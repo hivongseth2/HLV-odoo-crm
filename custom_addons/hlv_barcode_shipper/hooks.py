@@ -12,17 +12,6 @@ def pre_init_hook(env):
     _logger.info("HLV Barcode Shipper: Running pre_init_hook...")
     cr = env.cr
 
-    cr.execute("""
-        CREATE TABLE IF NOT EXISTS res_partner_delivery_location (
-            id SERIAL PRIMARY KEY
-        )
-    """)
-    cr.execute("""
-        CREATE TABLE IF NOT EXISTS geocode_picker_wizard (
-            id SERIAL PRIMARY KEY
-        )
-    """)
-
     company_columns = [
         ("hlv_barcode_skip_package_scan", "BOOLEAN DEFAULT FALSE"),
         ("hlv_barcode_skip_product_scan", "BOOLEAN DEFAULT FALSE"),
@@ -32,7 +21,6 @@ def pre_init_hook(env):
         ("hlv_barcode_return_require_detail_scan", "BOOLEAN DEFAULT FALSE"),
         ("hlv_barcode_return_skip_package_scan", "BOOLEAN DEFAULT FALSE"),
         ("hlv_barcode_return_skip_product_scan", "BOOLEAN DEFAULT FALSE"),
-        ("hlv_barcode_google_maps_api_key", "VARCHAR"),
     ]
 
     for column_name, column_def in company_columns:
@@ -65,3 +53,4 @@ def pre_init_hook(env):
         if not cr.fetchone():
             _logger.info(f"HLV Barcode Shipper: Adding stock_picking column '{column_name}'...")
             cr.execute(f"ALTER TABLE stock_picking ADD COLUMN {column_name} {column_def}")
+

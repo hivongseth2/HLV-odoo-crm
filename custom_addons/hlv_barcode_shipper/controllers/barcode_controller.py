@@ -4,7 +4,6 @@
 import base64
 import json
 import logging
-import re
 from datetime import timedelta
 
 from markupsafe import Markup, escape
@@ -317,7 +316,6 @@ class BarcodeShipperController(http.Controller):
                 "success": True,
                 "multiple": True, # Luôn coi là multiple để hiện giao diện chọn
                 "customer_name": partner.name or "Khách hàng",
-                "customer_address": partner.contact_address or "",
                 "so_groups": so_groups_list,
                 "message": f"Tìm thấy {len(all_partner_outs)} phiếu của {partner.name}",
             }
@@ -568,15 +566,11 @@ class BarcodeShipperController(http.Controller):
 
             result = []
             for p in pickings:
-                address, sale_order_name, address_source = self._get_picking_misa_shipping_address(p)
                 result.append({
                     "id": p.id,
                     "name": p.name,
                     "origin": p.origin or "",
-                    "sale_order_name": sale_order_name,
                     "partner_name": p.partner_id.name or "",
-                    "address": address,
-                    "address_source": address_source,
                     "date_done": (p.date_done + VN_OFFSET).strftime("%H:%M %d/%m/%Y") if p.date_done else "",
                 })
 
@@ -646,241 +640,6 @@ class BarcodeShipperController(http.Controller):
         return request.render(
             "hlv_barcode_shipper.shipper_interface", {"user": request.env.user}
         )
-
-    # ===== Web UI V2: /barcode/shipper_v2 (OWL) =====
-    # @http.route("/barcode/shipper_v2", type="http", auth="user", website=False)
-    # def shipper_interface_v2(self, **kwargs):
-    #     """V2 shipper interface page using OWL."""
-    #     if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
-    #         return request.render(
-    #             "hlv_barcode_shipper.access_denied", {"user": request.env.user}
-    #         )
-    #     return request.render(
-    #         "hlv_barcode_shipper.shipper_interface_v2", {"user": request.env.user}
-    #     )
-
-    # ===== Web UI: /barcode/shipper_route (delivery route planner) =====
-    @http.route("/barcode/shipper_route", type="http", auth="user", website=False)
-    def shipper_delivery_route(self, **kwargs):
-        """Route planner page for already received delivery orders."""
-        if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
-            return request.render(
-                "hlv_barcode_shipper.access_denied", {"user": request.env.user}
-            )
-        return request.render(
-            "hlv_barcode_shipper.delivery_route_interface",
-            {
-                "user": request.env.user,
-                "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or request.env['ir.config_parameter'].sudo().get_param('base_geolocalize.google_map_api_key') or "",
-            },
-        )
-
-    def _get_sale_order_for_picking(self, picking):
-        """Resolve the sale order linked to a picking without relying only on origin."""
-        SaleOrder = request.env["sale.order"]
-
-        sale_orders = SaleOrder.sudo().browse()
-        if "sale_id" in picking._fields and picking.sale_id:
-            sale_orders |= picking.sale_id.sudo()
-        if "move_ids" in picking._fields and "sale_line_id" in request.env["stock.move"]._fields:
-            sale_orders |= picking.move_ids.mapped("sale_line_id.order_id").sudo()
-        if "move_line_ids" in picking._fields and "sale_line_id" in request.env["stock.move"]._fields:
-            sale_orders |= picking.move_line_ids.mapped("move_id.sale_line_id.order_id").sudo()
-        if "group_id" in picking._fields and picking.group_id and "sale_id" in picking.group_id._fields:
-            sale_orders |= picking.group_id.sale_id.sudo()
-
-        if sale_orders:
-            with_address = sale_orders.filtered(lambda so: bool(getattr(so, "misa_shipping_address", False)))
-            return (with_address or sale_orders)[:1]
-
-        origin = (picking.origin or "").strip()
-        if not origin:
-            return False
-
-        origin_names = [origin]
-        origin_names += [
-            token.strip()
-            for token in re.split(r"[,;|\s]+", origin)
-            if token.strip()
-        ]
-        sale_order = SaleOrder.sudo().search([("name", "in", list(dict.fromkeys(origin_names)))], limit=1)
-        if not sale_order:
-            sale_order = SaleOrder.sudo().search([("name", "ilike", origin)], limit=1)
-        return sale_order
-
-    def _get_first_text_field(self, record, field_names):
-        """Return the first non-empty text value among possible fields."""
-        for field_name in field_names:
-            if field_name in record._fields:
-                value = getattr(record, field_name, False)
-                if value:
-                    return value, field_name
-        return "", ""
-
-    def _get_picking_misa_shipping_address(self, picking):
-        """Return delivery address from picking first, then sale.order.misa_shipping_address."""
-        picking_address, source_field = self._get_first_text_field(picking, [
-            "x_studio_dia_chi_giao_hang",
-            "x_misa_shipping_address",
-        ])
-        if picking_address:
-            return picking_address, picking.origin or "", source_field
-
-        sale_order = self._get_sale_order_for_picking(picking)
-        if not sale_order:
-            return "", "", ""
-
-        sale_address, source_field = self._get_first_text_field(sale_order, [
-            "misa_shipping_address",
-        ])
-        return sale_address, sale_order.name or "", source_field
-
-    # ===== API: delivery route stops =====
-    @http.route(
-        "/api/barcode/delivery_route_stops",
-        type="json",
-        auth="user",
-        methods=["POST"],
-        csrf=False,
-    )
-    def delivery_route_stops(self, **kwargs):
-        """Return received OUT pickings as route stops for the current shipper."""
-        try:
-            access = self._check_shipper_access()
-            if not access["success"]:
-                return access
-
-            uid = request.env.user.id
-            from datetime import datetime
-            today = datetime.now()
-            today_start = today.replace(hour=0, minute=0, second=0) - VN_OFFSET
-
-            domain = [
-                ("shipper_received", "=", True),
-                ("shipper_returned", "=", False),
-                ("picking_type_id.code", "=", "outgoing"),
-                "|",
-                ("shipper_received_by", "=", uid),
-                ("shipper_user_id", "=", uid),
-                "|",
-                ("state", "in", ["assigned", "partially_available"]),
-                "&",
-                ("state", "=", "done"),
-                ("date_done", ">=", today_start),
-            ]
-
-            pickings = request.env["stock.picking"].sudo().search(
-                domain, order="state desc, shipper_receive_time desc, scheduled_date asc, name asc"
-            )
-
-            stops = []
-            missing_address = []
-            for sequence, picking in enumerate(pickings, start=1):
-                address, sale_order_name, address_source = self._get_picking_misa_shipping_address(picking)
-                if not address:
-                    missing_address.append({
-                        "picking_name": picking.name,
-                        "origin": picking.origin or "",
-                        "sale_order_name": sale_order_name,
-                    })
-                    continue
-
-                lat = False
-                lng = False
-                if picking.partner_id:
-                    root_partner = picking.partner_id.commercial_partner_id or picking.partner_id
-                    clean_address = address.strip().lower()
-                    for loc in root_partner.hlv_delivery_location_ids:
-                        if loc.address and loc.address.strip().lower() == clean_address:
-                            lat = loc.latitude
-                            lng = loc.longitude
-                            break
-
-                item_count = len(picking.package_level_ids) + len(
-                    picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
-                )
-                stops.append({
-                    "id": picking.id,
-                    "sequence": sequence,
-                    "picking_name": picking.name,
-                    "origin": picking.origin or "",
-                    "sale_order_name": sale_order_name,
-                    "partner_name": picking.partner_id.name or "",
-                    "partner_id": picking.partner_id.id,
-                    "address": address,
-                    "address_source": address_source,
-                    "lat": lat,
-                    "lng": lng,
-                    "state": picking.state,
-                    "item_count": item_count,
-                    "receive_time": (
-                        (picking.shipper_receive_time + VN_OFFSET).strftime("%H:%M %d/%m")
-                        if picking.shipper_receive_time else ""
-                    ),
-                })
-
-            return {
-                "success": True,
-                "stops": stops,
-                "missing_address": missing_address,
-                "received_count": len(pickings),
-                "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or "",
-            }
-        except Exception:
-            _logger.exception("Error in delivery_route_stops")
-            return {"success": False, "error": "Không thể tải danh sách điểm giao"}
-
-    @http.route(
-        "/api/barcode/save_geocode",
-        type="json",
-        auth="user",
-        methods=["POST"],
-        csrf=False,
-    )
-    def save_geocode(self, **kwargs):
-        """Save a new geocode for a root partner's address."""
-        try:
-            access = self._check_shipper_access()
-            if not access["success"]:
-                return access
-
-            data = json.loads(request.httprequest.data.decode("utf-8"))
-            partner_id = data.get("partner_id")
-            address = data.get("address")
-            lat = data.get("lat")
-            lng = data.get("lng")
-
-            if not partner_id or not address or lat is None or lng is None:
-                return {"success": False, "error": "Thiếu dữ liệu"}
-
-            partner = request.env["res.partner"].sudo().browse(partner_id)
-            if not partner.exists():
-                return {"success": False, "error": "Không tìm thấy đối tác"}
-
-            root_partner = partner.commercial_partner_id or partner
-            clean_address = address.strip().lower()
-
-            Location = request.env["res.partner.delivery.location"].sudo()
-            
-            exists = False
-            for loc in root_partner.hlv_delivery_location_ids:
-                if loc.address and loc.address.strip().lower() == clean_address:
-                    exists = True
-                    # Update if coordinates are significantly different? (optional, skip for now as user just wants to save new)
-                    break
-            
-            if not exists:
-                Location.create({
-                    "partner_id": root_partner.id,
-                    "address": address.strip(),
-                    "latitude": lat,
-                    "longitude": lng,
-                })
-            
-            return {"success": True}
-        except Exception:
-            _logger.exception("Error in save_geocode")
-            return {"success": False}
 
     # ===== API: get settings =====
     @http.route(

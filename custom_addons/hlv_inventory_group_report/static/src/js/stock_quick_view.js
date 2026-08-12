@@ -14,10 +14,14 @@ export class StockQuickView extends Component {
         return Number(val).toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
     }
 
-    // Format ngày UTC+7 (da duoc format san tu python)
+    // Format ngày UTC+7 (chuoi tu server la UTC, can +7 gio de ra gio VN)
     formatDateVN(dateStr) {
         if (!dateStr) return '';
-        return dateStr;
+        const utcDate = new Date(dateStr.replace(' ', 'T') + 'Z');
+        if (isNaN(utcDate.getTime())) return dateStr;
+        const vnDate = new Date(utcDate.getTime() + 7 * 3600 * 1000);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${pad(vnDate.getUTCDate())}/${pad(vnDate.getUTCMonth() + 1)}/${vnDate.getUTCFullYear()} ${pad(vnDate.getUTCHours())}:${pad(vnDate.getUTCMinutes())}:${pad(vnDate.getUTCSeconds())}`;
     }
 
     async resetManualAvgCost(productId) {

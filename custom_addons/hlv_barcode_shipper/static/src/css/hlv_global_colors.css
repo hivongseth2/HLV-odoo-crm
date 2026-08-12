@@ -1,8 +1,0 @@
-/* HLV Global Color Palette */
-:root {
-  /* Các biến màu Global để dùng chung trên toàn hệ thống (không đè biến của Odoo) */
-  --hlv-primary-blue-dark: #2C5EAD;
-  --hlv-primary-blue: #1591DC;
-  --hlv-primary-blue-light: #4BB8FA;
-  --hlv-primary-bg: #C4E2F5;
-}
