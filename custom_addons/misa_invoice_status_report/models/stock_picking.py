@@ -1304,11 +1304,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return {'removed': True, 'line_id': line.id}
 
     def _cron_scan_misa_customs_pending(self):
-        """Quét định kỳ các dòng hải quan còn 'pending' (chưa có phiếu xuất kho tương ứng
-        hoặc phiếu chưa hoàn tất lúc ghi nhận) — tự thử khớp lại, không cần thao tác thủ công
-        khi phiếu xuất kho được tạo/hoàn tất sau đó."""
+        """Quét định kỳ các dòng hải quan còn 'pending' HOẶC 'partial' (chưa có phiếu xuất kho
+        tương ứng, phiếu chưa hoàn tất, hoặc mới chỉ khớp được 1 phần số lượng) — tự thử khớp
+        lại, không cần thao tác thủ công khi phiếu xuất kho được tạo/hoàn tất sau đó. LƯU Ý:
+        trước đây chỉ quét đúng 'pending' — bỏ sót 'partial' khiến các dòng đã khớp 1 phần
+        (VD hóa đơn ghi 2 nhưng mới xuất kho 1) không bao giờ được cron tự thử lại nữa."""
         pending = self.env['misa.invoice.customs.line'].sudo().search(
-            [('match_state', '=', 'pending')], limit=200,
+            [('match_state', 'in', ('pending', 'partial'))], limit=200,
         )
         for line in pending:
             try:
@@ -1317,6 +1319,65 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 _logger.exception(
                     "❌ [MISA CUSTOMS SCAN] Lỗi thử khớp dòng hải quan #%s (HĐ %s)", line.id, line.invoice_no,
                 )
+
+    def button_validate(self):
+        """Case hải quan: hóa đơn MISA có TRƯỚC, phiếu xuất kho xác nhận SAU — thời điểm hợp lý
+        nhất để thử khớp là NGAY khi phiếu vừa validate xong, không phải chờ tới lượt cron định
+        kỳ (30 phút/lần) hay bấm tay 'Thử khớp lại'. Trước đây việc khớp chỉ chạy lúc ghi nhận
+        hóa đơn + cron định kỳ — phiếu xuất kho VALIDATE SAU khi hóa đơn đã tồn tại sẽ không có
+        gì trigger khớp ngay, phải đợi cron hoặc vào bấm tay mới thấy chạy."""
+        res = super().button_validate()
+        for picking in self:
+            if picking.picking_type_id.code == 'outgoing' and picking.state == 'done':
+                try:
+                    picking._misa_invoice_customs_try_match_for_picking()
+                except Exception:
+                    _logger.exception(
+                        "❌ [MISA CUSTOMS] Lỗi thử khớp hải quan ngay khi xuất kho phiếu %s", picking.name,
+                    )
+        return res
+
+    def _misa_invoice_customs_try_match_for_picking(self):
+        """Thử khớp NGAY các dòng hải quan đang pending/partial của ĐÚNG (các) đơn bán trên
+        phiếu này — gọi khi phiếu vừa validate xong (xem button_validate)."""
+        self.ensure_one()
+        order_ids = self.misa_invoice_sale_order_ids.ids
+        if not order_ids:
+            return
+        lines = self.env['misa.invoice.customs.line'].sudo().search([
+            ('sale_order_id', 'in', order_ids),
+            ('match_state', 'in', ('pending', 'partial')),
+        ])
+        for line in lines:
+            self._misa_invoice_customs_try_match(line)
+
+    @api.model
+    def retry_all_pending_customs_matches(self, saler_code=False, limit=500):
+        """Nút 'Kiểm tra tất cả đang chờ' trên tab Đơn hải quan — thử khớp lại NGAY toàn bộ các
+        dòng pending/partial (bấm tay, không chờ cron) — dùng khi nghi ngờ có phiếu đã xuất kho
+        xong nhưng vì lý do gì đó (phiếu validate trước khi có bản vá này, lỗi tạm thời...) chưa
+        được tự động thử khớp. saler_code (tùy chọn): scope cho trang public, mỗi sale chỉ kiểm
+        tra đúng hóa đơn của mình."""
+        domain = [('match_state', 'in', ('pending', 'partial'))]
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            domain.append(('employee_code', '=', value))
+        lines = self.env['misa.invoice.customs.line'].sudo().search(domain, limit=limit)
+        matched_count = 0
+        for line in lines:
+            try:
+                if self._misa_invoice_customs_try_match(line):
+                    matched_count += 1
+            except Exception:
+                _logger.exception(
+                    "❌ [MISA CUSTOMS] Lỗi thử khớp lại hàng loạt dòng hải quan #%s (HĐ %s)", line.id, line.invoice_no,
+                )
+        return {'checked': len(lines), 'matched_count': matched_count}
+
+    @api.model
+    def retry_all_pending_customs_matches_public(self, saler_code):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().retry_all_pending_customs_matches(saler_code=code)
 
     @api.model
     def get_misa_customs_lines(self, search=False, pending_only=False, saler_code=False, limit=50, offset=0):

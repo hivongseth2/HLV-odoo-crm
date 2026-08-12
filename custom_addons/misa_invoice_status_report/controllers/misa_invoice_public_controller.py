@@ -207,6 +207,19 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_customs_retry error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/customs/retry_all', type='json', auth='public', methods=['POST'])
+    def api_customs_retry_all(self, saler_code='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            result = request.env['stock.picking'].sudo().retry_all_pending_customs_matches_public(saler_code)
+            return {'status': 'success', 'result': result}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_retry_all error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/customs/search_pickings', type='json', auth='public', methods=['POST'])
     def api_customs_search_pickings(self, line_id=None, search='', **kwargs):
         if not _pw_allowed():

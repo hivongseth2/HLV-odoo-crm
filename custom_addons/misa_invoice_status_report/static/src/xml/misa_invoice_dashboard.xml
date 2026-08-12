@@ -950,6 +950,11 @@
                                 <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.customsTab.pendingOnly" t-on-change="onCustomsPendingOnlyToggle"/>
                                 Chỉ hiện đang chờ xuất kho (<t t-esc="state.customsTab.pendingCount"/>)
                             </label>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="retryAllPendingCustomsMatches"
+                                    t-att-disabled="state.customsTab.checkingAll"
+                                    title="Thử khớp lại ngay toàn bộ dòng đang chờ/khớp một phần, không cần đợi quét định kỳ (30 phút/lần)">
+                                <i class="fa fa-refresh" t-att-class="{'fa-spin': state.customsTab.checkingAll}"/> Kiểm tra tất cả đang chờ
+                            </button>
                         </div>
                         <div class="miv-loading" t-if="state.customsTab.loading">
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
