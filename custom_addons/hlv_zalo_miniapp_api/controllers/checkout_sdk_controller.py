@@ -575,16 +575,25 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             ).hexdigest()
 
             target_url = "https://payment-mini.zalo.me/api/transaction/get-status"
-            payload = {
+            params = {
                 "appId": app_id,
                 "orderId": order_id,
                 "mac": mac,
             }
             headers = {"Content-Type": "application/json"}
 
-            _logger.info("Gọi Zalo getOrderStatus cho orderId=%s...", order_id)
-            resp = requests.post(target_url, json=payload, headers=headers, timeout=10)
-            res_data = resp.json() if resp.status_code == 200 else {}
+            _logger.info("Gọi Zalo getOrderStatus (GET) cho orderId=%s...", order_id)
+            resp = requests.get(target_url, params=params, headers=headers, timeout=10)
+            if resp.status_code != 200 or not resp.text or not resp.text.strip():
+                resp = requests.post(target_url, json=params, headers=headers, timeout=10)
+
+            res_data = {}
+            if resp.text and resp.text.strip():
+                try:
+                    res_data = resp.json()
+                except Exception:
+                    res_data = {"raw_text": resp.text}
+
             _logger.info("Zalo getOrderStatus Response: HTTP %s - Body: %s", resp.status_code, resp.text)
 
             return self._response_success({
