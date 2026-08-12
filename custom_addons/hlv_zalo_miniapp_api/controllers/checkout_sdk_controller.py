@@ -153,13 +153,11 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         # 3. Xác định mã phương thức thanh toán dựa theo môi trường Sandbox / Production
         is_sandbox = self._is_sandbox()
 
-        method_code = 'COD'
-        if payment_method_input == 'zalopay':
-            method_code = 'ZALOPAY_SANDBOX' if is_sandbox else 'ZALOPAY'
-        elif payment_method_input == 'vnpay':
-            method_code = 'VNPAY_SANDBOX' if is_sandbox else 'VNPAY'
-        elif payment_method_input == 'cod':
-            method_code = 'COD_SANDBOX' if is_sandbox else 'COD'
+        method_input_upper = payment_method_input.upper()
+        if is_sandbox and not method_input_upper.endswith('_SANDBOX'):
+            method_code = f"{method_input_upper}_SANDBOX"
+        else:
+            method_code = method_input_upper
 
         method_obj = {
             'id': method_code,
