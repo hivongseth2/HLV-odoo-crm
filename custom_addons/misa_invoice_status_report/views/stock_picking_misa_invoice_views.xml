@@ -46,6 +46,10 @@
                                 <field name="misa_invoice_no" readonly="1"/>
                                 <field name="misa_invoice_date" readonly="1"/>
                                 <field name="misa_invoice_amount" readonly="1"/>
+                                <field name="misa_invoice_net_actual_amount" readonly="1"
+                                       string="Tiền thực xuất (đã trừ hàng trả)"/>
+                                <field name="misa_invoice_returned_amount" readonly="1"
+                                       invisible="not misa_invoice_returned_amount"/>
                                 <field name="misa_invoice_amount_diff" readonly="1"
                                        invisible="misa_invoice_state != 'invoiced'"
                                        decoration-danger="misa_invoice_amount_mismatch"/>
@@ -93,7 +97,9 @@
                        decoration-muted="misa_invoice_state == 'not_checked'"/>
                 <field name="misa_invoice_no" optional="show"/>
                 <field name="misa_invoice_date" optional="show"/>
-                <field name="x_studio_tng_tin_sau_thu" string="Tiền Odoo xuất kho" optional="show" sum="Tổng tiền Odoo"/>
+                <field name="x_studio_tng_tin_sau_thu" string="Tiền Odoo xuất kho (gộp)" optional="hide" sum="Tổng tiền Odoo (gộp)"/>
+                <field name="misa_invoice_net_actual_amount" string="Tiền Odoo xuất kho (ròng)" optional="show" sum="Tổng tiền Odoo (ròng)"/>
+                <field name="misa_invoice_returned_amount" string="Tiền hàng đã trả" optional="hide" sum="Tổng tiền đã trả"/>
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
                 <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
                 <field name="misa_invoice_multi_order_group" widget="boolean_toggle" readonly="1" optional="hide"/>
