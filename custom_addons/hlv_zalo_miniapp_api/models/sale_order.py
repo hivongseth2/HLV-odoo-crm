@@ -268,3 +268,82 @@ class SaleOrder(models.Model):
         action["context"] = {"default_sale_id": self.id}
         return action
 
+    def _send_zalo_cod_callback_payment(self, result_code=1):
+        """
+        Gọi Server-to-Server API của Zalo:
+          POST https://payment-mini.zalo.me/api/transaction/{appId}/cod-callback-payment
+        để cập nhật trạng thái giao dịch COD trên Zalo Developer Portal từ "Chờ xử lý" -> "Thành công" (resultCode=1).
+        """
+        import requests
+        import hmac
+        import hashlib
+
+        ICP = self.env["ir.config_parameter"].sudo()
+        app_id = str(ICP.get_param("hlv_zalo_miniapp.checkout_app_id", "") or ICP.get_param("zalo.checkout_app_id", "")).strip()
+        private_key = str(
+            ICP.get_param("hlv_zalo_miniapp.checkout_private_key", "")
+            or ICP.get_param("checkout_private_key", "")
+            or ICP.get_param("zalo.checkout_private_key", "")
+        ).strip()
+
+        for order in self:
+            zalo_order_id = (order.x_zalo_order_id or "").strip()
+            if not zalo_order_id or not app_id or not private_key:
+                _logger.warning("Bỏ qua gọi Zalo COD Callback Payment cho đơn %s: Thiếu app_id/private_key/x_zalo_order_id", order.name)
+                continue
+
+            # 1. Tính toán MAC: appId={appId}&orderId={orderId}&resultCode={resultCode}&privateKey={privateKey}
+            raw_mac_str = f"appId={app_id}&orderId={zalo_order_id}&resultCode={result_code}&privateKey={private_key}"
+            mac = hmac.new(
+                private_key.encode("utf-8"),
+                raw_mac_str.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+
+            endpoint_url = f"https://payment-mini.zalo.me/api/transaction/{app_id}/cod-callback-payment"
+            payload = {
+                "appId": app_id,
+                "orderId": zalo_order_id,
+                "resultCode": result_code,
+                "mac": mac,
+            }
+            headers = {"Content-Type": "application/json"}
+
+            try:
+                _logger.info("Đang gọi Zalo COD Callback Payment API cho đơn %s (orderId=%s) tại %s...", order.name, zalo_order_id, endpoint_url)
+                resp = requests.post(endpoint_url, json=payload, headers=headers, timeout=10)
+                _logger.info("Kết quả Zalo COD Callback Payment: HTTP %s - Body: %s", resp.status_code, resp.text)
+                
+                # Nếu Zalo yêu cầu MAC dạng không chứa &privateKey= ở đuôi, fallback thử thêm format 2:
+                if resp.status_code != 200 or '"error":-2101' in resp.text or '"err":-2101' in resp.text:
+                    raw_mac_str2 = f"appId={app_id}&orderId={zalo_order_id}&resultCode={result_code}"
+                    mac2 = hmac.new(private_key.encode("utf-8"), raw_mac_str2.encode("utf-8"), hashlib.sha256).hexdigest()
+                    payload["mac"] = mac2
+                    resp2 = requests.post(endpoint_url, json=payload, headers=headers, timeout=10)
+                    _logger.info("Kết quả Zalo COD Callback Payment (Format 2): HTTP %s - Body: %s", resp2.status_code, resp2.text)
+            except Exception as req_err:
+                _logger.error("Lỗi khi gọi Zalo COD Callback Payment cho đơn %s: %s", order.name, str(req_err))
+
+    def action_mark_zalo_paid(self):
+        """
+        Nút bấm trên giao diện Odoo cho phép nhân viên xác nhận đã thu tiền đơn COD
+        hoặc đơn hàng Zalo Mini App.
+        Tự động chuyển state -> sale (nếu draft), cập nhật x_zalo_payment_status = 'paid'
+        và tự động gọi API Zalo payment-mini cod-callback-payment để cập nhật trạng thái trên Zalo Portal sang 'Thành công'.
+        """
+        for order in self:
+            if order.state == "draft":
+                try:
+                    order.action_confirm()
+                except Exception as e:
+                    _logger.warning("Không thể tự động confirm đơn %s: %s", order.name, str(e))
+            order.write({
+                "x_zalo_payment_status": "paid",
+                "x_zalo_trans_time": fields.Datetime.now(),
+            })
+            order._send_zalo_cod_callback_payment(result_code=1)
+            order.message_post(body=_("Nhân viên đã xác nhận thu tiền thành công và đồng bộ trạng thái đơn COD lên Zalo SDK Server."))
+        return True
+
+
+

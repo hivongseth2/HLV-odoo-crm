@@ -60,6 +60,14 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="priority">20</field>
         <field name="arch" type="xml">
+            <!-- Nút bấm trong header để nhân viên xác nhận đã thu tiền cho đơn Zalo/COD -->
+            <xpath expr="//header" position="inside">
+                <button name="action_mark_zalo_paid" type="object"
+                        string="Xác nhận đã thu tiền Zalo/COD"
+                        class="btn-success"
+                        invisible="not x_is_zalo_order or x_zalo_payment_status == 'paid'"/>
+            </xpath>
+
             <!-- Field x_is_zalo_order để OWL view đọc trực tiếp -->
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="x_is_zalo_order" invisible="1"/>

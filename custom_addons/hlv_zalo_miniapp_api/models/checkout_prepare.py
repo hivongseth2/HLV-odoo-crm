@@ -7,6 +7,7 @@ class ZaloCheckoutPrepare(models.Model):
     _description = "Chuẩn bị đơn hàng Zalo Checkout SDK (chưa tạo sale.order)"
 
     token = fields.Char(string="Token chuẩn bị", index=True, required=True)
+    order_name = fields.Char(string="Mã đơn dự kiến", index=True)
     partner_id = fields.Many2one(
         "res.partner", string="Khách hàng", required=True, ondelete="cascade"
     )

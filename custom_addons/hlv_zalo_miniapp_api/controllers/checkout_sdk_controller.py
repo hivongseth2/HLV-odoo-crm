@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import hmac
 import hashlib
 import json
@@ -160,11 +160,15 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             'isCustom': False,
         }
 
+        # Cấp phát trước mã đơn bán hàng dự kiến (sale.order sequence) để gắn vào Ghi chú & Extradata Zalo SDK
+        order_name = request.env['ir.sequence'].next_by_code('sale.order') or 'S00000'
+
         extradata_obj = {
             'contact_id': partner.id,
+            'odoo_order_name': order_name,
         }
 
-        desc_text = "Thanh toan don hang"
+        desc_text = f"Thanh toan don hang {order_name}"
         final_order_amount = int(round(total_amount))
 
         # 4. Đảm bảo quy tắc Zalo Checkout SDK: sum(item[i].amount) == amount tổng
@@ -186,7 +190,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         }
 
         mac_str = self._generate_create_order_mac(params_for_mac, private_key)
-        _logger.info("Zalo Checkout MAC computed: %s (amount=%s)", mac_str, final_order_amount)
+        _logger.info("Zalo Checkout MAC computed: %s (amount=%s, order_name=%s)", mac_str, final_order_amount, order_name)
 
         return {
             'partner_id': partner.id,
@@ -197,6 +201,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             'items_json': json.dumps(item_refs),
             'amount': final_order_amount,
             'desc': desc_text,
+            'order_name': order_name,
             'sdk_items': sdk_items,
             'item_sdk_json': json.dumps(sdk_items, separators=(',', ':')),
             'extradata_str': extradata_str,
@@ -255,6 +260,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             token = uuid.uuid4().hex
             request.env['zalo.miniapp.checkout.prepare'].sudo().create({
                 'token': token,
+                'order_name': payload['order_name'],
                 'partner_id': payload['partner_id'],
                 'items': payload['items_json'],
                 'address_id': payload['address_id'] or 0,
@@ -355,6 +361,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 pass
 
             order_vals = {
+                'name': prepare.order_name or request.env['ir.sequence'].next_by_code('sale.order'),
                 'partner_id': prepare.partner_id.id,
                 'partner_shipping_id': delivery_partner.id,
                 'order_line': order_lines,
