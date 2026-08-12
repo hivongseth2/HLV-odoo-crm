@@ -1747,13 +1747,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         # Hải quan: đơn vị tính là DÒNG HÓA ĐƠN (misa.invoice.customs.line), không phải PHIẾU
         # XUẤT KHO như các dòng khác — không cộng count vào total (khác đơn vị, sẽ làm sai tỷ
-        # lệ phiếu) và không có actual_amount riêng (hàng có thể chưa hề xuất kho ở Odoo). Chỉ
-        # cộng invoice_amount (= phần CHƯA khớp phiếu nào, xem _misa_invoice_customs_summary)
-        # vào tổng đã xuất HĐ — phần đã khớp thì tiền đã tính vào dòng 'invoiced' ở trên rồi.
+        # lệ phiếu). actual_amount ở đây = matched_amount (phần ĐÃ thực xuất kho ứng với các
+        # lượt khớp match_ids) — số này CHỈ để tham khảo, KHÔNG cộng vào total.actual_amount vì
+        # giá trị đó đã nằm sẵn trong tiền thực xuất của chính phiếu ở dòng 'invoiced' rồi (cộng
+        # thêm sẽ đếm trùng 2 lần). Chỉ cộng invoice_amount (= phần CHƯA khớp phiếu nào, xem
+        # _misa_invoice_customs_summary) vào tổng đã xuất HĐ.
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to)
         rows['customs'] = {
             'count': customs_summary['total_count'],
-            'actual_amount': 0.0,
+            'actual_amount': customs_summary['matched_amount'],
             'invoice_amount': customs_summary['pending_amount'],
         }
         rows['total']['invoice_amount'] += rows['customs']['invoice_amount']

@@ -325,10 +325,10 @@
                                 <td class="miv-col-num"><t t-esc="state.statusSummary.shopee.percentage"/>%</td>
                             </tr>
                             <tr t-if="state.statusSummary.customs" t-on-click="() => this.openReconciliationGroup('customs')" class="miv-row-clickable"
-                                title="Đơn vị là DÒNG HÓA ĐƠN hải quan, không phải phiếu xuất kho — chỉ tính phần CHƯA khớp phiếu nào, không cộng vào SỐ PHIẾU/TỶ LỆ chung.">
+                                title="Đơn vị là DÒNG HÓA ĐƠN hải quan, không phải phiếu xuất kho, nên không cộng vào SỐ PHIẾU/TỶ LỆ chung. Cột Tổng tiền XK = phần ĐÃ thực xuất kho ứng với các dòng đã khớp phiếu — số này đã tính trong dòng 'Đã xuất HĐ' ở trên rồi nên KHÔNG cộng thêm vào TỔNG CỘNG (tránh đếm trùng 2 lần). Chỉ cột 'Tổng đã xuất HĐ' (= phần CHƯA khớp phiếu nào) mới cộng vào tổng chung.">
                                 <td class="miv-cell-customs"><b>Đơn hải quan (chưa khớp PXK)</b></td>
                                 <td class="miv-col-num"><t t-esc="state.statusSummary.customs.count"/> dòng</td>
-                                <td class="miv-col-num">—</td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.customs.actual_amount)"/></td>
                                 <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.customs.invoice_amount)"/></td>
                                 <td class="miv-col-num">—</td>
                             </tr>
