@@ -727,7 +727,7 @@ class BarcodeShipper {
             <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.pickingName}</div>
-                    ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">${p.soName}</div>` : ''}
+                    ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">Đơn hàng: ${p.soName}</div>` : ''}
                 </div>
                 <i class="fa fa-times-circle" title="Bỏ phiếu này khỏi lượt giao" onclick="window.barcodeShipper._toggleSkipInDeliverConfirm(${p.pickingId})" style="color:#e53935;font-size:20px;flex-shrink:0;cursor:pointer;"></i>
             </div>
@@ -1352,6 +1352,7 @@ class BarcodeShipper {
             <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;">${d.info.name}</div>
+                    ${d.so_name && d.so_name !== 'Khác' ? `<div style="font-size:11px;color:#888;">Đơn hàng: ${d.so_name}</div>` : ''}
                     <div style="font-size:11px;color:#e65100;">Đã quét dở: ${d.progress.scanned}/${d.progress.total} kiện</div>
                 </div>
                 <button class="btn btn-secondary" style="font-size:12px;padding:6px 10px;white-space:nowrap;" onclick="window.barcodeShipper._skipPartialPicking(${pid})">Bỏ giao</button>
@@ -1397,15 +1398,22 @@ class BarcodeShipper {
         }
 
         const body = modal.querySelector('#partial-deliver-confirm-body');
-        const doneNames = doneIds.map(id => this.pickingDataMap[id]?.info?.name).filter(Boolean);
-        const notStartedNames = notStartedIds.map(id => this.pickingDataMap[id]?.info?.name).filter(Boolean);
+        const renderPickingRow = (id) => {
+            const d = this.pickingDataMap[id];
+            const name = d?.info?.name || `#${id}`;
+            const soName = d?.so_name;
+            return `
+            <div style="padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                <div style="font-weight:600;font-size:13px;">${name}</div>
+                ${soName && soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">Đơn hàng: ${soName}</div>` : ''}
+            </div>`;
+        };
 
         body.innerHTML = `
-            <div style="margin-bottom:10px;font-size:14px;">
-                Bạn chỉ mới quét đủ <b>${doneIds.length} phiếu</b>: ${doneNames.join(', ')}.
-                Giao (những) phiếu này trước nhé?
-            </div>
-            <div style="font-size:12px;color:#888;">Còn ${notStartedIds.length} phiếu chưa quét: ${notStartedNames.join(', ')}.</div>
+            <div style="margin-bottom:10px;font-size:14px;">Bạn chỉ mới quét đủ <b>${doneIds.length} phiếu</b> sau đây. Giao (những) phiếu này trước nhé?</div>
+            ${doneIds.map(renderPickingRow).join('')}
+            <div style="margin:12px 0 6px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Còn ${notStartedIds.length} phiếu chưa quét</div>
+            ${notStartedIds.map(renderPickingRow).join('')}
         `;
 
         const okBtn = modal.querySelector('#partial-deliver-ok-btn');
