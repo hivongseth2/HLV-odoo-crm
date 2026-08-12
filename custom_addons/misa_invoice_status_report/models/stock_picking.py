@@ -865,6 +865,58 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'outstanding_amount': total_actual_amount - total_invoiced_amount,
         }
 
+    @api.model
+    def get_misa_invoice_discrepancy(
+        self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        saler_code=False, limit=200,
+    ):
+        """Chi tiết CÁC PHIẾU đang góp phần vào 'chênh lệch' (tổng tiền xuất kho - tổng đã xuất
+        HĐ) — để trả lời "lệch phiếu nào" thay vì chỉ biết mỗi tổng số. Gồm 2 loại lệch, áp dụng
+        cho cả 2 luồng MISA (thường) và Shopee:
+        - Phiếu CHƯA xuất HĐ → lệch = toàn bộ tiền thực xuất (outstanding_amount).
+        - Phiếu ĐÃ xuất HĐ nhưng tiền hóa đơn khác tiền thực xuất quá dung sai
+          (misa_invoice_amount_mismatch/tương đương bên Shopee) → lệch = actual - invoice.
+        Sắp xếp theo |lệch| giảm dần để thấy ngay phiếu lệch nhiều nhất.
+
+        Hóa đơn hải quan CHƯA khớp phiếu xuất kho nào không có trong danh sách (không có "phiếu"
+        nào để liệt kê) — chỉ trả kèm customs_pending_amount/count để biết còn khoản này nữa."""
+        Picking = self.sudo()
+        today = fields.Date.context_today(self)
+        misa_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to, invoice_date_from, invoice_date_to)
+        shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
+            shopee_domain = shopee_domain + [('misa_invoice_saler_code', '=', value)]
+
+        rows = []
+        for picking in Picking.search(misa_domain):
+            row = Picking._misa_invoice_picking_to_row(picking, today)
+            diff = row['amount_diff'] if row['state'] == 'invoiced' else row['outstanding_amount']
+            if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                continue
+            row['diff'] = diff
+            row['source'] = 'misa'
+            rows.append(row)
+        for picking in Picking.search(shopee_domain):
+            row = Picking._misa_invoice_shopee_picking_to_row(picking, today)
+            diff = row['actual_amount'] - row['invoice_amount']
+            if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                continue
+            row['diff'] = diff
+            row['source'] = 'shopee'
+            rows.append(row)
+
+        rows.sort(key=lambda r: abs(r['diff']), reverse=True)
+        customs_summary = Picking._misa_invoice_customs_summary(invoice_date_from, invoice_date_to, saler_code)
+        return {
+            'rows': rows[:limit],
+            'total_count': len(rows),
+            'total_diff': sum(r['diff'] for r in rows),
+            'customs_pending_amount': customs_summary['pending_amount'],
+            'customs_pending_count': customs_summary['pending_count'],
+        }
+
     # ==================== Đơn hải quan (hóa đơn xuất TRƯỚC khi xuất kho Odoo) ====================
     # Case đặc biệt: hàng hải quan phải xuất hóa đơn MISA TRƯỚC khi tạo/xác nhận phiếu xuất
     # kho Odoo — lúc đó chưa hề có refno picking nào để đối soát theo luồng thông thường
