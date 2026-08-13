@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+import hashlib
+import hmac
 import logging
+import requests
 
 _logger = logging.getLogger(__name__)
 
@@ -44,6 +47,36 @@ class SaleOrder(models.Model):
         help="orderId do Zalo Checkout SDK sinh ra trong createOrder, dùng để map callback/notify với đơn Odoo",
         index=True,
     )
+
+    # ===== Zalo Checkout SDK Refund Fields =====
+    x_zalo_refund_id = fields.Char(
+        string="Mã hoàn tiền Zalo",
+        help="refundId do Zalo Checkout SDK trả về khi gọi createRefund",
+        index=True,
+    )
+    x_zalo_refund_status = fields.Selection(
+        [
+            ("pending", "Đang hoàn tiền"),
+            ("success", "Hoàn tiền thành công"),
+            ("failed", "Hoàn tiền thất bại"),
+        ],
+        string="Trạng thái hoàn tiền Zalo",
+        default=False,
+        index=True,
+    )
+    x_zalo_refund_amount = fields.Float(
+        string="Số tiền đã hoàn Zalo",
+        help="Số tiền đã gửi yêu cầu hoàn qua Zalo Checkout SDK",
+    )
+    x_zalo_refund_time = fields.Datetime(
+        string="Thời điểm hoàn tiền Zalo",
+        help="Thời gian Zalo xác nhận hoàn tiền thành công",
+    )
+    x_zalo_refund_log = fields.Text(
+        string="Log hoàn tiền Zalo",
+        help="Nhật ký phản hồi từ Zalo Refund API",
+    )
+
 
     # Computed fields tổng hợp từ picking_ids để đảm bảo 100% tương thích REST API cũ
     x_return_requested = fields.Boolean(
@@ -474,4 +507,244 @@ class SaleOrder(models.Model):
 
 
 
+
+
+
+    # ============================================================
+    # Zalo Checkout SDK Refund APIs
+    # ============================================================
+
+    def _get_zalo_checkout_credentials(self):
+        """Lấy App ID và Private Key từ ir.config_parameter."""
+        ICP = self.env["ir.config_parameter"].sudo()
+        app_id = str(ICP.get_param("hlv_zalo_miniapp.checkout_app_id", "") or "").strip()
+        private_key = str(
+            ICP.get_param("hlv_zalo_miniapp.checkout_private_key", "")
+            or ICP.get_param("checkout_private_key", "")
+            or ICP.get_param("zalo.checkout_private_key", "")
+        ).strip()
+        return app_id, private_key
+
+    def _can_create_zalo_refund(self):
+        """Kiểm tra đơn hàng có đủ điều kiện gọi Zalo refund không."""
+        self.ensure_one()
+        if not self.x_zalo_trans_id:
+            return False, _("Đơn hàng không có mã giao dịch Zalo (x_zalo_trans_id).")
+        if self.x_zalo_payment_status != "paid":
+            return False, _("Giao dịch chưa được thanh toán.")
+        if self.x_zalo_payment_method and "COD" in self.x_zalo_payment_method.upper():
+            return False, _("Đơn COD không cần hoàn tiền qua Zalo.")
+        return True, ""
+
+    def action_create_zalo_refund(self, refund_amount=None):
+        """
+        Gọi Zalo Checkout SDK createRefund API để hoàn tiền.
+        Docs: https://docs.zaloplatforms.com/docs/MA/checkoutSdk/apis/createRefund
+        """
+        self.ensure_one()
+        order = self
+
+        can_refund, msg = order._can_create_zalo_refund()
+        if not can_refund:
+            raise UserError(msg)
+
+        app_id, private_key = order._get_zalo_checkout_credentials()
+        if not app_id or not private_key:
+            raise UserError(_("Chưa cấu hình Zalo App ID hoặc Private Key trong Odoo System Parameters."))
+
+        # Tính số tiền hoàn: ưu tiên tham số, sau đó đến x_return_refund_amount, cuối cùng là amount_total
+        amount = refund_amount
+        if amount is None or amount <= 0:
+            amount = order.x_return_refund_amount or 0.0
+        if amount <= 0:
+            amount = order.amount_total or 0.0
+        if amount <= 0:
+            raise UserError(_("Số tiền hoàn phải lớn hơn 0."))
+
+        # Zalo yêu cầu amount là số nguyên (VND)
+        amount_int = int(round(amount))
+
+        # Kiểm tra tổng số tiền đã hoàn không vượt quá tổng đơn
+        already_refunded = sum(
+            order.picking_ids.filtered(lambda p: p.x_zalo_refund_status == "success").mapped("x_zalo_refund_amount")
+        ) or 0.0
+        if already_refunded + amount_int > (order.amount_total or 0.0):
+            raise UserError(_("Tổng số tiền hoàn không được vượt quá tổng giá trị đơn hàng."))
+
+        description = f"Hoan tien don hang {order.name}"
+        raw_mac_str = (
+            f"appId={app_id}&transId={order.x_zalo_trans_id}&amount={amount_int}"
+            f"&description={description}&privateKey={private_key}"
+        )
+        mac = hmac.new(
+            private_key.encode("utf-8"),
+            raw_mac_str.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        payload = {
+            "appId": app_id,
+            "transId": order.x_zalo_trans_id,
+            "amount": amount_int,
+            "description": description,
+            "mac": mac,
+        }
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            _logger.info("Gọi Zalo createRefund cho đơn %s (transId=%s, amount=%s)...", order.name, order.x_zalo_trans_id, amount_int)
+            resp = requests.post("https://payment-mini.zalo.me/api/refund/create", json=payload, headers=headers, timeout=10)
+            _logger.info("Kết quả Zalo createRefund đơn %s: HTTP %s - Body: %s", order.name, resp.status_code, resp.text)
+        except Exception as req_err:
+            _logger.exception("Lỗi kết nối Zalo createRefund cho đơn %s: %s", order.name, str(req_err))
+            raise UserError(_("Lỗi kết nối tới Zalo Refund API: %s") % str(req_err))
+
+        res_json = {}
+        if resp.text and resp.text.strip():
+            try:
+                res_json = resp.json()
+            except Exception as json_err:
+                _logger.warning("Không thể parse JSON từ Zalo createRefund response: %s (Lỗi: %s)", resp.text, str(json_err))
+
+        refund_id = res_json.get("refundId")
+        return_code = res_json.get("returnCode")
+        return_message = res_json.get("returnMessage", "")
+
+        if return_code == 1:
+            status = "success"
+        elif return_code > 1:
+            status = "pending"
+        else:
+            status = "failed"
+
+        vals = {
+            "x_zalo_refund_id": refund_id,
+            "x_zalo_refund_status": status,
+            "x_zalo_refund_amount": amount_int if status in ("success", "pending") else 0.0,
+            "x_zalo_refund_time": fields.Datetime.now() if status == "success" else False,
+            "x_zalo_refund_log": (
+                f"[createRefund] HTTP={resp.status_code}, returnCode={return_code}, "
+                f"returnMessage={return_message}, refundId={refund_id}, raw={resp.text}"
+            ),
+        }
+        order.write(vals)
+
+        # Đồng bộ refund info sang các phiếu xuất kho đang return
+        return_pickings = order.picking_ids.filtered(
+            lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
+        )
+        if return_pickings:
+            return_pickings.write({
+                "x_zalo_refund_id": refund_id,
+                "x_zalo_refund_status": status,
+                "x_zalo_refund_amount": amount_int if status in ("success", "pending") else 0.0,
+                "x_zalo_refund_time": vals["x_zalo_refund_time"],
+            })
+
+        order.message_post(body=_("Gọi Zalo createRefund: <b>%s</b> (returnCode=%s, refundId=%s, amount=%s, msg=%s)") % (status, return_code, refund_id, amount_int, return_message))
+
+        return res_json
+
+    def action_query_zalo_refund_status(self):
+        """
+        Gọi Zalo Checkout SDK getRefundStatus API để tra cứu trạng thái hoàn tiền.
+        Docs: https://docs.zaloplatforms.com/docs/MA/checkoutSdk/apis/getRefundStatus
+        """
+        self.ensure_one()
+        order = self
+        if not order.x_zalo_refund_id:
+            raise UserError(_("Đơn hàng này chưa có Mã hoàn tiền Zalo (x_zalo_refund_id)."))
+
+        app_id, private_key = order._get_zalo_checkout_credentials()
+        if not app_id or not private_key:
+            raise UserError(_("Chưa cấu hình Zalo App ID hoặc Private Key trong Odoo System Parameters."))
+
+        raw_mac_str = f"appId={app_id}&refundId={order.x_zalo_refund_id}&privateKey={private_key}"
+        mac = hmac.new(
+            private_key.encode("utf-8"),
+            raw_mac_str.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        params = {
+            "appId": app_id,
+            "refundId": order.x_zalo_refund_id,
+            "mac": mac,
+        }
+
+        try:
+            _logger.info("Gọi Zalo getRefundStatus cho đơn %s (refundId=%s)...", order.name, order.x_zalo_refund_id)
+            resp = requests.get("https://payment-mini.zalo.me/api/refund", params=params, timeout=10)
+            _logger.info("Kết quả Zalo getRefundStatus đơn %s: HTTP %s - Body: %s", order.name, resp.status_code, resp.text)
+        except Exception as req_err:
+            _logger.exception("Lỗi kết nối Zalo getRefundStatus cho đơn %s: %s", order.name, str(req_err))
+            raise UserError(_("Lỗi kết nối tới Zalo Refund API: %s") % str(req_err))
+
+        res_json = {}
+        if resp.text and resp.text.strip():
+            try:
+                res_json = resp.json()
+            except Exception as json_err:
+                _logger.warning("Không thể parse JSON từ Zalo getRefundStatus response: %s (Lỗi: %s)", resp.text, str(json_err))
+
+        return_code = res_json.get("returnCode")
+        return_message = res_json.get("returnMessage", "")
+
+        if return_code == 1:
+            status = "success"
+        elif return_code < 1:
+            status = "failed"
+        else:
+            status = order.x_zalo_refund_status or "pending"
+
+        vals = {
+            "x_zalo_refund_log": (
+                (order.x_zalo_refund_log or "")
+                + f"\n[getRefundStatus] HTTP={resp.status_code}, returnCode={return_code}, "
+                f"returnMessage={return_message}, status={status}, raw={resp.text}"
+            )
+        }
+        if status == "success":
+            vals["x_zalo_refund_status"] = "success"
+            vals["x_zalo_refund_time"] = fields.Datetime.now()
+        elif status == "failed" and order.x_zalo_refund_status == "pending":
+            vals["x_zalo_refund_status"] = "failed"
+
+        if vals:
+            order.write(vals)
+            return_pickings = order.picking_ids.filtered(
+                lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
+            )
+            if return_pickings:
+                return_pickings.write({
+                    "x_zalo_refund_status": vals.get("x_zalo_refund_status", order.x_zalo_refund_status),
+                    "x_zalo_refund_time": vals.get("x_zalo_refund_time", order.x_zalo_refund_time),
+                })
+
+        order.message_post(body=_("Tra cứu Zalo getRefundStatus: <b>%s</b> (returnCode=%s, refundId=%s, msg=%s)") % (status, return_code, order.x_zalo_refund_id, return_message))
+
+        return res_json
+
+    @api.model
+    def cron_sync_pending_zalo_refunds(self):
+        """
+        Cronjob tự động chạy ngầm trong Odoo (15 phút/lần).
+        Tự động tìm các đơn hàng Zalo có x_zalo_refund_status = 'pending'
+        và gọi getRefundStatus sang Zalo SDK Server để đồng bộ trạng thái.
+        """
+        pending_orders = self.search(
+            [
+                ("x_zalo_refund_status", "=", "pending"),
+                ("x_zalo_refund_id", "!=", False),
+                ("x_zalo_refund_id", "!=", ""),
+            ],
+            limit=50,
+        )
+        _logger.info("Zalo Refund Sync Cronjob: Đang quét %s đơn hàng đang hoàn tiền...", len(pending_orders))
+        for order in pending_orders:
+            try:
+                order.action_query_zalo_refund_status()
+            except Exception as e:
+                _logger.warning("Zalo Refund Sync Cronjob lỗi ở đơn %s: %s", order.name, str(e))
+        return True
 
