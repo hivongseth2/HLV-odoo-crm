@@ -444,7 +444,68 @@ class StockPickingMisaInvoiceStatus(models.Model):
             })
         if extra_masters_to_check:
             results += extra_masters_to_check.action_check_misa_invoice_status(request_map=request_map)
+        (self | extra_masters_to_check)._misa_invoice_dedupe_request_refid_groups()
         return results
+
+    def _misa_invoice_dedupe_request_refid_groups(self, request_refids=None):
+        """Lưới an toàn dự phòng cho việc gộp hóa đơn: cơ chế gộp chính (master_refno, xem
+        action_check_misa_invoice_status ở trên) dựa vào MISA tự báo đúng TÊN phiếu đại diện —
+        nếu MISA lưu refno của đề nghị/hóa đơn KHÔNG khớp tên phiếu Odoo nào (VD kế toán tự đặt
+        mã khi tạo hóa đơn gộp), việc tìm phiếu gốc thất bại và MỖI phiếu cùng match vào hóa đơn
+        đó sẽ tự ghi ĐỦ 100% tiền hóa đơn cho riêng mình — tính trùng N lần cho 1 hóa đơn duy
+        nhất (N = số phiếu bị match nhầm).
+
+        misa_invoice_request_refid (mã nội bộ MISA, không phải text refno dễ lệch) vẫn được ghi
+        ĐÚNG và GIỐNG NHAU ở mọi phiếu cùng 1 hóa đơn dù master_refno có khớp hay không — dùng
+        nó làm khóa gộp dự phòng: nếu có >=2 phiếu 'invoiced' cùng request_refid mà CHƯA phiếu
+        nào được gán quan hệ gộp hợp lệ, tự chọn 1 làm đại diện (ưu tiên phiếu đã sẵn có quan hệ
+        gộp nếu có, không thì phiếu xuất kho SỚM NHẤT) và trả tiền hóa đơn của các phiếu còn lại
+        về 0, trỏ chúng về đúng phiếu đại diện đó."""
+        Picking = self.env['stock.picking'].sudo()
+        if request_refids is None:
+            request_refids = self.mapped('misa_invoice_request_refid')
+        request_refids = sorted({r for r in request_refids if r})
+        for refid in request_refids:
+            group = Picking.search([
+                ('misa_invoice_request_refid', '=', refid),
+                ('misa_invoice_state', '=', 'invoiced'),
+            ])
+            if len(group) < 2:
+                continue
+            already_linked = group.filtered(
+                lambda p: p.misa_invoice_master_picking_id or p.misa_invoice_covered_picking_ids
+            )
+            ungrouped = group - already_linked
+            if not ungrouped:
+                continue  # cả nhóm đã có quan hệ gộp hợp lệ từ trước, không có gì để sửa
+            existing_master = next(
+                (p.misa_invoice_master_picking_id for p in already_linked if p.misa_invoice_master_picking_id),
+                self.browse(),
+            )
+            if existing_master:
+                # Đã có 1 phiếu đại diện hợp lệ trong nhóm — gộp nốt phần còn sót vào ĐÚNG
+                # phiếu đó, không tạo thêm 1 "cây" đại diện khác cho cùng 1 hóa đơn.
+                master, covered = existing_master, ungrouped
+            elif len(ungrouped) < 2:
+                continue  # chỉ có 1 phiếu chưa gộp, không đủ để tự suy ra ai là đại diện
+            else:
+                ordered = ungrouped.sorted(key=lambda p: (p.date_done or p.create_date, p.id))
+                master, covered = ordered[0], ordered[1:]
+            covered.write({'misa_invoice_master_picking_id': master.id, 'misa_invoice_amount': 0.0})
+            note = Markup(
+                "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện các phiếu này cùng khớp 1 hóa đơn MISA "
+                "(request_refid trùng nhau) nhưng MISA không báo đúng tên phiếu đại diện lúc kiểm tra, "
+                "khiến mỗi phiếu tự ghi đủ 100%% tiền hóa đơn — đã tự gộp lại về phiếu %s để không tính "
+                "trùng tiền hóa đơn."
+            ) % master.name
+            for c in covered:
+                c.message_post(body=note)
+            master.message_post(
+                body=Markup(
+                    "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện %s phiếu khác cùng khớp hóa đơn này "
+                    "(MISA không báo đúng tên phiếu đại diện) — đã tự gộp về phiếu này: %s."
+                ) % (len(covered), ', '.join(covered.mapped('name')))
+            )
 
     def action_mark_misa_invoice_exception(self):
         """Mở wizard nhập lý do — dùng chung cho nút trên form (1 phiếu), bulk action trên
