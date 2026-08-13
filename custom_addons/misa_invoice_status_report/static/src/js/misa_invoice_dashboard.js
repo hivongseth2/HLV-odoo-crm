@@ -109,6 +109,12 @@ export class MisaInvoiceDashboard extends Component {
                 invInput: "", fetching: false, saving: false, preview: null,
                 pendingOnly: false, pendingCount: 0, checkingAll: false,
             },
+            // Tab "Trả hàng / Điều chỉnh": phiếu có phát sinh trả hàng, tách riêng khỏi đối
+            // soát thường (xem _misa_invoice_dashboard_base_domain) vì hóa đơn gốc không tự
+            // giảm theo hàng trả.
+            returnsTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+            },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -141,6 +147,8 @@ export class MisaInvoiceDashboard extends Component {
             discrepancyOpen: false,
             discrepancyLoading: false,
             discrepancy: null,
+            returnDrawerOpen: false,
+            returnDrawerRow: null,
             // Các section lớn ở trang tổng quan (trên tab nav) có thể thu gọn cho đỡ dài trang —
             // mặc định mở hết, key nào có mặt trong đây với giá trị true là đang bị thu gọn.
             collapsedSections: {},
@@ -309,6 +317,8 @@ export class MisaInvoiceDashboard extends Component {
             this.loadShopeeTab(this.state.shopeeTab.page || 1);
         } else if (tab === "customs") {
             this.loadCustomsTab(this.state.customsTab.page || 1);
+        } else if (tab === "returns") {
+            this.loadReturnsTab(this.state.returnsTab.page || 1);
         }
     }
 
@@ -1275,6 +1285,82 @@ export class MisaInvoiceDashboard extends Component {
             this.notification.add("Lỗi kiểm tra hàng loạt: " + (e.message || e), { type: "danger" });
         }
         this.state.customsTab.checkingAll = false;
+    }
+
+    // ===== Tab "Trả hàng / Điều chỉnh" =====
+    async loadReturnsTab(page) {
+        this.state.returnsTab.loading = true;
+        try {
+            const resp = await this.orm.call(
+                "stock.picking", "get_misa_invoice_return_list", [],
+                {
+                    limit: this.state.returnsTab.pageSize,
+                    offset: (page - 1) * this.state.returnsTab.pageSize,
+                    search: this.state.returnsTab.search || false,
+                    date_from: this.state.shipFrom || false,
+                    date_to: this.state.shipTo || false,
+                }
+            );
+            this.state.returnsTab.rows = resp.rows;
+            this.state.returnsTab.total = resp.total;
+            this.state.returnsTab.page = page;
+        } catch (e) {
+            this.notification.add("Lỗi tải danh sách trả hàng: " + (e.message || e), { type: "danger" });
+        }
+        this.state.returnsTab.loading = false;
+    }
+
+    get returnsTabTotalPages() {
+        return Math.max(1, Math.ceil(this.state.returnsTab.total / this.state.returnsTab.pageSize));
+    }
+
+    returnsTabPrevPage() {
+        if (this.state.returnsTab.page > 1) {
+            this.loadReturnsTab(this.state.returnsTab.page - 1);
+        }
+    }
+
+    returnsTabNextPage() {
+        if (this.state.returnsTab.page < this.returnsTabTotalPages) {
+            this.loadReturnsTab(this.state.returnsTab.page + 1);
+        }
+    }
+
+    onReturnsSearchInput(ev) {
+        this.state.returnsTab.searchDraft = ev.target.value;
+    }
+
+    onReturnsSearchKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.submitReturnsSearch();
+        }
+    }
+
+    submitReturnsSearch() {
+        this.state.returnsTab.search = this.state.returnsTab.searchDraft.trim();
+        this.loadReturnsTab(1);
+    }
+
+    clearReturnsSearch() {
+        this.state.returnsTab.search = "";
+        this.state.returnsTab.searchDraft = "";
+        this.loadReturnsTab(1);
+    }
+
+    openReturnDrawer(row) {
+        this.state.returnDrawerRow = row;
+        this.state.returnDrawerOpen = true;
+    }
+
+    closeReturnDrawer() {
+        this.state.returnDrawerOpen = false;
+        this.state.returnDrawerRow = null;
+    }
+
+    onReturnDrawerOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeReturnDrawer();
+        }
     }
 
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
