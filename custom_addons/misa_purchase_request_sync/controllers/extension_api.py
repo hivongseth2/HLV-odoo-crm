@@ -976,7 +976,25 @@ class MisaExtensionController(http.Controller):
         partner_id = payload.get('partner_id') or kwargs.get('partner_id')
 
         partner = False
-        if partner_id:
+
+        # 0) Ưu tiên tìm theo mã số thuế (TaxCode) từ MISA CRM -> vat của res.partner
+        tax_code = (payload.get('tax_code') or kwargs.get('tax_code') or '').strip()
+        if tax_code:
+            normalized_tax_code = re.sub(r'[^0-9a-zA-Z]', '', tax_code).upper()
+            if normalized_tax_code:
+                env.cr.execute("""
+                    SELECT id FROM res_partner
+                    WHERE active = TRUE
+                      AND vat IS NOT NULL
+                      AND vat != ''
+                      AND regexp_replace(upper(vat), '[^0-9A-Z]', '', 'g') = %s
+                    LIMIT 1
+                """, (normalized_tax_code,))
+                row = env.cr.fetchone()
+                if row:
+                    partner = env['res.partner'].sudo().browse(row[0]).exists()
+
+        if not partner and partner_id:
             partner = env['res.partner'].sudo().browse(int(partner_id)).exists()
 
         if not partner and account_name:
