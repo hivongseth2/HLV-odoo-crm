@@ -384,7 +384,7 @@
                         </button>
                         <button t-attf-class="miv-tab miv-tab-returns {{ state.activeTab === 'returns' ? 'active' : '' }}"
                                 t-on-click="() => this.switchTab('returns')"
-                                title="Phiếu có phát sinh trả hàng — tách riêng khỏi đối soát thường vì hóa đơn gốc không tự giảm theo hàng trả.">
+                                title="Phiếu có phát sinh trả hàng — vẫn hiện ở các tab khác bình thường, đây chỉ là bộ lọc nhanh để xem/đối chiếu.">
                             Trả hàng / Điều chỉnh <span class="miv-tab-count"><t t-esc="state.returnsTab.total"/></span>
                         </button>
                         <a href="#" class="miv-link miv-tab-viewall" t-on-click.prevent="openFullList">
@@ -414,6 +414,8 @@
                                         <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
                                         <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" t-attf-title="Đề nghị xuất HĐ của nhóm này gộp chung: {{row.group_order_names}}"/>
                                         <i class="fa fa-pencil miv-link-icon" t-if="row.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{row.manual_refno}}"/>
+                                        <i class="fa fa-undo miv-link-icon" t-if="row.has_return"
+                                           t-attf-title="Có trả hàng — tiền HĐ ({{formatCurrency(row.invoice_amount)}}) coi như kế toán đã điều chỉnh xuống đúng bằng tiền thực xuất ròng. Tiền HĐ gốc ban đầu: {{formatCurrency(row.original_invoice_amount)}}."/>
                                     </td>
                                     <td><t t-esc="row.partner_name"/></td>
                                     <td><t t-esc="row.sale_order_name"/></td>
@@ -669,6 +671,8 @@
                                             <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
                                             <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" t-attf-title="Đề nghị xuất HĐ của nhóm này gộp chung: {{row.group_order_names}}"/>
                                             <i class="fa fa-pencil miv-link-icon" t-if="row.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{row.manual_refno}}"/>
+                                            <i class="fa fa-undo miv-link-icon" t-if="row.has_return"
+                                               t-attf-title="Có trả hàng — tiền HĐ ({{formatCurrency(row.invoice_amount)}}) coi như kế toán đã điều chỉnh xuống đúng bằng tiền thực xuất ròng. Tiền HĐ gốc ban đầu: {{formatCurrency(row.original_invoice_amount)}}."/>
                                         </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.sale_order_name"/></td>
@@ -1017,10 +1021,12 @@
                     <!-- === Tab: Trả hàng / Điều chỉnh === -->
                     <div t-if="state.activeTab === 'returns'" class="miv-tab-panel">
                         <p class="miv-section-hint">
-                            Phiếu xuất kho có phát sinh trả hàng (khách trả lại 1 phần/toàn bộ sau khi đã xuất kho) — tách
-                            riêng khỏi đối soát thường vì hóa đơn gốc trên MISA không tự giảm theo hàng trả. "Trả một phần":
-                            coi như đã xuất HĐ đúng bằng phần thực xuất, không cần đối chiếu thêm. "Trả hết": cần kế toán
-                            hủy/điều chỉnh hóa đơn gốc trên MISA.
+                            Phiếu xuất kho có phát sinh trả hàng (khách trả lại 1 phần/toàn bộ sau khi đã xuất kho) — hóa đơn
+                            gốc trên MISA không tự giảm theo hàng trả, nên hệ thống COI NHƯ kế toán luôn điều chỉnh đúng
+                            (không kiểm soát/xác minh được việc điều chỉnh thật trên MISA): "Trả một phần" → coi như hóa đơn
+                            đã điều chỉnh xuống đúng bằng tiền thực xuất ròng; "Trả hết" → coi như hóa đơn đã điều chỉnh về
+                            0đ. Tiền HĐ gốc (chưa điều chỉnh) vẫn được giữ lại đầy đủ ở đây để đối chiếu khi cần. Các phiếu
+                            này vẫn hiện bình thường ở mọi tab khác (không bị loại ra), chỉ có ghi chú riêng để nhận biết.
                         </p>
                         <div class="miv-orders-search">
                             <i class="fa fa-search"/>
@@ -1132,6 +1138,14 @@
                             <div class="miv-drawer-linking" t-if="state.drawerPicking.manual_refno">
                                 <i class="fa fa-pencil"/>
                                 Đã gắn mã đề nghị MISA thủ công: <b><t t-esc="state.drawerPicking.manual_refno"/></b>
+                            </div>
+
+                            <div class="miv-drawer-linking miv-drawer-linking-warning" t-if="state.drawerPicking.has_return">
+                                <i class="fa fa-undo"/>
+                                Phiếu này có trả hàng — tiền HĐ hiển thị ở trên (<t t-esc="formatCurrency(state.drawerPicking.invoice_amount)"/>)
+                                đang được <b>coi như kế toán đã điều chỉnh</b> xuống đúng bằng tiền thực xuất ròng (hệ thống không xác minh
+                                được điều chỉnh thật trên MISA). Tiền HĐ gốc ban đầu (chưa điều chỉnh):
+                                <b><t t-esc="formatCurrency(state.drawerPicking.original_invoice_amount)"/></b>.
                             </div>
 
                             <div class="miv-drawer-actions" t-if="state.data.can_configure and state.drawerPicking.state != 'invoiced'">
@@ -1766,7 +1780,7 @@
                                     <span><t t-esc="formatCurrency(state.returnDrawerRow.original_invoice_amount)"/></span>
                                 </div>
                                 <div>
-                                    <span class="miv-drawer-meta-label">Tiền HĐ áp dụng (chỉ dùng cho tab này)</span>
+                                    <span class="miv-drawer-meta-label">Tiền HĐ áp dụng (dùng ở mọi tab đối soát)</span>
                                     <span><b><t t-esc="formatCurrency(state.returnDrawerRow.effective_invoice_amount)"/></b></span>
                                 </div>
                             </div>

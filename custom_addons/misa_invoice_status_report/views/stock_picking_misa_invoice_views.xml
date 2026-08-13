@@ -50,6 +50,9 @@
                                        string="Tiền thực xuất (đã trừ hàng trả)"/>
                                 <field name="misa_invoice_returned_amount" readonly="1"
                                        invisible="not misa_invoice_returned_amount"/>
+                                <field name="misa_invoice_effective_amount" readonly="1"
+                                       string="Tiền HĐ áp dụng (coi như đã điều chỉnh)"
+                                       invisible="not misa_invoice_returned_amount"/>
                                 <field name="misa_invoice_amount_diff" readonly="1"
                                        invisible="misa_invoice_state != 'invoiced'"
                                        decoration-danger="misa_invoice_amount_mismatch"/>
