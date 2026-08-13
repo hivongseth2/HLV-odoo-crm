@@ -254,10 +254,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
             picking.misa_invoice_multi_order_group = len(orders) > 1
             picking.misa_invoice_group_order_names = ', '.join(orders.mapped('name'))
 
-    @api.depends('misa_invoice_state', 'misa_invoice_amount', 'misa_invoice_net_actual_amount', 'misa_invoice_returned_amount')
+    @api.depends(
+        'misa_invoice_state', 'misa_invoice_amount', 'misa_invoice_net_actual_amount',
+        'misa_invoice_returned_amount', 'misa_invoice_master_picking_id',
+    )
     def _compute_misa_invoice_effective_amount(self):
         for picking in self:
-            if picking.misa_invoice_state == 'invoiced' and picking.misa_invoice_returned_amount > 0:
+            if picking.misa_invoice_master_picking_id:
+                # Phiếu "ăn theo" 1 đề nghị gộp chung LUÔN phải = 0 (tiền đầy đủ nằm ở phiếu
+                # gốc, xem misa_invoice_amount) — kể cả khi CHÍNH phiếu ăn theo này có trả hàng,
+                # KHÔNG được ghi đè thành net_actual_amount, nếu không mọi tổng cộng dồn phẳng
+                # (read_group misa_invoice_effective_amount:sum) sẽ cộng trùng với phiếu gốc.
+                picking.misa_invoice_effective_amount = 0.0
+            elif picking.misa_invoice_state == 'invoiced' and picking.misa_invoice_returned_amount > 0:
                 picking.misa_invoice_effective_amount = picking.misa_invoice_net_actual_amount
             else:
                 picking.misa_invoice_effective_amount = picking.misa_invoice_amount
