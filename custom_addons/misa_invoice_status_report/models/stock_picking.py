@@ -682,7 +682,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         loại phiếu Shopee ra vì chúng dùng luồng hóa đơn điện tử meInvoice riêng, không đi qua
         MISA. shopee=True: đảo ngược lại — CHỈ lấy phiếu Shopee, dùng cho tab/đối soát riêng
         (xem _misa_invoice_shopee_domain) để tổng tiền xuất kho toàn hệ thống có thể cộng đủ
-        cả 2 luồng lại (MISA + Shopee) mà không đếm trùng hay bỏ sót phiếu nào."""
+        cả 2 luồng lại (MISA + Shopee) mà không đếm trùng hay bỏ sót phiếu nào.
+
+        Loại HẲN các phiếu có trả hàng (misa_invoice_returned_amount > 0) ra khỏi MỌI đối soát
+        thường ở đây — vì hóa đơn gốc (misa_invoice_amount) không tự giảm theo hàng trả, so nó
+        với tiền xuất kho ròng sẽ luôn ra lệch giả (invoice > actual). Các phiếu này chỉ còn
+        hiện ở tab riêng "Trả hàng / Điều chỉnh" (xem _misa_invoice_returns_domain), nơi coi
+        như đã xử lý xong (không cần đối chiếu tự động nữa) thay vì báo lệch nhầm ở đây."""
         lower = self._get_misa_invoice_cutoff_date()
         if date_from:
             try:
@@ -698,6 +704,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ('date_done', '>=', fields.Datetime.to_string(datetime.combine(lower, dt_time.min))),
             ('misa_invoice_is_shopee', '=', bool(shopee)),
             ('origin', 'not ilike', 'trả hàng'),
+            ('misa_invoice_returned_amount', '<=', 0),
         ]
         if date_to:
             try:
@@ -713,6 +720,93 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if invoice_date_to:
             domain.append(('misa_invoice_date', '<=', invoice_date_to))
         return domain
+
+    # ==================== Trả hàng / Điều chỉnh ====================
+    # Phiếu có trả hàng bị loại khỏi _misa_invoice_dashboard_base_domain (xem docstring ở đó)
+    # để không báo lệch giả — tab này là nơi DUY NHẤT còn hiển thị chúng, coi như đã "xử lý
+    # xong" (không đối chiếu tự động với MISA nữa), chỉ để kế toán tự xem/điều chỉnh hóa đơn
+    # gốc khi cần.
+
+    def _misa_invoice_returns_domain(self, date_from=False, date_to=False):
+        """Cùng bộ lọc nền (outgoing, done, từ mốc đối soát, theo ngày xuất kho) như
+        _misa_invoice_dashboard_base_domain, nhưng ĐẢO NGƯỢC điều kiện trả hàng: chỉ lấy đúng
+        các phiếu CÓ trả hàng. Gộp chung cả luồng MISA lẫn Shopee vào đây (không tách theo
+        misa_invoice_is_shopee) vì đây là 1 khu vực xử lý riêng, không phải đối soát theo luồng."""
+        lower = self._get_misa_invoice_cutoff_date()
+        if date_from:
+            try:
+                parsed_from = fields.Date.from_string(date_from)
+            except Exception:
+                parsed_from = False
+            if parsed_from and parsed_from > lower:
+                lower = parsed_from
+        domain = [
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('state', '=', 'done'),
+            ('date_done', '>=', fields.Datetime.to_string(datetime.combine(lower, dt_time.min))),
+            ('misa_invoice_returned_amount', '>', 0),
+        ]
+        if date_to:
+            try:
+                parsed_to = fields.Date.from_string(date_to)
+            except Exception:
+                parsed_to = False
+            if parsed_to:
+                domain.append(
+                    ('date_done', '<=', fields.Datetime.to_string(datetime.combine(parsed_to, dt_time.max)))
+                )
+        return domain
+
+    def _misa_invoice_return_picking_to_row(self, picking, today):
+        done_date = picking.date_done.date() if picking.date_done else False
+        is_full_return = (picking.misa_invoice_net_actual_amount or 0.0) <= MISA_INVOICE_AMOUNT_TOLERANCE
+        return {
+            'id': picking.id,
+            'name': picking.name,
+            'partner_name': picking.misa_invoice_root_partner_id.display_name or picking.partner_id.display_name or '',
+            'sale_order_name': ', '.join(picking.misa_invoice_sale_order_ids.mapped('name')),
+            'saler_code': picking.misa_invoice_saler_code or '',
+            'date_done': fields.Date.to_string(done_date) if done_date else '',
+            'gross_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
+            'returned_amount': picking.misa_invoice_returned_amount or 0.0,
+            'net_actual_amount': picking.misa_invoice_net_actual_amount or 0.0,
+            'is_full_return': is_full_return,
+            # Hóa đơn GỐC (thật, đã fetch từ MISA trước đây) — giữ nguyên để kế toán đối chiếu,
+            # KHÔNG bị sửa/xóa bởi tính năng này.
+            'original_invoice_no': picking.misa_invoice_no or False,
+            'original_invoice_date': (
+                fields.Date.to_string(picking.misa_invoice_date) if picking.misa_invoice_date else False
+            ),
+            'original_invoice_amount': picking.misa_invoice_amount or 0.0,
+            # Tiền HĐ "áp dụng" riêng cho tab này (chỉ để hiển thị, KHÔNG ghi đè misa_invoice_amount
+            # thật) — trả hết thì coi như 0 (chờ kế toán hủy/điều chỉnh HĐ gốc trên MISA), trả 1
+            # phần thì coi như đã xuất HĐ đúng bằng phần thực xuất, không cần đối chiếu thêm.
+            'effective_invoice_amount': 0.0 if is_full_return else (picking.misa_invoice_net_actual_amount or 0.0),
+            'note': (
+                "Đơn trả hết — cần hủy/điều chỉnh hóa đơn gốc trên MISA."
+                if is_full_return else
+                "Trả một phần — coi như đã xuất HĐ đúng bằng phần thực xuất, không cần đối chiếu thêm."
+            ),
+            'exception': picking.misa_invoice_exception,
+        }
+
+    @api.model
+    def get_misa_invoice_return_list(self, limit=20, offset=0, search=False, date_from=False, date_to=False):
+        Picking = self.sudo()
+        domain = Picking._misa_invoice_returns_domain(date_from, date_to)
+        if search:
+            domain = domain + [
+                '|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search),
+            ]
+        pickings = Picking.search(domain, order='date_done desc', limit=limit, offset=offset)
+        today = fields.Date.context_today(self)
+        return {
+            'rows': [Picking._misa_invoice_return_picking_to_row(p, today) for p in pickings],
+            'total': Picking.search_count(domain),
+            'full_return_count': Picking.search_count(
+                domain + [('misa_invoice_net_actual_amount', '<=', MISA_INVOICE_AMOUNT_TOLERANCE)]
+            ),
+        }
 
     # ==================== Đơn Shopee (hóa đơn điện tử meInvoice riêng, amis_callback) ====================
 

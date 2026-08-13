@@ -382,6 +382,11 @@
                                 t-on-click="() => this.switchTab('customs')">
                             Đơn hải quan <span class="miv-tab-count"><t t-esc="state.customsTab.total"/></span>
                         </button>
+                        <button t-attf-class="miv-tab miv-tab-returns {{ state.activeTab === 'returns' ? 'active' : '' }}"
+                                t-on-click="() => this.switchTab('returns')"
+                                title="Phiếu có phát sinh trả hàng — tách riêng khỏi đối soát thường vì hóa đơn gốc không tự giảm theo hàng trả.">
+                            Trả hàng / Điều chỉnh <span class="miv-tab-count"><t t-esc="state.returnsTab.total"/></span>
+                        </button>
                         <a href="#" class="miv-link miv-tab-viewall" t-on-click.prevent="openFullList">
                             <t t-esc="state.activeTab === 'orders' ? 'Xem tất cả đơn hàng' : 'Xem tất cả phiếu'"/> <i class="fa fa-arrow-right"/>
                         </a>
@@ -1006,6 +1011,70 @@
                                 </button>
                             </div>
                             <div class="miv-empty" t-if="!state.customsTab.rows.length">Chưa có dữ liệu đơn hải quan.</div>
+                        </t>
+                    </div>
+
+                    <!-- === Tab: Trả hàng / Điều chỉnh === -->
+                    <div t-if="state.activeTab === 'returns'" class="miv-tab-panel">
+                        <p class="miv-section-hint">
+                            Phiếu xuất kho có phát sinh trả hàng (khách trả lại 1 phần/toàn bộ sau khi đã xuất kho) — tách
+                            riêng khỏi đối soát thường vì hóa đơn gốc trên MISA không tự giảm theo hàng trả. "Trả một phần":
+                            coi như đã xuất HĐ đúng bằng phần thực xuất, không cần đối chiếu thêm. "Trả hết": cần kế toán
+                            hủy/điều chỉnh hóa đơn gốc trên MISA.
+                        </p>
+                        <div class="miv-orders-search">
+                            <i class="fa fa-search"/>
+                            <input type="text" placeholder="Tìm theo tên phiếu hoặc mã đơn hàng..."
+                                   t-att-value="state.returnsTab.searchDraft"
+                                   t-on-input="onReturnsSearchInput" t-on-keydown="onReturnsSearchKeydown"/>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="submitReturnsSearch">Tìm</button>
+                            <button class="btn btn-sm miv-cutoff-save" t-if="state.returnsTab.search" t-on-click="clearReturnsSearch">
+                                <i class="fa fa-times"/> Bỏ tìm
+                            </button>
+                        </div>
+                        <div class="miv-loading" t-if="state.returnsTab.loading">
+                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                        </div>
+                        <t t-else="">
+                            <table class="miv-table" t-if="state.returnsTab.rows.length">
+                                <thead>
+                                    <tr>
+                                        <th>Phiếu</th>
+                                        <th>Đơn hàng</th>
+                                        <th class="miv-col-num">Tiền thực xuất ròng</th>
+                                        <th class="miv-col-num">Tiền HĐ gốc</th>
+                                        <th>Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.returnsTab.rows" t-as="row" t-key="row.id"
+                                        t-attf-class="miv-row-status-{{ row.is_full_return ? 'noorder' : 'nomatch' }}"
+                                        t-on-click="() => this.openReturnDrawer(row)">
+                                        <td><b><t t-esc="row.name"/></b></td>
+                                        <td><t t-esc="row.sale_order_name or '—'"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.net_actual_amount)"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.original_invoice_amount)"/></td>
+                                        <td>
+                                            <span t-attf-class="miv-badge {{ row.is_full_return ? 'miv-badge-critical' : 'miv-badge-warning' }}">
+                                                <t t-esc="row.is_full_return ? 'Trả hết' : 'Trả một phần'"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-pagination" t-if="state.returnsTab.total > state.returnsTab.pageSize">
+                                <button class="btn btn-sm miv-page-btn" t-on-click="returnsTabPrevPage" t-att-disabled="state.returnsTab.page &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="miv-page-label">
+                                    Trang <t t-esc="state.returnsTab.page"/> / <t t-esc="returnsTabTotalPages"/>
+                                    (<t t-esc="state.returnsTab.total"/> phiếu)
+                                </span>
+                                <button class="btn btn-sm miv-page-btn" t-on-click="returnsTabNextPage" t-att-disabled="state.returnsTab.page &gt;= returnsTabTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
+                            <div class="miv-empty" t-if="!state.returnsTab.rows.length">Không có phiếu nào phát sinh trả hàng trong phạm vi đang lọc.</div>
                         </t>
                     </div>
                 </div>
@@ -1642,6 +1711,75 @@
                             <div class="miv-empty" t-if="!state.discrepancy.rows.length">Không có phiếu nào đang lệch tiền — mọi thứ đã khớp.</div>
                         </t>
                     </div>
+                </div>
+            </div>
+
+            <div class="miv-drawer-overlay" t-if="state.returnDrawerOpen" t-on-click="onReturnDrawerOverlayClick">
+                <div class="miv-drawer">
+                    <t t-if="state.returnDrawerRow">
+                        <div class="miv-drawer-header">
+                            <div>
+                                <div class="miv-drawer-eyebrow">Trả hàng / Điều chỉnh</div>
+                                <div class="miv-drawer-title"><t t-esc="state.returnDrawerRow.name"/></div>
+                                <div class="miv-drawer-subtitle"><t t-esc="state.returnDrawerRow.partner_name"/></div>
+                            </div>
+                            <i class="fa fa-times miv-drawer-close" t-on-click="closeReturnDrawer"/>
+                        </div>
+                        <div class="miv-drawer-body">
+                            <div class="miv-drawer-meta">
+                                <div>
+                                    <span class="miv-drawer-meta-label">Trạng thái</span>
+                                    <span t-attf-class="miv-badge {{ state.returnDrawerRow.is_full_return ? 'miv-badge-critical' : 'miv-badge-warning' }}">
+                                        <t t-esc="state.returnDrawerRow.is_full_return ? 'Trả hết' : 'Trả một phần'"/>
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Đơn hàng</span>
+                                    <span><t t-esc="state.returnDrawerRow.sale_order_name or '—'"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Ngày xuất kho</span>
+                                    <span><t t-esc="state.returnDrawerRow.date_done"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tiền xuất kho gộp</span>
+                                    <span><t t-esc="formatCurrency(state.returnDrawerRow.gross_amount)"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tiền hàng đã trả</span>
+                                    <span class="miv-cell-critical"><b><t t-esc="formatCurrency(state.returnDrawerRow.returned_amount)"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tiền thực xuất ròng</span>
+                                    <span><b><t t-esc="formatCurrency(state.returnDrawerRow.net_actual_amount)"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Số HĐ gốc (đã fetch từ MISA)</span>
+                                    <span><t t-esc="state.returnDrawerRow.original_invoice_no or '—'"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Ngày HĐ gốc</span>
+                                    <span><t t-esc="state.returnDrawerRow.original_invoice_date or '—'"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tiền HĐ gốc (chưa điều chỉnh)</span>
+                                    <span><t t-esc="formatCurrency(state.returnDrawerRow.original_invoice_amount)"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tiền HĐ áp dụng (chỉ dùng cho tab này)</span>
+                                    <span><b><t t-esc="formatCurrency(state.returnDrawerRow.effective_invoice_amount)"/></b></span>
+                                </div>
+                            </div>
+                            <div class="miv-drawer-linking">
+                                <i class="fa fa-info-circle"/> <t t-esc="state.returnDrawerRow.note"/>
+                            </div>
+                        </div>
+                        <div class="miv-drawer-actions">
+                            <button class="btn btn-primary btn-sm" t-on-click="() => this.openPicking(state.returnDrawerRow.id)">
+                                Mở phiếu xuất kho <i class="fa fa-arrow-right"/>
+                            </button>
+                        </div>
+                    </t>
                 </div>
             </div>
         </div>
