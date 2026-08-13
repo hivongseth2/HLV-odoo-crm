@@ -76,6 +76,12 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "days_since_delivery": getattr(order, "x_days_since_delivery", 0),
             "return_count": getattr(order, "x_return_count", 0),
             "return_revoke_count": getattr(order, "x_return_revoke_count", 0),
+            "zalo_payment_status": order.x_zalo_payment_status or None,
+            "zalo_payment_method": order.x_zalo_payment_method or None,
+            "zalo_refund_status": order.x_zalo_refund_status or None,
+            "zalo_refund_amount": order.x_zalo_refund_amount or 0,
+            "zalo_refund_id": order.x_zalo_refund_id or None,
+            "zalo_refund_time": order.x_zalo_refund_time or None,
         }
         if is_zalo and getattr(order, "x_return_requested", False):
             return_info.update({
@@ -441,6 +447,30 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if "x_plan_need_cancel" in order_sudo._fields:
                 cancel_vals["x_plan_need_cancel"] = True
             order_sudo.write(cancel_vals)
+
+            # Tự động hoàn tiền qua Zalo nếu đơn online đã thanh toán nhưng chưa giao
+            try:
+                if (
+                    order.x_zalo_payment_status == "paid"
+                    and order.x_zalo_trans_id
+                    and order.x_zalo_payment_method
+                    and "COD" not in order.x_zalo_payment_method.upper()
+                ):
+                    undelivered = not order.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing" and p.state == "done"
+                    )
+                    if undelivered:
+                        order.sudo().action_create_zalo_refund(refund_amount=order.amount_total)
+            except Exception as refund_err:
+                _logger.warning("Tự động hoàn tiền khi hủy đơn %s thất bại: %s", order.name, refund_err)
+                try:
+                    order.message_post(
+                        body=Markup(_("<b>Hủy đơn thành công nhưng chưa thể tự động hoàn tiền Zalo:</b> %s")) % str(refund_err),
+                        message_type="comment",
+                        subtype_xmlid="mail.mt_note",
+                    )
+                except Exception as me:
+                    _logger.warning("Post auto-refund error message error: %s", me)
 
             # Ghi log Chatter thông báo đơn hàng bị hủy từ Zalo Mini App
             try:

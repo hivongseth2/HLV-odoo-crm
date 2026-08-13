@@ -119,6 +119,30 @@ class StockPicking(models.Model):
         help="Phiếu nhập kho trả hàng được tạo từ wizard trả hàng chuẩn Odoo",
     )
 
+    # ===== Zalo Checkout SDK Refund Fields =====
+    x_zalo_refund_id = fields.Char(
+        string="Mã hoàn tiền Zalo",
+        help="refundId do Zalo Checkout SDK trả về khi gọi createRefund",
+    )
+    x_zalo_refund_status = fields.Selection(
+        [
+            ("pending", "Đang hoàn tiền"),
+            ("success", "Hoàn tiền thành công"),
+            ("failed", "Hoàn tiền thất bại"),
+        ],
+        string="Trạng thái hoàn tiền Zalo",
+        default=False,
+    )
+    x_zalo_refund_amount = fields.Float(
+        string="Số tiền đã hoàn Zalo",
+        help="Số tiền đã gửi yêu cầu hoàn qua Zalo Checkout SDK",
+    )
+    x_zalo_refund_time = fields.Datetime(
+        string="Thời điểm hoàn tiền Zalo",
+        help="Thời gian Zalo xác nhận hoàn tiền thành công",
+    )
+
+
     x_zalo_return_completed_date = fields.Datetime(
         string="Ngày hoàn tất đổi/trả Zalo",
         tracking=True,
@@ -248,6 +272,21 @@ class StockPicking(models.Model):
         self.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
         if self.sale_id:
             self.sale_id.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
+
+
+    def action_refund_via_zalo(self):
+        """
+        Nút bấm trên phiếu xuất kho Zalo để gọi hoàn tiền qua Zalo Checkout SDK.
+        Số tiền hoàn lấy từ x_zalo_return_refund_amount, nếu không có thì lấy từ đơn hàng.
+        """
+        self.ensure_one()
+        if not self.x_is_zalo_outgoing_picking:
+            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu xuất kho Zalo Mini App."))
+        if not self.sale_id:
+            raise UserError(_("Phiếu kho này không liên kết với đơn hàng."))
+
+        amount = self.x_zalo_return_refund_amount or 0.0
+        return self.sale_id.action_create_zalo_refund(refund_amount=amount)
 
     def _send_zalo_return_notifications(self):
         """
@@ -451,4 +490,4 @@ class StockPicking(models.Model):
                     origin_picking.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
                     if origin_picking.sale_id:
                         origin_picking.sale_id.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
-        return res
+        return res

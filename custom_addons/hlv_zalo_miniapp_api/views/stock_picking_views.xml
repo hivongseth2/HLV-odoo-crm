@@ -23,6 +23,10 @@
                         class="btn-success"
                         invisible="not x_is_zalo_outgoing_picking or x_zalo_return_state not in ('approved', 'processing')"
                         confirm="Xác nhận hoàn tất đổi/trả Zalo cho phiếu xuất kho này?"/>
+                <button name="action_refund_via_zalo" type="object" string="Hoàn tiền qua Zalo SDK"
+                        class="btn-primary"
+                        invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or x_zalo_refund_status in ('success', 'pending')"
+                        confirm="Xác nhận hoàn tiền qua Zalo Checkout SDK cho đơn hàng này?"/>
             </xpath>
 
             <!-- Page Đổi/Trả Zalo trong Notebook -->
@@ -41,6 +45,17 @@
                                invisible="not x_zalo_return_requested"/>
                         <field name="x_zalo_return_refund_amount" string="Số tiền hoàn lại" widget="monetary"
                                invisible="not x_zalo_return_requested"/>
+                        <field name="x_zalo_refund_status" string="Trạng thái hoàn tiền Zalo" widget="badge"
+                               invisible="not x_zalo_return_requested"
+                               decoration-warning="x_zalo_refund_status == 'pending'"
+                               decoration-success="x_zalo_refund_status == 'success'"
+                               decoration-danger="x_zalo_refund_status == 'failed'"/>
+                        <field name="x_zalo_refund_amount" string="Số tiền đã hoàn Zalo" widget="monetary"
+                               invisible="not x_zalo_refund_status"/>
+                        <field name="x_zalo_refund_id" string="Mã hoàn tiền Zalo"
+                               invisible="not x_zalo_refund_id"/>
+                        <field name="x_zalo_refund_time" string="Ngày hoàn tiền Zalo" widget="datetime"
+                               invisible="not x_zalo_refund_time"/>
                         <field name="x_zalo_return_note" string="Ghi chú từ khách Zalo"
                                invisible="not x_zalo_return_requested"/>
                         <field name="x_zalo_return_rejected_reason" string="Lý do từ chối"

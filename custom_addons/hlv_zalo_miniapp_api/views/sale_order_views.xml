@@ -24,6 +24,12 @@
                 <field name="x_return_type" string="Loại đổi/trả" optional="show"/>
                 <field name="x_return_picking_id" string="Phiếu trả hàng" optional="show"/>
                 <field name="x_return_refund_amount" string="Tiền hoàn lại" widget="monetary" optional="show"/>
+                <field name="x_zalo_refund_status" string="TT hoàn tiền Zalo" widget="badge"
+                       decoration-warning="x_zalo_refund_status == 'pending'"
+                       decoration-success="x_zalo_refund_status == 'success'"
+                       decoration-danger="x_zalo_refund_status == 'failed'"
+                       optional="show"/>
+                <field name="x_zalo_refund_amount" string="Tiền đã hoàn Zalo" widget="monetary" optional="show"/>
                 <field name="name" string="Số báo giá" readonly="1" decoration-bf="1"/>
                 <field name="date_order" string="Ngày đặt hàng" readonly="1" widget="datetime" optional="show"/>
                 <field name="commitment_date" string="Ngày giao hàng" widget="datetime" optional="show"/>
@@ -120,6 +126,22 @@
                         <field name="x_return_completed_date" string="Ngày hoàn tất gần nhất"
                                invisible="not x_return_completed_date"/>
                     </group>
+                    <group string="Thông tin hoàn tiền Zalo" colspan="4" col="2">
+                        <field name="x_zalo_refund_status" string="Trạng thái hoàn tiền Zalo" widget="badge"
+                               decoration-warning="x_zalo_refund_status == 'pending'"
+                               decoration-success="x_zalo_refund_status == 'success'"
+                               decoration-danger="x_zalo_refund_status == 'failed'"
+                               invisible="not x_zalo_refund_status"/>
+                        <field name="x_zalo_refund_amount" string="Số tiền đã hoàn Zalo" widget="monetary"
+                               invisible="not x_zalo_refund_status"/>
+                        <field name="x_zalo_refund_id" string="Mã hoàn tiền Zalo"
+                               invisible="not x_zalo_refund_id"/>
+                        <field name="x_zalo_refund_time" string="Ngày hoàn tiền Zalo" widget="datetime"
+                               invisible="not x_zalo_refund_time"/>
+                        <field name="x_zalo_refund_log" string="Log hoàn tiền Zalo"
+                               invisible="not x_zalo_refund_log"/>
+                    </group>
+
                     <group string="Danh sách phiếu xuất kho &amp; Trạng thái đổi/trả chi tiết" colspan="4" col="2">
                         <field name="picking_ids" string="Phiếu xuất kho"
                                domain="[('picking_type_id.code', '=', 'outgoing'), ('state', '!=', 'cancel')]"
