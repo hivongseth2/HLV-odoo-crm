@@ -906,6 +906,12 @@
 
         i { color: var(--miv-neutral-text); margin-right: 6px; }
         a { color: var(--miv-neutral-text); font-weight: 600; text-decoration: underline; }
+
+        &.miv-drawer-linking-warning {
+            background: rgba(250, 178, 25, 0.12);
+            border-color: rgba(250, 178, 25, 0.35);
+            i { color: var(--miv-warning-text); }
+        }
     }
 
     .miv-drawer-actions {

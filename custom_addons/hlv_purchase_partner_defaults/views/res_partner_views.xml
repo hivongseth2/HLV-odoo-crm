@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_res_partner_form_hlv_po_defaults" model="ir.ui.view">
+        <field name="name">res.partner.form.hlv.po.defaults</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Mặc định mua hàng" name="hlv_po_defaults">
+                    <group>
+                        <field name="hlv_po_payment_term" placeholder="VD: Thanh toán 30 ngày sau khi nhận hàng"/>
+                        <field name="hlv_po_delivery_term" placeholder="VD: Giao tận kho, FOB, CIF..."/>
+                        <field name="hlv_po_delivery_address" placeholder="VD: Kho HCM - 123 Đường ABC, Quận 1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
