@@ -96,6 +96,10 @@ export class MisaInvoiceDashboard extends Component {
             showRepairScanPanel: false,
             repairScanProgress: { done: 0, total: 0 },
             repairScanLog: [],
+            isRefreshingGapSummaries: false,
+            showGapSummaryScanPanel: false,
+            gapSummaryScanProgress: { done: 0, total: 0 },
+            gapSummaryScanLog: [],
             isSavingCutoff: false,
             data: null,
             urgent: [],
@@ -630,6 +634,58 @@ export class MisaInvoiceDashboard extends Component {
         }
     }
 
+    /* Cập nhật misa_invoice_gap_summary cho các nhóm ĐANG lệch (misa_invoice_amount_mismatch)
+     * — để danh sách "Đối chiếu tổng" hiện ngay lý do lệch (chưa xuất kho / không có phiếu /
+     * bị đề nghị khác nhận) mà không cần mở drawer từng phiếu. Cùng cơ chế từng-phiếu-một +
+     * tiến độ như scanGroupedOrders/repairGroupedOrders ở trên. */
+    async refreshGapSummaries() {
+        if (this.state.isRefreshingGapSummaries) {
+            return;
+        }
+        this.state.isRefreshingGapSummaries = true;
+        this.state.showGapSummaryScanPanel = true;
+        this.state.gapSummaryScanLog = [];
+        this.state.gapSummaryScanProgress = { done: 0, total: 0 };
+        let totalChecked = 0;
+        try {
+            const resp = await this.orm.call("stock.picking", "get_misa_invoice_gap_summary_candidates", [], {});
+            this.state.gapSummaryScanProgress.total = resp.candidates.length;
+            for (const candidate of resp.candidates) {
+                let result;
+                try {
+                    result = await this.orm.call("stock.picking", "refresh_misa_invoice_gap_summary", [candidate.id], {});
+                } catch (e) {
+                    result = { error: e.message || String(e) };
+                }
+                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không xác định được lý do" };
+                if (result.error) {
+                    entry.statusLabel = "Lỗi: " + result.error;
+                    entry.error = true;
+                } else if (result.gap_summary) {
+                    entry.statusLabel = result.gap_summary;
+                } else {
+                    entry.statusLabel = "Đã khớp đủ (có thể do trả hàng/gộp chung, không phải thiếu phiếu)";
+                }
+                this.state.gapSummaryScanLog.unshift(entry);
+                this.state.gapSummaryScanProgress.done += 1;
+                totalChecked += 1;
+            }
+            this.notification.add(`Đã cập nhật lý do lệch cho ${totalChecked} phiếu.`, { type: "success" });
+            if (totalChecked) {
+                await this._reload();
+            }
+        } catch (e) {
+            this.notification.add("Lỗi cập nhật lý do lệch: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isRefreshingGapSummaries = false;
+    }
+
+    closeGapSummaryScanPanel() {
+        if (!this.state.isRefreshingGapSummaries) {
+            this.state.showGapSummaryScanPanel = false;
+        }
+    }
+
     onIncludeInvoicedToggle(ev) {
         this.state.includeInvoiced = ev.target.checked;
     }
@@ -805,24 +861,17 @@ export class MisaInvoiceDashboard extends Component {
             this.notification.add("Lỗi tải chi tiết phiếu: " + (e.message || e), { type: "danger" });
         }
         this.state.drawerLoading = false;
+        // Tự tải luôn phần "Đối chiếu với MISA" (donut vì sao lệch + bảng dòng hàng) ngay khi
+        // mở drawer — người dùng không có thời gian bấm thêm 1 nút cho từng phiếu một. Không
+        // await (chạy nền, có spinner riêng) để không làm chậm phần nội dung chính. Chỉ tải
+        // khi phiếu đã có hóa đơn (chưa có thì backend cũng trả false, gọi phí công).
+        if (row.state === "invoiced") {
+            this._loadReconciliationData(row.id);
+        }
     }
 
-    /** Bấm nút "Đối chiếu từng dòng với MISA" — tải riêng (không tự động khi mở drawer) vì
-     * tốn thêm 1 lệnh gọi MISA; tự gộp cả nhóm phiếu nếu phiếu này nằm trong 1 đề nghị gộp
-     * chung nhiều phiếu (xử lý ở backend). */
-    async loadReconciliation() {
-        if (this.state.reconciliationOpen) {
-            this.state.reconciliationOpen = false;
-            return;
-        }
+    async _loadReconciliationData(pickingId) {
         this.state.reconciliationOpen = true;
-        if (this.state.reconciliation) {
-            return;
-        }
-        const pickingId = this.state.drawerPicking && this.state.drawerPicking.id;
-        if (!pickingId) {
-            return;
-        }
         this.state.reconciliationLoading = true;
         try {
             const result = await this.orm.call(
@@ -839,6 +888,26 @@ export class MisaInvoiceDashboard extends Component {
             this.state.reconciliationOpen = false;
         }
         this.state.reconciliationLoading = false;
+    }
+
+    /** Bấm nút "Đối chiếu từng dòng với MISA" — chủ yếu dùng để ĐÓNG/MỞ lại panel đã tự tải
+     * sẵn khi mở drawer (openDrawer), hoặc tải lần đầu cho các trường hợp không tự tải (VD mở
+     * qua đường khác). Tự gộp cả nhóm phiếu nếu phiếu này nằm trong 1 đề nghị gộp chung nhiều
+     * phiếu (xử lý ở backend). */
+    async loadReconciliation() {
+        if (this.state.reconciliationOpen) {
+            this.state.reconciliationOpen = false;
+            return;
+        }
+        if (this.state.reconciliation) {
+            this.state.reconciliationOpen = true;
+            return;
+        }
+        const pickingId = this.state.drawerPicking && this.state.drawerPicking.id;
+        if (!pickingId) {
+            return;
+        }
+        await this._loadReconciliationData(pickingId);
     }
 
     /** Bấm vào link 1 phiếu khác từ bên trong 1 drawer (VD "phiếu gốc"/"phiếu đi kèm") —

@@ -118,6 +118,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 picking.misa_invoice_grouped_match_ids.mapped('amount')
             )
 
+    # Tóm tắt LÝ DO CỤ THỂ (chưa xuất kho / chưa có phiếu / không rõ đơn / bị đề nghị khác
+    # nhận) khiến 1 nhóm gộp chung có "chênh lệch" — tính sẵn (không tính lại mỗi lần hiện
+    # danh sách "Đối chiếu tổng", vì danh sách đó có thể liệt kê hàng trăm nhóm cùng lúc, không
+    # thể gọi API MISA cho từng dòng). Chỉ có ý nghĩa trên phiếu ĐẠI DIỆN (không phải phiếu ăn
+    # theo) — xem _misa_invoice_refresh_gap_summary.
+    misa_invoice_gap_summary = fields.Text(string='Lý do lệch (tóm tắt)', copy=False)
+    misa_invoice_gap_checked_at = fields.Datetime(string='Lần cập nhật lý do lệch gần nhất', copy=False)
+
     # Đối soát tự động tra MISA bằng refno = TÊN PHIẾU. Nếu sale quên ghi đúng số phiếu xuất
     # kho lúc tạo đề nghị xuất HĐ trên MISA, MISA tự sinh 1 mã đề nghị khác (VD "DN00123")
     # không khớp tên phiếu — tự động sẽ không bao giờ tìm ra. Field này cho gắn tay đúng mã
@@ -765,6 +773,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # action_check_misa_invoice_status) tự thử lại, không mất dấu vết vĩnh viễn.
         if not any_pending:
             self.misa_invoice_group_checked = True
+
+        # Tận dụng luôn `lines` vừa đọc (không tốn thêm API MISA) để cập nhật lý do lệch —
+        # hiện ngay trong danh sách "Đối chiếu tổng" mà không cần mở drawer từng phiếu.
+        self.invalidate_recordset(['misa_invoice_covered_picking_ids', 'misa_invoice_amount_mismatch'])
+        try:
+            self._misa_invoice_refresh_gap_summary(
+                misa_lines=lines, group_pickings=self | self.misa_invoice_covered_picking_ids,
+            )
+        except Exception:
+            _logger.exception("❌ [MISA GAP SUMMARY] Lỗi cập nhật lý do lệch cho phiếu %s", self.name)
 
     def _misa_invoice_grouped_orders_domain(self):
         return [
@@ -1614,6 +1632,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if picking.misa_invoice_master_picking_id:
                 continue  # đã gộp vào phiếu gốc — hiện qua đúng 1 dòng của phiếu gốc đó
             row = Picking._misa_invoice_picking_to_row(picking, today)
+            # Đọc field ĐÃ LƯU SẴN (misa_invoice_gap_summary, cập nhật qua
+            # _misa_invoice_discover_grouped_orders / nút "Cập nhật lý do lệch") — KHÔNG gọi
+            # API MISA ở đây, vì danh sách này có thể liệt kê hàng trăm dòng cùng lúc.
+            row['gap_summary'] = picking.misa_invoice_gap_summary or ''
+            row['gap_checked_at'] = fields.Datetime.to_string(picking.misa_invoice_gap_checked_at) or ''
             if picking.misa_invoice_covered_picking_ids:
                 group = picking | picking.misa_invoice_covered_picking_ids
                 row['actual_amount'] = sum(group.mapped('misa_invoice_net_actual_amount'))
@@ -1629,6 +1652,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for picking in Picking.search(shopee_domain):
             row = Picking._misa_invoice_shopee_picking_to_row(picking, today)
             row['group_picking_names'] = [picking.name]  # Shopee không có cơ chế gộp nhóm
+            row['gap_summary'] = ''  # Shopee chưa có cơ chế phân tích lý do lệch theo dòng hàng
+            row['gap_checked_at'] = ''
             diff = row['actual_amount'] - row['invoice_amount']
             if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
                 continue
@@ -3352,10 +3377,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 if line.get('is_component') and code not in misa_codes:
                     continue
                 bucket = totals.setdefault(
-                    code, {'product_name': line['product_name'], 'uom_name': line['uom_name'], 'qty': 0.0, 'value': 0.0}
+                    code, {
+                        'product_name': line['product_name'], 'uom_name': line['uom_name'],
+                        'qty': 0.0, 'value': 0.0, 'picking_names': [],
+                    }
                 )
                 bucket['qty'] += line['qty']
                 bucket['value'] += line['value']
+                if line['qty'] and picking.name not in bucket['picking_names']:
+                    bucket['picking_names'].append(picking.name)
         return totals
 
     def _misa_invoice_request_lines_by_code(self, misa_lines):
@@ -3366,10 +3396,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for line in misa_lines:
             code = line.get('inventory_item_code') or line.get('description') or '?'
             bucket = totals.setdefault(
-                code, {'product_name': line.get('description'), 'unit_name': line.get('unit_name'), 'qty': 0.0, 'value': 0.0}
+                code, {
+                    'product_name': line.get('description'), 'unit_name': line.get('unit_name'),
+                    'qty': 0.0, 'value': 0.0, 'order_codes': [],
+                }
             )
             bucket['qty'] += line.get('quantity') or 0.0
             bucket['value'] += line.get('amount_oc') or 0.0
+            order_code = (line.get('order_code') or '').strip()
+            if order_code and order_code not in bucket['order_codes']:
+                bucket['order_codes'].append(order_code)
         return totals
 
     def _misa_invoice_resolve_qty_via_unit_convert(self, code, odoo_qty, misa_qty, misa_unit_name):
@@ -3495,6 +3531,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'unit_convert_note': unit_convert_note,
                 'in_odoo_only': odoo is not None and misa is None,
                 'in_misa_only': misa is not None and odoo is None,
+                # Dòng này thuộc VỀ phiếu xuất kho nào (bên Odoo) / đơn hàng nào (bên MISA) —
+                # bắt buộc phải có khi nhóm gộp nhiều phiếu/nhiều đơn, nếu không "Thiếu trên
+                # Odoo: 550.000đ" không nói lên được gì, không biết đi hỏi ai/kiểm tra phiếu
+                # nào (bài học thật: nhóm 11 phiếu, nhìn bảng cũ không đoán được).
+                'odoo_picking_names': (odoo and odoo['picking_names']) or [],
+                'misa_order_codes': (misa and misa['order_codes']) or [],
             })
         rows.sort(key=lambda r: (not r['mismatch'], r['product_name'] or ''))
 
@@ -3586,6 +3628,89 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'slices': slices,
             'total': sum(s['amount'] for s in slices),
         }
+
+    def _misa_invoice_gap_summary_text(self, breakdown):
+        """Rút gọn group_breakdown (xem _misa_invoice_compute_group_breakdown) thành 1 chuỗi
+        ngắn, đọc được ngay trong danh sách "Đối chiếu tổng" — không cần mở drawer từng phiếu.
+        Chỉ liệt kê các lát KHÔNG PHẢI 'linked' (đó mới là phần gây lệch)."""
+        gap_slices = [s for s in breakdown['slices'] if s['kind'] != 'linked']
+        if not gap_slices:
+            return ''
+        parts = []
+        for s in gap_slices:
+            if s['kind'] == 'not_shipped':
+                parts.append('%s chưa xuất kho (%s đ)' % (s['label'], '{:,.0f}'.format(s['amount']).replace(',', '.')))
+            elif s['kind'] == 'no_picking':
+                parts.append('đơn %s chưa có phiếu xuất kho (%s đ)' % (
+                    s['order_code'], '{:,.0f}'.format(s['amount']).replace(',', '.')
+                ))
+            elif s['kind'] == 'unknown_order':
+                parts.append('không tìm thấy đơn bán %s (%s đ)' % (
+                    s['order_code'], '{:,.0f}'.format(s['amount']).replace(',', '.')
+                ))
+            elif s['kind'] == 'conflict':
+                parts.append('%s đã bị đề nghị khác nhận (%s đ)' % (
+                    s['label'], '{:,.0f}'.format(s['amount']).replace(',', '.')
+                ))
+        return '; '.join(parts)
+
+    def _misa_invoice_refresh_gap_summary(self, misa_lines=None, group_pickings=None):
+        """Tính lại và LƯU misa_invoice_gap_summary cho 1 phiếu đại diện — dùng để hiện ngay
+        trong danh sách "Đối chiếu tổng" (679 phiếu lệch) mà KHÔNG cần gọi API MISA cho từng
+        dòng khi hiện danh sách đó (chỉ đọc field đã lưu sẵn). `misa_lines`/`group_pickings` —
+        nếu đã có sẵn (VD gọi từ _misa_invoice_discover_grouped_orders, cùng 1 lượt quét) thì
+        truyền vào để khỏi gọi thêm 1 API MISA; nếu không sẽ tự fetch."""
+        self.ensure_one()
+        if not self.misa_invoice_request_refid:
+            return
+        if group_pickings is None:
+            group_pickings = self | self.misa_invoice_covered_picking_ids
+        if misa_lines is None:
+            try:
+                misa_lines = self.env['misa.api.utils'].get_invoice_request_lines(self.misa_invoice_request_refid)
+            except Exception:
+                _logger.exception("❌ [MISA GAP SUMMARY] Lỗi đọc chi tiết dòng hàng cho phiếu %s", self.name)
+                return
+        breakdown = self._misa_invoice_compute_group_breakdown(self, group_pickings, misa_lines)
+        self.write({
+            'misa_invoice_gap_summary': self._misa_invoice_gap_summary_text(breakdown),
+            'misa_invoice_gap_checked_at': fields.Datetime.now(),
+        })
+
+    def _misa_invoice_gap_summary_domain(self):
+        return [
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('misa_invoice_state', '=', 'invoiced'),
+            ('misa_invoice_master_picking_id', '=', False),
+            ('misa_invoice_request_refid', '!=', False),
+            ('misa_invoice_amount_mismatch', '=', True),
+        ]
+
+    @api.model
+    def get_misa_invoice_gap_summary_candidates(self, limit=100):
+        """Danh sách phiếu đại diện ĐANG lệch (misa_invoice_amount_mismatch) cần tính/cập nhật
+        lý do lệch — dùng cho panel tiến độ trên dashboard, giống hệt các nút quét khác."""
+        Picking = self.sudo()
+        domain = self._misa_invoice_gap_summary_domain()
+        pickings = Picking.search(domain, order='misa_invoice_gap_checked_at asc nulls first', limit=limit)
+        return {
+            'candidates': [{'id': p.id, 'name': p.name} for p in pickings],
+            'total': Picking.search_count(domain),
+        }
+
+    @api.model
+    def refresh_misa_invoice_gap_summary(self, picking_id):
+        """Cập nhật lý do lệch cho ĐÚNG 1 phiếu — gọi lặp lại từ dashboard (1 lệnh/phiếu) để
+        hiện tiến độ thực, giống hệt check_misa_invoice_grouped_order."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return {'error': 'Phiếu này không còn tồn tại.'}
+        try:
+            picking._misa_invoice_refresh_gap_summary()
+            return {'gap_summary': picking.misa_invoice_gap_summary or ''}
+        except Exception as e:
+            _logger.exception("❌ [MISA GAP SUMMARY] Lỗi cập nhật lý do lệch cho phiếu %s", picking.name)
+            return {'error': str(e)}
 
     @api.model
     def get_misa_invoice_report_action(
