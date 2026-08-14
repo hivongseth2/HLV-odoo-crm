@@ -263,6 +263,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.depends(
         'misa_invoice_state', 'misa_invoice_amount', 'misa_invoice_net_actual_amount',
         'misa_invoice_returned_amount', 'misa_invoice_master_picking_id',
+        'misa_invoice_covered_picking_ids.misa_invoice_net_actual_amount',
+        'misa_invoice_covered_picking_ids.misa_invoice_returned_amount',
     )
     def _compute_misa_invoice_effective_amount(self):
         for picking in self:
@@ -272,8 +274,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 # KHÔNG được ghi đè thành net_actual_amount, nếu không mọi tổng cộng dồn phẳng
                 # (read_group misa_invoice_effective_amount:sum) sẽ cộng trùng với phiếu gốc.
                 picking.misa_invoice_effective_amount = 0.0
-            elif picking.misa_invoice_state == 'invoiced' and picking.misa_invoice_returned_amount > 0:
-                picking.misa_invoice_effective_amount = picking.misa_invoice_net_actual_amount
+                continue
+            # Trả hàng có thể xảy ra ở BẤT KỲ phiếu nào trong nhóm (chính phiếu gốc hoặc 1
+            # trong các phiếu ăn theo) — phải cộng dồn TOÀN NHÓM (không chỉ riêng phiếu gốc)
+            # rồi mới quyết định có "coi như đã điều chỉnh" hay không, nếu không sẽ vứt mất
+            # tiền của các phiếu ăn theo khác, tưởng nhầm là lệch (case KBC/OUT/10603 thực tế
+            # gặp: phiếu gốc tự có trả hàng, effective_amount trước đây tính ra 0 tiền đóng góp
+            # của 6 phiếu ăn theo còn lại).
+            group_returned = picking.misa_invoice_returned_amount + sum(
+                picking.misa_invoice_covered_picking_ids.mapped('misa_invoice_returned_amount')
+            )
+            if picking.misa_invoice_state == 'invoiced' and group_returned > 0:
+                picking.misa_invoice_effective_amount = picking.misa_invoice_net_actual_amount + sum(
+                    picking.misa_invoice_covered_picking_ids.mapped('misa_invoice_net_actual_amount')
+                )
             else:
                 picking.misa_invoice_effective_amount = picking.misa_invoice_amount
 
