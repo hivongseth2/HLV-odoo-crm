@@ -69,6 +69,9 @@ export class MisaInvoiceDashboard extends Component {
             isLoading: true,
             isScanning: false,
             isScanningGroups: false,
+            showGroupScanPanel: false,
+            groupScanProgress: { done: 0, total: 0 },
+            groupScanLog: [],
             isSavingCutoff: false,
             data: null,
             urgent: [],
@@ -490,28 +493,61 @@ export class MisaInvoiceDashboard extends Component {
 
     /** Nút "Quét đơn xuất kèm" — đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận để
      * tìm đơn hàng khác được xuất hóa đơn CHUNG mà cơ chế master_refno chính không phát hiện
-     * được (xem _misa_invoice_discover_grouped_orders ở backend). Có thể cần bấm lại nhiều lần
-     * nếu số lượng nhiều hơn 1 lô (100 phiếu/lần). */
+     * được (xem _misa_invoice_discover_grouped_orders ở backend). Gọi TỪNG PHIẾU MỘT (không
+     * gọi 1 lệnh lớn xử lý ngầm cả trăm phiếu) để hiện tiến độ thực — mỗi phiếu tốn thêm 1 API
+     * MISA nên có thể mất vài phút nếu số lượng nhiều, cần thấy được đang chạy tới đâu. Có thể
+     * cần bấm lại nếu số lượng nhiều hơn 1 lô (100 phiếu/lần). */
     async scanGroupedOrders() {
         if (this.state.isScanningGroups) {
             return;
         }
         this.state.isScanningGroups = true;
+        this.state.showGroupScanPanel = true;
+        this.state.groupScanLog = [];
+        this.state.groupScanProgress = { done: 0, total: 0 };
+        let totalDiscovered = 0;
+        let totalChecked = 0;
         try {
-            const resp = await this.orm.call("stock.picking", "scan_misa_invoice_grouped_orders", [], {});
-            if (resp.discovered) {
+            const resp = await this.orm.call("stock.picking", "get_misa_invoice_grouped_orders_candidates", [], {});
+            this.state.groupScanProgress.total = resp.candidates.length;
+            for (const candidate of resp.candidates) {
+                let result;
+                try {
+                    result = await this.orm.call("stock.picking", "check_misa_invoice_grouped_order", [candidate.id], {});
+                } catch (e) {
+                    result = { error: e.message || String(e) };
+                }
+                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có đơn xuất kèm" };
+                if (result.error) {
+                    entry.statusLabel = "Lỗi: " + result.error;
+                    entry.error = true;
+                } else if (result.discovered_count) {
+                    entry.statusLabel = `Phát hiện ${result.discovered_count} phiếu xuất kèm: ${result.discovered_names.join(", ")}`;
+                    totalDiscovered += result.discovered_count;
+                }
+                this.state.groupScanLog.unshift(entry);
+                this.state.groupScanProgress.done += 1;
+                totalChecked += 1;
+            }
+            if (totalDiscovered) {
                 this.notification.add(
-                    `Đã quét ${resp.checked} phiếu, phát hiện thêm ${resp.discovered} phiếu xuất kèm.`,
+                    `Đã quét ${totalChecked} phiếu, phát hiện thêm ${totalDiscovered} phiếu xuất kèm.`,
                     { type: "success" }
                 );
                 await this._reload();
             } else {
-                this.notification.add(`Đã quét ${resp.checked} phiếu, không phát hiện đơn xuất kèm nào mới.`, { type: "info" });
+                this.notification.add(`Đã quét ${totalChecked} phiếu, không phát hiện đơn xuất kèm nào mới.`, { type: "info" });
             }
         } catch (e) {
             this.notification.add("Lỗi quét đơn xuất kèm: " + (e.message || e), { type: "danger" });
         }
         this.state.isScanningGroups = false;
+    }
+
+    closeGroupScanPanel() {
+        if (!this.state.isScanningGroups) {
+            this.state.showGroupScanPanel = false;
+        }
     }
 
     onIncludeInvoicedToggle(ev) {

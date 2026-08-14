@@ -538,20 +538,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ) % (len(to_cover), ', '.join(to_cover.mapped('name')))
         )
 
-    @api.model
-    def scan_misa_invoice_grouped_orders(self, limit=100):
-        """Quét các phiếu ĐÃ 'invoiced' (không ăn theo ai) nhưng CHƯA từng được kiểm tra xem đề
-        nghị xuất HĐ của nó có xuất kèm đơn nào khác không — dùng để BACKFILL cho các phiếu đã
-        invoiced TRƯỚC KHI có tính năng này (xem migrations/1.4), hoặc chạy lại thủ công khi
-        nghi ngờ còn sót (nút 'Quét đơn xuất kèm' trên dashboard)."""
-        Picking = self.sudo()
-        candidates = Picking.search([
+    def _misa_invoice_grouped_orders_domain(self):
+        return [
             ('picking_type_id.code', '=', 'outgoing'),
             ('misa_invoice_state', '=', 'invoiced'),
             ('misa_invoice_master_picking_id', '=', False),
             ('misa_invoice_request_refid', '!=', False),
             ('misa_invoice_group_checked', '=', False),
-        ], limit=limit)
+        ]
+
+    @api.model
+    def scan_misa_invoice_grouped_orders(self, limit=100):
+        """Quét các phiếu ĐÃ 'invoiced' (không ăn theo ai) nhưng CHƯA từng được kiểm tra xem đề
+        nghị xuất HĐ của nó có xuất kèm đơn nào khác không — 1 lệnh XỬ LÝ NGẦM cả lô, dùng cho
+        migration backfill (migrations/1.4), KHÔNG dùng cho nút bấm trên dashboard nữa (không
+        có tiến độ hiện ra giữa chừng, phiếu nào cũng phải gọi thêm 1 API MISA nên với lô 100
+        phiếu có thể mất vài phút mà không thấy gì — xem get_misa_invoice_grouped_orders_candidates
+        + check_misa_invoice_grouped_order để hiện tiến độ từng phiếu)."""
+        Picking = self.sudo()
+        candidates = Picking.search(self._misa_invoice_grouped_orders_domain(), limit=limit)
         discovered_total = 0
         for picking in candidates:
             try:
@@ -562,6 +567,37 @@ class StockPickingMisaInvoiceStatus(models.Model):
             except Exception:
                 _logger.exception("❌ [MISA GROUP DISCOVER] Lỗi quét phiếu %s", picking.name)
         return {'checked': len(candidates), 'discovered': discovered_total}
+
+    @api.model
+    def get_misa_invoice_grouped_orders_candidates(self, limit=100):
+        """Danh sách phiếu SẼ được quét (chưa gọi MISA) — dùng để dashboard chạy từng phiếu một
+        và hiện tiến trình thực qua check_misa_invoice_grouped_order(), giống hệt cách
+        get_misa_invoice_scan_candidates() làm cho nút 'Kiểm tra MISA ngay'."""
+        Picking = self.sudo()
+        domain = self._misa_invoice_grouped_orders_domain()
+        pickings = Picking.search(domain, limit=limit)
+        return {
+            'candidates': [{'id': p.id, 'name': p.name} for p in pickings],
+            'total': Picking.search_count(domain),
+        }
+
+    @api.model
+    def check_misa_invoice_grouped_order(self, picking_id):
+        """Quét đơn xuất kèm cho ĐÚNG 1 phiếu — gọi lặp lại từ dashboard (1 lệnh/phiếu) để hiện
+        tiến độ thực, thay vì 1 lệnh lớn xử lý ngầm cả trăm phiếu không thấy gì giữa chừng."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return {'error': 'Phiếu này không còn tồn tại.'}
+        try:
+            before = picking.misa_invoice_covered_picking_ids
+            picking._misa_invoice_discover_grouped_orders()
+            picking.invalidate_recordset(['misa_invoice_covered_picking_ids'])
+            after = picking.misa_invoice_covered_picking_ids
+            new_covered = after - before
+            return {'discovered_count': len(new_covered), 'discovered_names': new_covered.mapped('name')}
+        except Exception as e:
+            _logger.exception("❌ [MISA GROUP DISCOVER] Lỗi quét phiếu %s", picking.name)
+            return {'error': str(e)}
 
     def _misa_invoice_dedupe_request_refid_groups(self, request_refids=None):
         """Lưới an toàn dự phòng cho việc gộp hóa đơn: cơ chế gộp chính (master_refno, xem
