@@ -30,6 +30,7 @@ class ZaloSyncAPI(ZaloBaseAPI, http.Controller):
             Param = request.env["ir.config_parameter"].sudo()
             forced_cat = Param.get_param("zalo_miniapp_forced_catalog_version", "")
             forced_ban = Param.get_param("zalo_miniapp_forced_banner_version", "")
+            forced_loy = Param.get_param("zalo_miniapp_forced_loyalty_version", "")
 
             catalog_ts = 0
             banner_ts = 0
@@ -114,9 +115,30 @@ class ZaloSyncAPI(ZaloBaseAPI, http.Controller):
             else:
                 banner_ts = int(forced_ban)
 
+            # 4. Loyalty catalog version (tiers + voucher packages + program config)
+            if not (forced_loy and forced_loy.isdigit()):
+                loyalty_timestamps = []
+                for model, domain in (
+                    ("hlv.loyalty.tier", []),
+                    ("hlv.loyalty.voucher.package", [("active", "=", True)]),
+                    ("hlv.loyalty.program", [("active", "=", True)]),
+                ):
+                    try:
+                        rec = request.env[model].sudo().search(domain, order="write_date desc, id desc", limit=1)
+                        if rec and (rec.write_date or rec.create_date):
+                            loyalty_timestamps.append(int(fields.Datetime.to_datetime(rec.write_date or rec.create_date).timestamp()))
+                    except Exception as e:
+                        _logger.warning("Error calculating %s max write_date: %s", model, e)
+                loyalty_ts = max(loyalty_timestamps) if loyalty_timestamps else int(time.time())
+                if forced_loy and forced_loy.isdigit():
+                    loyalty_ts = max(loyalty_ts, int(forced_loy))
+            else:
+                loyalty_ts = int(forced_loy)
+
             data = {
                 "catalog_version": str(catalog_ts),
                 "banner_version": str(banner_ts),
+                "loyalty_version": str(loyalty_ts),
                 "timestamp": int(time.time()),
             }
 
