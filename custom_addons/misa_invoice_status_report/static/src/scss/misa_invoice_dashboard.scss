@@ -90,6 +90,15 @@
             flex-wrap: wrap;
             justify-content: flex-end;
         }
+
+        .miv-admin-tools-toggle {
+            color: var(--miv-ink-muted);
+            padding: 10px 8px;
+            box-shadow: none;
+
+            i { margin: 0 1px; }
+            &:hover { color: var(--miv-ink-2); text-decoration: none; }
+        }
     }
 
     // ===== Toolbar: cutoff config + month filter =====
@@ -271,6 +280,8 @@
         padding: 14px;
         margin-bottom: 14px;
         flex-wrap: wrap;
+        max-width: 100%;
+        overflow-x: hidden;
 
         @media (max-width: 480px) { flex-direction: column; align-items: center; }
     }
@@ -282,11 +293,18 @@
 
     .miv-legend-breakdown {
         flex: 1;
-        min-width: 200px;
-        max-height: 220px;
+        min-width: 0;
+        max-width: 100%;
+        max-height: 260px;
         overflow-y: auto;
+        // Bắt buộc phải khai NGAY overflow-x (không để trình duyệt tự suy ra "auto" theo spec
+        // khi chỉ set overflow-y — đây chính là nguyên nhân xuất hiện thanh cuộn ngang lạ ở
+        // khung "Vì sao lệch") — mọi phần tử bên trong PHẢI tự rút gọn (ellipsis) thay vì đẩy
+        // khung rộng ra.
+        overflow-x: hidden;
 
-        li { align-items: flex-start; }
+        li { align-items: flex-start; min-width: 0; border-bottom: 1px solid var(--miv-grid); }
+        li:last-child { border-bottom: none; }
 
         .miv-dot { margin-top: 4px; }
 
