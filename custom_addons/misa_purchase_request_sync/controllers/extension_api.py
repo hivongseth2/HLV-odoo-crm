@@ -360,6 +360,7 @@ class MisaExtensionController(http.Controller):
                     "qty": line.product_uom_qty,
                     "price": line.price_unit,
                     "discount": line.discount,
+                    "loyalty_discount_pct": line.loyalty_discount_pct if hasattr(line, 'loyalty_discount_pct') else 0.0,
                     "tax_percentages": sorted(line.tax_id.mapped('amount')),
                     "uom": line.product_uom.name or "",
                     "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
@@ -442,6 +443,7 @@ class MisaExtensionController(http.Controller):
                         "qty": line.product_uom_qty,
                         "price": line.price_unit,
                         "discount": line.discount,
+                        "loyalty_discount_pct": line.loyalty_discount_pct if hasattr(line, 'loyalty_discount_pct') else 0.0,
                         "tax_percentages": sorted(line.tax_id.mapped('amount')),
                         "uom": line.product_uom.name or "",
                         "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
@@ -475,6 +477,7 @@ class MisaExtensionController(http.Controller):
                         "qty": float(item.get("crm_qty", item.get("qty")) or 0.0),
                         "price": float(item.get("crm_price", item.get("price")) or 0.0),
                         "discount": float(item.get("crm_discount", item.get("discount")) or 0.0),
+                        "loyalty_discount_pct": float(item.get("loyalty_discount_pct") or 0.0),
                         "tax_percentages": sorted(
                             env['account.tax'].sudo().browse(item.get("tax_ids") or []).exists().mapped('amount')
                         ),
@@ -895,9 +898,19 @@ class MisaExtensionController(http.Controller):
         env = request.env(user=admin_user) if admin_user else request.env
 
         # 1. Lấy danh sách NCC
+        # Đồng bộ domain với wizard_views.xml / purchase_order_view.xml (2 nơi khác
+        # cùng module đang chọn NCC): chỉ dựa vào hlv_business_role (computed từ
+        # hlv_has_purchase_order = supplier_rank>0 HOẶC đã có purchase.order) sẽ bỏ
+        # sót NCC mới sync từ MISA hoặc mới tick "Nhà cung cấp" nhưng CHƯA từng có
+        # đơn mua nào trong Odoo — họ vẫn chọn được trong form Odoo (nhờ 2 domain
+        # kia) nhưng lại "biến mất" trên Extension.
         domain = [
             ('parent_id', '=', False),
-            ('hlv_business_role', 'in', ['supplier', 'vendor'])
+            ('active', '=', True),
+            '|', '|',
+            ('hlv_business_role', 'in', ['supplier', 'vendor']),
+            ('supplier_rank', '>', 0),
+            ('misa_account_object_id', '!=', False),
         ]
         q = payload.get('q') or kwargs.get('q')
         if q:
