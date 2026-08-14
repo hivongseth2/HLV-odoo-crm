@@ -5,3 +5,5 @@ from . import sale_order
 from . import res_users
 from . import misa_invoice_customs_line
 from . import misa_invoice_customs_match
+from . import misa_invoice_grouped_line
+from . import misa_invoice_grouped_match

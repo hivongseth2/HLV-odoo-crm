@@ -29,6 +29,18 @@
                             <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
                             Kiểm tra MISA ngay
                         </button>
+                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
+                                t-on-click="scanGroupedOrders" t-att-disabled="state.isScanningGroups"
+                                title="Đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận, tìm đơn hàng khác được xuất hóa đơn CHUNG mà MISA không tự báo được (VD sale gộp 2 đơn vào 1 đề nghị) — phiếu của đơn đó đang bị treo 'Chưa có đề nghị' dù thực tế đã có hóa đơn.">
+                            <i class="fa fa-search" t-att-class="{'fa-spin': state.isScanningGroups}"/>
+                            Quét đơn xuất kèm
+                        </button>
+                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
+                                t-on-click="repairGroupedOrders" t-att-disabled="state.isRepairingGroups"
+                                title="Kiểm tra lại các phiếu đã từng được gán 'ăn theo' — sửa lại phiếu nào bị gán SAI (đề nghị chỉ phủ 1 phần giá trị của phiếu đó, không phải toàn bộ) do lỗi phiên bản cũ của tính năng quét đơn xuất kèm.">
+                            <i class="fa fa-wrench" t-att-class="{'fa-spin': state.isRepairingGroups}"/>
+                            Sửa gộp sai
+                        </button>
                     </div>
                 </div>
 
@@ -100,6 +112,68 @@
                     </ul>
                     <div class="miv-scan-done" t-if="!state.isScanning and state.scanProgress.total">
                         <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.scanProgress.done"/> phiếu.
+                    </div>
+                </div>
+
+                <!-- ===== Scan progress panel: Quét đơn xuất kèm ===== -->
+                <div class="miv-scan-panel" t-if="state.showGroupScanPanel">
+                    <div class="miv-scan-panel-header">
+                        <span>
+                            <i class="fa fa-search"/>
+                            Đang quét đơn xuất kèm:
+                            <b><t t-esc="state.groupScanProgress.done"/> / <t t-esc="state.groupScanProgress.total"/></b>
+                        </span>
+                        <i class="fa fa-times miv-scan-panel-close" t-if="!state.isScanningGroups" t-on-click="closeGroupScanPanel"/>
+                    </div>
+                    <div class="miv-scan-progress-bar">
+                        <div class="miv-scan-progress-fill"
+                             t-attf-style="width: {{ state.groupScanProgress.total ? Math.round(state.groupScanProgress.done / state.groupScanProgress.total * 100) : 0 }}%"/>
+                    </div>
+                    <ul class="miv-scan-log">
+                        <li t-foreach="state.groupScanLog.slice(0, 8)" t-as="entry" t-key="entry_index"
+                            t-attf-class="{{ entry.error ? 'miv-scan-log-error' : '' }}">
+                            <i class="fa fa-spinner fa-spin" t-if="entry.loading"/>
+                            <i class="fa fa-check text-success" t-if="!entry.loading and !entry.error"/>
+                            <i class="fa fa-exclamation-triangle" t-if="!entry.loading and entry.error"/>
+                            <b><t t-esc="entry.name"/></b> — <t t-esc="entry.statusLabel"/>
+                        </li>
+                    </ul>
+                    <div class="miv-scan-done" t-if="!state.isScanningGroups and state.groupScanProgress.total">
+                        <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.groupScanProgress.done"/> phiếu.
+                    </div>
+                    <div class="miv-empty" t-if="!state.isScanningGroups and !state.groupScanProgress.total">
+                        Không có phiếu nào cần quét.
+                    </div>
+                </div>
+
+                <!-- ===== Scan progress panel: Sửa gộp sai ===== -->
+                <div class="miv-scan-panel" t-if="state.showRepairScanPanel">
+                    <div class="miv-scan-panel-header">
+                        <span>
+                            <i class="fa fa-wrench"/>
+                            Đang kiểm tra sửa gộp sai:
+                            <b><t t-esc="state.repairScanProgress.done"/> / <t t-esc="state.repairScanProgress.total"/></b>
+                        </span>
+                        <i class="fa fa-times miv-scan-panel-close" t-if="!state.isRepairingGroups" t-on-click="closeRepairScanPanel"/>
+                    </div>
+                    <div class="miv-scan-progress-bar">
+                        <div class="miv-scan-progress-fill"
+                             t-attf-style="width: {{ state.repairScanProgress.total ? Math.round(state.repairScanProgress.done / state.repairScanProgress.total * 100) : 0 }}%"/>
+                    </div>
+                    <ul class="miv-scan-log">
+                        <li t-foreach="state.repairScanLog.slice(0, 8)" t-as="entry" t-key="entry_index"
+                            t-attf-class="{{ entry.error ? 'miv-scan-log-error' : '' }}">
+                            <i class="fa fa-spinner fa-spin" t-if="entry.loading"/>
+                            <i class="fa fa-check text-success" t-if="!entry.loading and !entry.error"/>
+                            <i class="fa fa-exclamation-triangle" t-if="!entry.loading and entry.error"/>
+                            <b><t t-esc="entry.name"/></b> — <t t-esc="entry.statusLabel"/>
+                        </li>
+                    </ul>
+                    <div class="miv-scan-done" t-if="!state.isRepairingGroups and state.repairScanProgress.total">
+                        <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.repairScanProgress.done"/> phiếu.
+                    </div>
+                    <div class="miv-empty" t-if="!state.isRepairingGroups and !state.repairScanProgress.total">
+                        Không có phiếu nào cần kiểm tra.
                     </div>
                 </div>
 
@@ -416,6 +490,8 @@
                                         <i class="fa fa-pencil miv-link-icon" t-if="row.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{row.manual_refno}}"/>
                                         <i class="fa fa-undo miv-link-icon" t-if="row.has_return"
                                            t-attf-title="Có trả hàng — tiền HĐ ({{formatCurrency(row.invoice_amount)}}) coi như kế toán đã điều chỉnh xuống đúng bằng tiền thực xuất ròng. Tiền HĐ gốc ban đầu: {{formatCurrency(row.original_invoice_amount)}}."/>
+                                        <i class="fa fa-share-alt miv-link-icon" t-if="row.has_partial_group_invoice"
+                                           t-attf-title="Đã xuất HĐ MỘT PHẦN qua đề nghị chung của phiếu khác (khớp theo dòng hàng): {{formatCurrency(row.grouped_matched_amount)}} — phần còn lại vẫn cần đề nghị/hóa đơn riêng."/>
                                     </td>
                                     <td><t t-esc="row.partner_name"/></td>
                                     <td><t t-esc="row.sale_order_name"/></td>
@@ -673,6 +749,8 @@
                                             <i class="fa fa-pencil miv-link-icon" t-if="row.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{row.manual_refno}}"/>
                                             <i class="fa fa-undo miv-link-icon" t-if="row.has_return"
                                                t-attf-title="Có trả hàng — tiền HĐ ({{formatCurrency(row.invoice_amount)}}) coi như kế toán đã điều chỉnh xuống đúng bằng tiền thực xuất ròng. Tiền HĐ gốc ban đầu: {{formatCurrency(row.original_invoice_amount)}}."/>
+                                            <i class="fa fa-share-alt miv-link-icon" t-if="row.has_partial_group_invoice"
+                                               t-attf-title="Đã xuất HĐ MỘT PHẦN qua đề nghị chung của phiếu khác (khớp theo dòng hàng): {{formatCurrency(row.grouped_matched_amount)}} — phần còn lại vẫn cần đề nghị/hóa đơn riêng."/>
                                         </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.sale_order_name"/></td>
@@ -1146,6 +1224,14 @@
                                 đang được <b>coi như kế toán đã điều chỉnh</b> xuống đúng bằng tiền thực xuất ròng (hệ thống không xác minh
                                 được điều chỉnh thật trên MISA). Tiền HĐ gốc ban đầu (chưa điều chỉnh):
                                 <b><t t-esc="formatCurrency(state.drawerPicking.original_invoice_amount)"/></b>.
+                            </div>
+
+                            <div class="miv-drawer-linking miv-drawer-linking-warning" t-if="state.drawerPicking.has_partial_group_invoice">
+                                <i class="fa fa-share-alt"/>
+                                Phiếu này đã được xuất hóa đơn <b>MỘT PHẦN</b> qua đề nghị xuất HĐ chung của 1 phiếu khác (khớp theo
+                                từng dòng hàng): <b><t t-esc="formatCurrency(state.drawerPicking.grouped_matched_amount)"/></b> trên
+                                tổng tiền thực xuất <t t-esc="formatCurrency(state.drawerPicking.actual_amount)"/>. Phần đã khớp được
+                                trừ vào số tiền còn thiếu hóa đơn ở trên — phần còn lại vẫn cần 1 đề nghị/hóa đơn riêng.
                             </div>
 
                             <div class="miv-drawer-actions" t-if="state.data.can_configure and state.drawerPicking.state != 'invoiced'">
@@ -1707,6 +1793,10 @@
                                         t-on-click="() => this.openDiscrepancyRow(row)">
                                         <td>
                                             <b><t t-esc="row.name"/></b>
+                                            <span class="miv-badge miv-badge-state-not_checked" t-if="row.group_picking_names and row.group_picking_names.length > 1"
+                                                  t-attf-title="Đây là 1 đề nghị xuất HĐ gộp chung — tổng tiền xuất kho tính đủ cả {{row.group_picking_names.length}} phiếu: {{row.group_picking_names.join(', ')}}">
+                                                +<t t-esc="row.group_picking_names.length - 1"/> phiếu gộp chung
+                                            </span>
                                             <div class="miv-subtable-hint"><t t-esc="row.partner_name"/></div>
                                         </td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
