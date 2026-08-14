@@ -584,6 +584,56 @@ class LoyaltyExternalAPI(http.Controller):
             return self._json_err('Không tìm thấy khách hàng', status=404)
         return self._json_ok(results if len(results) > 1 else results[0])
 
+    @http.route('/api/v1/loyalty/auth/login', type='http',
+                auth='public', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    def auth_login(self, **kwargs):
+        """POST /api/v1/loyalty/auth/login
+        Body JSON: {"phone": "0901234567", "password": "..."} or {"login": "...", "password": "..."}
+
+        Xác thực tài khoản Portal (hlv.loyalty.portal.account) bằng SĐT/Username + Mật khẩu.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
+
+        body = self._request_json()
+        login_input = (kwargs.get('login') or kwargs.get('phone') or body.get('login') or body.get('phone') or '').strip()
+        password = (kwargs.get('password') or body.get('password') or '').strip()
+
+        if not login_input:
+            return self._json_err('Vui lòng nhập số điện thoại hoặc tên đăng nhập', status=400, code='MISSING_LOGIN')
+        if not password:
+            return self._json_err('Vui lòng nhập mật khẩu', status=400, code='MISSING_PASSWORD')
+
+        phone_normalized = self._normalize_vn_phone(login_input)
+        PortalAccount = request.env['hlv.loyalty.portal.account'].sudo()
+
+        domain = [('active', '=', True)]
+        if phone_normalized:
+            domain += ['|', ('username', '=', login_input), ('portal_phone', '=', phone_normalized)]
+        else:
+            domain += [('username', '=', login_input)]
+
+        existing_accounts = PortalAccount.search(domain, limit=1)
+        if not existing_accounts:
+            return self._json_err('Số điện thoại chưa đăng ký tài khoản loyalty', status=404, code='NOT_REGISTERED')
+
+        account = PortalAccount.authenticate(login_input, password)
+        if not account:
+            return self._json_err('Mật khẩu không chính xác. Vui lòng kiểm tra lại.', status=401, code='INVALID_PASSWORD')
+
+        root = account.partner_id._get_loyalty_root()
+        summary = self._partner_summary(root)
+        summary['phone'] = account.portal_phone or phone_normalized or login_input
+        summary['account_id'] = account.id
+        summary['username'] = account.username
+        if account.buyer_name:
+            summary['buyer_name'] = account.buyer_name
+
+        is_default = account._verify_password('hlv@2026', account.password_hash)
+        summary['is_default_password'] = is_default
+
+        return self._json_ok(summary)
+
     @http.route('/api/v1/loyalty/zalo/phone', type='http',
                 auth='public', methods=['POST'], csrf=False, cors='*')
     def resolve_zalo_phone(self, **kwargs):
