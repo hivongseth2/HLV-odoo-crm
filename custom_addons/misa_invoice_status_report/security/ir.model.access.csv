@@ -3,3 +3,5 @@ access_misa_invoice_exception_wizard,misa.invoice.exception.wizard,model_misa_in
 access_misa_invoice_manual_link_wizard,misa.invoice.manual.link.wizard,model_misa_invoice_manual_link_wizard,misa_invoice_status_report.group_misa_invoice_reconciliation,1,1,1,0
 access_misa_invoice_customs_line_user,misa.invoice.customs.line,model_misa_invoice_customs_line,base.group_user,1,1,1,1
 access_misa_invoice_customs_match_user,misa.invoice.customs.match,model_misa_invoice_customs_match,base.group_user,1,1,1,1
+access_misa_invoice_grouped_line_user,misa.invoice.grouped.line,model_misa_invoice_grouped_line,base.group_user,1,1,1,1
+access_misa_invoice_grouped_match_user,misa.invoice.grouped.match,model_misa_invoice_grouped_match,base.group_user,1,1,1,1
