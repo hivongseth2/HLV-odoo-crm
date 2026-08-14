@@ -1744,6 +1744,10 @@
                                         t-on-click="() => this.openDiscrepancyRow(row)">
                                         <td>
                                             <b><t t-esc="row.name"/></b>
+                                            <span class="miv-badge miv-badge-state-not_checked" t-if="row.group_picking_names and row.group_picking_names.length > 1"
+                                                  t-attf-title="Đây là 1 đề nghị xuất HĐ gộp chung — tổng tiền xuất kho tính đủ cả {{row.group_picking_names.length}} phiếu: {{row.group_picking_names.join(', ')}}">
+                                                +<t t-esc="row.group_picking_names.length - 1"/> phiếu gộp chung
+                                            </span>
                                             <div class="miv-subtable-hint"><t t-esc="row.partner_name"/></div>
                                         </td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
