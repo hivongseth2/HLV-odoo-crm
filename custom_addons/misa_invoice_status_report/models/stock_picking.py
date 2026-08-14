@@ -85,6 +85,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_no = fields.Char(string='Số hóa đơn MISA', copy=False)
     misa_invoice_date = fields.Date(string='Ngày hóa đơn MISA', copy=False)
     misa_invoice_amount = fields.Float(string='Tiền hóa đơn MISA', copy=False)
+    # Đã đọc chi tiết dòng hàng (order_code) của đề nghị xuất HĐ để chủ động tìm đơn hàng KHÁC
+    # được xuất kèm trong CÙNG đề nghị này chưa — xem _misa_invoice_discover_grouped_orders().
+    # KHÔNG dùng "misa_invoice_covered_picking_ids rỗng" để suy ra "chưa kiểm tra", vì đa số
+    # hóa đơn chỉ có 1 đơn (không có ai xuất kèm) nên covered_picking_ids SẼ MÃI rỗng dù đã
+    # kiểm tra xong — phải có field riêng để không gọi lại MISA vô ích mỗi lần quét.
+    misa_invoice_group_checked = fields.Boolean(string='Đã quét đơn xuất kèm', copy=False)
 
     # Đối soát tự động tra MISA bằng refno = TÊN PHIẾU. Nếu sale quên ghi đúng số phiếu xuất
     # kho lúc tạo đề nghị xuất HĐ trên MISA, MISA tự sinh 1 mã đề nghị khác (VD "DN00123")
@@ -436,6 +442,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         picking.misa_invoice_amount_diff,
                     )
                 )
+            # Chỉ phiếu ĐẠI DIỆN (không phải ăn theo ai) mới cần tự đọc chi tiết dòng hàng đề
+            # nghị để tìm đơn xuất kèm — phiếu ăn theo đã có amount=0 rồi, đọc lại chỉ tốn thêm
+            # 1 API MISA vô ích (xem _misa_invoice_discover_grouped_orders).
+            if not master_picking and status['state'] == 'invoiced' and not picking.misa_invoice_group_checked:
+                try:
+                    picking._misa_invoice_discover_grouped_orders()
+                except Exception:
+                    _logger.exception(
+                        "❌ [MISA GROUP DISCOVER] Lỗi quét đơn xuất kèm cho phiếu %s", picking.name,
+                    )
             results.append({
                 'id': picking.id,
                 'name': picking.name,
@@ -446,6 +462,106 @@ class StockPickingMisaInvoiceStatus(models.Model):
             results += extra_masters_to_check.action_check_misa_invoice_status(request_map=request_map)
         (self | extra_masters_to_check)._misa_invoice_dedupe_request_refid_groups()
         return results
+
+    def _misa_invoice_discover_grouped_orders(self):
+        """Sau khi phiếu này được xác nhận 'invoiced' (không phải ăn theo ai) — đọc CHI TIẾT
+        TỪNG DÒNG HÀNG của đề nghị xuất HĐ (get_invoice_request_lines, mỗi dòng có order_code
+        riêng) để CHỦ ĐỘNG tìm đơn hàng KHÁC được xuất hóa đơn CHUNG trong cùng đề nghị này (VD
+        sale gộp 2 đơn của cùng khách vào 1 đề nghị) — cơ chế master_refno chính (dựa vào MISA
+        tự báo đúng TÊN phiếu đại diện) KHÔNG phát hiện được case này, vì phiếu của đơn kia
+        không hề xuất hiện trong refno/journal_memo — chỉ lộ ra khi đọc order_code ở CHI TIẾT
+        DÒNG HÀNG. Phiếu xuất kho của (các) đơn hàng phát hiện thêm được gán "ăn theo" phiếu
+        này, tránh bị treo mãi ở 'Chưa có đề nghị' dù thực tế đã có hóa đơn.
+
+        Chỉ chạy 1 LẦN cho mỗi phiếu (misa_invoice_group_checked) — tránh gọi thêm 1 API MISA
+        (get_paging_detail) mỗi lần phiếu được kiểm tra lại, kể cả khi không tìm thấy gì thêm
+        (đa số hóa đơn chỉ có 1 đơn, không có ai xuất kèm)."""
+        self.ensure_one()
+        if self.misa_invoice_group_checked or not self.misa_invoice_request_refid or self.misa_invoice_master_picking_id:
+            return
+        own_order_names = set(self.misa_invoice_sale_order_ids.mapped('name'))
+        misa_utils = self.env['misa.api.utils']
+        try:
+            lines = misa_utils.get_invoice_request_lines(self.misa_invoice_request_refid)
+        except Exception:
+            _logger.exception(
+                "❌ [MISA GROUP DISCOVER] Lỗi đọc chi tiết dòng hàng đề nghị cho phiếu %s", self.name,
+            )
+            return
+        self.misa_invoice_group_checked = True
+        other_order_codes = {
+            (line.get('order_code') or '').strip()
+            for line in lines
+            if (line.get('order_code') or '').strip() and (line.get('order_code') or '').strip() not in own_order_names
+        }
+        if not other_order_codes:
+            return
+        orders = self.env['sale.order'].sudo().search([('name', 'in', list(other_order_codes))])
+        if not orders:
+            return
+        sibling_pickings = self.sudo().search([
+            ('misa_invoice_sale_order_ids', 'in', orders.ids),
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('state', '=', 'done'),
+            ('id', '!=', self.id),
+        ])
+        # Chỉ nhận phiếu CHƯA có quan hệ gộp hợp lệ nào khác — không "cướp" phiếu đã là
+        # gốc/ăn theo của 1 đề nghị KHÁC (tránh phá vỡ 1 nhóm gộp đúng đã có sẵn).
+        to_cover = sibling_pickings.filtered(
+            lambda p: not p.misa_invoice_master_picking_id and not p.misa_invoice_covered_picking_ids
+            and p.misa_invoice_request_refid != self.misa_invoice_request_refid
+        )
+        if not to_cover:
+            return
+        to_cover.write({
+            'misa_invoice_master_picking_id': self.id,
+            'misa_invoice_state': 'invoiced',
+            'misa_invoice_amount': 0.0,
+            'misa_invoice_no': self.misa_invoice_no,
+            'misa_invoice_date': self.misa_invoice_date,
+            'misa_invoice_request_refid': self.misa_invoice_request_refid,
+            'misa_invoice_last_checked': fields.Datetime.now(),
+            'misa_invoice_group_checked': True,
+        })
+        for c in to_cover:
+            c.message_post(
+                body=Markup(
+                    "<b>🔗 Tự động phát hiện xuất HĐ chung:</b> đơn hàng của phiếu này được xuất "
+                    "hóa đơn CHUNG với phiếu %s (đọc chi tiết dòng hàng đề nghị xuất HĐ, MISA "
+                    "không tự báo được case này) — đã gán 'ăn theo' phiếu đó, số hóa đơn %s."
+                ) % (self.name, self.misa_invoice_no or '')
+            )
+        self.message_post(
+            body=Markup(
+                "<b>🔗 Tự động phát hiện xuất HĐ chung:</b> đề nghị xuất HĐ này còn xuất kèm cho "
+                "%s đơn hàng khác (đọc chi tiết dòng hàng) — đã gán các phiếu sau làm 'ăn theo': %s."
+            ) % (len(to_cover), ', '.join(to_cover.mapped('name')))
+        )
+
+    @api.model
+    def scan_misa_invoice_grouped_orders(self, limit=100):
+        """Quét các phiếu ĐÃ 'invoiced' (không ăn theo ai) nhưng CHƯA từng được kiểm tra xem đề
+        nghị xuất HĐ của nó có xuất kèm đơn nào khác không — dùng để BACKFILL cho các phiếu đã
+        invoiced TRƯỚC KHI có tính năng này (xem migrations/1.4), hoặc chạy lại thủ công khi
+        nghi ngờ còn sót (nút 'Quét đơn xuất kèm' trên dashboard)."""
+        Picking = self.sudo()
+        candidates = Picking.search([
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('misa_invoice_state', '=', 'invoiced'),
+            ('misa_invoice_master_picking_id', '=', False),
+            ('misa_invoice_request_refid', '!=', False),
+            ('misa_invoice_group_checked', '=', False),
+        ], limit=limit)
+        discovered_total = 0
+        for picking in candidates:
+            try:
+                before = len(picking.misa_invoice_covered_picking_ids)
+                picking._misa_invoice_discover_grouped_orders()
+                picking.invalidate_recordset(['misa_invoice_covered_picking_ids'])
+                discovered_total += len(picking.misa_invoice_covered_picking_ids) - before
+            except Exception:
+                _logger.exception("❌ [MISA GROUP DISCOVER] Lỗi quét phiếu %s", picking.name)
+        return {'checked': len(candidates), 'discovered': discovered_total}
 
     def _misa_invoice_dedupe_request_refid_groups(self, request_refids=None):
         """Lưới an toàn dự phòng cho việc gộp hóa đơn: cơ chế gộp chính (master_refno, xem

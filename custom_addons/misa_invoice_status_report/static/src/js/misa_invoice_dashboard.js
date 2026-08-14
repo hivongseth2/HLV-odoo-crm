@@ -68,6 +68,7 @@ export class MisaInvoiceDashboard extends Component {
         this.state = useState({
             isLoading: true,
             isScanning: false,
+            isScanningGroups: false,
             isSavingCutoff: false,
             data: null,
             urgent: [],
@@ -485,6 +486,32 @@ export class MisaInvoiceDashboard extends Component {
         if (!this.state.isScanning) {
             this.state.showScanPanel = false;
         }
+    }
+
+    /** Nút "Quét đơn xuất kèm" — đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận để
+     * tìm đơn hàng khác được xuất hóa đơn CHUNG mà cơ chế master_refno chính không phát hiện
+     * được (xem _misa_invoice_discover_grouped_orders ở backend). Có thể cần bấm lại nhiều lần
+     * nếu số lượng nhiều hơn 1 lô (100 phiếu/lần). */
+    async scanGroupedOrders() {
+        if (this.state.isScanningGroups) {
+            return;
+        }
+        this.state.isScanningGroups = true;
+        try {
+            const resp = await this.orm.call("stock.picking", "scan_misa_invoice_grouped_orders", [], {});
+            if (resp.discovered) {
+                this.notification.add(
+                    `Đã quét ${resp.checked} phiếu, phát hiện thêm ${resp.discovered} phiếu xuất kèm.`,
+                    { type: "success" }
+                );
+                await this._reload();
+            } else {
+                this.notification.add(`Đã quét ${resp.checked} phiếu, không phát hiện đơn xuất kèm nào mới.`, { type: "info" });
+            }
+        } catch (e) {
+            this.notification.add("Lỗi quét đơn xuất kèm: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isScanningGroups = false;
     }
 
     onIncludeInvoicedToggle(ev) {

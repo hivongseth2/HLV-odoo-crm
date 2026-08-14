@@ -29,6 +29,12 @@
                             <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
                             Kiểm tra MISA ngay
                         </button>
+                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
+                                t-on-click="scanGroupedOrders" t-att-disabled="state.isScanningGroups"
+                                title="Đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận, tìm đơn hàng khác được xuất hóa đơn CHUNG mà MISA không tự báo được (VD sale gộp 2 đơn vào 1 đề nghị) — phiếu của đơn đó đang bị treo 'Chưa có đề nghị' dù thực tế đã có hóa đơn.">
+                            <i class="fa fa-search" t-att-class="{'fa-spin': state.isScanningGroups}"/>
+                            Quét đơn xuất kèm
+                        </button>
                     </div>
                 </div>
 
