@@ -72,6 +72,10 @@ export class MisaInvoiceDashboard extends Component {
             showGroupScanPanel: false,
             groupScanProgress: { done: 0, total: 0 },
             groupScanLog: [],
+            isRepairingGroups: false,
+            showRepairScanPanel: false,
+            repairScanProgress: { done: 0, total: 0 },
+            repairScanLog: [],
             isSavingCutoff: false,
             data: null,
             urgent: [],
@@ -547,6 +551,62 @@ export class MisaInvoiceDashboard extends Component {
     closeGroupScanPanel() {
         if (!this.state.isScanningGroups) {
             this.state.showGroupScanPanel = false;
+        }
+    }
+
+    /* Sửa lại các phiếu bị gán "ăn theo" SAI bởi phiên bản CŨ của _misa_invoice_discover_grouped_orders
+     * (ép cả phiếu về đã xuất HĐ dù đề nghị chỉ phủ 1 PHẦN giá trị của nó). Cùng cơ chế
+     * từng-phiếu-một + tiến độ như scanGroupedOrders ở trên. */
+    async repairGroupedOrders() {
+        if (this.state.isRepairingGroups) {
+            return;
+        }
+        this.state.isRepairingGroups = true;
+        this.state.showRepairScanPanel = true;
+        this.state.repairScanLog = [];
+        this.state.repairScanProgress = { done: 0, total: 0 };
+        let totalReverted = 0;
+        let totalChecked = 0;
+        try {
+            const resp = await this.orm.call("stock.picking", "get_misa_invoice_grouped_orders_repair_candidates", [], {});
+            this.state.repairScanProgress.total = resp.candidates.length;
+            for (const candidate of resp.candidates) {
+                let result;
+                try {
+                    result = await this.orm.call("stock.picking", "repair_misa_invoice_grouped_order", [candidate.id], {});
+                } catch (e) {
+                    result = { error: e.message || String(e) };
+                }
+                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có gì cần sửa" };
+                if (result.error) {
+                    entry.statusLabel = "Lỗi: " + result.error;
+                    entry.error = true;
+                } else if (result.reverted_count) {
+                    entry.statusLabel = `Đã sửa ${result.reverted_count} phiếu gán sai: ${result.reverted_names.join(", ")}`;
+                    totalReverted += result.reverted_count;
+                }
+                this.state.repairScanLog.unshift(entry);
+                this.state.repairScanProgress.done += 1;
+                totalChecked += 1;
+            }
+            if (totalReverted) {
+                this.notification.add(
+                    `Đã kiểm tra ${totalChecked} phiếu đại diện, sửa lại ${totalReverted} phiếu bị gán sai trước đây.`,
+                    { type: "success" }
+                );
+                await this._reload();
+            } else {
+                this.notification.add(`Đã kiểm tra ${totalChecked} phiếu đại diện, không có phiếu nào bị gán sai.`, { type: "info" });
+            }
+        } catch (e) {
+            this.notification.add("Lỗi sửa gộp sai: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isRepairingGroups = false;
+    }
+
+    closeRepairScanPanel() {
+        if (!this.state.isRepairingGroups) {
+            this.state.showRepairScanPanel = false;
         }
     }
 
