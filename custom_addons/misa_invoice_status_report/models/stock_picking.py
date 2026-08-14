@@ -1247,7 +1247,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         Sắp xếp theo |lệch| giảm dần để thấy ngay phiếu lệch nhiều nhất.
 
         Hóa đơn hải quan CHƯA khớp phiếu xuất kho nào không có trong danh sách (không có "phiếu"
-        nào để liệt kê) — chỉ trả kèm customs_pending_amount/count để biết còn khoản này nữa."""
+        nào để liệt kê) — chỉ trả kèm customs_pending_amount/count để biết còn khoản này nữa.
+
+        Phiếu "ăn theo" 1 đề nghị gộp chung (misa_invoice_master_picking_id) KHÔNG hiện riêng —
+        cả nhóm chỉ hiện 1 dòng DUY NHẤT (ở phiếu GỐC), vì mọi phiếu trong nhóm đều lấy chung 1
+        con số lệch từ phiếu gốc (misa_invoice_amount_diff) — hiện riêng từng phiếu sẽ tưởng
+        nhầm là N vấn đề khác nhau trong khi thực ra chỉ là 1 vấn đề của cả nhóm lặp lại N lần.
+        actual_amount của dòng nhóm = TỔNG tiền thực xuất của CẢ NHÓM (không phải riêng phiếu
+        gốc) để so cho đúng nghĩa với tiền hóa đơn (cũng là tổng của cả nhóm)."""
         Picking = self.sudo()
         today = fields.Date.context_today(self)
         misa_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to, invoice_date_from, invoice_date_to)
@@ -1259,7 +1266,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         rows = []
         for picking in Picking.search(misa_domain):
+            if picking.misa_invoice_master_picking_id:
+                continue  # đã gộp vào phiếu gốc — hiện qua đúng 1 dòng của phiếu gốc đó
             row = Picking._misa_invoice_picking_to_row(picking, today)
+            if picking.misa_invoice_covered_picking_ids:
+                group = picking | picking.misa_invoice_covered_picking_ids
+                row['actual_amount'] = sum(group.mapped('misa_invoice_net_actual_amount'))
+                row['group_picking_names'] = group.mapped('name')
+            else:
+                row['group_picking_names'] = [picking.name]
             diff = row['amount_diff'] if row['state'] == 'invoiced' else row['outstanding_amount']
             if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
                 continue
@@ -1268,6 +1283,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             rows.append(row)
         for picking in Picking.search(shopee_domain):
             row = Picking._misa_invoice_shopee_picking_to_row(picking, today)
+            row['group_picking_names'] = [picking.name]  # Shopee không có cơ chế gộp nhóm
             diff = row['actual_amount'] - row['invoice_amount']
             if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
                 continue
