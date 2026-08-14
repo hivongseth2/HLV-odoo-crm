@@ -260,6 +260,61 @@
         }
     }
 
+    // ===== Donut "vì sao lệch" trong drawer (group_breakdown) =====
+    .miv-group-breakdown {
+        display: flex;
+        align-items: flex-start;
+        gap: 18px;
+        background: var(--miv-plane);
+        border: 1px solid var(--miv-grid);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+
+        @media (max-width: 480px) { flex-direction: column; align-items: center; }
+    }
+
+    .miv-donut-wrap-sm {
+        width: 108px;
+        height: 108px;
+    }
+
+    .miv-legend-breakdown {
+        flex: 1;
+        min-width: 200px;
+        max-height: 220px;
+        overflow-y: auto;
+
+        li { align-items: flex-start; }
+
+        .miv-dot { margin-top: 4px; }
+
+        .miv-legend-label {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .miv-legend-name {
+            font-weight: 700;
+            color: var(--miv-ink);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .miv-legend-sub {
+            font-size: 11px;
+            color: var(--miv-ink-muted);
+        }
+
+        .miv-legend-amount {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+    }
+
     // ===== KPI tiles =====
     .miv-tiles {
         display: grid;

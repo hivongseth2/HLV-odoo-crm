@@ -39,6 +39,26 @@ const SHOPEE_STATE_FILTER_OPTIONS = [
 ];
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
+// Donut "vì sao lệch" trong drawer phiếu (group_breakdown) — mỗi phiếu ĐÃ xuất kho (kind
+// 'linked') dùng 1 sắc độ trong dải xanh lá (sequential, cùng ý nghĩa "đã có thực xuất", theo
+// THỨ TỰ ngày xuất kho — không phải màu định danh riêng cho từng phiếu, xem dataviz skill: N
+// lớn thì dùng dải màu tuần tự thay vì cấp mỗi cái 1 hue). 3 lý do "còn thiếu" dùng màu status
+// cố định (không lẫn với dải xanh trên): chưa xuất kho = warning (rất có thể tự hết khi phiếu
+// đó hoàn tất), còn lại (không có phiếu / không rõ đơn / bị đề nghị khác nhận) = critical (cần
+// người kiểm tra tay).
+const GROUP_BREAKDOWN_LINKED_RAMP = ["#0ca30c", "#2bb050", "#4abd7a", "#69caa1", "#88d7c5", "#a7e4e6"];
+const GROUP_BREAKDOWN_GAP_COLORS = {
+    not_shipped: "#fab219",
+    no_picking: "#d03b3b",
+    unknown_order: "#d03b3b",
+    conflict: "#d03b3b",
+};
+const GROUP_BREAKDOWN_GAP_LABELS = {
+    not_shipped: "Chưa xuất kho",
+    no_picking: "Chưa có phiếu xuất kho",
+    unknown_order: "Không tìm thấy đơn bán",
+    conflict: "Đã bị đề nghị khác nhận",
+};
 const GROUP_PAGE_SIZE = 10;
 const SCAN_BATCH_SIZE = 50;
 
@@ -1769,6 +1789,61 @@ export class MisaInvoiceDashboard extends Component {
             cumulative += length;
         }
         return segments;
+    }
+
+    /** Donut "vì sao lệch" cho 1 nhóm gộp chung, dựng từ state.reconciliation.group_breakdown
+     * (xem _misa_invoice_compute_group_breakdown ở backend) — mỗi lát là 1 phiếu ĐÃ xuất kho
+     * (xanh lá, theo thứ tự ngày) hoặc 1 lý do CỤ THỂ khiến 1 phần hóa đơn chưa có phiếu tương
+     * ứng (vàng = chưa xuất kho, đỏ = cần kiểm tra tay). */
+    get groupBreakdownSegments() {
+        const breakdown = this.state.reconciliation && this.state.reconciliation.group_breakdown;
+        if (!breakdown || !breakdown.total) {
+            return [];
+        }
+        let cumulative = 0;
+        let linkedIndex = 0;
+        const segments = [];
+        for (const slice of breakdown.slices) {
+            if (!slice.amount) {
+                continue;
+            }
+            const length = (slice.amount / breakdown.total) * DONUT_CIRCUMFERENCE;
+            const color = slice.kind === "linked"
+                ? GROUP_BREAKDOWN_LINKED_RAMP[linkedIndex % GROUP_BREAKDOWN_LINKED_RAMP.length]
+                : GROUP_BREAKDOWN_GAP_COLORS[slice.kind] || "#c3c2b7";
+            if (slice.kind === "linked") {
+                linkedIndex += 1;
+            }
+            segments.push({
+                key: `${slice.kind}-${slice.label}`,
+                color,
+                dasharray: `${length} ${DONUT_CIRCUMFERENCE - length}`,
+                dashoffset: -cumulative,
+                slice,
+            });
+            cumulative += length;
+        }
+        return segments;
+    }
+
+    get groupBreakdownGapAmount() {
+        const breakdown = this.state.reconciliation && this.state.reconciliation.group_breakdown;
+        if (!breakdown) {
+            return 0;
+        }
+        return breakdown.slices.filter((s) => s.kind !== "linked").reduce((sum, s) => sum + s.amount, 0);
+    }
+
+    groupBreakdownKindLabel(kind) {
+        return GROUP_BREAKDOWN_GAP_LABELS[kind] || kind;
+    }
+
+    onGroupBreakdownSliceClick(slice) {
+        if (slice.kind === "linked" && slice.picking_id) {
+            this.openPickingDrawer(slice.picking_id);
+        } else if (slice.picking_ids && slice.picking_ids.length === 1) {
+            this.openPickingDrawer(slice.picking_ids[0]);
+        }
     }
 
     get invoicedPercent() {
