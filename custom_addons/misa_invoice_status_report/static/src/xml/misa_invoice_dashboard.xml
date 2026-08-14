@@ -109,6 +109,37 @@
                     </div>
                 </div>
 
+                <!-- ===== Scan progress panel: Quét đơn xuất kèm ===== -->
+                <div class="miv-scan-panel" t-if="state.showGroupScanPanel">
+                    <div class="miv-scan-panel-header">
+                        <span>
+                            <i class="fa fa-search"/>
+                            Đang quét đơn xuất kèm:
+                            <b><t t-esc="state.groupScanProgress.done"/> / <t t-esc="state.groupScanProgress.total"/></b>
+                        </span>
+                        <i class="fa fa-times miv-scan-panel-close" t-if="!state.isScanningGroups" t-on-click="closeGroupScanPanel"/>
+                    </div>
+                    <div class="miv-scan-progress-bar">
+                        <div class="miv-scan-progress-fill"
+                             t-attf-style="width: {{ state.groupScanProgress.total ? Math.round(state.groupScanProgress.done / state.groupScanProgress.total * 100) : 0 }}%"/>
+                    </div>
+                    <ul class="miv-scan-log">
+                        <li t-foreach="state.groupScanLog.slice(0, 8)" t-as="entry" t-key="entry_index"
+                            t-attf-class="{{ entry.error ? 'miv-scan-log-error' : '' }}">
+                            <i class="fa fa-spinner fa-spin" t-if="entry.loading"/>
+                            <i class="fa fa-check text-success" t-if="!entry.loading and !entry.error"/>
+                            <i class="fa fa-exclamation-triangle" t-if="!entry.loading and entry.error"/>
+                            <b><t t-esc="entry.name"/></b> — <t t-esc="entry.statusLabel"/>
+                        </li>
+                    </ul>
+                    <div class="miv-scan-done" t-if="!state.isScanningGroups and state.groupScanProgress.total">
+                        <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.groupScanProgress.done"/> phiếu.
+                    </div>
+                    <div class="miv-empty" t-if="!state.isScanningGroups and !state.groupScanProgress.total">
+                        Không có phiếu nào cần quét.
+                    </div>
+                </div>
+
                 <!-- ===== Hero: donut + tiles ===== -->
                 <div class="miv-hero">
                     <div class="miv-donut-card">
