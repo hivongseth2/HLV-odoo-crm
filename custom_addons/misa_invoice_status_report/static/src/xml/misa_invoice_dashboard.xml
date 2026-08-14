@@ -29,29 +29,37 @@
                             <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
                             Kiểm tra MISA ngay
                         </button>
-                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
-                                t-on-click="scanGroupedOrders" t-att-disabled="state.isScanningGroups"
-                                title="Đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận, tìm đơn hàng khác được xuất hóa đơn CHUNG mà MISA không tự báo được (VD sale gộp 2 đơn vào 1 đề nghị) — phiếu của đơn đó đang bị treo 'Chưa có đề nghị' dù thực tế đã có hóa đơn.">
-                            <i class="fa fa-search" t-att-class="{'fa-spin': state.isScanningGroups}"/>
-                            Quét đơn xuất kèm
-                        </button>
-                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
-                                t-on-click="repairGroupedOrders" t-att-disabled="state.isRepairingGroups"
-                                title="Kiểm tra lại các phiếu đã từng được gán 'ăn theo' — sửa lại phiếu nào bị gán SAI (đề nghị chỉ phủ 1 phần giá trị của phiếu đó, không phải toàn bộ) do lỗi phiên bản cũ của tính năng quét đơn xuất kèm.">
-                            <i class="fa fa-wrench" t-att-class="{'fa-spin': state.isRepairingGroups}"/>
-                            Sửa gộp sai
-                        </button>
-                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
-                                t-on-click="refreshGapSummaries" t-att-disabled="state.isRefreshingGapSummaries"
-                                title="Tính lại lý do lệch (chưa xuất kho / chưa có phiếu / bị đề nghị khác nhận) cho các nhóm đang chênh lệch tiền — để danh sách 'Đối chiếu tổng' hiện ngay lý do, không cần mở drawer từng phiếu.">
-                            <i class="fa fa-question-circle" t-att-class="{'fa-spin': state.isRefreshingGapSummaries}"/>
-                            Cập nhật lý do lệch
-                        </button>
-                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
-                                t-on-click="flattenMasterChains" t-att-disabled="state.isFlatteningChains"
-                                title="Sửa các phiếu bị gán 'ăn theo' LỒNG NHAU (VD phiếu A ăn theo phiếu B, nhưng B lại đang ăn theo phiếu C) — tiền của phiếu A bị 'chôn' ở tầng giữa, không cộng vào tổng đối soát của phiếu gốc thật sự (C).">
-                            <i class="fa fa-sitemap" t-att-class="{'fa-spin': state.isFlatteningChains}"/>
-                            Sửa gán lồng nhau
+                        <t t-if="state.data.can_configure and state.data.show_admin_tools">
+                            <button class="btn btn-secondary miv-scan-btn"
+                                    t-on-click="scanGroupedOrders" t-att-disabled="state.isScanningGroups"
+                                    title="Đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận, tìm đơn hàng khác được xuất hóa đơn CHUNG mà MISA không tự báo được (VD sale gộp 2 đơn vào 1 đề nghị) — phiếu của đơn đó đang bị treo 'Chưa có đề nghị' dù thực tế đã có hóa đơn.">
+                                <i class="fa fa-search" t-att-class="{'fa-spin': state.isScanningGroups}"/>
+                                Quét đơn xuất kèm
+                            </button>
+                            <button class="btn btn-secondary miv-scan-btn"
+                                    t-on-click="repairGroupedOrders" t-att-disabled="state.isRepairingGroups"
+                                    title="Kiểm tra lại các phiếu đã từng được gán 'ăn theo' — sửa lại phiếu nào bị gán SAI (đề nghị chỉ phủ 1 phần giá trị của phiếu đó, không phải toàn bộ) do lỗi phiên bản cũ của tính năng quét đơn xuất kèm.">
+                                <i class="fa fa-wrench" t-att-class="{'fa-spin': state.isRepairingGroups}"/>
+                                Sửa gộp sai
+                            </button>
+                            <button class="btn btn-secondary miv-scan-btn"
+                                    t-on-click="refreshGapSummaries" t-att-disabled="state.isRefreshingGapSummaries"
+                                    title="Tính lại lý do lệch (chưa xuất kho / chưa có phiếu / bị đề nghị khác nhận) cho các nhóm đang chênh lệch tiền — để danh sách 'Đối chiếu tổng' hiện ngay lý do, không cần mở drawer từng phiếu.">
+                                <i class="fa fa-question-circle" t-att-class="{'fa-spin': state.isRefreshingGapSummaries}"/>
+                                Cập nhật lý do lệch
+                            </button>
+                            <button class="btn btn-secondary miv-scan-btn"
+                                    t-on-click="flattenMasterChains" t-att-disabled="state.isFlatteningChains"
+                                    title="Sửa các phiếu bị gán 'ăn theo' LỒNG NHAU (VD phiếu A ăn theo phiếu B, nhưng B lại đang ăn theo phiếu C) — tiền của phiếu A bị 'chôn' ở tầng giữa, không cộng vào tổng đối soát của phiếu gốc thật sự (C).">
+                                <i class="fa fa-sitemap" t-att-class="{'fa-spin': state.isFlatteningChains}"/>
+                                Sửa gán lồng nhau
+                            </button>
+                        </t>
+                        <button class="btn btn-link miv-scan-btn miv-admin-tools-toggle" t-if="state.data.can_configure"
+                                t-on-click="toggleShowAdminTools"
+                                t-att-title="state.data.show_admin_tools ? 'Ẩn bớt các nút bảo trì/vá dữ liệu ở trên' : 'Hiện lại các nút bảo trì/vá dữ liệu'">
+                            <i class="fa fa-cog"/>
+                            <i class="fa" t-att-class="state.data.show_admin_tools ? 'fa-eye-slash' : 'fa-eye'"/>
                         </button>
                     </div>
                 </div>

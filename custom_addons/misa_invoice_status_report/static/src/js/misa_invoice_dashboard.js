@@ -771,6 +771,20 @@ export class MisaInvoiceDashboard extends Component {
         this.state.isSavingCutoff = false;
     }
 
+    /** Ẩn/hiện các nút "công cụ quản trị" (Quét đơn xuất kèm / Sửa gộp sai / Cập nhật lý do
+     * lệch / Sửa gán lồng nhau) — đây là cài đặt DÙNG CHUNG (lưu ir.config_parameter, không
+     * phải riêng từng người dùng), chỉ nhóm "Đối soát XHD" mới đổi được (kiểm tra lại ở
+     * backend, nút này vốn cũng chỉ hiện cho đúng nhóm đó). */
+    async toggleShowAdminTools() {
+        const next = !this.state.data.show_admin_tools;
+        try {
+            const data = await this.orm.call("stock.picking", "set_misa_invoice_show_admin_tools", [], { value: next });
+            this.state.data = data;
+        } catch (e) {
+            this.notification.add("Lỗi lưu cài đặt: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     /** invoiceState falsy (false/undefined) => không lọc trạng thái, dùng cho "Xem tất cả". */
     async openTile(invoiceState) {
         const action = await this.orm.call(

@@ -27,6 +27,11 @@ MISA_INVOICE_SCAN_BATCH_SIZE = 50
 MISA_INVOICE_CUTOFF_PARAM = 'misa_invoice_status_report.cutoff_date'
 MISA_INVOICE_CUTOFF_DEFAULT = '2026-05-01'
 MISA_INVOICE_RECONCILE_GROUP = 'misa_invoice_status_report.group_misa_invoice_reconciliation'
+# Ẩn/hiện các nút "công cụ quản trị" (Quét đơn xuất kèm / Sửa gộp sai / Cập nhật lý do lệch /
+# Sửa gán lồng nhau) trên dashboard — đây là các nút vá dữ liệu/bảo trì, không cần dùng hàng
+# ngày, để mặc định HIỆN (giữ hành vi hiện tại) nhưng cho nhóm "Đối soát XHD" tự ẩn bớt cho đỡ
+# rối nếu không cần — xem get_misa_invoice_show_admin_tools/set_misa_invoice_show_admin_tools.
+MISA_INVOICE_SHOW_ADMIN_TOOLS_PARAM = 'misa_invoice_status_report.show_admin_tools'
 
 # Sai số cho phép khi so tiền hóa đơn MISA với tiền thực xuất trên phiếu kho (làm tròn).
 MISA_INVOICE_AMOUNT_TOLERANCE = 1.0
@@ -602,7 +607,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         any_pending = False
         for order_code, order_lines in lines_by_order.items():
             is_own_order = order_code in own_order_names
-            order = self.env['sale.order'].sudo().search([('name', '=', order_code)], limit=1)
+            # active_test=False: đơn bán CŨ/đã hoàn tất có thể bị lưu trữ (active=False) — tìm
+            # cả đơn đã lưu trữ, nếu không sẽ báo nhầm "không tìm thấy đơn bán" hàng loạt cho
+            # các đơn thật ra có tồn tại, chỉ là đã cũ/lưu trữ (case thật: 3/10 đơn trong 1
+            # nhóm gộp KBC/OUT/10779 bị báo "không tìm thấy" dù order_code đọc đúng từ MISA).
+            order = self.env['sale.order'].sudo().with_context(active_test=False).search(
+                [('name', '=', order_code)], limit=1,
+            )
             if not order:
                 if not is_own_order:
                     self.message_post(body=Markup(
@@ -1361,6 +1372,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
             raise UserError(_("Ngày không hợp lệ: %s") % date_str)
         self.env['ir.config_parameter'].sudo().set_param(
             MISA_INVOICE_CUTOFF_PARAM, fields.Date.to_string(parsed)
+        )
+        return self.get_misa_invoice_dashboard_data()
+
+    def _get_misa_invoice_show_admin_tools(self):
+        raw = self.env['ir.config_parameter'].sudo().get_param(MISA_INVOICE_SHOW_ADMIN_TOOLS_PARAM)
+        return raw != '0'  # mặc định HIỆN (chưa từng lưu param) — chỉ ẩn khi đã lưu rõ '0'
+
+    @api.model
+    def set_misa_invoice_show_admin_tools(self, value):
+        if not self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+            raise AccessError(_("Bạn không có quyền thay đổi cài đặt này."))
+        self.env['ir.config_parameter'].sudo().set_param(
+            MISA_INVOICE_SHOW_ADMIN_TOOLS_PARAM, '1' if value else '0'
         )
         return self.get_misa_invoice_dashboard_data()
 
@@ -2647,6 +2671,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'last_scan_at': last_scan_at,
             'cutoff_date': fields.Date.to_string(self._get_misa_invoice_cutoff_date()),
             'can_configure': self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP),
+            'show_admin_tools': self._get_misa_invoice_show_admin_tools(),
         }
 
     @api.model
@@ -3675,7 +3700,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if order_code in accounted_order_codes:
                 continue
             order_amount = representative._misa_invoice_request_line_amount(order_lines)
-            order = self.env['sale.order'].sudo().search([('name', '=', order_code)], limit=1)
+            # active_test=False: xem lý do ở _misa_invoice_discover_grouped_orders — đơn bán cũ
+            # có thể đã bị lưu trữ (active=False), phải tìm cả đơn lưu trữ để không báo nhầm
+            # "không tìm thấy đơn bán".
+            order = self.env['sale.order'].sudo().with_context(active_test=False).search(
+                [('name', '=', order_code)], limit=1,
+            )
             if not order:
                 slices.append({
                     'kind': 'unknown_order', 'label': order_code, 'amount': order_amount,
