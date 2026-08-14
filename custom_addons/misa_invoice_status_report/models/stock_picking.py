@@ -547,7 +547,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         Chỉ đọc get_invoice_request_lines 1 LẦN cho mỗi phiếu (misa_invoice_group_checked) —
         tránh gọi thêm 1 API MISA mỗi lần phiếu được kiểm tra lại, kể cả khi không tìm thấy gì
-        thêm (đa số hóa đơn chỉ có 1 đơn, không có ai xuất kèm)."""
+        thêm (đa số hóa đơn chỉ có 1 đơn, không có ai xuất kèm).
+
+        KHÔNG được lặng lẽ bỏ qua đơn hàng nào (bài học thật: đề nghị của KBC/OUT/10603 nhắc
+        tới 6 đơn hàng khác nhưng dashboard chỉ hiện gộp được 2 — không có gì báo cho biết 4
+        đơn còn lại đang bị bỏ sót vì lý do gì). Với MỖI order_code tìm thấy trong đề nghị mà
+        không gán/khớp được gì, phải ghi rõ LÝ DO cụ thể (không tìm thấy đơn bán / phiếu xuất
+        kho chưa hoàn tất (chưa 'done') / phiếu đã bị 1 đề nghị KHÁC nhận trước) — và nếu lý do
+        là "chưa hoàn tất" (rất có thể sẽ done sau), KHÔNG đánh dấu misa_invoice_group_checked
+        — để lần quét sau (cron 30 phút) tự thử lại, chứ không mất dấu vết vĩnh viễn."""
         self.ensure_one()
         if self.misa_invoice_group_checked or not self.misa_invoice_request_refid or self.misa_invoice_master_picking_id:
             return
@@ -560,7 +568,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 "❌ [MISA GROUP DISCOVER] Lỗi đọc chi tiết dòng hàng đề nghị cho phiếu %s", self.name,
             )
             return
-        self.misa_invoice_group_checked = True
         lines_by_order = {}
         for line in lines:
             code = (line.get('order_code') or '').strip()
@@ -568,24 +575,67 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 continue
             lines_by_order.setdefault(code, []).append(line)
         if not lines_by_order:
+            # Đề nghị chỉ có đúng đơn hàng của chính phiếu này — không có gì để tìm thêm, đánh
+            # dấu đã quét NGAY để khỏi gọi lại API này mỗi lần cron chạy qua phiếu.
+            self.misa_invoice_group_checked = True
             return
 
         GroupedLine = self.env['misa.invoice.grouped.line'].sudo()
+        any_pending = False
         for order_code, order_lines in lines_by_order.items():
             order = self.env['sale.order'].sudo().search([('name', '=', order_code)], limit=1)
-            sibling_pickings = self.sudo().search([
+            if not order:
+                self.message_post(body=Markup(
+                    "<b>⚠️ Không tìm thấy đơn bán cho đơn hàng nhắc tới trong đề nghị:</b> đề nghị "
+                    "xuất HĐ của phiếu này có nhắc tới đơn %s nhưng không tìm thấy đơn bán nào tên "
+                    "như vậy trong Odoo — cần kiểm tra tay (có thể sai mã đơn, hoặc đơn ở phân hệ "
+                    "khác)."
+                ) % order_code)
+                continue
+
+            all_order_pickings = self.sudo().search([
                 ('misa_invoice_sale_order_ids', '=', order.id),
                 ('picking_type_id.code', '=', 'outgoing'),
-                ('state', '=', 'done'),
                 ('id', '!=', self.id),
-            ]) if order else self.browse()
+            ])
+            not_done = all_order_pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
+            done_pickings = all_order_pickings.filtered(lambda p: p.state == 'done')
+            # Đã là 1 phần ĐÚNG của group này rồi (từ lần quét trước, hoặc qua dedupe theo
+            # request_refid) — không phải "phiếu bị đề nghị KHÁC cướp mất", không cần báo gì.
+            already_in_group = done_pickings.filtered(lambda p: p.misa_invoice_master_picking_id == self)
             # Chỉ nhận phiếu CHƯA có quan hệ gộp hợp lệ nào khác — không "cướp" phiếu đã là
             # gốc/ăn theo của 1 đề nghị KHÁC (tránh phá vỡ 1 nhóm gộp đúng đã có sẵn).
-            sibling_pickings = sibling_pickings.filtered(
+            sibling_pickings = done_pickings.filtered(
                 lambda p: not p.misa_invoice_master_picking_id and not p.misa_invoice_covered_picking_ids
                 and p.misa_invoice_request_refid != self.misa_invoice_request_refid
             )
+            claimed_elsewhere = done_pickings - sibling_pickings - already_in_group
+
             if not sibling_pickings:
+                if not_done:
+                    # Rất có thể sẽ 'done' sau (đang soạn/đóng gói) — KHÔNG đánh dấu đã quét
+                    # xong, để lần cron sau tự thử lại thay vì mất dấu vết vĩnh viễn.
+                    any_pending = True
+                    self.message_post(body=Markup(
+                        "<b>⏳ Đơn hàng %s (nhắc tới trong đề nghị) có phiếu xuất kho CHƯA hoàn "
+                        "tất:</b> %s — chưa thể đối soát ngay, hệ thống sẽ tự kiểm tra lại ở lần "
+                        "quét sau khi phiếu đó hoàn tất."
+                    ) % (order_code, ', '.join(
+                        '%s (%s)' % (p.name, STOCK_PICKING_STATE_LABELS.get(p.state, p.state)) for p in not_done
+                    )))
+                elif claimed_elsewhere:
+                    self.message_post(body=Markup(
+                        "<b>⚠️ Đơn hàng %s (nhắc tới trong đề nghị) đã được gộp vào 1 đề nghị "
+                        "KHÁC:</b> %s — cần kiểm tra tay nếu nghi ngờ gán sai."
+                    ) % (order_code, ', '.join(claimed_elsewhere.mapped('name'))))
+                elif not all_order_pickings:
+                    self.message_post(body=Markup(
+                        "<b>⚠️ Chưa có phiếu xuất kho nào cho đơn hàng %s (nhắc tới trong đề "
+                        "nghị):</b> có thể chưa xuất kho, hoặc phiếu chưa được đồng bộ đơn bán "
+                        "đúng — cần kiểm tra tay."
+                    ) % order_code)
+                # else: already_in_group phủ hết done_pickings — đơn này đã được xử lý đúng từ
+                # trước, không có gì mới để báo, im lặng bỏ qua (không phải lỗi).
                 continue
 
             created_lines = GroupedLine.browse()
@@ -687,6 +737,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         "vẫn cần đề nghị/hóa đơn riêng."
                     ) % (order_code, ', '.join(partially_covered.mapped('name')))
                 )
+
+        # Chỉ đánh dấu "đã quét xong" khi KHÔNG còn đơn hàng nào đang chờ (phiếu xuất kho của
+        # nó chưa 'done') — nếu còn, để nguyên False để lần quét sau (cron 30 phút,
+        # action_check_misa_invoice_status) tự thử lại, không mất dấu vết vĩnh viễn.
+        if not any_pending:
+            self.misa_invoice_group_checked = True
 
     def _misa_invoice_grouped_orders_domain(self):
         return [

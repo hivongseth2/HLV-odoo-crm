@@ -1265,7 +1265,8 @@
 
                             <t t-if="state.drawerSiblings and state.drawerSiblings.length">
                                 <h4 class="miv-drawer-section-title">Phiếu xuất kho khác cùng đơn hàng</h4>
-                                <table class="miv-subtable miv-drawer-table">
+                                <div class="miv-table-scroll">
+<table class="miv-subtable miv-drawer-table">
                                     <tbody>
                                         <tr t-foreach="state.drawerSiblings" t-as="sib" t-key="sib.id"
                                             class="miv-row-clickable" t-on-click="() => this.openPickingDrawer(sib.id)">
@@ -1279,13 +1280,15 @@
                                         </tr>
                                     </tbody>
                                 </table>
+</div>
                             </t>
 
                             <h4 class="miv-drawer-section-title">Sản phẩm đã xuất</h4>
                             <div class="miv-drawer-loading" t-if="state.drawerLoading">
                                 <i class="fa fa-spinner fa-spin"/> Đang tải...
                             </div>
-                            <table class="miv-subtable miv-drawer-table" t-else="">
+                            <div class="miv-table-scroll" t-else="">
+<table class="miv-subtable miv-drawer-table">
                                 <thead>
                                     <tr>
                                         <th>Sản phẩm</th>
@@ -1313,6 +1316,7 @@
                                     </tr>
                                 </tfoot>
                             </table>
+</div>
 
                             <button class="btn btn-secondary btn-sm miv-reconcile-btn"
                                     t-if="state.drawerPicking.state === 'requested' or state.drawerPicking.state === 'invoiced'"
@@ -1349,7 +1353,8 @@
                                         </div>
                                     </div>
 
-                                    <table class="miv-subtable miv-drawer-table" t-if="state.reconciliation.rows.length">
+                                    <div class="miv-table-scroll" t-if="state.reconciliation.rows.length">
+<table class="miv-subtable miv-drawer-table">
                                         <thead>
                                             <tr>
                                                 <th>Mã hàng / Tên hàng</th>
@@ -1386,6 +1391,7 @@
                                             </tr>
                                         </tbody>
                                     </table>
+</div>
                                     <div class="miv-empty" t-else="">Không có dòng hàng nào để đối chiếu.</div>
                                 </t>
                             </t>
@@ -1527,7 +1533,8 @@
                             </div>
 
                             <h4 class="miv-drawer-section-title">Phiếu xuất kho liên quan</h4>
-                            <table class="miv-subtable miv-drawer-table" t-if="state.orderDrawerRow.pickings.length">
+                            <div class="miv-table-scroll" t-if="state.orderDrawerRow.pickings.length">
+<table class="miv-subtable miv-drawer-table">
                                 <thead>
                                     <tr>
                                         <th>Phiếu</th>
@@ -1566,6 +1573,7 @@
                                     </tr>
                                 </tbody>
                             </table>
+</div>
                             <div class="miv-empty" t-else="">Không có phiếu xuất kho nào trong phạm vi đang lọc.</div>
                         </div>
                         <div class="miv-drawer-actions" t-if="state.data.can_configure">
@@ -1663,7 +1671,8 @@
                             </div>
 
                             <h4 class="miv-drawer-section-title">Phiếu xuất kho đã khớp</h4>
-                            <table class="miv-subtable miv-drawer-table" t-if="state.customsDrawerRow.matches and state.customsDrawerRow.matches.length">
+                            <div class="miv-table-scroll" t-if="state.customsDrawerRow.matches and state.customsDrawerRow.matches.length">
+<table class="miv-subtable miv-drawer-table">
                                 <thead>
                                     <tr>
                                         <th>Phiếu</th>
@@ -1688,6 +1697,7 @@
                                     </tr>
                                 </tbody>
                             </table>
+</div>
                             <div class="miv-empty" t-else="">Chưa khớp phiếu xuất kho nào.</div>
 
                             <div t-if="state.customsManual.open" class="miv-section">
@@ -1707,7 +1717,8 @@
                                 <div class="miv-loading" t-if="state.customsManual.loading">
                                     <i class="fa fa-spinner fa-spin"/> Đang tìm...
                                 </div>
-                                <table class="miv-subtable miv-drawer-table" t-if="!state.customsManual.loading and state.customsManual.results.length">
+                                <div class="miv-table-scroll" t-if="!state.customsManual.loading and state.customsManual.results.length">
+<table class="miv-subtable miv-drawer-table">
                                     <thead>
                                         <tr>
                                             <th>Phiếu</th>
@@ -1730,6 +1741,7 @@
                                         </tr>
                                     </tbody>
                                 </table>
+</div>
                                 <div class="miv-empty" t-if="!state.customsManual.loading and !state.customsManual.results.length">
                                     Không tìm thấy phiếu nào phù hợp.
                                 </div>
@@ -1778,7 +1790,8 @@
                                 quan (<t t-esc="formatCurrency(state.discrepancy.customs_pending_amount)"/>) đã xuất HĐ nhưng CHƯA khớp phiếu xuất
                                 kho nào — xem ở tab "Đơn hải quan".
                             </div>
-                            <table class="miv-subtable miv-drawer-table" t-if="state.discrepancy.rows.length">
+                            <div class="miv-table-scroll" t-if="state.discrepancy.rows.length">
+<table class="miv-subtable miv-drawer-table">
                                 <thead>
                                     <tr>
                                         <th>Phiếu</th>
@@ -1812,6 +1825,7 @@
                                     </tr>
                                 </tbody>
                             </table>
+</div>
                             <div class="miv-empty" t-if="!state.discrepancy.rows.length">Không có phiếu nào đang lệch tiền — mọi thứ đã khớp.</div>
                         </t>
                     </div>
