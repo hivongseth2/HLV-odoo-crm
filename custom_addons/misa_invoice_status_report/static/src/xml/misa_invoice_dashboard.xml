@@ -41,6 +41,12 @@
                             <i class="fa fa-wrench" t-att-class="{'fa-spin': state.isRepairingGroups}"/>
                             Sửa gộp sai
                         </button>
+                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
+                                t-on-click="refreshGapSummaries" t-att-disabled="state.isRefreshingGapSummaries"
+                                title="Tính lại lý do lệch (chưa xuất kho / chưa có phiếu / bị đề nghị khác nhận) cho các nhóm đang chênh lệch tiền — để danh sách 'Đối chiếu tổng' hiện ngay lý do, không cần mở drawer từng phiếu.">
+                            <i class="fa fa-question-circle" t-att-class="{'fa-spin': state.isRefreshingGapSummaries}"/>
+                            Cập nhật lý do lệch
+                        </button>
                     </div>
                 </div>
 
@@ -174,6 +180,37 @@
                     </div>
                     <div class="miv-empty" t-if="!state.isRepairingGroups and !state.repairScanProgress.total">
                         Không có phiếu nào cần kiểm tra.
+                    </div>
+                </div>
+
+                <!-- ===== Scan progress panel: Cập nhật lý do lệch ===== -->
+                <div class="miv-scan-panel" t-if="state.showGapSummaryScanPanel">
+                    <div class="miv-scan-panel-header">
+                        <span>
+                            <i class="fa fa-question-circle"/>
+                            Đang cập nhật lý do lệch:
+                            <b><t t-esc="state.gapSummaryScanProgress.done"/> / <t t-esc="state.gapSummaryScanProgress.total"/></b>
+                        </span>
+                        <i class="fa fa-times miv-scan-panel-close" t-if="!state.isRefreshingGapSummaries" t-on-click="closeGapSummaryScanPanel"/>
+                    </div>
+                    <div class="miv-scan-progress-bar">
+                        <div class="miv-scan-progress-fill"
+                             t-attf-style="width: {{ state.gapSummaryScanProgress.total ? Math.round(state.gapSummaryScanProgress.done / state.gapSummaryScanProgress.total * 100) : 0 }}%"/>
+                    </div>
+                    <ul class="miv-scan-log">
+                        <li t-foreach="state.gapSummaryScanLog.slice(0, 8)" t-as="entry" t-key="entry_index"
+                            t-attf-class="{{ entry.error ? 'miv-scan-log-error' : '' }}">
+                            <i class="fa fa-spinner fa-spin" t-if="entry.loading"/>
+                            <i class="fa fa-check text-success" t-if="!entry.loading and !entry.error"/>
+                            <i class="fa fa-exclamation-triangle" t-if="!entry.loading and entry.error"/>
+                            <b><t t-esc="entry.name"/></b> — <t t-esc="entry.statusLabel"/>
+                        </li>
+                    </ul>
+                    <div class="miv-scan-done" t-if="!state.isRefreshingGapSummaries and state.gapSummaryScanProgress.total">
+                        <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.gapSummaryScanProgress.done"/> phiếu.
+                    </div>
+                    <div class="miv-empty" t-if="!state.isRefreshingGapSummaries and !state.gapSummaryScanProgress.total">
+                        Không có phiếu nào đang lệch cần cập nhật.
                     </div>
                 </div>
 
@@ -1413,6 +1450,12 @@
                                                 <td>
                                                     <b><t t-esc="row.product_name"/></b>
                                                     <div class="miv-subtable-hint"><t t-esc="row.code"/></div>
+                                                    <div class="miv-subtable-hint" t-if="row.odoo_picking_names.length">
+                                                        <i class="fa fa-cube"/> Phiếu Odoo: <t t-esc="row.odoo_picking_names.join(', ')"/>
+                                                    </div>
+                                                    <div class="miv-subtable-hint" t-if="row.misa_order_codes.length">
+                                                        <i class="fa fa-file-text-o"/> Đơn MISA: <t t-esc="row.misa_order_codes.join(', ')"/>
+                                                    </div>
                                                 </td>
                                                 <td class="miv-col-num">
                                                     <t t-esc="row.odoo_qty"/>
@@ -1853,6 +1896,12 @@
                                                 +<t t-esc="row.group_picking_names.length - 1"/> phiếu gộp chung
                                             </span>
                                             <div class="miv-subtable-hint"><t t-esc="row.partner_name"/></div>
+                                            <div class="miv-subtable-hint miv-gap-summary" t-if="row.gap_summary">
+                                                <i class="fa fa-info-circle"/> <t t-esc="row.gap_summary"/>
+                                            </div>
+                                            <div class="miv-subtable-hint miv-cell-muted" t-elif="row.source === 'misa'">
+                                                <i class="fa fa-question-circle"/> Chưa rõ lý do — bấm "Cập nhật lý do lệch" trên dashboard.
+                                            </div>
                                         </td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
