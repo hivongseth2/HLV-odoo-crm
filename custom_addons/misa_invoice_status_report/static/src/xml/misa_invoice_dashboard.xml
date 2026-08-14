@@ -1353,6 +1353,48 @@
                                         </div>
                                     </div>
 
+                                    <t t-if="groupBreakdownSegments.length">
+                                        <h4 class="miv-drawer-section-title">Vì sao lệch — tiền hóa đơn chia theo từng phiếu/lý do</h4>
+                                        <div class="miv-group-breakdown">
+                                            <div class="miv-donut-wrap miv-donut-wrap-sm">
+                                                <svg viewBox="0 0 120 120" class="miv-donut">
+                                                    <circle cx="60" cy="60" r="54" class="miv-donut-track"/>
+                                                    <t t-foreach="groupBreakdownSegments" t-as="seg" t-key="seg.key">
+                                                        <circle cx="60" cy="60" r="54" fill="none" stroke-width="12" stroke-linecap="butt"
+                                                                class="miv-donut-segment"
+                                                                t-att-stroke="seg.color"
+                                                                t-att-stroke-dasharray="seg.dasharray"
+                                                                t-att-stroke-dashoffset="seg.dashoffset"
+                                                                t-on-click="() => this.onGroupBreakdownSliceClick(seg.slice)">
+                                                            <title><t t-esc="seg.slice.label"/> — <t t-esc="formatCurrency(seg.slice.amount)"/></title>
+                                                        </circle>
+                                                    </t>
+                                                </svg>
+                                                <div class="miv-donut-center">
+                                                    <div class="miv-donut-value miv-cell-critical"><t t-esc="formatCurrency(groupBreakdownGapAmount)"/></div>
+                                                    <div class="miv-donut-label">còn thiếu phiếu</div>
+                                                </div>
+                                            </div>
+                                            <ul class="miv-legend miv-legend-breakdown">
+                                                <t t-foreach="groupBreakdownSegments" t-as="seg" t-key="seg.key">
+                                                    <li t-on-click="() => this.onGroupBreakdownSliceClick(seg.slice)">
+                                                        <span class="miv-dot" t-attf-style="background:{{seg.color}}"/>
+                                                        <span class="miv-legend-label">
+                                                            <span class="miv-legend-name" t-esc="seg.slice.label"/>
+                                                            <span class="miv-legend-sub" t-if="seg.slice.kind !== 'linked'">
+                                                                <t t-esc="groupBreakdownKindLabel(seg.slice.kind)"/>
+                                                            </span>
+                                                            <span class="miv-legend-sub" t-if="seg.slice.kind === 'not_shipped'">
+                                                                (<t t-esc="seg.slice.picking_states.join(', ')"/>)
+                                                            </span>
+                                                        </span>
+                                                        <b class="miv-legend-amount"><t t-esc="formatCurrency(seg.slice.amount)"/></b>
+                                                    </li>
+                                                </t>
+                                            </ul>
+                                        </div>
+                                    </t>
+
                                     <div class="miv-table-scroll" t-if="state.reconciliation.rows.length">
 <table class="miv-subtable miv-drawer-table">
                                         <thead>

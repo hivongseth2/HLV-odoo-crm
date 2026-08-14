@@ -3452,6 +3452,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         misa_totals = self._misa_invoice_request_lines_by_code(misa_lines)
         odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings, misa_codes=set(misa_totals.keys()))
+        group_breakdown = self._misa_invoice_compute_group_breakdown(representative, group_pickings, misa_lines)
 
         rows = []
         for code in set(odoo_totals) | set(misa_totals):
@@ -3506,6 +3507,84 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'diff': representative.misa_invoice_amount_diff,
                 'mismatch': representative.misa_invoice_amount_mismatch,
             },
+            'group_breakdown': group_breakdown,
+        }
+
+    def _misa_invoice_compute_group_breakdown(self, representative, group_pickings, misa_lines):
+        """Chia nhỏ tiền hóa đơn của 1 nhóm gộp chung ra từng "phần" để vẽ donut giải thích rõ
+        lệch ở đâu — thay vì chỉ hiện 1 con số "chênh lệch" khó hiểu. Case thật KBC/OUT/10735:
+        hóa đơn nhắc tới đơn DH...234127 nhưng phiếu xuất kho của đơn đó (KBC/OUT/11154) đang
+        'Sẵn sàng' (chưa xuất kho) — phải nói RÕ đây là lý do lệch, không được im lặng bỏ qua.
+
+        Mỗi phần (slice) có `kind`:
+        - 'linked': 1 phiếu ĐÃ trong nhóm (đã xuất kho) — amount = tiền thực xuất ròng của phiếu đó.
+        - 'not_shipped': đơn hàng được nhắc tới trong đề nghị, có phiếu xuất kho nhưng CHƯA
+          hoàn tất ('done') — amount = tiền dòng hàng (có VAT) của đơn đó theo MISA.
+        - 'no_picking': đơn hàng được nhắc tới nhưng chưa có phiếu xuất kho nào trong Odoo.
+        - 'unknown_order': không tìm thấy đơn bán nào khớp mã đơn MISA trả về.
+        - 'conflict': có phiếu đã 'done' cho đơn này nhưng đã được 1 đề nghị/hóa đơn KHÁC nhận
+          (không thuộc nhóm này) — có thể gán sai, cần kiểm tra tay."""
+        slices = []
+        for p in group_pickings.sorted('date_done'):
+            slices.append({
+                'kind': 'linked',
+                'label': p.name,
+                'amount': p.misa_invoice_net_actual_amount or 0.0,
+                'picking_id': p.id,
+            })
+
+        accounted_order_codes = set(group_pickings.mapped('misa_invoice_sale_order_ids').mapped('name'))
+        lines_by_order = {}
+        for line in misa_lines:
+            code = (line.get('order_code') or '').strip()
+            if not code:
+                continue
+            lines_by_order.setdefault(code, []).append(line)
+
+        for order_code, order_lines in lines_by_order.items():
+            if order_code in accounted_order_codes:
+                continue
+            order_amount = representative._misa_invoice_request_line_amount(order_lines)
+            order = self.env['sale.order'].sudo().search([('name', '=', order_code)], limit=1)
+            if not order:
+                slices.append({
+                    'kind': 'unknown_order', 'label': order_code, 'amount': order_amount,
+                    'order_code': order_code,
+                })
+                continue
+            order_pickings = self.sudo().search([
+                ('misa_invoice_sale_order_ids', '=', order.id),
+                ('picking_type_id.code', '=', 'outgoing'),
+            ])
+            not_done = order_pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
+            if not_done:
+                slices.append({
+                    'kind': 'not_shipped',
+                    'label': ', '.join(not_done.mapped('name')),
+                    'amount': order_amount,
+                    'order_code': order_code,
+                    'picking_names': not_done.mapped('name'),
+                    'picking_ids': not_done.ids,
+                    'picking_states': [STOCK_PICKING_STATE_LABELS.get(p.state, p.state) for p in not_done],
+                })
+            elif not order_pickings:
+                slices.append({
+                    'kind': 'no_picking', 'label': order_code, 'amount': order_amount,
+                    'order_code': order_code,
+                })
+            else:
+                slices.append({
+                    'kind': 'conflict',
+                    'label': ', '.join(order_pickings.mapped('name')),
+                    'amount': order_amount,
+                    'order_code': order_code,
+                    'picking_names': order_pickings.mapped('name'),
+                    'picking_ids': order_pickings.ids,
+                })
+
+        return {
+            'slices': slices,
+            'total': sum(s['amount'] for s in slices),
         }
 
     @api.model
