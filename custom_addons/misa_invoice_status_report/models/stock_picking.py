@@ -962,6 +962,76 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 _logger.exception("❌ [MISA GROUP REPAIR] Lỗi sửa phiếu %s", picking.name)
         return {'checked': len(candidates), 'reverted': total_reverted}
 
+    def _misa_invoice_master_chain_domain(self):
+        # 2 điều kiện quan hệ liên tiếp (master_picking_id.master_picking_id) — Odoo hỗ trợ
+        # domain xuyên quan hệ Many2one nhiều tầng, tự JOIN.
+        return [
+            ('misa_invoice_master_picking_id', '!=', False),
+            ('misa_invoice_master_picking_id.misa_invoice_master_picking_id', '!=', False),
+        ]
+
+    @api.model
+    def get_misa_invoice_master_chain_candidates(self, limit=100):
+        """Danh sách phiếu đang bị gán LỒNG NHAU (chain 2+ tầng, VD KBC/OUT/08194 → 09106 →
+        08437) — case thật: tiền của phiếu bị "chôn" ở tầng giữa, không cộng vào tổng đối soát
+        của phiếu đại diện thật sự. Dùng cho panel tiến độ trên dashboard."""
+        Picking = self.sudo()
+        domain = self._misa_invoice_master_chain_domain()
+        pickings = Picking.search(domain, limit=limit)
+        return {
+            'candidates': [{'id': p.id, 'name': p.name} for p in pickings],
+            'total': Picking.search_count(domain),
+        }
+
+    @api.model
+    def flatten_misa_invoice_master_chain(self, picking_id):
+        """Trỏ THẲNG 1 phiếu về đúng phiếu gốc CUỐI CÙNG (root) của chain — bất kể chain dài
+        bao nhiêu tầng (phòng hờ, dù thực tế chỉ mới gặp chain 2 tầng)."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return {'error': 'Phiếu này không còn tồn tại.'}
+        if not picking.misa_invoice_master_picking_id:
+            return {'flattened': False}
+        old_master = picking.misa_invoice_master_picking_id
+        root = old_master
+        seen = {picking.id}
+        while root.misa_invoice_master_picking_id and root.id not in seen:
+            seen.add(root.id)
+            root = root.misa_invoice_master_picking_id
+        if root.id == old_master.id:
+            return {'flattened': False}  # đã thẳng hàng, không có gì để sửa
+        picking.write({
+            'misa_invoice_master_picking_id': root.id,
+            'misa_invoice_amount': 0.0,
+            'misa_invoice_no': root.misa_invoice_no,
+            'misa_invoice_date': root.misa_invoice_date,
+            'misa_invoice_request_refid': root.misa_invoice_request_refid,
+            'misa_invoice_last_checked': fields.Datetime.now(),
+        })
+        picking.message_post(body=Markup(
+            "<b>🔗 Sửa gán lồng nhau (chain):</b> phiếu này trước đó bị gán 'ăn theo' phiếu %s — "
+            "nhưng %s CHÍNH NÓ cũng đang 'ăn theo' phiếu %s, khiến tiền của phiếu này bị 'chôn' 1 "
+            "tầng, không cộng vào tổng đối soát. Đã trỏ thẳng về phiếu gốc thật sự: %s."
+        ) % (old_master.name, old_master.name, root.name, root.name))
+        return {'flattened': True, 'root_name': root.name}
+
+    @api.model
+    def flatten_misa_invoice_master_chains(self, limit=200):
+        """Bản batch không hiện tiến độ — dùng cho migration/cron. Dùng
+        get_misa_invoice_master_chain_candidates + flatten_misa_invoice_master_chain cho nút
+        bấm trên dashboard (hiện tiến độ từng phiếu)."""
+        Picking = self.sudo()
+        candidates = Picking.search(self._misa_invoice_master_chain_domain(), limit=limit)
+        total_flattened = 0
+        for picking in candidates:
+            try:
+                result = picking.flatten_misa_invoice_master_chain(picking.id)
+                if result.get('flattened'):
+                    total_flattened += 1
+            except Exception:
+                _logger.exception("❌ [MISA CHAIN REPAIR] Lỗi sửa phiếu %s", picking.name)
+        return {'checked': len(candidates), 'flattened': total_flattened}
+
     def _misa_invoice_dedupe_request_refid_groups(self, request_refids=None):
         """Lưới an toàn dự phòng cho việc gộp hóa đơn: cơ chế gộp chính (master_refno, xem
         action_check_misa_invoice_status ở trên) dựa vào MISA tự báo đúng TÊN phiếu đại diện —
@@ -975,7 +1045,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
         nó làm khóa gộp dự phòng: nếu có >=2 phiếu 'invoiced' cùng request_refid mà CHƯA phiếu
         nào được gán quan hệ gộp hợp lệ, tự chọn 1 làm đại diện (ưu tiên phiếu đã sẵn có quan hệ
         gộp nếu có, không thì phiếu xuất kho SỚM NHẤT) và trả tiền hóa đơn của các phiếu còn lại
-        về 0, trỏ chúng về đúng phiếu đại diện đó."""
+        về 0, trỏ chúng về đúng phiếu đại diện đó.
+
+        QUAN TRỌNG (bài học thật KBC/OUT/08194 → 09106 → 08437): TẤT CẢ phiếu cùng
+        request_refid phải được trỏ THẲNG về CÙNG 1 đại diện — không chỉ những phiếu đang
+        "ungrouped" (chưa có quan hệ gì). Nếu 1 phiếu trong nhóm ĐÃ là đại diện cho phiếu KHÁC
+        (có covered_picking_ids riêng, VD 09106 từng tự gộp 08194 trước khi được elect làm
+        'phiếu đại diện' của 1 request khác) mà chỉ trỏ MASTER của phiếu đó sang đại diện mới,
+        không trỏ luôn các CON của nó — sẽ tạo ra CHAIN 2 tầng (08194→09106→08437) khiến tiền
+        của 08194 bị "chôn" 1 tầng, không cộng vào tổng đối soát của đại diện thật sự. Nên phải
+        flatten CẢ NHÓM (mọi phiếu trừ đại diện được chọn) về thẳng đại diện đó trong 1 lượt,
+        bất kể trạng thái gộp hiện tại của từng phiếu là gì."""
         Picking = self.env['stock.picking'].sudo()
         if request_refids is None:
             request_refids = self.mapped('misa_invoice_request_refid')
@@ -990,28 +1070,36 @@ class StockPickingMisaInvoiceStatus(models.Model):
             already_linked = group.filtered(
                 lambda p: p.misa_invoice_master_picking_id or p.misa_invoice_covered_picking_ids
             )
-            ungrouped = group - already_linked
-            if not ungrouped:
-                continue  # cả nhóm đã có quan hệ gộp hợp lệ từ trước, không có gì để sửa
             existing_master = next(
                 (p.misa_invoice_master_picking_id for p in already_linked if p.misa_invoice_master_picking_id),
                 self.browse(),
             )
             if existing_master:
-                # Đã có 1 phiếu đại diện hợp lệ trong nhóm — gộp nốt phần còn sót vào ĐÚNG
-                # phiếu đó, không tạo thêm 1 "cây" đại diện khác cho cùng 1 hóa đơn.
-                master, covered = existing_master, ungrouped
-            elif len(ungrouped) < 2:
-                continue  # chỉ có 1 phiếu chưa gộp, không đủ để tự suy ra ai là đại diện
+                master = existing_master
             else:
-                ordered = ungrouped.sorted(key=lambda p: (p.date_done or p.create_date, p.id))
-                master, covered = ordered[0], ordered[1:]
-            covered.write({'misa_invoice_master_picking_id': master.id, 'misa_invoice_amount': 0.0})
+                # Chưa ai trong nhóm được elect làm đại diện — ưu tiên phiếu ĐÃ là đại diện cho
+                # phiếu khác trong CHÍNH nhóm này (giữ ổn định quan hệ đã có), không thì lấy
+                # phiếu xuất kho SỚM NHẤT.
+                sub_masters = group.filtered(lambda p: p.misa_invoice_covered_picking_ids)
+                candidates = sub_masters or group
+                if len(candidates) < 2 and not sub_masters and len(group) < 2:
+                    continue
+                master = candidates.sorted(key=lambda p: (p.date_done or p.create_date, p.id))[0]
+            covered = group - master
+            if not covered:
+                continue  # đã đúng, không có gì lệch tầng để sửa
+            covered.write({
+                'misa_invoice_master_picking_id': master.id,
+                'misa_invoice_amount': 0.0,
+                'misa_invoice_no': master.misa_invoice_no,
+                'misa_invoice_date': master.misa_invoice_date,
+                'misa_invoice_request_refid': refid,
+            })
             note = Markup(
                 "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện các phiếu này cùng khớp 1 hóa đơn MISA "
                 "(request_refid trùng nhau) nhưng MISA không báo đúng tên phiếu đại diện lúc kiểm tra, "
                 "khiến mỗi phiếu tự ghi đủ 100%% tiền hóa đơn — đã tự gộp lại về phiếu %s để không tính "
-                "trùng tiền hóa đơn."
+                "trùng tiền hóa đơn (trỏ THẲNG về đại diện, không qua trung gian)."
             ) % master.name
             for c in covered:
                 c.message_post(body=note)

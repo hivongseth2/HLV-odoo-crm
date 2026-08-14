@@ -100,6 +100,10 @@ export class MisaInvoiceDashboard extends Component {
             showGapSummaryScanPanel: false,
             gapSummaryScanProgress: { done: 0, total: 0 },
             gapSummaryScanLog: [],
+            isFlatteningChains: false,
+            showChainScanPanel: false,
+            chainScanProgress: { done: 0, total: 0 },
+            chainScanLog: [],
             isSavingCutoff: false,
             data: null,
             urgent: [],
@@ -683,6 +687,62 @@ export class MisaInvoiceDashboard extends Component {
     closeGapSummaryScanPanel() {
         if (!this.state.isRefreshingGapSummaries) {
             this.state.showGapSummaryScanPanel = false;
+        }
+    }
+
+    /* Sửa các phiếu bị gán "ăn theo" LỒNG NHAU (chain 2+ tầng, VD KBC/OUT/08194 → 09106 →
+     * 08437) — tiền của phiếu bị "chôn" ở tầng giữa, không cộng vào tổng đối soát của phiếu
+     * đại diện thật sự. Cùng cơ chế từng-phiếu-một + tiến độ như các nút quét khác. */
+    async flattenMasterChains() {
+        if (this.state.isFlatteningChains) {
+            return;
+        }
+        this.state.isFlatteningChains = true;
+        this.state.showChainScanPanel = true;
+        this.state.chainScanLog = [];
+        this.state.chainScanProgress = { done: 0, total: 0 };
+        let totalFlattened = 0;
+        let totalChecked = 0;
+        try {
+            const resp = await this.orm.call("stock.picking", "get_misa_invoice_master_chain_candidates", [], {});
+            this.state.chainScanProgress.total = resp.candidates.length;
+            for (const candidate of resp.candidates) {
+                let result;
+                try {
+                    result = await this.orm.call("stock.picking", "flatten_misa_invoice_master_chain", [candidate.id], {});
+                } catch (e) {
+                    result = { error: e.message || String(e) };
+                }
+                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có gì cần sửa" };
+                if (result.error) {
+                    entry.statusLabel = "Lỗi: " + result.error;
+                    entry.error = true;
+                } else if (result.flattened) {
+                    entry.statusLabel = `Đã trỏ thẳng về phiếu gốc: ${result.root_name}`;
+                    totalFlattened += 1;
+                }
+                this.state.chainScanLog.unshift(entry);
+                this.state.chainScanProgress.done += 1;
+                totalChecked += 1;
+            }
+            if (totalFlattened) {
+                this.notification.add(
+                    `Đã kiểm tra ${totalChecked} phiếu, sửa ${totalFlattened} phiếu bị gán lồng nhau.`,
+                    { type: "success" }
+                );
+                await this._reload();
+            } else {
+                this.notification.add(`Đã kiểm tra ${totalChecked} phiếu, không có phiếu nào bị gán lồng nhau.`, { type: "info" });
+            }
+        } catch (e) {
+            this.notification.add("Lỗi sửa gán lồng nhau: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isFlatteningChains = false;
+    }
+
+    closeChainScanPanel() {
+        if (!this.state.isFlatteningChains) {
+            this.state.showChainScanPanel = false;
         }
     }
 

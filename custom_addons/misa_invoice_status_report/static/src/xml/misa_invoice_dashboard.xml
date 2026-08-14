@@ -47,6 +47,12 @@
                             <i class="fa fa-question-circle" t-att-class="{'fa-spin': state.isRefreshingGapSummaries}"/>
                             Cập nhật lý do lệch
                         </button>
+                        <button class="btn btn-secondary miv-scan-btn" t-if="state.data.can_configure"
+                                t-on-click="flattenMasterChains" t-att-disabled="state.isFlatteningChains"
+                                title="Sửa các phiếu bị gán 'ăn theo' LỒNG NHAU (VD phiếu A ăn theo phiếu B, nhưng B lại đang ăn theo phiếu C) — tiền của phiếu A bị 'chôn' ở tầng giữa, không cộng vào tổng đối soát của phiếu gốc thật sự (C).">
+                            <i class="fa fa-sitemap" t-att-class="{'fa-spin': state.isFlatteningChains}"/>
+                            Sửa gán lồng nhau
+                        </button>
                     </div>
                 </div>
 
@@ -211,6 +217,37 @@
                     </div>
                     <div class="miv-empty" t-if="!state.isRefreshingGapSummaries and !state.gapSummaryScanProgress.total">
                         Không có phiếu nào đang lệch cần cập nhật.
+                    </div>
+                </div>
+
+                <!-- ===== Scan progress panel: Sửa gán lồng nhau ===== -->
+                <div class="miv-scan-panel" t-if="state.showChainScanPanel">
+                    <div class="miv-scan-panel-header">
+                        <span>
+                            <i class="fa fa-sitemap"/>
+                            Đang kiểm tra sửa gán lồng nhau:
+                            <b><t t-esc="state.chainScanProgress.done"/> / <t t-esc="state.chainScanProgress.total"/></b>
+                        </span>
+                        <i class="fa fa-times miv-scan-panel-close" t-if="!state.isFlatteningChains" t-on-click="closeChainScanPanel"/>
+                    </div>
+                    <div class="miv-scan-progress-bar">
+                        <div class="miv-scan-progress-fill"
+                             t-attf-style="width: {{ state.chainScanProgress.total ? Math.round(state.chainScanProgress.done / state.chainScanProgress.total * 100) : 0 }}%"/>
+                    </div>
+                    <ul class="miv-scan-log">
+                        <li t-foreach="state.chainScanLog.slice(0, 8)" t-as="entry" t-key="entry_index"
+                            t-attf-class="{{ entry.error ? 'miv-scan-log-error' : '' }}">
+                            <i class="fa fa-spinner fa-spin" t-if="entry.loading"/>
+                            <i class="fa fa-check text-success" t-if="!entry.loading and !entry.error"/>
+                            <i class="fa fa-exclamation-triangle" t-if="!entry.loading and entry.error"/>
+                            <b><t t-esc="entry.name"/></b> — <t t-esc="entry.statusLabel"/>
+                        </li>
+                    </ul>
+                    <div class="miv-scan-done" t-if="!state.isFlatteningChains and state.chainScanProgress.total">
+                        <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.chainScanProgress.done"/> phiếu.
+                    </div>
+                    <div class="miv-empty" t-if="!state.isFlatteningChains and !state.chainScanProgress.total">
+                        Không có phiếu nào bị gán lồng nhau.
                     </div>
                 </div>
 
