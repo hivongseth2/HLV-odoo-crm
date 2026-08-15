@@ -42,19 +42,23 @@ const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 // Donut "vì sao lệch" trong drawer phiếu (group_breakdown) — mỗi phiếu ĐÃ xuất kho (kind
 // 'linked') dùng 1 sắc độ trong dải xanh lá (sequential, cùng ý nghĩa "đã có thực xuất", theo
 // THỨ TỰ ngày xuất kho — không phải màu định danh riêng cho từng phiếu, xem dataviz skill: N
-// lớn thì dùng dải màu tuần tự thay vì cấp mỗi cái 1 hue). 3 lý do "còn thiếu" dùng màu status
-// cố định (không lẫn với dải xanh trên): chưa xuất kho = warning (rất có thể tự hết khi phiếu
-// đó hoàn tất), còn lại (không có phiếu / không rõ đơn / bị đề nghị khác nhận) = critical (cần
-// người kiểm tra tay).
+// lớn thì dùng dải màu tuần tự thay vì cấp mỗi cái 1 hue). Các lý do "còn thiếu" dùng màu
+// status cố định (không lẫn với dải xanh trên): chưa xuất kho / chưa được đối soát = warning
+// (rất có thể tự hết khi phiếu hoàn tất hoặc bấm "Quét đơn xuất kèm", không cần làm gì thêm);
+// không có phiếu / không rõ đơn / đã bị đề nghị khác nhận = critical (cần người kiểm tra tay).
 const GROUP_BREAKDOWN_LINKED_RAMP = ["#0ca30c", "#2bb050", "#4abd7a", "#69caa1", "#88d7c5", "#a7e4e6"];
 const GROUP_BREAKDOWN_GAP_COLORS = {
     not_shipped: "#fab219",
+    not_matched: "#fab219",
+    self_unconfirmed: "#fab219",
     no_picking: "#d03b3b",
     unknown_order: "#d03b3b",
     conflict: "#d03b3b",
 };
 const GROUP_BREAKDOWN_GAP_LABELS = {
     not_shipped: "Chưa xuất kho",
+    not_matched: "Đã xuất kho, chưa được đối soát/gộp",
+    self_unconfirmed: "Đề nghị chỉ xác nhận 1 phần chính phiếu này",
     no_picking: "Chưa có phiếu xuất kho",
     unknown_order: "Không tìm thấy đơn bán",
     conflict: "Đã bị đề nghị khác nhận",
