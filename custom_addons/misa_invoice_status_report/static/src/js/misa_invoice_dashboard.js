@@ -54,6 +54,7 @@ const GROUP_BREAKDOWN_GAP_COLORS = {
     no_picking: "#d03b3b",
     unknown_order: "#d03b3b",
     conflict: "#d03b3b",
+    resolved_elsewhere: "#0ca30c",
 };
 const GROUP_BREAKDOWN_GAP_LABELS = {
     not_shipped: "Chưa xuất kho",
@@ -62,6 +63,7 @@ const GROUP_BREAKDOWN_GAP_LABELS = {
     no_picking: "Chưa có phiếu xuất kho",
     unknown_order: "Không tìm thấy đơn bán",
     conflict: "Đã bị đề nghị khác nhận",
+    resolved_elsewhere: "Đã xác nhận đủ qua đề nghị khác",
 };
 const GROUP_PAGE_SIZE = 10;
 const SCAN_BATCH_SIZE = 50;

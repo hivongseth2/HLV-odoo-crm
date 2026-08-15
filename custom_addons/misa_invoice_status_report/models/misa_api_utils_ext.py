@@ -119,6 +119,31 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             return _empty_invoice_status()
         return self._misa_invoice_result_from_request(page_data_req[0])
 
+    def get_invoice_requests_for_order(self, order_code):
+        """Tìm TẤT CẢ 'Đề nghị xuất hóa đơn' có nhắc tới order_code này (không chỉ lấy đề nghị
+        ĐẦU TIÊN như get_invoice_status_for_refno) — get_invoice_request_payload vốn đã search
+        theo 7 property cùng lúc (đã xác nhận: truyền order_code vào đây trả về ĐÚNG các đề
+        nghị MISA tự hiện khi gõ mã đơn vào ô tìm kiếm "Đơn đặt hàng").
+
+        Dùng để phát hiện case 1 đơn hàng bị CHIA xuất hóa đơn qua NHIỀU đề nghị hoàn toàn
+        RIÊNG BIỆT — case thật: KBC/OUT/10714 (đơn DH125524949233673) được xác nhận 1 phần bởi
+        đề nghị KBC/OUT/10677 (refid e1e15df5...), phần còn lại bởi KBC/OUT/10877 (refid
+        024dc159...) — 2 refid HOÀN TOÀN khác nhau, không phải cùng 1 voucher bị trùng tên.
+
+        Trả về list [{refno, refid}, ...] — chỉ cần refid để sau đó gọi
+        get_invoice_request_lines cho từng cái, không gọi thêm sa_invoice_get ở đây."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+        url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
+        payload_req = self.env['misa.config'].get_invoice_request_payload(order_code)
+        resp_req = self._fetch_with_retry(url_req, headers, payload_req)
+        data_req = _misa_json_or_raise(resp_req, "sa_invoice_request (search theo order)")
+        page_data_req = data_req.get("Data", {}).get("PageData", []) or []
+        return [
+            {'refno': (item.get('refno') or '').strip(), 'refid': item.get('refid')}
+            for item in page_data_req if item.get('refid')
+        ]
+
     def get_invoice_request_map(self, date_from_iso=False, date_to_iso=False):
         """Tải hàng loạt "Đề nghị xuất hóa đơn" (sa_invoice_request) trong 1 khoảng ngày,
         dùng để kiểm tra nhiều phiếu cùng lúc chỉ với vài lệnh gọi thay vì 1 lệnh/phiếu.
