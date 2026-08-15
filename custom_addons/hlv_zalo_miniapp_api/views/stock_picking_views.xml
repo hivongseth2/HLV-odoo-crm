@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- View Form kế thừa stock.picking - Thêm thông tin & nút đổi/trả Zalo -->
+    <record id="view_picking_form_zalo_return" model="ir.ui.view">
+        <field name="name">stock.picking.form.zalo.return</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="priority">25</field>
+        <field name="arch" type="xml">
+            <!-- Nút bấm xử lý Đổi/Trả Zalo trên Header (Chỉ xuất hiện trên Phiếu Xuất OUT) -->
+            <xpath expr="//header" position="inside">
+                <field name="x_is_zalo_picking" invisible="1"/>
+                <field name="x_is_zalo_outgoing_picking" invisible="1"/>
+                <field name="x_is_zalo_incoming_return_picking" invisible="1"/>
+                <button name="action_approve_zalo_return" type="object" string="Phê duyệt Đổi/Trả Zalo"
+                        class="btn-primary"
+                        invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'draft'))"
+                        confirm="Xác nhận phê duyệt yêu cầu đổi/trả Zalo và mở wizard trả hàng?"/>
+                <button name="action_open_reject_wizard" type="object" string="Từ chối Đổi/Trả Zalo"
+                        class="btn-danger"
+                        invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'approved'))"/>
+                <button name="action_complete_zalo_return" type="object" string="Hoàn tất Đổi/Trả Zalo"
+                        class="btn-success"
+                        invisible="not x_is_zalo_outgoing_picking or x_zalo_return_state not in ('approved', 'processing')"
+                        confirm="Xác nhận hoàn tất đổi/trả Zalo cho phiếu xuất kho này?"/>
+                <button name="action_refund_via_zalo" type="object" string="Hoàn tiền qua Zalo SDK"
+                        class="btn-primary"
+                        invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or x_zalo_refund_status in ('success', 'pending')"
+                        confirm="Xác nhận hoàn tiền qua Zalo Checkout SDK cho đơn hàng này?"/>
+            </xpath>
+
+            <!-- Page Đổi/Trả Zalo trong Notebook -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Đổi/Trả Zalo" name="zalo_return_page"
+                      invisible="not x_is_zalo_picking">
+                    <!-- Giao diện hiển thị trên Phiếu Xuất (OUT) -->
+                    <group string="Thông tin yêu cầu đổi/trả từ Zalo Mini App" colspan="4" col="2"
+                           invisible="not x_is_zalo_outgoing_picking">
+                        <field name="x_zalo_return_requested" string="Khách đề nghị đổi/trả"/>
+                        <field name="x_zalo_return_state" string="Trạng thái đổi/trả"
+                               widget="statusbar"
+                               statusbar_visible="pending,approved,processing,completed,rejected"
+                               invisible="not x_zalo_return_requested"/>
+                        <field name="x_zalo_return_type" string="Loại đổi/trả"
+                               invisible="not x_zalo_return_requested"/>
+                        <field name="x_zalo_return_refund_amount" string="Số tiền hoàn lại" widget="monetary"
+                               invisible="not x_zalo_return_requested"/>
+                        <field name="x_zalo_refund_status" string="Trạng thái hoàn tiền Zalo" widget="badge"
+                               invisible="not x_zalo_return_requested"
+                               decoration-warning="x_zalo_refund_status == 'pending'"
+                               decoration-success="x_zalo_refund_status == 'success'"
+                               decoration-danger="x_zalo_refund_status == 'failed'"/>
+                        <field name="x_zalo_refund_amount" string="Số tiền đã hoàn Zalo" widget="monetary"
+                               invisible="not x_zalo_refund_status"/>
+                        <field name="x_zalo_refund_id" string="Mã hoàn tiền Zalo"
+                               invisible="not x_zalo_refund_id"/>
+                        <field name="x_zalo_refund_time" string="Ngày hoàn tiền Zalo" widget="datetime"
+                               invisible="not x_zalo_refund_time"/>
+                        <field name="x_zalo_return_note" string="Ghi chú từ khách Zalo"
+                               invisible="not x_zalo_return_requested"/>
+                        <field name="x_zalo_return_rejected_reason" string="Lý do từ chối"
+                               invisible="x_zalo_return_state != 'rejected'"/>
+                    </group>
+                    <group string="Thông tin phiếu nhập kho trả hàng (WH/IN)" colspan="4" col="2"
+                           invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_picking_id">
+                        <field name="x_zalo_return_picking_id" string="Phiếu trả hàng (WH/IN)"/>
+                        <field name="x_zalo_return_completed_date" string="Ngày hoàn tất"/>
+                    </group>
+
+                    <!-- Giao diện hiển thị trên Phiếu Nhập Trả Hàng (WH/IN) -->
+                    <group string="Phiếu nhập kho trả hàng Zalo Mini App" colspan="4" col="2"
+                           invisible="not x_is_zalo_incoming_return_picking">
+                        <div class="alert alert-info" role="alert" colspan="2">
+                            <b>Phiếu kho nhận hàng trả Zalo</b> được tạo tự động từ phiếu xuất kho 
+                            <field name="origin" readonly="1" class="oe_inline fw-bold"/>.
+                            <br/>Kho kiểm đếm số lượng thực tế và bấm nút <b>Xác nhận (Validate)</b> chuẩn Odoo để hoàn tất nhập kho.
+                        </div>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Custom List View cho các phiếu xuất kho Đổi/Trả Zalo -->
+    <record id="view_picking_zalo_return_tree" model="ir.ui.view">
+        <field name="name">stock.picking.zalo.return.list</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">25</field>
+        <field name="arch" type="xml">
+            <list string="Phiếu xuất kho Đổi/Trả Zalo" sample="1" decoration-muted="state == 'cancel'">
+                <field name="name" string="Mã phiếu kho" decoration-bf="1"/>
+                <field name="location_dest_id" string="Đến địa điểm"/>
+                <field name="partner_id" string="Khách hàng Zalo"/>
+                <field name="date_done" string="Ngày hoàn thành" widget="datetime"/>
+                <field name="x_zalo_return_requested" string="Khách đề nghị đổi/trả" widget="boolean_toggle"/>
+                <field name="x_zalo_return_state" string="TT Đổi/Trả" widget="badge"
+                       decoration-warning="x_zalo_return_state == 'pending'"
+                       decoration-info="x_zalo_return_state == 'approved'"
+                       decoration-success="x_zalo_return_state in ('processing', 'completed')"
+                       decoration-danger="x_zalo_return_state == 'rejected'"/>
+                <field name="x_zalo_return_type" string="Loại đổi/trả"/>
+                <field name="x_zalo_return_picking_id" string="Phiếu trả hàng (IN)"/>
+                <field name="state" string="Trạng thái phiếu" widget="badge"
+                       decoration-info="state in ('draft', 'waiting', 'confirmed')"
+                       decoration-warning="state == 'assigned'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'cancel'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Window Action cho Phiếu xuất kho Đổi/Trả Zalo -->
+    <record id="action_zalo_return_picking" model="ir.actions.act_window">
+        <field name="name">Phiếu kho Đổi/Trả Zalo</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form,kanban,calendar</field>
+        <field name="view_id" ref="view_picking_zalo_return_tree"/>
+        <field name="domain">[('sale_id.partner_id.x_is_zalo_account', '=', True), ('x_zalo_return_requested', '=', True)]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có phiếu xuất kho nào có yêu cầu đổi/trả từ khách hàng Zalo Mini App.
+            </p>
+        </field>
+    </record>
+</odoo>
