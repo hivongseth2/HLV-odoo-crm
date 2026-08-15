@@ -42,19 +42,21 @@ const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 // Donut "vì sao lệch" trong drawer phiếu (group_breakdown) — mỗi phiếu ĐÃ xuất kho (kind
 // 'linked') dùng 1 sắc độ trong dải xanh lá (sequential, cùng ý nghĩa "đã có thực xuất", theo
 // THỨ TỰ ngày xuất kho — không phải màu định danh riêng cho từng phiếu, xem dataviz skill: N
-// lớn thì dùng dải màu tuần tự thay vì cấp mỗi cái 1 hue). 3 lý do "còn thiếu" dùng màu status
-// cố định (không lẫn với dải xanh trên): chưa xuất kho = warning (rất có thể tự hết khi phiếu
-// đó hoàn tất), còn lại (không có phiếu / không rõ đơn / bị đề nghị khác nhận) = critical (cần
-// người kiểm tra tay).
+// lớn thì dùng dải màu tuần tự thay vì cấp mỗi cái 1 hue). Các lý do "còn thiếu" dùng màu
+// status cố định (không lẫn với dải xanh trên): chưa xuất kho / chưa được đối soát = warning
+// (rất có thể tự hết khi phiếu hoàn tất hoặc bấm "Quét đơn xuất kèm", không cần làm gì thêm);
+// không có phiếu / không rõ đơn / đã bị đề nghị khác nhận = critical (cần người kiểm tra tay).
 const GROUP_BREAKDOWN_LINKED_RAMP = ["#0ca30c", "#2bb050", "#4abd7a", "#69caa1", "#88d7c5", "#a7e4e6"];
 const GROUP_BREAKDOWN_GAP_COLORS = {
     not_shipped: "#fab219",
+    not_matched: "#fab219",
     no_picking: "#d03b3b",
     unknown_order: "#d03b3b",
     conflict: "#d03b3b",
 };
 const GROUP_BREAKDOWN_GAP_LABELS = {
     not_shipped: "Chưa xuất kho",
+    not_matched: "Đã xuất kho, chưa được đối soát/gộp",
     no_picking: "Chưa có phiếu xuất kho",
     unknown_order: "Không tìm thấy đơn bán",
     conflict: "Đã bị đề nghị khác nhận",
@@ -523,12 +525,52 @@ export class MisaInvoiceDashboard extends Component {
         }
     }
 
+    /** Chạy 1 nút "quét/sửa từng phiếu" cho tới khi hết HẲN candidate, không chỉ 1 lô — trước
+     * đây mỗi nút chỉ gọi *_candidates() ĐÚNG 1 LẦN (tối đa 100-200 phiếu/lần) rồi dừng, và
+     * progress.total bị gán = candidates.length của lô đó (KHÔNG PHẢI tổng thật sự), nên thanh
+     * tiến độ luôn hiện "100/100 xong" dù còn hàng trăm phiếu khác chưa quét tới — trông như đã
+     * xong nhưng thực ra chỉ mới xử lý 1 lô, phải bấm lại nhiều lần mới hết (bug thật: người
+     * dùng tưởng nút bị lặp/bỏ sót vì bấm "Cập nhật lý do lệch" mãi không thấy dữ liệu tháng 7).
+     * Giờ progress.total lấy từ resp.total (tổng CẢ danh sách) ngay từ lô đầu, và tự động gọi
+     * lại *_candidates() cho tới khi candidates rỗng hoặc done >= total — không cần bấm lại. */
+    async _runScanUntilDone({ candidatesMethod, perItemMethod, progressKey, logKey, buildEntry }) {
+        let total = null;
+        const summary = { totalChecked: 0 };
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const resp = await this.orm.call("stock.picking", candidatesMethod, [], {});
+            if (total === null) {
+                total = resp.total;
+                this.state[progressKey].total = total;
+            }
+            if (!resp.candidates.length) {
+                break;
+            }
+            for (const candidate of resp.candidates) {
+                let result;
+                try {
+                    result = await this.orm.call("stock.picking", perItemMethod, [candidate.id], {});
+                } catch (e) {
+                    result = { error: e.message || String(e) };
+                }
+                const entry = buildEntry(candidate, result, summary);
+                this.state[logKey].unshift(entry);
+                this.state[progressKey].done += 1;
+                summary.totalChecked += 1;
+            }
+            if (this.state[progressKey].done >= total) {
+                break;
+            }
+        }
+        return summary;
+    }
+
     /** Nút "Quét đơn xuất kèm" — đọc chi tiết dòng hàng của các đề nghị xuất HĐ đã ghi nhận để
      * tìm đơn hàng khác được xuất hóa đơn CHUNG mà cơ chế master_refno chính không phát hiện
      * được (xem _misa_invoice_discover_grouped_orders ở backend). Gọi TỪNG PHIẾU MỘT (không
      * gọi 1 lệnh lớn xử lý ngầm cả trăm phiếu) để hiện tiến độ thực — mỗi phiếu tốn thêm 1 API
-     * MISA nên có thể mất vài phút nếu số lượng nhiều, cần thấy được đang chạy tới đâu. Có thể
-     * cần bấm lại nếu số lượng nhiều hơn 1 lô (100 phiếu/lần). */
+     * MISA nên có thể mất vài phút nếu số lượng nhiều, cần thấy được đang chạy tới đâu. Tự động
+     * chạy hết TOÀN BỘ danh sách (nhiều lô liên tiếp), không dừng giữa chừng. */
     async scanGroupedOrders() {
         if (this.state.isScanningGroups) {
             return;
@@ -537,38 +579,32 @@ export class MisaInvoiceDashboard extends Component {
         this.state.showGroupScanPanel = true;
         this.state.groupScanLog = [];
         this.state.groupScanProgress = { done: 0, total: 0 };
-        let totalDiscovered = 0;
-        let totalChecked = 0;
         try {
-            const resp = await this.orm.call("stock.picking", "get_misa_invoice_grouped_orders_candidates", [], {});
-            this.state.groupScanProgress.total = resp.candidates.length;
-            for (const candidate of resp.candidates) {
-                let result;
-                try {
-                    result = await this.orm.call("stock.picking", "check_misa_invoice_grouped_order", [candidate.id], {});
-                } catch (e) {
-                    result = { error: e.message || String(e) };
-                }
-                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có đơn xuất kèm" };
-                if (result.error) {
-                    entry.statusLabel = "Lỗi: " + result.error;
-                    entry.error = true;
-                } else if (result.discovered_count) {
-                    entry.statusLabel = `Phát hiện ${result.discovered_count} phiếu xuất kèm: ${result.discovered_names.join(", ")}`;
-                    totalDiscovered += result.discovered_count;
-                }
-                this.state.groupScanLog.unshift(entry);
-                this.state.groupScanProgress.done += 1;
-                totalChecked += 1;
-            }
-            if (totalDiscovered) {
+            const summary = await this._runScanUntilDone({
+                candidatesMethod: "get_misa_invoice_grouped_orders_candidates",
+                perItemMethod: "check_misa_invoice_grouped_order",
+                progressKey: "groupScanProgress",
+                logKey: "groupScanLog",
+                buildEntry: (candidate, result, summary) => {
+                    const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có đơn xuất kèm" };
+                    if (result.error) {
+                        entry.statusLabel = "Lỗi: " + result.error;
+                        entry.error = true;
+                    } else if (result.discovered_count) {
+                        entry.statusLabel = `Phát hiện ${result.discovered_count} phiếu xuất kèm: ${result.discovered_names.join(", ")}`;
+                        summary.totalDiscovered = (summary.totalDiscovered || 0) + result.discovered_count;
+                    }
+                    return entry;
+                },
+            });
+            if (summary.totalDiscovered) {
                 this.notification.add(
-                    `Đã quét ${totalChecked} phiếu, phát hiện thêm ${totalDiscovered} phiếu xuất kèm.`,
+                    `Đã quét ${summary.totalChecked} phiếu, phát hiện thêm ${summary.totalDiscovered} phiếu xuất kèm.`,
                     { type: "success" }
                 );
                 await this._reload();
             } else {
-                this.notification.add(`Đã quét ${totalChecked} phiếu, không phát hiện đơn xuất kèm nào mới.`, { type: "info" });
+                this.notification.add(`Đã quét ${summary.totalChecked} phiếu, không phát hiện đơn xuất kèm nào mới.`, { type: "info" });
             }
         } catch (e) {
             this.notification.add("Lỗi quét đơn xuất kèm: " + (e.message || e), { type: "danger" });
@@ -583,8 +619,8 @@ export class MisaInvoiceDashboard extends Component {
     }
 
     /* Sửa lại các phiếu bị gán "ăn theo" SAI bởi phiên bản CŨ của _misa_invoice_discover_grouped_orders
-     * (ép cả phiếu về đã xuất HĐ dù đề nghị chỉ phủ 1 PHẦN giá trị của nó). Cùng cơ chế
-     * từng-phiếu-một + tiến độ như scanGroupedOrders ở trên. */
+     * (ép cả phiếu về đã xuất HĐ dù đề nghị chỉ phủ 1 PHẦN giá trị của nó). Tự động chạy hết
+     * toàn bộ danh sách — xem _runScanUntilDone. */
     async repairGroupedOrders() {
         if (this.state.isRepairingGroups) {
             return;
@@ -593,38 +629,32 @@ export class MisaInvoiceDashboard extends Component {
         this.state.showRepairScanPanel = true;
         this.state.repairScanLog = [];
         this.state.repairScanProgress = { done: 0, total: 0 };
-        let totalReverted = 0;
-        let totalChecked = 0;
         try {
-            const resp = await this.orm.call("stock.picking", "get_misa_invoice_grouped_orders_repair_candidates", [], {});
-            this.state.repairScanProgress.total = resp.candidates.length;
-            for (const candidate of resp.candidates) {
-                let result;
-                try {
-                    result = await this.orm.call("stock.picking", "repair_misa_invoice_grouped_order", [candidate.id], {});
-                } catch (e) {
-                    result = { error: e.message || String(e) };
-                }
-                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có gì cần sửa" };
-                if (result.error) {
-                    entry.statusLabel = "Lỗi: " + result.error;
-                    entry.error = true;
-                } else if (result.reverted_count) {
-                    entry.statusLabel = `Đã sửa ${result.reverted_count} phiếu gán sai: ${result.reverted_names.join(", ")}`;
-                    totalReverted += result.reverted_count;
-                }
-                this.state.repairScanLog.unshift(entry);
-                this.state.repairScanProgress.done += 1;
-                totalChecked += 1;
-            }
-            if (totalReverted) {
+            const summary = await this._runScanUntilDone({
+                candidatesMethod: "get_misa_invoice_grouped_orders_repair_candidates",
+                perItemMethod: "repair_misa_invoice_grouped_order",
+                progressKey: "repairScanProgress",
+                logKey: "repairScanLog",
+                buildEntry: (candidate, result, summary) => {
+                    const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có gì cần sửa" };
+                    if (result.error) {
+                        entry.statusLabel = "Lỗi: " + result.error;
+                        entry.error = true;
+                    } else if (result.reverted_count) {
+                        entry.statusLabel = `Đã sửa ${result.reverted_count} phiếu gán sai: ${result.reverted_names.join(", ")}`;
+                        summary.totalReverted = (summary.totalReverted || 0) + result.reverted_count;
+                    }
+                    return entry;
+                },
+            });
+            if (summary.totalReverted) {
                 this.notification.add(
-                    `Đã kiểm tra ${totalChecked} phiếu đại diện, sửa lại ${totalReverted} phiếu bị gán sai trước đây.`,
+                    `Đã kiểm tra ${summary.totalChecked} phiếu đại diện, sửa lại ${summary.totalReverted} phiếu bị gán sai trước đây.`,
                     { type: "success" }
                 );
                 await this._reload();
             } else {
-                this.notification.add(`Đã kiểm tra ${totalChecked} phiếu đại diện, không có phiếu nào bị gán sai.`, { type: "info" });
+                this.notification.add(`Đã kiểm tra ${summary.totalChecked} phiếu đại diện, không có phiếu nào bị gán sai.`, { type: "info" });
             }
         } catch (e) {
             this.notification.add("Lỗi sửa gộp sai: " + (e.message || e), { type: "danger" });
@@ -640,8 +670,11 @@ export class MisaInvoiceDashboard extends Component {
 
     /* Cập nhật misa_invoice_gap_summary cho các nhóm ĐANG lệch (misa_invoice_amount_mismatch)
      * — để danh sách "Đối chiếu tổng" hiện ngay lý do lệch (chưa xuất kho / không có phiếu /
-     * bị đề nghị khác nhận) mà không cần mở drawer từng phiếu. Cùng cơ chế từng-phiếu-một +
-     * tiến độ như scanGroupedOrders/repairGroupedOrders ở trên. */
+     * bị đề nghị khác nhận) mà không cần mở drawer từng phiếu. LƯU Ý: nút này CHỈ ghi lại lý
+     * do (không sửa dữ liệu), nên 1 phiếu vẫn có thể tiếp tục xuất hiện ở lượt quét SAU nếu
+     * nguyên nhân lệch chưa được xử lý (VD còn chờ phiếu khác xuất kho) — không phải bug, đây
+     * là hành vi "làm mới thông tin" chứ không phải "dọn xong là hết việc". Tự động chạy hết
+     * toàn bộ danh sách hiện có — xem _runScanUntilDone. */
     async refreshGapSummaries() {
         if (this.state.isRefreshingGapSummaries) {
             return;
@@ -650,32 +683,27 @@ export class MisaInvoiceDashboard extends Component {
         this.state.showGapSummaryScanPanel = true;
         this.state.gapSummaryScanLog = [];
         this.state.gapSummaryScanProgress = { done: 0, total: 0 };
-        let totalChecked = 0;
         try {
-            const resp = await this.orm.call("stock.picking", "get_misa_invoice_gap_summary_candidates", [], {});
-            this.state.gapSummaryScanProgress.total = resp.candidates.length;
-            for (const candidate of resp.candidates) {
-                let result;
-                try {
-                    result = await this.orm.call("stock.picking", "refresh_misa_invoice_gap_summary", [candidate.id], {});
-                } catch (e) {
-                    result = { error: e.message || String(e) };
-                }
-                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không xác định được lý do" };
-                if (result.error) {
-                    entry.statusLabel = "Lỗi: " + result.error;
-                    entry.error = true;
-                } else if (result.gap_summary) {
-                    entry.statusLabel = result.gap_summary;
-                } else {
-                    entry.statusLabel = "Đã khớp đủ (có thể do trả hàng/gộp chung, không phải thiếu phiếu)";
-                }
-                this.state.gapSummaryScanLog.unshift(entry);
-                this.state.gapSummaryScanProgress.done += 1;
-                totalChecked += 1;
-            }
-            this.notification.add(`Đã cập nhật lý do lệch cho ${totalChecked} phiếu.`, { type: "success" });
-            if (totalChecked) {
+            const summary = await this._runScanUntilDone({
+                candidatesMethod: "get_misa_invoice_gap_summary_candidates",
+                perItemMethod: "refresh_misa_invoice_gap_summary",
+                progressKey: "gapSummaryScanProgress",
+                logKey: "gapSummaryScanLog",
+                buildEntry: (candidate, result) => {
+                    const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không xác định được lý do" };
+                    if (result.error) {
+                        entry.statusLabel = "Lỗi: " + result.error;
+                        entry.error = true;
+                    } else if (result.gap_summary) {
+                        entry.statusLabel = result.gap_summary;
+                    } else {
+                        entry.statusLabel = "Đã khớp đủ (có thể do trả hàng/gộp chung, không phải thiếu phiếu)";
+                    }
+                    return entry;
+                },
+            });
+            this.notification.add(`Đã cập nhật lý do lệch cho ${summary.totalChecked} phiếu.`, { type: "success" });
+            if (summary.totalChecked) {
                 await this._reload();
             }
         } catch (e) {
@@ -692,7 +720,7 @@ export class MisaInvoiceDashboard extends Component {
 
     /* Sửa các phiếu bị gán "ăn theo" LỒNG NHAU (chain 2+ tầng, VD KBC/OUT/08194 → 09106 →
      * 08437) — tiền của phiếu bị "chôn" ở tầng giữa, không cộng vào tổng đối soát của phiếu
-     * đại diện thật sự. Cùng cơ chế từng-phiếu-một + tiến độ như các nút quét khác. */
+     * đại diện thật sự. Tự động chạy hết toàn bộ danh sách — xem _runScanUntilDone. */
     async flattenMasterChains() {
         if (this.state.isFlatteningChains) {
             return;
@@ -701,38 +729,32 @@ export class MisaInvoiceDashboard extends Component {
         this.state.showChainScanPanel = true;
         this.state.chainScanLog = [];
         this.state.chainScanProgress = { done: 0, total: 0 };
-        let totalFlattened = 0;
-        let totalChecked = 0;
         try {
-            const resp = await this.orm.call("stock.picking", "get_misa_invoice_master_chain_candidates", [], {});
-            this.state.chainScanProgress.total = resp.candidates.length;
-            for (const candidate of resp.candidates) {
-                let result;
-                try {
-                    result = await this.orm.call("stock.picking", "flatten_misa_invoice_master_chain", [candidate.id], {});
-                } catch (e) {
-                    result = { error: e.message || String(e) };
-                }
-                const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có gì cần sửa" };
-                if (result.error) {
-                    entry.statusLabel = "Lỗi: " + result.error;
-                    entry.error = true;
-                } else if (result.flattened) {
-                    entry.statusLabel = `Đã trỏ thẳng về phiếu gốc: ${result.root_name}`;
-                    totalFlattened += 1;
-                }
-                this.state.chainScanLog.unshift(entry);
-                this.state.chainScanProgress.done += 1;
-                totalChecked += 1;
-            }
-            if (totalFlattened) {
+            const summary = await this._runScanUntilDone({
+                candidatesMethod: "get_misa_invoice_master_chain_candidates",
+                perItemMethod: "flatten_misa_invoice_master_chain",
+                progressKey: "chainScanProgress",
+                logKey: "chainScanLog",
+                buildEntry: (candidate, result, summary) => {
+                    const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không có gì cần sửa" };
+                    if (result.error) {
+                        entry.statusLabel = "Lỗi: " + result.error;
+                        entry.error = true;
+                    } else if (result.flattened) {
+                        entry.statusLabel = `Đã trỏ thẳng về phiếu gốc: ${result.root_name}`;
+                        summary.totalFlattened = (summary.totalFlattened || 0) + 1;
+                    }
+                    return entry;
+                },
+            });
+            if (summary.totalFlattened) {
                 this.notification.add(
-                    `Đã kiểm tra ${totalChecked} phiếu, sửa ${totalFlattened} phiếu bị gán lồng nhau.`,
+                    `Đã kiểm tra ${summary.totalChecked} phiếu, sửa ${summary.totalFlattened} phiếu bị gán lồng nhau.`,
                     { type: "success" }
                 );
                 await this._reload();
             } else {
-                this.notification.add(`Đã kiểm tra ${totalChecked} phiếu, không có phiếu nào bị gán lồng nhau.`, { type: "info" });
+                this.notification.add(`Đã kiểm tra ${summary.totalChecked} phiếu, không có phiếu nào bị gán lồng nhau.`, { type: "info" });
             }
         } catch (e) {
             this.notification.add("Lỗi sửa gán lồng nhau: " + (e.message || e), { type: "danger" });

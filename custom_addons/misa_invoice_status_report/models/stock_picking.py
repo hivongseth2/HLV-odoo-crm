@@ -1560,6 +1560,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 break
         state = invoice.state if invoice else 'missing'
         done_date = picking.date_done.date() if picking.date_done else False
+        # Có trả hàng — HĐĐT Shopee đã "accepted" từ TRƯỚC lúc trả hàng nên total_amount_oc vẫn
+        # giữ nguyên tiền gốc, không tự trừ theo hàng trả (khác gì MISA, chỉ là chưa từng vá
+        # cho luồng Shopee). Coi như đã điều chỉnh xuống đúng bằng tiền thực xuất ròng, y hệt
+        # nguyên tắc misa_invoice_effective_amount đã áp dụng cho phiếu MISA thường.
+        has_return = (picking.misa_invoice_returned_amount or 0.0) > 0
+        original_invoice_amount = (invoice.total_amount_oc or 0.0) if state == 'accepted' else 0.0
+        invoice_amount = (
+            (picking.misa_invoice_net_actual_amount or 0.0) if (state == 'accepted' and has_return)
+            else original_invoice_amount
+        )
         return {
             'id': picking.id,
             'name': picking.name,
@@ -1573,7 +1583,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'state_label': MISA_SHOPEE_INVOICE_STATE_LABELS.get(state, state),
             'invoice_no': invoice.inv_no or False,
             'invoice_date': fields.Date.to_string(invoice.inv_date_result) if invoice and invoice.inv_date_result else False,
-            'invoice_amount': (invoice.total_amount_oc or 0.0) if state == 'accepted' else 0.0,
+            'invoice_amount': invoice_amount,
+            'has_return': has_return,
+            'original_invoice_amount': original_invoice_amount,
+            'returned_amount': picking.misa_invoice_returned_amount or 0.0,
         }
 
     def _misa_invoice_shopee_summary(self, domain):
@@ -3677,8 +3690,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
           hoàn tất ('done') — amount = tiền dòng hàng (có VAT) của đơn đó theo MISA.
         - 'no_picking': đơn hàng được nhắc tới nhưng chưa có phiếu xuất kho nào trong Odoo.
         - 'unknown_order': không tìm thấy đơn bán nào khớp mã đơn MISA trả về.
-        - 'conflict': có phiếu đã 'done' cho đơn này nhưng đã được 1 đề nghị/hóa đơn KHÁC nhận
-          (không thuộc nhóm này) — có thể gán sai, cần kiểm tra tay."""
+        - 'not_matched': có phiếu ĐÃ 'done' cho đơn này nhưng CHƯA được đối soát/gán vào nhóm
+          nào cả (misa_invoice_state != 'invoiced', không có master/covered) — KHÔNG PHẢI lỗi,
+          chỉ là chưa được "Quét đơn xuất kèm" xử lý tới (bài học thật: KBC/OUT/11207 từng bị
+          báo nhầm "đã bị đề nghị khác nhận" trong khi thực ra misa_invoice_state='missing',
+          chưa ai nhận cả — chỉ đơn giản là engine gộp chưa chạy qua nó).
+        - 'conflict': có phiếu đã 'done' cho đơn này và ĐÃ có master_picking_id/covered_picking_ids
+          trỏ sang 1 nhóm KHÁC (không phải nhóm này) — có thể là 1 hóa đơn hợp lệ chia làm 2 đợt
+          cho cùng 1 phiếu, hoặc gán sai — cần kiểm tra tay để phân biệt."""
         slices = []
         for p in group_pickings.sorted('date_done'):
             slices.append({
@@ -3733,14 +3752,34 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'order_code': order_code,
                 })
             else:
-                slices.append({
-                    'kind': 'conflict',
-                    'label': ', '.join(order_pickings.mapped('name')),
-                    'amount': order_amount,
-                    'order_code': order_code,
-                    'picking_names': order_pickings.mapped('name'),
-                    'picking_ids': order_pickings.ids,
-                })
+                # Tất cả pickings của đơn này đã 'done' — phân biệt "chưa từng được đối soát"
+                # (không phải lỗi, chỉ chưa quét tới) với "đã bị 1 nhóm KHÁC nhận thật sự".
+                not_matched = order_pickings.filtered(
+                    lambda p: not p.misa_invoice_master_picking_id and not p.misa_invoice_covered_picking_ids
+                )
+                claimed_elsewhere = order_pickings - not_matched
+                if not_matched:
+                    slices.append({
+                        'kind': 'not_matched',
+                        'label': ', '.join(not_matched.mapped('name')),
+                        'amount': order_amount if not claimed_elsewhere else sum(
+                            not_matched.mapped('misa_invoice_net_actual_amount')
+                        ),
+                        'order_code': order_code,
+                        'picking_names': not_matched.mapped('name'),
+                        'picking_ids': not_matched.ids,
+                    })
+                if claimed_elsewhere:
+                    slices.append({
+                        'kind': 'conflict',
+                        'label': ', '.join(claimed_elsewhere.mapped('name')),
+                        'amount': order_amount if not not_matched else max(
+                            order_amount - sum(not_matched.mapped('misa_invoice_net_actual_amount')), 0.0
+                        ),
+                        'order_code': order_code,
+                        'picking_names': claimed_elsewhere.mapped('name'),
+                        'picking_ids': claimed_elsewhere.ids,
+                    })
 
         return {
             'slices': slices,
@@ -3765,6 +3804,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             elif s['kind'] == 'unknown_order':
                 parts.append('không tìm thấy đơn bán %s (%s đ)' % (
                     s['order_code'], '{:,.0f}'.format(s['amount']).replace(',', '.')
+                ))
+            elif s['kind'] == 'not_matched':
+                parts.append('%s đã xuất kho nhưng chưa được đối soát/gộp (%s đ)' % (
+                    s['label'], '{:,.0f}'.format(s['amount']).replace(',', '.')
                 ))
             elif s['kind'] == 'conflict':
                 parts.append('%s đã bị đề nghị khác nhận (%s đ)' % (
