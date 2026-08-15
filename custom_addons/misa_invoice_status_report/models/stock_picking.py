@@ -3945,6 +3945,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return {'error': str(e)}
 
     @api.model
+    def refresh_misa_invoice_gap_summaries(self, limit=100):
+        """Bản batch không hiện tiến độ — dùng cho migration backfill. Dùng
+        get_misa_invoice_gap_summary_candidates + refresh_misa_invoice_gap_summary cho nút bấm
+        trên dashboard (hiện tiến độ từng phiếu)."""
+        Picking = self.sudo()
+        candidates = Picking.search(self._misa_invoice_gap_summary_domain(), limit=limit)
+        for picking in candidates:
+            try:
+                picking._misa_invoice_refresh_gap_summary()
+            except Exception:
+                _logger.exception("❌ [MISA GAP SUMMARY] Lỗi cập nhật lý do lệch cho phiếu %s", picking.name)
+        return {'checked': len(candidates)}
+
+    @api.model
     def get_misa_invoice_report_action(
         self, state=False, exception=None, saler_code=False, mismatch=False, partner_id=False,
         warehouse_id=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
