@@ -50,6 +50,7 @@ const GROUP_BREAKDOWN_LINKED_RAMP = ["#0ca30c", "#2bb050", "#4abd7a", "#69caa1",
 const GROUP_BREAKDOWN_GAP_COLORS = {
     not_shipped: "#fab219",
     not_matched: "#fab219",
+    self_unconfirmed: "#fab219",
     no_picking: "#d03b3b",
     unknown_order: "#d03b3b",
     conflict: "#d03b3b",
@@ -57,6 +58,7 @@ const GROUP_BREAKDOWN_GAP_COLORS = {
 const GROUP_BREAKDOWN_GAP_LABELS = {
     not_shipped: "Chưa xuất kho",
     not_matched: "Đã xuất kho, chưa được đối soát/gộp",
+    self_unconfirmed: "Đề nghị chỉ xác nhận 1 phần chính phiếu này",
     no_picking: "Chưa có phiếu xuất kho",
     unknown_order: "Không tìm thấy đơn bán",
     conflict: "Đã bị đề nghị khác nhận",
