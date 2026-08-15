@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_hlv_customer_revenue_report_list" model="ir.ui.view">
+        <field name="name">hlv.customer.revenue.report.list</field>
+        <field name="model">hlv.customer.revenue.report</field>
+        <field name="arch" type="xml">
+            <list string="Doanh thu theo khách hàng" create="false" edit="false" delete="false"
+                  decoration-warning="qty_returned > 0">
+                <field name="date_done"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="partner_id"/>
+                <field name="order_partner_id" optional="hide"/>
+                <field name="sale_order_id"/>
+                <field name="user_id" optional="hide"/>
+                <field name="warehouse_id" optional="hide"/>
+                <field name="product_id"/>
+                <field name="product_categ_id" optional="hide"/>
+                <field name="qty_delivered" sum="Tổng SL xuất"/>
+                <field name="qty_returned" optional="show" sum="Tổng SL trả"/>
+                <field name="qty_net" sum="Tổng SL ròng"/>
+                <field name="price_unit_after_tax" optional="hide"/>
+                <field name="amount_gross" optional="show" sum="Tổng doanh thu gộp"/>
+                <field name="amount_returned" optional="show" sum="Tổng tiền trả lại"/>
+                <field name="amount_net" sum="Tổng doanh thu ròng"/>
+                <field name="amount_gross_untaxed" optional="hide" sum="Tổng gộp (trước thuế)"/>
+                <field name="amount_net_untaxed" optional="hide" sum="Tổng ròng (trước thuế)"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_customer_revenue_report_search" model="ir.ui.view">
+        <field name="name">hlv.customer.revenue.report.search</field>
+        <field name="model">hlv.customer.revenue.report</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm doanh thu theo khách hàng">
+                <field name="partner_id"/>
+                <field name="sale_order_id"/>
+                <field name="product_id"/>
+                <field name="user_id"/>
+                <field name="company_id"/>
+                <field name="warehouse_id"/>
+                <filter string="Ngày xuất kho" name="filter_date_done" date="date_done"/>
+                <filter string="Ngày đặt hàng" name="filter_order_date" date="order_date"/>
+                <separator/>
+                <filter string="Có hàng trả" name="filter_has_return" domain="[('qty_returned', '&gt;', 0)]"/>
+                <group expand="1" string="Nhóm theo">
+                    <filter string="Khách hàng" name="groupby_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Đơn hàng" name="groupby_order" context="{'group_by': 'sale_order_id'}"/>
+                    <filter string="Công ty" name="groupby_company" context="{'group_by': 'company_id'}"/>
+                    <filter string="Sản phẩm" name="groupby_product" context="{'group_by': 'product_id'}"/>
+                    <filter string="Nhóm sản phẩm" name="groupby_categ" context="{'group_by': 'product_categ_id'}"/>
+                    <filter string="Kho" name="groupby_warehouse" context="{'group_by': 'warehouse_id'}"/>
+                    <filter string="Nhân viên bán hàng" name="groupby_user" context="{'group_by': 'user_id'}"/>
+                    <filter string="Tháng xuất kho" name="groupby_date_done" context="{'group_by': 'date_done:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_hlv_customer_revenue_report_pivot" model="ir.ui.view">
+        <field name="name">hlv.customer.revenue.report.pivot</field>
+        <field name="model">hlv.customer.revenue.report</field>
+        <field name="arch" type="xml">
+            <pivot string="Doanh thu theo khách hàng">
+                <field name="partner_id" type="row"/>
+                <field name="date_done" interval="month" type="col"/>
+                <field name="qty_delivered" type="measure"/>
+                <field name="qty_returned" type="measure"/>
+                <field name="qty_net" type="measure"/>
+                <field name="amount_gross" type="measure"/>
+                <field name="amount_returned" type="measure"/>
+                <field name="amount_net" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_hlv_customer_revenue_report_graph" model="ir.ui.view">
+        <field name="name">hlv.customer.revenue.report.graph</field>
+        <field name="model">hlv.customer.revenue.report</field>
+        <field name="arch" type="xml">
+            <graph string="Doanh thu theo khách hàng" type="bar">
+                <field name="partner_id" type="row"/>
+                <field name="amount_net" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- Report 1: grouped by Customer -->
+    <record id="action_hlv_customer_revenue_report" model="ir.actions.act_window">
+        <field name="name">Doanh thu theo khách hàng</field>
+        <field name="res_model">hlv.customer.revenue.report</field>
+        <field name="view_mode">list,pivot,graph</field>
+        <field name="search_view_id" ref="view_hlv_customer_revenue_report_search"/>
+        <field name="context">{'search_default_groupby_partner': 1}</field>
+    </record>
+
+    <!-- Report 2: grouped by Company / Order -->
+    <record id="action_hlv_customer_revenue_report_by_order" model="ir.actions.act_window">
+        <field name="name">Doanh thu theo đơn hàng / công ty</field>
+        <field name="res_model">hlv.customer.revenue.report</field>
+        <field name="view_mode">list,pivot,graph</field>
+        <field name="search_view_id" ref="view_hlv_customer_revenue_report_search"/>
+        <field name="context">{'search_default_groupby_company': 1, 'search_default_groupby_order': 2}</field>
+    </record>
+
+    <menuitem id="menu_hlv_customer_revenue_report_root"
+              name="Doanh thu KH"
+              parent="sale.menu_sale_report"
+              sequence="60"/>
+
+    <menuitem id="menu_hlv_customer_revenue_report"
+              name="Theo khách hàng"
+              parent="menu_hlv_customer_revenue_report_root"
+              action="action_hlv_customer_revenue_report"
+              sequence="10"/>
+
+    <menuitem id="menu_hlv_customer_revenue_report_by_order"
+              name="Theo đơn hàng / công ty"
+              parent="menu_hlv_customer_revenue_report_root"
+              action="action_hlv_customer_revenue_report_by_order"
+              sequence="20"/>
+
+</odoo>
