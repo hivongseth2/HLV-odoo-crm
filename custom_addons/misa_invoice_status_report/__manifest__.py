@@ -1,6 +1,6 @@
 {
     'name': 'MISA Invoice Status Report',
-    'version': '1.6',
+    'version': '1.7',
     'category': 'Inventory',
     'summary': 'Đối soát phiếu xuất kho chưa có hóa đơn MISA',
     'description': """

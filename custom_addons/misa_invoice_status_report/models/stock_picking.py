@@ -437,29 +437,68 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
             # MISA cho phép 1 đề nghị (refno của phiếu ĐẠI DIỆN) gộp chung nhiều phiếu khác
             # (liệt kê trong journal_memo) — nếu refno thật của đề nghị khác tên phiếu đang
-            # kiểm tra, đây là phiếu "ăn theo": trỏ về phiếu gốc và KHÔNG lưu tiền hóa đơn ở
-            # đây nữa (đã lưu đầy đủ ở phiếu gốc) để tránh cộng dồn trùng tiền trong dashboard.
+            # kiểm tra, phiếu này CÓ THỂ là "ăn theo" phiếu đó.
+            #
+            # QUAN TRỌNG (bài học thật): TRƯỚC ĐÂY, cứ tìm thấy tên là gán NGAY "ăn theo" (zero
+            # tiền hóa đơn của phiếu này) — mù tịt không kiểm tra xem đề nghị đó có phủ ĐỦ giá
+            # trị của phiếu này hay chỉ 1 PHẦN (case y hệt lỗi đã sửa ở Cơ chế B/
+            # _misa_invoice_discover_grouped_orders cho KBC/OUT/11016 — 1 đề nghị chỉ phủ đúng
+            # 1/3 sản phẩm của phiếu kia). Giờ KHÔNG tự ý gán "ăn theo"/zero tiền ở đây nữa —
+            # chỉ ghi nhận phiếu này NHƯ THỂ tự tìm thấy hóa đơn ĐỘC LẬP (giữ nguyên tiền thô MISA
+            # trả về), và đảm bảo phiếu đại diện (master_refno) được/đã quét bằng
+            # _misa_invoice_discover_grouped_orders — engine đó đọc ĐÚNG order_code + số lượng
+            # từng dòng hàng (get_invoice_request_lines), khớp CHÍNH XÁC theo dòng hàng thay vì
+            # đoán mù theo tên, và tự quyết định: đủ → gán "ăn theo" (zero tiền); thiếu → chỉ
+            # cộng dồn 1 phần (misa_invoice_grouped_matched_amount). _misa_invoice_dedupe_request_refid_groups
+            # (chạy cuối hàm) vẫn là lưới an toàn dự phòng cho trường hợp cả 2 cơ chế trên đều
+            # không tự nối được (không chia sẻ order_code nào phát hiện được).
             master_refno = status.get('master_refno')
-            master_picking = self.browse()
+            # True khi MISA báo phiếu này nằm chung đề nghị với 1 phiếu KHÁC (dù đã xác định
+            # được ai là đại diện thật hay chưa) — dùng để: (a) không tự chạy discovery từ
+            # chính phiếu này (nhường vai đại diện cho candidate_master, tránh 2 phiếu cùng 1
+            # request_refid giành nhau tự nhận là gốc), (b) tạm giữ nguyên tiền hóa đơn thô
+            # (không zero mù) cho tới khi discovery/dedupe xác nhận xong.
+            found_master_refno = False
             # So với refno vừa dùng để tra (không phải luôn là tên phiếu — có thể là mã đề
             # nghị gắn tay) — nếu trùng nghĩa là đề nghị này chính là của phiếu đang xét,
             # không cần tìm phiếu gốc nào khác.
             if master_refno and master_refno != refno:
-                master_picking = self.sudo().search([('name', '=', master_refno)], limit=1)
-                if (
-                    master_picking and master_picking.id not in self._ids
-                    and master_picking.misa_invoice_state != 'invoiced'
-                ):
-                    extra_masters_to_check |= master_picking
+                candidate_master = self.sudo().search([('name', '=', master_refno)], limit=1)
+                if candidate_master and candidate_master.id not in self._ids:
+                    found_master_refno = True
+                    if candidate_master.misa_invoice_state != 'invoiced':
+                        # Phiếu đại diện chưa từng được kiểm tra — thêm vào lô kiểm tra ngay,
+                        # tự nó sẽ gọi _misa_invoice_discover_grouped_orders khi trở thành 'invoiced'.
+                        extra_masters_to_check |= candidate_master
+                    elif (
+                        picking.misa_invoice_master_picking_id != candidate_master
+                        and not picking.misa_invoice_grouped_matched_amount
+                    ):
+                        # Phiếu đại diện ĐÃ được kiểm tra từ trước (group_checked có thể đã
+                        # True) nhưng CHƯA từng biết tới phiếu đang xét (mới lộ ra qua
+                        # master_refno lần này, VD phiếu vừa mới 'done' sau lượt quét trước) —
+                        # buộc quét lại 1 lần để không bỏ sót vĩnh viễn (chỉ quét lại khi thật
+                        # sự có tin mới, tránh tốn thêm API mỗi 30 phút cho mọi phiếu).
+                        candidate_master.misa_invoice_group_checked = False
+                        try:
+                            candidate_master._misa_invoice_discover_grouped_orders()
+                        except Exception:
+                            _logger.exception(
+                                "❌ [MISA GROUP DISCOVER] Lỗi quét lại phiếu đại diện %s (phát hiện qua "
+                                "master_refno của phiếu %s)", candidate_master.name, picking.name,
+                            )
 
             vals = {
                 'misa_invoice_state': status['state'],
                 'misa_invoice_last_checked': fields.Datetime.now(),
                 'misa_invoice_request_refid': status.get('request_refid') or False,
                 'misa_invoice_no': status.get('invoice_no') or False,
-                'misa_invoice_amount': 0.0 if master_picking else (status.get('invoice_amount') or 0.0),
-                'misa_invoice_master_picking_id': master_picking.id if master_picking else False,
             }
+            # Nếu vòng quét lại phiếu đại diện ở trên (elif) VỪA gán "ăn theo" cho picking này
+            # (đủ dòng hàng → misa_invoice_master_picking_id + amount=0 đã ghi), KHÔNG được ghi
+            # đè tiền thô của MISA lên nữa — không thì lại xóa mất kết quả vừa xác minh đúng.
+            if not picking.misa_invoice_master_picking_id:
+                vals['misa_invoice_amount'] = status.get('invoice_amount') or 0.0
             invoice_date = status.get('invoice_date')
             if invoice_date:
                 try:
@@ -468,7 +507,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     _logger.warning("Không parse được ngày hóa đơn MISA: %s", invoice_date)
 
             old_state = picking.misa_invoice_state
-            old_master_id = picking.misa_invoice_master_picking_id.id
             picking.write(vals)
 
             if old_state != status['state']:
@@ -478,24 +516,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         MISA_INVOICE_STATE_LABELS.get(status['state'], status['state']),
                     )
                 )
-            if master_picking and old_master_id != master_picking.id:
-                master_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
-                    master_picking.id, master_picking.name
-                )
-                picking_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
-                    picking.id, picking.name
-                )
-                picking.message_post(
-                    body=Markup(
-                        "<b>🔗 Xuất hóa đơn gộp chung:</b> đề nghị xuất HĐ của phiếu này nằm trong "
-                        "phiếu gốc %s (xem chi tiết hóa đơn tại đó)."
-                    ) % master_link
-                )
-                master_picking.message_post(
-                    body=Markup(
-                        "<b>🔗 Xuất hóa đơn gộp chung:</b> đề nghị xuất HĐ này gộp chung cho phiếu %s."
-                    ) % picking_link
-                )
+            # Không tự đăng thông báo "gộp chung" ở đây nữa — quyết định gán "ăn theo" hay chỉ
+            # cộng dồn 1 phần giờ hoàn toàn do _misa_invoice_discover_grouped_orders quyết định
+            # (đã tự đăng thông báo riêng khi thật sự khớp), tránh đăng trùng/đăng nhầm khi chưa
+            # xác minh xong dòng hàng.
             if picking.misa_invoice_amount_mismatch:
                 picking.message_post(
                     body=Markup("<b>⚠️ Lệch tiền với MISA:</b> Odoo %.0f đ vs MISA %.0f đ (chênh %.0f đ)") % (
@@ -504,10 +528,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         picking.misa_invoice_amount_diff,
                     )
                 )
-            # Chỉ phiếu ĐẠI DIỆN (không phải ăn theo ai) mới cần tự đọc chi tiết dòng hàng đề
-            # nghị để tìm đơn xuất kèm — phiếu ăn theo đã có amount=0 rồi, đọc lại chỉ tốn thêm
-            # 1 API MISA vô ích (xem _misa_invoice_discover_grouped_orders).
-            if not master_picking and status['state'] == 'invoiced' and not picking.misa_invoice_group_checked:
+            # Chỉ phiếu ĐẠI DIỆN (không phải ăn theo ai, và MISA không báo có phiếu đại diện
+            # nào khác) mới cần tự đọc chi tiết dòng hàng đề nghị để tìm đơn xuất kèm — nếu đã
+            # phát hiện có phiếu đại diện khác (found_master_refno), nhường việc quét cho phiếu
+            # đó (xem khối master_refno ở trên) để tránh 2 phiếu cùng 1 request_refid giành
+            # nhau tự nhận là gốc.
+            if (
+                not found_master_refno and not picking.misa_invoice_master_picking_id
+                and status['state'] == 'invoiced' and not picking.misa_invoice_group_checked
+            ):
                 try:
                     picking._misa_invoice_discover_grouped_orders()
                 except Exception:
@@ -634,11 +663,18 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # Đã là 1 phần ĐÚNG của group này rồi (từ lần quét trước, hoặc qua dedupe theo
             # request_refid) — không phải "phiếu bị đề nghị KHÁC cướp mất", không cần báo gì.
             already_in_group = done_pickings.filtered(lambda p: p.misa_invoice_master_picking_id == self)
-            # Chỉ nhận phiếu CHƯA có quan hệ gộp hợp lệ nào khác — không "cướp" phiếu đã là
-            # gốc/ăn theo của 1 đề nghị KHÁC (tránh phá vỡ 1 nhóm gộp đúng đã có sẵn).
+            # Chỉ nhận phiếu CHƯA có quan hệ gộp hợp lệ nào khác VÀ CHƯA tự có hóa đơn riêng —
+            # không "cướp" phiếu đã là gốc/ăn theo của 1 đề nghị KHÁC (tránh phá vỡ 1 nhóm gộp
+            # đúng đã có sẵn), và QUAN TRỌNG: không "cướp" luôn cả phiếu đã TỰ tìm thấy hóa đơn
+            # ĐỘC LẬP của riêng nó (misa_invoice_state == 'invoiced', chỉ là chưa có
+            # master/covered vì nó không "ăn theo" ai cả — nó CÓ hóa đơn RIÊNG). Bài học thật:
+            # 1 đơn bán 2 cái, xuất 2 phiếu, mỗi phiếu có 1 đề nghị xuất HĐ RIÊNG BIỆT (không
+            # liên quan gì nhau) — nếu không loại trừ, FIFO khớp dòng hàng có thể vô tình gán
+            # nhầm phiếu đã có hóa đơn đúng của nó vào nhóm của phiếu khác.
             sibling_pickings = done_pickings.filtered(
                 lambda p: not p.misa_invoice_master_picking_id and not p.misa_invoice_covered_picking_ids
                 and p.misa_invoice_request_refid != self.misa_invoice_request_refid
+                and p.misa_invoice_state != 'invoiced'
             )
             claimed_elsewhere = done_pickings - sibling_pickings - already_in_group
 
@@ -657,8 +693,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     ))
                 elif claimed_elsewhere:
                     self.message_post(body=Markup(
-                        "<b>⚠️ Đơn hàng %s (nhắc tới trong đề nghị%s) đã được gộp vào 1 đề nghị "
-                        "KHÁC:</b> %s — cần kiểm tra tay nếu nghi ngờ gán sai."
+                        "<b>⚠️ Đơn hàng %s (nhắc tới trong đề nghị%s) đã có hóa đơn ở nơi KHÁC:</b> "
+                        "%s — có thể đã bị gộp vào 1 đề nghị khác, hoặc tự có đề nghị/hóa đơn RIÊNG "
+                        "biệt (VD 1 đơn bán nhiều cái, xuất kho + xuất HĐ thành nhiều đợt độc lập — "
+                        "trường hợp này là bình thường). Cần kiểm tra tay nếu nghi ngờ bị tính trùng."
                     ) % (
                         order_code, ' — cùng đơn với chính phiếu này' if is_own_order else '',
                         ', '.join(claimed_elsewhere.mapped('name')),
@@ -1560,6 +1598,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 break
         state = invoice.state if invoice else 'missing'
         done_date = picking.date_done.date() if picking.date_done else False
+        # Có trả hàng — HĐĐT Shopee đã "accepted" từ TRƯỚC lúc trả hàng nên total_amount_oc vẫn
+        # giữ nguyên tiền gốc, không tự trừ theo hàng trả (khác gì MISA, chỉ là chưa từng vá
+        # cho luồng Shopee). Coi như đã điều chỉnh xuống đúng bằng tiền thực xuất ròng, y hệt
+        # nguyên tắc misa_invoice_effective_amount đã áp dụng cho phiếu MISA thường.
+        has_return = (picking.misa_invoice_returned_amount or 0.0) > 0
+        original_invoice_amount = (invoice.total_amount_oc or 0.0) if state == 'accepted' else 0.0
+        invoice_amount = (
+            (picking.misa_invoice_net_actual_amount or 0.0) if (state == 'accepted' and has_return)
+            else original_invoice_amount
+        )
         return {
             'id': picking.id,
             'name': picking.name,
@@ -1573,7 +1621,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'state_label': MISA_SHOPEE_INVOICE_STATE_LABELS.get(state, state),
             'invoice_no': invoice.inv_no or False,
             'invoice_date': fields.Date.to_string(invoice.inv_date_result) if invoice and invoice.inv_date_result else False,
-            'invoice_amount': (invoice.total_amount_oc or 0.0) if state == 'accepted' else 0.0,
+            'invoice_amount': invoice_amount,
+            'has_return': has_return,
+            'original_invoice_amount': original_invoice_amount,
+            'returned_amount': picking.misa_invoice_returned_amount or 0.0,
         }
 
     def _misa_invoice_shopee_summary(self, domain):
@@ -3677,17 +3728,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
           hoàn tất ('done') — amount = tiền dòng hàng (có VAT) của đơn đó theo MISA.
         - 'no_picking': đơn hàng được nhắc tới nhưng chưa có phiếu xuất kho nào trong Odoo.
         - 'unknown_order': không tìm thấy đơn bán nào khớp mã đơn MISA trả về.
-        - 'conflict': có phiếu đã 'done' cho đơn này nhưng đã được 1 đề nghị/hóa đơn KHÁC nhận
-          (không thuộc nhóm này) — có thể gán sai, cần kiểm tra tay."""
-        slices = []
-        for p in group_pickings.sorted('date_done'):
-            slices.append({
-                'kind': 'linked',
-                'label': p.name,
-                'amount': p.misa_invoice_net_actual_amount or 0.0,
-                'picking_id': p.id,
-            })
-
+        - 'not_matched': có phiếu ĐÃ 'done' cho đơn này nhưng CHƯA được đối soát/gán vào nhóm
+          nào cả (misa_invoice_state != 'invoiced', không có master/covered) — KHÔNG PHẢI lỗi,
+          chỉ là chưa được "Quét đơn xuất kèm" xử lý tới.
+        - 'conflict': có phiếu đã 'done' cho đơn này và ĐÃ có hóa đơn ở nơi KHÁC — hoặc do đã
+          bị 1 nhóm khác nhận (master/covered), hoặc đã TỰ có misa_invoice_state='invoiced' độc
+          lập (case thật: 1 đơn bán 2 cái, 2 phiếu xuất kho, mỗi phiếu 1 đề nghị xuất HĐ RIÊNG
+          BIỆT — hoàn toàn hợp lệ, không phải lỗi) — cần kiểm tra tay để phân biệt 2 khả năng
+          này, hệ thống không tự khẳng định được là hợp lệ hay gán sai.
+        - 'self_unconfirmed': CHÍNH phiếu ĐẠI DIỆN của nhóm chỉ được đề nghị xuất HĐ này xác
+          nhận đúng 1 PHẦN giá trị của chính nó qua dòng hàng — phần còn lại vẫn hiện trong
+          'linked' như bình thường nhưng KHÔNG có dòng hàng nào trong đề nghị này xác nhận (bài
+          học thật: phiếu xuất kho dùng làm đề nghị xuất HĐ cũng có thể chỉ phủ 1 phần chính nó
+          — trước đây mặc định coi phiếu đại diện là 'linked' ĐỦ 100% chỉ vì nó là gốc của
+          nhóm, không hề đối chiếu dòng hàng riêng cho chính nó). CHỈ áp dụng cho phiếu đại
+          diện — phiếu "ăn theo" (covered) dùng thẳng misa_invoice_grouped_matched_amount đã
+          lưu sẵn (cộng dồn ĐÚNG từ MỌI đề nghị từng khớp nó, không chỉ đề nghị đang xem — bài
+          học thật: 1 phiếu ăn theo có thể được khớp một phần bởi đề nghị NÀY, một phần bởi 1
+          đề nghị KHÁC hoàn toàn — nếu chỉ tính theo dòng hàng của đề nghị đang xem sẽ báo nhầm
+          "chưa xác nhận" cho phần đã được đề nghị khác xác nhận từ trước)."""
         accounted_order_codes = set(group_pickings.mapped('misa_invoice_sale_order_ids').mapped('name'))
         lines_by_order = {}
         for line in misa_lines:
@@ -3695,6 +3754,45 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if not code:
                 continue
             lines_by_order.setdefault(code, []).append(line)
+
+        slices = []
+        for p in group_pickings.sorted('date_done'):
+            net_actual = p.misa_invoice_net_actual_amount or 0.0
+            if p.id == representative.id:
+                # Phiếu đại diện: không có misa_invoice_grouped_matched_amount cho CHÍNH nó
+                # (cơ chế khớp dòng hàng luôn loại trừ chính phiếu đại diện khỏi việc "tự khớp
+                # mình" — xem exclude_picking_ids trong _misa_invoice_discover_grouped_orders),
+                # nên phải tự đối chiếu dòng hàng của CHÍNH đề nghị đang xem cho phần của nó.
+                own_lines = [
+                    line for code in p.misa_invoice_sale_order_ids.mapped('name')
+                    for line in lines_by_order.get(code, [])
+                ]
+                # Không có dòng hàng nào của (các) đơn thuộc phiếu này trong CHÍNH đề nghị đang
+                # xét (VD đề nghị chỉ đọc lần đầu không trả order_code này, hiếm gặp) — coi như
+                # không xác minh được, giữ nguyên hành vi cũ (tin đủ) để tránh báo động giả.
+                confirmed = min(representative._misa_invoice_request_line_amount(own_lines), net_actual) if own_lines else net_actual
+            else:
+                # Phiếu "ăn theo" (covered): misa_invoice_grouped_matched_amount ĐÃ cộng dồn
+                # đúng từ MỌI đề nghị từng khớp nó (không chỉ đề nghị đang xem) — dùng thẳng,
+                # không tính lại chỉ theo dòng hàng của đề nghị hiện tại (case thật:
+                # KBC/OUT/10714 được khớp 1 phần bởi KBC/OUT/10677 — 1 đề nghị RIÊNG BIỆT, khác
+                # hẳn đề nghị đang xem — nếu chỉ nhìn dòng hàng của đề nghị đang xem sẽ báo nhầm
+                # phần đó là "chưa xác nhận").
+                confirmed = min(p.misa_invoice_grouped_matched_amount or 0.0, net_actual)
+            shortfall = max(net_actual - confirmed, 0.0)
+            slices.append({
+                'kind': 'linked',
+                'label': p.name,
+                'amount': confirmed,
+                'picking_id': p.id,
+            })
+            if shortfall > MISA_INVOICE_AMOUNT_TOLERANCE:
+                slices.append({
+                    'kind': 'self_unconfirmed',
+                    'label': p.name,
+                    'amount': shortfall,
+                    'picking_id': p.id,
+                })
 
         for order_code, order_lines in lines_by_order.items():
             if order_code in accounted_order_codes:
@@ -3733,14 +3831,38 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'order_code': order_code,
                 })
             else:
-                slices.append({
-                    'kind': 'conflict',
-                    'label': ', '.join(order_pickings.mapped('name')),
-                    'amount': order_amount,
-                    'order_code': order_code,
-                    'picking_names': order_pickings.mapped('name'),
-                    'picking_ids': order_pickings.ids,
-                })
+                # Tất cả pickings của đơn này đã 'done' — phân biệt "chưa từng được đối soát"
+                # (không phải lỗi, chỉ chưa quét tới) với "đã có hóa đơn RIÊNG ở nơi khác" (đã
+                # bị 1 nhóm khác nhận HOẶC tự có misa_invoice_state='invoiced' độc lập — case
+                # thật: 1 đơn bán 2 cái, 2 phiếu xuất kho, mỗi phiếu có 1 đề nghị xuất HĐ riêng
+                # biệt, hoàn toàn hợp lệ — không phải "chưa đối soát").
+                claimed_elsewhere = order_pickings.filtered(
+                    lambda p: p.misa_invoice_master_picking_id or p.misa_invoice_covered_picking_ids
+                    or p.misa_invoice_state == 'invoiced'
+                )
+                not_matched = order_pickings - claimed_elsewhere
+                if not_matched:
+                    slices.append({
+                        'kind': 'not_matched',
+                        'label': ', '.join(not_matched.mapped('name')),
+                        'amount': order_amount if not claimed_elsewhere else sum(
+                            not_matched.mapped('misa_invoice_net_actual_amount')
+                        ),
+                        'order_code': order_code,
+                        'picking_names': not_matched.mapped('name'),
+                        'picking_ids': not_matched.ids,
+                    })
+                if claimed_elsewhere:
+                    slices.append({
+                        'kind': 'conflict',
+                        'label': ', '.join(claimed_elsewhere.mapped('name')),
+                        'amount': order_amount if not not_matched else max(
+                            order_amount - sum(not_matched.mapped('misa_invoice_net_actual_amount')), 0.0
+                        ),
+                        'order_code': order_code,
+                        'picking_names': claimed_elsewhere.mapped('name'),
+                        'picking_ids': claimed_elsewhere.ids,
+                    })
 
         return {
             'slices': slices,
@@ -3765,6 +3887,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
             elif s['kind'] == 'unknown_order':
                 parts.append('không tìm thấy đơn bán %s (%s đ)' % (
                     s['order_code'], '{:,.0f}'.format(s['amount']).replace(',', '.')
+                ))
+            elif s['kind'] == 'self_unconfirmed':
+                parts.append('%s chỉ được đề nghị này xác nhận 1 phần chính nó, còn thiếu %s đ' % (
+                    s['label'], '{:,.0f}'.format(s['amount']).replace(',', '.')
+                ))
+            elif s['kind'] == 'not_matched':
+                parts.append('%s đã xuất kho nhưng chưa được đối soát/gộp (%s đ)' % (
+                    s['label'], '{:,.0f}'.format(s['amount']).replace(',', '.')
                 ))
             elif s['kind'] == 'conflict':
                 parts.append('%s đã bị đề nghị khác nhận (%s đ)' % (
@@ -3829,6 +3959,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         except Exception as e:
             _logger.exception("❌ [MISA GAP SUMMARY] Lỗi cập nhật lý do lệch cho phiếu %s", picking.name)
             return {'error': str(e)}
+
+    @api.model
+    def refresh_misa_invoice_gap_summaries(self, limit=100):
+        """Bản batch không hiện tiến độ — dùng cho migration backfill. Dùng
+        get_misa_invoice_gap_summary_candidates + refresh_misa_invoice_gap_summary cho nút bấm
+        trên dashboard (hiện tiến độ từng phiếu)."""
+        Picking = self.sudo()
+        candidates = Picking.search(self._misa_invoice_gap_summary_domain(), limit=limit)
+        for picking in candidates:
+            try:
+                picking._misa_invoice_refresh_gap_summary()
+            except Exception:
+                _logger.exception("❌ [MISA GAP SUMMARY] Lỗi cập nhật lý do lệch cho phiếu %s", picking.name)
+        return {'checked': len(candidates)}
 
     @api.model
     def get_misa_invoice_report_action(
