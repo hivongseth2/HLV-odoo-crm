@@ -3,94 +3,118 @@
     <t t-name="hlv_customer_revenue_report.Dashboard">
         <div class="hcr-dashboard">
             <div class="hcr-header">
-                <h3 class="hcr-title">Doanh thu theo khách hàng</h3>
+                <div class="hcr-header-left">
+                    <button t-if="state.view === 'detail'" class="btn btn-link hcr-back-btn" t-on-click="backToList">
+                        <i class="fa fa-arrow-left"/> Danh sách khách hàng
+                    </button>
+                    <h3 class="hcr-title" t-if="state.view === 'list'">Doanh thu theo khách hàng</h3>
+                    <h3 class="hcr-title" t-if="state.view === 'detail'" t-esc="state.selectedPartnerName"/>
+                </div>
                 <div class="hcr-toolbar">
-                    <div class="hcr-search-wrap">
-                        <input type="text" class="form-control hcr-search-input"
-                               placeholder="Tìm khách hàng (VD: BM WINDOW)..."
-                               t-att-value="state.searchTerm"
-                               t-on-input="onSearchInput"
-                               t-on-blur="onSearchBlur"/>
-                        <div class="hcr-suggestions" t-if="state.showSuggestions">
-                            <div t-foreach="state.suggestions" t-as="item" t-key="item.id"
-                                 class="hcr-suggestion-item"
-                                 t-on-click="() => this.selectCustomer(item)">
-                                <t t-esc="item.name"/>
-                            </div>
-                        </div>
-                    </div>
+                    <input t-if="state.view === 'list'" type="text" class="form-control hcr-search-input"
+                           placeholder="Tìm khách hàng (VD: BM WINDOW)..."
+                           t-att-value="state.searchTerm"
+                           t-on-input="onSearchInput"/>
                     <input type="date" class="form-control hcr-date-input" t-model="state.dateFrom" t-on-change="onDateChange"/>
                     <span class="hcr-date-sep">→</span>
                     <input type="date" class="form-control hcr-date-input" t-model="state.dateTo" t-on-change="onDateChange"/>
-                    <button class="btn btn-primary hcr-export-btn" t-on-click="exportExcel" t-att-disabled="!state.partnerId">
+                    <button class="btn btn-primary hcr-export-btn" t-on-click="exportExcel">
                         <i class="fa fa-file-excel-o"/> Xuất Excel
                     </button>
                 </div>
             </div>
 
-            <div class="hcr-empty" t-if="!state.partnerId">
-                <i class="fa fa-search"/>
-                <p>Nhập tên khách hàng để xem doanh thu theo tháng (đặt hàng / trả hàng / xuất ròng).</p>
+            <div class="hcr-loading" t-if="state.isLoading">
+                <i class="fa fa-spinner fa-spin"/> Đang tải dữ liệu...
             </div>
 
-            <t t-if="state.partnerId">
-                <div class="hcr-customer-banner">
-                    <i class="fa fa-building"/> <b t-esc="state.partnerName"/>
+            <!-- ==================== Danh sách khách hàng ==================== -->
+            <t t-if="state.view === 'list' and !state.isLoading">
+                <table class="table table-sm hcr-table" t-if="state.customers.length">
+                    <thead>
+                        <tr>
+                            <th class="hcr-sortable" t-on-click="() => this.toggleSort('partner_name')">Khách hàng</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('order_count')">Số đơn</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_delivered')">SL xuất kho</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_returned')">SL trả hàng</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_net')">SL thực xuất</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_gross')">Tiền đặt hàng (gộp)</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_returned')">Tiền trả hàng</th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_net')">Doanh thu xuất ròng</th>
+                            <th class="hcr-col-action"/>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="sortedCustomers" t-as="row" t-key="row.partner_id"
+                            class="hcr-row" t-on-click="() => this.selectCustomer(row)">
+                            <td><b t-esc="row.partner_name"/></td>
+                            <td class="hcr-col-num" t-esc="row.order_count"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(row.qty_delivered)"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(row.qty_returned)"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(row.qty_net)"/>
+                            <td class="hcr-col-num" t-esc="formatCurrency(row.amount_gross)"/>
+                            <td class="hcr-col-num hcr-negative" t-esc="formatCurrency(row.amount_returned)"/>
+                            <td class="hcr-col-num hcr-net" t-esc="formatCurrency(row.amount_net)"/>
+                            <td class="hcr-col-action"><i class="fa fa-chevron-right"/></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="hcr-empty" t-if="!state.customers.length">
+                    <i class="fa fa-inbox"/>
+                    <p>Không có khách hàng nào có doanh thu xuất kho trong khoảng thời gian / từ khóa đã chọn.</p>
                 </div>
+            </t>
 
-                <div class="hcr-loading" t-if="state.isLoading">
-                    <i class="fa fa-spinner fa-spin"/> Đang tải dữ liệu...
+            <!-- ==================== Chi tiết 1 khách hàng theo tháng ==================== -->
+            <t t-if="state.view === 'detail' and !state.isLoading">
+                <table class="table table-sm hcr-table" t-if="state.months.length">
+                    <thead>
+                        <tr>
+                            <th>Tháng</th>
+                            <th class="hcr-col-num">Số đơn</th>
+                            <th class="hcr-col-num">SL xuất kho</th>
+                            <th class="hcr-col-num">SL trả hàng</th>
+                            <th class="hcr-col-num">SL thực xuất</th>
+                            <th class="hcr-col-num">Tiền đặt hàng (gộp)</th>
+                            <th class="hcr-col-num">Tiền trả hàng</th>
+                            <th class="hcr-col-num">Doanh thu xuất ròng</th>
+                            <th class="hcr-col-action"/>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="state.months" t-as="month" t-key="month.month_label"
+                            class="hcr-row" t-on-click="() => this.openMonthDrawer(month)">
+                            <td><b t-esc="month.month_label"/></td>
+                            <td class="hcr-col-num" t-esc="month.order_count"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(month.qty_delivered)"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(month.qty_returned)"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(month.qty_net)"/>
+                            <td class="hcr-col-num" t-esc="formatCurrency(month.amount_gross)"/>
+                            <td class="hcr-col-num hcr-negative" t-esc="formatCurrency(month.amount_returned)"/>
+                            <td class="hcr-col-num hcr-net" t-esc="formatCurrency(month.amount_net)"/>
+                            <td class="hcr-col-action"><i class="fa fa-chevron-right"/></td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="hcr-total-row">
+                            <td><b>Tổng cộng</b></td>
+                            <td class="hcr-col-num" t-esc="totals.order_count"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(totals.qty_delivered)"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(totals.qty_returned)"/>
+                            <td class="hcr-col-num" t-esc="formatNumber(totals.qty_net)"/>
+                            <td class="hcr-col-num" t-esc="formatCurrency(totals.amount_gross)"/>
+                            <td class="hcr-col-num hcr-negative" t-esc="formatCurrency(totals.amount_returned)"/>
+                            <td class="hcr-col-num hcr-net" t-esc="formatCurrency(totals.amount_net)"/>
+                            <td class="hcr-col-action"/>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div class="hcr-empty" t-if="!state.months.length">
+                    <i class="fa fa-inbox"/>
+                    <p>Không có dữ liệu xuất kho cho khách hàng này trong khoảng thời gian đã chọn.</p>
                 </div>
-
-                <t t-if="!state.isLoading">
-                    <table class="table table-sm hcr-table" t-if="state.months.length">
-                        <thead>
-                            <tr>
-                                <th>Tháng</th>
-                                <th class="hcr-col-num">Số đơn</th>
-                                <th class="hcr-col-num">SL xuất kho</th>
-                                <th class="hcr-col-num">SL trả hàng</th>
-                                <th class="hcr-col-num">SL thực xuất</th>
-                                <th class="hcr-col-num">Tiền đặt hàng (gộp)</th>
-                                <th class="hcr-col-num">Tiền trả hàng</th>
-                                <th class="hcr-col-num">Doanh thu xuất ròng</th>
-                                <th class="hcr-col-action"/>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr t-foreach="state.months" t-as="month" t-key="month.month_label"
-                                class="hcr-row" t-on-click="() => this.openMonthDrawer(month)">
-                                <td><b t-esc="month.month_label"/></td>
-                                <td class="hcr-col-num" t-esc="month.order_count"/>
-                                <td class="hcr-col-num" t-esc="formatNumber(month.qty_delivered)"/>
-                                <td class="hcr-col-num" t-esc="formatNumber(month.qty_returned)"/>
-                                <td class="hcr-col-num" t-esc="formatNumber(month.qty_net)"/>
-                                <td class="hcr-col-num" t-esc="formatCurrency(month.amount_gross)"/>
-                                <td class="hcr-col-num hcr-negative" t-esc="formatCurrency(month.amount_returned)"/>
-                                <td class="hcr-col-num hcr-net" t-esc="formatCurrency(month.amount_net)"/>
-                                <td class="hcr-col-action"><i class="fa fa-chevron-right"/></td>
-                            </tr>
-                        </tbody>
-                        <tfoot>
-                            <tr class="hcr-total-row">
-                                <td><b>Tổng cộng</b></td>
-                                <td class="hcr-col-num" t-esc="totals.order_count"/>
-                                <td class="hcr-col-num" t-esc="formatNumber(totals.qty_delivered)"/>
-                                <td class="hcr-col-num" t-esc="formatNumber(totals.qty_returned)"/>
-                                <td class="hcr-col-num" t-esc="formatNumber(totals.qty_net)"/>
-                                <td class="hcr-col-num" t-esc="formatCurrency(totals.amount_gross)"/>
-                                <td class="hcr-col-num hcr-negative" t-esc="formatCurrency(totals.amount_returned)"/>
-                                <td class="hcr-col-num hcr-net" t-esc="formatCurrency(totals.amount_net)"/>
-                                <td class="hcr-col-action"/>
-                            </tr>
-                        </tfoot>
-                    </table>
-
-                    <div class="hcr-empty" t-if="!state.months.length">
-                        <i class="fa fa-inbox"/>
-                        <p>Không có dữ liệu xuất kho cho khách hàng này trong khoảng thời gian đã chọn.</p>
-                    </div>
-                </t>
             </t>
 
             <!-- Drawer chi tiết đơn hàng của 1 tháng -->
