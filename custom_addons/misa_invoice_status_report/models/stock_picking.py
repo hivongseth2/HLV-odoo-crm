@@ -3736,13 +3736,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
           lập (case thật: 1 đơn bán 2 cái, 2 phiếu xuất kho, mỗi phiếu 1 đề nghị xuất HĐ RIÊNG
           BIỆT — hoàn toàn hợp lệ, không phải lỗi) — cần kiểm tra tay để phân biệt 2 khả năng
           này, hệ thống không tự khẳng định được là hợp lệ hay gán sai.
-        - 'self_unconfirmed': CHÍNH 1 phiếu trong nhóm (kể cả phiếu đại diện) chỉ được đề nghị
-          xuất HĐ này xác nhận đúng 1 PHẦN giá trị của chính nó qua dòng hàng — phần còn lại
-          của phiếu vẫn hiện trong 'linked' như bình thường nhưng KHÔNG có dòng hàng nào trong
-          đề nghị này xác nhận (bài học thật: phiếu xuất kho dùng làm đề nghị xuất HĐ cũng có
-          thể chỉ phủ 1 phần chính nó, y hệt việc 1 đề nghị chỉ phủ 1 phần đơn hàng KHÁC — trước
-          đây mặc định coi phiếu trong nhóm là 'linked' ĐỦ 100% chỉ vì nó có mặt trong nhóm,
-          không hề đối chiếu dòng hàng riêng cho chính phiếu đó)."""
+        - 'self_unconfirmed': CHÍNH phiếu ĐẠI DIỆN của nhóm chỉ được đề nghị xuất HĐ này xác
+          nhận đúng 1 PHẦN giá trị của chính nó qua dòng hàng — phần còn lại vẫn hiện trong
+          'linked' như bình thường nhưng KHÔNG có dòng hàng nào trong đề nghị này xác nhận (bài
+          học thật: phiếu xuất kho dùng làm đề nghị xuất HĐ cũng có thể chỉ phủ 1 phần chính nó
+          — trước đây mặc định coi phiếu đại diện là 'linked' ĐỦ 100% chỉ vì nó là gốc của
+          nhóm, không hề đối chiếu dòng hàng riêng cho chính nó). CHỈ áp dụng cho phiếu đại
+          diện — phiếu "ăn theo" (covered) dùng thẳng misa_invoice_grouped_matched_amount đã
+          lưu sẵn (cộng dồn ĐÚNG từ MỌI đề nghị từng khớp nó, không chỉ đề nghị đang xem — bài
+          học thật: 1 phiếu ăn theo có thể được khớp một phần bởi đề nghị NÀY, một phần bởi 1
+          đề nghị KHÁC hoàn toàn — nếu chỉ tính theo dòng hàng của đề nghị đang xem sẽ báo nhầm
+          "chưa xác nhận" cho phần đã được đề nghị khác xác nhận từ trước)."""
         accounted_order_codes = set(group_pickings.mapped('misa_invoice_sale_order_ids').mapped('name'))
         lines_by_order = {}
         for line in misa_lines:
@@ -3754,15 +3758,27 @@ class StockPickingMisaInvoiceStatus(models.Model):
         slices = []
         for p in group_pickings.sorted('date_done'):
             net_actual = p.misa_invoice_net_actual_amount or 0.0
-            own_lines = [
-                line for code in p.misa_invoice_sale_order_ids.mapped('name')
-                for line in lines_by_order.get(code, [])
-            ]
-            # Không có dòng hàng nào của (các) đơn thuộc phiếu này trong CHÍNH đề nghị đang xét
-            # (VD đề nghị chỉ đọc lần đầu qua get_invoice_request_lines không trả order_code
-            # này, hiếm gặp) — coi như không xác minh được, giữ nguyên hành vi cũ (tin đủ) để
-            # tránh báo động giả tràn lan khi chưa chắc chắn.
-            confirmed = min(representative._misa_invoice_request_line_amount(own_lines), net_actual) if own_lines else net_actual
+            if p.id == representative.id:
+                # Phiếu đại diện: không có misa_invoice_grouped_matched_amount cho CHÍNH nó
+                # (cơ chế khớp dòng hàng luôn loại trừ chính phiếu đại diện khỏi việc "tự khớp
+                # mình" — xem exclude_picking_ids trong _misa_invoice_discover_grouped_orders),
+                # nên phải tự đối chiếu dòng hàng của CHÍNH đề nghị đang xem cho phần của nó.
+                own_lines = [
+                    line for code in p.misa_invoice_sale_order_ids.mapped('name')
+                    for line in lines_by_order.get(code, [])
+                ]
+                # Không có dòng hàng nào của (các) đơn thuộc phiếu này trong CHÍNH đề nghị đang
+                # xét (VD đề nghị chỉ đọc lần đầu không trả order_code này, hiếm gặp) — coi như
+                # không xác minh được, giữ nguyên hành vi cũ (tin đủ) để tránh báo động giả.
+                confirmed = min(representative._misa_invoice_request_line_amount(own_lines), net_actual) if own_lines else net_actual
+            else:
+                # Phiếu "ăn theo" (covered): misa_invoice_grouped_matched_amount ĐÃ cộng dồn
+                # đúng từ MỌI đề nghị từng khớp nó (không chỉ đề nghị đang xem) — dùng thẳng,
+                # không tính lại chỉ theo dòng hàng của đề nghị hiện tại (case thật:
+                # KBC/OUT/10714 được khớp 1 phần bởi KBC/OUT/10677 — 1 đề nghị RIÊNG BIỆT, khác
+                # hẳn đề nghị đang xem — nếu chỉ nhìn dòng hàng của đề nghị đang xem sẽ báo nhầm
+                # phần đó là "chưa xác nhận").
+                confirmed = min(p.misa_invoice_grouped_matched_amount or 0.0, net_actual)
             shortfall = max(net_actual - confirmed, 0.0)
             slices.append({
                 'kind': 'linked',
