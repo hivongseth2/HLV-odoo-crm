@@ -35,6 +35,12 @@ class HlvCustomerRevenueReport(models.Model):
     user_id = fields.Many2one('res.users', string='Nhân viên bán hàng', readonly=True)
     order_partner_id = fields.Many2one('res.partner', string='Người đặt hàng', readonly=True)
     partner_id = fields.Many2one('res.partner', string='Khách hàng', readonly=True)
+    shopee_shop_id = fields.Many2one('shopee.shop', string='Shop Shopee', readonly=True)
+    is_shopee = fields.Boolean(
+        string='Đơn Shopee', readonly=True,
+        help='Đơn có shopee_shop_id / shopee_order_ref hoặc tên khách hàng chứa "shopee" '
+             '(cùng cách nhận diện đang dùng ở export_outgoing_picking_excel).',
+    )
     product_id = fields.Many2one('product.product', string='Sản phẩm', readonly=True)
     product_categ_id = fields.Many2one('product.category', string='Nhóm sản phẩm', readonly=True)
     product_uom_id = fields.Many2one('uom.uom', string='Đơn vị tính', readonly=True)
@@ -98,6 +104,9 @@ class HlvCustomerRevenueReport(models.Model):
                     so.user_id AS user_id,
                     so.partner_id AS order_partner_id,
                     COALESCE(rp.commercial_partner_id, so.partner_id) AS partner_id,
+                    so.shopee_shop_id AS shopee_shop_id,
+                    (so.shopee_shop_id IS NOT NULL OR so.shopee_order_ref IS NOT NULL
+                        OR rp.name ILIKE '%shopee%') AS is_shopee,
                     sm.product_id AS product_id,
                     pt.categ_id AS product_categ_id,
                     sm.product_uom AS product_uom_id,
@@ -142,7 +151,10 @@ class HlvCustomerRevenueReport(models.Model):
             )
         """)
 
-    # ==================== Dashboard: danh sách khách hàng ====================
+    # ==================== Dashboard: danh sách khách hàng / shop Shopee ====================
+    # Đơn Shopee dùng chung 1 contact đại diện (VD "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE"),
+    # nên với đơn Shopee ta gộp theo shopee_shop_id thay vì partner_id. group_type phân biệt
+    # dòng nào là 1 khách hàng thật ('partner') và dòng nào là 1 shop Shopee ('shop').
     @staticmethod
     def _new_agg_entry(**extra):
         entry = {key.split(':')[0]: 0.0 for key in MONTHLY_MEASURES}
@@ -164,24 +176,45 @@ class HlvCustomerRevenueReport(models.Model):
             domain.append(('date_done', '<=', '%s 23:59:59' % date_to))
         return domain
 
-    @api.model
-    def get_customers_summary(self, date_from=False, date_to=False, search=False, limit=500):
-        """Doanh thu của TẤT CẢ khách hàng có phát sinh trong khoảng thời gian (có thể lọc theo tên)."""
-        domain = self._base_date_domain(date_from, date_to)
-        if search:
-            domain.append(('partner_id.name', 'ilike', search))
+    def _shopee_filter_domain(self, shopee_filter):
+        if shopee_filter == 'shopee':
+            return [('is_shopee', '=', True)]
+        if shopee_filter == 'non_shopee':
+            return [('is_shopee', '=', False)]
+        return []
 
-        groups = self.read_group(domain, MONTHLY_MEASURES, ['partner_id', 'sale_order_id'], lazy=False)
+    @api.model
+    def get_customers_summary(self, date_from=False, date_to=False, search=False, shopee_filter='all', limit=500):
+        """Doanh thu của TẤT CẢ khách hàng/shop Shopee có phát sinh trong khoảng thời gian.
+
+        Đơn Shopee được gộp theo shop (shopee_shop_id), không theo contact chung chung.
+        """
+        domain = self._base_date_domain(date_from, date_to) + self._shopee_filter_domain(shopee_filter)
+        if search:
+            domain += ['|', ('partner_id.name', 'ilike', search), ('shopee_shop_id.name', 'ilike', search)]
+
+        groups = self.read_group(
+            domain, MONTHLY_MEASURES, ['is_shopee', 'partner_id', 'shopee_shop_id', 'sale_order_id'], lazy=False,
+        )
         agg = {}
         for g in groups:
+            shop = g.get('shopee_shop_id')
             partner = g.get('partner_id')
-            if not partner:
+            if g.get('is_shopee') and shop:
+                key = ('shop', shop[0])
+                group_type, group_id, group_label = 'shop', shop[0], shop[1]
+            elif partner:
+                key = ('partner', partner[0])
+                group_type, group_id, group_label = 'partner', partner[0], partner[1]
+            else:
                 continue
-            pid, pname = partner
-            entry = agg.get(pid)
+            entry = agg.get(key)
             if entry is None:
-                entry = self._new_agg_entry(partner_id=pid, partner_name=pname)
-                agg[pid] = entry
+                entry = self._new_agg_entry(
+                    group_type=group_type, group_id=group_id, group_label=group_label,
+                    is_shopee_group=(group_type == 'shop'),
+                )
+                agg[key] = entry
             self._accumulate(entry, g)
 
         rows = []
@@ -191,16 +224,17 @@ class HlvCustomerRevenueReport(models.Model):
         rows.sort(key=lambda r: r['amount_net'], reverse=True)
         return rows[:limit]
 
-    # ==================== Dashboard: tổng hợp theo tháng (1 khách hàng) ====================
-    def _monthly_domain(self, partner_id, date_from=False, date_to=False):
-        if not partner_id:
-            raise UserError(_('Vui lòng chọn khách hàng.'))
-        return [('partner_id', '=', partner_id)] + self._base_date_domain(date_from, date_to)
+    # ==================== Dashboard: tổng hợp theo tháng (1 khách hàng / 1 shop) ====================
+    def _group_domain(self, group_type, group_id, date_from=False, date_to=False):
+        if not group_id:
+            raise UserError(_('Vui lòng chọn khách hàng hoặc shop Shopee.'))
+        field = 'shopee_shop_id' if group_type == 'shop' else 'partner_id'
+        return [(field, '=', group_id)] + self._base_date_domain(date_from, date_to)
 
     @api.model
-    def get_customer_monthly_summary(self, partner_id, date_from=False, date_to=False):
-        """Doanh thu theo tháng của 1 khách hàng: tiền đặt hàng (gộp), trả hàng, xuất ròng."""
-        domain = self._monthly_domain(partner_id, date_from, date_to)
+    def get_group_monthly_summary(self, group_type, group_id, date_from=False, date_to=False):
+        """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng."""
+        domain = self._group_domain(group_type, group_id, date_from, date_to)
         groups = self.read_group(domain, MONTHLY_MEASURES, ['date_done:month', 'sale_order_id'], lazy=False)
 
         agg = {}
@@ -224,11 +258,11 @@ class HlvCustomerRevenueReport(models.Model):
         return rows
 
     @api.model
-    def get_customer_month_detail(self, partner_id, date_from, date_to):
+    def get_group_month_detail(self, group_type, group_id, date_from, date_to):
         """Chi tiết theo đơn hàng trong khoảng [date_from, date_to) - dùng cho drawer."""
         if not date_from or not date_to:
             return []
-        domain = self._monthly_domain(partner_id) + [
+        domain = self._group_domain(group_type, group_id) + [
             ('date_done', '>=', date_from), ('date_done', '<', date_to),
         ]
         groups = self.read_group(
@@ -288,29 +322,33 @@ class HlvCustomerRevenueReport(models.Model):
         return output.read()
 
     @api.model
-    def export_customers_summary_excel(self, date_from=False, date_to=False, search=False):
-        rows = self.get_customers_summary(date_from, date_to, search, limit=10000)
+    def export_customers_summary_excel(self, date_from=False, date_to=False, search=False, shopee_filter='all'):
+        rows = self.get_customers_summary(date_from, date_to, search, shopee_filter, limit=10000)
         headers = [
-            'Khách hàng', 'Số đơn hàng', 'SL xuất kho', 'SL trả hàng', 'SL thực xuất (ròng)',
-            'Tiền đặt hàng (gộp)', 'Tiền hàng trả lại', 'Doanh thu xuất ròng',
+            'Khách hàng / Shop', 'Đơn Shopee?', 'Số đơn hàng', 'SL xuất kho', 'SL trả hàng',
+            'SL thực xuất (ròng)', 'Tiền đặt hàng (gộp)', 'Tiền hàng trả lại', 'Doanh thu xuất ròng',
         ]
         data = [
             [
-                r['partner_name'], r['order_count'], r['qty_delivered'], r['qty_returned'], r['qty_net'],
+                r['group_label'], 'Có' if r['is_shopee_group'] else '', r['order_count'],
+                r['qty_delivered'], r['qty_returned'], r['qty_net'],
                 r['amount_gross'], r['amount_returned'], r['amount_net'],
             ]
             for r in rows
         ]
-        content = self._build_workbook([('Doanh thu khach hang', headers, data, {5, 6, 7})])
+        content = self._build_workbook([('Doanh thu khach hang', headers, data, {6, 7, 8})])
         return self._create_export_attachment('doanh_thu_khach_hang.xlsx', content)
 
     @api.model
-    def export_customer_revenue_excel(self, partner_id, date_from=False, date_to=False):
-        partner = self.env['res.partner'].browse(partner_id)
-        if not partner.exists():
-            raise UserError(_('Khách hàng không tồn tại.'))
+    def export_group_revenue_excel(self, group_type, group_id, date_from=False, date_to=False):
+        if group_type == 'shop':
+            group = self.env['shopee.shop'].browse(group_id)
+        else:
+            group = self.env['res.partner'].browse(group_id)
+        if not group.exists():
+            raise UserError(_('Khách hàng / shop không tồn tại.'))
 
-        monthly_rows = self.get_customer_monthly_summary(partner_id, date_from, date_to)
+        monthly_rows = self.get_group_monthly_summary(group_type, group_id, date_from, date_to)
 
         monthly_headers = [
             'Tháng', 'Số đơn hàng', 'SL xuất kho', 'SL trả hàng', 'SL thực xuất (ròng)',
@@ -330,7 +368,9 @@ class HlvCustomerRevenueReport(models.Model):
         ]
         detail_data = []
         for month_row in monthly_rows:
-            for line in self.get_customer_month_detail(partner_id, month_row['date_from'], month_row['date_to']):
+            for line in self.get_group_month_detail(
+                group_type, group_id, month_row['date_from'], month_row['date_to'],
+            ):
                 detail_data.append([
                     month_row['month_label'], line['sale_order_name'],
                     line['qty_delivered'], line['qty_returned'], line['qty_net'],
@@ -341,5 +381,5 @@ class HlvCustomerRevenueReport(models.Model):
             ('Theo thang', monthly_headers, monthly_data, {5, 6, 7}),
             ('Chi tiet don hang', detail_headers, detail_data, {5, 6, 7}),
         ])
-        filename = 'doanh_thu_%s.xlsx' % (partner.name or partner_id)
+        filename = 'doanh_thu_%s.xlsx' % (group.name or group_id)
         return self._create_export_attachment(filename, content)

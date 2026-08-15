@@ -8,13 +8,22 @@
                         <i class="fa fa-arrow-left"/> Danh sách khách hàng
                     </button>
                     <h3 class="hcr-title" t-if="state.view === 'list'">Doanh thu theo khách hàng</h3>
-                    <h3 class="hcr-title" t-if="state.view === 'detail'" t-esc="state.selectedPartnerName"/>
+                    <t t-if="state.view === 'detail'">
+                        <h3 class="hcr-title" t-esc="state.selectedGroupLabel"/>
+                        <span class="badge hcr-badge-shopee" t-if="state.selectedIsShopee">Shop Shopee</span>
+                    </t>
                 </div>
                 <div class="hcr-toolbar">
                     <input t-if="state.view === 'list'" type="text" class="form-control hcr-search-input"
                            placeholder="Tìm khách hàng (VD: BM WINDOW)..."
                            t-att-value="state.searchTerm"
                            t-on-input="onSearchInput"/>
+                    <select t-if="state.view === 'list'" class="form-select hcr-shopee-filter"
+                            t-model="state.shopeeFilter" t-on-change="onShopeeFilterChange">
+                        <option value="all">Tất cả đơn</option>
+                        <option value="shopee">Chỉ đơn Shopee</option>
+                        <option value="non_shopee">Không phải Shopee</option>
+                    </select>
                     <input type="date" class="form-control hcr-date-input" t-model="state.dateFrom" t-on-change="onDateChange"/>
                     <span class="hcr-date-sep">→</span>
                     <input type="date" class="form-control hcr-date-input" t-model="state.dateTo" t-on-change="onDateChange"/>
@@ -33,7 +42,7 @@
                 <table class="table table-sm hcr-table" t-if="state.customers.length">
                     <thead>
                         <tr>
-                            <th class="hcr-sortable" t-on-click="() => this.toggleSort('partner_name')">Khách hàng</th>
+                            <th class="hcr-sortable" t-on-click="() => this.toggleSort('group_label')">Khách hàng / Shop</th>
                             <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('order_count')">Số đơn</th>
                             <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_delivered')">SL xuất kho</th>
                             <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_returned')">SL trả hàng</th>
@@ -45,9 +54,12 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr t-foreach="sortedCustomers" t-as="row" t-key="row.partner_id"
+                        <tr t-foreach="sortedCustomers" t-as="row" t-key="row.group_type + '_' + row.group_id"
                             class="hcr-row" t-on-click="() => this.selectCustomer(row)">
-                            <td><b t-esc="row.partner_name"/></td>
+                            <td>
+                                <b t-esc="row.group_label"/>
+                                <span class="badge hcr-badge-shopee" t-if="row.is_shopee_group">Shopee</span>
+                            </td>
                             <td class="hcr-col-num" t-esc="row.order_count"/>
                             <td class="hcr-col-num" t-esc="formatNumber(row.qty_delivered)"/>
                             <td class="hcr-col-num" t-esc="formatNumber(row.qty_returned)"/>

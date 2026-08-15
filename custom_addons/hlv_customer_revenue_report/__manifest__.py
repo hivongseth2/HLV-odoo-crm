@@ -6,13 +6,16 @@
     'description': """
         Dashboard (OWL) tra cứu doanh thu theo khách hàng, dựa trên các phiếu xuất kho (giao hàng)
         đã hoàn thành, gắn với dòng đơn bán:
-        - Tìm khách hàng, xem doanh thu từng tháng: tiền đặt hàng (gộp), tiền trả hàng, doanh thu xuất ròng.
+        - Danh sách khách hàng / shop Shopee, sort theo cột, xem doanh thu từng tháng: tiền đặt hàng
+          (gộp), tiền trả hàng, doanh thu xuất ròng.
+        - Đơn Shopee được gộp theo shop (shopee_shop_id) thay vì theo contact chung chung, có filter
+          Tất cả / Chỉ Shopee / Không phải Shopee.
         - Tính doanh thu xuất ròng dựa theo cơ chế trả hàng chuẩn của Odoo (stock.move.origin_returned_move_id).
         - Click 1 tháng để mở drawer xem chi tiết từng đơn hàng trong tháng đó.
         - Xuất Excel (tổng hợp theo tháng + chi tiết theo đơn hàng).
     """,
     'author': 'Antigravity',
-    'depends': ['sale', 'sale_stock', 'stock'],
+    'depends': ['sale', 'sale_stock', 'stock', 'sale_shopee'],
     'data': [
         'security/ir.model.access.csv',
         'views/customer_revenue_report_views.xml',

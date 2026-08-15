@@ -19,14 +19,17 @@ export class CustomerRevenueDashboard extends Component {
             searchTerm: "",
             dateFrom: "",
             dateTo: "",
+            shopeeFilter: "all", // "all" | "shopee" | "non_shopee"
             isLoading: false,
 
             customers: [],
             sortField: "amount_net",
             sortDir: "desc",
 
-            selectedPartnerId: null,
-            selectedPartnerName: "",
+            selectedGroupType: null, // "partner" | "shop"
+            selectedGroupId: null,
+            selectedGroupLabel: "",
+            selectedIsShopee: false,
             months: [],
 
             drawerOpen: false,
@@ -41,7 +44,7 @@ export class CustomerRevenueDashboard extends Component {
         });
     }
 
-    // ==================== Danh sách khách hàng ====================
+    // ==================== Danh sách khách hàng / shop Shopee ====================
     async loadCustomers() {
         this.state.isLoading = true;
         try {
@@ -49,6 +52,7 @@ export class CustomerRevenueDashboard extends Component {
                 date_from: this.state.dateFrom || false,
                 date_to: this.state.dateTo || false,
                 search: this.state.searchTerm || false,
+                shopee_filter: this.state.shopeeFilter,
             });
         } catch (e) {
             this.notification.add("Lỗi tải danh sách khách hàng: " + (e.message || e), { type: "danger" });
@@ -65,6 +69,10 @@ export class CustomerRevenueDashboard extends Component {
         this._searchTimer = setTimeout(() => this.loadCustomers(), 300);
     }
 
+    onShopeeFilterChange() {
+        this.loadCustomers();
+    }
+
     onDateChange() {
         if (this.state.view === "detail") {
             this.loadMonthly();
@@ -78,7 +86,7 @@ export class CustomerRevenueDashboard extends Component {
             this.state.sortDir = this.state.sortDir === "asc" ? "desc" : "asc";
         } else {
             this.state.sortField = field;
-            this.state.sortDir = field === "partner_name" ? "asc" : "desc";
+            this.state.sortDir = field === "group_label" ? "asc" : "desc";
         }
     }
 
@@ -99,27 +107,31 @@ export class CustomerRevenueDashboard extends Component {
 
     selectCustomer(row) {
         this.state.view = "detail";
-        this.state.selectedPartnerId = row.partner_id;
-        this.state.selectedPartnerName = row.partner_name;
+        this.state.selectedGroupType = row.group_type;
+        this.state.selectedGroupId = row.group_id;
+        this.state.selectedGroupLabel = row.group_label;
+        this.state.selectedIsShopee = row.is_shopee_group;
         this.loadMonthly();
     }
 
     backToList() {
         this.state.view = "list";
         this.state.months = [];
-        this.state.selectedPartnerId = null;
-        this.state.selectedPartnerName = "";
+        this.state.selectedGroupType = null;
+        this.state.selectedGroupId = null;
+        this.state.selectedGroupLabel = "";
     }
 
-    // ==================== Doanh thu theo tháng (1 khách hàng) ====================
+    // ==================== Doanh thu theo tháng (1 khách hàng / 1 shop) ====================
     async loadMonthly() {
-        if (!this.state.selectedPartnerId) {
+        if (!this.state.selectedGroupId) {
             return;
         }
         this.state.isLoading = true;
         try {
-            this.state.months = await this.orm.call(MODEL, "get_customer_monthly_summary", [], {
-                partner_id: this.state.selectedPartnerId,
+            this.state.months = await this.orm.call(MODEL, "get_group_monthly_summary", [], {
+                group_type: this.state.selectedGroupType,
+                group_id: this.state.selectedGroupId,
                 date_from: this.state.dateFrom || false,
                 date_to: this.state.dateTo || false,
             });
@@ -154,8 +166,9 @@ export class CustomerRevenueDashboard extends Component {
         this.state.drawerRows = [];
         this.state.drawerLoading = true;
         try {
-            this.state.drawerRows = await this.orm.call(MODEL, "get_customer_month_detail", [], {
-                partner_id: this.state.selectedPartnerId,
+            this.state.drawerRows = await this.orm.call(MODEL, "get_group_month_detail", [], {
+                group_type: this.state.selectedGroupType,
+                group_id: this.state.selectedGroupId,
                 date_from: month.date_from,
                 date_to: month.date_to,
             });
@@ -194,9 +207,10 @@ export class CustomerRevenueDashboard extends Component {
     async exportExcel() {
         try {
             let attachmentId;
-            if (this.state.view === "detail" && this.state.selectedPartnerId) {
-                attachmentId = await this.orm.call(MODEL, "export_customer_revenue_excel", [], {
-                    partner_id: this.state.selectedPartnerId,
+            if (this.state.view === "detail" && this.state.selectedGroupId) {
+                attachmentId = await this.orm.call(MODEL, "export_group_revenue_excel", [], {
+                    group_type: this.state.selectedGroupType,
+                    group_id: this.state.selectedGroupId,
                     date_from: this.state.dateFrom || false,
                     date_to: this.state.dateTo || false,
                 });
@@ -205,6 +219,7 @@ export class CustomerRevenueDashboard extends Component {
                     date_from: this.state.dateFrom || false,
                     date_to: this.state.dateTo || false,
                     search: this.state.searchTerm || false,
+                    shopee_filter: this.state.shopeeFilter,
                 });
             }
             window.location.href = "/web/content/" + attachmentId + "?download=true";

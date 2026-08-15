@@ -1,3 +1,7 @@
+.o_action_manager:has(.hcr-dashboard) {
+    overflow: auto !important;
+}
+
 .hcr-dashboard {
     --hcr-surface: #ffffff;
     --hcr-surface-alt: #f7f8fa;
@@ -12,12 +16,17 @@
     color: var(--hcr-ink);
 
     .hcr-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
         margin-bottom: 16px;
+        padding: 8px 0;
+        background: var(--hcr-surface);
     }
 
     .hcr-header-left {
@@ -46,6 +55,18 @@
 
     .hcr-search-input {
         width: 280px;
+    }
+
+    .hcr-shopee-filter {
+        width: 170px;
+    }
+
+    .hcr-badge-shopee {
+        margin-left: 8px;
+        background: #ee4d2d; // màu thương hiệu Shopee
+        color: #ffffff;
+        font-weight: 500;
+        vertical-align: middle;
     }
 
     .hcr-date-input {
