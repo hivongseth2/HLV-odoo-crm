@@ -58,8 +58,16 @@
                                     <field name="x_zalo_banner_version"/>
                                 </div>
                                 <div className="row mt8">
+                                    <label for="x_zalo_config_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_config_version"/>
+                                </div>
+                                <div className="row mt8">
                                     <label for="x_zalo_forced_catalog_version" className="col-lg-3 o_light_label"/>
                                     <field name="x_zalo_forced_catalog_version"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_forced_config_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_forced_config_version"/>
                                 </div>
 
                                 <div className="mt16">
@@ -71,6 +79,10 @@
                                             type="object"
                                             string="🖼️ Buộc làm mới Banner Version"
                                             class="btn-secondary mr8"/>
+                                    <button name="action_force_bump_config_version"
+                                            type="object"
+                                            string="⚙️ Buộc làm mới Cấu hình OA Version"
+                                            class="btn-info mr8"/>
                                     <button name="action_reset_forced_version"
                                             type="object"
                                             string="🔄 Khôi phục tự động theo write_date"

@@ -17,6 +17,10 @@
                             type="object"
                             string="🖼️ Buộc làm mới Banner Version"
                             class="btn-secondary"/>
+                    <button name="action_force_bump_config_version"
+                            type="object"
+                            string="⚙️ Buộc làm mới Config / OA Version"
+                            class="btn-info"/>
                     <button name="action_reset_forced_version"
                             type="object"
                             string="🔄 Trở về tự động (Auto write_date)"
@@ -34,10 +38,13 @@
                             <field name="catalog_version_datetime" readonly="1"/>
                             <field name="banner_version" readonly="1"/>
                             <field name="banner_version_datetime" readonly="1"/>
+                            <field name="config_version" readonly="1"/>
+                            <field name="config_version_datetime" readonly="1"/>
                         </group>
                         <group string="Cấu hình Ép buộc làm mới">
                             <field name="forced_catalog_version" readonly="1"/>
                             <field name="forced_banner_version" readonly="1"/>
+                            <field name="forced_config_version" readonly="1"/>
                         </group>
                     </group>
 

@@ -46,6 +46,10 @@
                             type="object"
                             string="🖼️ Buộc sinh Banner Version mới"
                             class="btn-secondary"/>
+                    <button name="action_force_bump_config"
+                            type="object"
+                            string="⚙️ Buộc sinh Config / OA Version mới"
+                            class="btn-info"/>
                     <button name="action_make_active"
                             type="object"
                             string="✅ Áp dụng Version này"
@@ -112,6 +116,7 @@
                 <separator/>
                 <filter name="filter_catalog" string="📦 Catalog Version" domain="[('snapshot_type','=','catalog')]"/>
                 <filter name="filter_banner" string="🖼️ Banner Version" domain="[('snapshot_type','=','banner')]"/>
+                <filter name="filter_config" string="⚙️ Config / OA Version" domain="[('snapshot_type','=','config')]"/>
                 <separator/>
                 <filter name="filter_today" string="Hôm nay"
                         domain="[('version_datetime','&gt;=', (context_today()).strftime('%Y-%m-%d 00:00:00'))]"/>

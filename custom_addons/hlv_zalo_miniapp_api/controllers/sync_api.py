@@ -31,9 +31,11 @@ class ZaloSyncAPI(ZaloBaseAPI, http.Controller):
             forced_cat = Param.get_param("zalo_miniapp_forced_catalog_version", "")
             forced_ban = Param.get_param("zalo_miniapp_forced_banner_version", "")
             forced_loy = Param.get_param("zalo_miniapp_forced_loyalty_version", "")
+            forced_cfg = Param.get_param("zalo_miniapp_forced_config_version", "")
 
             catalog_ts = 0
             banner_ts = 0
+            config_ts = int(forced_cfg) if forced_cfg and forced_cfg.isdigit() else int(time.time())
             latest_prod = None
             latest_cat = None
 
@@ -139,6 +141,7 @@ class ZaloSyncAPI(ZaloBaseAPI, http.Controller):
                 "catalog_version": str(catalog_ts),
                 "banner_version": str(banner_ts),
                 "loyalty_version": str(loyalty_ts),
+                "config_version": str(config_ts),
                 "timestamp": int(time.time()),
             }
 

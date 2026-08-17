@@ -56,11 +56,33 @@ class ZaloMiniAppSnapshotLog(models.Model):
         env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_banner_version", new_v)
         _logger.info("[VersionBump] Banner version bumped to %s by %s (%s)", new_v, trigger_source, affected_record_name)
 
+    @staticmethod
+    def _bump_config_version(env, trigger_source="auto_config", trigger_reason="Cập nhật cấu hình Zalo OA / Mini App", user=None):
+        """Tự động bump config version khi cấu hình Zalo OA thay đổi."""
+        new_v = str(int(time.time()))
+        Log = env["zalo.miniapp.snapshot.log"]
+        Log.search([("snapshot_type", "=", "config"), ("state", "=", "active")]).write({"state": "historical"})
+        Log.create({
+            "name": f"Config Snapshot #{new_v} (Auto)",
+            "snapshot_type": "config",
+            "version_code": new_v,
+            "version_datetime": fields.Datetime.now(),
+            "trigger_source": trigger_source,
+            "trigger_reason": trigger_reason,
+            "affected_model": "res.config.settings",
+            "affected_record_name": "Cấu hình Zalo Mini App / OA",
+            "user_id": user.id if user else env.user.id,
+            "state": "active",
+        })
+        env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_config_version", new_v)
+        _logger.info("[VersionBump] Config version bumped to %s by %s", new_v, trigger_source)
+
     name = fields.Char(string="Tiêu đề nhật ký", required=True, default="Snapshot Log")
     snapshot_type = fields.Selection(
         [
             ("catalog", "Catalog (Sản phẩm & Danh mục)"),
             ("banner", "Banner"),
+            ("config", "Cấu hình App & Zalo OA"),
         ],
         string="Loại Snapshot",
         default="catalog",
@@ -74,6 +96,7 @@ class ZaloMiniAppSnapshotLog(models.Model):
             ("auto_prod", "Sửa sản phẩm Zalo"),
             ("auto_cat", "Sửa danh mục Zalo"),
             ("auto_quant", "Thay đổi tồn kho"),
+            ("auto_config", "Sửa cấu hình Settings / OA"),
             ("manual", "Admin ép buộc làm mới"),
         ],
         string="Nguồn kích hoạt",
@@ -108,6 +131,8 @@ class ZaloMiniAppSnapshotLog(models.Model):
                 self.env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_catalog_version", rec.version_code)
             elif rec.snapshot_type == "banner":
                 self.env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_banner_version", rec.version_code)
+            elif rec.snapshot_type == "config":
+                self.env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_config_version", rec.version_code)
         return True
 
     def action_force_bump_catalog(self):
@@ -170,6 +195,35 @@ class ZaloMiniAppSnapshotLog(models.Model):
             "params": {
                 "title": _("Đã tạo Version Banner mới!"),
                 "message": _("Đã sinh Banner Version %s thành công!", new_v),
+                "sticky": False,
+                "type": "success",
+            },
+        }
+
+    def action_force_bump_config(self):
+        """Tạo một log thủ công ép buộc làm mới Config / OA Version."""
+        new_v = str(int(time.time()))
+
+        self.search([("snapshot_type", "=", "config"), ("state", "=", "active")]).write({"state": "historical"})
+
+        new_log = self.create({
+            "name": f"Config Snapshot #{new_v} (Manual)",
+            "snapshot_type": "config",
+            "version_code": new_v,
+            "version_datetime": fields.Datetime.now(),
+            "trigger_source": "manual",
+            "trigger_reason": "Admin chủ động bấm làm mới Cấu hình OA Version trên Odoo UI",
+            "user_id": self.env.user.id,
+            "state": "active",
+        })
+        self.env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_config_version", new_v)
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Đã tạo Version Cấu hình mới!"),
+                "message": _("Đã sinh Config / OA Version %s thành công!", new_v),
                 "sticky": False,
                 "type": "success",
             },
