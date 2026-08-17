@@ -31,106 +31,112 @@ def _norm_text(value):
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    def init(self):
-        cr = self.env.cr
-        cr.execute("""
-            UPDATE res_partner
-               SET hlv_partner_type = CASE
-                   WHEN type = 'delivery' THEN 'delivery'
-                   WHEN type = 'invoice' THEN 'invoice'
-                   WHEN parent_id IS NOT NULL THEN 'child_contact'
-                   WHEN is_company IS TRUE THEN 'root_company'
-                   ELSE 'root_person'
-               END
-        """)
-        cr.execute("""
-            UPDATE res_partner
-               SET hlv_misa_code_key = CASE
-                   WHEN COALESCE(NULLIF(TRIM(vat), ''), '') != ''
-                    AND COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), '')) IS NOT NULL
-                   THEN TRIM(vat) || '-' || COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
-                   ELSE COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
-               END,
-                   hlv_dirty_child_code = (
-                       parent_id IS NOT NULL
-                       AND (
-                           COALESCE(NULLIF(TRIM(ref), ''), '') != ''
-                           OR COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
-                       )
-                   ),
-                   hlv_root_code_mismatch = (
-                       parent_id IS NULL
-                       AND COALESCE(NULLIF(TRIM(ref), ''), '') != ''
-                       AND COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
-                       AND TRIM(ref) != TRIM(company_registry)
-                   )
-        """)
-        cr.execute("UPDATE res_partner SET hlv_has_sale_order = customer_rank > 0")
-        cr.execute("UPDATE res_partner SET hlv_has_purchase_order = supplier_rank > 0")
-        cr.execute("UPDATE res_partner SET hlv_has_shopee_order = FALSE")
-        cr.execute("""
-            UPDATE res_partner
-               SET hlv_has_sale_order = TRUE
-             WHERE id IN (
-                   SELECT DISTINCT COALESCE(cp.id, so.partner_id)
-                     FROM sale_order so
-                     JOIN res_partner p ON p.id = so.partner_id
-                LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
-             )
-        """)
-        cr.execute("""
-            UPDATE res_partner
-               SET hlv_has_purchase_order = TRUE
-             WHERE id IN (
-                   SELECT DISTINCT COALESCE(cp.id, po.partner_id)
-                     FROM purchase_order po
-                     JOIN res_partner p ON p.id = po.partner_id
-                LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
-             )
-        """)
-        cr.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                 WHERE table_name = 'sale_order'
-                   AND column_name = 'shopee_order_ref'
-            )
-        """)
-        has_shopee_ref = cr.fetchone()[0]
-        if has_shopee_ref:
-            cr.execute("""
-                UPDATE res_partner
-                   SET hlv_has_shopee_order = TRUE,
-                       hlv_has_sale_order = TRUE
-                 WHERE id IN (
-                       SELECT DISTINCT COALESCE(cp.id, so.partner_id)
-                         FROM sale_order so
-                         JOIN res_partner p ON p.id = so.partner_id
-                    LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
-                        WHERE so.shopee_order_ref IS NOT NULL
-                          AND so.shopee_order_ref != ''
-                 )
-            """)
-        cr.execute("""
-            UPDATE res_partner
-               SET hlv_business_role = CASE
-                   WHEN type = 'delivery' THEN 'delivery_address'
-                   WHEN type = 'invoice' THEN 'invoice_address'
-                   WHEN parent_id IS NOT NULL THEN 'child_contact'
-                   WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
-                   WHEN hlv_has_shopee_order IS TRUE THEN 'customer_shopee'
-                   WHEN hlv_has_sale_order IS TRUE THEN 'customer_crm'
-                   ELSE 'other'
-               END
-        """)
-        cr.execute("""
-            UPDATE res_partner
-               SET hlv_relationship_label = CASE
-                   WHEN type = 'delivery' THEN 'Giao hàng'
-                   WHEN type = 'invoice' THEN 'Hóa đơn'
-                   WHEN parent_id IS NOT NULL THEN 'Liên hệ con'
-                   ELSE 'Hồ sơ gốc'
-               END
-        """)
+    # NOTE: Đã comment init() để tránh lỗi `SerializationFailure: could not serialize access due to concurrent update`
+    # khi upgrade module trên môi trường Production (do UPDATE toàn bộ bảng res_partner trong transaction).
+    # Các trường này đã có hàm compute (@api.depends, store=True) tự động cập nhật.
+    # Mở lại khi thực sự cần chạy manual backfill dữ liệu lúc vắng người dùng.
+    #
+    # def init(self):
+    #     cr = self.env.cr
+    #     cr.execute("""
+    #         UPDATE res_partner
+    #            SET hlv_partner_type = CASE
+    #                WHEN type = 'delivery' THEN 'delivery'
+    #                WHEN type = 'invoice' THEN 'invoice'
+    #                WHEN parent_id IS NOT NULL THEN 'child_contact'
+    #                WHEN is_company IS TRUE THEN 'root_company'
+    #                ELSE 'root_person'
+    #            END
+    #     """)
+    #     cr.execute("""
+    #         UPDATE res_partner
+    #            SET hlv_misa_code_key = CASE
+    #                WHEN COALESCE(NULLIF(TRIM(vat), ''), '') != ''
+    #                 AND COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), '')) IS NOT NULL
+    #                THEN TRIM(vat) || '-' || COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
+    #                ELSE COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
+    #            END,
+    #                hlv_dirty_child_code = (
+    #                    parent_id IS NOT NULL
+    #                    AND (
+    #                        COALESCE(NULLIF(TRIM(ref), ''), '') != ''
+    #                        OR COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
+    #                    )
+    #                ),
+    #                hlv_root_code_mismatch = (
+    #                    parent_id IS NULL
+    #                    AND COALESCE(NULLIF(TRIM(ref), ''), '') != ''
+    #                    AND COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
+    #                    AND TRIM(ref) != TRIM(company_registry)
+    #                )
+    #     """)
+    #     cr.execute("UPDATE res_partner SET hlv_has_sale_order = customer_rank > 0")
+    #     cr.execute("UPDATE res_partner SET hlv_has_purchase_order = supplier_rank > 0")
+    #     cr.execute("UPDATE res_partner SET hlv_has_shopee_order = FALSE")
+    #     cr.execute("""
+    #         UPDATE res_partner
+    #            SET hlv_has_sale_order = TRUE
+    #          WHERE id IN (
+    #                SELECT DISTINCT COALESCE(cp.id, so.partner_id)
+    #                  FROM sale_order so
+    #                  JOIN res_partner p ON p.id = so.partner_id
+    #             LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+    #          )
+    #     """)
+    #     cr.execute("""
+    #         UPDATE res_partner
+    #            SET hlv_has_purchase_order = TRUE
+    #          WHERE id IN (
+    #                SELECT DISTINCT COALESCE(cp.id, po.partner_id)
+    #                  FROM purchase_order po
+    #                  JOIN res_partner p ON p.id = po.partner_id
+    #             LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+    #          )
+    #     """)
+    #     cr.execute("""
+    #         SELECT EXISTS (
+    #             SELECT 1 FROM information_schema.columns
+    #              WHERE table_name = 'sale_order'
+    #                AND column_name = 'shopee_order_ref'
+    #         )
+    #     """)
+    #     has_shopee_ref = cr.fetchone()[0]
+    #     if has_shopee_ref:
+    #         cr.execute("""
+    #             UPDATE res_partner
+    #                SET hlv_has_shopee_order = TRUE,
+    #                    hlv_has_sale_order = TRUE
+    #              WHERE id IN (
+    #                    SELECT DISTINCT COALESCE(cp.id, so.partner_id)
+    #                      FROM sale_order so
+    #                      JOIN res_partner p ON p.id = so.partner_id
+    #                 LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+    #                     WHERE so.shopee_order_ref IS NOT NULL
+    #                       AND so.shopee_order_ref != ''
+    #              )
+    #         """)
+    #     cr.execute("""
+    #         UPDATE res_partner
+    #            SET hlv_business_role = CASE
+    #                WHEN type = 'delivery' THEN 'delivery_address'
+    #                WHEN type = 'invoice' THEN 'invoice_address'
+    #                WHEN parent_id IS NOT NULL THEN 'child_contact'
+    #                WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
+    #                WHEN hlv_has_shopee_order IS TRUE THEN 'customer_shopee'
+    #                WHEN hlv_has_sale_order IS TRUE THEN 'customer_crm'
+    #                WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
+    #                ELSE 'other'
+    #            END
+    #     """)
+    #     cr.execute("""
+    #         UPDATE res_partner
+    #            SET hlv_relationship_label = CASE
+    #                WHEN type = 'delivery' THEN 'Giao hàng'
+    #                WHEN type = 'invoice' THEN 'Hóa đơn'
+    #                WHEN parent_id IS NOT NULL THEN 'Liên hệ con'
+    #                ELSE 'Hồ sơ gốc'
+    #            END
+    #     """)
 
     child_contact_count = fields.Integer(
         compute='_compute_child_contact_count',

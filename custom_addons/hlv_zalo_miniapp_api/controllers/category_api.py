@@ -57,8 +57,10 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             data = []
             for cat in categories:
                 img_url = None
-                if hasattr(cat, "image_128") and cat.image_128:
-                    img_url = self._get_image_url("pos.category", cat.id, "image_128", write_date=cat.write_date or cat.create_date)
+                for img_f in ("image_128", "image_256", "image_512", "image_1920", "image"):
+                    if hasattr(cat, img_f) and getattr(cat, img_f):
+                        img_url = self._get_image_url("pos.category", cat.id, img_f, write_date=cat.write_date or cat.create_date)
+                        break
                 zalo_display_name = (getattr(cat, "x_zalo_display_name", "") or "").strip()
                 display_name = zalo_display_name if zalo_display_name else cat.name
                 parent_display_name = None
@@ -217,19 +219,26 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             if if_none_match and if_none_match.strip() == etag:
                 return Response(status=304)
 
-            image_data = record[field] if hasattr(record, field) else None
+            image_data = record[field] if hasattr(record, field) and record[field] else None
+            if not image_data:
+                # Fallback to other image fields if requested field is empty
+                for fallback_field in ("image_128", "image_256", "image_512", "image_1920", "image"):
+                    if hasattr(record, fallback_field) and record[fallback_field]:
+                        image_data = record[fallback_field]
+                        break
+
             if not image_data:
                 headers = {
-                    "Cache-Control": "public, max-age=86400, immutable",
+                    "Cache-Control": "public, max-age=60",
                     **self._cors_headers(),
                 }
                 payload = json.dumps({"success": False, "error": {"code": "NOT_FOUND", "message": "Không có ảnh"}})
                 return Response(payload, status=404, content_type="application/json", headers=headers)
 
-
             headers = {
                 "Cache-Control": "public, max-age=2592000, immutable",
                 "ETag": etag,
+                **self._cors_headers(),
             }
 
             return Response(
