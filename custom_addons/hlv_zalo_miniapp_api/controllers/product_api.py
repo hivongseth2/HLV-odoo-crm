@@ -99,25 +99,29 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         category = None
         category_ids = []
         categories = []
+        tmpl = product.product_tmpl_id
 
         # 1. Lấy từ x_zalo_categ_ids (Danh mục Zalo)
-        if product.x_zalo_categ_ids:
-            for cat in product.x_zalo_categ_ids:
+        # Đọc TRỰC TIẾP từ product.template (product_tmpl_id) — chủ sở hữu thật của field.
+        # Đọc qua product.product (delegation/related) KHÔNG đầy đủ với m2m nhiều giá trị
+        # (fix bug: sản phẩm gán nhiều danh mục chỉ hiển thị 1 danh mục).
+        if tmpl.x_zalo_categ_ids:
+            for cat in tmpl.x_zalo_categ_ids:
                 if cat.id not in category_ids:
                     category_ids.append(cat.id)
                     categories.append({"id": cat.id, "name": cat.name})
 
         # 2. Lấy bổ sung từ pos_categ_ids (Danh mục POS) nếu có
-        if hasattr(product, "pos_categ_ids") and product.pos_categ_ids:
-            for cat in product.pos_categ_ids:
+        if hasattr(tmpl, "pos_categ_ids") and tmpl.pos_categ_ids:
+            for cat in tmpl.pos_categ_ids:
                 if cat.id not in category_ids:
                     category_ids.append(cat.id)
                     categories.append({"id": cat.id, "name": cat.name})
 
         # 3. Fallback sang product.categ_id (Danh mục nội bộ Odoo) nếu chưa có
-        if not category_ids and product.categ_id:
-            category_ids.append(product.categ_id.id)
-            categories.append({"id": product.categ_id.id, "name": product.categ_id.name})
+        if not category_ids and tmpl.categ_id:
+            category_ids.append(tmpl.categ_id.id)
+            categories.append({"id": tmpl.categ_id.id, "name": tmpl.categ_id.name})
 
         category = categories[0] if categories else None
 
