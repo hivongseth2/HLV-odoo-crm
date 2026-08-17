@@ -99,15 +99,27 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         category = None
         category_ids = []
         categories = []
+
+        # 1. Lấy từ x_zalo_categ_ids (Danh mục Zalo)
         if product.x_zalo_categ_ids:
             for cat in product.x_zalo_categ_ids:
-                categories.append({"id": cat.id, "name": cat.name})
-                category_ids.append(cat.id)
-            category = categories[0]
-        elif product.categ_id:
-            category = {"id": product.categ_id.id, "name": product.categ_id.name}
-            category_ids = [product.categ_id.id]
-            categories = [category]
+                if cat.id not in category_ids:
+                    category_ids.append(cat.id)
+                    categories.append({"id": cat.id, "name": cat.name})
+
+        # 2. Lấy bổ sung từ pos_categ_ids (Danh mục POS) nếu có
+        if hasattr(product, "pos_categ_ids") and product.pos_categ_ids:
+            for cat in product.pos_categ_ids:
+                if cat.id not in category_ids:
+                    category_ids.append(cat.id)
+                    categories.append({"id": cat.id, "name": cat.name})
+
+        # 3. Fallback sang product.categ_id (Danh mục nội bộ Odoo) nếu chưa có
+        if not category_ids and product.categ_id:
+            category_ids.append(product.categ_id.id)
+            categories.append({"id": product.categ_id.id, "name": product.categ_id.name})
+
+        category = categories[0] if categories else None
 
         # Lấy promotional price từ batch_prices dict nếu có
         promotional_price = None
@@ -308,7 +320,14 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
             if category_id:
                 cat_ids = request.env["pos.category"].sudo().search([("id", "child_of", category_id)]).ids
-                domain.append(("x_zalo_categ_ids", "in", cat_ids))
+                if hasattr(request.env["product.product"], "pos_categ_ids"):
+                    domain += [
+                        "|",
+                        ("x_zalo_categ_ids", "in", cat_ids),
+                        ("pos_categ_ids", "in", cat_ids),
+                    ]
+                else:
+                    domain.append(("x_zalo_categ_ids", "in", cat_ids))
 
             # Lọc theo khoảng giá
             if min_price > 0:

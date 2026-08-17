@@ -131,11 +131,18 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
 
             child_cats = request.env["pos.category"].sudo().search([("id", "child_of", category.id)])
             domain = [
-                ("x_zalo_categ_ids", "in", child_cats.ids),
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
                 ("sale_ok", "=", True),
             ]
+            if hasattr(request.env["product.product"], "pos_categ_ids"):
+                domain += [
+                    "|",
+                    ("x_zalo_categ_ids", "in", child_cats.ids),
+                    ("pos_categ_ids", "in", child_cats.ids),
+                ]
+            else:
+                domain.append(("x_zalo_categ_ids", "in", child_cats.ids))
 
             products = request.env["product.product"].sudo().search(
                 domain, limit=limit, offset=offset, order="name"
