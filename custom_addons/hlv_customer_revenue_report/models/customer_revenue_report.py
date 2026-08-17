@@ -42,6 +42,14 @@ CUSTOMERS_SUMMARY_GROUP_SQL = """
     GROUP BY 1, 2
 """
 
+# Whitelist cột ngày được phép dùng làm trục "theo tháng" cho thống kê tổng toàn công ty -
+# date_field đến từ client nên KHÔNG được nội suy trực tiếp vào SQL, chỉ tra qua dict này.
+MONTHLY_TOTALS_DATE_FIELDS = {
+    'date_done': 'date_done',
+    'order_date': 'order_date',
+    'misa_order_date': 'misa_order_date',
+}
+
 
 class HlvCustomerRevenueReport(models.Model):
     _name = 'hlv.customer.revenue.report'
@@ -77,7 +85,12 @@ class HlvCustomerRevenueReport(models.Model):
     currency_id = fields.Many2one('res.currency', string='Tiền tệ', readonly=True)
 
     # ==================== Dates ====================
-    order_date = fields.Datetime(string='Ngày đặt hàng', readonly=True)
+    order_date = fields.Datetime(string='Ngày đặt hàng (Odoo)', readonly=True)
+    misa_order_date = fields.Date(
+        string='Ngày đơn hàng (MISA)', readonly=True,
+        help='sale.order.x_studio_misa_order_date - ngày đơn hàng ghi nhận trên MISA, '
+             'có thể khác ngày tạo/xác nhận đơn trên Odoo.',
+    )
     date_done = fields.Datetime(string='Ngày xuất kho', readonly=True)
 
     # ==================== Quantities ====================
@@ -143,6 +156,7 @@ class HlvCustomerRevenueReport(models.Model):
                     sol.currency_id AS currency_id,
 
                     so.date_order AS order_date,
+                    so.x_studio_misa_order_date AS misa_order_date,
                     sp.date_done AS date_done,
 
                     sm.quantity AS qty_delivered,
@@ -206,7 +220,26 @@ class HlvCustomerRevenueReport(models.Model):
             domain.append(('date_done', '<=', '%s 23:59:59' % date_to))
         return domain
 
-    def _customers_summary_where(self, date_from, date_to, search, shopee_filter):
+    def _extra_date_domain(self, order_date_from=False, order_date_to=False,
+                            misa_order_date_from=False, misa_order_date_to=False):
+        """3 trục ngày độc lập, dùng được đồng thời: ngày xuất kho (date_done, ở
+        _base_date_domain), ngày đặt hàng gốc trên Odoo (order_date) và ngày đơn hàng
+        ghi nhận trên MISA (misa_order_date, x_studio_misa_order_date - có thể khác
+        order_date do backdating khi sync)."""
+        domain = []
+        if order_date_from:
+            domain.append(('order_date', '>=', '%s 00:00:00' % order_date_from))
+        if order_date_to:
+            domain.append(('order_date', '<=', '%s 23:59:59' % order_date_to))
+        if misa_order_date_from:
+            domain.append(('misa_order_date', '>=', misa_order_date_from))
+        if misa_order_date_to:
+            domain.append(('misa_order_date', '<=', misa_order_date_to))
+        return domain
+
+    def _customers_summary_where(self, date_from, date_to, search, shopee_filter,
+                                  order_date_from=False, order_date_to=False,
+                                  misa_order_date_from=False, misa_order_date_to=False):
         """WHERE áp lên bảng gốc (chưa GROUP BY) - trả về (sql, params), luôn tham số hoá."""
         clauses = ['1 = 1']
         params = []
@@ -216,6 +249,18 @@ class HlvCustomerRevenueReport(models.Model):
         if date_to:
             clauses.append('date_done <= %s')
             params.append('%s 23:59:59' % date_to)
+        if order_date_from:
+            clauses.append('order_date >= %s')
+            params.append('%s 00:00:00' % order_date_from)
+        if order_date_to:
+            clauses.append('order_date <= %s')
+            params.append('%s 23:59:59' % order_date_to)
+        if misa_order_date_from:
+            clauses.append('misa_order_date >= %s')
+            params.append(misa_order_date_from)
+        if misa_order_date_to:
+            clauses.append('misa_order_date <= %s')
+            params.append(misa_order_date_to)
         if shopee_filter == 'shopee':
             clauses.append('is_shopee = true')
         elif shopee_filter == 'non_shopee':
@@ -288,29 +333,110 @@ class HlvCustomerRevenueReport(models.Model):
 
     @api.model
     def get_customers_summary(self, date_from=False, date_to=False, search=False, shopee_filter='all',
+                               order_date_from=False, order_date_to=False,
+                               misa_order_date_from=False, misa_order_date_to=False,
                                order_by='amount_net', order_dir='desc', limit=50, offset=0):
         """Danh sách khách hàng/shop Shopee có phát sinh trong khoảng thời gian, có phân trang.
 
         Đơn Shopee được gộp theo shop (shopee_shop_id), không theo contact chung chung.
         Group + sắp xếp + phân trang đều thực hiện bằng SQL để tránh phải kéo toàn bộ dữ liệu
         (có thể hàng chục nghìn dòng) qua ORM rồi mới xử lý ở Python.
+
+        date_from/date_to lọc theo ngày xuất kho; order_date_from/to lọc theo ngày đặt hàng
+        gốc trên Odoo; misa_order_date_from/to lọc theo ngày đơn hàng ghi nhận trên MISA -
+        3 trục độc lập, có thể dùng đồng thời.
         """
-        where_sql, params = self._customers_summary_where(date_from, date_to, search, shopee_filter)
+        where_sql, params = self._customers_summary_where(
+            date_from, date_to, search, shopee_filter,
+            order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+        )
         rows = self._fetch_customers_summary(where_sql, params, order_by, order_dir, limit, offset)
         total_count = self._count_customers_summary_groups(where_sql, params)
         return {'rows': rows, 'total_count': total_count}
 
+    # ==================== Tổng toàn công ty theo tháng (KHÔNG tách theo khách hàng) ====================
+    @api.model
+    def get_overall_monthly_summary(self, date_from=False, date_to=False, search=False, shopee_filter='all',
+                                     order_date_from=False, order_date_to=False,
+                                     misa_order_date_from=False, misa_order_date_to=False,
+                                     date_field='date_done'):
+        """Doanh thu theo tháng CỘNG GỘP TẤT CẢ khách hàng/shop - dùng cho câu hỏi kiểu
+        "tổng công ty bán ra bao nhiêu mỗi tháng trong khoảng T5-T7". Khác get_customers_summary
+        (liệt kê từng khách hàng) và get_group_monthly_summary (theo tháng nhưng chỉ 1 khách
+        hàng/shop) - đây là 1 dòng / 1 tháng, cộng dồn toàn bộ dữ liệu khớp filter.
+
+        date_field chọn cột nào được dùng làm trục "tháng": 'date_done' (ngày xuất kho,
+        mặc định), 'order_date' (ngày đặt hàng gốc Odoo) hoặc 'misa_order_date' (ngày đơn
+        hàng MISA). date_from/date_to (+ order_date_from/to, misa_order_date_from/to) vẫn
+        lọc dữ liệu độc lập với date_field như các API khác - muốn lọc theo tháng 5-7 dựa
+        trên ngày nào thì truyền date_from/date_to (hoặc order_date_from/to...) tương ứng
+        VÀ đặt date_field = trục đó để tháng hiển thị khớp với khoảng đã lọc.
+        """
+        date_col = MONTHLY_TOTALS_DATE_FIELDS.get(date_field, 'date_done')
+        where_sql, params = self._customers_summary_where(
+            date_from, date_to, search, shopee_filter,
+            order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+        )
+        query = """
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', {date_col}), 'YYYY-MM') AS month_key,
+                TO_CHAR(DATE_TRUNC('month', {date_col}), 'YYYY-MM-DD') AS month_from,
+                TO_CHAR(DATE_TRUNC('month', {date_col}) + INTERVAL '1 month', 'YYYY-MM-DD') AS month_to,
+                COUNT(DISTINCT sale_order_id) AS order_count,
+                COUNT(DISTINCT CASE WHEN is_shopee AND shopee_shop_id IS NOT NULL
+                    THEN -shopee_shop_id ELSE partner_id END) AS customer_count,
+                COALESCE(SUM(qty_delivered), 0) AS qty_delivered,
+                COALESCE(SUM(qty_returned), 0) AS qty_returned,
+                COALESCE(SUM(qty_net), 0) AS qty_net,
+                COALESCE(SUM(amount_gross), 0) AS amount_gross,
+                COALESCE(SUM(amount_returned), 0) AS amount_returned,
+                COALESCE(SUM(amount_net), 0) AS amount_net
+            FROM hlv_customer_revenue_report
+            WHERE {where_sql} AND {date_col} IS NOT NULL
+            GROUP BY 1, 2, 3
+            ORDER BY 1
+        """.format(where_sql=where_sql, date_col=date_col)
+        self.env.cr.execute(query, params)
+        rows = self.env.cr.dictfetchall()
+        return [
+            {
+                'month_label': r['month_key'],
+                'date_from': r['month_from'],
+                'date_to': r['month_to'],
+                'order_count': int(r['order_count']),
+                'customer_count': int(r['customer_count']),
+                'qty_delivered': float(r['qty_delivered']),
+                'qty_returned': float(r['qty_returned']),
+                'qty_net': float(r['qty_net']),
+                'amount_gross': float(r['amount_gross']),
+                'amount_returned': float(r['amount_returned']),
+                'amount_net': float(r['amount_net']),
+            }
+            for r in rows
+        ]
+
     # ==================== Dashboard: tổng hợp theo tháng (1 khách hàng / 1 shop) ====================
-    def _group_domain(self, group_type, group_id, date_from=False, date_to=False):
+    def _group_domain(self, group_type, group_id, date_from=False, date_to=False,
+                       order_date_from=False, order_date_to=False,
+                       misa_order_date_from=False, misa_order_date_to=False):
         if not group_id:
             raise UserError(_('Vui lòng chọn khách hàng hoặc shop Shopee.'))
         field = 'shopee_shop_id' if group_type == 'shop' else 'partner_id'
-        return [(field, '=', group_id)] + self._base_date_domain(date_from, date_to)
+        return (
+            [(field, '=', group_id)]
+            + self._base_date_domain(date_from, date_to)
+            + self._extra_date_domain(order_date_from, order_date_to, misa_order_date_from, misa_order_date_to)
+        )
 
     @api.model
-    def get_group_monthly_summary(self, group_type, group_id, date_from=False, date_to=False):
+    def get_group_monthly_summary(self, group_type, group_id, date_from=False, date_to=False,
+                                   order_date_from=False, order_date_to=False,
+                                   misa_order_date_from=False, misa_order_date_to=False):
         """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng."""
-        domain = self._group_domain(group_type, group_id, date_from, date_to)
+        domain = self._group_domain(
+            group_type, group_id, date_from, date_to,
+            order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+        )
         groups = self.read_group(domain, MONTHLY_MEASURES, ['date_done:month', 'sale_order_id'], lazy=False)
 
         agg = {}
@@ -334,11 +460,21 @@ class HlvCustomerRevenueReport(models.Model):
         return rows
 
     @api.model
-    def get_group_month_detail(self, group_type, group_id, date_from, date_to):
-        """Chi tiết theo đơn hàng trong khoảng [date_from, date_to) - dùng cho drawer."""
+    def get_group_month_detail(self, group_type, group_id, date_from, date_to,
+                                order_date_from=False, order_date_to=False,
+                                misa_order_date_from=False, misa_order_date_to=False):
+        """Chi tiết theo đơn hàng trong khoảng [date_from, date_to) - dùng cho drawer.
+
+        order_date_from/to, misa_order_date_from/to nên truyền lại giống hệt lúc gọi
+        get_group_monthly_summary, để tổng các dòng ở đây khớp với dòng tháng đã hiển thị
+        (tránh lệch khi tháng đó được lọc thêm theo ngày đặt hàng/MISA).
+        """
         if not date_from or not date_to:
             return []
-        domain = self._group_domain(group_type, group_id) + [
+        domain = self._group_domain(
+            group_type, group_id, False, False,
+            order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+        ) + [
             ('date_done', '>=', date_from), ('date_done', '<', date_to),
         ]
         groups = self.read_group(
@@ -398,8 +534,13 @@ class HlvCustomerRevenueReport(models.Model):
         return output.read()
 
     @api.model
-    def export_customers_summary_excel(self, date_from=False, date_to=False, search=False, shopee_filter='all'):
-        where_sql, params = self._customers_summary_where(date_from, date_to, search, shopee_filter)
+    def export_customers_summary_excel(self, date_from=False, date_to=False, search=False, shopee_filter='all',
+                                        order_date_from=False, order_date_to=False,
+                                        misa_order_date_from=False, misa_order_date_to=False):
+        where_sql, params = self._customers_summary_where(
+            date_from, date_to, search, shopee_filter,
+            order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+        )
         rows = self._fetch_customers_summary(where_sql, params, limit=None)
         headers = [
             'Khách hàng / Shop', 'Đơn Shopee?', 'Số đơn hàng', 'SL xuất kho', 'SL trả hàng',
@@ -417,7 +558,9 @@ class HlvCustomerRevenueReport(models.Model):
         return self._create_export_attachment('doanh_thu_khach_hang.xlsx', content)
 
     @api.model
-    def export_group_revenue_excel(self, group_type, group_id, date_from=False, date_to=False):
+    def export_group_revenue_excel(self, group_type, group_id, date_from=False, date_to=False,
+                                    order_date_from=False, order_date_to=False,
+                                    misa_order_date_from=False, misa_order_date_to=False):
         if group_type == 'shop':
             group = self.env['shopee.shop'].browse(group_id)
         else:
@@ -425,7 +568,10 @@ class HlvCustomerRevenueReport(models.Model):
         if not group.exists():
             raise UserError(_('Khách hàng / shop không tồn tại.'))
 
-        monthly_rows = self.get_group_monthly_summary(group_type, group_id, date_from, date_to)
+        monthly_rows = self.get_group_monthly_summary(
+            group_type, group_id, date_from, date_to,
+            order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+        )
 
         monthly_headers = [
             'Tháng', 'Số đơn hàng', 'SL xuất kho', 'SL trả hàng', 'SL thực xuất (ròng)',
@@ -447,6 +593,7 @@ class HlvCustomerRevenueReport(models.Model):
         for month_row in monthly_rows:
             for line in self.get_group_month_detail(
                 group_type, group_id, month_row['date_from'], month_row['date_to'],
+                order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
             ):
                 detail_data.append([
                     month_row['month_label'], line['sale_order_name'],
