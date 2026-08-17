@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_hlv_customer_revenue_dashboard" model="ir.actions.client">
+        <field name="name">Doanh thu theo khách hàng</field>
+        <field name="tag">hlv_customer_revenue_report.Dashboard</field>
+    </record>
+
+    <menuitem id="menu_hlv_customer_revenue_report_root"
+              name="Doanh thu KH"
+              parent="sale.menu_sale_report"
+              sequence="60"/>
+
+    <menuitem id="menu_hlv_customer_revenue_dashboard"
+              name="Doanh thu theo khách hàng"
+              parent="menu_hlv_customer_revenue_report_root"
+              action="action_hlv_customer_revenue_dashboard"
+              sequence="10"/>
+
+</odoo>
