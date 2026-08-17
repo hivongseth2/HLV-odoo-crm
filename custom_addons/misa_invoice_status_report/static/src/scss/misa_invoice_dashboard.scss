@@ -510,6 +510,12 @@
         .miv-cell-shopee { color: #c9247a; font-weight: 700; }
         .miv-cell-customs { color: #2a6f97; font-weight: 700; }
 
+        // Nhóm đã XÁC MINH xong (misa_invoice_gap_resolved) — số lệch vẫn đúng như hiển thị
+        // (tiền thuộc về 1 hóa đơn khác thật), nhưng không cần ai xử lý tay nữa — làm mờ nhẹ để
+        // không lẫn với các dòng còn cần "hối" sale thật sự.
+        tbody tr.miv-row-resolved { opacity: 0.6; }
+        tbody tr.miv-row-resolved:hover { opacity: 1; }
+
         &.miv-table-compact tbody tr.miv-row-clickable {
             cursor: pointer;
             &:hover { background: var(--miv-plane); }
