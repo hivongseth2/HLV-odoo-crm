@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import time
+from datetime import datetime
 
 from odoo import _, api, fields, models
 
@@ -88,9 +89,9 @@ class ZaloMiniAppSnapshot(models.Model):
             final_ban_ts = max(computed_ban_ts, int(forced_ban_v)) if forced_ban_v and forced_ban_v.isdigit() else computed_ban_ts
 
             rec.catalog_version = str(final_cat_ts)
-            rec.catalog_version_datetime = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_cat_ts))
+            rec.catalog_version_datetime = fields.Datetime.to_string(datetime.fromtimestamp(final_cat_ts))
             rec.banner_version = str(final_ban_ts)
-            rec.banner_version_datetime = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_ban_ts))
+            rec.banner_version_datetime = fields.Datetime.to_string(datetime.fromtimestamp(final_ban_ts))
             rec.forced_catalog_version = forced_cat_v or "Tự động"
             rec.forced_banner_version = forced_ban_v or "Tự động"
             rec.name = f"Zalo Snapshot Version: {final_cat_ts}"

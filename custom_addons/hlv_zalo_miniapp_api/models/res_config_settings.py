@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import time
+from datetime import datetime
 
 from odoo import _, api, fields, models
 
@@ -201,9 +202,9 @@ class ResConfigSettings(models.TransientModel):
             final_ban_ts = max(computed_ban_ts, int(forced_ban_v)) if forced_ban_v and forced_ban_v.isdigit() else computed_ban_ts
 
             rec.x_zalo_catalog_version = str(final_cat_ts)
-            rec.x_zalo_catalog_version_dt = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_cat_ts))
+            rec.x_zalo_catalog_version_dt = fields.Datetime.to_string(datetime.fromtimestamp(final_cat_ts))
             rec.x_zalo_banner_version = str(final_ban_ts)
-            rec.x_zalo_banner_version_dt = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_ban_ts))
+            rec.x_zalo_banner_version_dt = fields.Datetime.to_string(datetime.fromtimestamp(final_ban_ts))
             rec.x_zalo_forced_catalog_version = forced_cat_v or "Tự động"
 
     def action_force_bump_catalog_version(self):
