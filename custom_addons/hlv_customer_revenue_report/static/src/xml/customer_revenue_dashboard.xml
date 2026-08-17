@@ -24,6 +24,11 @@
                         <option value="shopee">Chỉ đơn Shopee</option>
                         <option value="non_shopee">Không phải Shopee</option>
                     </select>
+                    <select class="form-select hcr-date-basis" t-model="state.dateBasis" t-on-change="onDateBasisChange">
+                        <option value="date_done">Lọc theo: Ngày xuất kho</option>
+                        <option value="order_date">Lọc theo: Ngày đặt hàng (Odoo)</option>
+                        <option value="misa_order_date">Lọc theo: Ngày đơn hàng (MISA)</option>
+                    </select>
                     <input type="date" class="form-control hcr-date-input" t-model="state.dateFrom" t-on-change="onDateChange"/>
                     <span class="hcr-date-sep">→</span>
                     <input type="date" class="form-control hcr-date-input" t-model="state.dateTo" t-on-change="onDateChange"/>
