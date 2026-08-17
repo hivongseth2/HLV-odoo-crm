@@ -327,6 +327,17 @@
             color: var(--miv-ink-muted);
         }
 
+        // Câu giải thích ĐẦY ĐỦ (vì sao lệch, đơn nào, qua đề nghị nào) — CHO XUỐNG DÒNG bình
+        // thường (không ellipsis như .miv-legend-name), vì đây chính là phần người xem cần đọc
+        // được ngay, không phải chỉ có tên phiếu ngắn gọn.
+        .miv-legend-hint {
+            font-size: 11px;
+            color: var(--miv-ink-muted);
+            white-space: normal;
+            line-height: 1.4;
+            margin-top: 2px;
+        }
+
         .miv-legend-amount {
             flex-shrink: 0;
             white-space: nowrap;
@@ -387,6 +398,12 @@
             margin-top: 2px;
             font-size: 12px;
             color: var(--miv-ink-2);
+        }
+
+        .miv-tile-hint {
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--miv-ink-muted);
         }
 
         .miv-tile-sub {

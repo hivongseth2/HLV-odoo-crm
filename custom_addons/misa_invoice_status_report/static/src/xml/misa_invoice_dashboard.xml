@@ -396,11 +396,14 @@
                             </div>
                         </div>
                         <div class="miv-tile miv-tile-critical" t-on-click="openDiscrepancyDrawer"
-                             title="Bấm để xem đúng danh sách phiếu đang gây ra khoản chênh lệch này.">
+                             title="Bấm để xem đúng danh sách phiếu đang gây ra khoản chênh lệch này. Đã trừ phần các nhóm đã xác minh xong (misa_invoice_gap_resolved) — số này chỉ còn tính phần thật sự cần xử lý.">
                             <div class="miv-tile-icon"><i class="fa fa-balance-scale"/></div>
                             <div class="miv-tile-body">
                                 <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.outstanding_amount)"/></div>
                                 <div class="miv-tile-label">Chênh lệch (xuất kho − xuất HĐ)</div>
+                                <div class="miv-tile-hint" t-if="reconciliationTotals.gap_resolved_amount">
+                                    (đã trừ <t t-esc="formatCurrency(reconciliationTotals.gap_resolved_amount)"/> đã xác minh xong)
+                                </div>
                             </div>
                         </div>
                         <div class="miv-tile miv-tile-shopee" t-on-click="() => this.openReconciliationGroup('shopee')">
@@ -1452,7 +1455,7 @@
                                                                 t-att-stroke-dasharray="seg.dasharray"
                                                                 t-att-stroke-dashoffset="seg.dashoffset"
                                                                 t-on-click="() => this.onGroupBreakdownSliceClick(seg.slice)">
-                                                            <title><t t-esc="seg.slice.label"/> — <t t-esc="formatCurrency(seg.slice.amount)"/></title>
+                                                            <title><t t-esc="seg.slice.text || seg.slice.label"/> — <t t-esc="formatCurrency(seg.slice.amount)"/></title>
                                                         </circle>
                                                     </t>
                                                 </svg>
@@ -1473,6 +1476,9 @@
                                                             <span class="miv-legend-sub" t-if="seg.slice.kind === 'not_shipped'">
                                                                 (<t t-esc="seg.slice.picking_states.join(', ')"/>)
                                                             </span>
+                                                            <div class="miv-legend-hint" t-if="seg.slice.text">
+                                                                <t t-esc="seg.slice.text"/>
+                                                            </div>
                                                         </span>
                                                         <b class="miv-legend-amount"><t t-esc="formatCurrency(seg.slice.amount)"/></b>
                                                     </li>
