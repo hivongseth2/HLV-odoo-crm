@@ -312,22 +312,30 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 in_stock = in_stock.lower() in ("true", "1", "yes")
             in_stock = bool(in_stock)
 
-            domain = [
+            # Query product.template trước để lọc theo x_zalo_categ_ids / pos_categ_ids
+            # chính xác (2 field này được định nghĩa trên product.template, không phải product.product).
+            # => Fix: sản phẩm gán nhiều danh mục sẽ được lọc đúng theo mọi danh mục đã gán.
+            tmpl_domain = [
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
-                ("sale_ok", "=", True),
             ]
-
             if category_id:
                 cat_ids = request.env["pos.category"].sudo().search([("id", "child_of", category_id)]).ids
-                if hasattr(request.env["product.product"], "pos_categ_ids"):
-                    domain += [
+                if hasattr(request.env["product.template"], "pos_categ_ids"):
+                    tmpl_domain += [
                         "|",
                         ("x_zalo_categ_ids", "in", cat_ids),
                         ("pos_categ_ids", "in", cat_ids),
                     ]
                 else:
-                    domain.append(("x_zalo_categ_ids", "in", cat_ids))
+                    tmpl_domain.append(("x_zalo_categ_ids", "in", cat_ids))
+            template_ids = request.env["product.template"].sudo().search(tmpl_domain).ids
+
+            domain = [
+                ("product_tmpl_id", "in", template_ids),
+                ("active", "=", True),
+                ("sale_ok", "=", True),
+            ]
 
             # Lọc theo khoảng giá
             if min_price > 0:

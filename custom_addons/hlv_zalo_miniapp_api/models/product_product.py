@@ -11,6 +11,23 @@ _logger = logging.getLogger(__name__)
 class ProductProduct(models.Model):
     _inherit = "product.product"
 
+    # Các field này vốn chỉ định nghĩa trên product.template; phải khai báo `related`
+    # rõ ràng trên product.product để tránh phụ thuộc delegation (_inherits) không ổn định.
+    # Bằng cách này, việc đọc/filter x_zalo_categ_ids trên variant hoạt động chính xác
+    # (fix bug: sản phẩm gán nhiều danh mục chỉ hiển thị ở danh mục cuối).
+    x_zalo_categ_ids = fields.Many2many(
+        related="product_tmpl_id.x_zalo_categ_ids",
+        readonly=False,
+    )
+    x_active_zalo = fields.Boolean(
+        related="product_tmpl_id.x_active_zalo",
+        readonly=False,
+    )
+    x_zalo_price = fields.Float(
+        related="product_tmpl_id.x_zalo_price",
+        readonly=False,
+    )
+
     def action_sync_to_wordpress(self):
         """
         Dummy method để bypass lỗi ParseError khi Odoo compile view product.product_normal_form_view.
