@@ -1,4 +1,4 @@
-﻿{
+{
     "name": "HLV - Loyalty Mobile App & Banners",
     "summary": "Quản lý Banners & Cấu hình cho Loyalty Mobile App (React Native)",
     "description": """

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- List View (Odoo 18 <list>) -->
     <record id="view_hlv_loyalty_banner_list" model="ir.ui.view">
