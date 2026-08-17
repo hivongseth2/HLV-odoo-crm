@@ -6,6 +6,7 @@
     "category": "Warehouse",
     "summary": "Scan từng sản phẩm trong phiếu Pack bằng barcode + Partial Pack Management",
     "data": [
+        "data/pack_video_stream_cron.xml",
         "views/pack_scan_template.xml",
         "views/menu.xml",
         "views/scan_ui_template.xml",
