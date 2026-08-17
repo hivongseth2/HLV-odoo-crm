@@ -3539,6 +3539,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 ('active', '=', True),
             ]))
 
+            order_code = sale_line.order_id.name if sale_line else None
             if sale_line and is_kit:
                 lines.append({
                     'product_name': sale_line.product_id.display_name,
@@ -3547,6 +3548,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'uom_name': sale_line.product_uom.name,
                     'value': sale_line.price_subtotal,
                     'is_combo': True,
+                    'order_code': order_code,
                 })
                 for move in group_moves:
                     lines.append({
@@ -3556,6 +3558,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         'uom_name': move.product_uom.name,
                         'value': 0.0,
                         'is_component': True,
+                        'order_code': order_code,
                     })
                 continue
 
@@ -3569,6 +3572,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'qty': move.quantity,
                     'uom_name': move.product_uom.name,
                     'value': value,
+                    'order_code': order_code,
                 })
         return lines
 
@@ -3580,7 +3584,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return []
         return self._misa_invoice_picking_line_items(picking)
 
-    def _misa_invoice_group_odoo_lines(self, pickings, misa_codes=None):
+    def _misa_invoice_group_odoo_lines(self, pickings, misa_codes=None, exclude_order_codes=None):
         """Gộp dòng hàng Odoo của TOÀN BỘ phiếu trong 1 nhóm gộp chung đề nghị xuất HĐ, theo
         mã hàng (default_code) — MISA cũng gộp chung các phiếu này vào 1 đề nghị/hóa đơn nên
         phải so theo tổng cả nhóm, không so lẻ từng phiếu.
@@ -3591,11 +3595,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         con khi tạo đề nghị xuất HĐ (không giữ 1 dòng combo gộp), nên nếu cứ bỏ qua sẽ báo
         nhầm "thiếu trên Odoo" cho các mã con dù giá trị/số lượng đã được gộp đủ ở dòng combo
         — bật lại dòng con (qty thật, value=0 vì tiền đã nằm ở dòng combo) khi MISA có báo
-        đúng mã đó để 2 bên so khớp nhau, còn KHÔNG có ở MISA thì vẫn bỏ qua như cũ."""
+        đúng mã đó để 2 bên so khớp nhau, còn KHÔNG có ở MISA thì vẫn bỏ qua như cũ.
+
+        exclude_order_codes: bỏ qua các dòng thuộc về 1 đơn hàng đã được xác minh là CÓ hóa
+        đơn riêng, độc lập qua 1 đề nghị KHÁC (case thật KBC/OUT/10826 tự xuất đơn
+        DH...233733 của chính nó, nhưng đơn đó lại được xuất hóa đơn qua đề nghị của phiếu
+        KBC/OUT/11218 hoàn toàn khác) — nếu không loại, dòng hàng của đơn này bị tính lộn vào
+        tổng Odoo của nhóm hiện tại trong khi tiền của nó đã nằm ở 1 hóa đơn khác rồi."""
         misa_codes = misa_codes or set()
+        exclude_order_codes = exclude_order_codes or set()
         totals = {}
         for picking in pickings:
             for line in self._misa_invoice_picking_line_items(picking):
+                if line.get('order_code') and line['order_code'] in exclude_order_codes:
+                    continue
                 code = line['default_code'] or line['product_name']
                 if line.get('is_component') and code not in misa_codes:
                     continue
@@ -3715,6 +3728,49 @@ class StockPickingMisaInvoiceStatus(models.Model):
             }
         return None
 
+    def _misa_invoice_filter_cross_request_orders(self, representative, group_pickings, misa_lines):
+        """Tìm các đơn hàng bị "double book" giữa 2 đề nghị xuất HĐ HOÀN TOÀN khác nhau — case
+        thật: phiếu KBC/OUT/10826 tự xuất đơn DH...233733 của CHÍNH NÓ, nhưng đơn đó lại được 1
+        đề nghị KHÁC (của phiếu KBC/OUT/11218, không liên quan gì tới 10826) xác nhận hóa đơn,
+        trong khi đề nghị CỦA CHÍNH 10826 chỉ nói tới 1 đơn khác hẳn (DH...234645, qua phiếu
+        11771). Nếu không lọc, bảng đối chiếu dòng hàng báo SAI Ở CẢ 2 CHIỀU: bên 10826 báo
+        "thiếu trên MISA" (Odoo có xuất đơn 233733, đề nghị của 10826 không nhắc), bên 11218
+        báo "thiếu trên Odoo" (đề nghị của 11218 có nhắc đơn 233733, nhưng nhóm Odoo của 11218
+        không xuất đơn đó) — trong khi thực ra 2 số đó CHỈ LÀ 1 và bù trừ đúng nhau.
+
+        Trả về (excluded_misa_orders, excluded_odoo_orders):
+        - excluded_misa_orders: mã đơn xuất hiện trong misa_lines của đề nghị này nhưng THỰC RA
+          thuộc về 1 phiếu KHÁC (ngoài group) đã có hóa đơn riêng qua 1 đề nghị khác — loại khỏi
+          misa_totals vì tiền của nó không thuộc đề nghị đang xem.
+        - excluded_odoo_orders: mã đơn hàng CHÍNH của 1 phiếu trong group nhưng đề nghị này
+          không hề nhắc tới, ĐÃ xác minh qua MISA là có hóa đơn riêng ở 1 đề nghị khác — loại
+          khỏi odoo_totals vì tiền của nó đã nằm ở hóa đơn khác rồi, không phải thiếu thật."""
+        own_order_codes = set(group_pickings.mapped('misa_invoice_sale_order_ids.name'))
+        misa_order_codes = {
+            (line.get('order_code') or '').strip() for line in misa_lines if line.get('order_code')
+        }
+
+        excluded_misa_orders = set()
+        for order_code in misa_order_codes - own_order_codes:
+            other_pickings = self.sudo().search([('misa_invoice_sale_order_ids.name', '=', order_code)])
+            elsewhere = other_pickings.filtered(
+                lambda p: p.misa_invoice_state == 'invoiced'
+                and p.misa_invoice_request_refid
+                and p.misa_invoice_request_refid != representative.misa_invoice_request_refid
+            )
+            if elsewhere:
+                excluded_misa_orders.add(order_code)
+
+        excluded_odoo_orders = set()
+        for order_code in own_order_codes - misa_order_codes:
+            total_invoiced, _sources = self._misa_invoice_sum_invoiced_for_order(
+                order_code, exclude_refids={representative.misa_invoice_request_refid}
+            )
+            if total_invoiced > MISA_INVOICE_AMOUNT_TOLERANCE:
+                excluded_odoo_orders.add(order_code)
+
+        return excluded_misa_orders, excluded_odoo_orders
+
     @api.model
     def get_misa_invoice_line_reconciliation(self, picking_id):
         """Đối chiếu TỪNG DÒNG HÀNG (mã hàng, số lượng, tiền hàng chưa VAT) giữa Odoo và MISA
@@ -3741,8 +3797,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         except Exception as e:
             return {'error': str(e)}
 
-        misa_totals = self._misa_invoice_request_lines_by_code(misa_lines)
-        odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings, misa_codes=set(misa_totals.keys()))
+        excluded_misa_orders, excluded_odoo_orders = self._misa_invoice_filter_cross_request_orders(
+            representative, group_pickings, misa_lines
+        )
+        misa_lines_for_group = misa_lines
+        if excluded_misa_orders:
+            misa_lines_for_group = [
+                line for line in misa_lines
+                if (line.get('order_code') or '').strip() not in excluded_misa_orders
+            ]
+
+        misa_totals = self._misa_invoice_request_lines_by_code(misa_lines_for_group)
+        odoo_totals = self._misa_invoice_group_odoo_lines(
+            group_pickings, misa_codes=set(misa_totals.keys()), exclude_order_codes=excluded_odoo_orders
+        )
         matched_outside = self._misa_invoice_group_matched_lines_outside(representative, group_pickings)
         for code, extra in matched_outside.items():
             bucket = odoo_totals.get(code)
