@@ -13,6 +13,13 @@ _ZALO_SENSITIVE_CAT_FIELDS = {
     "x_zalo_display_name",
     "sequence",
     "active",
+    "parent_id",
+    "image_128",
+    "image_256",
+    "image_512",
+    "image_1024",
+    "image_1920",
+    "image",
 }
 
 
@@ -43,15 +50,17 @@ class PosCategory(models.Model):
     def write(self, vals):
         res = super().write(vals)
         if self._is_zalo_relevant_write(vals):
+            is_image_change = any(f in vals for f in ("image_128", "image_256", "image_512", "image_1024", "image_1920", "image"))
             for record in self:
                 if record.x_active_zalo or vals.get("x_active_zalo"):
                     try:
+                        reason = f"Đổi ảnh danh mục Zalo: {record.name}" if is_image_change else f"Sửa danh mục Zalo: {record.name}"
                         self.env["zalo.miniapp.snapshot.log"]._bump_catalog_version(
                             self.env,
                             trigger_source="auto_cat",
                             affected_model="pos.category",
                             affected_record_name=record.name,
-                            trigger_reason=f"Sửa danh mục Zalo: {record.name}",
+                            trigger_reason=reason,
                         )
                         break
                     except Exception as e:
