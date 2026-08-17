@@ -11,6 +11,7 @@ _ZALO_SENSITIVE_TMPL_FIELDS = {
     "x_zalo_price",
     "x_active_zalo",
     "x_zalo_categ_ids",
+    "pos_categ_ids",
     "active",
     "sale_ok",
     "list_price",

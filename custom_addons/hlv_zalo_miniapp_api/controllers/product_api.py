@@ -97,11 +97,34 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 })
 
         category = None
-        if product.x_zalo_categ_ids:
-            cat = product.x_zalo_categ_ids[0]
-            category = {"id": cat.id, "name": cat.name}
-        elif product.categ_id:
-            category = {"id": product.categ_id.id, "name": product.categ_id.name}
+        category_ids = []
+        categories = []
+        tmpl = product.product_tmpl_id
+
+        # 1. Load M2M values using the product.template ORM read path.
+        # This avoids a stale/incomplete field cache from the variant record.
+        tmpl_values = request.env["product.template"].sudo().search_read(
+            [("id", "=", tmpl.id)],
+            ["x_zalo_categ_ids"],
+            limit=1,
+        )
+        zalo_cat_ids = tmpl_values[0]["x_zalo_categ_ids"] if tmpl_values else []
+        for cat in request.env["pos.category"].sudo().browse(zalo_cat_ids):
+            category_ids.append(cat.id)
+            categories.append({"id": cat.id, "name": cat.name})
+        # 2. Lấy bổ sung từ pos_categ_ids (Danh mục POS) nếu có
+        if hasattr(tmpl, "pos_categ_ids") and tmpl.pos_categ_ids:
+            for cat in tmpl.pos_categ_ids:
+                if cat.id not in category_ids:
+                    category_ids.append(cat.id)
+                    categories.append({"id": cat.id, "name": cat.name})
+
+        # 3. Fallback sang product.categ_id (Danh mục nội bộ Odoo) nếu chưa có
+        if not category_ids and tmpl.categ_id:
+            category_ids.append(tmpl.categ_id.id)
+            categories.append({"id": tmpl.categ_id.id, "name": tmpl.categ_id.name})
+
+        category = categories[0] if categories else None
 
         # Lấy promotional price từ batch_prices dict nếu có
         promotional_price = None
@@ -192,6 +215,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             "sales_count": sales_count,
             "create_date": create_date,
             "category": category,
+            "category_ids": category_ids,
+            "categories": categories,
             "attributes": attributes,
             "image_url": img_url,
             "images": self._get_product_images(product),
@@ -292,14 +317,30 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 in_stock = in_stock.lower() in ("true", "1", "yes")
             in_stock = bool(in_stock)
 
-            domain = [
+            # Query product.template trước để lọc theo x_zalo_categ_ids / pos_categ_ids
+            # chính xác (2 field này được định nghĩa trên product.template, không phải product.product).
+            # => Fix: sản phẩm gán nhiều danh mục sẽ được lọc đúng theo mọi danh mục đã gán.
+            tmpl_domain = [
                 ("x_active_zalo", "=", True),
+                ("active", "=", True),
+            ]
+            if category_id:
+                cat_ids = request.env["pos.category"].sudo().search([("id", "child_of", category_id)]).ids
+                if hasattr(request.env["product.template"], "pos_categ_ids"):
+                    tmpl_domain += [
+                        "|",
+                        ("x_zalo_categ_ids", "in", cat_ids),
+                        ("pos_categ_ids", "in", cat_ids),
+                    ]
+                else:
+                    tmpl_domain.append(("x_zalo_categ_ids", "in", cat_ids))
+            template_ids = request.env["product.template"].sudo().search(tmpl_domain).ids
+
+            domain = [
+                ("product_tmpl_id", "in", template_ids),
                 ("active", "=", True),
                 ("sale_ok", "=", True),
             ]
-
-            if category_id:
-                domain.append(("x_zalo_categ_ids", "in", [category_id]))
 
             # Lọc theo khoảng giá
             if min_price > 0:
@@ -377,11 +418,16 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("INVALID_INPUT", "Thiếu product_id")
 
             product = request.env["product.product"].sudo().browse(product_id)
+            if not product.exists():
+                tmpl = request.env["product.template"].sudo().browse(product_id)
+                if tmpl.exists():
+                    product = tmpl.product_variant_id or request.env["product.product"].sudo().search([("product_tmpl_id", "=", tmpl.id)], limit=1)
+
             if not product.exists() or not product.active:
                 return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
 
             if not product.x_active_zalo:
-                return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
+                return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại hoặc chưa kích hoạt Zalo", 404)
 
             # product_detail dùng fallback single query (batch_prices=None)
             data = self._build_product_data(product, batch_prices=None)
