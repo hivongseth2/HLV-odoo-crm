@@ -102,14 +102,21 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         tmpl = product.product_tmpl_id
 
         # 1. Lấy từ x_zalo_categ_ids (Danh mục Zalo)
-        # Đọc TRỰC TIẾP từ product.template (product_tmpl_id) — chủ sở hữu thật của field.
-        # Đọc qua product.product (delegation/related) KHÔNG đầy đủ với m2m nhiều giá trị
-        # (fix bug: sản phẩm gán nhiều danh mục chỉ hiển thị 1 danh mục).
-        if tmpl.x_zalo_categ_ids:
-            for cat in tmpl.x_zalo_categ_ids:
-                if cat.id not in category_ids:
-                    category_ids.append(cat.id)
-                    categories.append({"id": cat.id, "name": cat.name})
+        # Đọc TRỰC TIẾP từ bảng quan hệ product_template_x_zalo_categ_ids_rel để
+        # đảm bảo lấy ĐỦ MỌI danh mục đã gán. Đọc qua ORM m2m từ product.template
+        # (tmpl.x_zalo_categ_ids) bị thiếu — chỉ trả 1 danh mục dù DB có nhiều dòng.
+        self.env.cr.execute(
+            "SELECT pos_category_id FROM product_template_x_zalo_categ_ids_rel "
+            "WHERE product_template_id = %s",
+            (tmpl.id,),
+        )
+        zalo_cat_ids = [row[0] for row in self.env.cr.fetchall()]
+        if not zalo_cat_ids:
+            zalo_cat_ids = tmpl.x_zalo_categ_ids.ids
+        for cat in request.env["pos.category"].sudo().browse(zalo_cat_ids):
+            if cat.id not in category_ids:
+                category_ids.append(cat.id)
+                categories.append({"id": cat.id, "name": cat.name})
 
         # 2. Lấy bổ sung từ pos_categ_ids (Danh mục POS) nếu có
         if hasattr(tmpl, "pos_categ_ids") and tmpl.pos_categ_ids:
@@ -122,6 +129,11 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         if not category_ids and tmpl.categ_id:
             category_ids.append(tmpl.categ_id.id)
             categories.append({"id": tmpl.categ_id.id, "name": tmpl.categ_id.name})
+
+        _logger.info(
+            "ZALO_CAT product=%s tmpl=%s raw_sql=%s final_cat=%s",
+            product.id, tmpl.id, zalo_cat_ids, category_ids,
+        )
 
         category = categories[0] if categories else None
 
