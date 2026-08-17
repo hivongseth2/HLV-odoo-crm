@@ -8,8 +8,7 @@
             <field name="code">model._cron_finalize_stale_uploads()</field>
             <field name="interval_number">10</field>
             <field name="interval_type">minutes</field>
-            <field name="numbercall">-1</field>
-            <field name="active">True</field>
+            <field name="active" eval="True"/>
         </record>
     </data>
 </odoo>
