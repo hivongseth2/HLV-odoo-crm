@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import time
+from datetime import datetime
 
 from odoo import _, api, fields, models
 
@@ -81,10 +82,27 @@ class ResConfigSettings(models.TransientModel):
         return res
 
     def set_values(self):
-        super(ResConfigSettings, self).set_values()
         ICP = self.env["ir.config_parameter"].sudo()
+        prev_oa_id = ICP.get_param("hlv_zalo_miniapp.oa_id", "")
+        prev_oa_name = ICP.get_param("hlv_zalo_miniapp.oa_name", "")
+        prev_oa_subtext = ICP.get_param("hlv_zalo_miniapp.oa_subtext", "")
+
+        super(ResConfigSettings, self).set_values()
         user_ids_str = ",".join(str(u_id) for u_id in self.x_zalo_return_notify_user_ids.ids)
         ICP.set_param("hlv_zalo_miniapp.return_notify_user_ids", user_ids_str)
+
+        # Tự động sinh snapshot log và bump version khi cấu hình OA thay đổi
+        if (
+            (self.x_zalo_oa_id and self.x_zalo_oa_id != prev_oa_id)
+            or (self.x_zalo_oa_name and self.x_zalo_oa_name != prev_oa_name)
+            or (self.x_zalo_oa_subtext and self.x_zalo_oa_subtext != prev_oa_subtext)
+        ):
+            self.env["zalo.miniapp.snapshot.log"]._bump_config_version(
+                self.env,
+                trigger_source="auto_config",
+                trigger_reason=f"Cập nhật cấu hình OA: {self.x_zalo_oa_name or self.x_zalo_oa_id}",
+                user=self.env.user,
+            )
 
     # ===== Snapshot Version Monitoring & Controls =====
     x_zalo_catalog_version = fields.Char(
@@ -104,6 +122,16 @@ class ResConfigSettings(models.TransientModel):
     )
     x_zalo_banner_version_dt = fields.Datetime(
         string="Thời điểm Banner Version",
+        compute="_compute_zalo_snapshot_info",
+        readonly=True,
+    )
+    x_zalo_config_version = fields.Char(
+        string="Config / OA Version hiện tại",
+        compute="_compute_zalo_snapshot_info",
+        readonly=True,
+    )
+    x_zalo_config_version_dt = fields.Datetime(
+        string="Thời điểm Config Version",
         compute="_compute_zalo_snapshot_info",
         readonly=True,
     )
@@ -142,11 +170,17 @@ class ResConfigSettings(models.TransientModel):
         compute="_compute_zalo_snapshot_info",
         readonly=True,
     )
+    x_zalo_forced_config_version = fields.Char(
+        string="Config Version ép buộc",
+        compute="_compute_zalo_snapshot_info",
+        readonly=True,
+    )
 
     def _compute_zalo_snapshot_info(self):
         Param = self.env["ir.config_parameter"].sudo()
         forced_cat_v = Param.get_param("zalo_miniapp_forced_catalog_version", "")
         forced_ban_v = Param.get_param("zalo_miniapp_forced_banner_version", "")
+        forced_cfg_v = Param.get_param("zalo_miniapp_forced_config_version", "")
 
         for rec in self:
             timestamps = []
@@ -199,12 +233,16 @@ class ResConfigSettings(models.TransientModel):
             # Apply forced version if higher
             final_cat_ts = max(computed_cat_ts, int(forced_cat_v)) if forced_cat_v and forced_cat_v.isdigit() else computed_cat_ts
             final_ban_ts = max(computed_ban_ts, int(forced_ban_v)) if forced_ban_v and forced_ban_v.isdigit() else computed_ban_ts
+            final_cfg_ts = int(forced_cfg_v) if forced_cfg_v and forced_cfg_v.isdigit() else int(time.time())
 
             rec.x_zalo_catalog_version = str(final_cat_ts)
-            rec.x_zalo_catalog_version_dt = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_cat_ts))
+            rec.x_zalo_catalog_version_dt = fields.Datetime.to_string(datetime.fromtimestamp(final_cat_ts))
             rec.x_zalo_banner_version = str(final_ban_ts)
-            rec.x_zalo_banner_version_dt = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_ban_ts))
+            rec.x_zalo_banner_version_dt = fields.Datetime.to_string(datetime.fromtimestamp(final_ban_ts))
+            rec.x_zalo_config_version = str(final_cfg_ts)
+            rec.x_zalo_config_version_dt = fields.Datetime.to_string(datetime.fromtimestamp(final_cfg_ts))
             rec.x_zalo_forced_catalog_version = forced_cat_v or "Tự động"
+            rec.x_zalo_forced_config_version = forced_cfg_v or "Tự động"
 
     def action_force_bump_catalog_version(self):
         """Buộc làm mới Catalog Version: gán forced timestamp mới để tất cả client Zalo reload."""
@@ -236,11 +274,16 @@ class ResConfigSettings(models.TransientModel):
             },
         }
 
+    def action_force_bump_config_version(self):
+        """Buộc làm mới Config / OA Version."""
+        return self.env["zalo.miniapp.snapshot.log"].action_force_bump_config()
+
     def action_reset_forced_version(self):
         """Xóa ép buộc version, quay về tự động theo write_date."""
         Param = self.env["ir.config_parameter"].sudo()
         Param.set_param("zalo_miniapp_forced_catalog_version", "")
         Param.set_param("zalo_miniapp_forced_banner_version", "")
+        Param.set_param("zalo_miniapp_forced_config_version", "")
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import time
+from datetime import datetime
 
 from odoo import _, api, fields, models
 
@@ -17,6 +18,8 @@ class ZaloMiniAppSnapshot(models.Model):
     catalog_version_datetime = fields.Datetime(string="Thời điểm Catalog Version", compute="_compute_snapshot_info", store=False)
     banner_version = fields.Char(string="Banner Version hiện tại", compute="_compute_snapshot_info", store=False)
     banner_version_datetime = fields.Datetime(string="Thời điểm Banner Version", compute="_compute_snapshot_info", store=False)
+    config_version = fields.Char(string="Config / OA Version hiện tại", compute="_compute_snapshot_info", store=False)
+    config_version_datetime = fields.Datetime(string="Thời điểm Config Version", compute="_compute_snapshot_info", store=False)
 
     latest_category_id = fields.Many2one("pos.category", string="Danh mục sửa mới nhất", compute="_compute_snapshot_info", store=False)
     latest_category_write_date = fields.Datetime(string="Thời điểm sửa danh mục", compute="_compute_snapshot_info", store=False)
@@ -36,11 +39,13 @@ class ZaloMiniAppSnapshot(models.Model):
 
     forced_catalog_version = fields.Char(string="Version Catalog ép làm mới", compute="_compute_snapshot_info", store=False)
     forced_banner_version = fields.Char(string="Version Banner ép làm mới", compute="_compute_snapshot_info", store=False)
+    forced_config_version = fields.Char(string="Version Config ép làm mới", compute="_compute_snapshot_info", store=False)
 
     def _compute_snapshot_info(self):
         Param = self.env["ir.config_parameter"].sudo()
         forced_cat_v = Param.get_param("zalo_miniapp_forced_catalog_version", "")
         forced_ban_v = Param.get_param("zalo_miniapp_forced_banner_version", "")
+        forced_cfg_v = Param.get_param("zalo_miniapp_forced_config_version", "")
 
         for rec in self:
             timestamps = []
@@ -86,13 +91,17 @@ class ZaloMiniAppSnapshot(models.Model):
             # Apply forced version if higher
             final_cat_ts = max(computed_cat_ts, int(forced_cat_v)) if forced_cat_v and forced_cat_v.isdigit() else computed_cat_ts
             final_ban_ts = max(computed_ban_ts, int(forced_ban_v)) if forced_ban_v and forced_ban_v.isdigit() else computed_ban_ts
+            final_cfg_ts = int(forced_cfg_v) if forced_cfg_v and forced_cfg_v.isdigit() else int(time.time())
 
             rec.catalog_version = str(final_cat_ts)
-            rec.catalog_version_datetime = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_cat_ts))
+            rec.catalog_version_datetime = fields.Datetime.to_string(datetime.fromtimestamp(final_cat_ts))
             rec.banner_version = str(final_ban_ts)
-            rec.banner_version_datetime = fields.Datetime.to_string(fields.Datetime.from_timestamp(final_ban_ts))
+            rec.banner_version_datetime = fields.Datetime.to_string(datetime.fromtimestamp(final_ban_ts))
+            rec.config_version = str(final_cfg_ts)
+            rec.config_version_datetime = fields.Datetime.to_string(datetime.fromtimestamp(final_cfg_ts))
             rec.forced_catalog_version = forced_cat_v or "Tự động"
             rec.forced_banner_version = forced_ban_v or "Tự động"
+            rec.forced_config_version = forced_cfg_v or "Tự động"
             rec.name = f"Zalo Snapshot Version: {final_cat_ts}"
 
     def action_force_bump_catalog_version(self):
@@ -125,11 +134,16 @@ class ZaloMiniAppSnapshot(models.Model):
             },
         }
 
+    def action_force_bump_config_version(self):
+        """Buộc làm mới Config / OA Version."""
+        return self.env["zalo.miniapp.snapshot.log"].action_force_bump_config()
+
     def action_reset_forced_version(self):
         """Xóa ép buộc version, quay về tự động theo write_date."""
         Param = self.env["ir.config_parameter"].sudo()
         Param.set_param("zalo_miniapp_forced_catalog_version", "")
         Param.set_param("zalo_miniapp_forced_banner_version", "")
+        Param.set_param("zalo_miniapp_forced_config_version", "")
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
