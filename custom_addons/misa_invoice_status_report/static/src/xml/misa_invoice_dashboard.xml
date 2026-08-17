@@ -396,11 +396,14 @@
                             </div>
                         </div>
                         <div class="miv-tile miv-tile-critical" t-on-click="openDiscrepancyDrawer"
-                             title="Bấm để xem đúng danh sách phiếu đang gây ra khoản chênh lệch này.">
+                             title="Bấm để xem đúng danh sách phiếu đang gây ra khoản chênh lệch này. Đã trừ phần các nhóm đã xác minh xong (misa_invoice_gap_resolved) — số này chỉ còn tính phần thật sự cần xử lý.">
                             <div class="miv-tile-icon"><i class="fa fa-balance-scale"/></div>
                             <div class="miv-tile-body">
                                 <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.outstanding_amount)"/></div>
                                 <div class="miv-tile-label">Chênh lệch (xuất kho − xuất HĐ)</div>
+                                <div class="miv-tile-hint" t-if="reconciliationTotals.gap_resolved_amount">
+                                    (đã trừ <t t-esc="formatCurrency(reconciliationTotals.gap_resolved_amount)"/> đã xác minh xong)
+                                </div>
                             </div>
                         </div>
                         <div class="miv-tile miv-tile-shopee" t-on-click="() => this.openReconciliationGroup('shopee')">
@@ -1452,7 +1455,7 @@
                                                                 t-att-stroke-dasharray="seg.dasharray"
                                                                 t-att-stroke-dashoffset="seg.dashoffset"
                                                                 t-on-click="() => this.onGroupBreakdownSliceClick(seg.slice)">
-                                                            <title><t t-esc="seg.slice.label"/> — <t t-esc="formatCurrency(seg.slice.amount)"/></title>
+                                                            <title><t t-esc="seg.slice.text || seg.slice.label"/> — <t t-esc="formatCurrency(seg.slice.amount)"/></title>
                                                         </circle>
                                                     </t>
                                                 </svg>
@@ -1473,6 +1476,9 @@
                                                             <span class="miv-legend-sub" t-if="seg.slice.kind === 'not_shipped'">
                                                                 (<t t-esc="seg.slice.picking_states.join(', ')"/>)
                                                             </span>
+                                                            <div class="miv-legend-hint" t-if="seg.slice.text">
+                                                                <t t-esc="seg.slice.text"/>
+                                                            </div>
                                                         </span>
                                                         <b class="miv-legend-amount"><t t-esc="formatCurrency(seg.slice.amount)"/></b>
                                                     </li>
@@ -1910,6 +1916,9 @@
                             <div class="miv-drawer-title">Chênh lệch xuất kho vs xuất HĐ</div>
                             <div class="miv-drawer-subtitle" t-if="state.discrepancy">
                                 <t t-esc="state.discrepancy.total_count"/> phiếu đang lệch — tổng lệch <t t-esc="formatCurrency(state.discrepancy.total_diff)"/>
+                                <t t-if="state.discrepancy.resolved_count">
+                                    (chưa tính <t t-esc="state.discrepancy.resolved_count"/> phiếu đã xác minh xong — không cần xử lý, xem cuối bảng)
+                                </t>
                             </div>
                         </div>
                         <i class="fa fa-times miv-drawer-close" t-on-click="closeDiscrepancyDrawer"/>
@@ -1937,6 +1946,7 @@
                                 </thead>
                                 <tbody>
                                     <tr t-foreach="state.discrepancy.rows" t-as="row" t-key="row.source + '-' + row.id"
+                                        t-attf-class="{{ row.gap_resolved ? 'miv-row-resolved' : '' }}"
                                         t-on-click="() => this.openDiscrepancyRow(row)">
                                         <td>
                                             <b><t t-esc="row.name"/></b>
@@ -1944,9 +1954,13 @@
                                                   t-attf-title="Đây là 1 đề nghị xuất HĐ gộp chung — tổng tiền xuất kho tính đủ cả {{row.group_picking_names.length}} phiếu: {{row.group_picking_names.join(', ')}}">
                                                 +<t t-esc="row.group_picking_names.length - 1"/> phiếu gộp chung
                                             </span>
+                                            <span class="miv-badge miv-badge-state-invoiced" t-if="row.gap_resolved"
+                                                  title="Số lệch vẫn đúng như hiển thị (tiền thuộc về 1 hóa đơn KHÁC), nhưng đã xác minh đủ qua MISA — không cần ai xử lý tay.">
+                                                <i class="fa fa-check"/> Đã xác minh
+                                            </span>
                                             <div class="miv-subtable-hint"><t t-esc="row.partner_name"/></div>
-                                            <div class="miv-subtable-hint miv-gap-summary" t-if="row.gap_summary">
-                                                <i class="fa fa-info-circle"/> <t t-esc="row.gap_summary"/>
+                                            <div class="miv-subtable-hint miv-gap-summary" t-attf-class="{{ row.gap_resolved ? 'miv-cell-good' : '' }}" t-if="row.gap_summary">
+                                                <i t-attf-class="fa {{ row.gap_resolved ? 'fa-check-circle' : 'fa-info-circle' }}"/> <t t-esc="row.gap_summary"/>
                                             </div>
                                             <div class="miv-subtable-hint miv-cell-muted" t-elif="row.source === 'misa'">
                                                 <i class="fa fa-question-circle"/> Chưa rõ lý do — bấm "Cập nhật lý do lệch" trên dashboard.
@@ -1954,7 +1968,7 @@
                                         </td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
-                                        <td t-attf-class="miv-col-num {{ row.diff > 0 ? 'miv-cell-critical' : 'miv-cell-warning' }}">
+                                        <td t-attf-class="miv-col-num {{ row.gap_resolved ? 'miv-cell-good' : (row.diff > 0 ? 'miv-cell-critical' : 'miv-cell-warning') }}">
                                             <b><t t-esc="formatCurrency(row.diff)"/></b>
                                         </td>
                                         <td>
