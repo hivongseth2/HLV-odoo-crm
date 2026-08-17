@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_zalo" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.zalo</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Zalo Mini App" string="Zalo Mini App" name="hlv_zalo_miniapp_api">
+                    <block title="Cấu hình Zalo Official Account (OA)">
+                        <setting string="Thông tin Zalo Official Account" help="Cấu hình thông tin OA hiển thị trên Zalo Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_oa_id" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_oa_id"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_oa_name" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_oa_name"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_oa_subtext" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_oa_subtext"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="Thông Báo Yêu Cầu Đổi/Trả Zalo">
+                        <setting string="Người Nhận Thông Báo Đổi/Trả Zalo" help="Cấu hình tài khoản Odoo và Zalo UID nhận thông báo chủ động khi khách hàng yêu cầu đổi/trả">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_return_notify_user_ids" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_return_notify_user_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_return_zalo_uids" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_return_zalo_uids" placeholder="Ví dụ: 123456789,987654321"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="Quản lý &amp; Theo dõi Version Snapshot Zalo">
+                        <setting string="Trạng thái Version Snapshot Hiện tại" help="Theo dõi version dữ liệu và điều khiển ép buộc làm mới trên Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_catalog_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_catalog_version" class="font-weight-bold"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_catalog_version_dt" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_catalog_version_dt"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_banner_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_banner_version"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_forced_catalog_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_forced_catalog_version"/>
+                                </div>
+
+                                <div className="mt16">
+                                    <button name="action_force_bump_catalog_version"
+                                            type="object"
+                                            string="🚀 Buộc làm mới Catalog Version (Tất cả Client)"
+                                            class="btn-primary mr8"/>
+                                    <button name="action_force_bump_banner_version"
+                                            type="object"
+                                            string="🖼️ Buộc làm mới Banner Version"
+                                            class="btn-secondary mr8"/>
+                                    <button name="action_reset_forced_version"
+                                            type="object"
+                                            string="🔄 Khôi phục tự động theo write_date"
+                                            class="btn-link"/>
+                                </div>
+                            </div>
+                        </setting>
+
+                        <setting string="Thống kê Dữ liệu Zalo Active" help="Tổng số lượng bản ghi hiển thị trên Zalo Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_total_categories" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_total_categories"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_total_products" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_total_products"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_total_banners" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_total_banners"/>
+                                </div>
+                            </div>
+                        </setting>
+
+                        <setting string="Bản ghi vừa chỉnh sửa gần nhất" help="Chi tiết bản ghi làm thay đổi Version Snapshot gần nhất">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_latest_category_info" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_latest_category_info"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_latest_product_info" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_latest_product_info"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_latest_quant_info" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_latest_quant_info"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_zalo_config_settings" model="ir.actions.act_window">
+        <field name="name">Cấu hình Zalo Mini App</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'hlv_zalo_miniapp_api'}</field>
+    </record>
+</odoo>

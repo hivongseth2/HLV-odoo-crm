@@ -1,0 +1,17 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_product_product_zalo_api,product.product.zalo.api,product.model_product_product,,1,0,0,0
+access_res_partner_zalo_api,res.partner.zalo.api,base.model_res_partner,,1,1,0,0
+access_pos_category_zalo_api,pos.category.zalo.api,point_of_sale.model_pos_category,,1,0,0,0
+access_sale_order_zalo_api,sale.order.zalo.api,sale.model_sale_order,,1,1,1,0
+access_sale_order_line_zalo_api,sale.order.line.zalo.api,sale.model_sale_order_line,,1,1,1,0
+access_stock_quant_zalo_api,stock.quant.zalo.api,stock.model_stock_quant,,1,0,0,0
+access_hlv_loyalty_portal_account_zalo_api,hlv.loyalty.portal.account.zalo.api,hlv_loyalty.model_hlv_loyalty_portal_account,,1,1,1,0
+access_zalo_miniapp_banner_user,zalo.miniapp.banner.user,model_zalo_miniapp_banner,base.group_user,1,1,1,1
+access_zalo_miniapp_banner_public,zalo.miniapp.banner.public,model_zalo_miniapp_banner,,1,0,0,0
+access_zalo_miniapp_cart_line_user,zalo.miniapp.cart.line.user,model_zalo_miniapp_cart_line,base.group_user,1,1,1,1
+access_zalo_miniapp_cart_line_public,zalo.miniapp.cart.line.public,model_zalo_miniapp_cart_line,,1,1,1,1
+access_zalo_miniapp_snapshot_log_user,zalo.miniapp.snapshot.log.user,model_zalo_miniapp_snapshot_log,base.group_user,1,1,1,1
+access_zalo_miniapp_snapshot_log_public,zalo.miniapp.snapshot.log.public,model_zalo_miniapp_snapshot_log,,1,0,0,0
+access_zalo_return_reject_wizard,zalo.return.reject.wizard,model_zalo_return_reject_wizard,base.group_user,1,1,1,1
+
+

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Dedicated Zalo POS Category List View (Primary view) -->
+    <record id="view_zalo_pos_category_tree" model="ir.ui.view">
+        <field name="name">pos.category.tree.zalo.custom</field>
+        <field name="model">pos.category</field>
+        <field name="arch" type="xml">
+            <list string="Danh mục Zalo Mini App" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="x_zalo_display_name"/>
+                <field name="parent_id"/>
+                <field name="x_active_zalo" widget="boolean_toggle"/>
+                <field name="x_is_featured_zalo" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Dedicated Zalo POS Category Form View (Primary mode inherit) -->
+    <record id="view_zalo_pos_category_form" model="ir.ui.view">
+        <field name="name">pos.category.form.zalo.custom</field>
+        <field name="model">pos.category</field>
+        <field name="inherit_id" ref="point_of_sale.product_pos_category_form_view"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='parent_id']" position="after">
+                <field name="x_zalo_display_name"/>
+                <field name="x_active_zalo"/>
+                <field name="x_is_featured_zalo"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

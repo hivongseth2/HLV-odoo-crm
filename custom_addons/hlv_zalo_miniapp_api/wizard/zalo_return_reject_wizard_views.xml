@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zalo_return_reject_wizard_form" model="ir.ui.view">
+        <field name="name">zalo.return.reject.wizard.form</field>
+        <field name="model">zalo.return.reject.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Từ chối Yêu cầu Đổi/Trả Zalo">
+                <sheet>
+                    <group>
+                        <field name="picking_id" readonly="1" options="{'no_open': True}"/>
+                        <field name="reason" placeholder="Nhập lý do chi tiết từ chối yêu cầu đổi/trả (ví dụ: Sản phẩm quá hạn 7 ngày, rách tem nhãn...)..."/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm_reject" string="Xác nhận từ chối" type="object" class="btn-danger"/>
+                    <button string="Hủy bỏ" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_zalo_return_reject_wizard" model="ir.actions.act_window">
+        <field name="name">Từ chối Yêu cầu Đổi/Trả Zalo</field>
+        <field name="res_model">zalo.return.reject.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
