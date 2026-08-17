@@ -19,6 +19,7 @@ export class CustomerRevenueDashboard extends Component {
             searchTerm: "",
             dateFrom: "",
             dateTo: "",
+            dateBasis: "date_done", // "date_done" | "order_date" | "misa_order_date"
             shopeeFilter: "all", // "all" | "shopee" | "non_shopee"
             isLoading: false,
 
@@ -47,13 +48,44 @@ export class CustomerRevenueDashboard extends Component {
         });
     }
 
+    // ==================== Bộ lọc ngày: 3 trục độc lập ở API, dashboard cho chọn 1 trục/lần ====================
+    // "date_done" = ngày xuất kho, "order_date" = ngày đặt hàng gốc Odoo,
+    // "misa_order_date" = ngày đơn hàng ghi nhận trên MISA (x_studio_misa_order_date).
+    _dateParams() {
+        const from = this.state.dateFrom || false;
+        const to = this.state.dateTo || false;
+        if (this.state.dateBasis === "order_date") {
+            return { order_date_from: from, order_date_to: to };
+        }
+        if (this.state.dateBasis === "misa_order_date") {
+            return { misa_order_date_from: from, misa_order_date_to: to };
+        }
+        return { date_from: from, date_to: to };
+    }
+
+    onDateBasisChange() {
+        this.onDateChange();
+    }
+
+    /** Chỉ trả về order_date_from/to hoặc misa_order_date_from/to (không kèm date_from/date_to) -
+     * dùng khi date_from/date_to đã được set riêng thành khoảng ngày xuất kho của 1 tháng cụ thể
+     * (VD khi mở drawer chi tiết), để không bị ghi đè. */
+    _extraDateParamsOnly() {
+        if (this.state.dateBasis === "order_date") {
+            return { order_date_from: this.state.dateFrom || false, order_date_to: this.state.dateTo || false };
+        }
+        if (this.state.dateBasis === "misa_order_date") {
+            return { misa_order_date_from: this.state.dateFrom || false, misa_order_date_to: this.state.dateTo || false };
+        }
+        return {};
+    }
+
     // ==================== Danh sách khách hàng / shop Shopee (server-side, có phân trang) ====================
     async loadCustomers() {
         this.state.isLoading = true;
         try {
             const result = await this.orm.call(MODEL, "get_customers_summary", [], {
-                date_from: this.state.dateFrom || false,
-                date_to: this.state.dateTo || false,
+                ...this._dateParams(),
                 search: this.state.searchTerm || false,
                 shopee_filter: this.state.shopeeFilter,
                 order_by: this.state.sortField,
@@ -158,8 +190,7 @@ export class CustomerRevenueDashboard extends Component {
             this.state.months = await this.orm.call(MODEL, "get_group_monthly_summary", [], {
                 group_type: this.state.selectedGroupType,
                 group_id: this.state.selectedGroupId,
-                date_from: this.state.dateFrom || false,
-                date_to: this.state.dateTo || false,
+                ...this._dateParams(),
             });
         } catch (e) {
             this.notification.add("Lỗi tải doanh thu: " + (e.message || e), { type: "danger" });
@@ -197,6 +228,7 @@ export class CustomerRevenueDashboard extends Component {
                 group_id: this.state.selectedGroupId,
                 date_from: month.date_from,
                 date_to: month.date_to,
+                ...this._extraDateParamsOnly(),
             });
         } catch (e) {
             this.notification.add("Lỗi tải chi tiết: " + (e.message || e), { type: "danger" });
@@ -237,13 +269,11 @@ export class CustomerRevenueDashboard extends Component {
                 attachmentId = await this.orm.call(MODEL, "export_group_revenue_excel", [], {
                     group_type: this.state.selectedGroupType,
                     group_id: this.state.selectedGroupId,
-                    date_from: this.state.dateFrom || false,
-                    date_to: this.state.dateTo || false,
+                    ...this._dateParams(),
                 });
             } else {
                 attachmentId = await this.orm.call(MODEL, "export_customers_summary_excel", [], {
-                    date_from: this.state.dateFrom || false,
-                    date_to: this.state.dateTo || false,
+                    ...this._dateParams(),
                     search: this.state.searchTerm || false,
                     shopee_filter: this.state.shopeeFilter,
                 });

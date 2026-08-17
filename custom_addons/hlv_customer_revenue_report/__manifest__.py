@@ -13,6 +13,8 @@
         - Tính doanh thu xuất ròng dựa theo cơ chế trả hàng chuẩn của Odoo (stock.move.origin_returned_move_id).
         - Click 1 tháng để mở drawer xem chi tiết từng đơn hàng trong tháng đó.
         - Xuất Excel (tổng hợp theo tháng + chi tiết theo đơn hàng).
+        - API công khai (HTTP, xác thực bằng token) cho hệ thống ngoài gọi lấy dữ liệu:
+          xem controllers/revenue_api.py để biết endpoint và cách cấu hình token.
     """,
     'author': 'Antigravity',
     'depends': ['sale', 'sale_stock', 'stock', 'sale_shopee'],
