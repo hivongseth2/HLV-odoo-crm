@@ -3806,6 +3806,41 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         return excluded_misa_orders, excluded_odoo_orders
 
+    def _misa_invoice_fallback_match_by_name(self, odoo_totals, misa_totals):
+        """Fallback khớp theo TÊN sản phẩm khi không khớp được theo mã hàng — 1 sản phẩm có
+        thể đã bị LƯU TRỮ (archived) và GỠ default_code để gán mã đó cho 1 sản phẩm MỚI khác
+        (thực tế hay gặp khi đổi/thay nhà cung cấp cùng 1 mặt hàng), khiến các move CŨ của nó
+        không còn mã nội bộ (default_code=False) dù MISA vẫn ghi đúng TÊN hàng lúc xuất kho —
+        case thật: 'Dây cáp vải 5Tx6M' không có default_code, phải khớp qua tên với dòng MISA
+        cùng tên (MISA vẫn có inventory_item_code riêng, không liên quan gì tới việc Odoo còn
+        giữ mã hay không).
+
+        CHỈ áp dụng cho các mã CHƯA khớp được ở CẢ 2 BÊN (tránh phá vỡ những mã đã khớp đúng
+        theo code) — đổi KHÓA của phía Odoo sang đúng khóa MISA khi tên khớp Y HỆT (so sánh đã
+        chuẩn hóa hoa/thường + khoảng trắng đầu-cuối), không suy đoán khớp gần đúng/mờ để tránh
+        gán nhầm sang sản phẩm khác tên tương tự. Chỉ đổi khóa hiển thị, KHÔNG cộng gộp số liệu
+        2 bên vào nhau — số Odoo/MISA vẫn giữ nguyên, chỉ để chúng xuất hiện CHUNG 1 dòng thay
+        vì 2 dòng "Thiếu trên Odoo"/"Thiếu trên MISA" giả tạo."""
+        unmatched_odoo = [code for code in odoo_totals if code not in misa_totals]
+        unmatched_misa = {code: val for code, val in misa_totals.items() if code not in odoo_totals}
+        used_misa_codes = set()
+        renamed = {}
+        for o_code in unmatched_odoo:
+            o_name = (odoo_totals[o_code].get('product_name') or o_code or '').strip().casefold()
+            if not o_name:
+                continue
+            for m_code, m_val in unmatched_misa.items():
+                if m_code in used_misa_codes:
+                    continue
+                m_name = (m_val.get('product_name') or m_code or '').strip().casefold()
+                if m_name and m_name == o_name:
+                    renamed[o_code] = m_code
+                    used_misa_codes.add(m_code)
+                    break
+        for o_code, m_code in renamed.items():
+            odoo_totals[m_code] = odoo_totals.pop(o_code)
+        return odoo_totals
+
     @api.model
     def get_misa_invoice_line_reconciliation(self, picking_id):
         """Đối chiếu TỪNG DÒNG HÀNG (mã hàng, số lượng, tiền hàng chưa VAT) giữa Odoo và MISA
@@ -3858,6 +3893,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             for name in extra['picking_names']:
                 if name not in existing_names:
                     existing_names.append(name)
+        odoo_totals = self._misa_invoice_fallback_match_by_name(odoo_totals, misa_totals)
         group_breakdown = self._misa_invoice_compute_group_breakdown(representative, group_pickings, misa_lines)
 
         rows = []
