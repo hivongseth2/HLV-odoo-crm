@@ -259,19 +259,22 @@ class HlvCustomerRevenueReport(models.Model):
         )
         self.env.cr.execute(query, query_params)
         rows = self.env.cr.dictfetchall()
+        # SUM(...) trên cột numeric của Postgres trả về Decimal qua psycopg2 - ép về
+        # float ngay ở đây để mọi nơi gọi (RPC nội bộ, API HTTP/json.dumps, Excel) đều
+        # nhận kiểu số Python bình thường, tránh lỗi "Decimal is not JSON serializable".
         return [
             {
                 'group_type': r['group_type'],
                 'group_id': r['group_id'],
                 'group_label': r['group_label'] or _('(Không xác định)'),
                 'is_shopee_group': r['is_shopee_group'],
-                'order_count': r['order_count'],
-                'qty_delivered': r['qty_delivered'],
-                'qty_returned': r['qty_returned'],
-                'qty_net': r['qty_net'],
-                'amount_gross': r['amount_gross'],
-                'amount_returned': r['amount_returned'],
-                'amount_net': r['amount_net'],
+                'order_count': int(r['order_count']),
+                'qty_delivered': float(r['qty_delivered']),
+                'qty_returned': float(r['qty_returned']),
+                'qty_net': float(r['qty_net']),
+                'amount_gross': float(r['amount_gross']),
+                'amount_returned': float(r['amount_returned']),
+                'amount_net': float(r['amount_net']),
             }
             for r in rows
         ]
