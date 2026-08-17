@@ -299,7 +299,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             ]
 
             if category_id:
-                domain.append(("x_zalo_categ_ids", "in", [category_id]))
+                cat_ids = request.env["pos.category"].sudo().search([("id", "child_of", category_id)]).ids
+                domain.append(("x_zalo_categ_ids", "in", cat_ids))
 
             # Lọc theo khoảng giá
             if min_price > 0:

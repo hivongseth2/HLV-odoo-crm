@@ -129,8 +129,9 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             if hasattr(category, "x_active_zalo") and not category.x_active_zalo:
                 return self._response_error("NOT_FOUND", "Danh mục này đã bị tắt hiển thị trên Zalo Mini App", 404)
 
+            child_cats = request.env["pos.category"].sudo().search([("id", "child_of", category.id)])
             domain = [
-                ("x_zalo_categ_ids", "in", [category.id]),
+                ("x_zalo_categ_ids", "in", child_cats.ids),
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
                 ("sale_ok", "=", True),
