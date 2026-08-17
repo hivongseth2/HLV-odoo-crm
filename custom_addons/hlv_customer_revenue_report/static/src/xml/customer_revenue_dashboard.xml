@@ -42,19 +42,51 @@
                 <table class="table table-sm hcr-table" t-if="state.customers.length">
                     <thead>
                         <tr>
-                            <th class="hcr-sortable" t-on-click="() => this.toggleSort('group_label')">Khách hàng / Shop</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('order_count')">Số đơn</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_delivered')">SL xuất kho</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_returned')">SL trả hàng</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_net')">SL thực xuất</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_gross')">Tiền đặt hàng (gộp)</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_returned')">Tiền trả hàng</th>
-                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_net')">Doanh thu xuất ròng</th>
+                            <th class="hcr-sortable" t-on-click="() => this.toggleSort('group_label')">
+                                Khách hàng / Shop
+                                <i t-if="state.sortField === 'group_label'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('order_count')">
+                                Số đơn
+                                <i t-if="state.sortField === 'order_count'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_delivered')">
+                                SL xuất kho
+                                <i t-if="state.sortField === 'qty_delivered'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_returned')">
+                                SL trả hàng
+                                <i t-if="state.sortField === 'qty_returned'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('qty_net')">
+                                SL thực xuất
+                                <i t-if="state.sortField === 'qty_net'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_gross')">
+                                Tiền đặt hàng (gộp)
+                                <i t-if="state.sortField === 'amount_gross'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_returned')">
+                                Tiền trả hàng
+                                <i t-if="state.sortField === 'amount_returned'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
+                            <th class="hcr-col-num hcr-sortable" t-on-click="() => this.toggleSort('amount_net')">
+                                Doanh thu xuất ròng
+                                <i t-if="state.sortField === 'amount_net'"
+                                   t-attf-class="fa fa-caret-{{ state.sortDir === 'asc' ? 'up' : 'down' }}"/>
+                            </th>
                             <th class="hcr-col-action"/>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr t-foreach="sortedCustomers" t-as="row" t-key="row.group_type + '_' + row.group_id"
+                        <tr t-foreach="state.customers" t-as="row" t-key="row.group_type + '_' + row.group_id"
                             class="hcr-row" t-on-click="() => this.selectCustomer(row)">
                             <td>
                                 <b t-esc="row.group_label"/>
@@ -71,6 +103,19 @@
                         </tr>
                     </tbody>
                 </table>
+
+                <div class="hcr-pagination" t-if="state.totalCount">
+                    <span>Hiển thị <b t-esc="pageStart"/>-<b t-esc="pageEnd"/> / <b t-esc="state.totalCount"/></span>
+                    <div class="hcr-pagination-btns">
+                        <button class="btn btn-sm btn-outline-secondary" t-on-click="goToPrevPage" t-att-disabled="state.page &lt;= 1">
+                            <i class="fa fa-chevron-left"/>
+                        </button>
+                        <span>Trang <b t-esc="state.page"/> / <b t-esc="totalPages"/></span>
+                        <button class="btn btn-sm btn-outline-secondary" t-on-click="goToNextPage" t-att-disabled="state.page &gt;= totalPages">
+                            <i class="fa fa-chevron-right"/>
+                        </button>
+                    </div>
+                </div>
 
                 <div class="hcr-empty" t-if="!state.customers.length">
                     <i class="fa fa-inbox"/>

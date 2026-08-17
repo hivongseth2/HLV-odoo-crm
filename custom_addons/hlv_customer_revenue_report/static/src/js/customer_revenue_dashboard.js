@@ -23,6 +23,9 @@ export class CustomerRevenueDashboard extends Component {
             isLoading: false,
 
             customers: [],
+            totalCount: 0,
+            page: 1,
+            pageSize: 50,
             sortField: "amount_net",
             sortDir: "desc",
 
@@ -44,25 +47,33 @@ export class CustomerRevenueDashboard extends Component {
         });
     }
 
-    // ==================== Danh sách khách hàng / shop Shopee ====================
+    // ==================== Danh sách khách hàng / shop Shopee (server-side, có phân trang) ====================
     async loadCustomers() {
         this.state.isLoading = true;
         try {
-            this.state.customers = await this.orm.call(MODEL, "get_customers_summary", [], {
+            const result = await this.orm.call(MODEL, "get_customers_summary", [], {
                 date_from: this.state.dateFrom || false,
                 date_to: this.state.dateTo || false,
                 search: this.state.searchTerm || false,
                 shopee_filter: this.state.shopeeFilter,
+                order_by: this.state.sortField,
+                order_dir: this.state.sortDir,
+                limit: this.state.pageSize,
+                offset: (this.state.page - 1) * this.state.pageSize,
             });
+            this.state.customers = result.rows;
+            this.state.totalCount = result.total_count;
         } catch (e) {
             this.notification.add("Lỗi tải danh sách khách hàng: " + (e.message || e), { type: "danger" });
             this.state.customers = [];
+            this.state.totalCount = 0;
         }
         this.state.isLoading = false;
     }
 
     onSearchInput(ev) {
         this.state.searchTerm = ev.target.value;
+        this.state.page = 1;
         if (this._searchTimer) {
             clearTimeout(this._searchTimer);
         }
@@ -70,6 +81,7 @@ export class CustomerRevenueDashboard extends Component {
     }
 
     onShopeeFilterChange() {
+        this.state.page = 1;
         this.loadCustomers();
     }
 
@@ -77,6 +89,7 @@ export class CustomerRevenueDashboard extends Component {
         if (this.state.view === "detail") {
             this.loadMonthly();
         } else {
+            this.state.page = 1;
             this.loadCustomers();
         }
     }
@@ -88,21 +101,34 @@ export class CustomerRevenueDashboard extends Component {
             this.state.sortField = field;
             this.state.sortDir = field === "group_label" ? "asc" : "desc";
         }
+        this.state.page = 1;
+        this.loadCustomers();
     }
 
-    get sortedCustomers() {
-        const rows = this.state.customers.slice();
-        const field = this.state.sortField;
-        const dir = this.state.sortDir === "asc" ? 1 : -1;
-        rows.sort((a, b) => {
-            const av = a[field];
-            const bv = b[field];
-            if (typeof av === "string") {
-                return av.localeCompare(bv) * dir;
-            }
-            return (av - bv) * dir;
-        });
-        return rows;
+    get totalPages() {
+        return Math.max(1, Math.ceil(this.state.totalCount / this.state.pageSize));
+    }
+
+    get pageStart() {
+        return this.state.totalCount ? (this.state.page - 1) * this.state.pageSize + 1 : 0;
+    }
+
+    get pageEnd() {
+        return Math.min(this.state.page * this.state.pageSize, this.state.totalCount);
+    }
+
+    goToPrevPage() {
+        if (this.state.page > 1) {
+            this.state.page -= 1;
+            this.loadCustomers();
+        }
+    }
+
+    goToNextPage() {
+        if (this.state.page < this.totalPages) {
+            this.state.page += 1;
+            this.loadCustomers();
+        }
     }
 
     selectCustomer(row) {
