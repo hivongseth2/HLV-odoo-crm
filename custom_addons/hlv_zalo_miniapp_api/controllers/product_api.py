@@ -97,11 +97,17 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 })
 
         category = None
+        category_ids = []
+        categories = []
         if product.x_zalo_categ_ids:
-            cat = product.x_zalo_categ_ids[0]
-            category = {"id": cat.id, "name": cat.name}
+            for cat in product.x_zalo_categ_ids:
+                categories.append({"id": cat.id, "name": cat.name})
+                category_ids.append(cat.id)
+            category = categories[0]
         elif product.categ_id:
             category = {"id": product.categ_id.id, "name": product.categ_id.name}
+            category_ids = [product.categ_id.id]
+            categories = [category]
 
         # Lấy promotional price từ batch_prices dict nếu có
         promotional_price = None
@@ -192,6 +198,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             "sales_count": sales_count,
             "create_date": create_date,
             "category": category,
+            "category_ids": category_ids,
+            "categories": categories,
             "attributes": attributes,
             "image_url": img_url,
             "images": self._get_product_images(product),
