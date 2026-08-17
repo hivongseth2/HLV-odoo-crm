@@ -3992,10 +3992,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 # đã được XÁC MINH thật, không phải đoán.
                 confirmed = min(representative._misa_invoice_request_line_amount(own_lines), net_actual) if own_lines else 0.0
             else:
-                # Phiếu "ăn theo" (covered): misa_invoice_grouped_matched_amount ĐÃ cộng dồn
-                # đúng từ MỌI đề nghị từng khớp nó (không chỉ đề nghị đang xem) — dùng thẳng,
-                # không tính lại chỉ theo dòng hàng của đề nghị hiện tại.
-                confirmed = min(p.misa_invoice_grouped_matched_amount or 0.0, net_actual)
+                # Phiếu "ăn theo" (covered): 2 NGUỒN xác nhận độc lập, lấy nguồn nào LỚN HƠN
+                # (không cộng dồn cả 2 — tránh đếm trùng):
+                # (1) misa_invoice_grouped_matched_amount — cộng dồn từ MỌI đề nghị từng khớp
+                #     nó qua cơ chế FIFO line-matching (_misa_invoice_discover_grouped_orders).
+                # (2) dòng hàng của CHÍNH đơn thuộc phiếu này có ngay trong đề nghị đang xem
+                #     (lines_by_order) — QUAN TRỌNG (case thật KBC/OUT/09521): phiếu ăn theo
+                #     được gán qua cơ chế master_refno CŨ (MISA tự báo đúng tên phiếu đại diện,
+                #     xem action_check_misa_invoice_status) KHÔNG đi qua FIFO line-matching nên
+                #     KHÔNG BAO GIỜ có misa.invoice.grouped.line/match record — (1) mãi mãi = 0
+                #     dù dòng hàng của nó đã nằm sẵn ngay trong đề nghị đang xem, khiến nó bị
+                #     báo nhầm "chưa xác nhận" toàn bộ dù thực ra đã khớp đủ.
+                own_lines = [
+                    line for code in p.misa_invoice_sale_order_ids.mapped('name')
+                    for line in lines_by_order.get(code, [])
+                ]
+                own_lines_amount = representative._misa_invoice_request_line_amount(own_lines) if own_lines else 0.0
+                confirmed = min(max(p.misa_invoice_grouped_matched_amount or 0.0, own_lines_amount), net_actual)
                 if p.misa_invoice_request_refid:
                     known_refids.add(p.misa_invoice_request_refid)
             shortfall = max(net_actual - confirmed, 0.0)
