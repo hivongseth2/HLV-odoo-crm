@@ -4325,12 +4325,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
         })
 
     def _misa_invoice_gap_summary_domain(self):
+        """QUAN TRỌNG: bắt buộc phải có ('misa_invoice_gap_checked_at', '=', False) — chỉ quét
+        phiếu CHƯA TỪNG được tính lý do lệch. misa_invoice_amount_mismatch KHÔNG tự tắt sau khi
+        tính xong (đó là số tiền lệch thật, không phải cờ "đã xử lý"), nên nếu thiếu điều kiện
+        này, 1 phiếu lệch THẬT (còn cần xử lý tay) sẽ mãi mãi nằm trong domain này — khiến nút
+        "Cập nhật lý do lệch" (chạy qua _runScanUntilDone, vốn giả định domain RỖNG DẦN tới khi
+        hết) không bao giờ thật sự hết việc, cứ quét đi quét lại CÙNG 1 tập phiếu, gọi API MISA
+        lãng phí (bài học thật: quan sát thấy "166/143" — done vượt hẳn total ban đầu, dấu hiệu
+        vòng lặp không hội tụ). Muốn tính lại 1 phiếu ĐÃ check rồi (VD nghi ngờ lý do cũ sai),
+        dùng nút "Cập nhật lý do" ngay trên drawer của phiếu đó (gọi refresh_misa_invoice_gap_
+        summary trực tiếp, không qua domain này)."""
         return [
             ('picking_type_id.code', '=', 'outgoing'),
             ('misa_invoice_state', '=', 'invoiced'),
             ('misa_invoice_master_picking_id', '=', False),
             ('misa_invoice_request_refid', '!=', False),
             ('misa_invoice_amount_mismatch', '=', True),
+            ('misa_invoice_gap_checked_at', '=', False),
         ]
 
     @api.model
