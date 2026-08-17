@@ -1001,6 +1001,20 @@ class MisaExtensionController(http.Controller):
         if not partner and partner_id:
             partner = env['res.partner'].sudo().browse(int(partner_id)).exists()
 
+        # Ưu tiên account_id (ID nội bộ MISA, tra qua Account API — cùng cơ chế mà
+        # sale_order_misa_sync.py dùng để đồng bộ khách hàng chính xác) TRƯỚC khi
+        # thử khớp tên lỏng lẻo (ilike). Nếu thử account_name trước, tên khách
+        # hàng trùng/giống nhau giữa nhiều chi nhánh (vd nhiều bản ghi cùng dạng tên
+        # "CHI NHÁNH CÔNG TY ...") có thể khớp NHẦM sang partner khác không có tài
+        # khoản Loyalty nào rồi dừng lại — không bao giờ thử tới account_id chính
+        # xác nữa (đây là nguyên nhân "có tài khoản Loyalty mà API vẫn trả rỗng").
+        if not partner and account_id:
+            try:
+                headers, _crm_token = env['sale.order']._misa_headers() if hasattr(env['sale.order'], '_misa_headers') else ({}, False)
+                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+            except Exception:
+                pass
+
         if not partner and account_name:
             partner = env['res.partner'].sudo().search([
                 ('active', '=', True),
@@ -1014,13 +1028,6 @@ class MisaExtensionController(http.Controller):
                     ('active', '=', True),
                     ('name', 'ilike', account_name),
                 ], limit=1)
-
-        if not partner and account_id:
-            try:
-                headers, _crm_token = env['sale.order']._misa_headers() if hasattr(env['sale.order'], '_misa_headers') else ({}, False)
-                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
-            except Exception:
-                pass
 
         if not partner:
             return request.make_response(
