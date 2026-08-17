@@ -405,11 +405,16 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("INVALID_INPUT", "Thiếu product_id")
 
             product = request.env["product.product"].sudo().browse(product_id)
+            if not product.exists():
+                tmpl = request.env["product.template"].sudo().browse(product_id)
+                if tmpl.exists():
+                    product = tmpl.product_variant_id or request.env["product.product"].sudo().search([("product_tmpl_id", "=", tmpl.id)], limit=1)
+
             if not product.exists() or not product.active:
                 return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
 
             if not product.x_active_zalo:
-                return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
+                return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại hoặc chưa kích hoạt Zalo", 404)
 
             # product_detail dùng fallback single query (batch_prices=None)
             data = self._build_product_data(product, batch_prices=None)
