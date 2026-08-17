@@ -12,6 +12,36 @@ MONTHLY_MEASURES = [
     'amount_gross:sum', 'amount_returned:sum', 'amount_net:sum',
 ]
 
+# Whitelist cột được phép ORDER BY trên danh sách khách hàng/shop - order_by đến từ client
+# nên KHÔNG được nội suy trực tiếp vào SQL, chỉ tra qua dict này.
+CUSTOMERS_SUMMARY_ORDER_COLUMNS = {
+    'group_label': 'group_label',
+    'order_count': 'order_count',
+    'qty_delivered': 'qty_delivered',
+    'qty_returned': 'qty_returned',
+    'qty_net': 'qty_net',
+    'amount_gross': 'amount_gross',
+    'amount_returned': 'amount_returned',
+    'amount_net': 'amount_net',
+}
+
+CUSTOMERS_SUMMARY_GROUP_SQL = """
+    SELECT
+        CASE WHEN is_shopee AND shopee_shop_id IS NOT NULL THEN 'shop' ELSE 'partner' END AS group_type,
+        CASE WHEN is_shopee AND shopee_shop_id IS NOT NULL THEN shopee_shop_id ELSE partner_id END AS group_id,
+        bool_or(is_shopee AND shopee_shop_id IS NOT NULL) AS is_shopee_group,
+        COUNT(DISTINCT sale_order_id) AS order_count,
+        COALESCE(SUM(qty_delivered), 0) AS qty_delivered,
+        COALESCE(SUM(qty_returned), 0) AS qty_returned,
+        COALESCE(SUM(qty_net), 0) AS qty_net,
+        COALESCE(SUM(amount_gross), 0) AS amount_gross,
+        COALESCE(SUM(amount_returned), 0) AS amount_returned,
+        COALESCE(SUM(amount_net), 0) AS amount_net
+    FROM hlv_customer_revenue_report
+    WHERE {where_sql}
+    GROUP BY 1, 2
+"""
+
 
 class HlvCustomerRevenueReport(models.Model):
     _name = 'hlv.customer.revenue.report'
@@ -176,53 +206,96 @@ class HlvCustomerRevenueReport(models.Model):
             domain.append(('date_done', '<=', '%s 23:59:59' % date_to))
         return domain
 
-    def _shopee_filter_domain(self, shopee_filter):
+    def _customers_summary_where(self, date_from, date_to, search, shopee_filter):
+        """WHERE áp lên bảng gốc (chưa GROUP BY) - trả về (sql, params), luôn tham số hoá."""
+        clauses = ['1 = 1']
+        params = []
+        if date_from:
+            clauses.append('date_done >= %s')
+            params.append('%s 00:00:00' % date_from)
+        if date_to:
+            clauses.append('date_done <= %s')
+            params.append('%s 23:59:59' % date_to)
         if shopee_filter == 'shopee':
-            return [('is_shopee', '=', True)]
-        if shopee_filter == 'non_shopee':
-            return [('is_shopee', '=', False)]
-        return []
+            clauses.append('is_shopee = true')
+        elif shopee_filter == 'non_shopee':
+            clauses.append('is_shopee = false')
+        if search:
+            clauses.append("""(
+                partner_id IN (SELECT id FROM res_partner WHERE name ILIKE %s)
+                OR shopee_shop_id IN (SELECT id FROM shopee_shop WHERE name ILIKE %s)
+            )""")
+            like = '%%%s%%' % search
+            params += [like, like]
+        return ' AND '.join(clauses), params
+
+    def _fetch_customers_summary(self, where_sql, params, order_by='amount_net', order_dir='desc',
+                                  limit=None, offset=0):
+        """Query đã GROUP BY + JOIN tên hiển thị, tính toàn bộ phân trang/sắp xếp ở tầng DB
+        (thay vì kéo hết dữ liệu ra rồi group bằng Python - rất chậm khi có hàng chục nghìn dòng)."""
+        order_col = CUSTOMERS_SUMMARY_ORDER_COLUMNS.get(order_by, 'amount_net')
+        order_dir_sql = 'ASC' if str(order_dir).lower() == 'asc' else 'DESC'
+
+        limit_sql = ''
+        query_params = list(params)
+        if limit is not None:
+            limit_sql = 'LIMIT %s OFFSET %s'
+            query_params += [limit, offset]
+
+        query = """
+            SELECT
+                grp.group_type, grp.group_id, grp.is_shopee_group, grp.order_count,
+                grp.qty_delivered, grp.qty_returned, grp.qty_net,
+                grp.amount_gross, grp.amount_returned, grp.amount_net,
+                COALESCE(rp.name, ss.name) AS group_label
+            FROM ({group_sql}) grp
+            LEFT JOIN res_partner rp ON grp.group_type = 'partner' AND rp.id = grp.group_id
+            LEFT JOIN shopee_shop ss ON grp.group_type = 'shop' AND ss.id = grp.group_id
+            ORDER BY {order_col} {order_dir_sql} NULLS LAST
+            {limit_sql}
+        """.format(
+            group_sql=CUSTOMERS_SUMMARY_GROUP_SQL.format(where_sql=where_sql),
+            order_col=order_col, order_dir_sql=order_dir_sql, limit_sql=limit_sql,
+        )
+        self.env.cr.execute(query, query_params)
+        rows = self.env.cr.dictfetchall()
+        return [
+            {
+                'group_type': r['group_type'],
+                'group_id': r['group_id'],
+                'group_label': r['group_label'] or _('(Không xác định)'),
+                'is_shopee_group': r['is_shopee_group'],
+                'order_count': r['order_count'],
+                'qty_delivered': r['qty_delivered'],
+                'qty_returned': r['qty_returned'],
+                'qty_net': r['qty_net'],
+                'amount_gross': r['amount_gross'],
+                'amount_returned': r['amount_returned'],
+                'amount_net': r['amount_net'],
+            }
+            for r in rows
+        ]
+
+    def _count_customers_summary_groups(self, where_sql, params):
+        query = """
+            SELECT COUNT(*) FROM ({group_sql}) grp
+        """.format(group_sql=CUSTOMERS_SUMMARY_GROUP_SQL.format(where_sql=where_sql))
+        self.env.cr.execute(query, params)
+        return self.env.cr.fetchone()[0]
 
     @api.model
-    def get_customers_summary(self, date_from=False, date_to=False, search=False, shopee_filter='all', limit=500):
-        """Doanh thu của TẤT CẢ khách hàng/shop Shopee có phát sinh trong khoảng thời gian.
+    def get_customers_summary(self, date_from=False, date_to=False, search=False, shopee_filter='all',
+                               order_by='amount_net', order_dir='desc', limit=50, offset=0):
+        """Danh sách khách hàng/shop Shopee có phát sinh trong khoảng thời gian, có phân trang.
 
         Đơn Shopee được gộp theo shop (shopee_shop_id), không theo contact chung chung.
+        Group + sắp xếp + phân trang đều thực hiện bằng SQL để tránh phải kéo toàn bộ dữ liệu
+        (có thể hàng chục nghìn dòng) qua ORM rồi mới xử lý ở Python.
         """
-        domain = self._base_date_domain(date_from, date_to) + self._shopee_filter_domain(shopee_filter)
-        if search:
-            domain += ['|', ('partner_id.name', 'ilike', search), ('shopee_shop_id.name', 'ilike', search)]
-
-        groups = self.read_group(
-            domain, MONTHLY_MEASURES, ['is_shopee', 'partner_id', 'shopee_shop_id', 'sale_order_id'], lazy=False,
-        )
-        agg = {}
-        for g in groups:
-            shop = g.get('shopee_shop_id')
-            partner = g.get('partner_id')
-            if g.get('is_shopee') and shop:
-                key = ('shop', shop[0])
-                group_type, group_id, group_label = 'shop', shop[0], shop[1]
-            elif partner:
-                key = ('partner', partner[0])
-                group_type, group_id, group_label = 'partner', partner[0], partner[1]
-            else:
-                continue
-            entry = agg.get(key)
-            if entry is None:
-                entry = self._new_agg_entry(
-                    group_type=group_type, group_id=group_id, group_label=group_label,
-                    is_shopee_group=(group_type == 'shop'),
-                )
-                agg[key] = entry
-            self._accumulate(entry, g)
-
-        rows = []
-        for entry in agg.values():
-            entry['order_count'] = len(entry.pop('order_ids'))
-            rows.append(entry)
-        rows.sort(key=lambda r: r['amount_net'], reverse=True)
-        return rows[:limit]
+        where_sql, params = self._customers_summary_where(date_from, date_to, search, shopee_filter)
+        rows = self._fetch_customers_summary(where_sql, params, order_by, order_dir, limit, offset)
+        total_count = self._count_customers_summary_groups(where_sql, params)
+        return {'rows': rows, 'total_count': total_count}
 
     # ==================== Dashboard: tổng hợp theo tháng (1 khách hàng / 1 shop) ====================
     def _group_domain(self, group_type, group_id, date_from=False, date_to=False):
@@ -323,7 +396,8 @@ class HlvCustomerRevenueReport(models.Model):
 
     @api.model
     def export_customers_summary_excel(self, date_from=False, date_to=False, search=False, shopee_filter='all'):
-        rows = self.get_customers_summary(date_from, date_to, search, shopee_filter, limit=10000)
+        where_sql, params = self._customers_summary_where(date_from, date_to, search, shopee_filter)
+        rows = self._fetch_customers_summary(where_sql, params, limit=None)
         headers = [
             'Khách hàng / Shop', 'Đơn Shopee?', 'Số đơn hàng', 'SL xuất kho', 'SL trả hàng',
             'SL thực xuất (ròng)', 'Tiền đặt hàng (gộp)', 'Tiền hàng trả lại', 'Doanh thu xuất ròng',

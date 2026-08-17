@@ -160,6 +160,21 @@
         }
     }
 
+    .hcr-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 4px;
+        color: var(--hcr-muted);
+        font-size: 0.9rem;
+    }
+
+    .hcr-pagination-btns {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
     // ==================== Drawer ====================
     .hcr-drawer-overlay {
         position: fixed;
