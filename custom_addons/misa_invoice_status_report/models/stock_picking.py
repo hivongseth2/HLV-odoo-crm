@@ -3611,6 +3611,38 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     bucket['picking_names'].append(picking.name)
         return totals
 
+    def _misa_invoice_group_matched_lines_outside(self, representative, group_pickings):
+        """Bù thêm phần hàng đã xuất kho THẬT nhưng qua 1 phiếu KHÔNG nằm trong group_pickings
+        — case thật KBC/OUT/06650: chỉ phủ 1 PHẦN giá trị của phiếu này (phần còn lại thuộc 1
+        đề nghị xuất HĐ khác), nên đúng ra bị loại khỏi group_pickings (chưa đủ điều kiện gán
+        "ăn theo" toàn phần) — nhưng phần ĐÃ khớp của nó (ghi nhận qua
+        misa.invoice.grouped.line/.match khi phiếu đại diện discover đơn KHÁC) vẫn phải tính
+        vào bảng đối chiếu dòng hàng, nếu không sẽ báo nhầm "Thiếu trên Odoo" cho sản phẩm đã
+        xuất kho thật.
+
+        value trả về là tiền CHƯA VAT (prorate theo amount_oc gốc của dòng theo đúng tỉ lệ số
+        lượng đã khớp), để cùng đơn vị với _misa_invoice_group_odoo_lines."""
+        totals = {}
+        glines = self.env['misa.invoice.grouped.line'].sudo().search([
+            ('master_picking_id', '=', representative.id),
+        ])
+        for gline in glines:
+            outside_matches = gline.match_ids.filtered(lambda m: m.picking_id not in group_pickings)
+            matched_qty_outside = sum(outside_matches.mapped('quantity'))
+            if matched_qty_outside <= 0:
+                continue
+            code = (gline.inventory_item_code or '').strip()
+            if not code:
+                continue
+            pre_vat_value = (gline.amount_oc * matched_qty_outside / gline.quantity) if gline.quantity else 0.0
+            bucket = totals.setdefault(code, {'qty': 0.0, 'value': 0.0, 'picking_names': []})
+            bucket['qty'] += matched_qty_outside
+            bucket['value'] += pre_vat_value
+            for name in outside_matches.mapped('picking_id.name'):
+                if name not in bucket['picking_names']:
+                    bucket['picking_names'].append(name)
+        return totals
+
     def _misa_invoice_request_lines_by_code(self, misa_lines):
         """Gộp dòng hàng MISA (đã lấy qua get_invoice_request_lines) theo mã hàng
         (inventory_item_code) — 1 mã hàng có thể xuất hiện nhiều lần nếu đề nghị gộp
@@ -3711,6 +3743,18 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         misa_totals = self._misa_invoice_request_lines_by_code(misa_lines)
         odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings, misa_codes=set(misa_totals.keys()))
+        matched_outside = self._misa_invoice_group_matched_lines_outside(representative, group_pickings)
+        for code, extra in matched_outside.items():
+            bucket = odoo_totals.get(code)
+            if bucket is None:
+                bucket = {'product_name': None, 'uom_name': None, 'qty': 0.0, 'value': 0.0, 'picking_names': []}
+                odoo_totals[code] = bucket
+            bucket['qty'] += extra['qty']
+            bucket['value'] += extra['value']
+            existing_names = bucket.setdefault('picking_names', [])
+            for name in extra['picking_names']:
+                if name not in existing_names:
+                    existing_names.append(name)
         group_breakdown = self._misa_invoice_compute_group_breakdown(representative, group_pickings, misa_lines)
 
         rows = []

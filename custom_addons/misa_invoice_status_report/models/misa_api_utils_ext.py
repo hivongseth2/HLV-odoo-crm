@@ -66,6 +66,37 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         ICP.set_param(MISA_ACT_TOKEN_EXP_PARAM, str(exp))
         return token
 
+    def _fetch_misa_json_with_session_retry(self, url, payload, context):
+        """Gọi 1 API MISA (POST) và tự ĐĂNG NHẬP LẠI + gọi lại ĐÚNG 1 lần nếu request đầu tiên
+        lỗi — không chỉ khi MISA trả HTTP 401 (như _fetch_with_retry đã tự xử lý sẵn), mà CẢ
+        khi MISA trả lỗi khác.
+
+        Bài học thật: MISA có lúc trả HTTP 500 "Không lấy được thông tin user <uuid>" khi
+        phiên/token cache bị MISA "quên" mất phía họ — dù token CHƯA hết hạn theo đồng hồ JWT
+        của mình (_get_misa_token_cached() vẫn coi là còn hạn). _fetch_with_retry() chỉ tự
+        đăng nhập lại khi status=401 nên bỏ sót ĐÚNG case này — kết quả là cả 1 lô kiểm tra
+        MISA (cron/nút quét) lỗi hàng loạt cho tới khi có người vào Odoo shell ép đăng nhập lại
+        tay (_get_misa_token_cached(force_refresh=True)). Giờ tự làm y hệt thao tác đó, tự
+        động, ngay khi gặp lỗi lần đầu — không cần chờ ai đó phát hiện và chạy tay nữa.
+
+        Dùng cho MỌI lệnh gọi sa_invoice_request/sa_invoice_get/sa_voucher_get trong module
+        này thay vì gọi thẳng _fetch_with_retry + _misa_json_or_raise."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+        resp = self._fetch_with_retry(url, headers, payload)
+        try:
+            return _misa_json_or_raise(resp, context)
+        except Exception:
+            _logger.warning(
+                "🔁 [MISA] %s lỗi lần 1 (có thể do phiên/token bị MISA 'quên' dù chưa hết hạn "
+                "theo đồng hồ của mình) — ép đăng nhập lại và thử lại 1 lần trước khi báo lỗi thật.",
+                context,
+            )
+            token = self._get_misa_token_cached(force_refresh=True)
+            headers = self.env['misa.config'].get_default_headers(token)
+            resp = self._fetch_with_retry(url, headers, payload)
+            return _misa_json_or_raise(resp, context)
+
     def _misa_invoice_result_from_request(self, req_info):
         """Bước 2+3 của luồng tra cứu: từ 1 "Đề nghị xuất hóa đơn" (req_info), tìm xem đã
         có hóa đơn thật phát sinh từ đó chưa (sa_invoice_get, lọc theo sa_invoice_request_refid)."""
@@ -80,12 +111,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         if not target_req_id or not target_customer:
             return result
 
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
         url_inv = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
         payload_inv = self.env['misa.config'].get_invoice_full_search_payload(target_customer)
-        resp_inv = self._fetch_with_retry(url_inv, headers, payload_inv)
-        data_inv = _misa_json_or_raise(resp_inv, "sa_invoice_get")
+        data_inv = self._fetch_misa_json_with_session_retry(url_inv, payload_inv, "sa_invoice_get")
 
         page_data_inv = data_inv.get("Data", {}).get("PageData", []) or []
         matched_invs = [
@@ -106,13 +134,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         """Tra tình trạng xuất hóa đơn của 1 phiếu xuất kho (refno = stock.picking.name)
         trên MISA — dùng cho kiểm tra đơn lẻ (nút trên form / gọi ngoài batch), gọi thẳng
         1 API tìm đúng refno này, không tải hàng loạt."""
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
-
         url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
         payload_req = self.env['misa.config'].get_invoice_request_payload(refno)
-        resp_req = self._fetch_with_retry(url_req, headers, payload_req)
-        data_req = _misa_json_or_raise(resp_req, "sa_invoice_request")
+        data_req = self._fetch_misa_json_with_session_retry(url_req, payload_req, "sa_invoice_request")
 
         page_data_req = data_req.get("Data", {}).get("PageData", []) or []
         if not page_data_req:
@@ -132,12 +156,11 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
 
         Trả về list [{refno, refid}, ...] — chỉ cần refid để sau đó gọi
         get_invoice_request_lines cho từng cái, không gọi thêm sa_invoice_get ở đây."""
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
         url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
         payload_req = self.env['misa.config'].get_invoice_request_payload(order_code)
-        resp_req = self._fetch_with_retry(url_req, headers, payload_req)
-        data_req = _misa_json_or_raise(resp_req, "sa_invoice_request (search theo order)")
+        data_req = self._fetch_misa_json_with_session_retry(
+            url_req, payload_req, "sa_invoice_request (search theo order)",
+        )
         page_data_req = data_req.get("Data", {}).get("PageData", []) or []
         return [
             {'refno': (item.get('refno') or '').strip(), 'refid': item.get('refid')}
@@ -153,8 +176,6 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         các phiếu này KHÔNG tự tìm ra được nếu chỉ tra theo đúng refno của chính nó). Vì vậy
         map trả về được đánh chỉ mục theo CẢ refno lẫn từng dòng trong journal_memo, để phiếu
         "ăn theo" vẫn tra đúng ra tình trạng của đề nghị đại diện."""
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
         url = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
 
         if not date_from_iso:
@@ -169,12 +190,13 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             payload = self.env['misa.config'].get_invoice_request_bulk_payload(
                 date_from_iso, date_to_iso, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
             )
-            resp = self._fetch_with_retry(url, headers, payload)
             # Raise thay vì log+break: nếu trang 1 lỗi mà cứ coi map rỗng là "đã tải xong",
             # toàn bộ phiếu đang kiểm tra theo lô sẽ bị hiểu nhầm thành "chưa có đề nghị" và
             # GHI ĐÈ lên trạng thái đúng đã có trước đó — thà cả lô lỗi rõ ràng (được
             # _misa_invoice_check_batch bắt lại và bỏ qua) còn hơn âm thầm sai dữ liệu.
-            data = _misa_json_or_raise(resp, "sa_invoice_request (map trang %s)" % page)
+            data = self._fetch_misa_json_with_session_retry(
+                url, payload, "sa_invoice_request (map trang %s)" % page,
+            )
 
             page_data = data.get("Data", {}).get("PageData", []) or []
             if not page_data:
@@ -211,8 +233,6 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         bán gốc) của 1 "Đề nghị xuất hóa đơn" theo refid — dùng để đối chiếu từng dòng sản
         phẩm giữa Odoo và MISA (xem stock_picking.get_misa_invoice_line_reconciliation).
         Phân trang y hệt get_invoice_request_map() phòng khi 1 đề nghị có rất nhiều dòng."""
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
         url = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/get_paging_detail"
 
         lines = []
@@ -221,8 +241,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             payload = self.env['misa.config'].get_invoice_request_detail_payload(
                 request_refid, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
             )
-            resp = self._fetch_with_retry(url, headers, payload)
-            data = _misa_json_or_raise(resp, "sa_invoice_request/get_paging_detail (trang %s)" % page)
+            data = self._fetch_misa_json_with_session_retry(
+                url, payload, "sa_invoice_request/get_paging_detail (trang %s)" % page,
+            )
 
             page_data = data.get("Data", {}).get("PageData", []) or []
             lines.extend(page_data)
@@ -236,12 +257,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         HÓA ĐƠN — dùng cho case "hải quan": hóa đơn được xuất TRƯỚC khi có phiếu xuất kho
         Odoo, nên không có refno picking nào để tra theo luồng sa_invoice_request thông
         thường; đây là cách duy nhất tìm ra chứng từ chỉ bằng số hóa đơn."""
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
         url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/paging_filter_v2"
         payload = self.env['misa.config'].get_voucher_search_payload(inv_no)
-        resp = self._fetch_with_retry(url, headers, payload)
-        data = _misa_json_or_raise(resp, "sa_voucher_get")
+        data = self._fetch_misa_json_with_session_retry(url, payload, "sa_voucher_get")
         page_data = data.get("Data", {}).get("PageData", []) or []
         return page_data[0] if page_data else None
 
@@ -250,8 +268,6 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         1 chứng từ bán hàng theo refid — cho biết CHÍNH XÁC đơn hàng nào + mã hàng nào đã
         được hóa đơn này bao phủ (1 hóa đơn có thể gộp nhiều đơn, và có thể chỉ phủ MỘT PHẦN
         1 đơn nếu xuất kho nhiều đợt)."""
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
         url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/get_paging_detail"
 
         lines = []
@@ -260,8 +276,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             payload = self.env['misa.config'].get_voucher_detail_payload(
                 refid, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
             )
-            resp = self._fetch_with_retry(url, headers, payload)
-            data = _misa_json_or_raise(resp, "sa_voucher_get/get_paging_detail (trang %s)" % page)
+            data = self._fetch_misa_json_with_session_retry(
+                url, payload, "sa_voucher_get/get_paging_detail (trang %s)" % page,
+            )
 
             page_data = data.get("Data", {}).get("PageData", []) or []
             lines.extend(page_data)
