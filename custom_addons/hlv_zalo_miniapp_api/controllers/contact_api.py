@@ -8,6 +8,7 @@ import requests
 
 from odoo import fields, http
 from odoo.http import request, Response
+from odoo.exceptions import UserError
 
 from .base_api import ZaloBaseAPI
 
@@ -60,10 +61,9 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     @staticmethod
     def _get_secret_key():
         Param = request.env["ir.config_parameter"].sudo()
-        key = Param.get_param("zalo_api_secret", "")
+        key = str(Param.get_param("zalo_api_secret", "") or "").strip()
         if not key:
-            _logger.warning("zalo_api_secret not configured! Using dev fallback. Set this param in System Parameters for production.")
-            return "hlv_zalo_dev_secret_2026"
+            raise UserError("Zalo API secret key not configured. Set 'zalo_api_secret' in System Parameters.")
         return key
 
     @staticmethod
