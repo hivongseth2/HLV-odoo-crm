@@ -21,8 +21,20 @@ _logger = logging.getLogger(__name__)
 ALLOWED_MIME = {'video/webm', 'video/mp4', 'video/ogg'}
 MAX_UPLOAD_MB = 200
 
-# ====== Temp stream storage for chunked upload ======
-STREAM_DIR = os.path.join(tempfile.gettempdir(), 'pack_streams')
+# ====== Stream storage for chunked upload ======
+# Must survive a worker/container restart (e.g. a production deploy) while a
+# recording is still in progress, so this lives under Odoo's persistent
+# data_dir (odoo.sh: ~/data, survives builds) instead of the OS tempdir
+# (odoo.sh: /tmp, wiped on every new container) which would silently lose
+# any in-flight video.
+try:
+    from odoo.tools import config as _odoo_config
+    _data_dir = _odoo_config.get('data_dir')
+except Exception:
+    _data_dir = None
+
+STREAM_DIR = os.path.join(_data_dir, 'pack_streams') if _data_dir \
+    else os.path.join(tempfile.gettempdir(), 'pack_streams')
 os.makedirs(STREAM_DIR, exist_ok=True)
 
 
@@ -165,13 +177,36 @@ def move_package_quants_to_loose(env, package, location=None, logger=None):
 
 
 # ====== Background task: upload file -> Google Drive (My Drive) ======
+def _notify_bg_upload_failed(picking, filepath, reason):
+    """Post a chatter note when the Drive upload fails, so ops staff know the
+    recording wasn't lost and where to look for it (temp file is kept on disk
+    on failure instead of being deleted)."""
+    if not picking or not picking.exists():
+        return
+    try:
+        body = Markup(
+            '⚠️ Upload video đóng gói lên Google Drive THẤT BẠI ({reason}).<br/>'
+            'File quay vẫn còn lưu tạm trên server tại: <code>{path}</code><br/>'
+            'Vui lòng kiểm tra thư mục tạm (STREAM_DIR) trên server để lấy lại video thủ công.'
+        ).format(reason=escape(reason or 'unknown'), path=escape(filepath or ''))
+        picking.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+    except Exception:
+        _logger.exception("BG_UPLOAD could not post failure note to chatter")
+
+
 def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
     from odoo import registry as odoo_registry
     set_path = None
+    success = False
     try:
         with odoo_registry(dbname).cursor() as cr:
             env = api.Environment(cr, SUPERUSER_ID, {})
             ICP = env['ir.config_parameter'].sudo()
+            picking = env['stock.picking'].sudo().browse(picking_id)
 
             _logger.info("BG_UPLOAD start db=%s pick=%s file=%s size=%s",
                          dbname, picking_id, filepath,
@@ -179,11 +214,13 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
 
             if not os.path.exists(filepath):
                 _logger.warning("BG_UPLOAD skipped missing temp file: %s", filepath)
+                _notify_bg_upload_failed(picking, filepath, "không tìm thấy file tạm trên server")
                 return
 
             creds_json = ICP.get_param('gdrive.user_credentials_json') or ''
             if not creds_json:
                 _logger.error("BG_UPLOAD missing token")
+                _notify_bg_upload_failed(picking, filepath, "chưa kết nối Google Drive (thiếu token)")
                 return
 
             cid   = ICP.get_param('gdrive.oauth_client_id') or ''
@@ -192,7 +229,6 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             scopes_line = ICP.get_param('gdrive.oauth_scopes') or 'https://www.googleapis.com/auth/drive.file'
 
             # Lấy warehouse code từ picking
-            picking = env['stock.picking'].sudo().browse(picking_id)
             warehouse_code = picking.location_id.warehouse_id.code or 'DEFAULT'
 
             # Mapping warehouse code -> folder name
@@ -247,6 +283,7 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
                 gauth.Authorize()
             except Exception:
                 _logger.exception("BG_UPLOAD refresh/authorize failed")
+                _notify_bg_upload_failed(picking, filepath, "lỗi xác thực Google Drive (token hết hạn/bị thu hồi)")
                 return
 
             drive = GoogleDrive(gauth)
@@ -297,12 +334,23 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
                 )
 
             _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
+            success = True
 
     except Exception:
         _logger.exception("BG_UPLOAD fatal")
+        try:
+            with odoo_registry(dbname).cursor() as cr2:
+                env2 = api.Environment(cr2, SUPERUSER_ID, {})
+                picking2 = env2['stock.picking'].sudo().browse(picking_id)
+                _notify_bg_upload_failed(picking2, filepath, "lỗi không xác định khi upload lên Google Drive")
+        except Exception:
+            _logger.exception("BG_UPLOAD could not post fatal-failure note to chatter")
     finally:
-        try: os.remove(filepath)
-        except: pass
+        if success:
+            try: os.remove(filepath)
+            except: pass
+        else:
+            _logger.warning("BG_UPLOAD failed - keeping temp file for manual recovery: %s", filepath)
         if set_path:
             try: os.remove(set_path)
             except: pass
