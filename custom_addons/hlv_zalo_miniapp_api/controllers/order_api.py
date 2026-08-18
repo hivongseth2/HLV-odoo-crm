@@ -374,8 +374,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             except Exception as me:
                 _logger.warning("Post chatter error on sale.order %s: %s", order.id, me)
 
-            # Gửi thông báo vào Kênh Chat Odoo (Discuss Channel)
+            # Gửi thông báo vào Kênh Chat Odoo (Direct Chat 1-1 & Discuss Channel)
             self._notify_order_to_discuss_channel(order, payment_method=payment_method, customer_note=customer_note)
+
+            # Gửi tin nhắn Zalo về điện thoại cho các Zalo User ID (Admin/Quản lý)
+            self._send_order_zalo_notification_message(order, payment_method=payment_method, customer_note=customer_note)
 
             # Gửi ZNS xác nhận đơn nếu có cấu hình
             self._send_order_zns_notification(order)

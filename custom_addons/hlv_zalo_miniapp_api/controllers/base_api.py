@@ -273,25 +273,12 @@ class ZaloBaseAPI:
     # =========================================================================
 
     def _notify_order_to_discuss_channel(self, sale_order, payment_method="", customer_note=""):
-        """Gửi tin nhắn thông báo đơn hàng mới từ Zalo Mini App vào Kênh Chat Odoo (Discuss Channel)."""
+        """Gửi tin nhắn thông báo đơn hàng mới từ Zalo Mini App:
+        1. Gửi tin nhắn Chat trực tiếp 1-1 (Direct Message) giữa tài khoản hệ thống (OdooBot) và các tài khoản được cấu hình -> Làm nhảy popup Chat box nổi ngay trên màn hình người nhận!
+        2. Gửi tin nhắn vào Kênh Thảo luận (Discuss Channel) nếu có cấu hình.
+        """
         try:
             ICP = request.env["ir.config_parameter"].sudo()
-            channel_id_raw = ICP.get_param("hlv_zalo_miniapp.order_notify_channel_id", "")
-            channel = None
-            if channel_id_raw and str(channel_id_raw).isdigit():
-                channel = request.env["discuss.channel"].sudo().browse(int(channel_id_raw))
-                if not channel.exists():
-                    channel = None
-
-            # Fallback: tìm kênh có tên chứa 'zalo' hoặc 'don-hang' nếu chưa chọn kênh
-            if not channel:
-                channel = request.env["discuss.channel"].sudo().search([
-                    "|", ("name", "ilike", "zalo"), ("name", "ilike", "đơn hàng")
-                ], limit=1)
-
-            if not channel:
-                return
-
             base_url = ICP.get_param("web.base.url", "")
             order_url = f"{base_url}/web#id={sale_order.id}&model=sale.order&view_type=form" if base_url else ""
 
@@ -316,14 +303,88 @@ class ZaloBaseAPI:
             if customer_note:
                 msg_body += Markup("<br/>• <b>Ghi chú:</b> %s") % customer_note
 
-            channel.message_post(
-                body=msg_body,
-                message_type="comment",
-                subtype_xmlid="mail.mt_comment",
-            )
-            _logger.info("Discuss channel message posted for Zalo order %s to channel #%s", sale_order.name, channel.name)
+            # Lấy đối tượng gửi tin (tài khoản được cấu hình trong Cài đặt hoặc mặc định là OdooBot)
+            raw_sender_id = ICP.get_param("hlv_zalo_miniapp.order_sender_user_id", "")
+            bot_partner = None
+            if raw_sender_id and str(raw_sender_id).isdigit():
+                sender_user = request.env["res.users"].sudo().browse(int(raw_sender_id))
+                if sender_user.exists() and sender_user.partner_id:
+                    bot_partner = sender_user.partner_id
+
+            if not bot_partner:
+                bot_partner = request.env.ref("base.partner_root", raise_if_not_found=False)
+            if not bot_partner:
+                bot_user = request.env.ref("base.user_root", raise_if_not_found=False) or request.env.user
+                bot_partner = bot_user.partner_id
+
+            DiscussChannel = request.env["discuss.channel"].sudo()
+
+            # ===== 1. GỬI DIRECT CHAT (CHAT 1-1 TRỰC TIẾP TÀI KHOẢN VỚI TÀI KHOẢN) =====
+            # Tin nhắn Direct Chat giữa tài khoản sẽ làm nhảy popup Chat box nổi ngay trên màn hình người nhận
+            raw_order_user_ids = ICP.get_param("hlv_zalo_miniapp.order_notify_user_ids", "")
+            target_user_ids = []
+            if raw_order_user_ids:
+                try:
+                    clean_ids = raw_order_user_ids.replace("[", "").replace("]", "").split(",")
+                    target_user_ids = [int(u.strip()) for u in clean_ids if u.strip().isdigit()]
+                except Exception:
+                    pass
+
+            target_users = request.env["res.users"].sudo().browse(target_user_ids).filtered(lambda u: u.active)
+            if not target_users and sale_order.user_id and sale_order.user_id.active:
+                target_users = sale_order.user_id
+
+            for user in target_users:
+                target_partner = user.partner_id
+                if not target_partner.exists() or target_partner.id == bot_partner.id:
+                    continue
+                try:
+                    # Tìm hoặc tạo kênh chat 1-1 giữa bot/hệ thống và tài khoản nhân viên
+                    direct_channel = DiscussChannel.search([
+                        ("channel_type", "=", "chat"),
+                        ("channel_member_ids.partner_id", "in", [bot_partner.id]),
+                        ("channel_member_ids.partner_id", "in", [target_partner.id]),
+                    ], limit=1)
+
+                    if not direct_channel:
+                        try:
+                            direct_channel = DiscussChannel.with_user(request.env.ref("base.user_root", raise_if_not_found=False) or 1).channel_get(partners_to=[target_partner.id])
+                        except Exception:
+                            direct_channel = None
+
+                    if not direct_channel:
+                        direct_channel = DiscussChannel.create({
+                            "name": f"{bot_partner.name}, {target_partner.name}",
+                            "channel_type": "chat",
+                            "channel_member_ids": [
+                                (0, 0, {"partner_id": bot_partner.id}),
+                                (0, 0, {"partner_id": target_partner.id}),
+                            ],
+                        })
+
+                    if direct_channel:
+                        direct_channel.message_post(
+                            body=msg_body,
+                            message_type="comment",
+                            subtype_xmlid="mail.mt_comment",
+                            author_id=bot_partner.id,
+                        )
+                        _logger.info("Direct Chat popup message sent to user %s (partner %s)", user.name, target_partner.name)
+                except Exception as de:
+                    _logger.warning("Failed to send direct chat message to user %s: %s", user.name, de)
+
+            # ===== 2. GỬI KÊNH THẢO LUẬN (DISCUSS CHANNEL) NẾU CÓ CẤU HÌNH =====
+            channel_id_raw = ICP.get_param("hlv_zalo_miniapp.order_notify_channel_id", "")
+            if channel_id_raw and str(channel_id_raw).isdigit():
+                group_channel = DiscussChannel.browse(int(channel_id_raw))
+                if group_channel.exists():
+                    group_channel.message_post(
+                        body=msg_body,
+                        message_type="comment",
+                        subtype_xmlid="mail.mt_comment",
+                    )
         except Exception as e:
-            _logger.warning("Failed to notify order to discuss channel: %s", e)
+            _logger.warning("Failed to notify order via chat: %s", e)
 
     def _send_order_zns_notification(self, sale_order):
         """Gửi ZNS thông báo xác nhận đơn hàng tới SĐT khách qua module hlv_zalo_zns (nếu có config)."""
@@ -354,3 +415,43 @@ class ZaloBaseAPI:
             _logger.info("ZNS order confirmation sent for %s to %s", sale_order.name, phone)
         except Exception as e:
             _logger.warning("Failed to send ZNS order confirmation: %s", e)
+
+    def _send_order_zalo_notification_message(self, sale_order, payment_method="", customer_note=""):
+        """Gửi tin nhắn Zalo trực tiếp về điện thoại cho các Zalo User ID (Admin/Quản lý) qua hlv.zalo.stock.notification."""
+        try:
+            Param = request.env["ir.config_parameter"].sudo()
+            raw_zalo_uids = Param.get_param("hlv_zalo_miniapp.return_zalo_uids", "")
+            zalo_recipients = [u.strip() for u in raw_zalo_uids.split(",") if u.strip()]
+
+            if not zalo_recipients or "hlv.zalo.stock.notification" not in request.env:
+                return
+
+            zalo_config = request.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
+            if not zalo_config:
+                return
+
+            base_url = Param.get_param("web.base.url", "")
+            order_url = f"{base_url}/web#id={sale_order.id}&model=sale.order&view_type=form" if base_url else ""
+            partner = sale_order.partner_id
+            phone_str = partner.phone or partner.mobile or "N/A"
+
+            zalo_msg = (
+                f"🔔 CÓ ĐƠN HÀNG MỚI TỪ ZALO MINI APP\n"
+                f"  • Mã đơn: {sale_order.name}\n"
+                f"  • Khách hàng: {partner.name} ({phone_str})\n"
+                f"  • Tổng tiền: {sale_order.amount_total:,.0f} đ\n"
+                f"  • PTTT: {payment_method.upper() if payment_method else 'N/A'}\n"
+            )
+            if customer_note:
+                zalo_msg += f"  • Ghi chú: {customer_note}\n"
+            if order_url:
+                zalo_msg += f"👉 Mở xem trên Odoo: {order_url}"
+
+            for uid in zalo_recipients:
+                try:
+                    zalo_config.send_notification_message(uid, zalo_msg)
+                    _logger.info("✓ Zalo Order Notification sent to UID %s for order %s", uid, sale_order.name)
+                except Exception as ze:
+                    _logger.error("✗ Lỗi gửi Zalo Order Notification tới %s: %s", uid, ze)
+        except Exception as ex:
+            _logger.warning("Lỗi gửi Zalo Order Notification cho đơn %s: %s", sale_order.name, ex)

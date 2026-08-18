@@ -358,25 +358,87 @@ class StockPicking(models.Model):
             except Exception as e:
                 _logger.exception("Lỗi khi tạo Activity đổi/trả Zalo cho user %s: %s", user.id, e)
 
-        # ===== KÊNH 2: Odoo Bus Live Pop-up Toast (Sticky) & Notification Bell =====
-        target_partners = target_users.mapped("partner_id")
-        if target_partners:
-            chatter_msg = Markup(_(
+        # ===== KÊNH 2: Direct 1-1 Chat Message (Popup nhảy trên màn hình Odoo) =====
+        try:
+            DiscussChannel = self.env["discuss.channel"].sudo()
+            sender_id_raw = Param.get_param("hlv_zalo_miniapp.order_sender_user_id", "")
+            bot_partner = None
+            if sender_id_raw and str(sender_id_raw).isdigit():
+                sender_user = self.env["res.users"].sudo().browse(int(sender_id_raw))
+                if sender_user.exists() and sender_user.partner_id:
+                    bot_partner = sender_user.partner_id
+
+            if not bot_partner:
+                bot_partner = self.env.ref("base.partner_root", raise_if_not_found=False)
+            if not bot_partner:
+                bot_user = self.env.ref("base.user_root", raise_if_not_found=False)
+                bot_partner = bot_user.partner_id if bot_user else self.env.user.partner_id
+
+            direct_chat_body = Markup(_(
                 "🚨 <b>YÊU CẦU ĐỔI/TRẢ HÀNG ZALO MINI APP MỚI</b><br/>"
                 "• <b>Đơn hàng:</b> %s<br/>"
                 "• <b>Phiếu xuất kho:</b> %s<br/>"
                 "• <b>Khách hàng:</b> %s (%s)<br/>"
                 "• <b>Phân loại nguyên nhân:</b> %s<br/>"
                 "• <b>Tình trạng sản phẩm:</b> %s<br/>"
-                "• <b>Ghi chú từ khách:</b> %s"
-            )) % (so_name, self.name, cust_name, cust_phone, cat_label, cond_label, self.x_zalo_return_note or "Không có")
-            self.message_post(
-                body=chatter_msg,
-                partner_ids=target_partners.ids,
-                message_type="notification",
-                subtype_xmlid="mail.mt_comment",
-            )
+                "• <b>Ghi chú từ khách:</b> %s<br/>"
+                "👉 <i>Vui lòng vào kiểm tra phiếu xuất %s để duyệt hoặc từ chối yêu cầu đổi/trả.</i>"
+            )) % (so_name, self.name, cust_name, cust_phone, cat_label, cond_label, self.x_zalo_return_note or "Không có", self.name)
 
+            for user in target_users:
+                target_partner = user.partner_id
+                if not target_partner.exists() or target_partner.id == bot_partner.id:
+                    continue
+                try:
+                    direct_channel = DiscussChannel.search([
+                        ("channel_type", "=", "chat"),
+                        ("channel_member_ids.partner_id", "in", [bot_partner.id]),
+                        ("channel_member_ids.partner_id", "in", [target_partner.id]),
+                    ], limit=1)
+
+                    if not direct_channel:
+                        try:
+                            direct_channel = DiscussChannel.with_user(self.env.ref("base.user_root", raise_if_not_found=False) or 1).channel_get(partners_to=[target_partner.id])
+                        except Exception:
+                            direct_channel = None
+
+                    if not direct_channel:
+                        direct_channel = DiscussChannel.create({
+                            "name": f"{bot_partner.name}, {target_partner.name}",
+                            "channel_type": "chat",
+                            "channel_member_ids": [
+                                (0, 0, {"partner_id": bot_partner.id}),
+                                (0, 0, {"partner_id": target_partner.id}),
+                            ],
+                        })
+
+                    if direct_channel:
+                        direct_channel.message_post(
+                            body=direct_chat_body,
+                            message_type="comment",
+                            subtype_xmlid="mail.mt_comment",
+                            author_id=bot_partner.id,
+                        )
+                        _logger.info("Direct Chat popup for Return sent to user %s (partner %s)", user.name, target_partner.name)
+                except Exception as de:
+                    _logger.warning("Failed to send direct return chat to user %s: %s", user.name, de)
+
+            # Gửi Group Channel nếu có cấu hình
+            return_channel_id_raw = Param.get_param("hlv_zalo_miniapp.return_notify_channel_id", "")
+            if return_channel_id_raw and str(return_channel_id_raw).isdigit():
+                group_channel = DiscussChannel.browse(int(return_channel_id_raw))
+                if group_channel.exists():
+                    group_channel.message_post(
+                        body=direct_chat_body,
+                        message_type="comment",
+                        subtype_xmlid="mail.mt_comment",
+                    )
+        except Exception as dce:
+            _logger.warning("Failed to process Direct Chat for return: %s", dce)
+
+        # ===== KÊNH 3: Odoo Bus Live Pop-up Toast (Sticky) & Notification Bell =====
+        target_partners = target_users.mapped("partner_id")
+        if target_partners:
             # Bắn Pop-Up Notification (Hiển thị 8-10s đủ thời gian đọc rồi tự động ẩn, không bắt tắt thủ công)
             bus = self.env["bus.bus"].sudo()
             toast_title = _("🚨 YÊU CẦU ĐỔI/TRẢ ZALO: %s") % so_name
@@ -399,7 +461,7 @@ class StockPicking(models.Model):
                 except Exception as bse:
                     _logger.debug("Failed to send bus notification to partner %s: %s", partner.id, bse)
 
-        # ===== KÊNH 3: Instant Zalo Mobile Push (`hlv.zalo.stock.notification`) =====
+        # ===== KÊNH 4: Instant Zalo Mobile Push (`hlv.zalo.stock.notification`) =====
         try:
             raw_zalo_uids = Param.get_param("hlv_zalo_miniapp.return_zalo_uids", "")
             zalo_recipients = [u.strip() for u in raw_zalo_uids.split(",") if u.strip()]
