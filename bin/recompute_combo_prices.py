@@ -8,6 +8,7 @@ Tính lại TẤT CẢ giá của sản phẩm combo (BOM Kit / phantom):
   - x_studio_ga_web         (Giá Web)      -- đã tự tính từ trước, tính lại cho đồng bộ
   - x_studio_ga_hng_nim_yt  (Giá Niêm Yết) -- đã tự tính từ trước, tính lại cho đồng bộ
   - list_price              (Giá bán lẻ)   -- cùng cơ chế, tổng list_price linh kiện theo qty
+  - x_zalo_price            (Giá Zalo App) -- cùng cơ chế, tổng x_zalo_price linh kiện theo qty
 
 Dùng lại logic gốc: product.template._compute_combo_selling_price()
 (custom_addons/wordpress_sync/models/product_template.py) để đảm bảo
@@ -29,6 +30,7 @@ FIELDS_TO_WATCH = [
     'x_studio_gia_san_tmdt',
     'x_studio_gi_bn_thng_mi',
     'list_price',
+    'x_zalo_price',
 ]
 
 Template = env['product.template'].sudo()

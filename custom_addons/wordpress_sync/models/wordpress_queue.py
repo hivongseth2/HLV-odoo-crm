@@ -13,7 +13,13 @@ class WordPressSyncQueue(models.Model):
     product_id = fields.Many2one('product.template', string='Sản phẩm', required=True, ondelete='cascade')
     product_name = fields.Char(related='product_id.name', string='Tên sản phẩm', readonly=True)
     sku = fields.Char(related='product_id.default_code', string='Mã SKU', readonly=True)
-    
+
+    config_id = fields.Many2one(
+        'wordpress.config', string='Site', ondelete='cascade', index=True,
+        help='Site WordPress cụ thể job này sẽ đồng bộ tới. '
+             'Để trống (job cũ trước khi có multi-site) = tự resolve theo site mặc định lúc xử lý.'
+    )
+
     status = fields.Selection([
         ('draft', 'Nháp'),
         ('pending', 'Chờ xử lý'),
@@ -87,9 +93,11 @@ class WordPressSyncQueue(models.Model):
             
             try:
                 # Identify config and service
+                # job.config_id = site cụ thể job này nhắm tới (multi-site).
+                # Job cũ (tạo trước khi có multi-site) không có config_id -> fallback site mặc định.
                 product = job.product_id
-                config = product._get_wordpress_config()
-                
+                config = job.config_id or product._get_wordpress_config()
+
                 if not config:
                     raise Exception("No WordPress Config found")
 
@@ -147,27 +155,32 @@ class WordPressSyncQueue(models.Model):
             self.env.cr.commit()
 
     @api.model
-    def create_job(self, product, sync_type='price', priority=10, initial_log=None, old_value=None, new_value=None):
+    def create_job(self, product, sync_type='price', priority=10, initial_log=None, old_value=None, new_value=None, config_id=None):
         """
-        Helper to create or update existing pending job
+        Helper to create or update existing pending job.
+
+        config_id: site cụ thể job này nhắm tới (multi-site). Bỏ trống = job
+        "legacy" dùng site mặc định lúc xử lý (product._get_wordpress_config()).
+        Mỗi (product, sync_type, config) chỉ giữ tối đa 1 job pending/failed.
         """
-        # Check if pending job exists for this product
+        # Check if pending job exists for this product + site
         existing = self.search([
             ('product_id', '=', product.id),
             ('status', 'in', ['pending', 'failed']),
-            ('sync_type', '=', sync_type)
+            ('sync_type', '=', sync_type),
+            ('config_id', '=', config_id or False),
         ], limit=1)
-        
+
         vals = {
-            'status': 'pending', 
+            'status': 'pending',
             'next_execution': fields.Datetime.now(),
             'priority': max(existing.priority if existing else 0, priority),
             'attempt_count': 0,  # Reset retry count khi user chủ động sync lại
         }
-        
+
         if old_value: vals['old_value'] = old_value
         if new_value: vals['new_value'] = new_value
-        
+
         if initial_log:
              vals['log'] = f"{initial_log}\n{existing.log or ''}" if existing else initial_log
 
@@ -181,6 +194,7 @@ class WordPressSyncQueue(models.Model):
                 'sync_type': sync_type,
                 'priority': priority,
                 'old_value': old_value,
-                'new_value': new_value
+                'new_value': new_value,
+                'config_id': config_id or False,
             })
             return self.create(vals)
