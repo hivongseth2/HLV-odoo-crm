@@ -58,6 +58,7 @@ class ProductTemplate(models.Model):
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_hng_nim_yt',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_gia_san_tmdt',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_gi_bn_thng_mi',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_zalo_price',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_wp_combo_price',
     )
     def _compute_combo_selling_price(self):
@@ -72,14 +73,14 @@ class ProductTemplate(models.Model):
             discount_pct = 0.0
 
         for product in self:
-            combo_price, listed_price, tmdt_price, thuongmai_price, retail_price = product._calculate_combo_price_values(
+            combo_price, listed_price, tmdt_price, thuongmai_price, retail_price, zalo_price = product._calculate_combo_price_values(
                 pricing_method, discount_pct
             )
             product.computed_combo_selling_price = combo_price
 
             # Auto-update Odoo price fields if calculated
             # Update x_studio_ga_web, x_studio_ga_hng_nim_yt, x_studio_gia_san_tmdt,
-            # x_studio_gi_bn_thng_mi và list_price từ BOM (cùng một cơ chế)
+            # x_studio_gi_bn_thng_mi, list_price và x_zalo_price từ BOM (cùng một cơ chế)
             vals = {}
             if combo_price > 0 and 'x_studio_ga_web' in product._fields:
                  vals['x_studio_ga_web'] = combo_price
@@ -96,6 +97,9 @@ class ProductTemplate(models.Model):
             if retail_price > 0:
                  vals['list_price'] = retail_price
 
+            if zalo_price > 0 and 'x_zalo_price' in product._fields:
+                 vals['x_zalo_price'] = zalo_price
+
             if vals:
                 # Use write to update fields safely
                 product.write(vals)
@@ -107,10 +111,10 @@ class ProductTemplate(models.Model):
 
     def _calculate_combo_price_values(self, pricing_method='sum_combo_price', discount_pct=0.0):
         """
-        Tính giá combo (bán, niêm yết, sàn TMĐT, thương mại, bán lẻ) dựa trên BOM
+        Tính giá combo (bán, niêm yết, sàn TMĐT, thương mại, bán lẻ, Zalo) dựa trên BOM
 
         Returns:
-            tuple: (selling_price, listed_price, tmdt_price, thuongmai_price, retail_price)
+            tuple: (selling_price, listed_price, tmdt_price, thuongmai_price, retail_price, zalo_price)
         """
         self.ensure_one()
 
@@ -122,13 +126,14 @@ class ProductTemplate(models.Model):
         ], limit=1)
 
         if not bom:
-            return 0.0, 0.0, 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
         total_selling_price = 0.0
         total_listed_price = 0.0
         total_tmdt_price = 0.0
         total_thuongmai_price = 0.0
         total_retail_price = 0.0
+        total_zalo_price = 0.0
 
         for line in bom.bom_line_ids:
             child_product = line.product_id.product_tmpl_id
@@ -149,6 +154,10 @@ class ProductTemplate(models.Model):
             # Giá bán lẻ (list_price) - tổng list_price con, cùng cơ chế với giá niêm yết
             total_retail_price += (child_product.list_price or 0.0) * qty
 
+            # Giá Zalo Mini App - tổng x_zalo_price con, cùng cơ chế với giá niêm yết
+            child_zalo = getattr(child_product, 'x_zalo_price', 0) or 0.0
+            total_zalo_price += child_zalo * qty
+
             if pricing_method == 'sum_combo_price':
                 # Lấy x_wp_combo_price, nếu = 0 thì lấy giá bán thường
                 combo_price = child_product.x_wp_combo_price or 0.0
@@ -167,8 +176,9 @@ class ProductTemplate(models.Model):
             total_tmdt_price = total_tmdt_price * (1 - discount_pct / 100)
             total_thuongmai_price = total_thuongmai_price * (1 - discount_pct / 100)
             total_retail_price = total_retail_price * (1 - discount_pct / 100)
+            total_zalo_price = total_zalo_price * (1 - discount_pct / 100)
 
-        return total_selling_price, total_listed_price, total_tmdt_price, total_thuongmai_price, total_retail_price
+        return total_selling_price, total_listed_price, total_tmdt_price, total_thuongmai_price, total_retail_price, total_zalo_price
 
     # ===========================================
     # OVERRIDE METHODS
@@ -183,6 +193,7 @@ class ProductTemplate(models.Model):
             'x_wp_combo_price',
             'list_price',
             'x_studio_ga_hng_nim_yt',
+            'x_zalo_price',
         ]
         has_price_change = any(field in vals for field in price_fields)
         changed_price_fields = [field for field in price_fields if field in vals]
