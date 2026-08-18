@@ -44,6 +44,35 @@ class ProductTemplate(models.Model):
         help='Giá bán combo được tính tự động từ BOM'
     )
 
+    wordpress_config_ids = fields.Many2many(
+        'wordpress.config',
+        relation='product_template_wordpress_config_rel',
+        column1='product_tmpl_id',
+        column2='wordpress_config_id',
+        string='Site bán (WordPress)',
+        domain=[('active', '=', True)],
+        help='Sản phẩm này chỉ đồng bộ lên (những) site được chọn ở đây. '
+             'Để trống = dùng site mặc định trong Settings (hành vi cũ).'
+    )
+
+    # ===========================================
+    # SITE TARGETING (multi-site sync)
+    # ===========================================
+    def _get_target_wordpress_configs(self):
+        """Site(s) cần đồng bộ cho sản phẩm này.
+
+        Nếu sản phẩm được gắn cụ thể site nào (wordpress_config_ids) thì chỉ
+        tạo job cho đúng các site đó, tránh tạo job tràn lan cho mọi site khi
+        chỉ bán trên 1-2 site. Nếu chưa gắn site nào, fallback về site mặc
+        định (giữ nguyên hành vi trước khi có multi-site).
+        """
+        self.ensure_one()
+        configs = self.wordpress_config_ids.filtered('active')
+        if configs:
+            return configs
+        default_config = self._get_wordpress_config()
+        return default_config if default_config else self.env['wordpress.config']
+
     # ===========================================
     # COMPUTED METHODS
     # ===========================================
@@ -336,20 +365,27 @@ class ProductTemplate(models.Model):
         return stock_queue_values
 
     def _auto_sync_stock_to_wordpress(self, old_value=None, new_value=None, stock_queue_values=None):
-        """Queue stock sync job"""
+        """Queue stock sync job (1 job cho mỗi site sản phẩm được gắn)"""
         Queue = self.env['wordpress.sync.queue']
         for product in self:
             if not product.default_code: continue
             _logger.error(f"[Sync-DEBUG] Auto-Syncing Stock for {product.name} (ID: {product.id})")
             queue_values = (stock_queue_values or {}).get(product.id, {})
-            
-            Queue.create_job(
-                product, 
-                sync_type='stock', 
-                priority=50,
-                old_value=queue_values.get('old_value', old_value),
-                new_value=queue_values.get('new_value', new_value)
-            ) # Manual change = High priority
+
+            configs = product._get_target_wordpress_configs()
+            if not configs:
+                _logger.warning(f"Auto-sync stock: No active WordPress configuration found for {product.name}")
+                continue
+
+            for config in configs:
+                Queue.create_job(
+                    product,
+                    sync_type='stock',
+                    priority=50,
+                    config_id=config.id,
+                    old_value=queue_values.get('old_value', old_value),
+                    new_value=queue_values.get('new_value', new_value)
+                ) # Manual change = High priority
 
     def _update_parent_combo_prices(self):
         """Tìm và cập nhật giá của các combo cha chứa sản phẩm này"""
@@ -488,31 +524,33 @@ class ProductTemplate(models.Model):
             return str(value)
 
     def _auto_sync_to_wordpress(self, price_queue_values=None):
-        """Tự động đồng bộ giá lên WordPress: Create Queue Jobs"""
-        config = self._get_wordpress_config()
-        if not config:
-            _logger.warning("Auto-sync: No active WordPress configuration found")
-            return
-
+        """Tự động đồng bộ giá lên WordPress: Create Queue Jobs (1 job cho mỗi site sản phẩm được gắn)"""
         # Create Queue Jobs for each product
         QueueModel = self.env['wordpress.sync.queue']
-        
+
         for product in self:
             # Check SKU
             if not product.default_code:
                 continue
 
+            configs = product._get_target_wordpress_configs()
+            if not configs:
+                _logger.warning(f"Auto-sync: No active WordPress configuration found for {product.name}")
+                continue
+
             queue_values = (price_queue_values or {}).get(product.id, {})
-            QueueModel.create_job(
-                product,
-                sync_type='price',
-                priority=10,
-                old_value=queue_values.get('old_value'),
-                new_value=queue_values.get('new_value'),
-            )
-            _logger.info(f"Queued sync for product {product.name} (SKU: {product.default_code})")
-            
-            # Post internal note about queued status? 
+            for config in configs:
+                QueueModel.create_job(
+                    product,
+                    sync_type='price',
+                    priority=10,
+                    config_id=config.id,
+                    old_value=queue_values.get('old_value'),
+                    new_value=queue_values.get('new_value'),
+                )
+                _logger.info(f"Queued sync for product {product.name} (SKU: {product.default_code}) -> {config.name}")
+
+            # Post internal note about queued status?
             # Maybe too spammy. Let's just create job.
 
     def _post_sync_note(self, product, result, success=True):

@@ -34,12 +34,19 @@
                 <label for="x_wp_stock_status" string="Tình trạng WordPress"/>
                 <div class="o_row">
                     <field name="x_wp_stock_status" readonly="1" force_save="1"/>
-                    <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d" 
-                            string="Cập nhật an toàn" 
-                            type="action" 
+                    <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d"
+                            string="Cập nhật an toàn"
+                            type="action"
                             class="btn btn-secondary btn-sm"
                             icon="fa-shield"
                             help="Cập nhật trạng thái và đồng bộ các Combo cha liên quan"/>
+                </div>
+
+                <label for="wordpress_config_ids" string="Site bán (WordPress)"/>
+                <div class="o_row">
+                    <field name="wordpress_config_ids" widget="many2many_tags"
+                           options="{'no_create': True}"
+                           help="Để trống = đồng bộ theo site mặc định trong Settings. Chọn cụ thể site nếu sản phẩm chỉ bán trên 1 vài site để tránh tạo job đồng bộ cho các site không liên quan."/>
                 </div>
             </xpath>
         </field>
