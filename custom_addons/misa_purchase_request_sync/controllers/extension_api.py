@@ -192,8 +192,13 @@ class MisaExtensionController(http.Controller):
             else:
                 payload = {"ok": True, "exists": False, "name": name}
         else:
+            # ._fields["state"].selection trả label GỐC (tiếng Anh) định nghĩa
+            # trong code, không dịch theo ngôn ngữ hiện tại. Phải dùng
+            # ._description_selection(env) để lấy đúng label tiếng Việt
+            # (nếu không sẽ hiện "Sales Order" thay vì "Đơn bán hàng" v.v.).
+            pr_vi = pr.with_context(lang="vi_VN")
             state_label = (
-                dict(pr._fields["state"].selection).get(pr.state, pr.state)
+                dict(pr_vi._fields["state"]._description_selection(pr_vi.env)).get(pr.state, pr.state)
                 if pr.state
                 else ""
             )
@@ -344,8 +349,12 @@ class MisaExtensionController(http.Controller):
         if not so:
             payload = {"ok": True, "exists": False}
         else:
+            # Xem giải thích ở nhánh purchase.request phía trên: dùng
+            # _description_selection(env) để có label tiếng Việt thay vì
+            # label gốc tiếng Anh ("Sales Order" thay vì "Đơn bán hàng").
+            so_vi = so.with_context(lang="vi_VN")
             state_label = (
-                dict(so._fields["state"].selection).get(so.state, so.state)
+                dict(so_vi._fields["state"]._description_selection(so_vi.env)).get(so.state, so.state)
                 if so.state
                 else ""
             )
@@ -791,8 +800,10 @@ class MisaExtensionController(http.Controller):
             else:
                 payload = {"ok": True, "exists": False, "name": po_code, "can_revoke": False}
         else:
+            # Xem giải thích ở nhánh purchase.request phía trên.
+            po_vi = po.with_context(lang="vi_VN")
             state_label = (
-                dict(po._fields["state"].selection).get(po.state, po.state)
+                dict(po_vi._fields["state"]._description_selection(po_vi.env)).get(po.state, po.state)
                 if po.state
                 else ""
             )
@@ -983,6 +994,10 @@ class MisaExtensionController(http.Controller):
 
         # 0) Ưu tiên tìm theo mã số thuế (TaxCode) từ MISA CRM -> vat của res.partner
         tax_code = (payload.get('tax_code') or kwargs.get('tax_code') or '').strip()
+        _logger.info(
+            "MISA Loyalty API: nhận request account_name=%r account_id=%r partner_id=%r tax_code=%r",
+            account_name, account_id, partner_id, tax_code,
+        )
         if tax_code:
             normalized_tax_code = re.sub(r'[^0-9a-zA-Z]', '', tax_code).upper()
             if normalized_tax_code:
@@ -997,9 +1012,11 @@ class MisaExtensionController(http.Controller):
                 row = env.cr.fetchone()
                 if row:
                     partner = env['res.partner'].sudo().browse(row[0]).exists()
+            _logger.info("MISA Loyalty API: kết quả khớp theo tax_code -> partner=%s", partner)
 
         if not partner and partner_id:
             partner = env['res.partner'].sudo().browse(int(partner_id)).exists()
+            _logger.info("MISA Loyalty API: kết quả khớp theo partner_id -> partner=%s", partner)
 
         # Ưu tiên account_id (ID nội bộ MISA, tra qua Account API — cùng cơ chế mà
         # sale_order_misa_sync.py dùng để đồng bộ khách hàng chính xác) TRƯỚC khi
@@ -1012,8 +1029,9 @@ class MisaExtensionController(http.Controller):
             try:
                 headers, _crm_token = env['sale.order']._misa_headers() if hasattr(env['sale.order'], '_misa_headers') else ({}, False)
                 partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
-            except Exception:
-                pass
+                _logger.info("MISA Loyalty API: kết quả khớp theo account_id (Account API) -> partner=%s", partner)
+            except Exception as exc:
+                _logger.exception("MISA Loyalty API: lỗi khi gọi _sync_customer_from_misa_account_api(account_id=%r): %s", account_id, exc)
 
         if not partner and account_name:
             partner = env['res.partner'].sudo().search([
@@ -1028,8 +1046,14 @@ class MisaExtensionController(http.Controller):
                     ('active', '=', True),
                     ('name', 'ilike', account_name),
                 ], limit=1)
+            _logger.info("MISA Loyalty API: kết quả khớp theo account_name -> partner=%s", partner)
 
         if not partner:
+            _logger.warning(
+                "MISA Loyalty API: KHÔNG tìm được partner nào cho account_name=%r account_id=%r partner_id=%r tax_code=%r "
+                "-> trả về danh sách rỗng.",
+                account_name, account_id, partner_id, tax_code,
+            )
             return request.make_response(
                 json.dumps({"ok": True, "data": {"accounts": [], "default_pct": 0.0, "default_account_id": False}}),
                 headers=[("Content-Type", "application/json")]
@@ -1042,6 +1066,11 @@ class MisaExtensionController(http.Controller):
             ('partner_id', '=', root.id),
             ('active', '=', True),
         ])
+        _logger.info(
+            "MISA Loyalty API: partner=%s (id=%s) -> commercial_partner=%s -> loyalty_root=%s (id=%s) -> tìm thấy %s tài khoản Loyalty",
+            partner.display_name, partner.id, partner.commercial_partner_id.display_name if partner.commercial_partner_id else partner.display_name,
+            root.display_name, root.id, len(loyalty_accounts),
+        )
 
         accounts_data = []
         default_pct = 0.0
