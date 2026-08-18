@@ -421,13 +421,16 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             except Exception as me:
                 _logger.warning("Post chatter error on sale.order %s: %s", sale_order.id, me)
 
-            # 3. Gửi thông báo vào Kênh Chat Odoo (Discuss Channel)
+            # 3. Gửi thông báo vào Kênh Chat Odoo (Direct Chat 1-1 & Discuss Channel)
             self._notify_order_to_discuss_channel(sale_order, payment_method=prepare.payment_method, customer_note=customer_note)
 
-            # 4. Gửi ZNS xác nhận đơn nếu có cấu hình
+            # 4. Gửi tin nhắn Zalo về điện thoại cho các Zalo User ID (Admin/Quản lý)
+            self._send_order_zalo_notification_message(sale_order, payment_method=prepare.payment_method, customer_note=customer_note)
+
+            # 5. Gửi ZNS xác nhận đơn nếu có cấu hình
             self._send_order_zns_notification(sale_order)
 
-            # 5. Dọn dẹp giỏ hàng tạm (zalo.miniapp.cart.line) của khách sau khi tạo đơn thành công
+            # 6. Dọn dẹp giỏ hàng tạm (zalo.miniapp.cart.line) của khách sau khi tạo đơn thành công
             try:
                 CartLine = request.env["zalo.miniapp.cart.line"].sudo()
                 cart_lines = CartLine.search([("partner_id", "=", partner.id)])
