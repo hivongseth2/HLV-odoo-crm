@@ -101,16 +101,17 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         categories = []
         tmpl = product.product_tmpl_id
 
-        # 1. Lấy từ x_zalo_categ_ids (Danh mục Zalo)
-        # Đọc TRỰC TIẾP từ product.template (product_tmpl_id) — chủ sở hữu thật của field.
-        # Đọc qua product.product (delegation/related) KHÔNG đầy đủ với m2m nhiều giá trị
-        # (fix bug: sản phẩm gán nhiều danh mục chỉ hiển thị 1 danh mục).
-        if tmpl.x_zalo_categ_ids:
-            for cat in tmpl.x_zalo_categ_ids:
-                if cat.id not in category_ids:
-                    category_ids.append(cat.id)
-                    categories.append({"id": cat.id, "name": cat.name})
-
+        # 1. Load M2M values using the product.template ORM read path.
+        # This avoids a stale/incomplete field cache from the variant record.
+        tmpl_values = request.env["product.template"].sudo().search_read(
+            [("id", "=", tmpl.id)],
+            ["x_zalo_categ_ids"],
+            limit=1,
+        )
+        zalo_cat_ids = tmpl_values[0]["x_zalo_categ_ids"] if tmpl_values else []
+        for cat in request.env["pos.category"].sudo().browse(zalo_cat_ids):
+            category_ids.append(cat.id)
+            categories.append({"id": cat.id, "name": cat.name})
         # 2. Lấy bổ sung từ pos_categ_ids (Danh mục POS) nếu có
         if hasattr(tmpl, "pos_categ_ids") and tmpl.pos_categ_ids:
             for cat in tmpl.pos_categ_ids:
