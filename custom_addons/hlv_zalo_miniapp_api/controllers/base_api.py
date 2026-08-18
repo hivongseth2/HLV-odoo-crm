@@ -415,3 +415,43 @@ class ZaloBaseAPI:
             _logger.info("ZNS order confirmation sent for %s to %s", sale_order.name, phone)
         except Exception as e:
             _logger.warning("Failed to send ZNS order confirmation: %s", e)
+
+    def _send_order_zalo_notification_message(self, sale_order, payment_method="", customer_note=""):
+        """Gửi tin nhắn Zalo trực tiếp về điện thoại cho các Zalo User ID (Admin/Quản lý) qua hlv.zalo.stock.notification."""
+        try:
+            Param = request.env["ir.config_parameter"].sudo()
+            raw_zalo_uids = Param.get_param("hlv_zalo_miniapp.return_zalo_uids", "")
+            zalo_recipients = [u.strip() for u in raw_zalo_uids.split(",") if u.strip()]
+
+            if not zalo_recipients or "hlv.zalo.stock.notification" not in request.env:
+                return
+
+            zalo_config = request.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
+            if not zalo_config:
+                return
+
+            base_url = Param.get_param("web.base.url", "")
+            order_url = f"{base_url}/web#id={sale_order.id}&model=sale.order&view_type=form" if base_url else ""
+            partner = sale_order.partner_id
+            phone_str = partner.phone or partner.mobile or "N/A"
+
+            zalo_msg = (
+                f"🔔 CÓ ĐƠN HÀNG MỚI TỪ ZALO MINI APP\n"
+                f"  • Mã đơn: {sale_order.name}\n"
+                f"  • Khách hàng: {partner.name} ({phone_str})\n"
+                f"  • Tổng tiền: {sale_order.amount_total:,.0f} đ\n"
+                f"  • PTTT: {payment_method.upper() if payment_method else 'N/A'}\n"
+            )
+            if customer_note:
+                zalo_msg += f"  • Ghi chú: {customer_note}\n"
+            if order_url:
+                zalo_msg += f"👉 Mở xem trên Odoo: {order_url}"
+
+            for uid in zalo_recipients:
+                try:
+                    zalo_config.send_notification_message(uid, zalo_msg)
+                    _logger.info("✓ Zalo Order Notification sent to UID %s for order %s", uid, sale_order.name)
+                except Exception as ze:
+                    _logger.error("✗ Lỗi gửi Zalo Order Notification tới %s: %s", uid, ze)
+        except Exception as ex:
+            _logger.warning("Lỗi gửi Zalo Order Notification cho đơn %s: %s", sale_order.name, ex)

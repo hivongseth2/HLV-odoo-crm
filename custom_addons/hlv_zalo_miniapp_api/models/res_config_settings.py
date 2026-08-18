@@ -79,9 +79,9 @@ class ResConfigSettings(models.TransientModel):
     )
 
     x_zalo_return_zalo_uids = fields.Char(
-        string="Zalo User ID nhận tin nhắn Zalo",
+        string="Zalo User ID nhận tin nhắn Zalo (Đơn mới & Đổi/Trả)",
         config_parameter="hlv_zalo_miniapp.return_zalo_uids",
-        help="Danh sách Zalo User ID (phân cách bằng dấu phẩy) nhận tin nhắn Zalo trực tiếp về điện thoại khi có yêu cầu đổi/trả",
+        help="Danh sách Zalo User ID (phân cách bằng dấu phẩy) nhận tin nhắn thông báo Zalo trực tiếp về điện thoại khi có đơn hàng mới hoặc yêu cầu đổi/trả từ Zalo Mini App",
     )
 
     @api.model

@@ -44,7 +44,7 @@
                                 </div>
                             </div>
                         </setting>
-                        <setting string="Người Nhận Thông Báo Đổi/Trả Zalo" help="Cấu hình tài khoản Odoo và Zalo UID nhận thông báo chủ động khi khách hàng yêu cầu đổi/trả">
+                        <setting string="Người Nhận Thông Báo Đổi/Trả &amp; Đơn Hàng Qua Zalo" help="Cấu hình tài khoản Odoo nhận Activity Task và Zalo User ID nhận tin nhắn Zalo trực tiếp về điện thoại khi có Đơn hàng mới hoặc Yêu cầu đổi/trả">
                             <div className="content-group">
                                 <div className="row mt16">
                                     <label for="x_zalo_return_notify_user_ids" className="col-lg-3 o_light_label"/>
