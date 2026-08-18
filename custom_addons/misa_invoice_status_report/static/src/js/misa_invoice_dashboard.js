@@ -537,12 +537,12 @@ export class MisaInvoiceDashboard extends Component {
      * dùng tưởng nút bị lặp/bỏ sót vì bấm "Cập nhật lý do lệch" mãi không thấy dữ liệu tháng 7).
      * Giờ progress.total lấy từ resp.total (tổng CẢ danh sách) ngay từ lô đầu, và tự động gọi
      * lại *_candidates() cho tới khi candidates rỗng hoặc done >= total — không cần bấm lại. */
-    async _runScanUntilDone({ candidatesMethod, perItemMethod, progressKey, logKey, buildEntry }) {
+    async _runScanUntilDone({ candidatesMethod, perItemMethod, progressKey, logKey, buildEntry, candidatesKwargs }) {
         let total = null;
         const summary = { totalChecked: 0 };
         // eslint-disable-next-line no-constant-condition
         while (true) {
-            const resp = await this.orm.call("stock.picking", candidatesMethod, [], {});
+            const resp = await this.orm.call("stock.picking", candidatesMethod, [], candidatesKwargs || {});
             if (total === null) {
                 total = resp.total;
                 this.state[progressKey].total = total;
@@ -693,6 +693,10 @@ export class MisaInvoiceDashboard extends Component {
                 perItemMethod: "refresh_misa_invoice_gap_summary",
                 progressKey: "gapSummaryScanProgress",
                 logKey: "gapSummaryScanLog",
+                // Phải theo ĐÚNG bộ lọc ngày đang chọn trên dashboard — nếu không, số "còn cần
+                // cập nhật lý do" tính trên toàn bộ lịch sử, không khớp với số "phiếu đang
+                // lệch" (đã lọc theo filter) hiện ở drawer, gây khó hiểu.
+                candidatesKwargs: this.filterParams,
                 buildEntry: (candidate, result) => {
                     const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không xác định được lý do" };
                     if (result.error) {

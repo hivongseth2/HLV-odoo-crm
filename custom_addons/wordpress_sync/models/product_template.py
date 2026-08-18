@@ -53,7 +53,12 @@ class ProductTemplate(models.Model):
         'bom_ids.active',
         'bom_ids.bom_line_ids',
         'bom_ids.bom_line_ids.product_qty',
-        'bom_ids.bom_line_ids.product_id.product_tmpl_id.list_price'
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.list_price',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_web',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_hng_nim_yt',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_gia_san_tmdt',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_gi_bn_thng_mi',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_wp_combo_price',
     )
     def _compute_combo_selling_price(self):
         """Tính giá combo dựa trên BOM và phương pháp được cấu hình"""
@@ -67,35 +72,45 @@ class ProductTemplate(models.Model):
             discount_pct = 0.0
 
         for product in self:
-            combo_price, listed_price = product._calculate_combo_price_values(
+            combo_price, listed_price, tmdt_price, thuongmai_price, retail_price = product._calculate_combo_price_values(
                 pricing_method, discount_pct
             )
             product.computed_combo_selling_price = combo_price
-            
+
             # Auto-update Odoo price fields if calculated
-            # User request: update x_studio_ga_web and x_studio_ga_hng_nim_yt from BOM
+            # Update x_studio_ga_web, x_studio_ga_hng_nim_yt, x_studio_gia_san_tmdt,
+            # x_studio_gi_bn_thng_mi và list_price từ BOM (cùng một cơ chế)
             vals = {}
             if combo_price > 0 and 'x_studio_ga_web' in product._fields:
                  vals['x_studio_ga_web'] = combo_price
-            
+
             if listed_price > 0 and 'x_studio_ga_hng_nim_yt' in product._fields:
                  vals['x_studio_ga_hng_nim_yt'] = listed_price
-                 
+
+            if tmdt_price > 0 and 'x_studio_gia_san_tmdt' in product._fields:
+                 vals['x_studio_gia_san_tmdt'] = tmdt_price
+
+            if thuongmai_price > 0 and 'x_studio_gi_bn_thng_mi' in product._fields:
+                 vals['x_studio_gi_bn_thng_mi'] = thuongmai_price
+
+            if retail_price > 0:
+                 vals['list_price'] = retail_price
+
             if vals:
                 # Use write to update fields safely
                 product.write(vals)
 
     def _calculate_combo_price(self, pricing_method='sum_combo_price', discount_pct=0.0):
         """Deprecated: Use _calculate_combo_price_values instead"""
-        price, _ = self._calculate_combo_price_values(pricing_method, discount_pct)
+        price = self._calculate_combo_price_values(pricing_method, discount_pct)[0]
         return price
 
     def _calculate_combo_price_values(self, pricing_method='sum_combo_price', discount_pct=0.0):
         """
-        Tính giá combo (bán và niêm yết) dựa trên BOM
+        Tính giá combo (bán, niêm yết, sàn TMĐT, thương mại, bán lẻ) dựa trên BOM
 
         Returns:
-            tuple: (selling_price, listed_price)
+            tuple: (selling_price, listed_price, tmdt_price, thuongmai_price, retail_price)
         """
         self.ensure_one()
 
@@ -107,18 +122,32 @@ class ProductTemplate(models.Model):
         ], limit=1)
 
         if not bom:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0, 0.0
 
         total_selling_price = 0.0
         total_listed_price = 0.0
+        total_tmdt_price = 0.0
+        total_thuongmai_price = 0.0
+        total_retail_price = 0.0
 
         for line in bom.bom_line_ids:
             child_product = line.product_id.product_tmpl_id
             qty = line.product_qty or 1.0
-            
+
             # Tính giá listed (luôn là tổng listed con)
             child_listed = getattr(child_product, 'x_studio_ga_hng_nim_yt', 0) or child_product.list_price or 0.0
             total_listed_price += child_listed * qty
+
+            # Giá sàn TMĐT (tổng của các con, cùng cơ chế với giá niêm yết)
+            child_tmdt = getattr(child_product, 'x_studio_gia_san_tmdt', 0) or 0.0
+            total_tmdt_price += child_tmdt * qty
+
+            # Giá thương mại (tổng của các con, cùng cơ chế với giá niêm yết)
+            child_thuongmai = getattr(child_product, 'x_studio_gi_bn_thng_mi', 0) or 0.0
+            total_thuongmai_price += child_thuongmai * qty
+
+            # Giá bán lẻ (list_price) - tổng list_price con, cùng cơ chế với giá niêm yết
+            total_retail_price += (child_product.list_price or 0.0) * qty
 
             if pricing_method == 'sum_combo_price':
                 # Lấy x_wp_combo_price, nếu = 0 thì lấy giá bán thường
@@ -135,8 +164,11 @@ class ProductTemplate(models.Model):
         # Apply discount if using discount_percentage method
         if pricing_method == 'discount_percentage' and discount_pct > 0:
             total_selling_price = total_selling_price * (1 - discount_pct / 100)
+            total_tmdt_price = total_tmdt_price * (1 - discount_pct / 100)
+            total_thuongmai_price = total_thuongmai_price * (1 - discount_pct / 100)
+            total_retail_price = total_retail_price * (1 - discount_pct / 100)
 
-        return total_selling_price, total_listed_price
+        return total_selling_price, total_listed_price, total_tmdt_price, total_thuongmai_price, total_retail_price
 
     # ===========================================
     # OVERRIDE METHODS
