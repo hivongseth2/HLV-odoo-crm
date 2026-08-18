@@ -28,9 +28,17 @@
                     </block>
 
                     <block title="Thông Báo Đơn Hàng Mới &amp; Yêu Cầu Đổi/Trả">
-                        <setting string="Thông Báo Đơn Hàng Mới Qua Kênh Chat Odoo" help="Chọn Kênh Thảo luận (Discuss Channel) trên Odoo để nhận thông báo tức thì khi có đơn hàng mới từ Zalo Mini App">
+                        <setting string="Tài Khoản Odoo Nhận Chat Trực Tiếp Đơn Mới" help="Cấu hình tài khoản người gửi và danh sách tài khoản Odoo nhận tin nhắn Chat trực tiếp 1-1 (Direct Message) nhảy popup lên màn hình ngay khi có đơn hàng mới từ Zalo Mini App">
                             <div className="content-group">
                                 <div className="row mt16">
+                                    <label for="x_zalo_order_sender_user_id" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_order_sender_user_id" options="{'no_create': True}" placeholder="Mặc định: OdooBot"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_order_notify_user_ids" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_order_notify_user_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                </div>
+                                <div className="row mt8">
                                     <label for="x_zalo_order_notify_channel_id" className="col-lg-3 o_light_label"/>
                                     <field name="x_zalo_order_notify_channel_id" options="{'no_create': True}"/>
                                 </div>
