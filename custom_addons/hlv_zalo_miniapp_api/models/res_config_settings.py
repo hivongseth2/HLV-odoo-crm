@@ -74,8 +74,13 @@ class ResConfigSettings(models.TransientModel):
         "res_config_settings_zalo_return_user_rel",
         "config_id",
         "user_id",
-        string="Người dùng nhận Activity Đổi/Trả Zalo",
-        help="Danh sách người dùng Odoo sẽ được giao Activity Task và nhận chuông thông báo khi có yêu cầu đổi/trả từ Zalo Mini App",
+        string="Người dùng nhận Chat trực tiếp & Activity Đổi/Trả",
+        help="Danh sách người dùng Odoo sẽ nhận tin nhắn Chat trực tiếp 1-1 (popup nhảy trên màn hình) và được giao Activity Task khi có yêu cầu đổi/trả từ Zalo Mini App",
+    )
+    x_zalo_return_notify_channel_id = fields.Many2one(
+        "discuss.channel",
+        string="Kênh Chat Odoo nhận thông báo đổi/trả (tùy chọn)",
+        help="Kênh Thảo luận (Discuss Channel) trên Odoo sẽ nhận tin nhắn thông báo khi có yêu cầu đổi/trả từ Zalo Mini App",
     )
 
     x_zalo_return_zalo_uids = fields.Char(
@@ -116,11 +121,15 @@ class ResConfigSettings(models.TransientModel):
         raw_channel_id = ICP.get_param("hlv_zalo_miniapp.order_notify_channel_id", "")
         channel_id = int(raw_channel_id) if raw_channel_id and str(raw_channel_id).isdigit() else False
 
+        raw_return_channel_id = ICP.get_param("hlv_zalo_miniapp.return_notify_channel_id", "")
+        return_channel_id = int(raw_return_channel_id) if raw_return_channel_id and str(raw_return_channel_id).isdigit() else False
+
         res.update(
             x_zalo_order_sender_user_id=sender_id,
             x_zalo_order_notify_user_ids=[fields.Command.set(order_user_ids)],
             x_zalo_order_notify_channel_id=channel_id,
             x_zalo_return_notify_user_ids=[fields.Command.set(user_ids)],
+            x_zalo_return_notify_channel_id=return_channel_id,
         )
         return res
 
@@ -142,6 +151,10 @@ class ResConfigSettings(models.TransientModel):
         ICP.set_param(
             "hlv_zalo_miniapp.order_notify_channel_id",
             str(self.x_zalo_order_notify_channel_id.id) if self.x_zalo_order_notify_channel_id else "",
+        )
+        ICP.set_param(
+            "hlv_zalo_miniapp.return_notify_channel_id",
+            str(self.x_zalo_return_notify_channel_id.id) if self.x_zalo_return_notify_channel_id else "",
         )
 
         # Tự động sinh snapshot log và bump version khi cấu hình OA thay đổi
