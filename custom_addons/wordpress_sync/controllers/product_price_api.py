@@ -45,6 +45,7 @@ class WordPressProductPriceAPI(http.Controller):
         "x_studio_gia_san_tmdt",
         "x_studio_gi_bn_thng_mi",
         "x_wp_combo_price",
+        "x_zalo_price",
     }
 
     PRICE_ALIASES = {
@@ -60,6 +61,8 @@ class WordPressProductPriceAPI(http.Controller):
         "commercial_price": "x_studio_gi_bn_thng_mi",
         "combo_price": "x_wp_combo_price",
         "wp_combo_price": "x_wp_combo_price",
+        "zalo_price": "x_zalo_price",
+        "price_zalo": "x_zalo_price",
     }
 
     COMBO_PRICE_RESPONSE_FIELDS = (
@@ -69,6 +72,7 @@ class WordPressProductPriceAPI(http.Controller):
         "x_studio_gia_san_tmdt",
         "x_studio_gi_bn_thng_mi",
         "x_wp_combo_price",
+        "x_zalo_price",
     )
 
     TOKEN_PARAM = "wordpress_sync.price_update_api_token"
