@@ -48,6 +48,13 @@ class ResConfigSettings(models.TransientModel):
         help='Private Key do Zalo cung cấp dùng để ký MAC và xác thực Webhook Callback',
     )
 
+    # ===== Cấu hình Thông báo Đơn Hàng Mới Zalo =====
+    x_zalo_order_notify_channel_id = fields.Many2one(
+        "discuss.channel",
+        string="Kênh Chat Odoo nhận thông báo đơn mới",
+        help="Kênh Thảo luận (Discuss Channel) trên Odoo sẽ nhận tin nhắn thông báo khi có đơn hàng mới từ Zalo Mini App",
+    )
+
     # ===== Cấu hình Thông báo Yêu cầu Đổi/Trả Zalo =====
     x_zalo_return_notify_user_ids = fields.Many2many(
         "res.users",
@@ -76,7 +83,12 @@ class ResConfigSettings(models.TransientModel):
                 user_ids = [int(u.strip()) for u in clean_ids if u.strip().isdigit()]
             except Exception:
                 pass
+
+        raw_channel_id = ICP.get_param("hlv_zalo_miniapp.order_notify_channel_id", "")
+        channel_id = int(raw_channel_id) if raw_channel_id and str(raw_channel_id).isdigit() else False
+
         res.update(
+            x_zalo_order_notify_channel_id=channel_id,
             x_zalo_return_notify_user_ids=[fields.Command.set(user_ids)],
         )
         return res
@@ -90,6 +102,10 @@ class ResConfigSettings(models.TransientModel):
         super(ResConfigSettings, self).set_values()
         user_ids_str = ",".join(str(u_id) for u_id in self.x_zalo_return_notify_user_ids.ids)
         ICP.set_param("hlv_zalo_miniapp.return_notify_user_ids", user_ids_str)
+        ICP.set_param(
+            "hlv_zalo_miniapp.order_notify_channel_id",
+            str(self.x_zalo_order_notify_channel_id.id) if self.x_zalo_order_notify_channel_id else "",
+        )
 
         # Tự động sinh snapshot log và bump version khi cấu hình OA thay đổi
         if (

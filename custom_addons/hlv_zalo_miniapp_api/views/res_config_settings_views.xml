@@ -27,7 +27,15 @@
                         </setting>
                     </block>
 
-                    <block title="Thông Báo Yêu Cầu Đổi/Trả Zalo">
+                    <block title="Thông Báo Đơn Hàng Mới &amp; Yêu Cầu Đổi/Trả">
+                        <setting string="Thông Báo Đơn Hàng Mới Qua Kênh Chat Odoo" help="Chọn Kênh Thảo luận (Discuss Channel) trên Odoo để nhận thông báo tức thì khi có đơn hàng mới từ Zalo Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_order_notify_channel_id" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_order_notify_channel_id" options="{'no_create': True}"/>
+                                </div>
+                            </div>
+                        </setting>
                         <setting string="Người Nhận Thông Báo Đổi/Trả Zalo" help="Cấu hình tài khoản Odoo và Zalo UID nhận thông báo chủ động khi khách hàng yêu cầu đổi/trả">
                             <div className="content-group">
                                 <div className="row mt16">
