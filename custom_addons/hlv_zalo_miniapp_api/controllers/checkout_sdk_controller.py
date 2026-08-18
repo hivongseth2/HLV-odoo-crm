@@ -3,8 +3,10 @@ import hmac
 import hashlib
 import json
 import logging
+import re
 import time
 import uuid
+from markupsafe import Markup
 
 from odoo import http, fields
 from odoo.http import request, Response
@@ -385,6 +387,55 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
             sale_order = request.env['sale.order'].sudo().create(order_vals)
 
+            # 1. Tự động xác nhận đơn hàng (chuyển từ Báo giá 'draft' sang Đơn bán hàng 'sale')
+            try:
+                sale_order.action_confirm()
+            except Exception as ce:
+                _logger.warning("Order confirm warning on %s: %s", sale_order.name, ce)
+
+            # 2. Ghi log Chatter vào sale.order
+            partner = prepare.partner_id
+            note_raw = prepare.note or ""
+            customer_note = re.sub(r'^\[PTTT:\s*[^\]]+\]\s*(?:-\s*Ghi chú:\s*)?', '', note_raw).strip()
+            if customer_note.startswith("- Ghi chú: "):
+                customer_note = customer_note[10:].strip()
+
+            try:
+                chatter_msg = Markup(
+                    "<b>Đơn hàng được tạo và xác nhận từ Zalo Mini App</b><br/>"
+                    "• <b>Khách hàng:</b> %s (SĐT: %s)<br/>"
+                    "• <b>Phương thức thanh toán:</b> %s<br/>"
+                    "• <b>Mã đơn Zalo SDK:</b> %s<br/>"
+                    "• <b>Tổng tiền:</b> %s ₫"
+                ) % (
+                    partner.name,
+                    partner.phone or partner.mobile or "N/A",
+                    (prepare.payment_method or "N/A").upper(),
+                    zalo_order_id,
+                    f"{sale_order.amount_total:,.0f}",
+                )
+                if customer_note:
+                    chatter_msg += Markup("<br/>• <b>Ghi chú từ khách hàng:</b> %s") % customer_note
+
+                sale_order.message_post(body=chatter_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post chatter error on sale.order %s: %s", sale_order.id, me)
+
+            # 3. Gửi thông báo vào Kênh Chat Odoo (Discuss Channel)
+            self._notify_order_to_discuss_channel(sale_order, payment_method=prepare.payment_method, customer_note=customer_note)
+
+            # 4. Gửi ZNS xác nhận đơn nếu có cấu hình
+            self._send_order_zns_notification(sale_order)
+
+            # 5. Dọn dẹp giỏ hàng tạm (zalo.miniapp.cart.line) của khách sau khi tạo đơn thành công
+            try:
+                CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+                cart_lines = CartLine.search([("partner_id", "=", partner.id)])
+                if cart_lines:
+                    cart_lines.unlink()
+            except Exception as cle:
+                _logger.warning("Clear cart after order confirm error: %s", cle)
+
             prepare.write({'consumed': True})
 
             return self._response_success({
@@ -392,7 +443,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 'odoo_id': sale_order.id,
                 'order_name': sale_order.name,
                 'amount': prepare.amount,
-                'status': 'pending',
+                'status': 'confirmed',
             })
         except Exception as e:
             _logger.exception("Lỗi xác nhận đơn hàng Checkout SDK: %s", str(e))

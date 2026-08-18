@@ -4,7 +4,9 @@ import json
 import logging
 import re
 import time
+from markupsafe import Markup
 
+from odoo import fields
 from odoo.http import request, Response
 from odoo.exceptions import UserError
 
@@ -265,3 +267,90 @@ class ZaloBaseAPI:
             "ZALO_API %s %s partner=%s status=%s time=%.2fms",
             method, path, partner_id or "anonymous", status, elapsed_ms,
         )
+
+    # =========================================================================
+    # Order Notification Helpers
+    # =========================================================================
+
+    def _notify_order_to_discuss_channel(self, sale_order, payment_method="", customer_note=""):
+        """Gửi tin nhắn thông báo đơn hàng mới từ Zalo Mini App vào Kênh Chat Odoo (Discuss Channel)."""
+        try:
+            ICP = request.env["ir.config_parameter"].sudo()
+            channel_id_raw = ICP.get_param("hlv_zalo_miniapp.order_notify_channel_id", "")
+            channel = None
+            if channel_id_raw and str(channel_id_raw).isdigit():
+                channel = request.env["discuss.channel"].sudo().browse(int(channel_id_raw))
+                if not channel.exists():
+                    channel = None
+
+            # Fallback: tìm kênh có tên chứa 'zalo' hoặc 'don-hang' nếu chưa chọn kênh
+            if not channel:
+                channel = request.env["discuss.channel"].sudo().search([
+                    "|", ("name", "ilike", "zalo"), ("name", "ilike", "đơn hàng")
+                ], limit=1)
+
+            if not channel:
+                return
+
+            base_url = ICP.get_param("web.base.url", "")
+            order_url = f"{base_url}/web#id={sale_order.id}&model=sale.order&view_type=form" if base_url else ""
+
+            order_link_html = f"<a href='{order_url}'><b>{sale_order.name}</b></a>" if order_url else f"<b>{sale_order.name}</b>"
+            amount_formatted = f"{sale_order.amount_total:,.0f} ₫"
+            partner = sale_order.partner_id
+            phone_str = partner.phone or partner.mobile or "N/A"
+
+            msg_body = Markup(
+                "🛒 <b>CÓ ĐƠN HÀNG MỚI TỪ ZALO MINI APP!</b><br/>"
+                "• <b>Mã đơn:</b> %s<br/>"
+                "• <b>Khách hàng:</b> %s (SĐT: %s)<br/>"
+                "• <b>Tổng tiền:</b> <span style='color: #1177b7; font-weight: bold;'>%s</span><br/>"
+                "• <b>Phương thức thanh toán:</b> %s"
+            ) % (
+                Markup(order_link_html),
+                partner.name,
+                phone_str,
+                amount_formatted,
+                payment_method.upper() if payment_method else "N/A",
+            )
+            if customer_note:
+                msg_body += Markup("<br/>• <b>Ghi chú:</b> %s") % customer_note
+
+            channel.message_post(
+                body=msg_body,
+                message_type="comment",
+                subtype_xmlid="mail.mt_comment",
+            )
+            _logger.info("Discuss channel message posted for Zalo order %s to channel #%s", sale_order.name, channel.name)
+        except Exception as e:
+            _logger.warning("Failed to notify order to discuss channel: %s", e)
+
+    def _send_order_zns_notification(self, sale_order):
+        """Gửi ZNS thông báo xác nhận đơn hàng tới SĐT khách qua module hlv_zalo_zns (nếu có config)."""
+        try:
+            if "hlv.zalo.zns" not in request.env:
+                return
+
+            zns_config = request.env["hlv.zalo.zns"].sudo().search([], limit=1)
+            if not zns_config:
+                return
+
+            template_id = getattr(zns_config, "wp_template_id", False) or getattr(zns_config, "template_id", False)
+            if not template_id:
+                return
+
+            phone = sale_order.partner_id.phone or sale_order.partner_id.mobile
+            if not phone:
+                return
+
+            params = {
+                "order_code": sale_order.name,
+                "customer_name": sale_order.partner_id.name,
+                "cost": str(int(round(sale_order.amount_total))),
+                "date": fields.Date.to_string(sale_order.date_order.date() if sale_order.date_order else fields.Date.today()),
+            }
+
+            zns_config.send_zns(phone, params, template_id_override=template_id)
+            _logger.info("ZNS order confirmation sent for %s to %s", sale_order.name, phone)
+        except Exception as e:
+            _logger.warning("Failed to send ZNS order confirmation: %s", e)
