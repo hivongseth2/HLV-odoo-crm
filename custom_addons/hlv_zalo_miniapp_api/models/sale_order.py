@@ -375,7 +375,6 @@ class SaleOrder(models.Model):
                 "x_zalo_trans_time": fields.Datetime.now(),
             })
             order._send_zalo_cod_callback_payment(result_code=1)
-            order.message_post(body=_("Nhân viên đã xác nhận thu tiền thành công và đồng bộ trạng thái đơn COD lên Zalo SDK Server."))
         return True
 
     def action_query_zalo_order_status(self):
@@ -470,10 +469,6 @@ class SaleOrder(models.Model):
 
                     if vals:
                         order.write(vals)
-                    order.message_post(body=msg)
-                else:
-                    msg_body = resp.text.strip() if (resp.text and resp.text.strip()) else f"Mã HTTP {resp.status_code}"
-                    order.message_post(body=_("Phản hồi từ Zalo SDK Server khi tra cứu (HTTP %s): %s") % (resp.status_code, msg_body))
 
             except Exception as req_err:
                 _logger.exception("Lỗi khi tra cứu getOrderStatus cho đơn %s: %s", order.name, str(req_err))
@@ -641,8 +636,6 @@ class SaleOrder(models.Model):
                 "x_zalo_refund_time": vals["x_zalo_refund_time"],
             })
 
-        order.message_post(body=_("Gọi Zalo createRefund: <b>%s</b> (returnCode=%s, refundId=%s, amount=%s, msg=%s)") % (status, return_code, refund_id, amount_int, return_message))
-
         return res_json
 
     def action_query_zalo_refund_status(self):
@@ -720,8 +713,6 @@ class SaleOrder(models.Model):
                     "x_zalo_refund_status": vals.get("x_zalo_refund_status", order.x_zalo_refund_status),
                     "x_zalo_refund_time": vals.get("x_zalo_refund_time", order.x_zalo_refund_time),
                 })
-
-        order.message_post(body=_("Tra cứu Zalo getRefundStatus: <b>%s</b> (returnCode=%s, refundId=%s, msg=%s)") % (status, return_code, order.x_zalo_refund_id, return_message))
 
         return res_json
 
