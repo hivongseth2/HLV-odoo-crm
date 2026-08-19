@@ -172,19 +172,30 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         # Cấp phát trước mã đơn bán hàng dự kiến (sale.order sequence) để gắn vào Ghi chú & Extradata Zalo SDK
         order_name = request.env['ir.sequence'].sudo().next_by_code('sale.order') or 'S00000'
 
+        # 3.1. Xác thực và tính toán giảm giá Voucher (nếu có)
+        voucher_code = (body.get('voucher_code') or '').strip()
+        discount_amount = 0.0
+        if voucher_code:
+            voucher_res = self._verify_voucher_code(voucher_code, partner.id, total_amount)
+            if voucher_res.get('valid'):
+                discount_amount = float(voucher_res.get('estimated_discount', 0))
+            else:
+                _logger.warning("Prepare checkout invalid voucher %s: %s", voucher_code, voucher_res.get('error'))
+                voucher_code = ''
+
         extradata_obj = {
             'contact_id': partner.id,
             'odoo_order_name': order_name,
         }
 
         desc_text = f"Thanh toan don hang {order_name}"
-        final_order_amount = int(round(total_amount))
+        final_order_amount = max(int(round(total_amount - discount_amount)), 0)
 
         # 4. Đảm bảo quy tắc Zalo Checkout SDK: sum(item[i].amount) == amount tổng
         sum_sdk_items = sum(it['amount'] for it in sdk_items)
         if sdk_items and sum_sdk_items != final_order_amount:
             diff = final_order_amount - sum_sdk_items
-            sdk_items[-1]['amount'] += diff
+            sdk_items[-1]['amount'] = max(sdk_items[-1]['amount'] + diff, 0)
 
         # 5. Pre-stringify extradata và method để đảm bảo MAC consistency chuẩn Zalo SDK (alphabetical sort)
         extradata_str = json.dumps(extradata_obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
@@ -199,7 +210,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             params_for_mac['method'] = method_str
 
         mac_str = self._generate_create_order_mac(params_for_mac, private_key)
-        _logger.info("Zalo Checkout MAC computed: %s (amount=%s, order_name=%s, has_method=%s)", mac_str, final_order_amount, order_name, bool(method_str))
+        _logger.info("Zalo Checkout MAC computed: %s (amount=%s, discount=%s, voucher=%s, order_name=%s)", mac_str, final_order_amount, discount_amount, voucher_code, order_name)
 
         return {
             'partner_id': partner.id,
@@ -207,6 +218,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             'address_id': address_id,
             'note': body.get('note', ''),
             'payment_method': payment_method_input or 'native',
+            'voucher_code': voucher_code,
+            'discount_amount': discount_amount,
             'items_json': json.dumps(item_refs),
             'amount': final_order_amount,
             'desc': desc_text,
@@ -275,6 +288,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 'address_id': payload['address_id'] or 0,
                 'note': payload['note'],
                 'payment_method': payload['payment_method'],
+                'voucher_code': payload.get('voucher_code', ''),
+                'discount_amount': payload.get('discount_amount', 0.0),
                 'amount': payload['amount'],
                 'desc': payload['desc'],
                 'item_sdk': payload['item_sdk_json'],
@@ -387,13 +402,44 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
             sale_order = request.env['sale.order'].sudo().create(order_vals)
 
-            # 1. Tự động xác nhận đơn hàng (chuyển từ Báo giá 'draft' sang Đơn bán hàng 'sale')
+            # 1. Áp dụng Voucher (nếu có)
+            voucher_applied = False
+            if prepare.voucher_code:
+                try:
+                    sale_order.loyalty_voucher_code = prepare.voucher_code
+                    if hasattr(sale_order, 'action_apply_loyalty_voucher'):
+                        sale_order.action_apply_loyalty_voucher()
+                        voucher_applied = True
+                except Exception as ve:
+                    _logger.warning("Checkout SDK Voucher apply error on %s: %s", sale_order.name, ve)
+
+                # Fallback: nếu action_apply_loyalty_voucher không tạo dòng giảm giá
+                if not voucher_applied and prepare.discount_amount > 0:
+                    try:
+                        discount_product = sale_order._get_voucher_discount_product() if hasattr(sale_order, '_get_voucher_discount_product') else False
+                        if not discount_product:
+                            discount_product = request.env['product.product'].sudo().search([('default_code', '=', 'LOYALTY_VOUCHER_DISCOUNT')], limit=1)
+                        if discount_product:
+                            request.env['sale.order.line'].sudo().create({
+                                'order_id': sale_order.id,
+                                'product_id': discount_product.id,
+                                'name': f"Giảm giá Voucher [{prepare.voucher_code}]",
+                                'product_uom_qty': 1,
+                                'price_unit': -prepare.discount_amount,
+                                'tax_id': [(5, 0, 0)],
+                                'is_loyalty_reward_line': True,
+                            })
+                            voucher_applied = True
+                    except Exception as fe:
+                        _logger.warning("Fallback discount line error on %s: %s", sale_order.name, fe)
+
+            # 2. Tự động xác nhận đơn hàng (chuyển từ Báo giá 'draft' sang Đơn bán hàng 'sale')
             try:
                 sale_order.action_confirm()
             except Exception as ce:
                 _logger.warning("Order confirm warning on %s: %s", sale_order.name, ce)
 
-            # 2. Ghi log Chatter vào sale.order
+            # 3. Ghi log Chatter vào sale.order
             partner = prepare.partner_id
             note_raw = prepare.note or ""
             customer_note = re.sub(r'^\[PTTT:\s*[^\]]+\]\s*(?:-\s*Ghi chú:\s*)?', '', note_raw).strip()
@@ -416,6 +462,12 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 )
                 if customer_note:
                     chatter_msg += Markup("<br/>• <b>Ghi chú từ khách hàng:</b> %s") % customer_note
+                if prepare.voucher_code:
+                    chatter_msg += Markup("<br/>• <b>Voucher:</b> %s (Giảm %s ₫)") % (prepare.voucher_code, f"{prepare.discount_amount:,.0f}")
+
+                sale_order.message_post(body=chatter_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post chatter error on sale.order %s: %s", sale_order.id, me)
 
                 sale_order.message_post(body=chatter_msg, message_type="comment", subtype_xmlid="mail.mt_note")
             except Exception as me:

@@ -455,3 +455,67 @@ class ZaloBaseAPI:
                     _logger.error("✗ Lỗi gửi Zalo Order Notification tới %s: %s", uid, ze)
         except Exception as ex:
             _logger.warning("Lỗi gửi Zalo Order Notification cho đơn %s: %s", sale_order.name, ex)
+
+    # =========================================================================
+    # Loyalty Voucher Verification Helper
+    # =========================================================================
+
+    @staticmethod
+    def _verify_voucher_code(code, partner_id, order_amount=0):
+        """Xác thực mã voucher cho partner, kiểm tra quyền sở hữu gia đình, hạn dùng, giá trị đơn tối thiểu."""
+        try:
+            if not code:
+                return {"valid": False, "error": "Mã voucher trống"}
+            if "hlv.loyalty.voucher" not in request.env:
+                return {"valid": False, "error": "Hệ thống Loyalty chưa được kích hoạt"}
+
+            Voucher = request.env["hlv.loyalty.voucher"].sudo()
+            voucher = Voucher.search([("code", "=", str(code).strip().upper())], limit=1)
+            if not voucher:
+                return {"valid": False, "error": "Mã voucher không tồn tại"}
+            if voucher.state != "active":
+                return {"valid": False, "error": "Voucher không còn hiệu lực"}
+
+            partner = request.env["res.partner"].sudo().browse(int(partner_id))
+            root = partner._get_loyalty_root() if hasattr(partner, "_get_loyalty_root") else partner
+            family_ids = root._get_loyalty_family_partner_ids() if hasattr(root, "_get_loyalty_family_partner_ids") else [root.id, partner.id]
+
+            if voucher.partner_id.id not in family_ids:
+                return {"valid": False, "error": "Voucher không thuộc về bạn"}
+
+            if voucher.date_expiry:
+                now = fields.Datetime.now()
+                if voucher.date_expiry < now:
+                    return {"valid": False, "error": "Voucher đã hết hạn"}
+
+            min_amount = getattr(voucher, "min_order_amount", 0) or 0
+            if order_amount < min_amount:
+                return {"valid": False, "error": f"Đơn hàng tối thiểu {min_amount:,.0f}₫"}
+
+            reward_type = getattr(voucher, "reward_type", "discount") or "discount"
+            discount_type = getattr(voucher, "discount_type", "fixed") or "fixed"
+            raw_discount_value = getattr(voucher, "discount_value", 0) or 0
+            max_discount = getattr(voucher, "max_discount_amount", 0) or 0
+
+            discount_value = 0
+            if reward_type == "free_shipping":
+                discount_value = 0
+            elif discount_type == "percent":
+                discount_value = order_amount * raw_discount_value / 100
+                if max_discount > 0:
+                    discount_value = min(discount_value, max_discount)
+            else:
+                discount_value = min(raw_discount_value, order_amount)
+
+            return {
+                "valid": True,
+                "voucher_id": voucher.id,
+                "voucher_code": voucher.code,
+                "reward_type": reward_type,
+                "discount_type": discount_type,
+                "discount_value": raw_discount_value,
+                "estimated_discount": discount_value,
+            }
+        except Exception as e:
+            _logger.warning("Voucher verification error: %s", e)
+            return {"valid": False, "error": "Không thể kiểm tra voucher"}
