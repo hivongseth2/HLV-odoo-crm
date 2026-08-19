@@ -2,44 +2,55 @@
 // Purpose: Delivery planner mixin for dashboard data fetch, stats fetch, and load-more flows.
 
 export class DeliveryPlannerDataMixin {
-    async _silentRefresh() {
-        // D\u00f9ng CHUNG sequence token v\u1edbi fetchData() \u2014 2 h\u00e0m n\u00e0y c\u00f9ng ghi v\u00e0o state.saleOrders,
-        // n\u00ean c\u00e1i n\u00e0o b\u1eaft \u0111\u1ea7u SAU (b\u1ea5t k\u1ec3 l\u00e0 search do user g\u00f5 hay silent refresh do bus event
-        // realtime t\u1eeb ng\u01b0\u1eddi kh\u00e1c) ph\u1ea3i th\u1eafng, c\u00e1i c\u0169 h\u01a1n ph\u1ea3i t\u1ef1 b\u1ecf qua k\u1ebft qu\u1ea3 c\u1ee7a n\u00f3.
-        if (this._fetchDataAbortable) {
-            try {
-                this._fetchDataAbortable.abort(false);
-            } catch (e) {
-                // ignore
-            }
+    // --- Coalescing lock cho c\u00e1c RPC n\u1eb7ng (get_delivery_dashboard_data) ---
+    // orm.call().abort() ch\u1ec9 h\u1ee7y ph\u00eda CLIENT (d\u1eebng ch\u1edd response) \u2014 Odoo d\u00f9ng worker
+    // thread/process c\u1ed5 \u0111i\u1ec3n, KH\u00d4NG d\u1eebng \u0111\u01b0\u1ee3c Python/query DB \u0111ang ch\u1ea1y \u1edf SERVER gi\u1eefa \u0111\u01b0\u1eddng.
+    // N\u1ebfu user g\u00f5/x\u00f3a search li\u00ean t\u1ee5c, m\u1ed7i l\u1ea7n g\u1ecdi v\u1eabn b\u1eafn 1 query TH\u1eacT xu\u1ed1ng Postgres d\u00f9 ph\u00eda
+    // client \u0111\u00e3 "h\u1ee7y" ngay sau \u0111\u00f3 \u2014 nhi\u1ec1u query n\u1eb7ng ch\u1ed3ng l\u00ean nhau \u0111\u1ee7 nhanh s\u1ebd m\u01b0\u1ee3n h\u1ebft
+    // connection trong pool (\u0111\u00e3 g\u1eb7p th\u1ef1c t\u1ebf: "psycopg2.pool.PoolError: The Connection Pool Is
+    // Full"). Fix \u0111\u00fang l\u00e0 h\u1ea1n ch\u1ebf s\u1ed1 request TH\u1eacT b\u1eafn xu\u1ed1ng server: t\u1ed1i \u0111a 1 request
+    // get_delivery_dashboard_data bay tr\u00ean m\u1ea1ng c\u00f9ng l\u00fac; m\u1ecdi l\u1eddi g\u1ecdi \u0111\u1ebfn trong l\u00fac \u0111\u00f3 ch\u1ec9 \u0111\u01b0\u1ee3c
+    // g\u1ed9p th\u00e0nh 1 l\u1ea7n ch\u1ea1y l\u1ea1i (d\u00f9ng filter m\u1edbi nh\u1ea5t) ngay sau khi request hi\u1ec7n t\u1ea1i xong.
+    async _runHeavyFetch(fn) {
+        if (this._heavyFetchInFlight) {
+            this._heavyFetchRerunRequested = true;
+            return;
         }
-        const mySeq = (this._fetchDataSeq = (this._fetchDataSeq || 0) + 1);
-        const isKanban = this.state.viewMode === 'kanban';
-        // Stats refreshed independently \u2014 don't block silent refresh on it
-        this._fetchStatsAsync();
+        this._heavyFetchInFlight = true;
         try {
-            const promise = this.orm.call(
-                "sale.order",
-                "get_delivery_dashboard_data",
-                [],
-                {
-                    ...this._buildFetchKwargs(),
-                    limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
-                    offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
-                    include_stats: false,
-                }
-            );
-            this._fetchDataAbortable = promise;
-            const result = await promise;
-            if (mySeq !== this._fetchDataSeq) return;
-            this._mergeResult(result);
-            await this._saveToCache(result);
-        } catch (error) {
-            if (error && error.name === 'ConnectionAbortedError') {
-                return;
+            await fn();
+        } finally {
+            this._heavyFetchInFlight = false;
+            if (this._heavyFetchRerunRequested) {
+                this._heavyFetchRerunRequested = false;
+                this.fetchData(); // lu\u00f4n ch\u1ea1y l\u1ea1i b\u1eb1ng fetchData() \u0111\u1ec3 l\u1ea5y \u0111\u00fang filter/trang m\u1edbi nh\u1ea5t
             }
-            console.error("Silent refresh failed:", error);
         }
+    }
+
+    async _silentRefresh() {
+        return this._runHeavyFetch(async () => {
+            const isKanban = this.state.viewMode === 'kanban';
+            // Stats refreshed independently \u2014 don't block silent refresh on it
+            this._fetchStatsAsync();
+            try {
+                const result = await this.orm.call(
+                    "sale.order",
+                    "get_delivery_dashboard_data",
+                    [],
+                    {
+                        ...this._buildFetchKwargs(),
+                        limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
+                        offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                        include_stats: false,
+                    }
+                );
+                this._mergeResult(result);
+                await this._saveToCache(result);
+            } catch (error) {
+                console.error("Silent refresh failed:", error);
+            }
+        });
     }
 
     /**
@@ -206,28 +217,22 @@ export class DeliveryPlannerDataMixin {
      * cost is ~ms when warm.
      */
     async _fetchStatsAsync() {
-        // Hủy request stats cũ đang chạy (nếu có) — cùng lý do như fetchData(): search/đổi filter
-        // liên tục không nên để nhiều request stats cũ tiếp tục chạy chỉ để kết quả bị bỏ.
-        if (this._statsAbortable) {
-            try {
-                this._statsAbortable.abort(false);
-            } catch (e) {
-                // ignore
-            }
+        // Coalescing lock riêng cho stats (cùng lý do như get_delivery_dashboard_data: abort()
+        // client không dừng được query đang chạy ở server) — nhẹ hơn và có cache backend nên ít
+        // rủi ro cạn connection pool hơn, nhưng vẫn áp dụng cùng cơ chế cho nhất quán/an toàn.
+        if (this._statsFetchInFlight) {
+            this._statsRerunRequested = true;
+            return;
         }
-        const myToken = (this._statsRequestSeq = (this._statsRequestSeq || 0) + 1);
+        this._statsFetchInFlight = true;
         this.state.statsLoading = true;
         try {
-            const promise = this.orm.call(
+            const stats = await this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_stats",
                 [],
                 this._buildFetchKwargs(),
             );
-            this._statsAbortable = promise;
-            const stats = await promise;
-            // Drop stale responses if a newer request superseded this one
-            if (myToken !== this._statsRequestSeq) return;
             if (stats && stats.dashboard_stats) {
                 this.state.dashboardStats = stats.dashboard_stats;
                 if (typeof stats.total_count === 'number') {
@@ -239,102 +244,71 @@ export class DeliveryPlannerDataMixin {
                 }
             }
         } catch (e) {
-            if (e && e.name === 'ConnectionAbortedError') {
-                return;
-            }
             console.debug('[DP Stats] async fetch failed:', e);
         } finally {
-            if (myToken === this._statsRequestSeq) {
-                this.state.statsLoading = false;
+            this.state.statsLoading = false;
+            this._statsFetchInFlight = false;
+            if (this._statsRerunRequested) {
+                this._statsRerunRequested = false;
+                this._fetchStatsAsync();
             }
         }
     }
 
     async fetchData() {
-        // Chống race condition: nếu fetchData() trước ĐANG CHẠY (VD user gõ search liên tục,
-        // đổi filter nhanh), HỦY request cũ trước khi bắn request mới — không chỉ bỏ qua kết quả
-        // (như _fetchStatsAsync/_autoLoadAllRemaining), mà HỦY THẬT (orm.call() trả về promise có
-        // .abort(), xem @web/core/network/rpc.js) để đỡ tốn băng thông/CPU server cho request đã
-        // không còn cần nữa. abort(false) = không reject lỗi, chỉ lặng lẽ bỏ (đúng theo doc của
-        // Odoo: "cancel ignored rpc's ... not display an error").
-        if (this._fetchDataAbortable) {
-            try {
-                this._fetchDataAbortable.abort(false);
-            } catch (e) {
-                // ignore
+        return this._runHeavyFetch(async () => {
+            // Không còn abort() request cũ nữa (xem giải thích ở _runHeavyFetch) — chỉ có
+            // ĐÚNG 1 request get_delivery_dashboard_data được phép bay trên mạng tại 1 thời điểm;
+            // nếu fetchData() bị gọi lại trong lúc đang chạy, _runHeavyFetch() sẽ tự chạy lại
+            // 1 lần cuối (với filter mới nhất) ngay sau khi request hiện tại xong.
+            this._autoLoadSeq = (this._autoLoadSeq || 0) + 1; // vô hiệu hoá auto-load cũ (filter đã đổi)
+
+            // Don't show full loading spinner if we already have data on screen
+            // (cache restored OR previous fetch already populated saleOrders).
+            // This prevents the full-screen overlay from flashing on every
+            // filter change — instead the user keeps seeing the current rows
+            // while a thin "refreshing" indicator runs at the top.
+            const hasDataOnScreen = this._isCacheRestored || (this.state.saleOrders && this.state.saleOrders.length > 0);
+            if (!hasDataOnScreen) {
+                this.state.isLoading = true;
+            } else {
+                this.state.isRefreshing = true;
             }
-        }
-        // fetchData() mới bắt đầu → ngữ cảnh (filter/search) cũ đã lỗi thời, nên HỦY LUÔN mọi
-        // _autoLoadAllRemaining() đang chạy từ lần fetchData() trước (nếu còn) — nếu không, nó
-        // vẫn tiếp tục gọi thêm 1 request get_delivery_dashboard_data nữa với filter CŨ, cộng vào
-        // số request thấy trên Network tab dù kết quả của nó sẽ bị bỏ (đây là 1 trong các nguồn
-        // gây ra "6-7 request cho 1 lần search").
-        if (this._autoLoadAbortable) {
+            const isKanban = this.state.viewMode === 'kanban';
+
+            // Fire stats fetch INDEPENDENTLY — we don't await it. Stats render
+            // when ready, and never block kanban/table painting.
+            this._fetchStatsAsync();
+
             try {
-                this._autoLoadAbortable.abort(false);
-            } catch (e) {
-                // ignore
-            }
-        }
-        this._autoLoadSeq = (this._autoLoadSeq || 0) + 1; // vô hiệu hoá timer 50ms đang chờ (nếu có)
-        const mySeq = (this._fetchDataSeq = (this._fetchDataSeq || 0) + 1);
-
-        // Don't show full loading spinner if we already have data on screen
-        // (cache restored OR previous fetch already populated saleOrders).
-        // This prevents the full-screen overlay from flashing on every
-        // filter change — instead the user keeps seeing the current rows
-        // while a thin "refreshing" indicator runs at the top.
-        const hasDataOnScreen = this._isCacheRestored || (this.state.saleOrders && this.state.saleOrders.length > 0);
-        if (!hasDataOnScreen) {
-            this.state.isLoading = true;
-        } else {
-            this.state.isRefreshing = true;
-        }
-        const isKanban = this.state.viewMode === 'kanban';
-
-        // Fire stats fetch INDEPENDENTLY — we don't await it. Stats render
-        // when ready, and never block kanban/table painting.
-        this._fetchStatsAsync();
-
-        try {
-            const promise = this.orm.call(
-                "sale.order",
-                "get_delivery_dashboard_data",
-                [],
-                {
-                    ...this._buildFetchKwargs(),
-                    // Kanban tải theo batch, không phân trang backend
-                    limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
-                    offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
-                    include_stats: false,
+                const result = await this.orm.call(
+                    "sale.order",
+                    "get_delivery_dashboard_data",
+                    [],
+                    {
+                        ...this._buildFetchKwargs(),
+                        // Kanban tải theo batch, không phân trang backend
+                        limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
+                        offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                        include_stats: false,
+                    }
+                );
+                this._applyResult(result);
+                // Save to IndexedDB cache for instant restore on next page load
+                await this._saveToCache(result);
+                // Auto-load all remaining orders in background — no spinner, no confirm.
+                // Ensures không xót đơn khi tổng số đơn > initial batch size.
+                const remaining = (this.state.totalCount || 0) - this.state.saleOrders.length;
+                if (remaining > 0) {
+                    this._autoLoadAllRemaining(); // intentionally NOT awaited
                 }
-            );
-            this._fetchDataAbortable = promise;
-            const result = await promise;
-            // Phòng hờ: dù abort() đã hủy request cũ, vẫn kiểm tra thêm sequence token — nếu 1
-            // fetchData() MỚI HƠN đã bắt đầu trong lúc request này đang chờ, bỏ qua kết quả này.
-            if (mySeq !== this._fetchDataSeq) return;
-
-            this._applyResult(result);
-            // Save to IndexedDB cache for instant restore on next page load
-            await this._saveToCache(result);
-            // Auto-load all remaining orders in background — no spinner, no confirm.
-            // Ensures không xót đơn khi tổng số đơn > initial batch size.
-            const remaining = (this.state.totalCount || 0) - this.state.saleOrders.length;
-            if (remaining > 0) {
-                this._autoLoadAllRemaining(); // intentionally NOT awaited
-            }
-        } catch (error) {
-            if (error && error.name === 'ConnectionAbortedError') {
-                return; // bị chính mình hủy chủ động (request cũ), không phải lỗi thật
-            }
-            console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
-        } finally {
-            if (mySeq === this._fetchDataSeq) {
+            } catch (error) {
+                console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
+            } finally {
                 this.state.isLoading = false;
                 this.state.isRefreshing = false;
             }
-        }
+        });
     }
 
     // --- Background auto-load (no-spinner, no confirm) ---
@@ -350,14 +324,19 @@ export class DeliveryPlannerDataMixin {
         // Đợi 1 tick để render ban đầu hoàn thành trước
         await new Promise(r => setTimeout(r, 50));
         if (mySeq !== this._autoLoadSeq) return;
+        // Có fetchData()/_silentRefresh() khác đang chạy (filter/search vừa đổi) — bỏ qua lần
+        // auto-load này thay vì chồng thêm 1 query nặng nữa; fetchData() kế tiếp (nếu còn thiếu
+        // đơn) sẽ tự gọi lại _autoLoadAllRemaining() của riêng nó.
+        if (this._heavyFetchInFlight) return;
 
         const remaining = (this.state.totalCount || 0) - this.state.saleOrders.length;
         if (remaining <= 0) return;
 
+        this._heavyFetchInFlight = true;
         this.state.isLoadingMore = true;
         try {
             const offset = this.state.saleOrders.length;
-            const promise = this.orm.call(
+            const result = await this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
@@ -368,8 +347,6 @@ export class DeliveryPlannerDataMixin {
                     include_stats: false,
                 }
             );
-            this._autoLoadAbortable = promise;
-            const result = await promise;
             if (mySeq !== this._autoLoadSeq) return; // stale — filter đổi trong lúc đang tải
 
             const fresh = (result && result.orders) || [];
@@ -400,13 +377,15 @@ export class DeliveryPlannerDataMixin {
             });
             console.log('[DP AutoLoad] Loaded all', this.state.saleOrders.length, '/', this.state.totalCount, 'orders');
         } catch (e) {
-            if (e && e.name === 'ConnectionAbortedError') {
-                return; // bị hủy chủ động vì có fetchData() mới hơn, không phải lỗi thật
-            }
             console.error('[DP AutoLoad] _autoLoadAllRemaining failed:', e);
         } finally {
             if (mySeq === this._autoLoadSeq) {
                 this.state.isLoadingMore = false;
+            }
+            this._heavyFetchInFlight = false;
+            if (this._heavyFetchRerunRequested) {
+                this._heavyFetchRerunRequested = false;
+                this.fetchData();
             }
         }
     }
