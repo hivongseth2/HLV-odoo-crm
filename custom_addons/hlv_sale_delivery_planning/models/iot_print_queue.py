@@ -175,14 +175,9 @@ class HlvIotPrintQueue(models.Model):
             result.append(d)
         return result
 
-    @api.model
-    def get_log_for_picking(self, picking_id):
-        """Nhật ký các yêu cầu in liên quan tới 1 phiếu CỤ THỂ — gắn thẳng vào phiếu để đối soát
-        (VD 1 ngày cả trăm yêu cầu in, không thể mò trong danh sách chung của tất cả hàng chờ).
-        Gộp message của MỌI bản ghi hàng chờ từng chứa phiếu này (1 phiếu có thể được gửi in lại
-        nhiều lần nếu trước đó lỗi/không ra giấy), sắp theo thời gian."""
-        picking_id = int(picking_id)
-        queues = self.search([('picking_ids', 'in', [picking_id])])
+    def _messages_to_log(self, queues):
+        """Đổi message chatter của các bản ghi hàng chờ `queues` thành list nhật ký thuần text
+        (sắp theo thời gian), dùng chung cho get_log_for_picking/get_log_for_sale_order."""
         if not queues:
             return []
         messages = self.env['mail.message'].sudo().search([
@@ -203,6 +198,24 @@ class HlvIotPrintQueue(models.Model):
                 'body': body_text,
             })
         return result
+
+    @api.model
+    def get_log_for_picking(self, picking_id):
+        """Nhật ký các yêu cầu in liên quan tới 1 phiếu CỤ THỂ — gắn thẳng vào phiếu để đối soát
+        (VD 1 ngày cả trăm yêu cầu in, không thể mò trong danh sách chung của tất cả hàng chờ).
+        Gộp message của MỌI bản ghi hàng chờ từng chứa phiếu này (1 phiếu có thể được gửi in lại
+        nhiều lần nếu trước đó lỗi/không ra giấy), sắp theo thời gian."""
+        picking_id = int(picking_id)
+        queues = self.search([('picking_ids', 'in', [picking_id])])
+        return self._messages_to_log(queues)
+
+    @api.model
+    def get_log_for_sale_order(self, sale_order_id):
+        """Nhật ký in gộp cho CẢ ĐƠN (mọi phiếu) — dùng cho tab "Nhật ký" trong drawer đơn ở
+        dashboard backend "Điều phối Giao hàng"."""
+        sale_order_id = int(sale_order_id)
+        queues = self.search([('sale_order_id', '=', sale_order_id)])
+        return self._messages_to_log(queues)
 
     @api.model
     def auto_claim_and_print(self, limit=20):

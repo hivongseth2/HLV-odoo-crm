@@ -530,6 +530,35 @@
                     </div>
                 </div>
 
+                <!-- Nhật ký in (IoT) — đối soát khi sale nói đã gửi in mà kho không thấy giấy -->
+                <div>
+                    <h6 class="text-muted text-uppercase small mb-3 cursor-pointer d-flex align-items-center"
+                        t-on-click="() => this.toggleDrawerPrintLogSection()">
+                        <i class="fa fa-history me-1" title="Nhật ký"></i> Nhật Ký In (IoT)
+                        <i t-attf-class="fa ms-auto #{this.isSectionCollapsed('drawer_print_log') ? 'fa-chevron-right' : 'fa-chevron-down'} text-muted small"></i>
+                    </h6>
+                    <div t-attf-class="bg-white rounded border p-3 mb-4 #{this.isSectionCollapsed('drawer_print_log') ? 'd-none' : ''}">
+                        <div t-if="state.selectedOrder._printLogLoading" class="text-center text-muted py-3">
+                            <i class="fa fa-spinner fa-spin me-1"></i>Đang tải...
+                        </div>
+                        <div t-elif="!state.selectedOrder._printLog or !state.selectedOrder._printLog.length" class="text-muted small">
+                            Chưa có yêu cầu in nào cho đơn này.
+                        </div>
+                        <div t-else="" class="list-group list-group-flush">
+                            <t t-foreach="state.selectedOrder._printLog" t-as="log" t-key="log_index">
+                                <div class="list-group-item px-0 py-2">
+                                    <div class="small text-muted" style="font-size:.72rem">
+                                        <t t-esc="this._formatIotQueueTime(log.date)"/> · <t t-esc="log.author"/>
+                                    </div>
+                                    <div class="small" style="color:#334155">
+                                        <t t-esc="log.body"/>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tin nhắn & Chat -->
                 <div class="mb-4">
                     <h6 class="text-muted text-uppercase small mb-3 d-flex align-items-center">

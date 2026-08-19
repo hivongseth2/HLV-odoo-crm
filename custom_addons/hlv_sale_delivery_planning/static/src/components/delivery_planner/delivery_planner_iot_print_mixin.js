@@ -99,6 +99,30 @@ export class DeliveryPlannerIotPrintMixin {
         }
     }
 
+    /** Tab/section "Nhật ký" trong drawer đơn — lazy-load giống toggleFlowSection(), gộp log của
+     * MỌI phiếu thuộc đơn (không chỉ 1 phiếu), để đối soát khi sale nói đã gửi in mà kho không
+     * thấy giấy: xem lại đúng ai gửi lúc nào, có báo lỗi/gửi lại lần nào không. */
+    async toggleDrawerPrintLogSection() {
+        this.toggleSection('drawer_print_log');
+        const expanded = !this.isSectionCollapsed('drawer_print_log');
+        if (!expanded) return;
+        const so = this.state.selectedOrder;
+        if (!so) return;
+        if (Array.isArray(so._printLog) && so._printLog.length > 0) return; // đã tải rồi
+        if (so._printLogLoading) return;
+        so._printLogLoading = true;
+        try {
+            so._printLog = await this.orm.call(
+                'hlv.iot.print.queue', 'get_log_for_sale_order', [], { sale_order_id: so.id }
+            );
+        } catch (e) {
+            console.error('toggleDrawerPrintLogSection failed', e);
+            so._printLog = [];
+        } finally {
+            so._printLogLoading = false;
+        }
+    }
+
     get iotPrintQueuePendingCount() {
         return (this.state.iotPrintQueueItems || []).filter(
             (i) => i.state === 'pending' || i.state === 'printing'

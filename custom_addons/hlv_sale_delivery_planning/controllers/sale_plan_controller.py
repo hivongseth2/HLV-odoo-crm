@@ -1174,10 +1174,16 @@ function _spLoadCache(){
   }).catch(function(){return null;});
 }
 var _spCacheRestored=false;
+// Số thứ tự request — chống race condition: nếu 2 load() chạy chồng lên nhau (VD load() tự động
+// lúc mở trang còn đang chạy thì user đã gõ search + Enter ngay), request nào bắn đi TRƯỚC nhưng
+// VỀ SAU (do tải nhiều dữ liệu hơn/chậm hơn) sẽ tự bị bỏ qua, không ghi đè kết quả của request mới
+// hơn — đây chính là nguyên nhân "search đúng rồi 1-2s sau tự quay lại ALL" đã gặp.
+var _spLoadSeq=0;
 
 function load(append,silent){
   if(!_spCacheRestored&&!silent)showLoading();
   _spCacheRestored=false;
+  var mySeq=++_spLoadSeq;
   var offset=append?S.orders.length:0;
   var lim=append?100:S.limit;
   var body={search:gv('f-q'),warehouse_id:gv('f-wh'),delivery_status:gv('f-del'),
@@ -1195,6 +1201,11 @@ function load(append,silent){
   .then(function(r){return r.json()})
   .then(function(j){
     hideLoading();
+    if(mySeq!==_spLoadSeq){
+      // Đã có request load() mới hơn bắn ra sau request này (VD user gõ search khi request cũ
+      // còn đang chạy) — bỏ qua kết quả trễ này để không ghi đè kết quả đúng đang hiển thị.
+      return;
+    }
     if(!j.result||j.result.status!=='success'){console.error('API error',j);return;}
     var d=j.result.data;
     if(append){
