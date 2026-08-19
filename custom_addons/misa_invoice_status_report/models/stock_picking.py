@@ -3145,28 +3145,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     # ==================== Trang public /misa_sale_status (misa_invoice_public_controller) ====================
     # Mỗi sale theo dõi + tự thao tác (gắn mã đề nghị thủ công, đánh dấu ngoại lệ) trên các
-    # phiếu của MÌNH mà không cần vào backend Odoo. Vì nhiều sale dùng chung 1 mật khẩu trang
-    # public (giống /sale_plan, /search_invoice), danh tính "tôi là sale nào" xác định bằng
-    # cách TỰ CHỌN đúng mã sale MISA của mình trong danh sách hợp lệ (đăng ký sẵn qua
-    # res.users.x_misa_saler_codes, xem get_misa_invoice_saler_code_registry) — không cần
-    # đăng nhập Odoo thật, cùng mức tin cậy với hlv_order_cancel_request (đã áp dụng y hệt
-    # kiểu xác thực "tự khai mã sale" này cho 1 trang public khác trong cùng hệ thống).
+    # phiếu của MÌNH mà không cần vào backend Odoo. Route auth='user' — bắt buộc đăng nhập Odoo
+    # thật, danh tính "tôi là sale nào" lấy từ CHÍNH tài khoản đang đăng nhập
+    # (res.users.x_misa_saler_codes của self.env.user, xem get_misa_invoice_saler_code_registry)
+    # — KHÔNG còn dùng chung 1 mật khẩu cho mọi sale như trước (đã bỏ, vì lộ hết mã sale của
+    # người khác cho bất kỳ ai biết mật khẩu).
 
     @api.model
     def get_misa_invoice_saler_code_registry(self):
-        """Gộp TẤT CẢ mã sale MISA đã đăng ký qua res.users.x_misa_saler_codes (của mọi user,
-        không chỉ user đang gọi) thành 1 danh sách phẳng, không trùng — nguồn cho ô chọn mã
-        sale trên trang public. Cùng cách hlv_sale_delivery_planning gộp
-        x_sale_plan_mention_names cho trang /sale_plan."""
-        users = self.env['res.users'].sudo().search([('x_misa_saler_codes', '!=', False)])
+        """Mã sale MISA mà CHÍNH tài khoản đang đăng nhập (self.env.user) được cấu hình xem —
+        1 tài khoản có thể có nhiều mã (VD trưởng nhóm quản lý nhiều sale), nhưng TUYỆT ĐỐI
+        không gộp mã của user khác vào đây (khác hẳn thiết kế mật khẩu-chung trước đây) — nếu
+        không, bất kỳ ai đăng nhập được cũng thấy hết mã sale của toàn bộ công ty."""
         codes = []
         seen = set()
-        for user in users:
-            for part in (user.x_misa_saler_codes or '').split(','):
-                code = part.strip()
-                if code and code.upper() not in seen:
-                    seen.add(code.upper())
-                    codes.append(code)
+        for part in (self.env.user.x_misa_saler_codes or '').split(','):
+            code = part.strip()
+            if code and code.upper() not in seen:
+                seen.add(code.upper())
+                codes.append(code)
         return sorted(codes)
 
     def _misa_invoice_validate_public_saler_code(self, saler_code):

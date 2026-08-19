@@ -13,9 +13,4 @@
         <field name="prefix">DNC/</field>
         <field name="padding">5</field>
     </record>
-
-    <record id="amis_callback_config_singleton" model="amis.callback.config">
-        <field name="name">AMIS Callback</field>
-        <field name="app_id"></field>
-    </record>
 </odoo>
