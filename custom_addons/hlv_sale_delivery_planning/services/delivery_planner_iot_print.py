@@ -18,13 +18,24 @@ _logger = logging.getLogger(__name__)
 
 REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 
+PICKING_STATE_LABEL = {
+    'draft': 'Nháp',
+    'waiting': 'Chờ bước trước',
+    'confirmed': 'Chờ hàng (chưa giữ được)',
+    'assigned': 'Đã giữ hàng, sẵn sàng lấy',
+    'done': 'Hoàn thành',
+    'cancel': 'Đã hủy',
+}
+
 
 class DeliveryPlannerServiceIotPrint(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
 
-    def _get_pick_pickings_for_sale_order(self, sale_order):
-        """Cùng logic lọc phiếu PICK như print_picking_slips (controllers/main.py) nhưng scope cho
-        1 đơn — chưa hoàn thành/hủy, không phải phiếu trả hàng, đúng loại PICK."""
+    def _get_all_linked_pickings_for_sale_order(self, sale_order):
+        """Toàn bộ phiếu kho (outgoing/internal, chưa done/cancel) liên quan đến đơn — kể cả
+        không phải loại PICK. Dùng để chẩn đoán khi _get_pick_pickings_for_sale_order() trả về
+        rỗng (xem enqueue_iot_print_for_sale_order), giúp sale biết ĐANG có phiếu gì, trạng thái
+        nào, thay vì chỉ báo chung chung "không có gì để in"."""
         picking_obj = self.env['stock.picking']
         linked = sale_order.picking_ids
         linked |= picking_obj.search([
@@ -43,11 +54,38 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
             ('state', 'not in', ['done', 'cancel']),
         ])
         return linked.filtered(
-            lambda p: p.picking_type_code in ['outgoing', 'internal']
-                      and p.state not in ['done', 'cancel']
-                      and not p.return_id
-                      and 'PICK' in (p.picking_type_id.sequence_code or '').upper()
+            lambda p: p.picking_type_code in ['outgoing', 'internal'] and p.state not in ['done', 'cancel']
+        )
+
+    def _get_pick_pickings_for_sale_order(self, sale_order):
+        """Cùng logic lọc phiếu PICK như print_picking_slips (controllers/main.py) nhưng scope cho
+        1 đơn — chưa hoàn thành/hủy, không phải phiếu trả hàng, đúng loại PICK."""
+        linked = self._get_all_linked_pickings_for_sale_order(sale_order)
+        return linked.filtered(
+            lambda p: not p.return_id and 'PICK' in (p.picking_type_id.sequence_code or '').upper()
         ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
+
+    def _no_pick_picking_message(self, sale_order):
+        """Xây thông báo lỗi CHI TIẾT khi không tìm được phiếu PICK nào để in — liệt kê đúng
+        những phiếu ĐANG có (nếu có) kèm loại + trạng thái, thay vì báo chung chung."""
+        all_linked = self._get_all_linked_pickings_for_sale_order(sale_order)
+        if not all_linked:
+            return 'Đơn này chưa có phiếu kho nào (chưa xác nhận hoặc chưa tạo phiếu xuất kho).'
+        details = []
+        for p in all_linked:
+            if p.return_id:
+                details.append('%s (phiếu trả hàng — bỏ qua)' % p.name)
+            else:
+                details.append('%s — loại "%s", trạng thái "%s"' % (
+                    p.name,
+                    p.picking_type_id.name or p.picking_type_id.code or '?',
+                    PICKING_STATE_LABEL.get(p.state, p.state),
+                ))
+        return (
+            'Đơn này không có phiếu LẤY HÀNG (PICK) nào để in — có thể kho của đơn không dùng '
+            'bước lấy hàng riêng (giao thẳng 1 bước), hoặc phiếu chưa ở đúng trạng thái. '
+            'Phiếu hiện có: ' + '; '.join(details)
+        )
 
     def _render_preview_pdf(self, report, pickings):
         """Render PDF xem trước (không đánh dấu đã in — xem models/ir_actions_report.py) cho sale
@@ -74,7 +112,7 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
 
         pickings = self._get_pick_pickings_for_sale_order(sale_order)
         if not pickings:
-            return {'success': False, 'message': 'Đơn này không có phiếu lấy hàng nào cần in'}
+            return {'success': False, 'message': self._no_pick_picking_message(sale_order)}
 
         if not any(p.state == 'assigned' for p in pickings):
             return {

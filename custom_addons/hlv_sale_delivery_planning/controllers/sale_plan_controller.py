@@ -1670,6 +1670,32 @@ function sendPublicMessage(){
   processPublicMessageQueue();
 }
 
+var PICKING_STATE_LABEL={draft:'Nháp',waiting:'Chờ bước trước',confirmed:'Chờ hàng (chưa giữ được)',
+  assigned:'Đã giữ hàng, sẵn sàng lấy',done:'Hoàn thành',cancel:'Đã hủy'};
+var PICKING_STATE_BADGE={draft:'bg-secondary',waiting:'bg-secondary',confirmed:'bg-warning text-dark',
+  assigned:'bg-success',done:'bg-primary',cancel:'bg-danger'};
+function renderPickingsSection(pickings){
+  var h='<div class="mt-3 p-3 rounded" style="background:#f7fafc;border:1px solid #e2e8f0">'
+    +'<h6 class="text-uppercase small mb-2 text-muted"><i class="fa fa-truck me-1"></i>Phiếu kho</h6>';
+  if(!pickings.length){
+    h+='<div class="small text-danger"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có phiếu kho nào (chưa xác nhận hoặc chưa tạo phiếu xuất/lấy hàng).</div></div>';
+    return h;
+  }
+  h+='<table class="table table-sm table-borderless mb-0" style="font-size:.78rem">'
+    +'<thead><tr class="text-muted"><th>Phiếu</th><th>Loại</th><th>Trạng thái</th><th class="text-center">Đã in</th></tr></thead><tbody>';
+  pickings.forEach(function(p){
+    var isPick=(p.sequence_code||'').indexOf('PICK')!==-1;
+    h+='<tr>'
+      +'<td class="fw-bold">'+esc(p.name)+(p.return_of?' <span class="badge bg-danger bg-opacity-10 text-danger" style="font-size:.65rem">Trả hàng</span>':'')+'</td>'
+      +'<td>'+esc(p.type_name||p.code||'')+(isPick?' <span class="badge bg-info bg-opacity-25 text-dark" style="font-size:.62rem">PICK</span>':'')+'</td>'
+      +'<td><span class="badge '+(PICKING_STATE_BADGE[p.state]||'bg-secondary')+'">'+esc(PICKING_STATE_LABEL[p.state]||p.state)+'</span></td>'
+      +'<td class="text-center">'+(p.printed?'<i class="fa fa-check-circle text-success"></i>':'<i class="fa fa-minus text-muted opacity-50"></i>')+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+
 function openDrawer(id){
   var o=S.orders.find(function(x){return x.id===id;});
   if(!o)return;
@@ -1737,6 +1763,9 @@ function openDrawer(id){
     +'<td class="text-end fw-bold text-primary py-2">'+fm(totalTotal)+'</td>'
     +'<td></td>'
     +'</tr></tfoot></table>';
+  // Phiếu kho: giúp sale biết đơn đang có phiếu gì, ở trạng thái nào (nhất là phiếu PICK dùng để
+  // in) — tránh tình trạng bấm "In" báo lỗi mà không hiểu vì sao.
+  h+=renderPickingsSection(o.pickings||[]);
   // Đề xuất chuyển kho
   if(o.transfer_suggestions&&o.transfer_suggestions.length){
     h+='<div class="alert alert-warning border-warning mt-3 p-3" style="background:rgba(255,193,7,.08)">'
@@ -2174,9 +2203,13 @@ $('report-submit').addEventListener('click',function(){
 
 function showPrintToast(msg,ok){
   var toast=document.createElement('div');
-  toast.style.cssText='position:fixed;bottom:24px;right:24px;z-index:3000;background:'+(ok?'#38a169':'#dc2626')+';color:#fff;padding:12px 20px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-weight:600;max-width:360px';
+  var maxW=ok?360:480;
+  toast.style.cssText='position:fixed;bottom:24px;right:24px;z-index:3000;background:'+(ok?'#38a169':'#dc2626')+';color:#fff;padding:12px 20px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-weight:600;max-width:'+maxW+'px;cursor:pointer';
+  toast.title='Bấm để đóng';
   toast.innerHTML='<i class="fa fa-'+(ok?'check':'exclamation-triangle')+' me-1"></i>'+esc(msg);
-  document.body.appendChild(toast);setTimeout(function(){toast.remove();},5000);
+  toast.addEventListener('click',function(){toast.remove();});
+  document.body.appendChild(toast);
+  setTimeout(function(){toast.remove();},ok?5000:15000);
 }
 function printOrderPickSlip(btn){
   var soId=parseInt(btn.dataset.soId,10);
