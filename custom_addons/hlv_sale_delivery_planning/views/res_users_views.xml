@@ -8,6 +8,7 @@
             <xpath expr="//field[@name='name']" position="after">
                 <field name="x_packer_name" string="Tên người đóng"/>
                 <field name="x_sale_plan_mention_names" string="Sale Plan mention aliases" placeholder="thanhnhan, thanhluan"/>
+                <field name="x_handle_unassigned_saler_orders" string="Xử lý đơn không có mã sale MISA (VD: Shopee)"/>
             </xpath>
         </field>
     </record>

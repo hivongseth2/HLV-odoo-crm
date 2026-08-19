@@ -9,3 +9,4 @@ from . import delivery_planner_flow
 from . import delivery_planner_transfer
 from . import delivery_planner_stats
 from . import delivery_planner_messages
+from . import delivery_planner_iot_print

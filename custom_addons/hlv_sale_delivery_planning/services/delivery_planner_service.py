@@ -25,7 +25,7 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
         show_completed=False, filter_need_transfer=False, filter_new_orders=False,
         filter_print_status='all', filter_shipper_received='all',
-        domain=None, include_stats=True,
+        domain=None, include_stats=True, filter_mine=False,
     ):
 
         search_domain = self._build_search_domain(
@@ -35,6 +35,7 @@ class DeliveryPlannerService(models.AbstractModel):
             filter_htgh=filter_htgh,
             filter_delivery_type=filter_delivery_type,
             filter_tag_ids=filter_tag_ids,
+            filter_mine=filter_mine,
         )
         if domain:
             extra_domain = list(domain)
@@ -192,6 +193,7 @@ class DeliveryPlannerService(models.AbstractModel):
             filter_print_status=filter_print_status,
             filter_shipper_received=filter_shipper_received,
             domain=domain,
+            filter_mine=filter_mine,
         )
 
         return {
@@ -273,6 +275,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 filter_htgh=fk.get('filter_htgh', ''),
                 filter_delivery_type=fk.get('filter_delivery_type', 'all'),
                 filter_tag_ids=fk.get('filter_tag_ids', ''),
+                filter_mine=fk.get('filter_mine', False),
             )
             search_domain = [('id', 'in', list(existing_ids))] + search_domain
             page_sales = self.env['sale.order'].search(search_domain)
