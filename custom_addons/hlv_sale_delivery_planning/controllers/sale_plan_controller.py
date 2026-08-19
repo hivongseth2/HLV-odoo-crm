@@ -1724,8 +1724,9 @@ function renderPickingsSection(pickings){
   pickOnly.forEach(function(p){
     var moves=p.moves||[];
     var stDisplay=getPickingStatusDisplay(p);
-    h+='<tr class="pick-row" data-picking-id="'+p.id+'" style="cursor:pointer">'
-      +'<td class="fw-bold text-primary">'+esc(p.name)+' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i></td>'
+    var viewable=(p.state!=='done'&&p.state!=='cancel');
+    h+='<tr'+(viewable?' class="pick-row" data-picking-id="'+p.id+'" style="cursor:pointer"':' class="opacity-50" title="Phiếu đã hoàn tất/hủy, không xem lại bản in được nữa"')+'>'
+      +'<td class="fw-bold'+(viewable?' text-primary':' text-muted')+'">'+esc(p.name)+(viewable?' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i>':'')+'</td>'
       +'<td>'+(p.printed?'<span class="badge bg-success">Đã gửi lệnh in</span>':'<span class="badge bg-secondary">Chưa in</span>')+'</td>'
       +'<td><span class="badge '+stDisplay.badgeClass+'">'+esc(stDisplay.label)+'</span></td>'
       +'<td class="text-end">'+moves.length+'</td>'
@@ -1743,6 +1744,10 @@ function openPickingDetailModal(pickingId){
     (S.orders[i].pickings||[]).forEach(function(pk){if(pk.id===pickingId)p=pk;});
   }
   if(!p)return;
+  if(p.state==='done'||p.state==='cancel'){
+    showPrintToast('Phiếu này đã '+(p.state==='done'?'hoàn tất':'hủy')+', không xem lại bản in được nữa.',false);
+    return;
+  }
   _pdPickingId=pickingId;
   $('pd-title').textContent=p.name;
   var pdStDisplay=getPickingStatusDisplay(p);
@@ -1768,9 +1773,11 @@ function openPickingDetailModal(pickingId){
   var frame=$('pd-preview-frame');
   frame.src='about:blank';frame.classList.add('d-none');
   var pvBtn=$('pd-btn-preview');
-  pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
+  pvBtn.classList.remove('d-none');pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
   var cfBtn=$('pd-btn-confirm');
-  cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>Gửi phiếu in cho kho';
+  var whLabel='Gửi phiếu in cho kho'+(p.warehouse_name?' '+p.warehouse_name:'');
+  cfBtn.dataset.label=whLabel;
+  cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(whLabel);
   $('pd-modal').style.display='flex';
 }
 function closePickingDetailModal(){
@@ -1789,12 +1796,15 @@ $('pd-btn-preview').addEventListener('click',function(){
   .then(function(r){return r.json();})
   .then(function(j){
     var d=j.result;
-    btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
     if(d&&d.success){
       var frame=$('pd-preview-frame');
       frame.src=d.preview_url;frame.classList.remove('d-none');
+      // Đã xem trước rồi thì ẩn nút "Xem trước" luôn, chỉ còn nút gửi in — tránh xem trước lại
+      // nhiều lần không cần thiết, đỡ rối giao diện.
+      btn.classList.add('d-none');
       $('pd-btn-confirm').classList.remove('d-none');
     } else {
+      btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
       showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
     }
   }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';showPrintToast('Lỗi kết nối.',false);});
@@ -1802,13 +1812,14 @@ $('pd-btn-preview').addEventListener('click',function(){
 $('pd-btn-confirm').addEventListener('click',function(){
   if(!_pdPickingId)return;
   var btn=this;
+  var label=btn.dataset.label||'Gửi phiếu in cho kho';
   btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang gửi...';
   fetch('/api/sale_plan/confirm_print_pick_slip',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId}})})
   .then(function(r){return r.json();})
   .then(function(j){
     var d=j.result;
-    btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Gửi phiếu in cho kho';
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(label);
     if(d&&d.success){
       showPrintToast(d.message||'Đã gửi yêu cầu in',d.iot_ready!==false);
       loadPrintQueue();
@@ -1816,7 +1827,7 @@ $('pd-btn-confirm').addEventListener('click',function(){
     } else {
       showPrintToast((d&&d.message)||'Lỗi khi gửi in',false);
     }
-  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Gửi phiếu in cho kho';showPrintToast('Lỗi kết nối.',false);});
+  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(label);showPrintToast('Lỗi kết nối.',false);});
 });
 
 function openDrawer(id){

@@ -429,6 +429,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'type_name': p.picking_type_id.name or '',
                 'code': p.picking_type_id.code or '',
                 'sequence_code': (p.picking_type_id.sequence_code or '').upper(),
+                'warehouse_name': p.picking_type_id.warehouse_id.name or '',
                 'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                 'backorder_of': p.backorder_id.name if p.backorder_id else False,
                 'return_of_id': p.return_id.id if p.return_id else False,
