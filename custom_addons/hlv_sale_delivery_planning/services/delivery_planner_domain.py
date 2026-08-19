@@ -44,6 +44,20 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
             return None
         return expression.OR(sub_domains)
 
+    def _user_can_print_sale_order(self, sale_order):
+        """Tài khoản đang đăng nhập (self.env.user) có được phép GỬI IN phiếu của đơn này không —
+        dùng CHUNG đúng quy tắc với filter "Đơn của tôi" (khớp mã sale MISA, hoặc đơn không có mã
+        — VD Shopee — nếu tài khoản được đánh dấu x_handle_unassigned_saler_orders), nhưng ÁP DỤNG
+        LUÔN bất kể toggle "Đơn của tôi" đang bật/tắt — vì mục đích là chặn in nhầm đơn người khác,
+        không phải chỉ để hiển thị danh sách. Phải gọi lại đúng hàm này ở server khi xử lý yêu cầu
+        in (preview_pick_slip/confirm_print_pick_slip), KHÔNG suy luận qua trạng thái toggle phía
+        frontend — client chỉ dùng kết quả này để ẩn nút, không phải nơi quyết định."""
+        order_code = (sale_order.x_studio_misa_saler_code or '').strip()
+        if not order_code:
+            return bool(getattr(self.env.user, 'x_handle_unassigned_saler_orders', False))
+        codes = self._get_current_user_misa_codes()
+        return order_code.upper() in {c.upper() for c in codes}
+
     def _get_today_delivered_so_ids(self):
         """SO ID có ít nhất 1 phiếu OUT done trong NGÀY HÔM NAY (theo TZ user).
 

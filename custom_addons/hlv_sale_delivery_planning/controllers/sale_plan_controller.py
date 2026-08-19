@@ -581,6 +581,12 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 #pd-modal{display:none;position:fixed;inset:0;z-index:2100;background:rgba(0,0,0,.45);align-items:center;justify-content:center}
 #pd-modal .pd-card{background:#fff;max-width:1200px;width:96%;max-height:96vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden}
 #pd-modal .pd-header{padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center}
+#pd-modal .pd-tabs{display:flex;gap:4px;padding:8px 18px 0;border-bottom:1px solid #e5e7eb;background:#fafbfc}
+#pd-modal .pd-tab{border:0;background:transparent;padding:8px 12px;font-size:.82rem;font-weight:700;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-1px}
+#pd-modal .pd-tab.active{color:#4f46e5;border-bottom-color:#4f46e5}
+.pd-log-item{padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:.8rem}
+.pd-log-item .pd-log-meta{color:#94a3b8;font-size:.7rem;margin-bottom:2px}
+.pd-log-item .pd-log-body{color:#334155}
 #pd-modal .pd-body{padding:16px 18px;overflow-y:auto;flex:1}
 #pd-modal .pd-footer{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
 #pd-preview-frame{width:100%;height:78vh;border:1px solid #e5e7eb;border-radius:6px;margin-top:12px}
@@ -1005,11 +1011,18 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       </div>
       <button id="pd-close" class="btn btn-sm btn-light"><i class="fa fa-times"></i></button>
     </div>
-    <div class="pd-body">
-      <div id="pd-lines"></div>
-      <iframe id="pd-preview-frame" class="d-none"></iframe>
+    <div class="pd-tabs">
+      <button type="button" class="pd-tab active" id="pd-tab-detail" data-pd-tab="detail">Chi tiết</button>
+      <button type="button" class="pd-tab" id="pd-tab-log" data-pd-tab="log"><i class="fa fa-history me-1"></i>Nhật ký</button>
     </div>
-    <div class="pd-footer">
+    <div class="pd-body">
+      <div id="pd-tabpane-detail">
+        <div id="pd-lines"></div>
+        <iframe id="pd-preview-frame" class="d-none"></iframe>
+      </div>
+      <div id="pd-tabpane-log" class="d-none"></div>
+    </div>
+    <div class="pd-footer" id="pd-footer-detail">
       <button class="btn btn-outline-primary btn-sm" id="pd-btn-preview"><i class="fa fa-eye me-1"></i>Xem trước</button>
       <button class="btn btn-success btn-sm d-none" id="pd-btn-confirm"><i class="fa fa-check me-1"></i>Gửi phiếu in cho kho</button>
     </div>
@@ -1711,10 +1724,14 @@ function getPickingStatusDisplay(p){
   }
   return {badgeClass:PICKING_STATE_BADGE[p.state]||'bg-secondary',label:PICKING_STATE_LABEL[p.state]||p.state};
 }
-function renderPickingsSection(pickings){
+function renderPickingsSection(pickings,canPrint){
   var pickOnly=(pickings||[]).filter(function(p){return (p.sequence_code||'').indexOf('PICK')!==-1 && !p.return_of;});
   var h='<div class="mt-3 p-3 rounded" style="background:#f7fafc;border:1px solid #e2e8f0">'
     +'<h6 class="text-uppercase small mb-2 text-muted"><i class="fa fa-truck me-1"></i>Phiếu lấy hàng (PICK)</h6>';
+  if(!canPrint){
+    h+='<div class="small text-muted"><i class="fa fa-lock me-1"></i>Đơn này không thuộc mã sale của tài khoản bạn — không thể xem/in phiếu lấy hàng.</div></div>';
+    return h;
+  }
   if(!pickOnly.length){
     h+='<div class="small text-danger"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có phiếu lấy hàng (PICK) nào — có thể chưa xác nhận, hoặc kho của đơn không dùng bước lấy hàng riêng.</div></div>';
     return h;
@@ -1739,11 +1756,15 @@ function renderPickingsSection(pickings){
 // --- Picking detail modal: xem chi tiết 1 phiếu PICK, xem trước rồi mới xác nhận in ---
 var _pdPickingId=null;
 function openPickingDetailModal(pickingId){
-  var p=null;
+  var p=null,ownerOrder=null;
   for(var i=0;i<S.orders.length&&!p;i++){
-    (S.orders[i].pickings||[]).forEach(function(pk){if(pk.id===pickingId)p=pk;});
+    (S.orders[i].pickings||[]).forEach(function(pk){if(pk.id===pickingId){p=pk;ownerOrder=S.orders[i];}});
   }
   if(!p)return;
+  if(!ownerOrder||ownerOrder.can_print!==true){
+    showPrintToast('Đơn này không thuộc mã sale của tài khoản bạn, không được xem/in phiếu này.',false);
+    return;
+  }
   if(p.state==='done'||p.state==='cancel'){
     showPrintToast('Phiếu này đã '+(p.state==='done'?'hoàn tất':'hủy')+', không xem lại bản in được nữa.',false);
     return;
@@ -1778,7 +1799,36 @@ function openPickingDetailModal(pickingId){
   var whLabel='Gửi phiếu in cho kho'+(p.warehouse_name?' '+p.warehouse_name:'');
   cfBtn.dataset.label=whLabel;
   cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(whLabel);
+  pdSwitchTab('detail');
   $('pd-modal').style.display='flex';
+}
+function pdSwitchTab(tab){
+  $('pd-tab-detail').classList.toggle('active',tab==='detail');
+  $('pd-tab-log').classList.toggle('active',tab==='log');
+  $('pd-tabpane-detail').classList.toggle('d-none',tab!=='detail');
+  $('pd-tabpane-log').classList.toggle('d-none',tab!=='log');
+  $('pd-footer-detail').classList.toggle('d-none',tab!=='detail');
+  if(tab==='log') loadPickingPrintLog(_pdPickingId);
+}
+$('pd-tab-detail').addEventListener('click',function(){pdSwitchTab('detail');});
+$('pd-tab-log').addEventListener('click',function(){pdSwitchTab('log');});
+function loadPickingPrintLog(pickingId){
+  if(!pickingId)return;
+  var pane=$('pd-tabpane-log');
+  pane.innerHTML='<div class="p-3 text-center text-muted"><i class="fa fa-spinner fa-spin"></i></div>';
+  fetch('/api/sale_plan/picking_print_log',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:pickingId}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    var d=j.result;
+    if(!d||!d.success){pane.innerHTML='<div class="p-3 text-danger small">'+esc((d&&d.message)||'Lỗi tải nhật ký')+'</div>';return;}
+    var logs=d.logs||[];
+    if(!logs.length){pane.innerHTML='<div class="p-3 text-muted small">Chưa có nhật ký nào cho phiếu này.</div>';return;}
+    pane.innerHTML=logs.map(function(l){
+      return '<div class="pd-log-item"><div class="pd-log-meta">'+esc(pqFormatTime(l.date))+' &middot; '+esc(l.author)+'</div>'
+        +'<div class="pd-log-body">'+esc(l.body)+'</div></div>';
+    }).join('');
+  }).catch(function(){pane.innerHTML='<div class="p-3 text-danger small">Lỗi kết nối.</div>';});
 }
 function closePickingDetailModal(){
   $('pd-modal').style.display='none';
@@ -1896,7 +1946,7 @@ function openDrawer(id){
     +'</tr></tfoot></table>';
   // Phiếu kho: giúp sale biết đơn đang có phiếu gì, ở trạng thái nào (nhất là phiếu PICK dùng để
   // in) — tránh tình trạng bấm "In" báo lỗi mà không hiểu vì sao.
-  h+=renderPickingsSection(o.pickings||[]);
+  h+=renderPickingsSection(o.pickings||[], o.can_print===true);
   // Đề xuất chuyển kho
   if(o.transfer_suggestions&&o.transfer_suggestions.length){
     h+='<div class="alert alert-warning border-warning mt-3 p-3" style="background:rgba(255,193,7,.08)">'
@@ -2653,6 +2703,20 @@ self.addEventListener('notificationclick', function(event) {
             return request.env['hlv.delivery.planner.service'].sudo().confirm_print_pick_slip(picking_id)
         except Exception as e:
             _logger.exception('sale_plan confirm_print_pick_slip error')
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/api/sale_plan/picking_print_log', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_picking_print_log(self, picking_id=None, **kwargs):
+        """Tab "Nhật ký" trên dialog chi tiết phiếu: lịch sử các yêu cầu in gắn thẳng vào phiếu
+        này (không cần mò trong danh sách chung hàng chờ). Xem services/delivery_planner_iot_print.py."""
+        if not request.session.get(SESSION_KEY_OK):
+            return {'success': False, 'message': 'Unauthorized'}
+        if not picking_id:
+            return {'success': False, 'message': 'Thiếu picking_id'}
+        try:
+            return request.env['hlv.delivery.planner.service'].sudo().get_print_log_for_picking(picking_id)
+        except Exception as e:
+            _logger.exception('sale_plan picking_print_log error')
             return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/print_queue', type='json', auth='public', methods=['POST'])

@@ -1,3 +1,5 @@
+import re
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -165,6 +167,32 @@ class HlvIotPrintQueue(models.Model):
             d = r._to_summary_dict()
             d['saler_code'] = r.sale_order_id.x_studio_misa_saler_code or ''
             result.append(d)
+        return result
+
+    @api.model
+    def get_log_for_picking(self, picking_id):
+        """Nhật ký các yêu cầu in liên quan tới 1 phiếu CỤ THỂ — gắn thẳng vào phiếu để đối soát
+        (VD 1 ngày cả trăm yêu cầu in, không thể mò trong danh sách chung của tất cả hàng chờ).
+        Gộp message của MỌI bản ghi hàng chờ từng chứa phiếu này (1 phiếu có thể được gửi in lại
+        nhiều lần nếu trước đó lỗi/không ra giấy), sắp theo thời gian."""
+        picking_id = int(picking_id)
+        queues = self.search([('picking_ids', 'in', [picking_id])])
+        if not queues:
+            return []
+        messages = self.env['mail.message'].sudo().search([
+            ('model', '=', 'hlv.iot.print.queue'),
+            ('res_id', 'in', queues.ids),
+        ], order='date asc')
+        result = []
+        for msg in messages:
+            body_text = re.sub(r'<[^<]+?>', '', msg.body or '').strip()
+            if not body_text:
+                continue
+            result.append({
+                'date': msg.date.isoformat() if msg.date else False,
+                'author': msg.author_id.name or msg.email_from or 'Hệ thống',
+                'body': body_text,
+            })
         return result
 
     @api.model

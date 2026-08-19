@@ -49,6 +49,13 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
         if not picking:
             return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        sale_order = self._get_sale_order_for_picking(picking)
+        if sale_order and not self._user_can_print_sale_order(sale_order):
+            return {
+                'success': False,
+                'forbidden': True,
+                'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được phép xem/in phiếu này.',
+            }
         if 'PICK' not in (picking.picking_type_id.sequence_code or '').upper():
             return {'success': False, 'message': 'Phiếu này không phải phiếu lấy hàng (PICK)'}
         if picking.state != 'assigned':
@@ -88,6 +95,17 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
         if not picking:
             return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+
+        sale_order = self._get_sale_order_for_picking(picking)
+        if not sale_order:
+            return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
+        if not self._user_can_print_sale_order(sale_order):
+            return {
+                'success': False,
+                'forbidden': True,
+                'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được phép gửi in phiếu này.',
+            }
+
         if picking.state != 'assigned':
             return {
                 'success': False,
@@ -98,10 +116,6 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         wh = picking.picking_type_id.warehouse_id
         if not wh:
             return {'success': False, 'message': 'Không xác định được kho của phiếu này'}
-
-        sale_order = self._get_sale_order_for_picking(picking)
-        if not sale_order:
-            return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
 
         Queue = self.env['hlv.iot.print.queue'].sudo()
         existing = Queue.search([
@@ -137,3 +151,19 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
             message += ' CẢNH BÁO: kho "%s" chưa gán máy in IoT (vào Kho hàng > cấu hình).' % wh.name
 
         return {'success': True, 'message': message, 'iot_ready': iot_ready}
+
+    def get_print_log_for_picking(self, picking_id):
+        """Nhật ký in gắn thẳng vào 1 phiếu (tab "Nhật ký" trên dialog chi tiết phiếu /sale_plan)
+        — có kiểm quyền giống preview/confirm, không cho xem nhật ký đơn không phải của mình."""
+        picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
+        if not picking:
+            return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        sale_order = self._get_sale_order_for_picking(picking)
+        if sale_order and not self._user_can_print_sale_order(sale_order):
+            return {
+                'success': False,
+                'forbidden': True,
+                'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được xem nhật ký.',
+            }
+        logs = self.env['hlv.iot.print.queue'].sudo().get_log_for_picking(picking_id)
+        return {'success': True, 'logs': logs}
