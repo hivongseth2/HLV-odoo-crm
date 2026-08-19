@@ -495,6 +495,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'is_fully_ready': is_fully_ready,
             'packing_status': packing_status,
             'picking_warehouse_ids': picking_warehouse_ids,
+            # Tài khoản đang đăng nhập có được phép gửi in phiếu của đơn này không (khớp mã sale
+            # MISA, hoặc đơn không mã + tài khoản xử lý đơn không mã) — dùng để ẨN nút in trên
+            # /sale_plan cho đơn không phải của mình, LUÔN áp dụng bất kể toggle "Đơn của tôi".
+            'can_print': self._user_can_print_sale_order(so),
             'pos': po_data,
             'flows': flows,
             'has_flow': bool(so.picking_ids),
