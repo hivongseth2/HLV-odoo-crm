@@ -1675,24 +1675,40 @@ var PICKING_STATE_LABEL={draft:'Nháp',waiting:'Chờ bước trước',confirme
 var PICKING_STATE_BADGE={draft:'bg-secondary',waiting:'bg-secondary',confirmed:'bg-warning text-dark',
   assigned:'bg-success',done:'bg-primary',cancel:'bg-danger'};
 function renderPickingsSection(pickings){
+  var pickOnly=(pickings||[]).filter(function(p){return (p.sequence_code||'').indexOf('PICK')!==-1 && !p.return_of;});
   var h='<div class="mt-3 p-3 rounded" style="background:#f7fafc;border:1px solid #e2e8f0">'
-    +'<h6 class="text-uppercase small mb-2 text-muted"><i class="fa fa-truck me-1"></i>Phiếu kho</h6>';
-  if(!pickings.length){
-    h+='<div class="small text-danger"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có phiếu kho nào (chưa xác nhận hoặc chưa tạo phiếu xuất/lấy hàng).</div></div>';
+    +'<h6 class="text-uppercase small mb-2 text-muted"><i class="fa fa-truck me-1"></i>Phiếu lấy hàng (PICK)</h6>';
+  if(!pickOnly.length){
+    h+='<div class="small text-danger"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có phiếu lấy hàng (PICK) nào — có thể chưa xác nhận, hoặc kho của đơn không dùng bước lấy hàng riêng.</div></div>';
     return h;
   }
-  h+='<table class="table table-sm table-borderless mb-0" style="font-size:.78rem">'
-    +'<thead><tr class="text-muted"><th>Phiếu</th><th>Loại</th><th>Trạng thái</th><th class="text-center">Đã in</th></tr></thead><tbody>';
-  pickings.forEach(function(p){
-    var isPick=(p.sequence_code||'').indexOf('PICK')!==-1;
-    h+='<tr>'
-      +'<td class="fw-bold">'+esc(p.name)+(p.return_of?' <span class="badge bg-danger bg-opacity-10 text-danger" style="font-size:.65rem">Trả hàng</span>':'')+'</td>'
-      +'<td>'+esc(p.type_name||p.code||'')+(isPick?' <span class="badge bg-info bg-opacity-25 text-dark" style="font-size:.62rem">PICK</span>':'')+'</td>'
-      +'<td><span class="badge '+(PICKING_STATE_BADGE[p.state]||'bg-secondary')+'">'+esc(PICKING_STATE_LABEL[p.state]||p.state)+'</span></td>'
-      +'<td class="text-center">'+(p.printed?'<i class="fa fa-check-circle text-success"></i>':'<i class="fa fa-minus text-muted opacity-50"></i>')+'</td>'
-      +'</tr>';
+  pickOnly.forEach(function(p,idx){
+    h+='<div class="bg-white rounded border p-2'+(idx>0?' mt-2':'')+'" style="font-size:.78rem">'
+      +'<div class="d-flex justify-content-between align-items-center mb-1">'
+      +'<span class="fw-bold">'+esc(p.name)+'</span>'
+      +'<span><span class="badge '+(PICKING_STATE_BADGE[p.state]||'bg-secondary')+' me-1">'+esc(PICKING_STATE_LABEL[p.state]||p.state)+'</span>'
+      +(p.printed?'<i class="fa fa-check-circle text-success" title="Đã in"></i>':'<i class="fa fa-print text-muted opacity-50" title="Chưa in"></i>')
+      +'</span></div>';
+    var moves=p.moves||[];
+    if(!moves.length){
+      h+='<div class="text-muted small">Không có dòng sản phẩm.</div>';
+    } else {
+      h+='<table class="table table-sm table-borderless mb-0"><thead><tr class="text-muted">'
+        +'<th>Sản phẩm</th><th class="text-end">Yêu cầu</th><th class="text-end">Đã giữ</th></tr></thead><tbody>';
+      moves.forEach(function(mv){
+        var demand=mv.demand_qty||0,reserved=mv.reserved_qty||0;
+        var short=reserved<demand;
+        h+='<tr>'
+          +'<td>'+esc(mv.product_name)+'</td>'
+          +'<td class="text-end">'+fq(demand)+'</td>'
+          +'<td class="text-end '+(short?'text-danger fw-bold':'text-success fw-bold')+'">'+fq(reserved)+'</td>'
+          +'</tr>';
+      });
+      h+='</tbody></table>';
+    }
+    h+='</div>';
   });
-  h+='</tbody></table></div>';
+  h+='</div>';
   return h;
 }
 

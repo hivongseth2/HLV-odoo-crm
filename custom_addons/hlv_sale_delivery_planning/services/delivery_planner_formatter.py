@@ -458,6 +458,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     else False
                 ),
                 'videos': att_by_picking.get(p.id, []),
+                # Chi tiết yêu cầu/giữ được của phiếu (chủ yếu dùng cho phiếu PICK trên
+                # /sale_plan — sale cần biết phiếu lấy hàng đang yêu cầu gì, giữ được bao nhiêu).
+                'moves': [{
+                    'product_name': mv.product_id.display_name,
+                    'demand_qty': mv.product_uom_qty,
+                    'reserved_qty': mv.quantity,
+                } for mv in p.move_ids if mv.state != 'cancel'],
             })
 
         # Lazy: flows are heavy (recursive picking graph + per-SO ORM walks).

@@ -33,7 +33,13 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
             ['|'] * (len(codes) - 1) + [('x_studio_misa_saler_code', '=ilike', c) for c in codes]
         ] if codes else []
         if handle_unassigned:
-            sub_domains.append([('x_studio_misa_saler_code', '=', False)])
+            # Đơn Shopee/nhập tay thường được ghi x_studio_misa_saler_code = '' (chuỗi rỗng) thay
+            # vì để trống hẳn (NULL) — phải khớp CẢ 2 trường hợp, nếu không chỉ dùng ('=', False)
+            # domain sẽ bỏ sót toàn bộ đơn có giá trị '' (lý do filter từng không lên đơn Shopee).
+            sub_domains.append(['|',
+                ('x_studio_misa_saler_code', '=', False),
+                ('x_studio_misa_saler_code', '=', ''),
+            ])
         if not sub_domains:
             return None
         return expression.OR(sub_domains)
