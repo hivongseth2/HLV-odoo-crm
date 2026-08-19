@@ -3,11 +3,22 @@
 
 export class DeliveryPlannerDataMixin {
     async _silentRefresh() {
+        // D\u00f9ng CHUNG sequence token v\u1edbi fetchData() \u2014 2 h\u00e0m n\u00e0y c\u00f9ng ghi v\u00e0o state.saleOrders,
+        // n\u00ean c\u00e1i n\u00e0o b\u1eaft \u0111\u1ea7u SAU (b\u1ea5t k\u1ec3 l\u00e0 search do user g\u00f5 hay silent refresh do bus event
+        // realtime t\u1eeb ng\u01b0\u1eddi kh\u00e1c) ph\u1ea3i th\u1eafng, c\u00e1i c\u0169 h\u01a1n ph\u1ea3i t\u1ef1 b\u1ecf qua k\u1ebft qu\u1ea3 c\u1ee7a n\u00f3.
+        if (this._fetchDataAbortable) {
+            try {
+                this._fetchDataAbortable.abort(false);
+            } catch (e) {
+                // ignore
+            }
+        }
+        const mySeq = (this._fetchDataSeq = (this._fetchDataSeq || 0) + 1);
         const isKanban = this.state.viewMode === 'kanban';
         // Stats refreshed independently \u2014 don't block silent refresh on it
         this._fetchStatsAsync();
         try {
-            const result = await this.orm.call(
+            const promise = this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
@@ -18,9 +29,15 @@ export class DeliveryPlannerDataMixin {
                     include_stats: false,
                 }
             );
+            this._fetchDataAbortable = promise;
+            const result = await promise;
+            if (mySeq !== this._fetchDataSeq) return;
             this._mergeResult(result);
             await this._saveToCache(result);
         } catch (error) {
+            if (error && error.name === 'ConnectionAbortedError') {
+                return;
+            }
             console.error("Silent refresh failed:", error);
         }
     }
@@ -220,6 +237,21 @@ export class DeliveryPlannerDataMixin {
     }
 
     async fetchData() {
+        // Chống race condition: nếu fetchData() trước ĐANG CHẠY (VD user gõ search liên tục,
+        // đổi filter nhanh), HỦY request cũ trước khi bắn request mới — không chỉ bỏ qua kết quả
+        // (như _fetchStatsAsync/_autoLoadAllRemaining), mà HỦY THẬT (orm.call() trả về promise có
+        // .abort(), xem @web/core/network/rpc.js) để đỡ tốn băng thông/CPU server cho request đã
+        // không còn cần nữa. abort(false) = không reject lỗi, chỉ lặng lẽ bỏ (đúng theo doc của
+        // Odoo: "cancel ignored rpc's ... not display an error").
+        if (this._fetchDataAbortable) {
+            try {
+                this._fetchDataAbortable.abort(false);
+            } catch (e) {
+                // ignore
+            }
+        }
+        const mySeq = (this._fetchDataSeq = (this._fetchDataSeq || 0) + 1);
+
         // Don't show full loading spinner if we already have data on screen
         // (cache restored OR previous fetch already populated saleOrders).
         // This prevents the full-screen overlay from flashing on every
@@ -238,7 +270,7 @@ export class DeliveryPlannerDataMixin {
         this._fetchStatsAsync();
 
         try {
-            const result = await this.orm.call(
+            const promise = this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
@@ -250,6 +282,11 @@ export class DeliveryPlannerDataMixin {
                     include_stats: false,
                 }
             );
+            this._fetchDataAbortable = promise;
+            const result = await promise;
+            // Phòng hờ: dù abort() đã hủy request cũ, vẫn kiểm tra thêm sequence token — nếu 1
+            // fetchData() MỚI HƠN đã bắt đầu trong lúc request này đang chờ, bỏ qua kết quả này.
+            if (mySeq !== this._fetchDataSeq) return;
 
             this._applyResult(result);
             // Save to IndexedDB cache for instant restore on next page load
@@ -261,10 +298,15 @@ export class DeliveryPlannerDataMixin {
                 this._autoLoadAllRemaining(); // intentionally NOT awaited
             }
         } catch (error) {
+            if (error && error.name === 'ConnectionAbortedError') {
+                return; // bị chính mình hủy chủ động (request cũ), không phải lỗi thật
+            }
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
-            this.state.isLoading = false;
-            this.state.isRefreshing = false;
+            if (mySeq === this._fetchDataSeq) {
+                this.state.isLoading = false;
+                this.state.isRefreshing = false;
+            }
         }
     }
 

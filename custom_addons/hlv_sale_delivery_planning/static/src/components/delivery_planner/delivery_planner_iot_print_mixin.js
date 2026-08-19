@@ -101,14 +101,21 @@ export class DeliveryPlannerIotPrintMixin {
 
     /** Tab/section "Nhật ký" trong drawer đơn — lazy-load giống toggleFlowSection(), gộp log của
      * MỌI phiếu thuộc đơn (không chỉ 1 phiếu), để đối soát khi sale nói đã gửi in mà kho không
-     * thấy giấy: xem lại đúng ai gửi lúc nào, có báo lỗi/gửi lại lần nào không. */
+     * thấy giấy: xem lại đúng ai gửi lúc nào, có báo lỗi/gửi lại lần nào không.
+     * LUÔN tải lại mỗi lần mở (không cache theo so._printLog như flows) — vì yêu cầu in có thể
+     * vừa được sale gửi từ /sale_plan trong lúc drawer này đang mở sẵn ở tab khác, cache cũ sẽ
+     * làm mất đúng yêu cầu mới nhất (đây là nguyên nhân từng thấy "chưa có yêu cầu in nào" dù
+     * thực ra đã có — do mở section 1 lần, tải xong rồi không refetch nữa dù có dữ liệu mới). */
     async toggleDrawerPrintLogSection() {
         this.toggleSection('drawer_print_log');
         const expanded = !this.isSectionCollapsed('drawer_print_log');
         if (!expanded) return;
+        await this.refreshDrawerPrintLog();
+    }
+
+    async refreshDrawerPrintLog() {
         const so = this.state.selectedOrder;
         if (!so) return;
-        if (Array.isArray(so._printLog) && so._printLog.length > 0) return; // đã tải rồi
         if (so._printLogLoading) return;
         so._printLogLoading = true;
         try {
@@ -116,7 +123,7 @@ export class DeliveryPlannerIotPrintMixin {
                 'hlv.iot.print.queue', 'get_log_for_sale_order', [], { sale_order_id: so.id }
             );
         } catch (e) {
-            console.error('toggleDrawerPrintLogSection failed', e);
+            console.error('refreshDrawerPrintLog failed', e);
             so._printLog = [];
         } finally {
             so._printLogLoading = false;
