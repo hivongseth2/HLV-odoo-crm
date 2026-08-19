@@ -1011,7 +1011,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     </div>
     <div class="pd-footer">
       <button class="btn btn-outline-primary btn-sm" id="pd-btn-preview"><i class="fa fa-eye me-1"></i>Xem trước</button>
-      <button class="btn btn-success btn-sm d-none" id="pd-btn-confirm"><i class="fa fa-check me-1"></i>Xác nhận in</button>
+      <button class="btn btn-success btn-sm d-none" id="pd-btn-confirm"><i class="fa fa-check me-1"></i>Gửi phiếu in cho kho</button>
     </div>
   </div>
 </div>
@@ -1691,9 +1691,26 @@ function sendPublicMessage(){
 }
 
 var PICKING_STATE_LABEL={draft:'Nháp',waiting:'Chờ bước trước',confirmed:'Chờ hàng (chưa giữ được)',
-  assigned:'Đã giữ hàng, sẵn sàng lấy',done:'Hoàn thành',cancel:'Đã hủy'};
+  assigned:'Đã giữ đủ hàng, sẵn sàng lấy',done:'Hoàn thành',cancel:'Đã hủy'};
 var PICKING_STATE_BADGE={draft:'bg-secondary',waiting:'bg-secondary',confirmed:'bg-warning text-dark',
   assigned:'bg-success',done:'bg-primary',cancel:'bg-danger'};
+// state 'assigned' của Odoo KHÔNG phân biệt giữ đủ hay giữ 1 phần — phải tự so sánh
+// demand_qty/reserved_qty trong moves để biết chính xác, rồi báo đỏ nếu chỉ có 1 phần.
+function getPickingStatusDisplay(p){
+  if(!p.state){
+    return {badgeClass:'bg-secondary',label:'Không rõ trạng thái'};
+  }
+  if(p.state==='assigned'){
+    var moves=p.moves||[];
+    var totalDemand=0,totalReserved=0;
+    moves.forEach(function(mv){totalDemand+=(mv.demand_qty||0);totalReserved+=(mv.reserved_qty||0);});
+    if(moves.length&&totalReserved<totalDemand){
+      return {badgeClass:'bg-danger',label:totalReserved>0?'Có hàng 1 phần':'Chưa giữ được hàng'};
+    }
+    return {badgeClass:'bg-success',label:'Đã giữ đủ hàng, sẵn sàng lấy'};
+  }
+  return {badgeClass:PICKING_STATE_BADGE[p.state]||'bg-secondary',label:PICKING_STATE_LABEL[p.state]||p.state};
+}
 function renderPickingsSection(pickings){
   var pickOnly=(pickings||[]).filter(function(p){return (p.sequence_code||'').indexOf('PICK')!==-1 && !p.return_of;});
   var h='<div class="mt-3 p-3 rounded" style="background:#f7fafc;border:1px solid #e2e8f0">'
@@ -1706,10 +1723,11 @@ function renderPickingsSection(pickings){
     +'<thead><tr class="text-muted"><th>Phiếu</th><th>Trạng thái in</th><th>Trạng thái phiếu</th><th class="text-end">SL món</th></tr></thead><tbody>';
   pickOnly.forEach(function(p){
     var moves=p.moves||[];
+    var stDisplay=getPickingStatusDisplay(p);
     h+='<tr class="pick-row" data-picking-id="'+p.id+'" style="cursor:pointer">'
       +'<td class="fw-bold text-primary">'+esc(p.name)+' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i></td>'
       +'<td>'+(p.printed?'<span class="badge bg-success">Đã gửi lệnh in</span>':'<span class="badge bg-secondary">Chưa in</span>')+'</td>'
-      +'<td><span class="badge '+(PICKING_STATE_BADGE[p.state]||'bg-secondary')+'">'+esc(PICKING_STATE_LABEL[p.state]||p.state)+'</span></td>'
+      +'<td><span class="badge '+stDisplay.badgeClass+'">'+esc(stDisplay.label)+'</span></td>'
       +'<td class="text-end">'+moves.length+'</td>'
       +'</tr>';
   });
@@ -1727,8 +1745,9 @@ function openPickingDetailModal(pickingId){
   if(!p)return;
   _pdPickingId=pickingId;
   $('pd-title').textContent=p.name;
-  $('pd-state-badge').className='badge mt-1 '+(PICKING_STATE_BADGE[p.state]||'bg-secondary');
-  $('pd-state-badge').textContent=PICKING_STATE_LABEL[p.state]||p.state;
+  var pdStDisplay=getPickingStatusDisplay(p);
+  $('pd-state-badge').className='badge mt-1 '+pdStDisplay.badgeClass;
+  $('pd-state-badge').textContent=pdStDisplay.label;
   var moves=p.moves||[];
   var lh;
   if(!moves.length){
@@ -1751,7 +1770,7 @@ function openPickingDetailModal(pickingId){
   var pvBtn=$('pd-btn-preview');
   pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
   var cfBtn=$('pd-btn-confirm');
-  cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>Xác nhận in';
+  cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>Gửi phiếu in cho kho';
   $('pd-modal').style.display='flex';
 }
 function closePickingDetailModal(){
@@ -1789,7 +1808,7 @@ $('pd-btn-confirm').addEventListener('click',function(){
   .then(function(r){return r.json();})
   .then(function(j){
     var d=j.result;
-    btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Xác nhận in';
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Gửi phiếu in cho kho';
     if(d&&d.success){
       showPrintToast(d.message||'Đã gửi yêu cầu in',d.iot_ready!==false);
       loadPrintQueue();
@@ -1797,7 +1816,7 @@ $('pd-btn-confirm').addEventListener('click',function(){
     } else {
       showPrintToast((d&&d.message)||'Lỗi khi gửi in',false);
     }
-  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Xác nhận in';showPrintToast('Lỗi kết nối.',false);});
+  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Gửi phiếu in cho kho';showPrintToast('Lỗi kết nối.',false);});
 });
 
 function openDrawer(id){
