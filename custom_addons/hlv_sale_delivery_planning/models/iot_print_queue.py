@@ -1,4 +1,7 @@
-import re
+import html
+
+from bs4 import BeautifulSoup
+from markupsafe import Markup
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
@@ -42,10 +45,13 @@ class HlvIotPrintQueue(models.Model):
     def create(self, vals_list):
         records = super().create(vals_list)
         for rec in records:
-            rec.message_post(body=(
+            # Markup(...) % (...) tự escape các giá trị chèn vào (tên user/đơn/kho), chỉ giữ
+            # nguyên phần thẻ <b> tĩnh do mình viết — KHÔNG dùng body_is_html=True với chuỗi str
+            # thường, vì message_post() sẽ escape luôn cả thẻ <b> lẫn nội dung (double-escape,
+            # hiện ra &lt;b&gt; trên UI) nếu body không phải kiểu Markup.
+            rec.message_post(body=Markup(
                 'Sale <b>%s</b> gửi yêu cầu in đơn <b>%s</b> cho kho <b>%s</b>.'
-                % (rec.requested_by_id.name or '?', rec.sale_order_id.name, rec.warehouse_id.name)
-            ))
+            ) % (rec.requested_by_id.name or '?', rec.sale_order_id.name, rec.warehouse_id.name))
         return records
 
     def _claim_ids(self, ids):
@@ -169,14 +175,9 @@ class HlvIotPrintQueue(models.Model):
             result.append(d)
         return result
 
-    @api.model
-    def get_log_for_picking(self, picking_id):
-        """Nhật ký các yêu cầu in liên quan tới 1 phiếu CỤ THỂ — gắn thẳng vào phiếu để đối soát
-        (VD 1 ngày cả trăm yêu cầu in, không thể mò trong danh sách chung của tất cả hàng chờ).
-        Gộp message của MỌI bản ghi hàng chờ từng chứa phiếu này (1 phiếu có thể được gửi in lại
-        nhiều lần nếu trước đó lỗi/không ra giấy), sắp theo thời gian."""
-        picking_id = int(picking_id)
-        queues = self.search([('picking_ids', 'in', [picking_id])])
+    def _messages_to_log(self, queues):
+        """Đổi message chatter của các bản ghi hàng chờ `queues` thành list nhật ký thuần text
+        (sắp theo thời gian), dùng chung cho get_log_for_picking/get_log_for_sale_order."""
         if not queues:
             return []
         messages = self.env['mail.message'].sudo().search([
@@ -185,7 +186,10 @@ class HlvIotPrintQueue(models.Model):
         ], order='date asc')
         result = []
         for msg in messages:
-            body_text = re.sub(r'<[^<]+?>', '', msg.body or '').strip()
+            # html.unescape trước để xử lý các message cũ (tạo trước bản fix Markup) bị lưu dạng
+            # double-escaped ("&lt;b&gt;...&lt;/b&gt;" là TEXT thật, không phải thẻ) — sau đó
+            # BeautifulSoup lấy lại đúng text thuần, bỏ mọi thẻ HTML (cũ lẫn mới).
+            body_text = BeautifulSoup(html.unescape(msg.body or ''), 'html.parser').get_text().strip()
             if not body_text:
                 continue
             result.append({
@@ -194,6 +198,24 @@ class HlvIotPrintQueue(models.Model):
                 'body': body_text,
             })
         return result
+
+    @api.model
+    def get_log_for_picking(self, picking_id):
+        """Nhật ký các yêu cầu in liên quan tới 1 phiếu CỤ THỂ — gắn thẳng vào phiếu để đối soát
+        (VD 1 ngày cả trăm yêu cầu in, không thể mò trong danh sách chung của tất cả hàng chờ).
+        Gộp message của MỌI bản ghi hàng chờ từng chứa phiếu này (1 phiếu có thể được gửi in lại
+        nhiều lần nếu trước đó lỗi/không ra giấy), sắp theo thời gian."""
+        picking_id = int(picking_id)
+        queues = self.search([('picking_ids', 'in', [picking_id])])
+        return self._messages_to_log(queues)
+
+    @api.model
+    def get_log_for_sale_order(self, sale_order_id):
+        """Nhật ký in gộp cho CẢ ĐƠN (mọi phiếu) — dùng cho tab "Nhật ký" trong drawer đơn ở
+        dashboard backend "Điều phối Giao hàng"."""
+        sale_order_id = int(sale_order_id)
+        queues = self.search([('sale_order_id', '=', sale_order_id)])
+        return self._messages_to_log(queues)
 
     @api.model
     def auto_claim_and_print(self, limit=20):
