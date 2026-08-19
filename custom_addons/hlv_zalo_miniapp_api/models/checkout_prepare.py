@@ -21,6 +21,8 @@ class ZaloCheckoutPrepare(models.Model):
     extradata_str = fields.Text(string="Extradata (JSON string)")
     method_str = fields.Text(string="Method (JSON string)")
     mac = fields.Char(string="MAC signature")
+    voucher_code = fields.Char(string="Mã Voucher")
+    discount_amount = fields.Float(string="Số tiền giảm giá voucher")
 
     active = fields.Boolean(string="Còn hiệu lực", default=True)
     consumed = fields.Boolean(string="Đã xác nhận đơn", default=False)
