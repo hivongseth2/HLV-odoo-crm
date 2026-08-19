@@ -575,12 +575,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 /* Report button */
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
-/* Print button */
-.btn-print-order{font-size:.68rem;padding:2px 8px;border:1px solid #bfdbfe;color:#1d4ed8;background:#eff6ff;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
-.btn-print-order:hover{background:#dbeafe;border-color:#1d4ed8}
-.btn-print-order[disabled]{opacity:.6;cursor:wait}
 /* Report modal */
 #report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.4);align-items:center;justify-content:center}
+/* Picking detail modal (xem trước + xác nhận in) */
+#pd-modal{display:none;position:fixed;inset:0;z-index:2100;background:rgba(0,0,0,.45);align-items:center;justify-content:center}
+#pd-modal .pd-card{background:#fff;max-width:760px;width:94%;max-height:90vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden}
+#pd-modal .pd-header{padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center}
+#pd-modal .pd-body{padding:16px 18px;overflow-y:auto;flex:1}
+#pd-modal .pd-footer{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
+#pd-preview-frame{width:100%;height:60vh;border:1px solid #e5e7eb;border-radius:6px;margin-top:12px}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
 .msg-header{padding:10px 14px;background:#fafafa;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.82rem;color:#374151;user-select:none}
@@ -964,7 +967,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
   <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-primary text-white">
     <h5 class="mb-0" id="dr-title"></h5>
     <div class="d-flex align-items-center gap-2">
-      <button id="dr-print-btn" class="btn btn-sm btn-light btn-print-order" title="In phiếu lấy hàng"><i class="fa fa-print me-1"></i>In</button>
       <button id="dr-close" class="btn btn-sm btn-light">&times;</button>
     </div>
   </div>
@@ -990,6 +992,26 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     <div class="d-flex gap-2">
       <button class="btn btn-danger btn-sm flex-fill" id="report-submit"><i class="fa fa-flag me-1"></i>Gửi báo cáo</button>
       <button class="btn btn-outline-secondary btn-sm" id="report-cancel">Hủy</button>
+    </div>
+  </div>
+</div>
+<!-- Picking detail modal: xem chi tiết phiếu PICK, xem trước rồi mới xác nhận in -->
+<div id="pd-modal">
+  <div class="pd-card">
+    <div class="pd-header">
+      <div>
+        <h6 class="fw-bold mb-0" id="pd-title"></h6>
+        <span class="badge mt-1" id="pd-state-badge"></span>
+      </div>
+      <button id="pd-close" class="btn btn-sm btn-light"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="pd-body">
+      <div id="pd-lines"></div>
+      <iframe id="pd-preview-frame" class="d-none"></iframe>
+    </div>
+    <div class="pd-footer">
+      <button class="btn btn-outline-primary btn-sm" id="pd-btn-preview"><i class="fa fa-eye me-1"></i>Xem trước</button>
+      <button class="btn btn-success btn-sm d-none" id="pd-btn-confirm"><i class="fa fa-check me-1"></i>Xác nhận in</button>
     </div>
   </div>
 </div>
@@ -1400,7 +1422,6 @@ function renderSOCard(o){
   if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' DMH</span>';
   h+='</div>';
   h+='<div class="d-flex justify-content-end align-items-center gap-1 mt-2">';
-  h+='<button class="btn-print-order" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'" title="In phiếu lấy hàng"><i class="fa fa-print me-1"></i>In</button>';
   if(reported){
     h+='<span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger me-1"></i>Đã báo cáo</span>';
   } else {
@@ -1426,8 +1447,7 @@ function renderList(){
     var reportBtn=isReported
       ?'<span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger"></i></span>'
       :'<button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag"></i></button>';
-    var reportCell='<td class="d-flex gap-1">'+reportBtn
-      +'<button class="btn-print-order" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'" title="In phiếu lấy hàng"><i class="fa fa-print"></i></button></td>';
+    var reportCell='<td>'+reportBtn+'</td>';
     tr.innerHTML='<td class="fw-bold text-primary">'+esc(o.name)+'</td>'
       +'<td>'+esc(partnerName(o))+'</td>'
       +'<td>'+esc(whName(o))+'</td>'
@@ -1682,43 +1702,108 @@ function renderPickingsSection(pickings){
     h+='<div class="small text-danger"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có phiếu lấy hàng (PICK) nào — có thể chưa xác nhận, hoặc kho của đơn không dùng bước lấy hàng riêng.</div></div>';
     return h;
   }
-  pickOnly.forEach(function(p,idx){
-    h+='<div class="bg-white rounded border p-2'+(idx>0?' mt-2':'')+'" style="font-size:.78rem">'
-      +'<div class="d-flex justify-content-between align-items-center mb-1">'
-      +'<span class="fw-bold">'+esc(p.name)+'</span>'
-      +'<span><span class="badge '+(PICKING_STATE_BADGE[p.state]||'bg-secondary')+' me-1">'+esc(PICKING_STATE_LABEL[p.state]||p.state)+'</span>'
-      +(p.printed?'<i class="fa fa-check-circle text-success" title="Đã in"></i>':'<i class="fa fa-print text-muted opacity-50" title="Chưa in"></i>')
-      +'</span></div>';
+  h+='<table class="table table-sm table-borderless mb-0" style="font-size:.78rem">'
+    +'<thead><tr class="text-muted"><th>Phiếu</th><th>Trạng thái in</th><th>Trạng thái phiếu</th><th class="text-end">SL món</th></tr></thead><tbody>';
+  pickOnly.forEach(function(p){
     var moves=p.moves||[];
-    if(!moves.length){
-      h+='<div class="text-muted small">Không có dòng sản phẩm.</div>';
-    } else {
-      h+='<table class="table table-sm table-borderless mb-0"><thead><tr class="text-muted">'
-        +'<th>Sản phẩm</th><th class="text-end">Yêu cầu</th><th class="text-end">Đã giữ</th></tr></thead><tbody>';
-      moves.forEach(function(mv){
-        var demand=mv.demand_qty||0,reserved=mv.reserved_qty||0;
-        var short=reserved<demand;
-        h+='<tr>'
-          +'<td>'+esc(mv.product_name)+'</td>'
-          +'<td class="text-end">'+fq(demand)+'</td>'
-          +'<td class="text-end '+(short?'text-danger fw-bold':'text-success fw-bold')+'">'+fq(reserved)+'</td>'
-          +'</tr>';
-      });
-      h+='</tbody></table>';
-    }
-    h+='</div>';
+    h+='<tr class="pick-row" data-picking-id="'+p.id+'" style="cursor:pointer">'
+      +'<td class="fw-bold text-primary">'+esc(p.name)+' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i></td>'
+      +'<td>'+(p.printed?'<span class="badge bg-success">Đã gửi lệnh in</span>':'<span class="badge bg-secondary">Chưa in</span>')+'</td>'
+      +'<td><span class="badge '+(PICKING_STATE_BADGE[p.state]||'bg-secondary')+'">'+esc(PICKING_STATE_LABEL[p.state]||p.state)+'</span></td>'
+      +'<td class="text-end">'+moves.length+'</td>'
+      +'</tr>';
   });
-  h+='</div>';
+  h+='</tbody></table></div>';
   return h;
 }
+
+// --- Picking detail modal: xem chi tiết 1 phiếu PICK, xem trước rồi mới xác nhận in ---
+var _pdPickingId=null;
+function openPickingDetailModal(pickingId){
+  var p=null;
+  for(var i=0;i<S.orders.length&&!p;i++){
+    (S.orders[i].pickings||[]).forEach(function(pk){if(pk.id===pickingId)p=pk;});
+  }
+  if(!p)return;
+  _pdPickingId=pickingId;
+  $('pd-title').textContent=p.name;
+  $('pd-state-badge').className='badge mt-1 '+(PICKING_STATE_BADGE[p.state]||'bg-secondary');
+  $('pd-state-badge').textContent=PICKING_STATE_LABEL[p.state]||p.state;
+  var moves=p.moves||[];
+  var lh;
+  if(!moves.length){
+    lh='<div class="text-muted small">Không có dòng sản phẩm.</div>';
+  } else {
+    lh='<table class="table table-sm table-bordered mb-0"><thead><tr class="text-muted">'
+      +'<th>Sản phẩm</th><th class="text-end">Yêu cầu</th><th class="text-end">Đã giữ</th></tr></thead><tbody>';
+    moves.forEach(function(mv){
+      var demand=mv.demand_qty||0,reserved=mv.reserved_qty||0;
+      var short=reserved<demand;
+      lh+='<tr><td>'+esc(mv.product_name)+'</td>'
+        +'<td class="text-end">'+fq(demand)+'</td>'
+        +'<td class="text-end '+(short?'text-danger fw-bold':'text-success fw-bold')+'">'+fq(reserved)+'</td></tr>';
+    });
+    lh+='</tbody></table>';
+  }
+  $('pd-lines').innerHTML=lh;
+  var frame=$('pd-preview-frame');
+  frame.src='about:blank';frame.classList.add('d-none');
+  var pvBtn=$('pd-btn-preview');
+  pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
+  var cfBtn=$('pd-btn-confirm');
+  cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>Xác nhận in';
+  $('pd-modal').style.display='flex';
+}
+function closePickingDetailModal(){
+  $('pd-modal').style.display='none';
+  $('pd-preview-frame').src='about:blank';
+  _pdPickingId=null;
+}
+$('pd-close').addEventListener('click',closePickingDetailModal);
+$('pd-modal').addEventListener('click',function(e){if(e.target===this)closePickingDetailModal();});
+$('pd-btn-preview').addEventListener('click',function(){
+  if(!_pdPickingId)return;
+  var btn=this;
+  btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang tạo bản xem trước...';
+  fetch('/api/sale_plan/preview_pick_slip',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    var d=j.result;
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
+    if(d&&d.success){
+      var frame=$('pd-preview-frame');
+      frame.src=d.preview_url;frame.classList.remove('d-none');
+      $('pd-btn-confirm').classList.remove('d-none');
+    } else {
+      showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
+    }
+  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';showPrintToast('Lỗi kết nối.',false);});
+});
+$('pd-btn-confirm').addEventListener('click',function(){
+  if(!_pdPickingId)return;
+  var btn=this;
+  btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang gửi...';
+  fetch('/api/sale_plan/confirm_print_pick_slip',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    var d=j.result;
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Xác nhận in';
+    if(d&&d.success){
+      showPrintToast(d.message||'Đã gửi yêu cầu in',d.iot_ready!==false);
+      loadPrintQueue();
+      closePickingDetailModal();
+    } else {
+      showPrintToast((d&&d.message)||'Lỗi khi gửi in',false);
+    }
+  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>Xác nhận in';showPrintToast('Lỗi kết nối.',false);});
+});
 
 function openDrawer(id){
   var o=S.orders.find(function(x){return x.id===id;});
   if(!o)return;
   $('dr-title').textContent=o.name;
-  var drPrintBtn=$('dr-print-btn');
-  drPrintBtn.dataset.soId=o.id;drPrintBtn.dataset.soName=o.name;
-  drPrintBtn.disabled=false;drPrintBtn.innerHTML='<i class="fa fa-print me-1"></i>In';
   var rd=o.real_delivery_status||o.delivery_status;
   var ep=o.effective_packing||o.packing_status;
   var h='<div class="mb-3">'
@@ -1953,8 +2038,8 @@ document.addEventListener('click',function(e){
   }
   var rBtn=e.target.closest('.btn-report');
   if(rBtn){e.stopPropagation();e.preventDefault();openReportModal(parseInt(rBtn.dataset.soId,10),rBtn.dataset.soName);return;}
-  var pBtn=e.target.closest('.btn-print-order');
-  if(pBtn){e.stopPropagation();e.preventDefault();printOrderPickSlip(pBtn);return;}
+  var pickRow=e.target.closest('.pick-row');
+  if(pickRow){e.stopPropagation();e.preventDefault();openPickingDetailModal(parseInt(pickRow.dataset.pickingId,10));return;}
   if(e.target.closest('#clear-all-filters')){e.preventDefault();clearAll();return;}
   var colMore=e.target.closest('.btn-col-more');
   if(colMore){
@@ -2227,36 +2312,11 @@ function showPrintToast(msg,ok){
   document.body.appendChild(toast);
   setTimeout(function(){toast.remove();},ok?5000:15000);
 }
-function printOrderPickSlip(btn){
-  var soId=parseInt(btn.dataset.soId,10);
-  if(!soId)return;
-  var origHtml=btn.innerHTML;
-  btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
-  fetch('/api/sale_plan/print_order',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{sale_order_id:soId}})})
-  .then(function(r){return r.json();})
-  .then(function(j){
-    btn.disabled=false;btn.innerHTML=origHtml;
-    var d=j.result;
-    if(d&&d.success){
-      var msg=d.message||('Đã gửi yêu cầu in cho đơn '+btn.dataset.soName);
-      if(d.partial_stock) msg+=' (Lưu ý: đơn mới có 1 phần hàng, phiếu xem trước chỉ có phần hàng đang sẵn có.)';
-      showPrintToast(msg,d.iot_ready!==false);
-      if(d.preview_url) window.open(d.preview_url,'_blank');
-      loadPrintQueue();
-    } else if(d&&d.no_stock){
-      showPrintToast(d.message||'Đơn chưa có hàng, chưa thể in phiếu.',false);
-    } else {
-      showPrintToast('Lỗi khi in: '+((d&&d.message)||'Lỗi không xác định'),false);
-    }
-  }).catch(function(){btn.disabled=false;btn.innerHTML=origHtml;showPrintToast('Lỗi kết nối.',false);});
-}
-
 // --- Drawer "Yêu cầu in": danh sách + trạng thái các yêu cầu in đã gửi, chia theo mã sale MISA
 // (nhiều sale có thể dùng chung 1 tài khoản đăng nhập, xem filter "Đơn của tôi") ---
 var _pqItems=[];
 var _pqActiveTab='all';
-var PQ_STATE_LABEL={pending:'Chờ in',printing:'Đang in...',printed:'Đã in',error:'Lỗi',cancelled:'Đã hủy'};
+var PQ_STATE_LABEL={pending:'Chờ in',printing:'Đang in...',printed:'Đã gửi lệnh in',error:'Lỗi',cancelled:'Đã hủy'};
 var PQ_NO_CODE_LABEL='(Chưa rõ sale)';
 
 function loadPrintQueue(){
@@ -2521,21 +2581,33 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan API error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/print_order', type='json', auth='public', methods=['POST'])
-    def api_sale_plan_print_order(self, sale_order_id=None, **kwargs):
-        """Nút "In" trên từng đơn ở /sale_plan (card + drawer): gửi yêu cầu in phiếu lấy hàng của
-        đơn này vào hàng chờ theo kho (hlv.iot.print.queue) — kho mở "Điều phối Giao hàng > Hàng
-        chờ in (IoT)" trong backend để in thật. Xem services/delivery_planner_iot_print.py."""
+    @http.route('/api/sale_plan/preview_pick_slip', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_preview_pick_slip(self, picking_id=None, **kwargs):
+        """Bước 1 (dialog chi tiết phiếu): chỉ render PDF xem trước, KHÔNG tạo hàng chờ / KHÔNG
+        đánh dấu đã in. Xem services/delivery_planner_iot_print.py."""
         if not request.session.get(SESSION_KEY_OK):
             return {'success': False, 'message': 'Unauthorized'}
-        if not sale_order_id:
-            return {'success': False, 'message': 'Thiếu sale_order_id'}
+        if not picking_id:
+            return {'success': False, 'message': 'Thiếu picking_id'}
         try:
-            return request.env['hlv.delivery.planner.service'].sudo().enqueue_iot_print_for_sale_order(
-                sale_order_id
-            )
+            return request.env['hlv.delivery.planner.service'].sudo().preview_pick_slip(picking_id)
         except Exception as e:
-            _logger.exception('sale_plan print_order error')
+            _logger.exception('sale_plan preview_pick_slip error')
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/api/sale_plan/confirm_print_pick_slip', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_confirm_print_pick_slip(self, picking_id=None, **kwargs):
+        """Bước 2 (dialog chi tiết phiếu, sau khi đã xem trước): gửi yêu cầu in phiếu này vào
+        hàng chờ theo kho (hlv.iot.print.queue) — kho mở "Điều phối Giao hàng > Hàng chờ in (IoT)"
+        trong backend để tự động in thật. Xem services/delivery_planner_iot_print.py."""
+        if not request.session.get(SESSION_KEY_OK):
+            return {'success': False, 'message': 'Unauthorized'}
+        if not picking_id:
+            return {'success': False, 'message': 'Thiếu picking_id'}
+        try:
+            return request.env['hlv.delivery.planner.service'].sudo().confirm_print_pick_slip(picking_id)
+        except Exception as e:
+            _logger.exception('sale_plan confirm_print_pick_slip error')
             return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/print_queue', type='json', auth='public', methods=['POST'])

@@ -24,6 +24,9 @@
                         icon="fa-print" invisible="state not in ('pending', 'error')" class="btn-link"/>
                 <button name="action_retry" type="object" string="Đưa lại vào hàng chờ"
                         icon="fa-refresh" invisible="state != 'error'" class="btn-link"/>
+                <button name="action_requeue" type="object" string="Máy không ra giấy, gửi lại"
+                        icon="fa-repeat" invisible="state != 'printed'" class="btn-link text-warning"
+                        confirm="Đã gửi lệnh in nhưng máy in không ra giấy? Bấm OK để gửi lại lệnh in."/>
                 <button name="action_cancel" type="object" string="Hủy"
                         icon="fa-times" invisible="state not in ('pending', 'error')" class="btn-link text-danger"/>
             </list>
@@ -40,7 +43,7 @@
                 <field name="requested_by_id"/>
                 <filter string="Lỗi" name="error" domain="[('state', '=', 'error')]"/>
                 <filter string="Đang xử lý" name="in_progress" domain="[('state', 'in', ('pending', 'printing'))]"/>
-                <filter string="Đã in" name="printed" domain="[('state', '=', 'printed')]"/>
+                <filter string="Đã gửi lệnh in" name="printed" domain="[('state', '=', 'printed')]"/>
                 <separator/>
                 <group expand="1" string="Nhóm theo">
                     <filter string="Kho" name="group_warehouse" context="{'group_by': 'warehouse_id'}"/>
@@ -56,7 +59,7 @@
         <field name="view_mode">list</field>
         <field name="search_view_id" ref="view_iot_print_queue_search"/>
         <field name="context">{'search_default_error': 1, 'search_default_group_warehouse': 1}</field>
-        <field name="help">Yêu cầu in phiếu lấy hàng do sale gửi từ trang /sale_plan được TỰ ĐỘNG in ra máy IoT của kho ngay khi có ai đang mở "Điều phối Giao hàng" trong backend — không cần bấm gì. Màn hình này chỉ cần xem khi có dòng "Lỗi" (thiếu máy in IoT cho kho, thiếu report...), bấm "Đưa lại vào hàng chờ" sau khi khắc phục để hệ thống tự in lại.</field>
+        <field name="help">Yêu cầu in phiếu lấy hàng do sale gửi từ trang /sale_plan được TỰ ĐỘNG in ra máy IoT của kho ngay khi có ai đang mở "Điều phối Giao hàng" trong backend — không cần bấm gì. "Đã gửi lệnh in" chỉ nghĩa là Odoo đã gửi lệnh xuống IoT Box, KHÔNG đảm bảo máy in vật lý đã ra giấy (mất kết nối máy in sau khi gửi lệnh thì Odoo không báo lại được) — nếu thấy máy không ra giấy, bấm "Máy không ra giấy, gửi lại". Dòng "Lỗi" (thiếu máy in IoT cho kho, thiếu report...) thì bấm "Đưa lại vào hàng chờ" sau khi khắc phục.</field>
     </record>
 
     <menuitem id="menu_iot_print_queue"

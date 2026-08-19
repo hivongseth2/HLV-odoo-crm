@@ -761,7 +761,7 @@
                                       <t t-esc="{
                                           pending: 'Chờ in',
                                           printing: 'Đang in...',
-                                          printed: 'Đã in',
+                                          printed: 'Đã gửi lệnh in',
                                           error: 'Lỗi',
                                           cancelled: 'Đã hủy',
                                       }[q.state] || q.state"/>
@@ -778,6 +778,12 @@
                                       class="btn btn-sm btn-outline-danger mt-1"
                                       t-on-click="() => this.retryIotPrintQueueItem(q)">
                                   <i class="fa fa-refresh me-1"/>Thử lại
+                              </button>
+                              <button t-if="q.state === 'printed'" type="button"
+                                      class="btn btn-sm btn-outline-warning mt-1"
+                                      title="Dùng khi đã gửi lệnh in nhưng máy in vật lý không ra giấy"
+                                      t-on-click="() => this.requeueIotPrintQueueItem(q)">
+                                  <i class="fa fa-repeat me-1"/>Máy không ra giấy, gửi lại
                               </button>
                           </div>
                       </t>

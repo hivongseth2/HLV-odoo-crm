@@ -17,7 +17,11 @@ class HlvIotPrintQueue(models.Model):
     state = fields.Selection([
         ('pending', 'Chờ in'),
         ('printing', 'Đang in...'),
-        ('printed', 'Đã in'),
+        # Chỉ có nghĩa "đã GỬI lệnh in thành công" (report action đã dispatch) — KHÔNG chắc chắn
+        # máy in vật lý đã in ra giấy (IoT Box có thể mất kết nối máy in SAU khi lệnh đã gửi,
+        # Odoo không có cách nào báo lại lỗi đó cho ta biết theo thời gian thực). Nếu kho thấy máy
+        # không ra giấy dù trạng thái ở đây là "đã gửi lệnh in", dùng action_requeue để gửi lại.
+        ('printed', 'Đã gửi lệnh in'),
         ('error', 'Lỗi'),
         ('cancelled', 'Đã hủy'),
     ], string='Trạng thái', default='pending', required=True, index=True)
@@ -104,6 +108,15 @@ class HlvIotPrintQueue(models.Model):
     def action_retry(self):
         """Đưa các bản ghi lỗi về lại 'pending' để auto-processor / nút In ngay thử lại."""
         self.filtered(lambda q: q.state == 'error').write({'state': 'pending', 'error_message': False})
+
+    def action_requeue(self):
+        """"Gửi lại lệnh in" — dùng khi trạng thái đang là 'Đã gửi lệnh in' NHƯNG máy in vật lý
+        thực tế không ra giấy (VD: IoT Box mất kết nối máy in sau khi lệnh đã gửi — Odoo không có
+        cách báo lỗi này lại cho hệ thống theo thời gian thực, kho phải tự nhận biết và bấm nút
+        này). Khác action_retry ở chỗ áp dụng được cho CẢ state='printed', không chỉ 'error'."""
+        self.filtered(lambda q: q.state in ('printed', 'error')).write({
+            'state': 'pending', 'error_message': False, 'printed_by_id': False, 'printed_at': False,
+        })
 
     def action_cancel(self):
         self.filtered(lambda q: q.state in ('pending', 'error')).write({'state': 'cancelled'})

@@ -72,6 +72,18 @@ export class DeliveryPlannerIotPrintMixin {
         }
     }
 
+    /** "Máy không ra giấy, gửi lại" — dùng khi state='printed' (đã gửi lệnh in) nhưng máy in vật
+     * lý thực tế không in ra (VD IoT Box mất kết nối máy in sau khi lệnh đã gửi). */
+    async requeueIotPrintQueueItem(item) {
+        try {
+            await this.orm.call('hlv.iot.print.queue', 'action_requeue', [[item.id]]);
+            await this.processIotPrintQueue();
+        } catch (e) {
+            console.error('requeueIotPrintQueueItem failed', e);
+            this.notification.add('Không gửi lại được, vui lòng tải lại trang.', { type: 'danger' });
+        }
+    }
+
     get iotPrintQueuePendingCount() {
         return (this.state.iotPrintQueueItems || []).filter(
             (i) => i.state === 'pending' || i.state === 'printing'
