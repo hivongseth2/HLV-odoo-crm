@@ -206,15 +206,26 @@ export class DeliveryPlannerDataMixin {
      * cost is ~ms when warm.
      */
     async _fetchStatsAsync() {
+        // Hủy request stats cũ đang chạy (nếu có) — cùng lý do như fetchData(): search/đổi filter
+        // liên tục không nên để nhiều request stats cũ tiếp tục chạy chỉ để kết quả bị bỏ.
+        if (this._statsAbortable) {
+            try {
+                this._statsAbortable.abort(false);
+            } catch (e) {
+                // ignore
+            }
+        }
         const myToken = (this._statsRequestSeq = (this._statsRequestSeq || 0) + 1);
         this.state.statsLoading = true;
         try {
-            const stats = await this.orm.call(
+            const promise = this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_stats",
                 [],
                 this._buildFetchKwargs(),
             );
+            this._statsAbortable = promise;
+            const stats = await promise;
             // Drop stale responses if a newer request superseded this one
             if (myToken !== this._statsRequestSeq) return;
             if (stats && stats.dashboard_stats) {
@@ -228,6 +239,9 @@ export class DeliveryPlannerDataMixin {
                 }
             }
         } catch (e) {
+            if (e && e.name === 'ConnectionAbortedError') {
+                return;
+            }
             console.debug('[DP Stats] async fetch failed:', e);
         } finally {
             if (myToken === this._statsRequestSeq) {
@@ -250,6 +264,19 @@ export class DeliveryPlannerDataMixin {
                 // ignore
             }
         }
+        // fetchData() mới bắt đầu → ngữ cảnh (filter/search) cũ đã lỗi thời, nên HỦY LUÔN mọi
+        // _autoLoadAllRemaining() đang chạy từ lần fetchData() trước (nếu còn) — nếu không, nó
+        // vẫn tiếp tục gọi thêm 1 request get_delivery_dashboard_data nữa với filter CŨ, cộng vào
+        // số request thấy trên Network tab dù kết quả của nó sẽ bị bỏ (đây là 1 trong các nguồn
+        // gây ra "6-7 request cho 1 lần search").
+        if (this._autoLoadAbortable) {
+            try {
+                this._autoLoadAbortable.abort(false);
+            } catch (e) {
+                // ignore
+            }
+        }
+        this._autoLoadSeq = (this._autoLoadSeq || 0) + 1; // vô hiệu hoá timer 50ms đang chờ (nếu có)
         const mySeq = (this._fetchDataSeq = (this._fetchDataSeq || 0) + 1);
 
         // Don't show full loading spinner if we already have data on screen
@@ -330,7 +357,7 @@ export class DeliveryPlannerDataMixin {
         this.state.isLoadingMore = true;
         try {
             const offset = this.state.saleOrders.length;
-            const result = await this.orm.call(
+            const promise = this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
@@ -341,6 +368,8 @@ export class DeliveryPlannerDataMixin {
                     include_stats: false,
                 }
             );
+            this._autoLoadAbortable = promise;
+            const result = await promise;
             if (mySeq !== this._autoLoadSeq) return; // stale — filter đổi trong lúc đang tải
 
             const fresh = (result && result.orders) || [];
@@ -371,6 +400,9 @@ export class DeliveryPlannerDataMixin {
             });
             console.log('[DP AutoLoad] Loaded all', this.state.saleOrders.length, '/', this.state.totalCount, 'orders');
         } catch (e) {
+            if (e && e.name === 'ConnectionAbortedError') {
+                return; // bị hủy chủ động vì có fetchData() mới hơn, không phải lỗi thật
+            }
             console.error('[DP AutoLoad] _autoLoadAllRemaining failed:', e);
         } finally {
             if (mySeq === this._autoLoadSeq) {
