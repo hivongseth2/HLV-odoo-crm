@@ -20,7 +20,7 @@ from .base_api import ZaloBaseAPI
 _logger = logging.getLogger(__name__)
 
 
-class ZaloLoyaltyProxyAPI(ZaloBaseAPI):
+class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
     """Proxy các endpoint loyalty cho Zalo Mini App."""
 
     # ── Gói đổi quà (Redeem Packages) ───────────────────────────────────
