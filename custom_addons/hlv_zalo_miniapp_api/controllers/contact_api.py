@@ -405,14 +405,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if not partner.exists() or not partner.active:
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
+            root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
             total_points = 0
             exchange_points = 0
             tier = None
             try:
-                total_points = partner.loyalty_total_points or 0
-                exchange_points = getattr(partner, 'loyalty_exchange_points', 0)
-                if hasattr(partner, 'loyalty_tier_id') and partner.loyalty_tier_id:
-                    tier_obj = partner.loyalty_tier_id
+                total_points = getattr(root, 'loyalty_total_points', 0) or 0
+                exchange_points = getattr(root, 'loyalty_exchange_points', 0) or 0
+                tier_obj = getattr(root, 'loyalty_tier_id', None)
+                if tier_obj:
                     tier = {
                         "name": tier_obj.name,
                         "icon": tier_obj.icon or "",
