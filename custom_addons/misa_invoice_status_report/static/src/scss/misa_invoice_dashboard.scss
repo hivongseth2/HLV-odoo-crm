@@ -327,6 +327,17 @@
             color: var(--miv-ink-muted);
         }
 
+        // Câu giải thích ĐẦY ĐỦ (vì sao lệch, đơn nào, qua đề nghị nào) — CHO XUỐNG DÒNG bình
+        // thường (không ellipsis như .miv-legend-name), vì đây chính là phần người xem cần đọc
+        // được ngay, không phải chỉ có tên phiếu ngắn gọn.
+        .miv-legend-hint {
+            font-size: 11px;
+            color: var(--miv-ink-muted);
+            white-space: normal;
+            line-height: 1.4;
+            margin-top: 2px;
+        }
+
         .miv-legend-amount {
             flex-shrink: 0;
             white-space: nowrap;
@@ -387,6 +398,12 @@
             margin-top: 2px;
             font-size: 12px;
             color: var(--miv-ink-2);
+        }
+
+        .miv-tile-hint {
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--miv-ink-muted);
         }
 
         .miv-tile-sub {
@@ -509,6 +526,12 @@
         .miv-cell-muted { color: var(--miv-ink-muted); font-weight: 700; }
         .miv-cell-shopee { color: #c9247a; font-weight: 700; }
         .miv-cell-customs { color: #2a6f97; font-weight: 700; }
+
+        // Nhóm đã XÁC MINH xong (misa_invoice_gap_resolved) — số lệch vẫn đúng như hiển thị
+        // (tiền thuộc về 1 hóa đơn khác thật), nhưng không cần ai xử lý tay nữa — làm mờ nhẹ để
+        // không lẫn với các dòng còn cần "hối" sale thật sự.
+        tbody tr.miv-row-resolved { opacity: 0.6; }
+        tbody tr.miv-row-resolved:hover { opacity: 1; }
 
         &.miv-table-compact tbody tr.miv-row-clickable {
             cursor: pointer;
