@@ -429,6 +429,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'type_name': p.picking_type_id.name or '',
                 'code': p.picking_type_id.code or '',
                 'sequence_code': (p.picking_type_id.sequence_code or '').upper(),
+                'warehouse_name': p.picking_type_id.warehouse_id.name or '',
                 'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                 'backorder_of': p.backorder_id.name if p.backorder_id else False,
                 'return_of_id': p.return_id.id if p.return_id else False,
@@ -458,6 +459,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     else False
                 ),
                 'videos': att_by_picking.get(p.id, []),
+                # Chi tiết yêu cầu/giữ được của phiếu (chủ yếu dùng cho phiếu PICK trên
+                # /sale_plan — sale cần biết phiếu lấy hàng đang yêu cầu gì, giữ được bao nhiêu).
+                'moves': [{
+                    'product_name': mv.product_id.display_name,
+                    'demand_qty': mv.product_uom_qty,
+                    'reserved_qty': mv.quantity,
+                } for mv in p.move_ids if mv.state != 'cancel'],
             })
 
         # Lazy: flows are heavy (recursive picking graph + per-SO ORM walks).

@@ -72,6 +72,33 @@ export class DeliveryPlannerIotPrintMixin {
         }
     }
 
+    /** "Máy không ra giấy, gửi lại" — dùng khi state='printed' (đã gửi lệnh in) nhưng máy in vật
+     * lý thực tế không in ra (VD IoT Box mất kết nối máy in sau khi lệnh đã gửi). */
+    async requeueIotPrintQueueItem(item) {
+        try {
+            await this.orm.call('hlv.iot.print.queue', 'action_requeue', [[item.id]]);
+            await this.processIotPrintQueue();
+        } catch (e) {
+            console.error('requeueIotPrintQueueItem failed', e);
+            this.notification.add('Không gửi lại được, vui lòng tải lại trang.', { type: 'danger' });
+        }
+    }
+
+    /** Định dạng ISO datetime (UTC, không có 'Z') từ hlv.iot.print.queue._to_summary_dict() sang
+     * giờ VN (UTC+7) — dùng để đối soát thời gian yêu cầu/gửi in trong drawer. */
+    _formatIotQueueTime(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const utc = new Date(isoStr.endsWith('Z') ? isoStr : isoStr + 'Z');
+            if (isNaN(utc.getTime())) return '';
+            const vn = new Date(utc.getTime() + 7 * 60 * 60 * 1000);
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)} ${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
+        } catch (e) {
+            return '';
+        }
+    }
+
     get iotPrintQueuePendingCount() {
         return (this.state.iotPrintQueueItems || []).filter(
             (i) => i.state === 'pending' || i.state === 'printing'

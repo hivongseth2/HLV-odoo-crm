@@ -761,7 +761,7 @@
                                       <t t-esc="{
                                           pending: 'Chờ in',
                                           printing: 'Đang in...',
-                                          printed: 'Đã in',
+                                          printed: 'Đã gửi lệnh in',
                                           error: 'Lỗi',
                                           cancelled: 'Đã hủy',
                                       }[q.state] || q.state"/>
@@ -771,6 +771,12 @@
                                   <i class="fa fa-warehouse me-1"/><t t-esc="q.warehouse_name"/>
                                   <span class="ms-2"><i class="fa fa-user me-1"/><t t-esc="q.requested_by_name"/></span>
                               </p>
+                              <p class="mb-1 small text-muted" style="font-size:.72rem">
+                                  <i class="fa fa-clock-o me-1"/>Yêu cầu: <t t-esc="this._formatIotQueueTime(q.requested_at)"/>
+                                  <t t-if="q.printed_at">
+                                      <span class="ms-2"><i class="fa fa-print me-1"/>Đã gửi lệnh in: <t t-esc="this._formatIotQueueTime(q.printed_at)"/></span>
+                                  </t>
+                              </p>
                               <p t-if="q.state === 'error' and q.error_message" class="mb-1 small text-danger">
                                   <i class="fa fa-exclamation-triangle me-1"/><t t-esc="q.error_message"/>
                               </p>
@@ -778,6 +784,12 @@
                                       class="btn btn-sm btn-outline-danger mt-1"
                                       t-on-click="() => this.retryIotPrintQueueItem(q)">
                                   <i class="fa fa-refresh me-1"/>Thử lại
+                              </button>
+                              <button t-if="q.state === 'printed'" type="button"
+                                      class="btn btn-sm btn-outline-warning mt-1"
+                                      title="Dùng khi đã gửi lệnh in nhưng máy in vật lý không ra giấy"
+                                      t-on-click="() => this.requeueIotPrintQueueItem(q)">
+                                  <i class="fa fa-repeat me-1"/>Máy không ra giấy, gửi lại
                               </button>
                           </div>
                       </t>

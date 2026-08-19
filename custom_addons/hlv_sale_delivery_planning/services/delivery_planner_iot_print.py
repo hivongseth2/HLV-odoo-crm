@@ -1,13 +1,19 @@
-"""Hàng chờ in phiếu lấy hàng theo kho (hlv.iot.print.queue) — dùng cho nút "In" trên trang
-/sale_plan, để sale tự gửi yêu cầu in đơn của mình mà không cần chọn máy in tay.
+"""In phiếu lấy hàng (PICK) theo TỪNG PHIẾU, quy trình 2 bước rõ ràng cho sale trên /sale_plan:
+  1) preview_pick_slip(picking_id): chỉ render PDF xem trước (không tạo hàng chờ, không đánh dấu
+     đã in) — sale xem "có gì giao nấy" trước khi quyết định gửi in.
+  2) confirm_print_pick_slip(picking_id): sale đã xem preview và bấm "Xác nhận in" — lúc này mới
+     thật sự tạo/refresh hàng chờ theo kho (hlv.iot.print.queue) và báo bus cho backend tự in.
+Tuyệt đối không gộp 2 bước làm 1 (preview xong tự động gửi in luôn) — dễ khiến sale bấm nhầm gửi
+in cho kho trong khi chỉ định xem thử.
 
 Đã thử phương án gọi thẳng report._render_qweb_pdf() kèm ghi device_ids từ /sale_plan (public
 page, ngoài web client) — xác nhận KHÔNG kích hoạt in vật lý qua IoT Box, chỉ tải PDF về (cơ chế
 in-qua-IoT của Enterprise nằm ở tầng JS action-dispatch của web client, không phải side-effect
-Python của _render_qweb_pdf). Vì vậy sale chỉ ĐƯA YÊU CẦU vào hàng chờ theo kho; người ở kho mở
-"Điều phối Giao hàng > Hàng chờ in (IoT)" trong backend và bấm "In ngay" (models/iot_print_queue.py
-action_print_now — trả về report action để web client dispatch đúng cơ chế đã xác nhận hoạt động)
-để thực sự in ra máy. Hàng chờ là bản ghi bền (persistent), không bị mất khi không ai bấm ngay.
+Python của _render_qweb_pdf). Vì vậy bước (2) chỉ ĐƯA YÊU CẦU vào hàng chờ theo kho; người ở kho mở
+"Điều phối Giao hàng > Hàng chờ in (IoT)" trong backend (tự động xử lý, xem
+delivery_planner_iot_print_mixin.js) — action_print_now/auto_claim_and_print trong
+models/iot_print_queue.py trả về report action để web client dispatch đúng cơ chế đã xác nhận
+hoạt động, mới thực sự in ra máy. Hàng chờ là bản ghi bền (persistent), không mất khi chưa ai xử lý.
 """
 import base64
 import logging
@@ -22,146 +28,112 @@ REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 class DeliveryPlannerServiceIotPrint(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
 
-    def _get_pick_pickings_for_sale_order(self, sale_order):
-        """Cùng logic lọc phiếu PICK như print_picking_slips (controllers/main.py) nhưng scope cho
-        1 đơn — chưa hoàn thành/hủy, không phải phiếu trả hàng, đúng loại PICK."""
-        picking_obj = self.env['stock.picking']
-        linked = sale_order.picking_ids
-        linked |= picking_obj.search([
-            ('sale_id', '=', sale_order.id),
-            ('picking_type_code', 'in', ['outgoing', 'internal']),
-            ('state', 'not in', ['done', 'cancel']),
-        ])
-        linked |= picking_obj.search([
-            ('origin', '=', sale_order.name),
-            ('picking_type_code', 'in', ['outgoing', 'internal']),
-            ('state', 'not in', ['done', 'cancel']),
-        ])
-        linked |= picking_obj.search([
-            ('move_ids.sale_line_id.order_id', '=', sale_order.id),
-            ('picking_type_code', 'in', ['outgoing', 'internal']),
-            ('state', 'not in', ['done', 'cancel']),
-        ])
-        return linked.filtered(
-            lambda p: p.picking_type_code in ['outgoing', 'internal']
-                      and p.state not in ['done', 'cancel']
-                      and not p.return_id
-                      and 'PICK' in (p.picking_type_id.sequence_code or '').upper()
-        ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
+    def _get_sale_order_for_picking(self, picking):
+        return picking.sale_id or picking.move_ids.sale_line_id.order_id[:1]
 
-    def _render_preview_pdf(self, report, pickings):
+    def _get_pick_report(self):
+        return self.env['ir.actions.report'].sudo().search([
+            ('name', 'ilike', REPORT_NAME_SEARCH),
+        ], limit=1)
+
+    def _render_preview_pdf(self, report, picking):
         """Render PDF xem trước (không đánh dấu đã in — xem models/ir_actions_report.py) cho sale
-        xem "có gì giao nấy" trước khi phiếu được kho in thật. Render riêng từng phiếu rồi merge
-        (đảm bảo ngắt trang cứng giữa các phiếu), cùng cách main.py:print_picking_slips đang làm."""
-        from odoo.tools.pdf import merge_pdf
-        pdf_parts = []
-        for picking in pickings:
-            pdf_bytes, _ = report.with_context(hlv_skip_print_status_marking=True)._render_qweb_pdf(
-                report.report_name, res_ids=[picking.id]
-            )
-            pdf_parts.append(pdf_bytes)
-        return merge_pdf(pdf_parts)
+        xem "có gì giao nấy" trước khi phiếu được kho in thật."""
+        pdf_bytes, _ = report.with_context(hlv_skip_print_status_marking=True)._render_qweb_pdf(
+            report.report_name, res_ids=[picking.id]
+        )
+        return pdf_bytes
 
-    def enqueue_iot_print_for_sale_order(self, sale_order_id):
-        """RPC chính cho nút "In" trên /sale_plan (card + drawer). Kiểm tra tồn kho trước: nếu
-        TOÀN BỘ phiếu đều chưa giữ được chút hàng nào (state chưa lên 'assigned') thì CHẶN, không
-        tạo hàng chờ. Nếu có ít nhất 1 phần hàng (kể cả partial — "có gì giao nấy"): render 1 PDF
-        xem trước cho sale (không đánh dấu đã in), rồi mới gom phiếu PICK theo kho, tạo/refresh
-        hàng chờ (pending) mỗi kho, báo bus realtime cho backend tự in — xem docstring module."""
-        sale_order = self.env['sale.order'].sudo().browse(int(sale_order_id)).exists()
-        if not sale_order:
-            return {'success': False, 'message': 'Không tìm thấy đơn hàng'}
-
-        pickings = self._get_pick_pickings_for_sale_order(sale_order)
-        if not pickings:
-            return {'success': False, 'message': 'Đơn này không có phiếu lấy hàng nào cần in'}
-
-        if not any(p.state == 'assigned' for p in pickings):
+    def preview_pick_slip(self, picking_id):
+        """Bước 1: chỉ xem trước, KHÔNG tạo hàng chờ / KHÔNG đánh dấu đã in."""
+        picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
+        if not picking:
+            return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        if 'PICK' not in (picking.picking_type_id.sequence_code or '').upper():
+            return {'success': False, 'message': 'Phiếu này không phải phiếu lấy hàng (PICK)'}
+        if picking.state != 'assigned':
             return {
                 'success': False,
                 'no_stock': True,
-                'message': 'Đơn này chưa giữ được hàng cho bất kỳ sản phẩm nào (chưa có hàng), '
-                            'chưa thể in phiếu lấy hàng.',
+                'message': 'Phiếu này chưa giữ được hàng (chưa có hàng để lấy), chưa thể xem trước / in.',
             }
 
-        report = self.env['ir.actions.report'].sudo().search([
-            ('name', 'ilike', REPORT_NAME_SEARCH),
-        ], limit=1)
+        report = self._get_pick_report()
         if not report:
             return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
 
-        preview_url = False
         try:
-            pdf_content = self._render_preview_pdf(report, pickings)
+            pdf_content = self._render_preview_pdf(report, picking)
             attachment = self.env['ir.attachment'].sudo().create({
-                'name': 'Xem_truoc_Phieu_Lay_Hang_%s.pdf' % sale_order.name,
+                'name': 'Xem_truoc_%s.pdf' % picking.name.replace('/', '_'),
                 'type': 'binary',
                 'datas': base64.b64encode(pdf_content).decode('utf-8'),
-                'res_model': 'sale.order',
-                'res_id': sale_order.id,
+                'res_model': 'stock.picking',
+                'res_id': picking.id,
                 'mimetype': 'application/pdf',
             })
-            preview_url = '/web/content/%d?download=false' % attachment.id
-        except Exception:
-            # Preview chỉ là tiện ích thêm — lỗi render preview không được chặn việc gửi hàng chờ.
-            _logger.exception('Failed to render preview PDF for sale order %s', sale_order_id)
+        except Exception as e:
+            _logger.exception('Failed to render preview PDF for picking %s', picking_id)
+            return {'success': False, 'message': 'Lỗi khi tạo bản xem trước: %s' % e}
 
-        by_warehouse = {}
-        for picking in pickings:
-            wh = picking.picking_type_id.warehouse_id
-            by_warehouse.setdefault(wh, self.env['stock.picking'])
-            by_warehouse[wh] |= picking
+        return {
+            'success': True,
+            'preview_url': '/web/content/%d?download=false' % attachment.id,
+            'message': 'Xem trước phiếu %s' % picking.name,
+        }
+
+    def confirm_print_pick_slip(self, picking_id):
+        """Bước 2: sale đã xem preview, bấm "Xác nhận in" — tạo/refresh hàng chờ theo kho, báo
+        bus realtime cho backend tự in (xem docstring module)."""
+        picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
+        if not picking:
+            return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        if picking.state != 'assigned':
+            return {
+                'success': False,
+                'no_stock': True,
+                'message': 'Phiếu này chưa giữ được hàng (chưa có hàng để lấy), chưa thể gửi in.',
+            }
+
+        wh = picking.picking_type_id.warehouse_id
+        if not wh:
+            return {'success': False, 'message': 'Không xác định được kho của phiếu này'}
+
+        sale_order = self._get_sale_order_for_picking(picking)
+        if not sale_order:
+            return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
 
         Queue = self.env['hlv.iot.print.queue'].sudo()
-        warehouse_names = []
-        missing_device_warehouses = []
-        touched_warehouse_ids = []
-        for wh, wh_pickings in by_warehouse.items():
-            if not wh:
-                missing_device_warehouses.append('Không rõ kho')
-                continue
-            if not wh.x_iot_printer_device_id:
-                missing_device_warehouses.append(wh.name)
-            existing = Queue.search([
-                ('sale_order_id', '=', sale_order.id),
-                ('warehouse_id', '=', wh.id),
-                ('state', '=', 'pending'),
-            ], limit=1)
-            if existing:
-                existing.write({
-                    'picking_ids': [(6, 0, wh_pickings.ids)],
-                    'requested_by_id': self.env.uid,
-                    'requested_at': fields.Datetime.now(),
-                })
-            else:
-                Queue.create({
-                    'sale_order_id': sale_order.id,
-                    'warehouse_id': wh.id,
-                    'picking_ids': [(6, 0, wh_pickings.ids)],
-                })
-            warehouse_names.append(wh.name)
-            touched_warehouse_ids.append(wh.id)
-
-        if not warehouse_names:
-            return {'success': False, 'message': 'Không xác định được kho của phiếu lấy hàng'}
+        existing = Queue.search([
+            ('sale_order_id', '=', sale_order.id),
+            ('warehouse_id', '=', wh.id),
+            ('state', '=', 'pending'),
+        ], limit=1)
+        if existing:
+            existing_pickings = existing.picking_ids | picking
+            existing.write({
+                'picking_ids': [(6, 0, existing_pickings.ids)],
+                'requested_by_id': self.env.uid,
+                'requested_at': fields.Datetime.now(),
+            })
+        else:
+            Queue.create({
+                'sale_order_id': sale_order.id,
+                'warehouse_id': wh.id,
+                'picking_ids': [(6, 0, [picking.id])],
+            })
 
         try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel', 'iot_print_queue_changed',
-                {'warehouse_ids': touched_warehouse_ids, 'sale_order_id': sale_order.id},
+                {'warehouse_ids': [wh.id], 'sale_order_id': sale_order.id},
             )
         except Exception:
             _logger.debug('Failed to send iot_print_queue_changed notification', exc_info=True)
 
-        message = 'Đã gửi yêu cầu in cho kho %s. Kho sẽ in phiếu trong ít phút.' % ', '.join(warehouse_names)
-        if missing_device_warehouses:
-            message += ' CẢNH BÁO: kho %s chưa gán máy in IoT (vào Kho hàng > cấu hình).' % ', '.join(missing_device_warehouses)
+        message = 'Đã gửi yêu cầu in phiếu %s cho kho %s. Kho sẽ in trong ít phút.' % (picking.name, wh.name)
+        iot_ready = bool(wh.x_iot_printer_device_id)
+        if not iot_ready:
+            message += ' CẢNH BÁO: kho "%s" chưa gán máy in IoT (vào Kho hàng > cấu hình).' % wh.name
 
-        return {
-            'success': True,
-            'message': message,
-            'picking_count': len(pickings),
-            'iot_ready': not missing_device_warehouses,
-            'preview_url': preview_url,
-            'partial_stock': any(p.state != 'assigned' for p in pickings),
-        }
+        return {'success': True, 'message': message, 'iot_ready': iot_ready}
