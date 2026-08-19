@@ -473,10 +473,20 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 _logger.warning("Force cancel pickings error: %s", e)
 
             # Set trực tiếp order state về cancel và tự động bật Cần hủy (x_plan_need_cancel)
-            cancel_vals = {"state": "cancel"}
+            cancel_vals = {
+                "state": "cancel",
+                "x_zalo_payment_status": "cancelled",
+            }
             if "x_plan_need_cancel" in order_sudo._fields:
                 cancel_vals["x_plan_need_cancel"] = True
             order_sudo.write(cancel_vals)
+
+            # Đồng bộ trạng thái đơn hủy lên Zalo Developer Portal nếu là đơn Zalo
+            if order.x_zalo_order_id:
+                try:
+                    order.sudo()._send_zalo_cod_callback_payment(result_code=-1)
+                except Exception as ze:
+                    _logger.warning("Gửi Zalo cancel callback thất bại cho đơn %s: %s", order.name, ze)
 
             # Tự động hoàn tiền qua Zalo nếu đơn online đã thanh toán nhưng chưa giao
             try:
