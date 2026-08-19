@@ -6,6 +6,9 @@
     'category': 'Sales',
     'author': 'HLV',
     'depends': ['sale_management', 'purchase_stock', 'bus', 'iot', 'mail'],
+    'external_dependencies': {
+        'python': ['bs4'],
+    },
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',

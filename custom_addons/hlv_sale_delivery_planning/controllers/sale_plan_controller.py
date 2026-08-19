@@ -1741,9 +1741,12 @@ function renderPickingsSection(pickings,canPrint){
   pickOnly.forEach(function(p){
     var moves=p.moves||[];
     var stDisplay=getPickingStatusDisplay(p);
-    var viewable=(p.state!=='done'&&p.state!=='cancel');
-    h+='<tr'+(viewable?' class="pick-row" data-picking-id="'+p.id+'" style="cursor:pointer"':' class="opacity-50" title="Phiếu đã hoàn tất/hủy, không xem lại bản in được nữa"')+'>'
-      +'<td class="fw-bold'+(viewable?' text-primary':' text-muted')+'">'+esc(p.name)+(viewable?' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i>':'')+'</td>'
+    // Phiếu đã hoàn tất/hủy vẫn cho MỞ dialog xem chi tiết + nhật ký (đối soát), chỉ chặn hành
+    // động in NGAY TRONG dialog (xem openPickingDetailModal) — không chặn click mở luôn.
+    var finished=(p.state==='done'||p.state==='cancel');
+    h+='<tr class="pick-row'+(finished?' opacity-75':'')+'" data-picking-id="'+p.id+'" style="cursor:pointer"'
+      +(finished?' title="Phiếu đã hoàn tất/hủy — chỉ xem chi tiết/nhật ký, không in lại được"':'')+'>'
+      +'<td class="fw-bold'+(finished?' text-muted':' text-primary')+'">'+esc(p.name)+' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i></td>'
       +'<td>'+(p.printed?'<span class="badge bg-success">Đã gửi lệnh in</span>':'<span class="badge bg-secondary">Chưa in</span>')+'</td>'
       +'<td><span class="badge '+stDisplay.badgeClass+'">'+esc(stDisplay.label)+'</span></td>'
       +'<td class="text-end">'+moves.length+'</td>'
@@ -1763,10 +1766,6 @@ function openPickingDetailModal(pickingId){
   if(!p)return;
   if(!ownerOrder||ownerOrder.can_print!==true){
     showPrintToast('Đơn này không thuộc mã sale của tài khoản bạn, không được xem/in phiếu này.',false);
-    return;
-  }
-  if(p.state==='done'||p.state==='cancel'){
-    showPrintToast('Phiếu này đã '+(p.state==='done'?'hoàn tất':'hủy')+', không xem lại bản in được nữa.',false);
     return;
   }
   _pdPickingId=pickingId;
@@ -1790,15 +1789,26 @@ function openPickingDetailModal(pickingId){
     });
     lh+='</tbody></table>';
   }
+  var finished=(p.state==='done'||p.state==='cancel');
+  if(finished){
+    lh+='<div class="small text-muted mt-2"><i class="fa fa-info-circle me-1"></i>Phiếu đã '
+      +(p.state==='done'?'hoàn tất':'hủy')+' — chỉ xem chi tiết/nhật ký, không in lại được nữa.</div>';
+  }
   $('pd-lines').innerHTML=lh;
   var frame=$('pd-preview-frame');
   frame.src='about:blank';frame.classList.add('d-none');
   var pvBtn=$('pd-btn-preview');
-  pvBtn.classList.remove('d-none');pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
   var cfBtn=$('pd-btn-confirm');
-  var whLabel='Gửi phiếu in cho kho'+(p.warehouse_name?' '+p.warehouse_name:'');
-  cfBtn.dataset.label=whLabel;
-  cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(whLabel);
+  if(finished){
+    // Phiếu đã xong/hủy: ẩn hết nút in, chỉ còn xem chi tiết + nhật ký.
+    pvBtn.classList.add('d-none');
+    cfBtn.classList.add('d-none');
+  } else {
+    pvBtn.classList.remove('d-none');pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
+    var whLabel='Gửi phiếu in cho kho'+(p.warehouse_name?' '+p.warehouse_name:'');
+    cfBtn.dataset.label=whLabel;
+    cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(whLabel);
+  }
   pdSwitchTab('detail');
   $('pd-modal').style.display='flex';
 }
