@@ -211,6 +211,10 @@ export class DeliveryPlannerDashboard extends Component {
             busListening: false,
             busServiceAvailable: false,
             desktopNotificationPermission: (typeof window !== 'undefined' && 'Notification' in window) ? Notification.permission : 'unsupported',
+
+            isIotPrintQueueDrawerOpen: false,
+            iotPrintQueueItems: [],
+            iotPrintQueueLoading: false,
         });
 
         this.notification = useService("notification");

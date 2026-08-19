@@ -90,6 +90,22 @@
                                     t-on-click="togglePackingProgressDrawer">
                                 <i class="fa fa-tasks me-1"></i> Tiến độ đóng
                             </button>
+                            <button class="btn btn-outline-info shadow-sm position-relative ms-2"
+                                    t-on-click="openIotPrintQueueDrawer">
+                                <i class="fa fa-print"></i> Yêu cầu in
+                                <span t-if="this.iotPrintQueueErrorCount > 0"
+                                      class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                      style="font-size: 0.7rem; padding: 0.35em 0.5em; color:white"
+                                      title="Yêu cầu in bị lỗi">
+                                    <t t-esc="this.iotPrintQueueErrorCount"/>
+                                </span>
+                                <span t-elif="this.iotPrintQueuePendingCount > 0"
+                                      class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark"
+                                      style="font-size: 0.7rem; padding: 0.35em 0.5em"
+                                      title="Yêu cầu đang chờ/đang in">
+                                    <t t-esc="this.iotPrintQueuePendingCount"/>
+                                </span>
+                            </button>
                         </div>
                     </div>
 
@@ -386,6 +402,7 @@
 
             <!-- Message Drawer (Left) -->
             <t t-call="hlv_sale_delivery_planning.MessageDrawer"/>
+            <t t-call="hlv_sale_delivery_planning.IotPrintQueueDrawer"/>
 
             <!-- Backdrop Drawer -->
             <div t-if="state.isDrawerOpen"
@@ -396,6 +413,11 @@
             <div t-if="state.isMessageDrawerOpen"
                  class="modal-backdrop fade show"
                  t-on-click="() => { this.state.isMessageDrawerOpen = false; }"
+                 style="z-index: 1040;"></div>
+
+            <div t-if="state.isIotPrintQueueDrawerOpen"
+                 class="modal-backdrop fade show"
+                 t-on-click="closeIotPrintQueueDrawer"
                  style="z-index: 1040;"></div>
 
         </div>

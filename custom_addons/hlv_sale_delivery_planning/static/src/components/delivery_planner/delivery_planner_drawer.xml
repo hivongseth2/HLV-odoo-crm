@@ -718,4 +718,72 @@
         </div>
     </t>
 
+    <!-- ================================================================
+         IoT Print Queue Drawer - Danh sách yêu cầu in do sale gửi từ /sale_plan
+         Sử dụng state.iotPrintQueueItems và state.isIotPrintQueueDrawerOpen
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.IotPrintQueueDrawer">
+        <div t-if="state.isIotPrintQueueDrawerOpen"
+             class="offcanvas offcanvas-start show shadow-lg" tabindex="-1"
+             style="visibility: visible; width: 420px; z-index: 1050; position: fixed; top: 0; bottom: 0; left: 0; background: white;"
+             t-on-click.stop="">
+
+             <div class="offcanvas-header bg-info text-white p-3">
+                 <h5 class="offcanvas-title m-0" style="color:white">
+                     <i class="fa fa-print me-2"></i>
+                     Yêu cầu in (IoT) từ sale
+                 </h5>
+                 <button type="button" class="btn-close btn-close-white ms-auto"
+                         aria-label="Close" t-on-click="closeIotPrintQueueDrawer"></button>
+             </div>
+
+             <div class="offcanvas-body p-0 bg-light overflow-auto" style="height: calc(100vh - 70px);">
+                 <div t-if="state.iotPrintQueueLoading" class="p-4 text-center text-muted">
+                      <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
+                 </div>
+                 <div t-elif="state.iotPrintQueueItems.length === 0" class="p-4 text-center text-muted">
+                      <i class="fa fa-print fa-3x opacity-50 mb-3"></i><br/>
+                      Chưa có yêu cầu in nào từ trang /sale_plan.
+                 </div>
+                 <div t-else="" class="list-group list-group-flush">
+                      <t t-foreach="state.iotPrintQueueItems" t-as="q" t-key="q.id">
+                          <div class="list-group-item p-3">
+                              <div class="d-flex w-100 justify-content-between mb-1">
+                                  <h6 class="mb-0 fw-bold text-primary"><t t-esc="q.sale_order_name"/></h6>
+                                  <span class="badge"
+                                        t-att-class="{
+                                            pending: 'bg-warning text-dark',
+                                            printing: 'bg-info text-dark',
+                                            printed: 'bg-success',
+                                            error: 'bg-danger',
+                                            cancelled: 'bg-secondary',
+                                        }[q.state] || 'bg-secondary'">
+                                      <t t-esc="{
+                                          pending: 'Chờ in',
+                                          printing: 'Đang in...',
+                                          printed: 'Đã in',
+                                          error: 'Lỗi',
+                                          cancelled: 'Đã hủy',
+                                      }[q.state] || q.state"/>
+                                  </span>
+                              </div>
+                              <p class="mb-1 small text-muted">
+                                  <i class="fa fa-warehouse me-1"/><t t-esc="q.warehouse_name"/>
+                                  <span class="ms-2"><i class="fa fa-user me-1"/><t t-esc="q.requested_by_name"/></span>
+                              </p>
+                              <p t-if="q.state === 'error' and q.error_message" class="mb-1 small text-danger">
+                                  <i class="fa fa-exclamation-triangle me-1"/><t t-esc="q.error_message"/>
+                              </p>
+                              <button t-if="q.state === 'error'" type="button"
+                                      class="btn btn-sm btn-outline-danger mt-1"
+                                      t-on-click="() => this.retryIotPrintQueueItem(q)">
+                                  <i class="fa fa-refresh me-1"/>Thử lại
+                              </button>
+                          </div>
+                      </t>
+                 </div>
+             </div>
+        </div>
+    </t>
+
 </templates>

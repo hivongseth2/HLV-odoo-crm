@@ -488,6 +488,23 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 #drawer.open{right:0}
 #drawer-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.2);z-index:1055}
 #drawer-overlay.open{display:block}
+/* Print queue drawer (trái) */
+#print-queue-drawer{position:fixed;top:0;left:-460px;width:440px;height:100vh;background:#fff;
+  border-right:1px solid #e5e7eb;box-shadow:8px 0 32px rgba(0,0,0,.06);z-index:1065;transition:left .3s;overflow-y:auto;display:flex;flex-direction:column}
+#print-queue-drawer.open{left:0}
+#print-queue-drawer-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.2);z-index:1060}
+#print-queue-drawer-overlay.open{display:block}
+#print-queue-body{flex:1;overflow-y:auto}
+.pq-item{padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:.8rem}
+.pq-item .pq-title{font-weight:800;color:#0f172a}
+.pq-item .pq-meta{color:#64748b;font-size:.74rem;margin-top:2px}
+.pq-item .pq-error{color:#b91c1c;font-size:.74rem;margin-top:4px}
+.pq-badge{font-size:.66rem;font-weight:800;border-radius:999px;padding:2px 8px;color:#fff}
+.pq-badge.pending,.pq-badge.printing{background:#d97706}
+.pq-badge.printed{background:#16a34a}
+.pq-badge.error{background:#dc2626}
+.pq-badge.cancelled{background:#64748b}
+@media(max-width:1024px){#print-queue-drawer{width:100%!important;left:-105%!important}}
 /* Drawer table */
 .table-lines td,.table-lines th{font-size:.7rem;vertical-align:middle}
 .table-lines thead th{background:#f9fafb;color:#6b7280;font-weight:600;text-transform:uppercase;font-size:.65rem;letter-spacing:.6px;padding:9px 8px;border-bottom:1px solid #e5e7eb}
@@ -515,14 +532,16 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 
 .sale-plan-mention{color:#4f46e5;font-weight:800}
 .mention-noti-wrap{position:relative;display:flex;align-items:center}
-#mention-noti-button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:6px;padding:6px 10px;font-size:.78rem;font-weight:700;line-height:1;display:inline-flex;align-items:center;gap:7px}
+#mention-noti-button,#print-queue-button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:6px;padding:6px 10px;font-size:.78rem;font-weight:700;line-height:1;display:inline-flex;align-items:center;gap:7px}
 #mention-noti-button.has-unread{background:#4f46e5;border-color:#818cf8;color:#fff}
+#print-queue-button.has-error{background:#dc2626;border-color:#f87171;color:#fff}
+#print-queue-button.has-pending{background:#d97706;border-color:#fbbf24;color:#fff}
 #mention-browser-noti-button{border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:6px;padding:5px 8px;font-size:.72rem;font-weight:800;line-height:1;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 #mention-browser-noti-button.enabled{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
 #mention-browser-noti-button.blocked{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
 .mention-webpush-help{display:none;margin:8px 10px 0;padding:8px 10px;border:1px solid #fed7aa;background:#fff7ed;color:#7c2d12;border-radius:6px;font-size:.74rem;line-height:1.35}
 .mention-webpush-help.open{display:block}
-#mention-noti-count{min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;padding:0 5px}
+#mention-noti-count,#print-queue-count{min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;padding:0 5px}
 #mention-noti-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:3150;width:min(390px,calc(100vw - 32px));max-height:420px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 18px 40px rgba(15,23,42,.22);display:none;color:#0f172a}
 #mention-noti-panel.open{display:block}
 .mention-noti-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:.78rem;font-weight:800;color:#0f172a}
@@ -765,6 +784,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <li class="nav-item"><a class="nav-link" href="/search_order">Chứng từ mua</a></li>
       <li class="nav-item"><a class="nav-link active" href="/sale_plan">Tình trạng đơn</a></li>
       <li class="nav-item"><a class="nav-link" href="/search_invoice">Hóa đơn MISA</a></li>
+      <li class="nav-item ms-lg-2">
+        <button id="print-queue-button" type="button" title="Yêu cầu in"><i class="fa fa-print"></i><span id="print-queue-count">0</span></button>
+      </li>
       <li class="nav-item ms-lg-2 mention-noti-wrap">
         <button id="mention-noti-button" type="button" title="Thông báo"><i class="fa fa-bell"></i><span id="mention-noti-count">0</span></button>
         <div id="mention-noti-panel" aria-live="polite">
@@ -948,6 +970,16 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
   </div>
   <div id="dr-body" class="p-3"></div>
   <div class="p-3 border-top bg-light fw-bold" id="dr-footer"></div>
+</div>
+<!-- Print queue drawer -->
+<div id="print-queue-drawer-overlay"></div>
+<div id="print-queue-drawer">
+  <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-info text-white">
+    <h5 class="mb-0"><i class="fa fa-print me-2"></i>Yêu cầu in</h5>
+    <button id="print-queue-close" class="btn btn-sm btn-light">&times;</button>
+  </div>
+  <div class="mention-noti-tabs" id="print-queue-tabs"></div>
+  <div id="print-queue-body"></div>
 </div>
 <!-- Report modal -->
 <div id="report-modal">
@@ -2040,7 +2072,7 @@ $('btn-list').addEventListener('click',function(){
 
 $('dr-close').addEventListener('click',closeDrawer);
 $('drawer-overlay').addEventListener('click',closeDrawer);
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closeReportModal();}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closeReportModal();closePrintQueueDrawer();}});
 
 // --- Auto-refresh: poll for changes every 10s ---
 var _lastFingerprint=null;
@@ -2158,12 +2190,92 @@ function printOrderPickSlip(btn){
     btn.disabled=false;btn.innerHTML=origHtml;
     var d=j.result;
     if(d&&d.success){
-      showPrintToast(d.message||('Đã gửi yêu cầu in cho đơn '+btn.dataset.soName),d.iot_ready!==false);
+      var msg=d.message||('Đã gửi yêu cầu in cho đơn '+btn.dataset.soName);
+      if(d.partial_stock) msg+=' (Lưu ý: đơn mới có 1 phần hàng, phiếu xem trước chỉ có phần hàng đang sẵn có.)';
+      showPrintToast(msg,d.iot_ready!==false);
+      if(d.preview_url) window.open(d.preview_url,'_blank');
+      loadPrintQueue();
+    } else if(d&&d.no_stock){
+      showPrintToast(d.message||'Đơn chưa có hàng, chưa thể in phiếu.',false);
     } else {
       showPrintToast('Lỗi khi in: '+((d&&d.message)||'Lỗi không xác định'),false);
     }
   }).catch(function(){btn.disabled=false;btn.innerHTML=origHtml;showPrintToast('Lỗi kết nối.',false);});
 }
+
+// --- Drawer "Yêu cầu in": danh sách + trạng thái các yêu cầu in đã gửi, chia theo mã sale MISA
+// (nhiều sale có thể dùng chung 1 tài khoản đăng nhập, xem filter "Đơn của tôi") ---
+var _pqItems=[];
+var _pqActiveTab='all';
+var PQ_STATE_LABEL={pending:'Chờ in',printing:'Đang in...',printed:'Đã in',error:'Lỗi',cancelled:'Đã hủy'};
+var PQ_NO_CODE_LABEL='(Chưa rõ sale)';
+
+function loadPrintQueue(){
+  fetch('/api/sale_plan/print_queue',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    if(!j.result||j.result.status!=='success')return;
+    _pqItems=j.result.items||[];
+    updatePrintQueueBadge();
+    renderPrintQueueTabs();
+    renderPrintQueueList();
+  }).catch(function(){/* silent */});
+}
+function updatePrintQueueBadge(){
+  var pending=_pqItems.filter(function(i){return i.state==='pending'||i.state==='printing';}).length;
+  var errors=_pqItems.filter(function(i){return i.state==='error';}).length;
+  var btn=$('print-queue-button');
+  btn.classList.toggle('has-error',errors>0);
+  btn.classList.toggle('has-pending',errors===0&&pending>0);
+  $('print-queue-count').textContent=String(errors>0?errors:pending);
+}
+function renderPrintQueueTabs(){
+  var counts={};
+  _pqItems.forEach(function(i){var c=i.saler_code||PQ_NO_CODE_LABEL;counts[c]=(counts[c]||0)+1;});
+  var keys=Object.keys(counts).sort();
+  var html='<span class="mention-noti-alias-tab'+(_pqActiveTab==='all'?' active':'')+'" data-pq-tab="all">Tất cả<span class="count">'+_pqItems.length+'</span></span>';
+  keys.forEach(function(k){
+    html+='<span class="mention-noti-alias-tab'+(_pqActiveTab===k?' active':'')+'" data-pq-tab="'+esc(k)+'">'+esc(k)+'<span class="count">'+counts[k]+'</span></span>';
+  });
+  $('print-queue-tabs').innerHTML=html;
+}
+function renderPrintQueueList(){
+  var body=$('print-queue-body');
+  var items=_pqActiveTab==='all'?_pqItems:_pqItems.filter(function(i){return (i.saler_code||PQ_NO_CODE_LABEL)===_pqActiveTab;});
+  if(!items.length){
+    body.innerHTML='<div class="p-4 text-center text-muted"><i class="fa fa-print fa-3x opacity-50 mb-2"></i><br/>Chưa có yêu cầu in nào.</div>';
+    return;
+  }
+  body.innerHTML=items.map(function(i){
+    return '<div class="pq-item">'
+      +'<div class="d-flex justify-content-between align-items-start">'
+      +'<span class="pq-title">'+esc(i.sale_order_name)+'</span>'
+      +'<span class="pq-badge '+esc(i.state)+'">'+esc(PQ_STATE_LABEL[i.state]||i.state)+'</span>'
+      +'</div>'
+      +'<div class="pq-meta"><i class="fa fa-warehouse me-1"></i>'+esc(i.warehouse_name||'')
+      +' &middot; <i class="fa fa-user me-1"></i>'+esc(i.requested_by_name||'')+'</div>'
+      +(i.error_message?'<div class="pq-error"><i class="fa fa-exclamation-triangle me-1"></i>'+esc(i.error_message)+'</div>':'')
+      +'</div>';
+  }).join('');
+}
+$('print-queue-button').addEventListener('click',function(){
+  $('print-queue-drawer').classList.add('open');
+  $('print-queue-drawer-overlay').classList.add('open');
+  loadPrintQueue();
+});
+function closePrintQueueDrawer(){
+  $('print-queue-drawer').classList.remove('open');
+  $('print-queue-drawer-overlay').classList.remove('open');
+}
+$('print-queue-close').addEventListener('click',closePrintQueueDrawer);
+$('print-queue-drawer-overlay').addEventListener('click',closePrintQueueDrawer);
+document.addEventListener('click',function(e){
+  var tab=e.target.closest('[data-pq-tab]');
+  if(tab){_pqActiveTab=tab.getAttribute('data-pq-tab');renderPrintQueueTabs();renderPrintQueueList();}
+});
+loadPrintQueue();
+setInterval(loadPrintQueue,15000);
 
 // Restore from IndexedDB cache for instant display, then refresh in background
 _spLoadCache().then(function(_cachedData){
@@ -2376,6 +2488,19 @@ self.addEventListener('notificationclick', function(event) {
         except Exception as e:
             _logger.exception('sale_plan print_order error')
             return {'success': False, 'message': str(e)}
+
+    @http.route('/api/sale_plan/print_queue', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_print_queue(self, **kwargs):
+        """Danh sách cho drawer "Yêu cầu in" trên /sale_plan — xem
+        hlv.iot.print.queue.get_recent_for_sale_plan()."""
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            items = request.env['hlv.iot.print.queue'].sudo().get_recent_for_sale_plan(limit=200)
+            return {'status': 'success', 'items': items}
+        except Exception as e:
+            _logger.exception('sale_plan print_queue error')
+            return {'status': 'error', 'message': str(e)}
 
     @http.route('/api/sale_plan/check_changes', type='json', auth='public', methods=['POST'])
     def api_check_changes(self, **kwargs):

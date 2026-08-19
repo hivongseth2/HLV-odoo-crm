@@ -17,6 +17,12 @@ class IrActionsReport(models.Model):
         if not res_ids:
             return result
 
+        # Cho phép render PDF PREVIEW (VD: sale xem trước phiếu lấy hàng trên /sale_plan trước khi
+        # gửi vào hàng chờ in IoT — xem services/delivery_planner_iot_print.py) mà KHÔNG đánh dấu
+        # đã in — vì lúc này chưa có gì thực sự được in ra giấy cả.
+        if self.env.context.get('hlv_skip_print_status_marking'):
+            return result
+
         try:
             # Xác định report đang in
             report = self._get_report(report_ref)

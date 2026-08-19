@@ -9,11 +9,14 @@ Python của _render_qweb_pdf). Vì vậy sale chỉ ĐƯA YÊU CẦU vào hàng
 action_print_now — trả về report action để web client dispatch đúng cơ chế đã xác nhận hoạt động)
 để thực sự in ra máy. Hàng chờ là bản ghi bền (persistent), không bị mất khi không ai bấm ngay.
 """
+import base64
 import logging
 
 from odoo import fields, models
 
 _logger = logging.getLogger(__name__)
+
+REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 
 
 class DeliveryPlannerServiceIotPrint(models.AbstractModel):
@@ -46,10 +49,25 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                       and 'PICK' in (p.picking_type_id.sequence_code or '').upper()
         ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
 
+    def _render_preview_pdf(self, report, pickings):
+        """Render PDF xem trước (không đánh dấu đã in — xem models/ir_actions_report.py) cho sale
+        xem "có gì giao nấy" trước khi phiếu được kho in thật. Render riêng từng phiếu rồi merge
+        (đảm bảo ngắt trang cứng giữa các phiếu), cùng cách main.py:print_picking_slips đang làm."""
+        from odoo.tools.pdf import merge_pdf
+        pdf_parts = []
+        for picking in pickings:
+            pdf_bytes, _ = report.with_context(hlv_skip_print_status_marking=True)._render_qweb_pdf(
+                report.report_name, res_ids=[picking.id]
+            )
+            pdf_parts.append(pdf_bytes)
+        return merge_pdf(pdf_parts)
+
     def enqueue_iot_print_for_sale_order(self, sale_order_id):
-        """RPC chính cho nút "In" trên /sale_plan (card + drawer). Gom phiếu PICK của đơn theo
-        kho, tạo/refresh 1 bản ghi hàng chờ (pending) mỗi kho, báo bus realtime cho backend, KHÔNG
-        tự render/in gì ở đây (xem docstring module)."""
+        """RPC chính cho nút "In" trên /sale_plan (card + drawer). Kiểm tra tồn kho trước: nếu
+        TOÀN BỘ phiếu đều chưa giữ được chút hàng nào (state chưa lên 'assigned') thì CHẶN, không
+        tạo hàng chờ. Nếu có ít nhất 1 phần hàng (kể cả partial — "có gì giao nấy"): render 1 PDF
+        xem trước cho sale (không đánh dấu đã in), rồi mới gom phiếu PICK theo kho, tạo/refresh
+        hàng chờ (pending) mỗi kho, báo bus realtime cho backend tự in — xem docstring module."""
         sale_order = self.env['sale.order'].sudo().browse(int(sale_order_id)).exists()
         if not sale_order:
             return {'success': False, 'message': 'Không tìm thấy đơn hàng'}
@@ -57,6 +75,36 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         pickings = self._get_pick_pickings_for_sale_order(sale_order)
         if not pickings:
             return {'success': False, 'message': 'Đơn này không có phiếu lấy hàng nào cần in'}
+
+        if not any(p.state == 'assigned' for p in pickings):
+            return {
+                'success': False,
+                'no_stock': True,
+                'message': 'Đơn này chưa giữ được hàng cho bất kỳ sản phẩm nào (chưa có hàng), '
+                            'chưa thể in phiếu lấy hàng.',
+            }
+
+        report = self.env['ir.actions.report'].sudo().search([
+            ('name', 'ilike', REPORT_NAME_SEARCH),
+        ], limit=1)
+        if not report:
+            return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
+
+        preview_url = False
+        try:
+            pdf_content = self._render_preview_pdf(report, pickings)
+            attachment = self.env['ir.attachment'].sudo().create({
+                'name': 'Xem_truoc_Phieu_Lay_Hang_%s.pdf' % sale_order.name,
+                'type': 'binary',
+                'datas': base64.b64encode(pdf_content).decode('utf-8'),
+                'res_model': 'sale.order',
+                'res_id': sale_order.id,
+                'mimetype': 'application/pdf',
+            })
+            preview_url = '/web/content/%d?download=false' % attachment.id
+        except Exception:
+            # Preview chỉ là tiện ích thêm — lỗi render preview không được chặn việc gửi hàng chờ.
+            _logger.exception('Failed to render preview PDF for sale order %s', sale_order_id)
 
         by_warehouse = {}
         for picking in pickings:
@@ -114,4 +162,6 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
             'message': message,
             'picking_count': len(pickings),
             'iot_ready': not missing_device_warehouses,
+            'preview_url': preview_url,
+            'partial_stock': any(p.state != 'assigned' for p in pickings),
         }

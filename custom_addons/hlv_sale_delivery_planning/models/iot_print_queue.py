@@ -108,6 +108,38 @@ class HlvIotPrintQueue(models.Model):
     def action_cancel(self):
         self.filtered(lambda q: q.state in ('pending', 'error')).write({'state': 'cancelled'})
 
+    def _to_summary_dict(self):
+        self.ensure_one()
+        return {
+            'id': self.id,
+            'sale_order_id': self.sale_order_id.id,
+            'sale_order_name': self.sale_order_id.name,
+            'warehouse_id': self.warehouse_id.id,
+            'warehouse_name': self.warehouse_id.name,
+            'state': self.state,
+            'error_message': self.error_message or '',
+            'requested_by_name': self.requested_by_id.name or '',
+            'requested_at': self.requested_at.isoformat() if self.requested_at else False,
+            'printed_by_name': self.printed_by_id.name or '',
+            'printed_at': self.printed_at.isoformat() if self.printed_at else False,
+        }
+
+    @api.model
+    def get_recent_for_dashboard(self, limit=100):
+        """Danh sách cho drawer "Yêu cầu in (IoT)" trên dashboard backend "Điều phối Giao hàng"."""
+        return [r._to_summary_dict() for r in self.search([], limit=limit)]
+
+    @api.model
+    def get_recent_for_sale_plan(self, limit=200):
+        """Danh sách cho drawer "Yêu cầu in" trên /sale_plan — kèm mã sale MISA của đơn để FE
+        nhóm theo sale (nhiều sale có thể dùng chung 1 tài khoản đăng nhập, xem "Đơn của tôi")."""
+        result = []
+        for r in self.search([], limit=limit):
+            d = r._to_summary_dict()
+            d['saler_code'] = r.sale_order_id.x_studio_misa_saler_code or ''
+            result.append(d)
+        return result
+
     @api.model
     def auto_claim_and_print(self, limit=20):
         """RPC gọi từ dashboard backend (OWL, xem delivery_planner_iot_print_mixin.js): claim tối

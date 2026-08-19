@@ -35,5 +35,50 @@ export class DeliveryPlannerIotPrintMixin {
         } finally {
             this._iotPrintProcessing = false;
         }
+        // Danh sách drawer (nếu đang mở hoặc đã từng tải) luôn được làm mới sau mỗi lần xử lý
+        // hàng chờ, để trạng thái (chờ in/đã in/lỗi) hiển thị đúng thời gian thực.
+        this.loadIotPrintQueueDrawer();
+    }
+
+    async loadIotPrintQueueDrawer() {
+        this.state.iotPrintQueueLoading = true;
+        try {
+            this.state.iotPrintQueueItems = await this.orm.call(
+                'hlv.iot.print.queue', 'get_recent_for_dashboard', [], { limit: 100 }
+            );
+        } catch (e) {
+            console.error('loadIotPrintQueueDrawer failed', e);
+        } finally {
+            this.state.iotPrintQueueLoading = false;
+        }
+    }
+
+    openIotPrintQueueDrawer() {
+        this.state.isIotPrintQueueDrawerOpen = true;
+        this.loadIotPrintQueueDrawer();
+    }
+
+    closeIotPrintQueueDrawer() {
+        this.state.isIotPrintQueueDrawerOpen = false;
+    }
+
+    async retryIotPrintQueueItem(item) {
+        try {
+            await this.orm.call('hlv.iot.print.queue', 'action_retry', [[item.id]]);
+            await this.processIotPrintQueue();
+        } catch (e) {
+            console.error('retryIotPrintQueueItem failed', e);
+            this.notification.add('Không thử lại được, vui lòng tải lại trang.', { type: 'danger' });
+        }
+    }
+
+    get iotPrintQueuePendingCount() {
+        return (this.state.iotPrintQueueItems || []).filter(
+            (i) => i.state === 'pending' || i.state === 'printing'
+        ).length;
+    }
+
+    get iotPrintQueueErrorCount() {
+        return (this.state.iotPrintQueueItems || []).filter((i) => i.state === 'error').length;
     }
 }
