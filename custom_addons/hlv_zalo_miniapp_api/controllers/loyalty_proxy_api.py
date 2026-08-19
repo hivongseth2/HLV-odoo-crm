@@ -85,7 +85,14 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             return opt
 
         try:
-            domain = [('partner_id', '=', partner_id)]
+            partner = request.env['res.partner'].sudo().browse(partner_id)
+            if not partner.exists():
+                return self._response_success([])
+
+            root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
+            family_partner_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [partner_id]
+
+            domain = [('partner_id', 'in', family_partner_ids)]
             state = kwargs.get('state')
             if state and state != 'all':
                 domain.append(('state', '=', state))
@@ -96,17 +103,19 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             data = [{
                 'id': v.id,
                 'code': v.code,
-                'name': v.name or v.package_id.name if v.package_id else v.code,
+                'name': v.package_id.name if v.package_id else v.code,
+                'package_name': v.package_id.name if v.package_id else v.code,
                 'state': v.state,
-                'reward_type': v.reward_type if hasattr(v, 'reward_type') else 'discount',
-                'discount_type': v.discount_type if hasattr(v, 'discount_type') else 'fixed',
-                'discount_value': v.discount_value if hasattr(v, 'discount_value') else 0,
-                'max_discount_amount': v.max_discount_amount if hasattr(v, 'max_discount_amount') else 0,
-                'min_order_amount': v.min_order_amount if hasattr(v, 'min_order_amount') else 0,
-                'validity_days': v.validity_days if hasattr(v, 'validity_days') else 0,
-                'expiry_date': str(v.expiry_date) if hasattr(v, 'expiry_date') and v.expiry_date else '',
-                'gift_product_name': (v.gift_product_id.name if hasattr(v, 'gift_product_id') and v.gift_product_id else ''),
-                'gift_qty': v.gift_qty if hasattr(v, 'gift_qty') else 0,
+                'reward_type': v.reward_type or 'discount',
+                'discount_type': v.discount_type or 'fixed',
+                'discount_value': v.discount_value or 0,
+                'max_discount_amount': v.max_discount_amount or 0,
+                'min_order_amount': v.min_order_amount or 0,
+                'date_issued': str(v.date_issued) if v.date_issued else '',
+                'date_expiry': str(v.date_expiry) if v.date_expiry else '',
+                'expiry_date': str(v.date_expiry) if v.date_expiry else '',
+                'gift_product_name': (v.gift_product_id.name if v.gift_product_id else ''),
+                'gift_qty': v.gift_qty or 0,
             } for v in vouchers]
             return self._response_success(data)
         except Exception as e:
