@@ -1,20 +1,17 @@
-"""In phiếu lấy hàng cho MỘT đơn bán, tự động route ra đúng máy in IoT của kho
-(stock.warehouse.x_iot_printer_device_id) — dùng cho nút "In" trên trang /sale_plan, để sale tự in
-phiếu đơn của mình mà không cần chọn máy in tay mỗi lần.
+"""Hàng chờ in phiếu lấy hàng theo kho (hlv.iot.print.queue) — dùng cho nút "In" trên trang
+/sale_plan, để sale tự gửi yêu cầu in đơn của mình mà không cần chọn máy in tay.
 
-CHÚ Ý QUAN TRỌNG: cơ chế in vật lý qua IoT Box (route theo field device_ids trên ir.actions.report,
-xem Settings > Technical > Actions > Reports > tab "Thiết bị IoT") là tính năng của module
-Enterprise `iot` — codebase này không có source của module đó nên KHÔNG xác nhận được việc in vật
-lý được kích hoạt ở layer JS (web client action service) hay như 1 side-effect Python bên trong
-_render_qweb_pdf(). Hàm dưới đây set đúng device_ids theo kho TRƯỚC khi gọi _render_qweb_pdf():
-nếu Odoo IoT tự in như side-effect Python thì sẽ in thẳng ra máy ngay; nếu cơ chế thực sự nằm ở
-JS thì endpoint vẫn trả PDF bình thường (không regression so với trước), cần bấm thử trên máy thật
-để xác nhận có in ra giấy hay không.
+Đã thử phương án gọi thẳng report._render_qweb_pdf() kèm ghi device_ids từ /sale_plan (public
+page, ngoài web client) — xác nhận KHÔNG kích hoạt in vật lý qua IoT Box, chỉ tải PDF về (cơ chế
+in-qua-IoT của Enterprise nằm ở tầng JS action-dispatch của web client, không phải side-effect
+Python của _render_qweb_pdf). Vì vậy sale chỉ ĐƯA YÊU CẦU vào hàng chờ theo kho; người ở kho mở
+"Điều phối Giao hàng > Hàng chờ in (IoT)" trong backend và bấm "In ngay" (models/iot_print_queue.py
+action_print_now — trả về report action để web client dispatch đúng cơ chế đã xác nhận hoạt động)
+để thực sự in ra máy. Hàng chờ là bản ghi bền (persistent), không bị mất khi không ai bấm ngay.
 """
-import base64
 import logging
 
-from odoo import models
+from odoo import fields, models
 
 _logger = logging.getLogger(__name__)
 
@@ -49,19 +46,10 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                       and 'PICK' in (p.picking_type_id.sequence_code or '').upper()
         ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
 
-    def _set_report_iot_device(self, report, device):
-        """Ghi device_ids của report action đúng bằng 1 máy in (hoặc rỗng nếu kho chưa gán máy).
-        Chỉ ghi khi khác giá trị hiện tại để tránh write thừa (report action dùng CHUNG cho mọi
-        kho, nên phải set lại đúng trước MỖI lần render nếu kho khác nhau)."""
-        target_ids = {device.id} if device else set()
-        if set(report.device_ids.ids) != target_ids:
-            report.sudo().write({'device_ids': [(6, 0, list(target_ids))]})
-
-    def print_pick_slip_for_sale_order(self, sale_order_id):
-        """RPC chính cho nút "In" trên /sale_plan. Trả về:
-        {success, message, url, picking_count, iot_ready} — 'iot_ready' = True nếu MỌI phiếu đều
-        tìm được máy in IoT cấu hình cho kho (không đảm bảo Box đã thực sự in được, chỉ đảm bảo đã
-        set đúng device_ids trước khi render — xem docstring module)."""
+    def enqueue_iot_print_for_sale_order(self, sale_order_id):
+        """RPC chính cho nút "In" trên /sale_plan (card + drawer). Gom phiếu PICK của đơn theo
+        kho, tạo/refresh 1 bản ghi hàng chờ (pending) mỗi kho, báo bus realtime cho backend, KHÔNG
+        tự render/in gì ở đây (xem docstring module)."""
         sale_order = self.env['sale.order'].sudo().browse(int(sale_order_id)).exists()
         if not sale_order:
             return {'success': False, 'message': 'Không tìm thấy đơn hàng'}
@@ -70,53 +58,60 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         if not pickings:
             return {'success': False, 'message': 'Đơn này không có phiếu lấy hàng nào cần in'}
 
-        report = self.env['ir.actions.report'].sudo().search([
-            ('name', 'ilike', 'Hoạt động lấy hàng TSN'),
-        ], limit=1)
-        if not report:
-            return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
+        by_warehouse = {}
+        for picking in pickings:
+            wh = picking.picking_type_id.warehouse_id
+            by_warehouse.setdefault(wh, self.env['stock.picking'])
+            by_warehouse[wh] |= picking
 
-        from odoo.tools.pdf import merge_pdf
-        pdf_parts = []
-        missing_device_warehouses = set()
+        Queue = self.env['hlv.iot.print.queue'].sudo()
+        warehouse_names = []
+        missing_device_warehouses = []
+        touched_warehouse_ids = []
+        for wh, wh_pickings in by_warehouse.items():
+            if not wh:
+                missing_device_warehouses.append('Không rõ kho')
+                continue
+            if not wh.x_iot_printer_device_id:
+                missing_device_warehouses.append(wh.name)
+            existing = Queue.search([
+                ('sale_order_id', '=', sale_order.id),
+                ('warehouse_id', '=', wh.id),
+                ('state', '=', 'pending'),
+            ], limit=1)
+            if existing:
+                existing.write({
+                    'picking_ids': [(6, 0, wh_pickings.ids)],
+                    'requested_by_id': self.env.uid,
+                    'requested_at': fields.Datetime.now(),
+                })
+            else:
+                Queue.create({
+                    'sale_order_id': sale_order.id,
+                    'warehouse_id': wh.id,
+                    'picking_ids': [(6, 0, wh_pickings.ids)],
+                })
+            warehouse_names.append(wh.name)
+            touched_warehouse_ids.append(wh.id)
+
+        if not warehouse_names:
+            return {'success': False, 'message': 'Không xác định được kho của phiếu lấy hàng'}
+
         try:
-            for picking in pickings:
-                warehouse = picking.picking_type_id.warehouse_id
-                device = warehouse.x_iot_printer_device_id if warehouse else False
-                if not device:
-                    missing_device_warehouses.add(warehouse.name if warehouse else 'Không rõ kho')
-                self._set_report_iot_device(report, device)
-                pdf_bytes, _ = report._render_qweb_pdf(report.report_name, res_ids=[picking.id])
-                pdf_parts.append(pdf_bytes)
-            pdf_content = merge_pdf(pdf_parts)
-        except Exception as e:
-            _logger.error("Error printing pick slip for sale order %s: %s", sale_order_id, e, exc_info=True)
-            return {'success': False, 'message': f'Lỗi khi tạo PDF: {e}'}
-
-        if not sale_order.x_picking_slip_printed:
-            sale_order.write({'x_picking_slip_printed': True})
-
-        attachment = self.env['ir.attachment'].sudo().create({
-            'name': f'Phieu_Lay_Hang_{sale_order.name}.pdf',
-            'type': 'binary',
-            'datas': base64.b64encode(pdf_content).decode('utf-8'),
-            'res_model': 'sale.order',
-            'res_id': sale_order.id,
-            'mimetype': 'application/pdf',
-        })
-
-        message = f'Đã gửi in {len(pickings)} phiếu cho đơn {sale_order.name}'
-        if missing_device_warehouses:
-            message += (
-                ' — CẢNH BÁO: kho %s chưa gán máy in IoT (vào Kho hàng > cấu hình), '
-                'phiếu này chỉ ra PDF, chưa chắc in thẳng ra máy.'
-                % ', '.join(sorted(missing_device_warehouses))
+            self.env['bus.bus']._sendone(
+                'delivery_planner_channel', 'iot_print_queue_changed',
+                {'warehouse_ids': touched_warehouse_ids, 'sale_order_id': sale_order.id},
             )
+        except Exception:
+            _logger.debug('Failed to send iot_print_queue_changed notification', exc_info=True)
+
+        message = 'Đã gửi yêu cầu in cho kho %s. Kho sẽ in phiếu trong ít phút.' % ', '.join(warehouse_names)
+        if missing_device_warehouses:
+            message += ' CẢNH BÁO: kho %s chưa gán máy in IoT (vào Kho hàng > cấu hình).' % ', '.join(missing_device_warehouses)
 
         return {
             'success': True,
             'message': message,
-            'url': f'/web/content/{attachment.id}?download=true',
             'picking_count': len(pickings),
             'iot_ready': not missing_device_warehouses,
         }

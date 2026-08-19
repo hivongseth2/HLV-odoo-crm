@@ -888,7 +888,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
     </div>
     <div class="form-check form-switch">
-      <input class="form-check-input" type="checkbox" id="f-mine-only">
+      <input class="form-check-input" type="checkbox" id="f-mine-only" checked>
       <label class="form-check-label small fw-bold" for="f-mine-only"><i class="fa fa-user text-primary me-1"></i>Đơn của tôi</label>
     </div>
   </div>
@@ -941,7 +941,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 <div id="drawer">
   <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-primary text-white">
     <h5 class="mb-0" id="dr-title"></h5>
-    <button id="dr-close" class="btn btn-sm btn-light">&times;</button>
+    <div class="d-flex align-items-center gap-2">
+      <button id="dr-print-btn" class="btn btn-sm btn-light btn-print-order" title="In phiếu lấy hàng"><i class="fa fa-print me-1"></i>In</button>
+      <button id="dr-close" class="btn btn-sm btn-light">&times;</button>
+    </div>
   </div>
   <div id="dr-body" class="p-3"></div>
   <div class="p-3 border-top bg-light fw-bold" id="dr-footer"></div>
@@ -1639,6 +1642,9 @@ function openDrawer(id){
   var o=S.orders.find(function(x){return x.id===id;});
   if(!o)return;
   $('dr-title').textContent=o.name;
+  var drPrintBtn=$('dr-print-btn');
+  drPrintBtn.dataset.soId=o.id;drPrintBtn.dataset.soName=o.name;
+  drPrintBtn.disabled=false;drPrintBtn.innerHTML='<i class="fa fa-print me-1"></i>In';
   var rd=o.real_delivery_status||o.delivery_status;
   var ep=o.effective_packing||o.packing_status;
   var h='<div class="mb-3">'
@@ -1890,7 +1896,7 @@ function clearAll(){
   $('f-del').value='all';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
   $('f-show-completed').checked=true;
-  $('f-mine-only').checked=false;
+  $('f-mine-only').checked=true;
   S.kanbanColPageSize={};
   load(false);
 }
@@ -2152,8 +2158,7 @@ function printOrderPickSlip(btn){
     btn.disabled=false;btn.innerHTML=origHtml;
     var d=j.result;
     if(d&&d.success){
-      showPrintToast(d.message||('Đã gửi in phiếu cho đơn '+btn.dataset.soName),d.iot_ready!==false);
-      if(d.url) window.open(d.url,'_blank');
+      showPrintToast(d.message||('Đã gửi yêu cầu in cho đơn '+btn.dataset.soName),d.iot_ready!==false);
     } else {
       showPrintToast('Lỗi khi in: '+((d&&d.message)||'Lỗi không xác định'),false);
     }
@@ -2357,15 +2362,15 @@ self.addEventListener('notificationclick', function(event) {
 
     @http.route('/api/sale_plan/print_order', type='json', auth='public', methods=['POST'])
     def api_sale_plan_print_order(self, sale_order_id=None, **kwargs):
-        """Nút "In" trên từng đơn ở /sale_plan: in phiếu lấy hàng của đơn này, tự route ra máy
-        in IoT của kho (stock.warehouse.x_iot_printer_device_id) — xem
-        services/delivery_planner_iot_print.py."""
+        """Nút "In" trên từng đơn ở /sale_plan (card + drawer): gửi yêu cầu in phiếu lấy hàng của
+        đơn này vào hàng chờ theo kho (hlv.iot.print.queue) — kho mở "Điều phối Giao hàng > Hàng
+        chờ in (IoT)" trong backend để in thật. Xem services/delivery_planner_iot_print.py."""
         if not request.session.get(SESSION_KEY_OK):
             return {'success': False, 'message': 'Unauthorized'}
         if not sale_order_id:
             return {'success': False, 'message': 'Thiếu sale_order_id'}
         try:
-            return request.env['hlv.delivery.planner.service'].sudo().print_pick_slip_for_sale_order(
+            return request.env['hlv.delivery.planner.service'].sudo().enqueue_iot_print_for_sale_order(
                 sale_order_id
             )
         except Exception as e:

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_iot_print_queue_tree" model="ir.ui.view">
+        <field name="name">hlv.iot.print.queue.tree</field>
+        <field name="model">hlv.iot.print.queue</field>
+        <field name="arch" type="xml">
+            <tree string="Hàng chờ in IoT" decoration-muted="state in ('printed', 'cancelled')"
+                  decoration-danger="state == 'error'"
+                  default_order="requested_at desc">
+                <field name="sale_order_id"/>
+                <field name="warehouse_id"/>
+                <field name="picking_ids" widget="many2many_tags"/>
+                <field name="requested_by_id"/>
+                <field name="requested_at"/>
+                <field name="state" widget="badge"
+                       decoration-info="state in ('pending', 'printing')"
+                       decoration-success="state == 'printed'"
+                       decoration-danger="state == 'error'"
+                       decoration-muted="state == 'cancelled'"/>
+                <field name="error_message"/>
+                <field name="printed_by_id"/>
+                <field name="printed_at"/>
+                <button name="action_print_now" type="object" string="In ngay / Thử lại"
+                        icon="fa-print" invisible="state not in ('pending', 'error')" class="btn-link"/>
+                <button name="action_retry" type="object" string="Đưa lại vào hàng chờ"
+                        icon="fa-refresh" invisible="state != 'error'" class="btn-link"/>
+                <button name="action_cancel" type="object" string="Hủy"
+                        icon="fa-times" invisible="state not in ('pending', 'error')" class="btn-link text-danger"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_iot_print_queue_search" model="ir.ui.view">
+        <field name="name">hlv.iot.print.queue.search</field>
+        <field name="model">hlv.iot.print.queue</field>
+        <field name="arch" type="xml">
+            <search string="Hàng chờ in IoT">
+                <field name="sale_order_id"/>
+                <field name="warehouse_id"/>
+                <field name="requested_by_id"/>
+                <filter string="Lỗi" name="error" domain="[('state', '=', 'error')]"/>
+                <filter string="Đang xử lý" name="in_progress" domain="[('state', 'in', ('pending', 'printing'))]"/>
+                <filter string="Đã in" name="printed" domain="[('state', '=', 'printed')]"/>
+                <separator/>
+                <group expand="1" string="Nhóm theo">
+                    <filter string="Kho" name="group_warehouse" context="{'group_by': 'warehouse_id'}"/>
+                    <filter string="Trạng thái" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_iot_print_queue" model="ir.actions.act_window">
+        <field name="name">Hàng chờ in (IoT)</field>
+        <field name="res_model">hlv.iot.print.queue</field>
+        <field name="view_mode">tree</field>
+        <field name="search_view_id" ref="view_iot_print_queue_search"/>
+        <field name="context">{'search_default_error': 1, 'search_default_group_warehouse': 1}</field>
+        <field name="help">Yêu cầu in phiếu lấy hàng do sale gửi từ trang /sale_plan được TỰ ĐỘNG in ra máy IoT của kho ngay khi có ai đang mở "Điều phối Giao hàng" trong backend — không cần bấm gì. Màn hình này chỉ cần xem khi có dòng "Lỗi" (thiếu máy in IoT cho kho, thiếu report...), bấm "Đưa lại vào hàng chờ" sau khi khắc phục để hệ thống tự in lại.</field>
+    </record>
+
+    <menuitem id="menu_iot_print_queue"
+              name="Hàng chờ in (IoT)"
+              action="action_iot_print_queue"
+              parent="sale.sale_order_menu"
+              sequence="17"/>
+</odoo>
