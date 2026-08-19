@@ -71,7 +71,11 @@
                 <button name="action_mark_zalo_paid" type="object"
                         string="Xác nhận đã thu tiền Zalo/COD"
                         class="btn-success"
-                        invisible="not x_is_zalo_order or x_zalo_payment_status == 'paid'"/>
+                        invisible="not x_is_zalo_order or x_zalo_payment_status == 'paid' or state == 'cancel'"/>
+                <button name="action_mark_zalo_cancelled" type="object"
+                        string="Đồng bộ hủy Zalo"
+                        class="btn-secondary"
+                        invisible="not x_is_zalo_order or not x_zalo_order_id or x_zalo_payment_status == 'cancelled' or state != 'cancel'"/>
                 <button name="action_query_zalo_order_status" type="object"
                         string="Kiểm tra TT Zalo"
                         class="btn-info"
@@ -102,7 +106,7 @@
                         <field name="x_zalo_payment_status" string="Trạng thái thanh toán Zalo" widget="badge"
                                decoration-warning="x_zalo_payment_status == 'pending'"
                                decoration-success="x_zalo_payment_status == 'paid'"
-                               decoration-danger="x_zalo_payment_status == 'failed'"/>
+                               decoration-danger="x_zalo_payment_status in ('failed', 'cancelled')"/>
                         <field name="x_zalo_trans_id" string="Mã giao dịch Zalo (Trans ID)" readonly="1"/>
                         <field name="x_zalo_trans_time" string="Thời điểm giao dịch" readonly="1"/>
                     </group>
