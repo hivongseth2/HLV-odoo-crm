@@ -9,4 +9,5 @@ from . import banner_api
 from . import config_api
 from . import sync_api
 from . import checkout_sdk_controller
+from . import loyalty_proxy_api
 

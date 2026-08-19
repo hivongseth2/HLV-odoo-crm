@@ -48,26 +48,67 @@ class ResConfigSettings(models.TransientModel):
         help='Private Key do Zalo cung cấp dùng để ký MAC và xác thực Webhook Callback',
     )
 
+    # ===== Cấu hình Thông báo Đơn Hàng Mới Zalo =====
+    x_zalo_order_sender_user_id = fields.Many2one(
+        "res.users",
+        string="Tài khoản gửi tin nhắn (Người gửi)",
+        help="Tài khoản Odoo đứng tên người gửi tin nhắn chat đến nhân viên (để trống sẽ mặc định là OdooBot)",
+    )
+    x_zalo_order_notify_user_ids = fields.Many2many(
+        "res.users",
+        "res_config_settings_zalo_order_user_rel",
+        "config_id",
+        "user_id",
+        string="Người dùng nhận Chat trực tiếp khi có đơn mới",
+        help="Danh sách tài khoản nhân viên Odoo nhận tin nhắn chat trực tiếp 1-1 (Direct Message) nhảy popup lên màn hình khi có đơn hàng mới từ Zalo Mini App",
+    )
+    x_zalo_order_notify_channel_id = fields.Many2one(
+        "discuss.channel",
+        string="Kênh Chat Odoo nhận thông báo đơn mới (tùy chọn)",
+        help="Kênh Thảo luận (Discuss Channel) trên Odoo sẽ nhận tin nhắn thông báo khi có đơn hàng mới từ Zalo Mini App",
+    )
+
     # ===== Cấu hình Thông báo Yêu cầu Đổi/Trả Zalo =====
     x_zalo_return_notify_user_ids = fields.Many2many(
         "res.users",
         "res_config_settings_zalo_return_user_rel",
         "config_id",
         "user_id",
-        string="Người dùng nhận Activity Đổi/Trả Zalo",
-        help="Danh sách người dùng Odoo sẽ được giao Activity Task và nhận chuông thông báo khi có yêu cầu đổi/trả từ Zalo Mini App",
+        string="Người dùng nhận Chat trực tiếp & Activity Đổi/Trả",
+        help="Danh sách người dùng Odoo sẽ nhận tin nhắn Chat trực tiếp 1-1 (popup nhảy trên màn hình) và được giao Activity Task khi có yêu cầu đổi/trả từ Zalo Mini App",
+    )
+    x_zalo_return_notify_channel_id = fields.Many2one(
+        "discuss.channel",
+        string="Kênh Chat Odoo nhận thông báo đổi/trả (tùy chọn)",
+        help="Kênh Thảo luận (Discuss Channel) trên Odoo sẽ nhận tin nhắn thông báo khi có yêu cầu đổi/trả từ Zalo Mini App",
     )
 
     x_zalo_return_zalo_uids = fields.Char(
-        string="Zalo User ID nhận tin nhắn Zalo",
+        string="Zalo User ID nhận tin nhắn Zalo (Đơn mới & Đổi/Trả)",
         config_parameter="hlv_zalo_miniapp.return_zalo_uids",
-        help="Danh sách Zalo User ID (phân cách bằng dấu phẩy) nhận tin nhắn Zalo trực tiếp về điện thoại khi có yêu cầu đổi/trả",
+        help="Danh sách Zalo User ID (phân cách bằng dấu phẩy) nhận tin nhắn thông báo Zalo trực tiếp về điện thoại khi có đơn hàng mới hoặc yêu cầu đổi/trả từ Zalo Mini App",
     )
 
     @api.model
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
         ICP = self.env["ir.config_parameter"].sudo()
+
+        # Đọc tài khoản người gửi tin nhắn
+        raw_sender_id = ICP.get_param("hlv_zalo_miniapp.order_sender_user_id", "")
+        sender_id = int(raw_sender_id) if raw_sender_id and str(raw_sender_id).isdigit() else False
+
+        # Đọc danh sách user nhận thông báo đơn mới
+        raw_order_user_ids = ICP.get_param("hlv_zalo_miniapp.order_notify_user_ids", "")
+        order_user_ids = []
+        if raw_order_user_ids:
+            try:
+                clean_ids = raw_order_user_ids.replace("[", "").replace("]", "").split(",")
+                order_user_ids = [int(u.strip()) for u in clean_ids if u.strip().isdigit()]
+            except Exception:
+                pass
+
+        # Đọc danh sách user nhận thông báo đổi/trả
         raw_user_ids = ICP.get_param("hlv_zalo_miniapp.return_notify_user_ids", "")
         user_ids = []
         if raw_user_ids:
@@ -76,8 +117,19 @@ class ResConfigSettings(models.TransientModel):
                 user_ids = [int(u.strip()) for u in clean_ids if u.strip().isdigit()]
             except Exception:
                 pass
+
+        raw_channel_id = ICP.get_param("hlv_zalo_miniapp.order_notify_channel_id", "")
+        channel_id = int(raw_channel_id) if raw_channel_id and str(raw_channel_id).isdigit() else False
+
+        raw_return_channel_id = ICP.get_param("hlv_zalo_miniapp.return_notify_channel_id", "")
+        return_channel_id = int(raw_return_channel_id) if raw_return_channel_id and str(raw_return_channel_id).isdigit() else False
+
         res.update(
+            x_zalo_order_sender_user_id=sender_id,
+            x_zalo_order_notify_user_ids=[fields.Command.set(order_user_ids)],
+            x_zalo_order_notify_channel_id=channel_id,
             x_zalo_return_notify_user_ids=[fields.Command.set(user_ids)],
+            x_zalo_return_notify_channel_id=return_channel_id,
         )
         return res
 
@@ -88,8 +140,22 @@ class ResConfigSettings(models.TransientModel):
         prev_oa_subtext = ICP.get_param("hlv_zalo_miniapp.oa_subtext", "")
 
         super(ResConfigSettings, self).set_values()
+        ICP.set_param(
+            "hlv_zalo_miniapp.order_sender_user_id",
+            str(self.x_zalo_order_sender_user_id.id) if self.x_zalo_order_sender_user_id else "",
+        )
+        order_user_ids_str = ",".join(str(u_id) for u_id in self.x_zalo_order_notify_user_ids.ids)
+        ICP.set_param("hlv_zalo_miniapp.order_notify_user_ids", order_user_ids_str)
         user_ids_str = ",".join(str(u_id) for u_id in self.x_zalo_return_notify_user_ids.ids)
         ICP.set_param("hlv_zalo_miniapp.return_notify_user_ids", user_ids_str)
+        ICP.set_param(
+            "hlv_zalo_miniapp.order_notify_channel_id",
+            str(self.x_zalo_order_notify_channel_id.id) if self.x_zalo_order_notify_channel_id else "",
+        )
+        ICP.set_param(
+            "hlv_zalo_miniapp.return_notify_channel_id",
+            str(self.x_zalo_return_notify_channel_id.id) if self.x_zalo_return_notify_channel_id else "",
+        )
 
         # Tự động sinh snapshot log và bump version khi cấu hình OA thay đổi
         if (

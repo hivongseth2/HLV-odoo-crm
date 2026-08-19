@@ -325,15 +325,50 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 ("active", "=", True),
             ]
             if category_id:
-                cat_ids = request.env["pos.category"].sudo().search([("id", "child_of", category_id)]).ids
-                if hasattr(request.env["product.template"], "pos_categ_ids"):
-                    tmpl_domain += [
-                        "|",
-                        ("x_zalo_categ_ids", "in", cat_ids),
-                        ("pos_categ_ids", "in", cat_ids),
-                    ]
+                # Tìm category: ưu tiên x_misa_id, fallback internal ID
+                cat_record = request.env["pos.category"].sudo().search(
+                    [("x_misa_id", "=", category_id)], limit=1
+                )
+                if not cat_record or not cat_record.exists():
+                    cat_record = request.env["pos.category"].sudo().browse(category_id)
+
+                if cat_record.exists():
+                    cat_ids = request.env["pos.category"].sudo().search([("id", "child_of", cat_record.id)]).ids
                 else:
-                    tmpl_domain.append(("x_zalo_categ_ids", "in", cat_ids))
+                    cat_ids = [category_id]
+
+                # Thu thập template IDs từ tất cả các quan hệ category khả dụng
+                matching_tmpl_ids = set()
+                Tmpl = request.env["product.template"].sudo()
+
+                # A. x_zalo_categ_ids (M2M pos.category)
+                if "x_zalo_categ_ids" in Tmpl._fields:
+                    zalo_tmpls = Tmpl.search([
+                        ("x_zalo_categ_ids", "in", cat_ids),
+                        ("x_active_zalo", "=", True),
+                        ("active", "=", True),
+                    ]).ids
+                    matching_tmpl_ids.update(zalo_tmpls)
+
+                # B. pos_categ_ids (M2M pos.category)
+                if "pos_categ_ids" in Tmpl._fields:
+                    pos_tmpls = Tmpl.search([
+                        ("pos_categ_ids", "in", cat_ids),
+                        ("x_active_zalo", "=", True),
+                        ("active", "=", True),
+                    ]).ids
+                    matching_tmpl_ids.update(pos_tmpls)
+
+                # C. categ_id (M2O product.category) fallback
+                if "categ_id" in Tmpl._fields:
+                    categ_tmpls = Tmpl.search([
+                        ("categ_id", "in", cat_ids),
+                        ("x_active_zalo", "=", True),
+                        ("active", "=", True),
+                    ]).ids
+                    matching_tmpl_ids.update(categ_tmpls)
+
+                tmpl_domain.append(("id", "in", list(matching_tmpl_ids)))
             template_ids = request.env["product.template"].sudo().search(tmpl_domain).ids
 
             domain = [
