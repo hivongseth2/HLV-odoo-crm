@@ -1693,7 +1693,7 @@ function sendPublicMessage(){
 var PICKING_STATE_LABEL={draft:'Nháp',waiting:'Chờ bước trước',confirmed:'Chờ hàng (chưa giữ được)',
   assigned:'Đã giữ đủ hàng, sẵn sàng lấy',done:'Hoàn thành',cancel:'Đã hủy'};
 var PICKING_STATE_BADGE={draft:'bg-secondary',waiting:'bg-secondary',confirmed:'bg-warning text-dark',
-  assigned:'bg-success',done:'bg-primary',cancel:'bg-danger'};
+  assigned:'bg-success',done:'bg-success',cancel:'bg-danger'};
 // state 'assigned' của Odoo KHÔNG phân biệt giữ đủ hay giữ 1 phần — phải tự so sánh
 // demand_qty/reserved_qty trong moves để biết chính xác, rồi báo đỏ nếu chỉ có 1 phần.
 function getPickingStatusDisplay(p){
