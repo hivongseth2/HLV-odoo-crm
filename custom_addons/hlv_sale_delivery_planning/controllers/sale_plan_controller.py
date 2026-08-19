@@ -556,6 +556,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 /* Report button */
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
+/* Print button */
+.btn-print-order{font-size:.68rem;padding:2px 8px;border:1px solid #bfdbfe;color:#1d4ed8;background:#eff6ff;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
+.btn-print-order:hover{background:#dbeafe;border-color:#1d4ed8}
+.btn-print-order[disabled]{opacity:.6;cursor:wait}
 /* Report modal */
 #report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.4);align-items:center;justify-content:center}
 /* Messages section */
@@ -883,6 +887,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <input class="form-check-input" type="checkbox" id="f-show-completed" checked>
       <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
     </div>
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="f-mine-only">
+      <label class="form-check-label small fw-bold" for="f-mine-only"><i class="fa fa-user text-primary me-1"></i>Đơn của tôi</label>
+    </div>
   </div>
 </div>
 
@@ -922,8 +930,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 <div id="list-view" class="d-none">
 <div class="table-responsive"><table class="table table-hover table-sm table-bordered table-lines align-middle">
 <thead class="table-light"><tr>
-  <th>Đơn hàng</th><th>Khách hàng</th><th>Kho</th><th>Ngày đặt</th> 
-  <th>Giao dự kiến</th><th>Tổng tiền</th><th>Giao hàng</th><th>Tồn kho</th><th>Đóng kiện</th>
+  <th>Đơn hàng</th><th>Khách hàng</th><th>Kho</th><th>Ngày đặt</th>
+  <th>Giao dự kiến</th><th>Tổng tiền</th><th>Giao hàng</th><th>Tồn kho</th><th>Đóng kiện</th><th>Thao tác</th>
 </tr></thead><tbody id="tbl-body"></tbody>
 </table></div></div>
 </div>
@@ -1060,7 +1068,7 @@ function _spFilterKey(){
   return JSON.stringify([gv('f-q'),gv('f-wh'),gv('f-del'),gv('f-stk'),gv('f-pack'),
     gv('f-date-from'),gv('f-date-to'),gv('f-po-date-from'),gv('f-po-date-to'),
     gv('f-done-from'),gv('f-done-to'),gv('f-po-status'),gv('f-saler'),
-    gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked]);
+    gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked,$('f-mine-only').checked]);
 }
 function _spOpenDB(){
   return new Promise(function(resolve,reject){
@@ -1110,6 +1118,7 @@ function load(append,silent){
     po_status:gv('f-po-status'),saler_code:gv('f-saler'),
     htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked,
+    mine_only:$('f-mine-only').checked,
     limit:lim,offset:offset};
   fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:body})})
@@ -1355,7 +1364,8 @@ function renderSOCard(o){
   var pc=o.pos?o.pos.length:0;
   if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' DMH</span>';
   h+='</div>';
-  h+='<div class="d-flex justify-content-end mt-2">';
+  h+='<div class="d-flex justify-content-end align-items-center gap-1 mt-2">';
+  h+='<button class="btn-print-order" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'" title="In phiếu lấy hàng"><i class="fa fa-print me-1"></i>In</button>';
   if(reported){
     h+='<span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger me-1"></i>Đã báo cáo</span>';
   } else {
@@ -1378,9 +1388,11 @@ function renderList(){
     tr.className='cursor-pointer';
     tr.setAttribute('data-so-id',o.id);
     var isReported=S.reportedIds&&S.reportedIds[o.id];
-    var reportCell=isReported
-      ?'<td><span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger"></i></span></td>'
-      :'<td><button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag"></i></button></td>';
+    var reportBtn=isReported
+      ?'<span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger"></i></span>'
+      :'<button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag"></i></button>';
+    var reportCell='<td class="d-flex gap-1">'+reportBtn
+      +'<button class="btn-print-order" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'" title="In phiếu lấy hàng"><i class="fa fa-print"></i></button></td>';
     tr.innerHTML='<td class="fw-bold text-primary">'+esc(o.name)+'</td>'
       +'<td>'+esc(partnerName(o))+'</td>'
       +'<td>'+esc(whName(o))+'</td>'
@@ -1808,6 +1820,7 @@ function updFilters(){
   if(gv('f-saler')) chips.push({k:'f-saler',v:'NV MISA: '+gv('f-saler'),reset:''});
   if(gv('f-htgh')) chips.push({k:'f-htgh',v:'HTGH: '+gv('f-htgh'),reset:''});
   if(gv('f-dtype')!=='all'){var s6=$('f-dtype');chips.push({k:'f-dtype',v:'Vận chuyển: '+s6.options[s6.selectedIndex].text,reset:'all'});}
+  if($('f-mine-only').checked) chips.push({k:'f-mine-only',v:'Đơn của tôi',reset:''});
   // per-tag chips
   var tsel=$('f-tag');
   if(tsel){Array.from(tsel.selectedOptions).forEach(function(opt){
@@ -1851,12 +1864,14 @@ document.addEventListener('click',function(e){
       if(tsel){Array.from(tsel.options).forEach(function(o){if(o.value===chipX.dataset.tagId)o.selected=false;});}
     } else {
       var el=$(chipX.dataset.fk);
-      if(el){el.value=chipX.dataset.fr||'';}
+      if(el){if(el.type==='checkbox'){el.checked=false;}else{el.value=chipX.dataset.fr||'';}}
     }
     load(false);return;
   }
   var rBtn=e.target.closest('.btn-report');
   if(rBtn){e.stopPropagation();e.preventDefault();openReportModal(parseInt(rBtn.dataset.soId,10),rBtn.dataset.soName);return;}
+  var pBtn=e.target.closest('.btn-print-order');
+  if(pBtn){e.stopPropagation();e.preventDefault();printOrderPickSlip(pBtn);return;}
   if(e.target.closest('#clear-all-filters')){e.preventDefault();clearAll();return;}
   var colMore=e.target.closest('.btn-col-more');
   if(colMore){
@@ -1875,6 +1890,7 @@ function clearAll(){
   $('f-del').value='all';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
   $('f-show-completed').checked=true;
+  $('f-mine-only').checked=false;
   S.kanbanColPageSize={};
   load(false);
 }
@@ -1882,6 +1898,7 @@ function clearAll(){
 $('btn-filter').addEventListener('click',function(){S.kanbanColPageSize={};load(false);});
 $('f-need-transfer').addEventListener('change',function(){render();});
 $('f-show-completed').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
+$('f-mine-only').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
 $('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-saler').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
@@ -1943,7 +1960,8 @@ $('btn-export-excel').addEventListener('click',function(){
     filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
-    show_completed:$('f-show-completed').checked?'1':''
+    show_completed:$('f-show-completed').checked?'1':'',
+    filter_mine:$('f-mine-only').checked?'1':''
   });
   window.open('/api/sale_plan/export_excel?'+params.toString(),'_blank');
 });
@@ -1957,7 +1975,8 @@ $('btn-export-picking-excel-dd').addEventListener('click',function(e){
     filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
-    show_completed:$('f-show-completed').checked?'1':''
+    show_completed:$('f-show-completed').checked?'1':'',
+    filter_mine:$('f-mine-only').checked?'1':''
   });
   window.open('/api/sale_plan/export_picking_excel?'+params.toString(),'_blank');
 });
@@ -1971,7 +1990,8 @@ $('btn-export-picking-simple-excel-dd').addEventListener('click',function(e){
     filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
-    show_completed:$('f-show-completed').checked?'1':''
+    show_completed:$('f-show-completed').checked?'1':'',
+    filter_mine:$('f-mine-only').checked?'1':''
   });
   window.open('/api/sale_plan/export_picking_simple_excel?'+params.toString(),'_blank');
 });
@@ -2113,6 +2133,32 @@ $('report-submit').addEventListener('click',function(){
     }
   }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-flag me-1"></i>Gửi báo cáo';alert('Lỗi kết nối.');});
 });
+
+function showPrintToast(msg,ok){
+  var toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:24px;right:24px;z-index:3000;background:'+(ok?'#38a169':'#dc2626')+';color:#fff;padding:12px 20px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-weight:600;max-width:360px';
+  toast.innerHTML='<i class="fa fa-'+(ok?'check':'exclamation-triangle')+' me-1"></i>'+esc(msg);
+  document.body.appendChild(toast);setTimeout(function(){toast.remove();},5000);
+}
+function printOrderPickSlip(btn){
+  var soId=parseInt(btn.dataset.soId,10);
+  if(!soId)return;
+  var origHtml=btn.innerHTML;
+  btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
+  fetch('/api/sale_plan/print_order',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{sale_order_id:soId}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    btn.disabled=false;btn.innerHTML=origHtml;
+    var d=j.result;
+    if(d&&d.success){
+      showPrintToast(d.message||('Đã gửi in phiếu cho đơn '+btn.dataset.soName),d.iot_ready!==false);
+      if(d.url) window.open(d.url,'_blank');
+    } else {
+      showPrintToast('Lỗi khi in: '+((d&&d.message)||'Lỗi không xác định'),false);
+    }
+  }).catch(function(){btn.disabled=false;btn.innerHTML=origHtml;showPrintToast('Lỗi kết nối.',false);});
+}
 
 // Restore from IndexedDB cache for instant display, then refresh in background
 _spLoadCache().then(function(_cachedData){
@@ -2277,7 +2323,8 @@ self.addEventListener('notificationclick', function(event) {
                            date_from='', date_to='', po_date_from='', po_date_to='',
                            done_date_from='', done_date_to='',
                            po_status='all', saler_code='', htgh='', delivery_type='all',
-                           tag_ids='', limit=250, offset=0, show_completed=False, **kwargs):
+                           tag_ids='', limit=250, offset=0, show_completed=False,
+                           mine_only=False, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
             return {'status': 'error', 'message': 'Unauthorized'}
         try:
@@ -2301,11 +2348,29 @@ self.addEventListener('notificationclick', function(event) {
                 limit=int(limit),
                 offset=int(offset),
                 show_completed=bool(show_completed),
+                filter_mine=bool(mine_only),
             )
             return {'status': 'success', 'data': result}
         except Exception as e:
             _logger.exception('sale_plan API error')
             return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/print_order', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_print_order(self, sale_order_id=None, **kwargs):
+        """Nút "In" trên từng đơn ở /sale_plan: in phiếu lấy hàng của đơn này, tự route ra máy
+        in IoT của kho (stock.warehouse.x_iot_printer_device_id) — xem
+        services/delivery_planner_iot_print.py."""
+        if not request.session.get(SESSION_KEY_OK):
+            return {'success': False, 'message': 'Unauthorized'}
+        if not sale_order_id:
+            return {'success': False, 'message': 'Thiếu sale_order_id'}
+        try:
+            return request.env['hlv.delivery.planner.service'].sudo().print_pick_slip_for_sale_order(
+                sale_order_id
+            )
+        except Exception as e:
+            _logger.exception('sale_plan print_order error')
+            return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/check_changes', type='json', auth='public', methods=['POST'])
     def api_check_changes(self, **kwargs):
@@ -2687,6 +2752,7 @@ self.addEventListener('notificationclick', function(event) {
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
                 show_completed=bool(kwargs.get('show_completed', '')),
+                filter_mine=bool(kwargs.get('filter_mine', '')),
                 limit=100000,
                 offset=0,
             )
@@ -2818,6 +2884,7 @@ self.addEventListener('notificationclick', function(event) {
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
                 show_completed=bool(kwargs.get('show_completed', '')),
+                filter_mine=bool(kwargs.get('filter_mine', '')),
                 limit=100000,
                 offset=0,
             )
@@ -3073,6 +3140,7 @@ self.addEventListener('notificationclick', function(event) {
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
                 show_completed=bool(kwargs.get('show_completed', '')),
+                filter_mine=bool(kwargs.get('filter_mine', '')),
                 limit=100000,
                 offset=0,
             )

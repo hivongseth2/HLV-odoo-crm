@@ -1018,13 +1018,50 @@ class MisaExtensionController(http.Controller):
             partner = env['res.partner'].sudo().browse(int(partner_id)).exists()
             _logger.info("MISA Loyalty API: kết quả khớp theo partner_id -> partner=%s", partner)
 
-        # Ưu tiên account_id (ID nội bộ MISA, tra qua Account API — cùng cơ chế mà
-        # sale_order_misa_sync.py dùng để đồng bộ khách hàng chính xác) TRƯỚC khi
-        # thử khớp tên lỏng lẻo (ilike). Nếu thử account_name trước, tên khách
-        # hàng trùng/giống nhau giữa nhiều chi nhánh (vd nhiều bản ghi cùng dạng tên
-        # "CHI NHÁNH CÔNG TY ...") có thể khớp NHẦM sang partner khác không có tài
-        # khoản Loyalty nào rồi dừng lại — không bao giờ thử tới account_id chính
-        # xác nữa (đây là nguyên nhân "có tài khoản Loyalty mà API vẫn trả rỗng").
+        # account_name: khớp nhanh (thuần SQL, không gọi ra ngoài). Khi trùng
+        # nhiều bản ghi cùng tên (vd nhiều chi nhánh "CHI NHÁNH CÔNG TY ..."),
+        # ưu tiên bản ghi mà CÔNG TY GỐC (loyalty root) thực sự có tài khoản
+        # Loyalty — dùng dữ liệu sẵn có trong Odoo để phân biệt, thay vì phải
+        # gọi ra API thật của MISA (xem account_id bên dưới, có thể mất tới 30s
+        # nếu MISA timeout — quá chậm cho một lần mở dropdown).
+        if not partner and account_name:
+            candidates = env['res.partner'].sudo().search([
+                ('active', '=', True),
+                '|', '|',
+                ('name', '=', account_name),
+                ('ref', '=', account_name),
+                ('vat', '=', account_name),
+            ])
+            if not candidates:
+                candidates = env['res.partner'].sudo().search([
+                    ('active', '=', True),
+                    ('name', 'ilike', account_name),
+                ])
+            if len(candidates) == 1:
+                partner = candidates
+            elif len(candidates) > 1:
+                for candidate in candidates:
+                    cand_root = candidate.commercial_partner_id or candidate
+                    cand_root = cand_root._get_loyalty_root() if hasattr(cand_root, '_get_loyalty_root') else cand_root
+                    has_loyalty = env['hlv.loyalty.portal.account'].sudo().search_count([
+                        ('partner_id', '=', cand_root.id),
+                        ('active', '=', True),
+                    ])
+                    if has_loyalty:
+                        partner = candidate
+                        break
+                if not partner:
+                    partner = candidates[0]
+            _logger.info(
+                "MISA Loyalty API: kết quả khớp theo account_name -> %s ứng viên, chọn partner=%s",
+                len(candidates), partner,
+            )
+
+        # account_id: CHỈ dùng khi account_name ở trên không tìm được gì — path
+        # này gọi ra API THẬT của MISA (Account/{id}), có timeout=30s và trong
+        # thực tế đang treo/timeout liên tục (~30s mỗi lần), làm mỗi lần mở
+        # dropdown Loyalty phải chờ rất lâu. Để dự phòng cuối cùng, không phải
+        # đường đi chính, tránh trả giá 30s cho trường hợp phổ biến.
         if not partner and account_id:
             try:
                 headers, _crm_token = env['sale.order']._misa_headers() if hasattr(env['sale.order'], '_misa_headers') else ({}, False)
@@ -1032,21 +1069,6 @@ class MisaExtensionController(http.Controller):
                 _logger.info("MISA Loyalty API: kết quả khớp theo account_id (Account API) -> partner=%s", partner)
             except Exception as exc:
                 _logger.exception("MISA Loyalty API: lỗi khi gọi _sync_customer_from_misa_account_api(account_id=%r): %s", account_id, exc)
-
-        if not partner and account_name:
-            partner = env['res.partner'].sudo().search([
-                ('active', '=', True),
-                '|', '|',
-                ('name', '=', account_name),
-                ('ref', '=', account_name),
-                ('vat', '=', account_name),
-            ], limit=1)
-            if not partner:
-                partner = env['res.partner'].sudo().search([
-                    ('active', '=', True),
-                    ('name', 'ilike', account_name),
-                ], limit=1)
-            _logger.info("MISA Loyalty API: kết quả khớp theo account_name -> partner=%s", partner)
 
         if not partner:
             _logger.warning(

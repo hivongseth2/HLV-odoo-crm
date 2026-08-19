@@ -87,7 +87,6 @@ class ProductTemplate(models.Model):
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_hng_nim_yt',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_gia_san_tmdt',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_gi_bn_thng_mi',
-        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_zalo_price',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_wp_combo_price',
     )
     def _compute_combo_selling_price(self):
