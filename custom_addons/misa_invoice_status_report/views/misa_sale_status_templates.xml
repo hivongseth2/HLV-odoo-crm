@@ -12,39 +12,6 @@
         </xpath>
     </template>
 
-    <template id="misa_sale_status_login" name="MISA Sale Status Login">
-        <t t-call="misa_invoice_status_report.misa_sale_status_layout">
-            <style>
-                .msu-wrap{background:#f4f5f7;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
-                .msu-login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-                .msu-login-card{background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(15,23,42,.10);padding:36px 32px;width:min(380px,92vw)}
-                .msu-login-card h4{margin:0 0 22px;font-weight:800;text-align:center;color:#111827;font-size:1.25rem}
-                .msu-field-label{display:block;font-size:.82rem;font-weight:700;color:#374151;margin-bottom:6px}
-                .msu-input{width:100%;box-sizing:border-box;border:1px solid #d8d7d0;border-radius:8px;padding:10px 12px;font-size:.92rem;color:#111827;background:#fff}
-                .msu-input:focus{outline:none;border-color:#2a78d6;box-shadow:0 0 0 3px rgba(42,120,214,.15)}
-                .msu-alert-error{background:#fdf1f1;border:1px solid #f3c9c9;color:#a02323;border-radius:8px;padding:10px 12px;font-size:.85rem;margin-top:14px}
-                .msu-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;border:1px solid transparent;font-weight:700;font-size:.88rem;padding:10px 16px;cursor:pointer;transition:filter .15s,background .15s;line-height:1.2}
-                .msu-btn-primary{background:#2a78d6;border-color:#2a78d6;color:#fff;width:100%;margin-top:18px}
-                .msu-btn-primary:hover{background:#2568bd}
-            </style>
-            <div class="msu-login-wrap">
-                <div class="msu-login-card">
-                    <h4>Tình trạng xuất hóa đơn MISA</h4>
-                    <form method="post">
-                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                        <label class="msu-field-label" for="msu-login-password">Mật khẩu truy cập</label>
-                        <input type="password" id="msu-login-password" class="msu-input" name="password" required="required"
-                               placeholder="Nhập mật khẩu..." autofocus="autofocus"/>
-                        <t t-if="error">
-                            <div class="msu-alert-error"><t t-esc="error"/></div>
-                        </t>
-                        <button type="submit" class="msu-btn msu-btn-primary">Đăng nhập</button>
-                    </form>
-                </div>
-            </div>
-        </t>
-    </template>
-
     <template id="misa_sale_status_page" name="MISA Sale Status Page">
         <t t-call="misa_invoice_status_report.misa_sale_status_layout">
             <style>
@@ -216,6 +183,7 @@
                 .msu-drawer-sibling{cursor:pointer}
                 .msu-drawer-sibling:hover{background:#f1f0eb}
                 .msu-drawer-reason{background:#fdf1f1;border:1px solid #f3caca;border-radius:8px;padding:10px 12px;font-size:.84rem;color:#7a2020}
+                .msu-drawer-reason-good{background:#f0f9f0;border:1px solid #bfe3bf;border-radius:8px;padding:10px 12px;font-size:.84rem;color:#0a6b0a}
                 .msu-drawer-actions{display:flex;gap:8px;padding:16px 20px 20px;border-top:1px solid #eceae4;position:sticky;bottom:0;background:#fff}
                 .msu-drawer-actions .msu-btn-group{flex:1;display:flex}
                 .msu-drawer-actions .msu-btn{flex:1;justify-content:center;gap:6px}
@@ -245,7 +213,7 @@
                         <div class="msu-eyebrow">Đối soát MISA</div>
                         <h3>Tình trạng xuất hóa đơn</h3>
                     </div>
-                    <a href="/misa_sale_status/logout" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
+                    <a href="/web/session/logout?redirect=/misa_sale_status" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
                 </div>
 
                 <div class="msu-identity-bar">
@@ -285,6 +253,7 @@
                             <div class="msu-recon-item">
                                 <span class="msu-meta-label">Còn lại chưa xuất HĐ</span>
                                 <span class="msu-recon-value msu-recon-outstanding" id="msu-recon-outstanding">0 đ</span>
+                                <span class="msu-muted" id="msu-recon-outstanding-hint" style="font-size:.72rem;display:none"></span>
                             </div>
                         </div>
                     </div>
@@ -640,6 +609,13 @@
                     function loadSalerCodes() {
                         return rpc('/misa_sale_status/api/saler_codes').then(function(res) {
                             var codes = res.codes || [];
+                            if (!codes.length) {
+                                // Tài khoản đang đăng nhập chưa được admin gán mã sale nào
+                                // (res.users.x_misa_saler_codes rỗng) — nói rõ để không hiểu
+                                // nhầm là trang bị lỗi/đang tải mãi không xong.
+                                hintEl.textContent = 'Tài khoản của bạn chưa được gán mã sale nào. Liên hệ admin để cấu hình.';
+                                return;
+                            }
                             codes.forEach(function(code) {
                                 var opt = document.createElement('option');
                                 opt.value = code;
@@ -648,6 +624,13 @@
                             });
                             if (state.salerCode && codes.indexOf(state.salerCode) !== -1) {
                                 selectEl.value = state.salerCode;
+                                onSalerChosen();
+                            } else if (codes.length === 1) {
+                                // Chỉ có đúng 1 mã — tự chọn luôn, khỏi bắt người dùng bấm thêm
+                                // 1 bước thừa (đã biết chắc chắn họ là ai qua session Odoo rồi).
+                                state.salerCode = codes[0];
+                                selectEl.value = codes[0];
+                                localStorage.setItem(STORAGE_KEY, codes[0]);
                                 onSalerChosen();
                             } else if (state.salerCode) {
                                 hintEl.textContent = 'Mã "' + state.salerCode + '" đã lưu trước đó không còn hợp lệ, vui lòng chọn lại.';
@@ -680,6 +663,13 @@
                             document.getElementById('msu-recon-shopee').textContent = fmtMoney(d.shopee_invoiced_amount);
                             document.getElementById('msu-recon-customs').textContent = fmtMoney(d.customs_pending_amount);
                             document.getElementById('msu-recon-outstanding').textContent = fmtMoney(d.outstanding_amount);
+                            var hintEl2 = document.getElementById('msu-recon-outstanding-hint');
+                            if (d.gap_resolved_amount) {
+                                hintEl2.style.display = '';
+                                hintEl2.textContent = '(đã trừ ' + fmtMoney(d.gap_resolved_amount) + ' đã xác minh xong)';
+                            } else {
+                                hintEl2.style.display = 'none';
+                            }
                         }).catch(function(e) { toast('Lỗi tải số liệu đối chiếu: ' + e.message, 'error'); });
                     }
 
@@ -1565,6 +1555,17 @@
                         var exceptionHtml = row.exception
                             ? '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Ngoại lệ</p><div class="msu-drawer-reason">' + esc(row.exception_reason || '') + '</div></div>'
                             : '';
+                        // Lý do lệch (đã tính sẵn ở backend) — xanh khi ĐÃ XÁC MINH xong (tiền
+                        // không thiếu thật, chỉ là ghi nhận ở đề nghị khác), đỏ khi vẫn cần
+                        // kiểm tra tay. Chỉ hiện khi phiếu đang lệch VÀ đã có lý do (đã bấm
+                        // "Cập nhật lý do" hoặc hệ thống tự tính) — chưa tính thì không hiện gì,
+                        // tránh nói sai "chưa rõ lý do" trong khi chỉ đơn giản là chưa tính tới.
+                        var gapSummaryHtml = row.gap_summary
+                            ? '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Vì sao lệch</p><div class="' +
+                              (row.gap_resolved ? 'msu-drawer-reason-good' : 'msu-drawer-reason') + '">' +
+                              (row.gap_resolved ? '<i class="fa fa-check-circle"></i> ' : '<i class="fa fa-info-circle"></i> ') +
+                              esc(row.gap_summary) + '</div></div>'
+                            : '';
                         var groupItems = [];
                         if (row.master_picking_name) {
                             groupItems.push('<div class="msu-drawer-list-item"><span>Phiếu gốc</span><b>' + esc(row.master_picking_name) + '</b></div>');
@@ -1601,7 +1602,7 @@
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Mã đề nghị (gắn tay)</span><span class="msu-meta-value">' + (row.manual_refno ? esc(row.manual_refno) : '—') + '</span></div>' +
                                     '</div>' +
                                 '</div>' +
-                                groupHtml + siblingsHtml + exceptionHtml +
+                                gapSummaryHtml + groupHtml + siblingsHtml + exceptionHtml +
                             '</div>' +
                             '<div class="msu-drawer-actions">' + actionButtonsHtml(row, {size: 'sm', withText: true}) + '</div>';
 
