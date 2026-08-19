@@ -579,11 +579,11 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 #report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.4);align-items:center;justify-content:center}
 /* Picking detail modal (xem trước + xác nhận in) */
 #pd-modal{display:none;position:fixed;inset:0;z-index:2100;background:rgba(0,0,0,.45);align-items:center;justify-content:center}
-#pd-modal .pd-card{background:#fff;max-width:760px;width:94%;max-height:90vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden}
+#pd-modal .pd-card{background:#fff;max-width:1200px;width:96%;max-height:96vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden}
 #pd-modal .pd-header{padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center}
 #pd-modal .pd-body{padding:16px 18px;overflow-y:auto;flex:1}
 #pd-modal .pd-footer{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
-#pd-preview-frame{width:100%;height:60vh;border:1px solid #e5e7eb;border-radius:6px;margin-top:12px}
+#pd-preview-frame{width:100%;height:78vh;border:1px solid #e5e7eb;border-radius:6px;margin-top:12px}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
 .msg-header{padding:10px 14px;background:#fafafa;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.82rem;color:#374151;user-select:none}
