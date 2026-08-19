@@ -33,6 +33,7 @@ class SaleOrder(models.Model):
             ("pending", "Chờ thanh toán"),
             ("paid", "Đã thanh toán"),
             ("failed", "Thanh toán thất bại"),
+            ("cancelled", "Đã hủy đơn"),
         ],
         string="Trạng thái thanh toán Zalo",
         default="pending",
@@ -376,6 +377,32 @@ class SaleOrder(models.Model):
             })
             order._send_zalo_cod_callback_payment(result_code=1)
         return True
+
+    def action_mark_zalo_cancelled(self):
+        """
+        Nút bấm trên giao diện Odoo cho phép nhân viên xác nhận đơn hàng Zalo/COD đã bị hủy,
+        gọi API Zalo payment-mini cod-callback-payment với resultCode = -1 để đồng bộ trạng thái.
+        """
+        for order in self:
+            order.write({
+                "x_zalo_payment_status": "cancelled",
+            })
+            order._send_zalo_cod_callback_payment(result_code=-1)
+        return True
+
+    def action_cancel(self):
+        """Override action_cancel để đồng bộ trạng thái hủy đơn lên Zalo Developer Portal."""
+        res = super().action_cancel()
+        for order in self:
+            if order.x_zalo_order_id:
+                order.write({
+                    "x_zalo_payment_status": "cancelled",
+                })
+                try:
+                    order._send_zalo_cod_callback_payment(result_code=-1)
+                except Exception as ce:
+                    _logger.warning("Không thể gửi Zalo cancel callback cho đơn %s: %s", order.name, ce)
+        return res
 
     def action_query_zalo_order_status(self):
         """

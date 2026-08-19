@@ -325,13 +325,34 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 if not voucher_result["valid"]:
                     order.unlink()
                     return self._response_error("VOUCHER_ERROR", voucher_result["error"], 400)
-                voucher_info = voucher_result
+                voucher_applied = False
                 try:
                     order.loyalty_voucher_code = voucher_code
-                    order.action_apply_loyalty_voucher()
+                    if hasattr(order, 'action_apply_loyalty_voucher'):
+                        order.action_apply_loyalty_voucher()
+                        voucher_applied = True
                 except Exception as ve:
-                    _logger.warning("Voucher apply error: %s", ve)
-                    order.write({"note": (order.note or "") + f"\nVoucher: {voucher_code}"})
+                    _logger.warning("Voucher apply error on %s: %s", order.name, ve)
+
+                if not voucher_applied:
+                    try:
+                        disc_amt = voucher_info.get("estimated_discount", 0)
+                        if disc_amt > 0:
+                            discount_product = order._get_voucher_discount_product() if hasattr(order, '_get_voucher_discount_product') else False
+                            if not discount_product:
+                                discount_product = request.env['product.product'].sudo().search([('default_code', '=', 'LOYALTY_VOUCHER_DISCOUNT')], limit=1)
+                            if discount_product:
+                                request.env['sale.order.line'].sudo().create({
+                                    'order_id': order.id,
+                                    'product_id': discount_product.id,
+                                    'name': f"Giảm giá Voucher [{voucher_code}]",
+                                    'product_uom_qty': 1,
+                                    'price_unit': -disc_amt,
+                                    'tax_id': [(5, 0, 0)],
+                                    'is_loyalty_reward_line': True,
+                                })
+                    except Exception as fe:
+                        _logger.warning("Fallback discount line error on %s: %s", order.name, fe)
 
             # Luôn confirm đơn hàng ngay sau khi tạo (COD: user đã xác nhận, ZaloPay: đã thanh toán thành công)
             try:
@@ -452,10 +473,20 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 _logger.warning("Force cancel pickings error: %s", e)
 
             # Set trực tiếp order state về cancel và tự động bật Cần hủy (x_plan_need_cancel)
-            cancel_vals = {"state": "cancel"}
+            cancel_vals = {
+                "state": "cancel",
+                "x_zalo_payment_status": "cancelled",
+            }
             if "x_plan_need_cancel" in order_sudo._fields:
                 cancel_vals["x_plan_need_cancel"] = True
             order_sudo.write(cancel_vals)
+
+            # Đồng bộ trạng thái đơn hủy lên Zalo Developer Portal nếu là đơn Zalo
+            if order.x_zalo_order_id:
+                try:
+                    order.sudo()._send_zalo_cod_callback_payment(result_code=-1)
+                except Exception as ze:
+                    _logger.warning("Gửi Zalo cancel callback thất bại cho đơn %s: %s", order.name, ze)
 
             # Tự động hoàn tiền qua Zalo nếu đơn online đã thanh toán nhưng chưa giao
             try:

@@ -121,3 +121,114 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         except Exception as e:
             _logger.exception("zalo_user_vouchers error: %s", e)
             return self._response_error("LOYALTY_ERROR", str(e), status=500)
+
+    # ── Đổi điểm lấy Voucher (Redeem Submit Proxy) ──────────────────────
+
+    @http.route(
+        [
+            '/api/v1/zalo/loyalty/redeem-submit',
+            '/api/v1/zalo/loyalty/redeem/submit',
+            '/api/v1/zalo/loyalty/redeem',
+        ],
+        type='http', auth='public',
+        methods=['POST', 'OPTIONS'], csrf=False,
+    )
+    def zalo_redeem_submit(self, **kwargs):
+        """POST /api/v1/zalo/loyalty/redeem-submit
+        Body (JSON):
+        {
+            "partner_id": 42,
+            "package_id": 3,
+            "phone": "0901234567"
+        }
+        Proxy đổi thưởng trực tiếp gán account_id chính xác, trừ điểm thực tế vào tài khoản portal.
+        """
+        opt = self._check_options()
+        if opt:
+            return opt
+
+        body = self._request_json()
+        partner_id = body.get('partner_id') or kwargs.get('partner_id')
+        package_id = body.get('package_id') or kwargs.get('package_id')
+        phone = body.get('phone') or kwargs.get('phone') or ''
+
+        if not partner_id:
+            return self._response_error("MISSING_PARTNER_ID", "Thiếu partner_id", status=400)
+        if not package_id:
+            return self._response_error("MISSING_PACKAGE_ID", "Thiếu package_id", status=400)
+
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+            if not partner.exists():
+                return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", status=404)
+
+            root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
+            package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
+            if not package.exists() or not package.active:
+                return self._response_error("INVALID_PACKAGE", "Gói voucher không tồn tại hoặc đã ngừng áp dụng", status=400)
+
+            # Tìm đúng tài khoản portal account theo SĐT hoặc tài khoản mặc định
+            normalized_phone = self._normalize_vn_phone(phone)
+            account = False
+            family_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [root.id]
+            if normalized_phone and 'hlv.loyalty.portal.account' in request.env:
+                account = request.env['hlv.loyalty.portal.account'].sudo().search([
+                    ('partner_id', 'in', family_ids),
+                    ('portal_phone', '=', normalized_phone),
+                    ('active', '=', True),
+                ], limit=1)
+
+            if not account and hasattr(root, 'loyalty_portal_account_ids') and root.loyalty_portal_account_ids:
+                account = root.loyalty_portal_account_ids.filtered(lambda a: a.is_default)[:1] or root.loyalty_portal_account_ids[:1]
+
+            # Kiểm tra điểm khả dụng
+            avail_exchange = 0
+            if account:
+                avail_exchange = getattr(account, 'loyalty_exchange_available_points', 0) or getattr(account, 'loyalty_exchange_points', 0)
+            else:
+                avail_exchange = getattr(root, 'loyalty_exchange_available_points', 0) or getattr(root, 'loyalty_exchange_points', 0)
+
+            if avail_exchange < package.points_required:
+                return self._response_error(
+                    "INSUFFICIENT_POINTS",
+                    f"Không đủ điểm đổi thưởng. Cần {package.points_required:,} điểm, bạn còn {avail_exchange:,} điểm.",
+                    status=400,
+                )
+
+            # Tạo yêu cầu đổi thưởng và thực hiện action_done
+            vals = {
+                'partner_id': root.id,
+                'package_id': package.id,
+                'request_type': 'gift',
+                'balance_at_request': account.loyalty_exchange_points if account else getattr(root, 'loyalty_exchange_points', 0),
+                'company_id': package.company_id.id if package.company_id else request.env.company.id,
+            }
+            if account:
+                vals['account_id'] = account.id
+
+            req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+            req.action_done()
+
+            # Lấy điểm còn lại sau khi trừ
+            remaining_points = 0
+            if account:
+                remaining_points = account.loyalty_exchange_points
+            else:
+                remaining_points = getattr(root, 'loyalty_exchange_points', 0)
+
+            return self._response_success({
+                'request_id': req.id,
+                'request_name': req.name,
+                'state': req.state,
+                'points_required': req.points_required,
+                'voucher_id': req.voucher_id.id if req.voucher_id else None,
+                'voucher_code': req.voucher_id.code if req.voucher_id else '',
+                'exchange_points': remaining_points,
+                'exchange_points_available': remaining_points,
+                'exchange_points_remaining': remaining_points,
+                'message': 'Nhận mã ưu đãi thành công!',
+            })
+        except Exception as e:
+            _logger.exception("zalo_redeem_submit error: %s", e)
+            return self._response_error("REDEEM_ERROR", str(e), status=500)
+
