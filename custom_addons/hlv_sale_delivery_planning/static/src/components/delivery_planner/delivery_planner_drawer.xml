@@ -771,6 +771,12 @@
                                   <i class="fa fa-warehouse me-1"/><t t-esc="q.warehouse_name"/>
                                   <span class="ms-2"><i class="fa fa-user me-1"/><t t-esc="q.requested_by_name"/></span>
                               </p>
+                              <p class="mb-1 small text-muted" style="font-size:.72rem">
+                                  <i class="fa fa-clock-o me-1"/>Yêu cầu: <t t-esc="this._formatIotQueueTime(q.requested_at)"/>
+                                  <t t-if="q.printed_at">
+                                      <span class="ms-2"><i class="fa fa-print me-1"/>Đã gửi lệnh in: <t t-esc="this._formatIotQueueTime(q.printed_at)"/></span>
+                                  </t>
+                              </p>
                               <p t-if="q.state === 'error' and q.error_message" class="mb-1 small text-danger">
                                   <i class="fa fa-exclamation-triangle me-1"/><t t-esc="q.error_message"/>
                               </p>

@@ -2361,6 +2361,19 @@ function loadPrintQueue(){
     renderPrintQueueList();
   }).catch(function(){/* silent */});
 }
+// Định dạng ISO datetime (UTC, không có 'Z') từ hlv.iot.print.queue._to_summary_dict() sang giờ
+// VN (UTC+7) — cần chính xác giờ:phút (không chỉ ngày) để đối soát khi sale/kho tranh luận đã
+// gửi in lúc nào, khác với fd() (chỉ lấy ngày, không cộng offset UTC).
+function pqFormatTime(isoStr){
+  if(!isoStr)return'';
+  try{
+    var utc=new Date(isoStr.slice(-1)==='Z'?isoStr:isoStr+'Z');
+    if(isNaN(utc.getTime()))return'';
+    var vn=new Date(utc.getTime()+7*60*60*1000);
+    var pad=function(n){return('0'+n).slice(-2);};
+    return pad(vn.getUTCDate())+'/'+pad(vn.getUTCMonth()+1)+' '+pad(vn.getUTCHours())+':'+pad(vn.getUTCMinutes());
+  }catch(e){return'';}
+}
 function updatePrintQueueBadge(){
   var pending=_pqItems.filter(function(i){return i.state==='pending'||i.state==='printing';}).length;
   var errors=_pqItems.filter(function(i){return i.state==='error';}).length;
@@ -2394,6 +2407,8 @@ function renderPrintQueueList(){
       +'</div>'
       +'<div class="pq-meta"><i class="fa fa-warehouse me-1"></i>'+esc(i.warehouse_name||'')
       +' &middot; <i class="fa fa-user me-1"></i>'+esc(i.requested_by_name||'')+'</div>'
+      +'<div class="pq-meta"><i class="fa fa-clock-o me-1"></i>Yêu cầu: '+esc(pqFormatTime(i.requested_at))
+      +(i.printed_at?' &middot; <i class="fa fa-print me-1"></i>Đã gửi lệnh in: '+esc(pqFormatTime(i.printed_at)):'')+'</div>'
       +(i.error_message?'<div class="pq-error"><i class="fa fa-exclamation-triangle me-1"></i>'+esc(i.error_message)+'</div>':'')
       +'</div>';
   }).join('');

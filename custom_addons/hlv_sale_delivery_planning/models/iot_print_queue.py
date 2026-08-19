@@ -6,6 +6,7 @@ REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 
 class HlvIotPrintQueue(models.Model):
     _name = 'hlv.iot.print.queue'
+    _inherit = ['mail.thread']
     _description = 'Hàng chờ in phiếu lấy hàng IoT (sale gửi từ /sale_plan, tự động in ở backend)'
     _order = 'create_date desc'
     _rec_name = 'sale_order_id'
@@ -14,6 +15,10 @@ class HlvIotPrintQueue(models.Model):
                                      ondelete='cascade', index=True)
     warehouse_id = fields.Many2one('stock.warehouse', string='Kho', required=True, index=True)
     picking_ids = fields.Many2many('stock.picking', string='Phiếu lấy hàng')
+    # tracking=True: mỗi lần đổi state/error_message, Odoo tự ghi 1 dòng vào chatter (mail.thread)
+    # kèm người bấm + thời gian — dùng để ĐỐI SOÁT khi sale nói "đã gửi in" nhưng kho không thấy
+    # giấy: xem lại chatter của đúng bản ghi này biết chính xác ai gửi lúc nào, hệ thống có thật sự
+    # dispatch được không, có bị báo lỗi/gửi lại lần nào không.
     state = fields.Selection([
         ('pending', 'Chờ in'),
         ('printing', 'Đang in...'),
@@ -24,13 +29,22 @@ class HlvIotPrintQueue(models.Model):
         ('printed', 'Đã gửi lệnh in'),
         ('error', 'Lỗi'),
         ('cancelled', 'Đã hủy'),
-    ], string='Trạng thái', default='pending', required=True, index=True)
-    error_message = fields.Char(string='Lý do lỗi')
+    ], string='Trạng thái', default='pending', required=True, index=True, tracking=True)
+    error_message = fields.Char(string='Lý do lỗi', tracking=True)
     requested_by_id = fields.Many2one('res.users', string='Sale yêu cầu',
-                                       default=lambda self: self.env.user)
+                                       default=lambda self: self.env.user, tracking=True)
     requested_at = fields.Datetime(string='Thời gian yêu cầu', default=fields.Datetime.now)
-    printed_by_id = fields.Many2one('res.users', string='Người/phiên đã in')
+    printed_by_id = fields.Many2one('res.users', string='Người/phiên đã in', tracking=True)
     printed_at = fields.Datetime(string='Thời gian in')
+
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        for rec in records:
+            rec.message_post(body=(
+                'Sale <b>%s</b> gửi yêu cầu in đơn <b>%s</b> cho kho <b>%s</b>.'
+                % (rec.requested_by_id.name or '?', rec.sale_order_id.name, rec.warehouse_id.name)
+            ))
+        return records
 
     def _claim_ids(self, ids):
         """Atomically chuyển state pending -> printing cho đúng những id còn 'pending' tại thời
