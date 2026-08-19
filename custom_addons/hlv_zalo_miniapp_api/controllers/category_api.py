@@ -130,20 +130,39 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Danh mục này đã bị tắt hiển thị trên Zalo Mini App", 404)
 
             child_cats = request.env["pos.category"].sudo().search([("id", "child_of", category.id)])
-            # Query product.template trước để match x_zalo_categ_ids / pos_categ_ids chính xác
-            # (2 field này nằm trên product.template, không phải product.product).
+            # Thu thập template IDs từ tất cả các quan hệ category khả dụng
+            matching_tmpl_ids = set()
+            Tmpl = request.env["product.template"].sudo()
+
+            if "x_zalo_categ_ids" in Tmpl._fields:
+                zalo_tmpls = Tmpl.search([
+                    ("x_zalo_categ_ids", "in", child_cats.ids),
+                    ("x_active_zalo", "=", True),
+                    ("active", "=", True),
+                ]).ids
+                matching_tmpl_ids.update(zalo_tmpls)
+
+            if "pos_categ_ids" in Tmpl._fields:
+                pos_tmpls = Tmpl.search([
+                    ("pos_categ_ids", "in", child_cats.ids),
+                    ("x_active_zalo", "=", True),
+                    ("active", "=", True),
+                ]).ids
+                matching_tmpl_ids.update(pos_tmpls)
+
+            if "categ_id" in Tmpl._fields:
+                categ_tmpls = Tmpl.search([
+                    ("categ_id", "in", child_cats.ids),
+                    ("x_active_zalo", "=", True),
+                    ("active", "=", True),
+                ]).ids
+                matching_tmpl_ids.update(categ_tmpls)
+
             tmpl_domain = [
+                ("id", "in", list(matching_tmpl_ids)),
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
             ]
-            if hasattr(request.env["product.template"], "pos_categ_ids"):
-                tmpl_domain += [
-                    "|",
-                    ("x_zalo_categ_ids", "in", child_cats.ids),
-                    ("pos_categ_ids", "in", child_cats.ids),
-                ]
-            else:
-                tmpl_domain.append(("x_zalo_categ_ids", "in", child_cats.ids))
             template_ids = request.env["product.template"].sudo().search(tmpl_domain).ids
 
             domain = [
