@@ -32,7 +32,7 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             '/api/v1/zalo/loyalty/packages',
         ],
         type='http', auth='public',
-        methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*',
+        methods=['GET', 'POST', 'OPTIONS'], csrf=False,
     )
     def zalo_redeem_packages(self, **kwargs):
         """GET/POST /api/v1/zalo/loyalty/redeem-packages
@@ -73,7 +73,7 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             '/api/v1/zalo/loyalty/my-vouchers/<int:partner_id>',
         ],
         type='http', auth='public',
-        methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*',
+        methods=['GET', 'POST', 'OPTIONS'], csrf=False,
     )
     def zalo_user_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/zalo/loyalty/vouchers/<partner_id>?state=active
