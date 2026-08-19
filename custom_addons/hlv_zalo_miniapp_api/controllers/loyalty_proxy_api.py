@@ -26,12 +26,16 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI):
     # ── Gói đổi quà (Redeem Packages) ───────────────────────────────────
 
     @http.route(
-        '/api/v1/zalo/loyalty/redeem-packages',
+        [
+            '/api/v1/zalo/loyalty/redeem-packages',
+            '/api/v1/zalo/loyalty/voucher-packages',
+            '/api/v1/zalo/loyalty/packages',
+        ],
         type='http', auth='public',
-        methods=['GET', 'OPTIONS'], csrf=False, cors='*',
+        methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*',
     )
     def zalo_redeem_packages(self, **kwargs):
-        """GET /api/v1/zalo/loyalty/redeem-packages
+        """GET/POST /api/v1/zalo/loyalty/redeem-packages
         Proxy trả về danh sách gói quà đổi điểm (active) từ hlv.loyalty.voucher.package.
         Response format: {success: true, data: [{...}, ...]}
         """
@@ -64,9 +68,12 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI):
     # ── Voucher cá nhân (User Vouchers) ─────────────────────────────────
 
     @http.route(
-        '/api/v1/zalo/loyalty/vouchers/<int:partner_id>',
+        [
+            '/api/v1/zalo/loyalty/vouchers/<int:partner_id>',
+            '/api/v1/zalo/loyalty/my-vouchers/<int:partner_id>',
+        ],
         type='http', auth='public',
-        methods=['GET', 'OPTIONS'], csrf=False, cors='*',
+        methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*',
     )
     def zalo_user_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/zalo/loyalty/vouchers/<partner_id>?state=active
