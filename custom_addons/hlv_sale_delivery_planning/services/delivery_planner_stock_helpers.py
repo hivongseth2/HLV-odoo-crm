@@ -31,14 +31,21 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         if not all_pending_pids or not so_wh_locs:
             return {}
 
-        all_root_locs = list({v[1] for v in so_wh_locs.values()})
+        # Gộp theo (wh_id, root_loc) DUY NHẤT trước khi so khớp location — nhiều đơn
+        # thường dùng CHUNG 1 kho, tránh lặp lại vòng loc y hệt nhau cho MỖI đơn (trước đây
+        # O(số đơn x số location); giờ O(số kho khác nhau x số location) — với 1 kho, 373 đơn
+        # thì giảm ~373 lần cho đúng vòng lặp này).
+        unique_wh_roots = set(so_wh_locs.values())  # {(wh_id, root_loc), ...}
+        all_root_locs = list({root_loc for _wh_id, root_loc in unique_wh_roots})
         child_locs = self.env['stock.location'].sudo().search([
             ('id', 'child_of', all_root_locs), ('usage', '=', 'internal'),
         ])
         loc_to_whs = {}
-        for so_id, (wh_id, root_loc) in so_wh_locs.items():
-            for loc in child_locs:
-                if loc.parent_path and f'/{root_loc}/' in loc.parent_path:
+        for loc in child_locs:
+            if not loc.parent_path:
+                continue
+            for wh_id, root_loc in unique_wh_roots:
+                if f'/{root_loc}/' in loc.parent_path:
                     loc_to_whs.setdefault(loc.id, set()).add(wh_id)
 
         if not loc_to_whs:
