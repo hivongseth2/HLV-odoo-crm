@@ -13,7 +13,6 @@ class PackViewController(http.Controller):
 
     @http.route('/custom_barcode_scan/pack_view/<int:picking_id>', type='http', auth='user')
     def view_pack_products(self, picking_id):
-        _logger.info(f"🔍 Đang vào pack_view với ID: {picking_id}")
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if not picking.exists():
@@ -125,7 +124,6 @@ class PackViewController(http.Controller):
                 _logger.info(f"[PACK_VIEW] Auto-assigning picking {picking.name} (state: {picking.state})")
                 picking.action_assign()
                 picking = request.env['stock.picking'].sudo().browse(picking_id)
-                _logger.info(f"[PACK_VIEW] After assign: state={picking.state}, move_lines={len(picking.move_line_ids)}")
             except Exception as e:
                 _logger.warning(f"[PACK_VIEW] Auto-assign failed: {e}")
 
@@ -264,8 +262,6 @@ class PackViewController(http.Controller):
 
         # Chỉ lấy packages ĐÍCH (result_package_id) — kiện đang được tạo/đóng gói
         all_pkgs = picking.move_line_ids.mapped('result_package_id')
-
-        _logger.info(f"[PACK_VIEW] Picking {picking.name}: Found {len(all_pkgs)} destination packages")
 
         if not all_pkgs:
             return picking_packages

@@ -657,17 +657,12 @@ class MisaApiUtils(models.AbstractModel):
 
         # Step 1: Gửi request login
         response = session.post(login_url, headers=headers, json=payload)
-        _logger.warning("Đăng nhập MISA với response: %s", response.json())
-        _logger.warning("All response headers: %s", dict(response.headers))
-        _logger.warning("Full response text: %s", response.text)
-        _logger.warning("All cookies in session: %s", dict(session.cookies.get_dict()))  # Log tất cả cookie
 
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
         # Lấy tất cả cookie từ session (bao gồm HttpOnly)
         cookies_dict = session.cookies.get_dict()
-        _logger.warning("Cookies nhận được từ session: %s", cookies_dict)
 
         # Kiểm tra các cookie cần thiết (dựa vào session)
         x_sessionid = cookies_dict.get("x-sessionid")
