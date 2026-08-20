@@ -304,13 +304,6 @@ class HlvChatgptSession(models.Model):
             except Exception as e:
                 _logger.error("API Call Error: %s", str(e))
                 return f"Lỗi gọi OpenAI: {str(e)}"
-
-            # Kiểm tra Output Message
-            # _logger.info("API Response Object: %s", str(response))
-            try:
-                _logger.info("API Response Dict: %s", response.to_dict())
-            except:
-                pass
             
             tool_calls = []
             output_text = ""

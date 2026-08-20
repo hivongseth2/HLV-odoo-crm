@@ -16,7 +16,6 @@ class BarcodeScanController(http.Controller):
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', csrf=False)
     def scan_ui_api(self, **kwargs):
         barcode = kwargs.get("barcode")
-        _logger.info(f"[SCAN] Barcode: {barcode}")
 
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
@@ -26,7 +25,6 @@ class BarcodeScanController(http.Controller):
                 'message': f"Không tìm thấy phiếu với mã: {barcode}", 'type': 'danger','sticky': False}}
 
         if picking.state == 'done' and picking.group_id:
-            _logger.info(picking.picking_type_id.read()[0])
 
             # Lấy tất cả PACK còn xử lý được
             packs = Picking.search([
@@ -96,7 +94,6 @@ class BarcodeScanController(http.Controller):
             return {'type': 'ir.actions.client','tag': 'display_notification','params': {
                 'message': "Phiếu không có loại chuyển kho, không thể mở giao diện barcode.",'type': 'danger','sticky': False}}
 
-        _logger.info(f"[ACTION] Gửi barcode_action cho phiếu: {picking.name} | Picking Type: {picking.picking_type_id.name}")
         if picking.picking_type_id.code not in ['out', 'pick']:
             return {'type': 'ir.actions.client','tag': 'display_notification','params': {
                 'message': f"Phiếu {picking.name} không thuộc loại Pick hoặc Out. Không thể mở giao diện barcode.",'type': 'warning','sticky': False}}
