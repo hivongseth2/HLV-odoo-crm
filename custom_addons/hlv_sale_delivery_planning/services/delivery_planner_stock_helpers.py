@@ -44,14 +44,30 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         if not loc_to_whs:
             return {}
 
-        raw_moves = self.env['stock.move'].sudo().search_read([
-            ('product_id', 'in', list(all_pending_pids)),
-            ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
-            ('location_id', 'in', list(loc_to_whs.keys())),
-            ('picking_id', '!=', False),
-            ('picking_id.state', 'not in', ('done', 'cancel')),
-            ('sale_line_id', '=', False),
-        ], ['product_id', 'location_id', 'quantity', 'picking_id'])
+        # SQL thẳng thay vì search_read([...], ['product_id', ...]) — search_read() trả
+        # Many2one dạng [id, display_name], buộc tính display_name cho product.product (bị
+        # module renting override nặng) dù ở đây chỉ cần ID. Xem giải thích đầy đủ ở
+        # delivery_planner_stock.py._calculate_po_and_stock_status (cùng bug, đã đo qua
+        # bin/profile_cold_start_full.py).
+        self.env.cr.execute("""
+            SELECT sm.product_id, sm.location_id, sm.quantity, sm.picking_id
+              FROM stock_move sm
+              JOIN stock_picking sp ON sp.id = sm.picking_id
+             WHERE sm.product_id = ANY(%s)
+               AND sm.state IN ('assigned', 'partially_available', 'confirmed', 'waiting')
+               AND sm.location_id = ANY(%s)
+               AND sm.sale_line_id IS NULL
+               AND sp.state NOT IN ('done', 'cancel')
+        """, (list(all_pending_pids), list(loc_to_whs.keys())))
+        raw_moves = [
+            {
+                'product_id': [r[0]] if r[0] else False,
+                'location_id': [r[1]] if r[1] else False,
+                'quantity': r[2],
+                'picking_id': [r[3]] if r[3] else False,
+            }
+            for r in self.env.cr.fetchall()
+        ]
 
         pk_ids = list({mv['picking_id'][0] for mv in raw_moves if mv.get('picking_id')})
         pk_info = {}

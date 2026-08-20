@@ -161,27 +161,45 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             _tmpl_id = _tmpl_raw[0] if isinstance(_tmpl_raw, (list, tuple)) else _tmpl_raw
             if _tmpl_id and _tmpl_id in kit_tmpl_ids:
                 kit_sol_id_set.add(_r['id'])
+        # [D3]/[E]: dùng SQL thẳng thay vì search_read([...], ['sale_line_id', 'product_id', ...])
+        # — search_read() trả Many2one dạng [id, display_name], buộc Odoo phải TÍNH display_name
+        # cho sale.order.line/product.product (bị module subscription/renting override rất nặng,
+        # _additional_name_per_id/_get_partner_display) dù ở đây chỉ cần lấy ID. Đo thực tế: đây
+        # là nguồn ~5s+ trong tổng request (xem bin/profile_cold_start_full.py). Chỉ cần ID nên
+        # query trực tiếp bằng raw SQL để bỏ qua hoàn toàn phần tính display_name.
         done_moves_by_kit_sol = {}  # {sol_id: {prod_id: total_done_qty}}
         if kit_sol_id_set:
-            _done_mvs = self.env['stock.move'].sudo().search_read(
-                [
-                    ('sale_line_id', 'in', list(kit_sol_id_set)),
-                    ('state', '=', 'done'),
-                    ('picking_id.picking_type_code', '=', 'outgoing'),
-                ],
-                ['sale_line_id', 'product_id', 'quantity'],
-            )
-            for _mv in _done_mvs:
-                _sol_id = _mv['sale_line_id'][0] if isinstance(_mv['sale_line_id'], (list, tuple)) else _mv['sale_line_id']
-                _cpid = _mv['product_id'][0] if isinstance(_mv['product_id'], (list, tuple)) else _mv['product_id']
+            self.env.cr.execute("""
+                SELECT sm.sale_line_id, sm.product_id, sm.quantity
+                  FROM stock_move sm
+                  JOIN stock_picking sp ON sp.id = sm.picking_id
+                  JOIN stock_picking_type spt ON spt.id = sp.picking_type_id
+                 WHERE sm.sale_line_id = ANY(%s)
+                   AND sm.state = 'done'
+                   AND spt.code = 'outgoing'
+            """, (list(kit_sol_id_set),))
+            for _sol_id, _cpid, _qty in self.env.cr.fetchall():
                 _done_map = done_moves_by_kit_sol.setdefault(_sol_id, {})
-                _done_map[_cpid] = _done_map.get(_cpid, 0.0) + (_mv.get('quantity') or 0.0)
+                _done_map[_cpid] = _done_map.get(_cpid, 0.0) + (_qty or 0.0)
 
         # [E] Active moves per sale line — 1 query
-        move_recs = self.env['stock.move'].sudo().search_read(
-            [('sale_line_id', 'in', all_line_ids), ('state', 'not in', ('cancel', 'done'))],
-            ['id', 'sale_line_id', 'product_id', 'quantity', 'product_uom_qty'],
-        ) if all_line_ids else []
+        if all_line_ids:
+            self.env.cr.execute("""
+                SELECT id, sale_line_id, product_id, quantity, product_uom_qty
+                  FROM stock_move
+                 WHERE sale_line_id = ANY(%s)
+                   AND state NOT IN ('cancel', 'done')
+            """, (list(all_line_ids),))
+            move_recs = [
+                {
+                    'id': r[0], 'sale_line_id': [r[1]],
+                    'product_id': [r[2]] if r[2] else False,
+                    'quantity': r[3], 'product_uom_qty': r[4],
+                }
+                for r in self.env.cr.fetchall()
+            ]
+        else:
+            move_recs = []
         moves_by_line = {}
         line_reserved_qty = {}
         for mv in move_recs:
