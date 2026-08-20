@@ -987,18 +987,34 @@ class MisaExtensionController(http.Controller):
         env = request.env(user=admin_user) if admin_user else request.env
 
         account_name = (payload.get('account_name') or kwargs.get('account_name') or '').strip()
-        account_id = payload.get('account_id') or kwargs.get('account_id')
         partner_id = payload.get('partner_id') or kwargs.get('partner_id')
+        # company_registry (= "ID Công ty" trên MISA, field res.partner.company_registry,
+        # ví dụ "DONGJINTEXTILE"/"DONGJIN-BS") — bắt lúc người dùng chọn trong dropdown
+        # Khách hàng, chỉ hiện tại thời điểm đó. Phân biệt được cả trường hợp 2 công ty
+        # TRÙNG CẢ TÊN LẪN MÃ SỐ THUẾ (đã gặp thật: "CÔNG TY TNHH DONGJIN TEXTILE VINA")
+        # mà account_name/tax_code không làm được.
+        company_registry = (payload.get('company_registry') or kwargs.get('company_registry') or '').strip()
 
         partner = False
 
         # 0) Ưu tiên tìm theo mã số thuế (TaxCode) từ MISA CRM -> vat của res.partner
         tax_code = (payload.get('tax_code') or kwargs.get('tax_code') or '').strip()
         _logger.info(
-            "MISA Loyalty API: nhận request account_name=%r account_id=%r partner_id=%r tax_code=%r",
-            account_name, account_id, partner_id, tax_code,
+            "MISA Loyalty API: nhận request account_name=%r partner_id=%r tax_code=%r company_registry=%r",
+            account_name, partner_id, tax_code, company_registry,
         )
-        if tax_code:
+
+        # company_registry chính xác nhất khi có (unique theo field help text của
+        # chính field này) — thử trước cả tax_code, vì tax_code có thể bị trùng
+        # giữa nhiều công ty (đã gặp thật, xem comment ở trên).
+        if company_registry:
+            partner = env['res.partner'].sudo().search([
+                ('active', '=', True),
+                ('company_registry', '=', company_registry),
+            ], limit=1)
+            _logger.info("MISA Loyalty API: kết quả khớp theo company_registry -> partner=%s", partner)
+
+        if not partner and tax_code:
             normalized_tax_code = re.sub(r'[^0-9a-zA-Z]', '', tax_code).upper()
             if normalized_tax_code:
                 env.cr.execute("""
@@ -1032,13 +1048,10 @@ class MisaExtensionController(http.Controller):
         # account_name: khớp nhanh (thuần SQL, không gọi ra ngoài). Khi trùng
         # nhiều bản ghi cùng tên (vd nhiều chi nhánh "CHI NHÁNH CÔNG TY ..."),
         # ưu tiên bản ghi mà CÔNG TY GỐC (loyalty root) thực sự có tài khoản
-        # Loyalty. CHỈ dùng thẳng kết quả này nếu nó thực sự có tài khoản —
-        # nếu không (kể cả khi chỉ có ĐÚNG 1 bản ghi khớp tên nhưng lại là bản
-        # ghi sai, trùng tên nhưng khác công ty thật), vẫn thử tiếp account_id
-        # bên dưới thay vì chấp nhận luôn (đây là nguyên nhân "trùng tên bị lấy
-        # nhầm bản ghi đầu tiên").
-        partner_by_name = False
-        if account_name:
+        # Loyalty. Đây là đường fallback cuối cùng (không còn gọi ra API MISA
+        # thật nữa — quá chậm/hay timeout ~30s trong thực tế, và company_registry
+        # ở trên đã xử lý đúng các case bị trùng tên).
+        if not partner and account_name:
             candidates = env['res.partner'].sudo().search([
                 ('active', '=', True),
                 '|', '|',
@@ -1052,46 +1065,24 @@ class MisaExtensionController(http.Controller):
                     ('name', 'ilike', account_name),
                 ])
             if len(candidates) == 1:
-                partner_by_name = candidates
+                partner = candidates
             elif len(candidates) > 1:
                 for candidate in candidates:
                     if _loyalty_root_has_accounts(candidate):
-                        partner_by_name = candidate
+                        partner = candidate
                         break
-                if not partner_by_name:
-                    partner_by_name = candidates[0]
+                if not partner:
+                    partner = candidates[0]
             _logger.info(
                 "MISA Loyalty API: kết quả khớp theo account_name -> %s ứng viên, chọn partner=%s",
-                len(candidates), partner_by_name,
+                len(candidates), partner,
             )
-            if partner_by_name and _loyalty_root_has_accounts(partner_by_name):
-                partner = partner_by_name
-
-        # account_id: gọi ra API THẬT của MISA (Account/{id}), có timeout=30s và
-        # trong thực tế từng bị treo/timeout liên tục (~30s mỗi lần) — CHỈ dùng
-        # khi account_name ở trên không tìm được gì HOẶC tìm được nhưng bản ghi
-        # đó không hề có tài khoản Loyalty nào (dấu hiệu khớp nhầm), để tránh
-        # trả giá 30s cho trường hợp phổ biến (account_name đã đúng và có sẵn
-        # tài khoản) trong khi vẫn tự sửa được trường hợp khớp nhầm.
-        if not partner and account_id:
-            try:
-                headers, _crm_token = env['sale.order']._misa_headers() if hasattr(env['sale.order'], '_misa_headers') else ({}, False)
-                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
-                _logger.info("MISA Loyalty API: kết quả khớp theo account_id (Account API) -> partner=%s", partner)
-            except Exception as exc:
-                _logger.exception("MISA Loyalty API: lỗi khi gọi _sync_customer_from_misa_account_api(account_id=%r): %s", account_id, exc)
-
-        # account_id cũng không tìm được gì hơn (hoặc không có account_id) →
-        # đành dùng tạm kết quả khớp theo tên dù chưa chắc có tài khoản Loyalty,
-        # còn hơn trả về rỗng hoàn toàn.
-        if not partner and partner_by_name:
-            partner = partner_by_name
 
         if not partner:
             _logger.warning(
-                "MISA Loyalty API: KHÔNG tìm được partner nào cho account_name=%r account_id=%r partner_id=%r tax_code=%r "
-                "-> trả về danh sách rỗng.",
-                account_name, account_id, partner_id, tax_code,
+                "MISA Loyalty API: KHÔNG tìm được partner nào cho account_name=%r partner_id=%r tax_code=%r "
+                "company_registry=%r -> trả về danh sách rỗng.",
+                account_name, partner_id, tax_code, company_registry,
             )
             return request.make_response(
                 json.dumps({"ok": True, "data": {"accounts": [], "default_pct": 0.0, "default_account_id": False}}),
