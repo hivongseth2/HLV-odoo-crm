@@ -67,7 +67,7 @@
         </section>
 
         <!-- Body -->
-        <div class="sr-body">
+        <div class="sr-body sr-body-hero">
 
             <!-- Progress + actions row -->
             <div class="sr-main-row">

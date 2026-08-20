@@ -62,52 +62,51 @@ class ResPartner(models.Model):
     )
 
     @api.depends(
+        'loyalty_portal_account_ids.loyalty_total_points',
         'loyalty_history_ids', 'loyalty_history_ids.point_amount',
         'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
-        'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
-        'child_ids.loyalty_history_ids.point_type', 'child_ids.loyalty_history_ids.state',
     )
     def _compute_loyalty_total_points(self):
-        """Điểm xếp hạng: ranking confirmed + legacy records (point_type=False)."""
+        """Điểm xếp hạng: tổng hợp (rollup) từ các tài khoản Loyalty của công ty.
+
+        Đây là số CHỈ ĐỂ XEM — nguồn sự thật thật sự nằm ở
+        `hlv.loyalty.portal.account.loyalty_total_points` (mỗi tài khoản có
+        pool điểm xếp hạng riêng). Với partner không phải root (hiếm, dữ
+        liệu legacy), giữ hành vi cũ: chỉ tính lịch sử gắn trực tiếp vào
+        chính partner đó (partner không có tài khoản Loyalty riêng).
+        """
         History = self.env['hlv.loyalty.history']
         for partner in self:
-            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            if not partner.parent_id and partner.loyalty_portal_account_ids:
+                partner.loyalty_total_points = sum(
+                    partner.loyalty_portal_account_ids.mapped('loyalty_total_points')
+                )
+                continue
             records = History.search([
-                ('partner_id', 'in', all_ids),
+                ('partner_id', '=', partner.id),
                 ('point_type', 'in', ['ranking', False]),
                 ('state', 'in', ['confirmed', False]),
             ])
             partner.loyalty_total_points = sum(records.mapped('point_amount'))
 
-    @api.depends(
-        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
-        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
-        'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
-        'child_ids.loyalty_history_ids.point_type', 'child_ids.loyalty_history_ids.state',
-    )
+    @api.depends('loyalty_portal_account_ids.loyalty_exchange_points')
     def _compute_loyalty_exchange_points(self):
-        """Điểm đổi thưởng: exchange confirmed + legacy records (point_type=False)."""
-        History = self.env['hlv.loyalty.history']
+        """Điểm đổi thưởng: tổng hợp (rollup) CHỈ ĐỂ XEM từ các tài khoản của
+        công ty — công ty không còn giữ pool điểm đổi thưởng riêng, mọi
+        việc đổi/trừ điểm thật sự xảy ra ở từng `hlv.loyalty.portal.account`.
+        """
         for partner in self:
-            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
-            records = History.search([
-                ('partner_id', 'in', all_ids),
-                ('point_type', 'in', ['exchange', False]),
-                ('state', 'in', ['confirmed', False]),
-            ])
-            partner.loyalty_exchange_points = sum(records.mapped('point_amount'))
+            partner.loyalty_exchange_points = sum(
+                partner.loyalty_portal_account_ids.mapped('loyalty_exchange_points')
+            )
 
+    @api.depends('loyalty_portal_account_ids.loyalty_pending_points')
     def _compute_loyalty_pending_points(self):
-        """Điểm exchange đang chờ xác nhận."""
-        History = self.env['hlv.loyalty.history']
+        """Điểm exchange đang chờ xác nhận — tổng hợp từ các tài khoản."""
         for partner in self:
-            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
-            records = History.search([
-                ('partner_id', 'in', all_ids),
-                ('point_type', '=', 'exchange'),
-                ('state', '=', 'pending'),
-            ])
-            partner.loyalty_pending_points = sum(records.mapped('point_amount'))
+            partner.loyalty_pending_points = sum(
+                partner.loyalty_portal_account_ids.mapped('loyalty_pending_points')
+            )
 
     def _get_loyalty_family_partner_ids(self):
         self.ensure_one()

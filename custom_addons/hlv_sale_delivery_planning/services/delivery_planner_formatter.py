@@ -16,6 +16,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         att_by_picking, so_packages_dict, so_status_dict,
         transfer_suggestions=None,
         page_kit_tmpl_ids=None, page_kit_bom_map=None, page_blocking_by_so=None,
+        page_kit_comp_free=None,
         with_flows=False,
     ):
         """
@@ -110,8 +111,12 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if so.warehouse_id
             else False
         )
-        kit_comp_true_free = {}
-        if kit_bom_map and so.warehouse_id and wh_stock_root:
+        # page_kit_comp_free (khi caller truyền vào) đã tính sẵn cho TOÀN TRANG — thay cho
+        # việc lặp lại 1 location search + 1 quant read_group MỖI đơn (bug hiệu năng thật, xem
+        # _batch_kit_component_free_stock()). Chỉ tính lại per-order khi caller KHÔNG truyền
+        # (None) — giữ tương thích cho các call site standalone/cũ.
+        kit_comp_true_free = dict(page_kit_comp_free) if page_kit_comp_free is not None else {}
+        if page_kit_comp_free is None and kit_bom_map and so.warehouse_id and wh_stock_root:
             all_comp_prod_ids = list(set(
                 comp.product_id.id
                 for bom in _kit_bom_values()

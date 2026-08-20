@@ -41,31 +41,7 @@ class MisaApiSaleOrder(http.Controller):
                     "error": "not_found",
                     "message": "Không tìm thấy đơn Odoo theo MISA ID %s." % misa_order_id,
                 }
-
-            # Khóa OUT và tạo queue trong cùng transaction. Queue chưa trigger
-            # ngay để request /resync kế tiếp của extension tái sử dụng rồi đánh
-            # thức cron. Nếu sale reload làm mất callback, cron phút vẫn xử lý
-            # queue này; không còn trạng thái khóa thành công nhưng chưa gửi yêu
-            # cầu thay đổi.
-            with request.env.cr.savepoint():
-                lock_started = not order.misa_sale_edit_locked
-                order.with_context(
-                    misa_defer_sale_edit_notification=True,
-                ).action_misa_start_sale_edit()
-                enqueue_result = request.env(user=admin_user)[
-                    'misa.sync.queue'
-                ].sudo().enqueue_sale_order(
-                    misa_order_id=misa_order_id,
-                    payload={
-                        'misa_order_id': misa_order_id,
-                        'create_when_missing': False,
-                        'source': 'sale_edit_lock',
-                        'notify_sale_edit_lock': lock_started,
-                    },
-                    trigger_processor=False,
-                )
-                queue = enqueue_result['queue']
-
+            order.action_misa_start_sale_edit()
             return {
                 "ok": True,
                 "order_id": order.id,
@@ -73,9 +49,6 @@ class MisaApiSaleOrder(http.Controller):
                 "misa_order_id": order.misa_id,
                 "misa_sale_edit_locked": True,
                 "misa_sale_edit_locked_at": fields.Datetime.to_string(order.misa_sale_edit_locked_at),
-                "queued": True,
-                "queue_id": queue.id,
-                "deduplicated": not enqueue_result["created"],
                 "message": "Đã khóa xác nhận phiếu xuất kho; PICK/PACK vẫn xử lý bình thường.",
             }
         except Exception as error:

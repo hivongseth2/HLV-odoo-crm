@@ -7,6 +7,7 @@
             <form string="Điều chỉnh điểm thủ công">
                 <group>
                     <field name="partner_id" readonly="1"/>
+                    <field name="account_id" options="{'no_create': True}"/>
                     <field name="point_type" widget="radio"/>
                     <field name="point_amount"
                            help="Số dương (+) để cộng điểm, số âm (-) để trừ điểm"/>

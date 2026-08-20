@@ -19,6 +19,12 @@
                         class="btn-secondary"
                         invisible="not active"
                         groups="sales_team.group_sale_manager"/>
+                <button name="action_open_point_transfer_wizard"
+                        string="Chuyển điểm"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="not active"
+                        groups="hlv_loyalty.group_loyalty_operator"/>
             </header>
             <sheet>
                 <div class="oe_title">
@@ -28,11 +34,25 @@
                 <group>
                     <group string="Thông tin tài khoản">
                         <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False),('active','=',True)]" context="{'show_vat': True}"/>
+                        <field name="buyer_name" placeholder="VD: Anh A - phòng thu mua 1"/>
                         <field name="portal_phone" placeholder="vd: 0912345678"/>
+                        <field name="default_earning_pct" placeholder="VD: 5 = 5%"/>
+                        <field name="is_default"/>
                         <field name="active"/>
                     </group>
                     <group string="Mật khẩu">
                         <field name="password_hash" string="Hash (chỉ đọc)" readonly="1"/>
+                    </group>
+                </group>
+                <group string="Điểm Loyalty của tài khoản này">
+                    <group>
+                        <field name="loyalty_total_points" readonly="1"/>
+                        <field name="loyalty_exchange_points" readonly="1"/>
+                    </group>
+                    <group>
+                        <field name="loyalty_pending_points" readonly="1"/>
+                        <field name="loyalty_reward_pending_points" readonly="1"/>
+                        <field name="loyalty_exchange_available_points" readonly="1"/>
                     </group>
                 </group>
             </sheet>
@@ -47,8 +67,13 @@
     <field name="arch" type="xml">
         <list string="Tài khoản Portal Loyalty" editable="bottom">
             <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False),('active','=',True)]" context="{'show_vat': True}"/>
+            <field name="buyer_name" string="Tên thu mua" optional="show"/>
             <field name="username"/>
             <field name="portal_phone"/>
+            <field name="default_earning_pct" string="% mặc định" optional="show"/>
+            <field name="is_default" optional="show"/>
+            <field name="loyalty_total_points" string="Điểm xếp hạng" sum="Tổng" optional="show"/>
+            <field name="loyalty_exchange_points" string="Điểm đổi thưởng" sum="Tổng" optional="show"/>
             <field name="active"/>
             <button name="action_reset_password_wizard" string="Reset mật khẩu"
                     type="object" icon="fa-key" class="btn-sm"
@@ -57,6 +82,10 @@
                     type="object" icon="fa-refresh" class="btn-sm"
                     invisible="not active"
                     groups="sales_team.group_sale_manager"/>
+            <button name="action_open_point_transfer_wizard" string="Chuyển điểm"
+                    type="object" icon="fa-exchange" class="btn-sm"
+                    invisible="not active"
+                    groups="hlv_loyalty.group_loyalty_operator"/>
         </list>
     </field>
 </record>

@@ -16,7 +16,7 @@
                   class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
                 Tìm: "<t t-esc="state.searchQuery"/>"
                 <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
-                   t-on-click="() => { if (this._searchDebounceTimer) { clearTimeout(this._searchDebounceTimer); this._searchDebounceTimer = null; } state.searchQuery = ''; this.fetchData(); }"></i>
+                   t-on-click="() => this.clearSearchAndFetch()"></i>
             </span>
 
             <span t-if="state.filterWarehouseId !== 'all'"

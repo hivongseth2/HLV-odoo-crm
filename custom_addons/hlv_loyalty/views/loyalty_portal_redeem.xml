@@ -57,18 +57,6 @@
                             </div>
                         </div>
                     </t>
-                    <t t-if="program and program.cash_rate_per_point">
-                        <div class="sr-rdm-stat sr-rdm-stat-rate">
-                            <span class="ms sr-rdm-stat-icon">info</span>
-                            <div>
-                                <div class="sr-rdm-stat-lbl">Tỷ lệ đổi tiền</div>
-                                <div class="sr-rdm-stat-val">
-                                    <t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ
-                                </div>
-                                <div class="sr-rdm-stat-unit">/ 1 điểm ĐT</div>
-                            </div>
-                        </div>
-                    </t>
                 </div>
             </div>
             <div class="sr-rdm-hero-wm" aria-hidden="true"><span class="ms ms-xl">redeem</span></div>
@@ -268,10 +256,6 @@
                                 <span class="sr-cash-side-unit">points khả dụng</span>
                             </div>
                             <t t-if="program and program.cash_rate_per_point > 0">
-                                <div class="sr-cash-side-rate">
-                                    <span class="ms">swap_horiz</span>
-                                    1 điểm = <strong><t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ</strong>
-                                </div>
                                 <div class="sr-cash-side-max">
                                     Tối đa có thể đổi:<br/>
                                     <strong><t t-out="'{:,.0f}'.format(exchange_available_points * program.cash_rate_per_point)"/>đ</strong>

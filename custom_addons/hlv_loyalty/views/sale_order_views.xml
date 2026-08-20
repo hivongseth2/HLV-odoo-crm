@@ -30,6 +30,23 @@
                             confirm="Bạn có chắc muốn xóa Voucher khỏi đơn hàng?"/>
                 </div>
             </xpath>
+            <!-- Tab chọn tài khoản Loyalty cộng điểm cho đơn này -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Tài khoản cộng điểm Loyalty" name="loyalty_account_lines">
+                    <field name="loyalty_root_partner_id" invisible="1"/>
+                    <p class="text-muted">
+                        Chọn 1 hoặc nhiều tài khoản Loyalty để chia điểm của đơn này theo %.
+                        % tự điền theo cấu hình mặc định của tài khoản, có thể sửa lại.
+                        Nếu để trống, toàn bộ điểm sẽ cộng cho tài khoản mặc định của công ty.
+                    </p>
+                    <field name="loyalty_account_line_ids">
+                        <list editable="bottom">
+                            <field name="account_id" options="{'no_create': True}"/>
+                            <field name="earning_pct" string="% cộng điểm"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
         </field>
     </record>
 </odoo>

@@ -27,6 +27,14 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_print_status='all', filter_shipper_received='all',
         domain=None, include_stats=True, filter_mine=False,
     ):
+        # Tắt prefetch "kéo theo cả nhóm field" của Odoo cho toàn bộ hàm này — bình thường truy
+        # cập 1 field (VD so.warehouse_id, so.order_line) sẽ tự kéo theo các field "cùng nhóm"
+        # khác, trong đó có field computed rất nặng của module mail/renting (tracking, display_name
+        # theo ngữ cảnh cho thuê) mà dashboard này không dùng đến. Đo thực tế: đây là phần lớn còn
+        # lại của ~11s/request sau khi đã bỏ display_name khỏi các search_read (xem
+        # bin/profile_cold_start_full.py). Chỉ ảnh hưởng trong phạm vi hàm này (context riêng của
+        # self.env), không đụng gì tới các nơi khác trong hệ thống.
+        self = self.with_context(prefetch_fields=False)
 
         search_domain = self._build_search_domain(
             search_query, filter_warehouse_id,
@@ -131,6 +139,12 @@ class DeliveryPlannerService(models.AbstractModel):
         # dùng 1 location + 1 quant + 1 moves query cho toàn trang.
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
 
+        # Batch tồn kho khả dụng của component Kit cho TOÀN TRANG — thay vì mỗi đơn tự tính
+        # lại (1 location search + 1 quant read_group), lặp lại N lần cùng 1 kết quả nếu N đơn
+        # cùng kho. Đo thực tế: đây là bước tốn nhất trong _format_dashboard_order (~3.2s/6.2s
+        # cho 372 đơn cùng kho, xem bin/profile_format_dashboard_order.py).
+        page_kit_comp_free = self._batch_kit_component_free_stock(page_sales, page_kit_bom_map)
+
         # Optimization: pre-warm prefetch cache for picking graph used by _build_flow_nodes.
         # Without this, each per-SO call to _build_flow_nodes triggers many SQL round-trips
         # (move_dest_ids, move_orig_ids, picking_id, picking_type_id...) for that SO alone.
@@ -164,6 +178,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
                 page_blocking_by_so=page_blocking_by_so,
+                page_kit_comp_free=page_kit_comp_free,
             )
             for so in page_sales
         ]
@@ -251,6 +266,8 @@ class DeliveryPlannerService(models.AbstractModel):
         if not order_ids:
             return {'orders': [], 'removed_ids': []}
 
+        # Xem giải thích ở get_dashboard_data() — tắt prefetch "kéo theo cả nhóm field".
+        self = self.with_context(prefetch_fields=False)
         ids = [int(i) for i in order_ids if i]
         page_sales = self.env['sale.order'].browse(ids).exists()
         existing_ids = set(page_sales.ids)
@@ -343,6 +360,7 @@ class DeliveryPlannerService(models.AbstractModel):
 
         page_blocking_by_so = self._batch_blocking_moves(page_sales)
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
+        page_kit_comp_free = self._batch_kit_component_free_stock(page_sales, page_kit_bom_map)
 
         # Pre-warm prefetch for the picking graph (same as full load).
         # Subset is bus-driven (in-place card update); flows are loaded on
@@ -368,6 +386,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
                 page_blocking_by_so=page_blocking_by_so,
+                page_kit_comp_free=page_kit_comp_free,
             )
             for so in page_sales
         ]

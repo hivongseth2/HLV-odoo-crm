@@ -15,6 +15,14 @@ class HlvLoyaltyHistory(models.Model):
     partner_id = fields.Many2one(
         'res.partner', string='Khách hàng', required=True,
         ondelete='cascade', index=True,
+        help='Công ty gốc (để đối soát/rollup) — không phải nơi giữ số dư có thể '
+             'tiêu, xem account_id.',
+    )
+    account_id = fields.Many2one(
+        'hlv.loyalty.portal.account', string='Tài khoản Loyalty',
+        ondelete='cascade', index=True,
+        help='Tài khoản Loyalty thực sự sở hữu điểm này. Mỗi công ty có thể có '
+             'nhiều tài khoản, mỗi tài khoản có số dư riêng.',
     )
     date = fields.Datetime(
         string='Ngày giao dịch', required=True,
@@ -25,6 +33,7 @@ class HlvLoyaltyHistory(models.Model):
         ('earn', 'Tích điểm'),
         ('redeem', 'Đổi thưởng'),
         ('return', 'Hoàn hàng'),
+        ('transfer', 'Chuyển điểm'),
         ('manual', 'Điều chỉnh thủ công'),
     ], string='Loại giao dịch', required=True, index=True)
 

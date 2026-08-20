@@ -41,33 +41,75 @@ def _get_payment_status_map(reward_requests):
     return {r.id: r.misa_payment_is_paid for r in cash_requests}
 
 
-def _load_partner_data(partner):
-    """Load dashboard data for a partner — recent 5 rows for history/vouchers."""
-    root = partner._get_loyalty_root()
-    # Collect root + all direct children to catch points on child contacts/sub-companies
-    all_partner_ids = [root.id] + root.child_ids.ids
+def _account_or_legacy_domain(account, root):
+    """Domain: bản ghi thuộc CHÍNH tài khoản đang đăng nhập, HOẶC dữ liệu cũ
+    (trước khi có tính năng nhiều tài khoản/công ty, account_id còn rỗng)
+    thuộc cùng công ty — để không "mất" lịch sử của khách trong lúc chờ
+    admin chạy wizard migrate dữ liệu cũ vào tài khoản.
+    """
+    family_ids = [root.id] + root.child_ids.ids
+    return [
+        '|',
+        ('account_id', '=', account.id),
+        '&', ('account_id', '=', False), ('partner_id', 'in', family_ids),
+    ]
+
+
+def _owns_record(rec, account, root):
+    """True nếu bản ghi (voucher/reward request) thuộc tài khoản đang đăng
+    nhập, hoặc là dữ liệu cũ chưa migrate thuộc cùng công ty (xem
+    `_account_or_legacy_domain`)."""
+    if rec.account_id:
+        return rec.account_id.id == account.id
+    return rec.partner_id.id in root._get_loyalty_family_partner_ids()
+
+
+def _filter_visible_reward_requests(requests):
+    """Chỉ hiện cho khách các yêu cầu đổi thưởng ĐANG cần theo dõi:
+    đang chờ xử lý, hoặc đã xử lý nhưng là đổi tiền mặt và CHƯA thực nhận
+    tiền (còn cần biết trạng thái thanh toán). Yêu cầu đã xử lý xong (quà
+    đã nhận / tiền đã nhận) hoặc đã hủy thì ẩn khỏi lịch sử khách xem —
+    theo yêu cầu chỉ hiện các yêu cầu đang xử lý trên Portal.
+    """
+    payment_map = _get_payment_status_map(requests)
+    return requests.filtered(
+        lambda r: r.state == 'pending'
+        or (r.state == 'done' and r.request_type == 'cash' and not payment_map.get(r.id, False))
+    )
+
+
+def _load_account_data(account):
+    """Load dashboard data cho 1 tài khoản Portal — điểm đổi thưởng và
+    lịch sử/voucher 'của tôi' scope theo CHÍNH tài khoản này (mỗi tài
+    khoản có pool điểm đổi thưởng riêng); điểm xếp hạng + hạng thành viên
+    vẫn hiển thị theo công ty (cộng dồn từ mọi tài khoản, xem
+    `res.partner._compute_loyalty_total_points`).
+    """
+    root = account.partner_id._get_loyalty_root()
+    scope_domain = _account_or_legacy_domain(account, root)
+    # Lịch sử hiện cho khách chỉ gồm các dòng CỘNG điểm (point_amount dương)
+    # — tức phần tích lũy chưa đổi (bao gồm cả tích điểm mua hàng, cộng tay,
+    # nhận chuyển điểm...); các dòng trừ điểm (đổi thưởng, hoàn hàng, chuyển
+    # đi, trừ tay) không hiện ở đây.
+    history_domain = scope_domain + [('point_amount', '>', 0)]
     tiers = request.env['hlv.loyalty.tier'].sudo().search(
         [('active', '=', True)], order='min_points asc'
     )
     program = request.env['hlv.loyalty.program'].sudo().search(
         [('active', '=', True)], limit=1
     )
-    # Recent 5 active vouchers + total count
-    active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
-        ('partner_id', 'in', all_partner_ids),
-        ('state', '=', 'active'),
-    ], limit=5)
-    active_vouchers_count = request.env['hlv.loyalty.voucher'].sudo().search_count([
-        ('partner_id', 'in', all_partner_ids),
-        ('state', '=', 'active'),
-    ])
-    # Recent 5 history entries + total count
-    recent_history = request.env['hlv.loyalty.history'].sudo().search([
-        ('partner_id', 'in', all_partner_ids),
-    ], order='date desc', limit=5)
-    history_count = request.env['hlv.loyalty.history'].sudo().search_count([
-        ('partner_id', 'in', all_partner_ids),
-    ])
+    # Recent 5 active vouchers + total count (của riêng tài khoản này)
+    active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search(
+        scope_domain + [('state', '=', 'active')], limit=5
+    )
+    active_vouchers_count = request.env['hlv.loyalty.voucher'].sudo().search_count(
+        scope_domain + [('state', '=', 'active')]
+    )
+    # Recent 5 history entries + total count (của riêng tài khoản này)
+    recent_history = request.env['hlv.loyalty.history'].sudo().search(
+        history_domain, order='date desc', limit=5
+    )
+    history_count = request.env['hlv.loyalty.history'].sudo().search_count(history_domain)
     next_tier = None
     if root.loyalty_tier_id:
         next_tier = request.env['hlv.loyalty.tier'].sudo().search([
@@ -85,10 +127,10 @@ def _load_partner_data(partner):
         'next_tier': next_tier,
         'masked_phone': _mask_phone(root.phone),
         'masked_email': _mask_email(root.email),
-        'exchange_points': root.loyalty_exchange_points,
-        'reward_pending_points': root.loyalty_reward_pending_points,
-        'exchange_available_points': root.loyalty_exchange_available_points,
-        'pending_points': root.loyalty_pending_points,
+        'exchange_points': account.loyalty_exchange_points,
+        'reward_pending_points': account.loyalty_reward_pending_points,
+        'exchange_available_points': account.loyalty_exchange_available_points,
+        'pending_points': account.loyalty_pending_points,
         'fmt_vn_date': lambda dt: _vn_datetime(dt, '%d Thg %m, %Y'),
         'fmt_vn_time': lambda dt: _vn_datetime(dt, '%H:%M'),
     }
@@ -148,7 +190,7 @@ class LoyaltyPublicPortal(http.Controller):
         account = _get_current_account()
         if not account:
             return request.redirect('/loyalty')
-        data = _load_partner_data(account.partner_id)
+        data = _load_account_data(account)
         data['account'] = account
         # Show portal_phone (login phone) in header, not partner.phone
         if account.portal_phone:
@@ -168,14 +210,14 @@ class LoyaltyPublicPortal(http.Controller):
 
         new_phone = (post.get('new_phone') or '').strip()
         if not new_phone:
-            data = _load_partner_data(account.partner_id)
+            data = _load_account_data(account)
             data['account'] = account
             data['phone_error'] = 'Số điện thoại không được để trống.'
             data['show_phone_modal'] = True
             return request.render('hlv_loyalty.loyalty_public_dashboard', data)
 
         if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
-            data = _load_partner_data(account.partner_id)
+            data = _load_account_data(account)
             data['account'] = account
             data['phone_error'] = 'Số điện thoại không hợp lệ.'
             data['show_phone_modal'] = True
@@ -209,7 +251,7 @@ class LoyaltyPublicPortal(http.Controller):
             error = 'Mật khẩu mới phải có ít nhất 6 ký tự.'
 
         if error:
-            data = _load_partner_data(account.partner_id)
+            data = _load_account_data(account)
             data['account'] = account
             data['pw_error'] = error
             data['show_pw_modal'] = True
@@ -218,7 +260,7 @@ class LoyaltyPublicPortal(http.Controller):
         try:
             account.sudo().set_password(new_password)
         except UserError as e:
-            data = _load_partner_data(account.partner_id)
+            data = _load_account_data(account)
             data['account'] = account
             data['pw_error'] = str(e)
             data['show_pw_modal'] = True
@@ -235,7 +277,6 @@ class LoyaltyPublicPortal(http.Controller):
         if not account:
             return request.redirect('/loyalty')
         root = account.partner_id._get_loyalty_root()
-        all_partner_ids = [root.id] + root.child_ids.ids
 
         # ── Filter params ──────────────────────────────────────────────────
         active_pt = kwargs.get('pt', 'all')   # all | ranking | exchange
@@ -245,7 +286,10 @@ class LoyaltyPublicPortal(http.Controller):
         if active_st not in ('all', 'pending', 'confirmed', 'cancelled'):
             active_st = 'all'
 
-        domain = [('partner_id', 'in', all_partner_ids)]
+        # Chỉ hiện các dòng CỘNG điểm (point_amount dương) — phần tích lũy
+        # chưa đổi; các dòng trừ điểm (đổi thưởng/hoàn hàng/chuyển đi/trừ tay)
+        # không hiện cho khách ở trang này.
+        domain = _account_or_legacy_domain(account, root) + [('point_amount', '>', 0)]
         if active_pt != 'all':
             domain.append(('point_type', '=', active_pt))
         if active_st != 'all':
@@ -255,24 +299,13 @@ class LoyaltyPublicPortal(http.Controller):
             domain, order='date desc'
         )
 
-        # Với các giao dịch 'redeem' phát sinh từ yêu cầu đổi thưởng của khách
-        # (không phải do admin đổi trực tiếp), tìm lại yêu cầu gốc qua
-        # history_id để hiện tình trạng thanh toán + link xem chi tiết.
-        redeem_history_ids = all_history.filtered(lambda h: h.transaction_type == 'redeem').ids
-        reward_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
-            ('history_id', 'in', redeem_history_ids),
-        ]) if redeem_history_ids else request.env['hlv.loyalty.reward.request']
-        request_by_history_id = {rr.history_id.id: rr for rr in reward_requests}
-
-        data = _load_partner_data(account.partner_id)
+        data = _load_account_data(account)
         data['account'] = account
         if account.portal_phone:
             data['masked_phone'] = _mask_phone(account.portal_phone)
         data['all_history'] = all_history
         data['active_pt'] = active_pt
         data['active_st'] = active_st
-        data['request_by_history_id'] = request_by_history_id
-        data['payment_status_by_request'] = _get_payment_status_map(reward_requests)
         return request.render('hlv_loyalty.loyalty_portal_history_full', data)
 
     # ── Reward redemption page ────────────────────────────────────────────
@@ -289,7 +322,6 @@ class LoyaltyPublicPortal(http.Controller):
             active_tab = 'gift'
 
         root = account.partner_id._get_loyalty_root()
-        all_partner_ids = [root.id] + root.child_ids.ids
 
         program = request.env['hlv.loyalty.program'].sudo().search(
             [('active', '=', True)], limit=1
@@ -297,11 +329,11 @@ class LoyaltyPublicPortal(http.Controller):
         packages = request.env['hlv.loyalty.voucher.package'].sudo().search([
             ('active', '=', True),
         ], order='points_required asc')
-        my_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
-            ('partner_id', 'in', all_partner_ids),
-        ], order='date_request desc', limit=50)
+        my_requests = _filter_visible_reward_requests(request.env['hlv.loyalty.reward.request'].sudo().search(
+            _account_or_legacy_domain(account, root), order='date_request desc', limit=200,
+        ))[:50]
 
-        data = _load_partner_data(account.partner_id)
+        data = _load_account_data(account)
         data.update({
             'account': account,
             'active_tab': active_tab,
@@ -335,18 +367,19 @@ class LoyaltyPublicPortal(http.Controller):
         if not pkg.exists() or not pkg.active:
             return request.redirect('/loyalty/redeem?tab=gift')
 
-        balance = root.loyalty_exchange_points
-        avail = root.loyalty_exchange_available_points
+        balance = account.loyalty_exchange_points
+        avail = account.loyalty_exchange_available_points
         if avail < pkg.points_required:
             return request.redirect(
                 f'/loyalty/redeem?tab=gift&error_msg='
                 f'Không đủ điểm khả dụng. Bạn còn {avail} điểm, cần {pkg.points_required} điểm. '
-                f'Đang treo {root.loyalty_reward_pending_points} điểm trong yêu cầu chờ xử lý.'
+                f'Đang treo {account.loyalty_reward_pending_points} điểm trong yêu cầu chờ xử lý.'
             )
 
         # Create and immediately process (gift = no admin approval needed)
         rq = request.env['hlv.loyalty.reward.request'].sudo().create({
             'partner_id': root.id,
+            'account_id': account.id,
             'request_type': 'gift',
             'package_id': pkg.id,
             'balance_at_request': balance,
@@ -368,8 +401,8 @@ class LoyaltyPublicPortal(http.Controller):
             return request.redirect('/loyalty')
 
         root = account.partner_id._get_loyalty_root()
-        balance = root.loyalty_exchange_points
-        avail = root.loyalty_exchange_available_points
+        balance = account.loyalty_exchange_points
+        avail = account.loyalty_exchange_available_points
 
         points_to_redeem = int(post.get('points_to_redeem') or 0)
         bank_name = (post.get('bank_name') or '').strip()
@@ -383,7 +416,7 @@ class LoyaltyPublicPortal(http.Controller):
         elif points_to_redeem > avail:
             errors.append(
                 f'Không đủ điểm khả dụng. Bạn còn {avail:,} điểm, yêu cầu {points_to_redeem:,} điểm. '
-                f'Đang treo {root.loyalty_reward_pending_points:,} điểm trong yêu cầu chờ xử lý.'
+                f'Đang treo {account.loyalty_reward_pending_points:,} điểm trong yêu cầu chờ xử lý.'
             )
         if not bank_name:
             errors.append('Vui lòng nhập tên ngân hàng.')
@@ -400,11 +433,10 @@ class LoyaltyPublicPortal(http.Controller):
             packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
                 [('active', '=', True)], order='points_required asc'
             )
-            all_partner_ids = [root.id] + root.child_ids.ids
-            my_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
-                ('partner_id', 'in', all_partner_ids),
-            ], order='date_request desc', limit=50)
-            data = _load_partner_data(account.partner_id)
+            my_requests = _filter_visible_reward_requests(request.env['hlv.loyalty.reward.request'].sudo().search(
+                _account_or_legacy_domain(account, root), order='date_request desc', limit=200,
+            ))[:50]
+            data = _load_account_data(account)
             data.update({
                 'account': account,
                 'active_tab': 'cash',
@@ -421,6 +453,7 @@ class LoyaltyPublicPortal(http.Controller):
 
         request.env['hlv.loyalty.reward.request'].sudo().create({
             'partner_id': root.id,
+            'account_id': account.id,
             'request_type': 'cash',
             'points_to_redeem': points_to_redeem,
             'bank_name': bank_name,
@@ -444,7 +477,7 @@ class LoyaltyPublicPortal(http.Controller):
 
         root = account.partner_id._get_loyalty_root()
         req = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
-        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+        if not req.exists() or not _owns_record(req, account, root):
             return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu cần hủy.')
         try:
             req.action_cancel()
@@ -462,7 +495,7 @@ class LoyaltyPublicPortal(http.Controller):
 
         root = account.partner_id._get_loyalty_root()
         req = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
-        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+        if not req.exists() or not _owns_record(req, account, root):
             return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu cần cập nhật.')
         try:
             req.action_update_bank_info(
@@ -482,7 +515,7 @@ class LoyaltyPublicPortal(http.Controller):
 
         root = account.partner_id._get_loyalty_root()
         rq = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
-        if not rq.exists() or rq.partner_id.id not in root._get_loyalty_family_partner_ids():
+        if not rq.exists() or not _owns_record(rq, account, root):
             return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu.')
 
         payment_is_paid = _get_payment_status_map(rq).get(rq.id)
@@ -506,16 +539,14 @@ class LoyaltyPublicPortal(http.Controller):
         if not account:
             return request.redirect('/loyalty')
         root = account.partner_id._get_loyalty_root()
-        all_partner_ids = [root.id] + root.child_ids.ids
-        all_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
-            ('partner_id', 'in', all_partner_ids),
-            ('state', '=', 'active'),
-        ])
-        inactive_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
-            ('partner_id', 'in', all_partner_ids),
-            ('state', 'in', ['used', 'expired', 'cancelled']),
-        ])
-        data = _load_partner_data(account.partner_id)
+        scope_domain = _account_or_legacy_domain(account, root)
+        all_vouchers = request.env['hlv.loyalty.voucher'].sudo().search(
+            scope_domain + [('state', '=', 'active')]
+        )
+        inactive_vouchers = request.env['hlv.loyalty.voucher'].sudo().search(
+            scope_domain + [('state', 'in', ['used', 'expired', 'cancelled'])]
+        )
+        data = _load_account_data(account)
         data['account'] = account
         if account.portal_phone:
             data['masked_phone'] = _mask_phone(account.portal_phone)

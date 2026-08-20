@@ -17,6 +17,24 @@ class SaleOrder(models.Model):
         string='Mã Voucher', copy=False,
         help='Nhập mã Voucher để áp dụng giảm giá',
     )
+    loyalty_root_partner_id = fields.Many2one(
+        'res.partner', string='Công ty gốc Loyalty',
+        compute='_compute_loyalty_root_partner_id',
+        help='Dùng làm domain chọn tài khoản Loyalty cộng điểm cho đơn này.',
+    )
+    loyalty_account_line_ids = fields.One2many(
+        'hlv.loyalty.sale.order.account.line', 'order_id',
+        string='Tài khoản cộng điểm Loyalty',
+        help='Chọn 1 hoặc nhiều tài khoản Loyalty để chia điểm của đơn này theo %. '
+             'Nếu để trống, toàn bộ điểm sẽ cộng cho tài khoản mặc định của công ty.',
+    )
+
+    @api.depends('partner_id')
+    def _compute_loyalty_root_partner_id(self):
+        for order in self:
+            order.loyalty_root_partner_id = (
+                order.partner_id._get_loyalty_root() if order.partner_id else False
+            )
 
     def action_apply_loyalty_voucher(self):
         """Áp dụng mã Voucher vào đơn hàng."""
@@ -350,3 +368,40 @@ class SaleOrderLine(models.Model):
             line.x_studio_loyalty_discount_amount = (
                 line._get_loyalty_discount_amount()
             )
+
+
+class HlvLoyaltySaleOrderAccountLine(models.Model):
+    _name = 'hlv.loyalty.sale.order.account.line'
+    _description = 'Phân bổ tài khoản cộng điểm Loyalty theo đơn bán'
+    _rec_name = 'account_id'
+
+    order_id = fields.Many2one(
+        'sale.order', string='Đơn bán hàng', required=True,
+        ondelete='cascade', index=True,
+    )
+    account_id = fields.Many2one(
+        'hlv.loyalty.portal.account', string='Tài khoản Loyalty', required=True,
+        domain="[('partner_id', '=', parent.loyalty_root_partner_id), ('active', '=', True)]",
+    )
+    earning_pct = fields.Float(
+        string='% cộng điểm', digits=(5, 2),
+        help='% áp dụng lên tổng tiền hàng thực giao của đơn để tính điểm đổi thưởng '
+             'cho tài khoản này (độc lập với % của các tài khoản khác trên cùng đơn).',
+    )
+
+    @api.onchange('account_id')
+    def _onchange_account_id(self):
+        if self.account_id:
+            self.earning_pct = self.account_id.default_earning_pct
+
+    @api.constrains('order_id', 'account_id')
+    def _check_account_same_company(self):
+        for line in self:
+            if not line.order_id.partner_id:
+                continue
+            root = line.order_id.partner_id._get_loyalty_root()
+            if line.account_id.partner_id.id != root.id:
+                raise ValidationError(
+                    f'Tài khoản Loyalty "{line.account_id.display_name}" không thuộc '
+                    f'công ty của khách hàng trên đơn "{line.order_id.name}".'
+                )
