@@ -111,6 +111,69 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         }
 
     @api.model
+    def _batch_kit_component_free_stock(self, page_sales, kit_bom_map):
+        """
+        Batch tính tồn khả dụng (quantity - reserved_quantity) cho TẤT CẢ sản phẩm component
+        của Kit (phantom BOM) trên toàn trang, theo từng kho — MỘT LẦN duy nhất.
+
+        Trước đây _format_dashboard_order tự tính lại cái này (1 location search + 1 quant
+        read_group) cho MỖI đơn riêng lẻ — nếu N đơn cùng kho thì lặp lại N lần một kết quả
+        giống hệt nhau. Đo thực tế: 372 đơn cùng kho -> read_group gọi 372 lần, chiếm ~3.2s/6.2s
+        tổng thời gian format trang (xem bin/profile_format_dashboard_order.py).
+
+        Trả về: {(component_product_id, warehouse_id): free_qty}
+        """
+        if not page_sales or not kit_bom_map:
+            return {}
+
+        seen_bom_ids = set()
+        all_comp_prod_ids = set()
+        for bom in (
+            list(kit_bom_map.get('by_product', {}).values())
+            + list(kit_bom_map.get('by_template', {}).values())
+        ):
+            if not bom or bom.id in seen_bom_ids:
+                continue
+            seen_bom_ids.add(bom.id)
+            for comp in bom.bom_line_ids:
+                if comp.product_id:
+                    all_comp_prod_ids.add(comp.product_id.id)
+
+        if not all_comp_prod_ids:
+            return {}
+
+        wh_ids = {so.warehouse_id.id for so in page_sales if so.warehouse_id}
+        if not wh_ids:
+            return {}
+
+        loc_to_wh_id = self._get_loc_to_wh_map(frozenset(wh_ids))
+        if not loc_to_wh_id:
+            return {}
+
+        kit_comp_free = {}
+        for row in self.env['stock.quant'].sudo().read_group(
+            domain=[
+                ('product_id', 'in', list(all_comp_prod_ids)),
+                ('location_id', 'in', list(loc_to_wh_id.keys())),
+            ],
+            fields=['quantity:sum', 'reserved_quantity:sum'],
+            groupby=['product_id', 'location_id'],
+            lazy=False,
+        ):
+            pid_raw = row.get('product_id')
+            loc_raw = row.get('location_id')
+            if not pid_raw or not loc_raw:
+                continue
+            pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
+            loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
+            wh_id = loc_to_wh_id.get(loc_id)
+            if wh_id:
+                free = max((row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0)
+                key = (pid, wh_id)
+                kit_comp_free[key] = kit_comp_free.get(key, 0.0) + free
+        return kit_comp_free
+
+    @api.model
     def _batch_transfer_suggestions(self, page_sales, product_availabilities):
         """
         Batch version: tính transfer_suggestions cho toàn trang trong 1-2 queries

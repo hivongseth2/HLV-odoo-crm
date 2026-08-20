@@ -131,6 +131,12 @@ class DeliveryPlannerService(models.AbstractModel):
         # dùng 1 location + 1 quant + 1 moves query cho toàn trang.
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
 
+        # Batch tồn kho khả dụng của component Kit cho TOÀN TRANG — thay vì mỗi đơn tự tính
+        # lại (1 location search + 1 quant read_group), lặp lại N lần cùng 1 kết quả nếu N đơn
+        # cùng kho. Đo thực tế: đây là bước tốn nhất trong _format_dashboard_order (~3.2s/6.2s
+        # cho 372 đơn cùng kho, xem bin/profile_format_dashboard_order.py).
+        page_kit_comp_free = self._batch_kit_component_free_stock(page_sales, page_kit_bom_map)
+
         # Optimization: pre-warm prefetch cache for picking graph used by _build_flow_nodes.
         # Without this, each per-SO call to _build_flow_nodes triggers many SQL round-trips
         # (move_dest_ids, move_orig_ids, picking_id, picking_type_id...) for that SO alone.
@@ -164,6 +170,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
                 page_blocking_by_so=page_blocking_by_so,
+                page_kit_comp_free=page_kit_comp_free,
             )
             for so in page_sales
         ]
@@ -343,6 +350,7 @@ class DeliveryPlannerService(models.AbstractModel):
 
         page_blocking_by_so = self._batch_blocking_moves(page_sales)
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
+        page_kit_comp_free = self._batch_kit_component_free_stock(page_sales, page_kit_bom_map)
 
         # Pre-warm prefetch for the picking graph (same as full load).
         # Subset is bus-driven (in-place card update); flows are loaded on
@@ -368,6 +376,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
                 page_blocking_by_so=page_blocking_by_so,
+                page_kit_comp_free=page_kit_comp_free,
             )
             for so in page_sales
         ]
