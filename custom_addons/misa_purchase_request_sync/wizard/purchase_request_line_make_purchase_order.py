@@ -5,24 +5,10 @@ from odoo.exceptions import UserError
 from odoo.tools.translate import _
 
 
-MISA_SUPPLIER_DOMAIN = [
-    ("parent_id", "=", False),
-    ("active", "=", True),
-    "|",
-    "|",
-    ("hlv_business_role", "=", "supplier"),
-    ("supplier_rank", ">", 0),
-    ("misa_account_object_id", "!=", False),
-]
-
-
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order"
 
-    supplier_id = fields.Many2one(
-        required=False,
-        domain=MISA_SUPPLIER_DOMAIN,
-    )
+    supplier_id = fields.Many2one(required=False)
 
     toggle_keep_description = fields.Boolean(
         string="Giữ Mô tả (Tất cả)",
@@ -267,8 +253,6 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order.item"
-
-    supplier_id = fields.Many2one(domain=MISA_SUPPLIER_DOMAIN)
 
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
