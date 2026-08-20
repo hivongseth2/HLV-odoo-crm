@@ -18,7 +18,6 @@ class PackScanController(http.Controller):
         delta = float(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
         move_id = kwargs.get("move_id")
-        _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}, move_id={move_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if picking.exists():
             try:
@@ -136,14 +135,12 @@ class PackScanController(http.Controller):
                     is_pkg = bool(l.package_id or l.result_package_id)
                     if not is_pkg:
                         candidate = l
-                        _logger.info(f"REDIRECT FOUND (Loose Line Match): ML {l.id} | No Package")
                         break
 
             # Bước 2: Bỏ — KHÔNG fallback vào dòng đã đóng gói.
             # Nếu không tìm thấy loose line, trả về None để auto-find tạo dòng mới.
 
             if candidate:
-                _logger.info(f"REDIRECT EXECUTE: ML {target_ml.id} -> ML {candidate.id}")
                 target_ml = candidate
 
         if delta > 0:
