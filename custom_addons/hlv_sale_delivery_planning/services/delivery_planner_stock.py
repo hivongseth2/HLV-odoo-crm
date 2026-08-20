@@ -1,10 +1,43 @@
-from odoo import models
+from odoo import models, tools
 import pytz
 from odoo.fields import Date as OdooDate
 
 
 class DeliveryPlannerServiceStock(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
+
+    @tools.ormcache('wh_ids')
+    def _get_loc_to_wh_map(self, wh_ids):
+        """Quy đổi location nội bộ -> kho cha (dùng để gộp tồn quant theo kho). Cấu trúc
+        kho/location gần như không đổi (chỉ admin cấu hình lại mới đổi), nhưng trước đây bị
+        tính lại bằng vòng lặp lồng nhau (số location x số kho) MỖI REQUEST — cache theo tập
+        kho cần dùng để khỏi lặp lại. Cache tự hết khi worker restart; nếu admin đổi cấu trúc
+        kho/location lúc server đang chạy, cần restart hoặc gọi
+        _get_loc_to_wh_map.clear_cache(env['hlv.delivery.planner.service']) để thấy ngay."""
+        all_wh_objs = self.env['stock.warehouse'].browse(list(wh_ids))
+        root_loc_ids = [
+            (wh.view_location_id or wh.lot_stock_id).id
+            for wh in all_wh_objs
+            if wh.view_location_id or wh.lot_stock_id
+        ]
+        all_child_locs = self.env['stock.location'].sudo().search([
+            ('id', 'child_of', root_loc_ids), ('usage', '=', 'internal'),
+        ]) if root_loc_ids else self.env['stock.location']
+        loc_to_wh_id = {}
+        for loc in all_child_locs:
+            if not loc.parent_path:
+                continue
+            best_wh_id, best_pos = None, -1
+            for wh in all_wh_objs:
+                wh_root = wh.view_location_id or wh.lot_stock_id
+                if not wh_root:
+                    continue
+                pos = loc.parent_path.find(f'/{wh_root.id}/')
+                if pos > best_pos:
+                    best_pos, best_wh_id = pos, wh.id
+            if best_wh_id is not None:
+                loc_to_wh_id[loc.id] = best_wh_id
+        return loc_to_wh_id
 
     def _calculate_po_and_stock_status(
         self, sales, po_date_from, po_date_to, po_status,
@@ -207,28 +240,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         product_on_hand = {}
         loc_to_wh_id = {}
         if all_prod_ids_needed and all_needed_wh_ids:
-            all_wh_objs = self.env['stock.warehouse'].browse(list(all_needed_wh_ids))
-            root_loc_ids = [
-                (wh.view_location_id or wh.lot_stock_id).id
-                for wh in all_wh_objs
-                if wh.view_location_id or wh.lot_stock_id
-            ]
-            all_child_locs = self.env['stock.location'].sudo().search([
-                ('id', 'child_of', root_loc_ids), ('usage', '=', 'internal'),
-            ]) if root_loc_ids else self.env['stock.location']
-            for loc in all_child_locs:
-                if not loc.parent_path:
-                    continue
-                best_wh_id, best_pos = None, -1
-                for wh in all_wh_objs:
-                    wh_root = wh.view_location_id or wh.lot_stock_id
-                    if not wh_root:
-                        continue
-                    pos = loc.parent_path.find(f'/{wh_root.id}/')
-                    if pos > best_pos:
-                        best_pos, best_wh_id = pos, wh.id
-                if best_wh_id is not None:
-                    loc_to_wh_id[loc.id] = best_wh_id
+            loc_to_wh_id = self._get_loc_to_wh_map(frozenset(all_needed_wh_ids))
             all_cloc_ids = list(loc_to_wh_id.keys())
             if all_cloc_ids:
                 for row in self.env['stock.quant'].sudo().read_group(

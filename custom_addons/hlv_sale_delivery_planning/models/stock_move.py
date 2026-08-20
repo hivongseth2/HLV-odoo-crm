@@ -58,6 +58,9 @@ class StockMove(models.Model):
         # Reservation changed → stock status on dashboard may change
         if any(m.sale_line_id or (m.picking_id and m.picking_id.sale_id) for m in self[:5]):
             self._notify_delivery_planner_changed()
+        # Move này vừa GIỮ CHỖ (reserve) hàng — tồn "khả dụng" của sản phẩm giảm ngay lập
+        # tức đối với MỌI đơn khác đang chờ cùng sản phẩm, dù move này không thuộc đơn nào.
+        self._notify_delivery_planner_product_availability_changed()
         return res
 
     def _do_unreserve(self):
@@ -66,6 +69,10 @@ class StockMove(models.Model):
         res = super()._do_unreserve()
         if should_notify:
             self._notify_delivery_planner_changed()
+        # Move này vừa NHẢ CHỖ — tồn "khả dụng" tăng lại cho các đơn khác đang chờ cùng
+        # sản phẩm. Gọi SAU super() để product_id vẫn còn trên recordset (unreserve không
+        # xóa move, chỉ đổi state/quantity).
+        self._notify_delivery_planner_product_availability_changed()
         return res
 
     def _notify_delivery_planner_changed(self):
