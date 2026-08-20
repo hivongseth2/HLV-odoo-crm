@@ -114,6 +114,19 @@ export class DeliveryPlannerDisplayMixin {
         }, 350);
     }
 
+    /** Nút "x" xóa search — hủy debounce timer đang chờ (nếu có) rồi fetch ngay, tránh 1 lần
+     * gọi thừa sau đó khi timer cũ vẫn còn treo. Tách thành method riêng (thay vì inline
+     * nhiều dòng trong t-on-click) vì QWeb compiler không parse được arrow function có
+     * if(){...} lồng trong {...} ngay trong giá trị thuộc tính. */
+    async clearSearchAndFetch() {
+        if (this._searchDebounceTimer) {
+            clearTimeout(this._searchDebounceTimer);
+            this._searchDebounceTimer = null;
+        }
+        this.state.searchQuery = '';
+        await this.fetchData();
+    }
+
     async onTagFilterChange(ev) {
         this.state.filterTagIds = Array.from(ev.target.selectedOptions)
             .map(o => parseInt(o.value))
