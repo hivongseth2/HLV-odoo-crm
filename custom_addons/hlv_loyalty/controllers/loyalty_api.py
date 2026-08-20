@@ -2,6 +2,7 @@
 import base64
 import json
 import logging
+import re
 import requests
 from datetime import timedelta, timezone
 from odoo import fields as odoo_fields, http
@@ -504,6 +505,17 @@ class LoyaltyExternalAPI(http.Controller):
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
 
+    @staticmethod
+    def _account_for_root(root, phone=None):
+        """Tìm tài khoản loyalty của root partner (ưu tiên khớp phone)."""
+        Account = request.env['hlv.loyalty.portal.account'].sudo()
+        if phone:
+            acc = Account.search([('portal_phone', '=', phone), ('active', '=', True)], limit=1)
+            if acc:
+                return acc[0]
+        acc = Account.search([('partner_id', '=', root.id), ('active', '=', True)], limit=1)
+        return acc[0] if acc else None
+
     @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def tier_image(self, tier_id, **kwargs):
         tier = request.env['hlv.loyalty.tier'].sudo().with_context(bin_size=False).browse(tier_id)
@@ -578,11 +590,68 @@ class LoyaltyExternalAPI(http.Controller):
                 summary = self._partner_summary(root)
                 if phone:
                     summary['phone'] = phone
+                # Bổ sung thông tin tài khoản để app phân luồng đăng nhập
+                account = self._account_for_root(root, phone)
+                if account:
+                    summary['account_id'] = account.id
+                    summary['username'] = account.username
+                    summary['has_password'] = bool(account.password_hash)
+                    summary['is_default_password'] = account._verify_password('hlv@2026', account.password_hash)
                 results.append(summary)
 
         if not results:
             return self._json_err('Không tìm thấy khách hàng', status=404)
         return self._json_ok(results if len(results) > 1 else results[0])
+
+    @http.route('/api/v1/loyalty/auth/login', type='http',
+                auth='public', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    def auth_login(self, **kwargs):
+        """POST /api/v1/loyalty/auth/login
+        Body JSON: {"phone": "0901234567", "password": "..."} or {"login": "...", "password": "..."}
+
+        Xác thực tài khoản Portal (hlv.loyalty.portal.account) bằng SĐT/Username + Mật khẩu.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
+
+        body = self._request_json()
+        login_input = (kwargs.get('login') or kwargs.get('phone') or body.get('login') or body.get('phone') or '').strip()
+        password = (kwargs.get('password') or body.get('password') or '').strip()
+
+        if not login_input:
+            return self._json_err('Vui lòng nhập số điện thoại hoặc tên đăng nhập', status=400, code='MISSING_LOGIN')
+        if not password:
+            return self._json_err('Vui lòng nhập mật khẩu', status=400, code='MISSING_PASSWORD')
+
+        phone_normalized = self._normalize_vn_phone(login_input)
+        PortalAccount = request.env['hlv.loyalty.portal.account'].sudo()
+
+        domain = [('active', '=', True)]
+        if phone_normalized:
+            domain += ['|', ('username', '=', login_input), ('portal_phone', '=', phone_normalized)]
+        else:
+            domain += [('username', '=', login_input)]
+
+        existing_accounts = PortalAccount.search(domain, limit=1)
+        if not existing_accounts:
+            return self._json_err('Số điện thoại chưa đăng ký tài khoản loyalty', status=404, code='NOT_REGISTERED')
+
+        account = PortalAccount.authenticate(login_input, password)
+        if not account:
+            return self._json_err('Mật khẩu không chính xác. Vui lòng kiểm tra lại.', status=401, code='INVALID_PASSWORD')
+
+        root = account.partner_id._get_loyalty_root()
+        summary = self._partner_summary(root)
+        summary['phone'] = account.portal_phone or phone_normalized or login_input
+        summary['account_id'] = account.id
+        summary['username'] = account.username
+        if account.buyer_name:
+            summary['buyer_name'] = account.buyer_name
+
+        is_default = account._verify_password('hlv@2026', account.password_hash)
+        summary['is_default_password'] = is_default
+
+        return self._json_ok(summary)
 
     @http.route('/api/v1/loyalty/zalo/phone', type='http',
                 auth='public', methods=['POST'], csrf=False, cors='*')
@@ -1256,3 +1325,96 @@ class LoyaltyExternalAPI(http.Controller):
             'exchange_points_available': root.loyalty_exchange_available_points,
             'message': 'Yêu cầu đổi thưởng đã được hủy.',
         }
+
+    # ── Account management (đổi mật khẩu / đổi SĐT) ─────────────────────────
+
+    def _account_from_portal_phone_rpc(self, partner_id, phone):
+        """Xác thực partner_id + phone → trả về account (hoặc error dict)."""
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        except Exception:
+            return None, {'error': 'Invalid partner_id', 'code': 'INVALID_PARTNER_ID'}
+        if not partner.exists():
+            return None, {'error': 'Khach hang khong ton tai', 'code': 'PARTNER_NOT_FOUND'}
+
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None, {'error': 'Missing phone', 'code': 'MISSING_PHONE'}
+
+        root = partner._get_loyalty_root()
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            return None, {'error': 'Missing or invalid partner_id/phone', 'code': 'UNAUTHORIZED'}
+        return account, None
+
+    @http.route('/api/v1/loyalty/account/change-password', type='json',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def change_password(self, **kwargs):
+        """POST /api/v1/loyalty/account/change-password
+        Body: {"partner_id": 42, "phone": "0901234567",
+               "old_password": "...", "new_password": "...", "confirm_password": "..."}
+        """
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
+
+        account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
+
+        old_password = (kwargs.get('old_password') or '').strip()
+        new_password = (kwargs.get('new_password') or '').strip()
+        confirm_password = (kwargs.get('confirm_password') or '').strip()
+
+        if not old_password or not new_password or not confirm_password:
+            return {'error': 'Vui lòng điền đầy đủ thông tin', 'code': 'MISSING_FIELDS'}
+        if not account._verify_password(old_password, account.password_hash):
+            return {'error': 'Mật khẩu hiện tại không đúng', 'code': 'INVALID_OLD_PASSWORD'}
+        if new_password != confirm_password:
+            return {'error': 'Mật khẩu mới và xác nhận không khớp', 'code': 'PASSWORD_MISMATCH'}
+        if len(new_password) < 6:
+            return {'error': 'Mật khẩu mới phải có ít nhất 6 ký tự', 'code': 'PASSWORD_TOO_SHORT'}
+
+        try:
+            account.sudo().set_password(new_password)
+        except UserError as exc:
+            return {'error': str(exc), 'code': 'CHANGE_PASSWORD_FAILED'}
+
+        return {'success': True, 'message': 'Đổi mật khẩu thành công.'}
+
+    @http.route('/api/v1/loyalty/account/change-phone', type='json',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def change_phone(self, **kwargs):
+        """POST /api/v1/loyalty/account/change-phone
+        Body: {"partner_id": 42, "phone": "0901234567", "new_phone": "0909999999"}
+        """
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
+
+        account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
+
+        new_phone = (kwargs.get('new_phone') or '').strip()
+        if not new_phone:
+            return {'error': 'Số điện thoại mới không được để trống', 'code': 'MISSING_NEW_PHONE'}
+        if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
+            return {'error': 'Số điện thoại không hợp lệ', 'code': 'INVALID_PHONE'}
+
+        normalized = self._normalize_vn_phone(new_phone)
+        duplicate = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+            ('id', '!=', account.id),
+        ], limit=1)
+        if duplicate:
+            return {'error': 'Số điện thoại đã được sử dụng bởi tài khoản khác', 'code': 'PHONE_EXISTS'}
+
+        account.sudo().write({'portal_phone': new_phone})
+
+        return {'success': True, 'message': 'Đổi số điện thoại thành công.', 'new_phone': normalized}

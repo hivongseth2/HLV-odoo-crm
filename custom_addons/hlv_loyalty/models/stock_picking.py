@@ -61,71 +61,35 @@ class StockPicking(models.Model):
         )
 
         # ── Điểm xếp hạng: mỗi earning_amount tiền hàng = earning_points điểm ──
+        # (Tính 1 lần cho cả đơn — nếu có nhiều tài khoản, điểm này được
+        # CHIA theo % ở _split_loyalty_points_by_account, không tính lại
+        # riêng cho từng tài khoản để tránh mất điểm do làm tròn/mốc.)
         ranking_points = 0
         if delivered_subtotal > 0 and program.earning_amount > 0:
             ranking_points = int(delivered_subtotal / program.earning_amount) * program.earning_points
-        ranking_formula = self._format_loyalty_point_formula(
-            'Điểm xếp hạng',
-            delivered_subtotal,
-            program.earning_amount,
-            program.earning_points,
-            ranking_points,
-            multiplier_label='điểm/mốc',
-        )
-        ranking_formula_html = self._format_loyalty_point_formula_html(
-            'Điểm xếp hạng',
-            delivered_subtotal,
-            program.earning_amount,
-            program.earning_points,
-            ranking_points,
-            multiplier_label='điểm/mốc',
-        )
 
-        # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
-        exchange_points, exchange_formula, exchange_formula_html = (
-            self._compute_loyalty_exchange_points(program, delivered_lines, delivered_subtotal, partner)
+        # ── Điểm đổi thưởng: dựa trên tiền chiết khấu (1 lần cho cả đơn) ──
+        discount_amount, discount_details, discount_formula_source = (
+            self._compute_loyalty_discount_amount(delivered_lines, delivered_subtotal, partner)
         )
+        total_exchange_points = 0
+        if discount_amount > 0 and program.discount_per_point > 0:
+            total_exchange_points = int(discount_amount / program.discount_per_point)
 
-        if ranking_points <= 0 and exchange_points <= 0:
-            return
-
-        # Kiểm tra xem phiếu này đã tích điểm chưa (tránh duplicate)
-        existing = self.env['hlv.loyalty.history'].sudo().search([
-            ('picking_id', '=', self.id),
-            ('transaction_type', '=', 'earn'),
-        ])
-        if existing:
-            ranking_hist = existing.filtered(lambda hist: hist.point_type == 'ranking')[:1]
-            exchange_hist = existing.filtered(lambda hist: hist.point_type == 'exchange')[:1]
-            if ranking_hist:
-                # Điểm xếp hạng luôn tự động confirmed ngay khi tạo (đã vào
-                # số dư) → chỉ cập nhật công thức để đối chiếu, không tự
-                # sửa point_amount đã chốt.
-                ranking_hist.write({
-                    'point_formula': ranking_formula,
-                    'point_formula_html': ranking_formula_html,
-                })
-            if exchange_hist and exchange_hist.state == 'pending':
-                # Điểm đổi thưởng đang chờ xác nhận: CHƯA vào số dư khách
-                # hàng → an toàn để tính lại đúng số điểm mới nhất (VD:
-                # sale vừa sửa % CK loyalty trên dòng bán hàng, hoặc dữ
-                # liệu combo/kit vừa được tính đúng lại).
-                exchange_hist.write({
-                    'point_amount': exchange_points,
-                    'point_formula': exchange_formula,
-                    'point_formula_html': exchange_formula_html,
-                })
-            elif exchange_hist:
-                # Đã xác nhận (đã vào số dư) → chỉ cập nhật công thức để
-                # đối chiếu, không tự sửa point_amount đã chốt.
-                exchange_hist.write({
-                    'point_formula': exchange_formula,
-                    'point_formula_html': exchange_formula_html,
-                })
+        if ranking_points <= 0 and total_exchange_points <= 0:
             return
 
         # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
         root_partner = partner._get_loyalty_root()
+
+        allocations = self._get_loyalty_account_allocations(sale_order, root_partner)
+        if not allocations:
+            return
+
+        shares = self._split_loyalty_points_by_account(
+            allocations, delivered_subtotal, discount_amount, program, ranking_points,
+            discount_formula_source, discount_details,
+        )
 
         base_vals = {
             'partner_id': root_partner.id,
@@ -137,35 +101,240 @@ class StockPicking(models.Model):
             'delivery_company_id': self.company_id.id,
         }
 
-        # 1. Điểm xếp hạng – tự động xác nhận
-        if ranking_points > 0:
-            self.env['hlv.loyalty.history'].sudo().create({
-                **base_vals,
-                'point_amount': ranking_points,
-                'point_type': 'ranking',
-                'state': 'confirmed',
-                'description': f'Tích điểm xếp hạng {sale_order.name} - Phiếu {self.name}',
-                'point_formula': ranking_formula,
-                'point_formula_html': ranking_formula_html,
-            })
+        total_ranking_recorded = 0
+        total_exchange_recorded = 0
+        for share in shares:
+            account = share['account']
+            acc_ranking = share['ranking_points']
+            acc_exchange = share['exchange_points']
+            if acc_ranking <= 0 and acc_exchange <= 0:
+                continue
 
-        # 2. Điểm đổi thưởng – chờ nhân viên xác nhận
-        if exchange_points > 0:
-            self.env['hlv.loyalty.history'].sudo().create({
-                **base_vals,
-                'point_amount': exchange_points,
-                'point_type': 'exchange',
-                'state': 'pending',
-                'description': f'Tích điểm đổi thưởng {sale_order.name} - Phiếu {self.name}',
-                'point_formula': exchange_formula,
-                'point_formula_html': exchange_formula_html,
-            })
+            # Kiểm tra xem tài khoản này đã tích điểm cho phiếu này chưa
+            # (tránh duplicate khi validate lại / recalculate).
+            existing = self.env['hlv.loyalty.history'].sudo().search([
+                ('picking_id', '=', self.id),
+                ('transaction_type', '=', 'earn'),
+                ('account_id', '=', account.id),
+            ])
+            if existing:
+                ranking_hist = existing.filtered(lambda h: h.point_type == 'ranking')[:1]
+                exchange_hist = existing.filtered(lambda h: h.point_type == 'exchange')[:1]
+                if ranking_hist:
+                    # Luôn confirmed ngay khi tạo (đã vào số dư) → chỉ cập
+                    # nhật công thức để đối chiếu, không tự sửa điểm đã chốt.
+                    ranking_hist.write({
+                        'point_formula': share['ranking_formula'],
+                        'point_formula_html': share['ranking_formula_html'],
+                    })
+                if exchange_hist and exchange_hist.state == 'pending':
+                    exchange_hist.write({
+                        'point_amount': acc_exchange,
+                        'point_formula': share['exchange_formula'],
+                        'point_formula_html': share['exchange_formula_html'],
+                    })
+                elif exchange_hist:
+                    exchange_hist.write({
+                        'point_formula': share['exchange_formula'],
+                        'point_formula_html': share['exchange_formula_html'],
+                    })
+                continue
+
+            if acc_ranking > 0:
+                self.env['hlv.loyalty.history'].sudo().create({
+                    **base_vals,
+                    'account_id': account.id,
+                    'point_amount': acc_ranking,
+                    'point_type': 'ranking',
+                    'state': 'confirmed',
+                    'description': (
+                        f'Tích điểm xếp hạng {sale_order.name} - Phiếu {self.name}'
+                        f' - TK {account.display_name}'
+                    ),
+                    'point_formula': share['ranking_formula'],
+                    'point_formula_html': share['ranking_formula_html'],
+                })
+                total_ranking_recorded += acc_ranking
+
+            if acc_exchange > 0:
+                self.env['hlv.loyalty.history'].sudo().create({
+                    **base_vals,
+                    'account_id': account.id,
+                    'point_amount': acc_exchange,
+                    'point_type': 'exchange',
+                    'state': 'pending',
+                    'description': (
+                        f'Tích điểm đổi thưởng {sale_order.name} - Phiếu {self.name}'
+                        f' - TK {account.display_name}'
+                    ),
+                    'point_formula': share['exchange_formula'],
+                    'point_formula_html': share['exchange_formula_html'],
+                })
+                total_exchange_recorded += acc_exchange
 
         self.loyalty_points_earned = ranking_points
         _logger.info(
-            'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s)',
-            ranking_points, exchange_points, partner.name, self.name, sale_order.name,
+            'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s) qua %d tài khoản',
+            total_ranking_recorded, total_exchange_recorded, partner.name, self.name,
+            sale_order.name, len(shares),
         )
+
+    def _get_loyalty_account_allocations(self, sale_order, root_partner):
+        """Trả về danh sách [(account, pct)] để chia điểm của đơn này.
+
+        - Nếu đơn có cấu hình bảng "Tài khoản cộng điểm Loyalty"
+          (`loyalty_account_line_ids`), dùng đúng danh sách + % đó.
+        - Nếu không (đơn không chọn tài khoản nào), fallback về tài khoản
+          mặc định (`is_default=True`, hoặc tài khoản đầu tiên) của công ty,
+          với pct=None nghĩa là "nhận 100%, không chia tỷ lệ" — giữ nguyên
+          hành vi tính điểm như trước khi có tính năng multi-account.
+        """
+        self.ensure_one()
+        lines = sale_order.loyalty_account_line_ids.filtered(
+            lambda l: l.account_id and l.account_id.active
+        )
+        if lines:
+            return [(line.account_id, line.earning_pct or 0.0) for line in lines]
+
+        accounts = self.env['hlv.loyalty.portal.account'].sudo().search([
+            ('partner_id', '=', root_partner.id),
+            ('active', '=', True),
+        ])
+        if not accounts:
+            return []
+        default_account = accounts.filtered('is_default')[:1] or accounts[:1]
+        return [(default_account, None)]
+
+    def _split_loyalty_points_by_account(
+        self, allocations, delivered_subtotal, discount_amount, program, ranking_points,
+        discount_formula_source, discount_details,
+    ):
+        """Chia điểm ranking + đổi thưởng của cả phiếu cho từng tài khoản.
+
+        - Chỉ 1 allocation với pct=None (fallback, đơn không cấu hình bảng
+          phân bổ): tài khoản đó nhận 100% - công thức/kết quả giữ nguyên
+          y hệt logic gốc trước khi có tính năng multi-account.
+        - Có bảng phân bổ (N dòng, mỗi dòng 1 %): mỗi tài khoản có
+          `account_discount_amount = delivered_subtotal * pct / 100`, tính
+          ĐỘC LẬP như cách %/dòng vẫn hoạt động — nhưng nếu tổng các
+          account_discount_amount vượt quá `discount_amount` (giới hạn từ
+          % dòng đơn) thì scale toàn bộ xuống theo đúng tỷ lệ để không bao
+          giờ vượt trần; % chưa được phân bổ hết thì phần thiếu không tính
+          điểm cho ai. Điểm đổi thưởng của từng tài khoản làm tròn xuống
+          (floor) độc lập theo discount_per_point.
+          Điểm xếp hạng CHIA theo đúng tỷ lệ % (chuẩn hóa theo tổng % đã
+          liệt kê trong bảng, không có khái niệm phần dư cho ranking) —
+          phần dư do làm tròn được cộng vào tài khoản cuối cùng để tổng
+          luôn khớp đúng `ranking_points`.
+        """
+        self.ensure_one()
+
+        if len(allocations) == 1 and allocations[0][1] is None:
+            account = allocations[0][0]
+            exchange_points = 0
+            if discount_amount > 0 and program.discount_per_point > 0:
+                exchange_points = int(discount_amount / program.discount_per_point)
+            exchange_formula = self._format_loyalty_point_formula(
+                'Điểm đổi thưởng', discount_amount, program.discount_per_point, 1,
+                exchange_points, source_label=discount_formula_source, detail_lines=discount_details,
+            )
+            exchange_formula_html = self._format_loyalty_point_formula_html(
+                'Điểm đổi thưởng', discount_amount, program.discount_per_point, 1,
+                exchange_points, source_label=discount_formula_source, detail_lines=discount_details,
+            )
+            ranking_formula = self._format_loyalty_point_formula(
+                'Điểm xếp hạng', delivered_subtotal, program.earning_amount, program.earning_points,
+                ranking_points, multiplier_label='điểm/mốc',
+            )
+            ranking_formula_html = self._format_loyalty_point_formula_html(
+                'Điểm xếp hạng', delivered_subtotal, program.earning_amount, program.earning_points,
+                ranking_points, multiplier_label='điểm/mốc',
+            )
+            return [{
+                'account': account,
+                'ranking_points': ranking_points,
+                'exchange_points': exchange_points,
+                'ranking_formula': ranking_formula,
+                'ranking_formula_html': ranking_formula_html,
+                'exchange_formula': exchange_formula,
+                'exchange_formula_html': exchange_formula_html,
+            }]
+
+        # ── Có bảng phân bổ nhiều tài khoản ──────────────────────────────
+        raw_amounts = [
+            (account, pct or 0.0, delivered_subtotal * (pct or 0.0) / 100.0)
+            for account, pct in allocations
+        ]
+        total_raw = sum(amount for _, _, amount in raw_amounts)
+        scale = 1.0
+        if total_raw > 0 and discount_amount > 0 and total_raw > discount_amount:
+            scale = discount_amount / total_raw
+        is_scaled = scale < 0.999999
+
+        total_pct = sum(pct for _, pct, _ in raw_amounts) or 1.0
+
+        # Bảng tham chiếu chung (giống hệt trường hợp 1 tài khoản) để mọi
+        # tài khoản đều thấy rõ tổng chiết khấu 105.000đ kia đến từ đâu
+        # (dòng nào, % bao nhiêu) trước khi bị chia nhỏ theo % riêng.
+        reference_note = (
+            f'Doanh số giao của cả đơn: {delivered_subtotal:,.0f}đ. '
+            f'{discount_formula_source} → tổng chiết khấu tham chiếu (trần) '
+            f'= {discount_amount:,.0f}đ.'
+        )
+
+        shares = []
+        ranking_running_total = 0
+        for idx, (account, pct, raw_amount) in enumerate(raw_amounts):
+            is_last = idx == len(raw_amounts) - 1
+            account_discount_amount = raw_amount * scale
+            account_exchange_points = 0
+            if account_discount_amount > 0 and program.discount_per_point > 0:
+                account_exchange_points = int(account_discount_amount / program.discount_per_point)
+
+            if is_last:
+                account_ranking_points = ranking_points - ranking_running_total
+            else:
+                account_ranking_points = round(ranking_points * pct / total_pct)
+            ranking_running_total += account_ranking_points
+
+            account_line = (
+                f'Tài khoản "{account.display_name}" áp dụng {pct:g}% lên doanh số giao '
+                f'({delivered_subtotal:,.0f}đ) = {raw_amount:,.0f}đ'
+            )
+            if is_scaled:
+                account_line += (
+                    f' → do tổng % các tài khoản trên đơn vượt trần tham chiếu, quy đổi về '
+                    f'{account_discount_amount:,.0f}đ (tỷ lệ giới hạn {scale:.2%})'
+                )
+            account_line += '.'
+            source_label = f'{reference_note} {account_line}'
+
+            exchange_formula = self._format_loyalty_point_formula(
+                'Điểm đổi thưởng', account_discount_amount, program.discount_per_point, 1,
+                account_exchange_points, source_label=source_label, detail_lines=discount_details,
+            )
+            exchange_formula_html = self._format_loyalty_point_formula_html(
+                'Điểm đổi thưởng', account_discount_amount, program.discount_per_point, 1,
+                account_exchange_points, source_label=source_label, detail_lines=discount_details,
+            )
+            ranking_formula = (
+                f'Điểm xếp hạng tài khoản "{account.display_name}": tổng điểm xếp hạng cả đơn '
+                f'{ranking_points:,} điểm (tính từ doanh số giao {delivered_subtotal:,.0f}đ), '
+                f'chia theo tỷ lệ % được phân bổ trên đơn = '
+                f'round({ranking_points:,} x {pct:g}% / {total_pct:g}%) = {account_ranking_points:,} điểm.'
+            )
+            ranking_formula_html = f'<p><strong>{escape(ranking_formula)}</strong></p>'
+
+            shares.append({
+                'account': account,
+                'ranking_points': account_ranking_points,
+                'exchange_points': account_exchange_points,
+                'ranking_formula': ranking_formula,
+                'ranking_formula_html': ranking_formula_html,
+                'exchange_formula': exchange_formula,
+                'exchange_formula_html': exchange_formula_html,
+            })
+        return shares
 
     def _get_loyalty_delivered_lines(self):
         """Gom các stock.move đã giao (state=done) của phiếu này thành các
@@ -261,12 +430,13 @@ class StockPicking(models.Model):
         ]
         return min(ratios) if ratios else 0.0
 
-    def _compute_loyalty_exchange_points(self, program, delivered_lines, delivered_subtotal, partner):
-        """Tính điểm đổi thưởng + công thức từ danh sách dòng giao đã gộp
-        (xem `_get_loyalty_delivered_lines`). Tách riêng để dùng lại được
-        khi tính lại điểm cho 1 bản ghi lịch sử đang chờ xác nhận.
+    def _compute_loyalty_discount_amount(self, delivered_lines, delivered_subtotal, partner):
+        """Tính tổng "tiền chiết khấu loyalty" của cả phiếu từ danh sách dòng
+        giao đã gộp (xem `_get_loyalty_delivered_lines`). Đây là "ngân sách"
+        dùng làm trần khi chia điểm đổi thưởng cho nhiều tài khoản (xem
+        `_split_loyalty_points_by_account`).
 
-        Trả về (exchange_points, exchange_formula, exchange_formula_html).
+        Trả về (discount_amount, discount_details, discount_formula_source).
         """
         self.ensure_one()
         discount_details = [
@@ -290,29 +460,7 @@ class StockPicking(models.Model):
                 'Doanh số giao x % chiết khấu mặc định KH '
                 f'({fallback_pct:.2%})'
             )
-
-        exchange_points = 0
-        if discount_amount > 0 and program.discount_per_point > 0:
-            exchange_points = int(discount_amount / program.discount_per_point)
-        exchange_formula = self._format_loyalty_point_formula(
-            'Điểm đổi thưởng',
-            discount_amount,
-            program.discount_per_point,
-            1,
-            exchange_points,
-            source_label=discount_formula_source,
-            detail_lines=discount_details,
-        )
-        exchange_formula_html = self._format_loyalty_point_formula_html(
-            'Điểm đổi thưởng',
-            discount_amount,
-            program.discount_per_point,
-            1,
-            exchange_points,
-            source_label=discount_formula_source,
-            detail_lines=discount_details,
-        )
-        return exchange_points, exchange_formula, exchange_formula_html
+        return discount_amount, discount_details, discount_formula_source
 
     def _get_loyalty_discount_detail_for_line(self, line, fallback_pct=None):
         """Return loyalty discount detail for one delivered line (đã gộp
@@ -512,17 +660,15 @@ class StockPicking(models.Model):
         ratio = min(return_qty / original_qty, 1.0) if original_qty > 0 else 1.0
         is_full_return = ratio >= 0.999  # float tolerance
 
-        ranking_to_deduct = round(origin_picking.loyalty_points_earned * ratio)
-
-        # Tìm bản ghi điểm đổi thưởng của phiếu gốc (pending hoặc confirmed)
-        origin_exchange_hist = self.env['hlv.loyalty.history'].sudo().search([
+        # Lấy TOÀN BỘ dòng earn của phiếu gốc — có thể nhiều dòng (mỗi tài
+        # khoản Loyalty được chọn trên đơn 1 dòng ranking + 1 dòng exchange),
+        # không còn dựa vào field loyalty_points_earned (chỉ 1 số duy nhất,
+        # không đủ để thu hồi đúng theo từng tài khoản).
+        origin_earn_hist = self.env['hlv.loyalty.history'].sudo().search([
             ('picking_id', '=', origin_picking.id),
-            ('point_type', '=', 'exchange'),
             ('transaction_type', '=', 'earn'),
-            ('state', 'in', ['pending', 'confirmed']),
-        ], limit=1)
-
-        if ranking_to_deduct <= 0 and not origin_exchange_hist:
+        ])
+        if not origin_earn_hist:
             return
 
         root_partner = partner._get_loyalty_root()
@@ -538,10 +684,18 @@ class StockPicking(models.Model):
             'delivery_company_id': self.company_id.id,
         }
 
-        # ── Điểm xếp hạng (luôn auto-confirmed) → tạo bản ghi âm ────────────
-        if ranking_to_deduct > 0:
+        total_ranking_deducted = 0
+        total_exchange_deducted = 0
+
+        # ── Điểm xếp hạng (luôn auto-confirmed) → tạo bản ghi âm cho từng
+        #    tài khoản đã nhận điểm ranking ở phiếu gốc ──────────────────────
+        for ranking_hist in origin_earn_hist.filtered(lambda h: h.point_type == 'ranking'):
+            ranking_to_deduct = round(ranking_hist.point_amount * ratio)
+            if ranking_to_deduct <= 0:
+                continue
             self.env['hlv.loyalty.history'].sudo().create({
                 **base_vals,
+                'account_id': ranking_hist.account_id.id,
                 'point_amount': -ranking_to_deduct,
                 'point_type': 'ranking',
                 'state': 'confirmed',
@@ -550,23 +704,24 @@ class StockPicking(models.Model):
                     f' (gốc: {origin_picking.name}){pct_label}'
                 ),
             })
+            total_ranking_deducted += ranking_to_deduct
 
-        # ── Điểm đổi thưởng ──────────────────────────────────────────────────
-        exchange_log = 0
-        if origin_exchange_hist:
-            exchange_original = origin_exchange_hist.point_amount
+        # ── Điểm đổi thưởng — xử lý riêng cho từng tài khoản/dòng ───────────
+        for exchange_hist in origin_earn_hist.filtered(
+            lambda h: h.point_type == 'exchange' and h.state in ('pending', 'confirmed')
+        ):
+            exchange_original = exchange_hist.point_amount
             exchange_to_deduct = round(exchange_original * ratio)
-            exchange_log = exchange_to_deduct
 
-            if origin_exchange_hist.state == 'pending':
+            if exchange_hist.state == 'pending':
                 # Chưa xác nhận → chưa vào số dư khách hàng
                 # → chỉ điều chỉnh bản ghi pending, KHÔNG tạo record âm
                 if is_full_return:
                     # Hoàn toàn bộ: hủy bản ghi pending gốc
-                    origin_exchange_hist.write({
+                    exchange_hist.write({
                         'state': 'cancelled',
                         'description': (
-                            origin_exchange_hist.description
+                            exchange_hist.description
                             + f' [Hủy do hoàn hàng {self.name}]'
                         ),
                     })
@@ -574,19 +729,21 @@ class StockPicking(models.Model):
                     # Hoàn một phần: giảm điểm pending còn lại
                     # (khi nhân viên xác nhận sau, chỉ cộng phần chưa hoàn)
                     remaining = max(0, exchange_original - exchange_to_deduct)
-                    origin_exchange_hist.write({
+                    exchange_hist.write({
                         'point_amount': remaining,
                         'description': (
-                            origin_exchange_hist.description
+                            exchange_hist.description
                             + f' [Đã giảm {exchange_to_deduct}đ do hoàn {self.name}]'
                         ),
                     })
+                total_exchange_deducted += exchange_to_deduct
 
-            elif origin_exchange_hist.state == 'confirmed':
+            elif exchange_hist.state == 'confirmed':
                 # Đã xác nhận → đã vào số dư → tạo bản ghi âm để khấu trừ
                 if exchange_to_deduct > 0:
                     self.env['hlv.loyalty.history'].sudo().create({
                         **base_vals,
+                        'account_id': exchange_hist.account_id.id,
                         'point_amount': -exchange_to_deduct,
                         'point_type': 'exchange',
                         'state': 'confirmed',
@@ -595,10 +752,11 @@ class StockPicking(models.Model):
                             f' (gốc: {origin_picking.name}){pct_label}'
                         ),
                     })
+                    total_exchange_deducted += exchange_to_deduct
 
         _logger.info(
             'Loyalty: Thu hồi ranking=%d exchange=%d (ratio=%.0f%%) từ %s'
             ' do hoàn hàng %s (gốc: %s)',
-            ranking_to_deduct, exchange_log, ratio * 100,
+            total_ranking_deducted, total_exchange_deducted, ratio * 100,
             partner.name, self.name, origin_picking.name,
         )

@@ -24,6 +24,8 @@
         "wizard/loyalty_reset_password_wizard_views.xml",
         "wizard/loyalty_point_adjustment_wizard_views.xml",
         "wizard/loyalty_recalculate_points_wizard_views.xml",
+        "wizard/loyalty_point_transfer_wizard_views.xml",
+        "wizard/loyalty_migrate_account_points_wizard_views.xml",
         "views/loyalty_program_views.xml",
         "views/loyalty_voucher_package_views.xml",
         "views/loyalty_history_views.xml",

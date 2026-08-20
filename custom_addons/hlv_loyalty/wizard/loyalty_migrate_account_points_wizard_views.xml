@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_loyalty_migrate_account_points_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.migrate.account.points.wizard.form</field>
+        <field name="model">hlv.loyalty.migrate.account.points.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Chuyển điểm cũ vào tài khoản Loyalty">
+                <div class="alert alert-warning" role="alert">
+                    Thao tác này sẽ gán mọi lịch sử điểm / voucher / yêu cầu đổi thưởng
+                    CHƯA có tài khoản Loyalty (dữ liệu cũ trước khi có tính năng nhiều
+                    tài khoản/công ty) vào tài khoản đầu tiên (hoặc tài khoản mặc định
+                    nếu đã đặt) của công ty tương ứng. Chỉ chạy 1 lần, nên kiểm tra kỹ
+                    trên môi trường staging trước khi chạy trên dữ liệu thật.
+                </div>
+                <field name="result_log" widget="text" readonly="1"
+                       invisible="not result_log"/>
+                <footer>
+                    <button name="action_run_migration" string="Chạy migrate" type="object"
+                            class="btn-primary"
+                            confirm="Bạn có chắc chắn muốn chạy migrate dữ liệu điểm cũ vào tài khoản Loyalty?"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_loyalty_migrate_account_points_wizard" model="ir.actions.act_window">
+        <field name="name">Chuyển điểm cũ vào tài khoản Loyalty</field>
+        <field name="res_model">hlv.loyalty.migrate.account.points.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

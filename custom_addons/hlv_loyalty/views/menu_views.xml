@@ -68,4 +68,11 @@
               parent="menu_loyalty_config"
               action="action_loyalty_tier"
               sequence="30"/>
+
+    <!-- Migrate điểm cũ vào tài khoản -->
+    <menuitem id="menu_loyalty_migrate_account_points"
+              name="Chuyển điểm cũ vào tài khoản"
+              parent="menu_loyalty_config"
+              action="action_loyalty_migrate_account_points_wizard"
+              sequence="95"/>
 </odoo>

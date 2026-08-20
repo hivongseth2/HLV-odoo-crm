@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Kanban View -->
     <record id="view_loyalty_voucher_kanban" model="ir.ui.view">
@@ -114,6 +114,7 @@
                             <field name="partner_id"
                                    domain="[('parent_id', '=', False)]"
                                    options="{'no_create': True}"/>
+                            <field name="account_id" options="{'no_create': True}"/>
                             <field name="package_id"/>
                             <field name="program_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
@@ -161,6 +162,7 @@
                   decoration-info="state == 'used'">
                 <field name="code" widget="badge"/>
                 <field name="partner_id"/>
+                <field name="account_id" optional="show"/>
                 <field name="package_id"/>
                   <field name="reward_type" widget="badge"
                       decoration-success="reward_type == 'discount'"
@@ -194,6 +196,7 @@
             <search string="Tìm kiếm Voucher">
                 <field name="code"/>
                 <field name="partner_id"/>
+                <field name="account_id"/>
                 <field name="package_id"/>
                 <filter string="Khả dụng" name="filter_active"
                         domain="[('state', '=', 'active')]"/>
@@ -208,6 +211,8 @@
                 <group expand="0" string="Nhóm theo">
                     <filter string="Khách hàng" name="group_partner"
                             context="{'group_by': 'partner_id'}"/>
+                    <filter string="Tài khoản Loyalty" name="group_account"
+                            context="{'group_by': 'account_id'}"/>
                     <filter string="Trạng thái" name="group_state"
                             context="{'group_by': 'state'}"/>
                     <filter string="Gói Voucher" name="group_package"

@@ -22,6 +22,17 @@ body { margin:0; font-family:'Inter','Segoe UI',sans-serif;
 h1,h2,h3,h4 { font-family:'Manrope','Segoe UI',sans-serif; margin:0; line-height:1.15; }
 a { color:inherit; }
 
+/* Cross-fade khi chuyển trang (trình duyệt hỗ trợ View Transitions – Chrome/Edge);
+   trình duyệt khác bỏ qua, không ảnh hưởng. */
+@view-transition { navigation: auto; }
+
+/* ── Hiệu ứng vào trang cho các block chính (áp dụng lại mỗi lần tải trang) ── */
+@keyframes srPageIn { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+.sr-result-hero, .sr-mcard, .sr-voucher-section, .sr-hist-section, .sr-hist-toolbar {
+    animation:srPageIn .4s ease both;
+}
+.sr-main-row > * { animation:srPageIn .4s .05s ease both; }
+
 /* Material Symbols */
 .ms { font-family:'Material Symbols Outlined'; font-weight:normal; font-style:normal;
       font-size:24px; line-height:1; letter-spacing:normal; text-transform:none;
@@ -227,8 +238,10 @@ a { color:inherit; }
 .td-pts.neg { color:#ba1a1a; }
 .td-desc   { font-size:.875rem; color:var(--c-ink-v); }
 .td-status { font-size:.8rem; font-weight:700; color:var(--c-pri); text-align:right; }
-.sr-empty { padding:48px; text-align:center; color:var(--c-ink-v); }
+.sr-empty { padding:48px; text-align:center; color:var(--c-ink-v);
+            font-family:'Inter','Segoe UI',sans-serif; }
 .sr-empty .ms { font-size:48px; display:block; margin-bottom:12px; opacity:.4; }
+.sr-empty p { font-family:inherit; font-size:.9rem; margin:0; }
 
 /* ── Point type row colors ── */
 .row-pt-ranking td  { background:rgba(23,121,180,.05); }
@@ -378,7 +391,7 @@ a { color:inherit; }
     border-color: rgba(46, 125, 50, 0.45);
 }
 .sr-v-code {
-    font-family: 'Manrope', monospace;
+    font-family: 'Manrope', 'Segoe UI', sans-serif;
     font-weight: 800;
     font-size: 0.92rem;
     color: #1b5e20;
@@ -523,48 +536,36 @@ a { color:inherit; }
 .sr-topbar-logout { padding:7px 16px; background:#f3f4f5; border-radius:20px;
                     font-size:.82rem; font-weight:600; color:#454652; text-decoration:none; }
 
-/* ── Point info box ── */
-.sr-pts-info-box {
-    display:grid; grid-template-columns:1fr 1fr; gap:14px;
-    margin:0 0 22px;
+/* ── Tóm tắt điểm trên trang lịch sử ── */
+.sr-hist-pts-summary { display:flex; gap:14px; margin-bottom:16px; }
+.sr-hist-pts-item { flex:1; display:flex; align-items:center; gap:12px;
+    background:var(--c-surf-0); border-radius:14px; padding:14px 16px;
+    box-shadow:0 2px 10px rgba(0,6,102,.05); }
+.sr-hist-pts-item .ms { font-size:26px; color:#198754; flex-shrink:0; }
+.sr-hist-pts-item:nth-child(2) .ms { color:var(--c-pri); }
+.sr-hist-pts-num { font-family:'Manrope',sans-serif; font-weight:900; font-size:1.3rem; color:var(--c-ink); line-height:1.1; }
+.sr-hist-pts-lbl { font-size:.72rem; color:var(--c-ink-v); font-weight:600; margin-top:2px; }
+@media (max-width:480px) {
+    .sr-hist-pts-summary { flex-direction:column; gap:10px; }
 }
-.sr-pts-info-card {
-    display:flex; align-items:flex-start; gap:12px;
-    padding:14px 16px; border-radius:12px;
-}
-.sr-pts-info-ranking {
-    background:rgba(23,121,180,.07); border-left:4px solid var(--c-pri);
-}
-.sr-pts-info-exchange {
-    background:rgba(25,135,84,.07); border-left:4px solid #198754;
-}
-.sr-pts-info-icon { flex-shrink:0; font-size:22px; margin-top:1px; }
-.sr-pts-info-ranking .sr-pts-info-icon { color:var(--c-pri); }
-.sr-pts-info-exchange .sr-pts-info-icon { color:#198754; }
-.sr-pts-info-label { font-size:.82rem; font-weight:700; color:var(--c-ink); margin-bottom:4px; }
-.sr-pts-info-desc  { font-size:.78rem; color:var(--c-ink-v); line-height:1.5; }
 
-/* ── Filter bar ── */
+/* ── Filter bar: dropdown gọn kiểu pill (giống "6 tháng gần nhất ▾") ── */
 .sr-filter-bar {
-    display:flex; flex-wrap:wrap; gap:10px 24px;
+    display:flex; flex-wrap:wrap; gap:10px 14px;
     padding:12px 0 16px; border-bottom:1px solid var(--c-surf-hi);
     margin-bottom:16px;
 }
-.sr-filter-group { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-.sr-filter-label { font-size:.75rem; font-weight:700; color:var(--c-ink-v); white-space:nowrap; }
-.sr-filter-pill {
-    display:inline-flex; align-items:center; gap:4px;
-    padding:5px 12px; border-radius:20px; font-size:.78rem; font-weight:600;
-    text-decoration:none; color:var(--c-ink-v);
-    background:var(--c-surf-hi); border:1px solid transparent;
-    transition:background .15s, color .15s;
+.sr-filter-select-wrap { position:relative; }
+.sr-filter-select {
+    appearance:none; -webkit-appearance:none;
+    font-family:inherit; font-size:.82rem; font-weight:700; color:var(--c-ink);
+    background:#fff; border:1.5px solid var(--c-sec); border-radius:20px;
+    padding:8px 32px 8px 16px; cursor:pointer;
 }
-.sr-filter-pill:hover { background:#e0e4ff; color:var(--c-pri); }
-.sr-filter-pill.active {
-    background:var(--c-pri); color:#fff; border-color:var(--c-pri);
+.sr-filter-select-chevron {
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    font-size:18px; color:var(--c-sec); pointer-events:none;
 }
-.sr-fp-ranking.active  { background:var(--c-pri); border-color:var(--c-pri); }
-.sr-fp-exchange.active { background:#198754; border-color:#198754; }
 
 /* ── Split point columns ── */
 .th-pts-ranking { color:var(--c-pri); text-align:right; white-space:nowrap; }
@@ -589,13 +590,31 @@ a { color:inherit; }
     .sr-hero-actions { margin-top:12px; }
     .sr-hero-btn { font-size:.8rem; padding:7px 14px; }
     /* Body */
-    .sr-body { padding:0 12px 60px; margin-top:-40px; }
+    .sr-body { padding:0 12px 60px; }
+    .sr-body-hero { margin-top:-40px; }
     .sr-card, .sr-actions { padding:18px 14px; }
     .sr-hist-header { flex-direction:column; align-items:flex-start; gap:10px; }
+    /* Toolbar (tiêu đề + bộ lọc) — dạng thẻ */
+    .sr-hist-toolbar { background:var(--c-surf-0); border-radius:16px; padding:16px 14px 4px;
+        box-shadow:0 2px 10px rgba(0,6,102,.05); margin-bottom:14px; }
+    .sr-filter-bar { flex-wrap:nowrap; border-bottom:none; padding:8px 0 12px; margin-bottom:0; }
+    .sr-filter-select-wrap { flex:1; min-width:0; }
+    .sr-filter-select { width:100%; text-overflow:ellipsis; padding-left:12px; font-size:.76rem; }
     /* Table → hide, show cards */
     .sr-tbl-wrap { background:transparent; box-shadow:none; overflow:visible; border-radius:0; }
     .sr-tbl { display:none; }
-    .sr-hist-cards { display:flex; flex-direction:column; gap:8px; }
+    /* Danh sách phẳng 1 thẻ liền mạch, có gạch chia dòng — giống app tham chiếu */
+    .sr-hist-cards { display:flex; flex-direction:column; gap:0;
+        background:var(--c-surf-0); border-radius:16px;
+        box-shadow:0 2px 10px rgba(0,6,102,.05); overflow:hidden; }
+    .sr-hist-card { border-radius:0; box-shadow:none; border-left:none !important;
+        background:transparent !important; border-bottom:1px solid var(--c-surf-hi); }
+    .sr-hist-card:last-child { border-bottom:none; }
+    /* Trạng thái trống — bọc trong thẻ để không "trôi" giữa nền xám trống */
+    .sr-empty, .sr-rdm-empty {
+        background:var(--c-surf-0); border-radius:16px; padding:40px 20px;
+        box-shadow:0 2px 10px rgba(0,6,102,.05);
+    }
     /* Vouchers full width & compact styling on mobile */
     .sr-voucher-section { padding: 18px 14px; }
     .sr-voucher-card, .sr-voucher-pill {
@@ -664,20 +683,30 @@ a { color:inherit; }
         font-size: 0.68rem !important;
         margin-top: 2px !important;
     }
-    /* Tiers */
-    .sr-tier-grid { grid-template-columns:1fr 1fr; gap:14px; }
+    /* Tiers – render dạng list trên mobile: thẻ full-width, ảnh thẻ đã tự
+       hiển thị đủ tên hạng + tag "BẠN" nên bỏ hẳn label chữ bên ngoài */
+    .sr-tier-grid { grid-template-columns:1fr; gap:12px; }
+    .sr-tier-card {
+        display:block; cursor:default;
+        background:var(--c-surf-0); border-radius:16px; padding:10px;
+        box-shadow:0 2px 10px rgba(0,6,102,.05);
+    }
+    .sr-tier-card .tc-flip-inner {
+        width:100%; aspect-ratio:1.68/1; transform:none !important;
+    }
+    .sr-tier-card .tc-flip-front { position:static; width:100%; height:100%; }
+    .sr-tier-card .tc-flip-back { display:none; }
+    .sr-tier-card .tc-card-label { display:none; }
+    /* Tiêu đề section — thu nhỏ trên mobile để không vỡ dòng */
+    .sr-sec-title { font-size:1.3rem; }
+    .sr-divider { margin-bottom:20px; }
+    .sr-hist-title { font-size:1.05rem; }
     /* Top bar full pages */
     .sr-topbar { padding:10px 14px; }
     .sr-topbar-name { display:none; }
     .sr-topbar-logout { padding:6px 12px; font-size:.8rem; }
-    /* Info box stacks */
-    .sr-pts-info-box { grid-template-columns:1fr; }
-    /* Filter bar wraps */
-    .sr-filter-bar { gap:8px 16px; }
-    .sr-filter-pill { font-size:.72rem; padding:4px 10px; }
 }
 @media (max-width:480px) {
-    .sr-tier-grid { grid-template-columns:1fr 1fr; }
     .sr-cust-name { font-size:1.25rem; }
     .sr-bal-pill { flex-direction:column; align-items:flex-start; gap:8px; }
     .sr-actions-grid { grid-template-columns:1fr 1fr; }
@@ -1095,7 +1124,7 @@ button.sr-rq-cancel-btn .ms { display:none; }
     animation:rdmFadeUp .4s ease both;
 }
 .sr-rdm-empty .ms { font-size:56px; display:block; margin-bottom:14px; opacity:.25; animation:rdmFloat 3s ease-in-out infinite; }
-.sr-rdm-empty p { font-size:.9rem; margin:0; }
+.sr-rdm-empty p { font-family:'Inter','Segoe UI',sans-serif; font-size:.9rem; margin:0; }
 
 /* ── Responsive ── */
 @media (max-width:900px) {
@@ -1140,13 +1169,78 @@ button.sr-rq-cancel-btn .ms { display:none; }
     .sr-rdm-stat-val { font-size: 1.05rem; }
     .sr-rdm-stat-lbl { font-size: 0.55rem; letter-spacing: 0; }
     .sr-rdm-stat-unit { font-size: 0.55rem; }
-    
+
     .sr-rdm-tab-strip { padding: 0 4px; }
     .sr-rdm-tab { padding: 10px 4px; font-size: 0.72rem; gap: 3px; }
     .sr-rdm-tab .ms { font-size: 14px; }
     .sr-rdm-tab-badge { font-size: 0.6rem; padding: 1px 5px; min-width: 14px; }
-    
+
     .sr-pkg-grid { grid-template-columns:1fr; }
     .sr-rq-lbl { min-width:90px; }
+}
+
+/* ── Mã QR tài khoản (hero profile — desktop, thay cho hiển thị điểm) ── */
+.sr-qr-hero { display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0; }
+.sr-qr-hero img { width:140px; height:140px; border-radius:8px; display:block; }
+.sr-qr-hero-code { font-size:.75rem; font-weight:700; color:rgba(255,255,255,.85); letter-spacing:.5px; }
+
+/* ── Mobile member card (kiểu thẻ VIP) ── */
+.sr-mcard-wrap { display:none; }
+.sr-mcard {
+    background:linear-gradient(165deg,#fff 0%,#fff 62%,var(--c-surf) 62%);
+    border-radius:22px; box-shadow:0 8px 28px rgba(0,6,102,.10); overflow:hidden;
+    margin:16px; padding:20px 20px 8px;
+}
+.sr-mcard-top { display:flex; align-items:center; gap:12px; }
+.sr-mcard-avatar { width:48px; height:48px; border-radius:50%; overflow:hidden; flex-shrink:0;
+    background:linear-gradient(135deg,var(--c-pri),#1e8fd4); display:flex; align-items:center; justify-content:center; }
+.sr-mcard-avatar img { width:100%; height:100%; object-fit:cover; }
+.sr-mcard-avatar .ms { color:#fff; font-size:28px; }
+.sr-mcard-id { flex:1; min-width:0; }
+.sr-mcard-name { font-family:'Manrope',sans-serif; font-weight:800; font-size:1.05rem; color:var(--c-ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sr-mcard-tier { display:inline-block; margin-top:2px; font-size:.68rem; font-weight:700; color:var(--c-pri);
+    background:rgba(23,121,180,.1); border-radius:8px; padding:2px 8px; }
+.sr-mcard-icon-actions { display:flex; gap:6px; flex-shrink:0; }
+.sr-mcard-icon-btn { width:34px; height:34px; border-radius:50%; border:1px solid var(--c-surf-hi);
+    background:var(--c-surf-0); display:flex; align-items:center; justify-content:center; padding:0; }
+.sr-mcard-icon-btn .ms { font-size:17px; color:var(--c-ink-v); }
+.sr-mcard-qr { display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px 0 16px; }
+.sr-mcard-qr img { width:150px; height:150px; border-radius:12px; border:1px solid var(--c-surf-hi); padding:8px; background:#fff; }
+.sr-mcard-qr-code { font-size:.72rem; font-weight:700; letter-spacing:1px; color:var(--c-ink-v); }
+.sr-mcard-stats { border-top:1px dashed var(--c-surf-hi); }
+.sr-mcard-stat-row { display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:14px 4px; text-decoration:none; color:inherit; }
+.sr-mcard-stat-row + .sr-mcard-stat-row { border-top:1px solid var(--c-surf-hi); }
+.sr-mcard-stat-num { font-family:'Manrope',sans-serif; font-weight:900; font-size:1.3rem; color:var(--c-pri); }
+.sr-mcard-stat-num span { font-family:'Inter',sans-serif; font-weight:600; font-size:.85rem; color:var(--c-ink-v); }
+.sr-mcard-stat-plain { font-family:'Manrope',sans-serif; font-weight:800; font-size:1rem; color:var(--c-ink); }
+.sr-mcard-stat-link { font-size:.78rem; font-weight:700; color:var(--c-ink-v); display:flex; align-items:center; }
+.sr-mcard-stat-link .ms { font-size:18px; }
+
+/* ── Bottom navigation bar (mobile only) ── */
+.sr-bottom-nav-spacer { display:none; }
+.sr-bottom-nav { display:none; }
+@media (max-width:768px) {
+    .sr-result-hero { display:none; }
+    .sr-main-row { display:none; }
+    #loyalty-vouchers, #loyalty-history { display:none; }
+    .sr-mcard-wrap { display:block; }
+
+    .sr-bottom-nav-spacer { display:block; height:64px; }
+    .sr-bottom-nav {
+        display:flex; position:fixed; left:0; right:0; bottom:0; z-index:40;
+        background:var(--c-surf-0); border-top:1px solid var(--c-surf-hi);
+        box-shadow:0 -4px 16px rgba(0,6,102,.08);
+        padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    }
+    .sr-bn-item { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+        text-decoration:none; color:var(--c-ink-v); font-size:.64rem; font-weight:700; padding:4px 0;
+        transition:color .2s ease, transform .15s ease; }
+    .sr-bn-item .ms { font-size:22px; transition:transform .2s ease; }
+    .sr-bn-item:active { transform:scale(.9); }
+    .sr-bn-item.active { color:var(--c-pri); }
+    .sr-bn-item.active .ms { animation:bnActivePop .35s ease; }
+    @keyframes bnActivePop { 0%{transform:scale(.65)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
 }
 
