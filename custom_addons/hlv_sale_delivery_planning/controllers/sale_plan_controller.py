@@ -504,6 +504,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .pq-badge.printed{background:#16a34a}
 .pq-badge.error{background:#dc2626}
 .pq-badge.cancelled{background:#64748b}
+#print-queue-printer-status{padding:8px 14px;border-bottom:1px solid #f1f5f9;background:#f8fafc;
+  display:flex;flex-wrap:wrap;gap:6px}
+.pq-printer-chip{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px;
+  display:inline-flex;align-items:center;gap:5px;border:1px solid transparent}
+.pq-printer-chip.online{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+.pq-printer-chip.offline{background:#fee2e2;color:#991b1b;border-color:#fecaca}
+.pq-printer-chip .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.pq-printer-chip.online .dot{background:#22c55e}
+.pq-printer-chip.offline .dot{background:#ef4444}
 @media(max-width:1024px){#print-queue-drawer{width:100%!important;left:-105%!important}}
 /* Drawer table */
 .table-lines td,.table-lines th{font-size:.7rem;vertical-align:middle}
@@ -986,6 +995,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     <h5 class="mb-0"><i class="fa fa-print me-2"></i>Yêu cầu in</h5>
     <button id="print-queue-close" class="btn btn-sm btn-light">&times;</button>
   </div>
+  <div id="print-queue-printer-status"></div>
   <div class="mention-noti-tabs" id="print-queue-tabs"></div>
   <div id="print-queue-body"></div>
 </div>
@@ -2430,7 +2440,22 @@ function loadPrintQueue(){
     updatePrintQueueBadge();
     renderPrintQueueTabs();
     renderPrintQueueList();
+    renderPrinterStatus(j.result.printer_status||[]);
   }).catch(function(){/* silent */});
+}
+// Trạng thái ONLINE/OFFLINE máy in IoT theo kho — hiển thị ngay trong drawer để sale/kho biết
+// lý do 1 yêu cầu có thể bị kẹt/lỗi (máy in mất kết nối) mà không cần đợi bấm in.
+function renderPrinterStatus(list){
+  var box=$('print-queue-printer-status');
+  if(!box)return;
+  if(!list.length){box.innerHTML='';return;}
+  box.innerHTML=list.map(function(p){
+    var cls=p.connected?'online':'offline';
+    var label=p.connected?'Online':'Offline';
+    var title=p.device_name+(p.last_seen?' · lần cuối phản hồi '+esc(pqFormatTime(p.last_seen)):'');
+    return '<span class="pq-printer-chip '+cls+'" title="'+esc(title)+'">'
+      +'<i class="dot"></i>'+esc(p.warehouse_name)+': '+label+'</span>';
+  }).join('');
 }
 // Định dạng ISO datetime (UTC, không có 'Z') từ hlv.iot.print.queue._to_summary_dict() sang giờ
 // VN (UTC+7) — cần chính xác giờ:phút (không chỉ ngày) để đối soát khi sale/kho tranh luận đã
@@ -2747,8 +2772,10 @@ self.addEventListener('notificationclick', function(event) {
         if not request.session.get(SESSION_KEY_OK):
             return {'status': 'error', 'message': 'Unauthorized'}
         try:
-            items = request.env['hlv.iot.print.queue'].sudo().get_recent_for_sale_plan(limit=200)
-            return {'status': 'success', 'items': items}
+            Queue = request.env['hlv.iot.print.queue'].sudo()
+            items = Queue.get_recent_for_sale_plan(limit=200)
+            printer_status = Queue.get_printer_status_by_warehouse()
+            return {'status': 'success', 'items': items, 'printer_status': printer_status}
         except Exception as e:
             _logger.exception('sale_plan print_queue error')
             return {'status': 'error', 'message': str(e)}

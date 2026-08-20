@@ -98,6 +98,24 @@ class HlvIotPrintQueue(models.Model):
                 })
                 return False
 
+            # Kiểm tra máy in có đang online không TRƯỚC khi gửi lệnh — trước đây gửi mù (dispatch
+            # ngay không hỏi trước), nếu IoT Box/máy in mất kết nối thì phải chờ doAction() ở FE
+            # thất bại mới biết. iot.device.connected là cờ Odoo tự cập nhật theo heartbeat từ IoT
+            # Box (đã xác minh có phản ánh đúng thực tế qua bin/check_iot_device_fields.py — 1 máy
+            # mất kết nối thật có connected=False, write_date cũ hẳn so với máy cùng box còn sống).
+            # Không thay được việc "in thật lên giấy", nhưng chặn được sớm case "IoT Box/máy in
+            # offline" thay vì phải chờ máy khác báo kho không ra giấy.
+            if not device.connected:
+                last_seen = fields.Datetime.to_string(device.write_date) if device.write_date else 'không rõ'
+                self.write({
+                    'state': 'error',
+                    'error_message': 'Máy in "%s" (kho %s) đang OFFLINE (lần cuối phản hồi: %s) — '
+                                      'kiểm tra IoT Box/máy in trước khi gửi lại.' % (
+                                          device.name or '', self.warehouse_id.name or '', last_seen,
+                                      ),
+                })
+                return False
+
             target_ids = {device.id}
             if set(report.device_ids.ids) != target_ids:
                 report.sudo().write({'device_ids': [(6, 0, list(target_ids))]})
@@ -158,6 +176,26 @@ class HlvIotPrintQueue(models.Model):
             'printed_by_name': self.printed_by_id.name or '',
             'printed_at': self.printed_at.isoformat() if self.printed_at else False,
         }
+
+    @api.model
+    def get_printer_status_by_warehouse(self):
+        """Trạng thái ONLINE/OFFLINE của máy in IoT theo từng kho — để sale VÀ kho đều thấy
+        ngay lý do 1 yêu cầu in có thể bị kẹt/lỗi (máy in mất kết nối), không cần đợi bấm in
+        rồi mới biết. Chỉ trả về kho ĐÃ gán máy in (chưa gán thì không có gì để báo trạng thái)."""
+        warehouses = self.env['stock.warehouse'].sudo().search([
+            ('x_iot_printer_device_id', '!=', False),
+        ])
+        result = []
+        for wh in warehouses:
+            device = wh.x_iot_printer_device_id
+            result.append({
+                'warehouse_id': wh.id,
+                'warehouse_name': wh.name,
+                'device_name': device.name or '',
+                'connected': bool(device.connected),
+                'last_seen': device.write_date.isoformat() if device.write_date else False,
+            })
+        return result
 
     @api.model
     def get_recent_for_dashboard(self, limit=100):

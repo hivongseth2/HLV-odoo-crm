@@ -46,6 +46,11 @@ export class DeliveryPlannerIotPrintMixin {
             this.state.iotPrintQueueItems = await this.orm.call(
                 'hlv.iot.print.queue', 'get_recent_for_dashboard', [], { limit: 100 }
             );
+            // Trạng thái ONLINE/OFFLINE máy in theo kho — để kho/dispatcher thấy ngay lý do 1
+            // yêu cầu có thể bị kẹt/lỗi, không cần đợi bấm in rồi mới biết máy in mất kết nối.
+            this.state.iotPrinterStatus = await this.orm.call(
+                'hlv.iot.print.queue', 'get_printer_status_by_warehouse', [], {}
+            );
         } catch (e) {
             console.error('loadIotPrintQueueDrawer failed', e);
         } finally {

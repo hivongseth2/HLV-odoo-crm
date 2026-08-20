@@ -215,6 +215,7 @@ export class DeliveryPlannerDashboard extends Component {
             isIotPrintQueueDrawerOpen: false,
             iotPrintQueueItems: [],
             iotPrintQueueLoading: false,
+            iotPrinterStatus: [],
         });
 
         this.notification = useService("notification");

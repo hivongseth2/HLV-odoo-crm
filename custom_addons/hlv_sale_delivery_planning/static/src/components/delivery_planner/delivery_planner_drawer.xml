@@ -770,6 +770,18 @@
              </div>
 
              <div class="offcanvas-body p-0 bg-light overflow-auto" style="height: calc(100vh - 70px);">
+                 <!-- Trạng thái ONLINE/OFFLINE máy in theo kho — kho/dispatcher thấy ngay lý do
+                      1 yêu cầu có thể bị kẹt/lỗi (máy in mất kết nối), không cần đợi bấm in. -->
+                 <div t-if="state.iotPrinterStatus.length"
+                      class="d-flex flex-wrap gap-2 p-2 border-bottom bg-white">
+                     <t t-foreach="state.iotPrinterStatus" t-as="ps" t-key="ps.warehouse_id">
+                         <span class="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+                               t-att-class="ps.connected ? 'text-bg-success' : 'text-bg-danger'"
+                               t-att-title="ps.device_name + (ps.last_seen ? (' · lần cuối phản hồi ' + this._formatIotQueueTime(ps.last_seen)) : '')">
+                             <t t-esc="ps.warehouse_name"/>: <t t-esc="ps.connected ? 'Online' : 'Offline'"/>
+                         </span>
+                     </t>
+                 </div>
                  <div t-if="state.iotPrintQueueLoading" class="p-4 text-center text-muted">
                       <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
                  </div>
