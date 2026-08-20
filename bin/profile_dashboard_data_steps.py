@@ -130,6 +130,13 @@ transfer_map = service._batch_transfer_suggestions(page_sales, product_availabil
 t1 = time.time()
 print(f"  [7] _batch_transfer_suggestions        : {t1 - t0:.3f}s")
 
+# --- Bước 7b: kit component free stock batch (fix mới — trước đây _format_dashboard_order
+# tự tính lại cái này MỖI đơn, xem bin/profile_format_dashboard_order.py) ---
+t0 = time.time()
+page_kit_comp_free = service._batch_kit_component_free_stock(page_sales, page_kit_bom_map)
+t1 = time.time()
+print(f"  [7b] _batch_kit_component_free_stock    : {t1 - t0:.3f}s")
+
 # --- Bước 8: format_dashboard_order loop (từng đơn) ---
 t0 = time.time()
 result = [
@@ -140,6 +147,7 @@ result = [
         page_kit_tmpl_ids=page_kit_tmpl_ids,
         page_kit_bom_map=page_kit_bom_map,
         page_blocking_by_so=page_blocking_by_so,
+        page_kit_comp_free=page_kit_comp_free,
     )
     for so in page_sales
 ]
