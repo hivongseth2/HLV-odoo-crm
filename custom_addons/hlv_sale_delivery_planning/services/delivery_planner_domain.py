@@ -1,10 +1,62 @@
 from odoo import models
+from odoo.osv import expression
 import pytz
 from datetime import datetime, timedelta
 
 
 class DeliveryPlannerServiceDomain(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
+
+    def _get_current_user_misa_codes(self):
+        """Mã sale MISA mà CHÍNH tài khoản đang đăng nhập (self.env.user) được cấu hình xem trên
+        trang /sale_plan (res.users.x_misa_saler_codes, field của module misa_invoice_status_report
+        — dùng getattr vì hlv_sale_delivery_planning không depend cứng module đó, giống cách các
+        module khác đọc field Studio x_studio_misa_saler_code)."""
+        codes = []
+        seen = set()
+        for part in (getattr(self.env.user, 'x_misa_saler_codes', '') or '').split(','):
+            code = part.strip()
+            if code and code.upper() not in seen:
+                seen.add(code.upper())
+                codes.append(code)
+        return codes
+
+    def _get_mine_only_domain(self):
+        """Domain cho filter "Đơn của tôi": đơn khớp 1 trong các mã sale MISA đã khai báo cho tài
+        khoản đang đăng nhập, HOẶC (nếu tài khoản được đánh dấu x_handle_unassigned_saler_orders)
+        đơn không có mã sale MISA nào (VD: đơn Shopee). Trả về None nếu tài khoản chưa được cấu
+        hình gì cả — caller (_build_search_domain) coi None là "fail-closed" (trả về rỗng), KHÔNG
+        phải "không giới hạn", vì mục đích filter này là tránh sale bấm nhầm đơn của người khác."""
+        codes = self._get_current_user_misa_codes()
+        handle_unassigned = bool(getattr(self.env.user, 'x_handle_unassigned_saler_orders', False))
+        sub_domains = [
+            ['|'] * (len(codes) - 1) + [('x_studio_misa_saler_code', '=ilike', c) for c in codes]
+        ] if codes else []
+        if handle_unassigned:
+            # Đơn Shopee/nhập tay thường được ghi x_studio_misa_saler_code = '' (chuỗi rỗng) thay
+            # vì để trống hẳn (NULL) — phải khớp CẢ 2 trường hợp, nếu không chỉ dùng ('=', False)
+            # domain sẽ bỏ sót toàn bộ đơn có giá trị '' (lý do filter từng không lên đơn Shopee).
+            sub_domains.append(['|',
+                ('x_studio_misa_saler_code', '=', False),
+                ('x_studio_misa_saler_code', '=', ''),
+            ])
+        if not sub_domains:
+            return None
+        return expression.OR(sub_domains)
+
+    def _user_can_print_sale_order(self, sale_order):
+        """Tài khoản đang đăng nhập (self.env.user) có được phép GỬI IN phiếu của đơn này không —
+        dùng CHUNG đúng quy tắc với filter "Đơn của tôi" (khớp mã sale MISA, hoặc đơn không có mã
+        — VD Shopee — nếu tài khoản được đánh dấu x_handle_unassigned_saler_orders), nhưng ÁP DỤNG
+        LUÔN bất kể toggle "Đơn của tôi" đang bật/tắt — vì mục đích là chặn in nhầm đơn người khác,
+        không phải chỉ để hiển thị danh sách. Phải gọi lại đúng hàm này ở server khi xử lý yêu cầu
+        in (preview_pick_slip/confirm_print_pick_slip), KHÔNG suy luận qua trạng thái toggle phía
+        frontend — client chỉ dùng kết quả này để ẩn nút, không phải nơi quyết định."""
+        order_code = (sale_order.x_studio_misa_saler_code or '').strip()
+        if not order_code:
+            return bool(getattr(self.env.user, 'x_handle_unassigned_saler_orders', False))
+        codes = self._get_current_user_misa_codes()
+        return order_code.upper() in {c.upper() for c in codes}
 
     def _get_today_delivered_so_ids(self):
         """SO ID có ít nhất 1 phiếu OUT done trong NGÀY HÔM NAY (theo TZ user).
@@ -36,6 +88,7 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
         self, search_query, filter_warehouse_id,
         filter_delivery_status, filter_date_from, filter_date_to,
         filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
+        filter_mine=False,
     ):
         """Xây dựng domain tìm kiếm Sale Order dựa trên các bộ lọc."""
         search_query = (search_query or '').strip()
@@ -130,5 +183,13 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
                     domain += [('tag_ids', 'in', ids)]
             except (ValueError, TypeError):
                 pass
+
+        if filter_mine:
+            mine_domain = self._get_mine_only_domain()
+            # Fail-closed: nếu tài khoản chưa được cấu hình mã sale MISA lẫn cờ
+            # "xử lý đơn không có mã" thì KHÔNG được coi là "không giới hạn" —
+            # mục đích của filter này là tránh sale bấm nhầm đơn của người khác,
+            # nên khi thiếu cấu hình phải trả về rỗng, không phải trả về tất cả.
+            domain += mine_domain if mine_domain is not None else [('id', '=', 0)]
 
         return domain

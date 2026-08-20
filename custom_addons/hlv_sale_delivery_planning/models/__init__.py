@@ -1,6 +1,7 @@
 from . import sale_order
 from . import res_users
 from . import res_config_settings
+from . import stock_warehouse
 from . import stock_picking
 from . import stock_move
 from . import ir_actions_report
@@ -10,3 +11,4 @@ from . import delivery_planner_snapshot
 from . import picking_packer_wizard
 from . import sale_plan_mention_notification
 from . import sale_plan_web_push_subscription
+from . import iot_print_queue

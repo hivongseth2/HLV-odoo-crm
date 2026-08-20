@@ -23,6 +23,7 @@ import { DeliveryPlannerDisplayHelpersMixin } from "./delivery_planner_display_h
 import { DeliveryPlannerDrawerMessagesMixin } from "./delivery_planner_drawer_messages_mixin";
 import { DeliveryPlannerTransferMixin } from "./delivery_planner_transfer_mixin";
 import { DeliveryPlannerRelocationMixin } from "./delivery_planner_relocation_mixin";
+import { DeliveryPlannerIotPrintMixin } from "./delivery_planner_iot_print_mixin";
 
 export class DeliveryPlannerDashboard extends Component {
     static template = "hlv_sale_delivery_planning.Dashboard";
@@ -210,6 +211,10 @@ export class DeliveryPlannerDashboard extends Component {
             busListening: false,
             busServiceAvailable: false,
             desktopNotificationPermission: (typeof window !== 'undefined' && 'Notification' in window) ? Notification.permission : 'unsupported',
+
+            isIotPrintQueueDrawerOpen: false,
+            iotPrintQueueItems: [],
+            iotPrintQueueLoading: false,
         });
 
         this.notification = useService("notification");
@@ -238,9 +243,11 @@ export class DeliveryPlannerDashboard extends Component {
                 this._onBusDataChanged = (payload) => this._onDataChanged(payload);
                 this._onBusNewPortalMessage = (payload) => this.onNewPortalMessage(payload);
                 this._onBusPrefChanged = (payload) => this._onPreferenceChanged(payload);
+                this._onBusIotPrintQueueChanged = () => this.processIotPrintQueue();
                 this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
                 this.busService.subscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
+                this.busService.subscribe("iot_print_queue_changed", this._onBusIotPrintQueueChanged);
                 this.state.busListening = true;
             }
 
@@ -279,6 +286,13 @@ export class DeliveryPlannerDashboard extends Component {
             this.pollUnreadMessages(false);
         }, 15000);
 
+        // Xử lý hàng chờ in IoT ngay khi mở dashboard (bắt kịp các yêu cầu gửi lúc chưa ai mở),
+        // rồi poll fallback mỗi 20s phòng khi bus không ổn định — không cần ai bấm tay.
+        this.processIotPrintQueue();
+        this.iotPrintQueuePollingInterval = setInterval(() => {
+            this.processIotPrintQueue();
+        }, 20000);
+
         onWillDestroy(() => {
             if (this.busService) {
                 if (this._onBusDataChanged) {
@@ -290,11 +304,17 @@ export class DeliveryPlannerDashboard extends Component {
                 if (this._onBusPrefChanged) {
                     this.busService.unsubscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
                 }
+                if (this._onBusIotPrintQueueChanged) {
+                    this.busService.unsubscribe("iot_print_queue_changed", this._onBusIotPrintQueueChanged);
+                }
                 this.busService.deleteChannel("delivery_planner_channel");
                 this.state.busListening = false;
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
+            }
+            if (this.iotPrintQueuePollingInterval) {
+                clearInterval(this.iotPrintQueuePollingInterval);
             }
             if (this._dataChangedDebounce) {
                 clearTimeout(this._dataChangedDebounce);
@@ -324,6 +344,7 @@ function applyPlannerMixin(mixinClass) {
     DeliveryPlannerDrawerMessagesMixin,
     DeliveryPlannerTransferMixin,
     DeliveryPlannerRelocationMixin,
+    DeliveryPlannerIotPrintMixin,
 ].forEach(applyPlannerMixin);
 
 registry.category("actions").add("hlv_sale_delivery_planning.dashboard", DeliveryPlannerDashboard);
