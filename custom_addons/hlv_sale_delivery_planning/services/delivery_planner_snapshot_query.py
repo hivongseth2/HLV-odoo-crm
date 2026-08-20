@@ -7,7 +7,7 @@ the visible page. If the snapshot is incomplete or dirty, callers fall back to
 the existing full realtime pipeline.
 """
 
-from odoo import api, fields, models
+from odoo import api, models
 
 from ..models.delivery_planner_snapshot import SNAPSHOT_LOGIC_VERSION
 
@@ -29,11 +29,14 @@ class DeliveryPlannerServiceSnapshotQuery(models.AbstractModel):
         snapshots = snapshot_model.search([('sale_order_id', 'in', sales.ids)])
         if len(snapshots) != len(sales):
             return None
-        today = fields.Date.context_today(self)
+        # KHÔNG còn yêu cầu snapshot_date == today: dirty=True giờ được invalidate đúng lúc
+        # bởi hook trên sale/picking/move (đơn của chính nó) VÀ hook theo sản phẩm khi tồn
+        # kho đổi do BẤT KỲ đơn nào khác (xem stock_move.py) — nên dirty=False là đủ tin,
+        # không cần ép tính lại toàn bộ mỗi ngày (điều mà cron không bao giờ bắt kịp nổi với
+        # ~24k snapshot). Chỉ has_delivered_today mới thực sự phụ thuộc lịch, được cron
+        # _expire_delivered_today_flags() xử lý riêng, không cần snapshot_date ở đây.
         if any(
-            snap.dirty
-            or snap.snapshot_date != today
-            or snap.logic_version != SNAPSHOT_LOGIC_VERSION
+            snap.dirty or snap.logic_version != SNAPSHOT_LOGIC_VERSION
             for snap in snapshots
         ):
             return None

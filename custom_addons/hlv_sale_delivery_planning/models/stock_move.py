@@ -19,7 +19,39 @@ class StockMove(models.Model):
             # Only notify for moves linked to sale orders (avoid noise from internal/MRP moves)
             if any(m.sale_line_id or (m.picking_id and m.picking_id.sale_id) for m in self[:5]):
                 self._notify_delivery_planner_changed()
+        if vals.get('state') == 'done':
+            # Move này hoàn tất nghĩa là tồn kho THẬT SỰ thay đổi cho (các) sản phẩm của nó —
+            # dù move này không thuộc đơn bán nào (VD phiếu nhập từ PO), các đơn KHÁC đang chờ
+            # đúng sản phẩm đó cũng cần tính lại stock_status. Tách riêng khỏi check phía trên
+            # vì phía trên chỉ bắt đơn của CHÍNH move này, không bắt được ảnh hưởng chéo.
+            self._notify_delivery_planner_product_availability_changed()
         return res
+
+    def _notify_delivery_planner_product_availability_changed(self):
+        """Đánh dấu dirty cho MỌI đơn khác (chưa giao đủ) đang chờ đúng sản phẩm vừa có move
+        hoàn tất — thay cho việc reset toàn bộ snapshot mỗi ngày (không kịp với ~24k dòng, xem
+        delivery_planner_snapshot.cron_refresh_dirty_snapshots). Chỉ 1 query nhỏ, có index trên
+        product_id/state, không quét toàn bộ đơn."""
+        product_ids = self.mapped('product_id').ids
+        if not product_ids:
+            return
+        self.env.cr.execute("""
+            SELECT DISTINCT sol.order_id
+              FROM sale_order_line sol
+              JOIN sale_order so ON so.id = sol.order_id
+             WHERE sol.product_id = ANY(%s)
+               AND so.state IN ('sale', 'done')
+               AND sol.product_uom_qty > COALESCE(sol.qty_delivered, 0)
+        """, (product_ids,))
+        so_ids = {row[0] for row in self.env.cr.fetchall()}
+        if not so_ids:
+            return
+        try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().mark_dirty_for_sale_orders(
+                so_ids, reason='stock.move.product_availability'
+            )
+        except Exception:
+            _logger.debug('Failed to mark dirty for product availability change', exc_info=True)
 
     def _action_assign(self, *args, **kwargs):
         res = super()._action_assign(*args, **kwargs)
