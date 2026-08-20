@@ -1007,12 +1007,31 @@ class MisaExtensionController(http.Controller):
         # company_registry chính xác nhất khi có (unique theo field help text của
         # chính field này) — thử trước cả tax_code, vì tax_code có thể bị trùng
         # giữa nhiều công ty (đã gặp thật, xem comment ở trên).
+        #
+        # QUAN TRỌNG: nếu company_registry ĐÃ được cung cấp (bắt được từ đúng
+        # lựa chọn của người dùng) mà KHÔNG khớp partner nào trong Odoo, TUYỆT
+        # ĐỐI không được rơi xuống tax_code/account_name — 2 công ty trùng tên
+        # (và có thể trùng cả mã số thuế, đã gặp thật) nhưng khác company_registry
+        # sẽ khiến account_name khớp NHẦM sang công ty kia rồi trả về tài khoản
+        # Loyalty của công ty sai. Coi "có company_registry nhưng không khớp" là
+        # kết luận cuối cùng: trả rỗng, không đoán tiếp.
         if company_registry:
             partner = env['res.partner'].sudo().search([
                 ('active', '=', True),
                 ('company_registry', '=', company_registry),
             ], limit=1)
             _logger.info("MISA Loyalty API: kết quả khớp theo company_registry -> partner=%s", partner)
+            if not partner:
+                _logger.warning(
+                    "MISA Loyalty API: company_registry=%r được cung cấp nhưng KHÔNG khớp partner nào "
+                    "trong Odoo -> KHÔNG fallback sang tax_code/account_name (tránh trả nhầm tài khoản "
+                    "Loyalty của công ty khác trùng tên) -> trả về danh sách rỗng.",
+                    company_registry,
+                )
+                return request.make_response(
+                    json.dumps({"ok": True, "data": {"accounts": [], "default_pct": 0.0, "default_account_id": False}}),
+                    headers=[("Content-Type", "application/json")]
+                )
 
         if not partner and tax_code:
             normalized_tax_code = re.sub(r'[^0-9a-zA-Z]', '', tax_code).upper()
