@@ -248,7 +248,8 @@
                             <th class="hlv-col-frozen hlv-col-search">
                                 <input type="search" placeholder="Tìm Mã đơn / KH..."
                                        t-att-value="state.searchQuery"
-                                       t-on-input="(ev) => { this.state.searchQuery = ev.target.value; this.onSearchKeyup({ key: '' }); }"
+                                       t-on-input="(ev) => { this.state.searchQuery = ev.target.value; }"
+                                       t-on-keyup="onSearchKeyup"
                                        t-on-click.stop=""/>
                             </th>
                             <th class="hlv-col-search">
@@ -258,7 +259,8 @@
                             <th class="hlv-col-search">
                                 <input type="search" placeholder="Tìm KH..."
                                        t-att-value="state.searchQuery"
-                                       t-on-input="(ev) => { this.state.searchQuery = ev.target.value; this.onSearchKeyup({ key: '' }); }"
+                                       t-on-input="(ev) => { this.state.searchQuery = ev.target.value; }"
+                                       t-on-keyup="onSearchKeyup"
                                        t-on-click.stop=""/>
                             </th>
                             <th class="hlv-col-search">
@@ -316,7 +318,8 @@
                             <th class="hlv-col-search">
                                 <input type="search" placeholder="HTGH..."
                                        t-att-value="state.filterHtgh"
-                                       t-on-input="(ev) => { this.state.filterHtgh = ev.target.value; this.onSearchKeyup({ key: '' }); }"
+                                       t-on-input="(ev) => { this.state.filterHtgh = ev.target.value; }"
+                                       t-on-keyup="onSearchKeyup"
                                        t-on-click.stop=""/>
                             </th>
                             <th class="hlv-col-search">
@@ -330,7 +333,8 @@
                             <th class="hlv-col-search">
                                 <input type="search" placeholder="Mã NV..."
                                        t-att-value="state.filterSalerCode"
-                                       t-on-input="(ev) => { this.state.filterSalerCode = ev.target.value; this.onSearchKeyup({ key: '' }); }"
+                                       t-on-input="(ev) => { this.state.filterSalerCode = ev.target.value; }"
+                                       t-on-keyup="onSearchKeyup"
                                        t-on-click.stop=""/>
                             </th>
                             <th class="hlv-col-search">

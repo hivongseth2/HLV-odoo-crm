@@ -90,39 +90,23 @@ export class DeliveryPlannerDisplayMixin {
         this.state.filterHtgh = (this.state.filterHtgh || "").trim();
     }
 
+    /** Search/filter theo Mã NV MISA/HTGH chỉ chạy khi bấm Enter — không còn debounce theo
+     * từng ký tự gõ nữa (mỗi lần gõ đều bắn 1 request get_delivery_dashboard_data thật xuống
+     * server, xem [[delivery_planner_data_mixin]] — gõ nhanh dễ dồn request dù đã coalescing). */
     async onSearchKeyup(ev) {
-        if (ev.key === "Enter") {
-            if (this._searchDebounceTimer) {
-                clearTimeout(this._searchDebounceTimer);
-                this._searchDebounceTimer = null;
-            }
-            this._normalizeTextFilters();
-            this.state.currentPage = 1;
-            this.state.selectedSOIds = new Set();
-            await this.fetchData();
+        if (ev.key !== "Enter") {
             return;
         }
-        if (this._searchDebounceTimer) {
-            clearTimeout(this._searchDebounceTimer);
-        }
-        this._searchDebounceTimer = setTimeout(async () => {
-            this._searchDebounceTimer = null;
-            this._normalizeTextFilters();
-            this.state.currentPage = 1;
-            this.state.selectedSOIds = new Set();
-            await this.fetchData();
-        }, 350);
+        this._normalizeTextFilters();
+        this.state.currentPage = 1;
+        this.state.selectedSOIds = new Set();
+        await this.fetchData();
     }
 
-    /** Nút "x" xóa search — hủy debounce timer đang chờ (nếu có) rồi fetch ngay, tránh 1 lần
-     * gọi thừa sau đó khi timer cũ vẫn còn treo. Tách thành method riêng (thay vì inline
-     * nhiều dòng trong t-on-click) vì QWeb compiler không parse được arrow function có
-     * if(){...} lồng trong {...} ngay trong giá trị thuộc tính. */
+    /** Nút "x" xóa search — tách thành method riêng (thay vì inline trong t-on-click) vì QWeb
+     * compiler không parse được arrow function có nhiều statement/{} lồng ngay trong giá trị
+     * thuộc tính. */
     async clearSearchAndFetch() {
-        if (this._searchDebounceTimer) {
-            clearTimeout(this._searchDebounceTimer);
-            this._searchDebounceTimer = null;
-        }
         this.state.searchQuery = '';
         await this.fetchData();
     }
