@@ -183,6 +183,15 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         if not page_sales:
             return {}
 
+        # Làm nóng prefetch picking_ids -> move_ids -> sale_line_id/product_id cho TOÀN TRANG
+        # một lần — nếu không, vòng lặp per-SO dưới đây (so.picking_ids, pk.move_ids) sẽ fetch
+        # riêng lẻ từng đơn (đo thực tế: ~700 query dư cho 373 đơn khi env chưa từng truy cập
+        # các field này, xem bin/profile_cold_start.py — đây LUÔN xảy ra trên request HTTP thật
+        # vì mỗi request là 1 env/cache mới, không như test lặp lại trong cùng 1 shell).
+        page_moves = page_sales.mapped('picking_ids').mapped('move_ids')
+        page_moves.mapped('sale_line_id')
+        page_moves.mapped('product_id')
+
         # Bước 1: Xác định shortage per SO từ product_availabilities đã có
         all_tmpl_ids = page_sales.mapped('order_line.product_id.product_tmpl_id').ids
         kits = self.env['mrp.bom'].sudo().search([

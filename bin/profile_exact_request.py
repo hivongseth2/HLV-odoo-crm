@@ -50,17 +50,25 @@ KWARGS = dict(
 SEP = "=" * 90
 def section(t): print(f"\n{SEP}\n  {t}\n{SEP}")
 
-section("Gọi lại đúng request thật (kho=3, pending_partial, limit=372, search rỗng)")
-print(f"  kwargs: {KWARGS}")
-
-# Chạy 2 lần liên tiếp: lần 1 có thể vẫn phải "làm nóng" cache location->warehouse
-# (nếu server vừa restart), lần 2 mới phản ánh đúng tốc độ ổn định.
+section("A) Chạy bằng user MẶC ĐỊNH của shell (thường là superuser/OdooBot — BỎ QUA ir.rule)")
+print(f"  env.user hiện tại: {env.user.name!r} (uid={env.user.id}, is superuser={env.user._is_superuser()})")
 for i in (1, 2):
     t0 = time.time()
     res = env['sale.order'].get_delivery_dashboard_data(**KWARGS)
     t1 = time.time()
     print(f"  Lần {i}: {t1 - t0:.3f}s | total_count={res.get('total_count')} | orders_returned={len(res.get('orders', []))}")
 
+section("B) Chạy ĐÚNG bằng user thật của request (uid=2, có áp ir.rule/record rules)")
+real_user_env = env(user=2)
+real_user = real_user_env.user
+print(f"  Chạy với user: {real_user.name!r} (uid={real_user.id}, is superuser={real_user._is_superuser()})")
+for i in (1, 2):
+    t0 = time.time()
+    res = real_user_env['sale.order'].get_delivery_dashboard_data(**KWARGS)
+    t1 = time.time()
+    print(f"  Lần {i}: {t1 - t0:.3f}s | total_count={res.get('total_count')} | orders_returned={len(res.get('orders', []))}")
+
 section("XONG")
-print("  Nếu lần 2 vẫn > 5s -> vấn đề không nằm ở tính toán Python/DB nữa, quay lại nghi ngờ")
-print("  worker/connection contention trên Odoo.sh (nên so lại với Network tab TTFB cùng lúc).")
+print("  So sánh A) vs B): nếu B) chậm hẳn so với A) (kể cả lần 2, đã 'warm') -> đúng là do")
+print("  ir.rule/record rules áp cho user thật (uid=2), không phải cold-cache hay worker nữa —")
+print("  cần xem lại rule/domain phân quyền trên sale.order (và các model liên quan) đang nặng ở đâu.")

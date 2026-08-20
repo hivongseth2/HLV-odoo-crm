@@ -280,15 +280,25 @@ export class DeliveryPlannerDashboard extends Component {
             this._isCacheRestored = false;
         });
 
-        this.pollUnreadMessages(true); // Initial fetch
+        // Trì hoãn 2 lời gọi nền này vài giây sau khi mount — tránh bắn ĐỒNG THỜI với
+        // fetchData() (đường chính, người dùng đang chờ xem ngay) lúc component vừa khởi tạo.
+        // Odoo.sh chỉ có số lượng HTTP worker hạn chế; bắn 3+ request cùng lúc lúc mount khiến
+        // fetchData() phải xếp hàng chờ dù bản thân nó tính rất nhanh (đo qua shell chỉ ~3.3s,
+        // nhưng UI luôn ≥10s — chênh lệch không giải thích được bằng code/DB, nghi ngờ chính là
+        // tranh chấp worker do các polling nền này tự gây ra ngay lúc mount).
+        this._initialMessagePollTimeout = setTimeout(() => {
+            this.pollUnreadMessages(true); // Initial fetch
+        }, 2000);
         // Polling fallback cho notification (chạy mỗi 15s) vì bus trên server cấu hình có thể không ổn định
         this.messagePollingInterval = setInterval(() => {
             this.pollUnreadMessages(false);
         }, 15000);
 
-        // Xử lý hàng chờ in IoT ngay khi mở dashboard (bắt kịp các yêu cầu gửi lúc chưa ai mở),
-        // rồi poll fallback mỗi 20s phòng khi bus không ổn định — không cần ai bấm tay.
-        this.processIotPrintQueue();
+        // Xử lý hàng chờ in IoT — trì hoãn lần gọi đầu (không cần tức thời tới mức tranh worker
+        // với fetchData()), rồi poll fallback mỗi 20s phòng khi bus không ổn định.
+        this._initialIotQueueTimeout = setTimeout(() => {
+            this.processIotPrintQueue();
+        }, 2500);
         this.iotPrintQueuePollingInterval = setInterval(() => {
             this.processIotPrintQueue();
         }, 20000);
@@ -309,6 +319,12 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 this.busService.deleteChannel("delivery_planner_channel");
                 this.state.busListening = false;
+            }
+            if (this._initialMessagePollTimeout) {
+                clearTimeout(this._initialMessagePollTimeout);
+            }
+            if (this._initialIotQueueTimeout) {
+                clearTimeout(this._initialIotQueueTimeout);
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
