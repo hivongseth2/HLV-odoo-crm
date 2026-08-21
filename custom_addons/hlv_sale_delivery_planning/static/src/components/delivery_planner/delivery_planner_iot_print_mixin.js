@@ -44,7 +44,13 @@ export class DeliveryPlannerIotPrintMixin {
         this.state.iotPrintQueueLoading = true;
         try {
             this.state.iotPrintQueueItems = await this.orm.call(
-                'hlv.iot.print.queue', 'get_recent_for_dashboard', [], { limit: 100 }
+                'hlv.iot.print.queue', 'get_recent_for_dashboard', [], {
+                    limit: 100,
+                    warehouse_id: this.state.iotQueueFilterWarehouseId || false,
+                    date_from: this.state.iotQueueFilterDateFrom || false,
+                    date_to: this.state.iotQueueFilterDateTo || false,
+                    picking_state: this.state.iotQueueFilterPickingState || false,
+                }
             );
             // Trạng thái ONLINE/OFFLINE máy in theo kho — để kho/dispatcher thấy ngay lý do 1
             // yêu cầu có thể bị kẹt/lỗi, không cần đợi bấm in rồi mới biết máy in mất kết nối.
@@ -56,6 +62,21 @@ export class DeliveryPlannerIotPrintMixin {
         } finally {
             this.state.iotPrintQueueLoading = false;
         }
+    }
+
+    /** Đổi 1 filter của drawer "Yêu cầu in (IoT)" rồi tải lại danh sách ngay — lọc theo kho,
+     * theo ngày yêu cầu, theo trạng thái PHIẾU LẤY HÀNG (không phải trạng thái hàng chờ in). */
+    async setIotQueueFilter(key, value) {
+        this.state[key] = value;
+        await this.loadIotPrintQueueDrawer();
+    }
+
+    async clearIotQueueFilters() {
+        this.state.iotQueueFilterWarehouseId = '';
+        this.state.iotQueueFilterDateFrom = '';
+        this.state.iotQueueFilterDateTo = '';
+        this.state.iotQueueFilterPickingState = '';
+        await this.loadIotPrintQueueDrawer();
     }
 
     openIotPrintQueueDrawer() {
