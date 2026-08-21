@@ -49,6 +49,21 @@ class StockHoldRequest(models.Model):
     approved_by_id = fields.Many2one("res.users", string="Người duyệt", readonly=True, copy=False)
     approved_date = fields.Datetime(string="Ngày duyệt", readonly=True, copy=False)
     reject_reason = fields.Text(string="Lý do từ chối", copy=False)
+    hold_location_names = fields.Char(
+        string="Vị trí đang giữ", compute="_compute_hold_location_names",
+        help="Vị trí (bin) thực tế đang giữ hàng, lấy từ phiếu giữ hàng nội bộ — để sale biết "
+             "hàng đang nằm ở đâu trong kho.",
+    )
+
+    @api.depends("state", "hold_picking_id", "hold_picking_id.move_line_ids.location_id")
+    def _compute_hold_location_names(self):
+        for rec in self:
+            picking = rec.hold_picking_id.sudo() if rec.state == "approved" else False
+            if picking:
+                locations = picking.move_line_ids.location_id
+                rec.hold_location_names = ", ".join(sorted(set(locations.mapped("display_name")))) or False
+            else:
+                rec.hold_location_names = False
 
     @api.model_create_multi
     def create(self, vals_list):

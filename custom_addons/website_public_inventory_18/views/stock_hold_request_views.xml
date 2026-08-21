@@ -67,6 +67,7 @@
                         <field name="approved_date"/>
                         <field name="reject_reason" invisible="state != 'rejected'"/>
                         <field name="hold_picking_id"/>
+                        <field name="hold_location_names" invisible="state != 'approved'"/>
                     </group>
                 </sheet>
             </form>
