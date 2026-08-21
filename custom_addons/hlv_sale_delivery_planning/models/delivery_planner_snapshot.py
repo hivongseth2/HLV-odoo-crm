@@ -135,12 +135,16 @@ class DeliveryPlannerSnapshot(models.Model):
         limit = max(int(limit or 50), 1)
         snapshot_model = self.sudo()
         snapshot_model._ensure_missing_active_snapshots(limit=limit)
+        snapshot_model._expire_delivered_today_flags()
 
-        today = fields.Date.context_today(self)
+        # KHÔNG còn reset toàn bộ theo snapshot_date != today mỗi ngày nữa — với ~24k dòng,
+        # cron limit=50/phút không bao giờ bắt kịp trước khi ngày tiếp theo lại reset tiếp,
+        # khiến fast-path dashboard gần như luôn bị vô hiệu hóa. dirty=True giờ là tín hiệu
+        # DUY NHẤT (được invalidate đúng lúc bởi các hook trên sale/picking/move VÀ hook mới
+        # theo sản phẩm khi tồn kho đổi — xem stock_move.py), nên chỉ cần xử lý đúng tập thật
+        # sự cần tính lại, không phải toàn bộ.
         snapshots = snapshot_model.search([
-            '|',
             ('dirty', '=', True),
-            ('snapshot_date', '!=', today),
         ], order='write_date asc, id asc', limit=limit)
         orders = snapshots.mapped('sale_order_id').exists()
         if not orders:
@@ -166,6 +170,22 @@ class DeliveryPlannerSnapshot(models.Model):
             )
         snapshot_model.upsert_from_status_data(orders, status_by_so)
         return len(orders)
+
+    @api.model
+    def _expire_delivered_today_flags(self):
+        """has_delivered_today chỉ đúng trong đúng ngày phiếu OUT hoàn tất — sang ngày mới,
+        cờ này phải tự tắt dù không có ghi nào mới lên đơn đó. Đây là tập RẤT NHỎ (chỉ các
+        đơn giao hôm qua/trước đó vẫn còn để sót True), nên xử lý bằng UPDATE thẳng, không đi
+        qua pipeline tính lại trạng thái đầy đủ (rẻ hơn nhiều so với reset toàn bộ snapshot)."""
+        today = fields.Date.context_today(self)
+        self.env.cr.execute("""
+            UPDATE hlv_delivery_planner_snapshot
+               SET has_delivered_today = false,
+                   snapshot_date = %s
+             WHERE has_delivered_today = true
+               AND snapshot_date != %s
+        """, (today, today))
+        self.env.invalidate_all()
 
     @api.model
     def _ensure_missing_active_snapshots(self, limit=50):

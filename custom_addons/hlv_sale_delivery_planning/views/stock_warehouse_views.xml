@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_warehouse_form_iot_printer" model="ir.ui.view">
+        <field name="name">stock.warehouse.form.iot.printer</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="x_iot_printer_device_id"
+                       options="{'no_create': True}"
+                       placeholder="Chưa gán máy in IoT cho kho này"/>
+                <field name="x_iot_report_id"
+                       options="{'no_create': True}"
+                       placeholder="Mặc định (Hoạt động lấy hàng TSN)"/>
+                <field name="x_iot_queue_limit" placeholder="0 = không giới hạn"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

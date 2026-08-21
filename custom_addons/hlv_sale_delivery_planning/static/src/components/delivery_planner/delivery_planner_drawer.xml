@@ -530,6 +530,38 @@
                     </div>
                 </div>
 
+                <!-- Nhật ký in (IoT) — đối soát khi sale nói đã gửi in mà kho không thấy giấy -->
+                <div>
+                    <h6 class="text-muted text-uppercase small mb-3 cursor-pointer d-flex align-items-center"
+                        t-on-click="() => this.toggleDrawerPrintLogSection()">
+                        <i class="fa fa-history me-1" title="Nhật ký"></i> Nhật Ký In (IoT)
+                        <i t-if="!this.isSectionCollapsed('drawer_print_log')" class="fa fa-refresh ms-auto me-2"
+                           title="Làm mới nhật ký"
+                           t-on-click.stop="() => this.refreshDrawerPrintLog()"></i>
+                        <i t-attf-class="fa #{this.isSectionCollapsed('drawer_print_log') ? 'fa-chevron-right ms-auto' : 'fa-chevron-down'} text-muted small"></i>
+                    </h6>
+                    <div t-attf-class="bg-white rounded border p-3 mb-4 #{this.isSectionCollapsed('drawer_print_log') ? 'd-none' : ''}">
+                        <div t-if="state.selectedOrder._printLogLoading" class="text-center text-muted py-3">
+                            <i class="fa fa-spinner fa-spin me-1"></i>Đang tải...
+                        </div>
+                        <div t-elif="!state.selectedOrder._printLog or !state.selectedOrder._printLog.length" class="text-muted small">
+                            Chưa có yêu cầu in nào cho đơn này.
+                        </div>
+                        <div t-else="" class="list-group list-group-flush">
+                            <t t-foreach="state.selectedOrder._printLog" t-as="log" t-key="log_index">
+                                <div class="list-group-item px-0 py-2">
+                                    <div class="small text-muted" style="font-size:.72rem">
+                                        <t t-esc="this._formatIotQueueTime(log.date)"/> · <t t-esc="log.author"/>
+                                    </div>
+                                    <div class="small" style="color:#334155">
+                                        <t t-esc="log.body"/>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tin nhắn & Chat -->
                 <div class="mb-4">
                     <h6 class="text-muted text-uppercase small mb-3 d-flex align-items-center">
@@ -574,9 +606,9 @@
                         </div>
                         <button class="btn btn-sm btn-primary px-3"
                                 t-on-click="() => this.sendDrawerMessage()"
-                                t-att-disabled="state.drawerMessageSending || ((!state.drawerMessageText || !state.drawerMessageText.trim()) &amp;&amp; !state.drawerMessageFiles.length)">
-                            <i class="fa fa-paper-plane" t-if="!state.drawerMessageSending"></i>
-                            <i class="fa fa-spinner fa-spin" t-else=""></i>
+                                t-att-disabled="((!state.drawerMessageText || !state.drawerMessageText.trim()) &amp;&amp; !state.drawerMessageFiles.length)">
+                            <i class="fa fa-paper-plane"></i>
+                            <i class="fa fa-spinner fa-spin ms-1" t-if="state.drawerMessageSending"></i>
                         </button>
                     </div>
                     <div t-if="state.drawerMessageFiles.length" class="d-flex flex-wrap gap-1 mb-3">
@@ -712,6 +744,174 @@
                                   <t t-esc="uo._preview"/>
                               </p>
                           </button>
+                      </t>
+                 </div>
+             </div>
+        </div>
+    </t>
+
+    <!-- ================================================================
+         IoT Print Queue Drawer - Danh sách yêu cầu in do sale gửi từ /sale_plan
+         Sử dụng state.iotPrintQueueItems và state.isIotPrintQueueDrawerOpen
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.IotPrintQueueDrawer">
+        <div t-if="state.isIotPrintQueueDrawerOpen"
+             class="offcanvas offcanvas-start show shadow-lg" tabindex="-1"
+             style="visibility: visible; width: 420px; z-index: 1050; position: fixed; top: 0; bottom: 0; left: 0; background: white;"
+             t-on-click.stop="">
+
+             <div class="offcanvas-header bg-info text-white p-3">
+                 <h5 class="offcanvas-title m-0" style="color:white">
+                     <i class="fa fa-print me-2"></i>
+                     Yêu cầu in (IoT) từ sale
+                 </h5>
+                 <button type="button" class="btn-close btn-close-white ms-auto"
+                         aria-label="Close" t-on-click="closeIotPrintQueueDrawer"></button>
+             </div>
+
+             <div class="offcanvas-body p-0 bg-light overflow-auto" style="height: calc(100vh - 70px);">
+                 <!-- Trạng thái ONLINE/OFFLINE máy in theo kho — kho/dispatcher thấy ngay lý do
+                      1 yêu cầu có thể bị kẹt/lỗi (máy in mất kết nối), không cần đợi bấm in. -->
+                 <div t-if="state.iotPrinterStatus.length"
+                      class="d-flex flex-wrap gap-2 p-2 border-bottom bg-white">
+                     <t t-foreach="state.iotPrinterStatus" t-as="ps" t-key="ps.warehouse_id">
+                         <span class="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+                               t-att-class="ps.connected ? 'text-bg-success' : 'text-bg-danger'"
+                               t-att-title="ps.device_name + (ps.last_seen ? (' · lần cuối phản hồi ' + this._formatIotQueueTime(ps.last_seen)) : '')">
+                             <t t-esc="ps.warehouse_name"/>: <t t-esc="ps.connected ? 'Online' : 'Offline'"/>
+                         </span>
+                     </t>
+                 </div>
+                 <!-- Lọc theo kho / ngày yêu cầu / trạng thái phiếu lấy hàng -->
+                 <div class="p-2 border-bottom bg-white d-flex flex-wrap gap-1 align-items-center" style="font-size:.78rem">
+                     <select class="form-select form-select-sm" style="width:auto"
+                             t-att-value="state.iotQueueFilterWarehouseId"
+                             t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterWarehouseId', ev.target.value)">
+                         <option value="">Tất cả kho</option>
+                         <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                             <option t-att-value="wh.id" t-att-selected="wh.id == state.iotQueueFilterWarehouseId">
+                                 <t t-esc="wh.name"/>
+                             </option>
+                         </t>
+                     </select>
+                     <input type="date" class="form-control form-control-sm" style="width:auto"
+                            title="Yêu cầu từ ngày"
+                            t-att-value="state.iotQueueFilterDateFrom"
+                            t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterDateFrom', ev.target.value)"/>
+                     <input type="date" class="form-control form-control-sm" style="width:auto"
+                            title="Yêu cầu đến ngày"
+                            t-att-value="state.iotQueueFilterDateTo"
+                            t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterDateTo', ev.target.value)"/>
+                     <select class="form-select form-select-sm" style="width:auto"
+                             t-att-value="state.iotQueueFilterPickingState"
+                             t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterPickingState', ev.target.value)">
+                         <option value="">Mọi trạng thái phiếu</option>
+                         <option value="assigned">Sẵn sàng</option>
+                         <option value="confirmed">Chờ hàng</option>
+                         <option value="waiting">Chờ phiếu khác</option>
+                         <option value="done">Hoàn thành</option>
+                         <option value="cancel">Đã hủy</option>
+                     </select>
+                     <button type="button" class="btn btn-sm btn-outline-secondary"
+                             t-on-click="() => this.clearIotQueueFilters()">
+                         <i class="fa fa-times me-1"/>Xóa lọc
+                     </button>
+                 </div>
+                 <div t-if="state.iotPrintQueueLoading" class="p-4 text-center text-muted">
+                      <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
+                 </div>
+                 <div t-elif="state.iotPrintQueueItems.length === 0" class="p-4 text-center text-muted">
+                      <i class="fa fa-print fa-3x opacity-50 mb-3"></i><br/>
+                      Chưa có yêu cầu in nào từ trang /sale_plan.
+                 </div>
+                 <div t-else="" class="list-group list-group-flush">
+                      <t t-foreach="state.iotPrintQueueItems" t-as="q" t-key="q.id">
+                          <div class="list-group-item p-3">
+                              <div class="d-flex w-100 justify-content-between mb-1">
+                                  <h6 class="mb-0 fw-bold text-primary"><t t-esc="q.sale_order_name"/></h6>
+                                  <span class="badge"
+                                        t-att-class="{
+                                            pending: 'bg-warning text-dark',
+                                            printing: 'bg-info text-dark',
+                                            printed: 'bg-success',
+                                            error: 'bg-danger',
+                                            cancelled: 'bg-secondary',
+                                        }[q.state] || 'bg-secondary'">
+                                      <t t-esc="{
+                                          pending: 'Chờ in',
+                                          printing: 'Đang in...',
+                                          printed: 'Đã gửi lệnh in',
+                                          error: 'Lỗi',
+                                          cancelled: 'Đã hủy',
+                                      }[q.state] || q.state"/>
+                                  </span>
+                              </div>
+                              <div t-if="q.warehouse_action and q.warehouse_action !== 'none'" class="mb-1">
+                                  <span class="badge"
+                                        t-att-class="q.warehouse_action === 'rejected' ? 'bg-danger' : 'bg-warning text-dark'">
+                                      <i class="fa fa-info-circle me-1"/>
+                                      <t t-esc="q.warehouse_action === 'rejected' ? 'Kho: Từ chối xử lý' : 'Kho: Xử lý sau'"/>
+                                  </span>
+                              </div>
+                              <div t-if="q.pickings and q.pickings.length" class="mb-1 d-flex flex-wrap gap-1">
+                                  <t t-foreach="q.pickings" t-as="pk" t-key="pk.id">
+                                      <span class="badge text-bg-light border d-inline-flex align-items-center gap-1"
+                                            t-att-title="this.translatePickingState(pk.state)">
+                                          <t t-esc="pk.name"/>
+                                          <span class="badge"
+                                                t-att-class="{
+                                                    assigned: 'bg-success',
+                                                    confirmed: 'bg-warning text-dark',
+                                                    waiting: 'bg-warning text-dark',
+                                                    done: 'bg-secondary',
+                                                    cancel: 'bg-danger',
+                                                }[pk.state] || 'bg-secondary'">
+                                              <t t-esc="this.translatePickingState(pk.state)"/>
+                                          </span>
+                                      </span>
+                                  </t>
+                              </div>
+                              <p class="mb-1 small text-muted">
+                                  <i class="fa fa-warehouse me-1"/><t t-esc="q.warehouse_name"/>
+                                  <span class="ms-2"><i class="fa fa-user me-1"/><t t-esc="q.requested_by_name"/></span>
+                              </p>
+                              <p class="mb-1 small text-muted" style="font-size:.72rem">
+                                  <i class="fa fa-clock-o me-1"/>Yêu cầu: <t t-esc="this._formatIotQueueTime(q.requested_at)"/>
+                                  <t t-if="q.printed_at">
+                                      <span class="ms-2"><i class="fa fa-print me-1"/>Đã gửi lệnh in: <t t-esc="this._formatIotQueueTime(q.printed_at)"/></span>
+                                  </t>
+                              </p>
+                              <p t-if="q.state === 'error' and q.error_message" class="mb-1 small text-danger">
+                                  <i class="fa fa-exclamation-triangle me-1"/><t t-esc="q.error_message"/>
+                              </p>
+                              <button t-if="q.state === 'error'" type="button"
+                                      class="btn btn-sm btn-outline-danger mt-1"
+                                      t-on-click="() => this.retryIotPrintQueueItem(q)">
+                                  <i class="fa fa-refresh me-1"/>Thử lại
+                              </button>
+                              <button t-if="q.state === 'printed'" type="button"
+                                      class="btn btn-sm btn-outline-warning mt-1"
+                                      title="Dùng khi đã gửi lệnh in nhưng máy in vật lý không ra giấy"
+                                      t-on-click="() => this.requeueIotPrintQueueItem(q)">
+                                  <i class="fa fa-repeat me-1"/>Máy không ra giấy, gửi lại
+                              </button>
+                              <t t-if="!q.warehouse_action or q.warehouse_action === 'none'">
+                                  <button type="button" class="btn btn-sm btn-outline-warning mt-1 ms-1"
+                                          title="Vẫn giữ trong hàng chờ để xem lại, nhưng không tính vào số đơn đang xử lý của kho"
+                                          t-on-click="() => this.deferIotPrintQueueItem(q)">
+                                      <i class="fa fa-clock-o me-1"/>Xử lý sau
+                                  </button>
+                                  <button type="button" class="btn btn-sm btn-outline-danger mt-1 ms-1"
+                                          title="Đưa yêu cầu này ra khỏi hàng chờ (vẫn giữ lại để đối soát)"
+                                          t-on-click="() => this.rejectIotPrintQueueItem(q)">
+                                      <i class="fa fa-ban me-1"/>Từ chối xử lý
+                                  </button>
+                              </t>
+                              <button t-else="" type="button" class="btn btn-sm btn-outline-secondary mt-1"
+                                      t-on-click="() => this.resumeIotPrintQueueItem(q)">
+                                  <i class="fa fa-undo me-1"/>Xử lý bình thường lại
+                              </button>
+                          </div>
                       </t>
                  </div>
              </div>

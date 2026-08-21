@@ -36,29 +36,74 @@ export class DeliveryPlannerDrawerMessagesMixin {
         this.state.drawerMessagesLoading = false;
     }
 
-    async sendDrawerMessage() {
+    sendDrawerMessage() {
         const body = (this.state.drawerMessageText || '').trim();
-        const attachments = this.state.drawerMessageFiles.map((file) => ({
+        const files = [...this.state.drawerMessageFiles];
+        const attachments = files.map((file) => ({
             name: file.name,
             mimetype: file.mimetype,
             datas: file.datas,
         }));
-        if ((!body && !attachments.length) || !this.state.selectedOrder || this.state.drawerMessageSending) return;
+        if ((!body && !attachments.length) || !this.state.selectedOrder) return;
+
+        if (!this._drawerMessageQueue) this._drawerMessageQueue = [];
+        this._drawerMessageQueue.push({
+            orderId: this.state.selectedOrder.id,
+            body,
+            files,
+            attachments,
+        });
+
+        // Chỉ xóa payload vừa đưa vào queue. Người dùng có thể nhập và gửi
+        // tin tiếp theo trong khi RPC trước vẫn đang chạy.
+        this.state.drawerMessageText = '';
+        this.state.drawerMessageFiles = [];
+        this.state.drawerMentionSuggestions = [];
+        void this._processDrawerMessageQueue();
+    }
+
+    async _processDrawerMessageQueue() {
+        if (this._drawerMessageQueueRunning || !this._drawerMessageQueue?.length) return;
+
+        this._drawerMessageQueueRunning = true;
+        this.state.drawerMessageSending = true;
+        const successfulOrderIds = new Set();
+        const failedItems = [];
 
         try {
-            this.state.drawerMessageSending = true;
-            await this.orm.call(
-                'hlv.delivery.planner.service', 'post_order_message',
-                [this.state.selectedOrder.id, body, attachments]
-            );
-            this.state.drawerMessageText = '';
-            this.state.drawerMessageFiles = [];
-            this.state.drawerMentionSuggestions = [];
-            await this.loadDrawerMessages(this.state.selectedOrder.id);
-        } catch (e) {
-            console.error('sendDrawerMessage error', e);
+            while (this._drawerMessageQueue.length) {
+                const item = this._drawerMessageQueue.shift();
+                try {
+                    await this.orm.call(
+                        'hlv.delivery.planner.service', 'post_order_message',
+                        [item.orderId, item.body, item.attachments]
+                    );
+                    successfulOrderIds.add(item.orderId);
+                } catch (e) {
+                    failedItems.push(item);
+                    console.error('sendDrawerMessage error', e);
+                    this.notification.add('Không gửi được tin nhắn. Nội dung đã được giữ lại.', { type: 'danger' });
+                }
+            }
+
+            const currentOrderId = this.state.selectedOrder?.id;
+            const currentFailures = failedItems.filter((item) => item.orderId === currentOrderId);
+            if (currentFailures.length) {
+                const failedBodies = currentFailures.map((item) => item.body).filter(Boolean);
+                const currentBody = this.state.drawerMessageText || '';
+                this.state.drawerMessageText = [...failedBodies, currentBody].filter(Boolean).join('\n');
+                this.state.drawerMessageFiles = [
+                    ...currentFailures.flatMap((item) => item.files),
+                    ...this.state.drawerMessageFiles,
+                ];
+            }
+            if (currentOrderId && successfulOrderIds.has(currentOrderId)) {
+                await this.loadDrawerMessages(currentOrderId);
+            }
         } finally {
             this.state.drawerMessageSending = false;
+            this._drawerMessageQueueRunning = false;
+            if (this._drawerMessageQueue?.length) void this._processDrawerMessageQueue();
         }
     }
 

@@ -31,27 +31,50 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         if not all_pending_pids or not so_wh_locs:
             return {}
 
-        all_root_locs = list({v[1] for v in so_wh_locs.values()})
+        # Gộp theo (wh_id, root_loc) DUY NHẤT trước khi so khớp location — nhiều đơn
+        # thường dùng CHUNG 1 kho, tránh lặp lại vòng loc y hệt nhau cho MỖI đơn (trước đây
+        # O(số đơn x số location); giờ O(số kho khác nhau x số location) — với 1 kho, 373 đơn
+        # thì giảm ~373 lần cho đúng vòng lặp này).
+        unique_wh_roots = set(so_wh_locs.values())  # {(wh_id, root_loc), ...}
+        all_root_locs = list({root_loc for _wh_id, root_loc in unique_wh_roots})
         child_locs = self.env['stock.location'].sudo().search([
             ('id', 'child_of', all_root_locs), ('usage', '=', 'internal'),
         ])
         loc_to_whs = {}
-        for so_id, (wh_id, root_loc) in so_wh_locs.items():
-            for loc in child_locs:
-                if loc.parent_path and f'/{root_loc}/' in loc.parent_path:
+        for loc in child_locs:
+            if not loc.parent_path:
+                continue
+            for wh_id, root_loc in unique_wh_roots:
+                if f'/{root_loc}/' in loc.parent_path:
                     loc_to_whs.setdefault(loc.id, set()).add(wh_id)
 
         if not loc_to_whs:
             return {}
 
-        raw_moves = self.env['stock.move'].sudo().search_read([
-            ('product_id', 'in', list(all_pending_pids)),
-            ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
-            ('location_id', 'in', list(loc_to_whs.keys())),
-            ('picking_id', '!=', False),
-            ('picking_id.state', 'not in', ('done', 'cancel')),
-            ('sale_line_id', '=', False),
-        ], ['product_id', 'location_id', 'quantity', 'picking_id'])
+        # SQL thẳng thay vì search_read([...], ['product_id', ...]) — search_read() trả
+        # Many2one dạng [id, display_name], buộc tính display_name cho product.product (bị
+        # module renting override nặng) dù ở đây chỉ cần ID. Xem giải thích đầy đủ ở
+        # delivery_planner_stock.py._calculate_po_and_stock_status (cùng bug, đã đo qua
+        # bin/profile_cold_start_full.py).
+        self.env.cr.execute("""
+            SELECT sm.product_id, sm.location_id, sm.quantity, sm.picking_id
+              FROM stock_move sm
+              JOIN stock_picking sp ON sp.id = sm.picking_id
+             WHERE sm.product_id = ANY(%s)
+               AND sm.state IN ('assigned', 'partially_available', 'confirmed', 'waiting')
+               AND sm.location_id = ANY(%s)
+               AND sm.sale_line_id IS NULL
+               AND sp.state NOT IN ('done', 'cancel')
+        """, (list(all_pending_pids), list(loc_to_whs.keys())))
+        raw_moves = [
+            {
+                'product_id': [r[0]] if r[0] else False,
+                'location_id': [r[1]] if r[1] else False,
+                'quantity': r[2],
+                'picking_id': [r[3]] if r[3] else False,
+            }
+            for r in self.env.cr.fetchall()
+        ]
 
         pk_ids = list({mv['picking_id'][0] for mv in raw_moves if mv.get('picking_id')})
         pk_info = {}
@@ -111,6 +134,69 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         }
 
     @api.model
+    def _batch_kit_component_free_stock(self, page_sales, kit_bom_map):
+        """
+        Batch tính tồn khả dụng (quantity - reserved_quantity) cho TẤT CẢ sản phẩm component
+        của Kit (phantom BOM) trên toàn trang, theo từng kho — MỘT LẦN duy nhất.
+
+        Trước đây _format_dashboard_order tự tính lại cái này (1 location search + 1 quant
+        read_group) cho MỖI đơn riêng lẻ — nếu N đơn cùng kho thì lặp lại N lần một kết quả
+        giống hệt nhau. Đo thực tế: 372 đơn cùng kho -> read_group gọi 372 lần, chiếm ~3.2s/6.2s
+        tổng thời gian format trang (xem bin/profile_format_dashboard_order.py).
+
+        Trả về: {(component_product_id, warehouse_id): free_qty}
+        """
+        if not page_sales or not kit_bom_map:
+            return {}
+
+        seen_bom_ids = set()
+        all_comp_prod_ids = set()
+        for bom in (
+            list(kit_bom_map.get('by_product', {}).values())
+            + list(kit_bom_map.get('by_template', {}).values())
+        ):
+            if not bom or bom.id in seen_bom_ids:
+                continue
+            seen_bom_ids.add(bom.id)
+            for comp in bom.bom_line_ids:
+                if comp.product_id:
+                    all_comp_prod_ids.add(comp.product_id.id)
+
+        if not all_comp_prod_ids:
+            return {}
+
+        wh_ids = {so.warehouse_id.id for so in page_sales if so.warehouse_id}
+        if not wh_ids:
+            return {}
+
+        loc_to_wh_id = self._get_loc_to_wh_map(frozenset(wh_ids))
+        if not loc_to_wh_id:
+            return {}
+
+        kit_comp_free = {}
+        for row in self.env['stock.quant'].sudo().read_group(
+            domain=[
+                ('product_id', 'in', list(all_comp_prod_ids)),
+                ('location_id', 'in', list(loc_to_wh_id.keys())),
+            ],
+            fields=['quantity:sum', 'reserved_quantity:sum'],
+            groupby=['product_id', 'location_id'],
+            lazy=False,
+        ):
+            pid_raw = row.get('product_id')
+            loc_raw = row.get('location_id')
+            if not pid_raw or not loc_raw:
+                continue
+            pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
+            loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
+            wh_id = loc_to_wh_id.get(loc_id)
+            if wh_id:
+                free = max((row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0)
+                key = (pid, wh_id)
+                kit_comp_free[key] = kit_comp_free.get(key, 0.0) + free
+        return kit_comp_free
+
+    @api.model
     def _batch_transfer_suggestions(self, page_sales, product_availabilities):
         """
         Batch version: tính transfer_suggestions cho toàn trang trong 1-2 queries
@@ -119,6 +205,15 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         """
         if not page_sales:
             return {}
+
+        # Làm nóng prefetch picking_ids -> move_ids -> sale_line_id/product_id cho TOÀN TRANG
+        # một lần — nếu không, vòng lặp per-SO dưới đây (so.picking_ids, pk.move_ids) sẽ fetch
+        # riêng lẻ từng đơn (đo thực tế: ~700 query dư cho 373 đơn khi env chưa từng truy cập
+        # các field này, xem bin/profile_cold_start.py — đây LUÔN xảy ra trên request HTTP thật
+        # vì mỗi request là 1 env/cache mới, không như test lặp lại trong cùng 1 shell).
+        page_moves = page_sales.mapped('picking_ids').mapped('move_ids')
+        page_moves.mapped('sale_line_id')
+        page_moves.mapped('product_id')
 
         # Bước 1: Xác định shortage per SO từ product_availabilities đã có
         all_tmpl_ids = page_sales.mapped('order_line.product_id.product_tmpl_id').ids
