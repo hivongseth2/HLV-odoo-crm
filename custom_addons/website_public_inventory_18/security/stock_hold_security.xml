@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_stock_hold" model="ir.module.category">
+        <field name="name">Giữ hàng</field>
+        <field name="sequence">56</field>
+    </record>
+
+    <record id="group_stock_hold_approver" model="res.groups">
+        <field name="name">Duyệt yêu cầu giữ hàng</field>
+        <field name="category_id" ref="module_category_stock_hold"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Được phép duyệt/từ chối yêu cầu giữ hàng của sale gửi từ trang /search_stock.</field>
+    </record>
+
+    <!-- Quản lý kho tự động có quyền duyệt giữ hàng -->
+    <record id="stock.group_stock_manager" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_stock_hold_approver'))]"/>
+    </record>
+
+    <record id="stock_hold_request_rule_own" model="ir.rule">
+        <field name="name">Yêu cầu giữ hàng: chỉ xem của mình</field>
+        <field name="model_id" ref="model_stock_hold_request"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="stock_hold_request_rule_approver" model="ir.rule">
+        <field name="name">Yêu cầu giữ hàng: người duyệt xem tất cả</field>
+        <field name="model_id" ref="model_stock_hold_request"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_stock_hold_approver'))]"/>
+    </record>
+</odoo>

@@ -1,0 +1,176 @@
+# -*- coding: utf-8 -*-
+from odoo import api, fields, models, _
+from odoo.exceptions import AccessError, UserError
+
+APPROVER_GROUP = "website_public_inventory_18.group_stock_hold_approver"
+
+
+def _rg_sum(row, base):
+    """read_group() key naming for ':sum' aggregates varies by field/version; check both forms."""
+    v = row.get(f"{base}_sum")
+    if v is None:
+        v = row.get(base)
+    return float(v or 0.0)
+
+
+class StockHoldRequest(models.Model):
+    _name = "stock.hold.request"
+    _description = "Yêu cầu giữ hàng"
+    _order = "create_date desc"
+
+    name = fields.Char(
+        string="Mã yêu cầu", required=True, copy=False, readonly=True,
+        default=lambda self: _("New"),
+    )
+    product_id = fields.Many2one("product.product", string="Sản phẩm", required=True, tracking=True)
+    warehouse_id = fields.Many2one("stock.warehouse", string="Kho hàng", required=True, tracking=True)
+    quantity = fields.Float(string="Số lượng giữ", required=True)
+    hold_until_date = fields.Date(string="Giữ đến ngày", required=True)
+    project_name = fields.Char(string="Dự án", required=True)
+    sale_name = fields.Char(string="Tên sale", required=True)
+    user_id = fields.Many2one(
+        "res.users", string="Người tạo", required=True, readonly=True,
+        default=lambda self: self.env.user,
+    )
+    description = fields.Text(string="Mô tả")
+    company_id = fields.Many2one(
+        "res.company", string="Công ty", related="warehouse_id.company_id", store=True, readonly=True,
+    )
+    state = fields.Selection([
+        ("draft", "Nháp"),
+        ("pending_approval", "Chờ duyệt"),
+        ("approved", "Đang giữ"),
+        ("rejected", "Từ chối"),
+        ("completed", "Hoàn thành"),
+        ("cancelled", "Đã hủy"),
+        ("expired", "Hết hạn"),
+    ], string="Trạng thái", default="draft", required=True, tracking=True, copy=False)
+    hold_picking_id = fields.Many2one("stock.picking", string="Phiếu giữ hàng", readonly=True, copy=False)
+    approved_by_id = fields.Many2one("res.users", string="Người duyệt", readonly=True, copy=False)
+    approved_date = fields.Datetime(string="Ngày duyệt", readonly=True, copy=False)
+    reject_reason = fields.Text(string="Lý do từ chối", copy=False)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get("name", _("New")) == _("New"):
+                vals["name"] = self.env["ir.sequence"].sudo().next_by_code("stock.hold.request") or _("New")
+        return super().create(vals_list)
+
+    def _get_wh_qty(self):
+        """Tồn thực tế & đã giữ tại kho, cùng công thức với controllers/main.py::_get_qty."""
+        self.ensure_one()
+        domain = [
+            ("product_id", "=", self.product_id.id),
+            ("location_id", "child_of", self.warehouse_id.view_location_id.id),
+            ("location_id.usage", "=", "internal"),
+        ]
+        groups = self.env["stock.quant"].sudo().read_group(
+            domain, ["quantity:sum", "reserved_quantity:sum"], [],
+        )
+        if not groups:
+            return 0.0, 0.0
+        g = groups[0]
+        return _rg_sum(g, "quantity"), _rg_sum(g, "reserved_quantity")
+
+    def action_submit(self):
+        for rec in self:
+            if rec.state != "draft":
+                continue
+            if rec.warehouse_id.hold_requires_approval:
+                rec.state = "pending_approval"
+            else:
+                rec._reserve()
+                rec.state = "approved"
+
+    def action_approve(self):
+        if not self.env.user.has_group(APPROVER_GROUP):
+            raise AccessError(_("Bạn không có quyền duyệt yêu cầu giữ hàng."))
+        for rec in self:
+            if rec.state != "pending_approval":
+                continue
+            rec._reserve()
+            rec.write({
+                "state": "approved",
+                "approved_by_id": self.env.user.id,
+                "approved_date": fields.Datetime.now(),
+            })
+
+    def action_reject(self, reason=None):
+        if not self.env.user.has_group(APPROVER_GROUP):
+            raise AccessError(_("Bạn không có quyền từ chối yêu cầu giữ hàng."))
+        for rec in self:
+            if rec.state != "pending_approval":
+                continue
+            rec.write({"state": "rejected", "reject_reason": reason or rec.reject_reason})
+
+    def action_cancel(self):
+        for rec in self:
+            if rec.state in ("draft", "pending_approval", "approved"):
+                if rec.state == "approved":
+                    rec._release()
+                rec.state = "cancelled"
+
+    def action_complete(self):
+        for rec in self:
+            if rec.state == "approved":
+                rec._release()
+                rec.state = "completed"
+
+    def _reserve(self):
+        self.ensure_one()
+        if self.quantity <= 0:
+            raise UserError(_("Số lượng giữ phải lớn hơn 0."))
+
+        qty_total, qty_reserved = self._get_wh_qty()
+        qty_available = qty_total - qty_reserved
+        if self.quantity > qty_available:
+            raise UserError(_(
+                "Số lượng yêu cầu (%(qty)s) vượt quá số lượng sẵn sàng hiện tại (%(avail)s) "
+                "tại kho %(wh)s."
+            ) % {
+                "qty": self.quantity,
+                "avail": qty_available,
+                "wh": self.warehouse_id.display_name,
+            })
+
+        warehouse = self.warehouse_id.sudo()
+        hold_location = warehouse._get_or_create_hold_location()
+        picking = self.env["stock.picking"].sudo().create({
+            "picking_type_id": warehouse.int_type_id.id,
+            "location_id": warehouse.lot_stock_id.id,
+            "location_dest_id": hold_location.id,
+            "origin": self.name,
+            "move_ids": [(0, 0, {
+                "name": self.name,
+                "product_id": self.product_id.id,
+                "product_uom_qty": self.quantity,
+                "product_uom": self.product_id.uom_id.id,
+                "location_id": warehouse.lot_stock_id.id,
+                "location_dest_id": hold_location.id,
+            })],
+        })
+        picking.action_confirm()
+        picking.action_assign()
+
+        reserved_qty = sum(picking.move_line_ids.mapped("quantity"))
+        if reserved_qty < self.quantity:
+            picking.action_cancel()
+            raise UserError(_(
+                "Không đủ hàng sẵn sàng để giữ tại thời điểm này (có thể vừa bị đơn khác giữ "
+                "trước). Vui lòng thử lại."
+            ))
+        self.hold_picking_id = picking.id
+
+    def _release(self):
+        self.ensure_one()
+        if self.hold_picking_id and self.hold_picking_id.state not in ("cancel", "done"):
+            self.hold_picking_id.sudo().action_cancel()
+
+    @api.model
+    def _cron_expire_holds(self):
+        today = fields.Date.context_today(self)
+        expired = self.sudo().search([("state", "=", "approved"), ("hold_until_date", "<", today)])
+        for rec in expired:
+            rec._release()
+        expired.write({"state": "expired"})
