@@ -527,19 +527,19 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             # dùng x_printed của done PICK để xác định "đã in, chờ đóng gói".
             active_pick_flows = [p for p in active_outflow if 'PICK' in p['seq_code']]
             active_pack_flows = [p for p in active_outflow if p['seq_code'] == 'PACK']
-            if active_pick_flows:
-                # PICK chưa xong: dùng x_printed của PICK đang active
-                any_active_pick_printed = any(p.get('x_printed') for p in active_pick_flows)
-            elif active_pack_flows:
-                # PICK đã done, PACK đang active: hàng đã lấy xong, chờ đóng gói
-                # → kiểm tra done PICK gần nhất có được in không
+            # PICK chưa xong: dùng x_printed của PICK đang active.
+            any_active_pick_printed = any(p.get('x_printed') for p in active_pick_flows)
+            # Đơn có thể có ĐỒNG THỜI 1 PACK đang active (lô trước đã lấy xong, đã in, đang
+            # chờ đóng gói) VÀ 1 PICK backorder khác đang active nhưng CHƯA in (lô sau, còn
+            # thiếu hàng) — nếu chỉ nhìn active_pick_flows sẽ luôn ra False, che mất tình
+            # trạng "đã in, chờ đóng gói" thật của lô trước. Nên phải kiểm tra thêm done PICK
+            # đã in khi có PACK active, không chỉ khi active_pick_flows rỗng hoàn toàn.
+            if not any_active_pick_printed and active_pack_flows:
                 done_pick_pks_all = [
                     p for p in pickings
                     if p['state'] == 'done' and not p.get('return_id') and 'PICK' in p['seq_code']
                 ]
                 any_active_pick_printed = any(p.get('x_printed') for p in done_pick_pks_all)
-            else:
-                any_active_pick_printed = False
             has_assigned_pick = any(p['state'] == 'assigned' for p in active_pick_flows)
 
             so_status_dict[so_id] = {
