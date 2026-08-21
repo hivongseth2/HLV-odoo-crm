@@ -1792,6 +1792,22 @@ class SaleOrder(models.Model):
             )
             if loyalty_changed:
                 if self.env.context.get('misa_audit_changes') is not None:
+                    old_items = [
+                        f"{line.account_id.display_name or line.account_id.username or str(line.account_id.id)} ({line.earning_pct}%)"
+                        for line in self.loyalty_account_line_ids
+                    ]
+                    new_items = []
+                    for item in lines_data:
+                        if isinstance(item, dict) and item.get('account_id'):
+                            try:
+                                acc_id = int(item['account_id'])
+                                acc = self.env['hlv.loyalty.portal.account'].sudo().browse(acc_id).exists()
+                                acc_name = (acc.display_name or acc.username) if acc else (item.get('account_name') or str(acc_id))
+                            except Exception:
+                                acc_name = str(item.get('account_name') or item.get('account_id'))
+                            pct = item.get('earning_pct', 0)
+                            new_items.append(f"{acc_name} ({pct}%)")
+
                     self.env.context['misa_audit_changes'].append({
                         'change_type': 'update',
                         'crm_line_id': False,
@@ -1799,8 +1815,8 @@ class SaleOrder(models.Model):
                         'product_id': False,
                         'product_code': 'Loyalty',
                         'field_name': _('Tài khoản Loyalty'),
-                        'old_value': ', '.join(f"{line.account_id.display_name} ({line.earning_pct}%)" for line in self.loyalty_account_line_ids) or _('(Chưa chọn)'),
-                        'new_value': ', '.join(f"{item.get('account_name') or item.get('account_id')} ({item.get('earning_pct')}%)" for item in lines_data if isinstance(item, dict)) or _('(Chưa chọn)'),
+                        'old_value': ', '.join(old_items) or _('(Chưa chọn)'),
+                        'new_value': ', '.join(new_items) or _('(Chưa chọn)'),
                     })
                 if self.env.context.get('misa_defer_changes'):
                     _logger.info("MISA SO Loyalty: Hoãn cập nhật tài khoản Loyalty SO %s chờ kho duyệt", self.name)
