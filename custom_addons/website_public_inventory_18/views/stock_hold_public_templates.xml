@@ -7,7 +7,7 @@
       </style>
       <main id="wrap" class="oe_structure">
         <section>
-          <div class="container-fluid mt-3 mb-6" style="max-width: 1200px;">
+          <div class="container-fluid mt-3 mb-6" style="max-width: 1300px;">
             <div style="border-bottom: 2px solid #e9ecef; padding-bottom: 16px; margin-bottom: 1.5rem;">
               <ul class="nav nav-pills justify-content-center flex-wrap gap-2">
                 <li class="nav-item">
@@ -43,10 +43,47 @@
                 'pending_approval': ('Chờ duyệt', '#fffbeb', '#b45309'),
                 'approved': ('Đang giữ', '#f0fdf4', '#16a34a'),
                 'rejected': ('Từ chối', '#fef2f2', '#dc2626'),
-                'completed': ('Hoàn thành', '#f3f4f6', '#374151'),
+                'completed': ('Hoàn thành', '#ecfeff', '#0e7490'),
                 'cancelled': ('Đã hủy', '#f3f4f6', '#6b7280'),
-                'expired': ('Hết hạn', '#fef2f2', '#b91c1c'),
+                'expired': ('Hết hạn', '#f5f3ff', '#7c3aed'),
             }"/>
+
+            <form method="get" t-att-action="request.httprequest.path" class="row g-2 mb-3">
+              <div class="col-md-3">
+                <select name="state" class="form-select">
+                  <option value="">-- Tất cả trạng thái --</option>
+                  <t t-foreach="state_labels.items()" t-as="item">
+                    <option t-att-value="item[0]" t-att-selected="filter_state == item[0]">
+                      <t t-esc="item[1][0]"/>
+                    </option>
+                  </t>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select name="warehouse_id" class="form-select">
+                  <option value="">-- Tất cả kho --</option>
+                  <t t-foreach="warehouse_options" t-as="w">
+                    <option t-att-value="w.id" t-att-selected="filter_warehouse_id == w.id">
+                      <t t-esc="w.name"/>
+                    </option>
+                  </t>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select name="sale_name" class="form-select">
+                  <option value="">-- Tất cả sale --</option>
+                  <t t-foreach="sale_name_options_filter" t-as="sn">
+                    <option t-att-value="sn" t-att-selected="filter_sale_name == sn">
+                      <t t-esc="sn"/>
+                    </option>
+                  </t>
+                </select>
+              </div>
+              <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill"><i class="fa fa-filter me-1"></i>Lọc</button>
+                <a href="/search_stock/my_holds" class="btn btn-outline-secondary">Xóa lọc</a>
+              </div>
+            </form>
 
             <t t-if="holds">
               <div class="card shadow-sm border-0">
@@ -60,6 +97,7 @@
                         <th class="text-end">SL giữ</th>
                         <th>Dự án</th>
                         <th>Tên sale</th>
+                        <th>Ngày tạo</th>
                         <th>Giữ đến ngày</th>
                         <th>Trạng thái</th>
                         <th></th>
@@ -75,6 +113,7 @@
                           <td class="text-end"><t t-esc="'{:,.0f}'.format(h.quantity)"/></td>
                           <td><t t-esc="h.project_name"/></td>
                           <td><t t-esc="h.sale_name"/></td>
+                          <td><t t-esc="h.create_date.strftime('%d/%m/%Y')"/></td>
                           <td><t t-esc="h.hold_until_date"/></td>
                           <td>
                             <span class="hold-badge" t-attf-style="background:#{lbl[1]};color:#{lbl[2]};">
@@ -98,7 +137,7 @@
             <t t-else="">
               <div class="text-center py-5">
                 <img src="/web/static/img/smiling_face.svg" style="width:64px; opacity:0.5;"/>
-                <p class="mt-3 text-muted">Bạn chưa có yêu cầu giữ hàng nào.</p>
+                <p class="mt-3 text-muted">Không có yêu cầu giữ hàng nào khớp bộ lọc.</p>
               </div>
             </t>
           </div>

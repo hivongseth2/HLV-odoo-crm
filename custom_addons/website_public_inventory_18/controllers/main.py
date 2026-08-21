@@ -976,8 +976,29 @@ class PublicInventory(http.Controller):
         return {"ok": True}
 
     @http.route(["/search_stock/my_holds"], type="http", auth="user", website=True, sitemap=False)
-    def my_holds_page(self, **kw):
-        holds = request.env["stock.hold.request"].search(
-            [("user_id", "=", request.env.user.id)], order="create_date desc"
-        )
-        return request.render("website_public_inventory_18.my_holds_page", {"holds": holds})
+    def my_holds_page(self, state=None, warehouse_id=None, sale_name=None, **kw):
+        env = request.env
+        HoldRequest = env["stock.hold.request"]
+
+        base_domain = [("user_id", "=", env.user.id)]
+        my_holds = HoldRequest.search(base_domain)
+
+        domain = list(base_domain)
+        if state:
+            domain.append(("state", "=", state))
+        wid = _as_int_or_none(warehouse_id)
+        if wid:
+            domain.append(("warehouse_id", "=", wid))
+        if sale_name:
+            domain.append(("sale_name", "=", sale_name))
+
+        holds = HoldRequest.search(domain, order="create_date desc")
+
+        return request.render("website_public_inventory_18.my_holds_page", {
+            "holds": holds,
+            "warehouse_options": my_holds.warehouse_id,
+            "sale_name_options_filter": sorted(set(my_holds.mapped("sale_name"))),
+            "filter_state": state or "",
+            "filter_warehouse_id": wid,
+            "filter_sale_name": sale_name or "",
+        })
