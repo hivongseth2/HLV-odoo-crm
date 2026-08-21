@@ -6,8 +6,12 @@ from odoo import models
 
 _logger = logging.getLogger(__name__)
 
-# Move state changes that affect dashboard stock/packing status
-_MOVE_NOTIFY_FIELDS = {'state', 'quantity', 'picked'}
+# Move state changes that affect dashboard stock/packing status. picking_id: khi move được
+# CHUYỂN sang phiếu khác (VD Odoo tự tách backorder khi không lấy đủ hàng 1 lần) mà không đổi
+# state/quantity/picked trong CÙNG lần ghi — nếu thiếu field này, đơn có backorder mới sẽ không
+# được đánh dấu dirty, snapshot giữ packing_status cũ (đã xác nhận thực tế: đơn đã đóng gói lô 1
+# + có backorder lô 2 mới tách nhưng Kanban vẫn kẹt ở cột cũ).
+_MOVE_NOTIFY_FIELDS = {'state', 'quantity', 'picked', 'picking_id'}
 
 
 class StockMove(models.Model):

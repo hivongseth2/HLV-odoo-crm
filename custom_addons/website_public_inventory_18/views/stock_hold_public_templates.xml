@@ -3,7 +3,26 @@
   <template id="my_holds_page" name="Yêu cầu giữ hàng của tôi">
     <t t-call="website.layout">
       <style>
-        .hold-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:.78rem; font-weight:700; }
+        .hold-badge {
+          display:inline-block; padding:4px 12px; border-radius:999px;
+          font-size:.76rem; font-weight:700; white-space:nowrap; line-height:1.3;
+        }
+        #my-holds-table th {
+          white-space:nowrap; font-size:.76rem; text-transform:uppercase; letter-spacing:.4px;
+          color:#6b7280; font-weight:700; padding:.75rem .9rem; border-bottom-width:1px;
+        }
+        #my-holds-table td { padding:.65rem .9rem; vertical-align:middle; font-size:.9rem; }
+        #my-holds-table td.text-nowrap { white-space:nowrap; }
+        #my-holds-table td.product-cell { min-width:220px; }
+        #my-holds-table td.location-cell { color:#374151; font-size:.82rem; }
+        #my-holds-table tbody tr:last-child td { border-bottom:none; }
+        .held-qty-badge {
+          display:inline-flex; align-items:center; gap:5px; font-weight:800; font-size:.92rem;
+          color:#15803d; background:#f0fdf4; border:1px solid #86efac; border-radius:8px;
+          padding:3px 10px; cursor:pointer;
+        }
+        .held-qty-badge:hover { background:#dcfce7; }
+        .held-qty-plain { font-weight:700; }
       </style>
       <main id="wrap" class="oe_structure">
         <section>
@@ -94,6 +113,7 @@
                         <th>Mã</th>
                         <th>Sản phẩm</th>
                         <th>Kho</th>
+                        <th>Vị trí đang giữ</th>
                         <th class="text-end">SL giữ</th>
                         <th>Dự án</th>
                         <th>Tên sale</th>
@@ -107,20 +127,34 @@
                       <t t-foreach="holds" t-as="h">
                         <t t-set="lbl" t-value="state_labels.get(h.state, (h.state, '#eee', '#333'))"/>
                         <tr t-att-data-hold-id="h.id">
-                          <td class="fw-bold text-primary"><t t-esc="h.name"/></td>
-                          <td><t t-esc="h.product_id.display_name"/></td>
-                          <td><t t-esc="h.warehouse_id.name"/></td>
-                          <td class="text-end"><t t-esc="'{:,.0f}'.format(h.quantity)"/></td>
+                          <td class="fw-bold text-primary text-nowrap"><t t-esc="h.name"/></td>
+                          <td class="product-cell"><t t-esc="h.product_id.display_name"/></td>
+                          <td class="text-nowrap"><t t-esc="h.warehouse_id.name"/></td>
+                          <td class="location-cell">
+                            <t t-if="h.hold_location_names"><i class="fa fa-map-marker text-muted me-1"></i><t t-esc="h.hold_location_names"/></t>
+                            <t t-else="">—</t>
+                          </td>
+                          <td class="text-end text-nowrap">
+                            <span t-if="h.state == 'approved' and h.hold_location_breakdown_json != '[]'"
+                                  class="held-qty-badge btn-show-hold-locations"
+                                  t-att-data-hold-name="h.name"
+                                  t-att-data-product-name="h.product_id.display_name"
+                                  t-att-data-breakdown="h.hold_location_breakdown_json">
+                              <t t-esc="'{:,.0f}'.format(h.quantity)"/>
+                              <i class="fa fa-map-marker"></i>
+                            </span>
+                            <span t-else="" class="held-qty-plain"><t t-esc="'{:,.0f}'.format(h.quantity)"/></span>
+                          </td>
                           <td><t t-esc="h.project_name"/></td>
-                          <td><t t-esc="h.sale_name"/></td>
-                          <td><t t-esc="h.create_date.strftime('%d/%m/%Y')"/></td>
-                          <td><t t-esc="h.hold_until_date"/></td>
-                          <td>
+                          <td class="text-nowrap"><t t-esc="h.sale_name"/></td>
+                          <td class="text-nowrap"><t t-esc="h.create_date.strftime('%d/%m/%Y')"/></td>
+                          <td class="text-nowrap"><t t-esc="h.hold_until_date"/></td>
+                          <td class="text-nowrap">
                             <span class="hold-badge" t-attf-style="background:#{lbl[1]};color:#{lbl[2]};">
                               <t t-esc="lbl[0]"/>
                             </span>
                           </td>
-                          <td>
+                          <td class="text-nowrap">
                             <button t-if="h.state in ('draft', 'pending_approval', 'approved')"
                                     type="button" class="btn btn-sm btn-outline-danger btn-cancel-hold"
                                     t-att-data-hold-id="h.id">
@@ -143,9 +177,78 @@
           </div>
         </section>
 
+        <!-- Modal chi tiết vị trí đang giữ -->
+        <div class="modal fade" id="holdLocationsModal" tabindex="-1" aria-labelledby="holdLocationsModalLabel" aria-hidden="true" style="z-index:1060;">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="holdLocationsModalLabel">Chi tiết vị trí đang giữ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body p-0">
+                <div id="holdLocationsProductName" class="bg-light p-2 border-bottom fw-bold text-center text-primary"></div>
+                <div class="p-3">
+                  <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                      <tr><th>Vị trí</th><th class="text-end">Số lượng đang giữ</th></tr>
+                    </thead>
+                    <tbody id="holdLocationsBody"></tbody>
+                    <tfoot>
+                      <tr class="fw-bold">
+                        <td>Tổng</td>
+                        <td class="text-end" id="holdLocationsTotal"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
         <script type="text/javascript"><![CDATA[
+          function fmtQty(n) { return (parseFloat(n) || 0).toLocaleString('en-US'); }
+
           $(document).ready(function () {
+            $(document).on('click', '.btn-show-hold-locations', function () {
+              var $el = $(this);
+              var breakdown = [];
+              try { breakdown = JSON.parse($el.attr('data-breakdown') || '[]'); } catch (e) { breakdown = []; }
+
+              $('#holdLocationsProductName').text(
+                ($el.data('product-name') || '') + ' — ' + ($el.data('hold-name') || '')
+              );
+
+              var rowsHtml = '';
+              var total = 0;
+              breakdown.forEach(function (row) {
+                total += parseFloat(row.qty) || 0;
+                rowsHtml += '<tr><td><i class="fa fa-map-marker text-muted me-1"></i>' + row.location + '</td>'
+                          + '<td class="text-end fw-bold">' + fmtQty(row.qty) + '</td></tr>';
+              });
+              if (!breakdown.length) {
+                rowsHtml = '<tr><td colspan="2" class="text-center text-muted">Không có dữ liệu vị trí.</td></tr>';
+              }
+              $('#holdLocationsBody').html(rowsHtml);
+              $('#holdLocationsTotal').text(fmtQty(total));
+
+              var modalElem = document.getElementById('holdLocationsModal');
+              if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                (bootstrap.Modal.getInstance(modalElem) || new bootstrap.Modal(modalElem)).show();
+              } else {
+                $(modalElem).show().addClass('show');
+                $('body').append('<div class="modal-backdrop fade show" id="holdLocationsBackdrop"></div>');
+                $(modalElem).find('[data-bs-dismiss="modal"]').off('click.holdloc').on('click.holdloc', function () {
+                  $(modalElem).hide().removeClass('show');
+                  $('#holdLocationsBackdrop').remove();
+                });
+              }
+            });
+
             $(document).on('click', '.btn-cancel-hold', function () {
               var $btn = $(this);
               var holdId = $btn.data('hold-id');
