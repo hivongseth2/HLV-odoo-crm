@@ -570,6 +570,18 @@ class StockPicking(models.Model):
                 picking._check_pack_assignment_access()
         return super().button_validate()
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Phiếu MỚI (kể cả backorder do Odoo tự tách khi không lấy đủ hàng 1 lần) không đi qua
+        write() nên hook dưới đây không bắt được — snapshot của đơn liên quan bị bỏ sót, giữ
+        packing_status/has_assigned_pick TÍNH TỪ TRƯỚC KHI CÓ PHIẾU MỚI này, dẫn tới hiển thị
+        sai trên Kanban (VD: đơn đã đóng gói xong lô 1 nhưng còn backorder lô 2 đang chờ hàng,
+        Kanban vẫn kẹt ở cột cũ dù thực tế đã đổi). Phải invalidate ngay khi TẠO phiếu mới, không
+        chỉ khi ghi lên phiếu đã có."""
+        records = super().create(vals_list)
+        records._notify_delivery_planner_changed()
+        return records
+
     def write(self, vals):
         res = super().write(vals)
         if vals and _PICK_NOTIFY_FIELDS.intersection(vals.keys()):
