@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import json
+
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
 
@@ -54,16 +56,29 @@ class StockHoldRequest(models.Model):
         help="Vị trí (bin) thực tế đang giữ hàng, lấy từ phiếu giữ hàng nội bộ — để sale biết "
              "hàng đang nằm ở đâu trong kho.",
     )
+    hold_location_breakdown_json = fields.Char(
+        string="Chi tiết vị trí đang giữ (JSON)", compute="_compute_hold_location_names",
+        help="[{location, qty}, ...] — dùng để hiển thị dialog chi tiết trên trang public.",
+    )
 
-    @api.depends("state", "hold_picking_id", "hold_picking_id.move_line_ids.location_id")
+    @api.depends(
+        "state", "hold_picking_id",
+        "hold_picking_id.move_line_ids.location_id", "hold_picking_id.move_line_ids.quantity",
+    )
     def _compute_hold_location_names(self):
         for rec in self:
             picking = rec.hold_picking_id.sudo() if rec.state == "approved" else False
             if picking:
-                locations = picking.move_line_ids.location_id
-                rec.hold_location_names = ", ".join(sorted(set(locations.mapped("display_name")))) or False
+                qty_by_loc = {}
+                for ml in picking.move_line_ids:
+                    loc_name = ml.location_id.display_name
+                    qty_by_loc[loc_name] = qty_by_loc.get(loc_name, 0.0) + ml.quantity
+                breakdown = [{"location": loc, "qty": qty} for loc, qty in sorted(qty_by_loc.items())]
+                rec.hold_location_names = ", ".join(qty_by_loc.keys()) or False
+                rec.hold_location_breakdown_json = json.dumps(breakdown)
             else:
                 rec.hold_location_names = False
+                rec.hold_location_breakdown_json = json.dumps([])
 
     @api.model_create_multi
     def create(self, vals_list):
