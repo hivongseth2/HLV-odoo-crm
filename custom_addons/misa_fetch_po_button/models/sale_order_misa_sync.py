@@ -1427,6 +1427,13 @@ class SaleOrder(models.Model):
             vals['partner_shipping_id'] = shipping_id or self.partner_shipping_id.id or partner.id
         else:
             _logger.info("MISA SO Header: Hoãn cập nhật khách hàng SO %s (%s → %s) chờ kho duyệt", self.name, self.partner_id.name, partner.name)
+            # Lưu thông tin khách hàng bị hoãn vào context để snapshot lưu lại
+            if self.env.context.get('misa_deferred_header') is not None:
+                self.env.context['misa_deferred_header'].update({
+                    'partner_id': partner.id,
+                    'partner_invoice_id': partner.id,
+                    'partner_shipping_id': shipping_id or self.partner_shipping_id.id or partner.id,
+                })
         for source_key, field_name in (
             ('owner_code', 'x_studio_misa_saler_code'),
             ('sale_order_date', 'x_studio_misa_order_date'),
@@ -1548,7 +1555,8 @@ class SaleOrder(models.Model):
 
         defer_changes = bool(touched_pickings)
         audit_changes_list = []
-        sync_ctx = dict(self.env.context, misa_defer_changes=defer_changes, misa_audit_changes=audit_changes_list)
+        deferred_header = {}
+        sync_ctx = dict(self.env.context, misa_defer_changes=defer_changes, misa_audit_changes=audit_changes_list, misa_deferred_header=deferred_header)
 
         self.with_context(sync_ctx)._sync_misa_header_in_place(data, headers)
         self.with_context(sync_ctx)._sync_misa_loyalty_account_line(payload=self.env.context.get('misa_sync_payload'))
@@ -1625,11 +1633,16 @@ class SaleOrder(models.Model):
 
             was_pending = self.misa_qty_sync_pending
             old_summary = self.misa_qty_sync_pending_summary or ''
+            # Lưu snapshot dạng dict bao gồm cả deferred header/loyalty
+            snapshot_data = {
+                'lines': sync_result.get('line_snapshot') or [],
+                'deferred_header': deferred_header,
+            }
             self.write({
                 'misa_qty_sync_pending': True,
                 'misa_qty_sync_pending_at': fields.Datetime.now(),
                 'misa_qty_sync_pending_summary': summary,
-                'misa_qty_sync_pending_snapshot': sync_result.get('line_snapshot') or [],
+                'misa_qty_sync_pending_snapshot': snapshot_data,
                 'misa_qty_sync_pending_history_id': history.id,
             })
             if not was_pending or old_summary != summary:
@@ -1686,8 +1699,15 @@ class SaleOrder(models.Model):
             raise UserError(_("Đơn không có thay đổi số lượng MISA đang chờ duyệt."))
         if not self.env.user.has_group('stock.group_stock_user'):
             raise UserError(_("Chỉ người dùng kho mới được duyệt thay đổi số lượng MISA."))
-        snapshot = self.misa_qty_sync_pending_snapshot
-        if not isinstance(snapshot, list):
+        raw_snapshot = self.misa_qty_sync_pending_snapshot
+        # Hỗ trợ cả format cũ (list) và format mới (dict chứa lines + deferred_header)
+        if isinstance(raw_snapshot, dict):
+            snapshot = raw_snapshot.get('lines') or []
+            deferred_header = raw_snapshot.get('deferred_header') or {}
+        elif isinstance(raw_snapshot, list):
+            snapshot = raw_snapshot
+            deferred_header = {}
+        else:
             raise UserError(_(
                 "Đơn chờ duyệt này chưa có snapshot. Vui lòng đồng bộ MISA lại một lần để tạo snapshot mới."
             ))
@@ -1716,17 +1736,27 @@ class SaleOrder(models.Model):
             prepared_lines=snapshot,
         )
 
-        # 2. Áp dụng header mới nhất từ CRM và loyalty account lines
-        try:
-            misa_headers, _base_url = order._misa_headers()
-            crm_order_data = order._misa_fetch_order(headers=misa_headers)
-            order.with_context(misa_defer_changes=False)._sync_misa_header_in_place(crm_order_data, misa_headers)
-        except Exception as exc:
-            _logger.warning("Không thể fetch header CRM khi duyệt SO %s: %s", order.name, exc)
-
-        order.with_context(misa_defer_changes=False)._sync_misa_loyalty_account_line(
-            payload=order.env.context.get('misa_sync_payload')
-        )
+        # 2. Áp dụng thay đổi khách hàng / loyalty đã lưu trong snapshot (KHÔNG fetch live từ CRM)
+        if deferred_header:
+            header_vals = {}
+            if deferred_header.get('partner_id'):
+                partner = order.env['res.partner'].sudo().browse(deferred_header['partner_id']).exists()
+                if partner:
+                    header_vals['partner_id'] = partner.id
+                    header_vals['partner_invoice_id'] = deferred_header.get('partner_invoice_id') or partner.id
+                    header_vals['partner_shipping_id'] = deferred_header.get('partner_shipping_id') or partner.id
+                    _logger.info(
+                        "Duyệt: Áp dụng đổi khách hàng SO %s → %s (từ snapshot)",
+                        order.name, partner.display_name,
+                    )
+            if header_vals:
+                order.write(header_vals)
+            # Áp dụng loyalty từ snapshot
+            loyalty_lines = deferred_header.get('loyalty_account_lines')
+            if loyalty_lines and isinstance(loyalty_lines, list):
+                order.with_context(misa_defer_changes=False)._sync_misa_loyalty_account_line(
+                    payload={'loyalty_account_lines': loyalty_lines}
+                )
         order._misa_sync_open_picking_contact()
         if pending_history:
             lines_by_crm_id = {
@@ -1820,6 +1850,9 @@ class SaleOrder(models.Model):
                     })
                 if self.env.context.get('misa_defer_changes'):
                     _logger.info("MISA SO Loyalty: Hoãn cập nhật tài khoản Loyalty SO %s chờ kho duyệt", self.name)
+                    # Lưu payload loyalty bị hoãn vào context để snapshot lưu lại
+                    if self.env.context.get('misa_deferred_header') is not None:
+                        self.env.context['misa_deferred_header']['loyalty_account_lines'] = lines_data
                     return
             synced_account_ids = []
             for item in lines_data:
