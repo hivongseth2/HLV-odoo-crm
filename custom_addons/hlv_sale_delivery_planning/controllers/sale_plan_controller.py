@@ -598,6 +598,11 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .pd-log-item .pd-log-body{color:#334155}
 #pd-modal .pd-body{padding:16px 18px;overflow-y:auto;flex:1}
 #pd-modal .pd-footer{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
+/* PDF preview dialog — xem trước NGAY TRONG trang (đè lên pd-modal), không mở tab/điều hướng mới */
+#pdfp-modal{display:none;position:fixed;inset:0;z-index:2200;background:rgba(0,0,0,.6);align-items:center;justify-content:center}
+#pdfp-modal .pdfp-card{background:#fff;width:96%;max-width:900px;height:92vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden}
+#pdfp-modal .pdfp-header{padding:10px 14px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+#pdfp-modal iframe{flex:1;border:0;width:100%}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
 .msg-header{padding:10px 14px;background:#fafafa;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.82rem;color:#374151;user-select:none}
@@ -1034,6 +1039,17 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <button class="btn btn-outline-primary btn-sm" id="pd-btn-preview"><i class="fa fa-eye me-1"></i>Xem trước</button>
       <button class="btn btn-success btn-sm d-none" id="pd-btn-confirm"><i class="fa fa-check me-1"></i>Gửi phiếu in cho kho</button>
     </div>
+  </div>
+</div>
+<!-- PDF preview dialog: xem trước phiếu lấy hàng NGAY TRONG trang này (đè lên pd-modal), không
+     mở tab mới, không điều hướng rời trang (giữ nguyên danh sách/tìm kiếm đang xem) -->
+<div id="pdfp-modal">
+  <div class="pdfp-card">
+    <div class="pdfp-header">
+      <h6 class="fw-bold mb-0">Xem trước phiếu lấy hàng</h6>
+      <button id="pdfp-close" class="btn btn-sm btn-light"><i class="fa fa-times"></i></button>
+    </div>
+    <iframe id="pdfp-frame" src="about:blank"></iframe>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1876,23 +1892,29 @@ $('pd-btn-preview').addEventListener('click',function(){
   .then(function(r){return r.json();})
   .then(function(j){
     var d=j.result;
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
     if(d&&d.success){
       // Đã xem trước rồi thì ẩn nút "Xem trước" luôn, chỉ còn nút gửi in — tránh xem trước lại
-      // nhiều lần không cần thiết, đỡ rối giao diện. Toggle TRƯỚC khi điều hướng để nếu
-      // trình duyệt phục hồi trang này từ bfcache lúc bấm Back, nút "Gửi in" vẫn đang hiện sẵn.
+      // nhiều lần không cần thiết, đỡ rối giao diện.
       btn.classList.add('d-none');
       $('pd-btn-confirm').classList.remove('d-none');
-      // Mở PDF ngay trong tab hiện tại (không mở tab/popup mới) — bấm Back của trình duyệt để
-      // quay lại trang sale plan này.
-      window.location.href=d.preview_url;
+      // Hiện PDF trong 1 dialog riêng NGAY TRÊN trang này (không mở tab mới, không điều hướng
+      // rời trang) — đóng lại là quay về đúng chỗ đang xem, khỏi phải tìm/lọc lại đơn.
+      $('pdfp-frame').src=d.preview_url;
+      $('pdfp-modal').style.display='flex';
     } else {
-      btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
       showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
     }
   }).catch(function(){
     btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';showPrintToast('Lỗi kết nối.',false);
   });
 });
+function closePdfPreviewModal(){
+  $('pdfp-modal').style.display='none';
+  $('pdfp-frame').src='about:blank';
+}
+$('pdfp-close').addEventListener('click',closePdfPreviewModal);
+$('pdfp-modal').addEventListener('click',function(e){if(e.target===this)closePdfPreviewModal();});
 $('pd-btn-confirm').addEventListener('click',function(){
   if(!_pdPickingId)return;
   var btn=this;
