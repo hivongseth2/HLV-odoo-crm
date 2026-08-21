@@ -574,12 +574,11 @@
                       </div>
                       <div class="mb-3">
                         <label class="form-label">Tên sale <span class="text-danger">*</span></label>
-                        <input type="text" id="holdSaleName" class="form-control" list="holdSaleNameOptions" required="required"/>
-                        <datalist id="holdSaleNameOptions">
+                        <select id="holdSaleName" class="form-select" required="required">
                           <t t-foreach="sale_name_options" t-as="sn">
-                            <option t-att-value="sn"/>
+                            <option t-att-value="sn"><t t-esc="sn"/></option>
                           </t>
-                        </datalist>
+                        </select>
                       </div>
                       <div class="mb-1">
                         <label class="form-label">Mô tả</label>
