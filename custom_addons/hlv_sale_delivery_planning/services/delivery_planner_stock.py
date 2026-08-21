@@ -228,15 +228,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             sale_id = p['sale_id'][0] if p.get('sale_id') else None
             if sale_id:
                 pickings_by_so.setdefault(sale_id, []).append(p)
+        # seq_code ('PICK'/'PACK'/'OUT'...) của picking chứa move, dùng để phân biệt move nào
+        # còn THỰC SỰ cần lấy/đóng gói (PICK/PACK) và move nào đã qua giai đoạn đó, chỉ còn
+        # chờ xuất kho (OUT) — tránh đếm trùng tồn kho đã "khóa" cho lô đã đóng gói xong khi
+        # tính xem phần CÒN THIẾU của cùng dòng có hàng để đóng gói tiếp hay không.
         pick_seq_by_id = {p['id']: p['seq_code'] for p in pick_recs}
-        # lines_needing_pack_stage: dòng còn move active ở giai đoạn PICK/PACK (chưa qua hết
-        # PACK) — tức thực sự CÒN CẦN lấy/đóng gói. Một dòng đã done PICK+PACK, chỉ còn move
-        # active ở giai đoạn OUT (chờ giao), KHÔNG được tính vào đây — hàng của nó đã đóng gói
-        # xong, chỉ đang chờ xuất kho, không phải "chưa đóng gói do thiếu hàng".
-        lines_needing_pack_stage = {
-            mv['sale_line_id'][0] for mv in move_recs
-            if pick_seq_by_id.get(mv.get('picking_id')) in ('PICK', 'PACK')
-        }
 
         # [H] Build product_qty_cache + batch quant queries (1 location + 1 quant + 1 int_moves)
         product_qty_cache = {}
@@ -404,7 +400,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                                 if c_avail > 0:
                                     c_contrib = min(c_avail, c_pending)
                                     total_avail += c_contrib
-                                    if line['id'] in lines_needing_pack_stage:
+                                    if pick_seq_by_id.get(cm.get('picking_id')) in ('PICK', 'PACK'):
                                         total_avail_active_move += c_contrib
                                 if c_avail < c_pending:
                                     is_fully_ready = False
@@ -416,12 +412,29 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         product_on_hand.get(key, 0.0) if key else 0.0,
                     )
                     if qty_avail > 0:
-                        contrib = min(qty_avail, pending_qty)
-                        total_avail += contrib
-                        if line['id'] in lines_needing_pack_stage:
-                            total_avail_active_move += contrib
+                        total_avail += min(qty_avail, pending_qty)
                     if qty_avail < pending_qty:
                         is_fully_ready = False
+
+                    # Packing-riêng: chỉ tính phần tồn kho có thể dùng cho phần CÒN Ở giai
+                    # đoạn PICK/PACK của CHÍNH dòng này (demand + đã reserve của các move đó).
+                    # Không dùng line_reserved_qty (gộp cả move OUT) — 1 dòng có backorder
+                    # PICK (còn thiếu hàng) NHƯNG lô trước đã pick+pack xong đang giữ ở move
+                    # OUT (chờ xuất kho) thì số lượng đó KHÔNG phải hàng có thể dùng cho phần
+                    # backorder còn thiếu — nếu tính lẫn sẽ báo sai "còn hàng để đóng gói".
+                    pack_moves = [
+                        mv for mv in moves_by_line.get(line['id'], [])
+                        if pick_seq_by_id.get(mv.get('picking_id')) in ('PICK', 'PACK')
+                    ]
+                    pack_pending = sum(mv.get('product_uom_qty') or 0.0 for mv in pack_moves)
+                    if pack_pending > 0:
+                        pack_reserved = sum(mv.get('quantity') or 0.0 for mv in pack_moves)
+                        pack_avail = min(
+                            base_free + pack_reserved,
+                            product_on_hand.get(key, 0.0) if key else 0.0,
+                        )
+                        if pack_avail > 0:
+                            total_avail_active_move += min(pack_avail, pack_pending)
 
             if has_stock_pending:
                 stock_status = 'ready' if is_fully_ready else (

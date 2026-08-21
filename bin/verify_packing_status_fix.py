@@ -18,7 +18,7 @@ Chạy bằng lệnh (trên Odoo.sh shell):
     python odoo-bin shell -d <TEN_DATABASE> < bin/verify_packing_status_fix.py
 """
 
-ORDER_NAME = "DH125524949234879"  # đổi nếu cần
+ORDER_NAME = "DH125524949235568"  # đổi nếu cần
 
 SEP = "=" * 100
 def section(t): print(f"\n{SEP}\n  {t}\n{SEP}")
