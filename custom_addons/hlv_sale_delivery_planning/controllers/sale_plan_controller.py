@@ -600,9 +600,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 #pd-modal .pd-footer{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
 /* PDF preview dialog — xem trước NGAY TRONG trang (đè lên pd-modal), không mở tab/điều hướng mới */
 #pdfp-modal{display:none;position:fixed;inset:0;z-index:2200;background:rgba(0,0,0,.6);align-items:center;justify-content:center}
-#pdfp-modal .pdfp-card{background:#fff;width:96%;max-width:900px;height:92vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden}
+#pdfp-modal .pdfp-card{background:#fff;width:98%;max-width:1300px;height:97vh;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden}
 #pdfp-modal .pdfp-header{padding:10px 14px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 #pdfp-modal iframe{flex:1;border:0;width:100%}
+#pdfp-modal .pdfp-footer{padding:10px 14px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;flex-shrink:0}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
 .msg-header{padding:10px 14px;background:#fafafa;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.82rem;color:#374151;user-select:none}
@@ -1050,6 +1051,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <button id="pdfp-close" class="btn btn-sm btn-light"><i class="fa fa-times"></i></button>
     </div>
     <iframe id="pdfp-frame" src="about:blank"></iframe>
+    <div class="pdfp-footer">
+      <button class="btn btn-success btn-sm" id="pdfp-btn-confirm"><i class="fa fa-check me-1"></i>Gửi phiếu in cho kho</button>
+    </div>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1915,10 +1919,11 @@ function closePdfPreviewModal(){
 }
 $('pdfp-close').addEventListener('click',closePdfPreviewModal);
 $('pdfp-modal').addEventListener('click',function(e){if(e.target===this)closePdfPreviewModal();});
-$('pd-btn-confirm').addEventListener('click',function(){
+// Dùng chung cho cả nút "Gửi phiếu in cho kho" ở dialog chi tiết VÀ nút cùng tên ngay trong
+// dialog xem trước PDF (pdfp-modal) — khỏi phải đóng preview quay lại mới gửi in được.
+function sendPrintRequest(btn){
   if(!_pdPickingId)return;
-  var btn=this;
-  var label=btn.dataset.label||'Gửi phiếu in cho kho';
+  var label=$('pd-btn-confirm').dataset.label||'Gửi phiếu in cho kho';
   btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang gửi...';
   fetch('/api/sale_plan/confirm_print_pick_slip',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId}})})
@@ -1929,12 +1934,15 @@ $('pd-btn-confirm').addEventListener('click',function(){
     if(d&&d.success){
       showPrintToast(d.message||'Đã gửi yêu cầu in',d.iot_ready!==false);
       loadPrintQueue();
+      closePdfPreviewModal();
       closePickingDetailModal();
     } else {
       showPrintToast((d&&d.message)||'Lỗi khi gửi in',false);
     }
   }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(label);showPrintToast('Lỗi kết nối.',false);});
-});
+}
+$('pd-btn-confirm').addEventListener('click',function(){sendPrintRequest(this);});
+$('pdfp-btn-confirm').addEventListener('click',function(){sendPrintRequest(this);});
 
 function openDrawer(id){
   var o=S.orders.find(function(x){return x.id===id;});
