@@ -185,7 +185,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         # [E] Active moves per sale line — 1 query
         if all_line_ids:
             self.env.cr.execute("""
-                SELECT id, sale_line_id, product_id, quantity, product_uom_qty
+                SELECT id, sale_line_id, product_id, quantity, product_uom_qty, picking_id
                   FROM stock_move
                  WHERE sale_line_id = ANY(%s)
                    AND state NOT IN ('cancel', 'done')
@@ -195,6 +195,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     'id': r[0], 'sale_line_id': [r[1]],
                     'product_id': [r[2]] if r[2] else False,
                     'quantity': r[3], 'product_uom_qty': r[4],
+                    'picking_id': r[5],
                 }
                 for r in self.env.cr.fetchall()
             ]
@@ -227,6 +228,15 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             sale_id = p['sale_id'][0] if p.get('sale_id') else None
             if sale_id:
                 pickings_by_so.setdefault(sale_id, []).append(p)
+        pick_seq_by_id = {p['id']: p['seq_code'] for p in pick_recs}
+        # lines_needing_pack_stage: dòng còn move active ở giai đoạn PICK/PACK (chưa qua hết
+        # PACK) — tức thực sự CÒN CẦN lấy/đóng gói. Một dòng đã done PICK+PACK, chỉ còn move
+        # active ở giai đoạn OUT (chờ giao), KHÔNG được tính vào đây — hàng của nó đã đóng gói
+        # xong, chỉ đang chờ xuất kho, không phải "chưa đóng gói do thiếu hàng".
+        lines_needing_pack_stage = {
+            mv['sale_line_id'][0] for mv in move_recs
+            if pick_seq_by_id.get(mv.get('picking_id')) in ('PICK', 'PACK')
+        }
 
         # [H] Build product_qty_cache + batch quant queries (1 location + 1 quant + 1 int_moves)
         product_qty_cache = {}
@@ -333,12 +343,12 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             is_fully_ready = True
             total_pending, total_avail = 0, 0
             # total_avail_active_move: giống total_avail nhưng CHỈ tính phần của dòng còn
-            # move active (chưa done/cancel) — tức còn thực sự cần lấy/đóng gói. Dùng riêng
-            # cho quyết định packing_status: 1 dòng đã lấy+đóng gói xong (move đã done, hàng
-            # nằm ở vị trí đầu ra nội bộ) vẫn được tính vào total_avail (đúng cho stock_status,
+            # THỰC SỰ cần lấy/đóng gói (còn move active ở giai đoạn PICK/PACK). Dùng riêng cho
+            # quyết định packing_status: 1 dòng đã lấy+đóng gói xong (chỉ còn move active ở
+            # giai đoạn OUT — chờ xuất kho) vẫn được tính vào total_avail (đúng cho stock_status,
             # vì tồn kho thật sự "khả dụng"), nhưng KHÔNG được tính là "còn hàng để đóng gói"
-            # nữa — nếu không, 1 dòng khác thực sự hết hàng (moves_by_line có move active) sẽ
-            # bị che mất, làm packing_status nhảy sai qua 'unpacked' thay vì 'waiting_stock'.
+            # nữa — nếu không, 1 dòng khác thực sự hết hàng sẽ bị che mất, làm packing_status
+            # nhảy sai qua 'unpacked' thay vì 'waiting_stock'.
             total_avail_active_move = 0
 
             for line in lines:
@@ -394,7 +404,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                                 if c_avail > 0:
                                     c_contrib = min(c_avail, c_pending)
                                     total_avail += c_contrib
-                                    total_avail_active_move += c_contrib
+                                    if line['id'] in lines_needing_pack_stage:
+                                        total_avail_active_move += c_contrib
                                 if c_avail < c_pending:
                                     is_fully_ready = False
                 else:
@@ -407,7 +418,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     if qty_avail > 0:
                         contrib = min(qty_avail, pending_qty)
                         total_avail += contrib
-                        if line['id'] in moves_by_line:
+                        if line['id'] in lines_needing_pack_stage:
                             total_avail_active_move += contrib
                     if qty_avail < pending_qty:
                         is_fully_ready = False
