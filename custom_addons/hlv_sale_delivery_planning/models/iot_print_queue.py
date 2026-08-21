@@ -1,5 +1,4 @@
 import html
-from datetime import datetime, timedelta, timezone
 
 from bs4 import BeautifulSoup
 from markupsafe import Markup
@@ -9,13 +8,15 @@ from odoo.exceptions import UserError
 
 REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 
-# iot.device.connected KHÔNG tự hết hạn — nó là "trạng thái báo cáo lần cuối" từ IoT Box, chỉ
-# đổi khi có ghi mới. Nếu Box bị tắt đột ngột (mất điện, kill service, rút mạng — không kịp báo
-# "tôi sắp tắt"), connected có thể giữ nguyên True MÃI MÃI dù Box đã chết từ lâu (đã xác minh
-# thực tế qua bin/check_iot_device_live_status.py: nhiều máy connected=True dù write_date đã
-# im lặng hàng chục tới hàng trăm ngày). Phải kết hợp thêm ngưỡng "im lặng quá lâu" để suy ra
-# offline thật, không chỉ tin vào connected.
-IOT_DEVICE_STALE_SECONDS = 60
+# ĐÃ THỬ dùng write_date (thời điểm ghi cuối) để suy ra offline khi im lặng quá lâu — SAI, đã
+# rút lại: đo thực tế bằng bin/probe_iot_heartbeat_interval.py + log lỗi thật cho thấy write_date
+# có thể đứng yên NHIỀU GIỜ (quan sát được 7-9.5 giờ) dù máy in vẫn đang hoạt động/in bình
+# thường — write_date KHÔNG phải tín hiệu heartbeat liên tục (chỉ ghi khi có sự kiện rời rạc nào
+# đó, không rõ chu kỳ), nên không có ngưỡng nào vừa đủ ngắn để bắt được offline thật vừa đủ dài
+# để không chặn nhầm máy đang chạy tốt. Quay lại tin thẳng connected — biết trước nhược điểm: có
+# thể không phát hiện được máy chết đột ngột (connected có thể giữ True mãi, xem
+# bin/check_iot_device_live_status.py), nhưng vẫn đỡ hại hơn nhiều so với chặn nhầm in thật.
+IOT_DEVICE_STALE_SECONDS = None  # không dùng nữa — giữ lại hằng số để tham chiếu lịch sử
 
 
 class HlvIotPrintQueue(models.Model):
@@ -90,13 +91,9 @@ class HlvIotPrintQueue(models.Model):
 
     @api.model
     def _is_device_effectively_online(self, device):
-        """True chỉ khi connected=True VÀ vừa có tín hiệu (write_date) trong
-        IOT_DEVICE_STALE_SECONDS gần nhất — xem giải thích ở IOT_DEVICE_STALE_SECONDS phía trên
-        (connected không tự hết hạn, phải tự suy ra offline qua độ 'im lặng')."""
-        if not device or not device.connected or not device.write_date:
-            return False
-        age = datetime.now(timezone.utc) - device.write_date.replace(tzinfo=timezone.utc)
-        return age <= timedelta(seconds=IOT_DEVICE_STALE_SECONDS)
+        """Tin thẳng connected — xem giải thích ở IOT_DEVICE_STALE_SECONDS phía trên vì sao
+        KHÔNG dùng write_date để suy ra offline nữa (đã thử, gây chặn nhầm máy đang chạy tốt)."""
+        return bool(device and device.connected)
 
     def _do_print(self):
         """Thực hiện in 1 bản ghi ĐÃ claim (state='printing'). Set device_ids của report theo
@@ -131,11 +128,12 @@ class HlvIotPrintQueue(models.Model):
 
             # Kiểm tra máy in có đang online không TRƯỚC khi gửi lệnh — trước đây gửi mù (dispatch
             # ngay không hỏi trước), nếu IoT Box/máy in mất kết nối thì phải chờ doAction() ở FE
-            # thất bại mới biết. Dùng _is_device_effectively_online() (connected + độ 'im lặng'
-            # của write_date) — đã xác minh thực tế qua bin/check_iot_device_live_status.py rằng
-            # connected=True có thể tồn tại MÃI dù Box đã tắt từ lâu, nên KHÔNG được chỉ tin
-            # connected một mình. Không thay được việc "in thật lên giấy", nhưng chặn được sớm
-            # case "IoT Box/máy in offline" thay vì phải chờ máy khác báo kho không ra giấy.
+            # thất bại mới biết. Tin thẳng connected (KHÔNG dùng write_date — đã thử và bỏ, xem
+            # IOT_DEVICE_STALE_SECONDS phía trên: write_date có thể đứng yên nhiều GIỜ dù máy vẫn
+            # đang hoạt động tốt, dùng nó để chặn in gây chặn nhầm liên tục). Biết trước nhược
+            # điểm: connected có thể vẫn giữ True dù Box đã chết đột ngột (xem
+            # bin/check_iot_device_live_status.py) — không bắt được case đó, nhưng đỡ hại hơn
+            # nhiều so với chặn nhầm máy đang chạy tốt.
             if not self._is_device_effectively_online(device):
                 last_seen = fields.Datetime.to_string(device.write_date) if device.write_date else 'không rõ'
                 self.write({
