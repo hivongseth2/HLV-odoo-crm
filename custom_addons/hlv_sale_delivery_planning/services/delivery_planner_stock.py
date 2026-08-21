@@ -332,6 +332,14 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             has_deliverable_line = False
             is_fully_ready = True
             total_pending, total_avail = 0, 0
+            # total_avail_active_move: giống total_avail nhưng CHỈ tính phần của dòng còn
+            # move active (chưa done/cancel) — tức còn thực sự cần lấy/đóng gói. Dùng riêng
+            # cho quyết định packing_status: 1 dòng đã lấy+đóng gói xong (move đã done, hàng
+            # nằm ở vị trí đầu ra nội bộ) vẫn được tính vào total_avail (đúng cho stock_status,
+            # vì tồn kho thật sự "khả dụng"), nhưng KHÔNG được tính là "còn hàng để đóng gói"
+            # nữa — nếu không, 1 dòng khác thực sự hết hàng (moves_by_line có move active) sẽ
+            # bị che mất, làm packing_status nhảy sai qua 'unpacked' thay vì 'waiting_stock'.
+            total_avail_active_move = 0
 
             for line in lines:
                 pid = line['product_id'][0] if line.get('product_id') else None
@@ -384,7 +392,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                                     product_on_hand.get(c_key, 0.0),
                                 )
                                 if c_avail > 0:
-                                    total_avail += min(c_avail, c_pending)
+                                    c_contrib = min(c_avail, c_pending)
+                                    total_avail += c_contrib
+                                    total_avail_active_move += c_contrib
                                 if c_avail < c_pending:
                                     is_fully_ready = False
                 else:
@@ -395,7 +405,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         product_on_hand.get(key, 0.0) if key else 0.0,
                     )
                     if qty_avail > 0:
-                        total_avail += min(qty_avail, pending_qty)
+                        contrib = min(qty_avail, pending_qty)
+                        total_avail += contrib
+                        if line['id'] in moves_by_line:
+                            total_avail_active_move += contrib
                     if qty_avail < pending_qty:
                         is_fully_ready = False
 
@@ -452,7 +465,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             elif not has_stock_pending:
                 # Service-only pending orders have no pick/pack flow.
                 packing_status = 'unpacked'
-            elif total_avail <= 0:
+            elif total_avail_active_move <= 0:
                 packing_status = 'waiting_stock'
             else:
                 pack_pks = [p for p in active_outflow if p['seq_code'] == 'PACK']
