@@ -1718,7 +1718,7 @@ class SaleOrder(models.Model):
 
         # 2. Áp dụng header mới nhất từ CRM và loyalty account lines
         try:
-            misa_headers, _ = order._misa_headers()
+            misa_headers, _base_url = order._misa_headers()
             crm_order_data = order._misa_fetch_order(headers=misa_headers)
             order.with_context(misa_defer_changes=False)._sync_misa_header_in_place(crm_order_data, misa_headers)
         except Exception as exc:
