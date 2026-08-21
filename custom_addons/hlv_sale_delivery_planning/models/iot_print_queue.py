@@ -63,7 +63,10 @@ class HlvIotPrintQueue(models.Model):
     ], string='Quyết định của kho', default='none', required=True, index=True, tracking=True)
 
     def create(self, vals_list):
-        records = super().create(vals_list)
+        # mail_create_nolog: bỏ dòng chatter tự động "<_description kỹ thuật> được tạo" mà
+        # mail.thread tự ghi khi tạo record có field tracking=True — người dùng thường (sale/
+        # kho) không hiểu _description kỹ thuật đó, chỉ cần đúng 1 dòng log dễ hiểu ngay dưới.
+        records = super(HlvIotPrintQueue, self.with_context(mail_create_nolog=True)).create(vals_list)
         for rec in records:
             # Markup(...) % (...) tự escape các giá trị chèn vào (tên user/đơn/kho), chỉ giữ
             # nguyên phần thẻ <b> tĩnh do mình viết — KHÔNG dùng body_is_html=True với chuỗi str
@@ -328,13 +331,13 @@ class HlvIotPrintQueue(models.Model):
 
     def _messages_to_log(self, queues):
         """Đổi message chatter của các bản ghi hàng chờ `queues` thành list nhật ký thuần text
-        (sắp theo thời gian), dùng chung cho get_log_for_picking/get_log_for_sale_order."""
+        (mới nhất lên trước), dùng chung cho get_log_for_picking/get_log_for_sale_order."""
         if not queues:
             return []
         messages = self.env['mail.message'].sudo().search([
             ('model', '=', 'hlv.iot.print.queue'),
             ('res_id', 'in', queues.ids),
-        ], order='date asc')
+        ], order='date desc')
         result = []
         for msg in messages:
             # html.unescape trước để xử lý các message cũ (tạo trước bản fix Markup) bị lưu dạng

@@ -7,6 +7,12 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="HLV Delivery Planner" string="HLV Delivery Planner" name="hlv_sale_delivery_planning">
+                    <block title="In phiếu lấy hàng (IoT)" name="hlv_delivery_planner_pick_print_lock_settings">
+                        <setting string="Khóa mở/gửi in phiếu lấy hàng"
+                                 help="Khi bật, sale KHÔNG xem trước / gửi yêu cầu in phiếu lấy hàng được trên trang sale plan. Dùng để khóa tạm tính năng trước khi chính thức vận hành, tắt lại khi sẵn sàng.">
+                            <field name="lock_pick_slip_requests"/>
+                        </setting>
+                    </block>
                     <block title="Đóng gói" name="hlv_delivery_planner_pack_settings">
                         <setting string="Chỉ người được assign mới được đóng gói"
                                  help="Khi bật, người không được chọn lúc in phiếu lấy hàng sẽ không vào/validate được phiếu PACK. Quản lý kho và admin được bỏ qua.">

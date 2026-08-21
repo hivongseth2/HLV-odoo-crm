@@ -1828,6 +1828,9 @@ function openPickingDetailModal(pickingId){
   }
   pdSwitchTab('detail');
   $('pd-modal').style.display='flex';
+  // Tự fetch nhật ký ngay khi mở dialog (không đợi user bấm qua tab "Nhật ký" mới gọi) — đỡ
+  // phải "bấm load lại" mỗi lần xem, dữ liệu đã sẵn sàng khi chuyển tab.
+  loadPickingPrintLog(pickingId);
 }
 function pdSwitchTab(tab){
   $('pd-tab-detail').classList.toggle('active',tab==='detail');
@@ -1835,7 +1838,8 @@ function pdSwitchTab(tab){
   $('pd-tabpane-detail').classList.toggle('d-none',tab!=='detail');
   $('pd-tabpane-log').classList.toggle('d-none',tab!=='log');
   $('pd-footer-detail').classList.toggle('d-none',tab!=='detail');
-  if(tab==='log') loadPickingPrintLog(_pdPickingId);
+  // Không fetch lại ở đây nữa — nhật ký đã được tải sẵn ngay lúc mở dialog
+  // (xem openPickingDetailModal), tránh gọi API 2 lần cho cùng 1 lần xem.
 }
 $('pd-tab-detail').addEventListener('click',function(){pdSwitchTab('detail');});
 $('pd-tab-log').addEventListener('click',function(){pdSwitchTab('log');});
@@ -1866,11 +1870,6 @@ $('pd-modal').addEventListener('click',function(e){if(e.target===this)closePicki
 $('pd-btn-preview').addEventListener('click',function(){
   if(!_pdPickingId)return;
   var btn=this;
-  // Mở sẵn 1 tab trắng NGAY LÚC bấm (đồng bộ, trong cùng lượt click của user) — nếu đợi fetch
-  // xong mới gọi window.open thì hầu hết trình duyệt coi đó KHÔNG phải do user chủ động mở và
-  // sẽ chặn popup. Set địa chỉ PDF thật vào tab này sau khi preview_url đã có, để bản xem trước
-  // hiện riêng ở tab/popup của nó (không còn nhúng iframe chật chội trong dialog nữa).
-  var previewWin=window.open('', '_blank');
   btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang tạo bản xem trước...';
   fetch('/api/sale_plan/preview_pick_slip',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId}})})
@@ -1878,24 +1877,19 @@ $('pd-btn-preview').addEventListener('click',function(){
   .then(function(j){
     var d=j.result;
     if(d&&d.success){
-      if(previewWin){
-        previewWin.location=d.preview_url;
-      } else {
-        // Trình duyệt chặn popup (hoặc không cho mở tab trắng) — mở lại bằng thao tác khác.
-        showPrintToast('Trình duyệt đã chặn popup xem trước — vui lòng cho phép popup rồi bấm lại.',false);
-        window.open(d.preview_url,'_blank');
-      }
       // Đã xem trước rồi thì ẩn nút "Xem trước" luôn, chỉ còn nút gửi in — tránh xem trước lại
-      // nhiều lần không cần thiết, đỡ rối giao diện.
+      // nhiều lần không cần thiết, đỡ rối giao diện. Toggle TRƯỚC khi điều hướng để nếu
+      // trình duyệt phục hồi trang này từ bfcache lúc bấm Back, nút "Gửi in" vẫn đang hiện sẵn.
       btn.classList.add('d-none');
       $('pd-btn-confirm').classList.remove('d-none');
+      // Mở PDF ngay trong tab hiện tại (không mở tab/popup mới) — bấm Back của trình duyệt để
+      // quay lại trang sale plan này.
+      window.location.href=d.preview_url;
     } else {
-      if(previewWin)previewWin.close();
       btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
       showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
     }
   }).catch(function(){
-    if(previewWin)previewWin.close();
     btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';showPrintToast('Lỗi kết nối.',false);
   });
 });

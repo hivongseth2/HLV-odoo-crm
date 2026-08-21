@@ -31,6 +31,14 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
     def _get_sale_order_for_picking(self, picking):
         return picking.sale_id or picking.move_ids.sale_line_id.order_id[:1]
 
+    def _is_pick_slip_locked(self):
+        """Cờ tạm khóa tính năng in phiếu lấy hàng qua sale plan trước khi chính thức vận
+        hành (VD: đã lên code nhưng chờ 2-3 ngày mới cho sale dùng thật) — bật/tắt ở
+        Settings > HLV Delivery Planner, không cần đụng tới hàng chờ/queue."""
+        return self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_sale_delivery_planning.lock_pick_slip_requests'
+        ) in ('1', 'True', 'true')
+
     def _get_pick_report(self, warehouse=None):
         """Admin có thể cấu hình report riêng theo từng kho (stock.warehouse.x_iot_report_id) —
         ưu tiên report đó nếu có, không thì dùng mẫu mặc định (tìm theo tên)."""
@@ -53,6 +61,12 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
         if not picking:
             return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        if self._is_pick_slip_locked():
+            return {
+                'success': False,
+                'locked': True,
+                'message': 'Tính năng xem/in phiếu lấy hàng đang tạm khóa, chưa vận hành. Vui lòng thử lại sau.',
+            }
         sale_order = self._get_sale_order_for_picking(picking)
         if sale_order and not self._user_can_print_sale_order(sale_order):
             return {
@@ -99,6 +113,12 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
         if not picking:
             return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        if self._is_pick_slip_locked():
+            return {
+                'success': False,
+                'locked': True,
+                'message': 'Tính năng xem/in phiếu lấy hàng đang tạm khóa, chưa vận hành. Vui lòng thử lại sau.',
+            }
 
         sale_order = self._get_sale_order_for_picking(picking)
         if not sale_order:
