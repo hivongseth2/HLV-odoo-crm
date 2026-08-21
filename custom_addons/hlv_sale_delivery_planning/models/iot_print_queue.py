@@ -1,4 +1,5 @@
 import html
+from datetime import datetime, timedelta, timezone
 
 from bs4 import BeautifulSoup
 from markupsafe import Markup
@@ -7,6 +8,14 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
+
+# iot.device.connected KHÔNG tự hết hạn — nó là "trạng thái báo cáo lần cuối" từ IoT Box, chỉ
+# đổi khi có ghi mới. Nếu Box bị tắt đột ngột (mất điện, kill service, rút mạng — không kịp báo
+# "tôi sắp tắt"), connected có thể giữ nguyên True MÃI MÃI dù Box đã chết từ lâu (đã xác minh
+# thực tế qua bin/check_iot_device_live_status.py: nhiều máy connected=True dù write_date đã
+# im lặng hàng chục tới hàng trăm ngày). Phải kết hợp thêm ngưỡng "im lặng quá lâu" để suy ra
+# offline thật, không chỉ tin vào connected.
+IOT_DEVICE_STALE_SECONDS = 5 * 60
 
 
 class HlvIotPrintQueue(models.Model):
@@ -69,6 +78,16 @@ class HlvIotPrintQueue(models.Model):
         claimed_ids = [r[0] for r in self.env.cr.fetchall()]
         return self.browse(claimed_ids)
 
+    @api.model
+    def _is_device_effectively_online(self, device):
+        """True chỉ khi connected=True VÀ vừa có tín hiệu (write_date) trong
+        IOT_DEVICE_STALE_SECONDS gần nhất — xem giải thích ở IOT_DEVICE_STALE_SECONDS phía trên
+        (connected không tự hết hạn, phải tự suy ra offline qua độ 'im lặng')."""
+        if not device or not device.connected or not device.write_date:
+            return False
+        age = datetime.now(timezone.utc) - device.write_date.replace(tzinfo=timezone.utc)
+        return age <= timedelta(seconds=IOT_DEVICE_STALE_SECONDS)
+
     def _do_print(self):
         """Thực hiện in 1 bản ghi ĐÃ claim (state='printing'). Set device_ids của report theo
         đúng kho rồi TRẢ VỀ report action (không tự render PDF trong Python) — phải để trình
@@ -100,12 +119,12 @@ class HlvIotPrintQueue(models.Model):
 
             # Kiểm tra máy in có đang online không TRƯỚC khi gửi lệnh — trước đây gửi mù (dispatch
             # ngay không hỏi trước), nếu IoT Box/máy in mất kết nối thì phải chờ doAction() ở FE
-            # thất bại mới biết. iot.device.connected là cờ Odoo tự cập nhật theo heartbeat từ IoT
-            # Box (đã xác minh có phản ánh đúng thực tế qua bin/check_iot_device_fields.py — 1 máy
-            # mất kết nối thật có connected=False, write_date cũ hẳn so với máy cùng box còn sống).
-            # Không thay được việc "in thật lên giấy", nhưng chặn được sớm case "IoT Box/máy in
-            # offline" thay vì phải chờ máy khác báo kho không ra giấy.
-            if not device.connected:
+            # thất bại mới biết. Dùng _is_device_effectively_online() (connected + độ 'im lặng'
+            # của write_date) — đã xác minh thực tế qua bin/check_iot_device_live_status.py rằng
+            # connected=True có thể tồn tại MÃI dù Box đã tắt từ lâu, nên KHÔNG được chỉ tin
+            # connected một mình. Không thay được việc "in thật lên giấy", nhưng chặn được sớm
+            # case "IoT Box/máy in offline" thay vì phải chờ máy khác báo kho không ra giấy.
+            if not self._is_device_effectively_online(device):
                 last_seen = fields.Datetime.to_string(device.write_date) if device.write_date else 'không rõ'
                 self.write({
                     'state': 'error',
@@ -192,7 +211,7 @@ class HlvIotPrintQueue(models.Model):
                 'warehouse_id': wh.id,
                 'warehouse_name': wh.name,
                 'device_name': device.name or '',
-                'connected': bool(device.connected),
+                'connected': self._is_device_effectively_online(device),
                 'last_seen': device.write_date.isoformat() if device.write_date else False,
             })
         return result
