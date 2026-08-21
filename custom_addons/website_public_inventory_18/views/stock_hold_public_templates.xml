@@ -14,7 +14,6 @@
         #my-holds-table td { padding:.65rem .9rem; vertical-align:middle; font-size:.9rem; }
         #my-holds-table td.text-nowrap { white-space:nowrap; }
         #my-holds-table td.product-cell { min-width:220px; }
-        #my-holds-table td.location-cell { color:#374151; font-size:.82rem; }
         #my-holds-table tbody tr:last-child td { border-bottom:none; }
         .held-qty-badge {
           display:inline-flex; align-items:center; gap:5px; font-weight:800; font-size:.92rem;
@@ -113,7 +112,6 @@
                         <th>Mã</th>
                         <th>Sản phẩm</th>
                         <th>Kho</th>
-                        <th>Vị trí đang giữ</th>
                         <th class="text-end">SL giữ</th>
                         <th>Dự án</th>
                         <th>Tên sale</th>
@@ -130,10 +128,6 @@
                           <td class="fw-bold text-primary text-nowrap"><t t-esc="h.name"/></td>
                           <td class="product-cell"><t t-esc="h.product_id.display_name"/></td>
                           <td class="text-nowrap"><t t-esc="h.warehouse_id.name"/></td>
-                          <td class="location-cell">
-                            <t t-if="h.hold_location_names"><i class="fa fa-map-marker text-muted me-1"></i><t t-esc="h.hold_location_names"/></t>
-                            <t t-else="">—</t>
-                          </td>
                           <td class="text-end text-nowrap">
                             <span t-if="h.state == 'approved' and h.hold_location_breakdown_json != '[]'"
                                   class="held-qty-badge btn-show-hold-locations"
