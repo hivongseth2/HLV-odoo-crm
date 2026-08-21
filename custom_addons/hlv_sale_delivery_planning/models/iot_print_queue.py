@@ -262,6 +262,12 @@ class HlvIotPrintQueue(models.Model):
             'requested_at': self.requested_at.isoformat() if self.requested_at else False,
             'printed_by_name': self.printed_by_id.name or '',
             'printed_at': self.printed_at.isoformat() if self.printed_at else False,
+            # Mã phiếu lấy hàng + trạng thái của TỪNG phiếu được yêu cầu in trong bản ghi này —
+            # 1 yêu cầu có thể gồm nhiều phiếu nếu sale gửi in thêm phiếu mới vào request cũ.
+            'pickings': [
+                {'id': p.id, 'name': p.name, 'state': p.state}
+                for p in self.picking_ids
+            ],
         }
 
     @api.model
@@ -285,14 +291,28 @@ class HlvIotPrintQueue(models.Model):
         return result
 
     @api.model
-    def get_recent_for_dashboard(self, limit=100):
+    def get_recent_for_dashboard(
+        self, limit=100, warehouse_id=None, date_from=None, date_to=None, picking_state=None,
+    ):
         """Danh sách cho drawer "Yêu cầu in (IoT)" trên dashboard backend "Điều phối Giao hàng".
         Không hiện các bản ghi kho đã "Từ chối xử lý" — coi như đã đưa ra khỏi hàng chờ (vẫn
-        giữ lại record để đối soát, chỉ ẩn khỏi danh sách đang hoạt động)."""
-        return [
-            r._to_summary_dict()
-            for r in self.search([('warehouse_action', '!=', 'rejected')], limit=limit)
-        ]
+        giữ lại record để đối soát, chỉ ẩn khỏi danh sách đang hoạt động).
+
+        Lọc thêm (tất cả optional):
+          warehouse_id: chỉ lấy yêu cầu của 1 kho.
+          date_from/date_to: 'YYYY-MM-DD', lọc theo ngày YÊU CẦU (requested_at).
+          picking_state: chỉ lấy yêu cầu có ÍT NHẤT 1 phiếu đang ở trạng thái này (VD 'assigned',
+          'done'...) — lọc theo trạng thái PHIẾU LẤY HÀNG, không phải state của hàng chờ in."""
+        domain = [('warehouse_action', '!=', 'rejected')]
+        if warehouse_id:
+            domain.append(('warehouse_id', '=', int(warehouse_id)))
+        if date_from:
+            domain.append(('requested_at', '>=', '%s 00:00:00' % date_from))
+        if date_to:
+            domain.append(('requested_at', '<=', '%s 23:59:59' % date_to))
+        if picking_state:
+            domain.append(('picking_ids.state', '=', picking_state))
+        return [r._to_summary_dict() for r in self.search(domain, limit=limit)]
 
     @api.model
     def get_recent_for_sale_plan(self, limit=200):

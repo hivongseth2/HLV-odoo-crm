@@ -598,7 +598,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .pd-log-item .pd-log-body{color:#334155}
 #pd-modal .pd-body{padding:16px 18px;overflow-y:auto;flex:1}
 #pd-modal .pd-footer{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px}
-#pd-preview-frame{width:100%;height:78vh;border:1px solid #e5e7eb;border-radius:6px;margin-top:12px}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
 .msg-header{padding:10px 14px;background:#fafafa;border-bottom:1px solid #e5e7eb;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.82rem;color:#374151;user-select:none}
@@ -1028,7 +1027,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     <div class="pd-body">
       <div id="pd-tabpane-detail">
         <div id="pd-lines"></div>
-        <iframe id="pd-preview-frame" class="d-none"></iframe>
       </div>
       <div id="pd-tabpane-log" class="d-none"></div>
     </div>
@@ -1816,8 +1814,6 @@ function openPickingDetailModal(pickingId){
       +(p.state==='done'?'hoàn tất':'hủy')+' — chỉ xem chi tiết/nhật ký, không in lại được nữa.</div>';
   }
   $('pd-lines').innerHTML=lh;
-  var frame=$('pd-preview-frame');
-  frame.src='about:blank';frame.classList.add('d-none');
   var pvBtn=$('pd-btn-preview');
   var cfBtn=$('pd-btn-confirm');
   if(finished){
@@ -1863,7 +1859,6 @@ function loadPickingPrintLog(pickingId){
 }
 function closePickingDetailModal(){
   $('pd-modal').style.display='none';
-  $('pd-preview-frame').src='about:blank';
   _pdPickingId=null;
 }
 $('pd-close').addEventListener('click',closePickingDetailModal);
@@ -1871,6 +1866,11 @@ $('pd-modal').addEventListener('click',function(e){if(e.target===this)closePicki
 $('pd-btn-preview').addEventListener('click',function(){
   if(!_pdPickingId)return;
   var btn=this;
+  // Mở sẵn 1 tab trắng NGAY LÚC bấm (đồng bộ, trong cùng lượt click của user) — nếu đợi fetch
+  // xong mới gọi window.open thì hầu hết trình duyệt coi đó KHÔNG phải do user chủ động mở và
+  // sẽ chặn popup. Set địa chỉ PDF thật vào tab này sau khi preview_url đã có, để bản xem trước
+  // hiện riêng ở tab/popup của nó (không còn nhúng iframe chật chội trong dialog nữa).
+  var previewWin=window.open('', '_blank');
   btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang tạo bản xem trước...';
   fetch('/api/sale_plan/preview_pick_slip',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId}})})
@@ -1878,17 +1878,26 @@ $('pd-btn-preview').addEventListener('click',function(){
   .then(function(j){
     var d=j.result;
     if(d&&d.success){
-      var frame=$('pd-preview-frame');
-      frame.src=d.preview_url;frame.classList.remove('d-none');
+      if(previewWin){
+        previewWin.location=d.preview_url;
+      } else {
+        // Trình duyệt chặn popup (hoặc không cho mở tab trắng) — mở lại bằng thao tác khác.
+        showPrintToast('Trình duyệt đã chặn popup xem trước — vui lòng cho phép popup rồi bấm lại.',false);
+        window.open(d.preview_url,'_blank');
+      }
       // Đã xem trước rồi thì ẩn nút "Xem trước" luôn, chỉ còn nút gửi in — tránh xem trước lại
       // nhiều lần không cần thiết, đỡ rối giao diện.
       btn.classList.add('d-none');
       $('pd-btn-confirm').classList.remove('d-none');
     } else {
+      if(previewWin)previewWin.close();
       btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
       showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
     }
-  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';showPrintToast('Lỗi kết nối.',false);});
+  }).catch(function(){
+    if(previewWin)previewWin.close();
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';showPrintToast('Lỗi kết nối.',false);
+  });
 });
 $('pd-btn-confirm').addEventListener('click',function(){
   if(!_pdPickingId)return;

@@ -782,6 +782,41 @@
                          </span>
                      </t>
                  </div>
+                 <!-- Lọc theo kho / ngày yêu cầu / trạng thái phiếu lấy hàng -->
+                 <div class="p-2 border-bottom bg-white d-flex flex-wrap gap-1 align-items-center" style="font-size:.78rem">
+                     <select class="form-select form-select-sm" style="width:auto"
+                             t-att-value="state.iotQueueFilterWarehouseId"
+                             t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterWarehouseId', ev.target.value)">
+                         <option value="">Tất cả kho</option>
+                         <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                             <option t-att-value="wh.id" t-att-selected="String(wh.id) === String(state.iotQueueFilterWarehouseId)">
+                                 <t t-esc="wh.name"/>
+                             </option>
+                         </t>
+                     </select>
+                     <input type="date" class="form-control form-control-sm" style="width:auto"
+                            title="Yêu cầu từ ngày"
+                            t-att-value="state.iotQueueFilterDateFrom"
+                            t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterDateFrom', ev.target.value)"/>
+                     <input type="date" class="form-control form-control-sm" style="width:auto"
+                            title="Yêu cầu đến ngày"
+                            t-att-value="state.iotQueueFilterDateTo"
+                            t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterDateTo', ev.target.value)"/>
+                     <select class="form-select form-select-sm" style="width:auto"
+                             t-att-value="state.iotQueueFilterPickingState"
+                             t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterPickingState', ev.target.value)">
+                         <option value="">Mọi trạng thái phiếu</option>
+                         <option value="assigned">Sẵn sàng</option>
+                         <option value="confirmed">Chờ hàng</option>
+                         <option value="waiting">Chờ phiếu khác</option>
+                         <option value="done">Hoàn thành</option>
+                         <option value="cancel">Đã hủy</option>
+                     </select>
+                     <button type="button" class="btn btn-sm btn-outline-secondary"
+                             t-on-click="() => this.clearIotQueueFilters()">
+                         <i class="fa fa-times me-1"/>Xóa lọc
+                     </button>
+                 </div>
                  <div t-if="state.iotPrintQueueLoading" class="p-4 text-center text-muted">
                       <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
                  </div>
@@ -817,6 +852,24 @@
                                       <i class="fa fa-info-circle me-1"/>
                                       <t t-esc="q.warehouse_action === 'rejected' ? 'Kho: Từ chối xử lý' : 'Kho: Xử lý sau'"/>
                                   </span>
+                              </div>
+                              <div t-if="q.pickings and q.pickings.length" class="mb-1 d-flex flex-wrap gap-1">
+                                  <t t-foreach="q.pickings" t-as="pk" t-key="pk.id">
+                                      <span class="badge text-bg-light border d-inline-flex align-items-center gap-1"
+                                            t-att-title="this.translatePickingState(pk.state)">
+                                          <t t-esc="pk.name"/>
+                                          <span class="badge"
+                                                t-att-class="{
+                                                    assigned: 'bg-success',
+                                                    confirmed: 'bg-warning text-dark',
+                                                    waiting: 'bg-warning text-dark',
+                                                    done: 'bg-secondary',
+                                                    cancel: 'bg-danger',
+                                                }[pk.state] || 'bg-secondary'">
+                                              <t t-esc="this.translatePickingState(pk.state)"/>
+                                          </span>
+                                      </span>
+                                  </t>
                               </div>
                               <p class="mb-1 small text-muted">
                                   <i class="fa fa-warehouse me-1"/><t t-esc="q.warehouse_name"/>

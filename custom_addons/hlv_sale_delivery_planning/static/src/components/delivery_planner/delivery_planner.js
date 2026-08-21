@@ -216,6 +216,10 @@ export class DeliveryPlannerDashboard extends Component {
             iotPrintQueueItems: [],
             iotPrintQueueLoading: false,
             iotPrinterStatus: [],
+            iotQueueFilterWarehouseId: '',
+            iotQueueFilterDateFrom: '',
+            iotQueueFilterDateTo: '',
+            iotQueueFilterPickingState: '',
         });
 
         this.notification = useService("notification");
