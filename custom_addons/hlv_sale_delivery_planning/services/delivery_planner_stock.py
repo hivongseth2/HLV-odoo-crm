@@ -489,8 +489,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             elif not has_stock_pending:
                 # Service-only pending orders have no pick/pack flow.
                 packing_status = 'unpacked'
-            elif total_avail_active_move <= 0:
-                packing_status = 'waiting_stock'
             else:
                 pack_pks = [p for p in active_outflow if p['seq_code'] == 'PACK']
                 done_pack_pks = [
@@ -502,9 +500,22 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 # VD: PACK/03044 done + OUT/07604 done (đợt 1) nhưng PICK/05791
                 # vẫn assigned (backorder đợt 2) → phải là 'unpacked', không phải 'fully_packed'.
                 active_pick_pks = [p for p in active_outflow if 'PICK' in p['seq_code']]
-                packing_status = 'fully_packed' if (
-                    done_pack_pks and not pack_pks and not active_pick_pks
-                ) else 'unpacked'
+                # Lô đã đóng gói xong đang chờ ở OUT (CHƯA giao) — dù đơn còn 1 lô KHÁC
+                # (backorder) đang chờ lấy/đóng gói riêng, phần đã sẵn sàng vẫn cần được đẩy
+                # đi giao ngay, không nên bị "che" thành 'waiting_stock'/'unpacked' bởi phần
+                # backorder còn thiếu hàng. VD thực tế: PACK/07778 done (36/50) + OUT/12363
+                # assigned (chưa giao) + PICK/11534 confirmed (backorder 14 còn thiếu hàng)
+                # → phải là 'fully_packed' (FE hiển thị "Đã Gói, Chờ Nhận Giao"), không phải
+                # 'waiting_stock'/'unpacked' như nếu chỉ nhìn tổng total_avail của cả đơn.
+                active_out_pks = [p for p in active_outflow if p['picking_type_code'] == 'outgoing']
+                if done_pack_pks and not pack_pks and active_out_pks:
+                    packing_status = 'fully_packed'
+                elif total_avail_active_move <= 0:
+                    packing_status = 'waiting_stock'
+                else:
+                    packing_status = 'fully_packed' if (
+                        done_pack_pks and not pack_pks and not active_pick_pks
+                    ) else 'unpacked'
 
             has_shipper = any(
                 p.get('shipper_received') and not p.get('shipper_returned')
