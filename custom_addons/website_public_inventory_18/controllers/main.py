@@ -1,28 +1,42 @@
 # -*- coding: utf-8 -*-
-import hmac
 import logging
 import math
 import base64
+from datetime import date, datetime
+
 from odoo import http
 from odoo.http import request
 from odoo.osv import expression
 from odoo.tools.mimetypes import guess_mimetype
+from odoo.exceptions import UserError
 
 PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
-PW_PARAM_KEY = "website_public_inventory_18.search_password"
-SESSION_KEY_OK = "inv_pw_ok"
-SESSION_KEY_ERR = "inv_pw_err"
 
-def _get_search_password():
-    return request.env["ir.config_parameter"].sudo().get_param(PW_PARAM_KEY, default="") or ""
+def _get_sale_name_options():
+    """Danh sách 'tên sale' user hiện tại được chọn khi giữ hàng, tái dùng
+    res.users.x_misa_saler_codes (module misa_invoice_status_report), tách theo dấu phẩy.
+    Nếu chưa được cấu hình mã nào -> fallback về tên hiển thị của user."""
+    user = request.env.user
+    raw = getattr(user, "x_misa_saler_codes", "") or ""
+    options = [c.strip() for c in raw.split(",") if c.strip()]
+    return options or [user.name]
 
-def _consteq(a, b):
-    return hmac.compare_digest(str(a or ""), str(b or ""))
+def _get_active_holds(env, product_ids, warehouse_ids=None):
+    """Các yêu cầu giữ hàng đang hiệu lực (approved) cho các sản phẩm/kho chỉ định — dùng để
+    hiển thị 'ai đang giữ' cho sale khác nhìn vào biết hàng đã bị giữ."""
+    if not product_ids:
+        return env["stock.hold.request"].sudo().browse([])
+    domain = [("product_id", "in", product_ids), ("state", "=", "approved")]
+    if warehouse_ids:
+        domain.append(("warehouse_id", "in", warehouse_ids))
+    return env["stock.hold.request"].sudo().search(domain)
 
-def _pw_allowed():
-    conf = _get_search_password()
-    return not conf or bool(request.session.get(SESSION_KEY_OK))
+def _hold_summary(holds):
+    """(tổng SL đang giữ, ['Tên sale: SL', ...]) từ 1 recordset stock.hold.request."""
+    total = sum(holds.mapped("quantity"))
+    details = ["%s: %s" % (h.sale_name, "{:,.0f}".format(h.quantity)) for h in holds]
+    return total, details
 
 def _get_allowed_warehouses():
     env = request.env
@@ -84,11 +98,8 @@ class PublicInventory(http.Controller):
 
     
     # --- CẬP NHẬT: Route ảnh có fallback mặc định ---
-    @http.route(["/search_stock/image/<int:product_id>"], type="http", auth="public")
+    @http.route(["/search_stock/image/<int:product_id>"], type="http", auth="user")
     def stock_image(self, product_id):
-        if not _pw_allowed():
-            return request.not_found()
-        
         record = request.env['product.product'].sudo().browse(product_id).exists()
         
         # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định 
@@ -159,25 +170,8 @@ class PublicInventory(http.Controller):
                 rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
             return {"mode": "warehouses", "rows": rows}
 
-    @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
+    @http.route(["/search_stock"], type="http", auth="user", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
-        # 1. AUTH
-        conf_pw = _get_search_password()
-        if conf_pw:
-            if not request.session.get(SESSION_KEY_OK):
-                if request.httprequest.method == "POST":
-                    inp = (request.params.get("inv_password") or "").strip()
-                    if _consteq(inp, conf_pw):
-                        request.session[SESSION_KEY_OK] = True
-                        request.session.pop(SESSION_KEY_ERR, None)
-                        return request.redirect(request.httprequest.path)
-                    else:
-                        request.session[SESSION_KEY_ERR] = True
-                        return request.render("website_public_inventory_18.inventory_page", {"pw_ok": False, "pw_err": True})
-                else:
-                    request.session.pop(SESSION_KEY_ERR, None)
-                    return request.render("website_public_inventory_18.inventory_page", {"pw_ok": False, "pw_err": False})
-
         # 2. PREPARE
         env = request.env
         try: page = int(page or 1)
@@ -292,15 +286,25 @@ class PublicInventory(http.Controller):
         ])
         page_combo_tmpl_ids = set(page_boms.mapped('product_tmpl_id').ids)
 
+        # --- Yêu cầu giữ hàng đang hiệu lực (để hiển thị "Đã giữ: ai") ---
+        hold_wh_ids = [wid] if wid else _get_allowed_warehouses().ids
+        page_holds = _get_active_holds(env, page_pids, hold_wh_ids)
+        empty_holds = env["stock.hold.request"].sudo().browse([])
+        holds_by_pid = {}
+        for h in page_holds:
+            holds_by_pid[h.product_id.id] = holds_by_pid.get(h.product_id.id, empty_holds) | h
+
         # 6. BUILD ROWS
         rows = []
         for p in products_to_display:
             pid = p.id
             is_combo = p.product_tmpl_id.id in page_combo_tmpl_ids
             qty_total = 0.0
-            
+
             if is_combo: qty_total = self._compute_combo_qty(env, p, wid)
             else: qty_total = qty_map.get(pid, 0.0)
+
+            held_qty, held_by = _hold_summary(holds_by_pid.get(pid, empty_holds))
             
             if low_stock_mode and qty_total > 5.0: continue
 
@@ -317,7 +321,9 @@ class PublicInventory(http.Controller):
                 "barcode": p.barcode or "",
                 "uom": p.uom_id.name,
                 "qty_forecasted": qty_forecasted,
-                "qty_total": qty_total, 
+                "qty_total": qty_total,
+                "held_qty": held_qty,
+                "held_by": held_by,
                 "list_price": p.list_price,
                 "price_web": getattr(p.product_tmpl_id, "x_studio_ga_web", 0.0) or 0.0,
                 "price_tmdt": getattr(p.product_tmpl_id, "x_studio_gia_san_tmdt", 0.0) or 0.0,
@@ -339,7 +345,7 @@ class PublicInventory(http.Controller):
                 "page": page,
                 "pages": pages,
                 "total": total,
-                "pw_ok": True,
+                "sale_name_options": _get_sale_name_options(),
             },
         )
 
@@ -370,15 +376,13 @@ class PublicInventory(http.Controller):
             
         return float(max(0, min(possible_sets))) if possible_sets else 0.0
 
-    @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
+    @http.route(["/search_stock/json"], type="json", auth="user", methods=["POST"])
     def inventory_json(self, q="", warehouse_id=None, page=1):
-        if not _pw_allowed(): return {"ok": False, "error": "access_denied", "rows": []}
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
-    
-    @http.route(["/search_stock/product_breakdown"], type="json", auth="public", methods=["POST"])
+
+    @http.route(["/search_stock/product_breakdown"], type="json", auth="user", methods=["POST"])
     def product_breakdown(self, product_id=None, warehouse_id=None, detail_mode=None):
-        if not _pw_allowed(): return {"ok": False, "error": "access_denied", "rows": []}
         env = request.env
         pid = _as_int_or_none(product_id)
         if not pid: return {"ok": False, "error": "invalid_product_id", "rows": []}
@@ -443,18 +447,28 @@ class PublicInventory(http.Controller):
 
         if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
         else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+
+        holds_for_product = _get_active_holds(env, [pid], warehouses.ids)
+        empty_holds = env["stock.hold.request"].sudo().browse([])
+        holds_by_wid = {}
+        for h in holds_for_product:
+            holds_by_wid[h.warehouse_id.id] = holds_by_wid.get(h.warehouse_id.id, empty_holds) | h
+
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
             fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
             qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
-            rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
+            held_qty, held_by = _hold_summary(holds_by_wid.get(wh.id, empty_holds))
+            rows.append({
+                "warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr,
+                "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf,
+                "held_qty": held_qty, "held_by": held_by,
+            })
         return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
-    @http.route(["/search_stock/location_details"], type="json", auth="public", methods=["POST"])
+    @http.route(["/search_stock/location_details"], type="json", auth="user", methods=["POST"])
     def location_details(self, product_id=None, warehouse_id=None):
-        if not _pw_allowed(): return {"ok": False, "error": "access_denied", "locations": []}
-        
         env = request.env
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
         if params:
@@ -519,9 +533,8 @@ class PublicInventory(http.Controller):
             "locations": locations_data
         }
 
-    @http.route(["/search_stock/suggest"], type="json", auth="public", methods=["POST"])
+    @http.route(["/search_stock/suggest"], type="json", auth="user", methods=["POST"])
     def search_suggest(self, q="", combo_search=False):
-        if not _pw_allowed(): return {"ok": False, "error": "access_denied", "products": []}
         env = request.env
         q = (q or "").strip()
         if not q or len(q) < 2: return {"ok": True, "products": []}
@@ -592,12 +605,9 @@ class PublicInventory(http.Controller):
         
         return {"ok": True, "products": results}
 
-    @http.route(["/search_stock/forecast_details"], type="json", auth="public", methods=["POST"])
+    @http.route(["/search_stock/forecast_details"], type="json", auth="user", methods=["POST"])
     def forecast_details(self, product_id=None, warehouse_id=None):
         """Trả về chi tiết cấu thành số dự báo: phiếu nhập từ ĐMH + phiếu xuất từ ĐBH."""
-        if not _pw_allowed():
-            return {"ok": False, "error": "access_denied"}
-
         env = request.env
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
         if params:
@@ -896,3 +906,99 @@ class PublicInventory(http.Controller):
             "internal_incoming": sorted(internal_in_by_picking.values(), key=lambda x: x["scheduled_date"]),
             "internal_outgoing": sorted(internal_out_by_picking.values(), key=lambda x: x["scheduled_date"]),
         }
+
+    # --- YÊU CẦU GIỮ HÀNG ---
+    @http.route(["/search_stock/hold/create"], type="json", auth="user", methods=["POST"])
+    def hold_request_create(self, product_id=None, warehouse_id=None, quantity=None,
+                             hold_until_date=None, project_name=None, sale_name=None,
+                             description=None):
+        env = request.env
+        pid = _as_int_or_none(product_id)
+        wid = _as_int_or_none(warehouse_id)
+        if not pid or not wid:
+            return {"ok": False, "error": "Thiếu sản phẩm hoặc kho hàng."}
+
+        product = env["product.product"].sudo().browse(pid).exists()
+        warehouse = env["stock.warehouse"].sudo().browse(wid).exists()
+        if not product or not warehouse:
+            return {"ok": False, "error": "Sản phẩm hoặc kho hàng không hợp lệ."}
+
+        try:
+            qty = float(quantity)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Số lượng không hợp lệ."}
+        if qty <= 0:
+            return {"ok": False, "error": "Số lượng phải lớn hơn 0."}
+
+        try:
+            until_date = datetime.strptime((hold_until_date or "").strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return {"ok": False, "error": "Hạn giữ hàng không hợp lệ."}
+        if until_date <= date.today():
+            return {"ok": False, "error": "Hạn giữ hàng phải sau ngày hôm nay."}
+
+        project_name = (project_name or "").strip()
+        sale_name = (sale_name or "").strip()
+        if not project_name or not sale_name:
+            return {"ok": False, "error": "Vui lòng nhập đầy đủ Dự án và Tên sale."}
+
+        try:
+            hold = env["stock.hold.request"].create({
+                "product_id": product.id,
+                "warehouse_id": warehouse.id,
+                "quantity": qty,
+                "hold_until_date": until_date,
+                "project_name": project_name,
+                "sale_name": sale_name,
+                "description": (description or "").strip(),
+                "user_id": env.user.id,
+            })
+            hold.action_submit()
+        except UserError as e:
+            return {"ok": False, "error": str(e)}
+
+        return {"ok": True, "name": hold.name, "state": hold.state}
+
+    @http.route(["/search_stock/hold/cancel"], type="json", auth="user", methods=["POST"])
+    def hold_request_cancel(self, hold_id=None):
+        hid = _as_int_or_none(hold_id)
+        if not hid:
+            return {"ok": False, "error": "invalid_id"}
+        hold = request.env["stock.hold.request"].sudo().browse(hid).exists()
+        if not hold or hold.user_id.id != request.env.user.id:
+            return {"ok": False, "error": "Không tìm thấy yêu cầu hoặc bạn không có quyền hủy."}
+        if hold.state not in ("draft", "pending_approval", "approved"):
+            return {"ok": False, "error": "Yêu cầu này không thể hủy ở trạng thái hiện tại."}
+        try:
+            hold.action_cancel()
+        except UserError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True}
+
+    @http.route(["/search_stock/my_holds"], type="http", auth="user", website=True, sitemap=False)
+    def my_holds_page(self, state=None, warehouse_id=None, sale_name=None, **kw):
+        env = request.env
+        HoldRequest = env["stock.hold.request"]
+
+        base_domain = [("user_id", "=", env.user.id)]
+        my_holds = HoldRequest.search(base_domain)
+
+        domain = list(base_domain)
+        if state:
+            domain.append(("state", "=", state))
+        wid = _as_int_or_none(warehouse_id)
+        if wid:
+            domain.append(("warehouse_id", "=", wid))
+        if sale_name:
+            domain.append(("sale_name", "=", sale_name))
+
+        holds = HoldRequest.search(domain, order="create_date desc")
+
+        return request.render("website_public_inventory_18.my_holds_page", {
+            "holds": holds,
+            "warehouse_options": my_holds.warehouse_id,
+            "sale_name_options_filter": sorted(set(my_holds.mapped("sale_name"))),
+            "filter_state": state or "",
+            "filter_warehouse_id": wid,
+            "filter_sale_name": sale_name or "",
+        })

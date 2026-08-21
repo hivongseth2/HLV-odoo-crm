@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_stock_hold_request_list" model="ir.ui.view">
+        <field name="name">stock.hold.request.list</field>
+        <field name="model">stock.hold.request</field>
+        <field name="arch" type="xml">
+            <list string="Yêu cầu giữ hàng"
+                  decoration-warning="state == 'pending_approval'"
+                  decoration-success="state == 'approved'"
+                  decoration-muted="state in ('cancelled', 'rejected', 'expired')">
+                <field name="name"/>
+                <field name="sale_name"/>
+                <field name="product_id"/>
+                <field name="warehouse_id"/>
+                <field name="quantity"/>
+                <field name="project_name"/>
+                <field name="hold_until_date"/>
+                <field name="user_id" optional="show"/>
+                <field name="state" widget="badge"/>
+                <field name="create_date" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stock_hold_request_form" model="ir.ui.view">
+        <field name="name">stock.hold.request.form</field>
+        <field name="model">stock.hold.request</field>
+        <field name="arch" type="xml">
+            <form string="Yêu cầu giữ hàng">
+                <header>
+                    <button name="action_approve" type="object" string="Duyệt" class="btn-primary"
+                            invisible="state != 'pending_approval'"
+                            groups="website_public_inventory_18.group_stock_hold_approver"/>
+                    <button name="action_reject" type="object" string="Từ chối"
+                            invisible="state != 'pending_approval'"
+                            groups="website_public_inventory_18.group_stock_hold_approver"/>
+                    <button name="action_complete" type="object" string="Hoàn thành"
+                            invisible="state != 'approved'"/>
+                    <button name="action_cancel" type="object" string="Hủy"
+                            invisible="state not in ('draft', 'pending_approval', 'approved')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,pending_approval,approved,completed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="warehouse_id"/>
+                            <field name="quantity"/>
+                            <field name="hold_until_date"/>
+                        </group>
+                        <group>
+                            <field name="sale_name"/>
+                            <field name="project_name"/>
+                            <field name="user_id" readonly="1"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <group string="Mô tả">
+                        <field name="description" nolabel="1"/>
+                    </group>
+                    <group string="Duyệt" invisible="state not in ('approved', 'rejected', 'completed')">
+                        <field name="approved_by_id"/>
+                        <field name="approved_date"/>
+                        <field name="reject_reason" invisible="state != 'rejected'"/>
+                        <field name="hold_picking_id"/>
+                        <field name="hold_location_names" invisible="state != 'approved'"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_stock_hold_request_search" model="ir.ui.view">
+        <field name="name">stock.hold.request.search</field>
+        <field name="model">stock.hold.request</field>
+        <field name="arch" type="xml">
+            <search string="Yêu cầu giữ hàng">
+                <field name="name"/>
+                <field name="product_id"/>
+                <field name="sale_name"/>
+                <field name="project_name"/>
+                <field name="warehouse_id"/>
+                <filter string="Chờ duyệt" name="filter_pending" domain="[('state', '=', 'pending_approval')]"/>
+                <filter string="Đang giữ" name="filter_approved" domain="[('state', '=', 'approved')]"/>
+                <filter string="Của tôi" name="filter_mine" domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Theo Sale" name="group_sale" context="{'group_by': 'sale_name'}"/>
+                    <filter string="Theo Kho" name="group_wh" context="{'group_by': 'warehouse_id'}"/>
+                    <filter string="Theo trạng thái" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_stock_hold_request" model="ir.actions.act_window">
+        <field name="name">Giữ hàng theo Sale</field>
+        <field name="res_model">stock.hold.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_group_sale': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smile">
+                Chưa có yêu cầu giữ hàng nào — sale gửi yêu cầu từ trang /search_stock.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_stock_hold_request"
+              name="Giữ hàng theo Sale"
+              parent="stock.menu_stock_root"
+              action="action_stock_hold_request"
+              sequence="60"/>
+
+    <!-- Warehouse form: setting bật/tắt cần duyệt khi giữ hàng -->
+    <record id="view_warehouse_form_hold_inherit" model="ir.ui.view">
+        <field name="name">stock.warehouse.form.hold.inherit</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="hold_requires_approval"
+                       string="Giữ hàng cần duyệt (trang /search_stock)"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

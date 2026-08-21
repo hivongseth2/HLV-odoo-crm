@@ -201,24 +201,7 @@
       </style>
 
       <main id="wrap" class="oe_structure">
-        <t t-if="not pw_ok">
-          <section>
-            <div class="container mt-5 mb-6" style="max-width:560px;">
-              <h1 class="mb-3 text-center">Tra cứu tồn kho</h1>
-              <t t-if="pw_err"><div class="alert alert-danger">Mật khẩu không đúng. Vui lòng <strong>tải lại trang (F5)</strong>.</div></t>
-              <t t-else="">
-                <form method="post" t-att-action="request.httprequest.path" class="card p-4 shadow-sm border-0">
-                  <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                  <label class="form-label fw-bold">Nhập mật khẩu truy cập</label>
-                  <input type="password" name="inv_password" class="form-control mb-3 form-control-lg" autocomplete="off" required="required"/>
-                  <button type="submit" class="btn btn-primary w-100 btn-lg">Xác nhận</button>
-                </form>
-              </t>
-            </div>
-          </section>
-        </t>
-
-        <t t-if="pw_ok">
+        <t>
           <section>
             <div class="container-fluid mt-3 mb-6" style="max-width: 1550px;">
               <!-- Navigation Tabs -->
@@ -242,6 +225,11 @@
                   <li class="nav-item">
                     <a class="nav-link text-dark px-3 py-2" href="/sale_plan" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
                       <i class="fa fa-truck me-1"></i><span>Tình trạng đơn</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/search_stock/my_holds" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-lock me-1"></i><span>Yêu cầu của tôi</span>
                     </a>
                   </li>
                 </ul>
@@ -342,6 +330,13 @@
                                     <span t-att-class="'text-danger' if r.get('qty_total', 0) &lt;= 5 else 'text-success'">
                                         <t t-esc="'{:,.0f}'.format(r.get('qty_total', 0))"/>
                                     </span>
+                                    <t t-if="r.get('held_qty')">
+                                      <br/>
+                                      <span class="badge bg-warning text-dark fw-normal" style="font-size:.68rem;"
+                                            t-att-title="', '.join(r.get('held_by', []))">
+                                        Đã giữ: <t t-esc="'{:,.0f}'.format(r.get('held_qty', 0))"/>
+                                      </span>
+                                    </t>
                                 </t>
                               </td>
                               <td class="text-end"><t t-if="r.get('price_web')"><t t-esc="'{:,.0f}'.format(r['price_web'])"/></t></td>
@@ -545,6 +540,56 @@
                   <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modal Yêu cầu giữ hàng -->
+            <div class="modal fade" id="holdRequestModal" tabindex="-1" aria-labelledby="holdRequestModalLabel" aria-hidden="true" style="z-index: 1060;">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                  <form id="holdRequestForm">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="holdRequestModalLabel">Yêu cầu giữ hàng</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                      <div id="holdRequestAlert" class="alert alert-danger d-none" role="alert"></div>
+                      <div class="mb-2">
+                        <div class="fw-bold text-primary" id="holdRequestProductName"></div>
+                        <div class="text-muted small" id="holdRequestWarehouseName"></div>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Số lượng giữ <span class="text-danger">*</span></label>
+                        <input type="number" id="holdQuantity" class="form-control" min="0.01" step="any" required="required"/>
+                        <div class="form-text">Tối đa có thể giữ: <span id="holdQuantityMax">0</span> (số lượng sẵn sàng).</div>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Giữ đến ngày <span class="text-danger">*</span></label>
+                        <input type="date" id="holdUntilDate" class="form-control" required="required"/>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Dự án <span class="text-danger">*</span></label>
+                        <input type="text" id="holdProjectName" class="form-control" placeholder="Tên dự án" required="required"/>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Tên sale <span class="text-danger">*</span></label>
+                        <select id="holdSaleName" class="form-select" required="required">
+                          <t t-foreach="sale_name_options" t-as="sn">
+                            <option t-att-value="sn"><t t-esc="sn"/></option>
+                          </t>
+                        </select>
+                      </div>
+                      <div class="mb-1">
+                        <label class="form-label">Mô tả</label>
+                        <textarea id="holdDescription" class="form-control" rows="2" placeholder="(Không bắt buộc)"></textarea>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                      <button type="submit" class="btn btn-primary" id="holdRequestSubmitBtn">Gửi yêu cầu</button>
+                    </div>
+                  </form>
                 </div>
               </div>
             </div>
@@ -777,8 +822,90 @@
                     });
                 });
               });
-              
+
+              // --- YÊU CẦU GIỮ HÀNG ---
+              function _showModal(elem) {
+                  if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                      (bootstrap.Modal.getInstance(elem) || new bootstrap.Modal(elem)).show();
+                  } else {
+                      $(elem).show().addClass('show');
+                      $('body').append('<div class="modal-backdrop fade show" id="holdBackdrop"></div>');
+                      $(elem).find('[data-bs-dismiss="modal"]').off('click.hold').on('click.hold', function() {
+                          $(elem).hide().removeClass('show');
+                          $('#holdBackdrop').remove();
+                      });
+                  }
+              }
+
+              $(document).on('click', '.btn-hold-request', function(e) {
+                  e.preventDefault();
+                  var $btn = $(this);
+                  if ($btn.is(':disabled')) return;
+                  var available = parseFloat($btn.data('available')) || 0;
+
+                  $('#holdRequestForm')[0].reset();
+                  $('#holdRequestAlert').addClass('d-none').text('');
+                  $('#holdRequestForm').data('pid', $btn.data('pid'));
+                  $('#holdRequestForm').data('wid', $btn.data('wid'));
+                  $('#holdRequestProductName').text($btn.data('pname') || '');
+                  $('#holdRequestWarehouseName').text('Kho: ' + ($btn.data('wname') || ''));
+                  $('#holdQuantityMax').text(fmt(available));
+                  $('#holdQuantity').attr('max', available);
+
+                  var tomorrow = new Date();
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  $('#holdUntilDate').attr('min', tomorrow.toISOString().slice(0, 10));
+
+                  _showModal(document.getElementById('holdRequestModal'));
+              });
+
+              $(document).on('submit', '#holdRequestForm', function(e) {
+                  e.preventDefault();
+                  var $form = $(this);
+                  var $submitBtn = $('#holdRequestSubmitBtn');
+                  var $alert = $('#holdRequestAlert').addClass('d-none').text('');
+
+                  var payload = {
+                      product_id: $form.data('pid'),
+                      warehouse_id: $form.data('wid'),
+                      quantity: $('#holdQuantity').val(),
+                      hold_until_date: $('#holdUntilDate').val(),
+                      project_name: $('#holdProjectName').val(),
+                      sale_name: $('#holdSaleName').val(),
+                      description: $('#holdDescription').val()
+                  };
+
+                  $submitBtn.prop('disabled', true).text('Đang gửi...');
+                  $.ajax({
+                      url: "/search_stock/hold/create",
+                      type: "POST", dataType: "json", contentType: "application/json",
+                      data: JSON.stringify({ jsonrpc: "2.0", method: "call", params: payload, id: new Date().getTime() }),
+                      success: function(resp) {
+                          var res = (resp && resp.result) ? resp.result : {};
+                          $submitBtn.prop('disabled', false).text('Gửi yêu cầu');
+                          if (res.ok) {
+                              window.location.href = '/search_stock/my_holds';
+                          } else {
+                              $alert.removeClass('d-none').text(res.error || 'Không thể gửi yêu cầu.');
+                          }
+                      },
+                      error: function() {
+                          $submitBtn.prop('disabled', false).text('Gửi yêu cầu');
+                          $alert.removeClass('d-none').text('Lỗi kết nối. Vui lòng thử lại.');
+                      }
+                  });
+              });
+
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
+
+              // Ghi chú "Đã giữ: Tên sale (SL)" từ dữ liệu held_qty/held_by trả về ở mỗi dòng kho,
+              // để sale khác nhìn vào biết hàng này đã có người giữ trước rồi.
+              function buildHeldNote(r) {
+                  if (!r || !r.held_qty) return '';
+                  var names = (r.held_by || []).join(', ').replace(/"/g, '&quot;');
+                  return '<div class="small" style="color:#b45309;font-weight:600;" title="' + names + '">'
+                       + '<i class="fa fa-lock"></i> Đã giữ: ' + fmt(r.held_qty) + '</div>';
+              }
               
               function buildDetailTable(data) {
                   var html = '';
@@ -820,13 +947,15 @@
                   else {
                        html += '<div class="detail-container-mobile">';
                        html += '<div class="d-none d-md-block p-3 bg-white">';
-                       html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th><th class="text-end">Dự báo</th><th class="text-center">Vị trí</th></tr></thead><tbody>';
+                       html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th><th class="text-end">Dự báo</th><th class="text-center">Thao tác</th></tr></thead><tbody>';
                        rows.forEach(function(r){
                            var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
                            var fcVal = fmt(r.qty_forecast || 0);
                            var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
                            var locationButton = '<button type="button" class="btn btn-sm btn-light text-primary btn-view-location border py-0 px-2" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + '"><i class="fa fa-map-marker"></i></button>';
-                           html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td><td class="text-center">' + locationButton + '</td></tr>';
+                           var holdButton = '<button type="button" class="btn btn-sm btn-outline-success py-0 px-2 btn-hold-request" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-pname="' + (data.product_name || '') + '" data-wname="' + r.warehouse_name + '" data-available="' + r.qty_available + '"' + (r.qty_available <= 0 ? ' disabled="disabled"' : '') + '><i class="fa fa-lock"></i> Giữ hàng</button>';
+                           var heldNote = buildHeldNote(r);
+                           html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + heldNote + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td><td class="text-center">' + locationButton + ' ' + holdButton + '</td></tr>';
                        });
                       html += '</tbody></table></div>';
 
@@ -834,14 +963,16 @@
                       rows.forEach(function(r){
                             var fcVal = fmt(r.qty_forecast || 0);
                             var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
+                            var holdButtonMobile = '<button type="button" class="btn btn-sm btn-outline-success py-0 px-2 btn-hold-request" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-pname="' + (data.product_name || '') + '" data-wname="' + r.warehouse_name + '" data-available="' + r.qty_available + '"' + (r.qty_available <= 0 ? ' disabled="disabled"' : '') + '><i class="fa fa-lock"></i> Giữ hàng</button>';
                             html += '<div class="wh-card">';
                             html += '  <div class="wh-header d-flex justify-content-between align-items-center"><span>' + r.warehouse_name + '</span><button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-view-location" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + '"><i class="fa fa-map-marker"></i> Vị trí</button></div>';
                            html += '  <div class="wh-stats">';
                            html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
-                           html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
+                           html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div>' + buildHeldNote(r) + '</div>';
                            html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
                            html += '    <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val">' + fcLink + '</div></div>';
                            html += '  </div>';
+                           html += '  <div class="mt-2 text-end">' + holdButtonMobile + '</div>';
                            html += '</div>';
                       });
                       html += '</div>';

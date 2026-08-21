@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_hold_warning" model="ir.ui.view">
+        <field name="name">stock.picking.form.hold.warning</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('oe_title')]" position="before">
+                <div class="alert alert-warning mb-0" role="alert" invisible="not is_stock_hold_picking">
+                    <strong>Đây là phiếu giữ chỗ (do tính năng Giữ hàng theo Sale tạo ra).</strong>
+                    KHÔNG bấm "Xác nhận" để hoàn tất phiếu này — làm vậy sẽ di chuyển hàng thật
+                    sang vị trí ảo và làm mất tác dụng khóa hàng. Hãy dùng nút "Hoàn thành" hoặc
+                    "Hủy" trên yêu cầu giữ hàng tương ứng (menu Kho hàng &gt; Giữ hàng theo Sale).
+                </div>
+                <field name="is_stock_hold_picking" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
