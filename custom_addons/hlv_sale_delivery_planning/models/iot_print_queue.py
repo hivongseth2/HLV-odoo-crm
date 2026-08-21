@@ -15,7 +15,7 @@ REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 # thực tế qua bin/check_iot_device_live_status.py: nhiều máy connected=True dù write_date đã
 # im lặng hàng chục tới hàng trăm ngày). Phải kết hợp thêm ngưỡng "im lặng quá lâu" để suy ra
 # offline thật, không chỉ tin vào connected.
-IOT_DEVICE_STALE_SECONDS = 5 * 60
+IOT_DEVICE_STALE_SECONDS = 60
 
 
 class HlvIotPrintQueue(models.Model):
@@ -50,6 +50,16 @@ class HlvIotPrintQueue(models.Model):
     requested_at = fields.Datetime(string='Thời gian yêu cầu', default=fields.Datetime.now)
     printed_by_id = fields.Many2one('res.users', string='Người/phiên đã in', tracking=True)
     printed_at = fields.Datetime(string='Thời gian in')
+    # Quyết định RIÊNG của kho, KHÔNG liên quan tới việc đã gửi lệnh in được hay chưa (state).
+    # 'deferred' (Xử lý sau): vẫn giữ trong hàng chờ để xem lại, nhưng KHÔNG tính vào số đơn
+    # đang xử lý của kho (nhường chỗ cho sale gửi đơn khác — xem x_iot_queue_limit).
+    # 'rejected' (Từ chối xử lý): coi như đưa RA KHỎI hàng chờ (ẩn khỏi danh sách hàng chờ đang
+    # hoạt động), nhưng vẫn giữ record để đối soát/xem lịch sử, không xóa.
+    warehouse_action = fields.Selection([
+        ('none', 'Bình thường'),
+        ('deferred', 'Xử lý sau'),
+        ('rejected', 'Từ chối xử lý'),
+    ], string='Quyết định của kho', default='none', required=True, index=True, tracking=True)
 
     def create(self, vals_list):
         records = super().create(vals_list)
@@ -102,7 +112,9 @@ class HlvIotPrintQueue(models.Model):
                 self.write({'state': 'error', 'error_message': 'Không có phiếu nào để in.'})
                 return False
 
-            report = self.env['ir.actions.report'].sudo().search([
+            # Admin có thể cấu hình report riêng theo từng kho (x_iot_report_id) — ưu tiên report
+            # đó, không thì dùng mẫu mặc định (tìm theo tên).
+            report = self.warehouse_id.x_iot_report_id or self.env['ir.actions.report'].sudo().search([
                 ('name', 'ilike', REPORT_NAME_SEARCH),
             ], limit=1)
             if not report:
@@ -180,6 +192,63 @@ class HlvIotPrintQueue(models.Model):
     def action_cancel(self):
         self.filtered(lambda q: q.state in ('pending', 'error')).write({'state': 'cancelled'})
 
+    def action_defer(self):
+        """Kho đánh dấu "Xử lý sau" — vẫn hiện trong hàng chờ để xem lại, nhưng KHÔNG tính vào
+        số đơn đang xử lý của kho nữa (nhường chỗ cho sale gửi yêu cầu khác, xem
+        x_iot_queue_limit / count_active_for_warehouse)."""
+        for rec in self:
+            if rec.warehouse_action == 'deferred':
+                continue
+            rec.warehouse_action = 'deferred'
+            rec.message_post(body=Markup(
+                'Kho đánh dấu <b>xử lý sau</b> cho yêu cầu in này — không tính vào số đơn '
+                'đang xử lý của kho <b>%s</b>.'
+            ) % (rec.warehouse_id.name or ''))
+
+    def action_reject(self):
+        """Kho từ chối xử lý — coi như đưa RA KHỎI hàng chờ (không tính vào số đơn đang xử lý,
+        ẩn khỏi danh sách hàng chờ đang hoạt động), nhưng vẫn giữ lại record để đối soát."""
+        for rec in self:
+            if rec.warehouse_action == 'rejected':
+                continue
+            rec.warehouse_action = 'rejected'
+            rec.message_post(body=Markup(
+                'Kho đã <b>từ chối xử lý</b> yêu cầu in này — đưa ra khỏi hàng chờ của kho <b>%s</b>.'
+            ) % (rec.warehouse_id.name or ''))
+
+    def action_resume(self):
+        """Đưa đơn đang "Xử lý sau"/"Từ chối" trở lại bình thường — tính vào hàng chờ lại."""
+        labels = dict(self._fields['warehouse_action'].selection)
+        for rec in self:
+            if rec.warehouse_action == 'none':
+                continue
+            old_label = labels.get(rec.warehouse_action, '')
+            rec.warehouse_action = 'none'
+            rec.message_post(body=Markup(
+                'Kho đưa yêu cầu in này từ "<b>%s</b>" trở lại xử lý bình thường.'
+            ) % old_label)
+
+    @api.model
+    def count_active_for_warehouse(self, warehouse_id):
+        """Số đơn đang THẬT SỰ chiếm 'chỗ' trong hàng chờ in của kho — dùng để giới hạn số đơn
+        sale được gửi cùng lúc (stock.warehouse.x_iot_queue_limit). Loại trừ: đã hủy (state=
+        'cancelled'), kho đã đánh dấu "xử lý sau"/"từ chối" (warehouse_action != 'none'), và
+        đơn/phiếu đã HOÀN TẤT thật (đơn bán bị hủy, hoặc mọi phiếu liên quan đã done/cancel —
+        nghĩa là kho đã giao/xử lý xong, không còn chiếm công suất xử lý nữa)."""
+        queues = self.search([
+            ('warehouse_id', '=', int(warehouse_id)),
+            ('state', '!=', 'cancelled'),
+            ('warehouse_action', '=', 'none'),
+        ])
+        count = 0
+        for q in queues:
+            if q.sale_order_id.state == 'cancel':
+                continue
+            if q.picking_ids and all(p.state in ('done', 'cancel') for p in q.picking_ids):
+                continue
+            count += 1
+        return count
+
     def _to_summary_dict(self):
         self.ensure_one()
         return {
@@ -189,6 +258,7 @@ class HlvIotPrintQueue(models.Model):
             'warehouse_id': self.warehouse_id.id,
             'warehouse_name': self.warehouse_id.name,
             'state': self.state,
+            'warehouse_action': self.warehouse_action,
             'error_message': self.error_message or '',
             'requested_by_name': self.requested_by_id.name or '',
             'requested_at': self.requested_at.isoformat() if self.requested_at else False,
@@ -218,15 +288,21 @@ class HlvIotPrintQueue(models.Model):
 
     @api.model
     def get_recent_for_dashboard(self, limit=100):
-        """Danh sách cho drawer "Yêu cầu in (IoT)" trên dashboard backend "Điều phối Giao hàng"."""
-        return [r._to_summary_dict() for r in self.search([], limit=limit)]
+        """Danh sách cho drawer "Yêu cầu in (IoT)" trên dashboard backend "Điều phối Giao hàng".
+        Không hiện các bản ghi kho đã "Từ chối xử lý" — coi như đã đưa ra khỏi hàng chờ (vẫn
+        giữ lại record để đối soát, chỉ ẩn khỏi danh sách đang hoạt động)."""
+        return [
+            r._to_summary_dict()
+            for r in self.search([('warehouse_action', '!=', 'rejected')], limit=limit)
+        ]
 
     @api.model
     def get_recent_for_sale_plan(self, limit=200):
         """Danh sách cho drawer "Yêu cầu in" trên /sale_plan — kèm mã sale MISA của đơn để FE
-        nhóm theo sale (nhiều sale có thể dùng chung 1 tài khoản đăng nhập, xem "Đơn của tôi")."""
+        nhóm theo sale (nhiều sale có thể dùng chung 1 tài khoản đăng nhập, xem "Đơn của tôi").
+        Không hiện bản ghi kho đã "Từ chối xử lý" (xem get_recent_for_dashboard)."""
         result = []
-        for r in self.search([], limit=limit):
+        for r in self.search([('warehouse_action', '!=', 'rejected')], limit=limit):
             d = r._to_summary_dict()
             d['saler_code'] = r.sale_order_id.x_studio_misa_saler_code or ''
             result.append(d)
@@ -279,8 +355,12 @@ class HlvIotPrintQueue(models.Model):
         """RPC gọi từ dashboard backend (OWL, xem delivery_planner_iot_print_mixin.js): claim tối
         đa `limit` bản ghi đang 'pending', in từng bản ghi, trả về danh sách report action mà FE
         cần lần lượt doAction() để thực sự kích hoạt in qua IoT Box. Bản ghi lỗi đã tự chuyển
-        state='error' ở đây, không có trong kết quả trả về (FE không cần doAction cho nó)."""
-        pending_ids = self.search([('state', '=', 'pending')], order='id', limit=limit).ids
+        state='error' ở đây, không có trong kết quả trả về (FE không cần doAction cho nó).
+        Bỏ qua bản ghi kho đã đánh dấu "Xử lý sau"/"Từ chối" — đó là quyết định CHỦ ĐỘNG của
+        kho để tạm ngưng/dừng hẳn xử lý, không được tự động in đè lên quyết định đó."""
+        pending_ids = self.search([
+            ('state', '=', 'pending'), ('warehouse_action', '=', 'none'),
+        ], order='id', limit=limit).ids
         claimed = self._claim_ids(pending_ids)
         results = []
         for rec in claimed:

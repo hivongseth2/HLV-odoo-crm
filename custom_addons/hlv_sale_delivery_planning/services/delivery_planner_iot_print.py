@@ -31,7 +31,11 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
     def _get_sale_order_for_picking(self, picking):
         return picking.sale_id or picking.move_ids.sale_line_id.order_id[:1]
 
-    def _get_pick_report(self):
+    def _get_pick_report(self, warehouse=None):
+        """Admin có thể cấu hình report riêng theo từng kho (stock.warehouse.x_iot_report_id) —
+        ưu tiên report đó nếu có, không thì dùng mẫu mặc định (tìm theo tên)."""
+        if warehouse and warehouse.x_iot_report_id:
+            return warehouse.x_iot_report_id
         return self.env['ir.actions.report'].sudo().search([
             ('name', 'ilike', REPORT_NAME_SEARCH),
         ], limit=1)
@@ -65,7 +69,7 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                 'message': 'Phiếu này chưa giữ được hàng (chưa có hàng để lấy), chưa thể xem trước / in.',
             }
 
-        report = self._get_pick_report()
+        report = self._get_pick_report(picking.picking_type_id.warehouse_id)
         if not report:
             return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
 
@@ -124,6 +128,8 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
             ('state', '=', 'pending'),
         ], limit=1)
         if existing:
+            # Đơn này ĐÃ có chỗ trong hàng chờ của kho rồi (chỉ thêm phiếu vào request cũ) —
+            # không tính là "thêm 1 đơn mới", nên không cần kiểm tra giới hạn hàng chờ.
             existing_pickings = existing.picking_ids | picking
             existing.write({
                 'picking_ids': [(6, 0, existing_pickings.ids)],
@@ -131,6 +137,21 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                 'requested_at': fields.Datetime.now(),
             })
         else:
+            # Kho có thể cấu hình số đơn TỐI ĐA đang xử lý cùng lúc (x_iot_queue_limit, 0 =
+            # không giới hạn) — chỉ áp dụng khi tạo MỘT ĐƠN MỚI trong hàng chờ, để tránh kho bị
+            # quá tải nếu nhiều sale gửi in cùng lúc.
+            limit = wh.x_iot_queue_limit or 0
+            if limit > 0:
+                active_count = Queue.count_active_for_warehouse(wh.id)
+                if active_count >= limit:
+                    return {
+                        'success': False,
+                        'queue_full': True,
+                        'message': 'Kho "%s" đang xử lý %d/%d đơn (đã đạt giới hạn) — vui lòng '
+                                    'thử gửi in lại sau khi kho xử lý xong 1 vài đơn.' % (
+                                        wh.name, active_count, limit,
+                                    ),
+                    }
             Queue.create({
                 'sale_order_id': sale_order.id,
                 'warehouse_id': wh.id,

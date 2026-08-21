@@ -4,7 +4,7 @@
         <field name="name">hlv.iot.print.queue.list</field>
         <field name="model">hlv.iot.print.queue</field>
         <field name="arch" type="xml">
-            <list string="Hàng chờ in IoT" decoration-muted="state in ('printed', 'cancelled')"
+            <list string="Hàng chờ in IoT" decoration-muted="state in ('printed', 'cancelled') or warehouse_action != 'none'"
                   decoration-danger="state == 'error'"
                   default_order="requested_at desc">
                 <field name="sale_order_id"/>
@@ -17,6 +17,9 @@
                        decoration-success="state == 'printed'"
                        decoration-danger="state == 'error'"
                        decoration-muted="state == 'cancelled'"/>
+                <field name="warehouse_action" widget="badge"
+                       decoration-warning="warehouse_action == 'deferred'"
+                       decoration-danger="warehouse_action == 'rejected'"/>
                 <field name="error_message"/>
                 <field name="printed_by_id"/>
                 <field name="printed_at"/>
@@ -27,6 +30,13 @@
                 <button name="action_requeue" type="object" string="Máy không ra giấy, gửi lại"
                         icon="fa-repeat" invisible="state != 'printed'" class="btn-link text-warning"
                         confirm="Đã gửi lệnh in nhưng máy in không ra giấy? Bấm OK để gửi lại lệnh in."/>
+                <button name="action_defer" type="object" string="Xử lý sau"
+                        icon="fa-clock-o" invisible="warehouse_action != 'none'" class="btn-link text-warning"/>
+                <button name="action_reject" type="object" string="Từ chối xử lý"
+                        icon="fa-ban" invisible="warehouse_action != 'none'" class="btn-link text-danger"
+                        confirm="Từ chối xử lý sẽ đưa yêu cầu này ra khỏi hàng chờ (vẫn giữ lại để đối soát). Tiếp tục?"/>
+                <button name="action_resume" type="object" string="Xử lý bình thường lại"
+                        icon="fa-undo" invisible="warehouse_action == 'none'" class="btn-link"/>
                 <button name="action_cancel" type="object" string="Hủy"
                         icon="fa-times" invisible="state not in ('pending', 'error')" class="btn-link text-danger"/>
             </list>
@@ -46,11 +56,22 @@
                     <button name="action_requeue" type="object" string="Máy không ra giấy, gửi lại"
                             invisible="state != 'printed'"
                             confirm="Đã gửi lệnh in nhưng máy in không ra giấy? Bấm OK để gửi lại lệnh in."/>
+                    <button name="action_defer" type="object" string="Xử lý sau"
+                            invisible="warehouse_action != 'none'"/>
+                    <button name="action_reject" type="object" string="Từ chối xử lý"
+                            invisible="warehouse_action != 'none'"
+                            confirm="Từ chối xử lý sẽ đưa yêu cầu này ra khỏi hàng chờ (vẫn giữ lại để đối soát). Tiếp tục?"/>
+                    <button name="action_resume" type="object" string="Xử lý bình thường lại"
+                            invisible="warehouse_action == 'none'"/>
                     <button name="action_cancel" type="object" string="Hủy"
                             invisible="state not in ('pending', 'error')"/>
                     <field name="state" widget="statusbar" statusbar_visible="pending,printing,printed"/>
                 </header>
                 <sheet>
+                    <widget name="web_ribbon" title="Xử lý sau" bg_color="text-bg-warning"
+                            invisible="warehouse_action != 'deferred'"/>
+                    <widget name="web_ribbon" title="Từ chối xử lý" bg_color="text-bg-danger"
+                            invisible="warehouse_action != 'rejected'"/>
                     <group>
                         <group>
                             <field name="sale_order_id"/>
@@ -83,9 +104,13 @@
                 <filter string="Đang xử lý" name="in_progress" domain="[('state', 'in', ('pending', 'printing'))]"/>
                 <filter string="Đã gửi lệnh in" name="printed" domain="[('state', '=', 'printed')]"/>
                 <separator/>
+                <filter string="Xử lý sau" name="deferred" domain="[('warehouse_action', '=', 'deferred')]"/>
+                <filter string="Từ chối xử lý" name="rejected" domain="[('warehouse_action', '=', 'rejected')]"/>
+                <separator/>
                 <group expand="1" string="Nhóm theo">
                     <filter string="Kho" name="group_warehouse" context="{'group_by': 'warehouse_id'}"/>
                     <filter string="Trạng thái" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Quyết định của kho" name="group_warehouse_action" context="{'group_by': 'warehouse_action'}"/>
                 </group>
             </search>
         </field>

@@ -9,6 +9,10 @@
                 <field name="x_iot_printer_device_id"
                        options="{'no_create': True}"
                        placeholder="Chưa gán máy in IoT cho kho này"/>
+                <field name="x_iot_report_id"
+                       options="{'no_create': True}"
+                       placeholder="Mặc định (Hoạt động lấy hàng TSN)"/>
+                <field name="x_iot_queue_limit" placeholder="0 = không giới hạn"/>
             </xpath>
         </field>
     </record>

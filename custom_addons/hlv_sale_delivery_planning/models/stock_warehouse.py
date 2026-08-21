@@ -14,3 +14,17 @@ class StockWarehouse(models.Model):
         help='Máy in IoT Box được gán cho kho này. Khi in phiếu giao hàng cho đơn '
              'thuộc kho này, hệ thống sẽ tự chọn đúng máy in này thay vì phải chọn tay.',
     )
+    x_iot_report_id = fields.Many2one(
+        'ir.actions.report',
+        string='Mẫu phiếu lấy hàng IoT của kho',
+        domain=[('model', '=', 'stock.picking')],
+        help='Report template dùng khi sale bấm in phiếu lấy hàng cho kho này qua IoT. '
+             'Để trống thì dùng mẫu mặc định (tìm theo tên "Hoạt động lấy hàng TSN").',
+    )
+    x_iot_queue_limit = fields.Integer(
+        string='Số đơn tối đa trong hàng chờ in',
+        default=0,
+        help='Số đơn TỐI ĐA đang xử lý (chưa hủy/chưa hoàn tất giao) mà kho này cho phép '
+             'cùng lúc trong hàng chờ in IoT — sale sẽ không gửi được yêu cầu in mới nếu kho '
+             'đã đủ số này. Để 0 = không giới hạn.',
+    )

@@ -89,6 +89,41 @@ export class DeliveryPlannerIotPrintMixin {
         }
     }
 
+    /** Kho đánh dấu "Xử lý sau" — vẫn giữ trong hàng chờ để xem lại, nhưng KHÔNG tính vào số đơn
+     * đang xử lý của kho (nhường chỗ cho sale gửi yêu cầu khác nếu kho có cấu hình giới hạn). */
+    async deferIotPrintQueueItem(item) {
+        try {
+            await this.orm.call('hlv.iot.print.queue', 'action_defer', [[item.id]]);
+            await this.loadIotPrintQueueDrawer();
+        } catch (e) {
+            console.error('deferIotPrintQueueItem failed', e);
+            this.notification.add('Không đánh dấu được, vui lòng tải lại trang.', { type: 'danger' });
+        }
+    }
+
+    /** Kho từ chối xử lý — đưa yêu cầu ra khỏi hàng chờ đang hoạt động (vẫn giữ lại record để
+     * đối soát, không xóa). */
+    async rejectIotPrintQueueItem(item) {
+        try {
+            await this.orm.call('hlv.iot.print.queue', 'action_reject', [[item.id]]);
+            await this.loadIotPrintQueueDrawer();
+        } catch (e) {
+            console.error('rejectIotPrintQueueItem failed', e);
+            this.notification.add('Không từ chối được, vui lòng tải lại trang.', { type: 'danger' });
+        }
+    }
+
+    /** Đưa đơn đang "Xử lý sau"/"Từ chối" trở lại xử lý bình thường (tính vào hàng chờ lại). */
+    async resumeIotPrintQueueItem(item) {
+        try {
+            await this.orm.call('hlv.iot.print.queue', 'action_resume', [[item.id]]);
+            await this.loadIotPrintQueueDrawer();
+        } catch (e) {
+            console.error('resumeIotPrintQueueItem failed', e);
+            this.notification.add('Không đưa lại được, vui lòng tải lại trang.', { type: 'danger' });
+        }
+    }
+
     /** Định dạng ISO datetime (UTC, không có 'Z') từ hlv.iot.print.queue._to_summary_dict() sang
      * giờ VN (UTC+7) — dùng để đối soát thời gian yêu cầu/gửi in trong drawer. */
     _formatIotQueueTime(isoStr) {

@@ -2495,6 +2495,7 @@ function renderPrintQueueList(){
     body.innerHTML='<div class="p-4 text-center text-muted"><i class="fa fa-print fa-3x opacity-50 mb-2"></i><br/>Chưa có yêu cầu in nào.</div>';
     return;
   }
+  var WH_ACTION_LABEL={deferred:'Kho: Xử lý sau',rejected:'Kho: Từ chối xử lý'};
   body.innerHTML=items.map(function(i){
     return '<div class="pq-item">'
       +'<div class="d-flex justify-content-between align-items-start">'
@@ -2505,6 +2506,7 @@ function renderPrintQueueList(){
       +' &middot; <i class="fa fa-user me-1"></i>'+esc(i.requested_by_name||'')+'</div>'
       +'<div class="pq-meta"><i class="fa fa-clock-o me-1"></i>Yêu cầu: '+esc(pqFormatTime(i.requested_at))
       +(i.printed_at?' &middot; <i class="fa fa-print me-1"></i>Đã gửi lệnh in: '+esc(pqFormatTime(i.printed_at)):'')+'</div>'
+      +(i.warehouse_action&&i.warehouse_action!=='none'?'<div class="pq-badge cancelled mt-1" style="display:inline-block"><i class="fa fa-info-circle me-1"></i>'+esc(WH_ACTION_LABEL[i.warehouse_action]||i.warehouse_action)+'</div>':'')
       +(i.error_message?'<div class="pq-error"><i class="fa fa-exclamation-triangle me-1"></i>'+esc(i.error_message)+'</div>':'')
       +'</div>';
   }).join('');

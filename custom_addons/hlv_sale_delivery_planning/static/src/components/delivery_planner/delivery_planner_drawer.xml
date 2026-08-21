@@ -811,6 +811,13 @@
                                       }[q.state] || q.state"/>
                                   </span>
                               </div>
+                              <div t-if="q.warehouse_action and q.warehouse_action !== 'none'" class="mb-1">
+                                  <span class="badge"
+                                        t-att-class="q.warehouse_action === 'rejected' ? 'bg-danger' : 'bg-warning text-dark'">
+                                      <i class="fa fa-info-circle me-1"/>
+                                      <t t-esc="q.warehouse_action === 'rejected' ? 'Kho: Từ chối xử lý' : 'Kho: Xử lý sau'"/>
+                                  </span>
+                              </div>
                               <p class="mb-1 small text-muted">
                                   <i class="fa fa-warehouse me-1"/><t t-esc="q.warehouse_name"/>
                                   <span class="ms-2"><i class="fa fa-user me-1"/><t t-esc="q.requested_by_name"/></span>
@@ -834,6 +841,22 @@
                                       title="Dùng khi đã gửi lệnh in nhưng máy in vật lý không ra giấy"
                                       t-on-click="() => this.requeueIotPrintQueueItem(q)">
                                   <i class="fa fa-repeat me-1"/>Máy không ra giấy, gửi lại
+                              </button>
+                              <t t-if="!q.warehouse_action or q.warehouse_action === 'none'">
+                                  <button type="button" class="btn btn-sm btn-outline-warning mt-1 ms-1"
+                                          title="Vẫn giữ trong hàng chờ để xem lại, nhưng không tính vào số đơn đang xử lý của kho"
+                                          t-on-click="() => this.deferIotPrintQueueItem(q)">
+                                      <i class="fa fa-clock-o me-1"/>Xử lý sau
+                                  </button>
+                                  <button type="button" class="btn btn-sm btn-outline-danger mt-1 ms-1"
+                                          title="Đưa yêu cầu này ra khỏi hàng chờ (vẫn giữ lại để đối soát)"
+                                          t-on-click="() => this.rejectIotPrintQueueItem(q)">
+                                      <i class="fa fa-ban me-1"/>Từ chối xử lý
+                                  </button>
+                              </t>
+                              <button t-else="" type="button" class="btn btn-sm btn-outline-secondary mt-1"
+                                      t-on-click="() => this.resumeIotPrintQueueItem(q)">
+                                  <i class="fa fa-undo me-1"/>Xử lý bình thường lại
                               </button>
                           </div>
                       </t>
