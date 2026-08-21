@@ -22,6 +22,22 @@ def _get_sale_name_options():
     options = [c.strip() for c in raw.split(",") if c.strip()]
     return options or [user.name]
 
+def _get_active_holds(env, product_ids, warehouse_ids=None):
+    """Các yêu cầu giữ hàng đang hiệu lực (approved) cho các sản phẩm/kho chỉ định — dùng để
+    hiển thị 'ai đang giữ' cho sale khác nhìn vào biết hàng đã bị giữ."""
+    if not product_ids:
+        return env["stock.hold.request"].sudo().browse([])
+    domain = [("product_id", "in", product_ids), ("state", "=", "approved")]
+    if warehouse_ids:
+        domain.append(("warehouse_id", "in", warehouse_ids))
+    return env["stock.hold.request"].sudo().search(domain)
+
+def _hold_summary(holds):
+    """(tổng SL đang giữ, ['Tên sale: SL', ...]) từ 1 recordset stock.hold.request."""
+    total = sum(holds.mapped("quantity"))
+    details = ["%s: %s" % (h.sale_name, "{:,.0f}".format(h.quantity)) for h in holds]
+    return total, details
+
 def _get_allowed_warehouses():
     env = request.env
     param_val = env["ir.config_parameter"].sudo().get_param(
@@ -270,15 +286,25 @@ class PublicInventory(http.Controller):
         ])
         page_combo_tmpl_ids = set(page_boms.mapped('product_tmpl_id').ids)
 
+        # --- Yêu cầu giữ hàng đang hiệu lực (để hiển thị "Đã giữ: ai") ---
+        hold_wh_ids = [wid] if wid else _get_allowed_warehouses().ids
+        page_holds = _get_active_holds(env, page_pids, hold_wh_ids)
+        empty_holds = env["stock.hold.request"].sudo().browse([])
+        holds_by_pid = {}
+        for h in page_holds:
+            holds_by_pid[h.product_id.id] = holds_by_pid.get(h.product_id.id, empty_holds) | h
+
         # 6. BUILD ROWS
         rows = []
         for p in products_to_display:
             pid = p.id
             is_combo = p.product_tmpl_id.id in page_combo_tmpl_ids
             qty_total = 0.0
-            
+
             if is_combo: qty_total = self._compute_combo_qty(env, p, wid)
             else: qty_total = qty_map.get(pid, 0.0)
+
+            held_qty, held_by = _hold_summary(holds_by_pid.get(pid, empty_holds))
             
             if low_stock_mode and qty_total > 5.0: continue
 
@@ -295,7 +321,9 @@ class PublicInventory(http.Controller):
                 "barcode": p.barcode or "",
                 "uom": p.uom_id.name,
                 "qty_forecasted": qty_forecasted,
-                "qty_total": qty_total, 
+                "qty_total": qty_total,
+                "held_qty": held_qty,
+                "held_by": held_by,
                 "list_price": p.list_price,
                 "price_web": getattr(p.product_tmpl_id, "x_studio_ga_web", 0.0) or 0.0,
                 "price_tmdt": getattr(p.product_tmpl_id, "x_studio_gia_san_tmdt", 0.0) or 0.0,
@@ -419,12 +447,24 @@ class PublicInventory(http.Controller):
 
         if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
         else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+
+        holds_for_product = _get_active_holds(env, [pid], warehouses.ids)
+        empty_holds = env["stock.hold.request"].sudo().browse([])
+        holds_by_wid = {}
+        for h in holds_for_product:
+            holds_by_wid[h.warehouse_id.id] = holds_by_wid.get(h.warehouse_id.id, empty_holds) | h
+
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
             fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
             qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
-            rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
+            held_qty, held_by = _hold_summary(holds_by_wid.get(wh.id, empty_holds))
+            rows.append({
+                "warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr,
+                "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf,
+                "held_qty": held_qty, "held_by": held_by,
+            })
         return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
     @http.route(["/search_stock/location_details"], type="json", auth="user", methods=["POST"])

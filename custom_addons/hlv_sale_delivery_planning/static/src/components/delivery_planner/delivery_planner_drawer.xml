@@ -789,7 +789,7 @@
                              t-on-change="(ev) => this.setIotQueueFilter('iotQueueFilterWarehouseId', ev.target.value)">
                          <option value="">Tất cả kho</option>
                          <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
-                             <option t-att-value="wh.id" t-att-selected="String(wh.id) === String(state.iotQueueFilterWarehouseId)">
+                             <option t-att-value="wh.id" t-att-selected="wh.id == state.iotQueueFilterWarehouseId">
                                  <t t-esc="wh.name"/>
                              </option>
                          </t>

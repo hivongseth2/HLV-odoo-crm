@@ -141,6 +141,7 @@ class StockHoldRequest(models.Model):
             "location_id": warehouse.lot_stock_id.id,
             "location_dest_id": hold_location.id,
             "origin": self.name,
+            "is_stock_hold_picking": True,
             "move_ids": [(0, 0, {
                 "name": self.name,
                 "product_id": self.product_id.id,
