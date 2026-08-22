@@ -13,7 +13,7 @@
     <div id="modal-phone"
          style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
         <div style="background:#fff;border-radius:16px;padding:36px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-            <h3 style="margin:0 0 20px;font-family:'Sora',sans-serif">Đổi số điện thoại</h3>
+            <h3 style="margin:0 0 20px;font-family:'Plus Jakarta Sans',sans-serif">Đổi số điện thoại</h3>
             <t t-if="phone_error">
                 <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#c0392b">
                     <t t-out="phone_error"/>
@@ -41,7 +41,7 @@
     <div id="modal-pw"
          t-att-style="'display:' + ('flex' if show_pw_modal else 'none') + ';position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center'">
         <div style="background:#fff;border-radius:16px;padding:36px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-            <h3 style="margin:0 0 20px;font-family:'Sora',sans-serif">Đổi mật khẩu</h3>
+            <h3 style="margin:0 0 20px;font-family:'Plus Jakarta Sans',sans-serif">Đổi mật khẩu</h3>
             <t t-if="pw_error">
                 <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#c0392b">
                     <t t-out="pw_error"/>
