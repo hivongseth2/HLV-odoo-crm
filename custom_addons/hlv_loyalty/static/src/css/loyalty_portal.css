@@ -999,29 +999,14 @@ a { color:inherit; }
 }
 .sr-cash-side-inner {
     background:linear-gradient(145deg,#1e89ca 0%,#0d75b4 55%,#1779b4 100%);
-    border-radius:20px; padding:28px 26px;
-    color:#fff; display:flex; flex-direction:column; align-items:center;
-    text-align:center; gap:6px;
+    border-radius:20px; padding:24px 22px;
+    color:#fff; display:flex; flex-direction:column; align-items:flex-start;
+    text-align:left; gap:6px;
     box-shadow:0 8px 28px rgba(23,121,180,.35);
 }
-.sr-cash-side-icon { font-size:48px; opacity:.9; margin-bottom:4px; }
-.sr-cash-side-ttl { font-size:.72rem; font-weight:700; opacity:.75; text-transform:uppercase; letter-spacing:.08em; }
-.sr-cash-side-pts { display:flex; align-items:baseline; gap:6px; margin:4px 0; }
-.sr-cash-side-num { font-family:'Manrope',sans-serif; font-size:2.2rem; font-weight:800; line-height:1; }
-.sr-cash-side-unit { font-size:.8rem; opacity:.8; }
-.sr-cash-side-rate {
-    background:rgba(255,255,255,.15); border-radius:10px;
-    padding:8px 16px; font-size:.85rem; display:flex; align-items:center; gap:6px;
-    width:100%; justify-content:center; margin-top:4px;
-}
-.sr-cash-side-rate .ms { font-size:18px; }
-.sr-cash-side-max {
-    font-size:.8rem; opacity:.75; line-height:1.5;
-}
-.sr-cash-side-max strong { font-size:1.05rem; font-weight:800; opacity:1; }
+.sr-cash-side-ttl { font-size:.85rem; font-weight:800; display:flex; align-items:center; gap:8px; }
 .sr-cash-side-steps {
-    width:100%; margin-top:16px; display:flex; flex-direction:column; gap:10px;
-    border-top:1px solid rgba(255,255,255,.2); padding-top:16px; text-align:left;
+    width:100%; margin-top:14px; display:flex; flex-direction:column; gap:10px; text-align:left;
 }
 .sr-css-step { display:flex; align-items:center; gap:10px; font-size:.8rem; opacity:.88; }
 .sr-css-step-icon { font-size:20px; flex-shrink:0; opacity:.7; }
@@ -1186,9 +1171,7 @@ button.sr-rq-cancel-btn .ms { display:none; }
     .sr-rdm-body { padding:20px 16px 60px; }
     .sr-cash-layout { grid-template-columns:1fr; }
     .sr-cash-side { position:static; }
-    .sr-cash-side-inner { flex-direction:row; flex-wrap:wrap; text-align:left; padding:20px; }
-    .sr-cash-side-icon { display:none; }
-    .sr-cash-side-steps { display:none; }
+    .sr-cash-side-inner { padding:20px; }
 }
 @media (max-width:680px) {
     .sr-rdm-hero-inner { flex-direction:column; align-items:flex-start; gap:16px; }

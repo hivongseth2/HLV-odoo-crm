@@ -61,7 +61,7 @@
                     <div class="sr-rq-body">
                         <div class="sr-rq-row">
                             <span class="sr-rq-lbl">Điểm sử dụng:</span>
-                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm ĐT</span>
+                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm đổi thưởng</span>
                         </div>
                         <t t-if="rq.request_type == 'gift' and rq.package_id">
                             <div class="sr-rq-row">
@@ -76,17 +76,21 @@
                                     <t t-out="'{:,.0f}'.format(rq.cash_value)"/>đ
                                 </span>
                             </div>
-                            <div class="sr-rq-row">
-                                <span class="sr-rq-lbl">Thanh toán:</span>
-                                <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if payment_is_paid else 'sr-pay-pending')">
-                                    <span class="ms" style="font-size:14px">
-                                        <t t-if="payment_is_paid">check_circle</t>
-                                        <t t-else="">schedule</t>
+                            <!-- Chỉ hiện khi yêu cầu ĐÃ xử lý — đang 'Chờ duyệt' thì chưa có gì
+                                 để nói đã/chưa thanh toán. -->
+                            <t t-if="rq.state == 'done'">
+                                <div class="sr-rq-row">
+                                    <span class="sr-rq-lbl">Thanh toán:</span>
+                                    <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if payment_is_paid else 'sr-pay-pending')">
+                                        <span class="ms" style="font-size:14px">
+                                            <t t-if="payment_is_paid">check_circle</t>
+                                            <t t-else="">schedule</t>
+                                        </span>
+                                        <t t-if="payment_is_paid">Đã thanh toán</t>
+                                        <t t-else="">Chưa thanh toán</t>
                                     </span>
-                                    <t t-if="payment_is_paid">Đã thanh toán</t>
-                                    <t t-else="">Chưa thanh toán</t>
-                                </span>
-                            </div>
+                                </div>
+                            </t>
                         </t>
                         <t t-if="rq.state == 'done' and rq.voucher_id">
                             <div class="sr-rq-row sr-rq-voucher">

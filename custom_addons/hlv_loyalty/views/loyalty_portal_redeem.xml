@@ -120,7 +120,7 @@
                                         </div>
                                         <div class="sr-pkg-pts">
                                             <div class="sr-pkg-pts-num"><t t-out="'{:,}'.format(pkg.points_required)"/></div>
-                                            <div class="sr-pkg-pts-lbl">điểm ĐT</div>
+                                            <div class="sr-pkg-pts-lbl">điểm đổi thưởng</div>
                                         </div>
                                     </div>
                                     <div class="sr-pkg-name"><t t-out="pkg.name"/></div>
@@ -192,10 +192,13 @@
                                            placeholder="Nhập số điểm..."
                                            required="required"
                                            t-att-value="form_vals.get('points_to_redeem', '')"/>
+                                    <!-- Số điểm khả dụng/đang treo đã hiện ở khối thống kê đầu trang
+                                         (sr-rdm-stats) — ở đây chỉ nhắc lại NGẮN mức tối đa được nhập,
+                                         tránh lặp lại nguyên câu 2 lần trên cùng 1 màn hình. -->
                                     <div class="sr-cf-hint">
-                                        Bạn có <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong> khả dụng.
+                                        Tối đa <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong>.
                                         <t t-if="reward_pending_points &gt; 0">
-                                            Đang treo <strong><t t-out="'{:,}'.format(reward_pending_points)"/> điểm</strong> ở yêu cầu chờ xử lý.
+                                            (đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm)
                                         </t>
                                     </div>
                                     <t t-if="program and program.cash_rate_per_point > 0">
@@ -203,6 +206,10 @@
                                             <span class="ms">payments</span>
                                             <span>Bạn sẽ nhận:</span>
                                             <span class="sr-cash-preview-val" id="preview-val">0đ</span>
+                                        </div>
+                                        <div class="sr-cf-hint">
+                                            Tối đa quy đổi được:
+                                            <strong><t t-out="'{:,.0f}'.format(exchange_available_points * program.cash_rate_per_point)"/>đ</strong>
                                         </div>
                                     </t>
                                 </div>
@@ -298,21 +305,14 @@
                         </form>
                     </div><!-- /sr-cash-wrap -->
 
-                    <!-- Right panel -->
+                    <!-- Right panel — CHỈ còn quy trình xử lý (thông tin duy nhất chưa xuất
+                         hiện ở nơi khác trên trang); số điểm/số tiền tối đa đã có ở khối
+                         thống kê đầu trang + preview bên form, không lặp lại ở đây nữa. -->
                     <div class="sr-cash-side">
                         <div class="sr-cash-side-inner">
-                            <span class="ms sr-cash-side-icon">account_balance_wallet</span>
-                            <div class="sr-cash-side-ttl">Quy đổi điểm</div>
-                            <div class="sr-cash-side-pts">
-                                <span class="sr-cash-side-num"><t t-out="'{:,}'.format(exchange_available_points)"/></span>
-                                <span class="sr-cash-side-unit">points khả dụng</span>
+                            <div class="sr-cash-side-ttl">
+                                <span class="ms" style="font-size:18px">checklist</span> Quy trình xử lý
                             </div>
-                            <t t-if="program and program.cash_rate_per_point > 0">
-                                <div class="sr-cash-side-max">
-                                    Tối đa có thể đổi:<br/>
-                                    <strong><t t-out="'{:,.0f}'.format(exchange_available_points * program.cash_rate_per_point)"/>đ</strong>
-                                </div>
-                            </t>
                             <div class="sr-cash-side-steps">
                                 <div class="sr-css-step">
                                     <span class="ms sr-css-step-icon">edit_note</span>
@@ -400,7 +400,7 @@
                                     <div class="sr-rq-body">
                                         <div class="sr-rq-row">
                                             <span class="sr-rq-lbl">Điểm sử dụng:</span>
-                                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm ĐT</span>
+                                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm đổi thưởng</span>
                                         </div>
                                         <t t-if="rq.request_type == 'gift' and rq.package_id">
                                             <div class="sr-rq-row">
@@ -408,7 +408,10 @@
                                                 <span class="sr-rq-val"><t t-out="rq.package_id.name"/></span>
                                             </div>
                                         </t>
-                                        <t t-if="rq.request_type == 'cash'">
+                                        <!-- Chỉ hiện trạng thái thanh toán khi yêu cầu ĐÃ được duyệt/xử lý —
+                                             yêu cầu còn 'Chờ duyệt' thì chưa có gì để nói đã/chưa thanh toán,
+                                             hiện ra dễ gây hiểu lầm là chưa được duyệt bị "quên" thanh toán. -->
+                                        <t t-if="rq.request_type == 'cash' and rq.state == 'done'">
                                             <div class="sr-rq-row">
                                                 <span class="sr-rq-lbl">Thanh toán:</span>
                                                 <t t-set="is_paid" t-value="payment_status_by_request.get(rq.id)"/>
