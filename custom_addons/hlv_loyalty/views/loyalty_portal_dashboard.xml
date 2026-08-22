@@ -10,15 +10,15 @@
 <template id="loyalty_public_dashboard" name="Loyalty Portal - Dashboard">
     <t t-call="hlv_loyalty.loyalty_public_layout">
 
-        <!-- Top bar -->
-        <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
-            <span style="font-size:.88rem;color:#666">
+        <!-- Top bar — dùng riêng sr-topbar-greet (không phải sr-topbar-name) vì
+             trang chủ không có nút "quay về" để làm chỗ dựa bên trái; sr-topbar-name
+             bị ẩn hẳn (display:none) trên mobile ở các trang khác, nếu dùng lại ở đây
+             sẽ khiến 'Đăng xuất' là flex item DUY NHẤT còn lại và bị đẩy sang trái. -->
+        <div class="sr-topbar">
+            <span class="sr-topbar-greet">
                 Xin chào, <strong><t t-out="partner.name"/></strong>
             </span>
-            <a href="/loyalty/logout"
-               style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
-                Đăng xuất
-            </a>
+            <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
         </div>
 
         <!-- Success / error flash -->
@@ -43,7 +43,7 @@
                                  t-att-alt="partner.name or ''"/>
                         </t>
                         <t t-else="">
-                            <span class="ms ms-fill">account_circle</span>
+                            <span class="ms ms-fill">storefront</span>
                         </t>
                     </div>
                     <div class="sr-mcard-id">
@@ -91,7 +91,7 @@
                                      t-att-alt="partner.name or ''"/>
                             </t>
                             <t t-else="">
-                                <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">account_circle</span>
+                                <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">storefront</span>
                             </t>
                         </div>
                         <div>

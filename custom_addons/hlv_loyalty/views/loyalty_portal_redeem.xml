@@ -247,23 +247,29 @@
                                 </t>
                                 <t t-else="">
                                     <input type="hidden" name="use_saved_bank" value="0"/>
+                                    <t t-if="has_default_bank">
+                                        <div class="sr-cf-edit-banner">
+                                            <span class="ms" style="font-size:16px">info</span>
+                                            Đang sửa STK mặc định — thông tin hiện tại đã điền sẵn bên dưới, chỉnh lại rồi lưu.
+                                        </div>
+                                    </t>
                                     <div class="sr-cf-field">
                                         <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
                                         <input type="text" name="bank_name" class="sr-cf-input"
                                                placeholder="VD: Vietcombank, Techcombank, BIDV..."
-                                               required="required" t-att-value="form_vals.get('bank_name', '')"/>
+                                               required="required" t-att-value="form_vals.get('bank_name') or default_bank_name"/>
                                     </div>
                                     <div class="sr-cf-field">
                                         <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
                                         <input type="text" name="account_number" class="sr-cf-input"
                                                placeholder="Nhập số tài khoản..."
-                                               required="required" t-att-value="form_vals.get('account_number', '')"/>
+                                               required="required" t-att-value="form_vals.get('account_number') or default_account_number"/>
                                     </div>
                                     <div class="sr-cf-field">
                                         <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
                                         <input type="text" name="account_name" class="sr-cf-input"
                                                placeholder="Nhập đúng tên chủ tài khoản..."
-                                               required="required" t-att-value="form_vals.get('account_name', '')"/>
+                                               required="required" t-att-value="form_vals.get('account_name') or default_account_name"/>
                                         <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
                                     </div>
                                     <div class="sr-cf-field">

@@ -532,9 +532,15 @@ a { color:inherit; }
 .sr-topbar-back { font-weight:700; font-size:1rem; color:var(--c-pri); font-family:'Manrope',sans-serif;
                   text-decoration:none; display:flex; align-items:center; gap:6px; white-space:nowrap; }
 .sr-topbar-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.sr-topbar-name { font-size:.88rem; color:#666; }
+.sr-topbar-name { font-size:.88rem; color:#666; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .sr-topbar-logout { padding:7px 16px; background:#f3f4f5; border-radius:20px;
-                    font-size:.82rem; font-weight:600; color:#454652; text-decoration:none; }
+                    font-size:.82rem; font-weight:600; color:#454652; text-decoration:none;
+                    white-space:nowrap; flex-shrink:0; }
+/* Trang chủ: không có nút "quay về" nên dùng class riêng, luôn hiển thị (co lại +
+   ellipsis khi chật) thay vì ẩn hẳn như sr-topbar-name, để 'Đăng xuất' luôn có
+   1 flex item khác đứng cạnh và không bị đẩy lệch sang trái trên mobile. */
+.sr-topbar-greet { font-size:.88rem; color:#666; flex:1 1 auto; min-width:0;
+                    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* ── Tóm tắt điểm trên trang lịch sử ── */
 .sr-hist-pts-summary { display:flex; gap:14px; margin-bottom:16px; }
@@ -916,6 +922,13 @@ a { color:inherit; }
 .sr-cf-input:focus { outline:none; border-color:var(--c-pri); background:#fff; box-shadow:0 0 0 3px rgba(23,121,180,.1); }
 .sr-cf-textarea { min-height:84px; resize:vertical; }
 .sr-cf-hint { font-size:.75rem; color:#888; margin-top:5px; line-height:1.55; }
+.sr-cf-edit-banner {
+    display:flex; align-items:flex-start; gap:8px;
+    background:rgba(23,121,180,.08); color:var(--c-pri);
+    border-radius:10px; padding:10px 12px; margin-bottom:16px;
+    font-size:.78rem; font-weight:600; line-height:1.5;
+}
+.sr-cf-edit-banner .ms { flex-shrink:0; margin-top:1px; }
 /* Live cash value preview */
 .sr-cash-preview {
     display:flex; align-items:center; gap:10px; padding:12px 16px; margin-top:10px;
@@ -1191,20 +1204,20 @@ button.sr-rq-cancel-btn .ms { display:none; }
     border-radius:22px; box-shadow:0 8px 28px rgba(0,6,102,.10); overflow:hidden;
     margin:16px; padding:20px 20px 8px;
 }
-.sr-mcard-top { display:flex; align-items:center; gap:12px; }
+.sr-mcard-top { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
 .sr-mcard-avatar { width:48px; height:48px; border-radius:50%; overflow:hidden; flex-shrink:0;
-    background:linear-gradient(135deg,var(--c-pri),#1e8fd4); display:flex; align-items:center; justify-content:center; }
+    background:var(--c-pri); display:flex; align-items:center; justify-content:center; }
 .sr-mcard-avatar img { width:100%; height:100%; object-fit:cover; }
-.sr-mcard-avatar .ms { color:#fff; font-size:28px; }
+.sr-mcard-avatar .ms { color:#fff; font-size:24px; }
 .sr-mcard-id { flex:1; min-width:0; }
-.sr-mcard-name { font-family:'Manrope',sans-serif; font-weight:800; font-size:1.05rem; color:var(--c-ink);
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sr-mcard-tier { display:inline-block; margin-top:2px; font-size:.68rem; font-weight:700; color:var(--c-pri);
+.sr-mcard-name { font-family:'Manrope',sans-serif; font-weight:800; font-size:1.02rem; color:var(--c-ink);
+    line-height:1.25; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.sr-mcard-tier { display:inline-block; margin-top:4px; font-size:.68rem; font-weight:700; color:var(--c-pri);
     background:rgba(23,121,180,.1); border-radius:8px; padding:2px 8px; }
-.sr-mcard-icon-actions { display:flex; gap:6px; flex-shrink:0; }
-.sr-mcard-icon-btn { width:34px; height:34px; border-radius:50%; border:1px solid var(--c-surf-hi);
+.sr-mcard-icon-actions { display:flex; gap:5px; flex-shrink:0; align-self:flex-start; }
+.sr-mcard-icon-btn { width:30px; height:30px; border-radius:50%; border:1px solid var(--c-surf-hi);
     background:var(--c-surf-0); display:flex; align-items:center; justify-content:center; padding:0; }
-.sr-mcard-icon-btn .ms { font-size:17px; color:var(--c-ink-v); }
+.sr-mcard-icon-btn .ms { font-size:15px; color:var(--c-ink-v); }
 .sr-mcard-qr { display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px 0 16px; }
 .sr-mcard-qr img { width:150px; height:150px; border-radius:12px; border:1px solid var(--c-surf-hi); padding:8px; background:#fff; }
 .sr-mcard-qr-code { font-size:.72rem; font-weight:700; letter-spacing:1px; color:var(--c-ink-v); }
