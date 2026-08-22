@@ -140,10 +140,10 @@
                                             <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
                                         </span>
                                         <t t-if="h.point_type == 'ranking'">
-                                            <span class="sr-badge badge-pt-ranking" style="font-size:.62rem;padding:2px 7px"><span class="ms">trending_up</span> TL</span>
+                                            <span class="sr-badge badge-pt-ranking" style="font-size:.62rem;padding:2px 7px"><span class="ms">trending_up</span> Tích lũy</span>
                                         </t>
                                         <t t-else="">
-                                            <span class="sr-badge badge-pt-exchange" style="font-size:.62rem;padding:2px 7px"><span class="ms">swap_horiz</span> ĐT</span>
+                                            <span class="sr-badge badge-pt-exchange" style="font-size:.62rem;padding:2px 7px"><span class="ms">swap_horiz</span> Đổi thưởng</span>
                                         </t>
                                     </div>
                                     <div class="shc-body">

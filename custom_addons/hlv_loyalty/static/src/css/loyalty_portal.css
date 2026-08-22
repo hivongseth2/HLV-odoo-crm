@@ -129,9 +129,10 @@ a { color:inherit; }
 .tc-pop-empty { font-size:.85rem; opacity:.6; margin:0; color:inherit; }
 
 .tc-badge { position:absolute; top:12px; right:12px; font-size:10px; font-weight:900;
-            letter-spacing:1px; padding:4px 8px; border-radius:4px; text-transform:uppercase; z-index:4; }
+            letter-spacing:1px; padding:4px 10px; border-radius:999px; text-transform:uppercase; z-index:4;
+            box-shadow:0 2px 6px rgba(0,0,0,.25); backdrop-filter:blur(2px); }
 .tc-badge.popular { background:var(--c-sec-c); color:#5c420c; }
-.tc-badge.you     { background:var(--c-sec);   color:#fff; }
+.tc-badge.you     { background:rgba(255,255,255,.92); color:var(--c-pri); }
 .tc-card-label { margin-top:10px; font-size:.95rem; font-weight:800; color:var(--c-ink); text-align:left; }
 
 /* ── Result / Dashboard Hero ── */
@@ -249,8 +250,13 @@ a { color:inherit; }
 .row-pt-ranking:hover td  { background:rgba(23,121,180,.1); }
 .row-pt-exchange:hover td { background:rgba(25,135,84,.12); }
 /* Point type badges */
-.badge-pt-ranking  { background:#e3f2fd; color:#1565c0; }
-.badge-pt-exchange { background:#e8f5e9; color:#2e7d32; }
+/* Dùng ĐÚNG 2 tông màu đã là "ngôn ngữ màu" chuẩn của app cho ranking/exchange
+   (khớp với màu viền trái của .row-pt-ranking/.row-pt-exchange và màu
+   "Đã thanh toán"/số tiền hiện kim ở nơi khác), thay vì 2 sắc độ xanh khác
+   nhau (#1565c0 vs var(--c-pri)) và 2 sắc độ xanh lá khác nhau (#2e7d32 vs
+   #198754) đang bị dùng lẫn cho cùng 1 khái niệm ở các chỗ khác nhau. */
+.badge-pt-ranking  { background:rgba(23,121,180,.12); color:var(--c-pri); }
+.badge-pt-exchange { background:#eaf7ee; color:#198754; }
 
 /* ── View-all link ── */
 .sr-view-all-link { font-size:.82rem; font-weight:700; color:var(--c-pri); text-decoration:none;
