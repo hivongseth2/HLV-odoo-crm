@@ -214,34 +214,32 @@
                                 </h3>
 
                                 <t t-if="bank_mode == 'confirm'">
-                                    <!-- Đã có STK mặc định của tài khoản này — ẩn theo mặc định,
-                                         chỉ hiện đủ số khi khách bấm 'Xem đầy đủ'. Bọc trong
-                                         sr-cf-field để có margin-bottom:16px như các field khác,
-                                         tránh dính sát vào field Ghi chú ngay dưới. -->
+                                    <!-- Khối xác nhận STK mặc định — view riêng (sr-bank-confirm),
+                                         không dùng lại style hàng list của trang chi tiết yêu cầu.
+                                         Số tài khoản ẩn theo mặc định, chỉ hiện đủ khi bấm 'Xem đầy đủ'. -->
                                     <input type="hidden" name="use_saved_bank" value="1"/>
                                     <div class="sr-cf-field">
-                                        <div class="sr-rq-bank-block" style="margin-top:0">
-                                            <div class="sr-rq-row" style="margin-bottom:6px">
-                                                <span class="sr-rq-lbl">Ngân hàng:</span>
-                                                <span class="sr-rq-val"><t t-out="default_bank_name"/></span>
+                                        <div class="sr-bank-confirm">
+                                            <div class="sr-bank-confirm-chip">
+                                                <span class="ms ms-fill">account_balance</span>
                                             </div>
-                                            <div class="sr-rq-row" style="margin-bottom:6px">
-                                                <span class="sr-rq-lbl">Số tài khoản:</span>
-                                                <span class="sr-rq-val" id="cash-stk-masked"><t t-out="default_account_number_masked"/></span>
+                                            <div class="sr-bank-confirm-info">
+                                                <div class="sr-bank-confirm-bank"><t t-out="default_bank_name"/></div>
+                                                <div class="sr-bank-confirm-numrow">
+                                                    <span class="sr-bank-confirm-num" id="cash-stk-masked"><t t-out="default_account_number_masked"/></span>
+                                                    <button type="button" class="sr-bank-confirm-eye" id="cash-stk-reveal"
+                                                            t-att-data-full="default_account_number" aria-label="Xem đầy đủ số tài khoản">
+                                                        <span class="ms" id="cash-stk-reveal-icon">visibility</span>
+                                                        <span id="cash-stk-reveal-label">Xem đầy đủ</span>
+                                                    </button>
+                                                </div>
+                                                <div class="sr-bank-confirm-holder"><t t-out="default_account_name"/></div>
                                             </div>
-                                            <div class="sr-rq-row" style="margin-bottom:10px">
-                                                <span class="sr-rq-lbl">Chủ tài khoản:</span>
-                                                <span class="sr-rq-val"><t t-out="default_account_name"/></span>
-                                            </div>
-                                            <button type="button" class="sr-rq-toggle-btn" id="cash-stk-reveal"
-                                                    t-att-data-full="default_account_number">
-                                                <span class="ms" style="font-size:15px" id="cash-stk-reveal-icon">visibility</span>
-                                                <span id="cash-stk-reveal-label">Xem đầy đủ số tài khoản</span>
-                                            </button>
                                         </div>
                                         <div class="sr-cf-hint">
-                                            Đúng STK trên thì bấm <strong>Gửi yêu cầu</strong> để xác nhận, hoặc
-                                            <a t-att-href="'/loyalty/redeem?tab=cash&amp;bank_mode=edit'">đổi thông tin nhận tiền</a>.
+                                            Vui lòng kiểm tra thông tin nhận tiền phía trên. Nếu chính xác, bấm
+                                            <strong>Gửi yêu cầu</strong> để hoàn tất; nếu cần thay đổi, chọn
+                                            <a t-att-href="'/loyalty/redeem?tab=cash&amp;bank_mode=edit'">Cập nhật thông tin nhận tiền</a>.
                                         </div>
                                     </div>
                                 </t>
@@ -250,7 +248,7 @@
                                     <t t-if="has_default_bank">
                                         <div class="sr-cf-edit-banner">
                                             <span class="ms" style="font-size:16px">info</span>
-                                            Đang sửa STK mặc định — thông tin hiện tại đã điền sẵn bên dưới, chỉnh lại rồi lưu.
+                                            Thông tin nhận tiền hiện tại đã được điền sẵn bên dưới. Vui lòng chỉnh sửa nếu cần thay đổi.
                                         </div>
                                     </t>
                                     <div class="sr-cf-field">
@@ -275,11 +273,11 @@
                                     <div class="sr-cf-field">
                                         <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:.83rem;cursor:pointer">
                                             <input type="checkbox" name="save_default" value="1" checked="checked"/>
-                                            Lưu làm STK mặc định cho lần đổi sau
+                                            Lưu thông tin này làm mặc định cho các lần đổi sau
                                         </label>
                                         <t t-if="has_default_bank">
                                             <div class="sr-cf-hint">
-                                                <a t-att-href="'/loyalty/redeem?tab=cash'">Hủy, dùng lại STK mặc định</a>
+                                                <a t-att-href="'/loyalty/redeem?tab=cash'">Quay lại thông tin nhận tiền mặc định</a>
                                             </div>
                                         </t>
                                     </div>

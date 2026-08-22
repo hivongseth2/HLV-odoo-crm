@@ -929,6 +929,40 @@ a { color:inherit; }
     font-size:.78rem; font-weight:600; line-height:1.5;
 }
 .sr-cf-edit-banner .ms { flex-shrink:0; margin-top:1px; }
+
+/* Khối xác nhận STK mặc định trên tab Đổi hiện kim — view riêng, KHÔNG dùng
+   lại style hàng list của trang chi tiết yêu cầu (sr-rq-row/sr-rq-lbl...). */
+.sr-bank-confirm {
+    display:flex; align-items:flex-start; gap:14px;
+    background:var(--c-surf); border:1px solid var(--c-surf-hi); border-radius:14px;
+    padding:16px;
+}
+.sr-bank-confirm-chip {
+    width:42px; height:42px; border-radius:12px; flex-shrink:0;
+    background:var(--c-pri); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+}
+.sr-bank-confirm-chip .ms { font-size:22px; }
+.sr-bank-confirm-info { flex:1; min-width:0; }
+.sr-bank-confirm-bank {
+    font-size:.98rem; font-weight:800; color:var(--c-ink); font-family:'Manrope',sans-serif;
+    margin-bottom:6px;
+}
+.sr-bank-confirm-numrow { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
+.sr-bank-confirm-num {
+    /* Font monospace để mỗi ký tự (số hoặc *) chiếm đúng 1 khoảng rộng bằng
+       nhau — tránh dấu * và số bị lệch hàng do font chữ thường có độ rộng
+       ký tự không đều. */
+    font-family:'SFMono-Regular','Consolas','Menlo','Courier New',monospace;
+    font-size:1rem; font-weight:700; color:var(--c-ink); letter-spacing:2px;
+}
+.sr-bank-confirm-eye {
+    appearance:none; -webkit-appearance:none; border:none; background:none;
+    display:inline-flex; align-items:center; gap:3px; padding:2px 0;
+    color:var(--c-pri); font:700 .76rem/1 'Inter',sans-serif; cursor:pointer;
+}
+.sr-bank-confirm-eye .ms { font-size:17px; }
+.sr-bank-confirm-holder { font-size:.85rem; font-weight:600; color:var(--c-ink-v); }
 /* Live cash value preview */
 .sr-cash-preview {
     display:flex; align-items:center; gap:10px; padding:12px 16px; margin-top:10px;
