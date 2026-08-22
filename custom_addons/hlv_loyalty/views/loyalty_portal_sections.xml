@@ -229,12 +229,42 @@
                     </div>
                 </t>
             </div>
+            <div class="sr-tier-dots">
+                <t t-foreach="tiers" t-as="tier">
+                    <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
+                    <span t-att-class="'sr-tier-dot' + (' active' if is_current else '')"/>
+                </t>
+            </div>
         </div>
         <script>
         (function(){
+            var grid = document.querySelector('#loyalty-tiers .sr-tier-grid');
+            var cards = document.querySelectorAll('#loyalty-tiers .sr-tier-card');
+            var dots = document.querySelectorAll('#loyalty-tiers .sr-tier-dot');
+            if (!grid || !cards.length) return;
+
             var current = document.querySelector('#loyalty-tiers .sr-tier-card.current');
-            if (!current) return;
-            current.scrollIntoView({inline: 'center', block: 'nearest'});
+            if (current) current.scrollIntoView({inline: 'center', block: 'nearest'});
+
+            if (!dots.length) return;
+            function updateDots() {
+                var gridRect = grid.getBoundingClientRect();
+                var center = gridRect.left + gridRect.width / 2;
+                var closest = 0, closestDist = Infinity;
+                cards.forEach(function (card, i) {
+                    var r = card.getBoundingClientRect();
+                    var dist = Math.abs((r.left + r.width / 2) - center);
+                    if (closestDist > dist) { closestDist = dist; closest = i; }
+                });
+                dots.forEach(function (d, i) { d.classList.toggle('active', i === closest); });
+            }
+            var ticking = false;
+            grid.addEventListener('scroll', function () {
+                if (ticking) return;
+                ticking = true;
+                window.requestAnimationFrame(function () { updateDots(); ticking = false; });
+            }, { passive: true });
+            updateDots();
         })();
         </script>
     </section>
