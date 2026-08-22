@@ -1501,28 +1501,36 @@ class AmisCallbackConfig(models.Model):
                 )
                 continue
 
-            vals = self._misa_vendor_vals(item, partner=partner)
-            write_vals = {
-                key: value for key, value in vals.items()
-                if not self._record_value_matches(partner, key, value)
-            }
+            already_mapped = bool((partner.misa_account_object_id or '').strip())
             partner_updated = False
-            if write_vals:
-                operation = 'map' if not (partner.misa_account_object_id or '').strip() and 'misa_account_object_id' in write_vals else 'update'
-                change_summary = self._catalog_change_summary(partner, write_vals)
-                partner.write(write_vals)
+            if already_mapped:
                 self._catalog_log_change(
-                    job, 'vendor', operation, 'res.partner', partner.id,
-                    misa_id, code, name, change_summary,
+                    job, 'vendor', 'skip', 'res.partner', partner.id,
+                    misa_id, code, name,
+                    'Bỏ qua đồng bộ field mô tả: NCC đã có ID MISA từ trước, Odoo được coi là nguồn dữ liệu đúng.',
                 )
-                partner_updated = True
-            bank_updated = self._sync_misa_vendor_bank_accounts(partner, item, job=job)
-            if bank_updated:
-                self._catalog_log_change(
-                    job, 'bank', 'update', 'res.partner', partner.id,
-                    misa_id, code, name, 'Đã cập nhật thông tin tài khoản ngân hàng từ MISA',
-                )
-                partner_updated = True
+            else:
+                vals = self._misa_vendor_vals(item, partner=partner)
+                write_vals = {
+                    key: value for key, value in vals.items()
+                    if not self._record_value_matches(partner, key, value)
+                }
+                if write_vals:
+                    operation = 'map' if 'misa_account_object_id' in write_vals else 'update'
+                    change_summary = self._catalog_change_summary(partner, write_vals)
+                    partner.write(write_vals)
+                    self._catalog_log_change(
+                        job, 'vendor', operation, 'res.partner', partner.id,
+                        misa_id, code, name, change_summary,
+                    )
+                    partner_updated = True
+                bank_updated = self._sync_misa_vendor_bank_accounts(partner, item, job=job)
+                if bank_updated:
+                    self._catalog_log_change(
+                        job, 'bank', 'update', 'res.partner', partner.id,
+                        misa_id, code, name, 'Đã cập nhật thông tin tài khoản ngân hàng từ MISA',
+                    )
+                    partner_updated = True
             cache = self.env['amis.misa.vendor.cache'].sudo().search([
                 ('config_id', '=', self.id),
                 ('account_object_id', '=', misa_id),
@@ -3245,6 +3253,8 @@ class AmisCallbackConfig(models.Model):
             return ''
 
         if match_source == 'tax':
+            if not incoming_code_key or not existing_ref or existing_ref != incoming_code_key:
+                return 'Bỏ qua vì mã số thuế khớp nhưng mã NCC trên Odoo và MISA không khớp'
             return ''
 
         if match_source == 'ref':
