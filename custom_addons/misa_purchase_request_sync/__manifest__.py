@@ -19,7 +19,6 @@ Module cung cấp:
         "mail",
         "sale",
         "misa_fetch_po_button",
-        "amis_callback",
         "hlv_zalo_zns",
         "hlv_contact_refine",
     ],

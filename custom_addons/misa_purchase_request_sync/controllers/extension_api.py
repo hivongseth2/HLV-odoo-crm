@@ -192,8 +192,13 @@ class MisaExtensionController(http.Controller):
             else:
                 payload = {"ok": True, "exists": False, "name": name}
         else:
+            # ._fields["state"].selection trả label GỐC (tiếng Anh) định nghĩa
+            # trong code, không dịch theo ngôn ngữ hiện tại. Phải dùng
+            # ._description_selection(env) để lấy đúng label tiếng Việt
+            # (nếu không sẽ hiện "Sales Order" thay vì "Đơn bán hàng" v.v.).
+            pr_vi = pr.with_context(lang="vi_VN")
             state_label = (
-                dict(pr._fields["state"].selection).get(pr.state, pr.state)
+                dict(pr_vi._fields["state"]._description_selection(pr_vi.env)).get(pr.state, pr.state)
                 if pr.state
                 else ""
             )
@@ -344,8 +349,12 @@ class MisaExtensionController(http.Controller):
         if not so:
             payload = {"ok": True, "exists": False}
         else:
+            # Xem giải thích ở nhánh purchase.request phía trên: dùng
+            # _description_selection(env) để có label tiếng Việt thay vì
+            # label gốc tiếng Anh ("Sales Order" thay vì "Đơn bán hàng").
+            so_vi = so.with_context(lang="vi_VN")
             state_label = (
-                dict(so._fields["state"].selection).get(so.state, so.state)
+                dict(so_vi._fields["state"]._description_selection(so_vi.env)).get(so.state, so.state)
                 if so.state
                 else ""
             )
@@ -360,7 +369,6 @@ class MisaExtensionController(http.Controller):
                     "qty": line.product_uom_qty,
                     "price": line.price_unit,
                     "discount": line.discount,
-                    "loyalty_discount_pct": line.loyalty_discount_pct if hasattr(line, 'loyalty_discount_pct') else 0.0,
                     "tax_percentages": sorted(line.tax_id.mapped('amount')),
                     "uom": line.product_uom.name or "",
                     "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
@@ -517,6 +525,19 @@ class MisaExtensionController(http.Controller):
                         sync_baseline_lines.append(baseline_line)
                     sync_baseline_source = "sale_order"
 
+                loyalty_lines = getattr(so, 'loyalty_account_line_ids', False)
+                loyalty_earning_pct = loyalty_lines[0].earning_pct if loyalty_lines else False
+                loyalty_account_id = loyalty_lines[0].account_id.id if loyalty_lines else False
+                loyalty_account_name = loyalty_lines[0].account_id.display_name if loyalty_lines else False
+                loyalty_account_lines_data = []
+                if loyalty_lines:
+                    for line in loyalty_lines:
+                        loyalty_account_lines_data.append({
+                            "account_id": line.account_id.id,
+                            "account_name": line.account_id.display_name,
+                            "earning_pct": line.earning_pct,
+                        })
+
                 payload = {
                     "ok": True,
                     "exists": True,
@@ -532,6 +553,10 @@ class MisaExtensionController(http.Controller):
                     "misa_sale_edit_locked_at": (
                         fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
                     ),
+                    "loyalty_earning_pct": loyalty_earning_pct,
+                    "loyalty_account_id": loyalty_account_id,
+                    "loyalty_account_name": loyalty_account_name,
+                    "loyalty_account_lines": loyalty_account_lines_data,
                     "warehouse": warehouse_payload,
                     "warehouse_id": warehouse_payload["id"],
                     "warehouse_name": warehouse_payload["name"],
@@ -775,8 +800,10 @@ class MisaExtensionController(http.Controller):
             else:
                 payload = {"ok": True, "exists": False, "name": po_code, "can_revoke": False}
         else:
+            # Xem giải thích ở nhánh purchase.request phía trên.
+            po_vi = po.with_context(lang="vi_VN")
             state_label = (
-                dict(po._fields["state"].selection).get(po.state, po.state)
+                dict(po_vi._fields["state"]._description_selection(po_vi.env)).get(po.state, po.state)
                 if po.state
                 else ""
             )
@@ -898,12 +925,6 @@ class MisaExtensionController(http.Controller):
         env = request.env(user=admin_user) if admin_user else request.env
 
         # 1. Lấy danh sách NCC
-        # Đồng bộ domain với wizard_views.xml / purchase_order_view.xml (2 nơi khác
-        # cùng module đang chọn NCC): chỉ dựa vào hlv_business_role (computed từ
-        # hlv_has_purchase_order = supplier_rank>0 HOẶC đã có purchase.order) sẽ bỏ
-        # sót NCC mới sync từ MISA hoặc mới tick "Nhà cung cấp" nhưng CHƯA từng có
-        # đơn mua nào trong Odoo — họ vẫn chọn được trong form Odoo (nhờ 2 domain
-        # kia) nhưng lại "biến mất" trên Extension.
         domain = [
             ('parent_id', '=', False),
             ('active', '=', True),
@@ -933,6 +954,206 @@ class MisaExtensionController(http.Controller):
 
         return request.make_response(
             json.dumps({"ok": True, "data": {"suppliers": suppliers, "stock": stock_info}}),
+            headers=[("Content-Type", "application/json")]
+        )
+
+    # ============================================================
+    # POST /api/extension/customer_loyalty_accounts
+    # ============================================================
+    @http.route(
+        "/api/extension/customer_loyalty_accounts",
+        type="http",
+        auth="none",
+        methods=["GET", "POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_customer_loyalty_accounts(self, **kwargs):
+        """
+        Lấy danh sách các tài khoản Loyalty Portal của khách hàng kèm mức % chiết khấu mặc định.
+        """
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
+
+        payload = self._parse_json_body(kwargs)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return request.make_response(
+                json.dumps(err), headers=[("Content-Type", "application/json")]
+            )
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        account_name = (payload.get('account_name') or kwargs.get('account_name') or '').strip()
+        partner_id = payload.get('partner_id') or kwargs.get('partner_id')
+        # company_registry (= "ID Công ty" trên MISA, field res.partner.company_registry,
+        # ví dụ "DONGJINTEXTILE"/"DONGJIN-BS") — bắt lúc người dùng chọn trong dropdown
+        # Khách hàng, chỉ hiện tại thời điểm đó. Phân biệt được cả trường hợp 2 công ty
+        # TRÙNG CẢ TÊN LẪN MÃ SỐ THUẾ (đã gặp thật: "CÔNG TY TNHH DONGJIN TEXTILE VINA")
+        # mà account_name/tax_code không làm được.
+        company_registry = (payload.get('company_registry') or kwargs.get('company_registry') or '').strip()
+
+        partner = False
+
+        # 0) Ưu tiên tìm theo mã số thuế (TaxCode) từ MISA CRM -> vat của res.partner
+        tax_code = (payload.get('tax_code') or kwargs.get('tax_code') or '').strip()
+        _logger.info(
+            "MISA Loyalty API: nhận request account_name=%r partner_id=%r tax_code=%r company_registry=%r",
+            account_name, partner_id, tax_code, company_registry,
+        )
+
+        # company_registry chính xác nhất khi có (unique theo field help text của
+        # chính field này) — thử trước cả tax_code, vì tax_code có thể bị trùng
+        # giữa nhiều công ty (đã gặp thật, xem comment ở trên).
+        #
+        # QUAN TRỌNG: nếu company_registry ĐÃ được cung cấp (bắt được từ đúng
+        # lựa chọn của người dùng) mà KHÔNG khớp partner nào trong Odoo, TUYỆT
+        # ĐỐI không được rơi xuống tax_code/account_name — 2 công ty trùng tên
+        # (và có thể trùng cả mã số thuế, đã gặp thật) nhưng khác company_registry
+        # sẽ khiến account_name khớp NHẦM sang công ty kia rồi trả về tài khoản
+        # Loyalty của công ty sai. Coi "có company_registry nhưng không khớp" là
+        # kết luận cuối cùng: trả rỗng, không đoán tiếp.
+        if company_registry:
+            partner = env['res.partner'].sudo().search([
+                ('active', '=', True),
+                ('company_registry', '=', company_registry),
+            ], limit=1)
+            _logger.info("MISA Loyalty API: kết quả khớp theo company_registry -> partner=%s", partner)
+            if not partner:
+                _logger.warning(
+                    "MISA Loyalty API: company_registry=%r được cung cấp nhưng KHÔNG khớp partner nào "
+                    "trong Odoo -> KHÔNG fallback sang tax_code/account_name (tránh trả nhầm tài khoản "
+                    "Loyalty của công ty khác trùng tên) -> trả về danh sách rỗng.",
+                    company_registry,
+                )
+                return request.make_response(
+                    json.dumps({"ok": True, "data": {"accounts": [], "default_pct": 0.0, "default_account_id": False}}),
+                    headers=[("Content-Type", "application/json")]
+                )
+
+        if not partner and tax_code:
+            normalized_tax_code = re.sub(r'[^0-9a-zA-Z]', '', tax_code).upper()
+            if normalized_tax_code:
+                env.cr.execute("""
+                    SELECT id FROM res_partner
+                    WHERE active = TRUE
+                      AND vat IS NOT NULL
+                      AND vat != ''
+                      AND regexp_replace(upper(vat), '[^0-9A-Z]', '', 'g') = %s
+                    LIMIT 1
+                """, (normalized_tax_code,))
+                row = env.cr.fetchone()
+                if row:
+                    partner = env['res.partner'].sudo().browse(row[0]).exists()
+            _logger.info("MISA Loyalty API: kết quả khớp theo tax_code -> partner=%s", partner)
+
+        if not partner and partner_id:
+            partner = env['res.partner'].sudo().browse(int(partner_id)).exists()
+            _logger.info("MISA Loyalty API: kết quả khớp theo partner_id -> partner=%s", partner)
+
+        def _loyalty_root_has_accounts(cand):
+            """True nếu công ty gốc Loyalty của cand có ít nhất 1 tài khoản active."""
+            if not cand:
+                return False
+            cand_root = cand.commercial_partner_id or cand
+            cand_root = cand_root._get_loyalty_root() if hasattr(cand_root, '_get_loyalty_root') else cand_root
+            return bool(env['hlv.loyalty.portal.account'].sudo().search_count([
+                ('partner_id', '=', cand_root.id),
+                ('active', '=', True),
+            ]))
+
+        # account_name: khớp nhanh (thuần SQL, không gọi ra ngoài). Khi trùng
+        # nhiều bản ghi cùng tên (vd nhiều chi nhánh "CHI NHÁNH CÔNG TY ..."),
+        # ưu tiên bản ghi mà CÔNG TY GỐC (loyalty root) thực sự có tài khoản
+        # Loyalty. Đây là đường fallback cuối cùng (không còn gọi ra API MISA
+        # thật nữa — quá chậm/hay timeout ~30s trong thực tế, và company_registry
+        # ở trên đã xử lý đúng các case bị trùng tên).
+        if not partner and account_name:
+            candidates = env['res.partner'].sudo().search([
+                ('active', '=', True),
+                '|', '|',
+                ('name', '=', account_name),
+                ('ref', '=', account_name),
+                ('vat', '=', account_name),
+            ])
+            if not candidates:
+                candidates = env['res.partner'].sudo().search([
+                    ('active', '=', True),
+                    ('name', 'ilike', account_name),
+                ])
+            if len(candidates) == 1:
+                partner = candidates
+            elif len(candidates) > 1:
+                for candidate in candidates:
+                    if _loyalty_root_has_accounts(candidate):
+                        partner = candidate
+                        break
+                if not partner:
+                    partner = candidates[0]
+            _logger.info(
+                "MISA Loyalty API: kết quả khớp theo account_name -> %s ứng viên, chọn partner=%s",
+                len(candidates), partner,
+            )
+
+        if not partner:
+            _logger.warning(
+                "MISA Loyalty API: KHÔNG tìm được partner nào cho account_name=%r partner_id=%r tax_code=%r "
+                "company_registry=%r -> trả về danh sách rỗng.",
+                account_name, partner_id, tax_code, company_registry,
+            )
+            return request.make_response(
+                json.dumps({"ok": True, "data": {"accounts": [], "default_pct": 0.0, "default_account_id": False}}),
+                headers=[("Content-Type", "application/json")]
+            )
+
+        partner = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
+
+        loyalty_accounts = env['hlv.loyalty.portal.account'].sudo().search([
+            ('partner_id', '=', root.id),
+            ('active', '=', True),
+        ])
+        _logger.info(
+            "MISA Loyalty API: partner=%s (id=%s) -> commercial_partner=%s -> loyalty_root=%s (id=%s) -> tìm thấy %s tài khoản Loyalty",
+            partner.display_name, partner.id, partner.commercial_partner_id.display_name if partner.commercial_partner_id else partner.display_name,
+            root.display_name, root.id, len(loyalty_accounts),
+        )
+
+        accounts_data = []
+        default_pct = 0.0
+        default_account_id = False
+
+        for acc in loyalty_accounts:
+            pct = float(acc.default_earning_pct or 0.0)
+            if acc.is_default:
+                default_pct = pct
+                default_account_id = acc.id
+            accounts_data.append({
+                "id": acc.id,
+                "buyer_name": acc.buyer_name or "",
+                "username": acc.username or "",
+                "display_name": acc.display_name or acc.buyer_name or acc.username or "Default Account",
+                "default_earning_pct": pct,
+                "is_default": bool(acc.is_default),
+            })
+
+        if not default_account_id and accounts_data:
+            default_pct = accounts_data[0]["default_earning_pct"]
+            default_account_id = accounts_data[0]["id"]
+
+        return request.make_response(
+            json.dumps({
+                "ok": True,
+                "data": {
+                    "partner_id": root.id,
+                    "partner_name": root.name,
+                    "default_account_id": default_account_id,
+                    "default_pct": default_pct,
+                    "accounts": accounts_data,
+                }
+            }),
             headers=[("Content-Type", "application/json")]
         )
 
