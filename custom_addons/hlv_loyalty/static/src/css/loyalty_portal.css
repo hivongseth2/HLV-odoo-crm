@@ -70,7 +70,7 @@ a { color:inherit; }
 
 /* ── Section Wrapper ── */
 .sr-section { padding:48px 24px 64px; }
-.sr-section-bg { background:var(--c-surf-lo); }
+/* .sr-section-bg { background:var(--c-surf-lo); } */
 .sr-cont { max-width:1200px; margin:0 auto; }
 .sr-sec-title { font-size:1.75rem; font-weight:800; color:var(--c-ink); margin-bottom:8px; }
 .sr-divider { width:80px; height:4px; background:var(--c-sec); border-radius:4px; margin-bottom:32px; }
