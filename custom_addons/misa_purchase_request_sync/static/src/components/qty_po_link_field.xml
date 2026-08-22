@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- Widget Số lượng: hiện SL yêu cầu + badge "PO: x" có thể click để mở Đơn mua hàng liên kết -->
+    <t t-name="misa_purchase_request_sync.QtyWithPoLinkField" owl="1">
+        <div class="d-flex flex-column align-items-start justify-content-center w-100 position-relative">
+            <div><t t-esc="qtyStr"/></div>
+            <div t-if="hasPurchasedQty"
+                 class="position-relative"
+                 t-on-mouseenter="onMouseEnterBadge"
+                 t-on-mouseleave="onMouseLeaveBadge">
+                <span class="misa-po-link-badge"
+                      style="font-size: 0.85rem; color: #2e7d32; font-weight: bold; font-style: italic; cursor: pointer; text-decoration: underline dotted;"
+                      t-on-mousedown.stop.prevent="onClickBadge"
+                      t-on-click.stop.prevent="onDummy">
+                    PO: <t t-esc="purchasedQtyStr"/>
+                </span>
+                <div t-if="state.showTooltip and linkedPos.length"
+                     class="misa-po-link-tooltip shadow-sm"
+                     style="position: absolute; top: 100%; left: 0; z-index: 1000; background: #fff; border: 1px solid #ced4da; border-radius: 4px; padding: 6px 8px; min-width: 220px; white-space: nowrap;">
+                    <table style="font-size: 0.8rem; width: 100%;">
+                        <thead>
+                            <tr style="color: #6c757d;">
+                                <th class="text-start pe-2">Đơn mua hàng</th>
+                                <th class="text-start pe-2">Trạng thái</th>
+                                <th class="text-end">SL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="linkedPos" t-as="po" t-key="po.id">
+                                <tr>
+                                    <td class="pe-2 fw-bold text-primary"><t t-esc="po.name"/></td>
+                                    <td class="pe-2"><t t-esc="po.state_label"/></td>
+                                    <td class="text-end"><t t-esc="formatQty(po.qty)"/></td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </t>
+
+    <!-- Dialog chọn Đơn mua hàng khi dòng yêu cầu nằm trong nhiều đơn -->
+    <t t-name="misa_purchase_request_sync.PoLinkSelectDialog" owl="1">
+        <Dialog title="'Chọn Đơn mua hàng'" size="'md'">
+            <table class="table table-sm o_list_table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Đơn mua hàng</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Số lượng</th>
+                        <th/>
+                    </tr>
+                </thead>
+                <tbody>
+                    <t t-foreach="props.pos" t-as="po" t-key="po.id">
+                        <tr style="cursor: pointer;" t-on-click="() => this.onSelectPo(po)">
+                            <td class="fw-bold text-primary"><t t-esc="po.name"/></td>
+                            <td><t t-esc="po.state_label"/></td>
+                            <td class="text-end"><t t-esc="formatQty(po.qty)"/></td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" t-on-click.stop="() => this.onSelectPo(po)">Xem</button>
+                            </td>
+                        </tr>
+                    </t>
+                </tbody>
+            </table>
+            <t t-set-slot="footer">
+                <button class="btn btn-secondary" t-on-click="() => this.props.close()">Đóng</button>
+            </t>
+        </Dialog>
+    </t>
+</templates>

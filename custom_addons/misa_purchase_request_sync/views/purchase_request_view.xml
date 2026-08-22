@@ -100,7 +100,8 @@
                 <attribute name="readonly">parent.state != 'draft'</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
-                <field name="display_qty_html" string="Số lượng" widget="html" column_invisible="parent.state == 'draft'"/>
+                <field name="display_qty_html" string="Số lượng" widget="qty_po_link" column_invisible="parent.state == 'draft'"/>
+                <field name="misa_linked_po_json" column_invisible="1"/>
             </xpath>
 
             <!-- YC2: purchased_qty ra sau display_qty_html -->
