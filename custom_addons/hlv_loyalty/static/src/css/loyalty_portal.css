@@ -256,7 +256,7 @@ a { color:inherit; }
 .sr-hist-header { display:flex; justify-content:space-between; align-items:center; padding:0 4px; margin-bottom:20px; }
 .sr-hist-title { font-size:1.375rem; font-weight:800; color:var(--c-pri); }
 .sr-tbl-wrap { background:var(--c-glass-bg); backdrop-filter:blur(30px); -webkit-backdrop-filter:blur(30px);
-               border-radius:20px; box-shadow:var(--c-glass-hl), 0 14px 34px var(--c-glass-shadow); overflow:auto; }
+               border:1px solid var(--c-glass-border); border-radius:20px; box-shadow:var(--c-glass-hl), 0 14px 34px var(--c-glass-shadow); overflow:auto; }
 .sr-tbl { width:100%; border-collapse:collapse; min-width:540px; }
 .sr-tbl th { padding:16px 24px; font-size:10px; font-weight:900; text-transform:uppercase;
              letter-spacing:2px; color:var(--c-ink-v); background:rgba(255,255,255,.35); text-align:left; white-space:nowrap; }
@@ -582,7 +582,7 @@ a { color:inherit; }
 /* ── Top bar on full pages ── */
 .sr-topbar { background:rgba(255,255,255,.55); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
              border-bottom:1px solid var(--c-glass-border); padding:14px 24px;
-             display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+             display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:nowrap; }
 .sr-topbar-back { font-weight:700; font-size:1rem; color:var(--c-pri); font-family:'Plus Jakarta Sans',sans-serif;
                   text-decoration:none; display:flex; align-items:center; gap:6px; white-space:nowrap; }
 .sr-topbar-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
@@ -1147,15 +1147,20 @@ a.sr-rq-detail-link {
 a.sr-rq-detail-link:hover { background:var(--c-surf-hi); transform:translateY(-1px); color:var(--c-pri) !important; }
 
 .sr-rq-bank-block { margin-top:10px; }
-button.sr-rq-toggle-btn {
+/* Cũng dùng cho <a> (VD link "Cập nhật thông tin nhận tiền") — !important trên
+   color/text-decoration vì theme website chèn #wrapwrap a với specificity cao
+   hơn class thường, đè mất màu/underline nếu không ghim cứng (xem comment ở
+   a.sr-rq-detail-link phía trên). */
+button.sr-rq-toggle-btn, a.sr-rq-toggle-btn {
     appearance:none; -webkit-appearance:none;
-    border:1px solid var(--c-out); background:#fff; color:var(--c-pri);
+    border:1px solid var(--c-out); background:#fff; color:var(--c-pri) !important;
     min-height:30px; padding:0 12px; border-radius:8px;
     display:inline-flex; align-items:center; gap:5px;
-    font:700 .78rem/1 'Inter', sans-serif; cursor:pointer;
+    font:700 .78rem/1 'Inter', sans-serif !important; cursor:pointer;
+    text-decoration:none !important;
     transition:background .16s ease, border-color .16s ease;
 }
-button.sr-rq-toggle-btn:hover { background:var(--c-surf-hi); }
+button.sr-rq-toggle-btn:hover, a.sr-rq-toggle-btn:hover { background:var(--c-surf-hi); color:var(--c-pri) !important; }
 .sr-rq-bank-detail {
     display:none; margin-top:8px; padding:12px 14px; border-radius:8px;
     background:var(--c-surf-hi); border:1px solid var(--c-surf-hi);
