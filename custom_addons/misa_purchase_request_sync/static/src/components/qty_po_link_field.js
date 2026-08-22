@@ -18,6 +18,7 @@ export class PoLinkTooltip extends Component {
     static template = "misa_purchase_request_sync.PoLinkTooltip";
     static props = {
         pos: Array,
+        close: { type: Function, optional: true },
     };
 
     formatQty(qty) {
