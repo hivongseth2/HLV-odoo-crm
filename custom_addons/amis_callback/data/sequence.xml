@@ -13,4 +13,15 @@
         <field name="prefix">DNC/</field>
         <field name="padding">5</field>
     </record>
+
+    <!-- noupdate="1": record này PHẢI luôn tồn tại trong XML (nếu xóa, Odoo sẽ coi
+         xmlid là mồ côi và unlink() record thật khi module update -> cascade xóa
+         toàn bộ amis.misa.vendor/inventory/unit.cache trỏ vào nó, xem commit 94e9e643e).
+         noupdate="1" đảm bảo field app_id không bị ghi đè về rỗng ở các lần update sau. -->
+    <data noupdate="1">
+        <record id="amis_callback_config_singleton" model="amis.callback.config">
+            <field name="name">AMIS Callback</field>
+            <field name="app_id"></field>
+        </record>
+    </data>
 </odoo>

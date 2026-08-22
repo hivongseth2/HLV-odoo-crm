@@ -37,6 +37,8 @@ Module cung cấp:
         "web.assets_backend": [
             "misa_purchase_request_sync/static/src/components/proposed_fields.js",
             "misa_purchase_request_sync/static/src/components/proposed_fields.xml",
+            "misa_purchase_request_sync/static/src/components/qty_po_link_field.js",
+            "misa_purchase_request_sync/static/src/components/qty_po_link_field.xml",
             "misa_purchase_request_sync/static/src/css/rfq_dialog.css",
         ],
     },

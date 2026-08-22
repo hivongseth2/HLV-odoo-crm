@@ -68,6 +68,41 @@ class PurchaseRequestLine(models.Model):
     actual_discount_amount = fields.Monetary(string="Tiền CK thu mua", currency_field="currency_id")
     actual_supplier_id = fields.Many2one('res.partner', string="NCC thực mua")
 
+    # --- Dữ liệu các Đơn mua hàng (PO) đã sinh ra từ dòng này, dùng cho badge/hover/click ---
+    misa_linked_po_json = fields.Text(
+        string="Đơn mua hàng liên kết (JSON)",
+        compute="_compute_misa_linked_po_json",
+        help="Danh sách các Đơn mua hàng (kèm số lượng) đã được lên từ dòng yêu cầu này, "
+             "dùng để hiển thị badge/tooltip/hành động mở đơn mua hàng ở list view.",
+    )
+
+    @api.depends(
+        'purchase_lines', 'purchase_lines.state', 'purchase_lines.product_qty',
+        'purchase_lines.product_uom', 'purchase_lines.order_id',
+        'purchase_lines.order_id.name', 'purchase_lines.order_id.state',
+    )
+    def _compute_misa_linked_po_json(self):
+        state_labels = dict(
+            self.env['purchase.order']._fields['state']._description_selection(self.env)
+        )
+        for line in self:
+            po_data = {}
+            for po_line in line.purchase_lines.filtered(lambda l: l.state != 'cancel'):
+                order = po_line.order_id
+                qty = po_line.product_qty
+                if line.product_uom_id and po_line.product_uom != line.product_uom_id:
+                    qty = po_line.product_uom._compute_quantity(qty, line.product_uom_id)
+                if order.id not in po_data:
+                    po_data[order.id] = {
+                        'id': order.id,
+                        'name': order.name,
+                        'state': order.state,
+                        'state_label': state_labels.get(order.state, order.state),
+                        'qty': 0.0,
+                    }
+                po_data[order.id]['qty'] += qty
+            line.misa_linked_po_json = json.dumps(list(po_data.values())) if po_data else False
+
     # --- Các trường HTML hiển thị so sánh ở list view ---
     display_qty_html = fields.Html(string="Số lượng", compute="_compute_display_qty_html")
     display_price_unit_html = fields.Html(string="Đơn giá trước thuế (MISA)", compute="_compute_display_price_unit_html")
