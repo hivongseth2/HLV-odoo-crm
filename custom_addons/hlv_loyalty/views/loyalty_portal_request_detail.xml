@@ -48,7 +48,7 @@
                             <strong><t t-out="rq.name"/></strong>
                             <span t-att-class="'sr-rq-type-badge rq-type-' + rq.request_type">
                                 <t t-if="rq.request_type == 'gift'">Đổi quà</t>
-                                <t t-else="">Đổi tiền</t>
+                                <t t-else="">Đổi hiện kim</t>
                             </span>
                         </div>
                         <span t-att-class="'sr-rq-state rq-st-' + rq.state">

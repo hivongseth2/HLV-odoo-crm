@@ -32,7 +32,7 @@ class HlvLoyaltyRewardRequest(models.Model):
     )
     request_type = fields.Selection([
         ('gift', 'Đổi quà (Voucher)'),
-        ('cash', 'Đổi tiền mặt'),
+        ('cash', 'Đổi hiện kim'),
     ], string='Loại yêu cầu', required=True, default='gift', tracking=True)
 
     # ── Gift fields ────────────────────────────────────────────────────────
@@ -494,7 +494,7 @@ class HlvLoyaltyRewardRequest(models.Model):
         """
         self.ensure_one()
         if self.request_type != 'cash':
-            raise UserError('Chỉ có thể đổi thông tin nhận tiền cho yêu cầu đổi tiền mặt.')
+            raise UserError('Chỉ có thể đổi thông tin nhận tiền cho yêu cầu đổi hiện kim.')
         if self.state != 'pending':
             raise UserError('Chỉ có thể đổi thông tin nhận tiền khi yêu cầu đang Chờ duyệt.')
 

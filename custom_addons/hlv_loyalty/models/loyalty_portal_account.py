@@ -66,6 +66,11 @@ class HlvLoyaltyPortalAccount(models.Model):
              'tài khoản nào. Mỗi công ty chỉ có tối đa 1 tài khoản mặc định.',
     )
 
+    # ── STK nhận hiện kim mặc định (riêng theo từng tài khoản Portal) ────────
+    default_bank_name = fields.Char(string='Ngân hàng nhận hiện kim (mặc định)')
+    default_account_number = fields.Char(string='Số tài khoản nhận hiện kim (mặc định)')
+    default_account_name = fields.Char(string='Tên chủ tài khoản nhận hiện kim (mặc định)')
+
     # ── Điểm (mỗi tài khoản có pool điểm riêng — nguồn sự thật là hlv.loyalty.history) ──
     loyalty_history_ids = fields.One2many(
         'hlv.loyalty.history', 'account_id', string='Lịch sử điểm',

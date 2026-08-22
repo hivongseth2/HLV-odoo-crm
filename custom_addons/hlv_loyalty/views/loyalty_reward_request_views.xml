@@ -164,7 +164,7 @@
                 <filter string="Đã hủy" name="cancelled" domain="[('state','=','cancelled')]"/>
                 <separator/>
                 <filter string="Đổi quà" name="gift" domain="[('request_type','=','gift')]"/>
-                <filter string="Đổi tiền" name="cash" domain="[('request_type','=','cash')]"/>
+                <filter string="Đổi hiện kim" name="cash" domain="[('request_type','=','cash')]"/>
                 <group expand="0" string="Nhóm theo">
                     <filter string="Trạng thái" name="by_state" context="{'group_by':'state'}"/>
                     <filter string="Loại yêu cầu" name="by_type" context="{'group_by':'request_type'}"/>

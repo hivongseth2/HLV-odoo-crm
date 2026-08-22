@@ -44,6 +44,11 @@
                         <field name="password_hash" string="Hash (chỉ đọc)" readonly="1"/>
                     </group>
                 </group>
+                <group string="STK nhận hiện kim mặc định (khi đổi hiện kim trên Portal)">
+                    <field name="default_bank_name" placeholder="VD: Vietcombank, Techcombank..."/>
+                    <field name="default_account_number"/>
+                    <field name="default_account_name"/>
+                </group>
                 <group string="Điểm Loyalty của tài khoản này">
                     <group>
                         <field name="loyalty_total_points" readonly="1"/>
@@ -72,6 +77,8 @@
             <field name="portal_phone"/>
             <field name="default_earning_pct" string="% mặc định" optional="show"/>
             <field name="is_default" optional="show"/>
+            <field name="default_bank_name" string="Ngân hàng nhận hiện kim" optional="hide"/>
+            <field name="default_account_number" string="STK nhận hiện kim" optional="hide"/>
             <field name="loyalty_total_points" string="Điểm xếp hạng" sum="Tổng" optional="show"/>
             <field name="loyalty_exchange_points" string="Điểm đổi thưởng" sum="Tổng" optional="show"/>
             <field name="active"/>

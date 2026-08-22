@@ -78,6 +78,30 @@ def _filter_visible_reward_requests(requests):
     )
 
 
+def _get_bank_confirm_data(account, bank_mode):
+    """Trạng thái hiển thị khối 'Thông tin nhận hiện kim' trên tab Đổi hiện kim.
+
+    Mỗi tài khoản Portal có 1 STK mặc định riêng (default_bank_name/
+    default_account_number/default_account_name trên hlv.loyalty.portal.account).
+    Khi đã có mặc định: hiện khối xác nhận (STK ẩn, chỉ hiện 3 số cuối) +
+    nút 'Đổi thông tin nhận tiền'. Khi bấm đổi (bank_mode=edit) hoặc chưa
+    từng có mặc định: hiện form nhập tay như trước.
+    """
+    has_default = bool(
+        account.default_bank_name and account.default_account_number and account.default_account_name
+    )
+    if bank_mode != 'edit':
+        bank_mode = 'confirm' if has_default else 'edit'
+    return {
+        'bank_mode': bank_mode,
+        'has_default_bank': has_default,
+        'default_bank_name': account.default_bank_name or '',
+        'default_account_number': account.default_account_number or '',
+        'default_account_number_masked': _mask_account_number(account.default_account_number),
+        'default_account_name': account.default_account_name or '',
+    }
+
+
 def _load_account_data(account):
     """Load dashboard data cho 1 tài khoản Portal — điểm đổi thưởng và
     lịch sử/voucher 'của tôi' scope theo CHÍNH tài khoản này (mỗi tài
@@ -345,6 +369,7 @@ class LoyaltyPublicPortal(http.Controller):
             'error_msg': kwargs.get('error_msg', ''),
             'form_vals': {},
         })
+        data.update(_get_bank_confirm_data(account, kwargs.get('bank_mode', '')))
         if account.portal_phone:
             data['masked_phone'] = _mask_phone(account.portal_phone)
         return request.render('hlv_loyalty.loyalty_portal_redeem', data)
@@ -405,10 +430,21 @@ class LoyaltyPublicPortal(http.Controller):
         avail = account.loyalty_exchange_available_points
 
         points_to_redeem = int(post.get('points_to_redeem') or 0)
-        bank_name = (post.get('bank_name') or '').strip()
-        account_number = (post.get('account_number') or '').strip()
-        account_name = (post.get('account_name') or '').strip()
         customer_note = (post.get('customer_note') or '').strip()
+
+        # use_saved_bank=1 → khách bấm "Xác nhận dùng STK này" ở khối xác nhận
+        # (STK lấy từ default_* của account, KHÔNG tin dữ liệu form client gửi
+        # lên cho các field này). Ngược lại là khách đang ở form nhập/đổi tay.
+        use_saved_bank = post.get('use_saved_bank') == '1'
+        save_default = post.get('save_default') == '1'
+        if use_saved_bank:
+            bank_name = account.default_bank_name or ''
+            account_number = account.default_account_number or ''
+            account_name = account.default_account_name or ''
+        else:
+            bank_name = (post.get('bank_name') or '').strip()
+            account_number = (post.get('account_number') or '').strip()
+            account_name = (post.get('account_name') or '').strip()
 
         errors = []
         if points_to_redeem <= 0:
@@ -418,12 +454,15 @@ class LoyaltyPublicPortal(http.Controller):
                 f'Không đủ điểm khả dụng. Bạn còn {avail:,} điểm, yêu cầu {points_to_redeem:,} điểm. '
                 f'Đang treo {account.loyalty_reward_pending_points:,} điểm trong yêu cầu chờ xử lý.'
             )
-        if not bank_name:
-            errors.append('Vui lòng nhập tên ngân hàng.')
-        if not account_number:
-            errors.append('Vui lòng nhập số tài khoản.')
-        if not account_name:
-            errors.append('Vui lòng nhập tên chủ tài khoản.')
+        if use_saved_bank and not (bank_name and account_number and account_name):
+            errors.append('Không tìm thấy STK mặc định, vui lòng nhập lại thông tin nhận tiền.')
+        else:
+            if not bank_name:
+                errors.append('Vui lòng nhập tên ngân hàng.')
+            if not account_number:
+                errors.append('Vui lòng nhập số tài khoản.')
+            if not account_name:
+                errors.append('Vui lòng nhập tên chủ tài khoản.')
 
         if errors:
             # Re-render with errors + form values
@@ -447,9 +486,17 @@ class LoyaltyPublicPortal(http.Controller):
                 'error_msg': ' | '.join(errors),
                 'form_vals': post,
             })
+            data.update(_get_bank_confirm_data(account, 'confirm' if use_saved_bank else 'edit'))
             if account.portal_phone:
                 data['masked_phone'] = _mask_phone(account.portal_phone)
             return request.render('hlv_loyalty.loyalty_portal_redeem', data)
+
+        if not use_saved_bank and save_default:
+            account.sudo().write({
+                'default_bank_name': bank_name,
+                'default_account_number': account_number,
+                'default_account_name': account_name,
+            })
 
         request.env['hlv.loyalty.reward.request'].sudo().create({
             'partner_id': root.id,
@@ -465,7 +512,7 @@ class LoyaltyPublicPortal(http.Controller):
         })
         return request.redirect(
             '/loyalty/redeem?tab=history'
-            '&success_msg=Yêu cầu đổi tiền đã được gửi. Chúng tôi sẽ xử lý sớm nhất!'
+            '&success_msg=Yêu cầu đổi hiện kim đã được gửi. Chúng tôi sẽ xử lý sớm nhất!'
         )
 
     @http.route('/loyalty/redeem/request/<int:request_id>/cancel', type='http',
@@ -575,3 +622,13 @@ def _mask_email(email):
     if len(local) <= 2:
         return local + '***@' + domain
     return local[:2] + '*' * (len(local) - 2) + '@' + domain
+
+
+def _mask_account_number(number):
+    """STK ẩn theo mặc định trên Portal — chỉ hiện 3 số cuối, phần còn lại
+    thay bằng '*' (khách bấm 'Xem đầy đủ' mới thấy số thật, xem JS ở
+    template loyalty_portal_redeem.xml)."""
+    digits = ''.join(c for c in (number or '') if c.isalnum())
+    if len(digits) <= 3:
+        return '*' * len(digits)
+    return '*' * (len(digits) - 3) + digits[-3:]
