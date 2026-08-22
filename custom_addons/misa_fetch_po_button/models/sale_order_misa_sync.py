@@ -898,13 +898,14 @@ class SaleOrder(models.Model):
                         "%g" % float(sol.discount or 0.0),
                         "%g" % float(misa_data['discount'] or 0.0),
                     )
-                if (
+                loyalty_changed = (
                     misa_data['loyalty_discount_present']
                     and abs(
                         float(sol.loyalty_discount_pct or 0.0)
                         - float(misa_data['loyalty_discount_pct'] or 0.0)
                     ) >= 0.0001
-                ):
+                )
+                if loyalty_changed:
                     _audit(
                         misa_data, sol, _('CK Loyalty (%)'),
                         "%g" % float(sol.loyalty_discount_pct or 0.0),
@@ -936,7 +937,7 @@ class SaleOrder(models.Model):
                         'note': misa_data['note'],
                         'x_studio_product_status': misa_data['status'],
                     })
-                    if misa_data['loyalty_discount_present']:
+                    if misa_data['loyalty_discount_present'] and not (defer_quantity and loyalty_changed):
                         vals_line['loyalty_discount_pct'] = misa_data[
                             'loyalty_discount_pct'
                         ]
@@ -1059,10 +1060,15 @@ class SaleOrder(models.Model):
                 self.action_lock()
                 _logger.info("🔒 Khóa lại SO %s sau khi đồng bộ MISA", self.name)
 
+        has_loyalty_changed = any(
+            misa_data.get('loyalty_discount_present')
+            and abs(float(sol.loyalty_discount_pct or 0.0) - float(misa_data.get('loyalty_discount_pct') or 0.0)) >= 0.0001
+            for misa_data, sol in matched_pairs
+        )
         return {
             'qty_changes': qty_changes,
             'audit_changes': audit_changes,
-            'quantity_deferred': bool(defer_quantity and qty_changes),
+            'quantity_deferred': bool(defer_quantity and (qty_changes or has_loyalty_changed)),
             'line_snapshot': line_snapshot,
         }
 
@@ -1391,17 +1397,43 @@ class SaleOrder(models.Model):
 
         crm_order_no = str(data.get('SaleOrderNo') or '').strip()
         crm_order_name = str(data.get('SaleOrderName') or '').strip()
+
+        customer_changed = bool(self.partner_id and partner and partner.id != self.partner_id.id)
+        if customer_changed:
+            if self.env.context.get('misa_audit_changes') is not None:
+                self.env.context['misa_audit_changes'].append({
+                    'change_type': 'update',
+                    'crm_line_id': False,
+                    'sale_order_line_id': False,
+                    'product_id': False,
+                    'product_code': 'SO Header',
+                    'field_name': _('Khách hàng'),
+                    'old_value': self.partner_id.display_name or self.partner_id.name or '',
+                    'new_value': partner.display_name or partner.name or '',
+                })
+            _logger.info("MISA SO Header: Phát hiện đổi khách hàng SO %s: %s → %s", self.name, self.partner_id.name, partner.name)
+
         vals = {
             'name': crm_order_no or crm_order_name or self.name,
-            'partner_id': partner.id,
-            'partner_invoice_id': partner.id,
-            'partner_shipping_id': shipping_id or self.partner_shipping_id.id or partner.id,
             'origin': crm_order_name or self.origin,
             'misa_id': str(misa_order_id) if misa_order_id else self.misa_id,
             'misa_shipping_address': shipping_address or False,
             'x_studio_zns': bool(data.get('CustomField23', False)),
             'x_studio_sdt_giao_hang': data.get('Phone') or False,
         }
+        if not (customer_changed and self.env.context.get('misa_defer_changes')):
+            vals['partner_id'] = partner.id
+            vals['partner_invoice_id'] = partner.id
+            vals['partner_shipping_id'] = shipping_id or self.partner_shipping_id.id or partner.id
+        else:
+            _logger.info("MISA SO Header: Hoãn cập nhật khách hàng SO %s (%s → %s) chờ kho duyệt", self.name, self.partner_id.name, partner.name)
+            # Lưu thông tin khách hàng bị hoãn vào context để snapshot lưu lại
+            if self.env.context.get('misa_deferred_header') is not None:
+                self.env.context['misa_deferred_header'].update({
+                    'partner_id': partner.id,
+                    'partner_invoice_id': partner.id,
+                    'partner_shipping_id': shipping_id or self.partner_shipping_id.id or partner.id,
+                })
         for source_key, field_name in (
             ('owner_code', 'x_studio_misa_saler_code'),
             ('sale_order_date', 'x_studio_misa_order_date'),
@@ -1428,7 +1460,8 @@ class SaleOrder(models.Model):
 
         vals = {key: value for key, value in vals.items() if key in self._fields}
         self.write(vals)
-        self._misa_sync_open_picking_contact()
+        if not (customer_changed and self.env.context.get('misa_defer_changes')):
+            self._misa_sync_open_picking_contact()
 
     def action_resync_from_misa(self, prefetched_lines=None, misa_headers=None):
         """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
@@ -1520,7 +1553,13 @@ class SaleOrder(models.Model):
                     old_picking_names,
                 )
 
-        self._sync_misa_header_in_place(data, headers)
+        defer_changes = bool(touched_pickings)
+        audit_changes_list = []
+        deferred_header = {}
+        sync_ctx = dict(self.env.context, misa_defer_changes=defer_changes, misa_audit_changes=audit_changes_list, misa_deferred_header=deferred_header)
+
+        self.with_context(sync_ctx)._sync_misa_header_in_place(data, headers)
+        self.with_context(sync_ctx)._sync_misa_loyalty_account_line(payload=self.env.context.get('misa_sync_payload'))
         if self.env.context.get('misa_assign_warehouse_from_lines'):
             # Header sync can recompute warehouse_id from the current user's
             # default warehouse. Re-assert the warehouse resolved from MISA
@@ -1541,10 +1580,10 @@ class SaleOrder(models.Model):
                     self.name, self.warehouse_id.name,
                 )
 
-        sync_result = self._sync_so_lines_from_misa_no_picking(
+        sync_result = self.with_context(sync_ctx)._sync_so_lines_from_misa_no_picking(
             lines,
             headers,
-            defer_quantity=bool(touched_pickings),
+            defer_quantity=defer_changes,
         )
 
         if warehouse_changed and pickings_to_rebuild:
@@ -1567,25 +1606,48 @@ class SaleOrder(models.Model):
             )
 
         qty_changes = sync_result.get('qty_changes') or []
+        all_audit_changes = audit_changes_list + (sync_result.get('audit_changes') or [])
+        has_deferred_changes = bool(defer_changes and (sync_result.get('quantity_deferred') or audit_changes_list))
+
         history = self._misa_record_sync_snapshot_history(
-            sync_result,
+            {
+                'line_snapshot': sync_result.get('line_snapshot') or [],
+                'audit_changes': all_audit_changes,
+                'qty_changes': qty_changes,
+            },
             data,
-            pending=bool(sync_result.get('quantity_deferred')),
+            pending=has_deferred_changes,
         )
-        if sync_result.get('quantity_deferred'):
-            summary = self._misa_qty_change_summary(qty_changes)
+        if has_deferred_changes:
+            qty_summary = self._misa_qty_change_summary(qty_changes)
+            other_changes = [
+                f"{ch.get('field_name')}: {ch.get('old_value')} → {ch.get('new_value')}"
+                for ch in audit_changes_list
+            ]
+            summary_parts = []
+            if qty_summary:
+                summary_parts.append(qty_summary)
+            if other_changes:
+                summary_parts.append("\n".join(other_changes))
+            summary = "\n".join(summary_parts) or _("Thay đổi thông tin đơn hàng / Loyalty")
+
             was_pending = self.misa_qty_sync_pending
             old_summary = self.misa_qty_sync_pending_summary or ''
+            # Lưu snapshot dạng dict bao gồm cả deferred header/loyalty
+            snapshot_data = {
+                'lines': sync_result.get('line_snapshot') or [],
+                'deferred_header': deferred_header,
+            }
             self.write({
                 'misa_qty_sync_pending': True,
                 'misa_qty_sync_pending_at': fields.Datetime.now(),
                 'misa_qty_sync_pending_summary': summary,
-                'misa_qty_sync_pending_snapshot': sync_result.get('line_snapshot') or [],
+                'misa_qty_sync_pending_snapshot': snapshot_data,
                 'misa_qty_sync_pending_history_id': history.id,
             })
             if not was_pending or old_summary != summary:
                 self._misa_notify_warehouse(
-                    _("Đơn %s thay đổi số lượng trên MISA và đang chờ kho duyệt.") % self.name,
+                    _("Đơn %s thay đổi thông tin/số lượng trên MISA và đang chờ kho duyệt.") % self.name,
                     summary,
                     send_zalo=True,
                 )
@@ -1593,7 +1655,7 @@ class SaleOrder(models.Model):
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'title': _("Chờ kho duyệt số lượng"),
+                    'title': _("Chờ kho duyệt thay đổi MISA"),
                     'message': summary,
                     'type': 'warning',
                     'sticky': True,
@@ -1637,8 +1699,15 @@ class SaleOrder(models.Model):
             raise UserError(_("Đơn không có thay đổi số lượng MISA đang chờ duyệt."))
         if not self.env.user.has_group('stock.group_stock_user'):
             raise UserError(_("Chỉ người dùng kho mới được duyệt thay đổi số lượng MISA."))
-        snapshot = self.misa_qty_sync_pending_snapshot
-        if not isinstance(snapshot, list):
+        raw_snapshot = self.misa_qty_sync_pending_snapshot
+        # Hỗ trợ cả format cũ (list) và format mới (dict chứa lines + deferred_header)
+        if isinstance(raw_snapshot, dict):
+            snapshot = raw_snapshot.get('lines') or []
+            deferred_header = raw_snapshot.get('deferred_header') or {}
+        elif isinstance(raw_snapshot, list):
+            snapshot = raw_snapshot
+            deferred_header = {}
+        else:
             raise UserError(_(
                 "Đơn chờ duyệt này chưa có snapshot. Vui lòng đồng bộ MISA lại một lần để tạo snapshot mới."
             ))
@@ -1657,6 +1726,7 @@ class SaleOrder(models.Model):
             if pending_history
             else []
         )
+        # 1. Duyệt dòng sản phẩm từ snapshot
         order.with_context(
             misa_approved_legacy_removal_line_ids=legacy_removal_line_ids,
         )._sync_so_lines_from_misa_no_picking(
@@ -1665,6 +1735,28 @@ class SaleOrder(models.Model):
             defer_quantity=False,
             prepared_lines=snapshot,
         )
+
+        # 2. Áp dụng thay đổi khách hàng / loyalty đã lưu trong snapshot (KHÔNG fetch live từ CRM)
+        if deferred_header:
+            header_vals = {}
+            if deferred_header.get('partner_id'):
+                partner = order.env['res.partner'].sudo().browse(deferred_header['partner_id']).exists()
+                if partner:
+                    header_vals['partner_id'] = partner.id
+                    header_vals['partner_invoice_id'] = deferred_header.get('partner_invoice_id') or partner.id
+                    header_vals['partner_shipping_id'] = deferred_header.get('partner_shipping_id') or partner.id
+                    _logger.info(
+                        "Duyệt: Áp dụng đổi khách hàng SO %s → %s (từ snapshot)",
+                        order.name, partner.display_name,
+                    )
+            if header_vals:
+                order.write(header_vals)
+            # Áp dụng loyalty từ snapshot
+            loyalty_lines = deferred_header.get('loyalty_account_lines')
+            if loyalty_lines and isinstance(loyalty_lines, list):
+                order.with_context(misa_defer_changes=False)._sync_misa_loyalty_account_line(
+                    payload={'loyalty_account_lines': loyalty_lines}
+                )
         order._misa_sync_open_picking_contact()
         if pending_history:
             lines_by_crm_id = {
@@ -1706,9 +1798,153 @@ class SaleOrder(models.Model):
             'res_id': order.id,
             'target': 'current',
         }
+
+    def _sync_misa_loyalty_account_line(self, payload=None):
+        """Đồng bộ tài khoản cộng điểm Loyalty (%ck thu mua) từ MISA CRM Extension."""
+        self.ensure_one()
+        payload = payload or self.env.context.get('misa_sync_payload')
+        if not payload or not isinstance(payload, dict):
+            return
+
+        lines_data = payload.get('loyalty_account_lines')
+        if lines_data is not None and isinstance(lines_data, list):
+            current_map = {line.account_id.id: float(line.earning_pct or 0.0) for line in self.loyalty_account_line_ids}
+            target_map = {}
+            for item in lines_data:
+                if isinstance(item, dict) and item.get('account_id'):
+                    try:
+                        target_map[int(item['account_id'])] = float(item.get('earning_pct') or 0.0)
+                    except (ValueError, TypeError):
+                        target_map[int(item['account_id'])] = 0.0
+
+            loyalty_changed = (set(current_map.keys()) != set(target_map.keys())) or any(
+                abs(current_map[k] - target_map[k]) >= 0.0001 for k in current_map if k in target_map
+            )
+            if loyalty_changed:
+                if self.env.context.get('misa_audit_changes') is not None:
+                    old_items = [
+                        f"{line.account_id.display_name or line.account_id.username or str(line.account_id.id)} ({line.earning_pct}%)"
+                        for line in self.loyalty_account_line_ids
+                    ]
+                    new_items = []
+                    for item in lines_data:
+                        if isinstance(item, dict) and item.get('account_id'):
+                            try:
+                                acc_id = int(item['account_id'])
+                                acc = self.env['hlv.loyalty.portal.account'].sudo().browse(acc_id).exists()
+                                acc_name = (acc.display_name or acc.username) if acc else (item.get('account_name') or str(acc_id))
+                            except Exception:
+                                acc_name = str(item.get('account_name') or item.get('account_id'))
+                            pct = item.get('earning_pct', 0)
+                            new_items.append(f"{acc_name} ({pct}%)")
+
+                    self.env.context['misa_audit_changes'].append({
+                        'change_type': 'update',
+                        'crm_line_id': False,
+                        'sale_order_line_id': False,
+                        'product_id': False,
+                        'product_code': 'Loyalty',
+                        'field_name': _('Tài khoản Loyalty'),
+                        'old_value': ', '.join(old_items) or _('(Chưa chọn)'),
+                        'new_value': ', '.join(new_items) or _('(Chưa chọn)'),
+                    })
+                if self.env.context.get('misa_defer_changes'):
+                    _logger.info("MISA SO Loyalty: Hoãn cập nhật tài khoản Loyalty SO %s chờ kho duyệt", self.name)
+                    # Lưu payload loyalty bị hoãn vào context để snapshot lưu lại
+                    if self.env.context.get('misa_deferred_header') is not None:
+                        self.env.context['misa_deferred_header']['loyalty_account_lines'] = lines_data
+                    return
+            synced_account_ids = []
+            for item in lines_data:
+                if not isinstance(item, dict):
+                    continue
+                acc_id = item.get('account_id')
+                pct = item.get('earning_pct')
+                if not acc_id:
+                    continue
+                account = self.env['hlv.loyalty.portal.account'].sudo().browse(int(acc_id)).exists()
+                if not account:
+                    continue
+                try:
+                    pct_val = float(pct) if pct is not None else float(account.default_earning_pct or 0.0)
+                except (ValueError, TypeError):
+                    pct_val = float(account.default_earning_pct or 0.0)
+
+                synced_account_ids.append(account.id)
+                existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
+                if existing_line:
+                    existing_line.sudo().write({'earning_pct': pct_val})
+                    _logger.info("MISA SO Loyalty: Đã cập nhật %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+                else:
+                    self.env['hlv.loyalty.sale.order.account.line'].sudo().create({
+                        'order_id': self.id,
+                        'account_id': account.id,
+                        'earning_pct': pct_val,
+                    })
+                    _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+
+            removed_lines = self.loyalty_account_line_ids.filtered(lambda l: l.account_id.id not in synced_account_ids)
+            if removed_lines:
+                removed_lines.sudo().unlink()
+                _logger.info("MISA SO Loyalty: Đã xóa %s dòng tài khoản Loyalty không còn trong payload của SO %s", len(removed_lines), self.name)
+            return
+
+        earning_pct = payload.get('loyalty_earning_pct')
+        account_id = payload.get('loyalty_account_id')
+
+        if earning_pct is None and not account_id:
+            return
+
+        try:
+            pct_val = float(earning_pct) if earning_pct is not None else None
+        except (ValueError, TypeError):
+            pct_val = None
+
+        if pct_val is None and not account_id:
+            return
+
+        root_partner = self.partner_id._get_loyalty_root() if (self.partner_id and hasattr(self.partner_id, '_get_loyalty_root')) else self.partner_id
+        if not root_partner:
+            return
+
+        account = False
+        if account_id:
+            account = self.env['hlv.loyalty.portal.account'].sudo().browse(int(account_id)).exists()
+
+        if not account:
+            account = self.env['hlv.loyalty.portal.account'].sudo().search([
+                ('partner_id', '=', root_partner.id),
+                ('active', '=', True),
+                ('is_default', '=', True)
+            ], limit=1)
+
+        if not account:
+            account = self.env['hlv.loyalty.portal.account'].sudo().search([
+                ('partner_id', '=', root_partner.id),
+                ('active', '=', True)
+            ], limit=1)
+
+        if not account:
+            _logger.info("MISA SO Loyalty: Không tìm thấy hlv.loyalty.portal.account cho partner %s", root_partner.name)
+            return
+
+        final_pct = pct_val if pct_val is not None else float(account.default_earning_pct or 0.0)
+
+        existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
+        if existing_line:
+            existing_line.sudo().write({'earning_pct': final_pct})
+            _logger.info("MISA SO Loyalty: Đã cập nhật %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, final_pct)
+        else:
+            self.env['hlv.loyalty.sale.order.account.line'].sudo().create({
+                'order_id': self.id,
+                'account_id': account.id,
+                'earning_pct': final_pct,
+            })
+            _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, final_pct)
+
 # =====================API
     @api.model
-    def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):
+    def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True, payload=None):
         """
         Public API (RPC/JSON-RPC) để resync đơn bán theo MISA Order ID.
         - Nếu tìm thấy SO có misa_id => cập nhật tại chỗ theo CRM line ID.
@@ -1740,6 +1976,7 @@ class SaleOrder(models.Model):
             so.sudo().with_context(
                 misa_assign_warehouse_from_lines=True,
                 misa_resolved_warehouse_id=misa_warehouse.id or False,
+                misa_sync_payload=payload,
             ).action_resync_from_misa(
                 prefetched_lines=prefetched_lines,
                 misa_headers=misa_headers,
@@ -1797,6 +2034,7 @@ class SaleOrder(models.Model):
         so_boot.sudo().with_context(
             misa_assign_warehouse_from_lines=not bool(warehouse_id),
             misa_resolved_warehouse_id=misa_warehouse.id or False,
+            misa_sync_payload=payload,
         ).action_resync_from_misa(
             prefetched_lines=prefetched_lines,
             misa_headers=misa_headers,

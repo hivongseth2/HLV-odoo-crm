@@ -90,11 +90,10 @@ class SaleOrder(models.Model):
                 'misa_sale_edit_locked': True,
                 'misa_sale_edit_locked_at': now,
             })
-            if not self.env.context.get('misa_defer_sale_edit_notification'):
-                order._misa_notify_warehouse(
-                    _("Sale bắt đầu chỉnh sửa đơn %s trên CRM. Phiếu OUT tạm khóa xác nhận; PICK/PACK vẫn xử lý bình thường.")
-                    % order.name
-                )
+            order._misa_notify_warehouse(
+                _("Sale bắt đầu chỉnh sửa đơn %s trên CRM. Phiếu OUT tạm khóa xác nhận; PICK/PACK vẫn xử lý bình thường.")
+                % order.name
+            )
         return order
 
     def _misa_clear_sale_edit_lock(self):

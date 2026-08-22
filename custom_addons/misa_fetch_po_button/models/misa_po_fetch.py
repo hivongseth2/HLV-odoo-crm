@@ -100,6 +100,10 @@ class MisaPOFetch(models.TransientModel):
 
         product_id = self._misa_get_product_id_by_code(product_code, None, crm_headers)
         if not product_id:
+            _logger.warning(
+                "MISA UoM conversions: product_code=%r has no matching ProductID",
+                product_code,
+            )
             return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
 
@@ -144,7 +148,9 @@ class MisaPOFetch(models.TransientModel):
             resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
-            return data.get("Data", []) or []
+            conversions = data.get("Data", []) or []
+         
+            return conversions
         except Exception as e:
             _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
@@ -161,6 +167,17 @@ class MisaPOFetch(models.TransientModel):
 
         # Lấy bảng quy đổi theo ProductID
         conversions = self._misa_fetch_conversion_units(misa_product_code, crm_headers) if misa_product_code else []
+        _logger.warning(
+            "MISA UoM conversion lookup: product_code=%r requested_uom=%r "
+            "default_uom=%r candidates=%r",
+            misa_product_code,
+            misa_uom_text,
+            default_uom_name,
+            [
+                c.get("ConversionUnitIDText")
+                for c in (conversions or [])
+            ],
+        )
         # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
         conv = next((
             c for c in (conversions or [])
