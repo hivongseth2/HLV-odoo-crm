@@ -12,6 +12,7 @@
                 <field name="name"/>
                 <field name="date_request"/>
                 <field name="partner_id"/>
+                <field name="account_id" optional="show"/>
                 <field name="request_type" widget="badge"
                        decoration-info="request_type == 'gift'"
                        decoration-warning="request_type == 'cash'"/>
@@ -64,6 +65,7 @@
                     <group>
                         <group string="Thông tin yêu cầu">
                             <field name="partner_id" readonly="state != 'pending'"/>
+                            <field name="account_id" readonly="state != 'pending'" options="{'no_create': True}"/>
                             <field name="request_type" readonly="state != 'pending'"/>
                             <field name="date_request"/>
                             <field name="balance_at_request"/>
@@ -125,7 +127,8 @@
                                    decoration-success="transaction_type == 'earn'"
                                    decoration-warning="transaction_type == 'redeem'"
                                    decoration-danger="transaction_type == 'return'"
-                                   decoration-info="transaction_type == 'manual'"/>
+                                   decoration-info="transaction_type == 'transfer'"
+                                   decoration-muted="transaction_type == 'manual'"/>
                             <field name="point_type" widget="badge"
                                    decoration-success="point_type == 'exchange'"
                                    decoration-info="point_type == 'ranking'"/>
@@ -154,17 +157,19 @@
             <search>
                 <field name="name"/>
                 <field name="partner_id"/>
+                <field name="account_id"/>
                 <separator/>
                 <filter string="Chờ duyệt" name="pending" domain="[('state','=','pending')]"/>
                 <filter string="Đã xử lý" name="done" domain="[('state','=','done')]"/>
                 <filter string="Đã hủy" name="cancelled" domain="[('state','=','cancelled')]"/>
                 <separator/>
                 <filter string="Đổi quà" name="gift" domain="[('request_type','=','gift')]"/>
-                <filter string="Đổi tiền" name="cash" domain="[('request_type','=','cash')]"/>
+                <filter string="Đổi hiện kim" name="cash" domain="[('request_type','=','cash')]"/>
                 <group expand="0" string="Nhóm theo">
                     <filter string="Trạng thái" name="by_state" context="{'group_by':'state'}"/>
                     <filter string="Loại yêu cầu" name="by_type" context="{'group_by':'request_type'}"/>
                     <filter string="Khách hàng" name="by_partner" context="{'group_by':'partner_id'}"/>
+                    <filter string="Tài khoản Loyalty" name="by_account" context="{'group_by':'account_id'}"/>
                 </group>
             </search>
         </field>

@@ -12,15 +12,40 @@
             <meta name="viewport" content="width=device-width, initial-scale=1"/>
             <link rel="preconnect" href="https://fonts.googleapis.com"/>
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap"/>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap"/>
+            <!-- display=block (KHÔNG dùng swap) cho riêng font icon: các icon trong
+                 trang này là chữ tiếng Anh (VD "account_balance", "redeem") được font
+                 Material Symbols biến thành glyph qua ligature. Với display=swap,
+                 trình duyệt vẽ tạm chữ tiếng Anh đó bằng font fallback trước khi font
+                 icon tải xong rồi mới đổi qua icon → gây hiện tượng "chớp" ra chữ
+                 tiếng Anh/tên icon trước khi ra đúng UI. display=block ẩn tạm (invisible)
+                 trong lúc chờ tải font thay vì hiện chữ thô, tránh chớp chữ lạ. -->
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block"/>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
-            <!-- ?v= là cache-buster thủ công: TĂNG số này mỗi khi sửa
-                 loyalty_portal.css, nếu không trình duyệt/CDN có thể tiếp
-                 tục phục vụ bản CSS cũ đã cache dù server đã có bản mới. -->
-            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css?v=2"/>
+            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css"/>
         </t>
         <t t-out="0"/>
+
+        <!-- Bottom navigation (mobile only) — chỉ hiện khi đã đăng nhập Portal -->
+        <t t-if="request.session.get('hlv_loyalty_account_id')">
+            <t t-set="_p" t-value="request.httprequest.path"/>
+            <div class="sr-bottom-nav-spacer"/>
+            <nav class="sr-bottom-nav">
+                <a href="/loyalty/dashboard" t-att-class="'sr-bn-item' + (' active' if _p == '/loyalty/dashboard' else '')">
+                    <span class="ms ms-fill">home</span><span>Trang chủ</span>
+                </a>
+                <a href="/loyalty/history" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/history') else '')">
+                    <span class="ms">history</span><span>Lịch sử</span>
+                </a>
+                <a href="/loyalty/redeem" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/redeem') else '')">
+                    <span class="ms ms-fill">redeem</span><span>Đổi thưởng</span>
+                </a>
+                <a href="/loyalty/vouchers" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/vouchers') else '')">
+                    <span class="ms">confirmation_number</span><span>Voucher</span>
+                </a>
+            </nav>
+        </t>
+
         <script>
 (function () {
     function init() {

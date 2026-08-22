@@ -32,6 +32,12 @@ class HlvLoyaltyPortalAccount(models.Model):
     username = fields.Char(
         string='Tên đăng nhập', required=True, copy=False, index=True,
     )
+    display_name = fields.Char(
+        string='Tên hiển thị', compute='_compute_display_name', store=True,
+        help='Lưu cứng (store=True) để mọi nơi (list, search, name_search, '
+             'string dùng trong mô tả/công thức điểm) luôn ra đúng tên, '
+             'không phụ thuộc việc client có gọi đúng compute hay không.',
+    )
     password_hash = fields.Char(string='Mật khẩu (hash)', copy=False)
     active = fields.Boolean(default=True)
 
@@ -41,6 +47,59 @@ class HlvLoyaltyPortalAccount(models.Model):
         help='Số điện thoại dùng để đăng nhập cổng Loyalty. '
              'Mặc định lấy từ SĐT của khách hàng. Lưu dưới dạng chuẩn hóa (0xxxxxxxxx).',
         index=True,
+    )
+
+    # ── Multi-account per company ────────────────────────────────────────────
+    buyer_name = fields.Char(
+        string='Tên thu mua',
+        help='Tên người/bộ phận thu mua gắn với tài khoản này (VD: "Anh A - phòng thu mua 1").',
+    )
+    default_earning_pct = fields.Float(
+        string='% cộng điểm mặc định',
+        digits=(5, 2),
+        help='% chiết khấu mặc định dùng để tính điểm đổi thưởng khi tài khoản này '
+             'được chọn trên đơn bán hàng. VD: 5 = 5%. Sales có thể sửa lại trên từng đơn.',
+    )
+    is_default = fields.Boolean(
+        string='Tài khoản mặc định',
+        help='Tài khoản được tự động dùng để cộng điểm khi đơn bán hàng không chọn '
+             'tài khoản nào. Mỗi công ty chỉ có tối đa 1 tài khoản mặc định.',
+    )
+
+    # ── STK nhận hiện kim mặc định (riêng theo từng tài khoản Portal) ────────
+    default_bank_name = fields.Char(string='Ngân hàng nhận hiện kim (mặc định)')
+    default_account_number = fields.Char(string='Số tài khoản nhận hiện kim (mặc định)')
+    default_account_name = fields.Char(string='Tên chủ tài khoản nhận hiện kim (mặc định)')
+
+    # ── Điểm (mỗi tài khoản có pool điểm riêng — nguồn sự thật là hlv.loyalty.history) ──
+    loyalty_history_ids = fields.One2many(
+        'hlv.loyalty.history', 'account_id', string='Lịch sử điểm',
+    )
+    loyalty_total_points = fields.Integer(
+        string='Điểm xếp hạng', compute='_compute_loyalty_total_points',
+        store=True, readonly=True,
+        help='Điểm xếp hạng tự động xác nhận, riêng của tài khoản này.',
+    )
+    loyalty_exchange_points = fields.Integer(
+        string='Điểm đổi thưởng', compute='_compute_loyalty_exchange_points',
+        store=True, readonly=True,
+        help='Điểm đổi thưởng đã xác nhận, riêng của tài khoản này.',
+    )
+    loyalty_pending_points = fields.Integer(
+        string='Điểm chờ xác nhận', compute='_compute_loyalty_pending_points',
+        store=False, readonly=True,
+    )
+    loyalty_reward_pending_points = fields.Integer(
+        string='Điểm đổi thưởng đang treo',
+        compute='_compute_loyalty_reward_request_points',
+        store=False, readonly=True,
+        help='Tổng điểm của các yêu cầu đổi thưởng đang chờ xử lý của tài khoản này.',
+    )
+    loyalty_exchange_available_points = fields.Integer(
+        string='Điểm đổi thưởng khả dụng',
+        compute='_compute_loyalty_reward_request_points',
+        store=False, readonly=True,
+        help='Điểm đổi thưởng còn có thể dùng sau khi trừ điểm đang treo.',
     )
 
     _sql_constraints = [
@@ -69,12 +128,28 @@ class HlvLoyaltyPortalAccount(models.Model):
             # Set default password hash if no hash provided
             if not vals.get('password_hash'):
                 vals['password_hash'] = self._hash_password(default_pw)
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        records.filtered('is_default')._unset_sibling_defaults()
+        return records
 
     def write(self, vals):
         if 'portal_phone' in vals:
             vals['portal_phone'] = _normalize_phone(vals['portal_phone'] or '')
-        return super().write(vals)
+        result = super().write(vals)
+        if vals.get('is_default'):
+            self._unset_sibling_defaults()
+        return result
+
+    def _unset_sibling_defaults(self):
+        """Đảm bảo mỗi công ty (partner_id) chỉ có tối đa 1 tài khoản mặc định."""
+        for account in self:
+            siblings = self.search([
+                ('partner_id', '=', account.partner_id.id),
+                ('is_default', '=', True),
+                ('id', '!=', account.id),
+            ])
+            if siblings:
+                siblings.write({'is_default': False})
 
     # ── Password helpers ──────────────────────────────────────────────────────
 
@@ -100,6 +175,68 @@ class HlvLoyaltyPortalAccount(models.Model):
     def reset_password(self, new_plain: str):
         """Admin reset — no old-password check needed."""
         self.set_password(new_plain)
+
+    # ── Điểm (nguồn sự thật: hlv.loyalty.history.account_id) ────────────────────
+
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
+    )
+    def _compute_loyalty_total_points(self):
+        """Điểm xếp hạng: ranking confirmed (+ legacy point_type=False)."""
+        for account in self:
+            records = account.loyalty_history_ids.filtered(
+                lambda h: h.point_type in ('ranking', False) and h.state in ('confirmed', False)
+            )
+            account.loyalty_total_points = sum(records.mapped('point_amount'))
+
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
+    )
+    def _compute_loyalty_exchange_points(self):
+        """Điểm đổi thưởng: exchange confirmed (+ legacy point_type=False)."""
+        for account in self:
+            records = account.loyalty_history_ids.filtered(
+                lambda h: h.point_type in ('exchange', False) and h.state in ('confirmed', False)
+            )
+            account.loyalty_exchange_points = sum(records.mapped('point_amount'))
+
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
+    )
+    def _compute_loyalty_pending_points(self):
+        """Điểm exchange đang chờ xác nhận."""
+        for account in self:
+            records = account.loyalty_history_ids.filtered(
+                lambda h: h.point_type == 'exchange' and h.state == 'pending'
+            )
+            account.loyalty_pending_points = sum(records.mapped('point_amount'))
+
+    def _get_loyalty_pending_reward_requests(self, exclude_request=None):
+        self.ensure_one()
+        domain = [('account_id', '=', self.id), ('state', '=', 'pending')]
+        exclude_ids = []
+        if exclude_request:
+            exclude_ids = exclude_request.ids if hasattr(exclude_request, 'ids') else [int(exclude_request)]
+        if exclude_ids:
+            domain.append(('id', 'not in', exclude_ids))
+        return self.env['hlv.loyalty.reward.request'].sudo().search(domain)
+
+    def _get_loyalty_pending_reward_points(self, exclude_request=None):
+        self.ensure_one()
+        requests = self._get_loyalty_pending_reward_requests(exclude_request=exclude_request)
+        return sum(requests.mapped('points_required'))
+
+    @api.depends('loyalty_exchange_points')
+    def _compute_loyalty_reward_request_points(self):
+        for account in self:
+            pending_points = account._get_loyalty_pending_reward_points()
+            account.loyalty_reward_pending_points = pending_points
+            account.loyalty_exchange_available_points = max(
+                (account.loyalty_exchange_points or 0) - pending_points, 0
+            )
 
     # ── Authentication ────────────────────────────────────────────────────────
 
@@ -132,12 +269,21 @@ class HlvLoyaltyPortalAccount(models.Model):
 
     # ── Display ───────────────────────────────────────────────────────────────
 
-    def name_get(self):
-        result = []
+    @api.depends('partner_id.name', 'buyer_name', 'username')
+    def _compute_display_name(self):
+        """Tên hiển thị dùng ở mọi Many2one/dropdown (VD wizard chuyển điểm).
+
+        Ghi đè bằng field compute+store chuẩn Odoo 17+ thay vì name_get()
+        kiểu cũ — name_get() đôi khi không được web client mới resolve
+        đúng, khiến ô chọn hiện text thô dạng "hlv.loyalty.portal.account,69"
+        thay vì tên. Định dạng: "Công ty - Tên thu mua (username)", hoặc
+        "Công ty (username)" nếu chưa nhập tên thu mua.
+        """
         for acc in self:
-            name = f'{acc.partner_id.name} ({acc.username})'
-            result.append((acc.id, name))
-        return result
+            label = acc.partner_id.name or ''
+            if acc.buyer_name:
+                label = f'{label} - {acc.buyer_name}' if label else acc.buyer_name
+            acc.display_name = f'{label} ({acc.username})' if acc.username else label
 
     def action_reset_password_wizard(self):
         self.ensure_one()
@@ -159,4 +305,15 @@ class HlvLoyaltyPortalAccount(models.Model):
             'view_mode': 'form',
             'target': 'new',
             'context': {'default_account_id': self.id},
+        }
+
+    def action_open_point_transfer_wizard(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Chuyển điểm Loyalty',
+            'res_model': 'hlv.loyalty.point.transfer.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_source_account_id': self.id},
         }

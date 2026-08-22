@@ -26,7 +26,7 @@
                     <h1 class="sr-rdm-hero-ttl">
                         <span class="ms ms-fill">redeem</span> Đổi thưởng
                     </h1>
-                    <p class="sr-rdm-hero-sub">Dùng điểm đổi thưởng để nhận quà hoặc quy đổi thành tiền mặt.</p>
+                    <p class="sr-rdm-hero-sub">Dùng điểm đổi thưởng để nhận quà hoặc quy đổi thành hiện kim.</p>
                 </div>
                 <div class="sr-rdm-stats">
                     <div class="sr-rdm-stat sr-rdm-stat-exchange">
@@ -57,18 +57,6 @@
                             </div>
                         </div>
                     </t>
-                    <t t-if="program and program.cash_rate_per_point">
-                        <div class="sr-rdm-stat sr-rdm-stat-rate">
-                            <span class="ms sr-rdm-stat-icon">info</span>
-                            <div>
-                                <div class="sr-rdm-stat-lbl">Tỷ lệ đổi tiền</div>
-                                <div class="sr-rdm-stat-val">
-                                    <t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ
-                                </div>
-                                <div class="sr-rdm-stat-unit">/ 1 điểm ĐT</div>
-                            </div>
-                        </div>
-                    </t>
                 </div>
             </div>
             <div class="sr-rdm-hero-wm" aria-hidden="true"><span class="ms ms-xl">redeem</span></div>
@@ -86,7 +74,7 @@
                 </a>
                 <a t-att-href="'/loyalty/redeem?tab=cash'"
                    t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'cash' else '')">
-                    <span class="ms">payments</span> Đổi tiền mặt
+                    <span class="ms">payments</span> Đổi hiện kim
                 </a>
                 <a t-att-href="'/loyalty/redeem?tab=history'"
                    t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'history' else '')">
@@ -132,7 +120,7 @@
                                         </div>
                                         <div class="sr-pkg-pts">
                                             <div class="sr-pkg-pts-num"><t t-out="'{:,}'.format(pkg.points_required)"/></div>
-                                            <div class="sr-pkg-pts-lbl">điểm ĐT</div>
+                                            <div class="sr-pkg-pts-lbl">điểm đổi thưởng</div>
                                         </div>
                                     </div>
                                     <div class="sr-pkg-name"><t t-out="pkg.name"/></div>
@@ -204,10 +192,13 @@
                                            placeholder="Nhập số điểm..."
                                            required="required"
                                            t-att-value="form_vals.get('points_to_redeem', '')"/>
+                                    <!-- Số điểm khả dụng/đang treo đã hiện ở khối thống kê đầu trang
+                                         (sr-rdm-stats) — ở đây chỉ nhắc lại NGẮN mức tối đa được nhập,
+                                         tránh lặp lại nguyên câu 2 lần trên cùng 1 màn hình. -->
                                     <div class="sr-cf-hint">
-                                        Bạn có <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong> khả dụng.
+                                        Tối đa <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong>.
                                         <t t-if="reward_pending_points &gt; 0">
-                                            Đang treo <strong><t t-out="'{:,}'.format(reward_pending_points)"/> điểm</strong> ở yêu cầu chờ xử lý.
+                                            (đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm)
                                         </t>
                                     </div>
                                     <t t-if="program and program.cash_rate_per_point > 0">
@@ -216,33 +207,91 @@
                                             <span>Bạn sẽ nhận:</span>
                                             <span class="sr-cash-preview-val" id="preview-val">0đ</span>
                                         </div>
+                                        <div class="sr-cf-hint">
+                                            Tối đa quy đổi được:
+                                            <strong><t t-out="'{:,.0f}'.format(exchange_available_points * program.cash_rate_per_point)"/>đ</strong>
+                                        </div>
                                     </t>
                                 </div>
                             </div>
 
                             <div class="sr-cf-card">
                                 <h3 class="sr-cf-title">
-                                    <span class="ms">account_balance</span> Thông tin tài khoản nhận tiền
+                                    <span class="ms">account_balance</span> Thông tin nhận hiện kim
                                 </h3>
-                                <div class="sr-cf-field">
-                                    <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
-                                    <input type="text" name="bank_name" class="sr-cf-input"
-                                           placeholder="VD: Vietcombank, Techcombank, BIDV..."
-                                           required="required" t-att-value="form_vals.get('bank_name', '')"/>
-                                </div>
-                                <div class="sr-cf-field">
-                                    <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
-                                    <input type="text" name="account_number" class="sr-cf-input"
-                                           placeholder="Nhập số tài khoản..."
-                                           required="required" t-att-value="form_vals.get('account_number', '')"/>
-                                </div>
-                                <div class="sr-cf-field">
-                                    <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
-                                    <input type="text" name="account_name" class="sr-cf-input"
-                                           placeholder="Nhập đúng tên chủ tài khoản..."
-                                           required="required" t-att-value="form_vals.get('account_name', '')"/>
-                                    <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
-                                </div>
+
+                                <t t-if="bank_mode == 'confirm'">
+                                    <!-- Khối xác nhận STK mặc định — view riêng (sr-bank-confirm),
+                                         không dùng lại style hàng list của trang chi tiết yêu cầu.
+                                         Số tài khoản ẩn theo mặc định, chỉ hiện đủ khi bấm 'Xem đầy đủ'. -->
+                                    <input type="hidden" name="use_saved_bank" value="1"/>
+                                    <div class="sr-cf-field">
+                                        <div class="sr-bank-confirm">
+                                            <div class="sr-bank-confirm-chip">
+                                                <span class="ms ms-fill">account_balance</span>
+                                            </div>
+                                            <div class="sr-bank-confirm-info">
+                                                <div class="sr-bank-confirm-bank"><t t-out="default_bank_name"/></div>
+                                                <div class="sr-bank-confirm-numrow">
+                                                    <span class="sr-bank-confirm-num" id="cash-stk-masked"><t t-out="default_account_number_masked"/></span>
+                                                    <button type="button" class="sr-bank-confirm-eye" id="cash-stk-reveal"
+                                                            t-att-data-full="default_account_number" aria-label="Xem đầy đủ số tài khoản">
+                                                        <span class="ms" id="cash-stk-reveal-icon">visibility</span>
+                                                        <span id="cash-stk-reveal-label">Xem đầy đủ</span>
+                                                    </button>
+                                                </div>
+                                                <div class="sr-bank-confirm-holder"><t t-out="default_account_name"/></div>
+                                            </div>
+                                        </div>
+                                        <div class="sr-cf-hint">
+                                            Vui lòng kiểm tra thông tin nhận tiền phía trên. Nếu chính xác, bấm
+                                            <strong>Gửi yêu cầu</strong> để hoàn tất.
+                                        </div>
+                                        <a t-att-href="'/loyalty/redeem?tab=cash&amp;bank_mode=edit'" class="sr-rq-toggle-btn" style="margin-top:10px">
+                                            <span class="ms" style="font-size:16px">edit</span> Cập nhật thông tin nhận tiền
+                                        </a>
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <input type="hidden" name="use_saved_bank" value="0"/>
+                                    <t t-if="has_default_bank">
+                                        <div class="sr-cf-edit-banner">
+                                            <span class="ms" style="font-size:16px">info</span>
+                                            Thông tin nhận tiền hiện tại đã được điền sẵn bên dưới. Vui lòng chỉnh sửa nếu cần thay đổi.
+                                        </div>
+                                    </t>
+                                    <div class="sr-cf-field">
+                                        <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
+                                        <input type="text" name="bank_name" class="sr-cf-input"
+                                               placeholder="VD: Vietcombank, Techcombank, BIDV..."
+                                               required="required" t-att-value="form_vals.get('bank_name') or default_bank_name"/>
+                                    </div>
+                                    <div class="sr-cf-field">
+                                        <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
+                                        <input type="text" name="account_number" class="sr-cf-input"
+                                               placeholder="Nhập số tài khoản..."
+                                               required="required" t-att-value="form_vals.get('account_number') or default_account_number"/>
+                                    </div>
+                                    <div class="sr-cf-field">
+                                        <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
+                                        <input type="text" name="account_name" class="sr-cf-input"
+                                               placeholder="Nhập đúng tên chủ tài khoản..."
+                                               required="required" t-att-value="form_vals.get('account_name') or default_account_name"/>
+                                        <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
+                                    </div>
+                                    <div class="sr-cf-field">
+                                        <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:.83rem;cursor:pointer">
+                                            <input type="checkbox" name="save_default" value="1" checked="checked"/>
+                                            Lưu thông tin này làm mặc định cho các lần đổi sau
+                                        </label>
+                                        <t t-if="has_default_bank">
+                                            <div class="sr-cf-hint">
+                                                <a t-att-href="'/loyalty/redeem?tab=cash'">Quay lại thông tin nhận tiền mặc định</a>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </t>
+
                                 <div class="sr-cf-field">
                                     <label class="sr-cf-label">Ghi chú</label>
                                     <textarea name="customer_note" class="sr-cf-input sr-cf-textarea"
@@ -258,25 +307,14 @@
                         </form>
                     </div><!-- /sr-cash-wrap -->
 
-                    <!-- Right panel -->
+                    <!-- Right panel — CHỈ còn quy trình xử lý (thông tin duy nhất chưa xuất
+                         hiện ở nơi khác trên trang); số điểm/số tiền tối đa đã có ở khối
+                         thống kê đầu trang + preview bên form, không lặp lại ở đây nữa. -->
                     <div class="sr-cash-side">
                         <div class="sr-cash-side-inner">
-                            <span class="ms sr-cash-side-icon">account_balance_wallet</span>
-                            <div class="sr-cash-side-ttl">Quy đổi điểm</div>
-                            <div class="sr-cash-side-pts">
-                                <span class="sr-cash-side-num"><t t-out="'{:,}'.format(exchange_available_points)"/></span>
-                                <span class="sr-cash-side-unit">points khả dụng</span>
+                            <div class="sr-cash-side-ttl">
+                                <span class="ms" style="font-size:18px">checklist</span> Quy trình xử lý
                             </div>
-                            <t t-if="program and program.cash_rate_per_point > 0">
-                                <div class="sr-cash-side-rate">
-                                    <span class="ms">swap_horiz</span>
-                                    1 điểm = <strong><t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ</strong>
-                                </div>
-                                <div class="sr-cash-side-max">
-                                    Tối đa có thể đổi:<br/>
-                                    <strong><t t-out="'{:,.0f}'.format(exchange_available_points * program.cash_rate_per_point)"/>đ</strong>
-                                </div>
-                            </t>
                             <div class="sr-cash-side-steps">
                                 <div class="sr-css-step">
                                     <span class="ms sr-css-step-icon">edit_note</span>
@@ -315,6 +353,24 @@
                     })();
                     </script>
                 </t>
+                <script>
+                (function(){
+                    var btn = document.getElementById('cash-stk-reveal');
+                    var span = document.getElementById('cash-stk-masked');
+                    var icon = document.getElementById('cash-stk-reveal-icon');
+                    var label = document.getElementById('cash-stk-reveal-label');
+                    if(!btn || !span || !icon || !label) return;
+                    var masked = span.textContent;
+                    var full = btn.getAttribute('data-full') || '';
+                    var revealed = false;
+                    btn.addEventListener('click', function(){
+                        revealed = !revealed;
+                        span.textContent = revealed ? full : masked;
+                        icon.textContent = revealed ? 'visibility_off' : 'visibility';
+                        label.textContent = revealed ? 'Ẩn số tài khoản' : 'Xem đầy đủ số tài khoản';
+                    });
+                })();
+                </script>
             </t>
 
             <!-- ═══════════════ TAB: YÊU CẦU CỦA TÔI ═══════════════ -->
@@ -333,7 +389,7 @@
                                             <strong><t t-out="rq.name"/></strong>
                                             <span t-att-class="'sr-rq-type-badge rq-type-' + rq.request_type">
                                                 <t t-if="rq.request_type == 'gift'">Đổi quà</t>
-                                                <t t-else="">Đổi tiền</t>
+                                                <t t-else="">Đổi hiện kim</t>
                                             </span>
                                         </div>
                                         <span t-att-class="'sr-rq-state rq-st-' + rq.state">
@@ -346,7 +402,7 @@
                                     <div class="sr-rq-body">
                                         <div class="sr-rq-row">
                                             <span class="sr-rq-lbl">Điểm sử dụng:</span>
-                                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm ĐT</span>
+                                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm đổi thưởng</span>
                                         </div>
                                         <t t-if="rq.request_type == 'gift' and rq.package_id">
                                             <div class="sr-rq-row">
@@ -354,7 +410,10 @@
                                                 <span class="sr-rq-val"><t t-out="rq.package_id.name"/></span>
                                             </div>
                                         </t>
-                                        <t t-if="rq.request_type == 'cash'">
+                                        <!-- Chỉ hiện trạng thái thanh toán khi yêu cầu ĐÃ được duyệt/xử lý —
+                                             yêu cầu còn 'Chờ duyệt' thì chưa có gì để nói đã/chưa thanh toán,
+                                             hiện ra dễ gây hiểu lầm là chưa được duyệt bị "quên" thanh toán. -->
+                                        <t t-if="rq.request_type == 'cash' and rq.state == 'done'">
                                             <div class="sr-rq-row">
                                                 <span class="sr-rq-lbl">Thanh toán:</span>
                                                 <t t-set="is_paid" t-value="payment_status_by_request.get(rq.id)"/>

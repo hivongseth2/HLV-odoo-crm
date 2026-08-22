@@ -14,6 +14,11 @@ class HlvRedeemVoucherWizard(models.TransientModel):
     partner_id = fields.Many2one(
         'res.partner', string='Khách hàng', required=True, readonly=True,
     )
+    account_id = fields.Many2one(
+        'hlv.loyalty.portal.account', string='Tài khoản Loyalty', required=True,
+        domain="[('partner_id', '=', partner_id), ('active', '=', True)]",
+        help='Điểm bị trừ trực tiếp ở tài khoản này (mỗi công ty có thể có nhiều tài khoản).',
+    )
     current_points = fields.Integer(
         string='Điểm đổi thưởng hiện tại', compute='_compute_current_points',
     )
@@ -41,20 +46,29 @@ class HlvRedeemVoucherWizard(models.TransientModel):
         string='Điểm còn lại sau đổi', compute='_compute_remaining_points',
     )
 
-    @api.depends('partner_id')
+    @api.onchange('partner_id')
+    def _onchange_partner_id_default_account(self):
+        if self.partner_id:
+            root = self.partner_id._get_loyalty_root()
+            self.account_id = (
+                root.loyalty_portal_account_ids.filtered('is_default')[:1]
+                or root.loyalty_portal_account_ids[:1]
+            )
+
+    @api.depends('account_id')
     def _compute_current_points(self):
         for wiz in self:
-            if not wiz.partner_id:
+            if not wiz.account_id:
                 wiz.current_points = 0
                 wiz.pending_points = 0
                 wiz.reward_pending_points = 0
                 wiz.available_points = 0
             else:
-                partner = wiz.partner_id._get_loyalty_root()
-                wiz.current_points = partner.loyalty_exchange_points
-                wiz.pending_points = partner.loyalty_pending_points
-                wiz.reward_pending_points = partner.loyalty_reward_pending_points
-                wiz.available_points = partner.loyalty_exchange_available_points
+                account = wiz.account_id
+                wiz.current_points = account.loyalty_exchange_points
+                wiz.pending_points = account.loyalty_pending_points
+                wiz.reward_pending_points = account.loyalty_reward_pending_points
+                wiz.available_points = account.loyalty_exchange_available_points
 
     @api.depends('package_id')
     def _compute_discount_info(self):
@@ -87,18 +101,21 @@ class HlvRedeemVoucherWizard(models.TransientModel):
         """Thực hiện đổi điểm lấy Voucher."""
         self.ensure_one()
         partner = self.partner_id._get_loyalty_root()
+        account = self.account_id
         package = self.package_id
 
         if not package:
             raise UserError('Vui lòng chọn Gói Voucher!')
+        if not account:
+            raise UserError('Vui lòng chọn Tài khoản Loyalty để trừ điểm!')
 
         # Validate điểm đổi thưởng
-        available_points = partner.loyalty_exchange_available_points
+        available_points = account.loyalty_exchange_available_points
         if available_points < package.points_required:
             raise UserError(
                 f'Không đủ điểm đổi thưởng! Cần {package.points_required} điểm, '
                 f'hiện còn {available_points} điểm khả dụng.'
-                + (f'\n({partner.loyalty_reward_pending_points} điểm đang treo trong yêu cầu chờ xử lý.)' if partner.loyalty_reward_pending_points > 0 else '')
+                + (f'\n({account.loyalty_reward_pending_points} điểm đang treo trong yêu cầu chờ xử lý.)' if account.loyalty_reward_pending_points > 0 else '')
             )
 
         # Kiểm tra quyền (chỉ Admin HQ mới được điều chỉnh)
@@ -111,6 +128,7 @@ class HlvRedeemVoucherWizard(models.TransientModel):
         # Tạo Voucher
         voucher = self.env['hlv.loyalty.voucher'].sudo().create({
             'partner_id': partner.id,
+            'account_id': account.id,
             'package_id': package.id,
             'date_expiry': date_expiry,
         })
@@ -118,6 +136,7 @@ class HlvRedeemVoucherWizard(models.TransientModel):
         # Trừ điểm đổi thưởng - tạo bản ghi lịch sử
         self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': partner.id,
+            'account_id': account.id,
             'point_amount': -package.points_required,
             'transaction_type': 'redeem',
             'point_type': 'exchange',
@@ -126,15 +145,15 @@ class HlvRedeemVoucherWizard(models.TransientModel):
             'voucher_id': voucher.id,
             'company_id': self.env.company.id,
         })
-        partner.invalidate_recordset([
+        account.invalidate_recordset([
             'loyalty_exchange_points',
             'loyalty_reward_pending_points',
             'loyalty_exchange_available_points',
         ])
 
         _logger.info(
-            'Loyalty: %s đổi %d điểm lấy Voucher %s (Gói: %s)',
-            partner.name, package.points_required, voucher.code, package.name,
+            'Loyalty: %s (TK: %s) đổi %d điểm lấy Voucher %s (Gói: %s)',
+            partner.name, account.username, package.points_required, voucher.code, package.name,
         )
 
         return {

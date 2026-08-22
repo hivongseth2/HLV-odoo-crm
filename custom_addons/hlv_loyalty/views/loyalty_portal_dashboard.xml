@@ -10,20 +10,15 @@
 <template id="loyalty_public_dashboard" name="Loyalty Portal - Dashboard">
     <t t-call="hlv_loyalty.loyalty_public_layout">
 
-        <!-- Top bar -->
-        <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
-            <a href="/loyalty" style="font-weight:700;font-size:1.1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none">
-                🏆 Members Portal
-            </a>
-            <div style="display:flex;align-items:center;gap:12px">
-                <span style="font-size:.88rem;color:#666">
-                    Xin chào, <strong><t t-out="partner.name"/></strong>
-                </span>
-                <a href="/loyalty/logout"
-                   style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
-                    Đăng xuất
-                </a>
-            </div>
+        <!-- Top bar — dùng riêng sr-topbar-greet (không phải sr-topbar-name) vì
+             trang chủ không có nút "quay về" để làm chỗ dựa bên trái; sr-topbar-name
+             bị ẩn hẳn (display:none) trên mobile ở các trang khác, nếu dùng lại ở đây
+             sẽ khiến 'Đăng xuất' là flex item DUY NHẤT còn lại và bị đẩy sang trái. -->
+        <div class="sr-topbar">
+            <span class="sr-topbar-greet">
+                Xin chào, <strong><t t-out="partner.name"/></strong>
+            </span>
+            <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
         </div>
 
         <!-- Success / error flash -->
@@ -37,20 +32,66 @@
             </div>
         </t>
 
-        <!-- Profile hero -->
+        <!-- Mobile member card (kiểu thẻ VIP) — chỉ hiện trên màn hình hẹp,
+             thay thế toàn bộ hero + các block bên dưới bằng 1 thẻ tối giản -->
+        <div class="sr-mcard-wrap">
+            <div class="sr-mcard">
+                <div class="sr-mcard-top">
+                    <div class="sr-mcard-avatar">
+                        <t t-if="partner.image_1920">
+                            <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
+                                 t-att-alt="partner.name or ''"/>
+                        </t>
+                        <t t-else="">
+                            <span class="ms ms-fill">storefront</span>
+                        </t>
+                    </div>
+                    <div class="sr-mcard-id">
+                        <div class="sr-mcard-name"><t t-out="partner.name"/></div>
+                        <t t-if="partner.loyalty_tier_id">
+                            <span class="sr-mcard-tier"><t t-out="partner.loyalty_tier_id.name"/></span>
+                        </t>
+                    </div>
+                    <div class="sr-mcard-icon-actions">
+                        <button onclick="document.getElementById('modal-phone').style.display='flex'"
+                                class="sr-mcard-icon-btn" aria-label="Đổi số điện thoại">
+                            <span class="ms">edit</span>
+                        </button>
+                        <button onclick="document.getElementById('modal-pw').style.display='flex'"
+                                class="sr-mcard-icon-btn" aria-label="Đổi mật khẩu">
+                            <span class="ms">lock_reset</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="sr-mcard-stats">
+                    <a href="/loyalty/history" class="sr-mcard-stat-row">
+                        <span class="sr-mcard-stat-plain">Điểm của bạn</span>
+                        <span class="sr-mcard-stat-link">Xem lịch sử <span class="ms">chevron_right</span></span>
+                    </a>
+                    <a href="/loyalty/vouchers" class="sr-mcard-stat-row">
+                        <div class="sr-mcard-stat-num">
+                            <t t-out="active_vouchers_count or 0"/> <span>quà tặng</span>
+                        </div>
+                        <span class="sr-mcard-stat-link">Xem quà <span class="ms">chevron_right</span></span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile hero (desktop) -->
         <section class="sr-result-hero">
             <div class="sr-rc">
                 <div class="sr-result-top">
                     <div style="display:flex;align-items:center;gap:20px">
                         <!-- Avatar -->
-                        <div style="width:72px;height:72px;border-radius:50%;overflow:hidden;background:#d0d8e8;flex-shrink:0;border:3px solid rgba(255,255,255,.4)">
+                        <div style="width:72px;height:72px;border-radius:20px;overflow:hidden;background:#d0d8e8;flex-shrink:0;border:1px solid rgba(255,255,255,.4)">
                             <t t-if="partner.image_1920">
                                 <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
                                      style="width:100%;height:100%;object-fit:cover"
                                      t-att-alt="partner.name or ''"/>
                             </t>
                             <t t-else="">
-                                <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">account_circle</span>
+                                <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">storefront</span>
                             </t>
                         </div>
                         <div>
@@ -64,34 +105,6 @@
                                 </t>
                                 <t t-if="partner.ref">
                                     <span class="sr-meta-item"><span class="ms">verified_user</span>ID: <t t-out="partner.ref"/></span>
-                                </t>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Balance pill -->
-                    <div class="sr-bal-pill">
-                        <div class="sr-bal-avatar">
-                            <t t-if="partner.loyalty_tier_id and partner.loyalty_tier_id.image_url">
-                                <img class="sr-bal-avatar-img" t-att-src="partner.loyalty_tier_id.image_url" t-att-alt="partner.loyalty_tier_id.name or 'Tier image'"/>
-                            </t>
-                            <t t-else="">
-                                <span class="ms ms-fill ms-lg">workspace_premium</span>
-                            </t>
-                            <t t-if="partner.loyalty_tier_id">
-                                <span class="sr-bal-tier-tag"><t t-out="(partner.loyalty_tier_id.name or '').upper()"/></span>
-                            </t>
-                        </div>
-                        <div>
-                            <div class="sr-bal-lbl">Điểm hiện tại</div>
-                            <div>
-                                <span class="sr-bal-num"><t t-out="'{:,}'.format(partner.loyalty_total_points)"/></span>
-                                <span class="sr-bal-unit"> PTS xếp hạng</span>
-                            </div>
-                            <div style="margin-top:6px;font-size:.82rem;opacity:.85"  class="badge-pt-exchange sr-badge">
-                                <span style="font-weight:700"><t t-out="'{:,}'.format(exchange_points)"/></span>
-                                <span> PTS đổi thưởng</span>
-                                <t t-if="pending_points &gt; 0">
-                                    <span style="opacity:.7"> (+<t t-out="'{:,}'.format(pending_points)"/> chờ XN)</span>
                                 </t>
                             </div>
                         </div>
@@ -113,7 +126,7 @@
         </section>
 
         <!-- Body -->
-        <div class="sr-body">
+        <div class="sr-body sr-body-hero">
 
             <!-- Progress + actions row -->
             <div class="sr-main-row">
@@ -173,9 +186,9 @@
                 </div>
             </div>
 
-            <!-- Shared sections -->
+            <!-- Voucher (ẩn trên mobile qua CSS) — lịch sử tích lũy gần đây đã bỏ
+                 khỏi trang chủ, xem đầy đủ tại /loyalty/history -->
             <t t-call="hlv_loyalty.loyalty_portal_vouchers_section"/>
-            <t t-call="hlv_loyalty.loyalty_portal_history_section"/>
         </div>
 
         <!-- Shared tier section + modals -->
