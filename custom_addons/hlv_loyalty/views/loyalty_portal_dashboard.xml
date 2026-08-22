@@ -84,7 +84,7 @@
                 <div class="sr-result-top">
                     <div style="display:flex;align-items:center;gap:20px">
                         <!-- Avatar -->
-                        <div style="width:72px;height:72px;border-radius:50%;overflow:hidden;background:#d0d8e8;flex-shrink:0;border:3px solid rgba(255,255,255,.4)">
+                        <div style="width:72px;height:72px;border-radius:20px;overflow:hidden;background:#d0d8e8;flex-shrink:0;border:1px solid rgba(255,255,255,.4)">
                             <t t-if="partner.image_1920">
                                 <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
                                      style="width:100%;height:100%;object-fit:cover"

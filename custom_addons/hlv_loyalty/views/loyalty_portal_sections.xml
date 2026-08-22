@@ -230,6 +230,13 @@
                 </t>
             </div>
         </div>
+        <script>
+        (function(){
+            var current = document.querySelector('#loyalty-tiers .sr-tier-card.current');
+            if (!current) return;
+            current.scrollIntoView({inline: 'center', block: 'nearest'});
+        })();
+        </script>
     </section>
 </template>
 
