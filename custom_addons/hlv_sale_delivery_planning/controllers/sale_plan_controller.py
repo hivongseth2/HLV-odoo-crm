@@ -1986,10 +1986,13 @@ function openDrawer(id){
     var packCls=l.qty_packed>=l.product_uom_qty&&l.qty_packed>0?'cell-packed-full':(l.qty_packed>0?'cell-packed-partial':'cell-packed-zero');
     var stkCls=wfree>0?'cell-stock-ok':'cell-stock-zero';
     var packHtml=l.qty_packed>0?'<i class="fa fa-cube me-1"></i>'+fq(l.qty_packed)+(l.qty_packed>=l.product_uom_qty?' <i class="fa fa-check-circle"></i>':''):fq(0);
+    var reservedHere=l.qty_reserved_here||0;
+    var stockTitle=reservedHere>0?' title="Tự do: '+fq(l.qty_warehouse_free||0)+'  |  Giữ cho đơn: '+fq(reservedHere)+'"':'';
+    var stockSub=reservedHere>0?'<div class="text-info" style="font-size:.7rem;line-height:1.1"><i class="fa fa-lock me-1"></i>'+fq(reservedHere)+'</div>':'';
     h+='<tr class="'+rc+'"><td>'+esc(pname)+(l.is_kit?' <span class="badge bg-warning bg-opacity-25 text-dark" style="font-size:10px"><i class="fa fa-gift"></i> Combo</span>':'')+'</td>'
       +'<td class="text-end fw-bold">'+fq(l.product_uom_qty)+'</td>'
       +'<td class="text-end '+packCls+'">'+packHtml+'</td>'
-      +'<td class="text-end '+stkCls+'">'+fq(wfree)+'</td>'
+      +'<td class="text-end '+stkCls+'"'+stockTitle+'>'+fq(wfree)+stockSub+'</td>'
       +'<td class="text-end cell-delivered">'+fq(l.qty_delivered)+'</td>'
       +'<td class="text-end text-muted small">'+fm(l.price_unit||0)+(l.discount?'<div class="text-danger" style="font-size:0.7rem">-'+l.discount+'%</div>':'')+'</td>'
       +'<td class="text-end fw-bold text-success">'+fm(l.delivered_subtotal||0)+'</td>'
