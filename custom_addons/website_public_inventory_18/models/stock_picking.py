@@ -8,6 +8,17 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
+# Tên các nút cần ẩn trên phiếu giữ hàng (is_stock_hold_picking=True). Nút "In phiếu lấy hàng"
+# là do Odoo Studio tự sinh (name dạng UUID) — đã xác nhận bằng cách dump arch thật qua shell
+# (bin/check_stock_picking_hold_buttons.py), không phải đoán. Nếu ai đó sửa lại nút này trong
+# Studio (đổi tên/tạo lại), UUID có thể đổi — lúc đó cần dump lại arch để cập nhật.
+HIDDEN_BUTTON_NAMES_ON_HOLD_PICKING = [
+    "button_validate",
+    "action_cancel",
+    "action_open_label_wizard",  # "In Tem Nhãn" (module custom_picking_label)
+    "studio_customization.hoat_ong_lay_hang_2cee26a0-9494-42ea-ac3a-337c20b5f150",  # "In phiếu lấy hàng" (Odoo Studio)
+]
+
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -45,22 +56,65 @@ class StockPicking(models.Model):
         holds.write({"state": "cancelled"})
         return res
 
-    def get_view(self, view_id=None, view_type='form', **options):
-        """Ẩn nút 'Xác nhận' (button_validate) trên phiếu giữ hàng (is_stock_hold_picking),
-        để tránh người dùng lỡ tay validate làm mất tác dụng khóa hàng (button_validate() đã
-        raise UserError chặn cứng ở tầng server rồi, đây chỉ là ẩn bớt cho khỏi bấm nhầm).
+    def do_unreserve(self):
+        """'Hủy dự trữ' (Unreserve) trong menu Actions — khác action_cancel(): không hủy cả
+        phiếu, chỉ nhả reservation. Nếu ai đó dùng nó trên phiếu giữ hàng (vd kho cố tình giành
+        lại hàng cho việc khác), tác dụng khóa hàng của yêu cầu giữ hàng tương ứng coi như đã
+        mất — dù trạng thái vẫn đang hiển thị "Đang giữ". Nên: cảnh báo (chatter + thông báo cho
+        người thao tác) + tự động chuyển yêu cầu giữ hàng sang "Đã hủy" để phản ánh đúng thực tế,
+        không để sale tưởng nhầm hàng vẫn còn được giữ.
+        """
+        hold_pickings = self.filtered("is_stock_hold_picking")
+        res = super().do_unreserve()
+        if hold_pickings:
+            holds = self.env["stock.hold.request"].sudo().search([
+                ("hold_picking_id", "in", hold_pickings.ids),
+                ("state", "=", "approved"),
+            ])
+            actor = self.env.user.name
+            now_str = fields.Datetime.now()
+            for hold in holds:
+                hold.message_post(body=_(
+                    "⚠️ CẢNH BÁO: Nhân viên kho (%(user)s) đã bấm \"Hủy dự trữ\" (Unreserve) trên "
+                    "phiếu giữ hàng %(picking)s lúc %(time)s — hàng đã được nhả ra, có thể đã dùng "
+                    "cho mục đích khác. Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa, hệ thống đã tự "
+                    "chuyển sang trạng thái \"Đã hủy\". Nếu vẫn cần giữ chỗ, vui lòng tạo lại yêu "
+                    "cầu giữ hàng mới."
+                ) % {
+                    "user": actor,
+                    "picking": hold.hold_picking_id.name,
+                    "time": now_str,
+                })
+            holds.write({"state": "cancelled"})
+            for picking in hold_pickings:
+                picking.message_post(body=_(
+                    "Phiếu này là phiếu giữ chỗ cho yêu cầu giữ hàng — đã \"Hủy dự trữ\" nên yêu "
+                    "cầu giữ hàng tương ứng cũng đã được tự động chuyển sang \"Đã hủy\"."
+                ))
+        return res
 
-        Không đụng vào điều kiện invisible gốc của nút (không biết chắc nó là gì ở mọi version) —
-        chỉ OR thêm điều kiện của mình vào, nên phiếu thường (is_stock_hold_picking=False) không
-        bị ảnh hưởng gì cả. Bọc try/except để nếu có gì bất thường thì bỏ qua, không làm sập
-        màn hình phiếu kho của cả hệ thống.
+    def get_view(self, view_id=None, view_type='form', **options):
+        """Ẩn các nút không phù hợp với phiếu giữ hàng (is_stock_hold_picking): 'Xác nhận'
+        (button_validate), 'Hủy' (action_cancel), 'In Tem Nhãn' (action_open_label_wizard), 'In
+        phiếu lấy hàng' (nút Studio) — buộc phải thao tác qua yêu cầu giữ hàng tương ứng (nút
+        "Hoàn thành"/"Hủy" trên stock.hold.request) thay vì đụng thẳng vào phiếu kho, và không in
+        ấn gì cho 1 phiếu vốn chỉ để giữ chỗ chứ không giao/nhận hàng thật. Các method này vẫn
+        gọi thẳng được từ code nội bộ module (_reserve/_release) — ẩn nút chỉ chặn bấm tay trên UI.
+
+        Không đụng vào điều kiện invisible gốc của các nút (không biết chắc nó là gì ở mọi
+        version) — chỉ OR thêm điều kiện của mình vào, nên phiếu thường (is_stock_hold_picking=
+        False) không bị ảnh hưởng gì cả. Bọc try/except để nếu có gì bất thường thì bỏ qua,
+        không làm sập màn hình phiếu kho của cả hệ thống.
         """
         res = super().get_view(view_id=view_id, view_type=view_type, **options)
         if view_type != 'form':
             return res
         try:
             doc = etree.fromstring(res['arch'])
-            buttons = doc.xpath("//button[@name='button_validate']")
+            xpath_expr = " | ".join(
+                "//button[@name='%s']" % name for name in HIDDEN_BUTTON_NAMES_ON_HOLD_PICKING
+            )
+            buttons = doc.xpath(xpath_expr)
             if not buttons:
                 return res
             for node in buttons:
@@ -77,7 +131,7 @@ class StockPicking(models.Model):
                 )['is_stock_hold_picking']
         except Exception:
             _logger.exception(
-                "Không thể ẩn nút Xác nhận cho phiếu giữ hàng — bỏ qua, dùng view gốc."
+                "Không thể ẩn nút Xác nhận/Hủy cho phiếu giữ hàng — bỏ qua, dùng view gốc."
             )
             return super().get_view(view_id=view_id, view_type=view_type, **options)
         return res
