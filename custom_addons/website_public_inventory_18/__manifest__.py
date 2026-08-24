@@ -22,6 +22,7 @@
         "views/misa_purchase_lookup.xml",
         "views/stock_hold_request_views.xml",
         "views/stock_picking_hold_views.xml",
+        "views/stock_quant_hold_views.xml",
     ],
     "assets": {
         "web.assets_frontend": [
