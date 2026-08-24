@@ -67,30 +67,74 @@ class StockPicking(models.Model):
         hold_pickings = self.filtered("is_stock_hold_picking")
         res = super().do_unreserve()
         if hold_pickings:
+            # LƯU Ý: hành động "Hủy dự trữ" trong menu Actions (⋮) của phiếu kho đã bị tùy biến
+            # (Studio) để gọi rec.do_unreserve() bên trong 1 khối try/except: pass — TỨC LÀ bất kỳ
+            # exception nào xảy ra ở bất cứ đâu trong method này (kể cả không liên quan gì tới
+            # phần dưới đây) sẽ bị nuốt hoàn toàn, im lặng, không log, không báo lỗi. Do đó:
+            # 1. Đồng bộ trạng thái stock.hold.request (việc QUAN TRỌNG NHẤT) phải làm TRƯỚC
+            #    và không được phép bị chặn bởi lỗi ở bước log/Zalo phía sau.
+            # 2. message_post()/_notify_sale_zalo() bọc try/except RIÊNG từng cái, để lỗi gửi
+            #    Zalo (vd module hlv_zalo_zns chưa cấu hình) không làm mất luôn cả việc ghi log.
             holds = self.env["stock.hold.request"].sudo().search([
                 ("hold_picking_id", "in", hold_pickings.ids),
                 ("state", "=", "approved"),
             ])
-            actor = self.env.user.name
-            now_str = fields.Datetime.now()
-            for hold in holds:
-                hold.message_post(body=_(
-                    "⚠️ CẢNH BÁO: Nhân viên kho (%(user)s) đã bấm \"Hủy dự trữ\" (Unreserve) trên "
-                    "phiếu giữ hàng %(picking)s lúc %(time)s — hàng đã được nhả ra, có thể đã dùng "
-                    "cho mục đích khác. Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa, hệ thống đã tự "
-                    "chuyển sang trạng thái \"Đã hủy\". Nếu vẫn cần giữ chỗ, vui lòng tạo lại yêu "
-                    "cầu giữ hàng mới."
-                ) % {
-                    "user": actor,
-                    "picking": hold.hold_picking_id.name,
-                    "time": now_str,
-                })
-            holds.write({"state": "cancelled"})
+            if holds:
+                holds.write({"state": "cancelled"})
+                actor = self.env.user.name
+                now_str = fields.Datetime.now()
+                for hold in holds:
+                    try:
+                        hold.message_post(body=_(
+                            "⚠️ CẢNH BÁO: Nhân viên kho (%(user)s) đã bấm \"Hủy dự trữ\" (Unreserve) "
+                            "trên phiếu giữ hàng %(picking)s lúc %(time)s — hàng đã được nhả ra, có "
+                            "thể đã dùng cho mục đích khác. Yêu cầu giữ hàng này KHÔNG còn hiệu lực "
+                            "nữa, hệ thống đã tự chuyển sang trạng thái \"Đã hủy\". Nếu vẫn cần giữ "
+                            "chỗ, vui lòng tạo lại yêu cầu giữ hàng mới."
+                        ) % {
+                            "user": actor,
+                            "picking": hold.hold_picking_id.name,
+                            "time": now_str,
+                        })
+                    except Exception:
+                        _logger.exception(
+                            "Không log được chatter cho yêu cầu giữ hàng %s sau khi Hủy dự trữ.",
+                            hold.name,
+                        )
+                    try:
+                        hold._notify_sale_zalo(_(
+                            "⚠️ HÀNG ĐANG GIỮ ĐÃ BỊ NHẢ (kho thao tác)\n"
+                            "--------------------\n"
+                            "Mã yêu cầu: %(name)s\n"
+                            "Sản phẩm: %(product)s\n"
+                            "Kho: %(wh)s\n"
+                            "Số lượng: %(qty)s\n"
+                            "--------------------\n"
+                            "Kho vừa \"Hủy dự trữ\" phiếu giữ hàng liên quan (có thể cần dùng hàng "
+                            "cho việc khác). Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa. Vui lòng "
+                            "liên hệ kho hoặc tạo lại yêu cầu giữ hàng mới nếu vẫn cần giữ chỗ."
+                        ) % {
+                            "name": hold.name,
+                            "product": hold.product_id.display_name,
+                            "wh": hold.warehouse_id.display_name,
+                            "qty": "{:,.0f}".format(hold.quantity),
+                        })
+                    except Exception:
+                        _logger.exception(
+                            "Không gửi được Zalo cho yêu cầu giữ hàng %s sau khi Hủy dự trữ.",
+                            hold.name,
+                        )
             for picking in hold_pickings:
-                picking.message_post(body=_(
-                    "Phiếu này là phiếu giữ chỗ cho yêu cầu giữ hàng — đã \"Hủy dự trữ\" nên yêu "
-                    "cầu giữ hàng tương ứng cũng đã được tự động chuyển sang \"Đã hủy\"."
-                ))
+                try:
+                    picking.message_post(body=_(
+                        "Phiếu này là phiếu giữ chỗ cho yêu cầu giữ hàng — đã \"Hủy dự trữ\" nên "
+                        "yêu cầu giữ hàng tương ứng cũng đã được tự động chuyển sang \"Đã hủy\"."
+                    ))
+                except Exception:
+                    _logger.exception(
+                        "Không log được chatter cho phiếu giữ hàng %s sau khi Hủy dự trữ.",
+                        picking.name,
+                    )
         return res
 
     def get_view(self, view_id=None, view_type='form', **options):
