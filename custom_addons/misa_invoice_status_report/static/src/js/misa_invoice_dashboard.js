@@ -480,35 +480,35 @@ export class MisaInvoiceDashboard extends Component {
         this.state.scanProgress = { done: 0, total: 0 };
         try {
             const range = { date_from: this.state.shipFrom || false, date_to: this.state.shipTo || false };
-            const hasRange = !!(range.date_from || range.date_to);
             const includeInvoiced = this.state.includeInvoiced;
 
-            if (!hasRange) {
+            // QUAN TRỌNG: trước đây khi KHÔNG chọn khoảng ngày cụ thể, chỉ gọi ĐÚNG 1 lô
+            // (SCAN_BATCH_SIZE=50) rồi dừng — progress.total bị gán = candidates.length của lô
+            // đó (không phải tổng thật), nên với hàng trăm phiếu "chưa có đề nghị" thì bấm 1
+            // lần chỉ quét được 50 phiếu ĐẦU (theo misa_invoice_last_checked cũ nhất), còn lại
+            // vẫn "treo" cho tới khi ai đó bấm lại nhiều lần — bug thật: phiếu KBC/OUT/12307
+            // (cũ, chưa quét tới) vẫn báo "chưa có đề nghị" dù MISA đã có đề nghị DN0017605 từ
+            // lâu, chỉ vì chưa tới lượt trong hàng đợi. Giờ LUÔN lặp gọi lại
+            // get_misa_invoice_scan_candidates cho tới khi candidates rỗng hoặc done >= total
+            // thật (resp.total), bất kể có chọn khoảng ngày hay không — giống hệt cách
+            // _runScanUntilDone đã làm cho các nút quét khác.
+            let total = null;
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
                 const resp = await this.orm.call(
                     "stock.picking", "get_misa_invoice_scan_candidates", [],
-                    { limit: SCAN_BATCH_SIZE, include_invoiced: includeInvoiced }
+                    { limit: SCAN_BATCH_SIZE, include_invoiced: includeInvoiced, ...range }
                 );
-                this.state.scanProgress.total = resp.candidates.length;
+                if (total === null) {
+                    total = resp.total;
+                    this.state.scanProgress.total = total;
+                }
+                if (!resp.candidates.length) {
+                    break;
+                }
                 await this._processCandidates(resp.candidates);
-            } else {
-                let total = null;
-                // eslint-disable-next-line no-constant-condition
-                while (true) {
-                    const resp = await this.orm.call(
-                        "stock.picking", "get_misa_invoice_scan_candidates", [],
-                        { limit: SCAN_BATCH_SIZE, include_invoiced: includeInvoiced, ...range }
-                    );
-                    if (total === null) {
-                        total = resp.total;
-                        this.state.scanProgress.total = total;
-                    }
-                    if (!resp.candidates.length) {
-                        break;
-                    }
-                    await this._processCandidates(resp.candidates);
-                    if (this.state.scanProgress.done >= total) {
-                        break;
-                    }
+                if (this.state.scanProgress.done >= total) {
+                    break;
                 }
             }
             await this._reload();
