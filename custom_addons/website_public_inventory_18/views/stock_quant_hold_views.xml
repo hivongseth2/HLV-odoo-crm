@@ -9,7 +9,11 @@
         <field name="inherit_id" ref="stock.view_stock_quant_tree_editable"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='reserved_quantity']" position="after">
-                <field name="hold_request_qty" string="Đã giữ (Sale)" optional="show"/>
+                <field name="hold_request_qty" string="Đã giữ (Sale)" optional="show" sum="Tổng đã giữ (Sale)"/>
+            </xpath>
+            <xpath expr="//button[@name='action_view_orderpoints']" position="after">
+                <button name="action_view_hold_requests" string="Giữ hàng" type="object"
+                        class="btn-link" icon="fa-lock" invisible="not hold_request_qty"/>
             </xpath>
         </field>
     </record>
