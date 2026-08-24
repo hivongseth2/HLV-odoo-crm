@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models
+from odoo import fields, models, _
 
 
 class StockQuant(models.Model):
@@ -29,3 +29,19 @@ class StockQuant(models.Model):
                 by_key[key] = by_key.get(key, 0.0) + ml.quantity
         for quant in self:
             quant.hold_request_qty = by_key.get((quant.product_id.id, quant.location_id.id), 0.0)
+
+    def action_view_hold_requests(self):
+        self.ensure_one()
+        holds = self.env["stock.hold.request"].sudo().search([
+            ("state", "=", "approved"),
+            ("product_id", "=", self.product_id.id),
+            ("hold_picking_id.move_line_ids.location_id", "=", self.location_id.id),
+        ])
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Yêu cầu giữ hàng tại vị trí này"),
+            "res_model": "stock.hold.request",
+            "view_mode": "list,form",
+            "domain": [("id", "in", holds.ids)],
+            "context": {"create": False},
+        }
