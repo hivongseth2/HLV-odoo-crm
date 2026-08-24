@@ -7,7 +7,10 @@
     "website": "https://example.com",
     "category": "Website/Inventory",
     "license": "LGPL-3",
-    "depends": ["website", "stock", "sale", "mrp", "misa_fetch_po_button", "misa_invoice_status_report"],
+    "depends": [
+        "website", "stock", "sale", "mrp", "misa_fetch_po_button",
+        "misa_invoice_status_report", "hlv_zalo_zns",
+    ],
     "data": [
         "security/stock_hold_security.xml",
         "security/ir.model.access.csv",
