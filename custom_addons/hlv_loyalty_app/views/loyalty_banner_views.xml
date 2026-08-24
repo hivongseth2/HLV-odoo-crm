@@ -35,7 +35,7 @@
                     <group>
                         <group string="Cấu hình hiển thị">
                             <field name="tag" placeholder="vd: HOT, ĐỔI QUÀ 0Đ, VOUCHER 100K"/>
-                            <field name="subtitle" placeholder="vd: Đổi phụ kiện & quà tặng công cụ chỉ từ 200 điểm"/>
+                            <field name="subtitle" placeholder="vd: Đổi phụ kiện &amp; quà tặng công cụ chỉ từ 200 điểm"/>
                             <field name="link" placeholder="redeem | vouchers | tiers | hoặc URL website"/>
                             <field name="sequence"/>
                         </group>
@@ -72,9 +72,10 @@
         </field>
     </record>
 
-    <!-- Menu Item (gắn dưới menu Cấu hình Loyalty của hlv_loyalty nếu có, hoặc tạo menu riêng) -->
+    <!-- Menu Item (gắn dưới menu Cấu hình Loyalty của hlv_loyalty) -->
     <menuitem id="menu_hlv_loyalty_banner"
               name="Banner App Mobile"
+              parent="hlv_loyalty.menu_loyalty_config"
               action="action_hlv_loyalty_banner"
               sequence="30"/>
 </odoo>
