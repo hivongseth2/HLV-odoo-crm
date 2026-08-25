@@ -6,7 +6,6 @@ import os
 import re
 import time
 import pytz
-from collections import defaultdict
 from markupsafe import Markup
 from odoo import http, fields
 from odoo.http import request
@@ -55,13 +54,6 @@ _SKIP_MSG_RE = re.compile(
     re.IGNORECASE
 )
 _logger = logging.getLogger(__name__)
-
-SESSION_KEY_OK = "inv_pw_ok"
-PW_PARAM_KEY = "website_public_inventory_18.search_password"
-
-_FAIL_LOG = defaultdict(list)
-_RL_MAX = 5
-_RL_WINDOW = 600
 
 WEBPUSH_PUBLIC_PARAM = 'hlv_sale_delivery_planning.webpush_vapid_public_key'
 WEBPUSH_PRIVATE_PARAM = 'hlv_sale_delivery_planning.webpush_vapid_private_key'
@@ -188,17 +180,6 @@ _ALLOWED_CHAT_MEDIA_EXTS = {
   '.jfif', '.svg', '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'
 }
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
-
-
-def _is_rate_limited(ip):
-    now = time.time()
-    recent = [t for t in _FAIL_LOG[ip] if now - t < _RL_WINDOW]
-    _FAIL_LOG[ip] = recent
-    return len(recent) >= _RL_MAX
-
-
-def _record_failure(ip):
-    _FAIL_LOG[ip].append(time.time())
 
 
 def _is_allowed_chat_attachment(name, mimetype):
@@ -372,27 +353,6 @@ _H = [
     ("Pragma", "no-cache"),
     ("Expires", "0"),
 ]
-
-_ERR_PW = '<div class="alert alert-danger mb-3">Mật khẩu không đúng.</div>'
-_ERR_RATE = '<div class="alert alert-danger mb-3">Quá nhiều lần thử sai. Vui lòng thử lại sau 10 phút.</div>'
-
-_LOGIN = """<!DOCTYPE html>
-<html lang="vi"><head><meta charset="utf-8"/>
-<title>Tình trạng Đơn hàng</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
-</head>
-<body class="bg-light d-flex align-items-center justify-content-center" style="min-height:100vh">
-<div class="card shadow p-4" style="max-width:400px;width:100%;border-radius:4px">
-  <h4 class="fw-bold text-center text-primary mb-3">&#128666; Tình trạng Đơn hàng</h4>
-  {err}
-  <form method="post" action="/sale_plan">
-    <input type="hidden" name="csrf_token" value="{csrf}"/>
-    <label class="form-label fw-bold">Mật khẩu</label>
-    <input type="password" name="inv_password" class="form-control form-control-lg mb-3" autofocus required/>
-    <button type="submit" class="btn btn-primary w-100 btn-lg">Xác nhận</button>
-  </form>
-</div></body></html>"""
 
 _PAGE = r"""<!DOCTYPE html>
 <html lang="vi"><head><meta charset="utf-8"/>
@@ -2616,14 +2576,14 @@ load(false);
 
 class SalePlanPublicController(http.Controller):
 
-    @http.route('/sale_plan/bus_frame', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/sale_plan/bus_frame', type='http', auth='user', methods=['GET'], csrf=False)
     def sale_plan_bus_frame(self, **kwargs):
         session_info = request.env['ir.http'].session_info()
         return request.render('hlv_sale_delivery_planning.sale_plan_bus_frame', {
             'session_info_json': Markup(json.dumps(session_info)),
         })
 
-    @http.route('/sale_plan_webpush_sw.js', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/sale_plan_webpush_sw.js', type='http', auth='user', methods=['GET'], csrf=False)
     def sale_plan_webpush_sw(self, **kwargs):
         js = """
 self.addEventListener('push', function(event) {
@@ -2663,7 +2623,7 @@ self.addEventListener('notificationclick', function(event) {
             ('Cache-Control', 'no-store'),
         ])
 
-    @http.route('/api/sale_plan/webpush_config', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/webpush_config', type='json', auth='user', methods=['POST'])
     def api_sale_plan_webpush_config(self, **kwargs):
         public_key, private_key = _get_or_create_webpush_vapid(request.env)
         try:
@@ -2678,7 +2638,7 @@ self.addEventListener('notificationclick', function(event) {
             'sender_ready': sender_ready,
         }
 
-    @http.route('/api/sale_plan/webpush_subscribe', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/sale_plan/webpush_subscribe', type='json', auth='user', methods=['POST'], csrf=False)
     def api_sale_plan_webpush_subscribe(self, subscription=None, backend_messages=False, **kwargs):
         if not subscription or not isinstance(subscription, dict):
             return {'status': 'error', 'message': 'missing_subscription'}
@@ -2695,34 +2655,11 @@ self.addEventListener('notificationclick', function(event) {
         )
         return {'status': 'success', 'count': len(records), 'aliases': aliases}
 
-    @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
+    @http.route('/sale_plan', type='http', auth='user', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
-        ip = request.httprequest.remote_addr
-        conf_pw = (
-            request.env['ir.config_parameter'].sudo()
-            .get_param(PW_PARAM_KEY, default='') or ''
-        )
-        if not request.session.get(SESSION_KEY_OK):
-            if request.httprequest.method == 'POST':
-                if _is_rate_limited(ip):
-                    return request.make_response(
-                        _LOGIN.format(csrf=request.csrf_token(), err=_ERR_RATE),
-                        headers=_H)
-                inp = (request.params.get('inv_password') or '').strip()
-                if inp == conf_pw:
-                    request.session[SESSION_KEY_OK] = True
-                    _FAIL_LOG.pop(ip, None)
-                    return request.redirect('/sale_plan')
-                _record_failure(ip)
-                return request.make_response(
-                    _LOGIN.format(csrf=request.csrf_token(), err=_ERR_PW),
-                    headers=_H)
-            return request.make_response(
-                _LOGIN.format(csrf=request.csrf_token(), err=''),
-                headers=_H)
         return request.make_response(_PAGE, headers=_H)
 
-    @http.route('/api/sale_plan/data', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/data', type='json', auth='user', methods=['POST'])
     def api_sale_plan_data(self, search='', warehouse_id='all', delivery_status='all',
                            stock_status='all', packing_status='all',
                            date_from='', date_to='', po_date_from='', po_date_to='',
@@ -2730,8 +2667,6 @@ self.addEventListener('notificationclick', function(event) {
                            po_status='all', saler_code='', htgh='', delivery_type='all',
                            tag_ids='', limit=250, offset=0, show_completed=False,
                            mine_only=False, **kwargs):
-        if not request.session.get(SESSION_KEY_OK):
-            return {'status': 'error', 'message': 'Unauthorized'}
         try:
             result = request.env['hlv.delivery.planner.service'].sudo().get_dashboard_data(
                 search_query=search,
@@ -2760,12 +2695,10 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan API error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/preview_pick_slip', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/preview_pick_slip', type='json', auth='user', methods=['POST'])
     def api_sale_plan_preview_pick_slip(self, picking_id=None, **kwargs):
         """Bước 1 (dialog chi tiết phiếu): chỉ render PDF xem trước, KHÔNG tạo hàng chờ / KHÔNG
         đánh dấu đã in. Xem services/delivery_planner_iot_print.py."""
-        if not request.session.get(SESSION_KEY_OK):
-            return {'success': False, 'message': 'Unauthorized'}
         if not picking_id:
             return {'success': False, 'message': 'Thiếu picking_id'}
         try:
@@ -2774,13 +2707,11 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan preview_pick_slip error')
             return {'success': False, 'message': str(e)}
 
-    @http.route('/api/sale_plan/confirm_print_pick_slip', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/confirm_print_pick_slip', type='json', auth='user', methods=['POST'])
     def api_sale_plan_confirm_print_pick_slip(self, picking_id=None, **kwargs):
         """Bước 2 (dialog chi tiết phiếu, sau khi đã xem trước): gửi yêu cầu in phiếu này vào
         hàng chờ theo kho (hlv.iot.print.queue) — kho mở "Điều phối Giao hàng > Hàng chờ in (IoT)"
         trong backend để tự động in thật. Xem services/delivery_planner_iot_print.py."""
-        if not request.session.get(SESSION_KEY_OK):
-            return {'success': False, 'message': 'Unauthorized'}
         if not picking_id:
             return {'success': False, 'message': 'Thiếu picking_id'}
         try:
@@ -2789,12 +2720,10 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan confirm_print_pick_slip error')
             return {'success': False, 'message': str(e)}
 
-    @http.route('/api/sale_plan/picking_print_log', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/picking_print_log', type='json', auth='user', methods=['POST'])
     def api_sale_plan_picking_print_log(self, picking_id=None, **kwargs):
         """Tab "Nhật ký" trên dialog chi tiết phiếu: lịch sử các yêu cầu in gắn thẳng vào phiếu
         này (không cần mò trong danh sách chung hàng chờ). Xem services/delivery_planner_iot_print.py."""
-        if not request.session.get(SESSION_KEY_OK):
-            return {'success': False, 'message': 'Unauthorized'}
         if not picking_id:
             return {'success': False, 'message': 'Thiếu picking_id'}
         try:
@@ -2803,12 +2732,10 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan picking_print_log error')
             return {'success': False, 'message': str(e)}
 
-    @http.route('/api/sale_plan/print_queue', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/print_queue', type='json', auth='user', methods=['POST'])
     def api_sale_plan_print_queue(self, **kwargs):
         """Danh sách cho drawer "Yêu cầu in" trên /sale_plan — xem
         hlv.iot.print.queue.get_recent_for_sale_plan()."""
-        if not request.session.get(SESSION_KEY_OK):
-            return {'status': 'error', 'message': 'Unauthorized'}
         try:
             Queue = request.env['hlv.iot.print.queue'].sudo()
             items = Queue.get_recent_for_sale_plan(limit=200)
@@ -2818,12 +2745,10 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan print_queue error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/check_changes', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/check_changes', type='json', auth='user', methods=['POST'])
     def api_check_changes(self, **kwargs):
         """Lightweight endpoint: returns a fingerprint (max write_date + record count)
         so the frontend can detect changes without reloading heavy data."""
-        if not request.session.get(SESSION_KEY_OK):
-            return {'status': 'error', 'message': 'Unauthorized'}
         try:
             SaleOrder = request.env['sale.order'].sudo()
             domain = [('state', 'in', ['sale', 'done'])]
@@ -2843,10 +2768,8 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('check_changes error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/report_order', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/report_order', type='json', auth='user', methods=['POST'])
     def api_report_order(self, order_id=None, reason='', **kwargs):
-        if not request.session.get(SESSION_KEY_OK):
-            return {'status': 'error', 'message': 'Unauthorized'}
         try:
             so = request.env['sale.order'].sudo().browse(int(order_id))
             if not so.exists():
@@ -2863,10 +2786,8 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('report_order error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/messages', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/messages', type='json', auth='user', methods=['POST'])
     def api_sale_plan_messages(self, order_id=None, **kwargs):
-        if not request.session.get(SESSION_KEY_OK):
-            return {'status': 'error', 'message': 'Unauthorized'}
         try:
             so = request.env['sale.order'].sudo().browse(int(order_id))
             if not so.exists():
@@ -2927,10 +2848,8 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('sale_plan messages error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/send_message', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/send_message', type='json', auth='user', methods=['POST'])
     def api_sale_plan_send_message(self, order_id=None, body='', author_name='', attachments=None, **kwargs):
-        if not request.session.get(SESSION_KEY_OK):
-            return {'status': 'error', 'message': 'Unauthorized'}
         try:
             body = (body or '').strip()
             attachments = attachments or []
@@ -3057,12 +2976,12 @@ self.addEventListener('notificationclick', function(event) {
             _logger.exception('send_message error')
             return {'status': 'error', 'message': str(e)}
 
-    @http.route('/api/sale_plan/current_alias', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/current_alias', type='json', auth='user', methods=['POST'])
     def api_sale_plan_current_alias(self, **kwargs):
         aliases = _get_user_sale_plan_aliases(request.env.user)
         return {'status': 'success', 'alias': aliases[0] if aliases else '', 'aliases': aliases}
 
-    @http.route('/api/sale_plan/mention_aliases', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/mention_aliases', type='json', auth='user', methods=['POST'])
     def api_sale_plan_mention_aliases(self, **kwargs):
         return {'status': 'success', 'aliases': _get_sale_plan_alias_rows(request.env)}
 
@@ -3087,12 +3006,12 @@ self.addEventListener('notificationclick', function(event) {
             'ts': int(fields.Datetime.to_datetime(rec.create_date).timestamp()) if rec.create_date else 0,
         } for rec in records]
 
-    @http.route('/api/sale_plan/mention_notifications', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/mention_notifications', type='json', auth='user', methods=['POST'])
     def api_sale_plan_mention_notifications(self, **kwargs):
         aliases = _get_user_sale_plan_aliases(request.env.user)
         return {'status': 'success', 'events': self._sale_plan_mention_notif_payloads(aliases)}
 
-    @http.route('/api/sale_plan/mention_notifications/read', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/mention_notifications/read', type='json', auth='user', methods=['POST'])
     def api_sale_plan_mention_notifications_read(self, notification_ids=None, alias='', all_aliases=False, **kwargs):
         aliases = _get_user_sale_plan_aliases(request.env.user)
         domain = [('alias', 'in', aliases)]
@@ -3111,7 +3030,7 @@ self.addEventListener('notificationclick', function(event) {
         request.env['hlv.sale.plan.mention.notification'].sudo().search(domain).write({'is_read': True})
         return {'status': 'success', 'events': self._sale_plan_mention_notif_payloads(aliases)}
 
-    @http.route('/api/sale_plan/mention_notifications/clear', type='json', auth='public', methods=['POST'])
+    @http.route('/api/sale_plan/mention_notifications/clear', type='json', auth='user', methods=['POST'])
     def api_sale_plan_mention_notifications_clear(self, alias='', all_aliases=False, **kwargs):
         aliases = _get_user_sale_plan_aliases(request.env.user)
         domain = [('alias', 'in', aliases)]
@@ -3125,10 +3044,8 @@ self.addEventListener('notificationclick', function(event) {
         return {'status': 'success', 'events': self._sale_plan_mention_notif_payloads(aliases)}
 
 
-    @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='user', methods=['GET'], csrf=False)
     def api_sale_plan_attachment(self, att_id, **kwargs):
-        if not request.session.get(SESSION_KEY_OK):
-            return request.redirect('/sale_plan')
         import base64
         att = request.env['ir.attachment'].sudo().browse(att_id)
         if not att.exists() or not att.datas:
@@ -3141,11 +3058,8 @@ self.addEventListener('notificationclick', function(event) {
         ]
         return request.make_response(data, headers)
 
-    @http.route('/api/sale_plan/export_excel', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/sale_plan/export_excel', type='http', auth='user', methods=['GET'], csrf=False)
     def api_export_excel(self, **kwargs):
-        if not request.session.get(SESSION_KEY_OK):
-            return request.redirect('/sale_plan')
-
         import io
         try:
             import xlsxwriter
@@ -3294,16 +3208,13 @@ self.addEventListener('notificationclick', function(event) {
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
 
-    @http.route('/api/sale_plan/export_picking_excel', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/sale_plan/export_picking_excel', type='http', auth='user', methods=['GET'], csrf=False)
     def api_export_picking_excel(self, **kwargs):
         """Export OUT pickings (state=done) of the filtered sale orders.
         Bao gồm phiếu đã xuất kho hoàn toàn hoặc xuất kho 1 phần (tạo backorder)
         — tức là tất cả stock.picking có picking_type_code='outgoing' và state='done'
         thuộc các đơn hàng trong bộ lọc hiện tại.
         """
-        if not request.session.get(SESSION_KEY_OK):
-            return request.redirect('/sale_plan')
-
         import io
         try:
             import xlsxwriter
@@ -3558,15 +3469,12 @@ self.addEventListener('notificationclick', function(event) {
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
 
-    @http.route('/api/sale_plan/export_picking_simple_excel', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/sale_plan/export_picking_simple_excel', type='http', auth='user', methods=['GET'], csrf=False)
     def api_export_picking_simple_excel(self, **kwargs):
         """Export giản lược OUT pickings (state=done) — mỗi hàng = 1 phiếu, không có dòng sản phẩm.
         Columns: Mã phiếu XK, Đơn hàng, Trạng thái phiếu, Trạng thái ĐH,
                  Kho, Ngày hoàn thành, Tổng tiền trước thuế, Tổng tiền sau thuế.
         """
-        if not request.session.get(SESSION_KEY_OK):
-            return request.redirect('/sale_plan')
-
         try:
             result = request.env['hlv.delivery.planner.service'].sudo().get_dashboard_data(
                 search_query=kwargs.get('search_query', ''),
