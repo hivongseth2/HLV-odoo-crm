@@ -200,8 +200,23 @@
                         <div class="alert alert-danger" role="alert" style="margin-top: 8px;">
                             <p style="margin: 0;">
                                 Mỗi dòng 1 cấu hình: <code>WAREHOUSE_CODE:ID1,ID2,...</code><br/>
-                                Khi đơn bán bị HỦY, hệ thống sẽ quét các phiếu kho của đơn đó thuộc kho nào 
+                                Khi đơn bán bị HỦY, hệ thống sẽ quét các phiếu kho của đơn đó thuộc kho nào
                                 và gửi tin nhắn cảnh báo cho các ID tương ứng.
+                            </p>
+                        </div>
+                    </group>
+
+                    <group string="🔒 Thông báo Hủy Dự Trữ / Giữ Hàng (cho Sale)">
+                        <field name="hold_unreserve_saler_mapping_text" widget="text"
+                               placeholder="Ví dụ:&#10;DUONGTHIHA:4954993286556475779&#10;NGUYENVANA:1111111111111111111,2222222222222222222" />
+                        <div class="alert alert-warning" role="alert" style="margin-top: 8px;">
+                            <p style="margin: 0;">
+                                Mỗi dòng 1 cấu hình: <code>MISA_SALER_CODE:ID1,ID2,...</code><br/>
+                                Mapping RIÊNG — <b>không dùng chung</b> với mục "📤 Thông báo trực tiếp
+                                cho Nhân Viên Sale (phiếu XUẤT)" ở trên (vì mục đó hiện đã tạm ngừng).<br/>
+                                Áp dụng cho: yêu cầu Giữ hàng theo Sale (trang /search_stock) bị hết
+                                hạn / bị từ chối / bị kho "Hủy dự trữ"; và phiếu Lấy hàng (PICK) của
+                                đơn bán bị "Hủy dự trữ" hoặc bị xóa dòng dự trữ thủ công.
                             </p>
                         </div>
                     </group>

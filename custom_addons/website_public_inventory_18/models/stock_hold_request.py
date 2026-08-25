@@ -223,28 +223,24 @@ class StockHoldRequest(models.Model):
 
     def _notify_sale_zalo(self, message_text):
         """Gửi tin nhắn Zalo OA cho sale đứng tên yêu cầu, dùng map mã sale -> Zalo user_id
-        đã có sẵn trên module hlv_zalo_zns (saler_mapping_text). Fire-and-forget: lỗi gửi chỉ
-        log lại, không làm hỏng luồng nghiệp vụ chính (hủy/từ chối/hết hạn vẫn phải thành công
-        dù Zalo có gửi được hay không)."""
+        RIÊNG cho hủy dự trữ/giữ hàng (hlv.zalo.stock.notification.hold_unreserve_saler_mapping_text)
+        — KHÔNG dùng chung với saler_mapping_text (mapping đó dành cho thông báo phiếu XUẤT kho
+        đã validate, hiện đã tạm ngừng dùng cho mục đích đó; dùng chung sẽ vô tình bật lại nó).
+        Fire-and-forget: lỗi gửi chỉ log lại, không làm hỏng luồng nghiệp vụ chính (hủy/từ chối/
+        hết hạn vẫn phải thành công dù Zalo có gửi được hay không)."""
         self.ensure_one()
         config = self.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
         if not config:
             _logger.info("Không có cấu hình Zalo Stock Notification đang active, bỏ qua gửi báo cho %s.", self.name)
             return
-        user_ids = config.get_saler_user_ids_from_mapping(self.sale_name)
-        if not user_ids:
+        if not config.get_hold_unreserve_saler_user_ids_from_mapping(self.sale_name):
             _logger.info(
-                "Không tìm thấy Zalo user_id cho sale_name=%s (yêu cầu %s) trong saler_mapping_text, bỏ qua.",
+                "Không tìm thấy Zalo user_id cho sale_name=%s (yêu cầu %s) trong "
+                "hold_unreserve_saler_mapping_text, bỏ qua.",
                 self.sale_name, self.name,
             )
             return
-        for uid in user_ids:
-            try:
-                config.send_notification_message(uid, message_text)
-            except Exception:
-                _logger.exception(
-                    "Lỗi gửi Zalo cho yêu cầu giữ hàng %s tới user_id=%s", self.name, uid,
-                )
+        config.send_hold_unreserve_notification(self.sale_name, message_text)
 
     @api.model
     def _cron_expire_holds(self):
