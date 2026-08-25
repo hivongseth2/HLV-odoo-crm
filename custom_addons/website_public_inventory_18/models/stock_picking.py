@@ -6,6 +6,8 @@ from lxml import etree
 from odoo import fields, models, _
 from odoo.exceptions import UserError
 
+from .sale_plan_notify import notify_sale_plan_by_code
+
 _logger = logging.getLogger(__name__)
 
 # Tên các nút cần ẩn trên phiếu giữ hàng (is_stock_hold_picking=True). Nút "In phiếu lấy hàng"
@@ -154,28 +156,36 @@ class StockPicking(models.Model):
                     "Không log được chatter cho yêu cầu giữ hàng %s sau khi %s.",
                     hold.name, action_label,
                 )
+            hold_unreserved_message = _(
+                "⚠️ HÀNG ĐANG GIỮ ĐÃ BỊ NHẢ (kho thao tác: %(action)s)\n"
+                "--------------------\n"
+                "Mã yêu cầu: %(name)s\n"
+                "Sản phẩm: %(product)s\n"
+                "Kho: %(wh)s\n"
+                "Số lượng: %(qty)s\n"
+                "--------------------\n"
+                "Kho vừa thao tác nhả phiếu giữ hàng liên quan (có thể cần dùng hàng cho việc "
+                "khác). Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa. Vui lòng liên hệ kho hoặc "
+                "tạo lại yêu cầu giữ hàng mới nếu vẫn cần giữ chỗ."
+            ) % {
+                "action": action_label,
+                "name": hold.name,
+                "product": hold.product_id.display_name,
+                "wh": hold.warehouse_id.display_name,
+                "qty": "{:,.0f}".format(hold.quantity),
+            }
             try:
-                hold._notify_sale_zalo(_(
-                    "⚠️ HÀNG ĐANG GIỮ ĐÃ BỊ NHẢ (kho thao tác: %(action)s)\n"
-                    "--------------------\n"
-                    "Mã yêu cầu: %(name)s\n"
-                    "Sản phẩm: %(product)s\n"
-                    "Kho: %(wh)s\n"
-                    "Số lượng: %(qty)s\n"
-                    "--------------------\n"
-                    "Kho vừa thao tác nhả phiếu giữ hàng liên quan (có thể cần dùng hàng cho việc "
-                    "khác). Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa. Vui lòng liên hệ kho hoặc "
-                    "tạo lại yêu cầu giữ hàng mới nếu vẫn cần giữ chỗ."
-                ) % {
-                    "action": action_label,
-                    "name": hold.name,
-                    "product": hold.product_id.display_name,
-                    "wh": hold.warehouse_id.display_name,
-                    "qty": "{:,.0f}".format(hold.quantity),
-                })
+                hold._notify_sale_zalo(hold_unreserved_message)
             except Exception:
                 _logger.exception(
                     "Không gửi được Zalo cho yêu cầu giữ hàng %s sau khi %s.",
+                    hold.name, action_label,
+                )
+            try:
+                hold._notify_sale_plan(hold_unreserved_message)
+            except Exception:
+                _logger.exception(
+                    "Không báo được /sale_plan cho yêu cầu giữ hàng %s sau khi %s.",
                     hold.name, action_label,
                 )
         for picking in self:
@@ -193,31 +203,16 @@ class StockPicking(models.Model):
     def _notify_sale_pick_unreserved(self, reason="unreserve"):
         """self: các phiếu Lấy hàng (PICK) của đơn bán thật vừa mất reservation — do "Hủy dự
         trữ" (reason='unreserve') hoặc bị xóa dòng move line thủ công (reason='delete_move_line').
-        Báo Zalo cho đúng sale đứng đơn (theo Sale Order.x_studio_misa_saler_code), dùng chung
-        mapping hold_unreserve_saler_mapping_text với thông báo giữ hàng."""
+        Báo 2 kênh (Zalo + /sale_plan) cho đúng sale đứng đơn — CẢ 2 đều tra theo cùng 1 định
+        danh duy nhất: Sale Order.x_studio_misa_saler_code (mã sale MISA), KHÔNG dùng
+        Sale Order.user_id (Salesperson Odoo) vì đó chỉ là tài khoản đăng nhập, có thể không
+        khớp 1-1 với đúng sale đứng đơn (vd tài khoản dùng chung/trưởng nhóm quản lý nhiều mã).
+        Mỗi kênh dùng 1 mapping riêng (đều keyed theo saler_code) nên độc lập nhau — thiếu cấu
+        hình bên nào chỉ bên đó bị bỏ qua, có log rõ lý do."""
         config = self.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
-        if not config:
-            _logger.info(
-                "Không có cấu hình Zalo Stock Notification đang active, bỏ qua báo PICK unreserve cho: %s",
-                ", ".join(self.mapped("name")),
-            )
-            return
         action_label = UNRESERVE_ACTION_LABELS.get(reason, reason)
         for picking in self:
             saler_code = getattr(picking.sale_id, "x_studio_misa_saler_code", False)
-            if not saler_code:
-                _logger.info(
-                    "Phiếu %s (đơn %s) không có x_studio_misa_saler_code, bỏ qua báo PICK unreserve.",
-                    picking.name, picking.sale_id.name,
-                )
-                continue
-            if not config.get_hold_unreserve_saler_user_ids_from_mapping(saler_code):
-                _logger.info(
-                    "Không tìm thấy Zalo user_id cho saler_code=%s (phiếu %s, đơn %s) trong "
-                    "hold_unreserve_saler_mapping_text, bỏ qua.",
-                    saler_code, picking.name, picking.sale_id.name,
-                )
-                continue
             products = ", ".join(sorted(set(
                 picking.move_ids.mapped("product_id.display_name")
             ))) or "(không rõ)"
@@ -236,12 +231,43 @@ class StockPicking(models.Model):
                 "products": products,
                 "action": action_label,
             }
+
+            if not saler_code:
+                _logger.info(
+                    "Phiếu %s (đơn %s) không có x_studio_misa_saler_code, bỏ qua báo PICK "
+                    "unreserve (cả Zalo lẫn /sale_plan).", picking.name, picking.sale_id.name,
+                )
+                continue
+
+            if not config:
+                _logger.info(
+                    "Không có cấu hình Zalo Stock Notification đang active, bỏ qua báo Zalo "
+                    "PICK unreserve cho phiếu %s.", picking.name,
+                )
+            elif not config.get_hold_unreserve_saler_user_ids_from_mapping(saler_code):
+                _logger.info(
+                    "Không tìm thấy Zalo user_id cho saler_code=%s (phiếu %s, đơn %s) trong "
+                    "hold_unreserve_saler_mapping_text, bỏ qua.",
+                    saler_code, picking.name, picking.sale_id.name,
+                )
+            else:
+                try:
+                    config.send_hold_unreserve_notification(saler_code, message)
+                except Exception:
+                    _logger.exception(
+                        "Lỗi gửi Zalo (PICK unreserve) cho phiếu %s (đơn %s).",
+                        picking.name, picking.sale_id.name,
+                    )
+
             try:
-                config.send_hold_unreserve_notification(saler_code, message)
+                notify_sale_plan_by_code(
+                    self.env, saler_code, message,
+                    so=picking.sale_id, author_name="Kho hàng",
+                )
             except Exception:
                 _logger.exception(
-                    "Lỗi gửi Zalo (PICK unreserve) cho phiếu %s (đơn %s).",
-                    picking.name, picking.sale_id.name,
+                    "Lỗi báo /sale_plan (PICK unreserve) cho phiếu %s (đơn %s, mã sale=%s).",
+                    picking.name, picking.sale_id.name, saler_code,
                 )
 
     def get_view(self, view_id=None, view_type='form', **options):

@@ -221,6 +221,24 @@
                         </div>
                     </group>
 
+                    <group string="🔔 Thông báo Hủy Dự Trữ / Giữ Hàng trên trang /sale_plan (Alias)">
+                        <field name="sale_plan_alias_mapping_text" widget="text"
+                               placeholder="Ví dụ:&#10;DUONGTHIHA:duongthiha&#10;NGUYENVANA:nguyenvana,vana2" />
+                        <div class="alert alert-warning" role="alert" style="margin-top: 8px;">
+                            <p style="margin: 0;">
+                                Mỗi dòng 1 cấu hình: <code>MISA_SALER_CODE:alias1,alias2,...</code><br/>
+                                Alias phải khớp với alias đã cấu hình trên field
+                                <code>x_sale_plan_mention_names</code> của tài khoản tương ứng
+                                (menu Người dùng &gt; tab thông tin), KHÔNG dùng chung với mapping
+                                ID Zalo ở trên.<br/>
+                                Bắt buộc phải tra theo TỪNG MÃ SALE cụ thể (không suy ra từ tài
+                                khoản đang đăng nhập), vì 1 tài khoản có thể được gán nhiều mã sale
+                                (vd trưởng nhóm quản lý nhiều sale) — nếu không, hệ thống sẽ không
+                                biết đúng yêu cầu/đơn hàng này là của ai trong số đó.
+                            </p>
+                        </div>
+                    </group>
+
 
                     <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
                     <!-- <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
