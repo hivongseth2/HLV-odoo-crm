@@ -19,7 +19,33 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
     2. Bổ sung trường `buyer_name` (Tên thu mua) vào dữ liệu trả về cho App.
     3. Lọc Lịch sử điểm (history), Vouchers, Đơn đổi thưởng (redeem requests) theo `account_id`.
     4. Cung cấp route sync version độc lập cho Loyalty Mobile App.
+    5. Xử lý toàn bộ CORS và chuẩn hóa bảo mật dữ liệu riêng cho Loyalty App.
     """
+
+    # ── Helpers Override (CORS & Response) ───────────────────────────────────
+
+    @staticmethod
+    def _cors_headers():
+        return {
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+            'Access-Control-Max-Age': '86400',
+        }
+
+    @staticmethod
+    def _json_ok(data, status=200):
+        return Response(json.dumps(data, default=str),
+                        status=status, content_type='application/json',
+                        headers=LoyaltyAppLoyaltyAPI._cors_headers())
+
+    @staticmethod
+    def _json_err(msg, status=400, **extra):
+        body = {'error': msg}
+        body.update(extra)
+        return Response(json.dumps(body, default=str),
+                        status=status, content_type='application/json',
+                        headers=LoyaltyAppLoyaltyAPI._cors_headers())
+
 
     @classmethod
     def _account_from_portal_phone(cls, partner_id, phone):
@@ -127,6 +153,26 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             res['account_id'] = account_id
         return res
 
+    @classmethod
+    def _partner_lookup_summary(cls, partner, account=None):
+        """Dữ liệu tối thiểu & bảo mật cho API tra cứu công khai (trước khi đăng nhập).
+        Tuyệt đối không để lộ: điểm thưởng, email, hạng thành viên, người thu mua...
+        """
+        is_default_password = account._verify_password('hlv@2026', account.password_hash) if account else False
+        has_password = bool(account.password_hash) if account else False
+        account_id = account.id if account else None
+
+        res = {
+            'id': partner.id,
+            'name': partner.name or '',
+            'phone': (account.portal_phone if account else partner.phone) or '',
+            'has_password': has_password,
+            'is_default_password': is_default_password,
+        }
+        if account_id:
+            res['account_id'] = account_id
+        return res
+
     # ── Override Endpoints ──────────────────────────────────────────────────
 
     @http.route('/api/v1/loyalty/partner/lookup', type='http',
@@ -170,7 +216,7 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             if root.id not in seen:
                 seen.add(root.id)
                 account = matched_accounts.get(root.id) or self._account_for_root(root, phone)
-                summary = self._partner_summary_scoped(root, account=account)
+                summary = self._partner_lookup_summary(root, account=account)
                 if phone:
                     summary['phone'] = phone
                 results.append(summary)
@@ -609,3 +655,182 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
         except Exception as e:
             _logger.exception('loyalty_sync_version error: %s', e)
             return self._json_err(str(e), status=500)
+
+    # ── Full Overrides for App Endpoints ─────────────────────────────────────
+
+    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
+    def tier_image(self, tier_id, **kwargs):
+        tier = request.env['hlv.loyalty.tier'].sudo().with_context(bin_size=False).browse(tier_id)
+        if not tier.exists():
+            return Response(status=404, response='Tier not found', content_type='text/plain; charset=utf-8')
+        return self._image_response(tier.tier_image)
+
+    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
+    def partner_image(self, partner_id, **kwargs):
+        partner = request.env['res.partner'].sudo().with_context(bin_size=False).browse(partner_id)
+        if not partner.exists():
+            return Response(status=404, response='Partner not found', content_type='text/plain; charset=utf-8')
+        return self._image_response(partner.image_1920 if 'image_1920' in partner._fields else None)
+
+    @http.route('/api/v1/loyalty/tiers', type='http',
+                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
+    def list_tiers(self, **kwargs):
+        """GET/POST /api/v1/loyalty/tiers"""
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
+        tiers = request.env['hlv.loyalty.tier'].sudo().search([], order='min_points asc')
+        return self._json_ok([self._tier_dict(t) for t in tiers])
+
+    @http.route('/api/v1/loyalty/program/config', type='http',
+                auth='public', methods=['GET'], csrf=False, cors='*')
+    def get_program_config(self, **kwargs):
+        """GET /api/v1/loyalty/program/config"""
+        program = request.env['hlv.loyalty.program'].sudo().search(
+            [('active', '=', True)], limit=1
+        )
+        if not program:
+            return self._json_err('Chưa có chương trình loyalty', status=404)
+        return self._json_ok({
+            'cash_rate_per_point': program.cash_rate_per_point,
+            'voucher_validity_days': program.voucher_validity_days,
+            'ranking_desc': program.portal_ranking_desc or '',
+            'exchange_desc': program.portal_exchange_desc or '',
+        })
+
+    @http.route('/api/v1/loyalty/redeem/packages', type='http',
+                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
+    def list_redeem_packages(self, **kwargs):
+        """GET/POST /api/v1/loyalty/redeem/packages"""
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
+        packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
+            [('active', '=', True)], order='points_required asc'
+        )
+        return self._json_ok([{
+            'id': p.id,
+            'name': p.name,
+            'points_required': p.points_required,
+            'reward_type': p.reward_type,
+            'discount_type': p.discount_type,
+            'discount_value': p.discount_value,
+            'max_discount_amount': p.max_discount_amount,
+            'min_order_amount': p.min_order_amount,
+            'validity_days': p.validity_days,
+            'gift_product_id': p.gift_product_id.id if p.gift_product_id else None,
+            'gift_product_name': p.gift_product_id.display_name if p.gift_product_id else '',
+            'gift_product_code': p.gift_product_id.default_code or '' if p.gift_product_id else '',
+            'description': p.description or '',
+            'state': p.state or 'available',
+        } for p in packages])
+
+    @http.route('/api/v1/loyalty/voucher/validate', type='json',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def validate_voucher(self, **kwargs):
+        """POST /api/v1/loyalty/voucher/validate"""
+        code = (kwargs.get('code') or '').strip().upper()
+        partner_id = kwargs.get('partner_id')
+        order_amount = float(kwargs.get('order_amount') or 0.0)
+
+        if not code:
+            return {'valid': False, 'error': 'Vui lòng nhập mã voucher', 'code': 'MISSING_CODE'}
+
+        voucher = request.env['hlv.loyalty.voucher'].sudo().search([
+            ('code', '=', code),
+            ('active', '=', True),
+        ], limit=1)
+
+        if not voucher:
+            return {'valid': False, 'error': 'Mã voucher không tồn tại hoặc đã bị vô hiệu', 'code': 'VOUCHER_NOT_FOUND'}
+
+        account = None
+        if partner_id and kwargs.get('phone'):
+            root, account, err = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+            if err:
+                return {'valid': False, 'error': err.get('error', 'Lỗi xác thực'), 'code': err.get('code', 'UNAUTHORIZED')}
+            if voucher.partner_id.id != root.id:
+                return {'valid': False, 'error': 'Voucher không thuộc về khách hàng này', 'code': 'PARTNER_MISMATCH'}
+            if hasattr(voucher, 'portal_account_id') and voucher.portal_account_id and account and voucher.portal_account_id.id != account.id:
+                return {'valid': False, 'error': 'Voucher không thuộc về tài khoản này', 'code': 'ACCOUNT_MISMATCH'}
+
+        is_valid, reason = voucher.is_valid_for_order(order_amount=order_amount)
+        if not is_valid:
+            return {'valid': False, 'error': reason, 'code': 'VOUCHER_INVALID'}
+
+        discount = voucher.compute_discount(order_amount)
+        return {
+            'valid': True,
+            'voucher': {
+                'id': voucher.id,
+                'code': voucher.code,
+                'discount_type': voucher.discount_type,
+                'discount_value': voucher.discount_value,
+                'estimated_discount': discount,
+                'date_expiry': _vn_datetime(voucher.date_expiry),
+                'partner_id': voucher.partner_id.id,
+                'partner_name': voucher.partner_id.name,
+            },
+        }
+
+    @http.route('/api/v1/loyalty/account/change-password', type='json',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def change_password(self, **kwargs):
+        """POST /api/v1/loyalty/account/change-password"""
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
+
+        root, account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
+
+        old_password = (kwargs.get('old_password') or '').strip()
+        new_password = (kwargs.get('new_password') or '').strip()
+        confirm_password = (kwargs.get('confirm_password') or '').strip()
+
+        if not old_password or not new_password or not confirm_password:
+            return {'error': 'Vui lòng điền đầy đủ thông tin', 'code': 'MISSING_FIELDS'}
+        if not account._verify_password(old_password, account.password_hash):
+            return {'error': 'Mật khẩu hiện tại không đúng', 'code': 'INVALID_OLD_PASSWORD'}
+        if new_password != confirm_password:
+            return {'error': 'Mật khẩu mới và xác nhận không khớp', 'code': 'PASSWORD_MISMATCH'}
+        if len(new_password) < 6:
+            return {'error': 'Mật khẩu mới phải có ít nhất 6 ký tự', 'code': 'PASSWORD_TOO_SHORT'}
+
+        try:
+            account.sudo().set_password(new_password)
+        except UserError as exc:
+            return {'error': str(exc), 'code': 'CHANGE_PASSWORD_FAILED'}
+
+        return {'success': True, 'message': 'Đổi mật khẩu thành công.'}
+
+    @http.route('/api/v1/loyalty/account/change-phone', type='json',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def change_phone(self, **kwargs):
+        """POST /api/v1/loyalty/account/change-phone"""
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
+
+        root, account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
+
+        new_phone = (kwargs.get('new_phone') or '').strip()
+        normalized_new = self._normalize_vn_phone(new_phone)
+        if not normalized_new:
+            return {'error': 'Số điện thoại mới không hợp lệ', 'code': 'INVALID_PHONE'}
+
+        exists = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized_new),
+            ('id', '!=', account.id),
+            ('active', '=', True),
+        ], limit=1)
+        if exists:
+            return {'error': 'Số điện thoại này đã được sử dụng bởi tài khoản khác', 'code': 'PHONE_IN_USE'}
+
+        try:
+            account.sudo().write({'portal_phone': normalized_new})
+        except Exception as exc:
+            return {'error': str(exc), 'code': 'CHANGE_PHONE_FAILED'}
+
+        return {'success': True, 'message': 'Đổi số điện thoại thành công.', 'phone': normalized_new}
