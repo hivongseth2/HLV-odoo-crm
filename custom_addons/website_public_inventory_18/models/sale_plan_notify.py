@@ -1,8 +1,22 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
 import time
 
 _logger = logging.getLogger(__name__)
+
+
+def _to_single_line_preview(body):
+    """Panel thông báo /sale_plan chỉ render `preview` trên 1 dòng (CSS không có
+    white-space: pre-line, nên ký tự xuống dòng '\\n' bị trình duyệt gộp lại thành khoảng
+    trắng) — nếu giữ nguyên message nhiều dòng có dấu gạch ngang phân cách (định dạng dùng
+    chung cho chatter/Zalo), nó sẽ dính thành 1 câu rất khó đọc. Đổi mỗi dòng thành 1 cụm ngăn
+    cách bằng " | " để vẫn đọc được rành mạch trên 1 dòng, đồng thời bỏ dòng kẻ gạch ngang
+    (không cần thiết khi đã thành 1 dòng)."""
+    text = (body or "").strip()
+    text = re.sub(r"^-{3,}$", "", text, flags=re.MULTILINE)
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return " | ".join(lines)
 
 
 def push_sale_plan_notification(env, alias, body, so=None, author_name="Kho hàng"):
@@ -17,12 +31,13 @@ def push_sale_plan_notification(env, alias, body, so=None, author_name="Kho hàn
     Có bắn kèm sự kiện bus 'sale_plan_public_channel'/'sale_plan_mention' để nếu trang /sale_plan
     đang mở sẵn thì thấy ngay (chuông, toast) — KHÔNG làm thêm web-push (khi tắt hẳn trình duyệt),
     vì cơ chế đó cũng private/phức tạp hơn; kênh Zalo đã đảm nhiệm việc báo khi sale không mở
-    trang nào cả. Bản ghi vẫn được lưu lại nên mở lại trang /sale_plan sau đó vẫn thấy."""
+    trang nào cả. Bản ghi vẫn được lưu lại nên mở lại trang /sale_plan sau đó vẫn thấy.
+
+    `preview` KHÔNG bị cắt ngắn (module gốc mặc định cắt 140 ký tự cho tin chat ngắn — không phù
+    hợp với các cảnh báo tồn kho nhiều thông tin của mình), chỉ gộp về 1 dòng dễ đọc."""
     if not alias:
         return
-    preview = (body or "").strip()
-    if len(preview) > 140:
-        preview = preview[:140] + "..."
+    preview = _to_single_line_preview(body)
     so_id = so.id if so else False
     so_name = (so.name if so else "") or ""
 
