@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
 
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
+
+from .sale_plan_notify import notify_sale_plan_by_code
+
+_logger = logging.getLogger(__name__)
 
 APPROVER_GROUP = "website_public_inventory_18.group_stock_hold_approver"
 
@@ -133,6 +138,28 @@ class StockHoldRequest(models.Model):
             if rec.state != "pending_approval":
                 continue
             rec.write({"state": "rejected", "reject_reason": reason or rec.reject_reason})
+            reject_message = _(
+                "❌ YÊU CẦU GIỮ HÀNG BỊ TỪ CHỐI\n"
+                "--------------------\n"
+                "Mã yêu cầu: %(name)s\n"
+                "Sản phẩm: %(product)s\n"
+                "Kho: %(wh)s\n"
+                "Số lượng: %(qty)s\n"
+                "--------------------\n"
+                "%(reason)s"
+            ) % {
+                "name": rec.name,
+                "product": rec.product_id.display_name,
+                "wh": rec.warehouse_id.display_name,
+                "qty": "{:,.0f}".format(rec.quantity),
+                "reason": (
+                    _("Lý do: %s") % rec.reject_reason
+                    if rec.reject_reason
+                    else _("Vui lòng liên hệ kho để biết thêm chi tiết.")
+                ),
+            }
+            rec._notify_sale_zalo(reject_message)
+            rec._notify_sale_plan(reject_message)
 
     def action_cancel(self):
         for rec in self:
@@ -198,10 +225,68 @@ class StockHoldRequest(models.Model):
         if self.hold_picking_id and self.hold_picking_id.state not in ("cancel", "done"):
             self.hold_picking_id.sudo().action_cancel()
 
+    def _notify_sale_zalo(self, message_text):
+        """Gửi tin nhắn Zalo OA cho sale đứng tên yêu cầu, dùng map mã sale -> Zalo user_id
+        RIÊNG cho hủy dự trữ/giữ hàng (hlv.zalo.stock.notification.hold_unreserve_saler_mapping_text)
+        — KHÔNG dùng chung với saler_mapping_text (mapping đó dành cho thông báo phiếu XUẤT kho
+        đã validate, hiện đã tạm ngừng dùng cho mục đích đó; dùng chung sẽ vô tình bật lại nó).
+        Fire-and-forget: lỗi gửi chỉ log lại, không làm hỏng luồng nghiệp vụ chính (hủy/từ chối/
+        hết hạn vẫn phải thành công dù Zalo có gửi được hay không)."""
+        self.ensure_one()
+        config = self.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
+        if not config:
+            _logger.info("Không có cấu hình Zalo Stock Notification đang active, bỏ qua gửi báo cho %s.", self.name)
+            return
+        if not config.get_hold_unreserve_saler_user_ids_from_mapping(self.sale_name):
+            _logger.info(
+                "Không tìm thấy Zalo user_id cho sale_name=%s (yêu cầu %s) trong "
+                "hold_unreserve_saler_mapping_text, bỏ qua.",
+                self.sale_name, self.name,
+            )
+            return
+        config.send_hold_unreserve_notification(self.sale_name, message_text)
+
+    def _notify_sale_plan(self, message_text):
+        """Báo thêm vào chuông thông báo trang /sale_plan (module hlv_sale_delivery_planning) —
+        tra alias theo ĐÚNG sale_name (mã sale của chính yêu cầu này), KHÔNG dùng user_id (tài
+        khoản đăng nhập tạo yêu cầu) vì 1 tài khoản có thể quản lý nhiều mã sale (trưởng nhóm) —
+        đọc alias của tài khoản đó sẽ không biết chính xác yêu cầu này của ai trong số đó.
+        Fire-and-forget, không ảnh hưởng luồng chính."""
+        self.ensure_one()
+        try:
+            notify_sale_plan_by_code(
+                self.env, self.sale_name, message_text, so=None, author_name="Kho hàng",
+            )
+        except Exception:
+            _logger.exception(
+                "Lỗi báo /sale_plan cho yêu cầu giữ hàng %s (mã sale=%s).",
+                self.name, self.sale_name,
+            )
+
     @api.model
     def _cron_expire_holds(self):
         today = fields.Date.context_today(self)
         expired = self.sudo().search([("state", "=", "approved"), ("hold_until_date", "<", today)])
         for rec in expired:
             rec._release()
+            expire_message = _(
+                "⏰ HẾT HẠN GIỮ HÀNG\n"
+                "--------------------\n"
+                "Mã yêu cầu: %(name)s\n"
+                "Sản phẩm: %(product)s\n"
+                "Kho: %(wh)s\n"
+                "Số lượng: %(qty)s\n"
+                "Giữ đến ngày: %(until)s\n"
+                "--------------------\n"
+                "Yêu cầu đã HẾT HẠN, hệ thống đã tự động HỦY giữ. Nếu vẫn cần giữ chỗ, vui lòng "
+                "tạo lại yêu cầu giữ hàng mới trên trang tra cứu tồn kho."
+            ) % {
+                "name": rec.name,
+                "product": rec.product_id.display_name,
+                "wh": rec.warehouse_id.display_name,
+                "qty": "{:,.0f}".format(rec.quantity),
+                "until": rec.hold_until_date,
+            }
+            rec._notify_sale_zalo(expire_message)
+            rec._notify_sale_plan(expire_message)
         expired.write({"state": "expired"})

@@ -189,7 +189,134 @@ class ZaloStockNotificationConfig(models.Model):
         mapping = self._parse_saler_mapping_text()
         return mapping.get(norm_code, [])
 
-    
+    # ===================== Mapping saler_code -> Zalo User IDs (HỦY DỰ TRỮ / GIỮ HÀNG) =====
+    # Mapping RIÊNG, tách khỏi saler_mapping_text (mapping đó dùng cho thông báo phiếu XUẤT kho
+    # đã validate — hiện đã tạm ngừng dùng cho mục đích đó; nếu tái sử dụng chung 1 field, thêm
+    # mã sale vào đây sẽ vô tình bật lại luôn thông báo xuất kho cho mã đó).
+    hold_unreserve_saler_mapping_text = fields.Text(
+        'Mapping MISA saler_code → Zalo User ID (Hủy dự trữ / Giữ hàng)',
+        help=(
+            "Mapping RIÊNG cho các cảnh báo 'mất hàng đang giữ/dự trữ' gửi cho Sale — KHÔNG "
+            "dùng chung với mapping 'phiếu XUẤT' ở trên.\n"
+            "Áp dụng cho:\n"
+            "- Yêu cầu Giữ hàng theo Sale (trang /search_stock) bị hết hạn / bị từ chối / bị "
+            "kho bấm 'Hủy dự trữ'.\n"
+            "- Phiếu Lấy hàng (PICK) của đơn bán bị 'Hủy dự trữ' hoặc bị xóa dòng dự trữ thủ công.\n"
+            "Mỗi dòng 1 cấu hình, dạng: MISA_CODE:ID1,ID2,..."
+        ),
+    )
+
+    def _parse_hold_unreserve_saler_mapping_text(self):
+        """Parse hold_unreserve_saler_mapping_text thành dict {MISA_CODE: [zalo_id, ...]}."""
+        self.ensure_one()
+        mapping = {}
+        if not self.hold_unreserve_saler_mapping_text:
+            return mapping
+
+        for raw_line in self.hold_unreserve_saler_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.endswith(','):
+                line = line[:-1].strip()
+            if ':' not in line:
+                continue
+
+            code_part, ids_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code:
+                continue
+
+            ids_raw = (ids_part or '').replace(';', ',')
+            user_ids = [chunk.strip().strip("'").strip('"') for chunk in ids_raw.split(',') if chunk.strip()]
+            if user_ids:
+                mapping[code] = user_ids
+
+        return mapping
+
+    def get_hold_unreserve_saler_user_ids_from_mapping(self, saler_code):
+        """Lấy danh sách user_id Zalo từ hold_unreserve_saler_mapping_text theo mã MISA saler_code."""
+        self.ensure_one()
+        if not saler_code:
+            return []
+        norm_code = str(saler_code).strip().upper()
+        mapping = self._parse_hold_unreserve_saler_mapping_text()
+        return mapping.get(norm_code, [])
+
+    def send_hold_unreserve_notification(self, saler_code, message_text):
+        """Gửi Zalo cho sale khi mất hàng giữ/dự trữ (yêu cầu giữ hàng hết hạn/từ chối/bị kho
+        hủy dự trữ, hoặc phiếu PICK của đơn bán bị hủy dự trữ/xóa dòng dự trữ thủ công).
+        Dùng mapping riêng (hold_unreserve_saler_mapping_text) — không đụng tới
+        saler_mapping_text (phiếu xuất). Fire-and-forget: lỗi gửi chỉ log lại."""
+        self.ensure_one()
+        if not saler_code:
+            return
+        user_ids = self.get_hold_unreserve_saler_user_ids_from_mapping(saler_code)
+        for uid in user_ids:
+            try:
+                self.send_notification_message(uid, message_text)
+            except Exception:
+                _logger.exception(
+                    "Lỗi gửi Zalo (hủy dự trữ/giữ hàng) tới user_id=%s", uid,
+                )
+
+    # ===================== Mapping saler_code -> alias trang /sale_plan =====================
+    # RIÊNG, không suy ra từ res.users đang đăng nhập: 1 tài khoản có thể được gán nhiều mã sale
+    # (x_misa_saler_codes, vd trưởng nhóm quản lý nhiều sale) — không thể biết yêu cầu/đơn hàng
+    # cụ thể này thuộc VỀ AI trong số đó chỉ bằng cách đọc field alias của tài khoản đang đăng
+    # nhập. Phải tra đúng theo TỪNG mã sale cụ thể của bản ghi đó, giống hệt cách
+    # hold_unreserve_saler_mapping_text đã làm cho Zalo.
+    sale_plan_alias_mapping_text = fields.Text(
+        'Mapping MISA saler_code → Alias trang /sale_plan',
+        help=(
+            "Mapping RIÊNG cho kênh thông báo trong app /sale_plan (chuông thông báo, mention "
+            "theo alias — module hlv_sale_delivery_planning).\n"
+            "Mỗi dòng 1 cấu hình, dạng: MISA_CODE:alias1,alias2,...\n"
+            "Ví dụ:\nDUONGTHIHA:duongthiha\nNGUYENVANA:nguyenvana,vana2"
+        ),
+    )
+
+    def _parse_sale_plan_alias_mapping_text(self):
+        """Parse sale_plan_alias_mapping_text thành dict {MISA_CODE: [alias, ...]}."""
+        self.ensure_one()
+        mapping = {}
+        if not self.sale_plan_alias_mapping_text:
+            return mapping
+
+        for raw_line in self.sale_plan_alias_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.endswith(','):
+                line = line[:-1].strip()
+            if ':' not in line:
+                continue
+
+            code_part, alias_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code:
+                continue
+
+            alias_raw = (alias_part or '').replace(';', ',')
+            aliases = [
+                a.strip().lstrip('@').lower()
+                for a in alias_raw.split(',') if a.strip()
+            ]
+            if aliases:
+                mapping[code] = aliases
+
+        return mapping
+
+    def get_sale_plan_aliases_from_mapping(self, saler_code):
+        """Lấy danh sách alias /sale_plan từ sale_plan_alias_mapping_text theo mã MISA saler_code."""
+        self.ensure_one()
+        if not saler_code:
+            return []
+        norm_code = str(saler_code).strip().upper()
+        mapping = self._parse_sale_plan_alias_mapping_text()
+        return mapping.get(norm_code, [])
+
+
     # ===== NEW: Cơ chế saler online/offline =====
     # Danh sách mã saler online (mỗi dòng một mã)
     online_saler_codes = fields.Text(
