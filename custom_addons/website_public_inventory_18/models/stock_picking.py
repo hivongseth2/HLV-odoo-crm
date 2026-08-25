@@ -19,6 +19,46 @@ HIDDEN_BUTTON_NAMES_ON_HOLD_PICKING = [
     "studio_customization.hoat_ong_lay_hang_2cee26a0-9494-42ea-ac3a-337c20b5f150",  # "In phiếu lấy hàng" (Odoo Studio)
 ]
 
+# 3 con đường khác nhau khiến 1 move line bị mất reservation, mỗi con đường có nhãn hiển thị
+# riêng trong thông báo cho sale:
+# - "unreserve": nút "Hủy dự trữ" (Actions menu) -> stock.picking.do_unreserve()
+# - "delete_move_line": xóa thẳng dòng move line (icon thùng rác trong popup chi tiết)
+#   -> stock.move.line.unlink()
+# - "quantity_reduced": bị "rút" 1 phần/toàn bộ để nhường cho đơn khác, vd wizard
+#   stock.unreserve.wizard (module hlv_priority_stock_reservation) ghi thẳng move_line.quantity
+#   giảm xuống -> stock.move.line.write()
+UNRESERVE_ACTION_LABELS = {
+    "unreserve": "\"Hủy dự trữ\" (Unreserve)",
+    "delete_move_line": "xóa dòng dự trữ thủ công (Move Line)",
+    "quantity_reduced": "rút bớt số lượng đang giữ (có thể để nhường cho đơn khác)",
+}
+
+
+def _dispatch_unreserve_notifications(pickings, reason):
+    """Điểm tổng hợp DUY NHẤT cho cả 3 con đường mất reservation (xem UNRESERVE_ACTION_LABELS):
+    lọc ra 2 nhóm phiếu cần quan tâm (phiếu giữ hàng / phiếu PICK của đơn bán thật) từ
+    `pickings`, rồi gọi đúng method đồng bộ + cảnh báo tương ứng. Bỏ qua phiếu đã done/cancel
+    (không còn ý nghĩa gì để cảnh báo nữa)."""
+    pickings = pickings.filtered(lambda p: p.state not in ("done", "cancel"))
+    if not pickings:
+        return
+    hold_pickings = pickings.filtered("is_stock_hold_picking")
+    sale_pick_pickings = pickings.filtered(
+        lambda p: not p.is_stock_hold_picking
+        and p.picking_type_id.sequence_code == "PICK"
+        and p.sale_id
+    )
+    if hold_pickings:
+        try:
+            hold_pickings._sync_and_notify_hold_pickings_unreserved(reason=reason)
+        except Exception:
+            _logger.exception("Lỗi đồng bộ/cảnh báo phiếu giữ hàng (reason=%s).", reason)
+    if sale_pick_pickings:
+        try:
+            sale_pick_pickings._notify_sale_pick_unreserved(reason=reason)
+        except Exception:
+            _logger.exception("Lỗi gửi cảnh báo phiếu PICK (reason=%s).", reason)
+
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -68,22 +108,15 @@ class StockPicking(models.Model):
         (bị super().do_unreserve() gọi tới bên trong) tự bắn thêm 1 lần thông báo trùng lặp cho
         đúng các phiếu này — phần thông báo do CHÍNH method này đảm nhiệm là đủ.
         """
-        hold_pickings = self.filtered("is_stock_hold_picking")
-        sale_pick_pickings = self.filtered(
-            lambda p: not p.is_stock_hold_picking
-            and p.picking_type_id.sequence_code == "PICK"
-            and p.sale_id
-        )
+        candidates = self.filtered(lambda p: p.state not in ("done", "cancel"))
         res = super(StockPicking, self.with_context(_skip_hold_unreserve_notify=True)).do_unreserve()
         # LƯU Ý: hành động "Hủy dự trữ" trong menu Actions (⋮) của phiếu kho đã bị tùy biến
         # (Studio) để gọi rec.do_unreserve() bên trong 1 khối try/except: pass — TỨC LÀ bất kỳ
         # exception nào xảy ra ở bất cứ đâu trong method này (kể cả không liên quan gì tới phần
         # dưới đây) sẽ bị nuốt hoàn toàn, im lặng, không log, không báo lỗi. Do đó mọi bước quan
-        # trọng bên dưới đều tự bọc try/except riêng, không để 1 lỗi làm mất luôn các bước khác.
-        if hold_pickings:
-            hold_pickings._sync_and_notify_hold_pickings_unreserved(reason="unreserve")
-        if sale_pick_pickings:
-            sale_pick_pickings._notify_sale_pick_unreserved(reason="unreserve")
+        # trọng bên dưới (trong _dispatch_unreserve_notifications) đều tự bọc try/except riêng,
+        # không để 1 lỗi làm mất luôn các bước khác.
+        _dispatch_unreserve_notifications(candidates, "unreserve")
         return res
 
     def _sync_and_notify_hold_pickings_unreserved(self, reason="unreserve"):
@@ -99,19 +132,17 @@ class StockPicking(models.Model):
             return
         holds.write({"state": "cancelled"})
 
-        action_label = (
-            "xóa dòng dự trữ thủ công (Move Line)" if reason == "delete_move_line"
-            else "bấm \"Hủy dự trữ\" (Unreserve)"
-        )
+        action_label = UNRESERVE_ACTION_LABELS.get(reason, reason)
         actor = self.env.user.name
         now_str = fields.Datetime.now()
         for hold in holds:
             try:
                 hold.message_post(body=_(
-                    "⚠️ CẢNH BÁO: Nhân viên kho (%(user)s) đã %(action)s trên phiếu giữ hàng "
-                    "%(picking)s lúc %(time)s — hàng đã được nhả ra, có thể đã dùng cho mục đích "
-                    "khác. Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa, hệ thống đã tự chuyển sang "
-                    "trạng thái \"Đã hủy\". Nếu vẫn cần giữ chỗ, vui lòng tạo lại yêu cầu giữ hàng mới."
+                    "⚠️ CẢNH BÁO: Nhân viên kho (%(user)s) đã thực hiện %(action)s trên phiếu "
+                    "giữ hàng %(picking)s lúc %(time)s — hàng đã được nhả ra, có thể đã dùng cho "
+                    "mục đích khác. Yêu cầu giữ hàng này KHÔNG còn hiệu lực nữa, hệ thống đã tự "
+                    "chuyển sang trạng thái \"Đã hủy\". Nếu vẫn cần giữ chỗ, vui lòng tạo lại yêu "
+                    "cầu giữ hàng mới."
                 ) % {
                     "user": actor,
                     "action": action_label,
@@ -150,7 +181,7 @@ class StockPicking(models.Model):
         for picking in self:
             try:
                 picking.message_post(body=_(
-                    "Phiếu này là phiếu giữ chỗ cho yêu cầu giữ hàng — đã %s nên yêu cầu giữ "
+                    "Phiếu này là phiếu giữ chỗ cho yêu cầu giữ hàng — đã bị %s nên yêu cầu giữ "
                     "hàng tương ứng cũng đã được tự động chuyển sang \"Đã hủy\"."
                 ) % action_label)
             except Exception:
@@ -171,10 +202,7 @@ class StockPicking(models.Model):
                 ", ".join(self.mapped("name")),
             )
             return
-        action_label = (
-            "xóa dòng dự trữ thủ công (Move Line)" if reason == "delete_move_line"
-            else "\"Hủy dự trữ\" (Unreserve)"
-        )
+        action_label = UNRESERVE_ACTION_LABELS.get(reason, reason)
         for picking in self:
             saler_code = getattr(picking.sale_id, "x_studio_misa_saler_code", False)
             if not saler_code:
