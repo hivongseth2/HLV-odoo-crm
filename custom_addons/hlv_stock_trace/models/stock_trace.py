@@ -14,15 +14,33 @@ class StockTrace(models.AbstractModel):
       - toàn công ty (get_company_overview)
       - 1 kho cụ thể, kèm luân chuyển nội bộ (get_warehouse_detail)
       - 1 vị trí cụ thể, timeline chi tiết (get_location_timeline)
+
+    Perf note: opening balances are derived arithmetically as
+    (current on-hand from stock.quant) - (net moves in the period), using
+    2-3 grouped queries total — never one qty_available(to_date=...) call
+    per location. That historical-context call is expensive (it re-walks
+    stock.move for every distinct call), so doing it once per location in a
+    warehouse with many bin locations made the dashboard take up to a
+    minute to load; this version scales with the number of DISTINCT
+    warehouses/queries, not the number of locations.
     """
     _name = "stock.trace"
     _description = "Stock Trace"
 
     # ------------------------------------------------------------------
-    # helpers
+    # generic helpers
     # ------------------------------------------------------------------
     def _r(self, value):
         return round(float(value or 0.0), 2)
+
+    def _rg_num(self, row, base):
+        value = row.get(f"{base}_sum")
+        if value is None:
+            value = row.get(base)
+        try:
+            return float(value or 0.0)
+        except Exception:
+            return 0.0
 
     def _date_bounds(self, date_from, date_to=None):
         """Return (date_from_str, date_to_str, date_to_display) in UTC,
@@ -64,25 +82,60 @@ class StockTrace(models.AbstractModel):
     def _qty(self, move):
         return float(getattr(move, "quantity", 0) or getattr(move, "quantity_done", 0) or 0)
 
-    def _search_moves(self, product_id, loc_ids, date_from_str, date_to_str):
-        if not loc_ids:
-            return self.env["stock.move"]
-        return self.env["stock.move"].search([
-            ("product_id", "=", product_id),
-            ("state", "=", "done"),
-            ("date", ">=", date_from_str),
-            ("date", "<=", date_to_str),
-            "|",
-            ("location_id", "in", loc_ids),
-            ("location_dest_id", "in", loc_ids),
-        ], order="date asc, id asc")
-
     def _warehouse_location_ids(self, warehouse):
         return self.env["stock.location"].search([
             ("id", "child_of", warehouse.view_location_id.id),
             ("usage", "in", ("internal", "transit")),
         ])
 
+    # ---- bulk (grouped-query) balance helpers -------------------------
+    def _quant_map(self, product_id, loc_ids):
+        """location_id -> current on-hand qty. ONE grouped query."""
+        if not loc_ids:
+            return {}
+        rows = self.env["stock.quant"].sudo().read_group(
+            [("product_id", "=", product_id), ("location_id", "in", loc_ids)],
+            ["location_id", "quantity:sum"], ["location_id"], lazy=False,
+        )
+        return {r["location_id"][0]: self._rg_num(r, "quantity") for r in rows if r.get("location_id")}
+
+    def _period_moves(self, product_id, date_from_str, date_to_str, loc_ids=None):
+        """All done moves for the product in the period. If loc_ids is given,
+        restrict to moves touching at least one of those locations — still a
+        SINGLE query regardless of how many locations are in loc_ids."""
+        domain = [
+            ("product_id", "=", product_id),
+            ("state", "=", "done"),
+            ("date", ">=", date_from_str),
+            ("date", "<=", date_to_str),
+        ]
+        if loc_ids is not None:
+            domain += ["|", ("location_id", "in", loc_ids), ("location_dest_id", "in", loc_ids)]
+        return self.env["stock.move"].search(domain, order="date asc, id asc")
+
+    def _net_flow_maps(self, moves):
+        """One pass over an already-fetched moves recordset ->
+        (qty_in_by_location, qty_out_by_location)."""
+        qty_in, qty_out = {}, {}
+        for move in moves:
+            qty = self._qty(move)
+            if qty <= 0:
+                continue
+            dest_id = move.location_dest_id.id
+            src_id = move.location_id.id
+            if dest_id == src_id:
+                continue
+            qty_in[dest_id] = qty_in.get(dest_id, 0.0) + qty
+            qty_out[src_id] = qty_out.get(src_id, 0.0) + qty
+        return qty_in, qty_out
+
+    def _opening(self, loc_ids, quant_map, qty_in_map, qty_out_map):
+        closing = sum(quant_map.get(l, 0.0) for l in loc_ids)
+        moved_in = sum(qty_in_map.get(l, 0.0) for l in loc_ids)
+        moved_out = sum(qty_out_map.get(l, 0.0) for l in loc_ids)
+        return closing - moved_in + moved_out, closing
+
+    # ---- flow classification (boundary-crossing, in-memory) ------------
     def _summarize_flow(self, moves, loc_set):
         """Classify moves crossing the boundary of loc_set into nhập/bán/chuyển,
         skipping moves that stay fully inside the set (pure internal circulation)."""
@@ -141,6 +194,37 @@ class StockTrace(models.AbstractModel):
             ],
         }
 
+    def _per_location_flow(self, moves, loc_ids):
+        """One pass over an already-fetched moves recordset -> per-location
+        {received, sold, transfer_in, transfer_out}, each location's own
+        ledger (any move touching it counts, unlike the scope-boundary
+        version above)."""
+        result = {lid: {"received": 0.0, "sold": 0.0, "transfer_in": 0.0, "transfer_out": 0.0}
+                   for lid in loc_ids}
+        loc_set = set(loc_ids)
+        for move in moves:
+            qty = self._qty(move)
+            if qty <= 0:
+                continue
+            dest, src = move.location_dest_id, move.location_id
+            if dest.id == src.id:
+                continue
+            if dest.id in loc_set:
+                bucket = result[dest.id]
+                if src.usage in ("supplier", "inventory", "production"):
+                    bucket["received"] += qty
+                else:
+                    bucket["transfer_in"] += qty
+            if src.id in loc_set:
+                bucket = result[src.id]
+                if dest.usage == "customer":
+                    bucket["sold"] += qty
+                elif dest.usage in ("inventory", "production"):
+                    pass
+                else:
+                    bucket["transfer_out"] += qty
+        return result
+
     # ------------------------------------------------------------------
     # level 1: toàn công ty
     # ------------------------------------------------------------------
@@ -150,9 +234,7 @@ class StockTrace(models.AbstractModel):
         warehouses = self.env["stock.warehouse"].search([])
         date_from_str, date_to_str, date_to_display = self._date_bounds(date_from, date_to)
 
-        wh_loc_ids = {}
-        wh_loc_map = {}
-        known_loc_ids = set()
+        wh_loc_ids, wh_loc_map, known_loc_ids = {}, {}, set()
         for wh in warehouses:
             locs = self._warehouse_location_ids(wh)
             wh_loc_ids[wh.id] = locs.ids
@@ -160,45 +242,44 @@ class StockTrace(models.AbstractModel):
                 wh_loc_map[loc.id] = wh
             known_loc_ids |= set(locs.ids)
 
-        # locations holding stock or touched by moves, outside any warehouse tree
-        # (ví dụ transit chung giữa các kho)
-        extra_loc_ids = set()
-        quants = self.env["stock.quant"].search([
-            ("product_id", "=", product_id),
-            ("location_id.usage", "in", ("internal", "transit")),
-        ])
-        extra_loc_ids |= (set(quants.location_id.ids) - known_loc_ids)
+        # One unrestricted move search for the whole period — used both to
+        # discover "extra" locations (e.g. a shared transit point outside
+        # any warehouse tree) and to derive every flow number below.
+        period_moves = self._period_moves(product_id, date_from_str, date_to_str)
 
-        period_moves = self.env["stock.move"].search([
-            ("product_id", "=", product_id),
-            ("state", "=", "done"),
-            ("date", ">=", date_from_str),
-            ("date", "<=", date_to_str),
-        ])
+        extra_loc_ids = set()
         for move in period_moves:
             for loc in (move.location_id, move.location_dest_id):
                 if loc.usage in ("internal", "transit") and loc.id not in known_loc_ids:
                     extra_loc_ids.add(loc.id)
+        # also include locations currently holding stock, in case they had
+        # no movement in the chosen period but still count toward "hiện tại"
+        quants_here = self.env["stock.quant"].sudo().search([
+            ("product_id", "=", product_id),
+            ("location_id.usage", "in", ("internal", "transit")),
+            ("quantity", "!=", 0),
+        ])
+        extra_loc_ids |= (set(quants_here.location_id.ids) - known_loc_ids)
 
         all_loc_ids = list(known_loc_ids | extra_loc_ids)
+        all_loc_set = set(all_loc_ids)
 
-        opening = product.with_context(location=all_loc_ids, to_date=date_from_str).qty_available
-        closing = product.with_context(location=all_loc_ids, to_date=date_to_str).qty_available
+        quant_map = self._quant_map(product_id, all_loc_ids)
+        qty_in_map, qty_out_map = self._net_flow_maps(period_moves)
+        per_loc_flow = self._per_location_flow(period_moves, all_loc_ids)
 
-        moves = self._search_moves(product_id, all_loc_ids, date_from_str, date_to_str)
-        flow = self._summarize_flow(moves, set(all_loc_ids))
+        opening, closing = self._opening(all_loc_ids, quant_map, qty_in_map, qty_out_map)
+        flow = self._summarize_flow(period_moves, all_loc_set)
 
         warehouse_rows = []
         for wh in warehouses:
             loc_ids = wh_loc_ids.get(wh.id) or []
             if not loc_ids:
                 continue
-            w_opening = product.with_context(location=loc_ids, to_date=date_from_str).qty_available
-            w_closing = product.with_context(location=loc_ids, to_date=date_to_str).qty_available
-            w_moves = self._search_moves(product_id, loc_ids, date_from_str, date_to_str)
-            if self._r(w_opening) == 0 and self._r(w_closing) == 0 and not w_moves:
+            w_opening, w_closing = self._opening(loc_ids, quant_map, qty_in_map, qty_out_map)
+            if self._r(w_opening) == 0 and self._r(w_closing) == 0:
                 continue
-            w_flow = self._summarize_flow(w_moves, set(loc_ids))
+            w_flow = self._summarize_flow(period_moves, set(loc_ids))
             warehouse_rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
@@ -213,8 +294,7 @@ class StockTrace(models.AbstractModel):
 
         if extra_loc_ids:
             t_ids = list(extra_loc_ids)
-            t_opening = product.with_context(location=t_ids, to_date=date_from_str).qty_available
-            t_closing = product.with_context(location=t_ids, to_date=date_to_str).qty_available
+            t_opening, t_closing = self._opening(t_ids, quant_map, qty_in_map, qty_out_map)
             if self._r(t_opening) or self._r(t_closing):
                 warehouse_rows.append({
                     "warehouse_id": False,
@@ -226,14 +306,13 @@ class StockTrace(models.AbstractModel):
                 })
 
         location_rows = []
-        for loc_id in (known_loc_ids | extra_loc_ids):
-            loc = self.env["stock.location"].browse(loc_id)
-            l_opening = product.with_context(location=[loc_id], to_date=date_from_str).qty_available
-            l_closing = product.with_context(location=[loc_id], to_date=date_to_str).qty_available
-            l_moves = self._search_moves(product_id, [loc_id], date_from_str, date_to_str)
-            if self._r(l_opening) == 0 and self._r(l_closing) == 0 and not l_moves:
+        for loc_id in all_loc_ids:
+            l_opening, l_closing = self._opening([loc_id], quant_map, qty_in_map, qty_out_map)
+            l_flow = per_loc_flow.get(loc_id, {})
+            if (self._r(l_opening) == 0 and self._r(l_closing) == 0
+                    and not any(l_flow.values())):
                 continue
-            l_flow = self._summarize_flow(l_moves, {loc_id})
+            loc = self.env["stock.location"].browse(loc_id)
             wh = wh_loc_map.get(loc_id)
             location_rows.append({
                 "location_id": loc_id,
@@ -241,10 +320,10 @@ class StockTrace(models.AbstractModel):
                 "warehouse_name": wh.name if wh else "—",
                 "opening": self._r(l_opening),
                 "closing": self._r(l_closing),
-                "received": l_flow["received"],
-                "sold": l_flow["sold"],
-                "transfer_in": l_flow["transfer_in"],
-                "transfer_out": l_flow["transfer_out"],
+                "received": self._r(l_flow.get("received")),
+                "sold": self._r(l_flow.get("sold")),
+                "transfer_in": self._r(l_flow.get("transfer_in")),
+                "transfer_out": self._r(l_flow.get("transfer_out")),
             })
         location_rows.sort(key=lambda r: (r["warehouse_name"], r["location_name"]))
         warehouse_rows.sort(key=lambda r: r["warehouse_name"])
@@ -272,25 +351,21 @@ class StockTrace(models.AbstractModel):
 
         locs = self._warehouse_location_ids(warehouse)
         loc_ids = locs.ids
-        loc_set = set(loc_ids)
 
-        opening = product.with_context(location=loc_ids, to_date=date_from_str).qty_available
-        closing = product.with_context(location=loc_ids, to_date=date_to_str).qty_available
+        moves = self._period_moves(product_id, date_from_str, date_to_str, loc_ids=loc_ids)
 
-        boundary_moves = self._search_moves(product_id, loc_ids, date_from_str, date_to_str)
-        boundary_flow = self._summarize_flow(boundary_moves, loc_set)
+        quant_map = self._quant_map(product_id, loc_ids)
+        qty_in_map, qty_out_map = self._net_flow_maps(moves)
+        per_loc_flow = self._per_location_flow(moves, loc_ids)
 
-        internal_moves = self.env["stock.move"].search([
-            ("product_id", "=", product_id),
-            ("state", "=", "done"),
-            ("date", ">=", date_from_str),
-            ("date", "<=", date_to_str),
-            ("location_id", "in", loc_ids),
-            ("location_dest_id", "in", loc_ids),
-        ], order="date asc, id asc")
+        opening, closing = self._opening(loc_ids, quant_map, qty_in_map, qty_out_map)
+        boundary_flow = self._summarize_flow(moves, set(loc_ids))
 
         throughput = {}
-        for move in internal_moves:
+        loc_id_set = set(loc_ids)
+        for move in moves:
+            if move.location_id.id not in loc_id_set or move.location_dest_id.id not in loc_id_set:
+                continue
             if move.location_id.id == move.location_dest_id.id:
                 continue
             qty = self._qty(move)
@@ -314,23 +389,21 @@ class StockTrace(models.AbstractModel):
 
         location_rows = []
         for loc in locs:
-            l_opening = product.with_context(location=[loc.id], to_date=date_from_str).qty_available
-            l_closing = product.with_context(location=[loc.id], to_date=date_to_str).qty_available
+            l_opening, l_closing = self._opening([loc.id], quant_map, qty_in_map, qty_out_map)
+            l_flow = per_loc_flow.get(loc.id, {})
             l_through = throughput.get(loc.id, {"in": 0.0, "out": 0.0})
-            l_moves = self._search_moves(product_id, [loc.id], date_from_str, date_to_str)
             if (self._r(l_opening) == 0 and self._r(l_closing) == 0
-                    and not l_moves and not l_through["in"] and not l_through["out"]):
+                    and not any(l_flow.values()) and not l_through["in"] and not l_through["out"]):
                 continue
-            l_flow = self._summarize_flow(l_moves, {loc.id})
             location_rows.append({
                 "location_id": loc.id,
                 "location_name": loc.display_name,
                 "opening": self._r(l_opening),
                 "closing": self._r(l_closing),
-                "received": l_flow["received"],
-                "sold": l_flow["sold"],
-                "transfer_in": l_flow["transfer_in"],
-                "transfer_out": l_flow["transfer_out"],
+                "received": self._r(l_flow.get("received")),
+                "sold": self._r(l_flow.get("sold")),
+                "transfer_in": self._r(l_flow.get("transfer_in")),
+                "transfer_out": self._r(l_flow.get("transfer_out")),
                 "internal_in": self._r(l_through["in"]),
                 "internal_out": self._r(l_through["out"]),
             })
@@ -359,8 +432,10 @@ class StockTrace(models.AbstractModel):
         location = self.env["stock.location"].browse(location_id)
         date_from_str, date_to_str, date_to_display = self._date_bounds(date_from, date_to)
 
-        opening = product.with_context(location=[location_id], to_date=date_from_str).qty_available
-        moves = self._search_moves(product_id, [location_id], date_from_str, date_to_str)
+        moves = self._period_moves(product_id, date_from_str, date_to_str, loc_ids=[location_id])
+        quant_map = self._quant_map(product_id, [location_id])
+        qty_in_map, qty_out_map = self._net_flow_maps(moves)
+        opening, _closing = self._opening([location_id], quant_map, qty_in_map, qty_out_map)
 
         loc_set = {location_id}
         running = opening
