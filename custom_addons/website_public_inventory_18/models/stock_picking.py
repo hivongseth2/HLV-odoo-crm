@@ -166,6 +166,10 @@ class StockPicking(models.Model):
         mapping hold_unreserve_saler_mapping_text với thông báo giữ hàng."""
         config = self.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
         if not config:
+            _logger.info(
+                "Không có cấu hình Zalo Stock Notification đang active, bỏ qua báo PICK unreserve cho: %s",
+                ", ".join(self.mapped("name")),
+            )
             return
         action_label = (
             "xóa dòng dự trữ thủ công (Move Line)" if reason == "delete_move_line"
@@ -174,6 +178,17 @@ class StockPicking(models.Model):
         for picking in self:
             saler_code = getattr(picking.sale_id, "x_studio_misa_saler_code", False)
             if not saler_code:
+                _logger.info(
+                    "Phiếu %s (đơn %s) không có x_studio_misa_saler_code, bỏ qua báo PICK unreserve.",
+                    picking.name, picking.sale_id.name,
+                )
+                continue
+            if not config.get_hold_unreserve_saler_user_ids_from_mapping(saler_code):
+                _logger.info(
+                    "Không tìm thấy Zalo user_id cho saler_code=%s (phiếu %s, đơn %s) trong "
+                    "hold_unreserve_saler_mapping_text, bỏ qua.",
+                    saler_code, picking.name, picking.sale_id.name,
+                )
                 continue
             products = ", ".join(sorted(set(
                 picking.move_ids.mapped("product_id.display_name")
