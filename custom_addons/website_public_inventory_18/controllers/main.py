@@ -79,10 +79,10 @@ def _get_so_reservation_map(env, product_ids, warehouse_ids=None):
         details = []
         for v in by_so.values():
             so = v["so"]
-            salesperson = so.user_id.name if so.user_id else ""
+            saler_code = getattr(so, "x_studio_misa_saler_code", False) or ""
             label = "%s%s: %s" % (
                 so.name,
-                " (%s)" % salesperson if salesperson else "",
+                " (%s)" % saler_code if saler_code else "",
                 "{:,.0f}".format(v["qty"]),
             )
             details.append(label)
