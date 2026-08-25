@@ -60,11 +60,11 @@ else:
         print(f"  x_auto_print_requested = {pick.x_auto_print_requested}")
         wh = pick.picking_type_id.warehouse_id
         print(f"  Kho: {wh.name if wh else '(không xác định)'}  x_iot_queue_limit={wh.x_iot_queue_limit if wh else '?'}")
-        print("\n  -- Từng move (SL yêu cầu vs SL thực tế / reserved) --")
+        print("\n  -- Từng move (SL yêu cầu vs quantity/picked) --")
         for mv in pick.move_ids.sorted('id'):
             print(f"    move #{mv.id} {mv.product_id.display_name[:40]:40s} "
-                  f"demand={mv.product_uom_qty:>8.2f} reserved_availability={mv.reserved_availability:>8.2f} "
-                  f"state={mv.state}")
+                  f"demand={mv.product_uom_qty:>8.2f} quantity={mv.quantity:>8.2f} "
+                  f"picked={mv.picked}  state={mv.state}")
 
         section("3) hlv.iot.print.queue liên quan đơn/phiếu này")
         Queue = env['hlv.iot.print.queue'].sudo()
