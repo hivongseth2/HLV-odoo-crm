@@ -2655,7 +2655,11 @@ self.addEventListener('notificationclick', function(event) {
         )
         return {'status': 'success', 'count': len(records), 'aliases': aliases}
 
-    @http.route('/sale_plan', type='http', auth='user', methods=['GET'])
+    # csrf=False + vẫn nhận POST: trình duyệt của ai còn giữ trang CŨ (form đăng nhập bằng mật
+    # khẩu, đã bỏ) có thể resubmit POST /sale_plan khi F5 — không có csrf_token hợp lệ nữa nên
+    # sẽ bị chặn CSRF (hoặc 405 nếu chỉ cho GET). Cho qua và trả về cùng 1 trang bất kể GET/POST
+    # để không ai bị lỗi khi F5 lại, không cần hiểu vì sao.
+    @http.route('/sale_plan', type='http', auth='user', methods=['GET', 'POST'], csrf=False)
     def sale_plan_page(self, **kwargs):
         return request.make_response(_PAGE, headers=_H)
 
