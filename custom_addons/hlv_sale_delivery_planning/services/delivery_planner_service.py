@@ -25,7 +25,7 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
         show_completed=False, filter_need_transfer=False, filter_new_orders=False,
         filter_print_status='all', filter_shipper_received='all',
-        domain=None, include_stats=True, filter_mine=False,
+        domain=None, include_stats=True, filter_mine=False, filter_editing_locked=False,
     ):
         # Tắt prefetch "kéo theo cả nhóm field" của Odoo cho toàn bộ hàm này — bình thường truy
         # cập 1 field (VD so.warehouse_id, so.order_line) sẽ tự kéo theo các field "cùng nhóm"
@@ -44,6 +44,7 @@ class DeliveryPlannerService(models.AbstractModel):
             filter_delivery_type=filter_delivery_type,
             filter_tag_ids=filter_tag_ids,
             filter_mine=filter_mine,
+            filter_editing_locked=filter_editing_locked,
         )
         if domain:
             extra_domain = list(domain)
@@ -209,6 +210,7 @@ class DeliveryPlannerService(models.AbstractModel):
             filter_shipper_received=filter_shipper_received,
             domain=domain,
             filter_mine=filter_mine,
+            filter_editing_locked=filter_editing_locked,
         )
 
         return {
@@ -293,6 +295,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 filter_delivery_type=fk.get('filter_delivery_type', 'all'),
                 filter_tag_ids=fk.get('filter_tag_ids', ''),
                 filter_mine=fk.get('filter_mine', False),
+                filter_editing_locked=fk.get('filter_editing_locked', False),
             )
             search_domain = [('id', 'in', list(existing_ids))] + search_domain
             page_sales = self.env['sale.order'].search(search_domain)

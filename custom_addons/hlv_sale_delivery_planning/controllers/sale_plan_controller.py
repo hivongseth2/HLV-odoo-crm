@@ -896,6 +896,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <input class="form-check-input" type="checkbox" id="f-mine-only" checked>
       <label class="form-check-label small fw-bold" for="f-mine-only"><i class="fa fa-user text-primary me-1"></i>Đơn của tôi</label>
     </div>
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="f-editing-locked">
+      <label class="form-check-label small fw-bold" for="f-editing-locked"><i class="fa fa-lock text-warning me-1"></i>Đơn đang chỉnh sửa</label>
+    </div>
   </div>
 </div>
 
@@ -1126,7 +1130,8 @@ function _spFilterKey(){
   return JSON.stringify([gv('f-q'),gv('f-wh'),gv('f-del'),gv('f-stk'),gv('f-pack'),
     gv('f-date-from'),gv('f-date-to'),gv('f-po-date-from'),gv('f-po-date-to'),
     gv('f-done-from'),gv('f-done-to'),gv('f-po-status'),gv('f-saler'),
-    gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked,$('f-mine-only').checked]);
+    gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked,$('f-mine-only').checked,
+    $('f-editing-locked').checked]);
 }
 function _spOpenDB(){
   return new Promise(function(resolve,reject){
@@ -1183,6 +1188,7 @@ function load(append,silent){
     htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked,
     mine_only:$('f-mine-only').checked,
+    editing_locked:$('f-editing-locked').checked,
     limit:lim,offset:offset};
   fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:body})})
@@ -2096,6 +2102,7 @@ function updFilters(){
   if(gv('f-htgh')) chips.push({k:'f-htgh',v:'HTGH: '+gv('f-htgh'),reset:''});
   if(gv('f-dtype')!=='all'){var s6=$('f-dtype');chips.push({k:'f-dtype',v:'Vận chuyển: '+s6.options[s6.selectedIndex].text,reset:'all'});}
   if($('f-mine-only').checked) chips.push({k:'f-mine-only',v:'Đơn của tôi',reset:''});
+  if($('f-editing-locked').checked) chips.push({k:'f-editing-locked',v:'Đơn đang chỉnh sửa',reset:''});
   // per-tag chips
   var tsel=$('f-tag');
   if(tsel){Array.from(tsel.selectedOptions).forEach(function(opt){
@@ -2174,6 +2181,7 @@ $('btn-filter').addEventListener('click',function(){S.kanbanColPageSize={};load(
 $('f-need-transfer').addEventListener('change',function(){render();});
 $('f-show-completed').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
 $('f-mine-only').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
+$('f-editing-locked').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
 $('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-saler').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
@@ -2236,7 +2244,8 @@ $('btn-export-excel').addEventListener('click',function(){
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked?'1':'',
-    filter_mine:$('f-mine-only').checked?'1':''
+    filter_mine:$('f-mine-only').checked?'1':'',
+    filter_editing_locked:$('f-editing-locked').checked?'1':''
   });
   window.open('/api/sale_plan/export_excel?'+params.toString(),'_blank');
 });
@@ -2251,7 +2260,8 @@ $('btn-export-picking-excel-dd').addEventListener('click',function(e){
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked?'1':'',
-    filter_mine:$('f-mine-only').checked?'1':''
+    filter_mine:$('f-mine-only').checked?'1':'',
+    filter_editing_locked:$('f-editing-locked').checked?'1':''
   });
   window.open('/api/sale_plan/export_picking_excel?'+params.toString(),'_blank');
 });
@@ -2266,7 +2276,8 @@ $('btn-export-picking-simple-excel-dd').addEventListener('click',function(e){
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked?'1':'',
-    filter_mine:$('f-mine-only').checked?'1':''
+    filter_mine:$('f-mine-only').checked?'1':'',
+    filter_editing_locked:$('f-editing-locked').checked?'1':''
   });
   window.open('/api/sale_plan/export_picking_simple_excel?'+params.toString(),'_blank');
 });
@@ -2670,7 +2681,7 @@ self.addEventListener('notificationclick', function(event) {
                            done_date_from='', done_date_to='',
                            po_status='all', saler_code='', htgh='', delivery_type='all',
                            tag_ids='', limit=250, offset=0, show_completed=False,
-                           mine_only=False, **kwargs):
+                           mine_only=False, editing_locked=False, **kwargs):
         try:
             result = request.env['hlv.delivery.planner.service'].sudo().get_dashboard_data(
                 search_query=search,
@@ -2693,6 +2704,7 @@ self.addEventListener('notificationclick', function(event) {
                 offset=int(offset),
                 show_completed=bool(show_completed),
                 filter_mine=bool(mine_only),
+                filter_editing_locked=bool(editing_locked),
             )
             return {'status': 'success', 'data': result}
         except Exception as e:
@@ -3117,6 +3129,7 @@ self.addEventListener('notificationclick', function(event) {
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
                 show_completed=bool(kwargs.get('show_completed', '')),
                 filter_mine=bool(kwargs.get('filter_mine', '')),
+                filter_editing_locked=bool(kwargs.get('filter_editing_locked', '')),
                 limit=100000,
                 offset=0,
             )
@@ -3246,6 +3259,7 @@ self.addEventListener('notificationclick', function(event) {
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
                 show_completed=bool(kwargs.get('show_completed', '')),
                 filter_mine=bool(kwargs.get('filter_mine', '')),
+                filter_editing_locked=bool(kwargs.get('filter_editing_locked', '')),
                 limit=100000,
                 offset=0,
             )
@@ -3499,6 +3513,7 @@ self.addEventListener('notificationclick', function(event) {
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
                 show_completed=bool(kwargs.get('show_completed', '')),
                 filter_mine=bool(kwargs.get('filter_mine', '')),
+                filter_editing_locked=bool(kwargs.get('filter_editing_locked', '')),
                 limit=100000,
                 offset=0,
             )
