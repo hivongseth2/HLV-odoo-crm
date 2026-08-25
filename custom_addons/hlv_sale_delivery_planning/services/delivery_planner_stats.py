@@ -82,7 +82,7 @@ class DeliveryPlannerServiceStats(models.AbstractModel):
         filter_tag_ids='', show_completed=False,
         filter_need_transfer=False, filter_new_orders=False,
         filter_print_status='all', filter_shipper_received='all',
-        domain=None, filter_mine=False,
+        domain=None, filter_mine=False, filter_editing_locked=False,
     ):
         """Return ONLY {dashboard_stats, total_count, cached}.
 
@@ -110,6 +110,7 @@ class DeliveryPlannerServiceStats(models.AbstractModel):
             filter_print_status=filter_print_status,
             filter_shipper_received=filter_shipper_received,
             domain=domain, filter_mine=filter_mine,
+            filter_editing_locked=filter_editing_locked,
         )
         key = self._build_stats_cache_key(**filters)
         cached = _get(key)
@@ -126,6 +127,7 @@ class DeliveryPlannerServiceStats(models.AbstractModel):
             filter_delivery_type=filter_delivery_type,
             filter_tag_ids=filter_tag_ids,
             filter_mine=filter_mine,
+            filter_editing_locked=filter_editing_locked,
         )
         if domain:
             search_domain = search_domain + list(domain)
