@@ -12,6 +12,10 @@
                                  help="Khi bật, sale KHÔNG xem trước / gửi yêu cầu in phiếu lấy hàng được trên trang sale plan. Dùng để khóa tạm tính năng trước khi chính thức vận hành, tắt lại khi sẵn sàng.">
                             <field name="lock_pick_slip_requests"/>
                         </setting>
+                        <setting string="Tự động gửi in khi phiếu đủ hàng"
+                                 help="Khi bật, ngay khi phiếu lấy hàng giữ ĐỦ hàng cho TẤT CẢ sản phẩm, hệ thống tự động gửi yêu cầu in vào hàng chờ theo kho — sale không cần bấm gửi in. Mỗi phiếu chỉ tự động gửi 1 lần.">
+                            <field name="auto_print_pick_slip_when_full"/>
+                        </setting>
                     </block>
                     <block title="Đóng gói" name="hlv_delivery_planner_pack_settings">
                         <setting string="Chỉ người được assign mới được đóng gói"
