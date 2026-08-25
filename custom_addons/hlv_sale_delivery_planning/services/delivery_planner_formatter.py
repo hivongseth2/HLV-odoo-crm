@@ -1,3 +1,5 @@
+import math
+
 from odoo import models
 import pytz
 
@@ -205,7 +207,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                         qty_per_kit = comp_line.product_qty / (bom.product_qty or 1.0)
                         if qty_per_kit > 0:
                             kit_qty = min(kit_qty, comp_free / qty_per_kit)
-                    qty_avail = kit_qty if kit_qty != float('inf') else 0.0
+                    # Combo là 1 khối rời rạc (gồm N linh kiện nguyên vẹn) — không thể có
+                    # "32,5 combo" sẵn sàng, chỉ tính SỐ COMBO NGUYÊN có thể ráp được từ linh
+                    # kiện hiện có, nên phải floor về số nguyên trước khi hiển thị "Tồn Kho".
+                    qty_avail = math.floor(kit_qty) if kit_qty != float('inf') else 0.0
                 else:
                     qty_avail = 0.0
             else:
