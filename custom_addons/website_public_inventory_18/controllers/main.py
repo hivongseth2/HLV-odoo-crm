@@ -979,17 +979,26 @@ class PublicInventory(http.Controller):
     @http.route(["/search_stock/hold/customer_suggest"], type="json", auth="user", methods=["POST"])
     def hold_customer_suggest(self, q=""):
         """Autocomplete chọn khách hàng khi tạo yêu cầu giữ hàng — để hệ thống biết ưu tiên tìm
-        đơn của đúng khách này khi hàng giữ được nhả ra sau này."""
+        đơn của đúng khách này khi hàng giữ được nhả ra sau này. Chỉ tìm khách hàng GỐC
+        (parent_id=False) — bỏ qua các địa chỉ giao hàng/liên hệ con của cùng 1 công ty, tránh
+        hiện trùng lặp nhiều dòng cho cùng 1 khách hàng."""
         q = (q or "").strip()
         if not q or len(q) < 2:
             return {"ok": True, "customers": []}
-        partners = request.env["res.partner"].sudo().search(
-            ["|", ("name", "ilike", q), ("phone", "ilike", q)], limit=10,
-        )
-        return {
-            "ok": True,
-            "customers": [{"id": p.id, "name": p.display_name} for p in partners],
-        }
+        partners = request.env["res.partner"].sudo().search([
+            ("parent_id", "=", False),
+            "|", "|", "|",
+            ("name", "ilike", q), ("phone", "ilike", q),
+            ("ref", "ilike", q), ("company_registry", "ilike", q),
+        ], limit=10)
+        customers = []
+        for p in partners:
+            label = p.name or p.display_name
+            codes = [c for c in (p.ref, p.company_registry) if c]
+            if codes:
+                label = "%s (%s)" % (label, " / ".join(codes))
+            customers.append({"id": p.id, "name": label})
+        return {"ok": True, "customers": customers}
 
     @http.route(["/search_stock/hold/create"], type="json", auth="user", methods=["POST"])
     def hold_request_create(self, product_id=None, warehouse_id=None, quantity=None,
