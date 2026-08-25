@@ -196,13 +196,18 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                                 max(float(q.quantity) - float(q.reserved_quantity), 0.0)
                                 for q in quants
                             )
-                        # Tìm phần đã reserve cho chính đơn này
-                        # (cộng lại vì đã bị trừ trong quants nhưng thực ra là của đơn này)
+                        # Tìm phần đã reserve cho CHÍNH DÒNG COMBO này (cộng lại vì đã bị trừ
+                        # trong quants nhưng thực ra là của đơn này) — PHẢI lọc theo sale_line_id
+                        # đúng dòng, không chỉ theo product_id: nếu linh kiện này còn xuất hiện ở
+                        # 1 dòng combo KHÁC (hoặc bán lẻ) trong CÙNG đơn, move của dòng đó cũng
+                        # dùng chung product_id này — không lọc theo dòng sẽ cộng lộn 2 lần, ra
+                        # số "đã giữ" nhiều hơn cả số lượng đã đặt (VD đặt 2 combo mà hiện giữ 4).
                         comp_reserved_for_so = sum(
                             float(mv.quantity)
                             for pk in so_active_pickings
                             for mv in pk.move_ids
                             if mv.product_id.id == comp_line.product_id.id
+                            and mv.sale_line_id.id == line.id
                             and mv.state not in ('cancel', 'done')
                         )
                         comp_free = kit_comp_true_free[comp_key] + comp_reserved_for_so
