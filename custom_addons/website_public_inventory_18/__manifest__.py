@@ -9,7 +9,7 @@
     "license": "LGPL-3",
     "depends": [
         "website", "stock", "sale", "mrp", "misa_fetch_po_button",
-        "misa_invoice_status_report", "hlv_zalo_zns",
+        "misa_invoice_status_report", "hlv_zalo_zns", "hlv_sale_delivery_planning",
     ],
     "data": [
         "security/stock_hold_security.xml",

@@ -5,6 +5,8 @@ import logging
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
 
+from .sale_plan_notify import notify_sale_plan_by_code
+
 _logger = logging.getLogger(__name__)
 
 APPROVER_GROUP = "website_public_inventory_18.group_stock_hold_approver"
@@ -136,7 +138,7 @@ class StockHoldRequest(models.Model):
             if rec.state != "pending_approval":
                 continue
             rec.write({"state": "rejected", "reject_reason": reason or rec.reject_reason})
-            rec._notify_sale_zalo(_(
+            reject_message = _(
                 "❌ YÊU CẦU GIỮ HÀNG BỊ TỪ CHỐI\n"
                 "--------------------\n"
                 "Mã yêu cầu: %(name)s\n"
@@ -155,7 +157,9 @@ class StockHoldRequest(models.Model):
                     if rec.reject_reason
                     else _("Vui lòng liên hệ kho để biết thêm chi tiết.")
                 ),
-            })
+            }
+            rec._notify_sale_zalo(reject_message)
+            rec._notify_sale_plan(reject_message)
 
     def action_cancel(self):
         for rec in self:
@@ -242,13 +246,30 @@ class StockHoldRequest(models.Model):
             return
         config.send_hold_unreserve_notification(self.sale_name, message_text)
 
+    def _notify_sale_plan(self, message_text):
+        """Báo thêm vào chuông thông báo trang /sale_plan (module hlv_sale_delivery_planning) —
+        tra alias theo ĐÚNG sale_name (mã sale của chính yêu cầu này), KHÔNG dùng user_id (tài
+        khoản đăng nhập tạo yêu cầu) vì 1 tài khoản có thể quản lý nhiều mã sale (trưởng nhóm) —
+        đọc alias của tài khoản đó sẽ không biết chính xác yêu cầu này của ai trong số đó.
+        Fire-and-forget, không ảnh hưởng luồng chính."""
+        self.ensure_one()
+        try:
+            notify_sale_plan_by_code(
+                self.env, self.sale_name, message_text, so=None, author_name="Kho hàng",
+            )
+        except Exception:
+            _logger.exception(
+                "Lỗi báo /sale_plan cho yêu cầu giữ hàng %s (mã sale=%s).",
+                self.name, self.sale_name,
+            )
+
     @api.model
     def _cron_expire_holds(self):
         today = fields.Date.context_today(self)
         expired = self.sudo().search([("state", "=", "approved"), ("hold_until_date", "<", today)])
         for rec in expired:
             rec._release()
-            rec._notify_sale_zalo(_(
+            expire_message = _(
                 "⏰ HẾT HẠN GIỮ HÀNG\n"
                 "--------------------\n"
                 "Mã yêu cầu: %(name)s\n"
@@ -265,5 +286,7 @@ class StockHoldRequest(models.Model):
                 "wh": rec.warehouse_id.display_name,
                 "qty": "{:,.0f}".format(rec.quantity),
                 "until": rec.hold_until_date,
-            })
+            }
+            rec._notify_sale_zalo(expire_message)
+            rec._notify_sale_plan(expire_message)
         expired.write({"state": "expired"})
