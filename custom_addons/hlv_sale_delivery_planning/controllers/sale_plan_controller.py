@@ -2655,7 +2655,7 @@ self.addEventListener('notificationclick', function(event) {
         )
         return {'status': 'success', 'count': len(records), 'aliases': aliases}
 
-    @http.route('/sale_plan', type='http', auth='user', methods=['GET', 'POST'])
+    @http.route('/sale_plan', type='http', auth='user', methods=['GET'])
     def sale_plan_page(self, **kwargs):
         return request.make_response(_PAGE, headers=_H)
 
