@@ -38,6 +38,57 @@ def _hold_summary(holds):
     details = ["%s: %s" % (h.sale_name, "{:,.0f}".format(h.quantity)) for h in holds]
     return total, details
 
+def _get_so_reservation_map(env, product_ids, warehouse_ids=None):
+    """Số lượng đang bị giữ bởi ĐƠN BÁN THẬT (không phải phiếu giữ hàng của tính năng Giữ hàng
+    theo Sale) — gom theo (product_id, warehouse_id) từ các stock.move.line còn đang reserve
+    (chưa done/cancel) thuộc 1 phiếu có sale_id. Trả về dict
+    {(product_id, warehouse_id): (tổng SL, ['Đơn X (Sale Y): SL', ...])} để cộng gộp cùng
+    _hold_summary() ra đúng con số 'Giữ' hiển thị trên trang, kèm chi tiết ai/đơn nào đang giữ."""
+    if not product_ids:
+        return {}
+    domain = [
+        ("product_id", "in", product_ids),
+        ("state", "not in", ("done", "cancel")),
+        ("picking_id.sale_id", "!=", False),
+        ("picking_id.is_stock_hold_picking", "=", False),
+        ("location_id.usage", "=", "internal"),
+    ]
+    if warehouse_ids:
+        loc_ids = env["stock.warehouse"].sudo().browse(warehouse_ids).mapped("view_location_id").ids
+        if loc_ids:
+            domain.append(("location_id", "child_of", loc_ids))
+    move_lines = env["stock.move.line"].sudo().search(domain)
+
+    grouped = {}
+    for ml in move_lines:
+        qty = ml.quantity or 0.0
+        if qty <= 0:
+            continue
+        wh = ml.location_id.warehouse_id
+        so = ml.picking_id.sale_id
+        if not wh or not so:
+            continue
+        key = (ml.product_id.id, wh.id)
+        bucket = grouped.setdefault(key, {})
+        entry = bucket.setdefault(so.id, {"so": so, "qty": 0.0})
+        entry["qty"] += qty
+
+    result = {}
+    for key, by_so in grouped.items():
+        total = sum(v["qty"] for v in by_so.values())
+        details = []
+        for v in by_so.values():
+            so = v["so"]
+            salesperson = so.user_id.name if so.user_id else ""
+            label = "%s%s: %s" % (
+                so.name,
+                " (%s)" % salesperson if salesperson else "",
+                "{:,.0f}".format(v["qty"]),
+            )
+            details.append(label)
+        result[key] = (total, details)
+    return result
+
 def _get_allowed_warehouses():
     env = request.env
     param_val = env["ir.config_parameter"].sudo().get_param(
@@ -294,6 +345,14 @@ class PublicInventory(http.Controller):
         for h in page_holds:
             holds_by_pid[h.product_id.id] = holds_by_pid.get(h.product_id.id, empty_holds) | h
 
+        # --- Số lượng đang giữ bởi đơn bán thật (để gộp chung vào "Đã giữ: ai, đơn nào") ---
+        so_res_map = _get_so_reservation_map(env, page_pids, hold_wh_ids)
+        so_res_by_pid = {}
+        for (res_pid, res_wid), (res_qty, res_details) in so_res_map.items():
+            entry = so_res_by_pid.setdefault(res_pid, {"qty": 0.0, "details": []})
+            entry["qty"] += res_qty
+            entry["details"].extend(res_details)
+
         # 6. BUILD ROWS
         rows = []
         for p in products_to_display:
@@ -305,7 +364,11 @@ class PublicInventory(http.Controller):
             else: qty_total = qty_map.get(pid, 0.0)
 
             held_qty, held_by = _hold_summary(holds_by_pid.get(pid, empty_holds))
-            
+            so_res = so_res_by_pid.get(pid)
+            if so_res:
+                held_qty += so_res["qty"]
+                held_by = held_by + so_res["details"]
+
             if low_stock_mode and qty_total > 5.0: continue
 
             qty_forecasted = 0.0
@@ -454,12 +517,17 @@ class PublicInventory(http.Controller):
         for h in holds_for_product:
             holds_by_wid[h.warehouse_id.id] = holds_by_wid.get(h.warehouse_id.id, empty_holds) | h
 
+        so_res_map = _get_so_reservation_map(env, [pid], warehouses.ids)
+
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
             fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
             qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
             held_qty, held_by = _hold_summary(holds_by_wid.get(wh.id, empty_holds))
+            so_qty, so_details = so_res_map.get((pid, wh.id), (0.0, []))
+            held_qty += so_qty
+            held_by = held_by + so_details
             rows.append({
                 "warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr,
                 "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf,
