@@ -85,6 +85,8 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             return opt
 
         try:
+            body = self._request_json()
+            phone = kwargs.get('phone') or body.get('phone') or ''
             partner = request.env['res.partner'].sudo().browse(partner_id)
             if not partner.exists():
                 return self._response_success([])
@@ -92,8 +94,25 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
             family_partner_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [partner_id]
 
-            domain = [('partner_id', 'in', family_partner_ids)]
-            state = kwargs.get('state')
+            normalized_phone = self._normalize_vn_phone(phone or partner.phone or partner.mobile or '')
+            account = False
+            if normalized_phone and 'hlv.loyalty.portal.account' in request.env:
+                account = request.env['hlv.loyalty.portal.account'].sudo().search([
+                    ('partner_id', 'in', family_partner_ids),
+                    ('portal_phone', '=', normalized_phone),
+                    ('active', '=', True),
+                ], limit=1)
+
+            if account:
+                domain = [
+                    '|',
+                    ('account_id', '=', account.id),
+                    '&', ('account_id', '=', False), ('partner_id', 'in', family_partner_ids),
+                ]
+            else:
+                domain = [('partner_id', 'in', family_partner_ids)]
+
+            state = kwargs.get('state') or body.get('state')
             if state and state != 'all':
                 domain.append(('state', '=', state))
 

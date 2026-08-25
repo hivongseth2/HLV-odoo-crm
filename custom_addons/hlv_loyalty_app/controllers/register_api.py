@@ -30,9 +30,9 @@ class LoyaltyAppRegisterAPI(http.Controller):
 
     def _cors_headers(self):
         return [
-            ("Access-Control-Allow-Origin", "*"),
             ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
             ("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With"),
+            ("Access-Control-Max-Age", "86400"),
         ]
 
     def _json_response(self, data, status=200):

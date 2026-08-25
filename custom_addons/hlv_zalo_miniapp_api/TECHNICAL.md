@@ -209,3 +209,7 @@ Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (
   - `Loyalty > Cấu hình > Tài khoản Portal Zalo` (`menu_loyalty_zalo_portal_account`)
   - `Zalo Mini App > Quản lý > Tài khoản Portal Zalo` (`menu_zalo_miniapp_portal_account_app`)
 - **Tính năng**: Quản lý thông tin đăng nhập (username, portal_phone), Reset mật khẩu (`action_reset_password_wizard`), và Tính lại điểm Loyalty (`action_recalculate_points_wizard`).
+- **Cơ chế Phân tách Điểm & Hạng theo Tài khoản (Account-scoped Loyalty)**: 
+  - Toàn bộ điểm xếp hạng (`total_points`), điểm đổi thưởng (`exchange_points`), điểm khả dụng (`exchange_points_available`) và Hạng thành viên (`tier`) khi hiển thị trên Profile/API đều được lấy theo từng `hlv.loyalty.portal.account` dựa trên SĐT đăng nhập của người dùng.
+  - Tránh tình trạng 1 liên hệ / công ty mẹ (`res.partner`) có nhiều tài khoản portal khác nhau bị cộng gộp hoặc dùng chung điểm của nhau.
+  - Vouchers (`hlv.loyalty.voucher`) được lọc và cấp theo `account_id` để bảo mật quyền sở hữu ưu đãi.
