@@ -111,6 +111,7 @@
                       <tr>
                         <th>Mã</th>
                         <th>Sản phẩm</th>
+                        <th>Khách hàng</th>
                         <th>Kho</th>
                         <th class="text-end">SL giữ</th>
                         <th>Dự án</th>
@@ -127,6 +128,7 @@
                         <tr t-att-data-hold-id="h.id">
                           <td class="fw-bold text-primary text-nowrap"><t t-esc="h.name"/></td>
                           <td class="product-cell"><t t-esc="h.product_id.display_name"/></td>
+                          <td class="text-nowrap"><t t-esc="h.partner_id.display_name"/></td>
                           <td class="text-nowrap"><t t-esc="h.warehouse_id.name"/></td>
                           <td class="text-end text-nowrap">
                             <span t-if="h.state == 'approved' and h.hold_location_breakdown_json != '[]'"

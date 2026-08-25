@@ -976,10 +976,25 @@ class PublicInventory(http.Controller):
         }
 
     # --- YÊU CẦU GIỮ HÀNG ---
+    @http.route(["/search_stock/hold/customer_suggest"], type="json", auth="user", methods=["POST"])
+    def hold_customer_suggest(self, q=""):
+        """Autocomplete chọn khách hàng khi tạo yêu cầu giữ hàng — để hệ thống biết ưu tiên tìm
+        đơn của đúng khách này khi hàng giữ được nhả ra sau này."""
+        q = (q or "").strip()
+        if not q or len(q) < 2:
+            return {"ok": True, "customers": []}
+        partners = request.env["res.partner"].sudo().search(
+            ["|", ("name", "ilike", q), ("phone", "ilike", q)], limit=10,
+        )
+        return {
+            "ok": True,
+            "customers": [{"id": p.id, "name": p.display_name} for p in partners],
+        }
+
     @http.route(["/search_stock/hold/create"], type="json", auth="user", methods=["POST"])
     def hold_request_create(self, product_id=None, warehouse_id=None, quantity=None,
                              hold_until_date=None, project_name=None, sale_name=None,
-                             description=None):
+                             partner_id=None, description=None):
         env = request.env
         pid = _as_int_or_none(product_id)
         wid = _as_int_or_none(warehouse_id)
@@ -990,6 +1005,11 @@ class PublicInventory(http.Controller):
         warehouse = env["stock.warehouse"].sudo().browse(wid).exists()
         if not product or not warehouse:
             return {"ok": False, "error": "Sản phẩm hoặc kho hàng không hợp lệ."}
+
+        partner_id_int = _as_int_or_none(partner_id)
+        partner = env["res.partner"].sudo().browse(partner_id_int).exists() if partner_id_int else None
+        if not partner:
+            return {"ok": False, "error": "Vui lòng chọn khách hàng."}
 
         try:
             qty = float(quantity)
@@ -1014,6 +1034,7 @@ class PublicInventory(http.Controller):
             hold = env["stock.hold.request"].create({
                 "product_id": product.id,
                 "warehouse_id": warehouse.id,
+                "partner_id": partner.id,
                 "quantity": qty,
                 "hold_until_date": until_date,
                 "project_name": project_name,
