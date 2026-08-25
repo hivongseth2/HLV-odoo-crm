@@ -606,8 +606,9 @@ class StockPicking(models.Model):
         hàng cho TẤT CẢ sản phẩm — state='assigned' nghĩa là mọi move còn active của phiếu đã
         được reserve đủ (khác 'partially_available' — chỉ giữ được 1 phần). Chỉ chạy khi setting
         hlv_sale_delivery_planning.auto_print_pick_slip_when_full đang BẬT (Settings > HLV
-        Delivery Planner). x_auto_print_requested đảm bảo mỗi phiếu chỉ tự động gửi ĐÚNG 1 LẦN,
-        không gửi lặp nếu phiếu unreserve rồi reserve lại đủ nhiều lần."""
+        Delivery Planner). x_auto_print_requested chỉ được set khi ĐÃ GỬI THÀNH CÔNG (hoặc lý
+        do chặn không tự hết được) — tránh gửi lặp khi phiếu unreserve rồi reserve lại đủ nhiều
+        lần, nhưng vẫn cho thử lại nếu lần trước chỉ bị chặn TẠM THỜI (khóa tính năng/kho đầy)."""
         if self.env['ir.config_parameter'].sudo().get_param(
             'hlv_sale_delivery_planning.auto_print_pick_slip_when_full'
         ) not in ('1', 'True', 'true', True):
@@ -621,14 +622,18 @@ class StockPicking(models.Model):
             return
         Service = self.env['hlv.delivery.planner.service'].sudo()
         for pick in picks:
+            result = None
             try:
-                Service.auto_confirm_print_pick_slip(pick)
+                result = Service.auto_confirm_print_pick_slip(pick)
             except Exception:
                 _logger.exception('Auto print pick slip failed for %s', pick.name)
-            finally:
-                # Đánh dấu ĐÃ THỬ dù thành công hay không — đây là cơ chế "tự động gửi 1 lần
-                # khi vừa đủ hàng", không phải retry loop; nếu lần đó bị chặn (khóa tính năng,
-                # kho đầy queue...) thì để kho/sale xử lý tay, không lặp lại nữa cho phiếu này.
+            # Chỉ đánh dấu "đã thử" khi kết quả DỨT ĐIỂM (gửi thành công, hoặc lý do không tự
+            # hết được như không xác định được đơn hàng của phiếu) — KHÔNG đánh dấu khi bị chặn
+            # bởi lý do TẠM THỜI (đang khóa tính năng / kho đang đầy hàng chờ) hay lỗi bất ngờ,
+            # để lần phiếu được reserve lại sau đó (assigned lại) còn cơ hội tự động gửi thật.
+            # Phiếu có thể unreserve/reserve lại nhiều lần (đã quan sát thực tế), nên vẫn cần
+            # chặn gửi LẶP LẠI khi đã gửi thành công — đó là lý do CHÍNH của flag này.
+            if result and (result.get('success') or not (result.get('locked') or result.get('queue_full'))):
                 pick.x_auto_print_requested = True
 
     def _action_done(self):
