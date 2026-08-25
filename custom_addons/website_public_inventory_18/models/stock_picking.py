@@ -134,6 +134,21 @@ class StockPicking(models.Model):
             return
         holds.write({"state": "cancelled"})
 
+        # Tự động tìm đơn bán đang chờ để giữ lại ngay phần tồn kho vừa được nhả — TRỪ trường
+        # hợp reason="quantity_reduced" (wizard "rút hàng" của hlv_priority_stock_reservation):
+        # wizard đó đã tự gọi action_assign() cho ĐÚNG 1 đơn nhận cụ thể mà kho vừa chọn ngay
+        # sau khi rút — nếu mình tự động tái phân bổ ở đây, có thể cướp mất tồn kho trước khi
+        # wizard kịp gán cho đúng đơn kho vừa chọn, phản tác dụng ngay chính thao tác họ vừa làm.
+        if reason != "quantity_reduced":
+            for hold in holds:
+                try:
+                    hold._reassign_freed_stock_to_waiting_orders()
+                except Exception:
+                    _logger.exception(
+                        "Lỗi tự động giữ lại hàng vừa nhả cho đơn đang chờ (yêu cầu %s, "
+                        "reason=%s).", hold.name, reason,
+                    )
+
         action_label = UNRESERVE_ACTION_LABELS.get(reason, reason)
         actor = self.env.user.name
         now_str = fields.Datetime.now()
