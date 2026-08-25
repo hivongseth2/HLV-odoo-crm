@@ -11,6 +11,15 @@ class ResConfigSettings(models.TransientModel):
              'sale plan — dùng để khóa tạm tính năng in IoT trước khi chính thức vận hành.',
     )
 
+    auto_print_pick_slip_when_full = fields.Boolean(
+        string='Tự động gửi in phiếu lấy hàng khi đủ hàng',
+        config_parameter='hlv_sale_delivery_planning.auto_print_pick_slip_when_full',
+        help='Khi bật, ngay khi phiếu lấy hàng (PICK) giữ ĐỦ hàng cho TẤT CẢ sản phẩm (không '
+             'phải chỉ 1 phần), hệ thống tự động gửi yêu cầu in vào hàng chờ theo kho — không '
+             'cần sale bấm gửi in. Mỗi phiếu chỉ tự động gửi 1 lần. Vẫn tôn trọng khóa "Khóa '
+             'mở/gửi in phiếu lấy hàng" ở trên nếu đang bật.',
+    )
+
     restrict_pack_to_assigned_user = fields.Boolean(
         string='Chỉ người được assign mới được đóng gói',
         config_parameter='hlv_sale_delivery_planning.restrict_pack_to_assigned_user',
