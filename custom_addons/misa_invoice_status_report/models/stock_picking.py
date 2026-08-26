@@ -193,6 +193,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_amount_mismatch = fields.Boolean(
         string='Lệch tiền so với MISA', compute='_compute_misa_invoice_amount_mismatch', store=True,
     )
+    # Mức độ xuất HĐ THẬT theo ĐƠN HÀNG (không phải theo tên đề nghị/refno như
+    # misa_invoice_state) — vì 1 đơn có thể được xuất hóa đơn qua NHIỀU đề nghị khác nhau
+    # (chia nhỏ, gán nhầm tên đề nghị...), misa_invoice_state (dựa vào tìm ĐÚNG 1 refno khớp
+    # tên phiếu) không phản ánh đúng "đã xuất bao nhiêu % giá trị đơn". Field này cộng dồn TẤT
+    # CẢ tiền đã xuất HĐ qua MỌI đề nghị nhắc tới đơn hàng (get_invoice_requests_for_order,
+    # không quan tâm tên đề nghị) so với tổng tiền thực xuất của TOÀN BỘ phiếu thuộc đơn đó.
+    # CHỈ tính khi bước refno nhanh KHÔNG xác nhận đủ (state='missing' hoặc amount_mismatch=True)
+    # — xem _misa_invoice_reconcile_order_coverage — để không tốn thêm API cho phần lớn phiếu
+    # đã khớp sạch ngay từ bước refno.
+    misa_invoice_order_coverage = fields.Selection([
+        ('none', 'Chưa xuất HĐ'),
+        ('partial', 'Xuất HĐ 1 phần'),
+        ('full', 'Đã xuất HĐ đủ'),
+    ], string='Mức độ xuất HĐ theo đơn hàng', copy=False)
 
     # ==== Trả hàng (khách trả lại 1 phần/toàn bộ sau khi đã xuất kho) ====
     # x_studio_tng_tin_sau_thu (field Studio, "tiền thực xuất GỘP") chỉ được set 1 LẦN lúc
@@ -535,6 +549,18 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         picking.misa_invoice_amount_diff,
                     )
                 )
+            # Bước refno nhanh KHÔNG xác nhận đủ (không tìm ra refno nào khớp, hoặc tìm ra
+            # nhưng tiền không khớp) — chủ động xác minh mức độ xuất HĐ THẬT theo ĐƠN HÀNG (đối
+            # chiếu qua order_code, không quan tâm tên đề nghị) trước khi kết luận "chưa/thiếu"
+            # — xem _misa_invoice_reconcile_order_coverage. Chỉ chạy cho case này (không chạy
+            # tràn lan cho phiếu đã khớp sạch) để không tốn thêm API không cần thiết.
+            if picking.misa_invoice_state == 'missing' or picking.misa_invoice_amount_mismatch:
+                try:
+                    picking._misa_invoice_reconcile_order_coverage()
+                except Exception:
+                    _logger.exception(
+                        "❌ [MISA ORDER COVERAGE] Lỗi xác minh mức độ xuất HĐ theo đơn cho phiếu %s", picking.name,
+                    )
             # Chỉ phiếu ĐẠI DIỆN (không phải ăn theo ai, và MISA không báo có phiếu đại diện
             # nào khác) mới cần tự đọc chi tiết dòng hàng đề nghị để tìm đơn xuất kèm — nếu đã
             # phát hiện có phiếu đại diện khác (found_master_refno), nhường việc quét cho phiếu
@@ -629,6 +655,45 @@ class StockPickingMisaInvoiceStatus(models.Model):
             total_extra += amount
             sources.extend(order_sources)
         return total_extra, sources
+
+    def _misa_invoice_reconcile_order_coverage(self):
+        """Xác định mức độ xuất HĐ THẬT theo ĐƠN HÀNG (misa_invoice_order_coverage) — CHỈ gọi
+        khi bước refno nhanh (action_check_misa_invoice_status) KHÔNG xác nhận đủ (state=
+        'missing' hoặc amount_mismatch=True), vì bước này tốn thêm 1-2 lệnh gọi MISA cho mỗi
+        đơn hàng của phiếu.
+
+        Với MỖI đơn hàng của phiếu: cộng dồn TẤT CẢ tiền đã xuất HĐ qua MỌI đề nghị nhắc tới
+        đơn đó (_misa_invoice_sum_invoiced_for_order — không quan tâm tên đề nghị/refno) so với
+        tổng tiền thực xuất của TOÀN BỘ phiếu thuộc đơn đó (không chỉ phiếu đang xét — 1 đơn có
+        thể giao nhiều đợt qua nhiều phiếu khác nhau). 1 phiếu có thể có nhiều đơn hàng — lấy
+        mức THẤP NHẤT trong các đơn (none < partial < full) làm mức chung cho phiếu, vì phiếu
+        chỉ thật sự "đã xuất đủ" khi TẤT CẢ đơn của nó đều đã xuất đủ."""
+        rank = {'none': 0, 'partial': 1, 'full': 2}
+        for picking in self:
+            orders = picking.misa_invoice_sale_order_ids
+            if not orders:
+                picking.misa_invoice_order_coverage = False
+                continue
+            worst = 'full'
+            for order in orders:
+                order_pickings = self.sudo().search([
+                    ('misa_invoice_sale_order_ids', '=', order.id),
+                    ('picking_type_id.code', '=', 'outgoing'),
+                    ('state', '=', 'done'),
+                ])
+                shipped = sum(order_pickings.mapped('misa_invoice_net_actual_amount'))
+                if shipped <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                    continue
+                invoiced, _sources = self._misa_invoice_sum_invoiced_for_order(order.name)
+                if invoiced <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                    level = 'none'
+                elif invoiced >= shipped - MISA_INVOICE_AMOUNT_TOLERANCE:
+                    level = 'full'
+                else:
+                    level = 'partial'
+                if rank[level] < rank[worst]:
+                    worst = level
+            picking.misa_invoice_order_coverage = worst
 
     def _misa_invoice_discover_grouped_orders(self):
         """Sau khi phiếu này được xác nhận 'invoiced' (không phải ăn theo ai) — đọc CHI TIẾT
