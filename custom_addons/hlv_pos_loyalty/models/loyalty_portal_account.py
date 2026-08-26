@@ -18,6 +18,28 @@ def _normalize_phone(phone: str) -> str:
 class HlvLoyaltyPortalAccount(models.Model):
     _inherit = 'hlv.loyalty.portal.account'
 
+    def _pos_account_payload(self, account):
+        tier = account.partner_id.loyalty_tier_id if account.partner_id else False
+        return {
+            'id': account.id,
+            'name': account.display_name or account.buyer_name or account.portal_phone,
+            'phone': account.portal_phone,
+            'ranking_points': account.loyalty_total_points,
+            'exchange_points': account.loyalty_exchange_available_points,
+            'tier_name': tier.name if tier else 'Thành viên',
+            'tier_color': tier.badge_color if tier else '#1779b4',
+        }
+
+    @api.model
+    def pos_lookup_account(self, phone, partner_id=False):
+        """Find an existing account for a scanner without creating one."""
+        normalized_phone = _normalize_phone(phone)
+        if not normalized_phone or len(normalized_phone) < 9:
+            return False
+
+        account = self.sudo().search([('portal_phone', '=', normalized_phone)], limit=1)
+        return self._pos_account_payload(account) if account else False
+
     @api.model
     def pos_lookup_or_create_account(self, phone, partner_id=False):
         """
@@ -42,13 +64,4 @@ class HlvLoyaltyPortalAccount(models.Model):
                 'password_hash': self._hash_password(default_pw),
             })
 
-        tier = account.partner_id.loyalty_tier_id if account.partner_id else False
-        return {
-            'id': account.id,
-            'name': account.display_name or account.buyer_name or account.portal_phone,
-            'phone': account.portal_phone,
-            'ranking_points': account.loyalty_total_points,
-            'exchange_points': account.loyalty_exchange_available_points,
-            'tier_name': tier.name if tier else 'Thành viên',
-            'tier_color': tier.badge_color if tier else '#1779b4',
-        }
+        return self._pos_account_payload(account)

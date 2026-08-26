@@ -7,6 +7,19 @@ import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product
 import { usePos } from "@point_of_sale/app/store/pos_hook";
 import { _t } from "@web/core/l10n/translation";
 
+function isLoyaltyBarcode(value) {
+    const code = String(value || "").trim();
+    if (/^HLV(?:-|_)?LOYALTY:/i.test(code)) {
+        return true;
+    }
+
+    // A bare loyalty QR is normally a Vietnamese mobile number.  Keeping this
+    // check narrow avoids intercepting ordinary EAN/product barcodes.
+    const digits = code.replace(/\D/g, "");
+    const normalized = digits.startsWith("84") ? `0${digits.slice(2)}` : digits;
+    return /^0[35789]\d{8}$/.test(normalized);
+}
+
 patch(ProductScreen.prototype, {
     setup() {
         super.setup();
@@ -93,35 +106,72 @@ patch(ProductScreen.prototype, {
         setTimeout(render, 1000);
     },
 
-    async _onLoyaltyScanClick() {
-        const phone = prompt(_t("Quét mã Barcode/QR trên App hoặc nhập Số điện thoại:"));
-        if (!phone || !phone.trim()) return;
-
+    /**
+     * POS barcode scanners work as a keyboard and are already handled by
+     * ProductScreen's barcode reader.  Try a loyalty lookup before treating a
+     * scanned code as a product barcode.  Returning true means the code was a
+     * loyalty account and must not add a product to the order.
+     */
+    async _applyLoyaltyAccount(scanCode, notifyNotFound = false, createIfMissing = true) {
+        const code = String(scanCode || "").trim();
         const order = this.pos.get_order();
-        if (!order) return;
+        if (!code || !order) {
+            return false;
+        }
 
         try {
             const partner = order.get_partner();
             const result = await this.orm.call(
                 "hlv.loyalty.portal.account",
-                "pos_lookup_or_create_account",
-                [phone.trim(), partner ? partner.id : false]
+                createIfMissing ? "pos_lookup_or_create_account" : "pos_lookup_account",
+                [code, partner ? partner.id : false]
             );
 
-            if (result && result.id) {
-                order.loyalty_account_id = result.id;
-                order.loyalty_account = result;
-                this.notification.add(
-                    _t(`Đã áp dụng thành viên: ${result.name} (${result.ranking_points} điểm)`),
-                    { type: "success" }
-                );
-                this._renderLoyaltyControls();
+            if (!result?.id) {
+                if (notifyNotFound) {
+                    this.notification.add(_t("Không tìm thấy tài khoản Loyalty cho mã đã quét."), {
+                        type: "warning",
+                    });
+                }
+                return false;
             }
-        } catch (error) {
+
+            order.loyalty_account_id = result.id;
+            order.loyalty_account = result;
             this.notification.add(
-                _t("Không tìm thấy hoặc không tạo được tài khoản Loyalty: ") + (error?.data?.message || error?.message || ""),
-                { type: "danger" }
+                _t(`Đã áp dụng thành viên: ${result.name} (${result.ranking_points} điểm)`),
+                { type: "success" }
             );
+            this._renderLoyaltyControls();
+            return true;
+        } catch (error) {
+            if (notifyNotFound) {
+                this.notification.add(
+                    _t("Không thể áp dụng Loyalty: ") + (error?.data?.message || error?.message || ""),
+                    { type: "danger" }
+                );
+            }
+            return false;
         }
+    },
+
+    async _barcodeProductAction(code) {
+        // The standard POS reader classifies regular scanner input as
+        // "product".  A loyalty match takes precedence; otherwise preserve
+        // Odoo's original product-scanning behavior.
+        const barcode = code?.base_code || code?.code;
+        if (isLoyaltyBarcode(barcode) && !(await this._applyLoyaltyAccount(barcode, false, false))) {
+            return super._barcodeProductAction(...arguments);
+        }
+        if (isLoyaltyBarcode(barcode)) {
+            return;
+        }
+        return super._barcodeProductAction(...arguments);
+    },
+
+    async _onLoyaltyScanClick() {
+        const phone = prompt(_t("Quét mã Barcode/QR trên App hoặc nhập Số điện thoại:"));
+        if (!phone || !phone.trim()) return;
+        await this._applyLoyaltyAccount(phone, true);
     },
 });
