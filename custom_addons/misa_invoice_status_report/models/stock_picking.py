@@ -421,15 +421,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # thử lại bằng mã ĐƠN HÀNG (DH...) liên quan: sale nhiều khi tạo đề nghị xuất HĐ
             # trên MISA bằng mã đơn thay vì mã phiếu xuất kho nội bộ. Bỏ qua bước này nếu đã
             # gắn mã đề nghị thủ công (người dùng đã xác định chính xác refno cần dùng).
+            #
+            # QUAN TRỌNG: LUÔN gọi API SỐNG (get_invoice_status_for_refno) ở bước này, KHÔNG
+            # BAO GIỜ dùng request_map — request_map (get_invoice_request_map) chỉ đánh chỉ
+            # mục theo refno + journal_memo (danh sách TÊN PHIẾU gộp chung), hoàn toàn KHÔNG
+            # có mã ĐƠN HÀNG nào trong đó (order_code chỉ nằm ở DÒNG HÀNG chi tiết — map không
+            # tải dòng hàng để giữ rẻ cho quét hàng loạt) — nên tra order_name trong map SẼ
+            # LUÔN ra 'missing' dù MISA thực sự có đề nghị (case thật KBC/OUT/11613/đơn
+            # DH125524949234781, đề nghị DN0017572: bấm kiểm tra tay 1 phiếu thì work vì gọi
+            # API sống, nhưng quét hàng loạt qua request_map thì never work). Chỉ chạy fallback
+            # này cho phiếu ĐANG 'missing' (đã lọc ở trên) nên không tốn thêm API cho phần lớn
+            # phiếu đã khớp sạch qua refno trong map.
             if status['state'] == 'missing' and not picking.misa_invoice_manual_refno:
                 for order_name in picking.misa_invoice_sale_order_ids.mapped('name'):
                     if not order_name or order_name == refno or order_name in claimed_order_refnos:
                         continue
                     try:
-                        if request_map is not None:
-                            order_status = misa_utils.get_invoice_status_from_map(order_name, request_map)
-                        else:
-                            order_status = misa_utils.get_invoice_status_for_refno(order_name)
+                        order_status = misa_utils.get_invoice_status_for_refno(order_name)
                     except Exception:
                         _logger.exception(
                             "❌ [MISA INVOICE STATUS] Lỗi thử lại theo mã đơn %s cho phiếu %s",
