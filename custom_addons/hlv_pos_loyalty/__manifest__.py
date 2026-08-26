@@ -22,7 +22,6 @@
     'assets': {
         'point_of_sale._assets_pos': [
             'hlv_pos_loyalty/static/src/css/pos_loyalty.css',
-            'hlv_pos_loyalty/static/src/xml/loyalty_button.xml',
             'hlv_pos_loyalty/static/src/js/loyalty_button.js',
             'hlv_pos_loyalty/static/src/js/loyalty_order_patch.js',
         ],
