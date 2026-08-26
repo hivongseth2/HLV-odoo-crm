@@ -30,6 +30,11 @@ class StockHoldRequest(models.Model):
         default=lambda self: _("New"),
     )
     product_id = fields.Many2one("product.product", string="Sản phẩm", required=True, tracking=True)
+    partner_id = fields.Many2one(
+        "res.partner", string="Khách hàng", required=True, tracking=True,
+        help="Khách hàng dự kiến của lô hàng giữ này — dùng để khi giữ hàng bị hủy/hết hạn, hệ "
+             "thống ưu tiên tự tìm đúng đơn bán của khách hàng này đang chờ hàng để giữ lại ngay.",
+    )
     warehouse_id = fields.Many2one("stock.warehouse", string="Kho hàng", required=True, tracking=True)
     quantity = fields.Float(string="Số lượng giữ", required=True)
     hold_until_date = fields.Date(string="Giữ đến ngày", required=True)
@@ -224,6 +229,56 @@ class StockHoldRequest(models.Model):
         self.ensure_one()
         if self.hold_picking_id and self.hold_picking_id.state not in ("cancel", "done"):
             self.hold_picking_id.sudo().action_cancel()
+        try:
+            self._reassign_freed_stock_to_waiting_orders()
+        except Exception:
+            _logger.exception(
+                "Lỗi tự động giữ lại hàng vừa nhả cho đơn đang chờ (yêu cầu %s).", self.name,
+            )
+
+    def _reassign_freed_stock_to_waiting_orders(self):
+        """Sau khi nhả reservation của yêu cầu giữ hàng, chủ động tìm đơn bán đang chờ hàng để
+        giữ (action_assign) lại NGAY tại cùng kho — tránh trường hợp hàng đã có tồn nhưng đơn
+        báo thiếu hàng chỉ vì chưa ai bấm giữ lại. Ưu tiên:
+        1. Đơn của ĐÚNG khách hàng trên yêu cầu giữ hàng (partner_id) — đơn cũ nhất trước
+           ("khách hàng đã giữ trước" được ưu tiên).
+        2. Nếu không có đơn nào của khách đó, tìm bất kỳ đơn nào khác tại cùng kho đang chờ hàng
+           (chưa lấy hàng) — cũng đơn cũ nhất trước.
+        Hỗ trợ giữ cho NHIỀU đơn cùng lúc: gọi action_assign() tuần tự theo đúng thứ tự ưu tiên
+        trên, Odoo sẽ tự chia số lượng còn khả dụng cho từng đơn theo đúng thứ tự gọi (đơn ở
+        priority 1 luôn được ưu tiên phần tồn kho trước đơn ở priority 2)."""
+        self.ensure_one()
+        Picking = self.env["stock.picking"].sudo()
+        base_domain = [
+            ("sale_id", "!=", False),
+            ("picking_type_id.warehouse_id", "=", self.warehouse_id.id),
+            ("picking_type_id.sequence_code", "=", "PICK"),
+            ("state", "in", ("waiting", "confirmed", "partially_available")),
+            ("move_ids.product_id", "=", self.product_id.id),
+        ]
+        candidates = []
+        if self.partner_id:
+            customer_pickings = Picking.search(
+                base_domain + [("sale_id.partner_id", "=", self.partner_id.id)],
+                order="scheduled_date asc, id asc", limit=50,
+            )
+            candidates.extend(customer_pickings)
+        else:
+            customer_pickings = Picking.browse()
+        other_pickings = Picking.search(
+            base_domain + [("id", "not in", customer_pickings.ids)],
+            order="scheduled_date asc, id asc", limit=50,
+        )
+        candidates.extend(other_pickings)
+
+        for picking in candidates:
+            try:
+                picking.action_assign()
+            except Exception:
+                _logger.exception(
+                    "Lỗi tự động giữ lại hàng cho phiếu %s (đơn %s) sau khi nhả yêu cầu giữ "
+                    "hàng %s.", picking.name, picking.sale_id.name, self.name,
+                )
 
     def _notify_sale_zalo(self, message_text):
         """Gửi tin nhắn Zalo OA cho sale đứng tên yêu cầu, dùng map mã sale -> Zalo user_id

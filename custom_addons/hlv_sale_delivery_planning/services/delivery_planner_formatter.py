@@ -1,3 +1,5 @@
+import math
+
 from odoo import models
 import pytz
 
@@ -163,6 +165,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
             product_wh_key = False
             reserved_here = 0.0
+            kit_reserved_qty = 0.0
             pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
 
             if p_type == 'service':
@@ -179,6 +182,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     )
 
                     kit_qty = float('inf')
+                    kit_reserved_here = float('inf')
                     for comp_line in bom.bom_line_ids:
                         comp_key = (comp_line.product_id.id, so.warehouse_id.id)
                         if comp_key not in kit_comp_true_free:
@@ -192,20 +196,34 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                                 max(float(q.quantity) - float(q.reserved_quantity), 0.0)
                                 for q in quants
                             )
-                        # Tìm phần đã reserve cho chính đơn này
-                        # (cộng lại vì đã bị trừ trong quants nhưng thực ra là của đơn này)
+                        # Tìm phần đã reserve cho CHÍNH DÒNG COMBO này (cộng lại vì đã bị trừ
+                        # trong quants nhưng thực ra là của đơn này) — PHẢI lọc theo sale_line_id
+                        # đúng dòng, không chỉ theo product_id: nếu linh kiện này còn xuất hiện ở
+                        # 1 dòng combo KHÁC (hoặc bán lẻ) trong CÙNG đơn, move của dòng đó cũng
+                        # dùng chung product_id này — không lọc theo dòng sẽ cộng lộn 2 lần, ra
+                        # số "đã giữ" nhiều hơn cả số lượng đã đặt (VD đặt 2 combo mà hiện giữ 4).
                         comp_reserved_for_so = sum(
                             float(mv.quantity)
                             for pk in so_active_pickings
                             for mv in pk.move_ids
                             if mv.product_id.id == comp_line.product_id.id
+                            and mv.sale_line_id.id == line.id
                             and mv.state not in ('cancel', 'done')
                         )
                         comp_free = kit_comp_true_free[comp_key] + comp_reserved_for_so
                         qty_per_kit = comp_line.product_qty / (bom.product_qty or 1.0)
                         if qty_per_kit > 0:
                             kit_qty = min(kit_qty, comp_free / qty_per_kit)
-                    qty_avail = kit_qty if kit_qty != float('inf') else 0.0
+                            # Số combo trọn vẹn đang được GIỮ RIÊNG cho đơn này — cùng công thức
+                            # min-ratio như kit_qty, nhưng chỉ tính phần comp_reserved_for_so
+                            # (đã reserve cho đơn này), không phải toàn bộ comp_free. Dùng để
+                            # hiển thị icon khóa "đã giữ" cho combo, giống các dòng không phải kit.
+                            kit_reserved_here = min(kit_reserved_here, comp_reserved_for_so / qty_per_kit)
+                    # Combo là 1 khối rời rạc (gồm N linh kiện nguyên vẹn) — không thể có
+                    # "32,5 combo" sẵn sàng, chỉ tính SỐ COMBO NGUYÊN có thể ráp được từ linh
+                    # kiện hiện có, nên phải floor về số nguyên trước khi hiển thị "Tồn Kho".
+                    qty_avail = math.floor(kit_qty) if kit_qty != float('inf') else 0.0
+                    kit_reserved_qty = math.floor(kit_reserved_here) if kit_reserved_here != float('inf') else 0.0
                 else:
                     qty_avail = 0.0
             else:
@@ -251,8 +269,11 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
 
             # Raw warehouse free_qty (không capped theo line) để hiển thị "Tồn Kho"
             if is_kit:
-                raw_free = qty_avail  # Kit giữ nguyên logic kit
-                reserved_line = 0.0  # Kit qty_avail đã bao gồm reservations rồi
+                # qty_avail (tổng số combo có thể ráp) đã BAO GỒM phần đang giữ riêng cho đơn
+                # này (kit_reserved_qty) — phải trừ ra để raw_free là phần "tự do", khớp đúng
+                # công thức FE dùng chung cho mọi dòng: Tồn Kho hiển thị = raw_free + reserved.
+                raw_free = max(qty_avail - kit_reserved_qty, 0.0)
+                reserved_line = kit_reserved_qty
             elif product_wh_key:
                 raw_free = product_availabilities.get(product_wh_key, 0.0)
                 reserved_line = max(

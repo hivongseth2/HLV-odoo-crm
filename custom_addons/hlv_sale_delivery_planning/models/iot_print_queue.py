@@ -67,14 +67,23 @@ class HlvIotPrintQueue(models.Model):
         # mail.thread tự ghi khi tạo record có field tracking=True — người dùng thường (sale/
         # kho) không hiểu _description kỹ thuật đó, chỉ cần đúng 1 dòng log dễ hiểu ngay dưới.
         records = super(HlvIotPrintQueue, self.with_context(mail_create_nolog=True)).create(vals_list)
+        # hlv_auto_print_trigger: bản ghi này do HỆ THỐNG tự tạo (phiếu PICK vừa đủ hàng), không
+        # phải sale bấm gửi in — xem services/delivery_planner_iot_print.py:auto_confirm_print_pick_slip.
+        is_auto = self.env.context.get('hlv_auto_print_trigger')
         for rec in records:
             # Markup(...) % (...) tự escape các giá trị chèn vào (tên user/đơn/kho), chỉ giữ
             # nguyên phần thẻ <b> tĩnh do mình viết — KHÔNG dùng body_is_html=True với chuỗi str
             # thường, vì message_post() sẽ escape luôn cả thẻ <b> lẫn nội dung (double-escape,
             # hiện ra &lt;b&gt; trên UI) nếu body không phải kiểu Markup.
-            rec.message_post(body=Markup(
-                'Sale <b>%s</b> gửi yêu cầu in đơn <b>%s</b> cho kho <b>%s</b>.'
-            ) % (rec.requested_by_id.name or '?', rec.sale_order_id.name, rec.warehouse_id.name))
+            if is_auto:
+                rec.message_post(body=Markup(
+                    'Hệ thống <b>tự động</b> gửi yêu cầu in đơn <b>%s</b> cho kho <b>%s</b> '
+                    '(phiếu lấy hàng đã giữ đủ hàng).'
+                ) % (rec.sale_order_id.name, rec.warehouse_id.name))
+            else:
+                rec.message_post(body=Markup(
+                    'Sale <b>%s</b> gửi yêu cầu in đơn <b>%s</b> cho kho <b>%s</b>.'
+                ) % (rec.requested_by_id.name or '?', rec.sale_order_id.name, rec.warehouse_id.name))
         return records
 
     def _claim_ids(self, ids):

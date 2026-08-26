@@ -564,6 +564,15 @@
                         <input type="number" id="holdQuantity" class="form-control" min="0.01" step="any" required="required"/>
                         <div class="form-text">Tối đa có thể giữ: <span id="holdQuantityMax">0</span> (số lượng sẵn sàng).</div>
                       </div>
+                      <div class="mb-3 position-relative">
+                        <label class="form-label">Khách hàng <span class="text-danger">*</span></label>
+                        <input type="text" id="holdCustomerSearch" class="form-control" autocomplete="off"
+                               placeholder="Gõ tên hoặc SĐT khách hàng để tìm..." required="required"/>
+                        <input type="hidden" id="holdCustomerId"/>
+                        <div id="holdCustomerSuggestions" class="position-absolute w-100 bg-white border rounded shadow-sm overflow-auto"
+                             style="display:none; z-index:1070; top:100%; left:0; margin-top:2px; max-height:220px;"></div>
+                        <div class="form-text">Dùng để hệ thống ưu tiên tự giữ lại hàng cho đúng đơn của khách này nếu yêu cầu bị hủy/hết hạn.</div>
+                      </div>
                       <div class="mb-3">
                         <label class="form-label">Giữ đến ngày <span class="text-danger">*</span></label>
                         <input type="date" id="holdUntilDate" class="form-control" required="required"/>
@@ -851,6 +860,8 @@
                   $('#holdRequestWarehouseName').text('Kho: ' + ($btn.data('wname') || ''));
                   $('#holdQuantityMax').text(fmt(available));
                   $('#holdQuantity').attr('max', available);
+                  $('#holdCustomerId').val('');
+                  $('#holdCustomerSuggestions').hide().empty();
 
                   var tomorrow = new Date();
                   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -859,16 +870,62 @@
                   _showModal(document.getElementById('holdRequestModal'));
               });
 
+              var holdCustomerSearchTimeout = null;
+              $(document).on('input', '#holdCustomerSearch', function() {
+                  var $input = $(this);
+                  $('#holdCustomerId').val('');
+                  var term = $input.val().trim();
+                  clearTimeout(holdCustomerSearchTimeout);
+                  if (term.length < 2) { $('#holdCustomerSuggestions').hide().empty(); return; }
+                  holdCustomerSearchTimeout = setTimeout(function() {
+                      $.ajax({
+                          url: "/search_stock/hold/customer_suggest",
+                          type: "POST", dataType: "json", contentType: "application/json",
+                          data: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { q: term }, id: new Date().getTime() }),
+                          success: function(resp) {
+                              var res = (resp && resp.result) ? resp.result : {};
+                              var customers = res.customers || [];
+                              var $box = $('#holdCustomerSuggestions');
+                              if (!customers.length) {
+                                  $box.html('<div class="p-2 text-muted small">Không tìm thấy khách hàng.</div>').show();
+                                  return;
+                              }
+                              var html = '';
+                              customers.forEach(function(c) {
+                                  html += '<div class="p-2 hold-customer-suggestion" style="cursor:pointer;" data-id="' + c.id + '" data-name="' + $('<div>').text(c.name).html() + '">' + $('<div>').text(c.name).html() + '</div>';
+                              });
+                              $box.html(html).show();
+                          }
+                      });
+                  }, 300);
+              });
+              $(document).on('click', '.hold-customer-suggestion', function() {
+                  $('#holdCustomerId').val($(this).data('id'));
+                  $('#holdCustomerSearch').val($(this).data('name'));
+                  $('#holdCustomerSuggestions').hide().empty();
+              });
+              $(document).on('click', function(e) {
+                  if (!$(e.target).closest('#holdCustomerSearch, #holdCustomerSuggestions').length) {
+                      $('#holdCustomerSuggestions').hide();
+                  }
+              });
+
               $(document).on('submit', '#holdRequestForm', function(e) {
                   e.preventDefault();
                   var $form = $(this);
                   var $submitBtn = $('#holdRequestSubmitBtn');
                   var $alert = $('#holdRequestAlert').addClass('d-none').text('');
 
+                  if (!$('#holdCustomerId').val()) {
+                      $alert.removeClass('d-none').text('Vui lòng chọn khách hàng từ danh sách gợi ý.');
+                      return;
+                  }
+
                   var payload = {
                       product_id: $form.data('pid'),
                       warehouse_id: $form.data('wid'),
                       quantity: $('#holdQuantity').val(),
+                      partner_id: $('#holdCustomerId').val(),
                       hold_until_date: $('#holdUntilDate').val(),
                       project_name: $('#holdProjectName').val(),
                       sale_name: $('#holdSaleName').val(),

@@ -106,6 +106,13 @@ class StockPicking(models.Model):
         copy=False,
         readonly=True,
     )
+    x_auto_print_requested = fields.Boolean(
+        string='Đã tự động gửi in khi đủ hàng',
+        default=False,
+        copy=False,
+        help='Đánh dấu khi hệ thống đã tự động gửi yêu cầu in phiếu này vào hàng chờ IoT lúc '
+             'phiếu vừa giữ đủ hàng — chỉ tự động gửi 1 lần cho mỗi phiếu, tránh gửi lặp.',
+    )
 
     def _is_pick_slip_picking(self):
         self.ensure_one()
@@ -580,13 +587,54 @@ class StockPicking(models.Model):
         chỉ khi ghi lên phiếu đã có."""
         records = super().create(vals_list)
         records._notify_delivery_planner_changed()
+        # Hiếm khi xảy ra (phiếu mới thường tạo ở draft/confirmed rồi mới reserve sau), nhưng
+        # nếu tồn kho đã đủ sẵn ngay lúc tạo phiếu (state='assigned' luôn từ đầu), vẫn phải bắt
+        # được — không chỉ dựa vào write() ở dưới.
+        records._auto_queue_print_when_full()
         return records
 
     def write(self, vals):
         res = super().write(vals)
         if vals and _PICK_NOTIFY_FIELDS.intersection(vals.keys()):
             self._notify_delivery_planner_changed()
+        if vals.get('state') == 'assigned':
+            self._auto_queue_print_when_full()
         return res
+
+    def _auto_queue_print_when_full(self):
+        """Tự động gửi yêu cầu in phiếu PICK vào hàng chờ IoT ngay khi phiếu vừa được giữ ĐỦ
+        hàng cho TẤT CẢ sản phẩm — state='assigned' nghĩa là mọi move còn active của phiếu đã
+        được reserve đủ (khác 'partially_available' — chỉ giữ được 1 phần). Chỉ chạy khi setting
+        hlv_sale_delivery_planning.auto_print_pick_slip_when_full đang BẬT (Settings > HLV
+        Delivery Planner). x_auto_print_requested chỉ được set khi ĐÃ GỬI THÀNH CÔNG (hoặc lý
+        do chặn không tự hết được) — tránh gửi lặp khi phiếu unreserve rồi reserve lại đủ nhiều
+        lần, nhưng vẫn cho thử lại nếu lần trước chỉ bị chặn TẠM THỜI (khóa tính năng/kho đầy)."""
+        if self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_sale_delivery_planning.auto_print_pick_slip_when_full'
+        ) not in ('1', 'True', 'true', True):
+            return
+        picks = self.filtered(
+            lambda p: p.state == 'assigned'
+            and p._is_pick_slip_picking()
+            and not p.x_auto_print_requested
+        )
+        if not picks:
+            return
+        Service = self.env['hlv.delivery.planner.service'].sudo()
+        for pick in picks:
+            result = None
+            try:
+                result = Service.auto_confirm_print_pick_slip(pick)
+            except Exception:
+                _logger.exception('Auto print pick slip failed for %s', pick.name)
+            # Chỉ đánh dấu "đã thử" khi kết quả DỨT ĐIỂM (gửi thành công, hoặc lý do không tự
+            # hết được như không xác định được đơn hàng của phiếu) — KHÔNG đánh dấu khi bị chặn
+            # bởi lý do TẠM THỜI (đang khóa tính năng / kho đang đầy hàng chờ) hay lỗi bất ngờ,
+            # để lần phiếu được reserve lại sau đó (assigned lại) còn cơ hội tự động gửi thật.
+            # Phiếu có thể unreserve/reserve lại nhiều lần (đã quan sát thực tế), nên vẫn cần
+            # chặn gửi LẶP LẠI khi đã gửi thành công — đó là lý do CHÍNH của flag này.
+            if result and (result.get('success') or not (result.get('locked') or result.get('queue_full'))):
+                pick.x_auto_print_requested = True
 
     def _action_done(self):
         res = super()._action_done()

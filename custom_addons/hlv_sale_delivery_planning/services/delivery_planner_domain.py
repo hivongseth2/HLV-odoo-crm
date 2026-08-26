@@ -88,7 +88,7 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
         self, search_query, filter_warehouse_id,
         filter_delivery_status, filter_date_from, filter_date_to,
         filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
-        filter_mine=False,
+        filter_mine=False, filter_editing_locked=False,
     ):
         """Xây dựng domain tìm kiếm Sale Order dựa trên các bộ lọc."""
         search_query = (search_query or '').strip()
@@ -191,5 +191,14 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
             # mục đích của filter này là tránh sale bấm nhầm đơn của người khác,
             # nên khi thiếu cấu hình phải trả về rỗng, không phải trả về tất cả.
             domain += mine_domain if mine_domain is not None else [('id', '=', 0)]
+
+        if filter_editing_locked:
+            # misa_sale_edit_locked là field của module misa_fetch_po_button (không phải
+            # dependency cứng của hlv_sale_delivery_planning) — check tồn tại field trước khi
+            # thêm vào domain để tránh lỗi ở DB chưa cài module đó.
+            if 'misa_sale_edit_locked' in self.env['sale.order']._fields:
+                domain += [('misa_sale_edit_locked', '=', True)]
+            else:
+                domain += [('id', '=', 0)]
 
         return domain

@@ -107,6 +107,69 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
             'message': 'Xem trước phiếu %s' % picking.name,
         }
 
+    def _enqueue_pick_print_request(self, picking, sale_order, requested_by_id=None):
+        """Tạo/refresh 1 bản ghi hàng chờ in cho picking này — phần lõi DÙNG CHUNG cho cả luồng
+        sale bấm "Xác nhận in" (confirm_print_pick_slip) và luồng hệ thống TỰ ĐỘNG gửi khi phiếu
+        vừa đủ hàng (auto_confirm_print_pick_slip). Không kiểm tra khóa/quyền/trạng thái phiếu ở
+        đây — các điều kiện đó khác nhau giữa 2 luồng, caller phải tự kiểm trước khi gọi."""
+        wh = picking.picking_type_id.warehouse_id
+        if not wh:
+            return {'success': False, 'message': 'Không xác định được kho của phiếu này'}
+
+        Queue = self.env['hlv.iot.print.queue'].sudo()
+        existing = Queue.search([
+            ('sale_order_id', '=', sale_order.id),
+            ('warehouse_id', '=', wh.id),
+            ('state', '=', 'pending'),
+        ], limit=1)
+        if existing:
+            # Đơn này ĐÃ có chỗ trong hàng chờ của kho rồi (chỉ thêm phiếu vào request cũ) —
+            # không tính là "thêm 1 đơn mới", nên không cần kiểm tra giới hạn hàng chờ.
+            existing_pickings = existing.picking_ids | picking
+            write_vals = {'picking_ids': [(6, 0, existing_pickings.ids)]}
+            if requested_by_id:
+                write_vals.update({'requested_by_id': requested_by_id, 'requested_at': fields.Datetime.now()})
+            existing.write(write_vals)
+        else:
+            # Kho có thể cấu hình số đơn TỐI ĐA đang xử lý cùng lúc (x_iot_queue_limit, 0 =
+            # không giới hạn) — chỉ áp dụng khi tạo MỘT ĐƠN MỚI trong hàng chờ, để tránh kho bị
+            # quá tải nếu nhiều sale gửi in cùng lúc.
+            limit = wh.x_iot_queue_limit or 0
+            if limit > 0:
+                active_count = Queue.count_active_for_warehouse(wh.id)
+                if active_count >= limit:
+                    return {
+                        'success': False,
+                        'queue_full': True,
+                        'message': 'Kho "%s" đang xử lý %d/%d đơn (đã đạt giới hạn) — vui lòng '
+                                    'thử gửi in lại sau khi kho xử lý xong 1 vài đơn.' % (
+                                        wh.name, active_count, limit,
+                                    ),
+                    }
+            create_vals = {
+                'sale_order_id': sale_order.id,
+                'warehouse_id': wh.id,
+                'picking_ids': [(6, 0, [picking.id])],
+            }
+            if requested_by_id:
+                create_vals['requested_by_id'] = requested_by_id
+            Queue.create(create_vals)
+
+        try:
+            self.env['bus.bus']._sendone(
+                'delivery_planner_channel', 'iot_print_queue_changed',
+                {'warehouse_ids': [wh.id], 'sale_order_id': sale_order.id},
+            )
+        except Exception:
+            _logger.debug('Failed to send iot_print_queue_changed notification', exc_info=True)
+
+        message = 'Đã gửi yêu cầu in phiếu %s cho kho %s. Kho sẽ in trong ít phút.' % (picking.name, wh.name)
+        iot_ready = bool(wh.x_iot_printer_device_id)
+        if not iot_ready:
+            message += ' CẢNH BÁO: kho "%s" chưa gán máy in IoT (vào Kho hàng > cấu hình).' % wh.name
+
+        return {'success': True, 'message': message, 'iot_ready': iot_ready}
+
     def confirm_print_pick_slip(self, picking_id):
         """Bước 2: sale đã xem preview, bấm "Xác nhận in" — tạo/refresh hàng chờ theo kho, báo
         bus realtime cho backend tự in (xem docstring module)."""
@@ -137,61 +200,25 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                 'message': 'Phiếu này chưa giữ được hàng (chưa có hàng để lấy), chưa thể gửi in.',
             }
 
-        wh = picking.picking_type_id.warehouse_id
-        if not wh:
-            return {'success': False, 'message': 'Không xác định được kho của phiếu này'}
+        return self._enqueue_pick_print_request(picking, sale_order, requested_by_id=self.env.uid)
 
-        Queue = self.env['hlv.iot.print.queue'].sudo()
-        existing = Queue.search([
-            ('sale_order_id', '=', sale_order.id),
-            ('warehouse_id', '=', wh.id),
-            ('state', '=', 'pending'),
-        ], limit=1)
-        if existing:
-            # Đơn này ĐÃ có chỗ trong hàng chờ của kho rồi (chỉ thêm phiếu vào request cũ) —
-            # không tính là "thêm 1 đơn mới", nên không cần kiểm tra giới hạn hàng chờ.
-            existing_pickings = existing.picking_ids | picking
-            existing.write({
-                'picking_ids': [(6, 0, existing_pickings.ids)],
-                'requested_by_id': self.env.uid,
-                'requested_at': fields.Datetime.now(),
-            })
-        else:
-            # Kho có thể cấu hình số đơn TỐI ĐA đang xử lý cùng lúc (x_iot_queue_limit, 0 =
-            # không giới hạn) — chỉ áp dụng khi tạo MỘT ĐƠN MỚI trong hàng chờ, để tránh kho bị
-            # quá tải nếu nhiều sale gửi in cùng lúc.
-            limit = wh.x_iot_queue_limit or 0
-            if limit > 0:
-                active_count = Queue.count_active_for_warehouse(wh.id)
-                if active_count >= limit:
-                    return {
-                        'success': False,
-                        'queue_full': True,
-                        'message': 'Kho "%s" đang xử lý %d/%d đơn (đã đạt giới hạn) — vui lòng '
-                                    'thử gửi in lại sau khi kho xử lý xong 1 vài đơn.' % (
-                                        wh.name, active_count, limit,
-                                    ),
-                    }
-            Queue.create({
-                'sale_order_id': sale_order.id,
-                'warehouse_id': wh.id,
-                'picking_ids': [(6, 0, [picking.id])],
-            })
-
-        try:
-            self.env['bus.bus']._sendone(
-                'delivery_planner_channel', 'iot_print_queue_changed',
-                {'warehouse_ids': [wh.id], 'sale_order_id': sale_order.id},
-            )
-        except Exception:
-            _logger.debug('Failed to send iot_print_queue_changed notification', exc_info=True)
-
-        message = 'Đã gửi yêu cầu in phiếu %s cho kho %s. Kho sẽ in trong ít phút.' % (picking.name, wh.name)
-        iot_ready = bool(wh.x_iot_printer_device_id)
-        if not iot_ready:
-            message += ' CẢNH BÁO: kho "%s" chưa gán máy in IoT (vào Kho hàng > cấu hình).' % wh.name
-
-        return {'success': True, 'message': message, 'iot_ready': iot_ready}
+    def auto_confirm_print_pick_slip(self, picking):
+        """Gửi yêu cầu in TỰ ĐỘNG (không phải sale bấm) ngay khi phiếu PICK vừa được giữ ĐỦ hàng
+        cho TẤT CẢ sản phẩm (state='assigned') — xem hook gọi hàm này ở
+        models/stock_picking.py:_auto_queue_print_when_full(), chỉ chạy khi setting
+        hlv_sale_delivery_planning.auto_print_pick_slip_when_full đang BẬT. Vẫn tôn trọng khóa
+        tạm tính năng (lock_pick_slip_requests) — nếu đang khóa thì auto-print cũng phải chờ,
+        không được vượt qua khóa mà sale bấm tay không vượt qua được."""
+        if self._is_pick_slip_locked():
+            return {'success': False, 'locked': True, 'message': 'Tính năng đang tạm khóa.'}
+        sale_order = self._get_sale_order_for_picking(picking)
+        if not sale_order:
+            return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
+        if picking.state != 'assigned':
+            return {'success': False, 'no_stock': True, 'message': 'Phiếu chưa giữ đủ hàng.'}
+        return self.with_context(hlv_auto_print_trigger=True)._enqueue_pick_print_request(
+            picking, sale_order
+        )
 
     def get_print_log_for_picking(self, picking_id):
         """Nhật ký in gắn thẳng vào 1 phiếu (tab "Nhật ký" trên dialog chi tiết phiếu /sale_plan)
