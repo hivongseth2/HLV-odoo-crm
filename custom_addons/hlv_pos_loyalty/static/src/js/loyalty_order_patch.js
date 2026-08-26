@@ -1,22 +1,22 @@
 /** @odoo-module */
-import { Order } from "@point_of_sale/app/store/models";
+import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { patch } from "@web/core/utils/patch";
 
-patch(Order.prototype, {
-    setup() {
-        super.setup(...arguments);
-        this.loyalty_account_id = this.loyalty_account_id || null;
-        this.loyalty_account = this.loyalty_account || null;
+patch(PosOrder.prototype, {
+    setup(vals) {
+        super.setup(vals);
+        // These fields are custom POS-only state.  They must exist before the
+        // order becomes reactive and must be restored when an offline order is
+        // loaded back from IndexedDB.
+        this.loyalty_account_id = vals.loyalty_account_id || null;
+        this.loyalty_account = vals.loyalty_account || null;
     },
 
-    export_as_JSON() {
-        const json = super.export_as_JSON(...arguments);
-        json.loyalty_account_id = this.loyalty_account_id;
-        return json;
-    },
-
-    init_from_JSON(json) {
-        super.init_from_JSON(...arguments);
-        this.loyalty_account_id = json.loyalty_account_id;
+    serialize() {
+        const data = super.serialize(...arguments);
+        // Odoo 18 sends POS orders through serialize({ orm: true }), replacing
+        // the legacy export_as_JSON() flow.
+        data.loyalty_account_id = this.loyalty_account_id || false;
+        return data;
     },
 });
