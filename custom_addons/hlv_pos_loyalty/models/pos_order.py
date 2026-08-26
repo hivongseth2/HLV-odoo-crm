@@ -64,6 +64,10 @@ class PosOrder(models.Model):
             # Tính điểm xếp hạng từ tổng tiền
             amount = order.amount_total
             points = int(amount / program.earning_amount) * program.earning_points
+            pos_line_total = sum(
+                max(line.qty or 0.0, 0.0) * max(line.price_unit or 0.0, 0.0)
+                for line in order.lines
+            )
             discount_amount = sum(
                 max(line.qty or 0.0, 0.0)
                 * max(line.price_unit or 0.0, 0.0)
@@ -71,6 +75,23 @@ class PosOrder(models.Model):
                 / 100.0
                 for line in order.lines
             )
+            discount_source = 'POS line discounts'
+            if discount_amount <= 0:
+                # Keep POS aligned with the Sale/Picking flow: when no line
+                # discount is recorded, use the member's configured default
+                # Loyalty discount as the exchange-point basis.
+                loyalty_partner = order.loyalty_account_id.partner_id
+                root_partner = (
+                    loyalty_partner._get_loyalty_root() if loyalty_partner else False
+                )
+                fallback_discount = (
+                    root_partner.loyalty_default_discount if root_partner else 0.0
+                ) or 0.0
+                if fallback_discount > 0:
+                    discount_amount = pos_line_total * fallback_discount
+                    discount_source = (
+                        f'Member default Loyalty discount ({fallback_discount:.2%})'
+                    )
             exchange_points = (
                 int(discount_amount / program.discount_per_point)
                 if discount_amount > 0 and program.discount_per_point > 0
@@ -117,7 +138,7 @@ class PosOrder(models.Model):
                     'state': 'pending',
                     'description': f'POS exchange points - Order {order_ref}',
                     'point_formula': (
-                        f'POS line discounts: {discount_amount:,.0f} VND / '
+                        f'{discount_source}: {discount_amount:,.0f} VND / '
                         f'{program.discount_per_point:,.0f} VND = '
                         f'{exchange_points} exchange points ({company_name})'
                     ),
