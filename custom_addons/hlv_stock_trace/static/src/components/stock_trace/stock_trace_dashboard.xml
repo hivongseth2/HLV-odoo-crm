@@ -4,14 +4,16 @@
     <div class="o_hst_root">
 
       <div class="o_hst_topbar">
-        <h2 class="o_hst_title">Theo dõi tồn kho theo thời gian</h2>
-        <div class="o_hst_product" t-if="state.data">
-          <t t-esc="state.data.product_name"/>
+        <div>
+          <h2 class="o_hst_title">Theo dõi tồn kho theo thời gian</h2>
+          <div class="o_hst_product" t-if="state.data">
+            <t t-esc="state.data.product_name"/>
+          </div>
         </div>
       </div>
 
       <div class="o_hst_controls">
-        <span class="o_hst_label">Trace từ ngày:</span>
+        <span class="o_hst_label">Trace từ ngày</span>
         <input type="date" class="o_hst_date_input"
                t-att-value="state.dateFromInput"
                t-on-change="onDateInput"/>
@@ -21,11 +23,11 @@
 
         <div class="o_hst_chips">
           <button class="o_hst_chip" t-att-class="{ o_hst_chip_active: state.activeRangeMonths === 1 }"
-                  t-on-click="() => this.setQuickRange(1)">1 tháng trước</button>
+                  t-on-click="() => this.setQuickRange(1)">1 tháng</button>
           <button class="o_hst_chip" t-att-class="{ o_hst_chip_active: state.activeRangeMonths === 3 }"
-                  t-on-click="() => this.setQuickRange(3)">3 tháng trước</button>
+                  t-on-click="() => this.setQuickRange(3)">3 tháng</button>
           <button class="o_hst_chip" t-att-class="{ o_hst_chip_active: state.activeRangeMonths === 6 }"
-                  t-on-click="() => this.setQuickRange(6)">6 tháng trước</button>
+                  t-on-click="() => this.setQuickRange(6)">6 tháng</button>
         </div>
 
         <button class="o_hst_btn_primary" t-on-click="reload">Trace</button>
@@ -34,22 +36,24 @@
       <div class="o_hst_breadcrumb" t-if="state.view !== 'company'">
         <a href="#" t-on-click.prevent="backToCompany">Toàn công ty</a>
         <t t-if="state.view === 'warehouse'">
-          <span> / </span>
-          <span t-esc="state.data and state.data.warehouse_name"/>
+          <span class="o_hst_crumb_sep">/</span>
+          <span class="o_hst_crumb_cur" t-esc="state.data and state.data.warehouse_name"/>
         </t>
         <t t-if="state.view === 'location'">
-          <span> / </span>
+          <span class="o_hst_crumb_sep">/</span>
           <a href="#" t-on-click.prevent="backFromLocation">
             <t t-if="state.locationOrigin === 'warehouse'" t-esc="'1 kho'"/>
             <t t-else="" t-esc="'Toàn công ty'"/>
           </a>
-          <span> / </span>
-          <span t-esc="state.data and state.data.location_name"/>
+          <span class="o_hst_crumb_sep">/</span>
+          <span class="o_hst_crumb_cur" t-esc="state.data and state.data.location_name"/>
         </t>
       </div>
 
       <div class="o_hst_error" t-if="state.error" t-esc="state.error"/>
-      <div class="o_hst_loading" t-if="state.loading">Đang tải...</div>
+      <div class="o_hst_loading" t-if="state.loading">
+        <span class="o_hst_spinner"/> Đang tải dữ liệu...
+      </div>
 
       <t t-if="!state.loading and state.data">
 
@@ -60,8 +64,9 @@
             <div class="o_hst_kpi">
               <div class="o_hst_kpi_lbl">Tồn ngày <t t-esc="formatVN(state.data.date_from)"/></div>
               <div class="o_hst_kpi_val" t-esc="formatQty(state.data.opening)"/>
+              <div class="o_hst_kpi_warn" t-if="state.data.negative_opening">⚠ xem ghi chú bên dưới</div>
             </div>
-            <div class="o_hst_kpi">
+            <div class="o_hst_kpi o_hst_kpi_accent">
               <div class="o_hst_kpi_lbl">Tồn hiện tại</div>
               <div class="o_hst_kpi_val" t-esc="formatQty(state.data.closing)"/>
             </div>
@@ -73,91 +78,111 @@
 
           <div class="o_hst_section">
             <div class="o_hst_sec_title">Luồng dịch chuyển trong kỳ</div>
-            <table class="o_hst_table">
-              <thead><tr><th>Loại</th><th>Tổng số lượng</th><th>Chi tiết</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td><span class="o_hst_pill o_hst_pill_green">Nhập kho</span></td>
-                  <td class="o_hst_pos">+<t t-esc="formatQty(state.data.flow.received)"/></td>
-                  <td class="o_hst_muted">
-                    <t t-foreach="state.data.flow.receipt_lines" t-as="l" t-key="l_index">
-                      <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
-                    </t>
-                    <t t-if="!state.data.flow.receipt_lines.length">—</t>
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="o_hst_pill o_hst_pill_red">Bán hàng (xuất)</span></td>
-                  <td class="o_hst_neg">-<t t-esc="formatQty(state.data.flow.sold)"/></td>
-                  <td class="o_hst_muted">
-                    <t t-foreach="state.data.flow.sale_lines" t-as="l" t-key="l_index">
-                      <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
-                    </t>
-                    <t t-if="!state.data.flow.sale_lines.length">—</t>
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="o_hst_pill o_hst_pill_blue">Chuyển kho nội bộ</span></td>
-                  <td>± 0 (net toàn hệ thống)</td>
-                  <td class="o_hst_muted">
-                    <t t-foreach="state.data.flow.transfer_lines" t-as="l" t-key="l_index">
-                      <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
-                    </t>
-                    <t t-if="!state.data.flow.transfer_lines.length">—</t>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="o_hst_card">
+              <table class="o_hst_table">
+                <thead><tr><th>Loại</th><th class="o_hst_num">Tổng số lượng</th><th>Chi tiết</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span class="o_hst_pill o_hst_pill_green">Nhập kho</span></td>
+                    <td class="o_hst_num o_hst_pos">+<t t-esc="formatQty(state.data.flow.received)"/></td>
+                    <td class="o_hst_muted">
+                      <t t-foreach="state.data.flow.receipt_lines" t-as="l" t-key="l_index">
+                        <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
+                      </t>
+                      <t t-if="!state.data.flow.receipt_lines.length">—</t>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="o_hst_pill o_hst_pill_red">Bán hàng (xuất)</span></td>
+                    <td class="o_hst_num o_hst_neg">-<t t-esc="formatQty(state.data.flow.sold)"/></td>
+                    <td class="o_hst_muted">
+                      <t t-foreach="state.data.flow.sale_lines" t-as="l" t-key="l_index">
+                        <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
+                      </t>
+                      <t t-if="!state.data.flow.sale_lines.length">—</t>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="o_hst_pill o_hst_pill_blue">Chuyển kho nội bộ</span></td>
+                    <td class="o_hst_num o_hst_muted">± 0 (net)</td>
+                    <td class="o_hst_muted">
+                      <t t-foreach="state.data.flow.transfer_lines" t-as="l" t-key="l_index">
+                        <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
+                      </t>
+                      <t t-if="!state.data.flow.transfer_lines.length">—</t>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="o_hst_section">
             <div class="o_hst_sec_title">Theo từng kho</div>
-            <table class="o_hst_table o_hst_table_click">
-              <thead><tr><th>Kho</th><th>Tồn đầu kỳ</th><th>Tồn hiện tại</th><th>Biến động</th></tr></thead>
-              <tbody>
-                <tr t-foreach="state.data.warehouses" t-as="wh" t-key="wh.warehouse_id or wh.warehouse_name"
-                    t-att-class="wh.warehouse_id ? 'o_hst_row_clickable' : ''"
-                    t-on-click="() => this.onWarehouseRowClick(wh.warehouse_id)">
-                  <td>
-                    <strong t-esc="wh.warehouse_name"/>
-                    <span class="o_hst_muted" t-if="wh.warehouse_id"> · <t t-esc="wh.location_count"/> vị trí</span>
-                  </td>
-                  <td t-esc="formatQty(wh.opening)"/>
-                  <td><strong t-esc="formatQty(wh.closing)"/></td>
-                  <td class="o_hst_muted">
-                    <span class="o_hst_pos" t-if="wh.received">+<t t-esc="formatQty(wh.received)"/></span>
-                    <span class="o_hst_neg" t-if="wh.sold"> · -<t t-esc="formatQty(wh.sold)"/></span>
-                    <span t-if="wh.transfer_in"> · nhận +<t t-esc="formatQty(wh.transfer_in)"/></span>
-                    <span t-if="wh.transfer_out"> · chuyển đi -<t t-esc="formatQty(wh.transfer_out)"/></span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="o_hst_card">
+              <table class="o_hst_table o_hst_table_click">
+                <thead><tr><th>Kho</th><th class="o_hst_num">Tồn đầu kỳ</th><th class="o_hst_num">Tồn hiện tại</th><th></th></tr></thead>
+                <tbody>
+                  <tr t-foreach="state.data.warehouses" t-as="wh" t-key="wh.warehouse_id or wh.warehouse_name"
+                      t-att-class="wh.warehouse_id ? 'o_hst_row_clickable' : ''"
+                      t-on-click="() => this.onWarehouseRowClick(wh.warehouse_id)">
+                    <td>
+                      <strong t-esc="wh.warehouse_name"/>
+                      <span class="o_hst_muted" t-if="wh.warehouse_id"> · <t t-esc="wh.location_count"/> vị trí</span>
+                    </td>
+                    <td class="o_hst_num">
+                      <t t-esc="formatQty(wh.opening)"/>
+                      <span class="o_hst_warn_dot" t-if="wh.negative_opening" title="Số âm — xem ghi chú">⚠</span>
+                    </td>
+                    <td class="o_hst_num"><strong t-esc="formatQty(wh.closing)"/></td>
+                    <td class="o_hst_chevron" t-if="wh.warehouse_id">›</td>
+                    <td t-else=""></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <div class="o_hst_hint">Bấm vào 1 kho để xem luồng ra/vào và luân chuyển nội bộ trong kho đó.</div>
           </div>
 
           <div class="o_hst_section">
             <div class="o_hst_sec_title">Phân bổ theo vị trí</div>
-            <table class="o_hst_table o_hst_table_click">
-              <thead><tr><th>Vị trí</th><th>Kho</th><th>Tồn đầu kỳ</th><th>Tồn hiện tại</th><th>Biến động</th></tr></thead>
-              <tbody>
-                <tr t-foreach="state.data.locations" t-as="loc" t-key="loc.location_id"
-                    class="o_hst_row_clickable"
-                    t-on-click="() => this.onLocationRowClick(loc.location_id, 'company')">
-                  <td><strong t-esc="loc.location_name"/></td>
-                  <td t-esc="loc.warehouse_name"/>
-                  <td t-esc="formatQty(loc.opening)"/>
-                  <td><strong t-esc="formatQty(loc.closing)"/></td>
-                  <td class="o_hst_muted">
-                    <span class="o_hst_pos" t-if="loc.received">+<t t-esc="formatQty(loc.received)"/></span>
-                    <span class="o_hst_neg" t-if="loc.sold"> · -<t t-esc="formatQty(loc.sold)"/></span>
-                    <span t-if="loc.transfer_in"> · nhận +<t t-esc="formatQty(loc.transfer_in)"/></span>
-                    <span t-if="loc.transfer_out"> · chuyển đi -<t t-esc="formatQty(loc.transfer_out)"/></span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="o_hst_hint">Bấm vào 1 vị trí để xem timeline chi tiết từng giao dịch.</div>
+            <div class="o_hst_card">
+              <table class="o_hst_table o_hst_table_click">
+                <thead>
+                  <tr>
+                    <th>Vị trí</th><th>Kho</th>
+                    <th class="o_hst_num">Đầu kỳ</th>
+                    <th class="o_hst_num">Nhập/nhận</th>
+                    <th class="o_hst_num">Xuất/chuyển</th>
+                    <th class="o_hst_num">Hiện tại</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr t-foreach="state.data.locations" t-as="loc" t-key="loc.location_id"
+                      class="o_hst_row_clickable"
+                      t-on-click="() => this.onLocationRowClick(loc.location_id, 'company')">
+                    <td><strong t-esc="loc.location_name"/></td>
+                    <td class="o_hst_muted" t-esc="loc.warehouse_name"/>
+                    <td class="o_hst_num">
+                      <t t-esc="formatQty(loc.opening)"/>
+                      <span class="o_hst_warn_dot" t-if="loc.negative_opening" title="Số âm — xem ghi chú">⚠</span>
+                    </td>
+                    <td class="o_hst_num o_hst_pos" t-esc="loc.inflow ? '+' + formatQty(loc.inflow) : '—'"/>
+                    <td class="o_hst_num o_hst_neg" t-esc="loc.outflow ? '-' + formatQty(loc.outflow) : '—'"/>
+                    <td class="o_hst_num"><strong t-esc="formatQty(loc.closing)"/></td>
+                    <td class="o_hst_chevron">›</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="o_hst_hint">Đầu kỳ + Nhập/nhận − Xuất/chuyển = Hiện tại. Bấm vào 1 vị trí để xem timeline chi tiết.</div>
+          </div>
+
+          <div class="o_hst_note" t-if="state.data.locations.some(l => l.negative_opening)">
+            ⚠ <strong>Vị trí có tồn đầu kỳ âm</strong> không phải lỗi dữ liệu: đó là kết quả suy ra từ (tồn hiện tại − biến động trong kỳ).
+            Số âm nghĩa là tại thời điểm đó, vị trí đang ở trạng thái "âm kho" — thường gặp ở vị trí trung chuyển/đóng gói tạm,
+            nơi hàng được đặt trước/lấy ra trước khi có đủ hàng nhập vào.
           </div>
         </t>
 
@@ -168,8 +193,9 @@
             <div class="o_hst_kpi">
               <div class="o_hst_kpi_lbl">Tồn tại kho · <t t-esc="formatVN(state.data.date_from)"/></div>
               <div class="o_hst_kpi_val" t-esc="formatQty(state.data.opening)"/>
+              <div class="o_hst_kpi_warn" t-if="state.data.negative_opening">⚠ xem ghi chú bên dưới</div>
             </div>
-            <div class="o_hst_kpi">
+            <div class="o_hst_kpi o_hst_kpi_accent">
               <div class="o_hst_kpi_lbl">Tồn tại kho · hiện tại</div>
               <div class="o_hst_kpi_val" t-esc="formatQty(state.data.closing)"/>
             </div>
@@ -181,34 +207,36 @@
 
           <div class="o_hst_section">
             <div class="o_hst_sec_title">Luồng qua lại ranh giới kho (với bên ngoài)</div>
-            <table class="o_hst_table">
-              <thead><tr><th>Loại</th><th>Số lượng</th><th>Chi tiết</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td><span class="o_hst_pill o_hst_pill_blue">Nhận từ kho khác / NCC</span></td>
-                  <td class="o_hst_pos">+<t t-esc="formatQty(state.data.boundary_flow.received + state.data.boundary_flow.transfer_in)"/></td>
-                  <td class="o_hst_muted">
-                    <t t-foreach="state.data.boundary_flow.receipt_lines.concat(state.data.boundary_flow.transfer_lines)" t-as="l" t-key="l_index">
-                      <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
-                    </t>
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="o_hst_pill o_hst_pill_red">Bán ra khỏi kho</span></td>
-                  <td class="o_hst_neg">-<t t-esc="formatQty(state.data.boundary_flow.sold)"/></td>
-                  <td class="o_hst_muted">
-                    <t t-foreach="state.data.boundary_flow.sale_lines" t-as="l" t-key="l_index">
-                      <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
-                    </t>
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="o_hst_pill o_hst_pill_blue">Chuyển đi kho khác</span></td>
-                  <td class="o_hst_neg">-<t t-esc="formatQty(state.data.boundary_flow.transfer_out)"/></td>
-                  <td></td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="o_hst_card">
+              <table class="o_hst_table">
+                <thead><tr><th>Loại</th><th class="o_hst_num">Số lượng</th><th>Chi tiết</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span class="o_hst_pill o_hst_pill_blue">Nhận từ kho khác / NCC</span></td>
+                    <td class="o_hst_num o_hst_pos">+<t t-esc="formatQty(state.data.boundary_flow.received + state.data.boundary_flow.transfer_in)"/></td>
+                    <td class="o_hst_muted">
+                      <t t-foreach="state.data.boundary_flow.receipt_lines.concat(state.data.boundary_flow.transfer_lines)" t-as="l" t-key="l_index">
+                        <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
+                      </t>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="o_hst_pill o_hst_pill_red">Bán ra khỏi kho</span></td>
+                    <td class="o_hst_num o_hst_neg">-<t t-esc="formatQty(state.data.boundary_flow.sold)"/></td>
+                    <td class="o_hst_muted">
+                      <t t-foreach="state.data.boundary_flow.sale_lines" t-as="l" t-key="l_index">
+                        <span t-esc="l.from"/> → <span t-esc="l.to"/>: <t t-esc="formatQty(l.qty)"/><t t-if="!l_last"> · </t>
+                      </t>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="o_hst_pill o_hst_pill_blue">Chuyển đi kho khác</span></td>
+                    <td class="o_hst_num o_hst_neg">-<t t-esc="formatQty(state.data.boundary_flow.transfer_out)"/></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <div class="o_hst_hint">
               Cân đối: <t t-esc="formatQty(state.data.opening)"/> (đầu kỳ)
               + <t t-esc="formatQty(state.data.boundary_flow.received + state.data.boundary_flow.transfer_in)"/> (nhận về)
@@ -220,44 +248,68 @@
 
           <div class="o_hst_section" t-if="state.data.internal_throughput.length">
             <div class="o_hst_sec_title">Luân chuyển nội bộ trong kho</div>
-            <table class="o_hst_table">
-              <thead><tr><th>Vị trí</th><th>Đã nhận (nội bộ)</th><th>Đã chuyển đi (nội bộ)</th></tr></thead>
-              <tbody>
-                <tr t-foreach="state.data.internal_throughput" t-as="t_row" t-key="t_row.location_id">
-                  <td t-esc="t_row.location_name"/>
-                  <td class="o_hst_pos" t-esc="formatQty(t_row.in)"/>
-                  <td class="o_hst_neg" t-esc="formatQty(t_row.out)"/>
-                </tr>
-              </tbody>
-            </table>
+            <div class="o_hst_card">
+              <table class="o_hst_table">
+                <thead><tr><th>Vị trí</th><th class="o_hst_num">Đã nhận (nội bộ)</th><th class="o_hst_num">Đã chuyển đi (nội bộ)</th></tr></thead>
+                <tbody>
+                  <tr t-foreach="state.data.internal_throughput" t-as="t_row" t-key="t_row.location_id">
+                    <td t-esc="t_row.location_name"/>
+                    <td class="o_hst_num o_hst_pos" t-esc="'+' + formatQty(t_row.in)"/>
+                    <td class="o_hst_num o_hst_neg" t-esc="'-' + formatQty(t_row.out)"/>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <div class="o_hst_hint">Dòng hàng đi qua nội bộ giữa các vị trí trong kho (VD: lấy hàng → đóng gói → xuất) — không đổi tổng tồn của kho.</div>
           </div>
 
           <div class="o_hst_section">
             <div class="o_hst_sec_title">Phân bổ theo vị trí trong kho</div>
-            <table class="o_hst_table o_hst_table_click">
-              <thead><tr><th>Vị trí</th><th>Tồn đầu kỳ</th><th>Tồn hiện tại</th><th>Biến động</th></tr></thead>
-              <tbody>
-                <tr t-foreach="state.data.locations" t-as="loc" t-key="loc.location_id"
-                    class="o_hst_row_clickable"
-                    t-on-click="() => this.onLocationRowClick(loc.location_id, 'warehouse')">
-                  <td><strong t-esc="loc.location_name"/></td>
-                  <td t-esc="formatQty(loc.opening)"/>
-                  <td><strong t-esc="formatQty(loc.closing)"/></td>
-                  <td class="o_hst_muted">
-                    <span class="o_hst_pos" t-if="loc.received">+<t t-esc="formatQty(loc.received)"/></span>
-                    <span class="o_hst_neg" t-if="loc.sold"> · -<t t-esc="formatQty(loc.sold)"/></span>
-                    <span t-if="loc.internal_in"> · nhận nội bộ +<t t-esc="formatQty(loc.internal_in)"/></span>
-                    <span t-if="loc.internal_out"> · chuyển nội bộ -<t t-esc="formatQty(loc.internal_out)"/></span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="o_hst_card">
+              <table class="o_hst_table o_hst_table_click">
+                <thead>
+                  <tr>
+                    <th>Vị trí</th>
+                    <th class="o_hst_num">Đầu kỳ</th>
+                    <th class="o_hst_num">Nhập/nhận</th>
+                    <th class="o_hst_num">Xuất/chuyển</th>
+                    <th class="o_hst_num">Hiện tại</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr t-foreach="state.data.locations" t-as="loc" t-key="loc.location_id"
+                      class="o_hst_row_clickable"
+                      t-on-click="() => this.onLocationRowClick(loc.location_id, 'warehouse')">
+                    <td><strong t-esc="loc.location_name"/></td>
+                    <td class="o_hst_num">
+                      <t t-esc="formatQty(loc.opening)"/>
+                      <span class="o_hst_warn_dot" t-if="loc.negative_opening" title="Số âm — xem ghi chú">⚠</span>
+                    </td>
+                    <td class="o_hst_num o_hst_pos" t-esc="loc.inflow ? '+' + formatQty(loc.inflow) : '—'"/>
+                    <td class="o_hst_num o_hst_neg" t-esc="loc.outflow ? '-' + formatQty(loc.outflow) : '—'"/>
+                    <td class="o_hst_num"><strong t-esc="formatQty(loc.closing)"/></td>
+                    <td class="o_hst_chevron">›</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="o_hst_hint">"Nhập/nhận" gồm cả nhận nội bộ trong kho; "Xuất/chuyển" gồm cả chuyển nội bộ trong kho. Đầu kỳ + Nhập/nhận − Xuất/chuyển = Hiện tại.</div>
+          </div>
+
+          <div class="o_hst_note" t-if="state.data.locations.some(l => l.negative_opening)">
+            ⚠ <strong>Vị trí có tồn đầu kỳ âm</strong> không phải lỗi dữ liệu: đó là kết quả suy ra từ (tồn hiện tại − biến động trong kỳ).
+            Số âm nghĩa là tại thời điểm đó, vị trí đang ở trạng thái "âm kho" — thường gặp ở vị trí trung chuyển/đóng gói tạm,
+            nơi hàng được đặt trước/lấy ra trước khi có đủ hàng nhập vào.
           </div>
         </t>
 
         <!-- ================= LEVEL 3 : 1 VỊ TRÍ CỤ THỂ ================= -->
         <t t-if="state.view === 'location'">
+          <div class="o_hst_note" t-if="state.data.opening_negative">
+            ⚠ Tồn đầu kỳ tại vị trí này ra số âm — suy ra từ (tồn hiện tại − biến động trong kỳ), không phải lỗi dữ liệu.
+            Thường gặp ở vị trí trung chuyển/đóng gói tạm.
+          </div>
           <div class="o_hst_section">
             <div class="o_hst_sec_title">Dòng lịch sử tại vị trí này</div>
             <div class="o_hst_timeline">

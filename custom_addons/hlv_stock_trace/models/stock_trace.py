@@ -17,12 +17,18 @@ class StockTrace(models.AbstractModel):
 
     Perf note: opening balances are derived arithmetically as
     (current on-hand from stock.quant) - (net moves in the period), using
-    2-3 grouped queries total — never one qty_available(to_date=...) call
-    per location. That historical-context call is expensive (it re-walks
-    stock.move for every distinct call), so doing it once per location in a
-    warehouse with many bin locations made the dashboard take up to a
-    minute to load; this version scales with the number of DISTINCT
-    warehouses/queries, not the number of locations.
+    a handful of grouped queries total — never one qty_available(to_date=...)
+    call per location (that is expensive: it re-walks stock.move on every
+    distinct call, which made the dashboard take up to a minute to load on
+    a warehouse with many bin locations). This version scales with the
+    number of distinct warehouses/queries, not the number of locations.
+
+    A location's "tồn đầu kỳ" can come out negative — that is not a bug,
+    it is the arithmetic reconstruction of a real Odoo state: a staging /
+    transit location can be reserved-out before it is physically restocked
+    (backorders, automated putaway). Every method below exposes
+    `negative_opening` on the row so the UI can flag it instead of hiding
+    it or making it look like broken data.
     """
     _name = "stock.trace"
     _description = "Stock Trace"
@@ -198,7 +204,11 @@ class StockTrace(models.AbstractModel):
         """One pass over an already-fetched moves recordset -> per-location
         {received, sold, transfer_in, transfer_out}, each location's own
         ledger (any move touching it counts, unlike the scope-boundary
-        version above)."""
+        version above). transfer_in/out here means "to/from another
+        internal or transit location that is NOT itself in loc_ids" —
+        i.e. it already excludes moves that are purely internal to the
+        set passed in (those are reported separately as throughput, see
+        get_warehouse_detail)."""
         result = {lid: {"received": 0.0, "sold": 0.0, "transfer_in": 0.0, "transfer_out": 0.0}
                    for lid in loc_ids}
         loc_set = set(loc_ids)
@@ -224,6 +234,27 @@ class StockTrace(models.AbstractModel):
                 else:
                     bucket["transfer_out"] += qty
         return result
+
+    def _location_row(self, loc, opening, closing, received, sold, transfer_in, transfer_out,
+                       extra=None):
+        row = {
+            "location_id": loc.id,
+            "location_name": loc.display_name,
+            "opening": self._r(opening),
+            "closing": self._r(closing),
+            "received": self._r(received),
+            "sold": self._r(sold),
+            "transfer_in": self._r(transfer_in),
+            "transfer_out": self._r(transfer_out),
+            "inflow": self._r((received or 0) + (transfer_in or 0)),
+            "outflow": self._r((sold or 0) + (transfer_out or 0)),
+            "negative_opening": self._r(opening) < 0,
+        }
+        if extra:
+            row.update(extra)
+            row["inflow"] = self._r(row["inflow"] + (extra.get("internal_in") or 0))
+            row["outflow"] = self._r(row["outflow"] + (extra.get("internal_out") or 0))
+        return row
 
     # ------------------------------------------------------------------
     # level 1: toàn công ty
@@ -290,6 +321,7 @@ class StockTrace(models.AbstractModel):
                 "sold": w_flow["sold"],
                 "transfer_in": w_flow["transfer_in"],
                 "transfer_out": w_flow["transfer_out"],
+                "negative_opening": self._r(w_opening) < 0,
             })
 
         if extra_loc_ids:
@@ -303,6 +335,7 @@ class StockTrace(models.AbstractModel):
                     "opening": self._r(t_opening),
                     "closing": self._r(t_closing),
                     "received": 0.0, "sold": 0.0, "transfer_in": 0.0, "transfer_out": 0.0,
+                    "negative_opening": self._r(t_opening) < 0,
                 })
 
         location_rows = []
@@ -314,17 +347,13 @@ class StockTrace(models.AbstractModel):
                 continue
             loc = self.env["stock.location"].browse(loc_id)
             wh = wh_loc_map.get(loc_id)
-            location_rows.append({
-                "location_id": loc_id,
-                "location_name": loc.display_name,
-                "warehouse_name": wh.name if wh else "—",
-                "opening": self._r(l_opening),
-                "closing": self._r(l_closing),
-                "received": self._r(l_flow.get("received")),
-                "sold": self._r(l_flow.get("sold")),
-                "transfer_in": self._r(l_flow.get("transfer_in")),
-                "transfer_out": self._r(l_flow.get("transfer_out")),
-            })
+            row = self._location_row(
+                loc, l_opening, l_closing,
+                l_flow.get("received"), l_flow.get("sold"),
+                l_flow.get("transfer_in"), l_flow.get("transfer_out"),
+            )
+            row["warehouse_name"] = wh.name if wh else "—"
+            location_rows.append(row)
         location_rows.sort(key=lambda r: (r["warehouse_name"], r["location_name"]))
         warehouse_rows.sort(key=lambda r: r["warehouse_name"])
 
@@ -335,6 +364,7 @@ class StockTrace(models.AbstractModel):
             "date_to": date_to_display,
             "opening": self._r(opening),
             "closing": self._r(closing),
+            "negative_opening": self._r(opening) < 0,
             "flow": flow,
             "warehouses": warehouse_rows,
             "locations": location_rows,
@@ -351,6 +381,7 @@ class StockTrace(models.AbstractModel):
 
         locs = self._warehouse_location_ids(warehouse)
         loc_ids = locs.ids
+        loc_id_set = set(loc_ids)
 
         moves = self._period_moves(product_id, date_from_str, date_to_str, loc_ids=loc_ids)
 
@@ -359,10 +390,9 @@ class StockTrace(models.AbstractModel):
         per_loc_flow = self._per_location_flow(moves, loc_ids)
 
         opening, closing = self._opening(loc_ids, quant_map, qty_in_map, qty_out_map)
-        boundary_flow = self._summarize_flow(moves, set(loc_ids))
+        boundary_flow = self._summarize_flow(moves, loc_id_set)
 
         throughput = {}
-        loc_id_set = set(loc_ids)
         for move in moves:
             if move.location_id.id not in loc_id_set or move.location_dest_id.id not in loc_id_set:
                 continue
@@ -395,18 +425,13 @@ class StockTrace(models.AbstractModel):
             if (self._r(l_opening) == 0 and self._r(l_closing) == 0
                     and not any(l_flow.values()) and not l_through["in"] and not l_through["out"]):
                 continue
-            location_rows.append({
-                "location_id": loc.id,
-                "location_name": loc.display_name,
-                "opening": self._r(l_opening),
-                "closing": self._r(l_closing),
-                "received": self._r(l_flow.get("received")),
-                "sold": self._r(l_flow.get("sold")),
-                "transfer_in": self._r(l_flow.get("transfer_in")),
-                "transfer_out": self._r(l_flow.get("transfer_out")),
-                "internal_in": self._r(l_through["in"]),
-                "internal_out": self._r(l_through["out"]),
-            })
+            row = self._location_row(
+                loc, l_opening, l_closing,
+                l_flow.get("received"), l_flow.get("sold"),
+                l_flow.get("transfer_in"), l_flow.get("transfer_out"),
+                extra={"internal_in": self._r(l_through["in"]), "internal_out": self._r(l_through["out"])},
+            )
+            location_rows.append(row)
         location_rows.sort(key=lambda r: r["location_name"])
 
         return {
@@ -418,6 +443,7 @@ class StockTrace(models.AbstractModel):
             "date_to": date_to_display,
             "opening": self._r(opening),
             "closing": self._r(closing),
+            "negative_opening": self._r(opening) < 0,
             "boundary_flow": boundary_flow,
             "internal_throughput": internal_throughput,
             "locations": location_rows,
@@ -513,5 +539,6 @@ class StockTrace(models.AbstractModel):
             "location_name": location.display_name,
             "date_from": date_from,
             "date_to": date_to_display,
+            "opening_negative": self._r(opening) < 0,
             "lines": lines,
         }
