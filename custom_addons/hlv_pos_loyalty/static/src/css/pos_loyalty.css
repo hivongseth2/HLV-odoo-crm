@@ -1,0 +1,15 @@
+.loyalty-control-wrap {
+    margin-right: 8px;
+}
+
+.loyalty-scan-btn {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 6px 12px;
+}
+
+.loyalty-member-badge {
+    background-color: #ecfdf5 !important;
+    border: 1px solid #10b981 !important;
+    border-radius: 8px;
+}
