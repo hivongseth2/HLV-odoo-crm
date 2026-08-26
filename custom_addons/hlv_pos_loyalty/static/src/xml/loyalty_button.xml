@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="hlv_pos_loyalty.LoyaltyScanButton">
+        <div class="loyalty-control-wrap d-flex align-items-center">
+            <t t-if="!loyaltyAccount">
+                <button class="btn btn-secondary loyalty-scan-btn d-flex align-items-center gap-1" t-on-click="onClickScan">
+                    <i class="fa fa-qrcode fa-lg text-primary"></i>
+                    <span>Tích điểm Loyalty</span>
+                </button>
+            </t>
+            <t t-else="">
+                <div class="loyalty-member-badge d-flex align-items-center gap-2 p-2 rounded">
+                    <i class="fa fa-star text-warning"></i>
+                    <div class="d-flex flex-column">
+                        <strong class="text-success"><t t-esc="loyaltyAccount.name"/></strong>
+                        <small class="text-muted"><t t-esc="loyaltyAccount.tier_name"/> • <t t-esc="loyaltyAccount.ranking_points"/> điểm</small>
+                    </div>
+                    <button class="btn btn-sm btn-link text-danger ms-1" t-on-click="onRemoveLoyalty">✕</button>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>
