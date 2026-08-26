@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="view_pos_order_form_inherit_loyalty" model="ir.ui.view">
-        <name>pos.order.form.inherit.loyalty</name>
-        <model>pos.order</model>
-        <inherit_id ref="point_of_sale.view_pos_pos_form"/>
-        <arch type="xml">
+        <field name="name">pos.order.form.inherit.loyalty</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="loyalty_account_id" widget="many2one" options="{'no_create': True}"/>
                 <field name="loyalty_phone"/>
                 <field name="loyalty_points_earned" decoration-success="loyalty_points_earned &gt; 0"/>
             </xpath>
-        </arch>
+        </field>
     </record>
 </odoo>
