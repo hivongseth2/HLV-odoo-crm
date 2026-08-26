@@ -59,8 +59,12 @@ class HlvCustomerRevenueReport(models.Model):
     _order = 'date_done desc'
 
     # ==================== Relations ====================
-    move_id = fields.Many2one('stock.move', string='Dịch chuyển kho', readonly=True)
-    picking_id = fields.Many2one('stock.picking', string='Phiếu xuất kho', readonly=True)
+    # Grain = 1 dòng / 1 sale.order.line (không phải 1 stock.move) - xem ghi chú dài trong init().
+    picking_id = fields.Many2one(
+        'stock.picking', string='Phiếu xuất kho (đại diện)', readonly=True,
+        help='1 dòng đơn bán có thể được xuất qua nhiều phiếu/nhiều đợt (đặc biệt với sản phẩm '
+             'combo/kit - xem BOM) - trường này chỉ mang tính đại diện, không dùng để đối soát.',
+    )
     picking_type_id = fields.Many2one('stock.picking.type', string='Loại thao tác', readonly=True)
     sale_line_id = fields.Many2one('sale.order.line', string='Dòng đơn hàng', readonly=True)
     sale_order_id = fields.Many2one('sale.order', string='Đơn hàng', readonly=True)
@@ -94,8 +98,18 @@ class HlvCustomerRevenueReport(models.Model):
     date_done = fields.Datetime(string='Ngày xuất kho', readonly=True)
 
     # ==================== Quantities ====================
-    qty_delivered = fields.Float(string='SL xuất kho', readonly=True)
-    qty_returned = fields.Float(string='SL trả hàng', readonly=True)
+    qty_delivered = fields.Float(
+        string='SL xuất kho', readonly=True,
+        help='= sale.order.line.qty_delivered (Odoo tự tính, đúng cho cả sản phẩm combo/kit - '
+             'KHÔNG cộng trực tiếp từ stock.move vì 1 dòng combo có thể nổ ra nhiều move theo '
+             'từng linh kiện, cộng thẳng sẽ bị nhân sai số lượng).',
+    )
+    qty_returned = fields.Float(
+        string='SL trả hàng', readonly=True,
+        help='= qty_delivered × (tỉ lệ trả hàng), tỉ lệ này tính từ tổng SL trả / tổng SL xuất '
+             'trên các stock.move của dòng - tỉ lệ vẫn đúng cho combo/kit (phần nhân do nổ BOM '
+             'bị triệt tiêu ở tử và mẫu), miễn linh kiện được trả tương ứng tỉ lệ với nhau.',
+    )
     qty_net = fields.Float(string='SL thực xuất (ròng)', readonly=True)
 
     # ==================== Unit prices ====================
@@ -109,8 +123,8 @@ class HlvCustomerRevenueReport(models.Model):
     )
     amount_returned = fields.Monetary(
         string='Tiền hàng trả lại (sau thuế)', currency_field='currency_id', readonly=True,
-        help='Giá trị (theo đơn giá sau thuế) phần hàng đã bị khách trả lại, xác định qua '
-             'stock.move.origin_returned_move_id của các phiếu nhập trả hàng.',
+        help='= amount_gross × tỉ lệ trả hàng. Tỉ lệ trả hàng xác định qua '
+             'stock.move.origin_returned_move_id của các phiếu nhập trả hàng (xem qty_returned).',
     )
     amount_net = fields.Monetary(
         string='Doanh thu xuất ròng (sau thuế)', currency_field='currency_id', readonly=True,
@@ -124,6 +138,22 @@ class HlvCustomerRevenueReport(models.Model):
     )
 
     def init(self):
+        """Grain = 1 dòng / 1 sale.order.line (KHÔNG phải 1 stock.move).
+
+        Lý do đổi từ "1 dòng / 1 stock.move" sang "1 dòng / 1 sale.order.line": với sản phẩm
+        combo/kit (BOM loại phantom), Odoo xuất kho bằng cách nổ 1 dòng đơn bán thành NHIỀU
+        stock.move riêng theo từng linh kiện (VD 1 dòng "Combo x4 Bộ" nổ ra 3 move: máy x4,
+        pin x8, sạc x4 - tất cả cùng trỏ về 1 sale_line_id). Nếu tính "đơn giá combo × số
+        lượng của mỗi move" như bản cũ, số tiền sẽ bị nhân theo SỐ LINH KIỆN (VD x3), sai
+        gấp nhiều lần giá trị thật của dòng đơn.
+
+        Cách sửa: lấy SỐ LƯỢNG ĐÃ XUẤT trực tiếp từ sale_order_line.qty_delivered (field có
+        sẵn của Odoo, tự tính đúng cho cả combo/kit qua logic BOM - không tự cộng từ
+        stock_move). stock_move chỉ còn dùng để tính TỈ LỆ TRẢ HÀNG (return_ratio = tổng SL
+        trả / tổng SL xuất trên các move của dòng) - tỉ lệ này vẫn đúng cho combo/kit vì hệ số
+        nhân do nổ BOM xuất hiện ở CẢ tử và mẫu nên tự triệt tiêu, miễn các linh kiện được trả
+        theo đúng tỉ lệ với nhau (trả nguyên combo, không trả lẻ 1 linh kiện).
+        """
         tools.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW hlv_customer_revenue_report AS (
@@ -134,64 +164,84 @@ class HlvCustomerRevenueReport(models.Model):
                     FROM stock_move
                     WHERE state = 'done' AND origin_returned_move_id IS NOT NULL
                     GROUP BY origin_returned_move_id
+                ),
+                line_moves AS (
+                    SELECT
+                        sm.sale_line_id AS sale_line_id,
+                        MAX(sm.picking_id) AS picking_id,
+                        MAX(sp.picking_type_id) AS picking_type_id,
+                        MAX(spt.warehouse_id) AS warehouse_id,
+                        MAX(sp.date_done) AS date_done,
+                        SUM(sm.quantity) AS raw_qty,
+                        SUM(COALESCE(mr.returned_qty, 0.0)) AS raw_returned_qty
+                    FROM stock_move sm
+                    JOIN stock_picking sp ON sp.id = sm.picking_id
+                    JOIN stock_picking_type spt ON spt.id = sp.picking_type_id
+                    LEFT JOIN move_return mr ON mr.move_id = sm.id
+                    WHERE sm.state = 'done'
+                      AND spt.code = 'outgoing'
+                      AND sm.sale_line_id IS NOT NULL
+                    GROUP BY sm.sale_line_id
                 )
                 SELECT
-                    sm.id AS id,
-                    sm.id AS move_id,
-                    sm.picking_id AS picking_id,
-                    sp.picking_type_id AS picking_type_id,
-                    sm.sale_line_id AS sale_line_id,
+                    sol.id AS id,
+                    lm.picking_id AS picking_id,
+                    lm.picking_type_id AS picking_type_id,
+                    sol.id AS sale_line_id,
                     sol.order_id AS sale_order_id,
                     so.company_id AS company_id,
-                    spt.warehouse_id AS warehouse_id,
+                    lm.warehouse_id AS warehouse_id,
                     so.user_id AS user_id,
                     so.partner_id AS order_partner_id,
                     COALESCE(rp.commercial_partner_id, so.partner_id) AS partner_id,
                     so.shopee_shop_id AS shopee_shop_id,
                     (so.shopee_shop_id IS NOT NULL OR so.shopee_order_ref IS NOT NULL
                         OR rp.name ILIKE '%shopee%') AS is_shopee,
-                    sm.product_id AS product_id,
+                    sol.product_id AS product_id,
                     pt.categ_id AS product_categ_id,
-                    sm.product_uom AS product_uom_id,
+                    sol.product_uom AS product_uom_id,
                     sol.currency_id AS currency_id,
 
                     so.date_order AS order_date,
                     so.x_studio_misa_order_date AS misa_order_date,
-                    sp.date_done AS date_done,
+                    lm.date_done AS date_done,
 
-                    sm.quantity AS qty_delivered,
-                    COALESCE(mr.returned_qty, 0.0) AS qty_returned,
-                    (sm.quantity - COALESCE(mr.returned_qty, 0.0)) AS qty_net,
+                    sol.qty_delivered AS qty_delivered,
+                    sol.qty_delivered * (CASE WHEN lm.raw_qty != 0
+                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END) AS qty_returned,
+                    sol.qty_delivered * (1 - CASE WHEN lm.raw_qty != 0
+                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END) AS qty_net,
 
                     CASE WHEN sol.product_uom_qty != 0
                          THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END AS price_unit_after_tax,
                     CASE WHEN sol.product_uom_qty != 0
                          THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END AS price_unit_before_tax,
 
-                    sm.quantity * (CASE WHEN sol.product_uom_qty != 0
+                    sol.qty_delivered * (CASE WHEN sol.product_uom_qty != 0
                         THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_gross,
-                    COALESCE(mr.returned_qty, 0.0) * (CASE WHEN sol.product_uom_qty != 0
+                    sol.qty_delivered * (CASE WHEN lm.raw_qty != 0
+                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END)
+                        * (CASE WHEN sol.product_uom_qty != 0
                         THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_returned,
-                    (sm.quantity - COALESCE(mr.returned_qty, 0.0)) * (CASE WHEN sol.product_uom_qty != 0
+                    sol.qty_delivered * (1 - CASE WHEN lm.raw_qty != 0
+                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END)
+                        * (CASE WHEN sol.product_uom_qty != 0
                         THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_net,
 
-                    sm.quantity * (CASE WHEN sol.product_uom_qty != 0
+                    sol.qty_delivered * (CASE WHEN sol.product_uom_qty != 0
                         THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END) AS amount_gross_untaxed,
-                    (sm.quantity - COALESCE(mr.returned_qty, 0.0)) * (CASE WHEN sol.product_uom_qty != 0
+                    sol.qty_delivered * (1 - CASE WHEN lm.raw_qty != 0
+                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END)
+                        * (CASE WHEN sol.product_uom_qty != 0
                         THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END) AS amount_net_untaxed
 
-                FROM stock_move sm
-                JOIN sale_order_line sol ON sol.id = sm.sale_line_id
+                FROM sale_order_line sol
                 JOIN sale_order so ON so.id = sol.order_id
-                JOIN stock_picking sp ON sp.id = sm.picking_id
-                JOIN stock_picking_type spt ON spt.id = sp.picking_type_id
+                JOIN line_moves lm ON lm.sale_line_id = sol.id
                 LEFT JOIN res_partner rp ON rp.id = so.partner_id
-                LEFT JOIN product_product pp ON pp.id = sm.product_id
+                LEFT JOIN product_product pp ON pp.id = sol.product_id
                 LEFT JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                LEFT JOIN move_return mr ON mr.move_id = sm.id
-                WHERE sm.state = 'done'
-                  AND spt.code = 'outgoing'
-                  AND sm.sale_line_id IS NOT NULL
+                WHERE sol.qty_delivered > 0
             )
         """)
 
