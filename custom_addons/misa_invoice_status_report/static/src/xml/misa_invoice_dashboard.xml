@@ -54,6 +54,12 @@
                                 <i class="fa fa-sitemap" t-att-class="{'fa-spin': state.isFlatteningChains}"/>
                                 Sửa gán lồng nhau
                             </button>
+                            <button class="btn btn-secondary miv-scan-btn"
+                                    t-on-click="repairMissingNo" t-att-disabled="state.isRepairingMissingNo"
+                                    title="Kiểm tra lại các phiếu đang 'Đã xuất HĐ' nhưng thiếu Số HĐ/Số đề nghị — dữ liệu cũ bị ghi thiếu do 1 đợt code lỗi trước đây, kiểm tra lại bằng code hiện tại (đã đúng) sẽ tự điền lại đủ.">
+                                <i class="fa fa-file-text-o" t-att-class="{'fa-spin': state.isRepairingMissingNo}"/>
+                                Sửa thiếu Số HĐ
+                            </button>
                         </t>
                         <button class="btn btn-link miv-scan-btn miv-admin-tools-toggle" t-if="state.data.can_configure"
                                 t-on-click="toggleShowAdminTools"
@@ -256,6 +262,37 @@
                     </div>
                     <div class="miv-empty" t-if="!state.isFlatteningChains and !state.chainScanProgress.total">
                         Không có phiếu nào bị gán lồng nhau.
+                    </div>
+                </div>
+
+                <!-- ===== Scan progress panel: Sửa thiếu Số HĐ ===== -->
+                <div class="miv-scan-panel" t-if="state.showMissingNoScanPanel">
+                    <div class="miv-scan-panel-header">
+                        <span>
+                            <i class="fa fa-file-text-o"/>
+                            Đang kiểm tra sửa thiếu Số HĐ:
+                            <b><t t-esc="state.missingNoScanProgress.done"/> / <t t-esc="state.missingNoScanProgress.total"/></b>
+                        </span>
+                        <i class="fa fa-times miv-scan-panel-close" t-if="!state.isRepairingMissingNo" t-on-click="closeMissingNoScanPanel"/>
+                    </div>
+                    <div class="miv-scan-progress-bar">
+                        <div class="miv-scan-progress-fill"
+                             t-attf-style="width: {{ state.missingNoScanProgress.total ? Math.round(state.missingNoScanProgress.done / state.missingNoScanProgress.total * 100) : 0 }}%"/>
+                    </div>
+                    <ul class="miv-scan-log">
+                        <li t-foreach="state.missingNoScanLog.slice(0, 8)" t-as="entry" t-key="entry_index"
+                            t-attf-class="{{ entry.error ? 'miv-scan-log-error' : '' }}">
+                            <i class="fa fa-spinner fa-spin" t-if="entry.loading"/>
+                            <i class="fa fa-check text-success" t-if="!entry.loading and !entry.error"/>
+                            <i class="fa fa-exclamation-triangle" t-if="!entry.loading and entry.error"/>
+                            <b><t t-esc="entry.name"/></b> — <t t-esc="entry.statusLabel"/>
+                        </li>
+                    </ul>
+                    <div class="miv-scan-done" t-if="!state.isRepairingMissingNo and state.missingNoScanProgress.total">
+                        <i class="fa fa-check-circle"/> Hoàn tất <t t-esc="state.missingNoScanProgress.done"/> phiếu.
+                    </div>
+                    <div class="miv-empty" t-if="!state.isRepairingMissingNo and !state.missingNoScanProgress.total">
+                        Không có phiếu nào thiếu Số HĐ.
                     </div>
                 </div>
 
