@@ -87,6 +87,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
     )
     misa_invoice_last_checked = fields.Datetime(string='MISA kiểm tra lúc', copy=False)
     misa_invoice_request_refid = fields.Char(string='MISA Request RefID', copy=False)
+    # Số ĐỀ NGHỊ xuất HĐ THẬT trên MISA (VD "KBC/OUT/11613" hoặc "DN0017572") — KHÁC
+    # misa_invoice_request_refid (UUID nội bộ MISA, không đọc được) — lấy từ status['master_refno']
+    # trong action_check_misa_invoice_status, LUÔN là refno THẬT của đề nghị tìm được (không chỉ
+    # khi khác tên phiếu) — dùng để hiển thị "đơn này đi theo đề nghị nào" cho người dùng, case
+    # thật: đơn DH...234781/phiếu KBC/OUT/11613 nhưng đề nghị lại tên "DN0017572" (sale gõ theo
+    # mã đơn hàng khi tạo đề nghị trên MISA, không theo tên phiếu).
+    misa_invoice_request_refno = fields.Char(string='Số đề nghị xuất HĐ (MISA)', copy=False)
     misa_invoice_no = fields.Char(string='Số hóa đơn MISA', copy=False)
     misa_invoice_date = fields.Date(string='Ngày hóa đơn MISA', copy=False)
     misa_invoice_amount = fields.Float(string='Tiền hóa đơn MISA', copy=False)
@@ -513,6 +520,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'misa_invoice_state': status['state'],
                 'misa_invoice_last_checked': fields.Datetime.now(),
                 'misa_invoice_request_refid': status.get('request_refid') or False,
+                'misa_invoice_request_refno': status.get('master_refno') or False,
                 'misa_invoice_no': status.get('invoice_no') or False,
             }
             # Nếu vòng quét lại phiếu đại diện ở trên (elif) VỪA gán "ăn theo" cho picking này
@@ -3512,6 +3520,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         if p.misa_invoice_master_picking_id else p.misa_invoice_effective_amount
                     ) or 0.0,
                     'invoice_no': p.misa_invoice_no or False,
+                    # Số ĐỀ NGHỊ xuất HĐ thật trên MISA (VD "DN0017572") — có thể KHÁC hẳn tên
+                    # mọi phiếu (case thật KBC/OUT/11613/đơn DH...234781, đề nghị tên
+                    # "DN0017572") — đọc từ phiếu ĐẠI DIỆN (nếu đang "ăn theo") vì phiếu ăn
+                    # theo không tự lưu refno của chính mình.
+                    'request_refno': (p.misa_invoice_master_picking_id or p).misa_invoice_request_refno or False,
                     'master_picking_id': p.misa_invoice_master_picking_id.id or False,
                     'master_picking_name': p.misa_invoice_master_picking_id.name or False,
                     'exception': p.misa_invoice_exception,
