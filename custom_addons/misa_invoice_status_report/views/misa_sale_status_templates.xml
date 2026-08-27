@@ -227,6 +227,10 @@
                             </select>
                             <i class="fa fa-chevron-down msu-select-caret"/>
                         </span>
+                        <button id="msu-saler-link-btn" class="msu-btn msu-btn-outline-primary msu-btn-sm" style="display:none"
+                                title="Copy link riêng cho đúng mã sale đang chọn — gửi link này cho sale, họ mở lên là vào thẳng đúng dữ liệu của mình, không cần tự chọn.">
+                            <i class="fa fa-link"/> Copy link cho mã này
+                        </button>
                         <span id="msu-identity-hint" class="msu-identity-hint"/>
                     </div>
                 </div>
@@ -585,8 +589,18 @@
                         {key: 'exception', label: 'Ngoại lệ'},
                         {key: 'invoiced', label: 'Đã xuất HĐ'},
                     ];
+                    // Mã sale trong URL LUÔN ưu tiên hơn giá trị đã lưu trước đó trong trình
+                    // duyệt — để "1 sale = 1 đường link riêng" hoạt động đúng dù trình duyệt đó
+                    // trước giờ dùng cho mã khác (VD máy dùng chung). ?t=<token>: link MỚI,
+                    // không lộ mã thật trên URL (token resolve về mã sau khi tải xong registry
+                    // — xem loadSalerCodes). ?saler_code=<mã>: giữ lại để tương thích link CŨ
+                    // đã lỡ chia sẻ dạng cũ, ưu tiên thấp hơn token.
+                    var urlSalerToken = new URLSearchParams(window.location.search).get('t');
+                    var urlSalerCode = new URLSearchParams(window.location.search).get('saler_code');
                     var state = {
-                        salerCode: localStorage.getItem(STORAGE_KEY) || '',
+                        salerCode: urlSalerCode || localStorage.getItem(STORAGE_KEY) || '',
+                        isAdmin: false,
+                        codeTokenMap: {},
                         search: '', stateFilter: '', dateFrom: '', dateTo: '',
                         multiOrderGroup: false, multiRequest: false,
                         page: 1, total: 0, rows: [], selected: {},
@@ -604,6 +618,34 @@
                     function fmtMoney(n) {
                         if (!n) { return '0 đ'; }
                         return Math.round(n).toLocaleString('vi-VN') + ' đ';
+                    }
+                    // Cập nhật URL theo mã sale đang xem (không tải lại trang) — để địa chỉ
+                    // trên thanh trình duyệt LUÔN là link riêng, bookmark/copy/gửi lại lúc nào
+                    // cũng đúng, kể cả sau khi tự chọn tay (không chỉ lúc vào bằng link có sẵn).
+                    // Dùng ?t=<token> (không lộ mã thật trên URL) — chỉ rơi về ?saler_code=<mã>
+                    // khi vì lý do gì đó chưa có token tương ứng (registry chưa tải xong).
+                    function syncUrlSalerCode(code) {
+                        var url = new URL(window.location.href);
+                        url.searchParams.delete('saler_code');
+                        url.searchParams.delete('t');
+                        var token = code && state.codeTokenMap[code];
+                        if (token) {
+                            url.searchParams.set('t', token);
+                        } else if (code) {
+                            url.searchParams.set('saler_code', code);
+                        }
+                        window.history.replaceState(null, '', url.toString());
+                    }
+                    function buildSalerCodeLink(code) {
+                        var url = new URL(window.location.href);
+                        url.search = '';
+                        var token = code && state.codeTokenMap[code];
+                        if (token) {
+                            url.searchParams.set('t', token);
+                        } else {
+                            url.searchParams.set('saler_code', code);
+                        }
+                        return url.toString();
                     }
                     function fmtCompactMoney(n) {
                         n = n || 0;
@@ -661,7 +703,20 @@
 
                     function loadSalerCodes() {
                         return rpc('/misa_sale_status/api/saler_codes').then(function(res) {
-                            var codes = res.codes || [];
+                            var entries = res.codes || []; // [{code, token}, ...]
+                            var codes = entries.map(function(e) { return e.code; });
+                            state.isAdmin = !!res.is_admin;
+                            state.codeTokenMap = {};
+                            entries.forEach(function(e) { state.codeTokenMap[e.code] = e.token; });
+                            // ?t=<token> ưu tiên CAO NHẤT (link mới, không lộ mã) — chỉ resolve
+                            // được ở đây vì cần có registry (đã tải xong) mới biết token khớp
+                            // mã nào. Chỉ nhận token thuộc registry của CHÍNH user đang đăng
+                            // nhập (entries ở trên đã lọc đúng phạm vi rồi, không có gì thêm để
+                            // kiểm tra) — không mở rộng quyền gì so với cơ chế cũ.
+                            if (urlSalerToken) {
+                                var matched = entries.find(function(e) { return e.token === urlSalerToken; });
+                                if (matched) { state.salerCode = matched.code; }
+                            }
                             if (!codes.length) {
                                 // Tài khoản đang đăng nhập chưa được admin gán mã sale nào
                                 // (res.users.x_misa_saler_codes rỗng) — nói rõ để không hiểu
@@ -677,6 +732,7 @@
                             });
                             if (state.salerCode && codes.indexOf(state.salerCode) !== -1) {
                                 selectEl.value = state.salerCode;
+                                syncUrlSalerCode(state.salerCode);
                                 onSalerChosen();
                             } else if (codes.length === 1) {
                                 // Chỉ có đúng 1 mã — tự chọn luôn, khỏi bắt người dùng bấm thêm
@@ -684,14 +740,35 @@
                                 state.salerCode = codes[0];
                                 selectEl.value = codes[0];
                                 localStorage.setItem(STORAGE_KEY, codes[0]);
+                                syncUrlSalerCode(codes[0]);
                                 onSalerChosen();
                             } else if (state.salerCode) {
-                                hintEl.textContent = 'Mã "' + state.salerCode + '" đã lưu trước đó không còn hợp lệ, vui lòng chọn lại.';
+                                hintEl.textContent = 'Bạn không có quyền xem mã "' + state.salerCode + '" (hoặc mã/link đã cũ), vui lòng chọn lại.';
                                 state.salerCode = '';
                                 localStorage.removeItem(STORAGE_KEY);
                             }
+                            updateSalerLinkBtn();
                         }).catch(function(e) { toast('Lỗi tải danh sách mã sale: ' + e.message, 'error'); });
                     }
+
+                    // Nút "Copy link cho mã này" — CHỈ hiện cho tài khoản "Đối soát XHD"
+                    // (state.isAdmin, xem get_misa_invoice_saler_code_registry) — gửi link
+                    // trực tiếp cho từng sale, họ mở lên vào thẳng đúng mã, khỏi phải tự chọn.
+                    function updateSalerLinkBtn() {
+                        var btn = document.getElementById('msu-saler-link-btn');
+                        btn.style.display = (state.isAdmin && state.salerCode) ? '' : 'none';
+                    }
+                    document.getElementById('msu-saler-link-btn').addEventListener('click', function() {
+                        if (!state.salerCode) { return; }
+                        var link = buildSalerCodeLink(state.salerCode);
+                        var done = function() { toast('Đã copy link cho mã ' + state.salerCode + '.', 'success'); };
+                        var fail = function() { window.prompt('Copy link này:', link); };
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(link).then(done).catch(fail);
+                        } else {
+                            fail();
+                        }
+                    });
 
                     function onSalerChosen() {
                         appEl.style.display = state.salerCode ? '' : 'none';
@@ -1105,6 +1182,8 @@
                         } else {
                             localStorage.removeItem(STORAGE_KEY);
                         }
+                        syncUrlSalerCode(state.salerCode);
+                        updateSalerLinkBtn();
                         onSalerChosen();
                     });
 

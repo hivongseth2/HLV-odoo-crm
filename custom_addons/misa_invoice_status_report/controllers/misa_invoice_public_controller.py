@@ -28,8 +28,15 @@ class MisaInvoicePublicController(http.Controller):
 
     @http.route('/misa_sale_status/api/saler_codes', type='json', auth='user', methods=['POST'])
     def api_saler_codes(self, **kwargs):
-        codes = request.env['stock.picking'].sudo().get_misa_invoice_saler_code_registry()
-        return {'status': 'success', 'codes': codes}
+        Picking = request.env['stock.picking']
+        # {code, token} thay vì chỉ mã trần — token dùng để dựng link riêng
+        # (?t=<token>) không lộ mã thật trên URL, xem _misa_invoice_saler_code_token.
+        codes = Picking.sudo().get_misa_invoice_saler_code_registry_with_tokens()
+        # is_admin: tài khoản thuộc nhóm "Đối soát XHD" — codes ở trên khi đó là TOÀN BỘ mã đã
+        # đăng ký (không chỉ của riêng họ), JS dùng cờ này để hiện thêm nút "Copy link" cho
+        # từng mã (gửi link trực tiếp cho từng sale) thay vì hiểu nhầm là họ tự có nhiều mã.
+        is_admin = request.env.user.has_group('misa_invoice_status_report.group_misa_invoice_reconciliation')
+        return {'status': 'success', 'codes': codes, 'is_admin': is_admin}
 
     @http.route('/misa_sale_status/api/list', type='json', auth='user', methods=['POST'])
     def api_list(
