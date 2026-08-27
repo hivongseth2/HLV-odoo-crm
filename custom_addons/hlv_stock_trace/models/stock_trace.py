@@ -143,10 +143,16 @@ class StockTrace(models.AbstractModel):
 
     # ---- flow classification (boundary-crossing, in-memory) ------------
     def _summarize_flow(self, moves, loc_set):
-        """Classify moves crossing the boundary of loc_set into nhập/bán/chuyển,
-        skipping moves that stay fully inside the set (pure internal circulation)."""
-        received = sold = transfer_in = transfer_out = 0.0
+        """Classify moves crossing the boundary of loc_set into nhập/bán/chuyển/
+        điều chỉnh kiểm kho, skipping moves that stay fully inside the set
+        (pure internal circulation). Inventory adjustments (usage='inventory',
+        e.g. from "Cập nhật số lượng"/kiểm kho) and manufacturing moves
+        (usage='production') are their OWN category — they must never be
+        silently folded into "received" or silently dropped, since that is
+        exactly what makes an opening-balance swing look unexplained."""
+        received = sold = transfer_in = transfer_out = adjustment = 0.0
         receipt_lines, sale_lines, transfer_pairs = [], [], {}
+        adjustment_lines = []
 
         for move in moves:
             is_dest = move.location_dest_id.id in loc_set
@@ -160,11 +166,17 @@ class StockTrace(models.AbstractModel):
 
             if is_dest:
                 other = move.location_id
-                if other.usage in ("supplier", "inventory", "production"):
+                if other.usage == "supplier":
                     received += qty
                     receipt_lines.append({
                         "from": other.display_name,
                         "to": move.location_dest_id.display_name,
+                        "qty": self._r(qty),
+                    })
+                elif other.usage in ("inventory", "production"):
+                    adjustment += qty
+                    adjustment_lines.append({
+                        "location": move.location_dest_id.display_name,
                         "qty": self._r(qty),
                     })
                 else:
@@ -181,7 +193,11 @@ class StockTrace(models.AbstractModel):
                         "qty": self._r(qty),
                     })
                 elif other.usage in ("inventory", "production"):
-                    pass  # điều chỉnh tồn kho — bỏ qua ở mức tổng hợp
+                    adjustment -= qty
+                    adjustment_lines.append({
+                        "location": move.location_id.display_name,
+                        "qty": self._r(-qty),
+                    })
                 else:
                     transfer_out += qty
                     key = (move.location_id.display_name, other.display_name)
@@ -192,6 +208,8 @@ class StockTrace(models.AbstractModel):
             "sold": self._r(sold),
             "transfer_in": self._r(transfer_in),
             "transfer_out": self._r(transfer_out),
+            "adjustment": self._r(adjustment),
+            "adjustment_lines": adjustment_lines,
             "receipt_lines": receipt_lines,
             "sale_lines": sale_lines,
             "transfer_lines": [
@@ -202,14 +220,19 @@ class StockTrace(models.AbstractModel):
 
     def _per_location_flow(self, moves, loc_ids):
         """One pass over an already-fetched moves recordset -> per-location
-        {received, sold, transfer_in, transfer_out}, each location's own
-        ledger (any move touching it counts, unlike the scope-boundary
-        version above). transfer_in/out here means "to/from another
-        internal or transit location that is NOT itself in loc_ids" —
-        i.e. it already excludes moves that are purely internal to the
+        {received, sold, transfer_in, transfer_out, adjustment}, each
+        location's own ledger (any move touching it counts, unlike the
+        scope-boundary version above). transfer_in/out here means "to/from
+        another internal or transit location that is NOT itself in loc_ids"
+        — i.e. it already excludes moves that are purely internal to the
         set passed in (those are reported separately as throughput, see
-        get_warehouse_detail)."""
-        result = {lid: {"received": 0.0, "sold": 0.0, "transfer_in": 0.0, "transfer_out": 0.0}
+        get_warehouse_detail). adjustment is SIGNED (positive = found extra
+        stock via kiểm kho, negative = written off) — inventory-adjustment
+        and production moves are never folded into received/transfer_out,
+        that mislabels them and used to make opening-balance swings look
+        unexplained."""
+        result = {lid: {"received": 0.0, "sold": 0.0, "transfer_in": 0.0, "transfer_out": 0.0,
+                         "adjustment": 0.0}
                    for lid in loc_ids}
         loc_set = set(loc_ids)
         for move in moves:
@@ -221,8 +244,10 @@ class StockTrace(models.AbstractModel):
                 continue
             if dest.id in loc_set:
                 bucket = result[dest.id]
-                if src.usage in ("supplier", "inventory", "production"):
+                if src.usage == "supplier":
                     bucket["received"] += qty
+                elif src.usage in ("inventory", "production"):
+                    bucket["adjustment"] += qty
                 else:
                     bucket["transfer_in"] += qty
             if src.id in loc_set:
@@ -230,13 +255,14 @@ class StockTrace(models.AbstractModel):
                 if dest.usage == "customer":
                     bucket["sold"] += qty
                 elif dest.usage in ("inventory", "production"):
-                    pass
+                    bucket["adjustment"] -= qty
                 else:
                     bucket["transfer_out"] += qty
         return result
 
     def _location_row(self, loc, opening, closing, received, sold, transfer_in, transfer_out,
-                       extra=None):
+                       adjustment=0.0, extra=None):
+        adj = adjustment or 0.0
         row = {
             "location_id": loc.id,
             "location_name": loc.display_name,
@@ -246,8 +272,9 @@ class StockTrace(models.AbstractModel):
             "sold": self._r(sold),
             "transfer_in": self._r(transfer_in),
             "transfer_out": self._r(transfer_out),
-            "inflow": self._r((received or 0) + (transfer_in or 0)),
-            "outflow": self._r((sold or 0) + (transfer_out or 0)),
+            "adjustment": self._r(adj),
+            "inflow": self._r((received or 0) + (transfer_in or 0) + max(adj, 0.0)),
+            "outflow": self._r((sold or 0) + (transfer_out or 0) + max(-adj, 0.0)),
             "negative_opening": self._r(opening) < 0,
         }
         if extra:
@@ -321,6 +348,7 @@ class StockTrace(models.AbstractModel):
                 "sold": w_flow["sold"],
                 "transfer_in": w_flow["transfer_in"],
                 "transfer_out": w_flow["transfer_out"],
+                "adjustment": w_flow["adjustment"],
                 "negative_opening": self._r(w_opening) < 0,
             })
 
@@ -335,6 +363,7 @@ class StockTrace(models.AbstractModel):
                     "opening": self._r(t_opening),
                     "closing": self._r(t_closing),
                     "received": 0.0, "sold": 0.0, "transfer_in": 0.0, "transfer_out": 0.0,
+                    "adjustment": 0.0,
                     "negative_opening": self._r(t_opening) < 0,
                 })
 
@@ -351,6 +380,7 @@ class StockTrace(models.AbstractModel):
                 loc, l_opening, l_closing,
                 l_flow.get("received"), l_flow.get("sold"),
                 l_flow.get("transfer_in"), l_flow.get("transfer_out"),
+                adjustment=l_flow.get("adjustment"),
             )
             row["warehouse_name"] = wh.name if wh else "—"
             location_rows.append(row)
@@ -429,6 +459,7 @@ class StockTrace(models.AbstractModel):
                 loc, l_opening, l_closing,
                 l_flow.get("received"), l_flow.get("sold"),
                 l_flow.get("transfer_in"), l_flow.get("transfer_out"),
+                adjustment=l_flow.get("adjustment"),
                 extra={"internal_in": self._r(l_through["in"]), "internal_out": self._r(l_through["out"])},
             )
             location_rows.append(row)
@@ -494,8 +525,10 @@ class StockTrace(models.AbstractModel):
             if is_dest:
                 running += qty
                 signed_qty = qty
-                if other.usage in ("supplier", "inventory", "production"):
+                if other.usage == "supplier":
                     mtype, title = "receipt", "Nhập kho"
+                elif other.usage in ("inventory", "production"):
+                    mtype, title = "adjustment", "Điều chỉnh tồn kho (kiểm kho)"
                 else:
                     mtype, title = "transfer_in", "Chuyển kho đến"
             else:
@@ -504,7 +537,7 @@ class StockTrace(models.AbstractModel):
                 if other.usage == "customer":
                     mtype, title = "sale", "Bán hàng"
                 elif other.usage in ("inventory", "production"):
-                    mtype, title = "adjustment", "Điều chỉnh tồn kho"
+                    mtype, title = "adjustment", "Điều chỉnh tồn kho (kiểm kho)"
                 else:
                     mtype, title = "transfer_out", "Chuyển kho đi"
 
@@ -541,4 +574,274 @@ class StockTrace(models.AbstractModel):
             "date_to": date_to_display,
             "opening_negative": self._r(opening) < 0,
             "lines": lines,
+        }
+
+    # ------------------------------------------------------------------
+    # "Theo ngày" — daily ledger (any scope: company / warehouse / location)
+    # ------------------------------------------------------------------
+    def _resolve_scope(self, product_id, scope_type, scope_id, date_from_str, date_to_str):
+        """Return (loc_ids, wh_of) for the given scope.
+        wh_of is a callable location_id -> warehouse_id (or None), only
+        meaningful/needed for scope_type == 'company' (to tell an
+        intra-warehouse move apart from an inter-warehouse one); it is
+        None for 'warehouse'/'location' scope, where "chuyển kho" simply
+        means "crosses the scope's own boundary"."""
+        if scope_type == "location":
+            return [scope_id], None
+        if scope_type == "warehouse":
+            return self._warehouse_location_ids(self.env["stock.warehouse"].browse(scope_id)).ids, None
+
+        warehouses = self.env["stock.warehouse"].search([])
+        wh_loc_map, known_loc_ids = {}, set()
+        for wh in warehouses:
+            for loc_id in self._warehouse_location_ids(wh).ids:
+                wh_loc_map[loc_id] = wh.id
+                known_loc_ids.add(loc_id)
+
+        period_moves = self._period_moves(product_id, date_from_str, date_to_str)
+        extra_loc_ids = set()
+        for move in period_moves:
+            for loc in (move.location_id, move.location_dest_id):
+                if loc.usage in ("internal", "transit") and loc.id not in known_loc_ids:
+                    extra_loc_ids.add(loc.id)
+        quants_here = self.env["stock.quant"].sudo().search([
+            ("product_id", "=", product_id),
+            ("location_id.usage", "in", ("internal", "transit")),
+            ("quantity", "!=", 0),
+        ])
+        extra_loc_ids |= (set(quants_here.location_id.ids) - known_loc_ids)
+
+        return list(known_loc_ids | extra_loc_ids), wh_loc_map.get
+
+    def _classify_flow(self, move, loc_id_set, wh_of=None):
+        """Classify one move against a scope into 0-2 (category, qty)
+        contributions. category in {'mua','ban','chuyen_vao','chuyen_ra',
+        'dieu_chinh'}. 'dieu_chinh' carries a SIGNED qty (positive = found
+        extra stock via kiểm kho, negative = written off) — every other
+        category carries a plain magnitude, sign is implied by the category.
+        - dest in scope, src outside: 'mua' from a real supplier; 'dieu_chinh'
+          (+) when src is the inventory-adjustment or production location
+          (never folded into 'mua' — that hides why a balance moved); else
+          'chuyen_vao' (arriving from elsewhere not itself counted, e.g.
+          warehouse scope).
+        - src in scope, dest outside: 'ban' to a real customer; 'dieu_chinh'
+          (−) for inventory-adjustment/production; else 'chuyen_ra'.
+        - both in scope: only relevant for company scope, where an
+          inter-warehouse move (src/dest belong to different warehouses)
+          still counts as a visible chuyển kho event on BOTH sides even
+          though the company total doesn't change; purely intra-warehouse
+          moves are not part of this ledger (see internal_throughput on
+          get_warehouse_detail for that)."""
+        qty = self._qty(move)
+        if qty <= 0:
+            return []
+        dest_id, src_id = move.location_dest_id.id, move.location_id.id
+        is_dest = dest_id in loc_id_set
+        is_src = src_id in loc_id_set
+
+        if is_dest and not is_src:
+            other = move.location_id
+            if other.usage == "supplier":
+                return [("mua", qty)]
+            if other.usage in ("inventory", "production"):
+                return [("dieu_chinh", qty)]
+            return [("chuyen_vao", qty)]
+        if is_src and not is_dest:
+            other = move.location_dest_id
+            if other.usage == "customer":
+                return [("ban", qty)]
+            if other.usage in ("inventory", "production"):
+                return [("dieu_chinh", -qty)]
+            return [("chuyen_ra", qty)]
+        if is_dest and is_src and wh_of is not None and wh_of(src_id) != wh_of(dest_id):
+            return [("chuyen_vao", qty), ("chuyen_ra", qty)]
+        return []
+
+    def _day_key(self, dt_utc):
+        tz_name = self.env.user.tz or "Asia/Ho_Chi_Minh"
+        try:
+            tz = pytz.timezone(tz_name)
+        except Exception:
+            tz = pytz.timezone("Asia/Ho_Chi_Minh")
+        dt = pytz.utc.localize(dt_utc.replace(tzinfo=None)).astimezone(tz)
+        return dt.strftime("%Y-%m-%d")
+
+    @api.model
+    def get_daily_ledger(self, product_id, date_from, scope_type, scope_id=None, date_to=None):
+        date_from_str, date_to_str, date_to_display = self._date_bounds(date_from, date_to)
+        loc_ids, wh_of = self._resolve_scope(product_id, scope_type, scope_id, date_from_str, date_to_str)
+        loc_id_set = set(loc_ids)
+
+        moves = self._period_moves(product_id, date_from_str, date_to_str, loc_ids=loc_ids)
+        quant_map = self._quant_map(product_id, loc_ids)
+        qty_in_map, qty_out_map = self._net_flow_maps(moves)
+        opening, closing = self._opening(loc_ids, quant_map, qty_in_map, qty_out_map)
+
+        days = {}
+        for move in moves:
+            contribs = self._classify_flow(move, loc_id_set, wh_of=wh_of)
+            if not contribs:
+                continue
+            d = self._day_key(move.date)
+            bucket = days.setdefault(d, {
+                "mua": 0.0, "ban": 0.0, "chuyen_vao": 0.0, "chuyen_ra": 0.0,
+                "dieu_chinh": 0.0, "refs": set(),
+            })
+            for cat, qty in contribs:
+                bucket[cat] += qty
+            ref = (move.picking_id.name if move.picking_id else move.name) or ""
+            if ref:
+                bucket["refs"].add(ref)
+
+        running = opening
+        day_rows = []
+        for d in sorted(days.keys()):
+            b = days[d]
+            net = b["mua"] - b["ban"] + b["chuyen_vao"] - b["chuyen_ra"] + b["dieu_chinh"]
+            running += net
+            day_rows.append({
+                "date": d,
+                "mua": self._r(b["mua"]),
+                "ban": self._r(b["ban"]),
+                "chuyen_vao": self._r(b["chuyen_vao"]),
+                "chuyen_ra": self._r(b["chuyen_ra"]),
+                "dieu_chinh": self._r(b["dieu_chinh"]),
+                "net": self._r(net),
+                "balance": self._r(running),
+                "ref_count": len(b["refs"]),
+            })
+        day_rows.reverse()  # most recent first, matching the ledger UI
+
+        return {
+            "product_id": product_id,
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "date_from": date_from,
+            "date_to": date_to_display,
+            "opening": self._r(opening),
+            "closing": self._r(closing),
+            "days": day_rows,
+        }
+
+    @api.model
+    def get_day_detail(self, product_id, day_date, scope_type, scope_id=None):
+        """Detail for ONE day (local date 'YYYY-MM-DD'), for expanding a row
+        in the daily ledger: the transactions that day (per contributing
+        location, with the phiếu/reference that caused it), and — for
+        company/warehouse scope — an end-of-day snapshot per location."""
+        date_from_str, date_to_str, _ = self._date_bounds(day_date, day_date)
+        loc_ids, wh_of = self._resolve_scope(product_id, scope_type, scope_id, date_from_str, date_to_str)
+        loc_id_set = set(loc_ids)
+
+        day_moves = self._period_moves(product_id, date_from_str, date_to_str, loc_ids=loc_ids)
+
+        transactions = []
+        for move in day_moves:
+            contribs = self._classify_flow(move, loc_id_set, wh_of=wh_of)
+            if not contribs:
+                continue
+            picking = move.picking_id
+            partner = picking.partner_id if picking else False
+            for cat, qty in contribs:
+                if cat == "dieu_chinh":
+                    # qty already signed: + found via kiểm kho, − written off
+                    if qty >= 0:
+                        loc, other = move.location_dest_id, move.location_id
+                    else:
+                        loc, other = move.location_id, move.location_dest_id
+                    signed = qty
+                elif cat in ("mua", "chuyen_vao"):
+                    loc, other, signed = move.location_dest_id, move.location_id, qty
+                else:
+                    loc, other, signed = move.location_id, move.location_dest_id, -qty
+                wh_id = wh_of(loc.id) if wh_of else None
+                transactions.append({
+                    "category": cat,
+                    "location_id": loc.id,
+                    "location_name": loc.display_name,
+                    "warehouse_name": self.env["stock.warehouse"].browse(wh_id).name if wh_id else "",
+                    "other_location": other.display_name,
+                    "time": self._utc_to_local_str(move.date, fmt="%H:%M"),
+                    "reference": (picking.name if picking else move.name) or "",
+                    "partner_name": partner.name if partner else "",
+                    "qty": self._r(signed),
+                })
+        transactions.sort(key=lambda t: t["time"])
+
+        locations_snapshot = []
+        if scope_type in ("company", "warehouse") and loc_ids:
+            quant_map = self._quant_map(product_id, loc_ids)
+            now_utc_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            after_moves = self._period_moves(product_id, date_to_str, now_utc_str, loc_ids=loc_ids)
+            qty_in_after, qty_out_after = self._net_flow_maps(after_moves)
+            total = 0.0
+            for loc_id in loc_ids:
+                bal = (quant_map.get(loc_id, 0.0)
+                       - qty_in_after.get(loc_id, 0.0) + qty_out_after.get(loc_id, 0.0))
+                bal = self._r(bal)
+                total += bal
+                loc = self.env["stock.location"].browse(loc_id)
+                wh_id = wh_of(loc_id) if wh_of else None
+                locations_snapshot.append({
+                    "location_id": loc_id,
+                    "location_name": loc.display_name,
+                    "warehouse_name": self.env["stock.warehouse"].browse(wh_id).name if wh_id else "—",
+                    "balance": bal,
+                })
+            locations_snapshot.sort(key=lambda r: (r["warehouse_name"], r["location_name"]))
+            locations_snapshot.append({
+                "location_id": False,
+                "location_name": "Tổng",
+                "warehouse_name": "",
+                "balance": self._r(total),
+                "is_total": True,
+            })
+
+        return {
+            "date": day_date,
+            "transactions": transactions,
+            "locations_snapshot": locations_snapshot,
+        }
+
+    @api.model
+    def get_scope_options(self, product_id):
+        """Populate the 'Chọn 1 kho...' / 'Chọn 1 vị trí...' pickers with
+        every warehouse and every location (internal/transit) that
+        currently holds, or has ever moved, this product."""
+        warehouses = self.env["stock.warehouse"].search([])
+        wh_loc_map, known_loc_ids = {}, set()
+        for wh in warehouses:
+            for loc_id in self._warehouse_location_ids(wh).ids:
+                wh_loc_map[loc_id] = wh
+                known_loc_ids.add(loc_id)
+
+        quants_here = self.env["stock.quant"].sudo().search([
+            ("product_id", "=", product_id),
+            ("location_id.usage", "in", ("internal", "transit")),
+        ])
+        moved_here = self.env["stock.move"].search([
+            ("product_id", "=", product_id),
+            ("state", "=", "done"),
+        ], limit=2000)
+        extra_loc_ids = set(quants_here.location_id.ids) - known_loc_ids
+        for move in moved_here:
+            for loc in (move.location_id, move.location_dest_id):
+                if loc.usage in ("internal", "transit") and loc.id not in known_loc_ids:
+                    extra_loc_ids.add(loc.id)
+
+        locations = []
+        for loc_id in (known_loc_ids | extra_loc_ids):
+            loc = self.env["stock.location"].browse(loc_id)
+            wh = wh_loc_map.get(loc_id)
+            locations.append({
+                "location_id": loc_id,
+                "location_name": loc.display_name,
+                "warehouse_id": wh.id if wh else False,
+                "warehouse_name": wh.name if wh else "—",
+            })
+        locations.sort(key=lambda r: (r["warehouse_name"], r["location_name"]))
+
+        return {
+            "warehouses": [{"warehouse_id": w.id, "warehouse_name": w.name} for w in warehouses],
+            "locations": locations,
         }
