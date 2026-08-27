@@ -240,7 +240,12 @@
                                                 <span class="ms ms-fill">account_balance</span>
                                             </div>
                                             <div class="sr-bank-confirm-info">
-                                                <div class="sr-bank-confirm-bank"><t t-out="default_bank_name"/></div>
+                                                <div class="sr-bank-confirm-bank">
+                                                    <span><t t-out="default_bank_name"/></span>
+                                                    <button type="button" id="cash-switch-to-edit" class="sr-bank-confirm-edit-btn" aria-label="Sửa thông tin nhận tiền">
+                                                        <span class="ms" style="font-size:16px">edit</span>
+                                                    </button>
+                                                </div>
                                                 <div class="sr-bank-confirm-numrow">
                                                     <span class="sr-bank-confirm-num" id="cash-stk-masked"><t t-out="default_account_number_masked"/></span>
                                                     <button type="button" class="sr-bank-confirm-eye" id="cash-stk-reveal"
@@ -256,9 +261,6 @@
                                             Vui lòng kiểm tra thông tin nhận tiền phía trên. Nếu chính xác, bấm
                                             <strong>Xác nhận, gửi yêu cầu</strong> bên dưới.
                                         </div>
-                                        <button type="button" id="cash-switch-to-edit" class="sr-rq-toggle-btn" style="margin-top:10px">
-                                            <span class="ms" style="font-size:16px">edit</span> Sửa thông tin
-                                        </button>
                                     </div>
 
                                     <div id="cash-edit-view" t-attf-style="display:#{'none' if bank_mode == 'confirm' else 'block'}">

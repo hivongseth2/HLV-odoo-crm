@@ -1005,9 +1005,17 @@ a { color:inherit; }
 .sr-bank-confirm-chip .ms { font-size:22px; }
 .sr-bank-confirm-info { flex:1; min-width:0; }
 .sr-bank-confirm-bank {
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
     font-size:.98rem; font-weight:800; color:var(--c-ink); font-family:'Plus Jakarta Sans',sans-serif;
     margin-bottom:6px;
 }
+.sr-bank-confirm-edit-btn {
+    appearance:none; -webkit-appearance:none; flex-shrink:0;
+    width:26px; height:26px; border-radius:50%; border:1px solid var(--c-out); background:#fff;
+    color:var(--c-pri); display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer;
+    transition:background .16s ease;
+}
+.sr-bank-confirm-edit-btn:hover { background:var(--c-surf-hi); }
 .sr-bank-confirm-numrow { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
 .sr-bank-confirm-num {
     /* Font monospace để mỗi ký tự (số hoặc *) chiếm đúng 1 khoảng rộng bằng
@@ -1059,6 +1067,12 @@ a { color:inherit; }
     width:100%; max-width:460px; max-height:88vh; overflow-y:auto;
     background:rgba(255,255,255,.97); border-radius:26px; padding:28px 26px;
     box-shadow:0 24px 60px rgba(0,6,40,.35);
+}
+/* Mobile: popup chiếm trọn màn hình thay vì 1 thẻ nhỏ nổi giữa nền mờ —
+   đỡ lạc lõng trên màn hình hẹp. */
+@media (max-width:600px) {
+    .sr-modal-overlay { padding:0; align-items:stretch; }
+    .sr-modal-box { max-width:none; max-height:none; width:100%; height:100%; border-radius:0; }
 }
 .sr-modal-title {
     display:flex; align-items:center; gap:9px;
