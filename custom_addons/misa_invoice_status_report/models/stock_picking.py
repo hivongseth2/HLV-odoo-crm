@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import json
 import logging
@@ -515,6 +516,33 @@ class StockPickingMisaInvoiceStatus(models.Model):
                                 "❌ [MISA GROUP DISCOVER] Lỗi quét lại phiếu đại diện %s (phát hiện qua "
                                 "master_refno của phiếu %s)", candidate_master.name, picking.name,
                             )
+
+            # QUAN TRỌNG — CHỐNG MẤT DỮ LIỆU (bài học thật: mô phỏng lại đúng luồng quét theo lô
+            # bằng request_map với khoảng ngày hẹp, phát hiện lần quét đó "không tìm ra gì" cho
+            # 1 phiếu ĐANG 'invoiced' hợp lệ — nếu ghi đè thẳng theo status ở dưới, sẽ XÓA MẤT
+            # misa_invoice_no/request_refno/request_refid ĐÚNG đã có từ trước, dù hóa đơn thật
+            # vẫn còn nguyên trên MISA, chỉ là lần tìm NÀY không thấy (phạm vi ngày/API tạm thời
+            # không đủ). Phiếu đang 'invoiced' mà lần kiểm tra này ra 'missing' HOÀN TOÀN (không
+            # tìm được request_refid nào, kể cả sau fallback theo mã đơn ở trên) → KHÔNG ghi đè,
+            # chỉ cập nhật last_checked + cảnh báo, để không tự ý "hủy" 1 hóa đơn có thật chỉ vì
+            # 1 lần tìm không ra.
+            if (
+                picking.misa_invoice_state == 'invoiced' and status['state'] != 'invoiced'
+                and not status.get('request_refid')
+            ):
+                picking.misa_invoice_last_checked = fields.Datetime.now()
+                picking.message_post(body=Markup(
+                    "<b>⚠️ Kiểm tra lại KHÔNG tìm thấy đề nghị/hóa đơn</b> (phiếu đang 'Đã xuất "
+                    "HĐ' với số %s) — GIỮ NGUYÊN dữ liệu cũ, KHÔNG tự xóa/hạ trạng thái, vì rất "
+                    "có thể do phạm vi tìm kiếm lần này chưa đủ rộng chứ không phải hóa đơn đã "
+                    "bị hủy thật. Kiểm tra tay trên MISA nếu thật sự nghi ngờ."
+                ) % (picking.misa_invoice_no or '?'))
+                results.append({
+                    'id': picking.id, 'name': picking.name,
+                    'state': picking.misa_invoice_state,
+                    'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
+                })
+                continue
 
             vals = {
                 'misa_invoice_state': status['state'],
@@ -3319,7 +3347,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
         """Mã sale MISA mà CHÍNH tài khoản đang đăng nhập (self.env.user) được cấu hình xem —
         1 tài khoản có thể có nhiều mã (VD trưởng nhóm quản lý nhiều sale), nhưng TUYỆT ĐỐI
         không gộp mã của user khác vào đây (khác hẳn thiết kế mật khẩu-chung trước đây) — nếu
-        không, bất kỳ ai đăng nhập được cũng thấy hết mã sale của toàn bộ công ty."""
+        không, bất kỳ ai đăng nhập được cũng thấy hết mã sale của toàn bộ công ty.
+
+        NGOẠI LỆ: tài khoản thuộc nhóm "Đối soát XHD" (MISA_INVOICE_RECONCILE_GROUP) được xem
+        TẤT CẢ mã đã đăng ký — để có thể chủ động chọn xem/lấy link riêng cho từng sale (VD
+        đối chiếu thay khi sale nghỉ phép, hoặc gửi link trực tiếp cho từng người) — vẫn CHỈ
+        nhóm này, không mở rộng cho ai khác."""
+        if self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+            users = self.env['res.users'].sudo().search([('x_misa_saler_codes', '!=', False)])
+            codes = []
+            seen = set()
+            for user in users:
+                for part in (user.x_misa_saler_codes or '').split(','):
+                    code = part.strip()
+                    if code and code.upper() not in seen:
+                        seen.add(code.upper())
+                        codes.append(code)
+            return sorted(codes)
         codes = []
         seen = set()
         for part in (self.env.user.x_misa_saler_codes or '').split(','):
@@ -3328,6 +3372,28 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 seen.add(code.upper())
                 codes.append(code)
         return sorted(codes)
+
+    def _misa_invoice_saler_code_token(self, code):
+        """Token dùng để đưa vào URL link riêng (/misa_sale_status?t=<token>) thay vì để mã
+        sale ở dạng dễ đọc/dễ đoán (VD "NV001") ngay trên URL — CHỈ để tránh lộ/đoán được mã
+        khi nhìn link, KHÔNG PHẢI cơ chế xác thực (xác thực THẬT vẫn luôn dựa vào session Odoo
+        đang đăng nhập + x_misa_saler_codes, xem _misa_invoice_validate_public_saler_code —
+        token này chỉ giúp resolve về đúng mã, không tự cấp thêm quyền gì). Băm nhẹ (sha256,
+        cắt ngắn) với salt lấy từ database.uuid (secret sẵn có của Odoo, không cần lưu thêm
+        bảng ánh xạ nào) — cùng 1 mã LUÔN ra cùng 1 token, để link cũ vẫn dùng lại được."""
+        secret = self.env['ir.config_parameter'].sudo().get_param('database.uuid') or 'misa-invoice-status-report'
+        raw = (code or '').strip().upper() + '|' + secret
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]
+
+    @api.model
+    def get_misa_invoice_saler_code_registry_with_tokens(self):
+        """Như get_misa_invoice_saler_code_registry() nhưng kèm token URL cho từng mã — dùng
+        cho trang public /misa_sale_status (JS tự resolve ?t=<token> về đúng mã, và dựng link
+        "Copy link" mà không hiện mã thật trên URL)."""
+        return [
+            {'code': code, 'token': self._misa_invoice_saler_code_token(code)}
+            for code in self.get_misa_invoice_saler_code_registry()
+        ]
 
     def _misa_invoice_validate_public_saler_code(self, saler_code):
         code = (saler_code or '').strip()
