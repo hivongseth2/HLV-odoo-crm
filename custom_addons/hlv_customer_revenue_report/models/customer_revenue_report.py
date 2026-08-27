@@ -1,6 +1,5 @@
 import base64
 import io
-from datetime import timedelta
 
 import xlsxwriter
 
@@ -250,19 +249,6 @@ class HlvCustomerRevenueReport(models.Model):
     # Đơn Shopee dùng chung 1 contact đại diện (VD "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE"),
     # nên với đơn Shopee ta gộp theo shopee_shop_id thay vì partner_id. group_type phân biệt
     # dòng nào là 1 khách hàng thật ('partner') và dòng nào là 1 shop Shopee ('shop').
-    @staticmethod
-    def _new_agg_entry(**extra):
-        entry = {key.split(':')[0]: 0.0 for key in MONTHLY_MEASURES}
-        entry['order_ids'] = set()
-        entry.update(extra)
-        return entry
-
-    def _accumulate(self, entry, group):
-        if group.get('sale_order_id'):
-            entry['order_ids'].add(group['sale_order_id'][0])
-        for key in ('qty_delivered', 'qty_returned', 'qty_net', 'amount_gross', 'amount_returned', 'amount_net'):
-            entry[key] += group.get(key) or 0.0
-
     def _base_date_domain(self, date_from=False, date_to=False):
         domain = []
         if date_from:
@@ -479,58 +465,69 @@ class HlvCustomerRevenueReport(models.Model):
             + self._extra_date_domain(order_date_from, order_date_to, misa_order_date_from, misa_order_date_to)
         )
 
-    @staticmethod
-    def _month_range_to_inclusive_dates(date_range):
-        """Odoo read_group trả __range dạng {'from': đầu tháng, 'to': đầu THÁNG SAU (exclusive)}.
-        Toàn bộ API này coi date_from/date_to là 2 đầu mút BAO GỒM (inclusive, giống
-        _base_date_domain/_extra_date_domain) - nên chuẩn hoá về 'YYYY-MM-DD' và lùi 'to'
-        lại 1 ngày để thành ngày cuối tháng thực, tránh lệch khi dùng lại ở endpoint khác
-        (VD /customers/detail) mà không biết quy ước exclusive riêng của read_group."""
-        raw_from = date_range.get('from')
-        raw_to = date_range.get('to')
-        date_from = fields.Datetime.from_string(raw_from).date().isoformat() if raw_from else False
-        date_to = (
-            (fields.Datetime.from_string(raw_to) - timedelta(days=1)).date().isoformat()
-            if raw_to else False
-        )
-        return date_from, date_to
-
     @api.model
     def get_group_monthly_summary(self, group_type, group_id, date_from=False, date_to=False,
                                    order_date_from=False, order_date_to=False,
                                    misa_order_date_from=False, misa_order_date_to=False):
         """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng.
 
+        Cố tình dùng SQL trực tiếp (DATE_TRUNC trên date_done) thay vì ORM read_group +
+        groupby 'date_done:month': read_group trả __range theo TIMEZONE CỦA USER (context),
+        trong khi mọi domain lọc khác trong API này (_base_date_domain, _extra_date_domain)
+        so sánh thẳng với date_done LƯU Ở UTC không qua timezone - dẫn tới lệch 1 khoảng giờ
+        (có thể lệch nguyên 1 ngày ở đầu/cuối tháng) nếu tính __range rồi đem so lại bằng
+        domain thường. DATE_TRUNC ở đây làm việc trực tiếp trên giá trị UTC lưu trong cột,
+        khớp 100% với cách get_group_month_detail/_base_date_domain đang lọc.
+
         date_from/date_to trả về trong mỗi dòng tháng là 2 đầu mút BAO GỒM (inclusive) của
         tháng đó (VD tháng 7: '2026-07-01' -> '2026-07-31') - dùng thẳng được cho
         get_group_month_detail hay bất kỳ endpoint nào khác nhận date_from/date_to.
         """
-        domain = self._group_domain(
-            group_type, group_id, date_from, date_to,
+        if not group_id:
+            raise UserError(_('Vui lòng chọn khách hàng hoặc shop Shopee.'))
+        field = 'shopee_shop_id' if group_type == 'shop' else 'partner_id'
+        where_sql, params = self._customers_summary_where(
+            date_from, date_to, False, 'all',
             order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
         )
-        groups = self.read_group(domain, MONTHLY_MEASURES, ['date_done:month', 'sale_order_id'], lazy=False)
+        where_sql = '%s AND %s = %%s' % (where_sql, field)
+        params = params + [group_id]
 
-        agg = {}
-        for g in groups:
-            month_label = g.get('date_done:month') or _('Không xác định')
-            entry = agg.get(month_label)
-            if entry is None:
-                date_range = (g.get('__range') or {}).get('date_done:month') or {}
-                month_from, month_to = self._month_range_to_inclusive_dates(date_range)
-                entry = self._new_agg_entry(
-                    month_label=month_label,
-                    date_from=month_from, date_to=month_to,
-                )
-                agg[month_label] = entry
-            self._accumulate(entry, g)
-
-        rows = []
-        for entry in agg.values():
-            entry['order_count'] = len(entry.pop('order_ids'))
-            rows.append(entry)
-        rows.sort(key=lambda r: r['date_from'] or '')
-        return rows
+        query = """
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', date_done), 'YYYY-MM') AS month_key,
+                TO_CHAR(DATE_TRUNC('month', date_done), 'YYYY-MM-DD') AS month_from,
+                TO_CHAR(DATE_TRUNC('month', date_done) + INTERVAL '1 month' - INTERVAL '1 day', 'YYYY-MM-DD') AS month_to,
+                COUNT(DISTINCT sale_order_id) AS order_count,
+                COALESCE(SUM(qty_delivered), 0) AS qty_delivered,
+                COALESCE(SUM(qty_returned), 0) AS qty_returned,
+                COALESCE(SUM(qty_net), 0) AS qty_net,
+                COALESCE(SUM(amount_gross), 0) AS amount_gross,
+                COALESCE(SUM(amount_returned), 0) AS amount_returned,
+                COALESCE(SUM(amount_net), 0) AS amount_net
+            FROM hlv_customer_revenue_report
+            WHERE {where_sql} AND date_done IS NOT NULL
+            GROUP BY 1, 2, 3
+            ORDER BY 1
+        """.format(where_sql=where_sql)
+        self.env.cr.execute(query, params)
+        rows = self.env.cr.dictfetchall()
+        result = []
+        for r in rows:
+            year, month = r['month_key'].split('-')
+            result.append({
+                'month_label': 'Tháng %d/%s' % (int(month), year),
+                'date_from': r['month_from'],
+                'date_to': r['month_to'],
+                'order_count': int(r['order_count']),
+                'qty_delivered': float(r['qty_delivered']),
+                'qty_returned': float(r['qty_returned']),
+                'qty_net': float(r['qty_net']),
+                'amount_gross': float(r['amount_gross']),
+                'amount_returned': float(r['amount_returned']),
+                'amount_net': float(r['amount_net']),
+            })
+        return result
 
     @api.model
     def get_group_month_detail(self, group_type, group_id, date_from, date_to,
