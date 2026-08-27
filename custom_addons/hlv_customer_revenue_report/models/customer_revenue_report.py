@@ -98,19 +98,24 @@ class HlvCustomerRevenueReport(models.Model):
     date_done = fields.Datetime(string='Ngày xuất kho', readonly=True)
 
     # ==================== Quantities ====================
+    # LƯU Ý: sale.order.line.qty_delivered đã tự trừ hàng trả (là số RÒNG), nên qty_net lấy
+    # thẳng từ đó; qty_delivered (gộp, trước trả) và qty_returned phải suy ngược từ qty_net và
+    # tỉ lệ trả ρ tính trên stock.move (ρ = tổng SL trả / tổng SL xuất) - xem chi tiết trong init().
     qty_delivered = fields.Float(
-        string='SL xuất kho', readonly=True,
-        help='= sale.order.line.qty_delivered (Odoo tự tính, đúng cho cả sản phẩm combo/kit - '
-             'KHÔNG cộng trực tiếp từ stock.move vì 1 dòng combo có thể nổ ra nhiều move theo '
-             'từng linh kiện, cộng thẳng sẽ bị nhân sai số lượng).',
+        string='SL xuất kho (gộp)', readonly=True,
+        help='= qty_net / (1-ρ), suy ngược từ sale.order.line.qty_delivered (vốn đã RÒNG - trừ '
+             'sẵn hàng trả) và tỉ lệ trả ρ trên stock.move. Đúng cho cả sản phẩm combo/kit vì hệ '
+             'số nhân do nổ BOM tự triệt tiêu trong ρ.',
     )
     qty_returned = fields.Float(
         string='SL trả hàng', readonly=True,
-        help='= qty_delivered × (tỉ lệ trả hàng), tỉ lệ này tính từ tổng SL trả / tổng SL xuất '
-             'trên các stock.move của dòng - tỉ lệ vẫn đúng cho combo/kit (phần nhân do nổ BOM '
-             'bị triệt tiêu ở tử và mẫu), miễn linh kiện được trả tương ứng tỉ lệ với nhau.',
+        help='= qty_delivered (gộp) - qty_net.',
     )
-    qty_net = fields.Float(string='SL thực xuất (ròng)', readonly=True)
+    qty_net = fields.Float(
+        string='SL thực xuất (ròng)', readonly=True,
+        help='= sale.order.line.qty_delivered - lấy thẳng, KHÔNG trừ thêm (field này của Odoo '
+             'đã tự net-of-return sẵn).',
+    )
 
     # ==================== Unit prices ====================
     price_unit_after_tax = fields.Float(string='Đơn giá (sau thuế)', readonly=True)
@@ -123,8 +128,7 @@ class HlvCustomerRevenueReport(models.Model):
     )
     amount_returned = fields.Monetary(
         string='Tiền hàng trả lại (sau thuế)', currency_field='currency_id', readonly=True,
-        help='= amount_gross × tỉ lệ trả hàng. Tỉ lệ trả hàng xác định qua '
-             'stock.move.origin_returned_move_id của các phiếu nhập trả hàng (xem qty_returned).',
+        help='= qty_returned × đơn giá sau thuế (xem qty_returned).',
     )
     amount_net = fields.Monetary(
         string='Doanh thu xuất ròng (sau thuế)', currency_field='currency_id', readonly=True,
@@ -147,12 +151,16 @@ class HlvCustomerRevenueReport(models.Model):
         lượng của mỗi move" như bản cũ, số tiền sẽ bị nhân theo SỐ LINH KIỆN (VD x3), sai
         gấp nhiều lần giá trị thật của dòng đơn.
 
-        Cách sửa: lấy SỐ LƯỢNG ĐÃ XUẤT trực tiếp từ sale_order_line.qty_delivered (field có
-        sẵn của Odoo, tự tính đúng cho cả combo/kit qua logic BOM - không tự cộng từ
-        stock_move). stock_move chỉ còn dùng để tính TỈ LỆ TRẢ HÀNG (return_ratio = tổng SL
-        trả / tổng SL xuất trên các move của dòng) - tỉ lệ này vẫn đúng cho combo/kit vì hệ số
-        nhân do nổ BOM xuất hiện ở CẢ tử và mẫu nên tự triệt tiêu, miễn các linh kiện được trả
-        theo đúng tỉ lệ với nhau (trả nguyên combo, không trả lẻ 1 linh kiện).
+        Cách sửa: LƯU Ý QUAN TRỌNG - sale_order_line.qty_delivered của Odoo đã tự trừ hàng
+        trả rồi (bán 16, trả 2 -> Odoo tự hạ qty_delivered về 14) - nó là số RÒNG (qty_net),
+        KHÔNG phải số gộp. Nếu lấy nó làm "gộp" rồi trừ tiếp theo tỉ lệ trả sẽ bị trừ 2 LẦN.
+
+        Công thức đúng: gọi ρ (rho) = tổng SL trả / tổng SL xuất trên các stock.move của dòng
+        (tỉ lệ này vẫn đúng cho combo/kit vì hệ số nhân do nổ BOM xuất hiện ở CẢ tử và mẫu nên
+        tự triệt tiêu). Vì qty_net = qty_gộp × (1-ρ), suy ngược ra:
+            qty_gộp    = qty_net / (1-ρ)
+            qty_trả    = qty_gộp - qty_net
+        với qty_net lấy thẳng từ sol.qty_delivered (đã đúng & an toàn cho kit).
         """
         tools.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute("""
@@ -182,66 +190,82 @@ class HlvCustomerRevenueReport(models.Model):
                       AND spt.code = 'outgoing'
                       AND sm.sale_line_id IS NOT NULL
                     GROUP BY sm.sale_line_id
+                ),
+                line_base AS (
+                    SELECT
+                        sol.id AS sale_line_id,
+                        sol.order_id AS order_id,
+                        sol.product_id AS product_id,
+                        sol.product_uom AS product_uom,
+                        sol.product_uom_qty AS product_uom_qty,
+                        sol.price_total AS price_total,
+                        sol.price_subtotal AS price_subtotal,
+                        sol.currency_id AS currency_id,
+                        lm.picking_id AS picking_id,
+                        lm.picking_type_id AS picking_type_id,
+                        lm.warehouse_id AS warehouse_id,
+                        lm.date_done AS date_done,
+                        sol.qty_delivered AS qty_net,
+                        -- qty_gộp suy ngược từ qty_net (ròng) và tỉ lệ trả ρ trên stock move;
+                        -- fallback = qty_net khi không xác định được ρ hợp lệ (VD trả 100%).
+                        CASE
+                            WHEN lm.raw_qty > 0 AND lm.raw_returned_qty < lm.raw_qty
+                                THEN sol.qty_delivered / (1 - lm.raw_returned_qty / lm.raw_qty)
+                            ELSE sol.qty_delivered
+                        END AS qty_gross
+                    FROM sale_order_line sol
+                    JOIN line_moves lm ON lm.sale_line_id = sol.id
+                    WHERE sol.qty_delivered > 0
                 )
                 SELECT
-                    sol.id AS id,
-                    lm.picking_id AS picking_id,
-                    lm.picking_type_id AS picking_type_id,
-                    sol.id AS sale_line_id,
-                    sol.order_id AS sale_order_id,
+                    lb.sale_line_id AS id,
+                    lb.picking_id AS picking_id,
+                    lb.picking_type_id AS picking_type_id,
+                    lb.sale_line_id AS sale_line_id,
+                    lb.order_id AS sale_order_id,
                     so.company_id AS company_id,
-                    lm.warehouse_id AS warehouse_id,
+                    lb.warehouse_id AS warehouse_id,
                     so.user_id AS user_id,
                     so.partner_id AS order_partner_id,
                     COALESCE(rp.commercial_partner_id, so.partner_id) AS partner_id,
                     so.shopee_shop_id AS shopee_shop_id,
                     (so.shopee_shop_id IS NOT NULL OR so.shopee_order_ref IS NOT NULL
                         OR rp.name ILIKE '%shopee%') AS is_shopee,
-                    sol.product_id AS product_id,
+                    lb.product_id AS product_id,
                     pt.categ_id AS product_categ_id,
-                    sol.product_uom AS product_uom_id,
-                    sol.currency_id AS currency_id,
+                    lb.product_uom AS product_uom_id,
+                    lb.currency_id AS currency_id,
 
                     so.date_order AS order_date,
                     so.x_studio_misa_order_date AS misa_order_date,
-                    lm.date_done AS date_done,
+                    lb.date_done AS date_done,
 
-                    sol.qty_delivered AS qty_delivered,
-                    sol.qty_delivered * (CASE WHEN lm.raw_qty != 0
-                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END) AS qty_returned,
-                    sol.qty_delivered * (1 - CASE WHEN lm.raw_qty != 0
-                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END) AS qty_net,
+                    lb.qty_gross AS qty_delivered,
+                    (lb.qty_gross - lb.qty_net) AS qty_returned,
+                    lb.qty_net AS qty_net,
 
-                    CASE WHEN sol.product_uom_qty != 0
-                         THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END AS price_unit_after_tax,
-                    CASE WHEN sol.product_uom_qty != 0
-                         THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END AS price_unit_before_tax,
+                    CASE WHEN lb.product_uom_qty != 0
+                         THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END AS price_unit_after_tax,
+                    CASE WHEN lb.product_uom_qty != 0
+                         THEN lb.price_subtotal / lb.product_uom_qty ELSE 0.0 END AS price_unit_before_tax,
 
-                    sol.qty_delivered * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_gross,
-                    sol.qty_delivered * (CASE WHEN lm.raw_qty != 0
-                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END)
-                        * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_returned,
-                    sol.qty_delivered * (1 - CASE WHEN lm.raw_qty != 0
-                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END)
-                        * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_net,
+                    lb.qty_gross * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END) AS amount_gross,
+                    (lb.qty_gross - lb.qty_net) * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END) AS amount_returned,
+                    lb.qty_net * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END) AS amount_net,
 
-                    sol.qty_delivered * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END) AS amount_gross_untaxed,
-                    sol.qty_delivered * (1 - CASE WHEN lm.raw_qty != 0
-                        THEN lm.raw_returned_qty / lm.raw_qty ELSE 0.0 END)
-                        * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END) AS amount_net_untaxed
+                    lb.qty_gross * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_subtotal / lb.product_uom_qty ELSE 0.0 END) AS amount_gross_untaxed,
+                    lb.qty_net * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_subtotal / lb.product_uom_qty ELSE 0.0 END) AS amount_net_untaxed
 
-                FROM sale_order_line sol
-                JOIN sale_order so ON so.id = sol.order_id
-                JOIN line_moves lm ON lm.sale_line_id = sol.id
+                FROM line_base lb
+                JOIN sale_order so ON so.id = lb.order_id
                 LEFT JOIN res_partner rp ON rp.id = so.partner_id
-                LEFT JOIN product_product pp ON pp.id = sol.product_id
+                LEFT JOIN product_product pp ON pp.id = lb.product_id
                 LEFT JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                WHERE sol.qty_delivered > 0
             )
         """)
 
