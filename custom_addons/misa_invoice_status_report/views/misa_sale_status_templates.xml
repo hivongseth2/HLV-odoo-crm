@@ -826,6 +826,8 @@
                         document.getElementById('msu-orders-empty').style.display = state.orders.rows.length ? 'none' : '';
                         state.orders.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
+                            tr.className = 'msu-row-clickable';
+                            tr.dataset.id = row.id;
                             var partialBadge = row.partial_coverage
                                 ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
                                 : '';
@@ -838,6 +840,13 @@
                                 '<td class="msu-col-num">' + fmtMoney(row.outstanding_amount) + '</td>' +
                                 '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>';
                             tbody.appendChild(tr);
+                        });
+                        tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
+                            tr.addEventListener('click', function() {
+                                var id = parseInt(this.dataset.id, 10);
+                                var row = state.orders.rows.find(function(r) { return r.id === id; });
+                                if (row) { openOrderDrawer(row); }
+                            });
                         });
                     }
 
