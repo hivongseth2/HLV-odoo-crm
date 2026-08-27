@@ -64,6 +64,25 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_daily_stats error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/order_list', type='json', auth='user', methods=['POST'])
+    def api_order_list(
+        self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
+        date_from='', date_to='', limit=20, offset=0, **kwargs
+    ):
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_order_list(
+                saler_code=saler_code, search=search, state=state or False,
+                partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                date_from=date_from or False, date_to=date_to or False,
+                limit=int(limit), offset=int(offset),
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_order_list error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/shopee_list', type='json', auth='user', methods=['POST'])
     def api_shopee_list(self, saler_code='', search='', state='', date_from='', date_to='', limit=50, offset=0, **kwargs):
         try:

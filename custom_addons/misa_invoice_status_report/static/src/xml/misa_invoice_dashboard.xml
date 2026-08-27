@@ -334,6 +334,14 @@
                                 <div class="miv-tile-label">Lệch tiền với MISA</div>
                             </div>
                         </div>
+                        <div class="miv-tile miv-tile-warning" t-on-click="openPartialCoverageTile"
+                             title="Đơn hàng đã có hóa đơn nhưng CHƯA phủ đủ 100% giá trị đã xuất kho — tính đúng theo mã đơn hàng qua mọi đề nghị tìm được, không chỉ đề nghị mang đúng tên phiếu.">
+                            <div class="miv-tile-icon"><i class="fa fa-pie-chart"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="state.data.partial_coverage_count"/></div>
+                                <div class="miv-tile-label">Xuất HĐ 1 phần (theo đơn)</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -898,6 +906,10 @@
                                 <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.ordersTab.multiRequestOnly" t-on-change="onOrdersMultiRequestToggle"/>
                                 Chỉ đơn xuất HĐ nhiều đợt
                             </label>
+                            <label class="miv-daily-week-toggle" title="Đơn đã có hóa đơn nhưng CHƯA phủ đủ 100% giá trị đã xuất kho — tính theo mã đơn hàng qua mọi đề nghị tìm được, bắt được cả case chỉ 1 phiếu đã 'Đã xuất HĐ' nhưng tiền không đủ.">
+                                <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.ordersTab.partialCoverageOnly" t-on-change="onOrdersPartialCoverageToggle"/>
+                                Chỉ đơn xuất HĐ 1 phần
+                            </label>
                             <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportOrdersExcel">
                                 <i class="fa fa-file-excel-o"/> Xuất Excel
                             </button>
@@ -933,6 +945,10 @@
                                         <td>
                                             <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
                                                 <t t-esc="row.state_label"/>
+                                            </span>
+                                            <span class="miv-badge miv-badge-state-requested" t-if="row.partial_coverage"
+                                                  title="Đã có hóa đơn nhưng CHƯA phủ đủ 100% giá trị đã xuất kho — xem chi tiết trong drawer.">
+                                                1 phần
                                             </span>
                                         </td>
                                         <td>

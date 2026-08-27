@@ -59,8 +59,12 @@ class HlvCustomerRevenueReport(models.Model):
     _order = 'date_done desc'
 
     # ==================== Relations ====================
-    move_id = fields.Many2one('stock.move', string='Dịch chuyển kho', readonly=True)
-    picking_id = fields.Many2one('stock.picking', string='Phiếu xuất kho', readonly=True)
+    # Grain = 1 dòng / 1 sale.order.line (không phải 1 stock.move) - xem ghi chú dài trong init().
+    picking_id = fields.Many2one(
+        'stock.picking', string='Phiếu xuất kho (đại diện)', readonly=True,
+        help='1 dòng đơn bán có thể được xuất qua nhiều phiếu/nhiều đợt (đặc biệt với sản phẩm '
+             'combo/kit - xem BOM) - trường này chỉ mang tính đại diện, không dùng để đối soát.',
+    )
     picking_type_id = fields.Many2one('stock.picking.type', string='Loại thao tác', readonly=True)
     sale_line_id = fields.Many2one('sale.order.line', string='Dòng đơn hàng', readonly=True)
     sale_order_id = fields.Many2one('sale.order', string='Đơn hàng', readonly=True)
@@ -94,9 +98,24 @@ class HlvCustomerRevenueReport(models.Model):
     date_done = fields.Datetime(string='Ngày xuất kho', readonly=True)
 
     # ==================== Quantities ====================
-    qty_delivered = fields.Float(string='SL xuất kho', readonly=True)
-    qty_returned = fields.Float(string='SL trả hàng', readonly=True)
-    qty_net = fields.Float(string='SL thực xuất (ròng)', readonly=True)
+    # LƯU Ý: sale.order.line.qty_delivered đã tự trừ hàng trả (là số RÒNG), nên qty_net lấy
+    # thẳng từ đó; qty_delivered (gộp, trước trả) và qty_returned phải suy ngược từ qty_net và
+    # tỉ lệ trả ρ tính trên stock.move (ρ = tổng SL trả / tổng SL xuất) - xem chi tiết trong init().
+    qty_delivered = fields.Float(
+        string='SL xuất kho (gộp)', readonly=True,
+        help='= qty_net / (1-ρ), suy ngược từ sale.order.line.qty_delivered (vốn đã RÒNG - trừ '
+             'sẵn hàng trả) và tỉ lệ trả ρ trên stock.move. Đúng cho cả sản phẩm combo/kit vì hệ '
+             'số nhân do nổ BOM tự triệt tiêu trong ρ.',
+    )
+    qty_returned = fields.Float(
+        string='SL trả hàng', readonly=True,
+        help='= qty_delivered (gộp) - qty_net.',
+    )
+    qty_net = fields.Float(
+        string='SL thực xuất (ròng)', readonly=True,
+        help='= sale.order.line.qty_delivered - lấy thẳng, KHÔNG trừ thêm (field này của Odoo '
+             'đã tự net-of-return sẵn).',
+    )
 
     # ==================== Unit prices ====================
     price_unit_after_tax = fields.Float(string='Đơn giá (sau thuế)', readonly=True)
@@ -109,8 +128,7 @@ class HlvCustomerRevenueReport(models.Model):
     )
     amount_returned = fields.Monetary(
         string='Tiền hàng trả lại (sau thuế)', currency_field='currency_id', readonly=True,
-        help='Giá trị (theo đơn giá sau thuế) phần hàng đã bị khách trả lại, xác định qua '
-             'stock.move.origin_returned_move_id của các phiếu nhập trả hàng.',
+        help='= qty_returned × đơn giá sau thuế (xem qty_returned).',
     )
     amount_net = fields.Monetary(
         string='Doanh thu xuất ròng (sau thuế)', currency_field='currency_id', readonly=True,
@@ -124,6 +142,26 @@ class HlvCustomerRevenueReport(models.Model):
     )
 
     def init(self):
+        """Grain = 1 dòng / 1 sale.order.line (KHÔNG phải 1 stock.move).
+
+        Lý do đổi từ "1 dòng / 1 stock.move" sang "1 dòng / 1 sale.order.line": với sản phẩm
+        combo/kit (BOM loại phantom), Odoo xuất kho bằng cách nổ 1 dòng đơn bán thành NHIỀU
+        stock.move riêng theo từng linh kiện (VD 1 dòng "Combo x4 Bộ" nổ ra 3 move: máy x4,
+        pin x8, sạc x4 - tất cả cùng trỏ về 1 sale_line_id). Nếu tính "đơn giá combo × số
+        lượng của mỗi move" như bản cũ, số tiền sẽ bị nhân theo SỐ LINH KIỆN (VD x3), sai
+        gấp nhiều lần giá trị thật của dòng đơn.
+
+        Cách sửa: LƯU Ý QUAN TRỌNG - sale_order_line.qty_delivered của Odoo đã tự trừ hàng
+        trả rồi (bán 16, trả 2 -> Odoo tự hạ qty_delivered về 14) - nó là số RÒNG (qty_net),
+        KHÔNG phải số gộp. Nếu lấy nó làm "gộp" rồi trừ tiếp theo tỉ lệ trả sẽ bị trừ 2 LẦN.
+
+        Công thức đúng: gọi ρ (rho) = tổng SL trả / tổng SL xuất trên các stock.move của dòng
+        (tỉ lệ này vẫn đúng cho combo/kit vì hệ số nhân do nổ BOM xuất hiện ở CẢ tử và mẫu nên
+        tự triệt tiêu). Vì qty_net = qty_gộp × (1-ρ), suy ngược ra:
+            qty_gộp    = qty_net / (1-ρ)
+            qty_trả    = qty_gộp - qty_net
+        với qty_net lấy thẳng từ sol.qty_delivered (đã đúng & an toàn cho kit).
+        """
         tools.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW hlv_customer_revenue_report AS (
@@ -134,64 +172,100 @@ class HlvCustomerRevenueReport(models.Model):
                     FROM stock_move
                     WHERE state = 'done' AND origin_returned_move_id IS NOT NULL
                     GROUP BY origin_returned_move_id
+                ),
+                line_moves AS (
+                    SELECT
+                        sm.sale_line_id AS sale_line_id,
+                        MAX(sm.picking_id) AS picking_id,
+                        MAX(sp.picking_type_id) AS picking_type_id,
+                        MAX(spt.warehouse_id) AS warehouse_id,
+                        MAX(sp.date_done) AS date_done,
+                        SUM(sm.quantity) AS raw_qty,
+                        SUM(COALESCE(mr.returned_qty, 0.0)) AS raw_returned_qty
+                    FROM stock_move sm
+                    JOIN stock_picking sp ON sp.id = sm.picking_id
+                    JOIN stock_picking_type spt ON spt.id = sp.picking_type_id
+                    LEFT JOIN move_return mr ON mr.move_id = sm.id
+                    WHERE sm.state = 'done'
+                      AND spt.code = 'outgoing'
+                      AND sm.sale_line_id IS NOT NULL
+                    GROUP BY sm.sale_line_id
+                ),
+                line_base AS (
+                    SELECT
+                        sol.id AS sale_line_id,
+                        sol.order_id AS order_id,
+                        sol.product_id AS product_id,
+                        sol.product_uom AS product_uom,
+                        sol.product_uom_qty AS product_uom_qty,
+                        sol.price_total AS price_total,
+                        sol.price_subtotal AS price_subtotal,
+                        sol.currency_id AS currency_id,
+                        lm.picking_id AS picking_id,
+                        lm.picking_type_id AS picking_type_id,
+                        lm.warehouse_id AS warehouse_id,
+                        lm.date_done AS date_done,
+                        sol.qty_delivered AS qty_net,
+                        -- qty_gộp suy ngược từ qty_net (ròng) và tỉ lệ trả ρ trên stock move;
+                        -- fallback = qty_net khi không xác định được ρ hợp lệ (VD trả 100%).
+                        CASE
+                            WHEN lm.raw_qty > 0 AND lm.raw_returned_qty < lm.raw_qty
+                                THEN sol.qty_delivered / (1 - lm.raw_returned_qty / lm.raw_qty)
+                            ELSE sol.qty_delivered
+                        END AS qty_gross
+                    FROM sale_order_line sol
+                    JOIN line_moves lm ON lm.sale_line_id = sol.id
+                    WHERE sol.qty_delivered > 0
                 )
                 SELECT
-                    sm.id AS id,
-                    sm.id AS move_id,
-                    sm.picking_id AS picking_id,
-                    sp.picking_type_id AS picking_type_id,
-                    sm.sale_line_id AS sale_line_id,
-                    sol.order_id AS sale_order_id,
+                    lb.sale_line_id AS id,
+                    lb.picking_id AS picking_id,
+                    lb.picking_type_id AS picking_type_id,
+                    lb.sale_line_id AS sale_line_id,
+                    lb.order_id AS sale_order_id,
                     so.company_id AS company_id,
-                    spt.warehouse_id AS warehouse_id,
+                    lb.warehouse_id AS warehouse_id,
                     so.user_id AS user_id,
                     so.partner_id AS order_partner_id,
                     COALESCE(rp.commercial_partner_id, so.partner_id) AS partner_id,
                     so.shopee_shop_id AS shopee_shop_id,
                     (so.shopee_shop_id IS NOT NULL OR so.shopee_order_ref IS NOT NULL
                         OR rp.name ILIKE '%shopee%') AS is_shopee,
-                    sm.product_id AS product_id,
+                    lb.product_id AS product_id,
                     pt.categ_id AS product_categ_id,
-                    sm.product_uom AS product_uom_id,
-                    sol.currency_id AS currency_id,
+                    lb.product_uom AS product_uom_id,
+                    lb.currency_id AS currency_id,
 
                     so.date_order AS order_date,
                     so.x_studio_misa_order_date AS misa_order_date,
-                    sp.date_done AS date_done,
+                    lb.date_done AS date_done,
 
-                    sm.quantity AS qty_delivered,
-                    COALESCE(mr.returned_qty, 0.0) AS qty_returned,
-                    (sm.quantity - COALESCE(mr.returned_qty, 0.0)) AS qty_net,
+                    lb.qty_gross AS qty_delivered,
+                    (lb.qty_gross - lb.qty_net) AS qty_returned,
+                    lb.qty_net AS qty_net,
 
-                    CASE WHEN sol.product_uom_qty != 0
-                         THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END AS price_unit_after_tax,
-                    CASE WHEN sol.product_uom_qty != 0
-                         THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END AS price_unit_before_tax,
+                    CASE WHEN lb.product_uom_qty != 0
+                         THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END AS price_unit_after_tax,
+                    CASE WHEN lb.product_uom_qty != 0
+                         THEN lb.price_subtotal / lb.product_uom_qty ELSE 0.0 END AS price_unit_before_tax,
 
-                    sm.quantity * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_gross,
-                    COALESCE(mr.returned_qty, 0.0) * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_returned,
-                    (sm.quantity - COALESCE(mr.returned_qty, 0.0)) * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_total / sol.product_uom_qty ELSE 0.0 END) AS amount_net,
+                    lb.qty_gross * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END) AS amount_gross,
+                    (lb.qty_gross - lb.qty_net) * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END) AS amount_returned,
+                    lb.qty_net * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_total / lb.product_uom_qty ELSE 0.0 END) AS amount_net,
 
-                    sm.quantity * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END) AS amount_gross_untaxed,
-                    (sm.quantity - COALESCE(mr.returned_qty, 0.0)) * (CASE WHEN sol.product_uom_qty != 0
-                        THEN sol.price_subtotal / sol.product_uom_qty ELSE 0.0 END) AS amount_net_untaxed
+                    lb.qty_gross * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_subtotal / lb.product_uom_qty ELSE 0.0 END) AS amount_gross_untaxed,
+                    lb.qty_net * (CASE WHEN lb.product_uom_qty != 0
+                        THEN lb.price_subtotal / lb.product_uom_qty ELSE 0.0 END) AS amount_net_untaxed
 
-                FROM stock_move sm
-                JOIN sale_order_line sol ON sol.id = sm.sale_line_id
-                JOIN sale_order so ON so.id = sol.order_id
-                JOIN stock_picking sp ON sp.id = sm.picking_id
-                JOIN stock_picking_type spt ON spt.id = sp.picking_type_id
+                FROM line_base lb
+                JOIN sale_order so ON so.id = lb.order_id
                 LEFT JOIN res_partner rp ON rp.id = so.partner_id
-                LEFT JOIN product_product pp ON pp.id = sm.product_id
+                LEFT JOIN product_product pp ON pp.id = lb.product_id
                 LEFT JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                LEFT JOIN move_return mr ON mr.move_id = sm.id
-                WHERE sm.state = 'done'
-                  AND spt.code = 'outgoing'
-                  AND sm.sale_line_id IS NOT NULL
             )
         """)
 
@@ -199,19 +273,6 @@ class HlvCustomerRevenueReport(models.Model):
     # Đơn Shopee dùng chung 1 contact đại diện (VD "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE"),
     # nên với đơn Shopee ta gộp theo shopee_shop_id thay vì partner_id. group_type phân biệt
     # dòng nào là 1 khách hàng thật ('partner') và dòng nào là 1 shop Shopee ('shop').
-    @staticmethod
-    def _new_agg_entry(**extra):
-        entry = {key.split(':')[0]: 0.0 for key in MONTHLY_MEASURES}
-        entry['order_ids'] = set()
-        entry.update(extra)
-        return entry
-
-    def _accumulate(self, entry, group):
-        if group.get('sale_order_id'):
-            entry['order_ids'].add(group['sale_order_id'][0])
-        for key in ('qty_delivered', 'qty_returned', 'qty_net', 'amount_gross', 'amount_returned', 'amount_net'):
-            entry[key] += group.get(key) or 0.0
-
     def _base_date_domain(self, date_from=False, date_to=False):
         domain = []
         if date_from:
@@ -381,7 +442,7 @@ class HlvCustomerRevenueReport(models.Model):
             SELECT
                 TO_CHAR(DATE_TRUNC('month', {date_col}), 'YYYY-MM') AS month_key,
                 TO_CHAR(DATE_TRUNC('month', {date_col}), 'YYYY-MM-DD') AS month_from,
-                TO_CHAR(DATE_TRUNC('month', {date_col}) + INTERVAL '1 month', 'YYYY-MM-DD') AS month_to,
+                TO_CHAR(DATE_TRUNC('month', {date_col}) + INTERVAL '1 month' - INTERVAL '1 day', 'YYYY-MM-DD') AS month_to,
                 COUNT(DISTINCT sale_order_id) AS order_count,
                 COUNT(DISTINCT CASE WHEN is_shopee AND shopee_shop_id IS NOT NULL
                     THEN -shopee_shop_id ELSE partner_id END) AS customer_count,
@@ -432,38 +493,74 @@ class HlvCustomerRevenueReport(models.Model):
     def get_group_monthly_summary(self, group_type, group_id, date_from=False, date_to=False,
                                    order_date_from=False, order_date_to=False,
                                    misa_order_date_from=False, misa_order_date_to=False):
-        """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng."""
-        domain = self._group_domain(
-            group_type, group_id, date_from, date_to,
+        """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng.
+
+        Cố tình dùng SQL trực tiếp (DATE_TRUNC trên date_done) thay vì ORM read_group +
+        groupby 'date_done:month': read_group trả __range theo TIMEZONE CỦA USER (context),
+        trong khi mọi domain lọc khác trong API này (_base_date_domain, _extra_date_domain)
+        so sánh thẳng với date_done LƯU Ở UTC không qua timezone - dẫn tới lệch 1 khoảng giờ
+        (có thể lệch nguyên 1 ngày ở đầu/cuối tháng) nếu tính __range rồi đem so lại bằng
+        domain thường. DATE_TRUNC ở đây làm việc trực tiếp trên giá trị UTC lưu trong cột,
+        khớp 100% với cách get_group_month_detail/_base_date_domain đang lọc.
+
+        date_from/date_to trả về trong mỗi dòng tháng là 2 đầu mút BAO GỒM (inclusive) của
+        tháng đó (VD tháng 7: '2026-07-01' -> '2026-07-31') - dùng thẳng được cho
+        get_group_month_detail hay bất kỳ endpoint nào khác nhận date_from/date_to.
+        """
+        if not group_id:
+            raise UserError(_('Vui lòng chọn khách hàng hoặc shop Shopee.'))
+        field = 'shopee_shop_id' if group_type == 'shop' else 'partner_id'
+        where_sql, params = self._customers_summary_where(
+            date_from, date_to, False, 'all',
             order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
         )
-        groups = self.read_group(domain, MONTHLY_MEASURES, ['date_done:month', 'sale_order_id'], lazy=False)
+        where_sql = '%s AND %s = %%s' % (where_sql, field)
+        params = params + [group_id]
 
-        agg = {}
-        for g in groups:
-            month_label = g.get('date_done:month') or _('Không xác định')
-            entry = agg.get(month_label)
-            if entry is None:
-                date_range = (g.get('__range') or {}).get('date_done:month') or {}
-                entry = self._new_agg_entry(
-                    month_label=month_label,
-                    date_from=date_range.get('from'), date_to=date_range.get('to'),
-                )
-                agg[month_label] = entry
-            self._accumulate(entry, g)
-
-        rows = []
-        for entry in agg.values():
-            entry['order_count'] = len(entry.pop('order_ids'))
-            rows.append(entry)
-        rows.sort(key=lambda r: r['date_from'] or '')
-        return rows
+        query = """
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', date_done), 'YYYY-MM') AS month_key,
+                TO_CHAR(DATE_TRUNC('month', date_done), 'YYYY-MM-DD') AS month_from,
+                TO_CHAR(DATE_TRUNC('month', date_done) + INTERVAL '1 month' - INTERVAL '1 day', 'YYYY-MM-DD') AS month_to,
+                COUNT(DISTINCT sale_order_id) AS order_count,
+                COALESCE(SUM(qty_delivered), 0) AS qty_delivered,
+                COALESCE(SUM(qty_returned), 0) AS qty_returned,
+                COALESCE(SUM(qty_net), 0) AS qty_net,
+                COALESCE(SUM(amount_gross), 0) AS amount_gross,
+                COALESCE(SUM(amount_returned), 0) AS amount_returned,
+                COALESCE(SUM(amount_net), 0) AS amount_net
+            FROM hlv_customer_revenue_report
+            WHERE {where_sql} AND date_done IS NOT NULL
+            GROUP BY 1, 2, 3
+            ORDER BY 1
+        """.format(where_sql=where_sql)
+        self.env.cr.execute(query, params)
+        rows = self.env.cr.dictfetchall()
+        result = []
+        for r in rows:
+            year, month = r['month_key'].split('-')
+            result.append({
+                'month_label': 'Tháng %d/%s' % (int(month), year),
+                'date_from': r['month_from'],
+                'date_to': r['month_to'],
+                'order_count': int(r['order_count']),
+                'qty_delivered': float(r['qty_delivered']),
+                'qty_returned': float(r['qty_returned']),
+                'qty_net': float(r['qty_net']),
+                'amount_gross': float(r['amount_gross']),
+                'amount_returned': float(r['amount_returned']),
+                'amount_net': float(r['amount_net']),
+            })
+        return result
 
     @api.model
     def get_group_month_detail(self, group_type, group_id, date_from, date_to,
                                 order_date_from=False, order_date_to=False,
                                 misa_order_date_from=False, misa_order_date_to=False):
-        """Chi tiết theo đơn hàng trong khoảng [date_from, date_to) - dùng cho drawer.
+        """Chi tiết theo đơn hàng trong khoảng [date_from, date_to] (2 đầu mút BAO GỒM,
+        giống mọi endpoint khác trong API này) - dùng cho drawer / để lấy danh sách đơn
+        hàng của 1 khách hàng trong 1 tháng. date_from/date_to nên lấy nguyên từ dòng
+        tháng do get_group_monthly_summary trả về.
 
         order_date_from/to, misa_order_date_from/to nên truyền lại giống hệt lúc gọi
         get_group_monthly_summary, để tổng các dòng ở đây khớp với dòng tháng đã hiển thị
@@ -472,11 +569,9 @@ class HlvCustomerRevenueReport(models.Model):
         if not date_from or not date_to:
             return []
         domain = self._group_domain(
-            group_type, group_id, False, False,
+            group_type, group_id, date_from, date_to,
             order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
-        ) + [
-            ('date_done', '>=', date_from), ('date_done', '<', date_to),
-        ]
+        )
         groups = self.read_group(
             domain, MONTHLY_MEASURES, ['sale_order_id'], orderby='sale_order_id asc', lazy=False,
         )
@@ -494,6 +589,59 @@ class HlvCustomerRevenueReport(models.Model):
                 'amount_net': g.get('amount_net') or 0.0,
             })
         return rows
+
+    # ==================== Chi tiết từng dòng sản phẩm (giá, số lượng...) ====================
+    @api.model
+    def get_order_lines_detail(self, order_name=False, group_type='partner', group_id=False,
+                                date_from=False, date_to=False,
+                                order_date_from=False, order_date_to=False,
+                                misa_order_date_from=False, misa_order_date_to=False,
+                                limit=500, offset=0):
+        """Chi tiết TỪNG DÒNG SẢN PHẨM (không gộp theo đơn hàng như get_group_month_detail)
+        - trả về sản phẩm, số lượng, đơn giá, thành tiền của từng dòng.
+
+        2 cách gọi:
+        - order_name: chỉ lấy đúng 1 đơn hàng này (VD "DH125524949234726") - bỏ qua group_id/date.
+        - Không truyền order_name: bắt buộc group_type + group_id, lọc thêm theo date_from/date_to
+          (+ order_date_from/to, misa_order_date_from/to) như các endpoint khác - lấy TẤT CẢ dòng
+          sản phẩm của khách hàng/shop đó trong khoảng thời gian.
+        """
+        if order_name:
+            domain = [('sale_order_id.name', '=', order_name)]
+        else:
+            if not group_id:
+                raise UserError(_('Vui lòng truyền order_name, hoặc group_id + khoảng ngày.'))
+            domain = self._group_domain(
+                group_type, group_id, date_from, date_to,
+                order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+            )
+
+        total_count = self.search_count(domain)
+        records = self.search(domain, order='sale_order_id, id', limit=limit, offset=offset)
+        rows = [{
+            'sale_order_id': r.sale_order_id.id,
+            'sale_order_name': r.sale_order_id.name,
+            'partner_id': r.partner_id.id,
+            'partner_name': r.partner_id.name,
+            'product_id': r.product_id.id,
+            'product_name': r.product_id.display_name,
+            'product_code': r.product_id.default_code or '',
+            'product_category': r.product_categ_id.name or '',
+            'uom': r.product_uom_id.name or '',
+            'qty_delivered': r.qty_delivered,
+            'qty_returned': r.qty_returned,
+            'qty_net': r.qty_net,
+            'price_unit_before_tax': r.price_unit_before_tax,
+            'price_unit_after_tax': r.price_unit_after_tax,
+            'amount_gross_untaxed': r.amount_gross_untaxed,
+            'amount_gross': r.amount_gross,
+            'amount_returned': r.amount_returned,
+            'amount_net': r.amount_net,
+            'date_done': fields.Datetime.to_string(r.date_done) if r.date_done else False,
+            'order_date': fields.Datetime.to_string(r.order_date) if r.order_date else False,
+            'misa_order_date': fields.Date.to_string(r.misa_order_date) if r.misa_order_date else False,
+        } for r in records]
+        return {'rows': rows, 'total_count': total_count}
 
     # ==================== Xuất Excel ====================
     def _create_export_attachment(self, filename, content):

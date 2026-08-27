@@ -41,6 +41,20 @@ Endpoints:
         (+ order_date_from/to, misa_order_date_from/to - nên truyền lại giống lúc gọi /monthly
         để tổng số khớp với dòng tháng đã lấy)
         -> {"ok": true, "rows": [...]}
+        date_from/date_to là 2 đầu mút BAO GỒM (inclusive) - nên lấy nguyên date_from/date_to
+        của dòng tháng trả về bởi /customers/monthly, KHÔNG tự đoán ngày cuối tháng.
+        Đây chính là danh sách TẤT CẢ đơn hàng của 1 khách hàng trong 1 tháng/khoảng ngày.
+
+    GET /api/revenue/order/lines
+        ?order_name=DH125524949234726
+        HOẶC ?group_type=partner&group_id=123&date_from=...&date_to=...
+        (+ order_date_from/to, misa_order_date_from/to; limit, offset nếu dùng group_id)
+        -> {"ok": true, "rows": [{"sale_order_name": "...", "product_name": "...",
+             "product_code": "...", "qty_delivered": ..., "price_unit_after_tax": ...,
+             "amount_gross": ..., "amount_returned": ..., "amount_net": ...}, ...], "total_count": N}
+        Chi tiết TỪNG DÒNG SẢN PHẨM (giá, số lượng, thành tiền...) - khác /customers/detail
+        (chỉ tổng theo đơn hàng). Truyền order_name để xem đúng 1 đơn hàng, hoặc group_id +
+        khoảng ngày để xem tất cả dòng sản phẩm của 1 khách hàng/shop trong khoảng đó.
 
     GET /api/revenue/customers/export
         ?date_from=...&date_to=...&search=...&shopee_filter=...
@@ -189,6 +203,31 @@ class HlvRevenueApiController(http.Controller):
         except UserError as e:
             return self._json_response({"ok": False, "error": "invalid_request", "message": str(e)}, 400)
         return self._json_response({"ok": True, "rows": rows})
+
+    @http.route("/api/revenue/order/lines", type="http", auth="none", methods=["GET"], csrf=False, cors="*")
+    def api_revenue_order_lines(self, **kwargs):
+        """Chi tiết từng dòng sản phẩm - theo order_name HOẶC theo group_id + khoảng ngày."""
+        ok, err = self._authenticate(self._extract_token(kwargs))
+        if not ok:
+            return self._json_response(err, 401)
+
+        limit = self._to_int(kwargs.get("limit")) or 500
+        offset = self._to_int(kwargs.get("offset")) or 0
+
+        try:
+            result = self._report_model().get_order_lines_detail(
+                order_name=kwargs.get("order_name") or False,
+                group_type=kwargs.get("group_type") or "partner",
+                group_id=self._to_int(kwargs.get("group_id")),
+                date_from=kwargs.get("date_from") or False,
+                date_to=kwargs.get("date_to") or False,
+                limit=limit,
+                offset=offset,
+                **self._extra_date_kwargs(kwargs),
+            )
+        except UserError as e:
+            return self._json_response({"ok": False, "error": "invalid_request", "message": str(e)}, 400)
+        return self._json_response({"ok": True, "rows": result["rows"], "total_count": result["total_count"]})
 
     @http.route("/api/revenue/customers/export", type="http", auth="none", methods=["GET"], csrf=False, cors="*")
     def api_revenue_customers_export(self, **kwargs):

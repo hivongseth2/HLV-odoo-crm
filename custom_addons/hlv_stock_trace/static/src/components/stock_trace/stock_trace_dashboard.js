@@ -4,6 +4,21 @@ import { Component, useState, onWillStart } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
+const CHART_W = 820;
+const CHART_H = 130;
+const CHART_PAD = 10;
+
+const CATEGORY_LABEL = {
+    mua: "Mua vào",
+    ban: "Bán hàng",
+    chuyen_vao: "Chuyển kho đến",
+    chuyen_ra: "Chuyển kho đi",
+    chuyen_kho: "Chuyển kho",
+    dieu_chinh: "Điều chỉnh kiểm kho",
+    opening: "Tồn đầu kỳ",
+    current: "Hiện tại",
+};
+
 export class StockTraceDashboard extends Component {
     static template = "hlv_stock_trace.Dashboard";
     static props = ["*"];
@@ -22,16 +37,31 @@ export class StockTraceDashboard extends Component {
         this.state = useState({
             loading: true,
             error: null,
-            view: "company", // company | warehouse | location
+
             dateFromInput: this._toIso(dateFrom),
             activeRangeMonths: 3,
-            warehouseId: null,
-            locationId: null,
-            locationOrigin: "company", // company | warehouse — where "← quay lại" should go
-            data: null,
+
+            scopeType: "company", // company | warehouse | location
+            scopeId: null,
+            scopeLabel: "Toàn công ty",
+            pickerOpen: null, // 'warehouse' | 'location' | null
+            scopeOptions: { warehouses: [], locations: [] },
+
+            activeTab: "daily", // daily | structure | timeline
+            dailyData: null,
+            structureData: null,
+            timelineData: null,
+
+            expandedDay: null,
+            dayDetail: null,
+            dayDetailLoading: false,
+            dayDetailTab: "transactions", // transactions | snapshot
         });
 
-        onWillStart(() => this.loadCompany());
+        onWillStart(async () => {
+            await this._loadScopeOptions();
+            await this.loadDaily();
+        });
     }
 
     // ---------------------------------------------------------- helpers
@@ -55,59 +85,129 @@ export class StockTraceDashboard extends Component {
         return n % 1 === 0 ? String(n) : n.toFixed(2);
     }
 
-    signClass(value) {
-        if (value > 0) return "o_hst_pos";
-        if (value < 0) return "o_hst_neg";
-        return "";
+    formatSigned(value) {
+        if (!value) return "—";
+        const s = this.formatQty(Math.abs(value));
+        return (value > 0 ? "+" : "−") + s;
     }
 
-    // ---------------------------------------------------------- loaders
-    async _call(method, extra) {
-        this.state.loading = true;
-        this.state.error = null;
+    categoryLabel(cat) {
+        return CATEGORY_LABEL[cat] || cat;
+    }
+
+    /** Positive day count between a LATER date (a) and an EARLIER date (b). */
+    daysBetween(a, b) {
+        const da = new Date(a + "T00:00:00");
+        const db = new Date(b + "T00:00:00");
+        return Math.round((da - db) / 86400000);
+    }
+
+    // ---------------------------------------------------------- RPC
+    async _call(method, args) {
         try {
-            const args = [this.productId, this.state.dateFromInput, ...(extra || [])];
             return await this.orm.call("stock.trace", method, args);
         } catch (e) {
             this.state.error = (e && e.message && e.message.data && e.message.data.message)
                 || (e && e.message)
                 || "Không tải được dữ liệu trace.";
             return null;
-        } finally {
-            this.state.loading = false;
         }
     }
 
-    async loadCompany() {
-        const data = await this._call("get_company_overview");
+    async _loadScopeOptions() {
+        const data = await this._call("get_scope_options", [this.productId]);
         if (data) {
-            this.state.data = data;
-            this.state.view = "company";
-            this.state.warehouseId = null;
-            this.state.locationId = null;
+            this.state.scopeOptions = data;
         }
     }
 
-    async loadWarehouse(warehouseId) {
-        const data = await this._call("get_warehouse_detail", [warehouseId]);
-        if (data) {
-            this.state.data = data;
-            this.state.view = "warehouse";
-            this.state.warehouseId = warehouseId;
-            this.state.locationId = null;
+    async loadDaily() {
+        this.state.loading = true;
+        this.state.error = null;
+        this.state.expandedDay = null;
+        this.state.dayDetail = null;
+        const data = await this._call("get_daily_ledger", [
+            this.productId, this.state.dateFromInput, this.state.scopeType, this.state.scopeId,
+        ]);
+        this.state.dailyData = data;
+        this.state.loading = false;
+    }
+
+    async loadStructure() {
+        this.state.loading = true;
+        this.state.error = null;
+        let data;
+        if (this.state.scopeType === "warehouse") {
+            data = await this._call("get_warehouse_detail", [
+                this.productId, this.state.dateFromInput, this.state.scopeId,
+            ]);
+        } else if (this.state.scopeType === "location") {
+            data = await this._call("get_location_timeline", [
+                this.productId, this.state.dateFromInput, this.state.scopeId,
+            ]);
+        } else {
+            data = await this._call("get_company_overview", [this.productId, this.state.dateFromInput]);
+        }
+        this.state.structureData = data;
+        this.state.loading = false;
+    }
+
+    async loadTimeline() {
+        this.state.loading = true;
+        this.state.error = null;
+        const data = await this._call("get_full_timeline", [
+            this.productId, this.state.dateFromInput, this.state.scopeType, this.state.scopeId,
+        ]);
+        this.state.timelineData = data;
+        this.state.loading = false;
+    }
+
+    async loadDayDetail(dateStr) {
+        this.state.dayDetailLoading = true;
+        const data = await this._call("get_day_detail", [
+            this.productId, dateStr, this.state.scopeType, this.state.scopeId,
+        ]);
+        this.state.dayDetail = data;
+        this.state.dayDetailLoading = false;
+    }
+
+    // ---------------------------------------------------------- scope / tabs
+    setScope(type, id, label) {
+        this.state.scopeType = type;
+        this.state.scopeId = id || null;
+        this.state.scopeLabel = label;
+        this.state.pickerOpen = null;
+        this.state.dailyData = null;
+        this.state.structureData = null;
+        this.state.timelineData = null;
+        this._loadActiveTab();
+    }
+
+    togglePicker(which) {
+        this.state.pickerOpen = this.state.pickerOpen === which ? null : which;
+    }
+
+    setTab(tab) {
+        this.state.activeTab = tab;
+        if (tab === "daily" && !this.state.dailyData) {
+            this.loadDaily();
+        } else if (tab === "structure" && !this.state.structureData) {
+            this.loadStructure();
+        } else if (tab === "timeline" && !this.state.timelineData) {
+            this.loadTimeline();
         }
     }
 
-    async loadLocation(locationId) {
-        const data = await this._call("get_location_timeline", [locationId]);
-        if (data) {
-            this.state.data = data;
-            this.state.view = "location";
-            this.state.locationId = locationId;
+    _loadActiveTab() {
+        if (this.state.activeTab === "structure") {
+            return this.loadStructure();
         }
+        if (this.state.activeTab === "timeline") {
+            return this.loadTimeline();
+        }
+        return this.loadDaily();
     }
 
-    // ---------------------------------------------------------- ui events
     onDateInput(ev) {
         this.state.dateFromInput = ev.target.value;
         this.state.activeRangeMonths = null;
@@ -122,36 +222,105 @@ export class StockTraceDashboard extends Component {
     }
 
     reload() {
-        if (this.state.view === "warehouse" && this.state.warehouseId) {
-            return this.loadWarehouse(this.state.warehouseId);
-        }
-        if (this.state.view === "location" && this.state.locationId) {
-            return this.loadLocation(this.state.locationId);
-        }
-        return this.loadCompany();
+        this.state.dailyData = null;
+        this.state.structureData = null;
+        this.state.timelineData = null;
+        return this._loadActiveTab();
     }
 
-    onWarehouseRowClick(warehouseId) {
+    toggleDayExpand(dateStr) {
+        if (this.state.expandedDay === dateStr) {
+            this.state.expandedDay = null;
+            this.state.dayDetail = null;
+            return;
+        }
+        this.state.expandedDay = dateStr;
+        this.state.dayDetailTab = "transactions";
+        this.loadDayDetail(dateStr);
+    }
+
+    setDayDetailTab(tab) {
+        this.state.dayDetailTab = tab;
+    }
+
+    onStructureWarehouseClick(warehouseId, name) {
         if (warehouseId) {
-            this.loadWarehouse(warehouseId);
+            this.setScope("warehouse", warehouseId, name);
         }
     }
 
-    onLocationRowClick(locationId, origin) {
-        this.state.locationOrigin = origin || "company";
-        this.loadLocation(locationId);
+    onStructureLocationClick(locationId, name) {
+        this.setScope("location", locationId, name);
     }
 
-    backToCompany() {
-        this.loadCompany();
+    // ---------------------------------------------------------- chart geometry
+    get chartGeometry() {
+        const data = this.state.dailyData;
+        if (!data) return null;
+
+        // Evenly-spaced by INDEX among days-with-data, not by real elapsed
+        // calendar time — same "collapse the quiet gaps" idea as the ledger
+        // table below. A pure time axis crushes a burst of daily activity
+        // into a dense unreadable cluster while a multi-week quiet stretch
+        // eats most of the width; index spacing keeps every point legible.
+        const days = [...data.days].reverse(); // ascending chronological
+        const n = days.length;
+        const xAt = (i) => (n === 0 ? CHART_W : (i / (n + 1)) * CHART_W);
+
+        const balances = [data.opening, data.closing, ...days.map((d) => d.balance)];
+        const minB = Math.min(0, ...balances);
+        const maxB = Math.max(1, ...balances);
+        const span = Math.max(1, maxB - minB);
+        const innerH = CHART_H - CHART_PAD * 2;
+        const toY = (v) => CHART_PAD + (1 - (v - minB) / span) * innerH;
+
+        let pathD = `M0,${toY(data.opening).toFixed(1)}`;
+        let prev = data.opening;
+        const dots = [];
+        days.forEach((day, i) => {
+            const x = xAt(i + 1);
+            pathD += ` L${x.toFixed(1)},${toY(prev).toFixed(1)} L${x.toFixed(1)},${toY(day.balance).toFixed(1)}`;
+            dots.push({
+                x: x.toFixed(1), y: toY(day.balance).toFixed(1),
+                cls: day.net > 0 ? "o_hst_dot_up" : (day.net < 0 ? "o_hst_dot_down" : "o_hst_dot_flat"),
+            });
+            prev = day.balance;
+        });
+        pathD += ` L${CHART_W},${toY(prev).toFixed(1)}`;
+        const areaD = `${pathD} L${CHART_W},${CHART_H} L0,${CHART_H} Z`;
+
+        return {
+            pathD, areaD, dots,
+            width: CHART_W, height: CHART_H,
+            startY: toY(data.opening).toFixed(1),
+            endY: toY(prev).toFixed(1),
+            gridLines: [0, 0.33, 0.66, 1].map((f) => (CHART_PAD + f * innerH).toFixed(1)),
+        };
     }
 
-    backFromLocation() {
-        if (this.state.locationOrigin === "warehouse" && this.state.warehouseId) {
-            this.loadWarehouse(this.state.warehouseId);
-        } else {
-            this.loadCompany();
+    // ---------------------------------------------------------- ledger rows + collapsed gaps
+    get ledgerEntries() {
+        const data = this.state.dailyData;
+        if (!data) return [];
+        const days = data.days; // descending (most recent first)
+        const entries = [];
+        for (let i = 0; i < days.length; i++) {
+            entries.push({ type: "day", ...days[i] });
+            const nextDateStr = i + 1 < days.length ? days[i + 1].date : data.date_from;
+            const gapDays = this.daysBetween(days[i].date, nextDateStr) - 1;
+            if (gapDays > 0) {
+                const gapEnd = new Date(days[i].date + "T00:00:00");
+                gapEnd.setDate(gapEnd.getDate() - 1);
+                const gapStart = new Date(nextDateStr + "T00:00:00");
+                gapStart.setDate(gapStart.getDate() + 1);
+                entries.push({
+                    type: "gap", count: gapDays,
+                    from: this._toIso(gapStart), to: this._toIso(gapEnd),
+                });
+            }
         }
+        entries.push({ type: "opening", date: data.date_from, balance: data.opening });
+        return entries;
     }
 }
 

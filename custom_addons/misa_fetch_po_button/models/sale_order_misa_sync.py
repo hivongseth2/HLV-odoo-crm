@@ -878,6 +878,37 @@ class SaleOrder(models.Model):
                         unmatched_misa.append(misa_data)
                         continue
 
+                # Combo/Kit: sản phẩm không đổi nhưng số lượng đổi. Nếu combo đã có
+                # Kit BOM (kể cả vừa được tự tạo trong lần đồng bộ này) mà dòng SOL vẫn
+                # đang giữ 1 move CHƯA NỔ từ trước khi có BOM (tạo lúc combo còn là sản
+                # phẩm thường), thì chỉ tăng/giảm qty trên move đó qua
+                # _action_launch_stock_rule sẽ MERGE vào move cũ chứ không tạo move mới
+                # → không kích hoạt lại _action_confirm() → BoM không nổ ra phiếu cho
+                # sản phẩm con. Hủy move treo cũ để Odoo bắt buộc tạo move mới và nổ BOM.
+                if (
+                    not product_changed
+                    and not defer_quantity
+                    and abs(old_qty - new_qty) >= 0.01
+                ):
+                    has_kit_bom = bool(env['mrp.bom'].search_count([
+                        ('product_tmpl_id', '=', misa_data['product'].product_tmpl_id.id),
+                        ('type', '=', 'phantom'),
+                        ('active', '=', True),
+                    ]))
+                    if has_kit_bom:
+                        unexploded_moves = sol.move_ids.filtered(
+                            lambda m: m.state not in ('done', 'cancel')
+                            and m.product_id == misa_data['product']
+                        )
+                        if unexploded_moves:
+                            _logger.info(
+                                "📦 Hủy %s phiếu giao treo chưa nổ Kit BOM của combo '%s' "
+                                "(CRM line %s) để tạo lại và nổ BOM cho sản phẩm con",
+                                len(unexploded_moves), misa_data['code'], misa_data['crm_line_id'],
+                            )
+                            unexploded_moves._action_cancel()
+                            unexploded_moves.unlink()
+
                 stock_changed = product_changed or abs(old_qty - new_qty) >= 0.01
                 if product_changed:
                     _audit(
