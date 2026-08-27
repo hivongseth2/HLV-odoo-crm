@@ -257,15 +257,16 @@ export class StockTraceDashboard extends Component {
     get chartGeometry() {
         const data = this.state.dailyData;
         if (!data) return null;
-        const start = new Date(data.date_from + "T00:00:00");
-        const end = new Date(data.date_to + "T00:00:00");
-        const totalMs = Math.max(1, end - start);
-        const toX = (dstr) => {
-            const dt = new Date(dstr + "T00:00:00");
-            return Math.max(0, Math.min(CHART_W, ((dt - start) / totalMs) * CHART_W));
-        };
 
+        // Evenly-spaced by INDEX among days-with-data, not by real elapsed
+        // calendar time — same "collapse the quiet gaps" idea as the ledger
+        // table below. A pure time axis crushes a burst of daily activity
+        // into a dense unreadable cluster while a multi-week quiet stretch
+        // eats most of the width; index spacing keeps every point legible.
         const days = [...data.days].reverse(); // ascending chronological
+        const n = days.length;
+        const xAt = (i) => (n === 0 ? CHART_W : (i / (n + 1)) * CHART_W);
+
         const balances = [data.opening, data.closing, ...days.map((d) => d.balance)];
         const minB = Math.min(0, ...balances);
         const maxB = Math.max(1, ...balances);
@@ -276,15 +277,15 @@ export class StockTraceDashboard extends Component {
         let pathD = `M0,${toY(data.opening).toFixed(1)}`;
         let prev = data.opening;
         const dots = [];
-        for (const day of days) {
-            const x = toX(day.date);
+        days.forEach((day, i) => {
+            const x = xAt(i + 1);
             pathD += ` L${x.toFixed(1)},${toY(prev).toFixed(1)} L${x.toFixed(1)},${toY(day.balance).toFixed(1)}`;
             dots.push({
                 x: x.toFixed(1), y: toY(day.balance).toFixed(1),
                 cls: day.net > 0 ? "o_hst_dot_up" : (day.net < 0 ? "o_hst_dot_down" : "o_hst_dot_flat"),
             });
             prev = day.balance;
-        }
+        });
         pathD += ` L${CHART_W},${toY(prev).toFixed(1)}`;
         const areaD = `${pathD} L${CHART_W},${CHART_H} L0,${CHART_H} Z`;
 

@@ -208,6 +208,7 @@
                             <td>
                               <t t-esc="tx.to_location"/>
                               <span class="o_hst_muted" t-if="tx.to_warehouse"> (<t t-esc="tx.to_warehouse"/>)</span>
+                              <div class="o_hst_muted" t-if="tx.via_transit" style="font-size:11px;">qua <t t-esc="tx.via_transit"/><t t-if="tx.arrival_time"> · đến lúc <t t-esc="tx.arrival_time"/></t></div>
                             </td>
                             <td class="o_hst_num" style="font-weight:700;" t-esc="formatQty(tx.qty)"/>
                             <td class="o_hst_muted">
@@ -577,14 +578,15 @@
                     <div class="o_hst_tl_sub">
                       <t t-esc="formatVN(line.date)"/>
                       <t t-if="line.from_location"> · <t t-esc="line.from_location"/><t t-if="line.from_warehouse"> (<t t-esc="line.from_warehouse"/>)</t> → <t t-esc="line.to_location"/><t t-if="line.to_warehouse"> (<t t-esc="line.to_warehouse"/>)</t></t>
+                      <t t-if="line.via_transit"> · qua <t t-esc="line.via_transit"/></t>
                       <t t-if="line.reference"> · <t t-esc="line.reference"/></t>
                       <t t-if="line.partner_name"> · <t t-esc="line.partner_name"/></t>
                     </div>
                   </div>
                   <div class="o_hst_tl_right">
                     <div t-if="line.qty !== null"
-                         t-att-class="line.qty > 0 ? 'o_hst_tl_qty o_hst_pos' : (line.qty &lt; 0 ? 'o_hst_tl_qty o_hst_neg' : 'o_hst_tl_qty o_hst_dim')">
-                      <t t-if="line.qty > 0">+</t><t t-esc="formatQty(line.qty)"/>
+                         t-att-class="line.type === 'chuyen_kho' ? 'o_hst_tl_qty o_hst_blue' : (line.qty > 0 ? 'o_hst_tl_qty o_hst_pos' : (line.qty &lt; 0 ? 'o_hst_tl_qty o_hst_neg' : 'o_hst_tl_qty o_hst_dim'))">
+                      <t t-if="line.type !== 'chuyen_kho' and line.qty > 0">+</t><t t-esc="formatQty(Math.abs(line.qty))"/>
                     </div>
                     <div class="o_hst_tl_balance">Số dư: <t t-esc="formatQty(line.balance)"/></div>
                   </div>

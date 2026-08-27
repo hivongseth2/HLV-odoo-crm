@@ -633,12 +633,24 @@ class StockTrace(models.AbstractModel):
           warehouse scope).
         - src in scope, dest outside: 'ban' to a real customer; 'dieu_chinh'
           (−) for inventory-adjustment/production; else 'chuyen_ra'.
-        - both in scope: only relevant for company scope, where an
-          inter-warehouse move (src/dest belong to different warehouses)
-          still counts as a visible chuyển kho event on BOTH sides even
-          though the company total doesn't change; purely intra-warehouse
-          moves are not part of this ledger (see internal_throughput on
-          get_warehouse_detail for that)."""
+        - both in scope: only relevant for company scope. A 2-step transfer
+          (source warehouse -> shared transit location -> destination
+          warehouse) is TWO stock.move records for ONE logical shipment —
+          each leg touches the shared transit location, which belongs to NO
+          warehouse (wh_of returns None for it). Naively comparing
+          wh_of(src) != wh_of(dest) on EACH leg double-counts: the first leg
+          (warehouse -> transit, None != warehouse_id) and the second leg
+          (transit -> warehouse, warehouse_id != None) would each register
+          as a full "crossed a warehouse boundary" event, turning one
+          10-unit transfer into 20. Only emit the side that is actually a
+          REAL warehouse: leaving a real warehouse is one 'chuyen_ra', later
+          arriving at a real warehouse is one 'chuyen_vao' — a transit hop
+          in between contributes neither on its own. A DIRECT move between
+          two different real warehouses (no transit leg) still emits both,
+          since that single move genuinely is the whole transfer. Same
+          warehouse (or both ends untracked/transit) contributes nothing —
+          that is pure intra-warehouse circulation (see internal_throughput
+          on get_warehouse_detail for that)."""
         qty = self._qty(move)
         if qty <= 0:
             return []
@@ -660,9 +672,39 @@ class StockTrace(models.AbstractModel):
             if other.usage in ("inventory", "production"):
                 return [("dieu_chinh", -qty)]
             return [("chuyen_ra", qty)]
-        if is_dest and is_src and wh_of is not None and wh_of(src_id) != wh_of(dest_id):
-            return [("chuyen_vao", qty), ("chuyen_ra", qty)]
+        if is_dest and is_src and wh_of is not None:
+            src_wh, dest_wh = wh_of(src_id), wh_of(dest_id)
+            if src_wh == dest_wh:
+                return []
+            contribs = []
+            if src_wh is not None:
+                contribs.append(("chuyen_ra", qty))
+            if dest_wh is not None:
+                contribs.append(("chuyen_vao", qty))
+            return contribs
         return []
+
+    def _true_net(self, move, loc_id_set):
+        """The move's ACTUAL effect on the scope's total on-hand — +qty if
+        stock enters the scope from outside, -qty if it leaves, 0 if both
+        ends are inside the scope (conservation: what left one location in
+        the set arrived at another location in the same set, so the sum is
+        unchanged) or both outside. This is deliberately independent of
+        _classify_flow's category split: chuyen_vao/chuyen_ra exist to show
+        warehouse-level activity and, for a 2-step transfer through a
+        shared transit location, do NOT individually net to the true
+        company-wide change (see _classify_flow's docstring) — only this
+        function is safe to accumulate into a running balance."""
+        qty = self._qty(move)
+        if qty <= 0:
+            return 0.0
+        is_dest = move.location_dest_id.id in loc_id_set
+        is_src = move.location_id.id in loc_id_set
+        if is_dest and not is_src:
+            return qty
+        if is_src and not is_dest:
+            return -qty
+        return 0.0
 
     def _day_key(self, dt_utc):
         tz_name = self.env.user.tz or "Asia/Ho_Chi_Minh"
@@ -688,15 +730,17 @@ class StockTrace(models.AbstractModel):
         days = {}
         for move in moves:
             contribs = self._classify_flow(move, loc_id_set, wh_of=wh_of)
-            if not contribs:
+            true_net = self._true_net(move, loc_id_set)
+            if not contribs and true_net == 0:
                 continue
             d = self._day_key(move.date)
             bucket = days.setdefault(d, {
                 "mua": 0.0, "ban": 0.0, "chuyen_vao": 0.0, "chuyen_ra": 0.0,
-                "dieu_chinh": 0.0, "refs": set(),
+                "dieu_chinh": 0.0, "true_net": 0.0, "refs": set(),
             })
             for cat, qty in contribs:
                 bucket[cat] += qty
+            bucket["true_net"] += true_net
             ref = (move.picking_id.name if move.picking_id else move.name) or ""
             if ref:
                 bucket["refs"].add(ref)
@@ -705,7 +749,11 @@ class StockTrace(models.AbstractModel):
         day_rows = []
         for d in sorted(days.keys()):
             b = days[d]
-            net = b["mua"] - b["ban"] + b["chuyen_vao"] - b["chuyen_ra"] + b["dieu_chinh"]
+            # "Biến động"/"Tồn cuối ngày" MUST use true_net, not the
+            # mua/ban/chuyen_vao/chuyen_ra columns — those can legitimately
+            # not sum to the real change on a day that only sees one leg of
+            # a multi-day transit transfer (see _true_net's docstring).
+            net = b["true_net"]
             running += net
             day_rows.append({
                 "date": d,
@@ -737,6 +785,52 @@ class StockTrace(models.AbstractModel):
             return {}
         return {w.id: w.name for w in self.env["stock.warehouse"].browse(wh_ids)}
 
+    def _merge_transit_legs(self, moves):
+        """Merge the two stock.move legs of a 2-step transfer (source
+        warehouse -> shared transit location -> destination warehouse) into
+        ONE display entry, so the UI shows the real origin -> real
+        destination instead of two separate rows through a transit stop.
+        Legs are linked via Odoo's own move_dest_ids/move_orig_ids (the
+        chain a push/pull route rule sets up) — matched only when the
+        continuation is in the SAME `moves` recordset (e.g. same day, for
+        get_day_detail) and genuinely departs from where the first leg
+        arrived. Returns one dict per move NOT itself a consumed
+        continuation: {move, from_loc, to_loc, via_transit, extra_ref,
+        arrival_time}."""
+        move_ids = {m.id for m in moves}
+        by_id = {m.id: m for m in moves}
+        consumed = set()
+        result = []
+        for m in moves:
+            if m.id in consumed:
+                continue
+            continuation = None
+            if m.location_dest_id.usage == "transit":
+                for dest in m.move_dest_ids:
+                    if dest.id in move_ids and dest.location_id.id == m.location_dest_id.id:
+                        continuation = by_id[dest.id]
+                        break
+            if continuation is not None:
+                consumed.add(continuation.id)
+                result.append({
+                    "move": m,
+                    "from_loc": m.location_id,
+                    "to_loc": continuation.location_dest_id,
+                    "via_transit": m.location_dest_id.display_name,
+                    "extra_ref": (continuation.picking_id.name if continuation.picking_id else continuation.name) or "",
+                    "arrival_time": self._utc_to_local_str(continuation.date, fmt="%H:%M"),
+                })
+            else:
+                result.append({
+                    "move": m,
+                    "from_loc": m.location_id,
+                    "to_loc": m.location_dest_id,
+                    "via_transit": "",
+                    "extra_ref": "",
+                    "arrival_time": "",
+                })
+        return result
+
     @api.model
     def get_day_detail(self, product_id, day_date, scope_type, scope_id=None):
         """Detail for ONE day (local date 'YYYY-MM-DD'), for expanding a row
@@ -755,28 +849,34 @@ class StockTrace(models.AbstractModel):
         )
 
         transactions = []
-        for move in day_moves:
+        for leg in self._merge_transit_legs(day_moves):
+            move = leg["move"]
             contribs = self._classify_flow(move, loc_id_set, wh_of=wh_of)
             if not contribs:
                 continue
             # one row per MOVE (not per contribution) — Từ/Đến already show
-            # direction, so an inter-warehouse move (2 contribs, symmetric)
-            # only needs one line, tagged as a plain "chuyển kho".
-            category = "chuyen_kho" if len(contribs) == 2 else contribs[0][0]
+            # direction, so an inter-warehouse move (2 contribs, symmetric,
+            # or a merged transit-hop leg) only needs one line.
+            category = "chuyen_kho" if (len(contribs) == 2 or leg["via_transit"]) else contribs[0][0]
             qty = self._qty(move)
             picking = move.picking_id
             partner = picking.partner_id if picking else False
-            from_loc, to_loc = move.location_id, move.location_dest_id
+            from_loc, to_loc = leg["from_loc"], leg["to_loc"]
             from_wh_id = wh_of(from_loc.id) if wh_of else None
             to_wh_id = wh_of(to_loc.id) if wh_of else None
+            reference = (picking.name if picking else move.name) or ""
+            if leg["extra_ref"]:
+                reference = f"{reference} → {leg['extra_ref']}"
             transactions.append({
                 "category": category,
                 "from_location": from_loc.display_name,
                 "from_warehouse": wh_names.get(from_wh_id, ""),
                 "to_location": to_loc.display_name,
                 "to_warehouse": wh_names.get(to_wh_id, ""),
+                "via_transit": leg["via_transit"],
                 "time": self._utc_to_local_str(move.date, fmt="%H:%M"),
-                "reference": (picking.name if picking else move.name) or "",
+                "arrival_time": leg["arrival_time"],
+                "reference": reference,
                 "partner_name": partner.name if partner else "",
                 "qty": self._r(qty),
             })
@@ -846,25 +946,31 @@ class StockTrace(models.AbstractModel):
             "balance": self._r(running),
         }]
 
-        for move in moves:
+        for leg in self._merge_transit_legs(moves):
+            move = leg["move"]
             contribs = self._classify_flow(move, loc_id_set, wh_of=wh_of)
+            # running balance uses the TRUE effect on the scope's total —
+            # never the display categories (see _true_net's docstring: a
+            # transit-hop leg's chuyen_ra/chuyen_vao must NOT move the
+            # balance, the stock is still inside the scope in transit).
+            running += self._true_net(move, loc_id_set)
             if not contribs:
                 continue
-            net = 0.0
-            for cat, qty in contribs:
-                if cat in ("mua", "chuyen_vao"):
-                    net += qty
-                elif cat in ("ban", "chuyen_ra"):
-                    net -= qty
-                else:  # dieu_chinh — already signed
-                    net += qty
-            running += net
 
-            category = "chuyen_kho" if len(contribs) == 2 else contribs[0][0]
-            display_qty = self._qty(move) if len(contribs) == 2 else net
+            merged = bool(leg["via_transit"])
+            category = "chuyen_kho" if (len(contribs) == 2 or merged) else contribs[0][0]
+            if len(contribs) == 2 or merged:
+                display_qty = self._qty(move)  # lateral move, show plain magnitude
+            else:
+                cat0, qty0 = contribs[0]
+                display_qty = qty0 if cat0 in ("mua", "chuyen_vao", "dieu_chinh") else -qty0
+
             picking = move.picking_id
             partner = picking.partner_id if picking else False
-            from_loc, to_loc = move.location_id, move.location_dest_id
+            from_loc, to_loc = leg["from_loc"], leg["to_loc"]
+            reference = (picking.name if picking else move.name) or ""
+            if leg["extra_ref"]:
+                reference = f"{reference} → {leg['extra_ref']}"
             lines.append({
                 "type": category,
                 "date": self._utc_to_local_str(move.date),
@@ -872,7 +978,8 @@ class StockTrace(models.AbstractModel):
                 "from_warehouse": wh_names.get(wh_of(from_loc.id), "") if wh_of else "",
                 "to_location": to_loc.display_name,
                 "to_warehouse": wh_names.get(wh_of(to_loc.id), "") if wh_of else "",
-                "reference": (picking.name if picking else move.name) or "",
+                "via_transit": leg["via_transit"],
+                "reference": reference,
                 "partner_name": partner.name if partner else "",
                 "qty": self._r(display_qty),
                 "balance": self._r(running),
