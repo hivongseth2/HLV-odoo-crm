@@ -273,6 +273,7 @@
 .o_hst_pill_green { background: #e5f5ec; color: #1a7a4c; }
 .o_hst_pill_red { background: #fdeceb; color: #c22a30; }
 .o_hst_pill_blue { background: #eaf1ff; color: #2559c9; }
+.o_hst_pill_amber { background: #fef3e2; color: #a15c07; }
 
 // ---- timeline (level 3) ----
 .o_hst_timeline {
@@ -310,10 +311,16 @@
 }
 
 .o_hst_tl_receipt .o_hst_tl_dot,
-.o_hst_tl_transfer_in .o_hst_tl_dot { background: #1f9d5c; }
+.o_hst_tl_transfer_in .o_hst_tl_dot,
+.o_hst_tl_mua .o_hst_tl_dot,
+.o_hst_tl_chuyen_vao .o_hst_tl_dot { background: #1f9d5c; }
 .o_hst_tl_sale .o_hst_tl_dot,
-.o_hst_tl_transfer_out .o_hst_tl_dot { background: #e0393e; }
-.o_hst_tl_adjustment .o_hst_tl_dot { background: #d97706; }
+.o_hst_tl_transfer_out .o_hst_tl_dot,
+.o_hst_tl_ban .o_hst_tl_dot,
+.o_hst_tl_chuyen_ra .o_hst_tl_dot { background: #e0393e; }
+.o_hst_tl_adjustment .o_hst_tl_dot,
+.o_hst_tl_dieu_chinh .o_hst_tl_dot { background: #d97706; }
+.o_hst_tl_chuyen_kho .o_hst_tl_dot { background: #2559c9; }
 
 .o_hst_tl_card {
     display: flex;

@@ -75,6 +75,8 @@
              t-on-click="() => this.setTab('daily')">Theo ngày</div>
         <div class="o_hst_tab" t-att-class="{ o_hst_tab_active: state.activeTab === 'structure' }"
              t-on-click="() => this.setTab('structure')">Theo cơ cấu (kho &amp; vị trí)</div>
+        <div class="o_hst_tab" t-att-class="{ o_hst_tab_active: state.activeTab === 'timeline' }"
+             t-on-click="() => this.setTab('timeline')">Timeline</div>
       </div>
 
       <div class="o_hst_error" t-if="state.error" t-esc="state.error"/>
@@ -190,23 +192,30 @@
                              t-if="!state.dayDetail.locations_snapshot.length or state.dayDetailTab === 'transactions'">
                         <thead>
                           <tr>
-                            <th>Vị trí</th><th t-if="state.dailyData.scope_type === 'company'">Kho</th>
-                            <th class="o_hst_num">Biến động</th><th>Phiếu</th>
+                            <th>Giờ</th><th>Loại</th><th>Từ</th><th>Đến</th>
+                            <th class="o_hst_num">SL</th><th>Phiếu / đối tác</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr t-foreach="state.dayDetail.transactions" t-as="tx" t-key="tx_index">
-                            <td><t t-esc="tx.location_name"/></td>
-                            <td t-if="state.dailyData.scope_type === 'company'" t-esc="tx.warehouse_name"/>
-                            <td class="o_hst_num" t-att-class="tx.qty > 0 ? 'o_hst_pos' : 'o_hst_neg'" t-esc="formatSigned(tx.qty)"/>
+                            <td class="o_hst_muted" t-esc="tx.time"/>
+                            <td><span class="o_hst_pill" t-attf-class="o_hst_pill_{{ tx.category === 'ban' ? 'red' : (tx.category === 'mua' ? 'green' : (tx.category === 'dieu_chinh' ? 'amber' : 'blue')) }}"
+                                      t-esc="categoryLabel(tx.category)"/></td>
                             <td>
-                              <t t-esc="tx.reference"/> · <t t-esc="categoryLabel(tx.category)"/>
-                              <t t-if="tx.time"> (<t t-esc="tx.time"/>)</t>
-                              <t t-if="tx.partner_name"> → <t t-esc="tx.partner_name"/></t>
-                              <t t-elif="tx.other_location"> → <t t-esc="tx.other_location"/></t>
+                              <t t-esc="tx.from_location"/>
+                              <span class="o_hst_muted" t-if="tx.from_warehouse"> (<t t-esc="tx.from_warehouse"/>)</span>
+                            </td>
+                            <td>
+                              <t t-esc="tx.to_location"/>
+                              <span class="o_hst_muted" t-if="tx.to_warehouse"> (<t t-esc="tx.to_warehouse"/>)</span>
+                            </td>
+                            <td class="o_hst_num" style="font-weight:700;" t-esc="formatQty(tx.qty)"/>
+                            <td class="o_hst_muted">
+                              <t t-esc="tx.reference"/>
+                              <t t-if="tx.partner_name"> · <t t-esc="tx.partner_name"/></t>
                             </td>
                           </tr>
-                          <tr t-if="!state.dayDetail.transactions.length"><td colspan="4" class="o_hst_muted">Không có giao dịch</td></tr>
+                          <tr t-if="!state.dayDetail.transactions.length"><td colspan="6" class="o_hst_muted">Không có giao dịch</td></tr>
                         </tbody>
                       </table>
 
@@ -226,7 +235,9 @@
                 </t>
               </t>
             </div>
-            <div class="o_hst_hint">Chỉ hiển thị ngày có biến động; các khoảng lặng được gộp lại. Bấm mũi tên để mở rộng.</div>
+            <div class="o_hst_hint">Chỉ hiển thị ngày có biến động; các khoảng lặng được gộp lại. Bấm mũi tên để mở rộng.
+              <t t-if="state.dailyData.scope_type === 'company'"> "Chuyển vào/Chuyển ra" là tổng chuyển kho GIỮA CÁC KHO trong ngày — bấm mở rộng để xem rõ từ kho nào sang kho nào.</t>
+            </div>
           </div>
         </t>
 
@@ -535,6 +546,52 @@
               </div>
             </div>
           </t>
+        </t>
+
+        <!-- ======================= TAB: TIMELINE ======================= -->
+        <t t-if="state.activeTab === 'timeline' and state.timelineData">
+          <div class="o_hst_kpis">
+            <div class="o_hst_kpi">
+              <div class="o_hst_kpi_lbl">Tồn ngày <t t-esc="formatVN(state.timelineData.date_from)"/></div>
+              <div class="o_hst_kpi_val" t-esc="formatQty(state.timelineData.opening)"/>
+            </div>
+            <div class="o_hst_kpi o_hst_kpi_accent">
+              <div class="o_hst_kpi_lbl">Tồn hiện tại</div>
+              <div class="o_hst_kpi_val" t-esc="formatQty(state.timelineData.closing)"/>
+            </div>
+            <div class="o_hst_kpi">
+              <div class="o_hst_kpi_lbl">Số giao dịch</div>
+              <div class="o_hst_kpi_val" t-esc="state.timelineData.lines.length - 2"/>
+            </div>
+          </div>
+
+          <div class="o_hst_section">
+            <div class="o_hst_sec_title">Dòng thời gian — từng giao dịch</div>
+            <div class="o_hst_timeline">
+              <div class="o_hst_tl_item" t-foreach="state.timelineData.lines" t-as="line" t-key="line_index"
+                   t-att-class="'o_hst_tl_' + line.type">
+                <div class="o_hst_tl_dot"/>
+                <div class="o_hst_tl_card">
+                  <div class="o_hst_tl_main">
+                    <div class="o_hst_tl_title" t-esc="categoryLabel(line.type)"/>
+                    <div class="o_hst_tl_sub">
+                      <t t-esc="formatVN(line.date)"/>
+                      <t t-if="line.from_location"> · <t t-esc="line.from_location"/><t t-if="line.from_warehouse"> (<t t-esc="line.from_warehouse"/>)</t> → <t t-esc="line.to_location"/><t t-if="line.to_warehouse"> (<t t-esc="line.to_warehouse"/>)</t></t>
+                      <t t-if="line.reference"> · <t t-esc="line.reference"/></t>
+                      <t t-if="line.partner_name"> · <t t-esc="line.partner_name"/></t>
+                    </div>
+                  </div>
+                  <div class="o_hst_tl_right">
+                    <div t-if="line.qty !== null"
+                         t-att-class="line.qty > 0 ? 'o_hst_tl_qty o_hst_pos' : (line.qty &lt; 0 ? 'o_hst_tl_qty o_hst_neg' : 'o_hst_tl_qty o_hst_dim')">
+                      <t t-if="line.qty > 0">+</t><t t-esc="formatQty(line.qty)"/>
+                    </div>
+                    <div class="o_hst_tl_balance">Số dư: <t t-esc="formatQty(line.balance)"/></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </t>
 
       </t>

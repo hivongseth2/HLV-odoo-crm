@@ -13,7 +13,10 @@ const CATEGORY_LABEL = {
     ban: "Bán hàng",
     chuyen_vao: "Chuyển kho đến",
     chuyen_ra: "Chuyển kho đi",
+    chuyen_kho: "Chuyển kho",
     dieu_chinh: "Điều chỉnh kiểm kho",
+    opening: "Tồn đầu kỳ",
+    current: "Hiện tại",
 };
 
 export class StockTraceDashboard extends Component {
@@ -44,9 +47,10 @@ export class StockTraceDashboard extends Component {
             pickerOpen: null, // 'warehouse' | 'location' | null
             scopeOptions: { warehouses: [], locations: [] },
 
-            activeTab: "daily", // daily | structure
+            activeTab: "daily", // daily | structure | timeline
             dailyData: null,
             structureData: null,
+            timelineData: null,
 
             expandedDay: null,
             dayDetail: null,
@@ -91,10 +95,11 @@ export class StockTraceDashboard extends Component {
         return CATEGORY_LABEL[cat] || cat;
     }
 
+    /** Positive day count between a LATER date (a) and an EARLIER date (b). */
     daysBetween(a, b) {
         const da = new Date(a + "T00:00:00");
         const db = new Date(b + "T00:00:00");
-        return Math.round((db - da) / 86400000);
+        return Math.round((da - db) / 86400000);
     }
 
     // ---------------------------------------------------------- RPC
@@ -147,6 +152,16 @@ export class StockTraceDashboard extends Component {
         this.state.loading = false;
     }
 
+    async loadTimeline() {
+        this.state.loading = true;
+        this.state.error = null;
+        const data = await this._call("get_full_timeline", [
+            this.productId, this.state.dateFromInput, this.state.scopeType, this.state.scopeId,
+        ]);
+        this.state.timelineData = data;
+        this.state.loading = false;
+    }
+
     async loadDayDetail(dateStr) {
         this.state.dayDetailLoading = true;
         const data = await this._call("get_day_detail", [
@@ -164,11 +179,8 @@ export class StockTraceDashboard extends Component {
         this.state.pickerOpen = null;
         this.state.dailyData = null;
         this.state.structureData = null;
-        if (this.state.activeTab === "structure") {
-            this.loadStructure();
-        } else {
-            this.loadDaily();
-        }
+        this.state.timelineData = null;
+        this._loadActiveTab();
     }
 
     togglePicker(which) {
@@ -181,7 +193,19 @@ export class StockTraceDashboard extends Component {
             this.loadDaily();
         } else if (tab === "structure" && !this.state.structureData) {
             this.loadStructure();
+        } else if (tab === "timeline" && !this.state.timelineData) {
+            this.loadTimeline();
         }
+    }
+
+    _loadActiveTab() {
+        if (this.state.activeTab === "structure") {
+            return this.loadStructure();
+        }
+        if (this.state.activeTab === "timeline") {
+            return this.loadTimeline();
+        }
+        return this.loadDaily();
     }
 
     onDateInput(ev) {
@@ -200,10 +224,8 @@ export class StockTraceDashboard extends Component {
     reload() {
         this.state.dailyData = null;
         this.state.structureData = null;
-        if (this.state.activeTab === "structure") {
-            return this.loadStructure();
-        }
-        return this.loadDaily();
+        this.state.timelineData = null;
+        return this._loadActiveTab();
     }
 
     toggleDayExpand(dateStr) {
