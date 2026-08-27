@@ -135,7 +135,7 @@ export class MisaInvoiceDashboard extends Component {
             // Tab "Đơn hàng": phẳng, key là sale.order (DH...) — 1 đơn có thể gộp nhiều phiếu.
             ordersTab: {
                 rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
-                stateFilter: "", salerFilter: "", multiRequestOnly: false,
+                stateFilter: "", salerFilter: "", multiRequestOnly: false, partialCoverageOnly: false,
             },
             // Tab "Đơn Shopee": hóa đơn điện tử meInvoice riêng (amis_callback), chỉ xem —
             // phân trang/lọc phía server nhưng trạng thái tính từ model khác nên load nguyên
@@ -1700,6 +1700,7 @@ export class MisaInvoiceDashboard extends Component {
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
                     multi_request: this.state.ordersTab.multiRequestOnly,
+                    partial_coverage_only: this.state.ordersTab.partialCoverageOnly,
                     ...this.filterParams,
                 }
             );
@@ -1764,6 +1765,11 @@ export class MisaInvoiceDashboard extends Component {
         this.loadOrdersTab(1);
     }
 
+    onOrdersPartialCoverageToggle(ev) {
+        this.state.ordersTab.partialCoverageOnly = ev.target.checked;
+        this.loadOrdersTab(1);
+    }
+
     async exportOrdersExcel() {
         try {
             const attachmentId = await this.orm.call(
@@ -1773,6 +1779,7 @@ export class MisaInvoiceDashboard extends Component {
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
                     multi_request: this.state.ordersTab.multiRequestOnly,
+                    partial_coverage_only: this.state.ordersTab.partialCoverageOnly,
                     ...this.filterParams,
                 }
             );

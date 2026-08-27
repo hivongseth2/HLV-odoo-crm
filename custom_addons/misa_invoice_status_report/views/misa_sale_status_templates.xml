@@ -150,6 +150,7 @@
                 .msu-badge-state{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800}
                 .msu-badge-state-missing{background:#fdf1f1;color:#d03b3b}
                 .msu-badge-state-requested{background:#fef8e9;color:#92600a}
+                .msu-badge-state-partial{background:#fef8e9;color:#92600a}
                 .msu-badge-state-invoiced{background:#eaf8ea;color:#0ca30c}
                 .msu-badge-state-not_checked{background:#f1f0eb;color:#52514e}
                 .msu-status-cell{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
@@ -260,6 +261,7 @@
 
                     <div class="msu-tabs">
                         <button class="msu-tab msu-tab-active" id="msu-tab-btn-pickings" data-tab="pickings">Phiếu xuất kho (MISA)</button>
+                        <button class="msu-tab" id="msu-tab-btn-orders" data-tab="orders">Đơn hàng</button>
                         <button class="msu-tab" id="msu-tab-btn-shopee" data-tab="shopee">Đơn Shopee</button>
                         <button class="msu-tab" id="msu-tab-btn-customs" data-tab="customs">Đơn hải quan</button>
                     </div>
@@ -357,6 +359,55 @@
                             <button id="msu-next" class="msu-btn msu-btn-outline-muted msu-btn-sm">Sau &#8250;</button>
                         </div>
                     </div>
+                    </div>
+
+                    <div id="msu-tab-orders" style="display:none">
+                        <p class="msu-card-subtitle">
+                            Xem theo ĐƠN HÀNG thay vì theo phiếu xuất kho — 1 đơn có thể gộp nhiều phiếu/nhiều đề nghị xuất HĐ.
+                            "Xuất 1 phần" tính theo GIÁ TRỊ thật (đã xuất HĐ so với đã xuất kho qua mọi đề nghị tìm được theo mã
+                            đơn hàng) — bắt được cả trường hợp phiếu đã "Đã xuất HĐ" nhưng số tiền chưa phủ đủ.
+                        </p>
+                        <div class="msu-filters">
+                            <input type="text" id="msu-orders-search" class="msu-input msu-search-input" placeholder="Tìm theo mã đơn hàng..."/>
+                            <button id="msu-orders-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                            <button id="msu-orders-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
+                            <span class="msu-select-wrap">
+                                <select id="msu-orders-filter-select" class="msu-select">
+                                    <option value="">Tất cả</option>
+                                    <option value="missing">Chưa xuất</option>
+                                    <option value="invoiced">Đã xuất đủ</option>
+                                    <option value="partial">Xuất 1 phần</option>
+                                    <option value="mismatch">Lệch tiền</option>
+                                    <option value="not_checked">Chưa kiểm tra</option>
+                                </select>
+                                <i class="fa fa-chevron-down msu-select-caret"/>
+                            </span>
+                            <button id="msu-orders-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                        </div>
+                        <div class="msu-table-card">
+                            <div class="msu-table-scroll">
+                                <table class="msu-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Đơn hàng</th>
+                                            <th>Khách hàng</th>
+                                            <th>Phiếu xuất kho</th>
+                                            <th class="msu-col-num">Tổng tiền đơn</th>
+                                            <th class="msu-col-num">Tiền đã xuất HĐ</th>
+                                            <th class="msu-col-num">Tiền chưa xuất HĐ</th>
+                                            <th>Trạng thái</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="msu-orders-tbody"/>
+                                </table>
+                            </div>
+                            <div id="msu-orders-empty" class="msu-empty" style="display:none">Không tìm thấy đơn hàng nào.</div>
+                            <div class="msu-pagination" id="msu-orders-pagination" style="display:none">
+                                <button id="msu-orders-prev" class="msu-btn msu-btn-outline-muted msu-btn-sm">&#8249; Trước</button>
+                                <span id="msu-orders-page-label"/>
+                                <button id="msu-orders-next" class="msu-btn msu-btn-outline-muted msu-btn-sm">Sau &#8250;</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="msu-tab-shopee" style="display:none">
@@ -539,6 +590,7 @@
                         multiOrderGroup: false, multiRequest: false,
                         page: 1, total: 0, rows: [], selected: {},
                         activeTab: 'pickings',
+                        orders: {search: '', filter: '', page: 1, total: 0, rows: [], loaded: false},
                         shopee: {search: '', stateFilter: '', page: 1, total: 0, rows: [], loaded: false},
                         customs: {search: '', page: 1, total: 0, rows: [], loaded: false, preview: null, pendingOnly: false, pendingCount: 0},
                     };
@@ -680,11 +732,93 @@
                             document.querySelectorAll('.msu-tab').forEach(function(b) { b.classList.remove('msu-tab-active'); });
                             this.classList.add('msu-tab-active');
                             document.getElementById('msu-tab-pickings').style.display = state.activeTab === 'pickings' ? '' : 'none';
+                            document.getElementById('msu-tab-orders').style.display = state.activeTab === 'orders' ? '' : 'none';
                             document.getElementById('msu-tab-shopee').style.display = state.activeTab === 'shopee' ? '' : 'none';
                             document.getElementById('msu-tab-customs').style.display = state.activeTab === 'customs' ? '' : 'none';
+                            if (state.activeTab === 'orders' && !state.orders.loaded) { loadOrdersList(1); }
                             if (state.activeTab === 'shopee' && !state.shopee.loaded) { loadShopeeList(1); }
                             if (state.activeTab === 'customs' && !state.customs.loaded) { loadCustomsList(1); }
                         });
+                    });
+
+                    // ===== Tab: Đơn hàng (xem theo đơn bán, filter theo mức xuất HĐ) =====
+                    function renderOrdersRows() {
+                        var tbody = document.getElementById('msu-orders-tbody');
+                        tbody.innerHTML = '';
+                        document.getElementById('msu-orders-empty').style.display = state.orders.rows.length ? 'none' : '';
+                        state.orders.rows.forEach(function(row) {
+                            var tr = document.createElement('tr');
+                            var partialBadge = row.partial_coverage
+                                ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
+                                : '';
+                            tr.innerHTML =
+                                '<td><b>' + esc(row.name) + '</b></td>' +
+                                '<td>' + esc(row.partner_name) + '</td>' +
+                                '<td>' + esc(row.picking_names || '—') + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(row.amount_total) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(row.invoice_amount) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(row.outstanding_amount) + '</td>' +
+                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>';
+                            tbody.appendChild(tr);
+                        });
+                    }
+
+                    function updateOrdersPagination() {
+                        var totalPages = Math.max(1, Math.ceil(state.orders.total / PAGE_SIZE));
+                        var pag = document.getElementById('msu-orders-pagination');
+                        pag.style.display = state.orders.total > PAGE_SIZE ? '' : 'none';
+                        document.getElementById('msu-orders-page-label').textContent = 'Trang ' + state.orders.page + ' / ' + totalPages + ' (' + state.orders.total + ' đơn)';
+                        document.getElementById('msu-orders-prev').disabled = state.orders.page <= 1;
+                        document.getElementById('msu-orders-next').disabled = state.orders.page >= totalPages;
+                    }
+
+                    function loadOrdersList(page) {
+                        if (!state.salerCode) { return Promise.resolve(); }
+                        state.orders.page = page;
+                        var params = {
+                            saler_code: state.salerCode, search: state.orders.search,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                            limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+                        };
+                        if (state.orders.filter === 'partial') {
+                            params.partial_coverage_only = true;
+                        } else if (state.orders.filter === 'mismatch') {
+                            params.mismatch_only = true;
+                        } else if (state.orders.filter) {
+                            params.state = state.orders.filter;
+                        }
+                        return rpc('/misa_sale_status/api/order_list', params).then(function(res) {
+                            var data = res.data || {};
+                            state.orders.rows = data.rows || [];
+                            state.orders.total = data.total || 0;
+                            state.orders.loaded = true;
+                            renderOrdersRows();
+                            updateOrdersPagination();
+                        }).catch(function(e) { toast('Lỗi tải danh sách đơn hàng: ' + e.message, 'error'); });
+                    }
+
+                    document.getElementById('msu-orders-search-btn').addEventListener('click', function() {
+                        state.orders.search = document.getElementById('msu-orders-search').value.trim();
+                        document.getElementById('msu-orders-search-clear').style.display = state.orders.search ? '' : 'none';
+                        loadOrdersList(1);
+                    });
+                    document.getElementById('msu-orders-search').addEventListener('keydown', function(ev) {
+                        if (ev.key === 'Enter') { document.getElementById('msu-orders-search-btn').click(); }
+                    });
+                    document.getElementById('msu-orders-search-clear').addEventListener('click', function() {
+                        state.orders.search = '';
+                        document.getElementById('msu-orders-search').value = '';
+                        this.style.display = 'none';
+                        loadOrdersList(1);
+                    });
+                    document.getElementById('msu-orders-filter-select').addEventListener('change', function() {
+                        state.orders.filter = this.value;
+                        loadOrdersList(1);
+                    });
+                    document.getElementById('msu-orders-refresh-btn').addEventListener('click', function() { loadOrdersList(state.orders.page); });
+                    document.getElementById('msu-orders-prev').addEventListener('click', function() { if (state.orders.page > 1) { loadOrdersList(state.orders.page - 1); } });
+                    document.getElementById('msu-orders-next').addEventListener('click', function() {
+                        if (state.orders.page < Math.ceil(state.orders.total / PAGE_SIZE)) { loadOrdersList(state.orders.page + 1); }
                     });
 
                     function renderShopeeRows() {
