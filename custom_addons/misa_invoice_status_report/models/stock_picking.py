@@ -3884,9 +3884,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     def _misa_invoice_fetch_full_detail(self):
         """Đọc theo phiếu ĐẠI DIỆN nếu đang 'ăn theo' (giống mọi chỗ khác đang đọc
-        invoice_no/refno) — trả về cả đề nghị lẫn hóa đơn thật, mỗi bên kèm từng dòng hàng
-        (get_invoice_request_lines/get_voucher_lines), y hệt cấu trúc dữ liệu đã dùng ở
-        fetch_misa_customs_invoice."""
+        invoice_no/refno) — trả về:
+        - 'line_reconciliation': đối chiếu TỪNG DÒNG HÀNG Odoo (xuất kho) vs MISA (đề nghị),
+          tái dùng NGUYÊN get_misa_invoice_line_reconciliation() đã có sẵn (đã xử lý đúng case
+          gộp nhóm nhiều phiếu/nhiều đơn) — để vẽ 2 bên kèm mũi tên so khớp trên UI, thay vì
+          chỉ liệt kê rời rạc dòng hàng MISA như trước.
+        - 'invoice'/'invoice_lines': hóa đơn THẬT đã phát hành (sa_voucher_get), kèm dòng hàng
+          — tài liệu chính thức, tách riêng khỏi phần đối chiếu ở trên."""
         self.ensure_one()
         effective = self.misa_invoice_master_picking_id or self
         misa_utils = self.env['misa.api.utils']
@@ -3894,7 +3898,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'picking_name': self.name,
             'effective_picking_name': effective.name,
             'request': False,
-            'request_lines': [],
+            'line_reconciliation': False,
             'invoice': False,
             'invoice_lines': [],
         }
@@ -3913,11 +3917,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if refid:
             result['request'] = {'refid': refid, 'refno': effective.misa_invoice_request_refno or False}
             try:
-                lines = misa_utils.get_invoice_request_lines(refid)
+                result['line_reconciliation'] = self.get_misa_invoice_line_reconciliation(self.id)
             except Exception:
-                _logger.exception("Lỗi tải chi tiết đề nghị xuất HĐ MISA (refid=%s)", refid)
-                lines = []
-            result['request_lines'] = [_line_dict(l) for l in lines]
+                _logger.exception("Lỗi đối chiếu dòng hàng Odoo/MISA (picking=%s)", self.name)
+                result['line_reconciliation'] = False
 
         invoice_no = effective.misa_invoice_no
         if invoice_no:
