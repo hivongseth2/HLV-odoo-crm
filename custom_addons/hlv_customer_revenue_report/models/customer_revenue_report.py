@@ -1,5 +1,6 @@
 import base64
 import io
+from datetime import timedelta
 
 import xlsxwriter
 
@@ -431,7 +432,7 @@ class HlvCustomerRevenueReport(models.Model):
             SELECT
                 TO_CHAR(DATE_TRUNC('month', {date_col}), 'YYYY-MM') AS month_key,
                 TO_CHAR(DATE_TRUNC('month', {date_col}), 'YYYY-MM-DD') AS month_from,
-                TO_CHAR(DATE_TRUNC('month', {date_col}) + INTERVAL '1 month', 'YYYY-MM-DD') AS month_to,
+                TO_CHAR(DATE_TRUNC('month', {date_col}) + INTERVAL '1 month' - INTERVAL '1 day', 'YYYY-MM-DD') AS month_to,
                 COUNT(DISTINCT sale_order_id) AS order_count,
                 COUNT(DISTINCT CASE WHEN is_shopee AND shopee_shop_id IS NOT NULL
                     THEN -shopee_shop_id ELSE partner_id END) AS customer_count,
@@ -478,11 +479,32 @@ class HlvCustomerRevenueReport(models.Model):
             + self._extra_date_domain(order_date_from, order_date_to, misa_order_date_from, misa_order_date_to)
         )
 
+    @staticmethod
+    def _month_range_to_inclusive_dates(date_range):
+        """Odoo read_group trả __range dạng {'from': đầu tháng, 'to': đầu THÁNG SAU (exclusive)}.
+        Toàn bộ API này coi date_from/date_to là 2 đầu mút BAO GỒM (inclusive, giống
+        _base_date_domain/_extra_date_domain) - nên chuẩn hoá về 'YYYY-MM-DD' và lùi 'to'
+        lại 1 ngày để thành ngày cuối tháng thực, tránh lệch khi dùng lại ở endpoint khác
+        (VD /customers/detail) mà không biết quy ước exclusive riêng của read_group."""
+        raw_from = date_range.get('from')
+        raw_to = date_range.get('to')
+        date_from = fields.Datetime.from_string(raw_from).date().isoformat() if raw_from else False
+        date_to = (
+            (fields.Datetime.from_string(raw_to) - timedelta(days=1)).date().isoformat()
+            if raw_to else False
+        )
+        return date_from, date_to
+
     @api.model
     def get_group_monthly_summary(self, group_type, group_id, date_from=False, date_to=False,
                                    order_date_from=False, order_date_to=False,
                                    misa_order_date_from=False, misa_order_date_to=False):
-        """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng."""
+        """Doanh thu theo tháng của 1 khách hàng/shop: tiền đặt hàng (gộp), trả hàng, xuất ròng.
+
+        date_from/date_to trả về trong mỗi dòng tháng là 2 đầu mút BAO GỒM (inclusive) của
+        tháng đó (VD tháng 7: '2026-07-01' -> '2026-07-31') - dùng thẳng được cho
+        get_group_month_detail hay bất kỳ endpoint nào khác nhận date_from/date_to.
+        """
         domain = self._group_domain(
             group_type, group_id, date_from, date_to,
             order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
@@ -495,9 +517,10 @@ class HlvCustomerRevenueReport(models.Model):
             entry = agg.get(month_label)
             if entry is None:
                 date_range = (g.get('__range') or {}).get('date_done:month') or {}
+                month_from, month_to = self._month_range_to_inclusive_dates(date_range)
                 entry = self._new_agg_entry(
                     month_label=month_label,
-                    date_from=date_range.get('from'), date_to=date_range.get('to'),
+                    date_from=month_from, date_to=month_to,
                 )
                 agg[month_label] = entry
             self._accumulate(entry, g)
@@ -513,7 +536,10 @@ class HlvCustomerRevenueReport(models.Model):
     def get_group_month_detail(self, group_type, group_id, date_from, date_to,
                                 order_date_from=False, order_date_to=False,
                                 misa_order_date_from=False, misa_order_date_to=False):
-        """Chi tiết theo đơn hàng trong khoảng [date_from, date_to) - dùng cho drawer.
+        """Chi tiết theo đơn hàng trong khoảng [date_from, date_to] (2 đầu mút BAO GỒM,
+        giống mọi endpoint khác trong API này) - dùng cho drawer / để lấy danh sách đơn
+        hàng của 1 khách hàng trong 1 tháng. date_from/date_to nên lấy nguyên từ dòng
+        tháng do get_group_monthly_summary trả về.
 
         order_date_from/to, misa_order_date_from/to nên truyền lại giống hệt lúc gọi
         get_group_monthly_summary, để tổng các dòng ở đây khớp với dòng tháng đã hiển thị
@@ -522,11 +548,9 @@ class HlvCustomerRevenueReport(models.Model):
         if not date_from or not date_to:
             return []
         domain = self._group_domain(
-            group_type, group_id, False, False,
+            group_type, group_id, date_from, date_to,
             order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
-        ) + [
-            ('date_done', '>=', date_from), ('date_done', '<', date_to),
-        ]
+        )
         groups = self.read_group(
             domain, MONTHLY_MEASURES, ['sale_order_id'], orderby='sale_order_id asc', lazy=False,
         )
@@ -544,6 +568,59 @@ class HlvCustomerRevenueReport(models.Model):
                 'amount_net': g.get('amount_net') or 0.0,
             })
         return rows
+
+    # ==================== Chi tiết từng dòng sản phẩm (giá, số lượng...) ====================
+    @api.model
+    def get_order_lines_detail(self, order_name=False, group_type='partner', group_id=False,
+                                date_from=False, date_to=False,
+                                order_date_from=False, order_date_to=False,
+                                misa_order_date_from=False, misa_order_date_to=False,
+                                limit=500, offset=0):
+        """Chi tiết TỪNG DÒNG SẢN PHẨM (không gộp theo đơn hàng như get_group_month_detail)
+        - trả về sản phẩm, số lượng, đơn giá, thành tiền của từng dòng.
+
+        2 cách gọi:
+        - order_name: chỉ lấy đúng 1 đơn hàng này (VD "DH125524949234726") - bỏ qua group_id/date.
+        - Không truyền order_name: bắt buộc group_type + group_id, lọc thêm theo date_from/date_to
+          (+ order_date_from/to, misa_order_date_from/to) như các endpoint khác - lấy TẤT CẢ dòng
+          sản phẩm của khách hàng/shop đó trong khoảng thời gian.
+        """
+        if order_name:
+            domain = [('sale_order_id.name', '=', order_name)]
+        else:
+            if not group_id:
+                raise UserError(_('Vui lòng truyền order_name, hoặc group_id + khoảng ngày.'))
+            domain = self._group_domain(
+                group_type, group_id, date_from, date_to,
+                order_date_from, order_date_to, misa_order_date_from, misa_order_date_to,
+            )
+
+        total_count = self.search_count(domain)
+        records = self.search(domain, order='sale_order_id, id', limit=limit, offset=offset)
+        rows = [{
+            'sale_order_id': r.sale_order_id.id,
+            'sale_order_name': r.sale_order_id.name,
+            'partner_id': r.partner_id.id,
+            'partner_name': r.partner_id.name,
+            'product_id': r.product_id.id,
+            'product_name': r.product_id.display_name,
+            'product_code': r.product_id.default_code or '',
+            'product_category': r.product_categ_id.name or '',
+            'uom': r.product_uom_id.name or '',
+            'qty_delivered': r.qty_delivered,
+            'qty_returned': r.qty_returned,
+            'qty_net': r.qty_net,
+            'price_unit_before_tax': r.price_unit_before_tax,
+            'price_unit_after_tax': r.price_unit_after_tax,
+            'amount_gross_untaxed': r.amount_gross_untaxed,
+            'amount_gross': r.amount_gross,
+            'amount_returned': r.amount_returned,
+            'amount_net': r.amount_net,
+            'date_done': fields.Datetime.to_string(r.date_done) if r.date_done else False,
+            'order_date': fields.Datetime.to_string(r.order_date) if r.order_date else False,
+            'misa_order_date': fields.Date.to_string(r.misa_order_date) if r.misa_order_date else False,
+        } for r in records]
+        return {'rows': rows, 'total_count': total_count}
 
     # ==================== Xuất Excel ====================
     def _create_export_attachment(self, filename, content):
