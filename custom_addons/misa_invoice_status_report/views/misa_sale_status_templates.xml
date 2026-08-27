@@ -748,6 +748,8 @@
                         document.getElementById('msu-orders-empty').style.display = state.orders.rows.length ? 'none' : '';
                         state.orders.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
+                            tr.className = 'msu-row-clickable';
+                            tr.dataset.id = row.id;
                             var partialBadge = row.partial_coverage
                                 ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
                                 : '';
@@ -760,6 +762,13 @@
                                 '<td class="msu-col-num">' + fmtMoney(row.outstanding_amount) + '</td>' +
                                 '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>';
                             tbody.appendChild(tr);
+                        });
+                        tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
+                            tr.addEventListener('click', function() {
+                                var id = parseInt(this.dataset.id, 10);
+                                var row = state.orders.rows.find(function(r) { return r.id === id; });
+                                if (row) { openOrderDrawer(row); }
+                            });
                         });
                     }
 
@@ -1487,6 +1496,68 @@
                         if (drawerKind !== 'picking' || drawerOpenId == null) { return; }
                         var row = state.rows.find(function(r) { return r.id === drawerOpenId; });
                         if (row) { renderDrawerContent(row); } else { closeDrawer(); }
+                    }
+
+                    // Drawer "Đơn hàng" (tab Đơn hàng) — liệt kê TỪNG PHIẾU xuất kho của đơn
+                    // này kèm tiền thực xuất/tiền hóa đơn/trạng thái riêng, bấm vào 1 phiếu mở
+                    // tiếp drawer chi tiết ĐÚNG phiếu đó (tái dùng openSiblingDrawer, cùng cơ
+                    // chế phiếu "Phiếu xuất kho khác cùng đơn hàng" đang dùng trong drawer
+                    // picking) — trả lời trực tiếp "con nào đã xuất, con nào chưa".
+                    function openOrderDrawer(row) {
+                        drawerKind = 'order';
+                        drawerOpenId = row.id;
+                        renderOrderDrawerContent(row);
+                        drawerOverlay.style.display = 'flex';
+                    }
+
+                    function renderOrderDrawerContent(row) {
+                        var pickingRowsHtml = (row.pickings || []).map(function(p) {
+                            var extra = '';
+                            if (p.master_picking_name) {
+                                extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + '</div>';
+                            }
+                            if (p.exception) {
+                                extra += '<span class="msu-badge-exception">Ngoại lệ</span>';
+                            }
+                            return '<tr class="msu-drawer-sibling" data-picking-id="' + p.id + '">' +
+                                '<td><b>' + esc(p.name) + '</b>' + extra + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(p.actual_amount) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(p.invoice_amount) + '</td>' +
+                                '<td>' + (p.invoice_no ? esc(p.invoice_no) : '<span class="msu-muted">—</span>') + '</td>' +
+                                '<td><span class="msu-badge-state msu-badge-state-' + p.state + '">' + esc(p.state_label) + '</span></td>' +
+                            '</tr>';
+                        }).join('');
+
+                        drawerEl.innerHTML =
+                            '<div class="msu-drawer-header">' +
+                                '<div><h4 class="msu-drawer-title">' + esc(row.name) + '</h4><div class="msu-drawer-subtitle">' + esc(row.partner_name) + '</div></div>' +
+                                '<button class="msu-drawer-close" id="msu-drawer-close-btn"><i class="fa fa-times"></i></button>' +
+                            '</div>' +
+                            '<div class="msu-drawer-body">' +
+                                '<div class="msu-drawer-section">' +
+                                    '<div class="msu-drawer-meta">' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền đơn</span><span class="msu-meta-value">' + fmtMoney(row.amount_total) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền đã xuất HĐ</span><span class="msu-meta-value">' + fmtMoney(row.invoice_amount) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền chưa xuất HĐ</span><span class="msu-meta-value' + (row.outstanding_amount > 0 ? ' msu-col-diff-bad' : '') + '">' + fmtMoney(row.outstanding_amount) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div class="msu-drawer-section">' +
+                                    '<p class="msu-drawer-section-title">Phiếu xuất kho của đơn này — bấm vào 1 dòng để xem chi tiết</p>' +
+                                    '<div class="msu-table-scroll">' +
+                                        '<table class="msu-table"><thead><tr>' +
+                                            '<th>Phiếu</th><th class="msu-col-num">Tiền thực xuất</th><th class="msu-col-num">Tiền hóa đơn</th><th>Số HĐ</th><th>Trạng thái</th>' +
+                                        '</tr></thead><tbody>' + pickingRowsHtml + '</tbody></table>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>';
+
+                        document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
+                        drawerEl.querySelectorAll('.msu-drawer-sibling').forEach(function(tr) {
+                            tr.addEventListener('click', function() {
+                                openSiblingDrawer(parseInt(this.dataset.pickingId, 10));
+                            });
+                        });
                     }
 
                     function openCustomsDrawer(row) {

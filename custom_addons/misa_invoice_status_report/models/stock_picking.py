@@ -3457,7 +3457,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
             (p.misa_invoice_master_picking_id or p).id: (p.misa_invoice_master_picking_id or p)
             for p in invoiced_pickings
         }
-        invoiced_amount = sum(rep.misa_invoice_effective_amount or 0.0 for rep in representatives.values())
+        # QUAN TRỌNG: rep.misa_invoice_effective_amount là tiền HÓA ĐƠN CỦA CẢ NHÓM đại diện
+        # đó (có thể gộp NHIỀU đơn bán khác nhau vào 1 đề nghị) — cộng thẳng vào invoiced_amount
+        # của đơn NÀY có thể ra SỐ THỪA (case thật: 2 đơn khác nhau của cùng khách hàng cùng
+        # "ăn theo" 1 đề nghị gộp chung, mỗi đơn lại bị gán ĐỦ cả tiền hóa đơn của group, cộng
+        # dồn ra invoiced_amount > amount_total của chính đơn đó — vô lý). Muốn tính ĐÚNG phần
+        # tiền hóa đơn CHỈ RIÊNG đơn này cần tra order_code ở dòng hàng (như
+        # _misa_invoice_compute_order_coverage_detail đang làm) — nhưng đó là API SỐNG, KHÔNG
+        # được gọi tràn lan cho mọi dòng trong 1 danh sách (có thể hàng trăm-nghìn dòng/trang).
+        # Chốt lại: chỉ CHẶN TRẦN ở amount_total để số hiển thị không vô lý (đã xuất > tổng
+        # đơn) — số chính xác tuyệt đối xem trong drawer chi tiết phiếu (mở riêng từng phiếu).
+        invoiced_amount = min(
+            sum(rep.misa_invoice_effective_amount or 0.0 for rep in representatives.values()),
+            order.amount_total,
+        )
         # QUAN TRỌNG: KHÁC với overall_state ở trên (chỉ nhìn TRẠNG THÁI thô của từng phiếu,
         # 'partial' = có phiếu invoiced + có phiếu chưa) — misa_invoice_order_coverage tính
         # theo GIÁ TRỊ thật (tổng đã xuất HĐ so với tổng thực xuất qua MỌI đề nghị tìm được
@@ -3472,7 +3485,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'picking_names': ', '.join(order_pickings.mapped('name')),
             'amount_total': order.amount_total,
             'invoice_amount': invoiced_amount,
-            'outstanding_amount': 0.0 if overall_state == 'invoiced' else order.amount_total,
+            # Trước đây: 0 nếu overall_state=='invoiced', ngược lại LUÔN = amount_total (kể cả
+            # khi đã có 1 phần invoiced_amount > 0) — hiện SAI cho mọi đơn "1 phần"/"nhiều
+            # phiếu" (case thật: đơn đã xuất 21tr nhưng vẫn báo "còn thiếu" đúng bằng tổng đơn,
+            # như đã có tiền đã xuất = 0). Đổi thành phép trừ thật, luôn nhất quán với 2 cột
+            # "Tiền đã xuất HĐ" ngay cạnh nó.
+            'outstanding_amount': max(order.amount_total - invoiced_amount, 0.0),
             'state': overall_state,
             'state_label': MISA_ORDER_STATE_LABELS.get(overall_state, overall_state),
             'partial_coverage': partial_coverage,
