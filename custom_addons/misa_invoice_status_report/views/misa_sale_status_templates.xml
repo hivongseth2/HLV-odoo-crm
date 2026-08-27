@@ -56,6 +56,7 @@
                 .msu-select:focus{outline:none;border-color:#2a78d6}
                 .msu-select::-ms-expand{display:none}
                 .msu-identity-hint{color:#d03b3b;font-size:.78rem}
+                .msu-identity-value{border:1px solid #eceae4;border-radius:8px;padding:8px 12px;font-size:.86rem;font-weight:700;color:#111827;background:#f7f7f5}
 
                 /* ---- Đối chiếu tổng ---- */
                 .msu-recon-card{margin-bottom:18px}
@@ -221,12 +222,13 @@
                 <div class="msu-identity-bar">
                     <div class="msu-card">
                         <span class="msu-identity-label">Mã sale của bạn</span>
-                        <span class="msu-select-wrap">
+                        <span id="msu-saler-select-wrap" class="msu-select-wrap">
                             <select id="msu-saler-select" class="msu-select">
                                 <option value="">-- Chọn mã sale --</option>
                             </select>
                             <i class="fa fa-chevron-down msu-select-caret"/>
                         </span>
+                        <span id="msu-saler-label" class="msu-identity-value" style="display:none"/>
                         <button id="msu-saler-link-btn" class="msu-btn msu-btn-outline-primary msu-btn-sm" style="display:none"
                                 title="Copy link riêng cho đúng mã sale đang chọn — gửi link này cho sale, họ mở lên là vào thẳng đúng dữ liệu của mình, không cần tự chọn.">
                             <i class="fa fa-link"/> Copy link cho mã này
@@ -698,8 +700,23 @@
                     }
 
                     var selectEl = document.getElementById('msu-saler-select');
+                    var selectWrapEl = document.getElementById('msu-saler-select-wrap');
+                    var salerLabelEl = document.getElementById('msu-saler-label');
                     var appEl = document.getElementById('msu-app');
                     var hintEl = document.getElementById('msu-identity-hint');
+
+                    // Không có quyền "Đối soát XHD" thì không có gì để "chọn" cả — tài khoản đó
+                    // CHỈ ĐƯỢC gán đúng 1 mã sale (server đã giới hạn ở get_misa_invoice_saler_
+                    // code_registry_with_tokens), nên thay vì 1 dropdown chỉ có 1 lựa chọn (gây
+                    // hiểu lầm là bấm chọn được mã khác), hiển thị thẳng dạng label tĩnh. Tài
+                    // khoản có NHIỀU mã (VD trưởng nhóm quản nhiều sale) vẫn giữ dropdown để còn
+                    // chuyển qua lại giữa các mã CỦA CHÍNH HỌ.
+                    function updateSalerSelectorMode(codes) {
+                        var useLabel = !state.isAdmin && codes.length <= 1;
+                        selectWrapEl.style.display = useLabel ? 'none' : '';
+                        salerLabelEl.style.display = useLabel ? '' : 'none';
+                        if (useLabel) { salerLabelEl.textContent = codes.length ? codes[0] : '—'; }
+                    }
 
                     function loadSalerCodes() {
                         return rpc('/misa_sale_status/api/saler_codes').then(function(res) {
@@ -708,6 +725,7 @@
                             state.isAdmin = !!res.is_admin;
                             state.codeTokenMap = {};
                             entries.forEach(function(e) { state.codeTokenMap[e.code] = e.token; });
+                            updateSalerSelectorMode(codes);
                             // ?t=<token> ưu tiên CAO NHẤT (link mới, không lộ mã) — chỉ resolve
                             // được ở đây vì cần có registry (đã tải xong) mới biết token khớp
                             // mã nào. Chỉ nhận token thuộc registry của CHÍNH user đang đăng
