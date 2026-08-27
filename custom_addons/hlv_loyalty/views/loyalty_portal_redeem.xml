@@ -175,9 +175,15 @@
                 <div class="sr-rdm-pane">
                     <div class="sr-cash-layout">
                     <div class="sr-cash-wrap">
-                        <form action="/loyalty/redeem/cash" method="post" class="sr-cash-form" id="cash-form">
+                        <!-- LƯU Ý: class sr-cash-form (có animation → tạo transform trên phần tử)
+                             KHÔNG được đặt trực tiếp trên <form>, mà trên 1 div con — vì bất kỳ phần
+                             tử nào có transform (kể cả do animation) sẽ biến thành containing block
+                             cho con cháu position:fixed bên trong nó, khiến popup xác nhận
+                             (position:fixed) bị "kẹt" trong khung <form> thay vì phủ toàn màn hình. -->
+                        <form action="/loyalty/redeem/cash" method="post" id="cash-form">
                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
 
+                            <div class="sr-cash-form">
                             <div class="sr-cf-card">
                                 <h3 class="sr-cf-title">
                                     <span class="ms">swap_horiz</span> Số điểm muốn đổi
@@ -227,92 +233,7 @@
                                     <span class="ms">send</span> Gửi yêu cầu
                                 </button>
                             </div>
-
-                            <div id="cash-confirm-modal" class="sr-modal-overlay" style="display:none">
-                                <div class="sr-modal-box">
-                                    <h3 class="sr-modal-title">
-                                        <span class="ms">account_balance</span> Xác nhận thông tin nhận hiện kim
-                                    </h3>
-
-                                    <div id="cash-confirm-view" t-attf-style="display:#{'block' if bank_mode == 'confirm' else 'none'}">
-                                        <div class="sr-bank-confirm">
-                                            <div class="sr-bank-confirm-chip">
-                                                <span class="ms ms-fill">account_balance</span>
-                                            </div>
-                                            <div class="sr-bank-confirm-info">
-                                                <div class="sr-bank-confirm-bank">
-                                                    <span><t t-out="default_bank_name"/></span>
-                                                    <button type="button" id="cash-switch-to-edit" class="sr-bank-confirm-edit-btn" aria-label="Sửa thông tin nhận tiền">
-                                                        <span class="ms" style="font-size:16px">edit</span>
-                                                    </button>
-                                                </div>
-                                                <div class="sr-bank-confirm-numrow">
-                                                    <span class="sr-bank-confirm-num" id="cash-stk-masked"><t t-out="default_account_number_masked"/></span>
-                                                    <button type="button" class="sr-bank-confirm-eye" id="cash-stk-reveal"
-                                                            t-att-data-full="default_account_number" aria-label="Xem đầy đủ số tài khoản">
-                                                        <span class="ms" id="cash-stk-reveal-icon">visibility</span>
-                                                        <span id="cash-stk-reveal-label">Xem đầy đủ</span>
-                                                    </button>
-                                                </div>
-                                                <div class="sr-bank-confirm-holder"><t t-out="default_account_name"/></div>
-                                            </div>
-                                        </div>
-                                        <div class="sr-cf-hint">
-                                            Vui lòng kiểm tra thông tin nhận tiền phía trên. Nếu chính xác, bấm
-                                            <strong>Xác nhận, gửi yêu cầu</strong> bên dưới.
-                                        </div>
-                                    </div>
-
-                                    <div id="cash-edit-view" t-attf-style="display:#{'none' if bank_mode == 'confirm' else 'block'}">
-                                        <t t-if="has_default_bank">
-                                            <div class="sr-cf-edit-banner">
-                                                <span class="ms" style="font-size:16px">info</span>
-                                                Thông tin nhận tiền hiện tại đã được điền sẵn bên dưới. Vui lòng chỉnh sửa nếu cần thay đổi.
-                                            </div>
-                                        </t>
-                                        <div class="sr-cf-field">
-                                            <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
-                                            <input type="text" name="bank_name" class="sr-cf-input"
-                                                   placeholder="VD: Vietcombank, Techcombank, BIDV..."
-                                                   required="required" t-att-value="form_vals.get('bank_name') or default_bank_name"/>
-                                        </div>
-                                        <div class="sr-cf-field">
-                                            <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
-                                            <input type="text" name="account_number" class="sr-cf-input"
-                                                   placeholder="Nhập số tài khoản..."
-                                                   required="required" t-att-value="form_vals.get('account_number') or default_account_number"/>
-                                        </div>
-                                        <div class="sr-cf-field">
-                                            <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
-                                            <input type="text" name="account_name" class="sr-cf-input"
-                                                   placeholder="Nhập đúng tên chủ tài khoản..."
-                                                   required="required" t-att-value="form_vals.get('account_name') or default_account_name"/>
-                                            <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
-                                        </div>
-                                        <div class="sr-cf-field">
-                                            <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:.83rem;cursor:pointer">
-                                                <input type="checkbox" name="save_default" value="1" checked="checked"/>
-                                                Lưu thông tin này làm mặc định cho các lần đổi sau
-                                            </label>
-                                            <t t-if="has_default_bank">
-                                                <button type="button" id="cash-switch-to-confirm" class="sr-rq-toggle-btn" style="margin-top:8px">
-                                                    <span class="ms" style="font-size:16px">undo</span> Quay lại thông tin mặc định
-                                                </button>
-                                            </t>
-                                        </div>
-                                    </div>
-
-                                    <input type="hidden" name="use_saved_bank" id="use-saved-bank-input"
-                                           t-att-value="'1' if bank_mode == 'confirm' else '0'"/>
-
-                                    <div class="sr-modal-actions">
-                                        <button type="button" id="cash-modal-cancel" class="sr-modal-btn-cancel">Huỷ</button>
-                                        <button type="submit" class="sr-cf-submit">
-                                            <span class="ms">send</span> Xác nhận, gửi yêu cầu
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                            </div><!-- /sr-cash-form -->
                         </form>
                     </div><!-- /sr-cash-wrap -->
 
@@ -342,6 +263,100 @@
                     </div><!-- /sr-cash-side -->
                     </div><!-- /sr-cash-layout -->
                 </div>
+
+                <!-- Popup nằm NGOÀI <form>/.sr-rdm-pane (không phải bên trong form nữa) và
+                     liên kết vào form qua thuộc tính form="cash-form" trên từng field/nút —
+                     vì .sr-rdm-pane và .sr-cash-form đều có animation (tạo transform), mà bất kỳ
+                     tổ tiên nào có transform sẽ biến thành containing block cho phần tử con
+                     position:fixed bên trong, khiến popup bị "kẹt" trong khung nội dung thay vì
+                     phủ toàn màn hình như ý. Đặt hẳn ra ngoài để tránh mọi tổ tiên có transform,
+                     hiện tại lẫn về sau. -->
+                <div id="cash-confirm-modal" class="sr-modal-overlay" style="display:none">
+                    <div class="sr-modal-box">
+                        <h3 class="sr-modal-title">
+                            <span class="ms">account_balance</span> Xác nhận thông tin nhận hiện kim
+                        </h3>
+
+                        <div id="cash-confirm-view" t-attf-style="display:#{'block' if bank_mode == 'confirm' else 'none'}">
+                            <div class="sr-bank-confirm">
+                                <div class="sr-bank-confirm-chip">
+                                    <span class="ms ms-fill">account_balance</span>
+                                </div>
+                                <div class="sr-bank-confirm-info">
+                                    <div class="sr-bank-confirm-bank">
+                                        <span><t t-out="default_bank_name"/></span>
+                                        <button type="button" id="cash-switch-to-edit" class="sr-bank-confirm-edit-btn" aria-label="Sửa thông tin nhận tiền">
+                                            <span class="ms" style="font-size:16px">edit</span>
+                                        </button>
+                                    </div>
+                                    <div class="sr-bank-confirm-numrow">
+                                        <span class="sr-bank-confirm-num" id="cash-stk-masked"><t t-out="default_account_number_masked"/></span>
+                                        <button type="button" class="sr-bank-confirm-eye" id="cash-stk-reveal"
+                                                t-att-data-full="default_account_number" aria-label="Xem đầy đủ số tài khoản">
+                                            <span class="ms" id="cash-stk-reveal-icon">visibility</span>
+                                            <span id="cash-stk-reveal-label">Xem đầy đủ</span>
+                                        </button>
+                                    </div>
+                                    <div class="sr-bank-confirm-holder"><t t-out="default_account_name"/></div>
+                                </div>
+                            </div>
+                            <div class="sr-cf-hint">
+                                Vui lòng kiểm tra thông tin nhận tiền phía trên. Nếu chính xác, bấm
+                                <strong>Xác nhận, gửi yêu cầu</strong> bên dưới.
+                            </div>
+                        </div>
+
+                        <div id="cash-edit-view" t-attf-style="display:#{'none' if bank_mode == 'confirm' else 'block'}">
+                            <t t-if="has_default_bank">
+                                <div class="sr-cf-edit-banner">
+                                    <span class="ms" style="font-size:16px">info</span>
+                                    Thông tin nhận tiền hiện tại đã được điền sẵn bên dưới. Vui lòng chỉnh sửa nếu cần thay đổi.
+                                </div>
+                            </t>
+                            <div class="sr-cf-field">
+                                <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
+                                <input type="text" name="bank_name" form="cash-form" class="sr-cf-input"
+                                       placeholder="VD: Vietcombank, Techcombank, BIDV..."
+                                       required="required" t-att-value="form_vals.get('bank_name') or default_bank_name"/>
+                            </div>
+                            <div class="sr-cf-field">
+                                <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
+                                <input type="text" name="account_number" form="cash-form" class="sr-cf-input"
+                                       placeholder="Nhập số tài khoản..."
+                                       required="required" t-att-value="form_vals.get('account_number') or default_account_number"/>
+                            </div>
+                            <div class="sr-cf-field">
+                                <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
+                                <input type="text" name="account_name" form="cash-form" class="sr-cf-input"
+                                       placeholder="Nhập đúng tên chủ tài khoản..."
+                                       required="required" t-att-value="form_vals.get('account_name') or default_account_name"/>
+                                <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
+                            </div>
+                            <div class="sr-cf-field">
+                                <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:.83rem;cursor:pointer">
+                                    <input type="checkbox" name="save_default" form="cash-form" value="1" checked="checked"/>
+                                    Lưu thông tin này làm mặc định cho các lần đổi sau
+                                </label>
+                                <t t-if="has_default_bank">
+                                    <button type="button" id="cash-switch-to-confirm" class="sr-rq-toggle-btn" style="margin-top:8px">
+                                        <span class="ms" style="font-size:16px">undo</span> Quay lại thông tin mặc định
+                                    </button>
+                                </t>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="use_saved_bank" form="cash-form" id="use-saved-bank-input"
+                               t-att-value="'1' if bank_mode == 'confirm' else '0'"/>
+
+                        <div class="sr-modal-actions">
+                            <button type="button" id="cash-modal-cancel" class="sr-modal-btn-cancel">Huỷ</button>
+                            <button type="submit" form="cash-form" class="sr-cf-submit">
+                                <span class="ms">send</span> Xác nhận, gửi yêu cầu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <t t-if="program and program.cash_rate_per_point > 0">
                     <script>
                     (function(){
