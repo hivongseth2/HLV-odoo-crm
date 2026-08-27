@@ -24,6 +24,13 @@ MISA_INVOICE_STATE_LABELS = {
 # Giới hạn số phiếu xử lý mỗi lần chạy cron, tránh gọi MISA API quá nhiều cùng lúc.
 MISA_INVOICE_SCAN_BATCH_SIZE = 50
 
+# Giới hạn số phiếu ĐẠI DIỆN quét "đơn xuất kèm" (misa_invoice_group_checked) mỗi lần cron
+# chạy — bước này vốn chỉ tự kích hoạt 1 LẦN DUY NHẤT ngay lúc phiếu chuyển 'invoiced' (xem
+# action_check_misa_invoice_status); nếu lần đó lỡ mất, phiếu đã 'invoiced' sẽ KHÔNG BAO GIỜ
+# bị quét lại ở nhánh chính (domain chỉ lấy phiếu CHƯA invoiced) — quét bù nhỏ giọt ở cron để
+# không bị kẹt vĩnh viễn.
+MISA_INVOICE_GROUP_SCAN_BATCH_SIZE = 20
+
 # Mốc ngày mặc định bắt đầu đối soát nếu chưa cấu hình (có thể đổi trên dashboard).
 MISA_INVOICE_CUTOFF_PARAM = 'misa_invoice_status_report.cutoff_date'
 MISA_INVOICE_CUTOFF_DEFAULT = '2026-05-01'
@@ -1652,6 +1659,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
             self._misa_invoice_check_batch(pickings)
         except Exception:
             _logger.exception("❌ [MISA INVOICE STATUS CRON] Lỗi xử lý theo lô")
+
+        try:
+            self.scan_misa_invoice_grouped_orders(limit=MISA_INVOICE_GROUP_SCAN_BATCH_SIZE)
+        except Exception:
+            _logger.exception("❌ [MISA GROUP DISCOVER CRON] Lỗi quét bù đơn xuất kèm")
 
     @api.model
     def get_misa_invoice_scan_candidates(
