@@ -894,6 +894,13 @@ class StockTrace(models.AbstractModel):
                        - qty_in_after.get(loc_id, 0.0) + qty_out_after.get(loc_id, 0.0))
                 bal = self._r(bal)
                 total += bal
+                if bal == 0:
+                    # skip empty bins entirely — a warehouse tree can have
+                    # hundreds of shelf/bin locations (THUNG 1, THUNG 2, ...)
+                    # that never held this product; rendering all of them as
+                    # "0 Cái" rows is exactly what made this panel feel slow.
+                    # Still counted in `total` above, just not displayed.
+                    continue
                 loc = self.env["stock.location"].browse(loc_id)
                 wh_id = wh_of(loc_id) if wh_of else None
                 locations_snapshot.append({
