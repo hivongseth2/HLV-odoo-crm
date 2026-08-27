@@ -196,6 +196,23 @@
                 .msu-modal{background:#fff;border-radius:12px;padding:24px;width:min(440px,100%);box-shadow:0 24px 60px rgba(15,23,42,.28)}
                 .msu-modal-wide{width:min(820px,96vw);max-height:86vh;display:flex;flex-direction:column}
                 .msu-modal-wide-body{overflow-y:auto;flex:1}
+
+                /* ---- So sánh dòng hàng Odoo / MISA (mũi tên trực quan) ---- */
+                .msu-cmp-list{display:flex;flex-direction:column}
+                .msu-cmp-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #eceae4}
+                .msu-cmp-row:last-child{border-bottom:none}
+                .msu-cmp-side{flex:1;min-width:0}
+                .msu-cmp-side-empty{color:#b8b7b0;font-style:italic;font-size:.8rem}
+                .msu-cmp-label{font-size:.66rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#8b8d94;margin-bottom:2px}
+                .msu-cmp-name{font-weight:700;font-size:.86rem;color:#111827}
+                .msu-cmp-code{font-size:.74rem;color:#8b8d94;margin-top:2px}
+                .msu-cmp-meta{font-size:.8rem;color:#52514e;margin-top:2px}
+                .msu-cmp-mid{display:flex;flex-direction:column;align-items:center;gap:2px;width:56px;flex:none;text-align:center}
+                .msu-cmp-arrow{font-size:1.15rem;color:#b8b7b0}
+                .msu-cmp-mid.ok .msu-cmp-arrow{color:#0ca30c}
+                .msu-cmp-mid.mismatch .msu-cmp-arrow{color:#d03b3b}
+                .msu-cmp-diff{font-size:.66rem;font-weight:700;color:#d03b3b;line-height:1.3}
+                @media(max-width:640px){.msu-cmp-row{flex-direction:column;align-items:stretch}.msu-cmp-mid{flex-direction:row;width:auto;justify-content:center}}
                 .msu-modal h5{margin:0 0 6px;font-weight:800;font-size:1.02rem;color:#111827}
                 .msu-modal p{margin:0 0 12px}
                 .msu-modal textarea.msu-input{width:100%;resize:vertical;font-family:inherit}
@@ -1746,15 +1763,63 @@
                             '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
                     }
 
+                    // So sánh TỪNG DÒNG HÀNG Odoo (đã xuất kho) vs MISA (đề nghị) — vẽ 2 bên
+                    // kèm mũi tên/icon ở giữa cho trực quan, thay vì 1 bảng cột dọc khó dò theo
+                    // hàng ngang. rec = kết quả get_misa_invoice_line_reconciliation (đã có sẵn
+                    // qty/value 2 bên + cờ mismatch/in_odoo_only/in_misa_only).
+                    function renderLineReconciliation(rec) {
+                        if (!rec) {
+                            return '<p class="msu-muted" style="font-size:.82rem">Chưa đối chiếu được (lỗi tải dữ liệu MISA).</p>';
+                        }
+                        if (rec.error) {
+                            return '<div class="msu-modal-error">Lỗi đối chiếu: ' + esc(rec.error) + '</div>';
+                        }
+                        var rows = rec.rows || [];
+                        if (!rows.length) {
+                            return '<p class="msu-muted" style="font-size:.82rem">Không có dòng hàng nào để đối chiếu.</p>';
+                        }
+                        var rowsHtml = rows.map(function(r) {
+                            var midClass = r.mismatch ? 'mismatch' : 'ok';
+                            var icon = r.in_odoo_only ? 'fa-long-arrow-right'
+                                : r.in_misa_only ? 'fa-long-arrow-left'
+                                : r.mismatch ? 'fa-exchange' : 'fa-check';
+                            var diffHtml = '';
+                            if (r.mismatch && !r.in_odoo_only && !r.in_misa_only) {
+                                var parts = [];
+                                if (Math.abs(r.qty_diff) > 0.001) { parts.push('SL lệch ' + r.qty_diff.toLocaleString('vi-VN')); }
+                                if (Math.abs(r.amount_diff) > 1) { parts.push(fmtMoney(Math.abs(r.amount_diff))); }
+                                diffHtml = parts.length ? '<div class="msu-cmp-diff">' + esc(parts.join(' · ')) + '</div>' : '';
+                            }
+                            var odooSide = r.in_misa_only
+                                ? '<div class="msu-cmp-side-empty">Không có trên Odoo</div>'
+                                : '<div class="msu-cmp-label">Odoo — xuất kho</div>' +
+                                  '<div class="msu-cmp-name">' + esc(r.product_name || r.code) + '</div>' +
+                                  '<div class="msu-cmp-meta">SL ' + r.odoo_qty.toLocaleString('vi-VN') + ' &middot; ' + fmtMoney(r.odoo_value) + '</div>' +
+                                  (r.odoo_picking_names && r.odoo_picking_names.length ? '<div class="msu-cmp-code"><i class="fa fa-cube"></i> ' + esc(r.odoo_picking_names.join(', ')) + '</div>' : '');
+                            var misaSide = r.in_odoo_only
+                                ? '<div class="msu-cmp-side-empty">Không có trên MISA</div>'
+                                : '<div class="msu-cmp-label">MISA — đề nghị</div>' +
+                                  '<div class="msu-cmp-name">' + esc(r.product_name || r.code) + '</div>' +
+                                  '<div class="msu-cmp-meta">SL ' + r.misa_qty.toLocaleString('vi-VN') + ' &middot; ' + fmtMoney(r.misa_value) + '</div>' +
+                                  (r.misa_order_codes && r.misa_order_codes.length ? '<div class="msu-cmp-code"><i class="fa fa-file-text-o"></i> ' + esc(r.misa_order_codes.join(', ')) + '</div>' : '');
+                            return '<div class="msu-cmp-row">' +
+                                '<div class="msu-cmp-side">' + odooSide + '</div>' +
+                                '<div class="msu-cmp-mid ' + midClass + '"><i class="fa ' + icon + ' msu-cmp-arrow"></i>' + diffHtml + '</div>' +
+                                '<div class="msu-cmp-side">' + misaSide + '</div>' +
+                            '</div>';
+                        }).join('');
+                        return '<div class="msu-cmp-list">' + rowsHtml + '</div>';
+                    }
+
                     function renderInvoiceDetailBody(detail) {
                         var html = '';
                         if (detail.effective_picking_name && detail.effective_picking_name !== detail.picking_name) {
                             html += '<p class="msu-muted" style="font-size:.82rem">Đọc theo phiếu đại diện <b>' + esc(detail.effective_picking_name) + '</b> (phiếu này đang "ăn theo").</p>';
                         }
                         if (detail.request) {
-                            html += '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Đề nghị xuất HĐ — ' +
-                                esc(detail.request.refno || '(không rõ số đề nghị)') + '</p>' +
-                                renderInvoiceDetailLines(detail.request_lines) + '</div>';
+                            html += '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Đối chiếu dòng hàng — Odoo (xuất kho) so với MISA (đề nghị ' +
+                                esc(detail.request.refno || '') + ')</p>' +
+                                renderLineReconciliation(detail.line_reconciliation) + '</div>';
                         } else {
                             html += '<div class="msu-drawer-section"><p class="msu-muted" style="font-size:.82rem">Chưa có đề nghị xuất HĐ nào trên MISA cho phiếu này.</p></div>';
                         }
