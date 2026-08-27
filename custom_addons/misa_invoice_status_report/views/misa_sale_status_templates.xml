@@ -167,6 +167,7 @@
                 /* ---- Drawer (chi tiết 1 phiếu) ---- */
                 .msu-drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1900;display:flex;justify-content:flex-end}
                 .msu-drawer{background:#fff;width:min(440px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
+                .msu-drawer-wide{width:min(760px,96vw)}
                 @keyframes msuDrawerIn{from{transform:translateX(24px);opacity:.5}to{transform:translateX(0);opacity:1}}
                 .msu-drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:20px 20px 16px;border-bottom:1px solid #eceae4}
                 .msu-drawer-title{font-size:1.05rem;font-weight:800;color:#111827;margin:0}
@@ -1470,6 +1471,7 @@
                         drawerOpenId = null;
                         customsDrawerRowId = null;
                         drawerKind = null;
+                        drawerEl.classList.remove('msu-drawer-wide');
                         customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
                     }
                     drawerOverlay.addEventListener('click', function(ev) {
@@ -1479,6 +1481,7 @@
                     function openDrawer(row) {
                         drawerKind = 'picking';
                         drawerOpenId = row.id;
+                        drawerEl.classList.remove('msu-drawer-wide');
                         renderDrawerContent(row);
                         drawerOverlay.style.display = 'flex';
                     }
@@ -1489,9 +1492,74 @@
                         if (row) { renderDrawerContent(row); } else { closeDrawer(); }
                     }
 
+                    // Drawer "Đơn hàng" (tab Đơn hàng) — liệt kê TỪNG PHIẾU xuất kho của đơn
+                    // này kèm tiền thực xuất/tiền hóa đơn/trạng thái riêng, bấm vào 1 phiếu mở
+                    // tiếp drawer chi tiết ĐÚNG phiếu đó (tái dùng openSiblingDrawer, cùng cơ
+                    // chế phiếu "Phiếu xuất kho khác cùng đơn hàng" đang dùng trong drawer
+                    // picking) — trả lời trực tiếp "con nào đã xuất, con nào chưa".
+                    function openOrderDrawer(row) {
+                        drawerKind = 'order';
+                        drawerOpenId = row.id;
+                        drawerEl.classList.add('msu-drawer-wide');
+                        renderOrderDrawerContent(row);
+                        drawerOverlay.style.display = 'flex';
+                    }
+
+                    function renderOrderDrawerContent(row) {
+                        var pickingRowsHtml = (row.pickings || []).map(function(p) {
+                            var extra = '';
+                            if (p.master_picking_name) {
+                                extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + '</div>';
+                            }
+                            if (p.exception) {
+                                extra += '<span class="msu-badge-exception">Ngoại lệ</span>';
+                            }
+                            return '<tr class="msu-drawer-sibling" data-picking-id="' + p.id + '">' +
+                                '<td><b>' + esc(p.name) + '</b>' + extra + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(p.actual_amount) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(p.invoice_amount) + '</td>' +
+                                '<td>' + (p.invoice_no ? esc(p.invoice_no) : '<span class="msu-muted">—</span>') + '</td>' +
+                                '<td>' + (p.request_refno ? esc(p.request_refno) : '<span class="msu-muted">—</span>') + '</td>' +
+                                '<td><span class="msu-badge-state msu-badge-state-' + p.state + '">' + esc(p.state_label) + '</span></td>' +
+                            '</tr>';
+                        }).join('');
+
+                        drawerEl.innerHTML =
+                            '<div class="msu-drawer-header">' +
+                                '<div><h4 class="msu-drawer-title">' + esc(row.name) + '</h4><div class="msu-drawer-subtitle">' + esc(row.partner_name) + '</div></div>' +
+                                '<button class="msu-drawer-close" id="msu-drawer-close-btn"><i class="fa fa-times"></i></button>' +
+                            '</div>' +
+                            '<div class="msu-drawer-body">' +
+                                '<div class="msu-drawer-section">' +
+                                    '<div class="msu-drawer-meta">' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền đơn</span><span class="msu-meta-value">' + fmtMoney(row.amount_total) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền đã xuất HĐ</span><span class="msu-meta-value">' + fmtMoney(row.invoice_amount) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền chưa xuất HĐ</span><span class="msu-meta-value' + (row.outstanding_amount > 0 ? ' msu-col-diff-bad' : '') + '">' + fmtMoney(row.outstanding_amount) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div class="msu-drawer-section">' +
+                                    '<p class="msu-drawer-section-title">Phiếu xuất kho của đơn này — bấm vào 1 dòng để xem chi tiết</p>' +
+                                    '<div class="msu-table-scroll">' +
+                                        '<table class="msu-table"><thead><tr>' +
+                                            '<th>Phiếu</th><th class="msu-col-num">Tiền thực xuất</th><th class="msu-col-num">Tiền hóa đơn</th><th>Số HĐ</th><th>Đề nghị</th><th>Trạng thái</th>' +
+                                        '</tr></thead><tbody>' + pickingRowsHtml + '</tbody></table>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>';
+
+                        document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
+                        drawerEl.querySelectorAll('.msu-drawer-sibling').forEach(function(tr) {
+                            tr.addEventListener('click', function() {
+                                openSiblingDrawer(parseInt(this.dataset.pickingId, 10));
+                            });
+                        });
+                    }
+
                     function openCustomsDrawer(row) {
                         drawerKind = 'customs';
                         customsDrawerRowId = row.id;
+                        drawerEl.classList.remove('msu-drawer-wide');
                         if (!customsManualState.open) {
                             customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
                         }
