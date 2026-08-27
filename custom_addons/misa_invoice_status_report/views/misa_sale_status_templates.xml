@@ -1639,7 +1639,9 @@
                         var pickingRowsHtml = (row.pickings || []).map(function(p) {
                             var extra = '';
                             if (p.master_picking_name) {
-                                extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + '</div>';
+                                var masterOrderSuffix = p.master_picking_order_code
+                                    ? ' (đơn ' + esc(p.master_picking_order_code) + ')' : '';
+                                extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + masterOrderSuffix + '</div>';
                             }
                             if (p.exception) {
                                 extra += '<span class="msu-badge-exception">Ngoại lệ</span>';

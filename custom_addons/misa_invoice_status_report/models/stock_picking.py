@@ -3670,6 +3670,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'request_refno': (p.misa_invoice_master_picking_id or p).misa_invoice_request_refno or False,
                     'master_picking_id': p.misa_invoice_master_picking_id.id or False,
                     'master_picking_name': p.misa_invoice_master_picking_id.name or False,
+                    # Mã đơn hàng của phiếu ĐẠI DIỆN (nếu đang "ăn theo") — phiếu đại diện có
+                    # thể thuộc đơn KHÁC với đơn đang xem (case "resolved_elsewhere": đơn A bị
+                    # xuất chung với đơn B), hiện thêm ra để không phải tra cứu tay.
+                    'master_picking_order_code': (
+                        ', '.join(p.misa_invoice_master_picking_id.misa_invoice_sale_order_ids.mapped('name'))
+                        if p.misa_invoice_master_picking_id else False
+                    ) or False,
                     'exception': p.misa_invoice_exception,
                     'manual_refno': p.misa_invoice_manual_refno or False,
                 }
