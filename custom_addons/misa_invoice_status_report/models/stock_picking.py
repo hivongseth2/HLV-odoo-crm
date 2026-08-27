@@ -635,6 +635,45 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 sources.append({'refno': req.get('refno'), 'refid': refid, 'amount': amount})
         return total, sources
 
+    def _misa_invoice_compute_order_coverage_detail(self, order_name, exclude_refids=None):
+        """Tính (shipped, invoiced, sources) THẬT cho 1 ĐƠN HÀNG (theo order_code, không quan
+        tâm tên đề nghị) — phần PLUMBING dùng CHUNG cho cả misa_invoice_order_coverage (field
+        lưu trên phiếu) VÀ nhánh "đơn hàng khác nhắc tới trong đề nghị" của
+        _misa_invoice_compute_group_breakdown (donut "vì sao lệch"), để 2 nơi cùng xuất phát
+        từ 1 nguồn số liệu duy nhất (tránh gọi API 2 lần/khác điều kiện exclude_refids ra 2 kết
+        quả lệch nhau).
+
+        shipped = tổng tiền thực xuất của TOÀN BỘ phiếu (đã done) thuộc đơn này; invoiced =
+        tổng tiền đã xuất HĐ qua MỌI đề nghị tìm được cho đơn này.
+
+        `level` (none/partial/full) đi kèm chỉ dùng LÀM MẶC ĐỊNH cho field
+        misa_invoice_order_coverage (ngưỡng LỎNG 1 CHIỀU: invoiced thừa vẫn tính 'full', vì
+        field này chỉ trả lời "đã xuất đủ tiền chưa", không quan tâm thừa/thiếu). Chỗ nào cần
+        phân biệt "khớp đúng" với "thừa/thiếu bất thường cần kiểm tra tay" (VD donut
+        conflict/resolved_elsewhere) PHẢI tự so sánh shipped/invoiced bằng ngưỡng riêng
+        (abs(invoiced - shipped) <= tolerance, ĐỐI XỨNG 2 CHIỀU), KHÔNG dùng field `level` này."""
+        order = self.env['sale.order'].sudo().with_context(active_test=False).search(
+            [('name', '=', order_name)], limit=1,
+        )
+        if not order:
+            return {'level': 'none', 'shipped': 0.0, 'invoiced': 0.0, 'sources': []}
+        order_pickings = self.sudo().search([
+            ('misa_invoice_sale_order_ids', '=', order.id),
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('state', '=', 'done'),
+        ])
+        shipped = sum(order_pickings.mapped('misa_invoice_net_actual_amount'))
+        invoiced, sources = self._misa_invoice_sum_invoiced_for_order(order_name, exclude_refids=exclude_refids)
+        if shipped <= MISA_INVOICE_AMOUNT_TOLERANCE:
+            level = 'full' if invoiced > MISA_INVOICE_AMOUNT_TOLERANCE else 'none'
+        elif invoiced <= MISA_INVOICE_AMOUNT_TOLERANCE:
+            level = 'none'
+        elif invoiced >= shipped - MISA_INVOICE_AMOUNT_TOLERANCE:
+            level = 'full'
+        else:
+            level = 'partial'
+        return {'level': level, 'shipped': shipped, 'invoiced': invoiced, 'sources': sources}
+
     def _misa_invoice_verify_order_via_other_requests(self, order_names, known_refids):
         """Với 1 PHIẾU đang thiếu xác nhận (shortfall > 0): chủ động hỏi MISA có đề nghị nào
         KHÁC (refid ngoài known_refids) cũng nhắc tới (các) đơn hàng của phiếu này không, cộng
@@ -676,23 +715,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 continue
             worst = 'full'
             for order in orders:
-                order_pickings = self.sudo().search([
-                    ('misa_invoice_sale_order_ids', '=', order.id),
-                    ('picking_type_id.code', '=', 'outgoing'),
-                    ('state', '=', 'done'),
-                ])
-                shipped = sum(order_pickings.mapped('misa_invoice_net_actual_amount'))
-                if shipped <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                detail = self._misa_invoice_compute_order_coverage_detail(order.name)
+                if detail['shipped'] <= MISA_INVOICE_AMOUNT_TOLERANCE:
                     continue
-                invoiced, _sources = self._misa_invoice_sum_invoiced_for_order(order.name)
-                if invoiced <= MISA_INVOICE_AMOUNT_TOLERANCE:
-                    level = 'none'
-                elif invoiced >= shipped - MISA_INVOICE_AMOUNT_TOLERANCE:
-                    level = 'full'
-                else:
-                    level = 'partial'
-                if rank[level] < rank[worst]:
-                    worst = level
+                if rank[detail['level']] < rank[worst]:
+                    worst = detail['level']
             picking.misa_invoice_order_coverage = worst
 
     def _misa_invoice_discover_grouped_orders(self):
@@ -2791,6 +2818,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         mismatch_count = Picking.search_count(
             base_domain + [('misa_invoice_amount_mismatch', '=', True), ('misa_invoice_gap_resolved', '=', False)]
         )
+        # Đếm riêng "xuất HĐ 1 phần theo ĐƠN HÀNG" (misa_invoice_order_coverage='partial') —
+        # KHÁC với mismatch_count ở trên: 1 phiếu có thể misa_invoice_state='missing' (chưa tự
+        # có đề nghị riêng) nhưng đơn hàng của nó đã được xuất HĐ 1 phần qua phiếu/đề nghị khác
+        # (case thật KBC/OUT/06650) — con số này mới phản ánh đúng "đơn nào thật sự còn dở
+        # dang", không lẫn với "chưa kiểm tra" hay "chưa có gì cả".
+        partial_coverage_count = Picking.search_count(
+            base_domain + [('misa_invoice_order_coverage', '=', 'partial')]
+        )
         total = sum(counts.values()) + exception_count
 
         invoiced_sum = Picking.read_group(
@@ -2873,6 +2908,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'counts': counts,
             'exception_count': exception_count,
             'mismatch_count': mismatch_count,
+            'partial_coverage_count': partial_coverage_count,
             'total': total,
             'invoiced_amount': invoiced_amount,
             'by_warehouse': by_warehouse,
@@ -4260,11 +4296,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 if claimed_elsewhere:
                     # QUAN TRỌNG (case thật KBC/OUT/10714, lặp lại ở MỨC ĐƠN HÀNG): đơn này có
                     # thể ĐÃ được xuất hóa đơn ĐỦ — chỉ là qua NHIỀU đề nghị khác nhau (không
-                    # chỉ đề nghị đang xem) — trước khi kết luận đây là "cần kiểm tra tay", chủ
-                    # động hỏi MISA tổng tiền đã xuất hóa đơn cho đúng đơn này qua TẤT CẢ đề
-                    # nghị hiện có, so với tổng tiền thực xuất thật của đơn đó.
-                    all_actual = sum(order_pickings.mapped('misa_invoice_net_actual_amount'))
-                    total_invoiced, verify_sources = self._misa_invoice_sum_invoiced_for_order(order_code)
+                    # chỉ đề nghị đang xem) — trước khi kết luận đây là "cần kiểm tra tay", xác
+                    # minh qua _misa_invoice_compute_order_coverage_detail (CÙNG nguồn số liệu
+                    # với misa_invoice_order_coverage — không tự gọi lại API riêng ở đây nữa).
+                    # Dùng ngưỡng ĐỐI XỨNG (abs diff <= tolerance) của RIÊNG donut này, không
+                    # dùng detail['level'] (ngưỡng lỏng 1 chiều, không phân biệt được thừa bất
+                    # thường — xem docstring helper).
+                    detail = self._misa_invoice_compute_order_coverage_detail(order_code)
+                    all_actual = detail['shipped']
+                    total_invoiced = detail['invoiced']
+                    verify_sources = detail['sources']
                     if total_invoiced and abs(total_invoiced - all_actual) <= MISA_INVOICE_AMOUNT_TOLERANCE:
                         # Xác nhận: đơn này ĐÃ có đủ hóa đơn (qua 1 hay nhiều đề nghị riêng biệt)
                         # — không phải gap thật, không tính vào phần "còn thiếu", không cần
@@ -4457,8 +4498,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     @api.model
     def get_misa_invoice_report_action(
-        self, state=False, exception=None, saler_code=False, mismatch=False, partner_id=False,
-        warehouse_id=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        self, state=False, exception=None, saler_code=False, mismatch=False, partial_coverage=False,
+        partner_id=False, warehouse_id=False, date_from=False, date_to=False,
+        invoice_date_from=False, invoice_date_to=False,
     ):
         """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile/dòng được bấm.
         exception=None: không ép domain, để search view tự quyết định (dùng cho "Xem tất cả").
@@ -4491,5 +4533,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
         if mismatch:
             domain.append(('misa_invoice_amount_mismatch', '=', True))
+        if partial_coverage:
+            domain.append(('misa_invoice_order_coverage', '=', 'partial'))
         action['domain'] = domain
         return action

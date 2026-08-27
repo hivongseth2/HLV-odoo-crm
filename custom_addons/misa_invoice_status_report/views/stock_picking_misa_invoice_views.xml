@@ -105,6 +105,10 @@
                 <field name="misa_invoice_returned_amount" string="Tiền hàng đã trả" optional="hide" sum="Tổng tiền đã trả"/>
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
                 <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
+                <field name="misa_invoice_order_coverage" widget="badge" optional="show"
+                       decoration-danger="misa_invoice_order_coverage == 'none'"
+                       decoration-warning="misa_invoice_order_coverage == 'partial'"
+                       decoration-success="misa_invoice_order_coverage == 'full'"/>
                 <field name="misa_invoice_multi_order_group" widget="boolean_toggle" readonly="1" optional="hide"/>
                 <field name="misa_invoice_group_order_names" string="Đơn bán trong nhóm gộp" optional="show"/>
                 <field name="misa_invoice_master_picking_id" string="Phiếu gốc" optional="hide"/>
@@ -143,6 +147,8 @@
                 <separator/>
                 <filter string="Lệch tiền với MISA" name="filter_mismatch"
                         domain="[('misa_invoice_amount_mismatch', '=', True)]"/>
+                <filter string="Xuất HĐ 1 phần (theo đơn)" name="filter_partial_coverage"
+                        domain="[('misa_invoice_order_coverage', '=', 'partial')]"/>
                 <filter string="Đã đánh dấu ngoại lệ" name="filter_exception"
                         domain="[('misa_invoice_exception', '=', True)]"/>
                 <filter string="Chưa đánh dấu ngoại lệ" name="filter_no_exception"
