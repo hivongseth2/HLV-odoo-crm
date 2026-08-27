@@ -144,6 +144,19 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_picking_siblings error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/picking_full_detail', type='json', auth='user', methods=['POST'])
+    def api_picking_full_detail(self, picking_id=None, saler_code='', **kwargs):
+        try:
+            detail = request.env['stock.picking'].sudo().get_misa_invoice_public_full_detail(
+                int(picking_id), saler_code
+            )
+            return {'status': 'success', 'detail': detail}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_picking_full_detail error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/customs/fetch', type='json', auth='user', methods=['POST'])
     def api_customs_fetch(self, inv_no='', **kwargs):
         try:

@@ -3848,6 +3848,78 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return []
         return self._misa_invoice_picking_siblings(picking)
 
+    @api.model
+    def get_misa_invoice_public_full_detail(self, picking_id, saler_code):
+        """Chi tiết ĐẦY ĐỦ đề nghị xuất HĐ + hóa đơn thật (kèm từng dòng hàng) từ MISA cho
+        1 phiếu — dùng cho nút "Xem hóa đơn/đề nghị" ở drawer. Đọc LIVE trực tiếp từ MISA
+        (không lưu bảng riêng) vì chỉ gọi khi người dùng chủ động bấm xem 1 phiếu, không phải
+        quét hàng loạt."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        picking = self.sudo().browse(picking_id).exists()
+        if not picking or picking.misa_invoice_saler_code != code:
+            raise UserError("Bạn không có quyền xem phiếu này.")
+        return picking._misa_invoice_fetch_full_detail()
+
+    def _misa_invoice_fetch_full_detail(self):
+        """Đọc theo phiếu ĐẠI DIỆN nếu đang 'ăn theo' (giống mọi chỗ khác đang đọc
+        invoice_no/refno) — trả về cả đề nghị lẫn hóa đơn thật, mỗi bên kèm từng dòng hàng
+        (get_invoice_request_lines/get_voucher_lines), y hệt cấu trúc dữ liệu đã dùng ở
+        fetch_misa_customs_invoice."""
+        self.ensure_one()
+        effective = self.misa_invoice_master_picking_id or self
+        misa_utils = self.env['misa.api.utils']
+        result = {
+            'picking_name': self.name,
+            'effective_picking_name': effective.name,
+            'request': False,
+            'request_lines': [],
+            'invoice': False,
+            'invoice_lines': [],
+        }
+
+        def _line_dict(l):
+            return {
+                'order_code': (l.get('order_code') or '').strip(),
+                'inventory_item_code': l.get('inventory_item_code') or '',
+                'description': l.get('description') or '',
+                'quantity': l.get('quantity') or 0.0,
+                'unit_price': l.get('unit_price') or 0.0,
+                'amount': l.get('amount_oc') or 0.0,
+            }
+
+        refid = effective.misa_invoice_request_refid
+        if refid:
+            result['request'] = {'refid': refid, 'refno': effective.misa_invoice_request_refno or False}
+            try:
+                lines = misa_utils.get_invoice_request_lines(refid)
+            except Exception:
+                _logger.exception("Lỗi tải chi tiết đề nghị xuất HĐ MISA (refid=%s)", refid)
+                lines = []
+            result['request_lines'] = [_line_dict(l) for l in lines]
+
+        invoice_no = effective.misa_invoice_no
+        if invoice_no:
+            try:
+                voucher = misa_utils.get_voucher_by_inv_no(invoice_no)
+            except Exception:
+                _logger.exception("Lỗi tải hóa đơn MISA (inv_no=%s)", invoice_no)
+                voucher = None
+            if voucher:
+                v_refid = voucher.get('refid')
+                result['invoice'] = {
+                    'inv_no': voucher.get('inv_no') or invoice_no,
+                    'inv_date': voucher.get('inv_date'),
+                    'total_amount': voucher.get('total_amount') or 0.0,
+                    'account_object_name': voucher.get('account_object_name') or '',
+                }
+                try:
+                    vlines = misa_utils.get_voucher_lines(v_refid) if v_refid else []
+                except Exception:
+                    _logger.exception("Lỗi tải chi tiết hóa đơn MISA (refid=%s)", v_refid)
+                    vlines = []
+                result['invoice_lines'] = [_line_dict(l) for l in vlines]
+        return result
+
     def _misa_invoice_picking_line_items(self, picking):
         """Chi tiết sản phẩm/mã hàng/số lượng/giá trị xuất kho của 1 phiếu — dùng chung cho
         drawer hiển thị (get_misa_invoice_picking_lines) VÀ đối chiếu từng dòng với MISA

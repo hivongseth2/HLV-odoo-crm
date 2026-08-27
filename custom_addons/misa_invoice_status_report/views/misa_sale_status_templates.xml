@@ -194,6 +194,8 @@
                 /* ---- Modal ---- */
                 .msu-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
                 .msu-modal{background:#fff;border-radius:12px;padding:24px;width:min(440px,100%);box-shadow:0 24px 60px rgba(15,23,42,.28)}
+                .msu-modal-wide{width:min(820px,96vw);max-height:86vh;display:flex;flex-direction:column}
+                .msu-modal-wide-body{overflow-y:auto;flex:1}
                 .msu-modal h5{margin:0 0 6px;font-weight:800;font-size:1.02rem;color:#111827}
                 .msu-modal p{margin:0 0 12px}
                 .msu-modal textarea.msu-input{width:100%;resize:vertical;font-family:inherit}
@@ -574,6 +576,21 @@
                     <div class="msu-modal-actions">
                         <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-exception-cancel">Hủy</button>
                         <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-exception-confirm" data-loading-text="Đang lưu...">Xác nhận</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="msu-modal-overlay" id="msu-invoice-detail-modal" style="display:none">
+                <div class="msu-modal msu-modal-wide">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                        <h5 id="msu-invoice-detail-title">Chi tiết đề nghị / hóa đơn</h5>
+                        <button class="msu-drawer-close" id="msu-invoice-detail-close-x"><i class="fa fa-times"></i></button>
+                    </div>
+                    <div id="msu-invoice-detail-body" class="msu-modal-wide-body">
+                        <span class="msu-muted">Đang tải...</span>
+                    </div>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-invoice-detail-close">Đóng</button>
                     </div>
                 </div>
             </div>
@@ -1642,17 +1659,28 @@
                                 var masterOrderSuffix = p.master_picking_order_code
                                     ? ' (đơn ' + esc(p.master_picking_order_code) + ')' : '';
                                 extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + masterOrderSuffix + '</div>';
+                            } else if (p.request_refno && p.request_refno !== p.name) {
+                                // Không có link "ăn theo" chính thức trong Odoo, nhưng đề nghị
+                                // trên MISA lại mang tên khác phiếu này — vẫn là 1 dạng "liên
+                                // quan tới gốc" cần biết, chỉ khác là không truy được order_code
+                                // của cái tên đó (không có bản ghi picking liên kết chính thức).
+                                extra += '<div class="msu-muted" style="font-size:.76rem">Xuất qua đề nghị "' + esc(p.request_refno) + '"</div>';
                             }
                             if (p.exception) {
                                 extra += '<span class="msu-badge-exception">Ngoại lệ</span>';
                             }
-                            return '<tr class="msu-drawer-sibling" data-picking-id="' + p.id + '">' +
-                                '<td><b>' + esc(p.name) + '</b>' + extra + '</td>' +
+                            var hasDetail = !!(p.invoice_no || p.request_refno);
+                            var detailBtn = hasDetail
+                                ? '<button type="button" class="msu-btn msu-btn-outline-primary msu-btn-xs msu-view-invoice-detail-btn" data-picking-id="' + p.id + '" data-picking-name="' + esc(p.name) + '" title="Xem đầy đủ đề nghị/hóa đơn"><i class="fa fa-file-text-o"></i></button>'
+                                : '<span class="msu-muted">—</span>';
+                            return '<tr>' +
+                                '<td class="msu-drawer-sibling" data-picking-id="' + p.id + '"><b>' + esc(p.name) + '</b>' + extra + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(p.actual_amount) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(p.invoice_amount) + '</td>' +
                                 '<td>' + (p.invoice_no ? esc(p.invoice_no) : '<span class="msu-muted">—</span>') + '</td>' +
                                 '<td>' + (p.request_refno ? esc(p.request_refno) : '<span class="msu-muted">—</span>') + '</td>' +
                                 '<td><span class="msu-badge-state msu-badge-state-' + p.state + '">' + esc(p.state_label) + '</span></td>' +
+                                '<td>' + detailBtn + '</td>' +
                             '</tr>';
                         }).join('');
 
@@ -1671,22 +1699,101 @@
                                     '</div>' +
                                 '</div>' +
                                 '<div class="msu-drawer-section">' +
-                                    '<p class="msu-drawer-section-title">Phiếu xuất kho của đơn này — bấm vào 1 dòng để xem chi tiết</p>' +
+                                    '<p class="msu-drawer-section-title">Phiếu xuất kho của đơn này — bấm vào tên phiếu để xem chi tiết, bấm ' +
+                                    '<i class="fa fa-file-text-o"></i> để xem đầy đủ đề nghị/hóa đơn trên MISA</p>' +
                                     '<div class="msu-table-scroll">' +
                                         '<table class="msu-table"><thead><tr>' +
-                                            '<th>Phiếu</th><th class="msu-col-num">Tiền thực xuất</th><th class="msu-col-num">Tiền hóa đơn</th><th>Số HĐ</th><th>Đề nghị</th><th>Trạng thái</th>' +
+                                            '<th>Phiếu</th><th class="msu-col-num">Tiền thực xuất</th><th class="msu-col-num">Tiền hóa đơn</th><th>Số HĐ</th><th>Đề nghị</th><th>Trạng thái</th><th></th>' +
                                         '</tr></thead><tbody>' + pickingRowsHtml + '</tbody></table>' +
                                     '</div>' +
                                 '</div>' +
                             '</div>';
 
                         document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
-                        drawerEl.querySelectorAll('.msu-drawer-sibling').forEach(function(tr) {
-                            tr.addEventListener('click', function() {
+                        drawerEl.querySelectorAll('.msu-drawer-sibling').forEach(function(td) {
+                            td.addEventListener('click', function() {
                                 openSiblingDrawer(parseInt(this.dataset.pickingId, 10));
                             });
                         });
+                        drawerEl.querySelectorAll('.msu-view-invoice-detail-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function(ev) {
+                                ev.stopPropagation();
+                                openInvoiceDetailModal(parseInt(this.dataset.pickingId, 10), this.dataset.pickingName);
+                            });
+                        });
                     }
+
+                    // ===== Modal "Xem hóa đơn/đề nghị" — chi tiết ĐẦY ĐỦ (từng dòng hàng) đọc
+                    // LIVE từ MISA cho 1 phiếu, gọi khi bấm nút trong bảng phiếu của drawer đơn
+                    // hàng. Không cache — mỗi lần mở đều gọi lại (chỉ khi người dùng chủ động
+                    // bấm xem, không phải quét hàng loạt, nên chấp nhận tốn 1-2 API call/lần).
+                    function renderInvoiceDetailLines(lines) {
+                        if (!lines || !lines.length) {
+                            return '<p class="msu-muted" style="font-size:.82rem">Không có dòng hàng.</p>';
+                        }
+                        var rowsHtml = lines.map(function(l) {
+                            return '<tr>' +
+                                '<td>' + esc(l.order_code || '—') + '</td>' +
+                                '<td>' + esc(l.inventory_item_code || '') + '</td>' +
+                                '<td>' + esc(l.description || '') + '</td>' +
+                                '<td class="msu-col-num">' + (l.quantity || 0).toLocaleString('vi-VN') + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(l.unit_price) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(l.amount) + '</td>' +
+                            '</tr>';
+                        }).join('');
+                        return '<div class="msu-table-scroll"><table class="msu-table"><thead><tr>' +
+                            '<th>Đơn hàng</th><th>Mã hàng</th><th>Tên hàng</th><th class="msu-col-num">SL</th><th class="msu-col-num">Đơn giá</th><th class="msu-col-num">Thành tiền</th>' +
+                            '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+                    }
+
+                    function renderInvoiceDetailBody(detail) {
+                        var html = '';
+                        if (detail.effective_picking_name && detail.effective_picking_name !== detail.picking_name) {
+                            html += '<p class="msu-muted" style="font-size:.82rem">Đọc theo phiếu đại diện <b>' + esc(detail.effective_picking_name) + '</b> (phiếu này đang "ăn theo").</p>';
+                        }
+                        if (detail.request) {
+                            html += '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Đề nghị xuất HĐ — ' +
+                                esc(detail.request.refno || '(không rõ số đề nghị)') + '</p>' +
+                                renderInvoiceDetailLines(detail.request_lines) + '</div>';
+                        } else {
+                            html += '<div class="msu-drawer-section"><p class="msu-muted" style="font-size:.82rem">Chưa có đề nghị xuất HĐ nào trên MISA cho phiếu này.</p></div>';
+                        }
+                        if (detail.invoice) {
+                            html += '<div class="msu-drawer-section">' +
+                                '<p class="msu-drawer-section-title">Hóa đơn ' + esc(detail.invoice.inv_no || '') +
+                                (detail.invoice.inv_date ? (' — ' + esc(detail.invoice.inv_date)) : '') + '</p>' +
+                                '<div class="msu-drawer-meta" style="margin-bottom:10px">' +
+                                    '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Khách hàng</span><span class="msu-meta-value">' + esc(detail.invoice.account_object_name || '—') + '</span></div>' +
+                                    '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền HĐ</span><span class="msu-meta-value">' + fmtMoney(detail.invoice.total_amount) + '</span></div>' +
+                                '</div>' +
+                                renderInvoiceDetailLines(detail.invoice_lines) + '</div>';
+                        } else {
+                            html += '<div class="msu-drawer-section"><p class="msu-muted" style="font-size:.82rem">Chưa có hóa đơn thật được lập trên MISA (mới dừng ở đề nghị).</p></div>';
+                        }
+                        return html;
+                    }
+
+                    function openInvoiceDetailModal(pickingId, pickingName) {
+                        var modal = document.getElementById('msu-invoice-detail-modal');
+                        var body = document.getElementById('msu-invoice-detail-body');
+                        document.getElementById('msu-invoice-detail-title').textContent = 'Chi tiết đề nghị / hóa đơn — ' + pickingName;
+                        body.innerHTML = '<span class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải từ MISA...</span>';
+                        modal.style.display = 'flex';
+                        rpc('/misa_sale_status/api/picking_full_detail', {picking_id: pickingId, saler_code: state.salerCode}).then(function(res) {
+                            body.innerHTML = renderInvoiceDetailBody(res.detail || {});
+                        }).catch(function(e) {
+                            body.innerHTML = '<div class="msu-modal-error">Lỗi tải chi tiết: ' + esc(e.message) + '</div>';
+                        });
+                    }
+
+                    function closeInvoiceDetailModal() {
+                        document.getElementById('msu-invoice-detail-modal').style.display = 'none';
+                    }
+                    document.getElementById('msu-invoice-detail-close').addEventListener('click', closeInvoiceDetailModal);
+                    document.getElementById('msu-invoice-detail-close-x').addEventListener('click', closeInvoiceDetailModal);
+                    document.getElementById('msu-invoice-detail-modal').addEventListener('click', function(ev) {
+                        if (ev.target === this) { closeInvoiceDetailModal(); }
+                    });
 
                     function openCustomsDrawer(row) {
                         drawerKind = 'customs';
