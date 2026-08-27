@@ -207,6 +207,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_amount_mismatch = fields.Boolean(
         string='Lệch tiền so với MISA', compute='_compute_misa_invoice_amount_mismatch', store=True,
     )
+    # Mức độ xuất HĐ THẬT theo ĐƠN HÀNG (không phải theo tên đề nghị/refno như
+    # misa_invoice_state) — vì 1 đơn có thể được xuất hóa đơn qua NHIỀU đề nghị khác nhau
+    # (chia nhỏ, gán nhầm tên đề nghị...), misa_invoice_state (dựa vào tìm ĐÚNG 1 refno khớp
+    # tên phiếu) không phản ánh đúng "đã xuất bao nhiêu % giá trị đơn". Field này cộng dồn TẤT
+    # CẢ tiền đã xuất HĐ qua MỌI đề nghị nhắc tới đơn hàng (get_invoice_requests_for_order,
+    # không quan tâm tên đề nghị) so với tổng tiền thực xuất của TOÀN BỘ phiếu thuộc đơn đó.
+    # CHỈ tính khi bước refno nhanh KHÔNG xác nhận đủ (state='missing' hoặc amount_mismatch=True)
+    # — xem _misa_invoice_reconcile_order_coverage — để không tốn thêm API cho phần lớn phiếu
+    # đã khớp sạch ngay từ bước refno.
+    misa_invoice_order_coverage = fields.Selection([
+        ('none', 'Chưa xuất HĐ'),
+        ('partial', 'Xuất HĐ 1 phần'),
+        ('full', 'Đã xuất HĐ đủ'),
+    ], string='Mức độ xuất HĐ theo đơn hàng', copy=False)
 
     # ==== Trả hàng (khách trả lại 1 phần/toàn bộ sau khi đã xuất kho) ====
     # x_studio_tng_tin_sau_thu (field Studio, "tiền thực xuất GỘP") chỉ được set 1 LẦN lúc
