@@ -334,6 +334,14 @@
                                 <div class="miv-tile-label">Lệch tiền với MISA</div>
                             </div>
                         </div>
+                        <div class="miv-tile miv-tile-warning" t-on-click="openPartialCoverageTile"
+                             title="Đơn hàng đã có hóa đơn nhưng CHƯA phủ đủ 100% giá trị đã xuất kho — tính đúng theo mã đơn hàng qua mọi đề nghị tìm được, không chỉ đề nghị mang đúng tên phiếu.">
+                            <div class="miv-tile-icon"><i class="fa fa-pie-chart"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="state.data.partial_coverage_count"/></div>
+                                <div class="miv-tile-label">Xuất HĐ 1 phần (theo đơn)</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

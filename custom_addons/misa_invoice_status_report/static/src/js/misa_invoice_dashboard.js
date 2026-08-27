@@ -840,6 +840,14 @@ export class MisaInvoiceDashboard extends Component {
         this.action.doAction(action);
     }
 
+    async openPartialCoverageTile() {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, partial_coverage: true, ...this.filterParams }
+        );
+        this.action.doAction(action);
+    }
+
     async openSalerRow(salerCode) {
         const action = await this.orm.call(
             "stock.picking", "get_misa_invoice_report_action", [],
