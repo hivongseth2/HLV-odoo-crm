@@ -944,6 +944,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         'misa_invoice_no': self.misa_invoice_no,
                         'misa_invoice_date': self.misa_invoice_date,
                         'misa_invoice_request_refid': self.misa_invoice_request_refid,
+                        'misa_invoice_request_refno': self.misa_invoice_request_refno,
                         'misa_invoice_last_checked': fields.Datetime.now(),
                         'misa_invoice_group_checked': True,
                     })
@@ -1221,6 +1222,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'misa_invoice_no': root.misa_invoice_no,
             'misa_invoice_date': root.misa_invoice_date,
             'misa_invoice_request_refid': root.misa_invoice_request_refid,
+            'misa_invoice_request_refno': root.misa_invoice_request_refno,
             'misa_invoice_last_checked': fields.Datetime.now(),
         })
         picking.message_post(body=Markup(
@@ -1309,6 +1311,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'misa_invoice_no': master.misa_invoice_no,
                 'misa_invoice_date': master.misa_invoice_date,
                 'misa_invoice_request_refid': refid,
+                'misa_invoice_request_refno': master.misa_invoice_request_refno,
             })
             note = Markup(
                 "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện các phiếu này cùng khớp 1 hóa đơn MISA "
