@@ -720,7 +720,9 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             'gift_product_name': p.gift_product_id.display_name if p.gift_product_id else '',
             'gift_product_code': p.gift_product_id.default_code or '' if p.gift_product_id else '',
             'description': p.description or '',
-            'state': p.state or 'available',
+            # Voucher packages do not define a ``state`` field; availability
+            # is represented by the ``active`` flag used in the search domain.
+            'state': 'available',
         } for p in packages])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
