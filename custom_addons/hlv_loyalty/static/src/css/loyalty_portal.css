@@ -1046,6 +1046,34 @@ a { color:inherit; }
 .sr-cf-submit:hover { filter:brightness(1.08); transform:translateY(-2px); box-shadow:0 6px 22px rgba(23,121,180,.42); }
 .sr-cf-submit:active { transform:scale(.97); }
 
+/* Popup xác nhận thông tin nhận hiện kim (mở khi bấm "Gửi yêu cầu") — nền
+   overlay tối nên dùng box gần như đặc (không kính mờ hẳn) để chữ/số tài
+   khoản luôn rõ, tránh mờ nhoè khi đọc thông tin tài chính. */
+.sr-modal-overlay {
+    display:none; position:fixed; inset:0; z-index:9999;
+    background:rgba(15,20,32,.55); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+    align-items:center; justify-content:center; padding:20px;
+    animation:rdmFadeUp .2s ease both;
+}
+.sr-modal-box {
+    width:100%; max-width:460px; max-height:88vh; overflow-y:auto;
+    background:rgba(255,255,255,.97); border-radius:26px; padding:28px 26px;
+    box-shadow:0 24px 60px rgba(0,6,40,.35);
+}
+.sr-modal-title {
+    display:flex; align-items:center; gap:9px;
+    font-size:1.05rem; font-weight:800; color:var(--c-ink); margin-bottom:18px;
+}
+.sr-modal-title .ms { color:var(--c-pri); font-size:22px; }
+.sr-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+.sr-modal-btn-cancel {
+    appearance:none; -webkit-appearance:none;
+    border:1px solid var(--c-out); background:#fff; color:var(--c-ink-v);
+    padding:12px 20px; border-radius:10px; font:700 .88rem/1 'Inter',sans-serif; cursor:pointer;
+    transition:background .16s ease;
+}
+.sr-modal-btn-cancel:hover { background:var(--c-surf-hi); }
+
 /* ──────────────────────── QUY TRÌNH XỬ LÝ (dải ngang, full-width) ──────────────────────── */
 .sr-cash-side { animation:rdmFadeUp .4s .1s ease both; }
 .sr-cash-side-inner {
