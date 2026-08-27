@@ -208,6 +208,7 @@
                     <thead class="table-light">
                         <tr>
                             <th class="text-center">Sản phẩm</th>
+                            <th width="60" class="text-center">DVT</th>
                             <th width="70" class="text-center">Chốt Bán</th>
                             <th width="70" class="text-center">Đóng Gói</th>
                             <th width="70" class="text-center">Tồn Kho</th>
@@ -233,6 +234,7 @@
                                         </t>
                                     </div>
                                 </td>
+                                <td class="text-muted small"><t t-esc="line.uom_name"/></td>
                                 <td class="fw-bold"><t t-esc="this.formatQty(line.product_uom_qty)"/></td>
                                 <td t-att-class="line.qty_packed >= line.product_uom_qty ? 'text-success fw-bold' : (line.qty_packed > 0 ? 'text-info fw-bold' : 'text-muted')">
                                     <t t-if="line.qty_packed > 0">
@@ -278,7 +280,7 @@
                             <!-- Phiếu đang giữ hàng (blocking reservations) -->
                             <t t-if="line.blocked_by and line.blocked_by.length > 0">
                                 <tr class="table-light">
-                                    <td colspan="10" class="text-start p-0">
+                                    <td colspan="11" class="text-start p-0">
                                         <div class="px-3 py-2" style="font-size:0.75rem;">
                                             <div class="fw-bold text-danger mb-1">
                                                 <i class="fa fa-lock me-1"></i>Đang bị giữ hàng bởi:

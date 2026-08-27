@@ -345,6 +345,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             so_lines_data.append({
                 'id': line.id,
                 'product_id': [line.product_id.id, p_name] if line.product_id else False,
+                'uom_name': line.product_uom.name or '',
                 'product_uom_qty': line.product_uom_qty,
                 'qty_delivered': eff_qty_del,
                 'qty_packed': qty_packed,
