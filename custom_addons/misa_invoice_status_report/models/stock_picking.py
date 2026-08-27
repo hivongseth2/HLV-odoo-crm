@@ -530,19 +530,46 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 picking.misa_invoice_state == 'invoiced' and status['state'] != 'invoiced'
                 and not status.get('request_refid')
             ):
-                picking.misa_invoice_last_checked = fields.Datetime.now()
-                picking.message_post(body=Markup(
-                    "<b>⚠️ Kiểm tra lại KHÔNG tìm thấy đề nghị/hóa đơn</b> (phiếu đang 'Đã xuất "
-                    "HĐ' với số %s) — GIỮ NGUYÊN dữ liệu cũ, KHÔNG tự xóa/hạ trạng thái, vì rất "
-                    "có thể do phạm vi tìm kiếm lần này chưa đủ rộng chứ không phải hóa đơn đã "
-                    "bị hủy thật. Kiểm tra tay trên MISA nếu thật sự nghi ngờ."
-                ) % (picking.misa_invoice_no or '?'))
-                results.append({
-                    'id': picking.id, 'name': picking.name,
-                    'state': picking.misa_invoice_state,
-                    'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
-                })
-                continue
+                # Trước khi kết luận "không tìm thấy": nếu đang ở chế độ quét THEO LÔ (dùng
+                # request_map giới hạn theo ngày) — thử xác minh lại ĐÚNG 1 LẦN bằng API SỐNG
+                # (get_invoice_status_for_refno, không giới hạn ngày) CHỈ cho riêng phiếu này —
+                # tốn thêm đúng 1 lệnh gọi cho ca hiếm gặp này (không quét sống tràn lan cho cả
+                # lô, chỉ khi thật sự rơi vào nghi vấn), không ảnh hưởng hiệu năng chung.
+                if request_map is not None:
+                    try:
+                        live_status = misa_utils.get_invoice_status_for_refno(refno)
+                    except Exception:
+                        _logger.exception(
+                            "❌ [MISA INVOICE STATUS] Lỗi xác minh sống lại cho phiếu %s (quét theo lô "
+                            "không tìm thấy)", picking.name,
+                        )
+                        live_status = None
+                    if live_status and live_status.get('request_refid'):
+                        # Xác minh sống TÌM RA — dùng kết quả MỚI này, rơi xuống xử lý bình
+                        # thường bên dưới (vals = {...}) như 1 lần check thành công thật sự,
+                        # không còn là "không tìm thấy" nữa.
+                        status = live_status
+
+                if not status.get('request_refid'):
+                    # Vẫn KHÔNG tìm ra kể cả sau khi xác minh sống — GIỮ NGUYÊN dữ liệu cũ, vì
+                    # rất có thể do phạm vi tìm kiếm/API tạm thời không đủ, không phải hóa đơn
+                    # đã bị hủy thật trên MISA (bài học thật: mô phỏng lại đúng luồng quét theo
+                    # lô với khoảng ngày hẹp, phát hiện lần quét đó "không tìm ra gì" cho 1
+                    # phiếu ĐANG 'invoiced' hợp lệ — nếu ghi đè thẳng theo status, sẽ XÓA MẤT
+                    # misa_invoice_no/request_refno/request_refid ĐÚNG đã có từ trước).
+                    picking.misa_invoice_last_checked = fields.Datetime.now()
+                    picking.message_post(body=Markup(
+                        "<b>⚠️ Kiểm tra lại KHÔNG tìm thấy đề nghị/hóa đơn</b> (phiếu đang 'Đã xuất "
+                        "HĐ' với số %s), kể cả sau khi xác minh lại bằng API sống — GIỮ NGUYÊN dữ "
+                        "liệu cũ, KHÔNG tự xóa/hạ trạng thái. Kiểm tra tay trên MISA nếu thật sự "
+                        "nghi ngờ hóa đơn đã bị hủy."
+                    ) % (picking.misa_invoice_no or '?'))
+                    results.append({
+                        'id': picking.id, 'name': picking.name,
+                        'state': picking.misa_invoice_state,
+                        'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
+                    })
+                    continue
 
             vals = {
                 'misa_invoice_state': status['state'],
