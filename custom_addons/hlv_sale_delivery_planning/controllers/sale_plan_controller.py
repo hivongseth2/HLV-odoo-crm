@@ -1107,7 +1107,7 @@ function groupLines(lines){
       map[key].delivered_tax+=(l.delivered_tax||0);
       map[key].delivered_total+=(l.delivered_total||0);
     } else {
-      map[key]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
+      map[key]={product_id:l.product_id,uom_name:l.uom_name||'',product_uom_qty:l.product_uom_qty||0,
         qty_delivered:l.qty_delivered||0,qty_packed:l.qty_packed||0,
         qty_available:l.qty_available||0,qty_warehouse_free:l.qty_warehouse_free||0,
         qty_reserved_here:l.qty_reserved_here||0,is_kit:l.is_kit||false,
@@ -1937,7 +1937,7 @@ function openDrawer(id){
     +'</div>'
     +'</div>';
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
-    +'<th>Sản phẩm</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
+    +'<th>Sản phẩm</th><th class="text-end">DVT</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
     +'<th class="text-end">Tồn Kho</th><th class="text-end">Đã Giao</th>'
     +'<th class="text-end">Đơn Giá</th><th class="text-end">TT Thực Xuất</th><th class="text-end">VAT</th><th class="text-end">TT + VAT</th>'
     +'<th class="text-end">Thiếu</th></tr></thead><tbody>';
@@ -1956,6 +1956,7 @@ function openDrawer(id){
     var stockTitle=reservedHere>0?' title="Tự do: '+fq(l.qty_warehouse_free||0)+'  |  Giữ cho đơn: '+fq(reservedHere)+'"':'';
     var stockSub=reservedHere>0?'<div class="text-info" style="font-size:.7rem;line-height:1.1"><i class="fa fa-lock me-1"></i>'+fq(reservedHere)+'</div>':'';
     h+='<tr class="'+rc+'"><td>'+esc(pname)+(l.is_kit?' <span class="badge bg-warning bg-opacity-25 text-dark" style="font-size:10px"><i class="fa fa-gift"></i> Combo</span>':'')+'</td>'
+      +'<td class="text-end text-muted small">'+esc(l.uom_name||'')+'</td>'
       +'<td class="text-end fw-bold">'+fq(l.product_uom_qty)+'</td>'
       +'<td class="text-end '+packCls+'">'+packHtml+'</td>'
       +'<td class="text-end '+stkCls+'"'+stockTitle+'>'+fq(wfree)+stockSub+'</td>'
@@ -1971,7 +1972,7 @@ function openDrawer(id){
   });
   h+='</tbody>'
     +'<tfoot><tr style="background:#f8fafc;border-top:2px solid #e2e8f0">'
-    +'<td colspan="6" class="text-end text-muted small fw-semibold py-2">Tổng</td>'
+    +'<td colspan="7" class="text-end text-muted small fw-semibold py-2">Tổng</td>'
     +'<td class="text-end fw-bold text-success py-2">'+fm(totalSubtotal)+'</td>'
     +'<td class="text-end fw-bold py-2" style="color:#b45309">'+fm(totalTax)+'</td>'
     +'<td class="text-end fw-bold text-primary py-2">'+fm(totalTotal)+'</td>'
