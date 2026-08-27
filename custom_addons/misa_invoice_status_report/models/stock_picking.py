@@ -107,6 +107,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
     # bản CŨ của _misa_invoice_discover_grouped_orders chưa (ép cả phiếu ăn theo về 0 dù đề
     # nghị chỉ phủ 1 phần giá trị) — xem repair_misa_invoice_grouped_order().
     misa_invoice_group_repaired = fields.Boolean(string='Đã kiểm tra sửa gộp sai', copy=False)
+    # Đã thử sửa "thiếu Số HĐ/Số đề nghị dù đã Đã xuất HĐ" chưa (dữ liệu cũ bị ghi thiếu do 1
+    # đợt code lỗi trước đây — xem repair_misa_invoice_missing_no()) — PHẢI có field riêng để
+    # domain quét tự RỖNG DẦN sau khi xử lý, không thì nút quét chạy vòng lặp không hội tụ
+    # (bài học thật: misa_invoice_amount_mismatch không tự tắt sau khi tính lý do, khiến nút
+    # "Cập nhật lý do lệch" từng bị lặp vô ích cho tới khi thêm field đánh dấu tương tự).
+    misa_invoice_no_repaired = fields.Boolean(string='Đã kiểm tra sửa thiếu Số HĐ', copy=False)
     # Các lượt được xuất HĐ CHUNG qua đề nghị của 1 phiếu KHÁC, khớp theo TỪNG DÒNG HÀNG (mã
     # hàng + số lượng) — xem misa.invoice.grouped.line/.match và
     # _misa_invoice_discover_grouped_orders. Khác với misa_invoice_master_picking_id (chỉ gán
@@ -1159,6 +1165,69 @@ class StockPickingMisaInvoiceStatus(models.Model):
             except Exception:
                 _logger.exception("❌ [MISA GROUP REPAIR] Lỗi sửa phiếu %s", picking.name)
         return {'checked': len(candidates), 'reverted': total_reverted}
+
+    def _misa_invoice_missing_no_repair_domain(self):
+        return [
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('misa_invoice_state', '=', 'invoiced'),
+            ('misa_invoice_master_picking_id', '=', False),
+            '|',
+            ('misa_invoice_no', '=', False),
+            ('misa_invoice_request_refno', '=', False),
+            ('misa_invoice_no_repaired', '=', False),
+        ]
+
+    @api.model
+    def get_misa_invoice_missing_no_repair_candidates(self, limit=100):
+        """Danh sách phiếu ĐẠI DIỆN đang 'Đã xuất HĐ' nhưng thiếu Số HĐ/Số đề nghị — dữ liệu cũ
+        bị ghi thiếu do 1 đợt code lỗi trước đây (commit 0415820cd vô tình revert mất 1 đoạn xử
+        lý — case thật KBC/OUT/12440: live check lại ra đủ dữ liệu ngay, chứng tỏ code hiện tại
+        đúng, chỉ là DỮ LIỆU CŨ bị đóng băng sai lúc code lỗi còn chạy). Dùng cho panel tiến độ
+        trên dashboard, giống hệt get_misa_invoice_grouped_orders_repair_candidates."""
+        Picking = self.sudo()
+        domain = self._misa_invoice_missing_no_repair_domain()
+        pickings = Picking.search(domain, limit=limit)
+        return {
+            'candidates': [{'id': p.id, 'name': p.name} for p in pickings],
+            'total': Picking.search_count(domain),
+        }
+
+    @api.model
+    def repair_misa_invoice_missing_no(self, picking_id):
+        """Kiểm tra lại 1 phiếu đại diện đang thiếu Số HĐ/Số đề nghị — action_check_misa_invoice_status
+        hiện tại (đã đúng) sẽ tự điền lại đầy đủ. Nếu phiếu này có "ăn theo" cũng đang thiếu
+        (kế thừa từ đại diện lúc dữ liệu còn sai), đồng bộ luôn xuống — không cần đợi các phiếu
+        đó tự lọt vào 1 lượt quét khác."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return {'error': 'Phiếu này không còn tồn tại.'}
+        try:
+            picking.action_check_misa_invoice_status()
+        except Exception as e:
+            _logger.exception("❌ [MISA REPAIR NO] Lỗi kiểm tra lại phiếu %s", picking.name)
+            return {'error': str(e)}
+        picking.misa_invoice_no_repaired = True
+        fixed = bool(picking.misa_invoice_no and picking.misa_invoice_request_refno)
+        covered_fixed_names = []
+        if fixed and picking.misa_invoice_covered_picking_ids:
+            missing_covered = picking.misa_invoice_covered_picking_ids.filtered(
+                lambda p: not p.misa_invoice_no or not p.misa_invoice_request_refno
+            )
+            if missing_covered:
+                missing_covered.write({
+                    'misa_invoice_no': picking.misa_invoice_no,
+                    'misa_invoice_date': picking.misa_invoice_date,
+                    'misa_invoice_request_refid': picking.misa_invoice_request_refid,
+                    'misa_invoice_request_refno': picking.misa_invoice_request_refno,
+                    'misa_invoice_no_repaired': True,
+                })
+                covered_fixed_names = missing_covered.mapped('name')
+        return {
+            'fixed': fixed,
+            'covered_fixed_names': covered_fixed_names,
+            'state': picking.misa_invoice_state,
+            'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
+        }
 
     def _misa_invoice_master_chain_domain(self):
         # 2 điều kiện quan hệ liên tiếp (master_picking_id.master_picking_id) — Odoo hỗ trợ

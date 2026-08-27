@@ -110,6 +110,10 @@ export class MisaInvoiceDashboard extends Component {
             showChainScanPanel: false,
             chainScanProgress: { done: 0, total: 0 },
             chainScanLog: [],
+            isRepairingMissingNo: false,
+            showMissingNoScanPanel: false,
+            missingNoScanProgress: { done: 0, total: 0 },
+            missingNoScanLog: [],
             isSavingCutoff: false,
             data: null,
             urgent: [],
@@ -773,6 +777,59 @@ export class MisaInvoiceDashboard extends Component {
     closeChainScanPanel() {
         if (!this.state.isFlatteningChains) {
             this.state.showChainScanPanel = false;
+        }
+    }
+
+    /** Sửa dữ liệu cũ bị thiếu Số HĐ/Số đề nghị dù đã "Đã xuất HĐ" — case thật KBC/OUT/12440:
+     * bị ghi thiếu do 1 đợt code lỗi trước đây (commit revert), kiểm tra lại bằng code hiện
+     * tại (đã đúng) là tự điền lại đủ. Tự động chạy hết toàn bộ danh sách — xem _runScanUntilDone. */
+    async repairMissingNo() {
+        if (this.state.isRepairingMissingNo) {
+            return;
+        }
+        this.state.isRepairingMissingNo = true;
+        this.state.showMissingNoScanPanel = true;
+        this.state.missingNoScanLog = [];
+        this.state.missingNoScanProgress = { done: 0, total: 0 };
+        try {
+            const summary = await this._runScanUntilDone({
+                candidatesMethod: "get_misa_invoice_missing_no_repair_candidates",
+                perItemMethod: "repair_misa_invoice_missing_no",
+                progressKey: "missingNoScanProgress",
+                logKey: "missingNoScanLog",
+                buildEntry: (candidate, result, summary) => {
+                    const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Không tự sửa được (kiểm tra tay)" };
+                    if (result.error) {
+                        entry.statusLabel = "Lỗi: " + result.error;
+                        entry.error = true;
+                    } else if (result.fixed) {
+                        entry.statusLabel = "Đã điền lại đủ Số HĐ/Số đề nghị";
+                        if (result.covered_fixed_names && result.covered_fixed_names.length) {
+                            entry.statusLabel += ` (kèm ${result.covered_fixed_names.length} phiếu ăn theo: ${result.covered_fixed_names.join(", ")})`;
+                        }
+                        summary.totalFixed = (summary.totalFixed || 0) + 1;
+                    }
+                    return entry;
+                },
+            });
+            if (summary.totalFixed) {
+                this.notification.add(
+                    `Đã kiểm tra ${summary.totalChecked} phiếu, sửa ${summary.totalFixed} phiếu thiếu Số HĐ.`,
+                    { type: "success" }
+                );
+                await this._reload();
+            } else {
+                this.notification.add(`Đã kiểm tra ${summary.totalChecked} phiếu, không có phiếu nào thiếu Số HĐ.`, { type: "info" });
+            }
+        } catch (e) {
+            this.notification.add("Lỗi sửa thiếu Số HĐ: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isRepairingMissingNo = false;
+    }
+
+    closeMissingNoScanPanel() {
+        if (!this.state.isRepairingMissingNo) {
+            this.state.showMissingNoScanPanel = false;
         }
     }
 
