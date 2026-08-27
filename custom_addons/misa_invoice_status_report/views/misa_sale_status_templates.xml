@@ -705,17 +705,17 @@
                     var appEl = document.getElementById('msu-app');
                     var hintEl = document.getElementById('msu-identity-hint');
 
-                    // Không có quyền "Đối soát XHD" thì không có gì để "chọn" cả — tài khoản đó
-                    // CHỈ ĐƯỢC gán đúng 1 mã sale (server đã giới hạn ở get_misa_invoice_saler_
-                    // code_registry_with_tokens), nên thay vì 1 dropdown chỉ có 1 lựa chọn (gây
-                    // hiểu lầm là bấm chọn được mã khác), hiển thị thẳng dạng label tĩnh. Tài
-                    // khoản có NHIỀU mã (VD trưởng nhóm quản nhiều sale) vẫn giữ dropdown để còn
-                    // chuyển qua lại giữa các mã CỦA CHÍNH HỌ.
-                    function updateSalerSelectorMode(codes) {
-                        var useLabel = !state.isAdmin && codes.length <= 1;
-                        selectWrapEl.style.display = useLabel ? 'none' : '';
-                        salerLabelEl.style.display = useLabel ? '' : 'none';
-                        if (useLabel) { salerLabelEl.textContent = codes.length ? codes[0] : '—'; }
+                    // Không có quyền "Đối soát XHD" thì KHÔNG có gì để "chọn" cả, dù chỉ có
+                    // đúng 1 mã hay nhiều mã (VD trưởng nhóm) — CHỈ được vào bằng ĐÚNG link
+                    // riêng (?t=<token>) admin đã cấp cho mã đó, không tự suy ra mã của mình
+                    // qua session/localStorage nữa. Vào trang mà không kèm link hợp lệ => báo
+                    // lỗi không có quyền, không hiện dropdown/label nào để "mò" mã khác.
+                    function showSalerAccessDenied(msg) {
+                        selectWrapEl.style.display = 'none';
+                        salerLabelEl.style.display = 'none';
+                        document.getElementById('msu-saler-link-btn').style.display = 'none';
+                        appEl.style.display = 'none';
+                        hintEl.textContent = msg;
                     }
 
                     function loadSalerCodes() {
@@ -725,21 +725,45 @@
                             state.isAdmin = !!res.is_admin;
                             state.codeTokenMap = {};
                             entries.forEach(function(e) { state.codeTokenMap[e.code] = e.token; });
-                            updateSalerSelectorMode(codes);
+
+                            if (!state.isAdmin) {
+                                // entries ở đây đã bị server lọc CHỈ còn mã của CHÍNH tài khoản
+                                // đang đăng nhập (get_misa_invoice_saler_code_registry_with_tokens)
+                                // — nên token khớp được ở đây chắc chắn là mã của họ, không phải
+                                // mở rộng quyền gì thêm.
+                                var matched = urlSalerToken
+                                    ? entries.find(function(e) { return e.token === urlSalerToken; })
+                                    : null;
+                                if (!matched) {
+                                    showSalerAccessDenied(
+                                        'Bạn không có quyền truy cập trang này. Vui lòng dùng đúng đường ' +
+                                        'link đã được cấp cho mã sale của bạn (liên hệ admin nếu chưa có).'
+                                    );
+                                    return;
+                                }
+                                state.salerCode = matched.code;
+                                selectWrapEl.style.display = 'none';
+                                salerLabelEl.style.display = '';
+                                salerLabelEl.textContent = matched.code;
+                                document.getElementById('msu-saler-link-btn').style.display = 'none';
+                                hintEl.textContent = '';
+                                syncUrlSalerCode(matched.code);
+                                onSalerChosen();
+                                return;
+                            }
+
+                            // Tài khoản "Đối soát XHD": giữ nguyên hành vi chọn tự do như cũ.
+                            selectWrapEl.style.display = '';
+                            salerLabelEl.style.display = 'none';
                             // ?t=<token> ưu tiên CAO NHẤT (link mới, không lộ mã) — chỉ resolve
                             // được ở đây vì cần có registry (đã tải xong) mới biết token khớp
-                            // mã nào. Chỉ nhận token thuộc registry của CHÍNH user đang đăng
-                            // nhập (entries ở trên đã lọc đúng phạm vi rồi, không có gì thêm để
-                            // kiểm tra) — không mở rộng quyền gì so với cơ chế cũ.
+                            // mã nào.
                             if (urlSalerToken) {
-                                var matched = entries.find(function(e) { return e.token === urlSalerToken; });
-                                if (matched) { state.salerCode = matched.code; }
+                                var matchedAdmin = entries.find(function(e) { return e.token === urlSalerToken; });
+                                if (matchedAdmin) { state.salerCode = matchedAdmin.code; }
                             }
                             if (!codes.length) {
-                                // Tài khoản đang đăng nhập chưa được admin gán mã sale nào
-                                // (res.users.x_misa_saler_codes rỗng) — nói rõ để không hiểu
-                                // nhầm là trang bị lỗi/đang tải mãi không xong.
-                                hintEl.textContent = 'Tài khoản của bạn chưa được gán mã sale nào. Liên hệ admin để cấu hình.';
+                                hintEl.textContent = 'Chưa có mã sale nào được đăng ký. Liên hệ admin để cấu hình.';
                                 return;
                             }
                             codes.forEach(function(code) {
