@@ -231,8 +231,11 @@
                 @media(max-width:768px){.msu-stats{grid-template-columns:repeat(2,1fr)}}
 
                 /* ---- Nhắc nhở xuất HĐ: chuông + highlight ---- */
-                .msu-row-reminded{background:#fff6e0}
-                .msu-row-reminded:hover{background:#fdedc4}
+                /* Cần đủ specificity để thắng .msu-table tbody tr:nth-child(even) (dòng chẵn
+                   zebra-stripe) — nếu không dòng chẵn bị nhắc sẽ KHÔNG hiện highlight (đã gặp
+                   thật: dòng lẻ vàng, dòng chẵn trắng dù cả 2 đều "reminded"). */
+                .msu-table tbody tr.msu-row-reminded{background:#fff6e0}
+                .msu-table tbody tr.msu-row-reminded:hover{background:#fdedc4}
                 .msu-reminded-icon{color:#c98500;margin-left:4px}
                 .msu-bell-wrap{position:relative}
                 .msu-bell-badge{position:absolute;top:-6px;right:-6px;background:#d03b3b;color:#fff;border-radius:999px;font-size:.64rem;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4;pointer-events:none}
@@ -351,7 +354,7 @@
                             </select>
                             <i class="fa fa-chevron-down msu-select-caret"/>
                         </span>
-                        <input type="text" id="msu-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu hoặc mã đơn hàng..."/>
+                        <input type="text" id="msu-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu, mã đơn hàng hoặc tên khách hàng..."/>
                         <button id="msu-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
                         <button id="msu-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
                         <button id="msu-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
