@@ -74,12 +74,13 @@ class MisaInvoicePublicController(http.Controller):
     @http.route('/misa_sale_status/api/order_list', type='json', auth='user', methods=['POST'])
     def api_order_list(
         self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
-        date_from='', date_to='', limit=20, offset=0, **kwargs
+        states=None, date_from='', date_to='', limit=20, offset=0, **kwargs
     ):
         try:
             data = request.env['stock.picking'].sudo().get_misa_invoice_public_order_list(
                 saler_code=saler_code, search=search, state=state or False,
                 partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                states=states or None,
                 date_from=date_from or False, date_to=date_to or False,
                 limit=int(limit), offset=int(offset),
             )
@@ -93,12 +94,13 @@ class MisaInvoicePublicController(http.Controller):
     @http.route('/misa_sale_status/api/order_list/export', type='json', auth='user', methods=['POST'])
     def api_order_list_export(
         self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
-        date_from='', date_to='', **kwargs
+        states=None, date_from='', date_to='', **kwargs
     ):
         try:
             attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_order_list_excel(
                 saler_code=saler_code, search=search, state=state or False,
                 partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                states=states or None,
                 date_from=date_from or False, date_to=date_to or False,
             )
             return {'status': 'success', 'attachment_id': attachment_id}
@@ -111,12 +113,13 @@ class MisaInvoicePublicController(http.Controller):
     @http.route('/misa_sale_status/api/order_list/export_detail', type='json', auth='user', methods=['POST'])
     def api_order_list_export_detail(
         self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
-        date_from='', date_to='', **kwargs
+        states=None, date_from='', date_to='', **kwargs
     ):
         try:
             attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_order_detail_lines_excel(
                 saler_code=saler_code, search=search, state=state or False,
                 partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                states=states or None,
                 date_from=date_from or False, date_to=date_to or False,
             )
             return {'status': 'success', 'attachment_id': attachment_id}

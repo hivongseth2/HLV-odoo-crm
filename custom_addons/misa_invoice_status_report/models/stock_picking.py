@@ -11,6 +11,7 @@ from markupsafe import Markup
 
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
+from odoo.osv import expression
 
 _logger = logging.getLogger(__name__)
 
@@ -3744,7 +3745,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.model
     def get_misa_invoice_order_list(
         self, limit=20, offset=0, search=False, state=False, saler_code=False, multi_request=False,
-        partial_coverage_only=False, mismatch_only=False, date_from=False, date_to=False,
+        partial_coverage_only=False, mismatch_only=False, states=None, date_from=False, date_to=False,
         invoice_date_from=False, invoice_date_to=False,
     ):
         """Danh sách ĐƠN BÁN (key là sale.order DH...) — tab 'Đơn hàng' trên dashboard.
@@ -3756,6 +3757,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         lọc "Đã xuất HĐ" sẽ ra các đơn có ít nhất 1 phiếu đã xuất HĐ trong phạm vi đang lọc
         (đơn "Một phần đã xuất HĐ" vẫn xuất hiện), đủ dùng để thu hẹp danh sách mà không cần
         tính lại state tổng hợp cho toàn bộ đơn trước khi phân trang.
+
+        states: list nhiều lựa chọn cùng lúc (VD ['missing', 'partial']) — OR với nhau, dùng
+        cho bộ lọc multi-select mới trên UI. Khi truyền states thì state/partial_coverage_only/
+        mismatch_only (dạng đơn lẻ, giữ lại cho tương thích ngược với dashboard nội bộ) bị bỏ
+        qua, không kết hợp cả 2 kiểu cùng lúc cho khỏi rối.
 
         multi_request=True: lọc "đơn đã xuất HĐ qua nhiều đề nghị khác nhau" (VD giao/xuất
         nhiều đợt) — phải tính cho TẤT CẢ candidate rồi mới phân trang được (không lọc bằng
@@ -3774,7 +3780,21 @@ class StockPickingMisaInvoiceStatus(models.Model):
         base_picking_ids = Picking.search(base_picking_domain).ids
         base_picking_id_set = set(base_picking_ids)
 
-        if state or saler_code or partial_coverage_only or mismatch_only:
+        states = [s for s in (states or []) if s]
+        if states:
+            common_domain = self._misa_invoice_picking_list_domain(
+                False, False, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
+            )
+            sub_domains = []
+            for key in states:
+                if key == 'partial':
+                    sub_domains.append(common_domain + [('misa_invoice_order_coverage', '=', 'partial')])
+                elif key == 'mismatch':
+                    sub_domains.append(common_domain + [('misa_invoice_amount_mismatch', '=', True)])
+                else:
+                    sub_domains.append(common_domain + [('misa_invoice_state', '=', key)])
+            filter_picking_ids = Picking.search(expression.OR(sub_domains)).ids
+        elif state or saler_code or partial_coverage_only or mismatch_only:
             filter_picking_domain = self._misa_invoice_picking_list_domain(
                 False, state, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
             )
@@ -3806,7 +3826,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.model
     def export_misa_invoice_order_list_excel(
         self, search=False, state=False, saler_code=False, multi_request=False, partial_coverage_only=False,
-        mismatch_only=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        mismatch_only=False, states=None, date_from=False, date_to=False,
+        invoice_date_from=False, invoice_date_to=False,
     ):
         """Xuất Excel TOÀN BỘ đơn hàng khớp filter hiện tại của tab 'Đơn hàng' — trả về id
         ir.attachment, JS tự điều hướng tới /web/content/<id>?download=true để tải về.
@@ -3814,7 +3835,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         filter quá rộng."""
         result = self.get_misa_invoice_order_list(
             limit=10000, offset=0, search=search, state=state, saler_code=saler_code, multi_request=multi_request,
-            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only,
+            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only, states=states,
             date_from=date_from, date_to=date_to,
             invoice_date_from=invoice_date_from, invoice_date_to=invoice_date_to,
         )
@@ -3837,7 +3858,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.model
     def export_misa_invoice_order_detail_lines_excel(
         self, search=False, state=False, saler_code=False, multi_request=False, partial_coverage_only=False,
-        mismatch_only=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        mismatch_only=False, states=None, date_from=False, date_to=False,
+        invoice_date_from=False, invoice_date_to=False,
     ):
         """Xuất Excel CHI TIẾT TỪNG DÒNG HÀNG (mỗi dòng = 1 sản phẩm đã xuất kho) của TOÀN BỘ
         đơn khớp filter hiện tại của tab 'Đơn hàng' — merge ô Khách hàng khi nhiều dòng liền
@@ -3847,7 +3869,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         chỉ là 2 cột thông tin lấy sẵn trên phiếu, không phải nguồn xuất dòng hàng)."""
         result = self.get_misa_invoice_order_list(
             limit=10000, offset=0, search=search, state=state, saler_code=saler_code, multi_request=multi_request,
-            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only,
+            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only, states=states,
             date_from=date_from, date_to=date_to,
             invoice_date_from=invoice_date_from, invoice_date_to=invoice_date_to,
         )
@@ -3887,40 +3909,40 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.model
     def get_misa_invoice_public_order_list(
         self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
-        date_from=False, date_to=False, limit=20, offset=0,
+        states=None, date_from=False, date_to=False, limit=20, offset=0,
     ):
         """Danh sách ĐƠN BÁN (xem get_misa_invoice_order_list) scope theo đúng 1 mã sale cho
         trang public — tab 'Đơn hàng' của /misa_sale_status."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         return self.sudo().get_misa_invoice_order_list(
             limit=limit, offset=offset, search=search, state=state, saler_code=code,
-            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only,
+            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only, states=states,
             date_from=date_from, date_to=date_to,
         )
 
     @api.model
     def export_misa_invoice_public_order_list_excel(
         self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
-        date_from=False, date_to=False,
+        states=None, date_from=False, date_to=False,
     ):
         """Như export_misa_invoice_order_list_excel nhưng scope theo saler_code cho trang
         public /misa_sale_status (nút "Xuất đơn hàng")."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         return self.sudo().export_misa_invoice_order_list_excel(
-            search=search, state=state, saler_code=code, mismatch_only=mismatch_only,
+            search=search, state=state, saler_code=code, mismatch_only=mismatch_only, states=states,
             partial_coverage_only=partial_coverage_only, date_from=date_from, date_to=date_to,
         )
 
     @api.model
     def export_misa_invoice_public_order_detail_lines_excel(
         self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
-        date_from=False, date_to=False,
+        states=None, date_from=False, date_to=False,
     ):
         """Như export_misa_invoice_order_detail_lines_excel nhưng scope theo saler_code cho
         trang public /misa_sale_status (nút "Xuất dòng chi tiết")."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         return self.sudo().export_misa_invoice_order_detail_lines_excel(
-            search=search, state=state, saler_code=code, mismatch_only=mismatch_only,
+            search=search, state=state, saler_code=code, mismatch_only=mismatch_only, states=states,
             partial_coverage_only=partial_coverage_only, date_from=date_from, date_to=date_to,
         )
 
