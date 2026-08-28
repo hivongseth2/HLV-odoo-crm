@@ -3544,7 +3544,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
         elif state != 'all':
             domain += [('misa_invoice_state', '!=', 'invoiced'), ('misa_invoice_exception', '=', False)]
         if search:
-            domain += ['|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search)]
+            domain += [
+                '|', '|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search),
+                ('misa_invoice_root_partner_id.display_name', 'ilike', search),
+            ]
         if multi_order_group:
             domain.append(('misa_invoice_multi_order_group', '=', True))
         if multi_request:
