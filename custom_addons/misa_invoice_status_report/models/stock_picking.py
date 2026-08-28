@@ -3306,9 +3306,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'total': total,
         }
 
-    def _misa_invoice_export_workbook(self, sheet_name, headers, rows, money_cols=None):
+    def _misa_invoice_export_workbook(self, sheet_name, headers, rows, money_cols=None, merge_col=None):
         """Dựng file .xlsx trong bộ nhớ (xlsxwriter) — dùng chung cho mọi nút "Xuất Excel"
-        trên dashboard. money_cols: tập chỉ số cột (0-based) cần định dạng số tiền."""
+        trên dashboard. money_cols: tập chỉ số cột (0-based) cần định dạng số tiền.
+        merge_col: cột (0-based) cần MERGE các ô LIÊN TIẾP có cùng giá trị (VD gộp ô "Khách
+        hàng" khi xuất chi tiết dòng hàng nhiều dòng cùng 1 khách đứng liền nhau) — rows PHẢI
+        đã được sắp xếp theo đúng cột này trước khi gọi, nếu không sẽ chỉ gộp được các đoạn
+        liên tiếp tình cờ trùng giá trị."""
         money_cols = money_cols or set()
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -3329,6 +3333,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for row_idx, row in enumerate(rows, start=1):
             for col, value in enumerate(row):
                 worksheet.write(row_idx, col, value, fmt_money if col in money_cols else fmt_cell)
+
+        if merge_col is not None and rows:
+            n = len(rows)
+            group_start = 0
+            for i in range(1, n + 1):
+                if i == n or rows[i][merge_col] != rows[group_start][merge_col]:
+                    excel_start, excel_end = group_start + 1, i
+                    if excel_end > excel_start:
+                        worksheet.merge_range(
+                            excel_start, merge_col, excel_end, merge_col,
+                            rows[group_start][merge_col], fmt_cell,
+                        )
+                    group_start = i
 
         workbook.close()
         output.seek(0)
@@ -3765,7 +3782,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         order_domain = [('misa_invoice_picking_ids', 'in', filter_picking_ids)] if filter_picking_ids else [('id', '=', 0)]
         if search:
-            order_domain.append(('name', 'ilike', search))
+            order_domain += ['|', ('name', 'ilike', search), ('partner_id.name', 'ilike', search)]
 
         if multi_request:
             all_orders = SaleOrder.search(order_domain, order='date_order desc')
@@ -3783,7 +3800,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.model
     def export_misa_invoice_order_list_excel(
         self, search=False, state=False, saler_code=False, multi_request=False, partial_coverage_only=False,
-        date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        mismatch_only=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
         """Xuất Excel TOÀN BỘ đơn hàng khớp filter hiện tại của tab 'Đơn hàng' — trả về id
         ir.attachment, JS tự điều hướng tới /web/content/<id>?download=true để tải về.
@@ -3791,7 +3808,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         filter quá rộng."""
         result = self.get_misa_invoice_order_list(
             limit=10000, offset=0, search=search, state=state, saler_code=saler_code, multi_request=multi_request,
-            partial_coverage_only=partial_coverage_only, date_from=date_from, date_to=date_to,
+            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only,
+            date_from=date_from, date_to=date_to,
             invoice_date_from=invoice_date_from, invoice_date_to=invoice_date_to,
         )
         rows = [
@@ -3811,6 +3829,56 @@ class StockPickingMisaInvoiceStatus(models.Model):
         )
 
     @api.model
+    def export_misa_invoice_order_detail_lines_excel(
+        self, search=False, state=False, saler_code=False, multi_request=False, partial_coverage_only=False,
+        mismatch_only=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+    ):
+        """Xuất Excel CHI TIẾT TỪNG DÒNG HÀNG (mỗi dòng = 1 sản phẩm đã xuất kho) của TOÀN BỘ
+        đơn khớp filter hiện tại của tab 'Đơn hàng' — merge ô Khách hàng khi nhiều dòng liền
+        nhau cùng 1 khách, để dễ đối chiếu/gửi khách hơn là 1 bảng phẳng lặp lại tên khách ở
+        mọi dòng. Đơn giá/thuế lấy từ CHÍNH dòng đơn bán Odoo (prorate theo SL đã xuất kho,
+        xem _misa_invoice_picking_line_items) — không gọi thêm API MISA nào (số hóa đơn/refno
+        chỉ là 2 cột thông tin lấy sẵn trên phiếu, không phải nguồn xuất dòng hàng)."""
+        result = self.get_misa_invoice_order_list(
+            limit=10000, offset=0, search=search, state=state, saler_code=saler_code, multi_request=multi_request,
+            partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only,
+            date_from=date_from, date_to=date_to,
+            invoice_date_from=invoice_date_from, invoice_date_to=invoice_date_to,
+        )
+        Picking = self.sudo()
+        detail_rows = []
+        for row in result['rows']:
+            for p in row['pickings']:
+                picking = Picking.browse(p['id'])
+                effective = picking.misa_invoice_master_picking_id or picking
+                for line in self._misa_invoice_picking_line_items(picking):
+                    if line.get('is_component'):
+                        # Giá trị dòng con combo/kit đã gộp hết vào dòng combo đại diện (value=0
+                        # ở đây) — xuất thêm sẽ ra dòng 0đ gây rối, bỏ qua như mọi chỗ khác đang
+                        # tổng hợp giá trị (_misa_invoice_group_odoo_lines).
+                        continue
+                    detail_rows.append([
+                        row['partner_name'], row['name'], picking.name,
+                        effective.misa_invoice_request_refno or '', effective.misa_invoice_no or '',
+                        line['product_name'], line['default_code'] or '', line['qty'],
+                        line['pre_tax_unit_price'], line['tax_value'], line['post_tax_unit_price'],
+                        line['value'] + line['tax_value'],
+                    ])
+        detail_rows.sort(key=lambda r: (r[0], r[1], r[2]))
+
+        headers = [
+            'Khách hàng', 'Mã đơn hàng', 'Phiếu xuất kho', 'Đề nghị (refno)', 'Số hóa đơn',
+            'Tên hàng', 'Mã hàng', 'Số lượng',
+            'Đơn giá trước thuế', 'Thuế', 'Đơn giá sau thuế', 'Tổng tiền',
+        ]
+        content = self._misa_invoice_export_workbook(
+            'Chi tiết dòng hàng', headers, detail_rows, money_cols={8, 9, 10, 11}, merge_col=0,
+        )
+        return self._misa_invoice_create_export_attachment(
+            'chi_tiet_dong_hang_%s.xlsx' % fields.Date.to_string(fields.Date.context_today(self)), content
+        )
+
+    @api.model
     def get_misa_invoice_public_order_list(
         self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
         date_from=False, date_to=False, limit=20, offset=0,
@@ -3822,6 +3890,32 @@ class StockPickingMisaInvoiceStatus(models.Model):
             limit=limit, offset=offset, search=search, state=state, saler_code=code,
             partial_coverage_only=partial_coverage_only, mismatch_only=mismatch_only,
             date_from=date_from, date_to=date_to,
+        )
+
+    @api.model
+    def export_misa_invoice_public_order_list_excel(
+        self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
+        date_from=False, date_to=False,
+    ):
+        """Như export_misa_invoice_order_list_excel nhưng scope theo saler_code cho trang
+        public /misa_sale_status (nút "Xuất đơn hàng")."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().export_misa_invoice_order_list_excel(
+            search=search, state=state, saler_code=code, mismatch_only=mismatch_only,
+            partial_coverage_only=partial_coverage_only, date_from=date_from, date_to=date_to,
+        )
+
+    @api.model
+    def export_misa_invoice_public_order_detail_lines_excel(
+        self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
+        date_from=False, date_to=False,
+    ):
+        """Như export_misa_invoice_order_detail_lines_excel nhưng scope theo saler_code cho
+        trang public /misa_sale_status (nút "Xuất dòng chi tiết")."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().export_misa_invoice_order_detail_lines_excel(
+            search=search, state=state, saler_code=code, mismatch_only=mismatch_only,
+            partial_coverage_only=partial_coverage_only, date_from=date_from, date_to=date_to,
         )
 
     @api.model
@@ -3997,6 +4091,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'qty': sale_line.product_uom_qty,
                     'uom_name': sale_line.product_uom.name,
                     'value': sale_line.price_subtotal,
+                    'pre_tax_unit_price': sale_line.price_unit,
+                    'tax_value': sale_line.price_tax,
+                    'post_tax_unit_price': (
+                        sale_line.price_total / sale_line.product_uom_qty
+                        if sale_line.product_uom_qty else sale_line.price_unit
+                    ),
                     'is_combo': True,
                     'order_code': order_code,
                 })
@@ -4007,6 +4107,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         'qty': move.quantity,
                         'uom_name': move.product_uom.name,
                         'value': 0.0,
+                        'pre_tax_unit_price': 0.0,
+                        'tax_value': 0.0,
+                        'post_tax_unit_price': 0.0,
                         'is_component': True,
                         'order_code': order_code,
                     })
@@ -4014,14 +4117,22 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
             for move in group_moves:
                 value = 0.0
+                tax_value = 0.0
+                post_tax_unit_price = 0.0
+                pre_tax_unit_price = sale_line.price_unit if sale_line else 0.0
                 if sale_line and sale_line.product_uom_qty:
                     value = move.quantity * (sale_line.price_subtotal / sale_line.product_uom_qty)
+                    tax_value = move.quantity * (sale_line.price_tax / sale_line.product_uom_qty)
+                    post_tax_unit_price = sale_line.price_total / sale_line.product_uom_qty
                 lines.append({
                     'product_name': move.product_id.display_name,
                     'default_code': move.product_id.default_code or False,
                     'qty': move.quantity,
                     'uom_name': move.product_uom.name,
                     'value': value,
+                    'pre_tax_unit_price': pre_tax_unit_price,
+                    'tax_value': tax_value,
+                    'post_tax_unit_price': post_tax_unit_price,
                     'order_code': order_code,
                 })
         return lines

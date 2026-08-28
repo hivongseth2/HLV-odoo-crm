@@ -394,7 +394,7 @@
                             đơn hàng) — bắt được cả trường hợp phiếu đã "Đã xuất HĐ" nhưng số tiền chưa phủ đủ.
                         </p>
                         <div class="msu-filters">
-                            <input type="text" id="msu-orders-search" class="msu-input msu-search-input" placeholder="Tìm theo mã đơn hàng..."/>
+                            <input type="text" id="msu-orders-search" class="msu-input msu-search-input" placeholder="Tìm theo mã đơn hàng hoặc tên khách hàng..."/>
                             <button id="msu-orders-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
                             <button id="msu-orders-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
                             <span class="msu-select-wrap">
@@ -409,6 +409,14 @@
                                 <i class="fa fa-chevron-down msu-select-caret"/>
                             </span>
                             <button id="msu-orders-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                            <div class="msu-btn-group">
+                                <button id="msu-orders-export-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel danh sách đơn hàng đang xem">
+                                    <i class="fa fa-file-excel-o"/> Xuất đơn hàng
+                                </button>
+                                <button id="msu-orders-export-detail-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel chi tiết từng dòng hàng (gộp theo khách hàng)">
+                                    <i class="fa fa-list"/> Xuất dòng chi tiết
+                                </button>
+                            </div>
                         </div>
                         <div class="msu-table-card">
                             <div class="msu-table-scroll">
@@ -959,6 +967,39 @@
                             updateOrdersPagination();
                         }).catch(function(e) { toast('Lỗi tải danh sách đơn hàng: ' + e.message, 'error'); });
                     }
+
+                    // ===== Xuất Excel tab "Đơn hàng" — cùng bộ filter đang xem, 2 loại =====
+                    function buildOrdersExportParams() {
+                        var params = {
+                            saler_code: state.salerCode, search: state.orders.search,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                        };
+                        if (state.orders.filter === 'partial') {
+                            params.partial_coverage_only = true;
+                        } else if (state.orders.filter === 'mismatch') {
+                            params.mismatch_only = true;
+                        } else if (state.orders.filter) {
+                            params.state = state.orders.filter;
+                        }
+                        return params;
+                    }
+                    function exportOrdersExcel(route, btn) {
+                        if (!state.salerCode) { return; }
+                        setBtnLoading(btn, true);
+                        rpc(route, buildOrdersExportParams()).then(function(res) {
+                            if (res.attachment_id) {
+                                window.location.href = '/web/content/' + res.attachment_id + '?download=true';
+                            }
+                        }).catch(function(e) {
+                            toast('Lỗi xuất Excel: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
+                    }
+                    document.getElementById('msu-orders-export-btn').addEventListener('click', function() {
+                        exportOrdersExcel('/misa_sale_status/api/order_list/export', this);
+                    });
+                    document.getElementById('msu-orders-export-detail-btn').addEventListener('click', function() {
+                        exportOrdersExcel('/misa_sale_status/api/order_list/export_detail', this);
+                    });
 
                     document.getElementById('msu-orders-search-btn').addEventListener('click', function() {
                         state.orders.search = document.getElementById('msu-orders-search').value.trim();
