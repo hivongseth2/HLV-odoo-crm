@@ -1,26 +1,52 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
+from odoo.osv import expression
+
+from .common import tokenize_or_domain as _tokenize_or_domain, rewrite_free_text_domain as _rewrite_free_text_domain
+
 
 class ProductProduct(models.Model):
     _inherit = 'product.product'
+
+    def _search(self, domain, offset=0, limit=None, order=None):
+        # search_read()/web_search_read() (những gì web client thực sự gọi) bỏ
+        # qua search() công khai và gọi thẳng _search() — đã verify bằng trace
+        # thực tế (bin/check_search_internal_signature.py), nên phải hook ở đây.
+        domain = _rewrite_free_text_domain(list(domain or []))
+        return super(ProductProduct, self)._search(domain, offset=offset, limit=limit, order=order)
 
     @api.model
     def name_search(self, name='', args=None, operator='ilike', limit=100):
         """
         Override name_search to prioritize products WITHOUT a BOM (Single products)
         over products WITH a BOM (Combo products).
-        
+
         Strategy: Do two separate searches at database level:
         1. Search products WITHOUT BOMs first
         2. Search products WITH BOMs second
         3. Combine results
+
+        Also splits the query into tokens and matches each token against
+        name/default_code/barcode with OR (a product must match ALL tokens,
+        but each token can match ANY of the 3 fields). Same tokenizing logic
+        as the /search_stock route (website_public_inventory_18/controllers/main.py).
         """
         import logging
         _logger = logging.getLogger(__name__)
-        
+
         if not args:
             args = []
-        
+
+        original_query = name
+
+        # --- Tokenized OR search: tách từng từ trong `name` rồi OR theo name/default_code/barcode ---
+        if name:
+            token_domain = _tokenize_or_domain(name)
+            if token_domain:
+                args = expression.AND([args, token_domain])
+            # name đã được "tiêu thụ" thành domain ở trên, không cần super() match lại theo name nữa
+            name = ''
+
         # Find all product IDs that have BOMs
         bom_model = self.env['mrp.bom']
         
@@ -71,7 +97,7 @@ class ProductProduct(models.Model):
         # Combine results: Single products first, then combo products
         final_results = single_results + combo_results
         
-        _logger.info(f"HLV Search: Query='{name}', Single={len(single_results)}, Combo={len(combo_results)}, Total={len(final_results)}")
+        _logger.info(f"HLV Search: Query='{original_query}', Single={len(single_results)}, Combo={len(combo_results)}, Total={len(final_results)}")
         if final_results:
             _logger.info(f"HLV Search FINAL (first 3): {[x[1] for x in final_results[:3]]}")
         

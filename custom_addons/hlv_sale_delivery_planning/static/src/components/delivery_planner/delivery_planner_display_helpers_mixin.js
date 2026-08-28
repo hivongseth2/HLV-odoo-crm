@@ -134,7 +134,15 @@ export class DeliveryPlannerDisplayHelpersMixin {
             if (map[key]) {
                 map[key].product_uom_qty += (l.product_uom_qty || 0);
                 map[key].qty_delivered += (l.qty_delivered || 0);
-                map[key].qty_packed += (l.qty_packed || 0);
+                // qty_packed: do NOT sum — it's a PER-PRODUCT total for the whole order (backend
+                // returns the same value on every line of that product, see
+                // qty_packed_by_product_id in delivery_planner_formatter.py), not a per-line
+                // figure like product_uom_qty/qty_delivered. Summing multiplies it by N when N
+                // duplicate product+price+discount lines exist (e.g. MISA sync splitting one
+                // product into several lines) — confirmed in practice: order had 4 lines for the
+                // same product, backend correctly returned qty_packed=66 on each, but summing
+                // here inflated the displayed total to 264. Keep the first value instead, same
+                // as qty_warehouse_free below.
                 map[key].qty_reserved_here += (l.qty_reserved_here || 0); // sum across matching commercial lines
                 // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
                 map[key].delivered_subtotal += (l.delivered_subtotal || 0);

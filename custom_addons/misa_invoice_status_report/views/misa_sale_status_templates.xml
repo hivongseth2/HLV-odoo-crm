@@ -40,6 +40,8 @@
                 .msu-btn-outline-danger:hover{background:#fcefef}
                 .msu-btn-outline-muted{background:#fff;border-color:#d8d7d0;color:#52514e}
                 .msu-btn-outline-muted:hover{background:#f5f5f3}
+                .msu-btn-outline-warning{background:#fff;border-color:#c98500;color:#c98500}
+                .msu-btn-outline-warning:hover{background:#fdf4e3}
 
                 /* ---- Card shell ---- */
                 .msu-card{background:#fff;border-radius:12px;border:1px solid #eceae4;box-shadow:0 1px 2px rgba(15,23,42,.03);padding:18px 20px}
@@ -56,6 +58,7 @@
                 .msu-select:focus{outline:none;border-color:#2a78d6}
                 .msu-select::-ms-expand{display:none}
                 .msu-identity-hint{color:#d03b3b;font-size:.78rem}
+                .msu-identity-value{border:1px solid #eceae4;border-radius:8px;padding:8px 12px;font-size:.86rem;font-weight:700;color:#111827;background:#f7f7f5}
 
                 /* ---- Đối chiếu tổng ---- */
                 .msu-recon-card{margin-bottom:18px}
@@ -167,6 +170,7 @@
                 /* ---- Drawer (chi tiết 1 phiếu) ---- */
                 .msu-drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1900;display:flex;justify-content:flex-end}
                 .msu-drawer{background:#fff;width:min(440px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
+                .msu-drawer-wide{width:min(760px,96vw)}
                 @keyframes msuDrawerIn{from{transform:translateX(24px);opacity:.5}to{transform:translateX(0);opacity:1}}
                 .msu-drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:20px 20px 16px;border-bottom:1px solid #eceae4}
                 .msu-drawer-title{font-size:1.05rem;font-weight:800;color:#111827;margin:0}
@@ -192,6 +196,25 @@
                 /* ---- Modal ---- */
                 .msu-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
                 .msu-modal{background:#fff;border-radius:12px;padding:24px;width:min(440px,100%);box-shadow:0 24px 60px rgba(15,23,42,.28)}
+                .msu-modal-wide{width:min(1100px,96vw);max-height:90vh;display:flex;flex-direction:column}
+                .msu-modal-wide-body{overflow-y:auto;flex:1}
+
+                /* ---- So sánh dòng hàng Odoo / MISA (mũi tên trực quan) ---- */
+                .msu-cmp-list{display:flex;flex-direction:column}
+                .msu-cmp-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #eceae4}
+                .msu-cmp-row:last-child{border-bottom:none}
+                .msu-cmp-side{flex:1;min-width:0}
+                .msu-cmp-side-empty{color:#b8b7b0;font-style:italic;font-size:.8rem}
+                .msu-cmp-label{font-size:.66rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#8b8d94;margin-bottom:2px}
+                .msu-cmp-name{font-weight:700;font-size:.86rem;color:#111827}
+                .msu-cmp-code{font-size:.74rem;color:#8b8d94;margin-top:2px}
+                .msu-cmp-meta{font-size:.8rem;color:#52514e;margin-top:2px}
+                .msu-cmp-mid{display:flex;flex-direction:column;align-items:center;gap:2px;width:56px;flex:none;text-align:center}
+                .msu-cmp-arrow{font-size:1.15rem;color:#b8b7b0}
+                .msu-cmp-mid.ok .msu-cmp-arrow{color:#0ca30c}
+                .msu-cmp-mid.mismatch .msu-cmp-arrow{color:#d03b3b}
+                .msu-cmp-diff{font-size:.66rem;font-weight:700;color:#d03b3b;line-height:1.3}
+                @media(max-width:640px){.msu-cmp-row{flex-direction:column;align-items:stretch}.msu-cmp-mid{flex-direction:row;width:auto;justify-content:center}}
                 .msu-modal h5{margin:0 0 6px;font-weight:800;font-size:1.02rem;color:#111827}
                 .msu-modal p{margin:0 0 12px}
                 .msu-modal textarea.msu-input{width:100%;resize:vertical;font-family:inherit}
@@ -206,6 +229,34 @@
                 .msu-toast.success{border-left-color:#0ca30c}
 
                 @media(max-width:768px){.msu-stats{grid-template-columns:repeat(2,1fr)}}
+
+                /* ---- Multi-select filter (VD trạng thái tab Đơn hàng) ---- */
+                .msu-multiselect-wrap{position:relative;display:inline-flex}
+                .msu-multiselect-panel{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid #eceae4;border-radius:8px;box-shadow:0 14px 36px rgba(15,23,42,.18);z-index:1400;padding:6px;min-width:190px}
+                .msu-multiselect-item{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:.82rem;color:#1c1c1c;border-radius:6px;cursor:pointer;white-space:nowrap}
+                .msu-multiselect-item:hover{background:#f5f5f3}
+                .msu-multiselect-item input{cursor:pointer}
+
+                /* ---- Nhắc nhở xuất HĐ: chuông + highlight ---- */
+                /* Cần đủ specificity để thắng .msu-table tbody tr:nth-child(even) (dòng chẵn
+                   zebra-stripe) — nếu không dòng chẵn bị nhắc sẽ KHÔNG hiện highlight (đã gặp
+                   thật: dòng lẻ vàng, dòng chẵn trắng dù cả 2 đều "reminded"). */
+                .msu-table tbody tr.msu-row-reminded{background:#fff6e0}
+                .msu-table tbody tr.msu-row-reminded:hover{background:#fdedc4}
+                .msu-reminded-icon{color:#c98500;margin-left:4px}
+                .msu-bell-wrap{position:relative}
+                .msu-bell-badge{position:absolute;top:-6px;right:-6px;background:#d03b3b;color:#fff;border-radius:999px;font-size:.64rem;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4;pointer-events:none}
+                .msu-bell-panel{position:absolute;top:calc(100% + 8px);right:0;width:min(380px,90vw);background:#fff;border-radius:10px;box-shadow:0 20px 50px rgba(15,23,42,.25);z-index:1500;overflow:hidden;color:#1c1c1c;text-align:left}
+                .msu-bell-panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #eceae4;font-size:.86rem}
+                .msu-bell-list{max-height:360px;overflow-y:auto}
+                .msu-bell-empty{padding:16px 12px;color:#8b8d94;font-size:.82rem}
+                .msu-bell-item{padding:10px 12px;border-bottom:1px solid #f1f0eb;cursor:pointer;font-size:.82rem}
+                .msu-bell-item:last-child{border-bottom:none}
+                .msu-bell-item:hover{background:#f7f7f5}
+                .msu-bell-item.unread{background:#eaf1fc}
+                .msu-bell-item-title{font-weight:700;color:#111827}
+                .msu-bell-item-meta{color:#8b8d94;font-size:.72rem;margin-top:2px}
+                .msu-bell-item-msg{margin-top:4px;color:#52514e}
             </style>
 
             <div class="misa-sale-status">
@@ -214,18 +265,40 @@
                         <div class="msu-eyebrow">Đối soát MISA</div>
                         <h3>Tình trạng xuất hóa đơn</h3>
                     </div>
-                    <a href="/web/session/logout?redirect=/misa_sale_status" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="msu-bell-wrap" id="msu-bell-wrap">
+                            <button id="msu-bell-btn" class="msu-btn msu-btn-white msu-btn-sm" title="Thông báo nhắc xuất hóa đơn">
+                                <i class="fa fa-bell"/>
+                                <span id="msu-bell-badge" class="msu-bell-badge" style="display:none">0</span>
+                            </button>
+                            <div id="msu-bell-panel" class="msu-bell-panel" style="display:none">
+                                <div class="msu-bell-panel-header">
+                                    <b>Nhắc nhở xuất hóa đơn</b>
+                                    <button id="msu-bell-mark-all" class="msu-btn msu-btn-outline-muted msu-btn-xs">Đánh dấu đã đọc hết</button>
+                                </div>
+                                <div id="msu-bell-list" class="msu-bell-list">
+                                    <div class="msu-bell-empty">Không có thông báo nào.</div>
+                                </div>
+                            </div>
+                        </span>
+                        <a href="/web/session/logout?redirect=/misa_sale_status" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
+                    </div>
                 </div>
 
                 <div class="msu-identity-bar">
                     <div class="msu-card">
                         <span class="msu-identity-label">Mã sale của bạn</span>
-                        <span class="msu-select-wrap">
+                        <span id="msu-saler-select-wrap" class="msu-select-wrap">
                             <select id="msu-saler-select" class="msu-select">
                                 <option value="">-- Chọn mã sale --</option>
                             </select>
                             <i class="fa fa-chevron-down msu-select-caret"/>
                         </span>
+                        <span id="msu-saler-label" class="msu-identity-value" style="display:none"/>
+                        <button id="msu-saler-link-btn" class="msu-btn msu-btn-outline-primary msu-btn-sm" style="display:none"
+                                title="Copy link riêng cho đúng mã sale đang chọn — gửi link này cho sale, họ mở lên là vào thẳng đúng dữ liệu của mình, không cần tự chọn.">
+                            <i class="fa fa-link"/> Copy link cho mã này
+                        </button>
                         <span id="msu-identity-hint" class="msu-identity-hint"/>
                     </div>
                 </div>
@@ -277,21 +350,30 @@
                         <button id="msu-date-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">
                             <i class="fa fa-times"/> Bỏ lọc ngày
                         </button>
-                        <span class="msu-select-wrap">
-                            <select id="msu-state-select" class="msu-select">
-                                <option value="">Chưa xử lý (mặc định)</option>
-                                <option value="missing">Chưa có đề nghị</option>
-                                <option value="requested">Đã đề nghị, chờ HĐ</option>
-                                <option value="exception">Ngoại lệ</option>
-                                <option value="invoiced">Đã xuất HĐ</option>
-                                <option value="all">Tất cả trạng thái</option>
-                            </select>
-                            <i class="fa fa-chevron-down msu-select-caret"/>
+                        <span class="msu-multiselect-wrap" id="msu-state-filter-wrap">
+                            <button type="button" id="msu-state-filter-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm">
+                                <span id="msu-state-filter-label">Chưa xử lý (mặc định)</span> <i class="fa fa-chevron-down"/>
+                            </button>
+                            <div id="msu-state-filter-panel" class="msu-multiselect-panel" style="display:none">
+                                <label class="msu-multiselect-item"><input type="checkbox" value="missing"/> Chưa có đề nghị</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="requested"/> Đã đề nghị, chờ HĐ</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất HĐ</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="exception"/> Ngoại lệ</label>
+                            </div>
                         </span>
-                        <input type="text" id="msu-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu hoặc mã đơn hàng..."/>
+                        <input type="text" id="msu-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu, mã đơn hàng hoặc tên khách hàng..."/>
                         <button id="msu-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
                         <button id="msu-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
                         <button id="msu-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                        <div class="msu-btn-group">
+                            <button id="msu-export-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel danh sách phiếu đang xem">
+                                <i class="fa fa-file-excel-o"/> Xuất phiếu
+                            </button>
+                            <button id="msu-export-detail-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel chi tiết từng dòng hàng (gộp theo khách hàng)">
+                                <i class="fa fa-list"/> Xuất dòng chi tiết
+                            </button>
+                        </div>
                     </div>
 
                     <div class="msu-filters">
@@ -332,6 +414,9 @@
                         <button id="msu-bulk-check" class="msu-btn msu-btn-outline-primary msu-btn-sm" data-loading-text="Đang kiểm tra...">Kiểm tra MISA ngay</button>
                         <button id="msu-bulk-exception" class="msu-btn msu-btn-outline-danger msu-btn-sm">Đánh dấu ngoại lệ</button>
                         <button id="msu-bulk-unexception" class="msu-btn msu-btn-outline-muted msu-btn-sm" data-loading-text="Đang xử lý...">Bỏ ngoại lệ</button>
+                        <button id="msu-bulk-remind" class="msu-btn msu-btn-outline-warning msu-btn-sm" style="display:none">
+                            <i class="fa fa-bell"/> Nhắc xuất HĐ
+                        </button>
                     </div>
 
                     <div class="msu-table-card">
@@ -368,21 +453,30 @@
                             đơn hàng) — bắt được cả trường hợp phiếu đã "Đã xuất HĐ" nhưng số tiền chưa phủ đủ.
                         </p>
                         <div class="msu-filters">
-                            <input type="text" id="msu-orders-search" class="msu-input msu-search-input" placeholder="Tìm theo mã đơn hàng..."/>
+                            <input type="text" id="msu-orders-search" class="msu-input msu-search-input" placeholder="Tìm theo mã đơn hàng hoặc tên khách hàng..."/>
                             <button id="msu-orders-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
                             <button id="msu-orders-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
-                            <span class="msu-select-wrap">
-                                <select id="msu-orders-filter-select" class="msu-select">
-                                    <option value="">Tất cả</option>
-                                    <option value="missing">Chưa xuất</option>
-                                    <option value="invoiced">Đã xuất đủ</option>
-                                    <option value="partial">Xuất 1 phần</option>
-                                    <option value="mismatch">Lệch tiền</option>
-                                    <option value="not_checked">Chưa kiểm tra</option>
-                                </select>
-                                <i class="fa fa-chevron-down msu-select-caret"/>
+                            <span class="msu-multiselect-wrap" id="msu-orders-filter-wrap">
+                                <button type="button" id="msu-orders-filter-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm">
+                                    <span id="msu-orders-filter-label">Tất cả trạng thái</span> <i class="fa fa-chevron-down"/>
+                                </button>
+                                <div id="msu-orders-filter-panel" class="msu-multiselect-panel" style="display:none">
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="missing"/> Chưa xuất</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất đủ</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="partial"/> Xuất 1 phần</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="mismatch"/> Lệch tiền</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
+                                </div>
                             </span>
                             <button id="msu-orders-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                            <div class="msu-btn-group">
+                                <button id="msu-orders-export-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel danh sách đơn hàng đang xem">
+                                    <i class="fa fa-file-excel-o"/> Xuất đơn hàng
+                                </button>
+                                <button id="msu-orders-export-detail-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel chi tiết từng dòng hàng (gộp theo khách hàng)">
+                                    <i class="fa fa-list"/> Xuất dòng chi tiết
+                                </button>
+                            </div>
                         </div>
                         <div class="msu-table-card">
                             <div class="msu-table-scroll">
@@ -396,6 +490,7 @@
                                             <th class="msu-col-num">Tiền đã xuất HĐ</th>
                                             <th class="msu-col-num">Tiền chưa xuất HĐ</th>
                                             <th>Trạng thái</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody id="msu-orders-tbody"/>
@@ -571,6 +666,34 @@
                 </div>
             </div>
 
+            <div class="msu-modal-overlay" id="msu-reminder-modal" style="display:none">
+                <div class="msu-modal">
+                    <h5>Nhắc nhở xuất hóa đơn</h5>
+                    <p class="msu-card-subtitle" id="msu-reminder-target"/>
+                    <textarea id="msu-reminder-message" class="msu-input" rows="3" placeholder="Ghi chú (không bắt buộc)..."/>
+                    <div id="msu-reminder-error" class="msu-modal-error"/>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-reminder-cancel">Hủy</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-reminder-confirm" data-loading-text="Đang gửi...">Gửi nhắc nhở</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="msu-modal-overlay" id="msu-invoice-detail-modal" style="display:none">
+                <div class="msu-modal msu-modal-wide">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                        <h5 id="msu-invoice-detail-title">Chi tiết đề nghị / hóa đơn</h5>
+                        <button class="msu-drawer-close" id="msu-invoice-detail-close-x"><i class="fa fa-times"></i></button>
+                    </div>
+                    <div id="msu-invoice-detail-body" class="msu-modal-wide-body">
+                        <span class="msu-muted">Đang tải...</span>
+                    </div>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-invoice-detail-close">Đóng</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="msu-toast-stack" id="msu-toast-stack"/>
 
             <script type="text/javascript"><![CDATA[
@@ -584,13 +707,23 @@
                         {key: 'exception', label: 'Ngoại lệ'},
                         {key: 'invoiced', label: 'Đã xuất HĐ'},
                     ];
+                    // Mã sale trong URL LUÔN ưu tiên hơn giá trị đã lưu trước đó trong trình
+                    // duyệt — để "1 sale = 1 đường link riêng" hoạt động đúng dù trình duyệt đó
+                    // trước giờ dùng cho mã khác (VD máy dùng chung). ?t=<token>: link MỚI,
+                    // không lộ mã thật trên URL (token resolve về mã sau khi tải xong registry
+                    // — xem loadSalerCodes). ?saler_code=<mã>: giữ lại để tương thích link CŨ
+                    // đã lỡ chia sẻ dạng cũ, ưu tiên thấp hơn token.
+                    var urlSalerToken = new URLSearchParams(window.location.search).get('t');
+                    var urlSalerCode = new URLSearchParams(window.location.search).get('saler_code');
                     var state = {
-                        salerCode: localStorage.getItem(STORAGE_KEY) || '',
-                        search: '', stateFilter: '', dateFrom: '', dateTo: '',
+                        salerCode: urlSalerCode || localStorage.getItem(STORAGE_KEY) || '',
+                        isAdmin: false,
+                        codeTokenMap: {},
+                        search: '', stateFilters: [], dateFrom: '', dateTo: '',
                         multiOrderGroup: false, multiRequest: false,
                         page: 1, total: 0, rows: [], selected: {},
                         activeTab: 'pickings',
-                        orders: {search: '', filter: '', page: 1, total: 0, rows: [], loaded: false},
+                        orders: {search: '', filters: [], page: 1, total: 0, rows: [], loaded: false},
                         shopee: {search: '', stateFilter: '', page: 1, total: 0, rows: [], loaded: false},
                         customs: {search: '', page: 1, total: 0, rows: [], loaded: false, preview: null, pendingOnly: false, pendingCount: 0},
                     };
@@ -603,6 +736,34 @@
                     function fmtMoney(n) {
                         if (!n) { return '0 đ'; }
                         return Math.round(n).toLocaleString('vi-VN') + ' đ';
+                    }
+                    // Cập nhật URL theo mã sale đang xem (không tải lại trang) — để địa chỉ
+                    // trên thanh trình duyệt LUÔN là link riêng, bookmark/copy/gửi lại lúc nào
+                    // cũng đúng, kể cả sau khi tự chọn tay (không chỉ lúc vào bằng link có sẵn).
+                    // Dùng ?t=<token> (không lộ mã thật trên URL) — chỉ rơi về ?saler_code=<mã>
+                    // khi vì lý do gì đó chưa có token tương ứng (registry chưa tải xong).
+                    function syncUrlSalerCode(code) {
+                        var url = new URL(window.location.href);
+                        url.searchParams.delete('saler_code');
+                        url.searchParams.delete('t');
+                        var token = code && state.codeTokenMap[code];
+                        if (token) {
+                            url.searchParams.set('t', token);
+                        } else if (code) {
+                            url.searchParams.set('saler_code', code);
+                        }
+                        window.history.replaceState(null, '', url.toString());
+                    }
+                    function buildSalerCodeLink(code) {
+                        var url = new URL(window.location.href);
+                        url.search = '';
+                        var token = code && state.codeTokenMap[code];
+                        if (token) {
+                            url.searchParams.set('t', token);
+                        } else {
+                            url.searchParams.set('saler_code', code);
+                        }
+                        return url.toString();
                     }
                     function fmtCompactMoney(n) {
                         n = n || 0;
@@ -655,17 +816,70 @@
                     }
 
                     var selectEl = document.getElementById('msu-saler-select');
+                    var selectWrapEl = document.getElementById('msu-saler-select-wrap');
+                    var salerLabelEl = document.getElementById('msu-saler-label');
                     var appEl = document.getElementById('msu-app');
                     var hintEl = document.getElementById('msu-identity-hint');
 
+                    // Không có quyền "Đối soát XHD" thì KHÔNG có gì để "chọn" cả, dù chỉ có
+                    // đúng 1 mã hay nhiều mã (VD trưởng nhóm) — CHỈ được vào bằng ĐÚNG link
+                    // riêng (?t=<token>) admin đã cấp cho mã đó, không tự suy ra mã của mình
+                    // qua session/localStorage nữa. Vào trang mà không kèm link hợp lệ => báo
+                    // lỗi không có quyền, không hiện dropdown/label nào để "mò" mã khác.
+                    function showSalerAccessDenied(msg) {
+                        selectWrapEl.style.display = 'none';
+                        salerLabelEl.style.display = 'none';
+                        document.getElementById('msu-saler-link-btn').style.display = 'none';
+                        appEl.style.display = 'none';
+                        hintEl.textContent = msg;
+                    }
+
                     function loadSalerCodes() {
                         return rpc('/misa_sale_status/api/saler_codes').then(function(res) {
-                            var codes = res.codes || [];
+                            var entries = res.codes || []; // [{code, token}, ...]
+                            var codes = entries.map(function(e) { return e.code; });
+                            state.isAdmin = !!res.is_admin;
+                            state.codeTokenMap = {};
+                            entries.forEach(function(e) { state.codeTokenMap[e.code] = e.token; });
+
+                            if (!state.isAdmin) {
+                                // entries ở đây đã bị server lọc CHỈ còn mã của CHÍNH tài khoản
+                                // đang đăng nhập (get_misa_invoice_saler_code_registry_with_tokens)
+                                // — nên token khớp được ở đây chắc chắn là mã của họ, không phải
+                                // mở rộng quyền gì thêm.
+                                var matched = urlSalerToken
+                                    ? entries.find(function(e) { return e.token === urlSalerToken; })
+                                    : null;
+                                if (!matched) {
+                                    showSalerAccessDenied(
+                                        'Bạn không có quyền truy cập trang này. Vui lòng dùng đúng đường ' +
+                                        'link đã được cấp cho mã sale của bạn (liên hệ admin nếu chưa có).'
+                                    );
+                                    return;
+                                }
+                                state.salerCode = matched.code;
+                                selectWrapEl.style.display = 'none';
+                                salerLabelEl.style.display = '';
+                                salerLabelEl.textContent = matched.code;
+                                document.getElementById('msu-saler-link-btn').style.display = 'none';
+                                hintEl.textContent = '';
+                                syncUrlSalerCode(matched.code);
+                                onSalerChosen();
+                                return;
+                            }
+
+                            // Tài khoản "Đối soát XHD": giữ nguyên hành vi chọn tự do như cũ.
+                            selectWrapEl.style.display = '';
+                            salerLabelEl.style.display = 'none';
+                            // ?t=<token> ưu tiên CAO NHẤT (link mới, không lộ mã) — chỉ resolve
+                            // được ở đây vì cần có registry (đã tải xong) mới biết token khớp
+                            // mã nào.
+                            if (urlSalerToken) {
+                                var matchedAdmin = entries.find(function(e) { return e.token === urlSalerToken; });
+                                if (matchedAdmin) { state.salerCode = matchedAdmin.code; }
+                            }
                             if (!codes.length) {
-                                // Tài khoản đang đăng nhập chưa được admin gán mã sale nào
-                                // (res.users.x_misa_saler_codes rỗng) — nói rõ để không hiểu
-                                // nhầm là trang bị lỗi/đang tải mãi không xong.
-                                hintEl.textContent = 'Tài khoản của bạn chưa được gán mã sale nào. Liên hệ admin để cấu hình.';
+                                hintEl.textContent = 'Chưa có mã sale nào được đăng ký. Liên hệ admin để cấu hình.';
                                 return;
                             }
                             codes.forEach(function(code) {
@@ -676,6 +890,7 @@
                             });
                             if (state.salerCode && codes.indexOf(state.salerCode) !== -1) {
                                 selectEl.value = state.salerCode;
+                                syncUrlSalerCode(state.salerCode);
                                 onSalerChosen();
                             } else if (codes.length === 1) {
                                 // Chỉ có đúng 1 mã — tự chọn luôn, khỏi bắt người dùng bấm thêm
@@ -683,14 +898,35 @@
                                 state.salerCode = codes[0];
                                 selectEl.value = codes[0];
                                 localStorage.setItem(STORAGE_KEY, codes[0]);
+                                syncUrlSalerCode(codes[0]);
                                 onSalerChosen();
                             } else if (state.salerCode) {
-                                hintEl.textContent = 'Mã "' + state.salerCode + '" đã lưu trước đó không còn hợp lệ, vui lòng chọn lại.';
+                                hintEl.textContent = 'Bạn không có quyền xem mã "' + state.salerCode + '" (hoặc mã/link đã cũ), vui lòng chọn lại.';
                                 state.salerCode = '';
                                 localStorage.removeItem(STORAGE_KEY);
                             }
+                            updateSalerLinkBtn();
                         }).catch(function(e) { toast('Lỗi tải danh sách mã sale: ' + e.message, 'error'); });
                     }
+
+                    // Nút "Copy link cho mã này" — CHỈ hiện cho tài khoản "Đối soát XHD"
+                    // (state.isAdmin, xem get_misa_invoice_saler_code_registry) — gửi link
+                    // trực tiếp cho từng sale, họ mở lên vào thẳng đúng mã, khỏi phải tự chọn.
+                    function updateSalerLinkBtn() {
+                        var btn = document.getElementById('msu-saler-link-btn');
+                        btn.style.display = (state.isAdmin && state.salerCode) ? '' : 'none';
+                    }
+                    document.getElementById('msu-saler-link-btn').addEventListener('click', function() {
+                        if (!state.salerCode) { return; }
+                        var link = buildSalerCodeLink(state.salerCode);
+                        var done = function() { toast('Đã copy link cho mã ' + state.salerCode + '.', 'success'); };
+                        var fail = function() { window.prompt('Copy link này:', link); };
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(link).then(done).catch(fail);
+                        } else {
+                            fail();
+                        }
+                    });
 
                     function onSalerChosen() {
                         appEl.style.display = state.salerCode ? '' : 'none';
@@ -699,9 +935,161 @@
                             loadList(1);
                             loadDailyChart();
                             loadReconciliationTotals();
+                            loadReminders();
                             if (state.activeTab === 'shopee') { loadShopeeList(1); }
                         }
                     }
+
+                    // ===== Chuông thông báo: nhắc nhở xuất hóa đơn =====
+                    var lastReminders = [];
+                    function loadReminders() {
+                        if (!state.salerCode) { return Promise.resolve(); }
+                        return rpc('/misa_sale_status/api/reminders', {
+                            saler_code: state.salerCode, unread_only: false, limit: 30,
+                        }).then(function(res) {
+                            var data = res.data || {};
+                            lastReminders = data.reminders || [];
+                            var badge = document.getElementById('msu-bell-badge');
+                            var count = data.total_unread || 0;
+                            badge.style.display = count ? '' : 'none';
+                            badge.textContent = count > 99 ? '99+' : count;
+                            renderBellList();
+                            if (data.bus_channel) { connectReminderBus(data.bus_channel); }
+                        }).catch(function() { /* im lặng — không làm phiền bằng lỗi tải chuông nền */ });
+                    }
+
+                    // ===== Real-time qua WebSocket (bus.bus) — chuông cập nhật NGAY khi admin
+                    // bấm nhắc, không cần đợi tới lượt poll 60s (vẫn giữ poll làm lưới an toàn
+                    // phòng khi WebSocket bị chặn/rớt — trình duyệt/mạng công ty đôi khi chặn
+                    // ws://, lúc đó poll vẫn đảm bảo chuông không im lặng mãi). Kênh lấy từ
+                    // chính response /misa_sale_status/api/reminders (bus_channel) thay vì tự
+                    // build lại công thức ở đây, tránh 2 nơi lệch nhau nếu sau này đổi cách đặt
+                    // tên kênh phía backend.
+                    var reminderWs = null;
+                    var reminderWsChannel = null;
+                    var reminderWsReconnectTimer = null;
+                    function connectReminderBus(channel) {
+                        if (!channel || typeof WebSocket === 'undefined') { return; }
+                        if (reminderWs && reminderWsChannel === channel && reminderWs.readyState <= 1) { return; }
+                        if (reminderWs) { try { reminderWs.close(); } catch (e) { /* đã đóng rồi thì thôi */ } }
+                        reminderWsChannel = channel;
+                        try {
+                            var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                            var ws = new WebSocket(proto + '//' + window.location.host + '/websocket');
+                            reminderWs = ws;
+                            ws.addEventListener('open', function() {
+                                ws.send(JSON.stringify({event_name: 'subscribe', data: {channels: [channel], last: 0}}));
+                            });
+                            ws.addEventListener('message', function(ev) {
+                                try {
+                                    var notifications = JSON.parse(ev.data);
+                                    (notifications || []).forEach(function(n) {
+                                        var msg = n && n.message;
+                                        if (msg && msg.type === 'misa_invoice_reminder') { loadReminders(); }
+                                    });
+                                } catch (e) { /* frame lạ/không parse được — bỏ qua, không phải lỗi nghiêm trọng */ }
+                            });
+                            ws.addEventListener('close', function() {
+                                if (reminderWs !== ws) { return; } // đã bị thay bởi 1 kết nối mới hơn
+                                clearTimeout(reminderWsReconnectTimer);
+                                reminderWsReconnectTimer = setTimeout(function() {
+                                    connectReminderBus(reminderWsChannel);
+                                }, 5000);
+                            });
+                            ws.addEventListener('error', function() { try { ws.close(); } catch (e) { /* noop */ } });
+                        } catch (e) {
+                            // Trình duyệt/hạ tầng không hỗ trợ WebSocket — poll 60s vẫn chạy
+                            // làm lưới an toàn, không có gì phải báo lỗi cho người dùng.
+                        }
+                    }
+                    function renderBellList() {
+                        var list = document.getElementById('msu-bell-list');
+                        if (!lastReminders.length) {
+                            list.innerHTML = '<div class="msu-bell-empty">Không có thông báo nào.</div>';
+                            return;
+                        }
+                        list.innerHTML = lastReminders.map(function(r) {
+                            return '<div class="msu-bell-item' + (r.is_read ? '' : ' unread') + '" data-id="' + r.id + '" data-order-id="' + (r.order_id || '') + '" data-order-name="' + esc(r.order_name || '') + '">' +
+                                '<div class="msu-bell-item-title"><i class="fa fa-bell"></i> ' + esc(r.order_name || '(đơn không rõ)') + '</div>' +
+                                '<div class="msu-bell-item-meta">' + esc(r.created_by || '') + (r.create_date ? ' · ' + esc(r.create_date) : '') + '</div>' +
+                                (r.message ? '<div class="msu-bell-item-msg">' + esc(r.message) + '</div>' : '') +
+                            '</div>';
+                        }).join('');
+                        list.querySelectorAll('.msu-bell-item').forEach(function(el) {
+                            el.addEventListener('click', function() {
+                                var id = parseInt(this.dataset.id, 10);
+                                var orderName = this.dataset.orderName;
+                                rpc('/misa_sale_status/api/reminders/mark_read', {
+                                    saler_code: state.salerCode, reminder_ids: [id],
+                                }).then(function() { loadReminders(); }).catch(function() {});
+                                document.getElementById('msu-bell-panel').style.display = 'none';
+                                if (orderName) {
+                                    state.activeTab = 'orders';
+                                    document.querySelectorAll('.msu-tab').forEach(function(b) { b.classList.remove('msu-tab-active'); });
+                                    document.querySelector('.msu-tab[data-tab="orders"]').classList.add('msu-tab-active');
+                                    document.getElementById('msu-tab-pickings').style.display = 'none';
+                                    document.getElementById('msu-tab-orders').style.display = '';
+                                    document.getElementById('msu-tab-shopee').style.display = 'none';
+                                    document.getElementById('msu-tab-customs').style.display = 'none';
+                                    state.orders.search = orderName;
+                                    document.getElementById('msu-orders-search').value = orderName;
+                                    document.getElementById('msu-orders-search-clear').style.display = '';
+                                    loadOrdersList(1);
+                                }
+                            });
+                        });
+                    }
+                    document.getElementById('msu-bell-btn').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        var panel = document.getElementById('msu-bell-panel');
+                        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+                    });
+                    document.getElementById('msu-bell-mark-all').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        rpc('/misa_sale_status/api/reminders/mark_read', {saler_code: state.salerCode}).then(function() {
+                            loadReminders();
+                        }).catch(function(e) { toast('Lỗi đánh dấu đã đọc: ' + e.message, 'error'); });
+                    });
+                    document.addEventListener('click', function(ev) {
+                        var wrap = document.getElementById('msu-bell-wrap');
+                        if (wrap && !wrap.contains(ev.target)) { document.getElementById('msu-bell-panel').style.display = 'none'; }
+                    });
+                    // Poll nhẹ mỗi 60s — đủ để thấy nhắc nhở mới mà không cần refresh tay,
+                    // không cần tức thời như bus (đây không phải chat, vài chục giây là ổn).
+                    setInterval(function() { if (state.salerCode) { loadReminders(); } }, 60000);
+
+                    // ===== Modal: gửi nhắc nhở xuất hóa đơn (CHỈ admin/Đối soát XHD mới thấy nút bấm) =====
+                    var reminderModal = document.getElementById('msu-reminder-modal');
+                    var reminderTarget = null;
+                    function openReminderModal(target) {
+                        reminderTarget = target;
+                        document.getElementById('msu-reminder-target').textContent = 'Nhắc xuất hóa đơn cho ' + (target.label || '');
+                        document.getElementById('msu-reminder-message').value = '';
+                        document.getElementById('msu-reminder-error').textContent = '';
+                        reminderModal.style.display = 'flex';
+                    }
+                    document.getElementById('msu-reminder-cancel').addEventListener('click', function() { reminderModal.style.display = 'none'; });
+                    reminderModal.addEventListener('click', function(ev) { if (ev.target === this) { this.style.display = 'none'; } });
+                    document.getElementById('msu-reminder-confirm').addEventListener('click', function() {
+                        if (!reminderTarget) { return; }
+                        var btn = this;
+                        var errEl = document.getElementById('msu-reminder-error');
+                        errEl.textContent = '';
+                        setBtnLoading(btn, true);
+                        rpc('/misa_sale_status/api/send_reminder', {
+                            order_ids: reminderTarget.order_ids || [],
+                            picking_ids: reminderTarget.picking_ids || [],
+                            message: document.getElementById('msu-reminder-message').value.trim(),
+                        }).then(function(res) {
+                            setBtnLoading(btn, false);
+                            reminderModal.style.display = 'none';
+                            toast('Đã gửi nhắc nhở cho ' + (res.result.reminded_order_count || 0) + ' đơn hàng.', 'success');
+                            if (state.activeTab === 'orders') { loadOrdersList(state.orders.page); } else { loadList(state.page); }
+                        }).catch(function(e) {
+                            setBtnLoading(btn, false);
+                            errEl.textContent = e.message;
+                        });
+                    });
 
                     // ===== Đối chiếu tổng tiền xuất kho (MISA + Shopee) =====
                     function loadReconciliationTotals() {
@@ -748,19 +1136,26 @@
                         document.getElementById('msu-orders-empty').style.display = state.orders.rows.length ? 'none' : '';
                         state.orders.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
-                            tr.className = 'msu-row-clickable';
+                            tr.className = 'msu-row-clickable' + (row.reminded ? ' msu-row-reminded' : '');
                             tr.dataset.id = row.id;
                             var partialBadge = row.partial_coverage
                                 ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
                                 : '';
+                            var remindedBadge = row.reminded
+                                ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
+                                : '';
+                            var remindBtn = state.isAdmin
+                                ? '<button type="button" class="msu-btn msu-btn-outline-warning msu-btn-xs msu-order-remind-btn" data-order-id="' + row.id + '" data-order-name="' + esc(row.name) + '" title="Nhắc sale xuất hóa đơn cho đơn này"><i class="fa fa-bell"></i></button>'
+                                : '';
                             tr.innerHTML =
-                                '<td><b>' + esc(row.name) + '</b></td>' +
+                                '<td><b>' + esc(row.name) + '</b>' + remindedBadge + '</td>' +
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.picking_names || '—') + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.amount_total) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.invoice_amount) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.outstanding_amount) + '</td>' +
-                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>';
+                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>' +
+                                '<td>' + remindBtn + '</td>';
                             tbody.appendChild(tr);
                         });
                         tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
@@ -768,6 +1163,15 @@
                                 var id = parseInt(this.dataset.id, 10);
                                 var row = state.orders.rows.find(function(r) { return r.id === id; });
                                 if (row) { openOrderDrawer(row); }
+                            });
+                        });
+                        tbody.querySelectorAll('.msu-order-remind-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function(ev) {
+                                ev.stopPropagation();
+                                openReminderModal({
+                                    order_ids: [parseInt(this.dataset.orderId, 10)],
+                                    label: 'đơn ' + this.dataset.orderName,
+                                });
                             });
                         });
                     }
@@ -788,14 +1192,8 @@
                             saler_code: state.salerCode, search: state.orders.search,
                             date_from: state.dateFrom, date_to: state.dateTo,
                             limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+                            states: state.orders.filters,
                         };
-                        if (state.orders.filter === 'partial') {
-                            params.partial_coverage_only = true;
-                        } else if (state.orders.filter === 'mismatch') {
-                            params.mismatch_only = true;
-                        } else if (state.orders.filter) {
-                            params.state = state.orders.filter;
-                        }
                         return rpc('/misa_sale_status/api/order_list', params).then(function(res) {
                             var data = res.data || {};
                             state.orders.rows = data.rows || [];
@@ -805,6 +1203,32 @@
                             updateOrdersPagination();
                         }).catch(function(e) { toast('Lỗi tải danh sách đơn hàng: ' + e.message, 'error'); });
                     }
+
+                    // ===== Xuất Excel tab "Đơn hàng" — cùng bộ filter đang xem, 2 loại =====
+                    function buildOrdersExportParams() {
+                        return {
+                            saler_code: state.salerCode, search: state.orders.search,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                            states: state.orders.filters,
+                        };
+                    }
+                    function exportOrdersExcel(route, btn) {
+                        if (!state.salerCode) { return; }
+                        setBtnLoading(btn, true);
+                        rpc(route, buildOrdersExportParams()).then(function(res) {
+                            if (res.attachment_id) {
+                                window.location.href = '/web/content/' + res.attachment_id + '?download=true';
+                            }
+                        }).catch(function(e) {
+                            toast('Lỗi xuất Excel: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
+                    }
+                    document.getElementById('msu-orders-export-btn').addEventListener('click', function() {
+                        exportOrdersExcel('/misa_sale_status/api/order_list/export', this);
+                    });
+                    document.getElementById('msu-orders-export-detail-btn').addEventListener('click', function() {
+                        exportOrdersExcel('/misa_sale_status/api/order_list/export_detail', this);
+                    });
 
                     document.getElementById('msu-orders-search-btn').addEventListener('click', function() {
                         state.orders.search = document.getElementById('msu-orders-search').value.trim();
@@ -820,9 +1244,36 @@
                         this.style.display = 'none';
                         loadOrdersList(1);
                     });
-                    document.getElementById('msu-orders-filter-select').addEventListener('change', function() {
-                        state.orders.filter = this.value;
-                        loadOrdersList(1);
+                    // ===== Filter trạng thái tab "Đơn hàng" — multi-select (chọn nhiều trạng
+                    // thái cùng lúc, OR với nhau ở backend) thay vì 1 select đơn lẻ như trước =====
+                    var ORDERS_FILTER_LABELS = {
+                        missing: 'Chưa xuất', invoiced: 'Đã xuất đủ', partial: 'Xuất 1 phần',
+                        mismatch: 'Lệch tiền', not_checked: 'Chưa kiểm tra',
+                    };
+                    function updateOrdersFilterLabel() {
+                        var sel = state.orders.filters || [];
+                        document.getElementById('msu-orders-filter-label').textContent = sel.length
+                            ? sel.map(function(k) { return ORDERS_FILTER_LABELS[k] || k; }).join(', ')
+                            : 'Tất cả trạng thái';
+                    }
+                    document.getElementById('msu-orders-filter-btn').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        var panel = document.getElementById('msu-orders-filter-panel');
+                        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+                    });
+                    document.querySelectorAll('#msu-orders-filter-panel input[type="checkbox"]').forEach(function(cb) {
+                        cb.addEventListener('change', function() {
+                            state.orders.filters = Array.prototype.map.call(
+                                document.querySelectorAll('#msu-orders-filter-panel input:checked'),
+                                function(el) { return el.value; }
+                            );
+                            updateOrdersFilterLabel();
+                            loadOrdersList(1);
+                        });
+                    });
+                    document.addEventListener('click', function(ev) {
+                        var wrap = document.getElementById('msu-orders-filter-wrap');
+                        if (wrap && !wrap.contains(ev.target)) { document.getElementById('msu-orders-filter-panel').style.display = 'none'; }
                     });
                     document.getElementById('msu-orders-refresh-btn').addEventListener('click', function() { loadOrdersList(state.orders.page); });
                     document.getElementById('msu-orders-prev').addEventListener('click', function() { if (state.orders.page > 1) { loadOrdersList(state.orders.page - 1); } });
@@ -1104,6 +1555,8 @@
                         } else {
                             localStorage.removeItem(STORAGE_KEY);
                         }
+                        syncUrlSalerCode(state.salerCode);
+                        updateSalerLinkBtn();
                         onSalerChosen();
                     });
 
@@ -1128,7 +1581,10 @@
                         var exceptionBtn = row.exception
                             ? '<button class="msu-btn msu-btn-outline-muted msu-btn-' + size + ' msu-act-unexception" data-id="' + row.id + '" title="Bỏ ngoại lệ"><i class="fa fa-undo"></i>' + label('Bỏ ngoại lệ') + '</button>'
                             : '<button class="msu-btn msu-btn-outline-danger msu-btn-' + size + ' msu-act-exception" data-id="' + row.id + '" data-name="' + esc(row.name) + '" title="' + (canModify ? 'Đánh dấu ngoại lệ' : 'Đã xuất HĐ, không cần đánh dấu ngoại lệ nữa') + '"' + (canModify ? '' : ' disabled="disabled"') + '><i class="fa fa-ban"></i>' + label('Đánh dấu ngoại lệ') + '</button>';
-                        return '<div class="msu-btn-group">' + checkBtn + linkBtn + exceptionBtn + '</div>';
+                        var remindBtn = state.isAdmin
+                            ? '<button class="msu-btn msu-btn-outline-warning msu-btn-' + size + ' msu-act-remind" data-id="' + row.id + '" data-name="' + esc(row.name) + '" title="Nhắc sale xuất hóa đơn cho phiếu này"><i class="fa fa-bell"></i>' + label('Nhắc xuất HĐ') + '</button>'
+                            : '';
+                        return '<div class="msu-btn-group">' + checkBtn + linkBtn + exceptionBtn + remindBtn + '</div>';
                     }
 
                     function renderRows() {
@@ -1138,16 +1594,19 @@
                         state.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
                             tr.dataset.id = row.id;
-                            tr.className = 'msu-row-clickable';
+                            tr.className = 'msu-row-clickable' + (row.reminded ? ' msu-row-reminded' : '');
                             var checked = state.selected[row.id] ? 'checked="checked"' : '';
                             var manualHtml = row.manual_refno
                                 ? '<span class="msu-manual-refno" title="Đã gắn mã đề nghị thủ công">' + esc(row.manual_refno) + '</span>'
                                 : '<span class="msu-muted">—</span>';
                             var exceptionHtml = row.exception
                                 ? '<span class="msu-badge-exception" title="' + esc(row.exception_reason || '') + '"><i class="fa fa-ban"></i> Ngoại lệ</span>' : '';
+                            var remindedIcon = row.reminded
+                                ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
+                                : '';
                             tr.innerHTML =
                                 '<td><input type="checkbox" class="msu-row-check" data-id="' + row.id + '" ' + checked + '/></td>' +
-                                '<td><span class="msu-picking-name">' + esc(row.name) + '</span>' + rowMeta(row) + '<span class="msu-picking-order">' + esc(row.sale_order_name || '') + '</span></td>' +
+                                '<td><span class="msu-picking-name">' + esc(row.name) + '</span>' + remindedIcon + rowMeta(row) + '<span class="msu-picking-order">' + esc(row.sale_order_name || '') + '</span></td>' +
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.date_done) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.actual_amount) + '</td>' +
@@ -1340,7 +1799,7 @@
                         if (!state.salerCode) { return Promise.resolve(); }
                         state.page = page;
                         return rpc('/misa_sale_status/api/list', {
-                            saler_code: state.salerCode, search: state.search, state: state.stateFilter,
+                            saler_code: state.salerCode, search: state.search, states: state.stateFilters,
                             date_from: state.dateFrom, date_to: state.dateTo,
                             multi_order_group: state.multiOrderGroup, multi_request: state.multiRequest,
                             limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
@@ -1372,9 +1831,57 @@
                         this.style.display = 'none';
                         loadList(1);
                     });
-                    document.getElementById('msu-state-select').addEventListener('change', function() {
-                        state.stateFilter = this.value;
-                        loadList(1);
+                    // ===== Filter trạng thái tab "Phiếu xuất kho" — multi-select (checkbox),
+                    // giống tab "Đơn hàng". Không chọn gì = hành vi mặc định CŨ (chưa xử lý:
+                    // chưa invoiced + chưa ngoại lệ) — xem _misa_invoice_public_list_state_domain. =====
+                    var PICKING_STATE_FILTER_LABELS = {
+                        missing: 'Chưa có đề nghị', requested: 'Đã đề nghị, chờ HĐ', not_checked: 'Chưa kiểm tra',
+                        invoiced: 'Đã xuất HĐ', exception: 'Ngoại lệ',
+                    };
+                    function updateStateFilterLabel() {
+                        var sel = state.stateFilters || [];
+                        document.getElementById('msu-state-filter-label').textContent = sel.length
+                            ? sel.map(function(k) { return PICKING_STATE_FILTER_LABELS[k] || k; }).join(', ')
+                            : 'Chưa xử lý (mặc định)';
+                    }
+                    document.getElementById('msu-state-filter-btn').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        var panel = document.getElementById('msu-state-filter-panel');
+                        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+                    });
+                    document.querySelectorAll('#msu-state-filter-panel input[type="checkbox"]').forEach(function(cb) {
+                        cb.addEventListener('change', function() {
+                            state.stateFilters = Array.prototype.map.call(
+                                document.querySelectorAll('#msu-state-filter-panel input:checked'),
+                                function(el) { return el.value; }
+                            );
+                            updateStateFilterLabel();
+                            loadList(1);
+                        });
+                    });
+                    document.addEventListener('click', function(ev) {
+                        var wrap = document.getElementById('msu-state-filter-wrap');
+                        if (wrap && !wrap.contains(ev.target)) { document.getElementById('msu-state-filter-panel').style.display = 'none'; }
+                    });
+                    function exportPickingListExcel(route, btn) {
+                        if (!state.salerCode) { return; }
+                        setBtnLoading(btn, true);
+                        rpc(route, {
+                            saler_code: state.salerCode, search: state.search, states: state.stateFilters,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                        }).then(function(res) {
+                            if (res.attachment_id) {
+                                window.location.href = '/web/content/' + res.attachment_id + '?download=true';
+                            }
+                        }).catch(function(e) {
+                            toast('Lỗi xuất Excel: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
+                    }
+                    document.getElementById('msu-export-btn').addEventListener('click', function() {
+                        exportPickingListExcel('/misa_sale_status/api/list/export', this);
+                    });
+                    document.getElementById('msu-export-detail-btn').addEventListener('click', function() {
+                        exportPickingListExcel('/misa_sale_status/api/list/export_detail', this);
                     });
                     document.getElementById('msu-multi-order-group').addEventListener('change', function() {
                         state.multiOrderGroup = this.checked;
@@ -1443,6 +1950,11 @@
                         root.querySelectorAll('.msu-act-unexception').forEach(function(btn) {
                             btn.addEventListener('click', function() { runUnexception([parseInt(this.dataset.id, 10)], this); });
                         });
+                        root.querySelectorAll('.msu-act-remind').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                openReminderModal({picking_ids: [parseInt(this.dataset.id, 10)], label: 'phiếu ' + this.dataset.name});
+                            });
+                        });
                     }
 
                     function bindRowEvents() {
@@ -1479,6 +1991,7 @@
                         drawerOpenId = null;
                         customsDrawerRowId = null;
                         drawerKind = null;
+                        drawerEl.classList.remove('msu-drawer-wide');
                         customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
                     }
                     drawerOverlay.addEventListener('click', function(ev) {
@@ -1488,6 +2001,7 @@
                     function openDrawer(row) {
                         drawerKind = 'picking';
                         drawerOpenId = row.id;
+                        drawerEl.classList.remove('msu-drawer-wide');
                         renderDrawerContent(row);
                         drawerOverlay.style.display = 'flex';
                     }
@@ -1506,6 +2020,7 @@
                     function openOrderDrawer(row) {
                         drawerKind = 'order';
                         drawerOpenId = row.id;
+                        drawerEl.classList.add('msu-drawer-wide');
                         renderOrderDrawerContent(row);
                         drawerOverlay.style.display = 'flex';
                     }
@@ -1514,17 +2029,31 @@
                         var pickingRowsHtml = (row.pickings || []).map(function(p) {
                             var extra = '';
                             if (p.master_picking_name) {
-                                extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + '</div>';
+                                var masterOrderSuffix = p.master_picking_order_code
+                                    ? ' (đơn ' + esc(p.master_picking_order_code) + ')' : '';
+                                extra += '<div class="msu-muted" style="font-size:.76rem">Ăn theo ' + esc(p.master_picking_name) + masterOrderSuffix + '</div>';
+                            } else if (p.request_refno && p.request_refno !== p.name) {
+                                // Không có link "ăn theo" chính thức trong Odoo, nhưng đề nghị
+                                // trên MISA lại mang tên khác phiếu này — vẫn là 1 dạng "liên
+                                // quan tới gốc" cần biết, chỉ khác là không truy được order_code
+                                // của cái tên đó (không có bản ghi picking liên kết chính thức).
+                                extra += '<div class="msu-muted" style="font-size:.76rem">Xuất qua đề nghị "' + esc(p.request_refno) + '"</div>';
                             }
                             if (p.exception) {
                                 extra += '<span class="msu-badge-exception">Ngoại lệ</span>';
                             }
-                            return '<tr class="msu-drawer-sibling" data-picking-id="' + p.id + '">' +
-                                '<td><b>' + esc(p.name) + '</b>' + extra + '</td>' +
+                            var hasDetail = !!(p.invoice_no || p.request_refno);
+                            var detailBtn = hasDetail
+                                ? '<button type="button" class="msu-btn msu-btn-outline-primary msu-btn-xs msu-view-invoice-detail-btn" data-picking-id="' + p.id + '" data-picking-name="' + esc(p.name) + '" title="Xem đầy đủ đề nghị/hóa đơn"><i class="fa fa-file-text-o"></i></button>'
+                                : '<span class="msu-muted">—</span>';
+                            return '<tr>' +
+                                '<td class="msu-drawer-sibling" data-picking-id="' + p.id + '"><b>' + esc(p.name) + '</b>' + extra + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(p.actual_amount) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(p.invoice_amount) + '</td>' +
                                 '<td>' + (p.invoice_no ? esc(p.invoice_no) : '<span class="msu-muted">—</span>') + '</td>' +
+                                '<td>' + (p.request_refno ? esc(p.request_refno) : '<span class="msu-muted">—</span>') + '</td>' +
                                 '<td><span class="msu-badge-state msu-badge-state-' + p.state + '">' + esc(p.state_label) + '</span></td>' +
+                                '<td>' + detailBtn + '</td>' +
                             '</tr>';
                         }).join('');
 
@@ -1543,26 +2072,163 @@
                                     '</div>' +
                                 '</div>' +
                                 '<div class="msu-drawer-section">' +
-                                    '<p class="msu-drawer-section-title">Phiếu xuất kho của đơn này — bấm vào 1 dòng để xem chi tiết</p>' +
+                                    '<p class="msu-drawer-section-title">Phiếu xuất kho của đơn này — bấm vào tên phiếu để xem chi tiết, bấm ' +
+                                    '<i class="fa fa-file-text-o"></i> để xem đầy đủ đề nghị/hóa đơn trên MISA</p>' +
                                     '<div class="msu-table-scroll">' +
                                         '<table class="msu-table"><thead><tr>' +
-                                            '<th>Phiếu</th><th class="msu-col-num">Tiền thực xuất</th><th class="msu-col-num">Tiền hóa đơn</th><th>Số HĐ</th><th>Trạng thái</th>' +
+                                            '<th>Phiếu</th><th class="msu-col-num">Tiền thực xuất</th><th class="msu-col-num">Tiền hóa đơn</th><th>Số HĐ</th><th>Đề nghị</th><th>Trạng thái</th><th></th>' +
                                         '</tr></thead><tbody>' + pickingRowsHtml + '</tbody></table>' +
                                     '</div>' +
                                 '</div>' +
                             '</div>';
 
                         document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
-                        drawerEl.querySelectorAll('.msu-drawer-sibling').forEach(function(tr) {
-                            tr.addEventListener('click', function() {
+                        drawerEl.querySelectorAll('.msu-drawer-sibling').forEach(function(td) {
+                            td.addEventListener('click', function() {
                                 openSiblingDrawer(parseInt(this.dataset.pickingId, 10));
+                            });
+                        });
+                        drawerEl.querySelectorAll('.msu-view-invoice-detail-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function(ev) {
+                                ev.stopPropagation();
+                                openInvoiceDetailModal(parseInt(this.dataset.pickingId, 10), this.dataset.pickingName);
                             });
                         });
                     }
 
+                    // ===== Modal "Xem hóa đơn/đề nghị" — chi tiết ĐẦY ĐỦ (từng dòng hàng) đọc
+                    // LIVE từ MISA cho 1 phiếu, gọi khi bấm nút trong bảng phiếu của drawer đơn
+                    // hàng. Không cache — mỗi lần mở đều gọi lại (chỉ khi người dùng chủ động
+                    // bấm xem, không phải quét hàng loạt, nên chấp nhận tốn 1-2 API call/lần).
+                    function renderInvoiceDetailLines(lines) {
+                        if (!lines || !lines.length) {
+                            return '<p class="msu-muted" style="font-size:.82rem">Không có dòng hàng.</p>';
+                        }
+                        var rowsHtml = lines.map(function(l) {
+                            return '<tr>' +
+                                '<td>' + esc(l.order_code || '—') + '</td>' +
+                                '<td>' + esc(l.inventory_item_code || '') + '</td>' +
+                                '<td>' + esc(l.description || '') + '</td>' +
+                                '<td class="msu-col-num">' + (l.quantity || 0).toLocaleString('vi-VN') + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(l.unit_price) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(l.amount) + '</td>' +
+                            '</tr>';
+                        }).join('');
+                        return '<div class="msu-table-scroll"><table class="msu-table"><thead><tr>' +
+                            '<th>Đơn hàng</th><th>Mã hàng</th><th>Tên hàng</th><th class="msu-col-num">SL</th><th class="msu-col-num">Đơn giá</th><th class="msu-col-num">Thành tiền</th>' +
+                            '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+                    }
+
+                    // So sánh TỪNG DÒNG HÀNG Odoo (đã xuất kho) vs MISA (đề nghị) — vẽ 2 bên
+                    // kèm mũi tên/icon ở giữa cho trực quan, thay vì 1 bảng cột dọc khó dò theo
+                    // hàng ngang. rec = kết quả get_misa_invoice_line_reconciliation (đã có sẵn
+                    // qty/value 2 bên + cờ mismatch/in_odoo_only/in_misa_only).
+                    function renderLineReconciliation(rec) {
+                        if (!rec) {
+                            return '<p class="msu-muted" style="font-size:.82rem">Chưa đối chiếu được (lỗi tải dữ liệu MISA).</p>';
+                        }
+                        if (rec.error) {
+                            return '<div class="msu-modal-error">Lỗi đối chiếu: ' + esc(rec.error) + '</div>';
+                        }
+                        var rows = rec.rows || [];
+                        if (!rows.length) {
+                            return '<p class="msu-muted" style="font-size:.82rem">Không có dòng hàng nào để đối chiếu.</p>';
+                        }
+                        var rowsHtml = rows.map(function(r) {
+                            var midClass = r.mismatch ? 'mismatch' : 'ok';
+                            var icon = r.in_odoo_only ? 'fa-long-arrow-right'
+                                : r.in_misa_only ? 'fa-long-arrow-left'
+                                : r.mismatch ? 'fa-exchange' : 'fa-check';
+                            var diffHtml = '';
+                            if (r.mismatch && !r.in_odoo_only && !r.in_misa_only) {
+                                var parts = [];
+                                if (Math.abs(r.qty_diff) > 0.001) { parts.push('SL lệch ' + r.qty_diff.toLocaleString('vi-VN')); }
+                                if (Math.abs(r.amount_diff) > 1) { parts.push(fmtMoney(Math.abs(r.amount_diff))); }
+                                diffHtml = parts.length ? '<div class="msu-cmp-diff">' + esc(parts.join(' · ')) + '</div>' : '';
+                            }
+                            var odooSide = r.in_misa_only
+                                ? '<div class="msu-cmp-side-empty">Không có trên Odoo</div>'
+                                : '<div class="msu-cmp-label">Odoo — xuất kho</div>' +
+                                  '<div class="msu-cmp-name">' + esc(r.product_name || r.code) + '</div>' +
+                                  '<div class="msu-cmp-meta">SL ' + r.odoo_qty.toLocaleString('vi-VN') + ' &middot; ' + fmtMoney(r.odoo_value) + '</div>' +
+                                  (r.odoo_picking_names && r.odoo_picking_names.length ? '<div class="msu-cmp-code"><i class="fa fa-cube"></i> ' + esc(r.odoo_picking_names.join(', ')) + '</div>' : '');
+                            var misaSide = r.in_odoo_only
+                                ? '<div class="msu-cmp-side-empty">Không có trên MISA</div>'
+                                : '<div class="msu-cmp-label">MISA — đề nghị</div>' +
+                                  '<div class="msu-cmp-name">' + esc(r.product_name || r.code) + '</div>' +
+                                  '<div class="msu-cmp-meta">SL ' + r.misa_qty.toLocaleString('vi-VN') + ' &middot; ' + fmtMoney(r.misa_value) + '</div>' +
+                                  (r.misa_order_codes && r.misa_order_codes.length ? '<div class="msu-cmp-code"><i class="fa fa-file-text-o"></i> ' + esc(r.misa_order_codes.join(', ')) + '</div>' : '');
+                            return '<div class="msu-cmp-row">' +
+                                '<div class="msu-cmp-side">' + odooSide + '</div>' +
+                                '<div class="msu-cmp-mid ' + midClass + '"><i class="fa ' + icon + ' msu-cmp-arrow"></i>' + diffHtml + '</div>' +
+                                '<div class="msu-cmp-side">' + misaSide + '</div>' +
+                            '</div>';
+                        }).join('');
+                        return '<div class="msu-cmp-list">' + rowsHtml + '</div>';
+                    }
+
+                    function renderInvoiceDetailBody(detail) {
+                        var html = '';
+                        if (detail.effective_picking_name && detail.effective_picking_name !== detail.picking_name) {
+                            html += '<p class="msu-muted" style="font-size:.82rem">Đọc theo phiếu đại diện <b>' + esc(detail.effective_picking_name) + '</b> (phiếu này đang "ăn theo").</p>';
+                        }
+
+                        // 1 đề nghị thường ra ĐÚNG 1 hóa đơn với CÙNG dòng hàng — gộp chung
+                        // thông tin đề nghị + hóa đơn vào 1 khối meta, chỉ render DUY NHẤT 1
+                        // bảng dòng hàng (ưu tiên bảng đối chiếu Odoo/MISA nếu có đề nghị để so
+                        // khớp; chỉ rơi về danh sách dòng hóa đơn đơn thuần khi có hóa đơn mà
+                        // KHÔNG tìm ra đề nghị để đối chiếu — tránh lặp lại y hệt 2 lần).
+                        var metaItems = [];
+                        if (detail.request) {
+                            metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đề nghị</span><span class="msu-meta-value">' + esc(detail.request.refno || '(không rõ số)') + '</span></div>');
+                        }
+                        if (detail.invoice) {
+                            metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Hóa đơn</span><span class="msu-meta-value">' + esc(detail.invoice.inv_no || '') + (detail.invoice.inv_date ? (' — ' + esc(detail.invoice.inv_date)) : '') + '</span></div>');
+                            metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Khách hàng</span><span class="msu-meta-value">' + esc(detail.invoice.account_object_name || '—') + '</span></div>');
+                            metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền HĐ</span><span class="msu-meta-value">' + fmtMoney(detail.invoice.total_amount) + '</span></div>');
+                        }
+                        if (metaItems.length) {
+                            html += '<div class="msu-drawer-section"><div class="msu-drawer-meta">' + metaItems.join('') + '</div></div>';
+                        }
+
+                        if (detail.request) {
+                            html += '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Đối chiếu dòng hàng — Odoo (xuất kho) so với MISA</p>' +
+                                renderLineReconciliation(detail.line_reconciliation) + '</div>';
+                        } else if (detail.invoice) {
+                            html += '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Dòng hàng trên hóa đơn</p>' +
+                                renderInvoiceDetailLines(detail.invoice_lines) + '</div>';
+                        } else {
+                            html += '<div class="msu-drawer-section"><p class="msu-muted" style="font-size:.82rem">Chưa có đề nghị hoặc hóa đơn nào trên MISA cho phiếu này.</p></div>';
+                        }
+                        return html;
+                    }
+
+                    function openInvoiceDetailModal(pickingId, pickingName) {
+                        var modal = document.getElementById('msu-invoice-detail-modal');
+                        var body = document.getElementById('msu-invoice-detail-body');
+                        document.getElementById('msu-invoice-detail-title').textContent = 'Chi tiết đề nghị / hóa đơn — ' + pickingName;
+                        body.innerHTML = '<span class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải từ MISA...</span>';
+                        modal.style.display = 'flex';
+                        rpc('/misa_sale_status/api/picking_full_detail', {picking_id: pickingId, saler_code: state.salerCode}).then(function(res) {
+                            body.innerHTML = renderInvoiceDetailBody(res.detail || {});
+                        }).catch(function(e) {
+                            body.innerHTML = '<div class="msu-modal-error">Lỗi tải chi tiết: ' + esc(e.message) + '</div>';
+                        });
+                    }
+
+                    function closeInvoiceDetailModal() {
+                        document.getElementById('msu-invoice-detail-modal').style.display = 'none';
+                    }
+                    document.getElementById('msu-invoice-detail-close').addEventListener('click', closeInvoiceDetailModal);
+                    document.getElementById('msu-invoice-detail-close-x').addEventListener('click', closeInvoiceDetailModal);
+                    document.getElementById('msu-invoice-detail-modal').addEventListener('click', function(ev) {
+                        if (ev.target === this) { closeInvoiceDetailModal(); }
+                    });
+
                     function openCustomsDrawer(row) {
                         drawerKind = 'customs';
                         customsDrawerRowId = row.id;
+                        drawerEl.classList.remove('msu-drawer-wide');
                         if (!customsManualState.open) {
                             customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
                         }
@@ -1855,6 +2521,7 @@
                         var bar = document.getElementById('msu-bulk-bar');
                         bar.style.display = ids.length ? '' : 'none';
                         document.getElementById('msu-bulk-count').textContent = 'Đã chọn ' + ids.length + ' phiếu';
+                        document.getElementById('msu-bulk-remind').style.display = state.isAdmin ? '' : 'none';
                     }
 
                     function runCheck(ids, btn) {
@@ -1883,6 +2550,10 @@
                     document.getElementById('msu-bulk-unexception').addEventListener('click', function() { runUnexception(Object.keys(state.selected).map(Number), this); });
                     document.getElementById('msu-bulk-exception').addEventListener('click', function() {
                         openExceptionModal(Object.keys(state.selected).map(Number), Object.keys(state.selected).length + ' phiếu đã chọn');
+                    });
+                    document.getElementById('msu-bulk-remind').addEventListener('click', function() {
+                        var ids = Object.keys(state.selected).map(Number);
+                        openReminderModal({picking_ids: ids, label: ids.length + ' phiếu đã chọn'});
                     });
 
                     // ===== Modal: gắn mã đề nghị =====

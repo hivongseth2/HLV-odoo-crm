@@ -1,7 +1,7 @@
 import logging
 
 from odoo import http
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -28,17 +28,24 @@ class MisaInvoicePublicController(http.Controller):
 
     @http.route('/misa_sale_status/api/saler_codes', type='json', auth='user', methods=['POST'])
     def api_saler_codes(self, **kwargs):
-        codes = request.env['stock.picking'].sudo().get_misa_invoice_saler_code_registry()
-        return {'status': 'success', 'codes': codes}
+        Picking = request.env['stock.picking']
+        # {code, token} thay vì chỉ mã trần — token dùng để dựng link riêng
+        # (?t=<token>) không lộ mã thật trên URL, xem _misa_invoice_saler_code_token.
+        codes = Picking.sudo().get_misa_invoice_saler_code_registry_with_tokens()
+        # is_admin: tài khoản thuộc nhóm "Đối soát XHD" — codes ở trên khi đó là TOÀN BỘ mã đã
+        # đăng ký (không chỉ của riêng họ), JS dùng cờ này để hiện thêm nút "Copy link" cho
+        # từng mã (gửi link trực tiếp cho từng sale) thay vì hiểu nhầm là họ tự có nhiều mã.
+        is_admin = request.env.user.has_group('misa_invoice_status_report.group_misa_invoice_reconciliation')
+        return {'status': 'success', 'codes': codes, 'is_admin': is_admin}
 
     @http.route('/misa_sale_status/api/list', type='json', auth='user', methods=['POST'])
     def api_list(
-        self, saler_code='', search='', state='', date_from='', date_to='',
+        self, saler_code='', search='', state='', states=None, date_from='', date_to='',
         multi_order_group=False, multi_request=False, limit=50, offset=0, **kwargs
     ):
         try:
             data = request.env['stock.picking'].sudo().get_misa_invoice_public_list(
-                saler_code=saler_code, search=search, state=state or False,
+                saler_code=saler_code, search=search, state=state or False, states=states or None,
                 date_from=date_from or False, date_to=date_to or False,
                 multi_order_group=bool(multi_order_group), multi_request=bool(multi_request),
                 limit=int(limit), offset=int(offset),
@@ -48,6 +55,38 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
         except Exception as e:
             _logger.exception('misa_sale_status api_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/list/export', type='json', auth='user', methods=['POST'])
+    def api_list_export(
+        self, saler_code='', search='', state='', states=None, date_from='', date_to='', **kwargs
+    ):
+        try:
+            attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_list_excel(
+                saler_code=saler_code, search=search, state=state or False, states=states or None,
+                date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'attachment_id': attachment_id}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_list_export error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/list/export_detail', type='json', auth='user', methods=['POST'])
+    def api_list_export_detail(
+        self, saler_code='', search='', state='', states=None, date_from='', date_to='', **kwargs
+    ):
+        try:
+            attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_picking_detail_lines_excel(
+                saler_code=saler_code, search=search, state=state or False, states=states or None,
+                date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'attachment_id': attachment_id}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_list_export_detail error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/daily_stats', type='json', auth='user', methods=['POST'])
@@ -67,12 +106,13 @@ class MisaInvoicePublicController(http.Controller):
     @http.route('/misa_sale_status/api/order_list', type='json', auth='user', methods=['POST'])
     def api_order_list(
         self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
-        date_from='', date_to='', limit=20, offset=0, **kwargs
+        states=None, date_from='', date_to='', limit=20, offset=0, **kwargs
     ):
         try:
             data = request.env['stock.picking'].sudo().get_misa_invoice_public_order_list(
                 saler_code=saler_code, search=search, state=state or False,
                 partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                states=states or None,
                 date_from=date_from or False, date_to=date_to or False,
                 limit=int(limit), offset=int(offset),
             )
@@ -81,6 +121,44 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
         except Exception as e:
             _logger.exception('misa_sale_status api_order_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/order_list/export', type='json', auth='user', methods=['POST'])
+    def api_order_list_export(
+        self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
+        states=None, date_from='', date_to='', **kwargs
+    ):
+        try:
+            attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_order_list_excel(
+                saler_code=saler_code, search=search, state=state or False,
+                partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                states=states or None,
+                date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'attachment_id': attachment_id}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_order_list_export error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/order_list/export_detail', type='json', auth='user', methods=['POST'])
+    def api_order_list_export_detail(
+        self, saler_code='', search='', state='', partial_coverage_only=False, mismatch_only=False,
+        states=None, date_from='', date_to='', **kwargs
+    ):
+        try:
+            attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_order_detail_lines_excel(
+                saler_code=saler_code, search=search, state=state or False,
+                partial_coverage_only=bool(partial_coverage_only), mismatch_only=bool(mismatch_only),
+                states=states or None,
+                date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'attachment_id': attachment_id}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_order_list_export_detail error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/shopee_list', type='json', auth='user', methods=['POST'])
@@ -135,6 +213,58 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
         except Exception as e:
             _logger.exception('misa_sale_status api_picking_siblings error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/picking_full_detail', type='json', auth='user', methods=['POST'])
+    def api_picking_full_detail(self, picking_id=None, saler_code='', **kwargs):
+        try:
+            detail = request.env['stock.picking'].sudo().get_misa_invoice_public_full_detail(
+                int(picking_id), saler_code
+            )
+            return {'status': 'success', 'detail': detail}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_picking_full_detail error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/reminders', type='json', auth='user', methods=['POST'])
+    def api_reminders(self, saler_code='', unread_only=True, limit=50, **kwargs):
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_reminders(
+                saler_code=saler_code, unread_only=bool(unread_only), limit=int(limit),
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_reminders error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/reminders/mark_read', type='json', auth='user', methods=['POST'])
+    def api_reminders_mark_read(self, saler_code='', reminder_ids=None, **kwargs):
+        try:
+            result = request.env['stock.picking'].sudo().mark_misa_invoice_reminder_read(
+                saler_code=saler_code, reminder_ids=reminder_ids,
+            )
+            return {'status': 'success', 'result': result}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_reminders_mark_read error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/send_reminder', type='json', auth='user', methods=['POST'])
+    def api_send_reminder(self, order_ids=None, picking_ids=None, message='', **kwargs):
+        try:
+            result = request.env['stock.picking'].sudo().action_send_misa_invoice_reminder(
+                order_ids=order_ids, picking_ids=picking_ids, message=message or False,
+            )
+            return {'status': 'success', 'result': result}
+        except (UserError, AccessError) as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_send_reminder error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/customs/fetch', type='json', auth='user', methods=['POST'])

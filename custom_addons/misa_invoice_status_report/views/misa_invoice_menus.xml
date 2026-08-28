@@ -12,17 +12,20 @@
     <menuitem id="menu_misa_invoice_root"
               name="Đối soát XHD MISA"
               web_icon="misa_invoice_status_report,static/description/icon.png"
+              groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
               sequence="70"/>
 
     <menuitem id="menu_misa_invoice_dashboard"
               name="Tổng quan"
               parent="menu_misa_invoice_root"
               action="action_misa_invoice_dashboard"
+              groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
               sequence="10"/>
 
     <menuitem id="menu_misa_invoice_status_report"
               name="Danh sách phiếu"
               parent="menu_misa_invoice_root"
               action="action_server_misa_invoice_list_menu"
+              groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
               sequence="20"/>
 </odoo>
