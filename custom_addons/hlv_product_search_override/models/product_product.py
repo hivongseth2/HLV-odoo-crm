@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
+from odoo.osv import expression
 
 class ProductProduct(models.Model):
     _inherit = 'product.product'
@@ -9,18 +10,38 @@ class ProductProduct(models.Model):
         """
         Override name_search to prioritize products WITHOUT a BOM (Single products)
         over products WITH a BOM (Combo products).
-        
+
         Strategy: Do two separate searches at database level:
         1. Search products WITHOUT BOMs first
         2. Search products WITH BOMs second
         3. Combine results
+
+        Also splits the query into tokens and matches each token against
+        name/default_code/barcode with OR (a product must match ALL tokens,
+        but each token can match ANY of the 3 fields). Same tokenizing logic
+        as the /search_stock route (website_public_inventory_18/controllers/main.py).
         """
         import logging
         _logger = logging.getLogger(__name__)
-        
+
         if not args:
             args = []
-        
+
+        original_query = name
+
+        # --- Tokenized OR search: tách từng từ trong `name` rồi OR theo name/default_code/barcode ---
+        if name:
+            tokens = [t for t in name.split() if t]
+            domains_per_token = [
+                ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
+                for token in tokens
+            ]
+            if domains_per_token:
+                token_domain = expression.AND(domains_per_token)
+                args = expression.AND([args, token_domain])
+            # name đã được "tiêu thụ" thành domain ở trên, không cần super() match lại theo name nữa
+            name = ''
+
         # Find all product IDs that have BOMs
         bom_model = self.env['mrp.bom']
         
@@ -71,7 +92,7 @@ class ProductProduct(models.Model):
         # Combine results: Single products first, then combo products
         final_results = single_results + combo_results
         
-        _logger.info(f"HLV Search: Query='{name}', Single={len(single_results)}, Combo={len(combo_results)}, Total={len(final_results)}")
+        _logger.info(f"HLV Search: Query='{original_query}', Single={len(single_results)}, Combo={len(combo_results)}, Total={len(final_results)}")
         if final_results:
             _logger.info(f"HLV Search FINAL (first 3): {[x[1] for x in final_results[:3]]}")
         
