@@ -8,9 +8,12 @@ from .common import tokenize_or_domain as _tokenize_or_domain, rewrite_free_text
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
-    def search(self, domain, offset=0, limit=None, order=None, **kwargs):
+    def _search(self, domain, offset=0, limit=None, order=None):
+        # search_read()/web_search_read() (những gì web client thực sự gọi) bỏ
+        # qua search() công khai và gọi thẳng _search() — đã verify bằng trace
+        # thực tế (bin/check_search_internal_signature.py), nên phải hook ở đây.
         domain = _rewrite_free_text_domain(list(domain or []))
-        return super(ProductProduct, self).search(domain, offset=offset, limit=limit, order=order, **kwargs)
+        return super(ProductProduct, self)._search(domain, offset=offset, limit=limit, order=order)
 
     @api.model
     def name_search(self, name='', args=None, operator='ilike', limit=100):
