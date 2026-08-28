@@ -2,8 +2,15 @@
 from odoo import models, api
 from odoo.osv import expression
 
+from .common import tokenize_or_domain as _tokenize_or_domain, rewrite_free_text_domain as _rewrite_free_text_domain
+
+
 class ProductProduct(models.Model):
     _inherit = 'product.product'
+
+    def search(self, domain, offset=0, limit=None, order=None, **kwargs):
+        domain = _rewrite_free_text_domain(list(domain or []))
+        return super(ProductProduct, self).search(domain, offset=offset, limit=limit, order=order, **kwargs)
 
     @api.model
     def name_search(self, name='', args=None, operator='ilike', limit=100):
@@ -31,13 +38,8 @@ class ProductProduct(models.Model):
 
         # --- Tokenized OR search: tách từng từ trong `name` rồi OR theo name/default_code/barcode ---
         if name:
-            tokens = [t for t in name.split() if t]
-            domains_per_token = [
-                ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
-                for token in tokens
-            ]
-            if domains_per_token:
-                token_domain = expression.AND(domains_per_token)
+            token_domain = _tokenize_or_domain(name)
+            if token_domain:
                 args = expression.AND([args, token_domain])
             # name đã được "tiêu thụ" thành domain ở trên, không cần super() match lại theo name nữa
             name = ''
