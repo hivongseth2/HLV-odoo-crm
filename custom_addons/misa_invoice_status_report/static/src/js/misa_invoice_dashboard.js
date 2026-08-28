@@ -1846,6 +1846,32 @@ export class MisaInvoiceDashboard extends Component {
         }
     }
 
+    /** Nút chuông trên dòng đơn hàng — nhắc sale xuất hóa đơn cho đúng đơn này (theo
+     * x_studio_misa_saler_code của đơn). Dùng window.prompt cho ghi chú thay vì dựng thêm 1
+     * modal riêng — hành động phụ, không cần trải nghiệm cầu kỳ như wizard ngoại lệ. */
+    async sendOrderReminder(ev, row) {
+        ev.stopPropagation();
+        const message = window.prompt(`Nhắc xuất hóa đơn cho đơn ${row.name} — ghi chú (không bắt buộc):`, "");
+        if (message === null) { return; }
+        try {
+            const result = await this.orm.call(
+                "stock.picking", "action_send_misa_invoice_reminder", [],
+                { order_ids: [row.id], message: message || false }
+            );
+            if (result.skipped_no_saler_code && result.skipped_no_saler_code.length) {
+                this.notification.add(
+                    `Đơn ${result.skipped_no_saler_code.join(', ')} chưa gán mã sale MISA nên không tạo được thông báo.`,
+                    { type: "warning" }
+                );
+            } else {
+                this.notification.add(`Đã nhắc xuất hóa đơn cho đơn ${row.name}.`, { type: "success" });
+            }
+            this.loadOrdersTab(this.state.ordersTab.page || 1);
+        } catch (e) {
+            this.notification.add("Lỗi gửi nhắc nhở: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     /** Bấm vào dòng đơn hàng: mở drawer chi tiết (dữ liệu đã có sẵn `pickings` con từ
      * backend) — nút trong drawer mở thẳng form đơn bán trên Odoo. */
     openOrderDrawer(row) {

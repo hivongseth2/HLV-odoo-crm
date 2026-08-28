@@ -533,6 +533,19 @@
         tbody tr.miv-row-resolved { opacity: 0.6; }
         tbody tr.miv-row-resolved:hover { opacity: 1; }
 
+        // Đơn/phiếu đã bị "nhắc xuất HĐ" và còn actionable (xem stock_picking._misa_invoice_order_row).
+        tbody tr.miv-row-reminded { background: rgba(250, 178, 25, 0.10); }
+        tbody tr.miv-row-reminded:hover { background: rgba(250, 178, 25, 0.18); }
+        .miv-reminded-icon { color: var(--miv-warning-text); margin-left: 4px; }
+        .miv-remind-btn {
+            border: 1px solid var(--miv-warning-text);
+            color: var(--miv-warning-text);
+            background: #fff;
+            border-radius: 6px;
+            padding: 3px 8px;
+            &:hover { background: rgba(250, 178, 25, 0.12); }
+        }
+
         &.miv-table-compact tbody tr.miv-row-clickable {
             cursor: pointer;
             &:hover { background: var(--miv-plane); }

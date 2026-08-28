@@ -1,7 +1,7 @@
 import logging
 
 from odoo import http
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -191,6 +191,45 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
         except Exception as e:
             _logger.exception('misa_sale_status api_picking_full_detail error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/reminders', type='json', auth='user', methods=['POST'])
+    def api_reminders(self, saler_code='', unread_only=True, limit=50, **kwargs):
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_reminders(
+                saler_code=saler_code, unread_only=bool(unread_only), limit=int(limit),
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_reminders error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/reminders/mark_read', type='json', auth='user', methods=['POST'])
+    def api_reminders_mark_read(self, saler_code='', reminder_ids=None, **kwargs):
+        try:
+            result = request.env['stock.picking'].sudo().mark_misa_invoice_reminder_read(
+                saler_code=saler_code, reminder_ids=reminder_ids,
+            )
+            return {'status': 'success', 'result': result}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_reminders_mark_read error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/send_reminder', type='json', auth='user', methods=['POST'])
+    def api_send_reminder(self, order_ids=None, picking_ids=None, message='', **kwargs):
+        try:
+            result = request.env['stock.picking'].sudo().action_send_misa_invoice_reminder(
+                order_ids=order_ids, picking_ids=picking_ids, message=message or False,
+            )
+            return {'status': 'success', 'result': result}
+        except (UserError, AccessError) as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_send_reminder error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/customs/fetch', type='json', auth='user', methods=['POST'])
