@@ -1106,7 +1106,14 @@ function groupLines(lines){
     if(map[key]){
       map[key].product_uom_qty+=l.product_uom_qty||0;
       map[key].qty_delivered+=l.qty_delivered||0;
-      map[key].qty_packed+=l.qty_packed||0;
+      // qty_packed: KHÔNG cộng dồn — đây là số liệu THEO SẢN PHẨM cho CẢ ĐƠN (backend trả về
+      // y hệt trên MỌI dòng cùng sản phẩm, xem qty_packed_by_product_id trong
+      // delivery_planner_formatter.py), không phải số liệu riêng từng dòng như
+      // product_uom_qty/qty_delivered. Cộng dồn sẽ nhân lên N lần khi có N dòng trùng
+      // product+price+discount (VD MISA sync tách nhiều dòng cho cùng 1 sản phẩm) — đã xác
+      // nhận thực tế: đơn có 4 dòng cùng sản phẩm, mỗi dòng backend trả đúng qty_packed=66,
+      // nhưng cộng dồn ở đây từng làm hiển thị lên 264. Giữ giá trị đầu tiên, giống
+      // qty_warehouse_free bên dưới.
       map[key].qty_reserved_here+=(l.qty_reserved_here||0); // sum reservations across matching commercial lines
       // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
       map[key].delivered_subtotal+=(l.delivered_subtotal||0);
