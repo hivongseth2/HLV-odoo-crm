@@ -18,14 +18,17 @@ from odoo import api, fields, models
 class StockPickingMisaInvoiceExport(models.Model):
     _inherit = 'stock.picking'
 
-    def _misa_invoice_export_workbook(self, sheet_name, headers, rows, money_cols=None, merge_col=None):
+    def _misa_invoice_export_workbook(self, sheet_name, headers, rows, money_cols=None, percent_cols=None, merge_col=None):
         """Dựng file .xlsx trong bộ nhớ (xlsxwriter) — dùng chung cho mọi nút "Xuất Excel"
         trên dashboard. money_cols: tập chỉ số cột (0-based) cần định dạng số tiền.
+        percent_cols: tập chỉ số cột cần định dạng "%" (VD cột VAT — giá trị lưu ở dạng SỐ
+        THƯỜNG như 8, 10, không phải 0.08, chỉ thêm ký hiệu % lúc hiển thị).
         merge_col: cột (0-based) cần MERGE các ô LIÊN TIẾP có cùng giá trị (VD gộp ô "Khách
         hàng" khi xuất chi tiết dòng hàng nhiều dòng cùng 1 khách đứng liền nhau) — rows PHẢI
         đã được sắp xếp theo đúng cột này trước khi gọi, nếu không sẽ chỉ gộp được các đoạn
         liên tiếp tình cờ trùng giá trị."""
         money_cols = money_cols or set()
+        percent_cols = percent_cols or set()
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output, {'in_memory': True})
         worksheet = workbook.add_worksheet(sheet_name[:31])
@@ -36,6 +39,9 @@ class StockPickingMisaInvoiceExport(models.Model):
         })
         fmt_cell = workbook.add_format({'border': 1, 'valign': 'vcenter'})
         fmt_money = workbook.add_format({'border': 1, 'valign': 'vcenter', 'num_format': '#,##0', 'align': 'right'})
+        fmt_percent = workbook.add_format({
+            'border': 1, 'valign': 'vcenter', 'num_format': '0.##"%"', 'align': 'right',
+        })
 
         worksheet.set_row(0, 22)
         for col, header in enumerate(headers):
@@ -44,7 +50,8 @@ class StockPickingMisaInvoiceExport(models.Model):
 
         for row_idx, row in enumerate(rows, start=1):
             for col, value in enumerate(row):
-                worksheet.write(row_idx, col, value, fmt_money if col in money_cols else fmt_cell)
+                fmt = fmt_money if col in money_cols else (fmt_percent if col in percent_cols else fmt_cell)
+                worksheet.write(row_idx, col, value, fmt)
 
         if merge_col is not None and rows:
             n = len(rows)
@@ -134,7 +141,7 @@ class StockPickingMisaInvoiceExport(models.Model):
     _MISA_INVOICE_DETAIL_LINES_HEADERS = [
         'Khách hàng', 'Mã đơn hàng', 'Phiếu xuất kho', 'Đề nghị (refno)', 'Số hóa đơn',
         'Tên hàng', 'Mã hàng', 'Số lượng',
-        'Đơn giá trước thuế', 'Thuế', 'Đơn giá sau thuế', 'Tổng tiền',
+        'Đơn giá trước thuế', 'Thành tiền trước thuế', 'VAT (%)', 'Thuế', 'Đơn giá sau thuế', 'Tổng tiền',
     ]
 
     def _misa_invoice_detail_line_row(self, partner_name, order_name, picking, line):
@@ -143,12 +150,18 @@ class StockPickingMisaInvoiceExport(models.Model):
         tab 'Phiếu xuất kho' (partner/order_name lấy thẳng từ phiếu) — tránh lặp code 2 nơi mà
         vẫn giữ đúng ngữ cảnh gọi, không gộp nhầm khi 1 phiếu thuộc nhiều đơn."""
         effective = picking.misa_invoice_master_picking_id or picking
+        pre_tax_amount = line['value']
+        tax_amount = line['tax_value']
+        # Suy ra % VAT từ chính 2 số tiền đã tính sẵn (không đọc line.tax_id) — đúng với BẤT KỲ
+        # cách cấu hình thuế nào trên dòng đơn bán (kể cả thuế gộp/nhiều thuế), không phụ thuộc
+        # phải có ĐÚNG 1 thuế dạng percent mới suy ra đúng.
+        vat_rate_pct = round(tax_amount / pre_tax_amount * 100, 2) if pre_tax_amount else 0.0
         return [
             partner_name, order_name, picking.name,
             effective.misa_invoice_request_refno or '', effective.misa_invoice_no or '',
             line['product_name'], line['default_code'] or '', line['qty'],
-            line['pre_tax_unit_price'], line['tax_value'], line['post_tax_unit_price'],
-            line['value'] + line['tax_value'],
+            line['pre_tax_unit_price'], pre_tax_amount, vat_rate_pct, tax_amount,
+            line['post_tax_unit_price'], pre_tax_amount + tax_amount,
         ]
 
     def _misa_invoice_export_detail_lines_attachment(self, filename_prefix, detail_rows):
@@ -157,7 +170,7 @@ class StockPickingMisaInvoiceExport(models.Model):
         detail_rows.sort(key=lambda r: (r[0], r[1], r[2]))
         content = self._misa_invoice_export_workbook(
             'Chi tiết dòng hàng', self._MISA_INVOICE_DETAIL_LINES_HEADERS, detail_rows,
-            money_cols={8, 9, 10, 11}, merge_col=0,
+            money_cols={8, 9, 11, 12, 13}, percent_cols={10}, merge_col=0,
         )
         return self._misa_invoice_create_export_attachment(
             '%s_%s.xlsx' % (filename_prefix, fields.Date.to_string(fields.Date.context_today(self))), content
