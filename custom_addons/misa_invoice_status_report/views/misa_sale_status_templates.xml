@@ -366,7 +366,14 @@
                         <button id="msu-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
                         <button id="msu-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
                         <button id="msu-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
-                        <button id="msu-export-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel danh sách phiếu đang xem"><i class="fa fa-file-excel-o"/> Xuất Excel</button>
+                        <div class="msu-btn-group">
+                            <button id="msu-export-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel danh sách phiếu đang xem">
+                                <i class="fa fa-file-excel-o"/> Xuất phiếu
+                            </button>
+                            <button id="msu-export-detail-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel chi tiết từng dòng hàng (gộp theo khách hàng)">
+                                <i class="fa fa-list"/> Xuất dòng chi tiết
+                            </button>
+                        </div>
                     </div>
 
                     <div class="msu-filters">
@@ -947,7 +954,53 @@
                             badge.style.display = count ? '' : 'none';
                             badge.textContent = count > 99 ? '99+' : count;
                             renderBellList();
+                            if (data.bus_channel) { connectReminderBus(data.bus_channel); }
                         }).catch(function() { /* im lặng — không làm phiền bằng lỗi tải chuông nền */ });
+                    }
+
+                    // ===== Real-time qua WebSocket (bus.bus) — chuông cập nhật NGAY khi admin
+                    // bấm nhắc, không cần đợi tới lượt poll 60s (vẫn giữ poll làm lưới an toàn
+                    // phòng khi WebSocket bị chặn/rớt — trình duyệt/mạng công ty đôi khi chặn
+                    // ws://, lúc đó poll vẫn đảm bảo chuông không im lặng mãi). Kênh lấy từ
+                    // chính response /misa_sale_status/api/reminders (bus_channel) thay vì tự
+                    // build lại công thức ở đây, tránh 2 nơi lệch nhau nếu sau này đổi cách đặt
+                    // tên kênh phía backend.
+                    var reminderWs = null;
+                    var reminderWsChannel = null;
+                    var reminderWsReconnectTimer = null;
+                    function connectReminderBus(channel) {
+                        if (!channel || typeof WebSocket === 'undefined') { return; }
+                        if (reminderWs && reminderWsChannel === channel && reminderWs.readyState <= 1) { return; }
+                        if (reminderWs) { try { reminderWs.close(); } catch (e) { /* đã đóng rồi thì thôi */ } }
+                        reminderWsChannel = channel;
+                        try {
+                            var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                            var ws = new WebSocket(proto + '//' + window.location.host + '/websocket');
+                            reminderWs = ws;
+                            ws.addEventListener('open', function() {
+                                ws.send(JSON.stringify({event_name: 'subscribe', data: {channels: [channel], last: 0}}));
+                            });
+                            ws.addEventListener('message', function(ev) {
+                                try {
+                                    var notifications = JSON.parse(ev.data);
+                                    (notifications || []).forEach(function(n) {
+                                        var msg = n && n.message;
+                                        if (msg && msg.type === 'misa_invoice_reminder') { loadReminders(); }
+                                    });
+                                } catch (e) { /* frame lạ/không parse được — bỏ qua, không phải lỗi nghiêm trọng */ }
+                            });
+                            ws.addEventListener('close', function() {
+                                if (reminderWs !== ws) { return; } // đã bị thay bởi 1 kết nối mới hơn
+                                clearTimeout(reminderWsReconnectTimer);
+                                reminderWsReconnectTimer = setTimeout(function() {
+                                    connectReminderBus(reminderWsChannel);
+                                }, 5000);
+                            });
+                            ws.addEventListener('error', function() { try { ws.close(); } catch (e) { /* noop */ } });
+                        } catch (e) {
+                            // Trình duyệt/hạ tầng không hỗ trợ WebSocket — poll 60s vẫn chạy
+                            // làm lưới an toàn, không có gì phải báo lỗi cho người dùng.
+                        }
                     }
                     function renderBellList() {
                         var list = document.getElementById('msu-bell-list');
@@ -1810,11 +1863,10 @@
                         var wrap = document.getElementById('msu-state-filter-wrap');
                         if (wrap && !wrap.contains(ev.target)) { document.getElementById('msu-state-filter-panel').style.display = 'none'; }
                     });
-                    document.getElementById('msu-export-btn').addEventListener('click', function() {
+                    function exportPickingListExcel(route, btn) {
                         if (!state.salerCode) { return; }
-                        var btn = this;
                         setBtnLoading(btn, true);
-                        rpc('/misa_sale_status/api/list/export', {
+                        rpc(route, {
                             saler_code: state.salerCode, search: state.search, states: state.stateFilters,
                             date_from: state.dateFrom, date_to: state.dateTo,
                         }).then(function(res) {
@@ -1824,6 +1876,12 @@
                         }).catch(function(e) {
                             toast('Lỗi xuất Excel: ' + e.message, 'error');
                         }).finally(function() { setBtnLoading(btn, false); });
+                    }
+                    document.getElementById('msu-export-btn').addEventListener('click', function() {
+                        exportPickingListExcel('/misa_sale_status/api/list/export', this);
+                    });
+                    document.getElementById('msu-export-detail-btn').addEventListener('click', function() {
+                        exportPickingListExcel('/misa_sale_status/api/list/export_detail', this);
                     });
                     document.getElementById('msu-multi-order-group').addEventListener('change', function() {
                         state.multiOrderGroup = this.checked;

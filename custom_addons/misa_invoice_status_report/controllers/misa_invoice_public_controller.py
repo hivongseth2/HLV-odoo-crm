@@ -73,6 +73,22 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_list_export error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/list/export_detail', type='json', auth='user', methods=['POST'])
+    def api_list_export_detail(
+        self, saler_code='', search='', state='', states=None, date_from='', date_to='', **kwargs
+    ):
+        try:
+            attachment_id = request.env['stock.picking'].sudo().export_misa_invoice_public_picking_detail_lines_excel(
+                saler_code=saler_code, search=search, state=state or False, states=states or None,
+                date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'attachment_id': attachment_id}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_list_export_detail error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/daily_stats', type='json', auth='user', methods=['POST'])
     def api_daily_stats(self, saler_code='', date_from='', date_to='', weekly=False, **kwargs):
         try:

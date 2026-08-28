@@ -14,7 +14,10 @@
     # amis_callback: dùng model amis.misa.inventory.cache (đã đồng bộ sẵn quy đổi đơn vị
     # tính từ MISA) để đối chiếu số lượng từng dòng hàng không bị báo lệch sai khi Odoo và
     # MISA ghi nhận cùng 1 mặt hàng ở 2 đơn vị tính khác nhau (VD 1000 Cái = 5 Bịch).
-    'depends': ['base', 'stock', 'sale', 'sale_stock', 'mrp', 'misa_fetch_po_button', 'amis_callback', 'website'],
+    'depends': [
+        'base', 'stock', 'sale', 'sale_stock', 'mrp', 'bus',
+        'misa_fetch_po_button', 'amis_callback', 'website',
+    ],
     'data': [
         'security/misa_invoice_security.xml',
         'security/ir.model.access.csv',
