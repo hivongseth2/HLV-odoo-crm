@@ -2604,3 +2604,96 @@ class MisaExtensionController(http.Controller):
 
         return json_response({"ok": True, "results": results})
 
+    # ============================================================
+    # POST /api/extension/so/batch_check
+    # ============================================================
+    @http.route(
+        "/api/extension/so/batch_check",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_batch_check(self, **payload):
+        """
+        Kiểm tra trạng thái Odoo của nhiều Đơn bán hàng cùng lúc (dùng cho
+        trang /crm/sale-order/list). Xem so/check cho endpoint kiểm tra 1 đơn.
+
+        Body JSON:
+        {
+            "token": "...",
+            "names": ["DH125524949236001", ...]
+        }
+
+        Response 200 JSON:
+        {
+            "ok": true,
+            "results": {
+                "DH125524949236001": {"exists": true, "state": "sale", "state_label": "Đơn bán hàng"},
+                "DH...": {"exists": false}
+            }
+        }
+        """
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")]
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        names = payload.get("names") or []
+        if not names or not isinstance(names, list):
+            return json_response({"ok": False, "error": "missing_names", "message": "Thiếu danh sách 'names'."}, 400)
+
+        names = [n.strip() for n in names if n and n.strip()]
+        if not names:
+            return json_response({"ok": False, "error": "empty_names", "message": "Danh sách 'names' rỗng."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        sos = env["sale.order"].sudo().search([("name", "in", names)])
+        so_map = {so.name: so for so in sos}
+
+        queue_names = [n for n in names if n not in so_map]
+        queues = env["misa.sync.queue"].sudo().search([
+            ('name', 'in', queue_names),
+            ('sync_type', '=', 'so'),
+            ('state', 'in', ['draft', 'processing'])
+        ])
+        queue_name_set = set(q.name for q in queues)
+
+        results = {}
+        for name in names:
+            if name in so_map:
+                so = so_map[name]
+                so_vi = so.with_context(lang="vi_VN")
+                state_label = (
+                    dict(so_vi._fields["state"]._description_selection(so_vi.env)).get(so.state, so.state)
+                    if so.state
+                    else ""
+                )
+                results[name] = {
+                    "exists": True,
+                    "state": so.state,
+                    "state_label": state_label,
+                }
+            elif name in queue_name_set:
+                results[name] = {
+                    "exists": True,
+                    "state": "queued",
+                    "state_label": "Đang đồng bộ",
+                }
+            else:
+                results[name] = {"exists": False}
+
+        return json_response({"ok": True, "results": results})
+
