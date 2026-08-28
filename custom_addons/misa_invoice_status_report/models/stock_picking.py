@@ -3510,18 +3510,43 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 multi_ids.append(order_id)
         return multi_ids
 
+    def _misa_invoice_public_list_state_domain(self, state=False, states=None):
+        """Domain phần trạng thái/ngoại lệ cho get_misa_invoice_public_list — tách riêng để
+        export (export_misa_invoice_public_list_excel) tái dùng được ĐÚNG cùng 1 logic, không
+        xây domain lệch với danh sách đang xem.
+
+        states (list): multi-select mới (checkbox) — mỗi lựa chọn OR với nhau. 'exception' là
+        ngoại lệ (bất kể misa_invoice_state); các key còn lại ('missing'/'requested'/
+        'invoiced'/'not_checked') là ĐÚNG trạng thái đó VÀ chưa ngoại lệ (ngoại lệ chỉ hiện
+        qua lựa chọn 'exception' riêng, không lẫn vào state khác — giữ đúng hành vi cũ).
+
+        state (str): kiểu chọn 1 CŨ, vẫn giữ cho nơi gọi khác chưa đổi qua multi-select. Bỏ
+        qua nếu states có giá trị."""
+        states = [s for s in (states or []) if s]
+        if states:
+            sub_domains = []
+            for key in states:
+                if key == 'exception':
+                    sub_domains.append([('misa_invoice_exception', '=', True)])
+                else:
+                    sub_domains.append([('misa_invoice_state', '=', key), ('misa_invoice_exception', '=', False)])
+            return expression.OR(sub_domains)
+        if state == 'exception':
+            return [('misa_invoice_exception', '=', True)]
+        if state in ('missing', 'requested', 'invoiced', 'not_checked'):
+            return [('misa_invoice_state', '=', state), ('misa_invoice_exception', '=', False)]
+        if state == 'all':
+            return []
+        return [('misa_invoice_state', '!=', 'invoiced'), ('misa_invoice_exception', '=', False)]
+
     @api.model
     def get_misa_invoice_public_list(
-        self, saler_code, search=False, state=False, date_from=False, date_to=False,
+        self, saler_code, search=False, state=False, states=None, date_from=False, date_to=False,
         multi_order_group=False, multi_request=False, limit=50, offset=0,
     ):
         """Danh sách phiếu xuất kho của ĐÚNG 1 mã sale cho trang public, lọc thêm được theo
-        khoảng NGÀY XUẤT KHO (date_from/date_to) và theo trạng thái cụ thể:
-        - state rỗng/'pending' (mặc định): chưa xuất HĐ, chưa ngoại lệ — đúng mục đích "theo
-          dõi đơn chưa XHD".
-        - 'missing' / 'requested' / 'invoiced': đúng trạng thái đó, chưa ngoại lệ.
-        - 'exception': đã đánh dấu ngoại lệ (không phân biệt trạng thái xuất HĐ).
-        - 'all': không lọc trạng thái/ngoại lệ, chỉ còn scope theo mã sale + ngày.
+        khoảng NGÀY XUẤT KHO (date_from/date_to) và theo trạng thái cụ thể — xem
+        _misa_invoice_public_list_state_domain cho ý nghĩa từng lựa chọn/kiểu 'states' multi-select.
         multi_order_group=True: chỉ phiếu thuộc nhóm gộp chung nhiều đơn bán (1 đề nghị HĐ
         cho >=2 đơn). multi_request=True: chỉ phiếu của đơn bán đã xuất HĐ qua >=2 đề nghị
         khác nhau (giao/xuất nhiều đợt) — 2 case khác nhau, xem field misa_invoice_multi_order_group.
@@ -3533,13 +3558,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         base_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to) + [
             ('misa_invoice_saler_code', '=', code),
         ]
-        domain = list(base_domain)
-        if state == 'exception':
-            domain.append(('misa_invoice_exception', '=', True))
-        elif state in ('missing', 'requested', 'invoiced'):
-            domain += [('misa_invoice_state', '=', state), ('misa_invoice_exception', '=', False)]
-        elif state != 'all':
-            domain += [('misa_invoice_state', '!=', 'invoiced'), ('misa_invoice_exception', '=', False)]
+        domain = list(base_domain) + Picking._misa_invoice_public_list_state_domain(state, states)
         if search:
             domain += [
                 '|', '|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search),
@@ -3569,6 +3588,33 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'exception': exception_count,
             },
         }
+
+    @api.model
+    def export_misa_invoice_public_list_excel(
+        self, saler_code, search=False, state=False, states=None, date_from=False, date_to=False,
+    ):
+        """Xuất Excel TOÀN BỘ phiếu khớp filter hiện tại của tab 'Phiếu xuất kho' trên
+        /misa_sale_status — tái dùng NGUYÊN get_misa_invoice_public_list (kể cả multi-select
+        states) để đảm bảo xuất ĐÚNG y hệt danh sách đang xem, không xây domain riêng lần 2."""
+        result = self.get_misa_invoice_public_list(
+            saler_code=saler_code, search=search, state=state, states=states,
+            date_from=date_from, date_to=date_to, limit=10000, offset=0,
+        )
+        rows = [
+            [
+                row['name'], row['partner_name'], row['sale_order_name'], row['date_done'],
+                row['actual_amount'], row['invoice_amount'], row['outstanding_amount'], row['state_label'],
+            ]
+            for row in result['rows']
+        ]
+        headers = [
+            'Phiếu', 'Khách hàng', 'Đơn bán', 'Ngày xuất kho',
+            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái',
+        ]
+        content = self._misa_invoice_export_workbook('Phiếu xuất kho', headers, rows, money_cols={4, 5, 6})
+        return self._misa_invoice_create_export_attachment(
+            'phieu_xuat_kho_%s.xlsx' % fields.Date.to_string(fields.Date.context_today(self)), content
+        )
 
     @api.model
     def get_misa_invoice_public_daily_stats(self, saler_code, date_from=False, date_to=False, weekly=False):

@@ -350,21 +350,23 @@
                         <button id="msu-date-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">
                             <i class="fa fa-times"/> Bỏ lọc ngày
                         </button>
-                        <span class="msu-select-wrap">
-                            <select id="msu-state-select" class="msu-select">
-                                <option value="">Chưa xử lý (mặc định)</option>
-                                <option value="missing">Chưa có đề nghị</option>
-                                <option value="requested">Đã đề nghị, chờ HĐ</option>
-                                <option value="exception">Ngoại lệ</option>
-                                <option value="invoiced">Đã xuất HĐ</option>
-                                <option value="all">Tất cả trạng thái</option>
-                            </select>
-                            <i class="fa fa-chevron-down msu-select-caret"/>
+                        <span class="msu-multiselect-wrap" id="msu-state-filter-wrap">
+                            <button type="button" id="msu-state-filter-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm">
+                                <span id="msu-state-filter-label">Chưa xử lý (mặc định)</span> <i class="fa fa-chevron-down"/>
+                            </button>
+                            <div id="msu-state-filter-panel" class="msu-multiselect-panel" style="display:none">
+                                <label class="msu-multiselect-item"><input type="checkbox" value="missing"/> Chưa có đề nghị</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="requested"/> Đã đề nghị, chờ HĐ</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất HĐ</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="exception"/> Ngoại lệ</label>
+                            </div>
                         </span>
                         <input type="text" id="msu-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu, mã đơn hàng hoặc tên khách hàng..."/>
                         <button id="msu-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
                         <button id="msu-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
                         <button id="msu-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                        <button id="msu-export-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm" title="Xuất Excel danh sách phiếu đang xem"><i class="fa fa-file-excel-o"/> Xuất Excel</button>
                     </div>
 
                     <div class="msu-filters">
@@ -710,7 +712,7 @@
                         salerCode: urlSalerCode || localStorage.getItem(STORAGE_KEY) || '',
                         isAdmin: false,
                         codeTokenMap: {},
-                        search: '', stateFilter: '', dateFrom: '', dateTo: '',
+                        search: '', stateFilters: [], dateFrom: '', dateTo: '',
                         multiOrderGroup: false, multiRequest: false,
                         page: 1, total: 0, rows: [], selected: {},
                         activeTab: 'pickings',
@@ -1526,7 +1528,10 @@
                         var exceptionBtn = row.exception
                             ? '<button class="msu-btn msu-btn-outline-muted msu-btn-' + size + ' msu-act-unexception" data-id="' + row.id + '" title="Bỏ ngoại lệ"><i class="fa fa-undo"></i>' + label('Bỏ ngoại lệ') + '</button>'
                             : '<button class="msu-btn msu-btn-outline-danger msu-btn-' + size + ' msu-act-exception" data-id="' + row.id + '" data-name="' + esc(row.name) + '" title="' + (canModify ? 'Đánh dấu ngoại lệ' : 'Đã xuất HĐ, không cần đánh dấu ngoại lệ nữa') + '"' + (canModify ? '' : ' disabled="disabled"') + '><i class="fa fa-ban"></i>' + label('Đánh dấu ngoại lệ') + '</button>';
-                        return '<div class="msu-btn-group">' + checkBtn + linkBtn + exceptionBtn + '</div>';
+                        var remindBtn = state.isAdmin
+                            ? '<button class="msu-btn msu-btn-outline-warning msu-btn-' + size + ' msu-act-remind" data-id="' + row.id + '" data-name="' + esc(row.name) + '" title="Nhắc sale xuất hóa đơn cho phiếu này"><i class="fa fa-bell"></i>' + label('Nhắc xuất HĐ') + '</button>'
+                            : '';
+                        return '<div class="msu-btn-group">' + checkBtn + linkBtn + exceptionBtn + remindBtn + '</div>';
                     }
 
                     function renderRows() {
@@ -1741,7 +1746,7 @@
                         if (!state.salerCode) { return Promise.resolve(); }
                         state.page = page;
                         return rpc('/misa_sale_status/api/list', {
-                            saler_code: state.salerCode, search: state.search, state: state.stateFilter,
+                            saler_code: state.salerCode, search: state.search, states: state.stateFilters,
                             date_from: state.dateFrom, date_to: state.dateTo,
                             multi_order_group: state.multiOrderGroup, multi_request: state.multiRequest,
                             limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
@@ -1773,9 +1778,52 @@
                         this.style.display = 'none';
                         loadList(1);
                     });
-                    document.getElementById('msu-state-select').addEventListener('change', function() {
-                        state.stateFilter = this.value;
-                        loadList(1);
+                    // ===== Filter trạng thái tab "Phiếu xuất kho" — multi-select (checkbox),
+                    // giống tab "Đơn hàng". Không chọn gì = hành vi mặc định CŨ (chưa xử lý:
+                    // chưa invoiced + chưa ngoại lệ) — xem _misa_invoice_public_list_state_domain. =====
+                    var PICKING_STATE_FILTER_LABELS = {
+                        missing: 'Chưa có đề nghị', requested: 'Đã đề nghị, chờ HĐ', not_checked: 'Chưa kiểm tra',
+                        invoiced: 'Đã xuất HĐ', exception: 'Ngoại lệ',
+                    };
+                    function updateStateFilterLabel() {
+                        var sel = state.stateFilters || [];
+                        document.getElementById('msu-state-filter-label').textContent = sel.length
+                            ? sel.map(function(k) { return PICKING_STATE_FILTER_LABELS[k] || k; }).join(', ')
+                            : 'Chưa xử lý (mặc định)';
+                    }
+                    document.getElementById('msu-state-filter-btn').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        var panel = document.getElementById('msu-state-filter-panel');
+                        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+                    });
+                    document.querySelectorAll('#msu-state-filter-panel input[type="checkbox"]').forEach(function(cb) {
+                        cb.addEventListener('change', function() {
+                            state.stateFilters = Array.prototype.map.call(
+                                document.querySelectorAll('#msu-state-filter-panel input:checked'),
+                                function(el) { return el.value; }
+                            );
+                            updateStateFilterLabel();
+                            loadList(1);
+                        });
+                    });
+                    document.addEventListener('click', function(ev) {
+                        var wrap = document.getElementById('msu-state-filter-wrap');
+                        if (wrap && !wrap.contains(ev.target)) { document.getElementById('msu-state-filter-panel').style.display = 'none'; }
+                    });
+                    document.getElementById('msu-export-btn').addEventListener('click', function() {
+                        if (!state.salerCode) { return; }
+                        var btn = this;
+                        setBtnLoading(btn, true);
+                        rpc('/misa_sale_status/api/list/export', {
+                            saler_code: state.salerCode, search: state.search, states: state.stateFilters,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                        }).then(function(res) {
+                            if (res.attachment_id) {
+                                window.location.href = '/web/content/' + res.attachment_id + '?download=true';
+                            }
+                        }).catch(function(e) {
+                            toast('Lỗi xuất Excel: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
                     });
                     document.getElementById('msu-multi-order-group').addEventListener('change', function() {
                         state.multiOrderGroup = this.checked;
@@ -1843,6 +1891,11 @@
                         });
                         root.querySelectorAll('.msu-act-unexception').forEach(function(btn) {
                             btn.addEventListener('click', function() { runUnexception([parseInt(this.dataset.id, 10)], this); });
+                        });
+                        root.querySelectorAll('.msu-act-remind').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                openReminderModal({picking_ids: [parseInt(this.dataset.id, 10)], label: 'phiếu ' + this.dataset.name});
+                            });
                         });
                     }
 
