@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View (Odoo 18 <list>) -->
+    <record id="view_hlv_loyalty_store_list" model="ir.ui.view">
+        <field name="name">hlv.loyalty.store.list</field>
+        <field name="model">hlv.loyalty.store</field>
+        <field name="arch" type="xml">
+            <list string="Chi nhánh / Cửa hàng Hoàng Long Vũ">
+                <field name="sequence" widget="handle"/>
+                <field name="name" string="Tên chi nhánh"/>
+                <field name="tag" string="Nhãn"/>
+                <field name="address" string="Địa chỉ"/>
+                <field name="hotline" string="Số Hotline"/>
+                <field name="hours" string="Giờ mở cửa"/>
+                <field name="active" widget="boolean_toggle" string="Hiển thị"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_hlv_loyalty_store_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.store.form</field>
+        <field name="model">hlv.loyalty.store</field>
+        <field name="arch" type="xml">
+            <form string="Chi nhánh / Cửa hàng Hoàng Long Vũ">
+                <sheet>
+                    <field name="active" invisible="1"/>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only" string="Tên chi nhánh / Cửa hàng"/>
+                        <h1>
+                            <field name="name" placeholder="vd: Chi nhánh TP. Hồ Chí Minh (Trụ sở chính)"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin liên hệ &amp; Vị trí">
+                            <field name="tag" placeholder="vd: Trụ sở chính, Chi nhánh, Showroom"/>
+                            <field name="hotline" placeholder="vd: 0932632563"/>
+                            <field name="hotline_display" placeholder="vd: 0932.63.25.63 (tùy chọn)"/>
+                            <field name="hours" placeholder="vd: 08:00 – 17:30 (Thứ 2 – Thứ 7)"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group string="Địa chỉ &amp; Bản đồ Google Maps">
+                            <field name="address" placeholder="vd: 127 Nguyễn Thị Nhỏ, Phường 9, Quận Tân Bình, TP. Hồ Chí Minh"/>
+                            <field name="map_query" placeholder="vd: 127 Nguyễn Thị Nhỏ, Phường 9, Tân Bình, Hồ Chí Minh"/>
+                        </group>
+                    </group>
+                    <group string="Hình ảnh Showroom / Cửa hàng (tùy chọn)">
+                        <field name="image" widget="image" class="oe_avatar" options="{'preview_image': 'image'}" style="width: 240px; height: 160px; object-fit: cover;"/>
+                    </group>
+                    <notebook>
+                        <page string="Ghi chú chi tiết" name="description">
+                            <field name="description" placeholder="Ghi chú nội bộ hoặc hướng dẫn đường đi..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_hlv_loyalty_store" model="ir.actions.act_window">
+        <field name="name">Hệ thống Chi nhánh</field>
+        <field name="res_model">hlv.loyalty.store</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Thêm chi nhánh / cửa hàng Hoàng Long Vũ mới!
+            </p>
+            <p>
+                Danh sách chi nhánh này sẽ tự động đồng bộ lên ứng dụng di động để khách hàng tra cứu địa chỉ, gọi hotline và mở bản đồ chỉ đường.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item (gắn dưới menu Cấu hình Loyalty của hlv_loyalty) -->
+    <menuitem id="menu_hlv_loyalty_store"
+              name="Hệ thống Chi nhánh"
+              parent="hlv_loyalty.menu_loyalty_config"
+              action="action_hlv_loyalty_store"
+              sequence="35"/>
+</odoo>
