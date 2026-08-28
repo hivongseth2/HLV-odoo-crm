@@ -40,6 +40,8 @@
                 .msu-btn-outline-danger:hover{background:#fcefef}
                 .msu-btn-outline-muted{background:#fff;border-color:#d8d7d0;color:#52514e}
                 .msu-btn-outline-muted:hover{background:#f5f5f3}
+                .msu-btn-outline-warning{background:#fff;border-color:#c98500;color:#c98500}
+                .msu-btn-outline-warning:hover{background:#fdf4e3}
 
                 /* ---- Card shell ---- */
                 .msu-card{background:#fff;border-radius:12px;border:1px solid #eceae4;box-shadow:0 1px 2px rgba(15,23,42,.03);padding:18px 20px}
@@ -227,6 +229,24 @@
                 .msu-toast.success{border-left-color:#0ca30c}
 
                 @media(max-width:768px){.msu-stats{grid-template-columns:repeat(2,1fr)}}
+
+                /* ---- Nhắc nhở xuất HĐ: chuông + highlight ---- */
+                .msu-row-reminded{background:#fff6e0}
+                .msu-row-reminded:hover{background:#fdedc4}
+                .msu-reminded-icon{color:#c98500;margin-left:4px}
+                .msu-bell-wrap{position:relative}
+                .msu-bell-badge{position:absolute;top:-6px;right:-6px;background:#d03b3b;color:#fff;border-radius:999px;font-size:.64rem;font-weight:800;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4;pointer-events:none}
+                .msu-bell-panel{position:absolute;top:calc(100% + 8px);right:0;width:min(380px,90vw);background:#fff;border-radius:10px;box-shadow:0 20px 50px rgba(15,23,42,.25);z-index:1500;overflow:hidden;color:#1c1c1c;text-align:left}
+                .msu-bell-panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #eceae4;font-size:.86rem}
+                .msu-bell-list{max-height:360px;overflow-y:auto}
+                .msu-bell-empty{padding:16px 12px;color:#8b8d94;font-size:.82rem}
+                .msu-bell-item{padding:10px 12px;border-bottom:1px solid #f1f0eb;cursor:pointer;font-size:.82rem}
+                .msu-bell-item:last-child{border-bottom:none}
+                .msu-bell-item:hover{background:#f7f7f5}
+                .msu-bell-item.unread{background:#eaf1fc}
+                .msu-bell-item-title{font-weight:700;color:#111827}
+                .msu-bell-item-meta{color:#8b8d94;font-size:.72rem;margin-top:2px}
+                .msu-bell-item-msg{margin-top:4px;color:#52514e}
             </style>
 
             <div class="misa-sale-status">
@@ -235,7 +255,24 @@
                         <div class="msu-eyebrow">Đối soát MISA</div>
                         <h3>Tình trạng xuất hóa đơn</h3>
                     </div>
-                    <a href="/web/session/logout?redirect=/misa_sale_status" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="msu-bell-wrap" id="msu-bell-wrap">
+                            <button id="msu-bell-btn" class="msu-btn msu-btn-white msu-btn-sm" title="Thông báo nhắc xuất hóa đơn">
+                                <i class="fa fa-bell"/>
+                                <span id="msu-bell-badge" class="msu-bell-badge" style="display:none">0</span>
+                            </button>
+                            <div id="msu-bell-panel" class="msu-bell-panel" style="display:none">
+                                <div class="msu-bell-panel-header">
+                                    <b>Nhắc nhở xuất hóa đơn</b>
+                                    <button id="msu-bell-mark-all" class="msu-btn msu-btn-outline-muted msu-btn-xs">Đánh dấu đã đọc hết</button>
+                                </div>
+                                <div id="msu-bell-list" class="msu-bell-list">
+                                    <div class="msu-bell-empty">Không có thông báo nào.</div>
+                                </div>
+                            </div>
+                        </span>
+                        <a href="/web/session/logout?redirect=/misa_sale_status" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
+                    </div>
                 </div>
 
                 <div class="msu-identity-bar">
@@ -358,6 +395,9 @@
                         <button id="msu-bulk-check" class="msu-btn msu-btn-outline-primary msu-btn-sm" data-loading-text="Đang kiểm tra...">Kiểm tra MISA ngay</button>
                         <button id="msu-bulk-exception" class="msu-btn msu-btn-outline-danger msu-btn-sm">Đánh dấu ngoại lệ</button>
                         <button id="msu-bulk-unexception" class="msu-btn msu-btn-outline-muted msu-btn-sm" data-loading-text="Đang xử lý...">Bỏ ngoại lệ</button>
+                        <button id="msu-bulk-remind" class="msu-btn msu-btn-outline-warning msu-btn-sm" style="display:none">
+                            <i class="fa fa-bell"/> Nhắc xuất HĐ
+                        </button>
                     </div>
 
                     <div class="msu-table-card">
@@ -430,6 +470,7 @@
                                             <th class="msu-col-num">Tiền đã xuất HĐ</th>
                                             <th class="msu-col-num">Tiền chưa xuất HĐ</th>
                                             <th>Trạng thái</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody id="msu-orders-tbody"/>
@@ -601,6 +642,19 @@
                     <div class="msu-modal-actions">
                         <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-exception-cancel">Hủy</button>
                         <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-exception-confirm" data-loading-text="Đang lưu...">Xác nhận</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="msu-modal-overlay" id="msu-reminder-modal" style="display:none">
+                <div class="msu-modal">
+                    <h5>Nhắc nhở xuất hóa đơn</h5>
+                    <p class="msu-card-subtitle" id="msu-reminder-target"/>
+                    <textarea id="msu-reminder-message" class="msu-input" rows="3" placeholder="Ghi chú (không bắt buộc)..."/>
+                    <div id="msu-reminder-error" class="msu-modal-error"/>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-reminder-cancel">Hủy</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-reminder-confirm" data-loading-text="Đang gửi...">Gửi nhắc nhở</button>
                     </div>
                 </div>
             </div>
@@ -861,9 +915,115 @@
                             loadList(1);
                             loadDailyChart();
                             loadReconciliationTotals();
+                            loadReminders();
                             if (state.activeTab === 'shopee') { loadShopeeList(1); }
                         }
                     }
+
+                    // ===== Chuông thông báo: nhắc nhở xuất hóa đơn =====
+                    var lastReminders = [];
+                    function loadReminders() {
+                        if (!state.salerCode) { return Promise.resolve(); }
+                        return rpc('/misa_sale_status/api/reminders', {
+                            saler_code: state.salerCode, unread_only: false, limit: 30,
+                        }).then(function(res) {
+                            var data = res.data || {};
+                            lastReminders = data.reminders || [];
+                            var badge = document.getElementById('msu-bell-badge');
+                            var count = data.total_unread || 0;
+                            badge.style.display = count ? '' : 'none';
+                            badge.textContent = count > 99 ? '99+' : count;
+                            renderBellList();
+                        }).catch(function() { /* im lặng — không làm phiền bằng lỗi tải chuông nền */ });
+                    }
+                    function renderBellList() {
+                        var list = document.getElementById('msu-bell-list');
+                        if (!lastReminders.length) {
+                            list.innerHTML = '<div class="msu-bell-empty">Không có thông báo nào.</div>';
+                            return;
+                        }
+                        list.innerHTML = lastReminders.map(function(r) {
+                            return '<div class="msu-bell-item' + (r.is_read ? '' : ' unread') + '" data-id="' + r.id + '" data-order-id="' + (r.order_id || '') + '" data-order-name="' + esc(r.order_name || '') + '">' +
+                                '<div class="msu-bell-item-title"><i class="fa fa-bell"></i> ' + esc(r.order_name || '(đơn không rõ)') + '</div>' +
+                                '<div class="msu-bell-item-meta">' + esc(r.created_by || '') + (r.create_date ? ' · ' + esc(r.create_date) : '') + '</div>' +
+                                (r.message ? '<div class="msu-bell-item-msg">' + esc(r.message) + '</div>' : '') +
+                            '</div>';
+                        }).join('');
+                        list.querySelectorAll('.msu-bell-item').forEach(function(el) {
+                            el.addEventListener('click', function() {
+                                var id = parseInt(this.dataset.id, 10);
+                                var orderName = this.dataset.orderName;
+                                rpc('/misa_sale_status/api/reminders/mark_read', {
+                                    saler_code: state.salerCode, reminder_ids: [id],
+                                }).then(function() { loadReminders(); }).catch(function() {});
+                                document.getElementById('msu-bell-panel').style.display = 'none';
+                                if (orderName) {
+                                    state.activeTab = 'orders';
+                                    document.querySelectorAll('.msu-tab').forEach(function(b) { b.classList.remove('msu-tab-active'); });
+                                    document.querySelector('.msu-tab[data-tab="orders"]').classList.add('msu-tab-active');
+                                    document.getElementById('msu-tab-pickings').style.display = 'none';
+                                    document.getElementById('msu-tab-orders').style.display = '';
+                                    document.getElementById('msu-tab-shopee').style.display = 'none';
+                                    document.getElementById('msu-tab-customs').style.display = 'none';
+                                    state.orders.search = orderName;
+                                    document.getElementById('msu-orders-search').value = orderName;
+                                    document.getElementById('msu-orders-search-clear').style.display = '';
+                                    loadOrdersList(1);
+                                }
+                            });
+                        });
+                    }
+                    document.getElementById('msu-bell-btn').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        var panel = document.getElementById('msu-bell-panel');
+                        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+                    });
+                    document.getElementById('msu-bell-mark-all').addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        rpc('/misa_sale_status/api/reminders/mark_read', {saler_code: state.salerCode}).then(function() {
+                            loadReminders();
+                        }).catch(function(e) { toast('Lỗi đánh dấu đã đọc: ' + e.message, 'error'); });
+                    });
+                    document.addEventListener('click', function(ev) {
+                        var wrap = document.getElementById('msu-bell-wrap');
+                        if (wrap && !wrap.contains(ev.target)) { document.getElementById('msu-bell-panel').style.display = 'none'; }
+                    });
+                    // Poll nhẹ mỗi 60s — đủ để thấy nhắc nhở mới mà không cần refresh tay,
+                    // không cần tức thời như bus (đây không phải chat, vài chục giây là ổn).
+                    setInterval(function() { if (state.salerCode) { loadReminders(); } }, 60000);
+
+                    // ===== Modal: gửi nhắc nhở xuất hóa đơn (CHỈ admin/Đối soát XHD mới thấy nút bấm) =====
+                    var reminderModal = document.getElementById('msu-reminder-modal');
+                    var reminderTarget = null;
+                    function openReminderModal(target) {
+                        reminderTarget = target;
+                        document.getElementById('msu-reminder-target').textContent = 'Nhắc xuất hóa đơn cho ' + (target.label || '');
+                        document.getElementById('msu-reminder-message').value = '';
+                        document.getElementById('msu-reminder-error').textContent = '';
+                        reminderModal.style.display = 'flex';
+                    }
+                    document.getElementById('msu-reminder-cancel').addEventListener('click', function() { reminderModal.style.display = 'none'; });
+                    reminderModal.addEventListener('click', function(ev) { if (ev.target === this) { this.style.display = 'none'; } });
+                    document.getElementById('msu-reminder-confirm').addEventListener('click', function() {
+                        if (!reminderTarget) { return; }
+                        var btn = this;
+                        var errEl = document.getElementById('msu-reminder-error');
+                        errEl.textContent = '';
+                        setBtnLoading(btn, true);
+                        rpc('/misa_sale_status/api/send_reminder', {
+                            order_ids: reminderTarget.order_ids || [],
+                            picking_ids: reminderTarget.picking_ids || [],
+                            message: document.getElementById('msu-reminder-message').value.trim(),
+                        }).then(function(res) {
+                            setBtnLoading(btn, false);
+                            reminderModal.style.display = 'none';
+                            toast('Đã gửi nhắc nhở cho ' + (res.result.reminded_order_count || 0) + ' đơn hàng.', 'success');
+                            if (state.activeTab === 'orders') { loadOrdersList(state.orders.page); } else { loadList(state.page); }
+                        }).catch(function(e) {
+                            setBtnLoading(btn, false);
+                            errEl.textContent = e.message;
+                        });
+                    });
 
                     // ===== Đối chiếu tổng tiền xuất kho (MISA + Shopee) =====
                     function loadReconciliationTotals() {
@@ -910,19 +1070,26 @@
                         document.getElementById('msu-orders-empty').style.display = state.orders.rows.length ? 'none' : '';
                         state.orders.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
-                            tr.className = 'msu-row-clickable';
+                            tr.className = 'msu-row-clickable' + (row.reminded ? ' msu-row-reminded' : '');
                             tr.dataset.id = row.id;
                             var partialBadge = row.partial_coverage
                                 ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
                                 : '';
+                            var remindedBadge = row.reminded
+                                ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
+                                : '';
+                            var remindBtn = state.isAdmin
+                                ? '<button type="button" class="msu-btn msu-btn-outline-warning msu-btn-xs msu-order-remind-btn" data-order-id="' + row.id + '" data-order-name="' + esc(row.name) + '" title="Nhắc sale xuất hóa đơn cho đơn này"><i class="fa fa-bell"></i></button>'
+                                : '';
                             tr.innerHTML =
-                                '<td><b>' + esc(row.name) + '</b></td>' +
+                                '<td><b>' + esc(row.name) + '</b>' + remindedBadge + '</td>' +
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.picking_names || '—') + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.amount_total) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.invoice_amount) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.outstanding_amount) + '</td>' +
-                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>';
+                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>' +
+                                '<td>' + remindBtn + '</td>';
                             tbody.appendChild(tr);
                         });
                         tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
@@ -930,6 +1097,15 @@
                                 var id = parseInt(this.dataset.id, 10);
                                 var row = state.orders.rows.find(function(r) { return r.id === id; });
                                 if (row) { openOrderDrawer(row); }
+                            });
+                        });
+                        tbody.querySelectorAll('.msu-order-remind-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function(ev) {
+                                ev.stopPropagation();
+                                openReminderModal({
+                                    order_ids: [parseInt(this.dataset.orderId, 10)],
+                                    label: 'đơn ' + this.dataset.orderName,
+                                });
                             });
                         });
                     }
@@ -1335,16 +1511,19 @@
                         state.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
                             tr.dataset.id = row.id;
-                            tr.className = 'msu-row-clickable';
+                            tr.className = 'msu-row-clickable' + (row.reminded ? ' msu-row-reminded' : '');
                             var checked = state.selected[row.id] ? 'checked="checked"' : '';
                             var manualHtml = row.manual_refno
                                 ? '<span class="msu-manual-refno" title="Đã gắn mã đề nghị thủ công">' + esc(row.manual_refno) + '</span>'
                                 : '<span class="msu-muted">—</span>';
                             var exceptionHtml = row.exception
                                 ? '<span class="msu-badge-exception" title="' + esc(row.exception_reason || '') + '"><i class="fa fa-ban"></i> Ngoại lệ</span>' : '';
+                            var remindedIcon = row.reminded
+                                ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
+                                : '';
                             tr.innerHTML =
                                 '<td><input type="checkbox" class="msu-row-check" data-id="' + row.id + '" ' + checked + '/></td>' +
-                                '<td><span class="msu-picking-name">' + esc(row.name) + '</span>' + rowMeta(row) + '<span class="msu-picking-order">' + esc(row.sale_order_name || '') + '</span></td>' +
+                                '<td><span class="msu-picking-name">' + esc(row.name) + '</span>' + remindedIcon + rowMeta(row) + '<span class="msu-picking-order">' + esc(row.sale_order_name || '') + '</span></td>' +
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.date_done) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.actual_amount) + '</td>' +
@@ -2206,6 +2385,7 @@
                         var bar = document.getElementById('msu-bulk-bar');
                         bar.style.display = ids.length ? '' : 'none';
                         document.getElementById('msu-bulk-count').textContent = 'Đã chọn ' + ids.length + ' phiếu';
+                        document.getElementById('msu-bulk-remind').style.display = state.isAdmin ? '' : 'none';
                     }
 
                     function runCheck(ids, btn) {
@@ -2234,6 +2414,10 @@
                     document.getElementById('msu-bulk-unexception').addEventListener('click', function() { runUnexception(Object.keys(state.selected).map(Number), this); });
                     document.getElementById('msu-bulk-exception').addEventListener('click', function() {
                         openExceptionModal(Object.keys(state.selected).map(Number), Object.keys(state.selected).length + ' phiếu đã chọn');
+                    });
+                    document.getElementById('msu-bulk-remind').addEventListener('click', function() {
+                        var ids = Object.keys(state.selected).map(Number);
+                        openReminderModal({picking_ids: ids, label: ids.length + ' phiếu đã chọn'});
                     });
 
                     // ===== Modal: gắn mã đề nghị =====

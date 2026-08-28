@@ -270,6 +270,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_exception_by_id = fields.Many2one('res.users', string='Người đánh dấu', copy=False)
     misa_invoice_exception_date = fields.Datetime(string='Ngày đánh dấu', copy=False)
 
+    # Nhắc nhở xuất HĐ Ở MỨC PHIẾU — dùng khi admin chọn nhắc trực tiếp 1/nhiều phiếu (tab
+    # "Phiếu xuất kho") thay vì cả đơn hàng (xem sale.order.misa_invoice_reminder_at ở
+    # models/sale_order.py và action_send_misa_invoice_reminder bên dưới).
+    misa_invoice_reminder_at = fields.Datetime(string='Lần nhắc xuất HĐ gần nhất', copy=False)
+    misa_invoice_reminder_by_id = fields.Many2one('res.users', string='Người nhắc xuất HĐ', copy=False)
+
     # Đơn Shopee dùng luồng hóa đơn meInvoice riêng (amis_callback) — loại khỏi đối soát MISA này.
     misa_invoice_is_shopee = fields.Boolean(
         string='Thuộc đơn Shopee', compute='_compute_misa_invoice_is_shopee', store=True,
@@ -3251,6 +3257,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'manual_refno': picking.misa_invoice_manual_refno or False,
             'amount_diff': diff_source.misa_invoice_amount_diff or 0.0,
             'amount_mismatch': diff_source.misa_invoice_amount_mismatch,
+            # Xem giải thích tương tự ở _misa_invoice_order_row — highlight tới khi hết
+            # 'invoiced', không tự xóa reminder_at để giữ lịch sử.
+            'reminded': bool(picking.misa_invoice_reminder_at) and picking.misa_invoice_state != 'invoiced',
+            'reminder_note': picking.misa_invoice_reminder_at and (
+                'Đã nhắc lúc %s%s' % (
+                    fields.Datetime.to_string(picking.misa_invoice_reminder_at),
+                    (' bởi %s' % picking.misa_invoice_reminder_by_id.name) if picking.misa_invoice_reminder_by_id else '',
+                )
+            ) or False,
         }
 
     @api.model
@@ -3702,6 +3717,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # gộp NHIỀU đơn).
             'multi_request': len(representatives) > 1,
             'has_exception': any(order_pickings.mapped('misa_invoice_exception')),
+            # Đã bị "nhắc xuất HĐ" và VẪN CHƯA xuất đủ — chỉ highlight khi còn actionable, tự
+            # hết highlight khi đơn đã invoiced đủ (không cần dọn field reminder_at, giữ lại để
+            # còn lịch sử/audit — xem action_send_misa_invoice_reminder).
+            'reminded': bool(order.misa_invoice_reminder_at) and overall_state != 'invoiced',
+            'reminder_note': order.misa_invoice_reminder_at and (
+                'Đã nhắc lúc %s%s' % (
+                    fields.Datetime.to_string(order.misa_invoice_reminder_at),
+                    (' bởi %s' % order.misa_invoice_reminder_by_id.name) if order.misa_invoice_reminder_by_id else '',
+                )
+            ) or False,
             'pickings': [
                 {
                     'id': p.id,
@@ -3917,6 +3942,99 @@ class StockPickingMisaInvoiceStatus(models.Model):
             search=search, state=state, saler_code=code, mismatch_only=mismatch_only,
             partial_coverage_only=partial_coverage_only, date_from=date_from, date_to=date_to,
         )
+
+    # ==================== Nhắc nhở xuất hóa đơn ====================
+    # Nút "Nhắc xuất HĐ" (dashboard nội bộ + /misa_sale_status khi isAdmin) — CHỈ tài khoản
+    # thuộc nhóm Đối soát XHD được gửi (đây là hành động ADMIN/kế toán nhắc SALE, không phải
+    # sale tự thao tác lên dữ liệu của mình). Nhắc theo ĐƠN HÀNG là chính (misa sale order
+    # code) vì mục đích là nhắc "đơn này chưa xuất đủ HĐ", nhưng vẫn nhận thêm picking_ids để
+    # hỗ trợ nhắc nhanh 1/nhiều PHIẾU từ tab "Phiếu xuất kho" (tự suy ra đơn liên quan).
+
+    @api.model
+    def action_send_misa_invoice_reminder(self, order_ids=None, picking_ids=None, message=False):
+        if not self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+            raise AccessError("Bạn không có quyền gửi nhắc nhở xuất hóa đơn.")
+
+        Order = self.env['sale.order'].sudo()
+        orders = Order.browse(order_ids or []).exists()
+        reminded_picking_ids = set()
+        if picking_ids:
+            pickings = self.sudo().browse(picking_ids).exists()
+            orders |= pickings.mapped('misa_invoice_sale_order_ids')
+            # Highlight riêng ở mức phiếu — trường hợp chọn lẻ vài phiếu trong 1 đơn có nhiều
+            # phiếu, không muốn "ăn theo" nhắc luôn các phiếu KHÁC chưa được chọn của cùng đơn.
+            now = fields.Datetime.now()
+            pickings.write({
+                'misa_invoice_reminder_at': now,
+                'misa_invoice_reminder_by_id': self.env.user.id,
+            })
+            reminded_picking_ids = set(pickings.ids)
+        if not orders:
+            raise UserError("Không tìm thấy đơn hàng nào để nhắc.")
+
+        now = fields.Datetime.now()
+        Reminder = self.env['misa.invoice.reminder'].sudo()
+        created = Reminder.browse()
+        skipped_no_code = []
+        for order in orders:
+            order.write({
+                'misa_invoice_reminder_at': now,
+                'misa_invoice_reminder_by_id': self.env.user.id,
+            })
+            code = (order.x_studio_misa_saler_code or '').strip()
+            if not code:
+                skipped_no_code.append(order.name)
+                continue
+            created |= Reminder.create({
+                'saler_code': code,
+                'order_id': order.id,
+                'order_name': order.name,
+                'picking_ids': [(6, 0, order.misa_invoice_picking_ids.ids)],
+                'message': message or False,
+            })
+        return {
+            'reminded_order_count': len(orders),
+            'notification_count': len(created),
+            'reminded_picking_count': len(reminded_picking_ids),
+            'skipped_no_saler_code': skipped_no_code,
+        }
+
+    @api.model
+    def get_misa_invoice_public_reminders(self, saler_code, unread_only=True, limit=50):
+        """Danh sách nhắc nhở của mã sale đang xem — dùng cho chuông thông báo trên
+        /misa_sale_status. total_unread luôn tính lại riêng (không phụ thuộc limit) để hiện
+        đúng số trên badge chuông kể cả khi danh sách bị cắt bớt."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        Reminder = self.env['misa.invoice.reminder'].sudo()
+        domain = [('saler_code', '=', code)]
+        total_unread = Reminder.search_count(domain + [('is_read', '=', False)])
+        if unread_only:
+            domain.append(('is_read', '=', False))
+        reminders = Reminder.search(domain, order='create_date desc', limit=limit)
+        return {
+            'total_unread': total_unread,
+            'reminders': [{
+                'id': r.id,
+                'order_id': r.order_id.id if r.order_id else False,
+                'order_name': r.order_name or (r.order_id.name if r.order_id else ''),
+                'picking_names': r.picking_ids.mapped('name'),
+                'message': r.message or '',
+                'created_by': r.created_by_id.name or '',
+                'create_date': fields.Datetime.to_string(r.create_date) if r.create_date else False,
+                'is_read': r.is_read,
+            } for r in reminders],
+        }
+
+    @api.model
+    def mark_misa_invoice_reminder_read(self, saler_code, reminder_ids=None):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        Reminder = self.env['misa.invoice.reminder'].sudo()
+        domain = [('saler_code', '=', code), ('is_read', '=', False)]
+        if reminder_ids:
+            domain.append(('id', 'in', reminder_ids))
+        reminders = Reminder.search(domain)
+        reminders.write({'is_read': True, 'read_at': fields.Datetime.now()})
+        return {'marked': len(reminders)}
 
     @api.model
     def get_misa_invoice_picking_row(self, picking_id):

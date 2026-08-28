@@ -5,3 +5,4 @@ access_misa_invoice_customs_line_user,misa.invoice.customs.line,model_misa_invoi
 access_misa_invoice_customs_match_user,misa.invoice.customs.match,model_misa_invoice_customs_match,base.group_user,1,1,1,1
 access_misa_invoice_grouped_line_user,misa.invoice.grouped.line,model_misa_invoice_grouped_line,base.group_user,1,1,1,1
 access_misa_invoice_grouped_match_user,misa.invoice.grouped.match,model_misa_invoice_grouped_match,base.group_user,1,1,1,1
+access_misa_invoice_reminder_user,misa.invoice.reminder,model_misa_invoice_reminder,base.group_user,1,1,1,1

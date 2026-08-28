@@ -966,13 +966,17 @@
                                         <th class="miv-col-num">Tiền chưa xuất HĐ</th>
                                         <th>Trạng thái</th>
                                         <th>Ngoại lệ</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr t-foreach="state.ordersTab.rows" t-as="row" t-key="row.id" t-on-click="() => this.openOrderDrawer(row)">
+                                    <tr t-foreach="state.ordersTab.rows" t-as="row" t-key="row.id"
+                                        t-attf-class="{{ row.reminded ? 'miv-row-reminded' : '' }}"
+                                        t-on-click="() => this.openOrderDrawer(row)">
                                         <td>
                                             <b><t t-esc="row.name"/></b>
                                             <i class="fa fa-refresh miv-link-icon" t-if="row.multi_request" title="Đã xuất hóa đơn qua nhiều đợt/đề nghị khác nhau"/>
+                                            <i class="fa fa-bell miv-reminded-icon" t-if="row.reminded" t-att-title="row.reminder_note"/>
                                         </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.picking_names or '—'"/></td>
@@ -991,6 +995,12 @@
                                         <td>
                                             <span class="miv-badge miv-badge-critical" t-if="row.has_exception">Có</span>
                                             <span t-else="">—</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm miv-remind-btn" title="Nhắc sale xuất hóa đơn cho đơn này"
+                                                    t-on-click="(ev) => this.sendOrderReminder(ev, row)">
+                                                <i class="fa fa-bell"/>
+                                            </button>
                                         </td>
                                     </tr>
                                 </tbody>
