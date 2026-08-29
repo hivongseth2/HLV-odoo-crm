@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import logging
 from odoo import models, fields, api
 
@@ -35,6 +35,9 @@ class HlvLoyaltyStore(models.Model):
     image = fields.Image(string="Hình ảnh cửa hàng / Showroom", max_width=1024, max_height=1024)
     description = fields.Text(string="Ghi chú thêm")
 
+    image = fields.Image(string="Hình ảnh cửa hàng / Showroom", max_width=1024, max_height=1024)
+    description = fields.Text(string="Ghi chú thêm")
+
     @api.model
     def get_active_stores_data(self):
         """Helper lấy danh sách chi nhánh cho mobile API."""
@@ -46,13 +49,14 @@ class HlvLoyaltyStore(models.Model):
             data.append({
                 "id": r.id,
                 "name": r.name,
-                "tag": r.tag or "Chi nhánh",
+                "tag": r.tag or "",
                 "address": r.address or "",
                 "hotline": r.hotline or "",
                 "hotline_display": r.hotline_display or r.hotline or "",
-                "hours": r.hours or "08:00 – 17:30 (Thứ 2 – Thứ 7)",
+                "hours": r.hours or "",
                 "map_query": r.map_query or r.address or "",
                 "image_url": img_url,
+                "description": r.description or "",
                 "sequence": r.sequence,
             })
         return data
