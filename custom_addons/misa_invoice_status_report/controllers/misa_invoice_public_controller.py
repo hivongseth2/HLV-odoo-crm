@@ -417,3 +417,16 @@ class MisaInvoicePublicController(http.Controller):
         except Exception as e:
             _logger.exception('misa_sale_status api_manual_link error')
             return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/check_order', type='json', auth='user', methods=['POST'])
+    def api_check_order(self, order_id=None, saler_code='', **kwargs):
+        try:
+            result = request.env['stock.picking'].sudo().action_public_check_order(
+                int(order_id), saler_code
+            )
+            return {'status': 'success', 'result': result}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_check_order error')
+            return _json_error(str(e))

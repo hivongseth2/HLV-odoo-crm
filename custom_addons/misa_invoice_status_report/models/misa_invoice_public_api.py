@@ -246,6 +246,20 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         return picking.action_apply_manual_invoice_link(refno, source_note='trang public — mã sale %s' % code)
 
     @api.model
+    def action_public_check_order(self, order_id, saler_code):
+        """Kiểm tra MISA cho TẤT CẢ phiếu xuất kho của 1 đơn hàng cùng lúc — bản public của
+        action_check_misa_invoice_order (dashboard nội bộ), scope theo đúng 1 mã sale: chỉ cho
+        phép khi ÍT NHẤT 1 phiếu của đơn thuộc đúng mã sale đang xem (đơn có thể có phiếu của
+        nhiều mã sale nếu gộp chung, nhưng phải liên quan tới mã đang xem mới cho kiểm tra)."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        order = self.env['sale.order'].sudo().browse(order_id).exists()
+        if not order:
+            raise UserError("Không tìm thấy đơn hàng.")
+        if not order.misa_invoice_picking_ids.filtered(lambda p: p.misa_invoice_saler_code == code):
+            raise UserError("Không tìm thấy đơn hàng phù hợp với mã sale của bạn.")
+        return self.sudo().action_check_misa_invoice_order(order.id)
+
+    @api.model
     def get_misa_invoice_public_order_list(
         self, saler_code, search=False, state=False, partial_coverage_only=False, mismatch_only=False,
         states=None, date_from=False, date_to=False, limit=20, offset=0,

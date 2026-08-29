@@ -170,7 +170,7 @@
                 /* ---- Drawer (chi tiết 1 phiếu) ---- */
                 .msu-drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1900;display:flex;justify-content:flex-end}
                 .msu-drawer{background:#fff;width:min(440px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
-                .msu-drawer-wide{width:min(760px,96vw)}
+                .msu-drawer-wide{width:min(920px,97vw)}
                 @keyframes msuDrawerIn{from{transform:translateX(24px);opacity:.5}to{transform:translateX(0);opacity:1}}
                 .msu-drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:20px 20px 16px;border-bottom:1px solid #eceae4}
                 .msu-drawer-title{font-size:1.05rem;font-weight:800;color:#111827;margin:0}
@@ -1147,6 +1147,7 @@
                             var remindBtn = state.isAdmin
                                 ? '<button type="button" class="msu-btn msu-btn-outline-warning msu-btn-xs msu-order-remind-btn" data-order-id="' + row.id + '" data-order-name="' + esc(row.name) + '" title="Nhắc sale xuất hóa đơn cho đơn này"><i class="fa fa-bell"></i></button>'
                                 : '';
+                            var checkBtn = '<button type="button" class="msu-btn msu-btn-outline-primary msu-btn-xs msu-order-check-btn" data-order-id="' + row.id + '" title="Kiểm tra MISA ngay cho tất cả phiếu của đơn này"><i class="fa fa-refresh"></i></button>';
                             tr.innerHTML =
                                 '<td><b>' + esc(row.name) + '</b>' + remindedBadge + '</td>' +
                                 '<td>' + esc(row.partner_name) + '</td>' +
@@ -1155,7 +1156,7 @@
                                 '<td class="msu-col-num">' + fmtMoney(row.invoice_amount) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.outstanding_amount) + '</td>' +
                                 '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialBadge + '</td>' +
-                                '<td>' + remindBtn + '</td>';
+                                '<td><div class="msu-btn-group">' + checkBtn + remindBtn + '</div></td>';
                             tbody.appendChild(tr);
                         });
                         tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
@@ -1172,6 +1173,12 @@
                                     order_ids: [parseInt(this.dataset.orderId, 10)],
                                     label: 'đơn ' + this.dataset.orderName,
                                 });
+                            });
+                        });
+                        tbody.querySelectorAll('.msu-order-check-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function(ev) {
+                                ev.stopPropagation();
+                                checkOrderNow(parseInt(this.dataset.orderId, 10), this);
                             });
                         });
                     }
@@ -2057,10 +2064,19 @@
                             '</tr>';
                         }).join('');
 
+                        var orderPartialBadge = row.partial_coverage
+                            ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
+                            : '';
+
                         drawerEl.innerHTML =
                             '<div class="msu-drawer-header">' +
                                 '<div><h4 class="msu-drawer-title">' + esc(row.name) + '</h4><div class="msu-drawer-subtitle">' + esc(row.partner_name) + '</div></div>' +
-                                '<button class="msu-drawer-close" id="msu-drawer-close-btn"><i class="fa fa-times"></i></button>' +
+                                '<div style="display:flex;align-items:center;gap:6px">' +
+                                    '<button class="msu-btn msu-btn-outline-primary msu-btn-sm" id="msu-drawer-order-check-btn" data-loading-text="Đang kiểm tra..." title="Kiểm tra MISA ngay cho TẤT CẢ phiếu của đơn này">' +
+                                        '<i class="fa fa-refresh"></i> Kiểm tra MISA ngay' +
+                                    '</button>' +
+                                    '<button class="msu-drawer-close" id="msu-drawer-close-btn"><i class="fa fa-times"></i></button>' +
+                                '</div>' +
                             '</div>' +
                             '<div class="msu-drawer-body">' +
                                 '<div class="msu-drawer-section">' +
@@ -2068,7 +2084,7 @@
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền đơn</span><span class="msu-meta-value">' + fmtMoney(row.amount_total) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền đã xuất HĐ</span><span class="msu-meta-value">' + fmtMoney(row.invoice_amount) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền chưa xuất HĐ</span><span class="msu-meta-value' + (row.outstanding_amount > 0 ? ' msu-col-diff-bad' : '') + '">' + fmtMoney(row.outstanding_amount) + '</span></div>' +
-                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + orderPartialBadge + '</div>' +
                                     '</div>' +
                                 '</div>' +
                                 '<div class="msu-drawer-section">' +
@@ -2094,6 +2110,39 @@
                                 openInvoiceDetailModal(parseInt(this.dataset.pickingId, 10), this.dataset.pickingName);
                             });
                         });
+                        document.getElementById('msu-drawer-order-check-btn').addEventListener('click', function() {
+                            checkOrderNow(row.id, this);
+                        });
+                    }
+
+                    // Kiểm tra MISA ngay cho TẤT CẢ phiếu của 1 đơn hàng (nút trong drawer đơn
+                    // hàng) — tương đương nút "Kiểm tra ngay" từng dòng ở tab Phiếu xuất kho,
+                    // nhưng gộp cả đơn 1 lượt thay vì phải mở từng phiếu. Sau khi xong, tải lại
+                    // đúng đơn này để cập nhật drawer đang mở + làm mới bảng danh sách phía sau.
+                    function checkOrderNow(orderId, btn) {
+                        setBtnLoading(btn, true);
+                        rpc('/misa_sale_status/api/check_order', {
+                            order_id: orderId, saler_code: state.salerCode,
+                        }).then(function(res) {
+                            var count = (res.result && res.result.count) || 0;
+                            toast('Đã kiểm tra ' + count + ' phiếu của đơn hàng.', 'success');
+                            return rpc('/misa_sale_status/api/order_list', {
+                                saler_code: state.salerCode, search: orderNameById(orderId), limit: 1,
+                            });
+                        }).then(function(res) {
+                            var rows = (res && res.data && res.data.rows) || [];
+                            var updated = rows.find(function(r) { return r.id === orderId; });
+                            if (updated && drawerKind === 'order' && drawerOpenId === orderId) {
+                                renderOrderDrawerContent(updated);
+                            }
+                            loadOrdersList(state.orders.page);
+                        }).catch(function(e) {
+                            toast('Lỗi kiểm tra MISA: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
+                    }
+                    function orderNameById(orderId) {
+                        var row = state.orders.rows.find(function(r) { return r.id === orderId; });
+                        return row ? row.name : '';
                     }
 
                     // ===== Modal "Xem hóa đơn/đề nghị" — chi tiết ĐẦY ĐỦ (từng dòng hàng) đọc
