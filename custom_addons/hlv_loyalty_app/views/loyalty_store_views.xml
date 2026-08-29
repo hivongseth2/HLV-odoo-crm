@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- List View (Odoo 18 <list>) -->
     <record id="view_hlv_loyalty_store_list" model="ir.ui.view">
@@ -10,6 +10,7 @@
                 <field name="name" string="Tên chi nhánh"/>
                 <field name="tag" string="Nhãn"/>
                 <field name="address" string="Địa chỉ"/>
+                <field name="map_query" string="Link nhúng Google Maps" optional="hide"/>
                 <field name="hotline" string="Số Hotline"/>
                 <field name="hours" string="Giờ mở cửa"/>
                 <field name="active" widget="boolean_toggle" string="Hiển thị"/>
@@ -41,7 +42,7 @@
                         </group>
                         <group string="Địa chỉ &amp; Bản đồ Google Maps">
                             <field name="address" placeholder="vd: 127 Nguyễn Thị Nhỏ, Phường 9, Quận Tân Bình, TP. Hồ Chí Minh"/>
-                            <field name="map_query" placeholder="vd: 127 Nguyễn Thị Nhỏ, Phường 9, Tân Bình, Hồ Chí Minh"/>
+                            <field name="map_query" string="Link nhúng Google Maps" placeholder="Dán URL dạng https://www.google.com/maps/embed?..."/>
                         </group>
                     </group>
                     <group string="Hình ảnh Showroom / Cửa hàng (tùy chọn)">

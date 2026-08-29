@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import logging
 from odoo import models, fields, api
 
@@ -29,8 +29,8 @@ class HlvLoyaltyStore(models.Model):
         default="08:00 – 17:30 (Thứ 2 – Thứ 7)",
     )
     map_query = fields.Char(
-        string="Địa chỉ / Từ khóa tìm kiếm Bản đồ Google Maps",
-        help="Từ khóa tìm kiếm khi bấm nút Chỉ đường trên ứng dụng",
+        string="Link nhúng Google Maps",
+        help="Dán URL nhúng Google Maps (Google Maps → Chia sẻ → Nhúng bản đồ). Ứng dụng sẽ mở trực tiếp liên kết này.",
     )
     image = fields.Image(string="Hình ảnh cửa hàng / Showroom", max_width=1024, max_height=1024)
     description = fields.Text(string="Ghi chú thêm")

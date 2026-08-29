@@ -13,9 +13,7 @@
     "depends": ["hlv_loyalty", "web"],
     "data": [
         "security/ir.model.access.csv",
-        "data/loyalty_store_data.xml",
         "views/loyalty_banner_views.xml",
-        "views/loyalty_store_views.xml",
     ],
     "installable": True,
     "application": False,
