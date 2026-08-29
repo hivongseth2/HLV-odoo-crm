@@ -2616,12 +2616,18 @@ class StockPickingMisaInvoiceStatus(models.Model):
             order.amount_total,
         )
         # QUAN TRỌNG: KHÁC với overall_state ở trên (chỉ nhìn TRẠNG THÁI thô của từng phiếu,
-        # 'partial' = có phiếu invoiced + có phiếu chưa) — misa_invoice_order_coverage tính
-        # theo GIÁ TRỊ thật (tổng đã xuất HĐ so với tổng thực xuất qua MỌI đề nghị tìm được
-        # theo order_code) — bắt được cả case 1 đơn CHỈ 1 phiếu, phiếu đó đã 'invoiced' (nên
-        # overall_state ra 'invoiced' bình thường), nhưng số tiền hóa đơn KHÔNG phủ đủ giá trị
-        # (case thật KBC/OUT/11218) — overall_state không thấy được, field này thấy được.
-        partial_coverage = 'partial' in order_pickings.mapped('misa_invoice_order_coverage')
+        # 'partial' = có phiếu invoiced + có phiếu chưa) — cần bắt thêm cả case 1 đơn có TẤT CẢ
+        # phiếu đều đã 'invoiced' (nên overall_state ra 'invoiced' bình thường, đúng theo trạng
+        # thái từng phiếu) nhưng TỔNG tiền hóa đơn (invoiced_amount, đã tính ở trên) vẫn KHÔNG
+        # phủ đủ amount_total — case thật KBC/OUT/11611+11645+11695 (đơn DH...234620): cả 3
+        # phiếu cùng "ăn theo" 1 đề nghị chỉ phủ 7,8tr/28,9tr, mỗi phiếu tự nó vẫn "invoiced"
+        # nên trước đây không có gì báo hiệu còn thiếu. So trực tiếp 2 số tiền đã có sẵn ở đây
+        # (invoiced_amount vs amount_total) đáng tin cậy hơn misa_invoice_order_coverage — field
+        # đó chỉ được tính REACTIVE khi bước refno nhanh báo 'missing'/mismatch (xem
+        # _misa_invoice_reconcile_order_coverage), nên có thể vẫn là False (chưa từng tính) dù
+        # thực tế đang thiếu tiền như case này — OR thêm cả 2 tín hiệu để không bỏ sót.
+        value_partial_coverage = 0 < invoiced_amount < (order.amount_total - MISA_INVOICE_AMOUNT_TOLERANCE)
+        partial_coverage = value_partial_coverage or 'partial' in order_pickings.mapped('misa_invoice_order_coverage')
         return {
             'id': order.id,
             'name': order.name,
