@@ -29,9 +29,12 @@ class HlvLoyaltyStore(models.Model):
         default="08:00 – 17:30 (Thứ 2 – Thứ 7)",
     )
     map_query = fields.Char(
-        string="Địa chỉ / Từ khóa tìm kiếm Bản đồ Google Maps",
-        help="Từ khóa tìm kiếm khi bấm nút Chỉ đường trên ứng dụng",
+        string="Link nhúng Google Maps",
+        help="Dán URL nhúng Google Maps (Google Maps → Chia sẻ → Nhúng bản đồ). Ứng dụng sẽ mở trực tiếp liên kết này.",
     )
+    image = fields.Image(string="Hình ảnh cửa hàng / Showroom", max_width=1024, max_height=1024)
+    description = fields.Text(string="Ghi chú thêm")
+
     image = fields.Image(string="Hình ảnh cửa hàng / Showroom", max_width=1024, max_height=1024)
     description = fields.Text(string="Ghi chú thêm")
 
@@ -46,13 +49,14 @@ class HlvLoyaltyStore(models.Model):
             data.append({
                 "id": r.id,
                 "name": r.name,
-                "tag": r.tag or "Chi nhánh",
+                "tag": r.tag or "",
                 "address": r.address or "",
                 "hotline": r.hotline or "",
                 "hotline_display": r.hotline_display or r.hotline or "",
-                "hours": r.hours or "08:00 – 17:30 (Thứ 2 – Thứ 7)",
+                "hours": r.hours or "",
                 "map_query": r.map_query or r.address or "",
                 "image_url": img_url,
+                "description": r.description or "",
                 "sequence": r.sequence,
             })
         return data

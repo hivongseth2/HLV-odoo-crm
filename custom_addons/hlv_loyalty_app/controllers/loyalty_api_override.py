@@ -716,90 +716,13 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             'max_discount_amount': p.max_discount_amount,
             'min_order_amount': p.min_order_amount,
             'validity_days': p.validity_days,
-            'gift_product_name': p.gift_product_id.name if p.gift_product_id else '',
-            'gift_qty': p.gift_qty,
+            'gift_product_id': p.gift_product_id.id if p.gift_product_id else None,
+            'gift_product_name': p.gift_product_id.display_name if p.gift_product_id else '',
+            'gift_product_code': p.gift_product_id.default_code or '' if p.gift_product_id else '',
+            # Voucher packages do not define a ``state`` field; availability
+            # is represented by the ``active`` flag used in the search domain.
+            'state': 'available',
         } for p in packages])
-
-    @http.route('/api/v1/loyalty/voucher/validate', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def validate_voucher(self, **kwargs):
-        """POST /api/v1/loyalty/voucher/validate"""
-        code = (kwargs.get('code') or '').strip().upper()
-        partner_id = kwargs.get('partner_id')
-        order_amount = float(kwargs.get('order_amount') or 0.0)
-
-        if not code:
-            return {'valid': False, 'error': 'Vui lòng nhập mã voucher', 'code': 'MISSING_CODE'}
-
-        voucher = request.env['hlv.loyalty.voucher'].sudo().search([
-            ('code', '=', code),
-            ('active', '=', True),
-        ], limit=1)
-
-        if not voucher:
-            return {'valid': False, 'error': 'Mã voucher không tồn tại hoặc đã bị vô hiệu', 'code': 'VOUCHER_NOT_FOUND'}
-
-        account = None
-        if partner_id and kwargs.get('phone'):
-            root, account, err = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-            if err:
-                return {'valid': False, 'error': err.get('error', 'Lỗi xác thực'), 'code': err.get('code', 'UNAUTHORIZED')}
-            if voucher.partner_id.id != root.id:
-                return {'valid': False, 'error': 'Voucher không thuộc về khách hàng này', 'code': 'PARTNER_MISMATCH'}
-            if hasattr(voucher, 'portal_account_id') and voucher.portal_account_id and account and voucher.portal_account_id.id != account.id:
-                return {'valid': False, 'error': 'Voucher không thuộc về tài khoản này', 'code': 'ACCOUNT_MISMATCH'}
-
-        is_valid, reason = voucher.is_valid_for_order(order_amount=order_amount)
-        if not is_valid:
-            return {'valid': False, 'error': reason, 'code': 'VOUCHER_INVALID'}
-
-        discount = voucher.compute_discount(order_amount)
-        return {
-            'valid': True,
-            'voucher': {
-                'id': voucher.id,
-                'code': voucher.code,
-                'discount_type': voucher.discount_type,
-                'discount_value': voucher.discount_value,
-                'estimated_discount': discount,
-                'date_expiry': _vn_datetime(voucher.date_expiry),
-                'partner_id': voucher.partner_id.id,
-                'partner_name': voucher.partner_id.name,
-            },
-        }
-
-
-    @http.route('/api/v1/loyalty/account/change-password', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def change_password(self, **kwargs):
-        """POST /api/v1/loyalty/account/change-password"""
-        partner_id = kwargs.get('partner_id')
-        if not partner_id:
-            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
-
-        root, account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-
-        old_password = (kwargs.get('old_password') or '').strip()
-        new_password = (kwargs.get('new_password') or '').strip()
-        confirm_password = (kwargs.get('confirm_password') or '').strip()
-
-        if not old_password or not new_password or not confirm_password:
-            return {'error': 'Vui lòng điền đầy đủ thông tin', 'code': 'MISSING_FIELDS'}
-        if not account._verify_password(old_password, account.password_hash):
-            return {'error': 'Mật khẩu hiện tại không đúng', 'code': 'INVALID_OLD_PASSWORD'}
-        if new_password != confirm_password:
-            return {'error': 'Mật khẩu mới và xác nhận không khớp', 'code': 'PASSWORD_MISMATCH'}
-        if len(new_password) < 6:
-            return {'error': 'Mật khẩu mới phải có ít nhất 6 ký tự', 'code': 'PASSWORD_TOO_SHORT'}
-
-        try:
-            account.sudo().set_password(new_password)
-        except UserError as exc:
-            return {'error': str(exc), 'code': 'CHANGE_PASSWORD_FAILED'}
-
-        return {'success': True, 'message': 'Đổi mật khẩu thành công.'}
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
                 auth='public', methods=['POST'], csrf=False, cors='*')
@@ -912,33 +835,3 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             return {'error': str(exc), 'code': 'CHANGE_PHONE_FAILED'}
 
         return {'success': True, 'message': 'Đổi số điện thoại thành công.', 'phone': normalized_new}
-
-    # ── Hệ thống Chi nhánh / Cửa hàng API ───────────────────────────────────
-
-    @http.route('/api/v1/loyalty/stores', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
-    def get_stores(self, **kwargs):
-        """GET /api/v1/loyalty/stores: Trả về danh sách chi nhánh Hoàng Long Vũ."""
-        stores_data = request.env['hlv.loyalty.store'].sudo().get_active_stores_data()
-        return self._json_ok({
-            'success': True,
-            'data': stores_data,
-        })
-
-    @http.route('/api/v1/loyalty/store/<int:store_id>/image', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
-    def get_store_image(self, store_id, **kwargs):
-        """GET /api/v1/loyalty/store/<id>/image: Trả về hình ảnh showroom / chi nhánh."""
-        store = request.env['hlv.loyalty.store'].sudo().browse(store_id)
-        if not store.exists() or not store.image:
-            return request.not_found()
-        import base64
-        image_data = base64.b64decode(store.image)
-        return request.make_response(
-            image_data,
-            headers=[
-                ('Content-Type', 'image/jpeg'),
-                ('Content-Length', len(image_data)),
-                ('Cache-Control', 'public, max-age=86400'),
-            ]
-        )
