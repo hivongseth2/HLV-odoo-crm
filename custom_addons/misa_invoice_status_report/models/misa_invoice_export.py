@@ -18,7 +18,9 @@ from odoo import api, fields, models
 class StockPickingMisaInvoiceExport(models.Model):
     _inherit = 'stock.picking'
 
-    def _misa_invoice_export_workbook(self, sheet_name, headers, rows, money_cols=None, percent_cols=None, merge_col=None):
+    def _misa_invoice_export_workbook(
+        self, sheet_name, headers, rows, money_cols=None, percent_cols=None, merge_col=None, note_col=None,
+    ):
         """Dựng file .xlsx trong bộ nhớ (xlsxwriter) — dùng chung cho mọi nút "Xuất Excel"
         trên dashboard. money_cols: tập chỉ số cột (0-based) cần định dạng số tiền.
         percent_cols: tập chỉ số cột cần định dạng "%" (VD cột VAT — giá trị lưu ở dạng SỐ
@@ -26,7 +28,9 @@ class StockPickingMisaInvoiceExport(models.Model):
         merge_col: cột (0-based) cần MERGE các ô LIÊN TIẾP có cùng giá trị (VD gộp ô "Khách
         hàng" khi xuất chi tiết dòng hàng nhiều dòng cùng 1 khách đứng liền nhau) — rows PHẢI
         đã được sắp xếp theo đúng cột này trước khi gọi, nếu không sẽ chỉ gộp được các đoạn
-        liên tiếp tình cờ trùng giá trị."""
+        liên tiếp tình cờ trùng giá trị. note_col: cột (0-based) chứa ghi chú giải thích lệch
+        (xem _misa_invoice_reconciliation_notes_by_picking) — CHỈ những Ô CÓ giá trị trong cột
+        này được tô đỏ để dễ nhận ra, các ô rỗng vẫn viền/canh lề bình thường."""
         money_cols = money_cols or set()
         percent_cols = percent_cols or set()
         output = io.BytesIO()
@@ -42,15 +46,23 @@ class StockPickingMisaInvoiceExport(models.Model):
         fmt_percent = workbook.add_format({
             'border': 1, 'valign': 'vcenter', 'num_format': '0.##"%"', 'align': 'right',
         })
+        fmt_note = workbook.add_format({
+            'border': 1, 'valign': 'vcenter', 'bg_color': '#fde2e2', 'font_color': '#a3241f',
+        })
 
         worksheet.set_row(0, 22)
         for col, header in enumerate(headers):
             worksheet.write(0, col, header, fmt_header)
             worksheet.set_column(col, col, max(14, len(header) + 4))
+        if note_col is not None:
+            worksheet.set_column(note_col, note_col, 60)
 
         for row_idx, row in enumerate(rows, start=1):
             for col, value in enumerate(row):
-                fmt = fmt_money if col in money_cols else (fmt_percent if col in percent_cols else fmt_cell)
+                if col == note_col and value:
+                    fmt = fmt_note
+                else:
+                    fmt = fmt_money if col in money_cols else (fmt_percent if col in percent_cols else fmt_cell)
                 worksheet.write(row_idx, col, value, fmt)
 
         if merge_col is not None and rows:
@@ -81,39 +93,34 @@ class StockPickingMisaInvoiceExport(models.Model):
         })
         return attachment.id
 
-    def _misa_invoice_reconciliation_note_rows(self, date_from, date_to, saler_code):
-        """Thêm vào CUỐI file Excel 'Phiếu xuất kho' các dòng GHI CHÚ (số tiền đặt đúng cột
-        'Tiền chưa xuất HĐ') giải thích phần lệch đã biết giữa tổng cộng dồn theo phiếu và thẻ
-        "Đối chiếu tổng" (hải quan chưa khớp PXK, nhóm bắc cầu qua ranh giới ngày lọc, nhóm dùng
-        chung nhiều mã sale — xem get_misa_invoice_reconciliation_gap_explain) — để kế toán CỘNG
-        THẲNG cả cột (kể cả các dòng ghi chú này) là ra đúng số khớp với thẻ đối chiếu, không
-        cần mở riêng UI xem giải thích."""
+    def _misa_invoice_reconciliation_notes_by_picking(self, date_from, date_to, saler_code):
+        """Map {tên phiếu: ghi chú} cho các phiếu bị ảnh hưởng bởi phần lệch đã biết giữa tổng
+        cộng dồn theo phiếu và thẻ "Đối chiếu tổng" (nhóm bắc cầu qua ranh giới ngày lọc, nhóm
+        dùng chung nhiều mã sale — xem get_misa_invoice_reconciliation_gap_explain) — gắn thẳng
+        vào cột "Ghi chú" NGAY TRÊN dòng phiếu đó khi xuất Excel, thay vì tạo dòng tổng hợp
+        riêng (dễ hiểu lầm là 1 phiếu thật, số âm khó hiểu). Hóa đơn hải quan chưa khớp PXK
+        không gắn được vào phiếu nào nên không có trong map này."""
         explain = self.get_misa_invoice_reconciliation_gap_explain(
             date_from=date_from, date_to=date_to, saler_code=saler_code,
         )
-        note_rows = []
-        if explain['customs_pending_amount']:
-            note_rows.append([
-                'GHI CHÚ: %d hóa đơn hải quan chưa khớp phiếu xuất kho nào' % explain['customs_pending_count'],
-                '', '', '', 0.0, 0.0, explain['customs_pending_amount'], 'Ghi chú đối chiếu',
-            ])
+        notes = {}
+
+        def add_note(name, text):
+            notes[name] = (notes[name] + '; ' + text) if name in notes else text
+
         for g in explain['boundary_groups']:
-            note_rows.append([
-                'GHI CHÚ: %s dùng chung đề nghị xuất HĐ với %s (ngày %s, NGOÀI khoảng đang lọc)' % (
-                    ', '.join(g['visible_picking_names']), ', '.join(g['hidden_picking_names']),
-                    ', '.join(g['hidden_dates']),
-                ),
-                '', '', '', 0.0, 0.0, g['attributed_amount'], 'Ghi chú đối chiếu',
-            ])
+            text = 'Dùng chung đề nghị xuất HĐ với %s (ngày %s, NGOÀI khoảng ngày đang lọc)' % (
+                ', '.join(g['hidden_picking_names']), ', '.join(g['hidden_dates']),
+            )
+            for name in g['visible_picking_names']:
+                add_note(name, text)
         for g in explain['cross_saler_groups']:
-            note_rows.append([
-                'GHI CHÚ: %s dùng chung đề nghị %s với mã sale %s' % (
-                    ', '.join(g['this_saler_picking_names']), g['representative_name'],
-                    ', '.join(g['other_saler_codes']),
-                ),
-                '', '', '', 0.0, 0.0, g['gap_amount'], 'Ghi chú đối chiếu',
-            ])
-        return note_rows
+            text = 'Dùng chung đề nghị %s với mã sale %s' % (
+                g['representative_name'], ', '.join(g['other_saler_codes']),
+            )
+            for name in g['this_saler_picking_names']:
+                add_note(name, text)
+        return notes
 
     @api.model
     def export_misa_invoice_picking_list_excel(
@@ -129,19 +136,22 @@ class StockPickingMisaInvoiceExport(models.Model):
         )
         pickings = Picking.search(domain, order='date_done desc')
         today = fields.Date.context_today(self)
+        notes = self._misa_invoice_reconciliation_notes_by_picking(date_from, date_to, saler_code)
         rows = [
             [
                 row['name'], row['partner_name'], row['sale_order_name'], row['date_done'],
                 row['actual_amount'], row['invoice_amount'], row['outstanding_amount'], row['state_label'],
+                notes.get(row['name'], ''),
             ]
             for row in (self._misa_invoice_picking_to_row(picking, today) for picking in pickings)
         ]
-        rows += self._misa_invoice_reconciliation_note_rows(date_from, date_to, saler_code)
         headers = [
             'Phiếu', 'Khách hàng', 'Đơn bán', 'Ngày xuất kho',
-            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái',
+            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái', 'Ghi chú',
         ]
-        content = self._misa_invoice_export_workbook('Phiếu xuất kho', headers, rows, money_cols={4, 5, 6})
+        content = self._misa_invoice_export_workbook(
+            'Phiếu xuất kho', headers, rows, money_cols={4, 5, 6}, note_col=8,
+        )
         return self._misa_invoice_create_export_attachment(
             'phieu_xuat_kho_%s.xlsx' % fields.Date.to_string(today), content
         )
@@ -157,19 +167,22 @@ class StockPickingMisaInvoiceExport(models.Model):
             saler_code=saler_code, search=search, state=state, states=states,
             date_from=date_from, date_to=date_to, limit=10000, offset=0,
         )
+        notes = self._misa_invoice_reconciliation_notes_by_picking(date_from, date_to, saler_code)
         rows = [
             [
                 row['name'], row['partner_name'], row['sale_order_name'], row['date_done'],
                 row['actual_amount'], row['invoice_amount'], row['outstanding_amount'], row['state_label'],
+                notes.get(row['name'], ''),
             ]
             for row in result['rows']
         ]
-        rows += self._misa_invoice_reconciliation_note_rows(date_from, date_to, saler_code)
         headers = [
             'Phiếu', 'Khách hàng', 'Đơn bán', 'Ngày xuất kho',
-            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái',
+            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái', 'Ghi chú',
         ]
-        content = self._misa_invoice_export_workbook('Phiếu xuất kho', headers, rows, money_cols={4, 5, 6})
+        content = self._misa_invoice_export_workbook(
+            'Phiếu xuất kho', headers, rows, money_cols={4, 5, 6}, note_col=8,
+        )
         return self._misa_invoice_create_export_attachment(
             'phieu_xuat_kho_%s.xlsx' % fields.Date.to_string(fields.Date.context_today(self)), content
         )
