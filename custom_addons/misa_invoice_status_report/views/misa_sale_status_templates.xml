@@ -464,6 +464,7 @@
                                     <label class="msu-multiselect-item"><input type="checkbox" value="missing"/> Chưa xuất</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất đủ</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="partial"/> Xuất 1 phần</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="value_gap"/> Còn nợ tiền HĐ (giá trị)</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="mismatch"/> Lệch tiền</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
                                 </div>
@@ -1255,6 +1256,7 @@
                     // thái cùng lúc, OR với nhau ở backend) thay vì 1 select đơn lẻ như trước =====
                     var ORDERS_FILTER_LABELS = {
                         missing: 'Chưa xuất', invoiced: 'Đã xuất đủ', partial: 'Xuất 1 phần',
+                        value_gap: 'Còn nợ tiền HĐ (giá trị)',
                         mismatch: 'Lệch tiền', not_checked: 'Chưa kiểm tra',
                     };
                     function updateOrdersFilterLabel() {
