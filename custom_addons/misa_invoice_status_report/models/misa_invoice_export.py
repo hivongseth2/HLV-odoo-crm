@@ -198,9 +198,15 @@ class StockPickingMisaInvoiceExport(models.Model):
         Giới hạn đã biết: chỉ khử trùng được phần chia sẻ giữa các đơn CÙNG có mặt trong `rows`
         — nếu đại diện còn được đơn NGOÀI phạm vi export hiện tại (VD saler_code khác) dùng
         chung, phần đó không có dữ liệu để chia nên không tính vào, tổng có thể vẫn còn lệch
-        (nhỏ) so với "Đối chiếu tổng" toàn hệ thống."""
+        (nhỏ) so với "Đối chiếu tổng" toàn hệ thống.
+
+        Đơn đã có `row['exact']=True` (invoice_amount/outstanding_amount đã CHÍNH XÁC tuyệt đối
+        — xem misa_invoice_exact_* trên sale.order, _misa_invoice_order_row) bị LOẠI HOÀN TOÀN
+        khỏi hàm này — không tham gia phát hiện đại diện dùng chung, không bị tính lại — để
+        không lấy số ước lượng đè lên số đã đúng sẵn."""
+        approx_rows = [row for row in rows if not row.get('exact')]
         rep_orders = {}
-        for row in rows:
+        for row in approx_rows:
             seen = set()
             for p in row['pickings']:
                 if p['state'] != 'invoiced':
@@ -216,7 +222,7 @@ class StockPickingMisaInvoiceExport(models.Model):
         if not shared_reps:
             return rows
 
-        amount_total_by_order = {row['id']: row['amount_total'] for row in rows}
+        amount_total_by_order = {row['id']: row['amount_total'] for row in approx_rows}
         alloc = {}
         for rep_id, data in shared_reps.items():
             total_amount_total = sum(amount_total_by_order.get(oid, 0.0) for oid in data['order_ids'])
@@ -227,7 +233,7 @@ class StockPickingMisaInvoiceExport(models.Model):
                 )
                 alloc[(oid, rep_id)] = data['amount'] * share
 
-        for row in rows:
+        for row in approx_rows:
             seen = set()
             raw_sum = 0.0
             for p in row['pickings']:

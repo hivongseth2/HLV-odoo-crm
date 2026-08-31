@@ -17,3 +17,13 @@ class SaleOrderMisaInvoiceStatus(models.Model):
     # còn giữ lịch sử "đã từng nhắc lúc nào, ai nhắc" — xem action_send_misa_invoice_reminder.
     misa_invoice_reminder_at = fields.Datetime(string='Lần nhắc xuất HĐ gần nhất', copy=False)
     misa_invoice_reminder_by_id = fields.Many2one('res.users', string='Người nhắc xuất HĐ', copy=False)
+
+    # Số CHÍNH XÁC (quy đúng theo order_code qua API sống MISA, không đếm trùng khi 1 đề nghị
+    # gộp chung nhiều đơn) — lấy từ _misa_invoice_compute_order_coverage_detail, lưu lại thay vì
+    # tính-rồi-vứt như trước, để _misa_invoice_order_row đọc thẳng (rẻ, không cần gọi API lúc
+    # render/export). shipped = tổng tiền thực xuất kho TOÀN BỘ phiếu của đơn (không lọc theo
+    # ngày đang xem trên dashboard — xem giới hạn đã biết trong plan); invoiced = tổng tiền đã
+    # xuất HĐ quy ĐÚNG về đơn này (không dính tiền của đơn khác dùng chung đề nghị).
+    misa_invoice_exact_shipped_amount = fields.Float(string='Đã xuất kho (chính xác)', copy=False)
+    misa_invoice_exact_invoiced_amount = fields.Float(string='Đã xuất HĐ (chính xác, quy đúng về đơn)', copy=False)
+    misa_invoice_exact_checked_at = fields.Datetime(string='Lần tính chính xác gần nhất', copy=False)
