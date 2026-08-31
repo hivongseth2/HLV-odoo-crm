@@ -2585,9 +2585,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # giảm về y hệt phép trừ đơn giản cũ (không đổi hành vi cho trường hợp phổ biến nhất).
         group_pickings = diff_source | diff_source.misa_invoice_covered_picking_ids
         group_actual_amount = sum(group_pickings.mapped('misa_invoice_net_actual_amount')) or 0.0
-        # diff_source.misa_invoice_amount_diff = group_actual - group_invoice, đã tính đúng sẵn
-        # (xem _compute_misa_invoice_amount_mismatch) — tái dùng thay vì trừ lại invoice_amount.
-        group_outstanding_amount = max(diff_source.misa_invoice_amount_diff or 0.0, 0.0)
+        # LƯU Ý: KHÔNG dùng diff_source.misa_invoice_amount_diff ở đây — field đó CHỈ được tính
+        # khi state=='invoiced' (_compute_misa_invoice_amount_mismatch reset về 0 cho mọi state
+        # khác, kể cả 'missing'/'requested' đang còn NGUYÊN actual_amount chưa xuất HĐ) — dùng
+        # nhầm sẽ làm outstanding_amount SAI thành 0 cho toàn bộ phiếu chưa invoiced. Phải trừ
+        # trực tiếp actual - invoice ở đây (invoice_amount = 0 khi chưa có hóa đơn, ra đúng
+        # actual_amount như bình thường).
+        group_outstanding_amount = max(group_actual_amount - invoice_amount, 0.0)
         own_actual_amount = picking.misa_invoice_net_actual_amount or 0.0
         outstanding_amount = (
             group_outstanding_amount * own_actual_amount / group_actual_amount if group_actual_amount > 0 else 0.0
