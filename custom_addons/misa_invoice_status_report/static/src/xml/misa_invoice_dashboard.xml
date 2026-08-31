@@ -22,9 +22,16 @@
                         </div>
                     </div>
                     <div class="miv-scan-actions">
-                        <!-- Checkbox "Bao gồm phiếu đã xuất HĐ (backfill)" đã ẩn khỏi giao diện production
-                             (chỉ cần khi vá lỗi dữ liệu cũ lúc mới triển khai) — state.includeInvoiced vẫn
-                             còn trong code, cần dùng lại thì bỏ comment này. -->
+                        <!-- Khôi phục lại (từng bị ẩn khỏi giao diện production) — cần dùng để
+                             backfill misa_invoice_exact_shipped_amount/_invoiced_amount trên
+                             sale.order cho các phiếu ĐÃ 'Đã xuất HĐ' (vốn bị loại khỏi vòng quét
+                             thường ngày — xem _misa_invoice_scan_domain), sau khi
+                             _misa_invoice_reconcile_order_coverage được đổi thành chạy MỌI LẦN
+                             kiểm tra thay vì chỉ khi missing/mismatch. -->
+                        <label class="miv-daily-week-toggle" t-if="state.data.can_configure" title="Quét lại cả phiếu đã 'Đã xuất HĐ' — chỉ dùng để backfill 1 lần, không dùng hàng ngày">
+                            <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.includeInvoiced" t-on-change="onIncludeInvoicedToggle"/>
+                            Bao gồm phiếu đã xuất HĐ (backfill)
+                        </label>
                         <button class="btn btn-primary miv-scan-btn" t-on-click="scanNow" t-att-disabled="state.isScanning">
                             <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
                             Kiểm tra MISA ngay
