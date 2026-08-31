@@ -177,6 +177,72 @@ class StockPickingMisaInvoiceExport(models.Model):
         )
 
     @api.model
+    def _misa_invoice_dedupe_order_rows(self, rows):
+        """Khử đếm-trùng invoice_amount/outstanding_amount khi 1 phiếu ĐẠI DIỆN (đề nghị gộp
+        chung) được NHIỀU đơn hàng khác nhau trong CHÍNH danh sách `rows` này cùng tham chiếu
+        — xem comment gốc rễ vấn đề trong _misa_invoice_order_row (stock_picking.py): mỗi đơn
+        tự cộng ĐỦ effective_amount của đại diện, chỉ chặn trần theo amount_total CỦA RIÊNG NÓ,
+        nên tổng cộng dồn qua nhiều đơn > số tiền hóa đơn THẬT chỉ có 1 lần (case thật đã đo
+        được: 1 đại diện liên quan 12 đơn, KBC/OUT/09217).
+
+        Cách xử lý: với mỗi đại diện bị > 1 đơn (trong CHÍNH rows này) tham chiếu, CHIA LẠI
+        effective_amount của nó theo tỷ lệ amount_total giữa các đơn cùng tham chiếu (đơn giá
+        trị hợp đồng lớn hơn được chia phần lớn hơn) — thay vì mỗi đơn tự nhận ĐỦ. Đây là ước
+        lượng hợp lý, KHÔNG phải con số tuyệt đối chính xác cho TỪNG đơn riêng lẻ (muốn tuyệt
+        đối phải tra chi tiết dòng hàng qua API sống theo order_code — xem
+        _misa_invoice_compute_order_coverage_detail — quá tốn để chạy hàng loạt lúc xuất Excel)
+        — nhưng đảm bảo TỔNG cộng dồn qua các đơn trong file xuất ra khớp đúng số tiền hóa đơn
+        thật (không còn thừa do đếm trùng), giải quyết đúng vấn đề "cộng Excel ra số khác đối
+        chiếu tổng".
+
+        Giới hạn đã biết: chỉ khử trùng được phần chia sẻ giữa các đơn CÙNG có mặt trong `rows`
+        — nếu đại diện còn được đơn NGOÀI phạm vi export hiện tại (VD saler_code khác) dùng
+        chung, phần đó không có dữ liệu để chia nên không tính vào, tổng có thể vẫn còn lệch
+        (nhỏ) so với "Đối chiếu tổng" toàn hệ thống."""
+        rep_orders = {}
+        for row in rows:
+            seen = set()
+            for p in row['pickings']:
+                if p['state'] != 'invoiced':
+                    continue
+                rep_id = p['master_picking_id'] or p['id']
+                if rep_id in seen:
+                    continue
+                seen.add(rep_id)
+                bucket = rep_orders.setdefault(rep_id, {'amount': p['invoice_amount'] or 0.0, 'order_ids': set()})
+                bucket['order_ids'].add(row['id'])
+
+        shared_reps = {rep_id: data for rep_id, data in rep_orders.items() if len(data['order_ids']) > 1}
+        if not shared_reps:
+            return rows
+
+        amount_total_by_order = {row['id']: row['amount_total'] for row in rows}
+        alloc = {}
+        for rep_id, data in shared_reps.items():
+            total_amount_total = sum(amount_total_by_order.get(oid, 0.0) for oid in data['order_ids'])
+            for oid in data['order_ids']:
+                share = (
+                    amount_total_by_order.get(oid, 0.0) / total_amount_total if total_amount_total > 0
+                    else 1.0 / len(data['order_ids'])
+                )
+                alloc[(oid, rep_id)] = data['amount'] * share
+
+        for row in rows:
+            seen = set()
+            raw_sum = 0.0
+            for p in row['pickings']:
+                if p['state'] != 'invoiced':
+                    continue
+                rep_id = p['master_picking_id'] or p['id']
+                if rep_id in seen:
+                    continue
+                seen.add(rep_id)
+                raw_sum += alloc[(row['id'], rep_id)] if rep_id in shared_reps else (p['invoice_amount'] or 0.0)
+            corrected_invoiced = min(raw_sum, row['amount_total'])
+            row['invoice_amount'] = corrected_invoiced
+            row['outstanding_amount'] = max(row['amount_total'] - corrected_invoiced, 0.0)
+        return rows
+
     def export_misa_invoice_order_list_excel(
         self, search=False, state=False, saler_code=False, multi_request=False, partial_coverage_only=False,
         mismatch_only=False, states=None, date_from=False, date_to=False,
@@ -192,12 +258,13 @@ class StockPickingMisaInvoiceExport(models.Model):
             date_from=date_from, date_to=date_to,
             invoice_date_from=invoice_date_from, invoice_date_to=invoice_date_to,
         )
+        rows_data = self._misa_invoice_dedupe_order_rows(result['rows'])
         rows = [
             [
                 row['name'], row['partner_name'], row['picking_names'],
                 row['amount_total'], row['invoice_amount'], row['outstanding_amount'], row['state_label'],
             ]
-            for row in result['rows']
+            for row in rows_data
         ]
         headers = [
             'Đơn hàng', 'Khách hàng', 'Phiếu xuất kho',

@@ -2733,18 +2733,44 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         states = [s for s in (states or []) if s]
         if states:
-            common_domain = self._misa_invoice_picking_list_domain(
-                False, False, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
-            )
-            sub_domains = []
-            for key in states:
-                if key == 'partial':
-                    sub_domains.append(common_domain + [('misa_invoice_order_coverage', '=', 'partial')])
-                elif key == 'mismatch':
-                    sub_domains.append(common_domain + [('misa_invoice_amount_mismatch', '=', True)])
-                else:
-                    sub_domains.append(common_domain + [('misa_invoice_state', '=', key)])
-            filter_picking_ids = Picking.search(expression.OR(sub_domains)).ids
+            value_gap = 'value_gap' in states
+            normal_states = [s for s in states if s != 'value_gap']
+            picking_filter_ids = set()
+            if normal_states:
+                common_domain = self._misa_invoice_picking_list_domain(
+                    False, False, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
+                )
+                sub_domains = []
+                for key in normal_states:
+                    if key == 'partial':
+                        sub_domains.append(common_domain + [('misa_invoice_order_coverage', '=', 'partial')])
+                    elif key == 'mismatch':
+                        sub_domains.append(common_domain + [('misa_invoice_amount_mismatch', '=', True)])
+                    else:
+                        sub_domains.append(common_domain + [('misa_invoice_state', '=', key)])
+                picking_filter_ids.update(Picking.search(expression.OR(sub_domains)).ids)
+            if value_gap:
+                # "Còn nợ tiền HĐ (giá trị)" — bắt case TỪNG PHIẾU của đơn đều tự báo 'invoiced'
+                # (không missing/mismatch ở mức phiếu) nhưng invoiced_amount (đã quy về đại diện,
+                # khử trùng) vẫn KHÔNG đủ amount_total (xem value_partial_coverage trong
+                # _misa_invoice_order_row). misa_invoice_order_coverage (dùng bởi key 'partial'
+                # ở trên) KHÔNG bắt được case này vì field đó chỉ được tính lại khi bước refno
+                # nhanh báo phiếu 'missing'/mismatch (_misa_invoice_reconcile_order_coverage) —
+                # không có tín hiệu nào kích hoạt khi mọi phiếu đã tự 'invoiced'. Không thể diễn
+                # tả bằng domain SQL trên stock.picking nên phải quét toàn bộ candidate (giới hạn
+                # theo saler_code/ngày, giống phạm vi multi_request) rồi lọc bằng giá trị tiền.
+                saler_picking_domain = self._misa_invoice_picking_list_domain(
+                    False, False, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
+                )
+                saler_picking_ids = Picking.search(saler_picking_domain).ids
+                value_gap_order_domain = (
+                    [('misa_invoice_picking_ids', 'in', saler_picking_ids)] if saler_picking_ids else [('id', '=', 0)]
+                )
+                for candidate_order in SaleOrder.search(value_gap_order_domain):
+                    candidate_row = self._misa_invoice_order_row(candidate_order, base_picking_id_set)
+                    if candidate_row['partial_coverage']:
+                        picking_filter_ids.update(p['id'] for p in candidate_row['pickings'])
+            filter_picking_ids = list(picking_filter_ids)
         elif state or saler_code or partial_coverage_only or mismatch_only:
             filter_picking_domain = self._misa_invoice_picking_list_domain(
                 False, state, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
