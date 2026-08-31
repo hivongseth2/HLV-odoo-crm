@@ -12,6 +12,7 @@ const PICKING_STATE_FILTER_OPTIONS = [
     { value: "missing", label: "Chưa có đề nghị xuất HĐ" },
     { value: "requested", label: "Đã đề nghị, chờ HĐ" },
     { value: "invoiced", label: "Đã xuất hóa đơn" },
+    { value: "partial_invoice", label: "Đã xuất HĐ, chưa đủ tiền" },
 ];
 
 /** Trang riêng "Danh sách đơn hàng" (khác dashboard Tổng quan) — mở từ nút "Xem tất cả đơn

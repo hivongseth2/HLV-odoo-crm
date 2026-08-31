@@ -899,6 +899,10 @@
                                             <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
                                                 <t t-esc="row.state_label"/>
                                             </span>
+                                            <span class="miv-badge miv-badge-state-requested" t-if="row.partial_invoice"
+                                                  title="Có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho (đề nghị gộp chung nhiều phiếu/đơn).">
+                                                Chưa đủ tiền
+                                            </span>
                                         </td>
                                         <td>
                                             <span class="miv-badge miv-badge-critical" t-if="row.exception">Có</span>

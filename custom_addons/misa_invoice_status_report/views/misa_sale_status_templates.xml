@@ -359,6 +359,7 @@
                                 <label class="msu-multiselect-item"><input type="checkbox" value="requested"/> Đã đề nghị, chờ HĐ</label>
                                 <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
                                 <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất HĐ</label>
+                                <label class="msu-multiselect-item"><input type="checkbox" value="partial_invoice"/> Đã xuất HĐ, chưa đủ tiền</label>
                                 <label class="msu-multiselect-item"><input type="checkbox" value="exception"/> Ngoại lệ</label>
                             </div>
                         </span>
@@ -1610,6 +1611,9 @@
                                 : '<span class="msu-muted">—</span>';
                             var exceptionHtml = row.exception
                                 ? '<span class="msu-badge-exception" title="' + esc(row.exception_reason || '') + '"><i class="fa fa-ban"></i> Ngoại lệ</span>' : '';
+                            var partialInvoiceBadge = row.partial_invoice
+                                ? ' <span class="msu-badge-state msu-badge-state-requested" title="Có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho (đề nghị gộp chung nhiều phiếu/đơn)">Chưa đủ tiền</span>'
+                                : '';
                             var remindedIcon = row.reminded
                                 ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
                                 : '';
@@ -1619,7 +1623,7 @@
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.date_done) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.actual_amount) + '</td>' +
-                                '<td><div class="msu-status-cell"><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + exceptionHtml + '</div></td>' +
+                                '<td><div class="msu-status-cell"><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialInvoiceBadge + exceptionHtml + '</div></td>' +
                                 '<td>' + manualHtml + '</td>' +
                                 '<td>' + actionButtonsHtml(row) + '</td>';
                             tbody.appendChild(tr);
@@ -1845,7 +1849,7 @@
                     // chưa invoiced + chưa ngoại lệ) — xem _misa_invoice_public_list_state_domain. =====
                     var PICKING_STATE_FILTER_LABELS = {
                         missing: 'Chưa có đề nghị', requested: 'Đã đề nghị, chờ HĐ', not_checked: 'Chưa kiểm tra',
-                        invoiced: 'Đã xuất HĐ', exception: 'Ngoại lệ',
+                        invoiced: 'Đã xuất HĐ', partial_invoice: 'Đã xuất HĐ, chưa đủ tiền', exception: 'Ngoại lệ',
                     };
                     function updateStateFilterLabel() {
                         var sel = state.stateFilters || [];
@@ -2505,6 +2509,9 @@
                             ? '<div class="msu-drawer-section" id="msu-drawer-siblings-section"><p class="msu-drawer-section-title">Phiếu xuất kho khác cùng đơn hàng</p><div class="msu-drawer-list" id="msu-drawer-siblings-list"><span class="msu-muted">Đang tải...</span></div></div>'
                             : '';
                         var diffClass = row.amount_mismatch ? ' msu-col-diff-bad' : '';
+                        var drawerPartialInvoiceBadge = row.partial_invoice
+                            ? ' <span class="msu-badge-state msu-badge-state-requested" title="Có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho (đề nghị gộp chung nhiều phiếu/đơn)">Chưa đủ tiền</span>'
+                            : '';
 
                         drawerEl.innerHTML =
                             '<div class="msu-drawer-header">' +
@@ -2516,7 +2523,7 @@
                                     '<div class="msu-drawer-meta">' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn hàng</span><span class="msu-meta-value">' + (row.sale_order_name ? esc(row.sale_order_name) : '—') + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ngày xuất kho</span><span class="msu-meta-value">' + esc(row.date_done) + '</span></div>' +
-                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + drawerPartialInvoiceBadge + '</div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền thực xuất</span><span class="msu-meta-value">' + fmtMoney(row.actual_amount) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số hóa đơn</span><span class="msu-meta-value">' + (row.invoice_no ? esc(row.invoice_no) : '—') + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền hóa đơn</span><span class="msu-meta-value">' + (row.state === 'invoiced' ? fmtMoney(row.invoice_amount) : '—') + '</span></div>' +

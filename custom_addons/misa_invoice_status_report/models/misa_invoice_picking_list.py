@@ -37,7 +37,12 @@ class StockPickingMisaInvoicePickingList(models.Model):
             domain.append('|')
             domain.append(('name', 'ilike', search))
             domain.append(('misa_invoice_root_partner_id.display_name', 'ilike', search))
-        if state:
+        if state == 'partial_invoice':
+            # "Đã xuất HĐ, chưa đủ tiền" — field stored riêng (misa_invoice_partial_invoice),
+            # KHÁC với state='invoiced' thô (chỉ nói "có hóa đơn", không nói tiền có đủ hay
+            # không) — xem stock_picking.py.
+            domain.append(('misa_invoice_partial_invoice', '=', True))
+        elif state:
             domain.append(('misa_invoice_state', '=', state))
         if saler_code:
             value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code

@@ -123,6 +123,12 @@ class StockPickingMisaInvoicePublicApi(models.Model):
             for key in states:
                 if key == 'exception':
                     sub_domains.append([('misa_invoice_exception', '=', True)])
+                elif key == 'partial_invoice':
+                    # "Đã xuất HĐ, chưa đủ tiền" — field stored riêng (xem
+                    # misa_invoice_partial_invoice), KHÔNG lồng vào case 'invoiced' bên dưới vì
+                    # concept khác nhau: state='invoiced' chỉ nói "có hóa đơn", field này nói
+                    # thêm "nhưng tiền chưa đủ" — người dùng cần lọc RIÊNG được case này.
+                    sub_domains.append([('misa_invoice_partial_invoice', '=', True), ('misa_invoice_exception', '=', False)])
                 else:
                     sub_domains.append([('misa_invoice_state', '=', key), ('misa_invoice_exception', '=', False)])
             return expression.OR(sub_domains)

@@ -27,6 +27,9 @@ const PICKING_STATE_FILTER_OPTIONS = [
     { value: "missing", label: "Chưa có đề nghị xuất HĐ" },
     { value: "requested", label: "Đã đề nghị, chờ HĐ" },
     { value: "invoiced", label: "Đã xuất hóa đơn" },
+    // "Đã xuất hóa đơn" chỉ có nghĩa "CÓ hóa đơn", không có nghĩa tiền đã đủ 100% (case gộp
+    // chung nhiều phiếu/đơn, 1 đề nghị chỉ phủ 1 phần) — lựa chọn riêng để lọc đúng case này.
+    { value: "partial_invoice", label: "Đã xuất HĐ, chưa đủ tiền" },
 ];
 // Trạng thái riêng của hóa đơn điện tử Shopee (meInvoice) — khác hẳn tập trạng thái MISA ở
 // trên vì đây là model meinvoice.invoice.state, không phải misa_invoice_state.
