@@ -349,7 +349,13 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
            actual_amount vào NHÓM (misa_invoice_amount_diff tính trên TOÀN NHÓM, không cắt theo
            ngày — xem _misa_invoice_order_row/_misa_invoice_picking_to_row) — khiến phiếu ĐANG
            hiển thị trong khoảng lọc "gánh" 1 phần tiền của phiếu không hiển thị. Chỉ xảy ra khi
-           CÓ lọc ngày; không lọc ngày thì không nhóm nào bị cắt ngang."""
+           CÓ lọc ngày; không lọc ngày thì không nhóm nào bị cắt ngang.
+        3. "Nhóm dùng chung nhiều mã sale" — 1 đề nghị gộp chung cho khách hàng của NHIỀU nhân
+           viên bán khác nhau. get_misa_invoice_reconciliation_totals lọc theo saler_code bằng
+           read_group NÊN CHỈ đếm actual_amount của ĐÚNG các phiếu thuộc saler đang xem, nhưng
+           tiền hóa đơn (misa_invoice_effective_amount) của CẢ NHÓM lại được tính TRỌN VẸN cho
+           saler của phiếu ĐẠI DIỆN — khiến 1 saler bị "nhận thừa" tín dụng hóa đơn tương ứng
+           với phần actual của saler KHÁC trong nhóm. Chỉ xảy ra khi CÓ lọc saler_code."""
         Picking = self.sudo()
         boundary_groups = []
         if date_from or date_to:
@@ -409,9 +415,60 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 })
             boundary_groups.sort(key=lambda r: -r['attributed_amount'])
 
+        cross_saler_groups = []
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            # KHÔNG lọc theo saler_code ở domain — phải quét CẢ nhóm mà đại diện thuộc saler
+            # KHÁC nhưng có phiếu ăn theo thuộc đúng saler đang xem (2 chiều), nên chỉ giới hạn
+            # theo loại phiếu + đã invoiced + có phiếu ăn theo.
+            rep_domain_all = [
+                ('picking_type_id.code', '=', 'outgoing'),
+                ('misa_invoice_master_picking_id', '=', False),
+                ('misa_invoice_covered_picking_ids', '!=', False),
+                ('misa_invoice_state', '=', 'invoiced'),
+            ]
+            for rep in Picking.search(rep_domain_all):
+                group = rep | rep.misa_invoice_covered_picking_ids
+                salers_in_group = set(group.mapped('misa_invoice_saler_code'))
+                if value not in salers_in_group or len(salers_in_group) <= 1:
+                    continue
+                group_actual = sum(group.mapped('misa_invoice_net_actual_amount')) or 0.0
+                if group_actual <= 0:
+                    continue
+                group_invoice = rep.misa_invoice_effective_amount or 0.0
+                group_outstanding = max(group_actual - group_invoice, 0.0)
+                this_saler_members = group.filtered(lambda m: m.misa_invoice_saler_code == value)
+                other_saler_members = group - this_saler_members
+                this_saler_actual = sum(this_saler_members.mapped('misa_invoice_net_actual_amount')) or 0.0
+                # Số CỦA TÔI (đúng, y hệt _misa_invoice_picking_to_row) — chia group_outstanding
+                # theo tỷ lệ actual_amount, không quan tâm saler.
+                my_contribution = group_outstanding * this_saler_actual / group_actual
+                # Số của "Đối chiếu tổng" khi lọc theo saler này — chỉ đếm actual của saler này,
+                # và CHỈ trừ group_invoice nếu chính ĐẠI DIỆN thuộc saler này (nếu không, saler
+                # này không được ghi nhận ĐỒNG NÀO tiền hóa đơn của nhóm, dù có phiếu ăn theo).
+                ground_truth_contribution = this_saler_actual - (
+                    group_invoice if rep.misa_invoice_saler_code == value else 0.0
+                )
+                gap = my_contribution - ground_truth_contribution
+                if abs(gap) <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                    continue
+                cross_saler_groups.append({
+                    'representative_name': rep.name,
+                    'representative_saler_code': rep.misa_invoice_saler_code or '',
+                    'this_saler_picking_names': this_saler_members.mapped('name'),
+                    'other_saler_picking_names': other_saler_members.mapped('name'),
+                    'other_saler_codes': sorted(salers_in_group - {value}),
+                    # Dương: số của tôi CAO hơn Đối chiếu tổng (Excel > số thật vì nhóm này).
+                    # Âm: ngược lại (số thật cao hơn Excel vì nhóm này).
+                    'gap_amount': gap,
+                })
+            cross_saler_groups.sort(key=lambda r: -abs(r['gap_amount']))
+
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
         return {
             'boundary_groups': boundary_groups,
+            'cross_saler_groups': cross_saler_groups,
+            'cross_saler_total_amount': sum(g['gap_amount'] for g in cross_saler_groups),
             'boundary_total_amount': sum(g['attributed_amount'] for g in boundary_groups),
             'customs_pending_amount': customs_summary['pending_amount'],
             'customs_pending_count': customs_summary['pending_count'],

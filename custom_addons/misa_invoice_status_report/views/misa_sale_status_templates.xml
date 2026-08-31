@@ -1173,6 +1173,24 @@
                                     '<tbody>' + rows + '</tbody></table></div>'
                                 );
                             }
+                            if (d.cross_saler_groups && d.cross_saler_groups.length) {
+                                var csRows = d.cross_saler_groups.map(function(g) {
+                                    return '<tr>' +
+                                        '<td>' + esc(g.this_saler_picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(g.other_saler_picking_names.join(', ')) + ' (mã sale: ' + esc(g.other_saler_codes.join(', ')) + ')</td>' +
+                                        '<td>' + esc(g.representative_name) + (g.representative_saler_code ? ' (mã sale: ' + esc(g.representative_saler_code) + ')' : '') + '</td>' +
+                                        '<td class="msu-col-num">' + fmtMoney(g.gap_amount) + '</td>' +
+                                        '</tr>';
+                                }).join('');
+                                parts.push(
+                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Nhóm đề nghị dùng chung nhiều mã sale</p>' +
+                                    '<p>Các nhóm dưới đây gộp chung phiếu của mã sale bạn ĐANG XEM với mã sale KHÁC — tiền hóa đơn của cả nhóm ' +
+                                    'được ghi nhận trọn vẹn cho mã sale của phiếu đại diện, có thể khiến số của bạn và "Đối chiếu tổng" lệch nhau ' +
+                                    '(dương = Excel/list của bạn cao hơn; âm = "Đối chiếu tổng" cao hơn). Tổng cả bảng: <b>' + fmtMoney(d.cross_saler_total_amount) + '</b>.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn (cùng nhóm)</th><th>Phiếu mã sale khác (cùng nhóm)</th><th>Phiếu đại diện</th><th>Chênh lệch</th></tr></thead>' +
+                                    '<tbody>' + csRows + '</tbody></table></div>'
+                                );
+                            }
                             body.innerHTML = parts.length ? parts.join('') : '<span class="msu-muted">Không tìm thấy nguyên nhân cụ thể nào trong phạm vi đang lọc.</span>';
                         }).catch(function(e) {
                             body.innerHTML = '<span class="msu-muted">Lỗi tải dữ liệu: ' + esc(e.message) + '</span>';
