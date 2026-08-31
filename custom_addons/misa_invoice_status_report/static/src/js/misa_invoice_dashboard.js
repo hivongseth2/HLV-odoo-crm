@@ -196,6 +196,7 @@ export class MisaInvoiceDashboard extends Component {
             discrepancyOpen: false,
             discrepancyLoading: false,
             discrepancy: null,
+            discrepancyBoundaryGroups: null,
             returnDrawerOpen: false,
             returnDrawerRow: null,
             // Các section lớn ở trang tổng quan (trên tab nav) có thể thu gọn cho đỡ dài trang —
@@ -301,6 +302,17 @@ export class MisaInvoiceDashboard extends Component {
                 "stock.picking", "get_misa_invoice_discrepancy", [],
                 { ...this.filterParams, limit: 200 }
             );
+            // Giải thích CỤ THỂ (phiếu nào, ngày nào, bao nhiêu tiền) khi 1 nhóm gộp chung bị
+            // "cắt ngang" bởi khoảng ngày đang lọc — xem get_misa_invoice_reconciliation_gap_explain.
+            // Chỉ có ý nghĩa khi ĐANG lọc ngày (date_from/date_to), nên bỏ qua khi không lọc.
+            if (this.state.shipFrom || this.state.shipTo) {
+                this.state.discrepancyBoundaryGroups = await this.orm.call(
+                    "stock.picking", "get_misa_invoice_reconciliation_gap_explain", [],
+                    { date_from: this.state.shipFrom || false, date_to: this.state.shipTo || false }
+                );
+            } else {
+                this.state.discrepancyBoundaryGroups = null;
+            }
         } catch (e) {
             this.notification.add("Lỗi tải danh sách chênh lệch: " + (e.message || e), { type: "danger" });
             this.state.discrepancyOpen = false;

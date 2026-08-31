@@ -210,6 +210,15 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         )
 
     @api.model
+    def get_misa_invoice_public_reconciliation_gap_explain(self, saler_code, date_from=False, date_to=False):
+        """Như get_misa_invoice_reconciliation_gap_explain nhưng scope theo đúng 1 mã sale cho
+        trang public — xem misa_invoice_dashboard_data.py."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().get_misa_invoice_reconciliation_gap_explain(
+            date_from=date_from, date_to=date_to, saler_code=code,
+        )
+
+    @api.model
     def action_public_check(self, picking_ids, saler_code):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         pickings = self.sudo().browse(picking_ids or []).exists().filtered(

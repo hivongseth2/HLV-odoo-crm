@@ -3,7 +3,10 @@ from datetime import date, timedelta
 
 from odoo import api, fields, models
 
-from .stock_picking import MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABELS, MISA_INVOICE_UNASSIGNED_SALER
+from .stock_picking import (
+    MISA_INVOICE_AMOUNT_TOLERANCE, MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABELS,
+    MISA_INVOICE_UNASSIGNED_SALER,
+)
 
 # Số liệu tổng hợp cho dashboard OWL nội bộ (KPI tiles, bảng theo kho/sale/khách hàng, bảng
 # "Tình trạng xuất hóa đơn", biểu đồ theo ngày) — tách khỏi stock_picking.py (đã quá lớn).
@@ -331,3 +334,69 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 bucket['invoice_amount'] += picking.misa_invoice_effective_amount or 0.0
 
         return [buckets[key] for key in sorted(buckets.keys())]
+
+    @api.model
+    def get_misa_invoice_reconciliation_gap_explain(self, date_from=False, date_to=False, saler_code=False):
+        """Giải thích CỤ THỂ (phiếu nào, bao nhiêu tiền) vì sao "Còn lại chưa xuất HĐ"
+        (get_misa_invoice_reconciliation_totals, tính ở mức phiếu) có thể khác tổng
+        outstanding_amount cộng dồn qua từng phiếu/đơn hiển thị trên list/Excel — thay vì 1 câu
+        cảnh báo chung chung. 2 nguồn lệch đã biết:
+
+        1. "Đơn hải quan chưa khớp PXK" — hóa đơn KHÔNG gắn với phiếu xuất kho nào, nên không
+           thể hiện ở bất kỳ dòng phiếu/đơn nào (đã có count/amount sẵn, chỉ liệt kê lại).
+        2. "Nhóm bắc cầu qua ranh giới ngày lọc" — 1 đề nghị gộp chung (đại diện + phiếu ăn
+           theo) có phiếu NẰM NGOÀI khoảng date_from/date_to đang lọc, nhưng phiếu đó vẫn góp
+           actual_amount vào NHÓM (misa_invoice_amount_diff tính trên TOÀN NHÓM, không cắt theo
+           ngày — xem _misa_invoice_order_row/_misa_invoice_picking_to_row) — khiến phiếu ĐANG
+           hiển thị trong khoảng lọc "gánh" 1 phần tiền của phiếu không hiển thị. Chỉ xảy ra khi
+           CÓ lọc ngày; không lọc ngày thì không nhóm nào bị cắt ngang."""
+        Picking = self.sudo()
+        boundary_groups = []
+        if date_from or date_to:
+            parsed_from = fields.Date.from_string(date_from) if date_from else None
+            parsed_to = fields.Date.from_string(date_to) if date_to else None
+
+            def in_range(picking):
+                d = picking.date_done.date() if picking.date_done else None
+                if not d:
+                    return False
+                if parsed_from and d < parsed_from:
+                    return False
+                if parsed_to and d > parsed_to:
+                    return False
+                return True
+
+            rep_domain = [
+                ('picking_type_id.code', '=', 'outgoing'),
+                ('misa_invoice_master_picking_id', '=', False),
+                ('misa_invoice_covered_picking_ids', '!=', False),
+            ]
+            if saler_code:
+                value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+                rep_domain.append(('misa_invoice_saler_code', '=', value))
+            for rep in Picking.search(rep_domain):
+                group = rep | rep.misa_invoice_covered_picking_ids
+                visible = group.filtered(in_range)
+                hidden = group - visible
+                # Nhóm toàn bộ TRONG hoặc toàn bộ NGOÀI khoảng lọc — không bị cắt ngang, bỏ qua.
+                if not visible or not hidden:
+                    continue
+                hidden_actual = sum(hidden.mapped('misa_invoice_net_actual_amount')) or 0.0
+                if hidden_actual <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                    continue
+                boundary_groups.append({
+                    'visible_picking_names': visible.mapped('name'),
+                    'hidden_picking_names': hidden.mapped('name'),
+                    'hidden_dates': sorted(set(
+                        fields.Date.to_string(p.date_done.date()) for p in hidden if p.date_done
+                    )),
+                    'hidden_actual_amount': hidden_actual,
+                })
+            boundary_groups.sort(key=lambda r: -r['hidden_actual_amount'])
+
+        customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
+        return {
+            'boundary_groups': boundary_groups,
+            'customs_pending_amount': customs_summary['pending_amount'],
+            'customs_pending_count': customs_summary['pending_count'],
+        }

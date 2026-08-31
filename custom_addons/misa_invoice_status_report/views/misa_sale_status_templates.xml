@@ -328,6 +328,7 @@
                                 <span class="msu-meta-label">Còn lại chưa xuất HĐ</span>
                                 <span class="msu-recon-value msu-recon-outstanding" id="msu-recon-outstanding">0 đ</span>
                                 <span class="msu-muted" id="msu-recon-outstanding-hint" style="font-size:.72rem;display:none"></span>
+                                <a href="#" id="msu-recon-gap-explain-link" style="font-size:.72rem;display:none">Xem chi tiết vì sao lệch</a>
                             </div>
                         </div>
                     </div>
@@ -692,6 +693,21 @@
                     </div>
                     <div class="msu-modal-actions">
                         <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-invoice-detail-close">Đóng</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="msu-modal-overlay" id="msu-gap-explain-modal" style="display:none">
+                <div class="msu-modal msu-modal-wide">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                        <h5>Vì sao "Còn lại chưa xuất HĐ" khác tổng cộng dồn theo phiếu/đơn?</h5>
+                        <button class="msu-drawer-close" id="msu-gap-explain-close-x"><i class="fa fa-times"></i></button>
+                    </div>
+                    <div id="msu-gap-explain-body" class="msu-modal-wide-body">
+                        <span class="msu-muted">Đang tải...</span>
+                    </div>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-gap-explain-close">Đóng</button>
                     </div>
                 </div>
             </div>
@@ -1112,8 +1128,59 @@
                             } else {
                                 hintEl2.style.display = 'none';
                             }
+                            var explainLink = document.getElementById('msu-recon-gap-explain-link');
+                            explainLink.style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
                         }).catch(function(e) { toast('Lỗi tải số liệu đối chiếu: ' + e.message, 'error'); });
                     }
+
+                    // ===== Giải thích CỤ THỂ vì sao "Còn lại chưa xuất HĐ" khác tổng cộng dồn
+                    // theo phiếu/đơn khi đang lọc ngày — liệt kê đúng phiếu nào, bao nhiêu tiền,
+                    // thay vì 1 câu cảnh báo chung chung. =====
+                    document.getElementById('msu-recon-gap-explain-link').addEventListener('click', function(ev) {
+                        ev.preventDefault();
+                        var modal = document.getElementById('msu-gap-explain-modal');
+                        var body = document.getElementById('msu-gap-explain-body');
+                        modal.style.display = '';
+                        body.innerHTML = '<span class="msu-muted">Đang tải...</span>';
+                        rpc('/misa_sale_status/api/reconciliation_gap_explain', {
+                            saler_code: state.salerCode, date_from: state.dateFrom, date_to: state.dateTo,
+                        }).then(function(res) {
+                            var d = res.data || {};
+                            var parts = [];
+                            if (d.customs_pending_amount) {
+                                parts.push(
+                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Hóa đơn hải quan chưa khớp phiếu xuất kho</p>' +
+                                    '<p>' + d.customs_pending_count + ' hóa đơn, tổng <b>' + fmtMoney(d.customs_pending_amount) + '</b> — ' +
+                                    'không gắn với phiếu xuất kho nào nên không thể hiện ở bất kỳ dòng phiếu/đơn nào, ' +
+                                    'nhưng vẫn được trừ vào "Còn lại chưa xuất HĐ".</p></div>'
+                                );
+                            }
+                            if (d.boundary_groups && d.boundary_groups.length) {
+                                var rows = d.boundary_groups.map(function(g) {
+                                    return '<tr>' +
+                                        '<td>' + esc(g.visible_picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(g.hidden_picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(g.hidden_dates.join(', ')) + '</td>' +
+                                        '<td class="msu-col-num">' + fmtMoney(g.hidden_actual_amount) + '</td>' +
+                                        '</tr>';
+                                }).join('');
+                                parts.push(
+                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Nhóm đề nghị bắc cầu qua ranh giới ngày lọc</p>' +
+                                    '<p>Các phiếu đang hiển thị dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC nằm NGOÀI khoảng ngày ' +
+                                    (state.dateFrom || '…') + ' → ' + (state.dateTo || '…') + ' đang lọc — phiếu ngoài khoảng đó vẫn góp tiền vào nhóm, ' +
+                                    'khiến phiếu đang hiển thị "gánh" thêm phần thiếu tương ứng.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu đang hiển thị</th><th>Phiếu NGOÀI khoảng lọc (cùng nhóm)</th><th>Ngày xuất kho (phiếu ngoài)</th><th>Tiền thực xuất (phiếu ngoài)</th></tr></thead>' +
+                                    '<tbody>' + rows + '</tbody></table></div>'
+                                );
+                            }
+                            body.innerHTML = parts.length ? parts.join('') : '<span class="msu-muted">Không tìm thấy nguyên nhân cụ thể nào trong phạm vi đang lọc.</span>';
+                        }).catch(function(e) {
+                            body.innerHTML = '<span class="msu-muted">Lỗi tải dữ liệu: ' + esc(e.message) + '</span>';
+                        });
+                    });
+                    function closeGapExplainModal() { document.getElementById('msu-gap-explain-modal').style.display = 'none'; }
+                    document.getElementById('msu-gap-explain-close').addEventListener('click', closeGapExplainModal);
+                    document.getElementById('msu-gap-explain-close-x').addEventListener('click', closeGapExplainModal);
 
                     // ===== Tab: Phiếu xuất kho (MISA) / Đơn Shopee / Đơn hải quan =====
                     document.querySelectorAll('.msu-tab').forEach(function(btn) {
