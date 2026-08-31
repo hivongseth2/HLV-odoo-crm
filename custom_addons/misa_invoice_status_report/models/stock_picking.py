@@ -777,18 +777,37 @@ class StockPickingMisaInvoiceStatus(models.Model):
             sources.extend(order_sources)
         return total_extra, sources
 
-    def _misa_invoice_reconcile_order_coverage(self):
-        """Xác định mức độ xuất HĐ THẬT theo ĐƠN HÀNG (misa_invoice_order_coverage) — CHỈ gọi
-        khi bước refno nhanh (action_check_misa_invoice_status) KHÔNG xác nhận đủ (state=
-        'missing' hoặc amount_mismatch=True), vì bước này tốn thêm 1-2 lệnh gọi MISA cho mỗi
-        đơn hàng của phiếu.
+    def _misa_invoice_order_coverage_is_simple(self, picking, order):
+        """True nếu đơn này ĐƠN GIẢN tới mức không cần gọi API sống để đối chiếu: CHỈ có ĐÚNG 1
+        phiếu xuất kho (không giao nhiều đợt), phiếu đó không "ăn theo" ai và không ai "ăn
+        theo" nó (1 phiếu = đúng 1 đề nghị, không gộp chung với đơn nào khác), đã 'invoiced'
+        sạch (không mismatch), và tiền hóa đơn đã phủ ĐỦ cả tiền thực xuất lẫn amount_total của
+        đơn (đủ hàng, không phải xuất từng phần) — khi đó số của CHÍNH phiếu này chắc chắn cũng
+        là số của đơn, tra lại qua API chỉ tốn thêm chi phí mà không đổi kết quả."""
+        return (
+            len(order.misa_invoice_picking_ids) == 1
+            and not picking.misa_invoice_master_picking_id
+            and not picking.misa_invoice_covered_picking_ids
+            and picking.misa_invoice_state == 'invoiced'
+            and not picking.misa_invoice_amount_mismatch
+            and abs((picking.misa_invoice_net_actual_amount or 0.0) - order.amount_total) <= MISA_INVOICE_AMOUNT_TOLERANCE
+            and abs((picking.misa_invoice_effective_amount or 0.0) - order.amount_total) <= MISA_INVOICE_AMOUNT_TOLERANCE
+        )
 
-        Với MỖI đơn hàng của phiếu: cộng dồn TẤT CẢ tiền đã xuất HĐ qua MỌI đề nghị nhắc tới
-        đơn đó (_misa_invoice_sum_invoiced_for_order — không quan tâm tên đề nghị/refno) so với
-        tổng tiền thực xuất của TOÀN BỘ phiếu thuộc đơn đó (không chỉ phiếu đang xét — 1 đơn có
-        thể giao nhiều đợt qua nhiều phiếu khác nhau). 1 phiếu có thể có nhiều đơn hàng — lấy
-        mức THẤP NHẤT trong các đơn (none < partial < full) làm mức chung cho phiếu, vì phiếu
-        chỉ thật sự "đã xuất đủ" khi TẤT CẢ đơn của nó đều đã xuất đủ."""
+    def _misa_invoice_reconcile_order_coverage(self):
+        """Xác định mức độ xuất HĐ THẬT theo ĐƠN HÀNG (misa_invoice_order_coverage) — chạy MỌI
+        LẦN action_check_misa_invoice_status xử lý 1 phiếu có đơn hàng (xem call site), để
+        misa_invoice_exact_* trên sale.order luôn được cập nhật.
+
+        Với MỖI đơn hàng của phiếu: nếu là case ĐƠN GIẢN (xem _misa_invoice_order_coverage_is_simple)
+        — dùng THẲNG số sẵn có trên phiếu, KHÔNG gọi API (tiết kiệm chi phí cho phần lớn đơn,
+        vốn chỉ giao 1 đợt/1 đề nghị/đủ hàng). Ngược lại (gộp chung/ăn theo/nhiều đợt giao/thiếu
+        tiền) mới cộng dồn TẤT CẢ tiền đã xuất HĐ qua MỌI đề nghị nhắc tới đơn đó
+        (_misa_invoice_sum_invoiced_for_order — không quan tâm tên đề nghị/refno) so với tổng
+        tiền thực xuất của TOÀN BỘ phiếu thuộc đơn đó (không chỉ phiếu đang xét). 1 phiếu có thể
+        có nhiều đơn hàng — lấy mức THẤP NHẤT trong các đơn (none < partial < full) làm mức
+        chung cho phiếu, vì phiếu chỉ thật sự "đã xuất đủ" khi TẤT CẢ đơn của nó đều đã xuất
+        đủ."""
         rank = {'none': 0, 'partial': 1, 'full': 2}
         for picking in self:
             orders = picking.misa_invoice_sale_order_ids
@@ -797,6 +816,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 continue
             worst = 'full'
             for order in orders:
+                if self._misa_invoice_order_coverage_is_simple(picking, order):
+                    order.write({
+                        'misa_invoice_exact_shipped_amount': picking.misa_invoice_net_actual_amount or 0.0,
+                        'misa_invoice_exact_invoiced_amount': picking.misa_invoice_effective_amount or 0.0,
+                        'misa_invoice_exact_checked_at': fields.Datetime.now(),
+                    })
+                    continue
                 detail = self._misa_invoice_compute_order_coverage_detail(order.name)
                 # Lưu lại shipped/invoiced THẬT (trước đây chỉ giữ 'level' rồi vứt số) — để
                 # _misa_invoice_order_row đọc thẳng, tính invoice_amount/outstanding_amount
@@ -2546,9 +2572,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'actual_amount': picking.misa_invoice_net_actual_amount or 0.0,
             'invoice_amount': invoice_amount,
             'invoice_no': picking.misa_invoice_no or False,
-            'outstanding_amount': 0.0 if picking.misa_invoice_state == 'invoiced' else max(
-                (picking.misa_invoice_net_actual_amount or 0.0) - invoice_amount, 0.0
-            ),
+            # TRƯỚC ĐÂY: ép cứng 0 nếu picking.misa_invoice_state == 'invoiced', bất kể
+            # invoice_amount có thực sự phủ đủ actual_amount hay không — SAI cho phiếu "ăn
+            # theo"/gộp chung mà invoice_amount (effective_amount CỦA CẢ NHÓM, pha loãng) không
+            # đủ so với chính net_actual_amount của phiếu này (case y hệt đã sửa ở
+            # _misa_invoice_order_row cho tab Đơn hàng — DH...234620). Luôn trừ thật, nhất quán
+            # với get_misa_invoice_reconciliation_totals (tính outstanding = actual - invoiced,
+            # không có ngoại lệ theo state).
+            'outstanding_amount': max((picking.misa_invoice_net_actual_amount or 0.0) - invoice_amount, 0.0),
             # Có trả hàng — tiền HĐ ở trên (invoice_amount) là số ĐÃ COI NHƯ kế toán điều chỉnh
             # (không phải misa_invoice_amount thật từ MISA) — kèm số gốc để frontend tự dựng
             # ghi chú (không build sẵn chuỗi tiếng Việt có định dạng tiền ở đây, để frontend
