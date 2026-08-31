@@ -2592,6 +2592,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # trực tiếp actual - invoice ở đây (invoice_amount = 0 khi chưa có hóa đơn, ra đúng
         # actual_amount như bình thường).
         group_outstanding_amount = max(group_actual_amount - invoice_amount, 0.0)
+        if diff_source.misa_invoice_gap_resolved:
+            # Lệch này ĐÃ được xác minh xong (nút "Cập nhật lý do lệch") — tiền thực chất ĐÃ có
+            # hóa đơn, chỉ gắn nhầm đề nghị khác (case KBC/OUT/10826/11218), KHÔNG phải còn
+            # thiếu thật. get_misa_invoice_reconciliation_totals đã cộng bù phần này vào "đã
+            # xuất HĐ" (gap_resolved_amount) nên outstanding THẬT SỰ = 0 cho nhóm này — nếu
+            # không loại ở đây, phiếu này vẫn hiện "còn thiếu" trong khi Đối chiếu tổng đã coi
+            # là xong, gây lệch tổng giữa export và thẻ Đối chiếu tổng.
+            group_outstanding_amount = 0.0
         own_actual_amount = picking.misa_invoice_net_actual_amount or 0.0
         outstanding_amount = (
             group_outstanding_amount * own_actual_amount / group_actual_amount if group_actual_amount > 0 else 0.0
