@@ -1161,15 +1161,15 @@
                                         '<td>' + esc(g.visible_picking_names.join(', ')) + '</td>' +
                                         '<td>' + esc(g.hidden_picking_names.join(', ')) + '</td>' +
                                         '<td>' + esc(g.hidden_dates.join(', ')) + '</td>' +
-                                        '<td class="msu-col-num">' + fmtMoney(g.hidden_actual_amount) + '</td>' +
+                                        '<td class="msu-col-num">' + fmtMoney(g.attributed_amount) + '</td>' +
                                         '</tr>';
                                 }).join('');
                                 parts.push(
                                     '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Nhóm đề nghị bắc cầu qua ranh giới ngày lọc</p>' +
-                                    '<p>Các phiếu đang hiển thị dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC nằm NGOÀI khoảng ngày ' +
-                                    (state.dateFrom || '…') + ' → ' + (state.dateTo || '…') + ' đang lọc — phiếu ngoài khoảng đó vẫn góp tiền vào nhóm, ' +
-                                    'khiến phiếu đang hiển thị "gánh" thêm phần thiếu tương ứng.</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu đang hiển thị</th><th>Phiếu NGOÀI khoảng lọc (cùng nhóm)</th><th>Ngày xuất kho (phiếu ngoài)</th><th>Tiền thực xuất (phiếu ngoài)</th></tr></thead>' +
+                                    '<p>Các nhóm dưới đây THẬT SỰ còn thiếu tiền và có phiếu NGOÀI khoảng ngày ' +
+                                    (state.dateFrom || '…') + ' → ' + (state.dateTo || '…') + ' đang lọc — cột cuối là đúng phần các phiếu đang hiển thị ' +
+                                    'phải gánh (không phải toàn bộ tiền của phiếu ngoài khoảng). Tổng cả bảng: <b>' + fmtMoney(d.boundary_total_amount) + '</b>.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu đang hiển thị</th><th>Phiếu NGOÀI khoảng lọc (cùng nhóm)</th><th>Ngày xuất kho (phiếu ngoài)</th><th>Phần phải gánh</th></tr></thead>' +
                                     '<tbody>' + rows + '</tbody></table></div>'
                                 );
                             }

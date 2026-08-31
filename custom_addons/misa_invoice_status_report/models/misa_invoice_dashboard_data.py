@@ -381,8 +381,20 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 # Nhóm toàn bộ TRONG hoặc toàn bộ NGOÀI khoảng lọc — không bị cắt ngang, bỏ qua.
                 if not visible or not hidden:
                     continue
-                hidden_actual = sum(hidden.mapped('misa_invoice_net_actual_amount')) or 0.0
-                if hidden_actual <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                # QUAN TRỌNG: có phiếu ngoài khoảng KHÔNG có nghĩa là nhóm đang THIẾU tiền — phải
+                # tính đúng group_outstanding (group_actual - group_invoice, y hệt
+                # _misa_invoice_picking_to_row) rồi CHỈ báo phần thật sự ảnh hưởng tới các phiếu
+                # đang hiển thị (chia theo tỷ lệ actual_amount) — KHÔNG phải toàn bộ actual_amount
+                # của phiếu ngoài khoảng (số đó có thể lớn hơn nhiều so với phần thiếu thật, nếu
+                # nhóm đã đủ/gần đủ tiền — case gây hiểu lầm "cộng lại lớn hơn nhiều" đã gặp).
+                group_actual = sum(group.mapped('misa_invoice_net_actual_amount')) or 0.0
+                group_invoice = rep.misa_invoice_effective_amount or 0.0
+                group_outstanding = max(group_actual - group_invoice, 0.0)
+                if group_outstanding <= MISA_INVOICE_AMOUNT_TOLERANCE or group_actual <= 0:
+                    continue
+                visible_actual = sum(visible.mapped('misa_invoice_net_actual_amount')) or 0.0
+                attributed_amount = group_outstanding * visible_actual / group_actual
+                if attributed_amount <= MISA_INVOICE_AMOUNT_TOLERANCE:
                     continue
                 boundary_groups.append({
                     'visible_picking_names': visible.mapped('name'),
@@ -390,13 +402,17 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                     'hidden_dates': sorted(set(
                         fields.Date.to_string(p.date_done.date()) for p in hidden if p.date_done
                     )),
-                    'hidden_actual_amount': hidden_actual,
+                    # Phần CỤ THỂ của khoản thiếu chung của nhóm mà các phiếu ĐANG HIỂN THỊ phải
+                    # gánh — đây là số cộng dồn được vào tổng "Tiền chưa xuất HĐ" trên list/Excel,
+                    # KHÔNG phải toàn bộ actual_amount của phiếu ngoài khoảng.
+                    'attributed_amount': attributed_amount,
                 })
-            boundary_groups.sort(key=lambda r: -r['hidden_actual_amount'])
+            boundary_groups.sort(key=lambda r: -r['attributed_amount'])
 
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
         return {
             'boundary_groups': boundary_groups,
+            'boundary_total_amount': sum(g['attributed_amount'] for g in boundary_groups),
             'customs_pending_amount': customs_summary['pending_amount'],
             'customs_pending_count': customs_summary['pending_count'],
         }
