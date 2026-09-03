@@ -95,31 +95,25 @@ class StockPickingMisaInvoiceExport(models.Model):
 
     def _misa_invoice_reconciliation_notes_by_picking(self, date_from, date_to, saler_code):
         """Map {tên phiếu: ghi chú} cho các phiếu bị ảnh hưởng bởi phần lệch đã biết giữa tổng
-        cộng dồn theo phiếu và thẻ "Đối chiếu tổng" (nhóm bắc cầu qua ranh giới ngày lọc, nhóm
-        dùng chung nhiều mã sale — xem get_misa_invoice_reconciliation_gap_explain) — gắn thẳng
-        vào cột "Ghi chú" NGAY TRÊN dòng phiếu đó khi xuất Excel, thay vì tạo dòng tổng hợp
-        riêng (dễ hiểu lầm là 1 phiếu thật, số âm khó hiểu). Hóa đơn hải quan chưa khớp PXK
-        không gắn được vào phiếu nào nên không có trong map này."""
+        cộng dồn theo phiếu và thẻ "Đối chiếu tổng" (nhóm bị cắt bởi bộ lọc ngày/mã sale — xem
+        get_misa_invoice_reconciliation_gap_explain) — gắn thẳng vào cột "Ghi chú" NGAY TRÊN
+        dòng phiếu đó khi xuất Excel, thay vì tạo dòng tổng hợp riêng (dễ hiểu lầm là 1 phiếu
+        thật, số âm khó hiểu). Hóa đơn hải quan chưa khớp PXK không gắn được vào phiếu nào nên
+        không có trong map này."""
         explain = self.get_misa_invoice_reconciliation_gap_explain(
             date_from=date_from, date_to=date_to, saler_code=saler_code,
         )
         notes = {}
-
-        def add_note(name, text):
-            notes[name] = (notes[name] + '; ' + text) if name in notes else text
-
-        for g in explain['boundary_groups']:
-            text = 'Dùng chung đề nghị xuất HĐ với %s (ngày %s, NGOÀI khoảng ngày đang lọc)' % (
-                ', '.join(g['hidden_picking_names']), ', '.join(g['hidden_dates']),
-            )
-            for name in g['visible_picking_names']:
-                add_note(name, text)
-        for g in explain['cross_saler_groups']:
-            text = 'Dùng chung đề nghị %s với mã sale %s' % (
-                g['representative_name'], ', '.join(g['other_saler_codes']),
-            )
-            for name in g['this_saler_picking_names']:
-                add_note(name, text)
+        for g in explain['cut_groups']:
+            reasons = []
+            if g['out_of_date_picking_names']:
+                reasons.append('ngày %s (NGOÀI khoảng đang lọc)' % ', '.join(g['out_of_date_dates']))
+            if g['other_saler_picking_names']:
+                reasons.append('mã sale %s' % ', '.join(g['other_saler_codes']))
+            cut_names = g['out_of_date_picking_names'] + g['other_saler_picking_names']
+            text = 'Dùng chung đề nghị xuất HĐ với %s (%s)' % (', '.join(cut_names), '; '.join(reasons))
+            for name in g['qualifying_picking_names']:
+                notes[name] = (notes[name] + '; ' + text) if name in notes else text
         return notes
 
     @api.model
