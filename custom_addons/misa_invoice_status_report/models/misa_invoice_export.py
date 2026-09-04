@@ -105,22 +105,20 @@ class StockPickingMisaInvoiceExport(models.Model):
         )
         notes = {}
         for g in explain['cut_groups']:
-            reasons = []
-            if g['out_of_date_picking_names']:
-                reasons.append('ngày %s (NGOÀI khoảng đang lọc)' % ', '.join(g['out_of_date_dates']))
-            if g['other_saler_picking_names']:
-                reasons.append('mã sale %s' % ', '.join(g['other_saler_codes']))
-            cut_names = g['out_of_date_picking_names'] + g['other_saler_picking_names']
-            text = 'Dùng chung đề nghị xuất HĐ với %s (%s) — số đúng theo đơn hàng: %s%s' % (
-                ', '.join(cut_names), '; '.join(reasons), '{:,.0f}'.format(g['exact_outstanding']),
+            text = 'Dùng chung đề nghị xuất HĐ với %s (ngày %s, NGOÀI khoảng đang lọc) — số đúng theo đơn hàng: %s%s — chênh lệch góp vào "Đối chiếu tổng": %s' % (
+                ', '.join(g['out_of_date_picking_names']), ', '.join(g['out_of_date_dates']),
+                '{:,.0f}'.format(g['exact_outstanding']),
                 ' (ƯỚC LƯỢNG — đơn giao nhiều đợt)' if g['is_estimated'] else '',
+                '{:,.0f}'.format(g['gap_amount']),
             )
-            notes[g['picking_name']] = text
+            for name in g['picking_names']:
+                notes[name] = (notes[name] + '; ' + text) if name in notes else text
         for n in explain.get('cross_saler_notes', []):
-            text = 'Dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — không tính được số chênh lệch đáng tin, tự tra soát trên MISA nếu cần' % (
+            text = 'Dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — chênh lệch góp vào "Đối chiếu tổng": %s' % (
                 n['representative_name'],
                 ', '.join(n.get('other_saler_picking_labels') or n['other_saler_picking_names']),
                 ', '.join(n['other_saler_codes']),
+                '{:,.0f}'.format(n['gap_amount']),
             )
             for name in n['picking_names']:
                 notes[name] = (notes[name] + '; ' + text) if name in notes else text

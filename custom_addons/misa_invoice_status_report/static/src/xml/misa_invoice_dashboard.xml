@@ -2019,8 +2019,8 @@
                                         <tr><th>Phiếu</th><th>Phiếu NGOÀI khoảng lọc (cùng nhóm)</th><th>Ngày (phiếu ngoài)</th><th class="miv-col-num">Số đúng theo đơn</th><th class="miv-col-num">Chênh lệch</th></tr>
                                     </thead>
                                     <tbody>
-                                        <tr t-foreach="state.discrepancyGapExplain.cut_groups" t-as="cg" t-key="cg.picking_name">
-                                            <td><t t-esc="cg.picking_name"/></td>
+                                        <tr t-foreach="state.discrepancyGapExplain.cut_groups" t-as="cg" t-key="cg.picking_names.join(',')">
+                                            <td><t t-esc="cg.picking_names.join(', ')"/></td>
                                             <td><t t-esc="cg.out_of_date_picking_names.join(', ')"/></td>
                                             <td><t t-esc="cg.out_of_date_dates.join(', ')"/></td>
                                             <td class="miv-col-num">

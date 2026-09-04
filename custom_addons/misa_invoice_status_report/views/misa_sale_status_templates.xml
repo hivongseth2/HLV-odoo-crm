@@ -1147,13 +1147,11 @@
                         }).then(function(res) {
                             var d = res.data || {};
                             var parts = [];
-                            var tongCong = (d.customs_pending_amount || 0) + (d.cut_groups_total_amount || 0);
+                            var tongCong = (d.customs_pending_amount || 0) + (d.cut_groups_total_amount || 0) + (d.cross_saler_notes_total_amount || 0);
                             parts.push(
                                 '<div class="msu-drawer-section" style="background:#f5f7fa;border-radius:8px;padding:10px 14px">' +
-                                '<p><b>2 mục đầu (hải quan + bắc cầu ngày lọc) cộng lại: ' + fmtMoney(tongCong) + '</b> — đây là phần TÍNH ĐƯỢC ' +
-                                'số tiền cụ thể. Mục "Dùng chung mã sale khác" ở cuối KHÔNG kèm số (đã thử 3 cách, ra 3 kết quả mâu thuẫn nhau — ' +
-                                'không đủ tin cậy để hiện số) — nên tổng 2 mục này sẽ KHÔNG bằng đủ khoản chênh lệch Excel/list vs "Đối chiếu tổng", ' +
-                                'còn thiếu đúng phần dùng chung mã sale.</p></div>'
+                                '<p><b>Tổng cả 3 mục bên dưới: ' + fmtMoney(tongCong) + '</b> — số này khớp với khoản chênh lệch giữa Excel/list và ' +
+                                '"Đối chiếu tổng" (đo trực tiếp bằng cách loại từng nhóm khỏi phép tính thật, không suy diễn công thức).</p></div>'
                             );
                             if (d.customs_pending_amount) {
                                 parts.push(
@@ -1165,27 +1163,21 @@
                             }
                             if (d.cut_groups && d.cut_groups.length) {
                                 var rows = d.cut_groups.map(function(g) {
-                                    var cutParts = [];
-                                    if (g.out_of_date_picking_names.length) {
-                                        cutParts.push(esc(g.out_of_date_picking_names.join(', ')) + ' (ngày ' + esc(g.out_of_date_dates.join(', ')) + ', ngoài khoảng lọc)');
-                                    }
-                                    if (g.other_saler_picking_names.length) {
-                                        cutParts.push(esc(g.other_saler_picking_names.join(', ')) + ' (mã sale ' + esc(g.other_saler_codes.join(', ')) + ')');
-                                    }
                                     return '<tr>' +
-                                        '<td>' + esc(g.picking_name) + '</td>' +
-                                        '<td>' + cutParts.join('; ') + '</td>' +
+                                        '<td>' + esc(g.picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(g.out_of_date_picking_names.join(', ')) + ' (ngày ' + esc(g.out_of_date_dates.join(', ')) + ')</td>' +
                                         '<td class="msu-col-num">' + fmtMoney(g.exact_outstanding) + (g.is_estimated ? ' (ước lượng)' : '') + '</td>' +
                                         '<td class="msu-col-num">' + fmtMoney(g.gap_amount) + '</td>' +
                                         '</tr>';
                                 }).join('');
                                 parts.push(
-                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị bị cắt bởi bộ lọc</p>' +
-                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC không thỏa bộ lọc ngày/mã sale đang xem — ' +
+                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị bị cắt bởi bộ lọc ngày</p>' +
+                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC không thỏa bộ lọc ngày đang xem — ' +
                                     'cột "Số đúng theo đơn" đọc/tính từ dữ liệu chính xác theo order_code (chỉ ghi "(ước lượng)" khi đơn đó giao ' +
-                                    'nhiều đợt, phải chia theo tỷ lệ giữa các đợt giao CỦA ĐÚNG đơn đó). Chênh lệch: dương = số hiển thị cao hơn ' +
-                                    'số đúng; âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cut_groups_total_amount) + '</b>.</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu</th><th>Phiếu bị cắt (cùng nhóm)</th><th>Số đúng theo đơn</th><th>Chênh lệch</th></tr></thead>' +
+                                    'nhiều đợt). Cột "Chênh lệch góp vào Đối chiếu tổng" đo TRỰC TIẾP (không suy diễn công thức) bằng cách loại các ' +
+                                    'phiếu này khỏi phép tính thật rồi xem "Đối chiếu tổng" tăng/giảm bao nhiêu — dương = Excel/list cao hơn thẻ; ' +
+                                    'âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cut_groups_total_amount) + '</b>.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu</th><th>Phiếu bị cắt (cùng nhóm, ngoài bộ lọc)</th><th>Số đúng theo đơn</th><th>Chênh lệch góp vào Đối chiếu tổng</th></tr></thead>' +
                                     '<tbody>' + rows + '</tbody></table></div>'
                                 );
                             }
@@ -1197,15 +1189,17 @@
                                         '<td>' + esc(n.representative_name) + '</td>' +
                                         '<td>' + esc((n.other_saler_picking_labels || n.other_saler_picking_names).join(', ')) + '</td>' +
                                         '<td>' + esc(n.other_saler_codes.join(', ')) + '</td>' +
+                                        '<td class="msu-col-num">' + fmtMoney(n.gap_amount) + '</td>' +
                                         '</tr>';
                                 }).join('');
                                 parts.push(
                                     '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị với mã sale khác</p>' +
                                     '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu thuộc mã sale KHÁC — "Đối chiếu tổng" tính riêng ' +
-                                    'theo từng mã sale nên có thể lệch, nhưng KHÔNG tính được số tiền chênh lệch đáng tin cho phần này (đã thử 3 cách, ' +
-                                    'ra 3 kết quả mâu thuẫn nhau) — chỉ liệt kê để tự tra soát trên MISA. ' +
-                                    '<b>' + d.cross_saler_notes.length + '</b> nhóm.</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn</th><th>Đơn hàng</th><th>Đề nghị (phiếu đại diện)</th><th>Phiếu mã sale khác (cùng đề nghị)</th><th>Mã sale khác</th></tr></thead>' +
+                                    'theo từng mã sale nên bị lệch. Cột "Chênh lệch góp vào Đối chiếu tổng" đo TRỰC TIẾP (không suy diễn công thức) ' +
+                                    'bằng cách loại các phiếu này khỏi phép tính thật rồi xem "Đối chiếu tổng" tăng/giảm bao nhiêu — dương = Excel/list ' +
+                                    'cao hơn thẻ; âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cross_saler_notes_total_amount) + '</b> (' +
+                                    d.cross_saler_notes.length + ' nhóm).</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn</th><th>Đơn hàng</th><th>Đề nghị (phiếu đại diện)</th><th>Phiếu mã sale khác (cùng đề nghị)</th><th>Mã sale khác</th><th>Chênh lệch góp vào Đối chiếu tổng</th></tr></thead>' +
                                     '<tbody>' + csRows + '</tbody></table></div>'
                                 );
                             }
