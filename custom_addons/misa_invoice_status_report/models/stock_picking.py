@@ -1741,6 +1741,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
         misa_invoiced_total = (
             (misa_invoiced_group[0]['misa_invoice_effective_amount'] or 0.0) if misa_invoiced_group else 0.0
         )
+        # Cộng thêm tín dụng phát hiện qua dữ liệu exact (đơn hàng đã xuất HĐ đủ qua đề nghị
+        # KHÁC mà công thức trên chưa biết tới — xem exact_correction_credit trong
+        # _misa_invoice_picking_to_row) — dùng CHUNG đúng 1 nguồn tính với Excel/list, để 2 nơi
+        # không tự vá riêng rồi lệch nhau. Không ảnh hưởng tới các nhóm THỪA hóa đơn khác (vẫn
+        # được bù trừ toàn cục như cũ qua misa_actual_total - misa_invoiced_total).
+        today = fields.Date.context_today(Picking)
+        exact_correction_total = sum(
+            Picking._misa_invoice_picking_to_row(p, today)['exact_correction_credit']
+            for p in Picking.search(misa_domain)
+        )
+        misa_invoiced_total += exact_correction_total
 
         shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
@@ -2602,7 +2613,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # nhầm sẽ làm outstanding_amount SAI thành 0 cho toàn bộ phiếu chưa invoiced. Phải trừ
         # trực tiếp actual - invoice ở đây (invoice_amount = 0 khi chưa có hóa đơn, ra đúng
         # actual_amount như bình thường).
-        group_outstanding_amount = max(group_actual_amount - invoice_amount, 0.0)
+        group_outstanding_amount_naive = max(group_actual_amount - invoice_amount, 0.0)
+        group_outstanding_amount = group_outstanding_amount_naive
         if group_outstanding_amount > MISA_INVOICE_AMOUNT_TOLERANCE:
             # QUAN TRỌNG (case thật KBC/OUT/08748+11841, đơn DH...229154): invoice_amount ở trên
             # chỉ tính tiền hóa đơn CỦA ĐỀ NGHỊ Odoo đã tự liên kết cho NHÓM này — nếu đơn hàng
@@ -2623,6 +2635,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     for o in group_orders
                 )
                 group_outstanding_amount = min(group_outstanding_amount, exact_orders_outstanding)
+        # Phần "tín dụng" tìm thêm được nhờ dữ liệu exact (KHÔNG liên quan gap_resolved bên dưới)
+        # — get_misa_invoice_reconciliation_totals cộng CHÍNH giá trị này (quy theo tỷ lệ actual
+        # của từng phiếu trong misa_domain, y hệt cách chia outstanding_amount ở dưới) vào tiền
+        # đã xuất HĐ, để thẻ "Đối chiếu tổng" và Excel/list LUÔN dùng chung 1 nguồn sửa lỗi, thay
+        # vì mỗi nơi tự vá riêng rồi lệch nhau (bài học từ nhiều lần trong phiên làm việc này).
+        group_outstanding_exact_delta = group_outstanding_amount_naive - group_outstanding_amount
         if diff_source.misa_invoice_gap_resolved:
             # Lệch này ĐÃ được xác minh xong (nút "Cập nhật lý do lệch") — tiền thực chất ĐÃ có
             # hóa đơn, chỉ gắn nhầm đề nghị khác (case KBC/OUT/10826/11218), KHÔNG phải còn
@@ -2634,6 +2652,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         own_actual_amount = picking.misa_invoice_net_actual_amount or 0.0
         outstanding_amount = (
             group_outstanding_amount * own_actual_amount / group_actual_amount if group_actual_amount > 0 else 0.0
+        )
+        exact_correction_credit = (
+            group_outstanding_exact_delta * own_actual_amount / group_actual_amount if group_actual_amount > 0 else 0.0
         )
         has_return = (picking.misa_invoice_returned_amount or 0.0) > 0
         # Đã khớp 1 PHẦN (không đủ để gán "ăn theo") qua đề nghị xuất HĐ chung của 1 phiếu
@@ -2665,6 +2686,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # NHÓM rồi chia lại theo tỷ lệ — xem outstanding_amount ở trên, nhất quán với
             # get_misa_invoice_reconciliation_totals.
             'outstanding_amount': outstanding_amount,
+            # Phần tín dụng phát hiện thêm nhờ dữ liệu exact (order.misa_invoice_exact_*) —
+            # get_misa_invoice_reconciliation_totals cộng field này vào tiền đã xuất HĐ để thẻ
+            # "Đối chiếu tổng" khớp với outstanding_amount ở trên (xem giải thích tại nơi tính).
+            'exact_correction_credit': exact_correction_credit,
             # True nếu state='invoiced' nhưng NHÓM (đại diện + ăn theo) vẫn chưa đủ tiền — để
             # frontend hiện thêm badge phụ bên cạnh "Đã xuất hóa đơn" (không lẫn với "Lệch tiền",
             # vốn bắt cả case THỪA tiền, xem misa_invoice_partial_invoice).
