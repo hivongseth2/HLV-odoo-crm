@@ -136,37 +136,52 @@ class ReportDialogController(ReportController):
     @http.route("/report/download", type="http", auth="user")
     def report_download(self, data, context=None, token=None):
         """Override report_download to fix Content-Disposition header format.
-        
-        The standard Odoo controller uses RFC2231 encoding which can cause
-        'invalid parameter format' errors in some JavaScript parsers.
-        """
-        # Call parent method to get the response
+
+        Odoo gốc đôi khi trả về HAI header 'Content-Disposition' riêng biệt (1 bản ASCII
+        filename="..." + 1 bản RFC2231 filename*=charset'lang'encoded) — hợp lệ theo cách
+        Werkzeug lưu nhưng trình duyệt (Chrome mới) coi là lỗi
+        (net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_DISPOSITION) và HỦY response luôn.
+        response.headers.get(...) chỉ đọc được BẢN ĐẦU TIÊN — nếu bản đó không chứa
+        'filename*=', code cũ bỏ qua không sửa gì, để nguyên 2 header trùng tên gây lỗi.
+        Ở đây gom HẾT các bản trùng tên (get_all) rồi ghi lại ĐÚNG 1 header duy nhất."""
         response = super().report_download(data, context=context, token=token)
-        
-        # Fix Content-Disposition header if present
-        if hasattr(response, 'headers') and 'Content-Disposition' in response.headers:
-            content_disp = response.headers.get('Content-Disposition', '')
-            
-            # Check if it uses RFC2231 encoding (filename*=)
-            if 'filename*=' in content_disp:
-                import re
-                # Try to extract the filename and convert to simple format
-                # RFC2231 format: filename*=charset'language'encoded_value
-                match = re.search(r"filename\*=([^']+)'([^']*)'(.+?)(?:;|$)", content_disp)
-                if match:
-                    try:
-                        encoded_filename = match.group(3)
-                        # URL decode the filename
-                        from urllib.parse import unquote
-                        decoded_filename = unquote(encoded_filename)
-                        # Create simple Content-Disposition with URL-encoded filename
-                        disposition_type = 'attachment' if content_disp.startswith('attachment') else 'inline'
-                        # Use ASCII-safe filename
-                        safe_filename = quote(decoded_filename, safe='')
-                        new_content_disp = f'{disposition_type}; filename="{safe_filename}"'
-                        response.headers['Content-Disposition'] = new_content_disp
-                    except Exception as e:
-                        # If conversion fails, try a fallback
-                        pass
-        
+
+        if not hasattr(response, "headers"):
+            return response
+        disposition_values = response.headers.get_all("Content-Disposition")
+        if not disposition_values:
+            return response
+
+        import re
+        from urllib.parse import unquote
+
+        # Ưu tiên bản RFC2231 (filename*=) vì nó giữ đúng tên file gốc (có dấu/unicode) —
+        # bản ASCII fallback thường chỉ là tên đã rút gọn/thay thế ký tự.
+        chosen = next((v for v in disposition_values if "filename*=" in v), disposition_values[0])
+        disposition_type = "attachment" if chosen.startswith("attachment") else "inline"
+
+        filename = None
+        match = re.search(r"filename\*=([^']+)'([^']*)'(.+?)(?:;|$)", chosen)
+        if match:
+            try:
+                filename = unquote(match.group(3))
+            except Exception:
+                filename = None
+        if filename is None:
+            match_ascii = re.search(r'filename="?([^";]+)"?', chosen)
+            if match_ascii:
+                filename = match_ascii.group(1)
+
+        if filename:
+            safe_filename = quote(filename, safe="")
+            new_content_disp = f'{disposition_type}; filename="{safe_filename}"'
+        else:
+            # Không tách được tên file từ BẤT KỲ bản nào — vẫn phải gom về 1 header duy nhất,
+            # dùng nguyên bản đầu tiên thay vì để nguyên cả 2 gây lỗi trình duyệt.
+            new_content_disp = chosen
+
+        # QUAN TRỌNG: __setitem__ trên Headers của Werkzeug tự xóa HẾT các bản trùng tên trước
+        # khi ghi bản mới — đảm bảo response cuối cùng chỉ còn ĐÚNG 1 header Content-Disposition.
+        response.headers["Content-Disposition"] = new_content_disp
+
         return response
