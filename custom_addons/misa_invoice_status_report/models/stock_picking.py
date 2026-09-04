@@ -1762,11 +1762,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 continue
             if group.filtered(lambda m: not matches_saler(m)):
                 continue  # có thành viên khác mã sale — KHÔNG tự động cộng, xem cross_saler_notes
-            excel_contribution = sum(
-                Picking._misa_invoice_picking_to_row(m, today)['outstanding_amount'] for m in qualifying
-            )
-            naive_contribution = sum(qualifying.mapped('misa_invoice_net_actual_amount')) or 0.0
-            credit_total += naive_contribution - excel_contribution
+            for m in qualifying:
+                row = Picking._misa_invoice_picking_to_row(m, today)
+                # QUAN TRỌNG: KHÔNG được dùng thẳng actual thô của m làm "phần card đang tính
+                # là còn thiếu" — vì misa_invoiced_total (nơi credit_total này được cộng vào)
+                # ĐÃ được cộng exact_correction_credit của m rồi (xem
+                # _misa_invoice_misa_only_totals) — dùng actual thô sẽ CỘNG TRÙNG credit đó lần
+                # 2, làm thẻ bị cộng THỪA tín dụng (case thật đã bắt được: card tụt xuống sai,
+                # khoảng lệch PHÌNH TO thay vì thu hẹp). Phần card ĐANG thiếu (trước khi có credit
+                # mới này) = actual - exact_correction_credit ĐÃ áp dụng.
+                current_card_contribution = (m.misa_invoice_net_actual_amount or 0.0) - row['exact_correction_credit']
+                credit_total += current_card_contribution - row['outstanding_amount']
         return credit_total
 
     def _misa_invoice_misa_only_totals(self, misa_domain, date_from=False, date_to=False, saler_code=False):
