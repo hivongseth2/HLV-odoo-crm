@@ -360,11 +360,11 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         3. "Dùng chung mã sale khác" (cross_saler_notes) — 1 đề nghị gộp chung cho khách hàng
            của NHIỀU nhân viên bán khác nhau. get_misa_invoice_reconciliation_totals tính riêng
            theo từng saler (read_group ở MỨC PHIẾU) nên có thể gán TRỌN group_invoice cho saler
-           của phiếu đại diện dù tiền đó thuộc về nhiều saler. gap_amount ở đây so 2 công thức
-           CÙNG chỉ dùng dữ liệu mức phiếu (không đụng misa_invoice_exact_* theo đơn — thứ đã
-           gây lỗi 652 triệu ở get_misa_invoice_reconciliation_totals do vấn đề mốc cắt ngày —
-           nên an toàn, không có rủi ro đó): số ĐANG HIỂN THỊ (Excel/list) so với số mà chính
-           get_misa_invoice_reconciliation_totals tính ra cho NHÓM này."""
+           của phiếu đại diện dù tiền đó thuộc về nhiều saler. ĐÃ THỬ tính gap_amount 2 cách
+           (order-exact: lỗi mốc cắt ngày; picking-level read_group: SAI vì đa số nhóm thực tế
+           VỪA dùng chung mã sale VỪA có phiếu ngoài khoảng ngày lọc, 2 nguyên nhân lẫn nhau
+           không tách được) — KHÔNG kèm số tiền, chỉ liệt kê THÔNG TIN (phiếu/đơn hàng/mã sale
+           khác) để tự tra soát, tránh đưa số sai."""
         Picking = self.sudo()
         today = fields.Date.context_today(self)
         parsed_from = fields.Date.from_string(date_from) if date_from else None
@@ -401,13 +401,14 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         ]
         affected_pickings = Picking.browse()
         cut_context_by_picking = {}
-        # "Dùng chung mã sale khác" — TÍNH ĐƯỢC gap_amount đáng tin, nhưng KHÔNG dùng
-        # misa_invoice_exact_* (dữ liệu theo đơn, all-time, dính lỗi mốc cắt ngày như đã gặp) —
-        # ở đây so sánh 2 công thức CÙNG chỉ dùng dữ liệu MỨC PHIẾU (không có vấn đề mốc cắt):
-        # my_contribution = số ĐANG HIỂN THỊ trên Excel/list cho các phiếu của saler này (công
-        # thức nhóm cũ, _misa_invoice_picking_to_row); ground_truth_contribution = số mà
-        # get_misa_invoice_reconciliation_totals (read_group, lọc saler) THẬT SỰ tính ra cho
-        # NHÓM này — chỉ trừ group_invoice nếu chính đại diện cũng thỏa domain đang lọc.
+        # "Dùng chung mã sale khác" — ĐÃ THỬ tính gap_amount 2 CÁCH khác nhau (order-exact:
+        # gây lỗi mốc cắt ngày; picking-level read_group: tính RA SỐ nhưng SAI vì đa số nhóm
+        # thực tế VỪA dùng chung mã sale VỪA có phiếu ngoài khoảng ngày lọc (case thật:
+        # KBC/OUT/11810 group còn có KBC/OUT/11375, KBC/OUT/11518 của CHÍNH saler này nhưng
+        # xuất TRƯỚC khoảng ngày đang lọc) — 2 nguyên nhân lẫn vào nhau, không tách được bằng 1
+        # công thức đơn giản, tính ra 20,5tr trong khi số lệch thật chỉ có ~7tr (thổi phồng gần
+        # gấp 3). KHÔNG tính số nữa — chỉ liệt kê THÔNG TIN (phiếu/đơn hàng/mã sale khác) để
+        # người quản lý tự tra soát trên MISA, tránh đưa ra con số sai gây hiểu lầm.
         cross_saler_notes = []
         for rep in Picking.search(rep_domain):
             group = rep | rep.misa_invoice_covered_picking_ids
@@ -417,21 +418,12 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 continue
             other_saler_members_any = group.filtered(lambda m: not matches_saler(m))
             if other_saler_members_any:
-                group_actual = sum(group.mapped('misa_invoice_net_actual_amount')) or 0.0
-                group_invoice = rep.misa_invoice_effective_amount or 0.0
-                group_outstanding = max(group_actual - group_invoice, 0.0)
-                this_saler_actual = sum(qualifying.mapped('misa_invoice_net_actual_amount')) or 0.0
-                my_contribution = (group_outstanding * this_saler_actual / group_actual) if group_actual > 0 else 0.0
-                ground_truth_contribution = this_saler_actual - (group_invoice if qualifies(rep) else 0.0)
                 cross_saler_notes.append({
                     'picking_names': qualifying.mapped('name'),
                     'order_names': sorted(set(qualifying.mapped('misa_invoice_sale_order_ids').mapped('name'))),
                     'representative_name': rep.name,
                     'other_saler_picking_names': other_saler_members_any.mapped('name'),
                     'other_saler_codes': sorted(set(other_saler_members_any.mapped('misa_invoice_saler_code'))),
-                    # Dương: số hiển thị (Excel/list) CAO hơn "Đối chiếu tổng" vì nhóm này.
-                    # Âm: ngược lại.
-                    'gap_amount': my_contribution - ground_truth_contribution,
                 })
             if not cut_off:
                 continue
@@ -502,14 +494,12 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 'gap_amount': gap,
             })
         cut_rows.sort(key=lambda r: -abs(r['gap_amount']))
-        cross_saler_notes.sort(key=lambda r: -abs(r['gap_amount']))
 
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
         return {
             'cut_groups': cut_rows,
             'cut_groups_total_amount': sum(g['gap_amount'] for g in cut_rows),
             'cross_saler_notes': cross_saler_notes,
-            'cross_saler_notes_total_amount': sum(n['gap_amount'] for n in cross_saler_notes),
             'customs_pending_amount': customs_summary['pending_amount'],
             'customs_pending_count': customs_summary['pending_count'],
         }
