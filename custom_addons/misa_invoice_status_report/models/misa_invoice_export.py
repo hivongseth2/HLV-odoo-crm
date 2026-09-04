@@ -116,6 +116,12 @@ class StockPickingMisaInvoiceExport(models.Model):
                 ' (ƯỚC LƯỢNG — đơn giao nhiều đợt)' if g['is_estimated'] else '',
             )
             notes[g['picking_name']] = text
+        for n in explain.get('cross_saler_notes', []):
+            text = 'Dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — không tính được số chênh lệch đáng tin, tự tra soát trên MISA nếu cần' % (
+                n['representative_name'], ', '.join(n['other_saler_picking_names']), ', '.join(n['other_saler_codes']),
+            )
+            for name in n['picking_names']:
+                notes[name] = (notes[name] + '; ' + text) if name in notes else text
         return notes
 
     @api.model

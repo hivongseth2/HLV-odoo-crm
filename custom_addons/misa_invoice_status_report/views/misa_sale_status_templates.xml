@@ -1181,6 +1181,26 @@
                                     '<tbody>' + rows + '</tbody></table></div>'
                                 );
                             }
+                            if (d.cross_saler_notes && d.cross_saler_notes.length) {
+                                var csRows = d.cross_saler_notes.map(function(n) {
+                                    return '<tr>' +
+                                        '<td>' + esc(n.picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(n.order_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(n.representative_name) + '</td>' +
+                                        '<td>' + esc(n.other_saler_picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(n.other_saler_codes.join(', ')) + '</td>' +
+                                        '</tr>';
+                                }).join('');
+                                parts.push(
+                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị với mã sale khác</p>' +
+                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu thuộc mã sale KHÁC — "Đối chiếu tổng" tính riêng ' +
+                                    'theo từng mã sale nên có thể lệch (không sửa được số vì gây lỗi khác lớn hơn — xem giải thích trong code), ' +
+                                    'chỉ liệt kê ở đây để tự tra soát trực tiếp trên MISA nếu cần. ' +
+                                    '<b>' + d.cross_saler_notes.length + '</b> nhóm.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn</th><th>Đơn hàng</th><th>Đề nghị (phiếu đại diện)</th><th>Phiếu mã sale khác (cùng đề nghị)</th><th>Mã sale khác</th></tr></thead>' +
+                                    '<tbody>' + csRows + '</tbody></table></div>'
+                                );
+                            }
                             body.innerHTML = parts.length ? parts.join('') : '<span class="msu-muted">Không tìm thấy nguyên nhân cụ thể nào trong phạm vi đang lọc.</span>';
                         }).catch(function(e) {
                             body.innerHTML = '<span class="msu-muted">Lỗi tải dữ liệu: ' + esc(e.message) + '</span>';

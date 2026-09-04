@@ -356,7 +356,13 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
            việc ước lượng. Chỉ khi 1 đơn có NHIỀU đợt giao (nhiều phiếu xuất kho) mới phải chia
            tiếp theo tỷ lệ actual GIỮA CÁC PHIẾU CỦA ĐÚNG ĐƠN ĐÓ (is_estimated=True, phạm vi hẹp
            hơn NHIỀU so với cách cũ theo cả nhóm đề nghị) — các trường hợp còn lại là số CHÍNH
-           XÁC TUYỆT ĐỐI (is_estimated=False)."""
+           XÁC TUYỆT ĐỐI (is_estimated=False).
+        3. "Dùng chung mã sale khác" (cross_saler_notes) — 1 đề nghị gộp chung cho khách hàng
+           của NHIỀU nhân viên bán khác nhau. get_misa_invoice_reconciliation_totals tính riêng
+           theo từng saler nên có thể lệch (đã cân nhắc sửa theo order_code như mục 2, nhưng gây
+           lỗi lớn hơn do vấn đề mốc cắt ngày — xem get_misa_invoice_reconciliation_totals — nên
+           KHÔNG sửa số, chỉ LIỆT KÊ phiếu/đơn hàng/mã sale khác để người quản lý tự tra soát,
+           không kèm số tiền chênh lệch)."""
         Picking = self.sudo()
         today = fields.Date.context_today(self)
         parsed_from = fields.Date.from_string(date_from) if date_from else None
@@ -393,11 +399,26 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         ]
         affected_pickings = Picking.browse()
         cut_context_by_picking = {}
+        # "Dùng chung mã sale khác" KHÔNG tính được số chênh lệch đáng tin (đã thử, gây lỗi lớn
+        # hơn do vấn đề mốc cắt ngày — xem get_misa_invoice_reconciliation_totals) — CHỈ liệt kê
+        # THÔNG TIN (phiếu/đơn hàng/mã sale khác) để người quản lý tự tra soát, không kèm số tiền.
+        cross_saler_notes = []
         for rep in Picking.search(rep_domain):
             group = rep | rep.misa_invoice_covered_picking_ids
             qualifying = group.filtered(qualifies)
             cut_off = group - qualifying
-            if not qualifying or not cut_off:
+            if not qualifying:
+                continue
+            other_saler_members_any = group.filtered(lambda m: not matches_saler(m))
+            if other_saler_members_any:
+                cross_saler_notes.append({
+                    'picking_names': qualifying.mapped('name'),
+                    'order_names': sorted(set(qualifying.mapped('misa_invoice_sale_order_ids').mapped('name'))),
+                    'representative_name': rep.name,
+                    'other_saler_picking_names': other_saler_members_any.mapped('name'),
+                    'other_saler_codes': sorted(set(other_saler_members_any.mapped('misa_invoice_saler_code'))),
+                })
+            if not cut_off:
                 continue
             out_of_date_members = cut_off.filtered(lambda m: not in_date_range(m))
             other_saler_members = cut_off.filtered(lambda m: in_date_range(m) and not matches_saler(m))
@@ -471,6 +492,7 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         return {
             'cut_groups': cut_rows,
             'cut_groups_total_amount': sum(g['gap_amount'] for g in cut_rows),
+            'cross_saler_notes': cross_saler_notes,
             'customs_pending_amount': customs_summary['pending_amount'],
             'customs_pending_count': customs_summary['pending_count'],
         }
