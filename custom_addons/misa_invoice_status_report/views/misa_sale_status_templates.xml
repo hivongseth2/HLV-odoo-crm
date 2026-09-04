@@ -1195,7 +1195,7 @@
                                         '<td>' + esc(n.picking_names.join(', ')) + '</td>' +
                                         '<td>' + esc(n.order_names.join(', ')) + '</td>' +
                                         '<td>' + esc(n.representative_name) + '</td>' +
-                                        '<td>' + esc(n.other_saler_picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc((n.other_saler_picking_labels || n.other_saler_picking_names).join(', ')) + '</td>' +
                                         '<td>' + esc(n.other_saler_codes.join(', ')) + '</td>' +
                                         '</tr>';
                                 }).join('');

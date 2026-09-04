@@ -424,6 +424,13 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                     'order_names': sorted(set(qualifying.mapped('misa_invoice_sale_order_ids').mapped('name'))),
                     'representative_name': rep.name,
                     'other_saler_picking_names': other_saler_members_any.mapped('name'),
+                    # Kèm tên đơn hàng của TỪNG phiếu mã sale khác (VD "KBC/OUT/11667
+                    # (DH125524949234807)") — người quản lý cần biết ngay đơn nào để tự tra MISA,
+                    # không phải tự đi tìm lại đơn hàng theo tên phiếu.
+                    'other_saler_picking_labels': [
+                        '%s (%s)' % (m.name, ', '.join(m.misa_invoice_sale_order_ids.mapped('name')) or '?')
+                        for m in other_saler_members_any
+                    ],
                     'other_saler_codes': sorted(set(other_saler_members_any.mapped('misa_invoice_saler_code'))),
                 })
             if not cut_off:
