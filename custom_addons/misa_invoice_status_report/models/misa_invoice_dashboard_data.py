@@ -344,15 +344,21 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
 
         1. "Đơn hải quan chưa khớp PXK" — hóa đơn KHÔNG gắn với phiếu xuất kho nào, nên không
            thể hiện ở bất kỳ dòng phiếu/đơn nào (đã có count/amount sẵn, chỉ liệt kê lại).
-        2. "Nhóm bị cắt bởi bộ lọc" — 1 đề nghị gộp chung (đại diện + phiếu ăn theo) có phiếu
-           KHÔNG THỎA bộ lọc đang xem (ngày NGOÀI date_from/date_to, và/hoặc thuộc mã sale
-           KHÁC saler_code đang xem), nhưng _misa_invoice_picking_to_row luôn tính
-           group_actual/group_invoice trên TOÀN NHÓM (không cắt theo filter) — trong khi
-           get_misa_invoice_reconciliation_totals dùng read_group CÓ áp domain (ngày + saler),
-           nên 2 bên "nhìn thấy" 2 tập phiếu khác nhau của cùng 1 nhóm → tổng khác nhau. Gộp
-           chung 2 nguyên nhân (ngày/saler) vào 1 công thức duy nhất vì chúng cùng bản chất —
-           chỉ khác ĐIỀU KIỆN "phiếu này có thỏa domain đang lọc hay không"."""
+        2. "Phiếu thuộc nhóm bị cắt bởi bộ lọc" — 1 đề nghị gộp chung (đại diện + phiếu ăn theo)
+           có phiếu KHÔNG THỎA bộ lọc đang xem (ngày NGOÀI date_from/date_to, và/hoặc thuộc mã
+           sale KHÁC saler_code đang xem). _misa_invoice_picking_to_row (số hiển thị trên
+           list/Excel) tính group_actual/group_invoice trên TOÀN NHÓM rồi chia theo tỷ lệ —
+           XẤP XỈ. Ở ĐÂY tính số CHÍNH XÁC hơn theo TỪNG PHIẾU bị ảnh hưởng, bằng cách đọc
+           misa_invoice_exact_shipped_amount/_invoiced_amount đã LƯU SẴN trên đơn hàng của
+           phiếu đó (đã quy đúng theo order_code qua API sống, không đếm trùng cross-order —
+           xem sale_order.py/_misa_invoice_reconcile_order_coverage) — CHỈ khi đơn đó CHƯA
+           từng được tính mới CHỦ ĐỘNG gọi API ngay (và lưu lại cho lần sau), hạn chế tối đa
+           việc ước lượng. Chỉ khi 1 đơn có NHIỀU đợt giao (nhiều phiếu xuất kho) mới phải chia
+           tiếp theo tỷ lệ actual GIỮA CÁC PHIẾU CỦA ĐÚNG ĐƠN ĐÓ (is_estimated=True, phạm vi hẹp
+           hơn NHIỀU so với cách cũ theo cả nhóm đề nghị) — các trường hợp còn lại là số CHÍNH
+           XÁC TUYỆT ĐỐI (is_estimated=False)."""
         Picking = self.sudo()
+        today = fields.Date.context_today(self)
         parsed_from = fields.Date.from_string(date_from) if date_from else None
         parsed_to = fields.Date.from_string(date_to) if date_to else None
         saler_value = False
@@ -377,58 +383,94 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         def qualifies(picking):
             return in_date_range(picking) and matches_saler(picking)
 
-        cut_groups = []
+        # Bước 1: tìm CÁC PHIẾU ĐANG HIỂN THỊ (thỏa filter) thuộc 1 nhóm gộp chung có phiếu
+        # KHÁC không thỏa filter — đây là các phiếu có nguy cơ số hiển thị bị xấp xỉ sai.
         rep_domain = [
             ('picking_type_id.code', '=', 'outgoing'),
             ('misa_invoice_master_picking_id', '=', False),
             ('misa_invoice_covered_picking_ids', '!=', False),
             ('misa_invoice_state', '=', 'invoiced'),
         ]
+        affected_pickings = Picking.browse()
+        cut_context_by_picking = {}
         for rep in Picking.search(rep_domain):
             group = rep | rep.misa_invoice_covered_picking_ids
             qualifying = group.filtered(qualifies)
             cut_off = group - qualifying
-            # Nhóm toàn bộ THỎA hoặc toàn bộ KHÔNG THỎA bộ lọc — không bị cắt ngang, bỏ qua.
             if not qualifying or not cut_off:
-                continue
-            group_actual = sum(group.mapped('misa_invoice_net_actual_amount')) or 0.0
-            if group_actual <= 0:
-                continue
-            group_invoice = rep.misa_invoice_effective_amount or 0.0
-            group_outstanding = max(group_actual - group_invoice, 0.0)
-            qualifying_actual = sum(qualifying.mapped('misa_invoice_net_actual_amount')) or 0.0
-            # Số hiển thị trên list/Excel (_misa_invoice_picking_to_row) — LUÔN dùng group_outstanding
-            # tính trên TOÀN NHÓM, chia theo tỷ lệ actual cho các phiếu ĐANG hiển thị.
-            my_contribution = group_outstanding * qualifying_actual / group_actual
-            # Số của get_misa_invoice_reconciliation_totals — chỉ đếm actual của phiếu THỎA bộ
-            # lọc, và CHỈ trừ group_invoice nếu chính ĐẠI DIỆN cũng thỏa bộ lọc (read_group chỉ
-            # thấy field misa_invoice_effective_amount của đại diện nếu đại diện nằm trong domain).
-            ground_truth_contribution = qualifying_actual - (group_invoice if qualifies(rep) else 0.0)
-            gap = my_contribution - ground_truth_contribution
-            if abs(gap) <= MISA_INVOICE_AMOUNT_TOLERANCE:
                 continue
             out_of_date_members = cut_off.filtered(lambda m: not in_date_range(m))
             other_saler_members = cut_off.filtered(lambda m: in_date_range(m) and not matches_saler(m))
-            cut_groups.append({
-                'qualifying_picking_names': qualifying.mapped('name'),
+            ctx = {
                 'out_of_date_picking_names': out_of_date_members.mapped('name'),
                 'out_of_date_dates': sorted(set(
                     fields.Date.to_string(m.date_done.date()) for m in out_of_date_members if m.date_done
                 )),
                 'other_saler_picking_names': other_saler_members.mapped('name'),
                 'other_saler_codes': sorted(set(other_saler_members.mapped('misa_invoice_saler_code'))),
-                'representative_name': rep.name,
-                'representative_saler_code': rep.misa_invoice_saler_code or '',
-                # Dương: số hiển thị (Excel/list) CAO hơn "Đối chiếu tổng" vì nhóm này.
-                # Âm: ngược lại ("Đối chiếu tổng" cao hơn vì nhóm này).
+            }
+            for p in qualifying:
+                cut_context_by_picking[p.id] = ctx
+            affected_pickings |= qualifying
+
+        # Bước 2: với TỪNG phiếu bị ảnh hưởng, tính số CHÍNH XÁC theo đơn hàng — ưu tiên đọc
+        # misa_invoice_exact_* đã lưu sẵn, CHỈ gọi API khi đơn CHƯA từng được tính (1 lần/đơn,
+        # không lặp lại cho phiếu khác cùng đơn nhờ ensured_order_ids).
+        ensured_order_ids = set()
+        cut_rows = []
+        for picking in affected_pickings:
+            orders = picking.misa_invoice_sale_order_ids
+            if not orders:
+                continue
+            exact_outstanding = 0.0
+            is_estimated = False
+            for order in orders:
+                if order.id not in ensured_order_ids:
+                    if not order.misa_invoice_exact_checked_at:
+                        try:
+                            picking._misa_invoice_reconcile_order_coverage()
+                        except Exception:
+                            pass
+                    ensured_order_ids.add(order.id)
+                order_shipped = order.misa_invoice_exact_shipped_amount or 0.0
+                order_invoiced = order.misa_invoice_exact_invoiced_amount or 0.0
+                order_outstanding = max(order_shipped - order_invoiced, 0.0)
+                order_pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.state == 'done')
+                if order_shipped <= 0 or len(order_pickings) <= 1:
+                    # Đơn chỉ có 1 phiếu xuất kho (hoặc chưa xuất gì) — số của đơn CHÍNH LÀ số
+                    # của phiếu này, không cần chia — CHÍNH XÁC TUYỆT ĐỐI.
+                    exact_outstanding += order_outstanding
+                else:
+                    # Đơn có NHIỀU đợt giao — buộc phải chia order_outstanding theo tỷ lệ actual
+                    # GIỮA CÁC PHIẾU CỦA ĐÚNG ĐƠN NÀY — vẫn là ước lượng, nhưng phạm vi hẹp hơn
+                    # nhiều so với cách cũ (theo cả nhóm đề nghị, có thể lẫn qua đơn/sale khác).
+                    is_estimated = True
+                    own_actual = picking.misa_invoice_net_actual_amount or 0.0
+                    exact_outstanding += order_outstanding * own_actual / order_shipped
+
+            displayed_outstanding = self._misa_invoice_picking_to_row(picking, today)['outstanding_amount']
+            gap = displayed_outstanding - exact_outstanding
+            if abs(gap) <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                continue
+            ctx = cut_context_by_picking.get(picking.id, {})
+            cut_rows.append({
+                'picking_name': picking.name,
+                'out_of_date_picking_names': ctx.get('out_of_date_picking_names', []),
+                'out_of_date_dates': ctx.get('out_of_date_dates', []),
+                'other_saler_picking_names': ctx.get('other_saler_picking_names', []),
+                'other_saler_codes': ctx.get('other_saler_codes', []),
+                'exact_outstanding': exact_outstanding,
+                'is_estimated': is_estimated,
+                # Dương: số hiển thị (Excel/list) CAO hơn số CHÍNH XÁC theo đơn hàng.
+                # Âm: ngược lại.
                 'gap_amount': gap,
             })
-        cut_groups.sort(key=lambda r: -abs(r['gap_amount']))
+        cut_rows.sort(key=lambda r: -abs(r['gap_amount']))
 
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
         return {
-            'cut_groups': cut_groups,
-            'cut_groups_total_amount': sum(g['gap_amount'] for g in cut_groups),
+            'cut_groups': cut_rows,
+            'cut_groups_total_amount': sum(g['gap_amount'] for g in cut_rows),
             'customs_pending_amount': customs_summary['pending_amount'],
             'customs_pending_count': customs_summary['pending_count'],
         }

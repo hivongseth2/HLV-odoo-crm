@@ -2012,17 +2012,21 @@
                             </div>
                             <div class="miv-drawer-linking" t-if="state.discrepancyGapExplain and state.discrepancyGapExplain.cut_groups.length">
                                 <i class="fa fa-exclamation-triangle"/> Đang lọc theo ngày xuất kho (<t t-esc="state.shipFrom || '…'"/> → <t t-esc="state.shipTo || '…'"/>)
-                                — <b><t t-esc="state.discrepancyGapExplain.cut_groups.length"/></b> nhóm đề nghị gộp chung có phiếu bị "cắt" khỏi khoảng ngày này,
+                                — <b><t t-esc="state.discrepancyGapExplain.cut_groups.length"/></b> phiếu dùng chung đề nghị với phiếu bị "cắt" khỏi khoảng ngày này,
                                 tổng chênh lệch: <b><t t-esc="formatCurrency(state.discrepancyGapExplain.cut_groups_total_amount)"/></b>
                                 <table class="miv-subtable" style="margin-top:6px">
                                     <thead>
-                                        <tr><th>Phiếu đang hiển thị</th><th>Phiếu NGOÀI khoảng lọc (cùng nhóm)</th><th>Ngày (phiếu ngoài)</th><th class="miv-col-num">Chênh lệch</th></tr>
+                                        <tr><th>Phiếu</th><th>Phiếu NGOÀI khoảng lọc (cùng nhóm)</th><th>Ngày (phiếu ngoài)</th><th class="miv-col-num">Số đúng theo đơn</th><th class="miv-col-num">Chênh lệch</th></tr>
                                     </thead>
                                     <tbody>
-                                        <tr t-foreach="state.discrepancyGapExplain.cut_groups" t-as="cg" t-key="cg.qualifying_picking_names.join(',')">
-                                            <td><t t-esc="cg.qualifying_picking_names.join(', ')"/></td>
+                                        <tr t-foreach="state.discrepancyGapExplain.cut_groups" t-as="cg" t-key="cg.picking_name">
+                                            <td><t t-esc="cg.picking_name"/></td>
                                             <td><t t-esc="cg.out_of_date_picking_names.join(', ')"/></td>
                                             <td><t t-esc="cg.out_of_date_dates.join(', ')"/></td>
+                                            <td class="miv-col-num">
+                                                <t t-esc="formatCurrency(cg.exact_outstanding)"/>
+                                                <span t-if="cg.is_estimated" title="Đơn giao nhiều đợt — đã chia theo tỷ lệ giữa các đợt giao của cùng đơn"> (ước lượng)</span>
+                                            </td>
                                             <td class="miv-col-num"><t t-esc="formatCurrency(cg.gap_amount)"/></td>
                                         </tr>
                                     </tbody>

@@ -111,9 +111,11 @@ class StockPickingMisaInvoiceExport(models.Model):
             if g['other_saler_picking_names']:
                 reasons.append('mã sale %s' % ', '.join(g['other_saler_codes']))
             cut_names = g['out_of_date_picking_names'] + g['other_saler_picking_names']
-            text = 'Dùng chung đề nghị xuất HĐ với %s (%s)' % (', '.join(cut_names), '; '.join(reasons))
-            for name in g['qualifying_picking_names']:
-                notes[name] = (notes[name] + '; ' + text) if name in notes else text
+            text = 'Dùng chung đề nghị xuất HĐ với %s (%s) — số đúng theo đơn hàng: %s%s' % (
+                ', '.join(cut_names), '; '.join(reasons), '{:,.0f}'.format(g['exact_outstanding']),
+                ' (ƯỚC LƯỢNG — đơn giao nhiều đợt)' if g['is_estimated'] else '',
+            )
+            notes[g['picking_name']] = text
         return notes
 
     @api.model

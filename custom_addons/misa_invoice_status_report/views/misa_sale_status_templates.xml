@@ -1165,17 +1165,19 @@
                                         cutParts.push(esc(g.other_saler_picking_names.join(', ')) + ' (mã sale ' + esc(g.other_saler_codes.join(', ')) + ')');
                                     }
                                     return '<tr>' +
-                                        '<td>' + esc(g.qualifying_picking_names.join(', ')) + '</td>' +
+                                        '<td>' + esc(g.picking_name) + '</td>' +
                                         '<td>' + cutParts.join('; ') + '</td>' +
+                                        '<td class="msu-col-num">' + fmtMoney(g.exact_outstanding) + (g.is_estimated ? ' (ước lượng)' : '') + '</td>' +
                                         '<td class="msu-col-num">' + fmtMoney(g.gap_amount) + '</td>' +
                                         '</tr>';
                                 }).join('');
                                 parts.push(
-                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Nhóm đề nghị bị cắt bởi bộ lọc</p>' +
-                                    '<p>Các phiếu đang hiển thị dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC không thỏa bộ lọc ngày/mã sale ' +
-                                    'đang xem (nằm ngoài khoảng ngày, hoặc thuộc mã sale khác) — cột cuối là chênh lệch do nhóm này gây ra ' +
-                                    '(dương = số hiển thị cao hơn "Đối chiếu tổng"; âm = ngược lại). Tổng cả bảng: <b>' + fmtMoney(d.cut_groups_total_amount) + '</b>.</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu đang hiển thị</th><th>Phiếu bị cắt (cùng nhóm)</th><th>Chênh lệch</th></tr></thead>' +
+                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị bị cắt bởi bộ lọc</p>' +
+                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC không thỏa bộ lọc ngày/mã sale đang xem — ' +
+                                    'cột "Số đúng theo đơn" đọc/tính từ dữ liệu chính xác theo order_code (chỉ ghi "(ước lượng)" khi đơn đó giao ' +
+                                    'nhiều đợt, phải chia theo tỷ lệ giữa các đợt giao CỦA ĐÚNG đơn đó). Chênh lệch: dương = số hiển thị cao hơn ' +
+                                    'số đúng; âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cut_groups_total_amount) + '</b>.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu</th><th>Phiếu bị cắt (cùng nhóm)</th><th>Số đúng theo đơn</th><th>Chênh lệch</th></tr></thead>' +
                                     '<tbody>' + rows + '</tbody></table></div>'
                                 );
                             }
