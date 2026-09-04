@@ -345,14 +345,18 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         1. "Đơn hải quan chưa khớp PXK" — hóa đơn KHÔNG gắn với phiếu xuất kho nào, nên không
            thể hiện ở bất kỳ dòng phiếu/đơn nào (đã có count/amount sẵn, chỉ liệt kê lại).
         2. "Phiếu thuộc nhóm bị cắt bởi bộ lọc ngày" — 1 đề nghị gộp chung (đại diện + phiếu ăn
-           theo) có phiếu KHÔNG THỎA bộ lọc ngày đang xem (đại diện hoặc thành viên nằm ngoài
-           date_from/date_to), khiến get_misa_invoice_reconciliation_totals (read_group ở MỨC
-           PHIẾU, theo domain đang lọc) không cộng được tín dụng hóa đơn của thành viên ngoài
-           phạm vi, dù nhóm đã được xuất HĐ đủ.
+           theo) có đại diện KHÔNG THỎA bộ lọc ngày đang xem (nằm ngoài date_from/date_to). Mục
+           này giờ ĐÃ ĐƯỢC TỰ ĐỘNG SỬA thẳng trong get_misa_invoice_reconciliation_totals (xem
+           _misa_invoice_date_cut_auto_credit) — thẻ tự cộng tín dụng cho trường hợp này, không
+           cần người dùng tự tra soát nữa. cut_groups ở đây thường sẽ RỖNG (chỉ còn khác 0 nếu
+           có sai số làm tròn/dữ liệu vừa thay đổi giữa 2 lần tính) — giữ lại mục này làm lưới an
+           toàn (safety net), không xóa hẳn.
         3. "Dùng chung mã sale khác" (cross_saler_notes) — 1 đề nghị gộp chung cho khách hàng
            của NHIỀU nhân viên bán khác nhau — get_misa_invoice_reconciliation_totals tính riêng
            theo từng saler (read_group ở MỨC PHIẾU) nên actual của saler khác không được cộng
-           nhưng invoice của đại diện vẫn tính đủ (hoặc ngược lại), gây lệch.
+           nhưng invoice của đại diện vẫn tính đủ (hoặc ngược lại), gây lệch. KHÔNG tự động sửa
+           (khác mục 2) — hóa đơn dùng chung nhiều saler không có cách chia rạch ròi đáng tin
+           (đã thử 3 công thức, ra 3 kết quả mâu thuẫn nhau), chỉ liệt kê để tự tra tay trên MISA.
 
         gap_amount cho CẢ 2 mục 2 và 3: ĐÃ THỬ NHIỀU CÁCH tự suy diễn công thức theo từng nhóm
         (dựa vào group_actual/group_invoice, hoặc dữ liệu exact theo đơn hàng) — luôn có nguy cơ
@@ -363,8 +367,7 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         cả — gọi LẠI đúng get_misa_invoice_reconciliation_totals (qua
         _misa_invoice_group_gap_contribution) với domain LOẠI TRỪ các phiếu của nhóm, đo mức
         TĂNG/GIẢM thật, nên không thể sai theo kiểu trên nữa (chỉ dùng read_group/hàm gốc, không
-        tự viết lại logic nhóm). Đã kiểm chứng thực tế: tổng gap_amount qua TẤT CẢ nhóm phát hiện
-        được khớp CHÍNH XÁC 100% với chênh lệch thật đo được giữa thẻ và Excel/list.
+        tự viết lại logic nhóm).
 
         Một nhóm có thể vừa "dùng chung mã sale khác" vừa có phiếu bị "cắt bởi bộ lọc ngày" cùng
         lúc (case thật KBC/OUT/11810) — không tách gap_amount riêng cho từng lý do được (chỉ 1 đề
@@ -491,7 +494,11 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                     order_invoiced = order.misa_invoice_exact_invoiced_amount or 0.0
                     order_outstanding = max(order_shipped - order_invoiced, 0.0)
                     order_pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.state == 'done')
-                    if order_shipped <= 0 or len(order_pickings) <= 1:
+                    if order_shipped <= 0 or len(order_pickings) <= 1 or order_outstanding <= MISA_INVOICE_AMOUNT_TOLERANCE:
+                        # order_outstanding <= 0 (đơn đã đủ/thừa hóa đơn) — CHIA 0 CHO BAO NHIÊU
+                        # PHIẾU CŨNG RA 0, không có gì mơ hồ để "ước lượng" dù đơn có giao nhiều
+                        # đợt hay không (bài học thật: KBC/OUT/12308, đơn giao 2 đợt nhưng đã
+                        # xuất đủ HĐ, trước đây vẫn bị gắn nhãn "(ước lượng)" gây hiểu lầm).
                         exact_outstanding += order_outstanding
                     else:
                         is_estimated = True

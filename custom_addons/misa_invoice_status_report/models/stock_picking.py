@@ -1702,13 +1702,83 @@ class StockPickingMisaInvoiceStatus(models.Model):
         }
 
     @api.model
-    def _misa_invoice_misa_only_totals(self, misa_domain):
+    def _misa_invoice_date_cut_auto_credit(self, date_from, date_to, saler_code):
+        """Tự động cộng tín dụng hóa đơn cho các nhóm bị "cắt bởi bộ lọc ngày" THUẦN TÚY (đại
+        diện nằm NGOÀI date_from/date_to đang lọc, nhưng có phiếu ăn theo NẰM TRONG) vào
+        get_misa_invoice_reconciliation_totals — để THẺ khớp Excel/list ngay từ nguồn, không
+        cần người dùng tự tra soát qua modal "Xem chi tiết vì sao lệch" cho trường hợp này nữa.
+
+        CHỦ ĐỘNG BỎ QUA nhóm có thành viên thuộc SALER KHÁC (xem cross_saler_notes ở
+        get_misa_invoice_reconciliation_gap_explain) — hóa đơn dùng chung nhiều saler KHÔNG có
+        cách chia rạch ròi đáng tin (đã thử 3 công thức khác nhau, ra 3 kết quả mâu thuẫn nhau
+        trong phiên điều tra thực tế) nên KHÔNG tự động cộng, chỉ liệt kê để tự tra tay.
+
+        Đo TRỰC TIẾP (không suy diễn công thức nhóm — bài học từ nhiều lần sai trước đó, xem
+        case KBC/OUT/12139+12052+12192+12299): với MỖI phiếu "ăn theo" đang thỏa bộ lọc, so
+        outstanding_amount ĐANG HIỂN THỊ (Excel/list, đã đúng — đọc thẳng qua
+        _misa_invoice_picking_to_row) với actual của CHÍNH nó (phần mà read_group ở
+        _misa_invoice_misa_only_totals đang tính là "còn thiếu" do không thấy tín dụng của đại
+        diện ngoài phạm vi) — chênh lệch giữa 2 số đó CHÍNH LÀ tín dụng cần cộng thêm.
+
+        Quét CÔNG TY (không giới hạn theo date_from/date_to — vì cần tìm ĐÚNG các đại diện NẰM
+        NGOÀI khoảng đó) nhưng CHỈ trong các đại diện có nhóm (có phiếu ăn theo, state=invoiced)
+        — tập này thường nhỏ (đa số phiếu không gộp nhóm), chấp nhận được cho 1 lần tính thẻ."""
+        Picking = self.sudo()
+        today = fields.Date.context_today(Picking)
+        parsed_from = fields.Date.from_string(date_from) if date_from else None
+        parsed_to = fields.Date.from_string(date_to) if date_to else None
+        saler_value = False
+        if saler_code:
+            saler_value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+
+        def in_date_range(picking):
+            if not (parsed_from or parsed_to):
+                return True
+            d = picking.date_done.date() if picking.date_done else None
+            if not d:
+                return False
+            if parsed_from and d < parsed_from:
+                return False
+            if parsed_to and d > parsed_to:
+                return False
+            return True
+
+        def matches_saler(picking):
+            return (not saler_code) or picking.misa_invoice_saler_code == saler_value
+
+        rep_domain = [
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('misa_invoice_master_picking_id', '=', False),
+            ('misa_invoice_covered_picking_ids', '!=', False),
+            ('misa_invoice_state', '=', 'invoiced'),
+        ]
+        credit_total = 0.0
+        for rep in Picking.search(rep_domain):
+            if in_date_range(rep) and matches_saler(rep):
+                continue  # đại diện đã nằm trong domain, read_group đã tự cộng đủ rồi
+            group = rep | rep.misa_invoice_covered_picking_ids
+            qualifying = group.filtered(lambda m: in_date_range(m) and matches_saler(m))
+            if not qualifying:
+                continue
+            if group.filtered(lambda m: not matches_saler(m)):
+                continue  # có thành viên khác mã sale — KHÔNG tự động cộng, xem cross_saler_notes
+            excel_contribution = sum(
+                Picking._misa_invoice_picking_to_row(m, today)['outstanding_amount'] for m in qualifying
+            )
+            naive_contribution = sum(qualifying.mapped('misa_invoice_net_actual_amount')) or 0.0
+            credit_total += naive_contribution - excel_contribution
+        return credit_total
+
+    def _misa_invoice_misa_only_totals(self, misa_domain, date_from=False, date_to=False, saler_code=False):
         """(actual, invoiced) CHỈ riêng luồng MISA cho 1 domain bất kỳ — TÁCH RIÊNG khỏi
         get_misa_invoice_reconciliation_totals để dùng lại được cho
         _misa_invoice_group_gap_contribution (đo đóng góp của 1 nhóm phiếu cụ thể vào chênh
         lệch Card/Excel bằng cách gọi lại đúng hàm này với domain LOẠI TRỪ nhóm đó — xem giải
         thích ở get_misa_invoice_reconciliation_gap_explain). invoiced đã CỘNG SẴN
-        exact_correction_credit (xem _misa_invoice_picking_to_row)."""
+        exact_correction_credit (xem _misa_invoice_picking_to_row) VÀ tín dụng nhóm "cắt bởi bộ
+        lọc ngày" (xem _misa_invoice_date_cut_auto_credit — CHỈ cộng khi date_from/date_to/
+        saler_code được truyền vào, vì cần các tham số GỐC (không phải misa_domain đã build) để
+        tự quét công ty tìm đại diện NGOÀI phạm vi)."""
         Picking = self.sudo()
         actual_group = Picking.read_group(misa_domain, ['misa_invoice_net_actual_amount:sum'], [])
         actual_total = (actual_group[0]['misa_invoice_net_actual_amount'] or 0.0) if actual_group else 0.0
@@ -1721,18 +1791,21 @@ class StockPickingMisaInvoiceStatus(models.Model):
             Picking._misa_invoice_picking_to_row(p, today)['exact_correction_credit']
             for p in Picking.search(misa_domain)
         )
-        return actual_total, invoiced_total + exact_correction_total
+        invoiced_total += exact_correction_total
+        invoiced_total += Picking._misa_invoice_date_cut_auto_credit(date_from, date_to, saler_code)
+        return actual_total, invoiced_total
 
     def _misa_invoice_group_gap_contribution(self, date_from, date_to, saler_code, group_picking_ids, excel_contribution):
-        """Đo CHÍNH XÁC (không suy diễn công thức) phần 1 nhóm phiếu cụ thể (VD nhóm dùng chung
-        đề nghị với saler khác, hoặc nhóm bị 'cắt' bởi bộ lọc ngày) đóng góp bao nhiêu vào chênh
-        lệch giữa Excel/list (tổng cộng dồn từng phiếu) và thẻ "Đối chiếu tổng" (1 phép trừ toàn
-        cục) — bằng cách gọi LẠI đúng _misa_invoice_misa_only_totals 2 LẦN (có/không loại trừ
-        các phiếu của nhóm này khỏi domain) rồi so sánh mức TĂNG/GIẢM, thay vì tự viết công thức
-        "card_contribution" theo từng nhóm (ĐÃ THỬ NHIỀU LẦN VÀ SAI — nhóm phiếu có thể lồng
-        nhau qua nhiều cấp master/covered mà code tự viết dễ bỏ sót, xem lịch sử điều tra thực tế
-        case KBC/OUT/12139+12052+12192+12299). Cách này CHỈ dùng đúng read_group/hàm gốc nên
-        không thể tự sai theo kiểu đó nữa.
+        """Đo CHÍNH XÁC (không suy diễn công thức) phần 1 nhóm phiếu cụ thể (chỉ còn dùng cho
+        nhóm "dùng chung mã sale khác" — nhóm "cắt bởi bộ lọc ngày" giờ đã được
+        _misa_invoice_date_cut_auto_credit tự cộng thẳng vào thẻ, không còn gap để đo nữa) đóng
+        góp bao nhiêu vào chênh lệch giữa Excel/list (tổng cộng dồn từng phiếu) và thẻ "Đối
+        chiếu tổng" (1 phép trừ toàn cục) — bằng cách gọi LẠI đúng _misa_invoice_misa_only_totals
+        2 LẦN (có/không loại trừ các phiếu của nhóm này khỏi domain) rồi so sánh mức TĂNG/GIẢM,
+        thay vì tự viết công thức "card_contribution" theo từng nhóm (ĐÃ THỬ NHIỀU LẦN VÀ SAI —
+        nhóm phiếu có thể lồng nhau qua nhiều cấp master/covered mà code tự viết dễ bỏ sót, xem
+        lịch sử điều tra thực tế case KBC/OUT/12139+12052+12192+12299). Cách này CHỈ dùng đúng
+        read_group/hàm gốc nên không thể tự sai theo kiểu đó nữa.
 
         `excel_contribution` = tổng outstanding_amount ĐANG HIỂN THỊ của các phiếu trong nhóm
         (tính sẵn ở nơi gọi, vì nơi gọi đã có sẵn dữ liệu này, tránh tính lại)."""
@@ -1741,9 +1814,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if saler_code:
             value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
             misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
-        actual_base, invoiced_base = Picking._misa_invoice_misa_only_totals(misa_domain)
+        actual_base, invoiced_base = Picking._misa_invoice_misa_only_totals(
+            misa_domain, date_from, date_to, saler_code,
+        )
         exclude_domain = misa_domain + [('id', 'not in', list(group_picking_ids))]
-        actual_excl, invoiced_excl = Picking._misa_invoice_misa_only_totals(exclude_domain)
+        actual_excl, invoiced_excl = Picking._misa_invoice_misa_only_totals(
+            exclude_domain, date_from, date_to, saler_code,
+        )
         drop_card = (actual_base - invoiced_base) - (actual_excl - invoiced_excl)
         return excel_contribution - drop_card
 
@@ -1778,7 +1855,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # nhận được so với việc tự làm sai chỗ khác lớn hơn — phần này giờ đã ĐO ĐƯỢC chính xác
         # qua get_misa_invoice_reconciliation_gap_explain/_misa_invoice_group_gap_contribution,
         # hiện số cụ thể cho người dùng tự đối chiếu thay vì để "mất tích" trong tổng).
-        misa_actual_total, misa_invoiced_total = Picking._misa_invoice_misa_only_totals(misa_domain)
+        misa_actual_total, misa_invoiced_total = Picking._misa_invoice_misa_only_totals(
+            misa_domain, date_from, date_to, saler_code,
+        )
 
         shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
