@@ -2603,6 +2603,26 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # trực tiếp actual - invoice ở đây (invoice_amount = 0 khi chưa có hóa đơn, ra đúng
         # actual_amount như bình thường).
         group_outstanding_amount = max(group_actual_amount - invoice_amount, 0.0)
+        if group_outstanding_amount > MISA_INVOICE_AMOUNT_TOLERANCE:
+            # QUAN TRỌNG (case thật KBC/OUT/08748+11841, đơn DH...229154): invoice_amount ở trên
+            # chỉ tính tiền hóa đơn CỦA ĐỀ NGHỊ Odoo đã tự liên kết cho NHÓM này — nếu đơn hàng
+            # còn được xuất hóa đơn qua 1-2 đề nghị KHÁC hoàn toàn (Odoo chưa từng phát hiện, vì
+            # không nằm cùng đề nghị/không cùng dòng hàng với nhóm này), công thức trên báo "còn
+            # thiếu" SAI dù đơn đã đủ 100% rồi. order.misa_invoice_exact_* (xem
+            # _misa_invoice_reconcile_order_coverage) đã chủ động hỏi MISA MỌI đề nghị nhắc tới
+            # đơn này nên đáng tin hơn — chỉ dùng để GIẢM (min), KHÔNG BAO GIỜ tăng, outstanding
+            # đang tính, và chỉ khi MỌI đơn liên quan đều đã có dữ liệu exact (tránh đoán mò với
+            # đơn chưa từng được quét).
+            group_orders = group_pickings.mapped('misa_invoice_sale_order_ids')
+            if group_orders and all(group_orders.mapped('misa_invoice_exact_checked_at')):
+                exact_orders_outstanding = sum(
+                    max(
+                        (o.misa_invoice_exact_shipped_amount or 0.0) - (o.misa_invoice_exact_invoiced_amount or 0.0),
+                        0.0,
+                    )
+                    for o in group_orders
+                )
+                group_outstanding_amount = min(group_outstanding_amount, exact_orders_outstanding)
         if diff_source.misa_invoice_gap_resolved:
             # Lệch này ĐÃ được xác minh xong (nút "Cập nhật lý do lệch") — tiền thực chất ĐÃ có
             # hóa đơn, chỉ gắn nhầm đề nghị khác (case KBC/OUT/10826/11218), KHÔNG phải còn

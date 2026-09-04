@@ -1147,12 +1147,13 @@
                         }).then(function(res) {
                             var d = res.data || {};
                             var parts = [];
-                            var tongCong = (d.customs_pending_amount || 0) + (d.cut_groups_total_amount || 0) + (d.cross_saler_notes_total_amount || 0);
+                            var tongCong = (d.customs_pending_amount || 0) + (d.cut_groups_total_amount || 0);
                             parts.push(
                                 '<div class="msu-drawer-section" style="background:#f5f7fa;border-radius:8px;padding:10px 14px">' +
-                                '<p><b>Tổng cộng cả 3 mục dưới đây: ' + fmtMoney(tongCong) + '</b> — đây đúng bằng khoản chênh lệch giữa ' +
-                                'tổng cộng dồn theo phiếu (Excel/list) và số trên thẻ "Đối chiếu tổng" (trừ dòng nào ghi "không rõ" — không đọc được ' +
-                                'dòng hàng từ MISA nên không cộng vào tổng này được).</p></div>'
+                                '<p><b>2 mục đầu (hải quan + bắc cầu ngày lọc) cộng lại: ' + fmtMoney(tongCong) + '</b> — đây là phần TÍNH ĐƯỢC ' +
+                                'số tiền cụ thể. Mục "Dùng chung mã sale khác" ở cuối KHÔNG kèm số (đã thử 3 cách, ra 3 kết quả mâu thuẫn nhau — ' +
+                                'không đủ tin cậy để hiện số) — nên tổng 2 mục này sẽ KHÔNG bằng đủ khoản chênh lệch Excel/list vs "Đối chiếu tổng", ' +
+                                'còn thiếu đúng phần dùng chung mã sale.</p></div>'
                             );
                             if (d.customs_pending_amount) {
                                 parts.push(
@@ -1190,24 +1191,21 @@
                             }
                             if (d.cross_saler_notes && d.cross_saler_notes.length) {
                                 var csRows = d.cross_saler_notes.map(function(n) {
-                                    var gapCell = n.gap_amount === null
-                                        ? '<span class="msu-muted">không rõ (lỗi đọc dòng hàng MISA)</span>'
-                                        : fmtMoney(n.gap_amount);
                                     return '<tr>' +
                                         '<td>' + esc(n.picking_names.join(', ')) + '</td>' +
                                         '<td>' + esc(n.order_names.join(', ')) + '</td>' +
                                         '<td>' + esc(n.representative_name) + '</td>' +
                                         '<td>' + esc(n.other_saler_picking_names.join(', ')) + '</td>' +
                                         '<td>' + esc(n.other_saler_codes.join(', ')) + '</td>' +
-                                        '<td class="msu-col-num">' + gapCell + '</td>' +
                                         '</tr>';
                                 }).join('');
                                 parts.push(
                                     '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị với mã sale khác</p>' +
-                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu thuộc mã sale KHÁC — cột "Chênh lệch" đọc thẳng dòng ' +
-                                    'hàng của đề nghị (không dính lỗi mốc cắt ngày như dữ liệu theo đơn): dương = số hiển thị (Excel/list) cao hơn số ' +
-                                    'đúng; âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cross_saler_notes_total_amount) + '</b>.</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn</th><th>Đơn hàng</th><th>Đề nghị (phiếu đại diện)</th><th>Phiếu mã sale khác (cùng đề nghị)</th><th>Mã sale khác</th><th>Chênh lệch</th></tr></thead>' +
+                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu thuộc mã sale KHÁC — "Đối chiếu tổng" tính riêng ' +
+                                    'theo từng mã sale nên có thể lệch, nhưng KHÔNG tính được số tiền chênh lệch đáng tin cho phần này (đã thử 3 cách, ' +
+                                    'ra 3 kết quả mâu thuẫn nhau) — chỉ liệt kê để tự tra soát trên MISA. ' +
+                                    '<b>' + d.cross_saler_notes.length + '</b> nhóm.</p>' +
+                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn</th><th>Đơn hàng</th><th>Đề nghị (phiếu đại diện)</th><th>Phiếu mã sale khác (cùng đề nghị)</th><th>Mã sale khác</th></tr></thead>' +
                                     '<tbody>' + csRows + '</tbody></table></div>'
                                 );
                             }

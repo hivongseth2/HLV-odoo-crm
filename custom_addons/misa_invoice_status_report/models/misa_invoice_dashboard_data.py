@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -8,8 +7,6 @@ from .stock_picking import (
     MISA_INVOICE_AMOUNT_TOLERANCE, MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABELS,
     MISA_INVOICE_UNASSIGNED_SALER,
 )
-
-_logger = logging.getLogger(__name__)
 
 # Số liệu tổng hợp cho dashboard OWL nội bộ (KPI tiles, bảng theo kho/sale/khách hàng, bảng
 # "Tình trạng xuất hóa đơn", biểu đồ theo ngày) — tách khỏi stock_picking.py (đã quá lớn).
@@ -338,48 +335,6 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
 
         return [buckets[key] for key in sorted(buckets.keys())]
 
-    def _misa_invoice_request_saler_split(self, request_refid, saler_value):
-        """Tách CHÍNH XÁC tiền hóa đơn (CÓ VAT, giống misa_invoice_effective_amount) của 1 ĐỀ
-        NGHỊ CỤ THỂ (request_refid) theo mã sale — đọc từng dòng hàng
-        (misa.api.utils.get_invoice_request_lines, mỗi dòng có order_code riêng — xem
-        _misa_invoice_discover_grouped_orders), map order_code → đơn hàng Odoo →
-        x_studio_misa_saler_code, rồi cộng dồn theo ĐÚNG saler_value vs saler khác.
-
-        KHÔNG dính vấn đề mốc cắt ngày (như misa_invoice_exact_* gặp phải) vì đây là 1 TÀI
-        LIỆU CỐ ĐỊNH (1 đề nghị/hóa đơn), không phải số tổng hợp theo thời gian — chỉ đơn giản
-        là "hóa đơn NÀY có bao nhiêu tiền thuộc về đơn của saler NÀY".
-
-        Trả về (tiền của saler_value, tiền của saler khác) — None nếu không đọc được (lỗi
-        API/không có refid/không có order_code nào trong dòng hàng)."""
-        if not request_refid:
-            return None
-        misa_utils = self.env['misa.api.utils']
-        try:
-            lines = misa_utils.get_invoice_request_lines(request_refid)
-        except Exception:
-            _logger.exception("❌ [MISA GAP EXPLAIN] Lỗi đọc chi tiết dòng hàng đề nghị %s", request_refid)
-            return None
-        lines_by_order = {}
-        for line in lines:
-            code = (line.get('order_code') or '').strip()
-            if not code:
-                continue
-            lines_by_order.setdefault(code, []).append(line)
-        if not lines_by_order:
-            return None
-        SaleOrder = self.env['sale.order'].sudo()
-        this_saler_amount = 0.0
-        other_saler_amount = 0.0
-        for order_code, order_lines in lines_by_order.items():
-            order = SaleOrder.with_context(active_test=False).search([('name', '=', order_code)], limit=1)
-            order_saler = getattr(order, 'x_studio_misa_saler_code', False) if order else False
-            amount = self._misa_invoice_request_line_amount(order_lines)
-            if order_saler == saler_value:
-                this_saler_amount += amount
-            else:
-                other_saler_amount += amount
-        return this_saler_amount, other_saler_amount
-
     @api.model
     def get_misa_invoice_reconciliation_gap_explain(self, date_from=False, date_to=False, saler_code=False):
         """Giải thích CỤ THỂ (phiếu nào, bao nhiêu tiền) vì sao "Còn lại chưa xuất HĐ"
@@ -405,15 +360,14 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         3. "Dùng chung mã sale khác" (cross_saler_notes) — 1 đề nghị gộp chung cho khách hàng
            của NHIỀU nhân viên bán khác nhau. get_misa_invoice_reconciliation_totals tính riêng
            theo từng saler (read_group ở MỨC PHIẾU) nên có thể gán TRỌN group_invoice cho saler
-           của phiếu đại diện dù tiền đó thuộc về nhiều saler. ĐÃ THỬ SAI 2 cách trước khi ra
-           cách này (order-exact: dính lỗi mốc cắt ngày; so sánh picking-level read_group trực
-           tiếp: lẫn với nguyên nhân bắc cầu ngày lọc, thổi phồng gần gấp 3) — cách ĐÚNG: đọc
-           thẳng dòng hàng của CHÍNH đề nghị này (get_invoice_request_lines — 1 tài liệu cố
-           định, KHÔNG có khái niệm "theo thời gian" nên không dính lỗi mốc cắt), tách tiền
-           theo order_code → mã sale (xem _misa_invoice_request_saler_split), rồi so với số
-           ĐANG HIỂN THỊ. exact_outstanding/gap_amount = None khi không đọc được dòng hàng
-           (lỗi API/đề nghị không có order_code) — frontend tự hiện "không rõ", không giả định
-           bằng 0."""
+           của phiếu đại diện dù tiền đó thuộc về nhiều saler. ĐÃ THỬ 3 CÁCH tính gap_amount cho
+           mục này (order-exact: dính lỗi mốc cắt ngày; picking-level read_group: lẫn với
+           nguyên nhân bắc cầu ngày lọc, thổi phồng gần gấp 3; đọc dòng hàng CHÍNH đề nghị qua
+           get_invoice_request_lines — _misa_invoice_request_saler_split — không dính mốc cắt
+           nhưng đo 1 THỨ KHÁC với số get_misa_invoice_reconciliation_totals thực sự tính ra,
+           cho kết quả 0đ mâu thuẫn với 2 cách trước) — 3 kết quả KHÁC NHAU, KHÔNG đủ tin cậy.
+           KHÔNG tính số nữa — chỉ liệt kê THÔNG TIN (phiếu/đơn hàng/mã sale khác) để tự tra
+           soát trên MISA."""
         Picking = self.sudo()
         today = fields.Date.context_today(self)
         parsed_from = fields.Date.from_string(date_from) if date_from else None
@@ -450,11 +404,12 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         ]
         affected_pickings = Picking.browse()
         cut_context_by_picking = {}
-        # "Dùng chung mã sale khác" — ĐÃ THỬ 2 cách tính SAI trước đây (order-exact: dính lỗi
-        # mốc cắt ngày; picking-level read_group: lẫn với case bắc cầu ngày lọc, thổi phồng gần
-        # gấp 3). Cách ĐÚNG: đọc thẳng dòng hàng của CHÍNH đề nghị này (get_invoice_request_lines
-        # — 1 tài liệu cố định, KHÔNG có khái niệm "theo thời gian" nên không dính lỗi mốc cắt)
-        # rồi tách tiền hóa đơn theo order_code → mã sale — xem _misa_invoice_request_saler_split.
+        # "Dùng chung mã sale khác" — ĐÃ THỬ 3 CÁCH cho gap_amount của mục này, ra 3 KẾT QUẢ MÂU THUẪN nhau (không tính,
+        # ~20,5tr, rồi 0đ) — mỗi cách đo 1 THỨ HƠI KHÁC NHAU (số hiển thị vs số CHÍNH XÁC theo
+        # dòng hàng vs số mà CHÍNH get_misa_invoice_reconciliation_totals tính ra), và các nhóm
+        # thực tế đa số VỪA dùng chung mã sale VỪA có phiếu ngoài khoảng ngày lọc nên rất dễ
+        # tính lẫn/trùng giữa các nguyên nhân. KHÔNG đủ tin cậy để hiện số — chỉ liệt kê THÔNG
+        # TIN (phiếu/đơn hàng/mã sale khác) để người quản lý tự tra soát trên MISA.
         cross_saler_notes = []
         for rep in Picking.search(rep_domain):
             group = rep | rep.misa_invoice_covered_picking_ids
@@ -464,27 +419,12 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 continue
             other_saler_members_any = group.filtered(lambda m: not matches_saler(m))
             if other_saler_members_any:
-                split = self._misa_invoice_request_saler_split(rep.misa_invoice_request_refid, saler_value)
-                gap_amount = None
-                exact_outstanding = None
-                if split is not None:
-                    this_saler_invoiced, _other_saler_invoiced = split
-                    this_saler_actual = sum(qualifying.mapped('misa_invoice_net_actual_amount')) or 0.0
-                    exact_outstanding = max(this_saler_actual - this_saler_invoiced, 0.0)
-                    displayed = sum(
-                        self._misa_invoice_picking_to_row(p, today)['outstanding_amount'] for p in qualifying
-                    )
-                    gap_amount = displayed - exact_outstanding
                 cross_saler_notes.append({
                     'picking_names': qualifying.mapped('name'),
                     'order_names': sorted(set(qualifying.mapped('misa_invoice_sale_order_ids').mapped('name'))),
                     'representative_name': rep.name,
                     'other_saler_picking_names': other_saler_members_any.mapped('name'),
                     'other_saler_codes': sorted(set(other_saler_members_any.mapped('misa_invoice_saler_code'))),
-                    'exact_outstanding': exact_outstanding,
-                    # None khi không đọc được dòng hàng (lỗi API) — frontend tự hiện "không rõ".
-                    # Dương: số hiển thị (Excel/list) CAO hơn số đúng. Âm: ngược lại.
-                    'gap_amount': gap_amount,
                 })
             if not cut_off:
                 continue
@@ -555,17 +495,12 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 'gap_amount': gap,
             })
         cut_rows.sort(key=lambda r: -abs(r['gap_amount']))
-        cross_saler_notes.sort(key=lambda r: -abs(r['gap_amount'] or 0.0))
 
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
         return {
             'cut_groups': cut_rows,
             'cut_groups_total_amount': sum(g['gap_amount'] for g in cut_rows),
             'cross_saler_notes': cross_saler_notes,
-            # Chỉ cộng các dòng có gap_amount (bỏ qua dòng None — đọc dòng hàng lỗi/không rõ).
-            'cross_saler_notes_total_amount': sum(
-                n['gap_amount'] for n in cross_saler_notes if n['gap_amount'] is not None
-            ),
             'customs_pending_amount': customs_summary['pending_amount'],
             'customs_pending_count': customs_summary['pending_count'],
         }

@@ -117,13 +117,8 @@ class StockPickingMisaInvoiceExport(models.Model):
             )
             notes[g['picking_name']] = text
         for n in explain.get('cross_saler_notes', []):
-            amount_text = (
-                'không đọc được dòng hàng MISA để tính' if n['gap_amount'] is None
-                else 'số đúng theo dòng hàng: {:,.0f}'.format(n['exact_outstanding'])
-            )
-            text = 'Dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — %s' % (
+            text = 'Dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — không tính được số chênh lệch đáng tin, tự tra soát trên MISA nếu cần' % (
                 n['representative_name'], ', '.join(n['other_saler_picking_names']), ', '.join(n['other_saler_codes']),
-                amount_text,
             )
             for name in n['picking_names']:
                 notes[name] = (notes[name] + '; ' + text) if name in notes else text
