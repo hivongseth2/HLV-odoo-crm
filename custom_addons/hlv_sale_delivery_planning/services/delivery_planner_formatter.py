@@ -462,6 +462,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
                 'printed': bool(p.x_printed),
+                'delivery_type': p.x_pick_delivery_type or '',
                 'packer_user': (
                     [p.x_pack_packer_user_id.id,
                      getattr(p.x_pack_packer_user_id, 'x_packer_name', None) or p.x_pack_packer_user_id.name]

@@ -23,10 +23,6 @@ from odoo import fields, models
 _logger = logging.getLogger(__name__)
 
 REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
-# Danh sách hình thức giao hàng hợp lệ — khớp đúng dropdown lọc "Loại vận chuyển" đã có sẵn
-# trên /sale_plan (sale_plan_controller.py, id="f-dtype"), dùng chung 1 nguồn cho cả lọc lẫn
-# bắt buộc nhập trước khi in.
-DELIVERY_TYPE_OPTIONS = ['HLV vận chuyển', 'GHN', 'J&T']
 
 
 class DeliveryPlannerServiceIotPrint(models.AbstractModel):
@@ -78,11 +74,11 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                 'forbidden': True,
                 'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được phép xem/in phiếu này.',
             }
-        if sale_order and not sale_order.x_studio_delivery_type:
+        if not picking.x_pick_delivery_type:
             return {
                 'success': False,
                 'missing_delivery_type': True,
-                'message': 'Vui lòng chọn Hình thức giao hàng cho đơn này trước khi xem trước/in phiếu.',
+                'message': 'Vui lòng chọn Hình thức giao hàng cho phiếu này trước khi xem trước/in.',
             }
         if 'PICK' not in (picking.picking_type_id.sequence_code or '').upper():
             return {'success': False, 'message': 'Phiếu này không phải phiếu lấy hàng (PICK)'}
@@ -202,11 +198,11 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                 'forbidden': True,
                 'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được phép gửi in phiếu này.',
             }
-        if not sale_order.x_studio_delivery_type:
+        if not picking.x_pick_delivery_type:
             return {
                 'success': False,
                 'missing_delivery_type': True,
-                'message': 'Vui lòng chọn Hình thức giao hàng cho đơn này trước khi gửi in.',
+                'message': 'Vui lòng chọn Hình thức giao hàng cho phiếu này trước khi gửi in.',
             }
 
         if picking.state != 'assigned':
@@ -230,44 +226,38 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         sale_order = self._get_sale_order_for_picking(picking)
         if not sale_order:
             return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
+        if not picking.x_pick_delivery_type:
+            return {
+                'success': False,
+                'missing_delivery_type': True,
+                'message': 'Phiếu này chưa có Hình thức giao hàng, không thể tự động gửi in.',
+            }
         if picking.state != 'assigned':
             return {'success': False, 'no_stock': True, 'message': 'Phiếu chưa giữ đủ hàng.'}
         return self.with_context(hlv_auto_print_trigger=True)._enqueue_pick_print_request(
             picking, sale_order
         )
 
-    def set_sale_order_delivery_type(self, delivery_type, picking_id=None, order_id=None):
-        """Sale nhập/sửa Hình thức giao hàng — gọi được từ 2 chỗ trên /sale_plan: (1) dialog xem
-        trước/gửi in phiếu khi đơn CHƯA có field này (bị chặn không cho in — xem
-        preview_pick_slip/confirm_print_pick_slip ở trên), truyền picking_id; (2) drawer chi tiết
-        đơn, sửa lại bất cứ lúc nào kể cả đã có giá trị, truyền order_id thẳng (không cần đi qua
-        picking vì drawer không có phiếu nào đang được chọn). Kiểm quyền giống hệt in phiếu
-        (không cho sửa đơn người khác qua kẽ hở này)."""
-        sale_order = None
-        if order_id:
-            sale_order = self.env['sale.order'].sudo().browse(int(order_id)).exists()
-            if not sale_order:
-                return {'success': False, 'message': 'Không tìm thấy đơn hàng'}
-        elif picking_id:
-            picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
-            if not picking:
-                return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
-            sale_order = self._get_sale_order_for_picking(picking)
-            if not sale_order:
-                return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
-        else:
-            return {'success': False, 'message': 'Thiếu picking_id hoặc order_id'}
-        if not self._user_can_print_sale_order(sale_order):
+    def set_picking_delivery_type(self, picking_id, delivery_type):
+        """Sale nhập/sửa Hình thức giao hàng CHO RIÊNG phiếu PICK này — field nằm trên
+        stock.picking (x_pick_delivery_type), KHÔNG phải sale.order, vì 1 đơn có thể có nhiều
+        lần lấy hàng (backorder) với hình thức giao khác nhau. Kiểm quyền qua đơn hàng của phiếu
+        (giống hệt in phiếu, không cho sửa phiếu của đơn người khác)."""
+        picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
+        if not picking:
+            return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+        sale_order = self._get_sale_order_for_picking(picking)
+        if sale_order and not self._user_can_print_sale_order(sale_order):
             return {
                 'success': False,
                 'forbidden': True,
-                'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được phép sửa đơn này.',
+                'message': 'Tài khoản của bạn không khớp mã sale của đơn này, không được phép sửa phiếu này.',
             }
         delivery_type = (delivery_type or '').strip()
-        if delivery_type not in DELIVERY_TYPE_OPTIONS:
-            return {'success': False, 'message': 'Hình thức giao hàng không hợp lệ.'}
-        sale_order.sudo().write({'x_studio_delivery_type': delivery_type})
-        return {'success': True, 'x_studio_delivery_type': delivery_type}
+        if not delivery_type:
+            return {'success': False, 'message': 'Vui lòng nhập hình thức giao hàng.'}
+        picking.sudo().write({'x_pick_delivery_type': delivery_type})
+        return {'success': True, 'x_pick_delivery_type': delivery_type}
 
     def get_print_log_for_picking(self, picking_id):
         """Nhật ký in gắn thẳng vào 1 phiếu (tab "Nhật ký" trên dialog chi tiết phiếu /sale_plan)

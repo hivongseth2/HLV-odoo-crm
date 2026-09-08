@@ -38,6 +38,18 @@ class StockPicking(models.Model):
         help='Đánh dấu tự động khi in các report như: biên bản giao nhận/bàn giao, BBGN, BBBG, PXBH, phiếu xuất, phiếu bàn giao... cho phiếu này.',
     )
 
+    x_pick_delivery_type = fields.Char(
+        string='Hình thức giao hàng',
+        copy=False,
+        index=True,
+        help='Hình thức giao hàng cho riêng LẦN LẤY HÀNG này (phiếu PICK) — 1 đơn có thể có '
+             'nhiều lần lấy hàng (backorder), mỗi lần có thể giao theo hình thức khác nhau nên '
+             'không dùng chung 1 field ở cấp đơn hàng nữa (trước đây là '
+             'sale.order.x_studio_delivery_type — đã migrate qua đây, xem '
+             'bin/migrate_delivery_type_to_picking.py). Bắt buộc nhập trước khi sale xem trước/'
+             'gửi in phiếu trên /sale_plan — xem services/delivery_planner_iot_print.py.',
+    )
+
     x_pack_packer_user_id = fields.Many2one(
         'res.users',
         string='Người đóng được assign',
