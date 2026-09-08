@@ -1002,16 +1002,21 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     </div>
     <div class="pd-body">
       <div id="pd-tabpane-detail">
-        <div id="pd-delivery-type-block" class="alert alert-warning d-none mb-3">
-          <div class="fw-bold mb-2"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có Hình thức giao hàng — bắt buộc chọn trước khi xem trước/gửi in phiếu.</div>
-          <div class="d-flex gap-2">
-            <select id="pd-delivery-type-select" class="form-select form-select-sm" style="max-width:220px">
-              <option value="">-- Chọn --</option>
-              <option value="HLV vận chuyển">HLV vận chuyển</option>
-              <option value="GHN">GHN</option>
-              <option value="J&amp;T">J&amp;T</option>
-            </select>
-            <button class="btn btn-warning btn-sm" id="pd-delivery-type-save">Lưu</button>
+        <div id="pd-delivery-type-block" class="mb-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa fa-truck text-muted"></i>
+            <span id="pd-delivery-type-text" class="text-muted"></span>
+            <i class="fa fa-pencil text-primary" style="cursor:pointer" id="pd-delivery-type-edit-btn" title="Sửa hình thức giao hàng"></i>
+          </div>
+          <div id="pd-delivery-type-warning" class="alert alert-warning d-none mt-1 mb-0 py-1 px-2 small">
+            <i class="fa fa-exclamation-triangle me-1"></i>Bắt buộc chọn Hình thức giao hàng cho phiếu này trước khi xem trước/gửi in.
+          </div>
+          <div id="pd-delivery-type-edit-box" class="d-none mt-1 d-flex gap-2">
+            <input type="text" id="pd-delivery-type-select" list="delivery-type-suggestions"
+                   class="form-control form-control-sm" style="max-width:220px"
+                   placeholder="Chọn hoặc nhập mới..."/>
+            <button class="btn btn-primary btn-sm" id="pd-delivery-type-save">Lưu</button>
+            <button class="btn btn-outline-secondary btn-sm" id="pd-delivery-type-cancel">Hủy</button>
           </div>
         </div>
         <div id="pd-lines"></div>
@@ -1024,6 +1029,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     </div>
   </div>
 </div>
+<!-- Gợi ý Hình thức giao hàng — dùng chung cho ô nhập ở pd-modal và ở drawer chi tiết đơn.
+     Đây chỉ là GỢI Ý (input text + datalist), sale vẫn gõ được giá trị MỚI không có trong danh
+     sách này — server tự thêm option mới nếu field là Selection (xem
+     services/delivery_planner_iot_print.py:_ensure_delivery_type_option_exists). -->
+<datalist id="delivery-type-suggestions">
+  <option value="HLV vận chuyển"></option>
+  <option value="GHN"></option>
+  <option value="J&amp;T"></option>
+</datalist>
 <!-- PDF preview dialog: xem trước phiếu lấy hàng NGAY TRONG trang này (đè lên pd-modal), không
      mở tab mới, không điều hướng rời trang (giữ nguyên danh sách/tìm kiếm đang xem) -->
 <div id="pdfp-modal">
@@ -1767,16 +1781,23 @@ function renderPickingsSection(pickings,canPrint){
     return h;
   }
   h+='<table class="table table-sm table-borderless mb-0" style="font-size:.78rem">'
-    +'<thead><tr class="text-muted"><th>Phiếu</th><th>Trạng thái in</th><th>Trạng thái phiếu</th><th class="text-end">SL món</th></tr></thead><tbody>';
+    +'<thead><tr class="text-muted"><th>Phiếu</th><th>Hình thức giao hàng</th><th>Trạng thái in</th><th>Trạng thái phiếu</th><th class="text-end">SL món</th></tr></thead><tbody>';
   pickOnly.forEach(function(p){
     var moves=p.moves||[];
     var stDisplay=getPickingStatusDisplay(p);
     // Phiếu đã hoàn tất/hủy vẫn cho MỞ dialog xem chi tiết + nhật ký (đối soát), chỉ chặn hành
     // động in NGAY TRONG dialog (xem openPickingDetailModal) — không chặn click mở luôn.
     var finished=(p.state==='done'||p.state==='cancel');
+    // Mỗi phiếu PICK có Hình thức giao hàng RIÊNG (x_pick_delivery_type trên stock.picking) —
+    // 1 đơn có thể có nhiều lần lấy hàng (backorder) khác hình thức nhau. Sửa trong dialog chi
+    // tiết phiếu (bấm vào dòng), không sửa trực tiếp ở đây.
+    var dtypeHtml=p.delivery_type
+      ?'<span class="text-muted">'+esc(p.delivery_type)+'</span>'
+      :(finished?'<span class="text-muted">—</span>':'<span class="text-danger"><i class="fa fa-exclamation-triangle me-1"></i>Chưa có</span>');
     h+='<tr class="pick-row'+(finished?' opacity-75':'')+'" data-picking-id="'+p.id+'" style="cursor:pointer"'
       +(finished?' title="Phiếu đã hoàn tất/hủy — chỉ xem chi tiết/nhật ký, không in lại được"':'')+'>'
       +'<td class="fw-bold'+(finished?' text-muted':' text-primary')+'">'+esc(p.name)+' <i class="fa fa-chevron-right text-muted" style="font-size:.65rem"></i></td>'
+      +'<td>'+dtypeHtml+'</td>'
       +'<td>'+(p.printed?'<span class="badge bg-success">Đã gửi lệnh in</span>':'<span class="badge bg-secondary">Chưa in</span>')+'</td>'
       +'<td><span class="badge '+stDisplay.badgeClass+'">'+esc(stDisplay.label)+'</span></td>'
       +'<td class="text-end">'+moves.length+'</td>'
@@ -1789,6 +1810,7 @@ function renderPickingsSection(pickings,canPrint){
 // --- Picking detail modal: xem chi tiết 1 phiếu PICK, xem trước rồi mới xác nhận in ---
 var _pdPickingId=null;
 var _pdOwnerOrderId=null;
+var _pdPicking=null;
 function openPickingDetailModal(pickingId){
   var p=null,ownerOrder=null;
   for(var i=0;i<S.orders.length&&!p;i++){
@@ -1801,6 +1823,7 @@ function openPickingDetailModal(pickingId){
   }
   _pdPickingId=pickingId;
   _pdOwnerOrderId=ownerOrder.id;
+  _pdPicking=p;
   $('pd-title').textContent=p.name;
   var pdStDisplay=getPickingStatusDisplay(p);
   $('pd-state-badge').className='badge mt-1 '+pdStDisplay.badgeClass;
@@ -1829,9 +1852,11 @@ function openPickingDetailModal(pickingId){
   $('pd-lines').innerHTML=lh;
   var pvBtn=$('pd-btn-preview');
   var cfBtn=$('pd-btn-confirm');
-  var missingDeliveryType=!finished&&!ownerOrder.x_studio_delivery_type;
-  $('pd-delivery-type-block').classList.toggle('d-none',!missingDeliveryType);
-  if(missingDeliveryType)$('pd-delivery-type-select').value='';
+  var missingDeliveryType=!finished&&!p.delivery_type;
+  $('pd-delivery-type-text').textContent=p.delivery_type||'Chưa có hình thức giao hàng';
+  $('pd-delivery-type-warning').classList.toggle('d-none',!missingDeliveryType);
+  $('pd-delivery-type-edit-box').classList.add('d-none');
+  $('pd-delivery-type-edit-btn').classList.toggle('d-none',finished);
   if(finished){
     // Phiếu đã xong/hủy: ẩn hết nút in, chỉ còn xem chi tiết + nhật ký.
     pvBtn.classList.add('d-none');
@@ -1885,12 +1910,20 @@ function closePickingDetailModal(){
   $('pd-modal').style.display='none';
   _pdPickingId=null;
   _pdOwnerOrderId=null;
+  _pdPicking=null;
 }
 $('pd-close').addEventListener('click',closePickingDetailModal);
 $('pd-modal').addEventListener('click',function(e){if(e.target===this)closePickingDetailModal();});
+$('pd-delivery-type-edit-btn').addEventListener('click',function(){
+  $('pd-delivery-type-select').value=(_pdPicking&&_pdPicking.delivery_type)||'';
+  $('pd-delivery-type-edit-box').classList.remove('d-none');
+});
+$('pd-delivery-type-cancel').addEventListener('click',function(){
+  $('pd-delivery-type-edit-box').classList.add('d-none');
+});
 $('pd-delivery-type-save').addEventListener('click',function(){
   if(!_pdPickingId)return;
-  var val=$('pd-delivery-type-select').value;
+  var val=$('pd-delivery-type-select').value.trim();
   if(!val){showPrintToast('Vui lòng chọn hình thức giao hàng.',false);return;}
   var btn=this;
   btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
@@ -1902,10 +1935,15 @@ $('pd-delivery-type-save').addEventListener('click',function(){
     btn.disabled=false;btn.innerHTML='Lưu';
     if(d&&d.success){
       showPrintToast('Đã lưu hình thức giao hàng.',true);
-      var ord=S.orders.find(function(o){return o.id===_pdOwnerOrderId;});
-      if(ord)ord.x_studio_delivery_type=d.x_studio_delivery_type;
-      $('pd-delivery-type-block').classList.add('d-none');
+      // Cập nhật thẳng object picking đang tham chiếu (cùng object trong S.orders[].pickings)
+      // để bảng "Phiếu lấy hàng" ở drawer cũng hiện đúng giá trị mới, không cần load lại.
+      if(_pdPicking)_pdPicking.delivery_type=d.x_pick_delivery_type;
+      $('pd-delivery-type-text').textContent=d.x_pick_delivery_type;
+      $('pd-delivery-type-warning').classList.add('d-none');
+      $('pd-delivery-type-edit-box').classList.add('d-none');
       $('pd-btn-preview').disabled=false;
+      var ord=S.orders.find(function(o){return o.id===_pdOwnerOrderId;});
+      if(ord&&$('drawer').classList.contains('open'))openDrawer(ord.id);
     } else {
       showPrintToast((d&&d.message)||'Lỗi khi lưu hình thức giao hàng',false);
     }
@@ -1932,9 +1970,11 @@ $('pd-btn-preview').addEventListener('click',function(){
       $('pdfp-modal').style.display='flex';
     } else {
       if(d&&d.missing_delivery_type){
-        // Chặn ở FE bị lệch (VD dữ liệu cache cũ) — server vẫn chặn đúng, hiện lại khối bắt
-        // buộc chọn để sale sửa ngay, khỏi phải đoán vì sao bị lỗi.
-        $('pd-delivery-type-block').classList.remove('d-none');
+        // Chặn ở FE bị lệch (VD dữ liệu cache cũ) — server vẫn chặn đúng, hiện lại cảnh báo +
+        // ô nhập để sale sửa ngay, khỏi phải đoán vì sao bị lỗi.
+        $('pd-delivery-type-warning').classList.remove('d-none');
+        $('pd-delivery-type-edit-box').classList.remove('d-none');
+        $('pd-delivery-type-select').value=(_pdPicking&&_pdPicking.delivery_type)||'';
         btn.disabled=true;
       }
       showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
@@ -1990,21 +2030,7 @@ function openDrawer(id){
     +'<div><i class="fa fa-user text-primary me-2"></i><strong>'+esc(partnerName(o))+'</strong></div>'
     +'<div><i class="fa fa-warehouse text-muted me-2"></i><span class="text-muted">'+esc(whName(o))+'</span></div>'
     +(o.commitment_date?'<div><i class="fa fa-calendar text-muted me-2"></i><span class="text-muted">Hẹn giao: '+fd(o.commitment_date)+'</span></div>':'')
-    +'<div class="dr-delivery-type-row" data-order-id="'+o.id+'">'
-      +'<i class="fa fa-truck text-muted me-2"></i>'
-      +'<span class="text-muted dr-delivery-type-text">'+(o.x_studio_delivery_type?esc(o.x_studio_delivery_type):'<em>Chưa có hình thức giao hàng</em>')+'</span>'
-      +' <i class="fa fa-pencil text-primary dr-delivery-type-edit-btn" style="cursor:pointer" title="Sửa hình thức giao hàng"></i>'
-      +'<div class="d-none mt-1 d-flex gap-2 dr-delivery-type-edit-box">'
-        +'<select class="form-select form-select-sm dr-delivery-type-select" style="max-width:200px">'
-          +'<option value="">-- Chọn --</option>'
-          +'<option value="HLV vận chuyển">HLV vận chuyển</option>'
-          +'<option value="GHN">GHN</option>'
-          +'<option value="J&amp;T">J&amp;T</option>'
-        +'</select>'
-        +'<button type="button" class="btn btn-sm btn-primary dr-delivery-type-save-btn">Lưu</button>'
-        +'<button type="button" class="btn btn-sm btn-outline-secondary dr-delivery-type-cancel-btn">Hủy</button>'
-      +'</div>'
-    +'</div>'
+    +(o.x_studio_delivery_type?'<div><i class="fa fa-truck text-muted me-2"></i><span class="text-muted">'+esc(o.x_studio_delivery_type)+'</span></div>':'')
     +(o.x_studio_htgh?'<div><i class="fa fa-info-circle text-muted me-2"></i><span class="text-muted">HTGH: '+esc(o.x_studio_htgh)+'</span></div>':'')
     +(o.x_studio_ghi_ch_odoo?'<div><i class="fa fa-pencil text-primary me-2"></i><span class="text-primary">Ghi Chú Odoo: '+esc(o.x_studio_ghi_ch_odoo)+'</span></div>':'')
     +(o.x_studio_misa_saler_code?'<div><i class="fa fa-id-badge text-muted me-2"></i><span class="text-muted">NV MISA: '+esc(o.x_studio_misa_saler_code)+'</span></div>':'')
@@ -2228,49 +2254,6 @@ document.addEventListener('click',function(e){
       if(el){if(el.type==='checkbox'){el.checked=false;}else{el.value=chipX.dataset.fr||'';}}
     }
     load(false);return;
-  }
-  var drDtEdit=e.target.closest('.dr-delivery-type-edit-btn');
-  if(drDtEdit){
-    e.preventDefault();e.stopPropagation();
-    var row=drDtEdit.closest('.dr-delivery-type-row');
-    var box=row.querySelector('.dr-delivery-type-edit-box');
-    var sel=row.querySelector('.dr-delivery-type-select');
-    var curOrd=S.orders.find(function(x){return String(x.id)===row.dataset.orderId;});
-    sel.value=(curOrd&&curOrd.x_studio_delivery_type)||'';
-    box.classList.remove('d-none');
-    return;
-  }
-  var drDtCancel=e.target.closest('.dr-delivery-type-cancel-btn');
-  if(drDtCancel){
-    e.preventDefault();e.stopPropagation();
-    drDtCancel.closest('.dr-delivery-type-edit-box').classList.add('d-none');
-    return;
-  }
-  var drDtSave=e.target.closest('.dr-delivery-type-save-btn');
-  if(drDtSave){
-    e.preventDefault();e.stopPropagation();
-    var saveRow=drDtSave.closest('.dr-delivery-type-row');
-    var saveOrderId=saveRow.dataset.orderId;
-    var saveVal=saveRow.querySelector('.dr-delivery-type-select').value;
-    if(!saveVal){showPrintToast('Vui lòng chọn hình thức giao hàng.',false);return;}
-    drDtSave.disabled=true;drDtSave.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
-    fetch('/api/sale_plan/set_delivery_type',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:saveOrderId,delivery_type:saveVal}})})
-    .then(function(r){return r.json();})
-    .then(function(j){
-      var d=j.result;
-      drDtSave.disabled=false;drDtSave.innerHTML='Lưu';
-      if(d&&d.success){
-        showPrintToast('Đã lưu hình thức giao hàng.',true);
-        var savedOrd=S.orders.find(function(x){return String(x.id)===saveOrderId;});
-        if(savedOrd)savedOrd.x_studio_delivery_type=d.x_studio_delivery_type;
-        saveRow.querySelector('.dr-delivery-type-text').innerHTML=esc(d.x_studio_delivery_type);
-        saveRow.querySelector('.dr-delivery-type-edit-box').classList.add('d-none');
-      } else {
-        showPrintToast((d&&d.message)||'Lỗi khi lưu hình thức giao hàng',false);
-      }
-    }).catch(function(){drDtSave.disabled=false;drDtSave.innerHTML='Lưu';showPrintToast('Lỗi kết nối.',false);});
-    return;
   }
   var rBtn=e.target.closest('.btn-report');
   if(rBtn){e.stopPropagation();e.preventDefault();openReportModal(parseInt(rBtn.dataset.soId,10),rBtn.dataset.soName);return;}
@@ -2859,15 +2842,15 @@ self.addEventListener('notificationclick', function(event) {
             return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/set_delivery_type', type='json', auth='user', methods=['POST'])
-    def api_sale_plan_set_delivery_type(self, delivery_type=None, picking_id=None, order_id=None, **kwargs):
-        """Sale nhập/sửa Hình thức giao hàng — dialog xem trước/gửi in phiếu (bắt buộc phải có
-        trước khi in, truyền picking_id) HOẶC drawer chi tiết đơn (sửa lại bất cứ lúc nào, truyền
-        order_id). Xem services/delivery_planner_iot_print.py:set_sale_order_delivery_type."""
-        if not picking_id and not order_id:
-            return {'success': False, 'message': 'Thiếu picking_id hoặc order_id'}
+    def api_sale_plan_set_delivery_type(self, picking_id=None, delivery_type=None, **kwargs):
+        """Sale nhập/sửa Hình thức giao hàng CHO RIÊNG phiếu PICK này (dialog xem trước/gửi in
+        phiếu, bắt buộc phải có trước khi in). Xem
+        services/delivery_planner_iot_print.py:set_picking_delivery_type."""
+        if not picking_id:
+            return {'success': False, 'message': 'Thiếu picking_id'}
         try:
-            return request.env['hlv.delivery.planner.service'].sudo().set_sale_order_delivery_type(
-                delivery_type, picking_id=picking_id, order_id=order_id
+            return request.env['hlv.delivery.planner.service'].sudo().set_picking_delivery_type(
+                picking_id, delivery_type
             )
         except Exception as e:
             _logger.exception('sale_plan set_delivery_type error')
