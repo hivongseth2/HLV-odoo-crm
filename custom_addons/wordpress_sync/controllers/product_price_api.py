@@ -186,6 +186,63 @@ class WordPressProductPriceAPI(http.Controller):
             "affected_combos": combo_results,
         }
 
+    @http.route(
+        "/api/wordpress_sync/queue/status",
+        type="http",
+        auth="public",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def queue_status(self, **kwargs):
+        if request.httprequest.method == "OPTIONS":
+            return self._json_response({"ok": True})
+
+        payload = self._request_payload(kwargs)
+        token_error = self._validate_token(payload)
+        if token_error:
+            return self._json_response(token_error, status=401)
+
+        raw_ids = payload.get("ids") if isinstance(payload, dict) else None
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return self._json_response(
+                {"ok": False, "error": "missing_ids", "message": "Missing ids."},
+                status=400,
+            )
+
+        try:
+            ids = [int(i) for i in raw_ids if i not in (None, False, "")]
+        except (TypeError, ValueError):
+            return self._json_response(
+                {"ok": False, "error": "invalid_ids", "message": "Invalid ids."},
+                status=400,
+            )
+
+        Queue = request.env["wordpress.sync.queue"].sudo()
+        queues = Queue.browse(ids).exists()
+        found_ids = set(queues.ids)
+
+        results = [
+            {
+                "id": queue.id,
+                "product_id": queue.product_id.id,
+                "sku": queue.sku or "",
+                "sync_type": queue.sync_type,
+                "status": queue.status,
+                "attempt_count": queue.attempt_count,
+                "max_attempts": queue.max_attempts,
+                "last_error": queue.last_error or False,
+            }
+            for queue in queues
+        ]
+        results.extend(
+            {"id": missing_id, "status": False, "error": "not_found"}
+            for missing_id in ids
+            if missing_id not in found_ids
+        )
+
+        return self._json_response({"ok": True, "count": len(results), "queues": results})
+
     def _find_product(self, Product, item):
         product_id = item.get("product_id") or item.get("template_id") or item.get("odoo_id") or item.get("id")
         if product_id:
