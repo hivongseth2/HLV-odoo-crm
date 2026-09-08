@@ -1002,6 +1002,18 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     </div>
     <div class="pd-body">
       <div id="pd-tabpane-detail">
+        <div id="pd-delivery-type-block" class="alert alert-warning d-none mb-3">
+          <div class="fw-bold mb-2"><i class="fa fa-exclamation-triangle me-1"></i>Đơn này chưa có Hình thức giao hàng — bắt buộc chọn trước khi xem trước/gửi in phiếu.</div>
+          <div class="d-flex gap-2">
+            <select id="pd-delivery-type-select" class="form-select form-select-sm" style="max-width:220px">
+              <option value="">-- Chọn --</option>
+              <option value="HLV vận chuyển">HLV vận chuyển</option>
+              <option value="GHN">GHN</option>
+              <option value="J&amp;T">J&amp;T</option>
+            </select>
+            <button class="btn btn-warning btn-sm" id="pd-delivery-type-save">Lưu</button>
+          </div>
+        </div>
         <div id="pd-lines"></div>
       </div>
       <div id="pd-tabpane-log" class="d-none"></div>
@@ -1776,6 +1788,7 @@ function renderPickingsSection(pickings,canPrint){
 
 // --- Picking detail modal: xem chi tiết 1 phiếu PICK, xem trước rồi mới xác nhận in ---
 var _pdPickingId=null;
+var _pdOwnerOrderId=null;
 function openPickingDetailModal(pickingId){
   var p=null,ownerOrder=null;
   for(var i=0;i<S.orders.length&&!p;i++){
@@ -1787,6 +1800,7 @@ function openPickingDetailModal(pickingId){
     return;
   }
   _pdPickingId=pickingId;
+  _pdOwnerOrderId=ownerOrder.id;
   $('pd-title').textContent=p.name;
   var pdStDisplay=getPickingStatusDisplay(p);
   $('pd-state-badge').className='badge mt-1 '+pdStDisplay.badgeClass;
@@ -1815,12 +1829,19 @@ function openPickingDetailModal(pickingId){
   $('pd-lines').innerHTML=lh;
   var pvBtn=$('pd-btn-preview');
   var cfBtn=$('pd-btn-confirm');
+  var missingDeliveryType=!finished&&!ownerOrder.x_studio_delivery_type;
+  $('pd-delivery-type-block').classList.toggle('d-none',!missingDeliveryType);
+  if(missingDeliveryType)$('pd-delivery-type-select').value='';
   if(finished){
     // Phiếu đã xong/hủy: ẩn hết nút in, chỉ còn xem chi tiết + nhật ký.
     pvBtn.classList.add('d-none');
     cfBtn.classList.add('d-none');
   } else {
-    pvBtn.classList.remove('d-none');pvBtn.disabled=false;pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
+    pvBtn.classList.remove('d-none');
+    // Bắt buộc chọn Hình thức giao hàng trước khi in — chặn ngay ở FE (server cũng chặn lại,
+    // đây chỉ là UX để sale thấy rõ lý do thay vì bấm xong mới bị báo lỗi).
+    pvBtn.disabled=missingDeliveryType;
+    pvBtn.innerHTML='<i class="fa fa-eye me-1"></i>Xem trước';
     var whLabel='Gửi phiếu in cho kho'+(p.warehouse_name?' '+p.warehouse_name:'');
     cfBtn.dataset.label=whLabel;
     cfBtn.classList.add('d-none');cfBtn.disabled=false;cfBtn.innerHTML='<i class="fa fa-check me-1"></i>'+esc(whLabel);
@@ -1863,9 +1884,33 @@ function loadPickingPrintLog(pickingId){
 function closePickingDetailModal(){
   $('pd-modal').style.display='none';
   _pdPickingId=null;
+  _pdOwnerOrderId=null;
 }
 $('pd-close').addEventListener('click',closePickingDetailModal);
 $('pd-modal').addEventListener('click',function(e){if(e.target===this)closePickingDetailModal();});
+$('pd-delivery-type-save').addEventListener('click',function(){
+  if(!_pdPickingId)return;
+  var val=$('pd-delivery-type-select').value;
+  if(!val){showPrintToast('Vui lòng chọn hình thức giao hàng.',false);return;}
+  var btn=this;
+  btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
+  fetch('/api/sale_plan/set_delivery_type',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{picking_id:_pdPickingId,delivery_type:val}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    var d=j.result;
+    btn.disabled=false;btn.innerHTML='Lưu';
+    if(d&&d.success){
+      showPrintToast('Đã lưu hình thức giao hàng.',true);
+      var ord=S.orders.find(function(o){return o.id===_pdOwnerOrderId;});
+      if(ord)ord.x_studio_delivery_type=d.x_studio_delivery_type;
+      $('pd-delivery-type-block').classList.add('d-none');
+      $('pd-btn-preview').disabled=false;
+    } else {
+      showPrintToast((d&&d.message)||'Lỗi khi lưu hình thức giao hàng',false);
+    }
+  }).catch(function(){btn.disabled=false;btn.innerHTML='Lưu';showPrintToast('Lỗi kết nối.',false);});
+});
 $('pd-btn-preview').addEventListener('click',function(){
   if(!_pdPickingId)return;
   var btn=this;
@@ -1886,6 +1931,12 @@ $('pd-btn-preview').addEventListener('click',function(){
       $('pdfp-frame').src=d.preview_url;
       $('pdfp-modal').style.display='flex';
     } else {
+      if(d&&d.missing_delivery_type){
+        // Chặn ở FE bị lệch (VD dữ liệu cache cũ) — server vẫn chặn đúng, hiện lại khối bắt
+        // buộc chọn để sale sửa ngay, khỏi phải đoán vì sao bị lỗi.
+        $('pd-delivery-type-block').classList.remove('d-none');
+        btn.disabled=true;
+      }
       showPrintToast((d&&d.message)||'Lỗi khi tạo bản xem trước',false);
     }
   }).catch(function(){
@@ -2748,6 +2799,21 @@ self.addEventListener('notificationclick', function(event) {
             return request.env['hlv.delivery.planner.service'].sudo().confirm_print_pick_slip(picking_id)
         except Exception as e:
             _logger.exception('sale_plan confirm_print_pick_slip error')
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/api/sale_plan/set_delivery_type', type='json', auth='user', methods=['POST'])
+    def api_sale_plan_set_delivery_type(self, picking_id=None, delivery_type=None, **kwargs):
+        """Sale nhập Hình thức giao hàng ngay trong dialog xem trước/gửi in phiếu (bắt buộc phải
+        có trước khi in — xem preview_pick_slip/confirm_print_pick_slip). Xem
+        services/delivery_planner_iot_print.py:set_sale_order_delivery_type."""
+        if not picking_id:
+            return {'success': False, 'message': 'Thiếu picking_id'}
+        try:
+            return request.env['hlv.delivery.planner.service'].sudo().set_sale_order_delivery_type(
+                picking_id, delivery_type
+            )
+        except Exception as e:
+            _logger.exception('sale_plan set_delivery_type error')
             return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/picking_print_log', type='json', auth='user', methods=['POST'])
