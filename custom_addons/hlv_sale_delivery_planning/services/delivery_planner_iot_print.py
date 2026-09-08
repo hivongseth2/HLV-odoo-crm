@@ -236,17 +236,27 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
             picking, sale_order
         )
 
-    def set_sale_order_delivery_type(self, picking_id, delivery_type):
-        """Sale nhập Hình thức giao hàng NGAY TRONG dialog xem trước/gửi in phiếu (bị chặn không
-        cho in nếu đơn chưa có field này — xem preview_pick_slip/confirm_print_pick_slip ở trên),
-        không cần mở đơn ra sửa riêng. Kiểm quyền giống hệt in phiếu (không cho sửa đơn người
-        khác qua kẽ hở này)."""
-        picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
-        if not picking:
-            return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
-        sale_order = self._get_sale_order_for_picking(picking)
-        if not sale_order:
-            return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
+    def set_sale_order_delivery_type(self, delivery_type, picking_id=None, order_id=None):
+        """Sale nhập/sửa Hình thức giao hàng — gọi được từ 2 chỗ trên /sale_plan: (1) dialog xem
+        trước/gửi in phiếu khi đơn CHƯA có field này (bị chặn không cho in — xem
+        preview_pick_slip/confirm_print_pick_slip ở trên), truyền picking_id; (2) drawer chi tiết
+        đơn, sửa lại bất cứ lúc nào kể cả đã có giá trị, truyền order_id thẳng (không cần đi qua
+        picking vì drawer không có phiếu nào đang được chọn). Kiểm quyền giống hệt in phiếu
+        (không cho sửa đơn người khác qua kẽ hở này)."""
+        sale_order = None
+        if order_id:
+            sale_order = self.env['sale.order'].sudo().browse(int(order_id)).exists()
+            if not sale_order:
+                return {'success': False, 'message': 'Không tìm thấy đơn hàng'}
+        elif picking_id:
+            picking = self.env['stock.picking'].sudo().browse(int(picking_id)).exists()
+            if not picking:
+                return {'success': False, 'message': 'Không tìm thấy phiếu lấy hàng'}
+            sale_order = self._get_sale_order_for_picking(picking)
+            if not sale_order:
+                return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
+        else:
+            return {'success': False, 'message': 'Thiếu picking_id hoặc order_id'}
         if not self._user_can_print_sale_order(sale_order):
             return {
                 'success': False,

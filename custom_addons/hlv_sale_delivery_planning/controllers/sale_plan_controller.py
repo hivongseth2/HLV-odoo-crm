@@ -1990,7 +1990,21 @@ function openDrawer(id){
     +'<div><i class="fa fa-user text-primary me-2"></i><strong>'+esc(partnerName(o))+'</strong></div>'
     +'<div><i class="fa fa-warehouse text-muted me-2"></i><span class="text-muted">'+esc(whName(o))+'</span></div>'
     +(o.commitment_date?'<div><i class="fa fa-calendar text-muted me-2"></i><span class="text-muted">Hẹn giao: '+fd(o.commitment_date)+'</span></div>':'')
-    +(o.x_studio_delivery_type?'<div><i class="fa fa-truck text-muted me-2"></i><span class="text-muted">'+esc(o.x_studio_delivery_type)+'</span></div>':'')
+    +'<div class="dr-delivery-type-row" data-order-id="'+o.id+'">'
+      +'<i class="fa fa-truck text-muted me-2"></i>'
+      +'<span class="text-muted dr-delivery-type-text">'+(o.x_studio_delivery_type?esc(o.x_studio_delivery_type):'<em>Chưa có hình thức giao hàng</em>')+'</span>'
+      +' <i class="fa fa-pencil text-primary dr-delivery-type-edit-btn" style="cursor:pointer" title="Sửa hình thức giao hàng"></i>'
+      +'<div class="d-none mt-1 d-flex gap-2 dr-delivery-type-edit-box">'
+        +'<select class="form-select form-select-sm dr-delivery-type-select" style="max-width:200px">'
+          +'<option value="">-- Chọn --</option>'
+          +'<option value="HLV vận chuyển">HLV vận chuyển</option>'
+          +'<option value="GHN">GHN</option>'
+          +'<option value="J&amp;T">J&amp;T</option>'
+        +'</select>'
+        +'<button type="button" class="btn btn-sm btn-primary dr-delivery-type-save-btn">Lưu</button>'
+        +'<button type="button" class="btn btn-sm btn-outline-secondary dr-delivery-type-cancel-btn">Hủy</button>'
+      +'</div>'
+    +'</div>'
     +(o.x_studio_htgh?'<div><i class="fa fa-info-circle text-muted me-2"></i><span class="text-muted">HTGH: '+esc(o.x_studio_htgh)+'</span></div>':'')
     +(o.x_studio_ghi_ch_odoo?'<div><i class="fa fa-pencil text-primary me-2"></i><span class="text-primary">Ghi Chú Odoo: '+esc(o.x_studio_ghi_ch_odoo)+'</span></div>':'')
     +(o.x_studio_misa_saler_code?'<div><i class="fa fa-id-badge text-muted me-2"></i><span class="text-muted">NV MISA: '+esc(o.x_studio_misa_saler_code)+'</span></div>':'')
@@ -2214,6 +2228,49 @@ document.addEventListener('click',function(e){
       if(el){if(el.type==='checkbox'){el.checked=false;}else{el.value=chipX.dataset.fr||'';}}
     }
     load(false);return;
+  }
+  var drDtEdit=e.target.closest('.dr-delivery-type-edit-btn');
+  if(drDtEdit){
+    e.preventDefault();e.stopPropagation();
+    var row=drDtEdit.closest('.dr-delivery-type-row');
+    var box=row.querySelector('.dr-delivery-type-edit-box');
+    var sel=row.querySelector('.dr-delivery-type-select');
+    var curOrd=S.orders.find(function(x){return String(x.id)===row.dataset.orderId;});
+    sel.value=(curOrd&&curOrd.x_studio_delivery_type)||'';
+    box.classList.remove('d-none');
+    return;
+  }
+  var drDtCancel=e.target.closest('.dr-delivery-type-cancel-btn');
+  if(drDtCancel){
+    e.preventDefault();e.stopPropagation();
+    drDtCancel.closest('.dr-delivery-type-edit-box').classList.add('d-none');
+    return;
+  }
+  var drDtSave=e.target.closest('.dr-delivery-type-save-btn');
+  if(drDtSave){
+    e.preventDefault();e.stopPropagation();
+    var saveRow=drDtSave.closest('.dr-delivery-type-row');
+    var saveOrderId=saveRow.dataset.orderId;
+    var saveVal=saveRow.querySelector('.dr-delivery-type-select').value;
+    if(!saveVal){showPrintToast('Vui lòng chọn hình thức giao hàng.',false);return;}
+    drDtSave.disabled=true;drDtSave.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
+    fetch('/api/sale_plan/set_delivery_type',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:saveOrderId,delivery_type:saveVal}})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      var d=j.result;
+      drDtSave.disabled=false;drDtSave.innerHTML='Lưu';
+      if(d&&d.success){
+        showPrintToast('Đã lưu hình thức giao hàng.',true);
+        var savedOrd=S.orders.find(function(x){return String(x.id)===saveOrderId;});
+        if(savedOrd)savedOrd.x_studio_delivery_type=d.x_studio_delivery_type;
+        saveRow.querySelector('.dr-delivery-type-text').innerHTML=esc(d.x_studio_delivery_type);
+        saveRow.querySelector('.dr-delivery-type-edit-box').classList.add('d-none');
+      } else {
+        showPrintToast((d&&d.message)||'Lỗi khi lưu hình thức giao hàng',false);
+      }
+    }).catch(function(){drDtSave.disabled=false;drDtSave.innerHTML='Lưu';showPrintToast('Lỗi kết nối.',false);});
+    return;
   }
   var rBtn=e.target.closest('.btn-report');
   if(rBtn){e.stopPropagation();e.preventDefault();openReportModal(parseInt(rBtn.dataset.soId,10),rBtn.dataset.soName);return;}
@@ -2802,15 +2859,15 @@ self.addEventListener('notificationclick', function(event) {
             return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/set_delivery_type', type='json', auth='user', methods=['POST'])
-    def api_sale_plan_set_delivery_type(self, picking_id=None, delivery_type=None, **kwargs):
-        """Sale nhập Hình thức giao hàng ngay trong dialog xem trước/gửi in phiếu (bắt buộc phải
-        có trước khi in — xem preview_pick_slip/confirm_print_pick_slip). Xem
-        services/delivery_planner_iot_print.py:set_sale_order_delivery_type."""
-        if not picking_id:
-            return {'success': False, 'message': 'Thiếu picking_id'}
+    def api_sale_plan_set_delivery_type(self, delivery_type=None, picking_id=None, order_id=None, **kwargs):
+        """Sale nhập/sửa Hình thức giao hàng — dialog xem trước/gửi in phiếu (bắt buộc phải có
+        trước khi in, truyền picking_id) HOẶC drawer chi tiết đơn (sửa lại bất cứ lúc nào, truyền
+        order_id). Xem services/delivery_planner_iot_print.py:set_sale_order_delivery_type."""
+        if not picking_id and not order_id:
+            return {'success': False, 'message': 'Thiếu picking_id hoặc order_id'}
         try:
             return request.env['hlv.delivery.planner.service'].sudo().set_sale_order_delivery_type(
-                picking_id, delivery_type
+                delivery_type, picking_id=picking_id, order_id=order_id
             )
         except Exception as e:
             _logger.exception('sale_plan set_delivery_type error')
