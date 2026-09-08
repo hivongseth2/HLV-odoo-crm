@@ -1158,6 +1158,123 @@ class MisaExtensionController(http.Controller):
         )
 
     # ============================================================
+    # POST /api/extension/so/loyalty_points_preview
+    # ============================================================
+    @http.route(
+        "/api/extension/so/loyalty_points_preview",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_loyalty_points_preview(self, **payload):
+        """
+        Ước tính số điểm xếp hạng (ranking points) sẽ được cộng cho từng tài
+        khoản Loyalty đã chọn trên 1 đơn CHƯA tạo/CHƯA giao hàng — dùng để
+        MISA Extension hiển thị dialog xác nhận cho sale TRƯỚC khi tạo đơn
+        (xem hlv_loyalty.sale_order: đã bỏ giới hạn "tài khoản phải cùng công
+        ty khách hàng" — giờ cho phép chọn tài khoản Loyalty của công ty
+        khác, nhưng phải xác nhận rõ số điểm/công ty nhận điểm).
+
+        Công thức giống hệt `stock.picking._loyalty_earn_points` /
+        `_split_loyalty_points_by_account` (chỉ phần điểm xếp hạng — điểm đổi
+        thưởng phụ thuộc CK Loyalty theo dòng, không tính ở đây vì lúc preview
+        đơn có thể chưa tồn tại), CHỈ khác: dùng `order_amount_untaxed` (tổng
+        tiền hàng ước tính từ MISA) thay cho `delivered_subtotal` thật (vì
+        chưa giao hàng).
+
+        Body JSON:
+        {
+            "token": "...",
+            "order_amount_untaxed": 12000000,
+            "accounts": [{"account_id": 5, "earning_pct": 60}, {"account_id": 8, "earning_pct": 40}]
+        }
+        """
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")]
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        try:
+            order_amount = float(payload.get('order_amount_untaxed') or 0.0)
+        except (ValueError, TypeError):
+            order_amount = 0.0
+
+        accounts_payload = payload.get('accounts') or []
+        if not isinstance(accounts_payload, list) or not accounts_payload:
+            return json_response({"ok": False, "error": "missing_accounts", "message": "Thiếu danh sách 'accounts'."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        program = env['hlv.loyalty.program'].sudo().search([('active', '=', True)], limit=1)
+        if not program:
+            return json_response({"ok": True, "data": {"has_program": False, "total_ranking_points": 0, "accounts": []}})
+
+        ranking_points = 0
+        if order_amount > 0 and program.earning_amount > 0:
+            ranking_points = int(order_amount / program.earning_amount) * program.earning_points
+
+        allocations = []
+        for item in accounts_payload:
+            if not isinstance(item, dict) or not item.get('account_id'):
+                continue
+            acc = env['hlv.loyalty.portal.account'].sudo().browse(int(item['account_id'])).exists()
+            if not acc:
+                continue
+            try:
+                pct = float(item.get('earning_pct') or 0.0)
+            except (ValueError, TypeError):
+                pct = 0.0
+            allocations.append((acc, pct))
+
+        base_data = {
+            "has_program": True,
+            "earning_amount": program.earning_amount,
+            "earning_points": program.earning_points,
+            "order_amount_untaxed": order_amount,
+            "total_ranking_points": ranking_points,
+        }
+
+        if not allocations:
+            return json_response({"ok": True, "data": {**base_data, "accounts": []}})
+
+        # Chia điểm theo % — công thức giống hệt
+        # stock.picking._split_loyalty_points_by_account: mỗi tài khoản làm
+        # tròn theo tỷ lệ %/tổng %, tài khoản cuối nhận phần dư để tổng luôn
+        # khớp đúng ranking_points (không mất/dư điểm do làm tròn).
+        total_pct = sum(pct for _, pct in allocations) or 1.0
+        accounts_data = []
+        running_total = 0
+        for idx, (acc, pct) in enumerate(allocations):
+            is_last = idx == len(allocations) - 1
+            if is_last:
+                acc_points = ranking_points - running_total
+            else:
+                acc_points = round(ranking_points * pct / total_pct)
+            running_total += acc_points
+            accounts_data.append({
+                "account_id": acc.id,
+                "display_name": acc.display_name,
+                "partner_id": acc.partner_id.id,
+                "partner_name": acc.partner_id.display_name,
+                "earning_pct": pct,
+                "ranking_points": acc_points,
+            })
+
+        return json_response({"ok": True, "data": {**base_data, "accounts": accounts_data}})
+
+    # ============================================================
     # POST /api/extension/pr/create
     # ============================================================
     @http.route(
