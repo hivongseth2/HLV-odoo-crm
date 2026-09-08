@@ -1078,12 +1078,84 @@ class PickingExportWizard(models.TransientModel):
         pos_order = getattr(picking, 'pos_order_id', False)
         
         if pos_order:
-            # Loop qua từng POS order line (để đảm bảo xuất đủ số dòng)
+            # --- Bù trừ hàng trả (qty < 0) vào đúng dòng bán tương ứng ---
+            # Yêu cầu: trả hết thì bỏ hẳn dòng đó ra khỏi file,
+            # trả một phần thì tự trừ lại số lượng & tiền tương ứng.
+            # Nhóm theo (sản phẩm, % chiết khấu, % thuế) để chỉ bù trừ các dòng
+            # thực sự cùng bản chất; nhóm nào không có dòng trả thì giữ nguyên như cũ.
+            groups = {}
+            group_keys = []
             for pos_line in pos_order.lines:
                 prod = pos_line.product_id
                 if not prod:
                     continue
-                
+
+                line_discount = pos_line.discount or 0.0
+                line_tax = 0.0
+                if pos_line.tax_ids_after_fiscal_position:
+                    line_tax = pos_line.tax_ids_after_fiscal_position[0].amount
+
+                key = (prod.id, round(line_discount, 4), round(line_tax, 4))
+                if key not in groups:
+                    groups[key] = {
+                        'product': prod,
+                        'discount': line_discount,
+                        'tax_amount': line_tax,
+                        'lines': [],
+                        'has_return': False,
+                    }
+                    group_keys.append(key)
+                groups[key]['lines'].append(pos_line)
+                if (pos_line.qty or 0.0) < 0:
+                    groups[key]['has_return'] = True
+
+            # Danh sách dòng sẽ thực sự xuất ra Excel
+            pos_entries = []
+            for key in group_keys:
+                grp = groups[key]
+
+                if not grp['has_return']:
+                    # Không có hàng trả -> xuất từng dòng như trước
+                    for pos_line in grp['lines']:
+                        pos_entries.append({
+                            'product': grp['product'],
+                            'qty': pos_line.qty or 0.0,
+                            'price_subtotal': pos_line.price_subtotal or 0.0,
+                            'price_unit_fallback': pos_line.price_unit or 0.0,
+                            'discount': grp['discount'],
+                            'tax_amount': grp['tax_amount'],
+                        })
+                    continue
+
+                # Có hàng trả -> cộng dồn số lượng và tiền của cả nhóm
+                net_qty = sum((l.qty or 0.0) for l in grp['lines'])
+                net_subtotal = sum((l.price_subtotal or 0.0) for l in grp['lines'])
+
+                if abs(net_qty) < 1e-6 and abs(net_subtotal) < 0.01:
+                    # Trả hết -> bỏ luôn dòng này, không xuất ra file
+                    continue
+
+                # Đơn giá tham chiếu: lấy từ dòng bán (qty > 0) nếu có
+                fallback_unit = 0.0
+                for l in grp['lines']:
+                    if (l.qty or 0.0) > 0:
+                        fallback_unit = l.price_unit or 0.0
+                        break
+                if not fallback_unit and grp['lines']:
+                    fallback_unit = grp['lines'][0].price_unit or 0.0
+
+                pos_entries.append({
+                    'product': grp['product'],
+                    'qty': net_qty,
+                    'price_subtotal': net_subtotal,
+                    'price_unit_fallback': fallback_unit,
+                    'discount': grp['discount'],
+                    'tax_amount': grp['tax_amount'],
+                })
+
+            for entry in pos_entries:
+                prod = entry['product']
+
                 # Tìm stock move tương ứng (nếu cần)
                 move = None
                 if picking.move_line_ids:
@@ -1096,29 +1168,24 @@ class PickingExportWizard(models.TransientModel):
                         if mv.product_id == prod:
                             move = mv
                             break
-                
-                # Lấy dữ liệu trực tiếp từ POS line
-                qty = pos_line.qty or 0.0
+
+                # Số lượng / thành tiền đã bù trừ hàng trả
+                qty = entry['qty']
                 uom = prod.uom_id
-                
-                # Thành tiền chưa thuế
-                price_subtotal = pos_line.price_subtotal or 0.0
-                
+                price_subtotal = entry['price_subtotal']
+                discount = entry['discount']
+                tax_amount = entry['tax_amount']
+
                 # Tính lại đơn giá chưa thuế để tương thích với chiết khấu
-                discount = pos_line.discount or 0.0
-                if qty != 0 and discount != 100.0:
-                     price_unit = price_subtotal / (qty * (1 - discount / 100.0))
+                if abs(qty) > 1e-6 and discount != 100.0:
+                    price_unit = price_subtotal / (qty * (1 - discount / 100.0))
                 else:
-                     price_unit = pos_line.price_unit# Fallback if qty is 0 or discount is 100%
-                
-                tax_amount = 0.0
-                if pos_line.tax_ids_after_fiscal_position:
-                    tax_amount = pos_line.tax_ids_after_fiscal_position[0].amount
-                
-                # Computed fields
-                tien_ck = abs(price_unit * qty * discount / 100)
+                    price_unit = entry['price_unit_fallback']
+
+                # Computed fields (giữ dấu theo số lượng để dòng trả còn lại được trừ tiền)
+                tien_ck = price_unit * qty * discount / 100
                 thanh_tien = price_subtotal
-                tien_thue = abs(thanh_tien * tax_amount / 100) if tax_amount else 0
+                tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
                 
                 # Mapping logic based on warehouse and payment method
                 ma_khach_hang = partner_code
@@ -1220,7 +1287,7 @@ class PickingExportWizard(models.TransientModel):
                     'tk_gia_von': '632',
                     'tk_kho': '1561',
                     'don_gia_von': prod.standard_price,
-                    'tien_von': prod.standard_price * abs(qty),  # Use abs for cost calculation
+                    'tien_von': prod.standard_price * qty,  # Giữ dấu: dòng trả còn lại phải âm tiền vốn
                     'hang_hoa_giu_ho': '',
                     'la_hoa_don_tu_may_tinh_tien': 'Có',
                 }
