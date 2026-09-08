@@ -317,19 +317,19 @@
                                 <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
                                 <input type="text" name="bank_name" form="cash-form" class="sr-cf-input"
                                        placeholder="VD: Vietcombank, Techcombank, BIDV..."
-                                       required="required" t-att-value="form_vals.get('bank_name') or default_bank_name"/>
+                                       data-bank-required="1" t-att-value="form_vals.get('bank_name') or default_bank_name"/>
                             </div>
                             <div class="sr-cf-field">
                                 <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
                                 <input type="text" name="account_number" form="cash-form" class="sr-cf-input"
                                        placeholder="Nhập số tài khoản..."
-                                       required="required" t-att-value="form_vals.get('account_number') or default_account_number"/>
+                                       data-bank-required="1" t-att-value="form_vals.get('account_number') or default_account_number"/>
                             </div>
                             <div class="sr-cf-field">
                                 <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
                                 <input type="text" name="account_name" form="cash-form" class="sr-cf-input"
                                        placeholder="Nhập đúng tên chủ tài khoản..."
-                                       required="required" t-att-value="form_vals.get('account_name') or default_account_name"/>
+                                       data-bank-required="1" t-att-value="form_vals.get('account_name') or default_account_name"/>
                                 <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
                             </div>
                             <div class="sr-cf-field">
@@ -408,15 +408,53 @@
                     var useSavedInput = document.getElementById('use-saved-bank-input');
                     if (!form || !modal || !openBtn) return;
 
-                    function openModal(){ modal.style.display = 'flex'; }
-                    function closeModal(){ modal.style.display = 'none'; }
+                    // Các field ngân hàng nằm TRONG popup (lúc đầu display:none) nhưng vẫn
+                    // thuộc form qua thuộc tính form="cash-form". Nếu để required="required"
+                    // tĩnh trong HTML thì checkValidity()/submit sẽ fail ngay trên field đang
+                    // bị ẩn, trình duyệt không focus được vào nó → Chrome log
+                    // "An invalid form control with name='bank_name' is not focusable"
+                    // và popup xác nhận không mở ra được (khách không đổi điểm được).
+                    // Vì vậy chỉ gắn required cho field đang HIỆN, đồng bộ lại mỗi lần
+                    // đóng/mở popup hay chuyển giữa view xác nhận ↔ view nhập tay.
+                    var bankInputs = form.querySelectorAll('[data-bank-required="1"]');
+                    function isShown(el){
+                        // display:none (ở chính field hoặc ở view cha) → không có box nào để render.
+                        return !!(el &amp;&amp; el.getClientRects().length &gt; 0);
+                    }
+                    function syncBankRequired(){
+                        for (var i = 0; i &lt; bankInputs.length; i++) {
+                            if (isShown(bankInputs[i])) {
+                                bankInputs[i].setAttribute('required', 'required');
+                            } else {
+                                bankInputs[i].removeAttribute('required');
+                            }
+                        }
+                    }
+
+                    function isModalOpen(){ return modal.style.display !== 'none'; }
+                    function openModal(){ modal.style.display = 'flex'; syncBankRequired(); }
+                    function closeModal(){ modal.style.display = 'none'; syncBankRequired(); }
+
+                    syncBankRequired();
 
                     openBtn.addEventListener('click', function(){
+                        // Popup còn đóng → field ngân hàng chưa required, chỉ validate số điểm.
+                        syncBankRequired();
                         if (form.checkValidity &amp;&amp; !form.checkValidity()) {
                             form.reportValidity();
                             return;
                         }
                         openModal();
+                    });
+                    // Enter trong ô số điểm sẽ submit native ngay khi popup còn đóng → chặn lại
+                    // và mở popup xác nhận, thay vì gửi thiếu thông tin nhận tiền.
+                    form.addEventListener('submit', function(e){
+                        if (!isModalOpen()) {
+                            e.preventDefault();
+                            openBtn.click();
+                            return;
+                        }
+                        syncBankRequired();
                     });
                     if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
                     modal.addEventListener('click', function(e){
@@ -426,11 +464,13 @@
                         if (confirmView) confirmView.style.display = 'none';
                         if (editView) editView.style.display = 'block';
                         if (useSavedInput) useSavedInput.value = '0';
+                        syncBankRequired();
                     });
                     if (toConfirm) toConfirm.addEventListener('click', function(){
                         if (editView) editView.style.display = 'none';
                         if (confirmView) confirmView.style.display = 'block';
                         if (useSavedInput) useSavedInput.value = '1';
+                        syncBankRequired();
                     });
 
                     <t t-if="error_msg">
