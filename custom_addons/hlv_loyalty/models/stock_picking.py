@@ -255,18 +255,22 @@ class StockPicking(models.Model):
         - Chỉ 1 allocation với pct=None (fallback, đơn không cấu hình bảng
           phân bổ): tài khoản đó nhận 100% - công thức/kết quả giữ nguyên
           y hệt logic gốc trước khi có tính năng multi-account.
-        - Có bảng phân bổ (N dòng, mỗi dòng 1 %): mỗi tài khoản có
-          `account_discount_amount = delivered_subtotal * pct / 100`, tính
-          ĐỘC LẬP như cách %/dòng vẫn hoạt động — nhưng nếu tổng các
-          account_discount_amount vượt quá `discount_amount` (giới hạn từ
-          % dòng đơn) thì scale toàn bộ xuống theo đúng tỷ lệ để không bao
-          giờ vượt trần; % chưa được phân bổ hết thì phần thiếu không tính
-          điểm cho ai. Điểm đổi thưởng của từng tài khoản làm tròn xuống
-          (floor) độc lập theo discount_per_point.
-          Điểm xếp hạng CHIA theo đúng tỷ lệ % (chuẩn hóa theo tổng % đã
-          liệt kê trong bảng, không có khái niệm phần dư cho ranking) —
-          phần dư do làm tròn được cộng vào tài khoản cuối cùng để tổng
-          luôn khớp đúng `ranking_points`.
+        - Có bảng phân bổ (N dòng, mỗi dòng 1 %, VD 0.5% + 0.3%): CẢ
+          `ranking_points` LẪN `exchange_points` của cả đơn đều được chia
+          theo đúng tỷ lệ `pct / total_pct` (chuẩn hóa theo tổng % đã liệt
+          kê trong bảng — total_pct KHÔNG bắt buộc = 100%). Tài khoản cuối
+          cùng luôn nhận phần dư do làm tròn để tổng của từng loại điểm
+          luôn khớp đúng `ranking_points`/`exchange_points` của cả đơn.
+
+          LƯU Ý: trước đây exchange_points được tính ĐỘC LẬP theo
+          `delivered_subtotal * pct / 100` (coi pct như 1 tỷ lệ chiết khấu
+          áp thẳng lên doanh số) rồi mới scale xuống nếu vượt trần
+          `discount_amount` — sai vì pct ở đây là % cộng điểm (tỷ trọng
+          chia điểm giữa các tài khoản, cùng ý nghĩa với pct dùng cho
+          ranking), không phải % chiết khấu. Với pct nhỏ (0.5%, 0.3%...)
+          công thức cũ gần như luôn floor về 0, mất trắng điểm đổi thưởng
+          dù cả đơn thừa điểm kiểu điểm. Đã sửa để dùng chung 1 cách chia
+          (chuẩn hóa theo total_pct) cho cả 2 loại điểm.
         """
         self.ensure_one()
 
@@ -302,52 +306,49 @@ class StockPicking(models.Model):
             }]
 
         # ── Có bảng phân bổ nhiều tài khoản ──────────────────────────────
-        raw_amounts = [
-            (account, pct or 0.0, delivered_subtotal * (pct or 0.0) / 100.0)
-            for account, pct in allocations
-        ]
-        total_raw = sum(amount for _, _, amount in raw_amounts)
-        scale = 1.0
-        if total_raw > 0 and discount_amount > 0 and total_raw > discount_amount:
-            scale = discount_amount / total_raw
-        is_scaled = scale < 0.999999
+        # Chia CẢ ranking_points LẪN exchange_points của cả đơn theo cùng 1
+        # tỷ lệ pct/total_pct (xem lưu ý ở docstring - trước đây exchange
+        # bị tính sai theo delivered_subtotal, không liên quan gì tới
+        # discount_amount thật của đơn).
+        total_pct = sum((pct or 0.0) for _, pct in allocations) or 1.0
 
-        total_pct = sum(pct for _, pct, _ in raw_amounts) or 1.0
+        exchange_points_total = 0
+        if discount_amount > 0 and program.discount_per_point > 0:
+            exchange_points_total = int(discount_amount / program.discount_per_point)
 
         # Bảng tham chiếu chung (giống hệt trường hợp 1 tài khoản) để mọi
         # tài khoản đều thấy rõ tổng chiết khấu 105.000đ kia đến từ đâu
         # (dòng nào, % bao nhiêu) trước khi bị chia nhỏ theo % riêng.
         reference_note = (
             f'Doanh số giao của cả đơn: {delivered_subtotal:,.0f}đ. '
-            f'{discount_formula_source} → tổng chiết khấu tham chiếu (trần) '
-            f'= {discount_amount:,.0f}đ.'
+            f'{discount_formula_source} → tổng chiết khấu của cả đơn '
+            f'= {discount_amount:,.0f}đ → tổng điểm đổi thưởng của cả đơn '
+            f'= {exchange_points_total:,} điểm, chia cho từng tài khoản theo tỷ lệ % được phân bổ.'
         )
 
         shares = []
         ranking_running_total = 0
-        for idx, (account, pct, raw_amount) in enumerate(raw_amounts):
-            is_last = idx == len(raw_amounts) - 1
-            account_discount_amount = raw_amount * scale
-            account_exchange_points = 0
-            if account_discount_amount > 0 and program.discount_per_point > 0:
-                account_exchange_points = int(account_discount_amount / program.discount_per_point)
+        exchange_running_total = 0
+        for idx, (account, pct) in enumerate(allocations):
+            pct = pct or 0.0
+            is_last = idx == len(allocations) - 1
+            account_discount_amount = discount_amount * pct / total_pct
 
             if is_last:
                 account_ranking_points = ranking_points - ranking_running_total
+                account_exchange_points = exchange_points_total - exchange_running_total
             else:
                 account_ranking_points = round(ranking_points * pct / total_pct)
+                account_exchange_points = 0
+                if account_discount_amount > 0 and program.discount_per_point > 0:
+                    account_exchange_points = int(account_discount_amount / program.discount_per_point)
             ranking_running_total += account_ranking_points
+            exchange_running_total += account_exchange_points
 
             account_line = (
-                f'Tài khoản "{account.display_name}" áp dụng {pct:g}% lên doanh số giao '
-                f'({delivered_subtotal:,.0f}đ) = {raw_amount:,.0f}đ'
+                f'Tài khoản "{account.display_name}" nhận {pct:g}% / tổng {total_pct:g}% được phân bổ trên đơn '
+                f'= {pct:g}/{total_pct:g} x {discount_amount:,.0f}đ = {account_discount_amount:,.0f}đ.'
             )
-            if is_scaled:
-                account_line += (
-                    f' → do tổng % các tài khoản trên đơn vượt trần tham chiếu, quy đổi về '
-                    f'{account_discount_amount:,.0f}đ (tỷ lệ giới hạn {scale:.2%})'
-                )
-            account_line += '.'
             source_label = f'{reference_note} {account_line}'
 
             exchange_formula = self._format_loyalty_point_formula(
