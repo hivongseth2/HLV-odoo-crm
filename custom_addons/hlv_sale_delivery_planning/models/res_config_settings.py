@@ -20,6 +20,29 @@ class ResConfigSettings(models.TransientModel):
              'mở/gửi in phiếu lấy hàng" ở trên nếu đang bật.',
     )
 
+    # --- Watchdog máy chủ kho (script chạy trên máy kho báo về, xem bin/iot_watchdog_windows.ps1) ---
+    iot_watchdog_token = fields.Char(
+        string='Token watchdog máy chủ kho',
+        config_parameter='hlv_sale_delivery_planning.iot_watchdog_token',
+        help='Chuỗi bí mật dùng chung giữa Odoo và script watchdog trên máy chủ kho '
+             '(/api/iot_watchdog/heartbeat). ĐỂ TRỐNG = tắt hẳn tính năng nhận heartbeat. '
+             'Đặt 1 chuỗi dài ngẫu nhiên, dán y hệt vào tham số -Token của script.',
+    )
+    iot_watchdog_max_silence_minutes = fields.Integer(
+        string='Watchdog: số phút im lặng thì báo lỗi',
+        config_parameter='hlv_sale_delivery_planning.iot_watchdog_max_silence_minutes',
+        default=5,
+        help='Quá số phút này không nhận được heartbeat từ máy chủ kho thì coi như máy đã '
+             'tắt/mất mạng và gửi cảnh báo. Nên đặt gấp 2-3 lần chu kỳ chạy của script.',
+    )
+    iot_alert_emails = fields.Char(
+        string='Email nhận cảnh báo máy in IoT',
+        config_parameter='hlv_sale_delivery_planning.iot_alert_emails',
+        help='Danh sách email (phân tách bằng dấu phẩy) nhận cảnh báo khi service IoT của kho '
+             'tắt, máy chủ kho mất kết nối, hoặc Odoo không kết nối được hộp IoT. Để trống thì '
+             'chỉ cảnh báo trên dashboard (ai đang mở mới thấy).',
+    )
+
     restrict_pack_to_assigned_user = fields.Boolean(
         string='Chỉ người được assign mới được đóng gói',
         config_parameter='hlv_sale_delivery_planning.restrict_pack_to_assigned_user',

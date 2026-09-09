@@ -1,12 +1,20 @@
 import html
+import logging
 
+import psycopg2
 from bs4 import BeautifulSoup
 from markupsafe import Markup
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+_logger = logging.getLogger(__name__)
+
 REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
+
+# Khoá tư vấn (advisory lock) dùng riêng cho bước claim hàng chờ in — xem _claim_ids().
+# Số bất kỳ nhưng phải CỐ ĐỊNH và không đụng module khác (Odoo core dùng khoá theo id bảng).
+CLAIM_ADVISORY_LOCK_KEY = 728131001
 
 # ĐÃ THỬ dùng write_date (thời điểm ghi cuối) để suy ra offline khi im lặng quá lâu — SAI, đã
 # rút lại: đo thực tế bằng bin/probe_iot_heartbeat_interval.py + log lỗi thật cho thấy write_date
@@ -88,17 +96,53 @@ class HlvIotPrintQueue(models.Model):
 
     def _claim_ids(self, ids):
         """Atomically chuyển state pending -> printing cho đúng những id còn 'pending' tại thời
-        điểm này (1 câu UPDATE ... WHERE state='pending' duy nhất) — tránh 2 phiên dashboard đang
-        mở cùng lúc (VD dispatcher + vài máy kho) cùng nhận bus event rồi in trùng lặp 1 yêu cầu.
-        Trả về recordset CHỈ gồm những bản ghi request này thực sự thắng (claim được)."""
+        điểm này — tránh 2 phiên dashboard đang mở cùng lúc (VD dispatcher + vài máy kho) cùng
+        nhận bus event rồi in trùng lặp 1 yêu cầu.
+        Trả về recordset CHỈ gồm những bản ghi request này thực sự thắng (claim được).
+
+        3 lớp chống đụng độ (trước đây chỉ có 1 câu UPDATE trần, gây lỗi thật trên PRD:
+        "could not serialize access due to concurrent update" khi 2 phiên claim cùng 1 id):
+          1. pg_try_advisory_xact_lock: chỉ CHO 1 phiên chạy claim tại 1 thời điểm. Phiên không
+             lấy được khoá trả về rỗng NGAY (không chờ) — coi như "phiên khác đang xử lý", lượt
+             sau FE tự gọi lại. Đây là lớp chính, dập gần hết đụng độ.
+          2. FOR UPDATE SKIP LOCKED: bỏ qua dòng đang bị transaction khác giữ, thay vì chờ/lỗi.
+          3. savepoint + bắt SerializationFailure: PostgreSQL ở mức REPEATABLE READ (mặc định
+             của Odoo) vẫn có thể báo lỗi 40001 nếu dòng đã bị transaction khác sửa+commit SAU
+             snapshot của mình. Không retry trong cùng transaction (snapshot cũ, retry cũng lỗi
+             lại) — chỉ rollback về savepoint và coi như KHÔNG claim được, đúng nghĩa nghiệp vụ
+             "người khác đã giành trước". Không để lỗi này nổ ra thành lỗi request cho user.
+        """
         if not ids:
             return self.browse()
-        self.env.cr.execute(
-            "UPDATE hlv_iot_print_queue SET state = 'printing' "
-            "WHERE id = ANY(%s) AND state = 'pending' RETURNING id",
-            (list(ids),),
-        )
-        claimed_ids = [r[0] for r in self.env.cr.fetchall()]
+        cr = self.env.cr
+        cr.execute("SELECT pg_try_advisory_xact_lock(%s)", (CLAIM_ADVISORY_LOCK_KEY,))
+        if not cr.fetchone()[0]:
+            return self.browse()
+        claimed_ids = []
+        try:
+            with cr.savepoint():
+                cr.execute(
+                    """
+                    UPDATE hlv_iot_print_queue
+                       SET state = 'printing'
+                     WHERE id IN (
+                           SELECT id
+                             FROM hlv_iot_print_queue
+                            WHERE id = ANY(%s)
+                              AND state = 'pending'
+                            ORDER BY id
+                              FOR UPDATE SKIP LOCKED
+                     )
+                 RETURNING id
+                    """,
+                    (list(ids),),
+                )
+                claimed_ids = [r[0] for r in cr.fetchall()]
+        except psycopg2.errors.SerializationFailure:
+            _logger.info(
+                'IoT print queue: bỏ qua claim %s do phiên khác vừa cập nhật (serialization).', ids,
+            )
+            return self.browse()
         return self.browse(claimed_ids)
 
     @api.model
@@ -290,15 +334,29 @@ class HlvIotPrintQueue(models.Model):
         warehouses = self.env['stock.warehouse'].sudo().search([
             ('x_iot_printer_device_id', '!=', False),
         ])
+        now = fields.Datetime.now()
         result = []
         for wh in warehouses:
             device = wh.x_iot_printer_device_id
+            # Gộp thêm tín hiệu watchdog từ máy chủ kho: connected của iot.device có thể giữ
+            # True mãi dù máy đã chết (xem IOT_DEVICE_STALE_SECONDS), nên chỉ nhìn connected là
+            # KHÔNG đủ để nói "in được". overall_ok mới là thứ FE nên tô màu chip.
+            wd = wh._iot_watchdog_state(now=now)
             result.append({
                 'warehouse_id': wh.id,
                 'warehouse_name': wh.name,
                 'device_name': device.name or '',
                 'connected': self._is_device_effectively_online(device),
                 'last_seen': device.write_date.isoformat() if device.write_date else False,
+                'overall_ok': wd['ok'],
+                'problem_message': wd['message'],
+                'watchdog_installed': wd['watchdog_installed'],
+                'watchdog_ok': wd['watchdog_ok'],
+                'watchdog_service_ok': wd['watchdog_service_ok'],
+                'watchdog_last_seen': (
+                    wd['watchdog_last_seen'].isoformat() if wd['watchdog_last_seen'] else False
+                ),
+                'watchdog_note': wd['watchdog_note'],
             })
         return result
 

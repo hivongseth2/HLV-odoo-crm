@@ -13,6 +13,15 @@
                        options="{'no_create': True}"
                        placeholder="Mặc định (Hoạt động lấy hàng TSN)"/>
                 <field name="x_iot_queue_limit" placeholder="0 = không giới hạn"/>
+                <!-- Chỉ đọc: do script watchdog trên máy chủ kho ghi về qua
+                     /api/iot_watchdog/heartbeat (xem bin/iot_watchdog_windows.ps1). Hiện ở đây
+                     để admin/kho tự kiểm tra được máy kho còn sống hay không, không phải mò log. -->
+                <field name="x_iot_watchdog_last_seen" readonly="1"
+                       placeholder="Chưa cài watchdog cho kho này"/>
+                <field name="x_iot_watchdog_service_ok" readonly="1"
+                       invisible="not x_iot_watchdog_last_seen"/>
+                <field name="x_iot_watchdog_note" readonly="1"
+                       invisible="not x_iot_watchdog_last_seen"/>
             </xpath>
         </field>
     </record>

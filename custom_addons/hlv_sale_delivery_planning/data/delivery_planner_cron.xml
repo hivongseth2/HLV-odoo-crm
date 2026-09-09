@@ -11,4 +11,18 @@
         <field name="user_id" ref="base.user_root"/>
         <field name="active">True</field>
     </record>
+
+    <!-- Soát máy chủ kho / máy in IoT: gửi cảnh báo khi service ở kho tắt, máy kho mất kết nối,
+         hoặc Odoo không kết nối được hộp IoT. Nguồn tín hiệu là heartbeat do script watchdog
+         trên chính máy kho gửi về (xem bin/iot_watchdog_windows.ps1 + controllers/iot_watchdog_controller.py). -->
+    <record id="ir_cron_hlv_iot_watchdog_check" model="ir.cron">
+        <field name="name">Delivery Planner: Giám sát máy chủ kho / máy in IoT</field>
+        <field name="model_id" ref="stock.model_stock_warehouse"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_check_iot_watchdog()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="active">True</field>
+    </record>
 </odoo>
