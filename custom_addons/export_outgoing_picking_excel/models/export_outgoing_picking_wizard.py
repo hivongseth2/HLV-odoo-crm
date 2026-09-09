@@ -1078,83 +1078,13 @@ class PickingExportWizard(models.TransientModel):
         pos_order = getattr(picking, 'pos_order_id', False)
         
         if pos_order:
-            # --- Bù trừ hàng trả (qty < 0) vào đúng dòng bán tương ứng ---
-            # Yêu cầu: trả hết thì bỏ hẳn dòng đó ra khỏi file,
-            # trả một phần thì tự trừ lại số lượng & tiền tương ứng.
-            # Nhóm theo (sản phẩm, % chiết khấu, % thuế) để chỉ bù trừ các dòng
-            # thực sự cùng bản chất; nhóm nào không có dòng trả thì giữ nguyên như cũ.
-            groups = {}
-            group_keys = []
+            # Loop qua từng POS order line (để đảm bảo xuất đủ số dòng)
+            # Dòng trả hàng (qty < 0) sẽ được bù trừ vào đúng dòng gốc ở bước sau
+            # (_net_pos_refund_rows), dựa trên liên kết chính xác refunded_orderline_id.
             for pos_line in pos_order.lines:
                 prod = pos_line.product_id
                 if not prod:
                     continue
-
-                line_discount = pos_line.discount or 0.0
-                line_tax = 0.0
-                if pos_line.tax_ids_after_fiscal_position:
-                    line_tax = pos_line.tax_ids_after_fiscal_position[0].amount
-
-                key = (prod.id, round(line_discount, 4), round(line_tax, 4))
-                if key not in groups:
-                    groups[key] = {
-                        'product': prod,
-                        'discount': line_discount,
-                        'tax_amount': line_tax,
-                        'lines': [],
-                        'has_return': False,
-                    }
-                    group_keys.append(key)
-                groups[key]['lines'].append(pos_line)
-                if (pos_line.qty or 0.0) < 0:
-                    groups[key]['has_return'] = True
-
-            # Danh sách dòng sẽ thực sự xuất ra Excel
-            pos_entries = []
-            for key in group_keys:
-                grp = groups[key]
-
-                if not grp['has_return']:
-                    # Không có hàng trả -> xuất từng dòng như trước
-                    for pos_line in grp['lines']:
-                        pos_entries.append({
-                            'product': grp['product'],
-                            'qty': pos_line.qty or 0.0,
-                            'price_subtotal': pos_line.price_subtotal or 0.0,
-                            'price_unit_fallback': pos_line.price_unit or 0.0,
-                            'discount': grp['discount'],
-                            'tax_amount': grp['tax_amount'],
-                        })
-                    continue
-
-                # Có hàng trả -> cộng dồn số lượng và tiền của cả nhóm
-                net_qty = sum((l.qty or 0.0) for l in grp['lines'])
-                net_subtotal = sum((l.price_subtotal or 0.0) for l in grp['lines'])
-
-                if abs(net_qty) < 1e-6 and abs(net_subtotal) < 0.01:
-                    # Trả hết -> bỏ luôn dòng này, không xuất ra file
-                    continue
-
-                # Đơn giá tham chiếu: lấy từ dòng bán (qty > 0) nếu có
-                fallback_unit = 0.0
-                for l in grp['lines']:
-                    if (l.qty or 0.0) > 0:
-                        fallback_unit = l.price_unit or 0.0
-                        break
-                if not fallback_unit and grp['lines']:
-                    fallback_unit = grp['lines'][0].price_unit or 0.0
-
-                pos_entries.append({
-                    'product': grp['product'],
-                    'qty': net_qty,
-                    'price_subtotal': net_subtotal,
-                    'price_unit_fallback': fallback_unit,
-                    'discount': grp['discount'],
-                    'tax_amount': grp['tax_amount'],
-                })
-
-            for entry in pos_entries:
-                prod = entry['product']
 
                 # Tìm stock move tương ứng (nếu cần)
                 move = None
@@ -1169,20 +1099,25 @@ class PickingExportWizard(models.TransientModel):
                             move = mv
                             break
 
-                # Số lượng / thành tiền đã bù trừ hàng trả
-                qty = entry['qty']
+                # Lấy dữ liệu trực tiếp từ POS line
+                qty = pos_line.qty or 0.0
                 uom = prod.uom_id
-                price_subtotal = entry['price_subtotal']
-                discount = entry['discount']
-                tax_amount = entry['tax_amount']
+
+                # Thành tiền chưa thuế
+                price_subtotal = pos_line.price_subtotal or 0.0
 
                 # Tính lại đơn giá chưa thuế để tương thích với chiết khấu
-                if abs(qty) > 1e-6 and discount != 100.0:
-                    price_unit = price_subtotal / (qty * (1 - discount / 100.0))
+                discount = pos_line.discount or 0.0
+                if qty != 0 and discount != 100.0:
+                     price_unit = price_subtotal / (qty * (1 - discount / 100.0))
                 else:
-                    price_unit = entry['price_unit_fallback']
+                     price_unit = pos_line.price_unit# Fallback if qty is 0 or discount is 100%
 
-                # Computed fields (giữ dấu theo số lượng để dòng trả còn lại được trừ tiền)
+                tax_amount = 0.0
+                if pos_line.tax_ids_after_fiscal_position:
+                    tax_amount = pos_line.tax_ids_after_fiscal_position[0].amount
+
+                # Computed fields (giữ dấu theo số lượng để dòng trả trừ đúng tiền)
                 tien_ck = price_unit * qty * discount / 100
                 thanh_tien = price_subtotal
                 tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
@@ -1290,6 +1225,11 @@ class PickingExportWizard(models.TransientModel):
                     'tien_von': prod.standard_price * qty,  # Giữ dấu: dòng trả còn lại phải âm tiền vốn
                     'hang_hoa_giu_ho': '',
                     'la_hoa_don_tu_may_tinh_tien': 'Có',
+
+                    # --- Metadata nội bộ (không xuất ra Excel) ---
+                    # Dùng để bù trừ dòng trả vào đúng dòng gốc trong cùng số chứng từ.
+                    '_pos_line_id': pos_line.id,
+                    '_refunded_line_id': pos_line.refunded_orderline_id.id if pos_line.refunded_orderline_id else False,
                 }
                 rows.append(row)
                 
@@ -1457,6 +1397,64 @@ class PickingExportWizard(models.TransientModel):
             rows.append(row)
         return rows
 
+    def _net_pos_refund_rows(self, rows):
+        """Bù trừ dòng trả hàng POS vào đúng dòng gốc.
+
+        - Match chính xác bằng ``refunded_orderline_id`` (không đoán theo sản phẩm).
+        - Phạm vi bù trừ: chỉ trong cùng ``so_chung_tu`` (cùng chứng từ MISA),
+          để không sửa ngược chứng từ của ca/ngày khác đã xuất.
+        - Trả hết  -> bỏ cả dòng gốc lẫn dòng trả ra khỏi file.
+        - Trả một phần -> trừ lại số lượng & tiền tương ứng trên dòng gốc,
+          bỏ dòng trả đi.
+        - Không tìm được dòng gốc trong cùng chứng từ -> giữ nguyên dòng âm.
+        """
+        # Index dòng gốc theo (số chứng từ, id pos.order.line)
+        by_key = {}
+        for row in rows:
+            line_id = row.get('_pos_line_id')
+            if line_id:
+                by_key[(row.get('so_chung_tu'), line_id)] = row
+
+        dropped = set()   # id() của các dòng bị loại khỏi file
+
+        for row in rows:
+            refunded_id = row.get('_refunded_line_id')
+            qty = row.get('so_luong') or 0.0
+            if not refunded_id or qty >= 0:
+                continue
+
+            target = by_key.get((row.get('so_chung_tu'), refunded_id))
+            if target is None or id(target) in dropped:
+                # Dòng gốc nằm ngoài chứng từ này (hoặc đã bị trừ hết)
+                # -> giữ nguyên dòng âm để vẫn trừ tiền.
+                continue
+
+            net_qty = (target.get('so_luong') or 0.0) + qty
+            net_subtotal = (target.get('thanh_tien') or 0.0) + (row.get('thanh_tien') or 0.0)
+
+            # Dòng trả luôn được gộp vào dòng gốc
+            dropped.add(id(row))
+
+            if abs(net_qty) < 1e-6 and abs(net_subtotal) < 0.01:
+                # Trả hết -> bỏ luôn dòng gốc
+                dropped.add(id(target))
+                by_key.pop((target.get('so_chung_tu'), target.get('_pos_line_id')), None)
+                continue
+
+            # Trả một phần -> cập nhật lại số lượng và các cột tiền liên quan
+            don_gia = target.get('don_gia') or 0.0
+            ty_le_ck = target.get('ty_le_ck') or 0.0
+            ty_le_thue = target.get('ty_le_thue_gtgt') or 0.0
+            don_gia_von = target.get('don_gia_von') or 0.0
+
+            target['so_luong'] = net_qty
+            target['thanh_tien'] = net_subtotal
+            target['tien_chiet_khau'] = don_gia * net_qty * ty_le_ck / 100
+            target['tien_thue_gtgt'] = (net_subtotal * ty_le_thue / 100) if ty_le_thue else 0
+            target['tien_von'] = don_gia_von * net_qty
+
+        return [r for r in rows if id(r) not in dropped]
+
     def _create_pos_excel_workbook(self, pickings):
         """Tạo workbook Excel mẫu POS với header và hướng dẫn"""
         wb = Workbook()
@@ -1493,29 +1491,35 @@ class PickingExportWizard(models.TransientModel):
 
         # --- DATA ROWS ---
         current_row = DATA_START
+
+        # Gom toàn bộ dòng trước, rồi bù trừ hàng trả vào đúng dòng gốc
+        # (cùng số chứng từ) trước khi ghi ra file.
+        all_row_data = []
         for picking in pickings:
-            row_data_list = self._get_pos_row_data(picking)
-            for row_data in row_data_list:
-                for col_idx, col_def in enumerate(columns, start=1):
-                    cell = ws.cell(row=current_row, column=col_idx)
-                    value = row_data.get(col_def['key'], "")
-                    
-                    if value is None: value = ""
-                    
-                    cell.value = value
-                    cell.border = border
-                    
-                    # Number fmt
-                    if isinstance(value, (int, float)) and value != "":
-                        cell.alignment = number_alignment
-                        if 'ty_le' in col_def['key'] or 'so_luong' in col_def['key']:
-                             cell.number_format = '#,##0.00'
-                        elif 'tien' in col_def['key'] or 'gia' in col_def['key']:
-                             cell.number_format = '#,##0'
-                    else:
-                        cell.alignment = cell_alignment
+            all_row_data.extend(self._get_pos_row_data(picking))
+        all_row_data = self._net_pos_refund_rows(all_row_data)
+
+        for row_data in all_row_data:
+            for col_idx, col_def in enumerate(columns, start=1):
+                cell = ws.cell(row=current_row, column=col_idx)
+                value = row_data.get(col_def['key'], "")
                 
-                current_row += 1
+                if value is None: value = ""
+                
+                cell.value = value
+                cell.border = border
+                
+                # Number fmt
+                if isinstance(value, (int, float)) and value != "":
+                    cell.alignment = number_alignment
+                    if 'ty_le' in col_def['key'] or 'so_luong' in col_def['key']:
+                         cell.number_format = '#,##0.00'
+                    elif 'tien' in col_def['key'] or 'gia' in col_def['key']:
+                         cell.number_format = '#,##0'
+                else:
+                    cell.alignment = cell_alignment
+            
+            current_row += 1
 
         ws.row_dimensions[HEADER_ROW].height = 30
         return wb
