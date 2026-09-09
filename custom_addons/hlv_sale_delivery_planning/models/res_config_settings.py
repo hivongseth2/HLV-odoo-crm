@@ -51,6 +51,14 @@ class ResConfigSettings(models.TransientModel):
              'đối chiếu sai); tắt = chỉ cảnh báo + hiện nhãn "NGHI CHƯA IN RA" để kho tự bấm '
              '"Gửi lại lệnh in". Dù bật hay tắt đều KHÔNG bao giờ im lặng bỏ qua.',
     )
+    iot_pending_stale_minutes = fields.Integer(
+        string='Yêu cầu in chờ quá bao nhiêu phút thì báo động',
+        config_parameter='hlv_sale_delivery_planning.iot_pending_stale_minutes',
+        default=10,
+        help='Yêu cầu in nằm ở "Chờ in" quá số phút này thì coi là KHÔNG CÓ AI ĐANG MỞ trang '
+             '"Điều phối Giao hàng" để gửi lệnh in xuống máy in — Odoo sẽ cảnh báo (dashboard, '
+             'email, và popup ngay trên máy ở kho). Để 0 = dùng mặc định 10 phút.',
+    )
     iot_alert_emails = fields.Char(
         string='Email nhận cảnh báo máy in IoT',
         config_parameter='hlv_sale_delivery_planning.iot_alert_emails',
