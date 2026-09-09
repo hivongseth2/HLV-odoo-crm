@@ -2562,9 +2562,15 @@ function renderPrinterStatus(list){
   if(!box)return;
   if(!list.length){box.innerHTML='';return;}
   box.innerHTML=list.map(function(p){
-    var cls=p.connected?'online':'offline';
-    var label=p.connected?'Online':'Offline';
-    var title=p.device_name+(p.last_seen?' · lần cuối phản hồi '+esc(pqFormatTime(p.last_seen)):'');
+    // overall_ok gộp cả 2 nguồn: Odoo có thấy hộp IoT không, VÀ máy chủ kho có còn sống +
+    // service còn chạy không (heartbeat từ bin/iot_watchdog_windows.ps1). Chỉ nhìn connected
+    // là KHÔNG đủ — nó có thể giữ True mãi khi hộp IoT chết đột ngột.
+    var ok=(p.overall_ok!==undefined)?p.overall_ok:p.connected;
+    var cls=ok?'online':'offline';
+    var label=ok?'Online':'Có sự cố';
+    var title=p.problem_message||p.device_name||'';
+    if(p.watchdog_last_seen)title+=' · máy chủ kho báo về lúc '+pqFormatTime(p.watchdog_last_seen);
+    else if(p.watchdog_installed===false)title+=' · chưa cài watchdog trên máy chủ kho';
     return '<span class="pq-printer-chip '+cls+'" title="'+esc(title)+'">'
       +'<i class="dot"></i>'+esc(p.warehouse_name)+': '+label+'</span>';
   }).join('');

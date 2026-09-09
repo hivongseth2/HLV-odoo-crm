@@ -777,10 +777,14 @@
                  <div t-if="state.iotPrinterStatus.length"
                       class="d-flex flex-wrap gap-2 p-2 border-bottom bg-white">
                      <t t-foreach="state.iotPrinterStatus" t-as="ps" t-key="ps.warehouse_id">
+                         <!-- overall_ok gộp cả 2 nguồn: Odoo có thấy hộp IoT không (connected)
+                              VÀ máy chủ kho có còn sống + service còn chạy không (watchdog).
+                              Chỉ nhìn connected là KHÔNG đủ — nó có thể giữ True mãi khi hộp
+                              IoT chết đột ngột (xem models/iot_print_queue.py). -->
                          <span class="badge d-inline-flex align-items-center gap-1 px-2 py-1"
-                               t-att-class="ps.connected ? 'text-bg-success' : 'text-bg-danger'"
-                               t-att-title="ps.device_name + (ps.last_seen ? (' · lần cuối phản hồi ' + this._formatIotQueueTime(ps.last_seen)) : '')">
-                             <t t-esc="ps.warehouse_name"/>: <t t-esc="ps.connected ? 'Online' : 'Offline'"/>
+                               t-att-class="ps.overall_ok ? 'text-bg-success' : 'text-bg-danger'"
+                               t-att-title="(ps.problem_message || ps.device_name) + (ps.watchdog_last_seen ? (' · máy chủ kho báo về lúc ' + this._formatIotQueueTime(ps.watchdog_last_seen)) : (ps.watchdog_installed ? '' : ' · chưa cài watchdog trên máy chủ kho'))">
+                             <t t-esc="ps.warehouse_name"/>: <t t-esc="ps.overall_ok ? 'Online' : 'Có sự cố'"/>
                          </span>
                      </t>
                  </div>

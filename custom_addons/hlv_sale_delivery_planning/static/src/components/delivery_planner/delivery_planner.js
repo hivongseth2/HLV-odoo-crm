@@ -249,10 +249,15 @@ export class DeliveryPlannerDashboard extends Component {
                 this._onBusNewPortalMessage = (payload) => this.onNewPortalMessage(payload);
                 this._onBusPrefChanged = (payload) => this._onPreferenceChanged(payload);
                 this._onBusIotPrintQueueChanged = () => this.processIotPrintQueue();
+                // Cảnh báo máy chủ kho / máy in IoT có sự cố (do cron soát watchdog gửi ra —
+                // xem stock_warehouse.cron_check_iot_watchdog). Sticky khi lỗi để người ngồi ở
+                // máy dispatcher không bỏ lọt: đúng tình huống hỏng là "không ai để ý".
+                this._onBusIotWatchdogAlert = (payload) => this.onIotWatchdogAlert(payload);
                 this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
                 this.busService.subscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
                 this.busService.subscribe("iot_print_queue_changed", this._onBusIotPrintQueueChanged);
+                this.busService.subscribe("iot_watchdog_alert", this._onBusIotWatchdogAlert);
                 this.state.busListening = true;
             }
 
@@ -321,6 +326,9 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 if (this._onBusIotPrintQueueChanged) {
                     this.busService.unsubscribe("iot_print_queue_changed", this._onBusIotPrintQueueChanged);
+                }
+                if (this._onBusIotWatchdogAlert) {
+                    this.busService.unsubscribe("iot_watchdog_alert", this._onBusIotWatchdogAlert);
                 }
                 this.busService.deleteChannel("delivery_planner_channel");
                 this.state.busListening = false;

@@ -5,6 +5,26 @@
 // được báo ngay bằng notification thay vì im lặng.
 
 export class DeliveryPlannerIotPrintMixin {
+    /**
+     * Cảnh báo do cron soát watchdog gửi qua bus (stock_warehouse.cron_check_iot_watchdog):
+     * service Odoo IoT ở máy chủ kho bị tắt, máy chủ kho mất kết nối, hoặc Odoo không kết nối
+     * được hộp IoT. Sticky khi lỗi (bắt buộc người ngồi máy dispatcher phải thấy và tự tắt),
+     * không sticky khi đã hồi phục. Đồng thời làm mới chip trạng thái máy in ngay.
+     */
+    onIotWatchdogAlert(payload) {
+        const p = payload || {};
+        const name = p.warehouse_name || '';
+        if (p.recovered) {
+            this.notification.add(`Máy in IoT kho ${name} đã hoạt động lại.`, { type: 'success' });
+        } else {
+            this.notification.add(
+                `MÁY IN IoT KHO ${name} CÓ SỰ CỐ: ${p.message || 'không rõ nguyên nhân'}`,
+                { type: 'danger', sticky: true }
+            );
+        }
+        this.loadIotPrintQueueDrawer();
+    }
+
     async processIotPrintQueue() {
         if (this._iotPrintProcessing) {
             return; // tránh chạy chồng nếu bus event dồn dập trong lúc đang xử lý

@@ -17,6 +17,20 @@
                             <field name="auto_print_pick_slip_when_full"/>
                         </setting>
                     </block>
+                    <block title="Giám sát máy chủ kho / máy in IoT" name="hlv_delivery_planner_iot_watchdog_settings">
+                        <setting string="Token watchdog máy chủ kho"
+                                 help="Chuỗi bí mật để script watchdog trên máy chủ kho gửi tín hiệu 'tôi còn sống' về Odoo (/api/iot_watchdog/heartbeat). Để trống = không nhận heartbeat. Dán y hệt chuỗi này vào tham số -Token khi cài script (xem bin/iot_watchdog_windows.ps1).">
+                            <field name="iot_watchdog_token"/>
+                        </setting>
+                        <setting string="Số phút im lặng thì coi là mất kết nối"
+                                 help="Quá số phút này không nhận được tín hiệu từ máy chủ kho thì Odoo coi như máy đã tắt/mất mạng và gửi cảnh báo. Nên đặt gấp 2-3 lần chu kỳ chạy script (script chạy mỗi 2 phút thì đặt 5).">
+                            <field name="iot_watchdog_max_silence_minutes"/>
+                        </setting>
+                        <setting string="Email nhận cảnh báo"
+                                 help="Ai sẽ nhận email khi service IoT ở kho bị tắt, máy chủ kho mất kết nối, hoặc Odoo không kết nối được hộp IoT. Nhiều email cách nhau bằng dấu phẩy. Để trống thì chỉ cảnh báo trên dashboard (chỉ ai đang mở mới thấy).">
+                            <field name="iot_alert_emails" placeholder="kho@congty.com, it@congty.com"/>
+                        </setting>
+                    </block>
                     <block title="Đóng gói" name="hlv_delivery_planner_pack_settings">
                         <setting string="Chỉ người được assign mới được đóng gói"
                                  help="Khi bật, người không được chọn lúc in phiếu lấy hàng sẽ không vào/validate được phiếu PACK. Quản lý kho và admin được bỏ qua.">
