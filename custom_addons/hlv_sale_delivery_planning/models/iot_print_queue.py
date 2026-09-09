@@ -70,6 +70,20 @@ class HlvIotPrintQueue(models.Model):
         ('rejected', 'Từ chối xử lý'),
     ], string='Quyết định của kho', default='none', required=True, index=True, tracking=True)
 
+    # --- Đối chiếu với hàng đợi in của Windows tại máy kho -----------------------------
+    # state='printed' chỉ nghĩa "đã dispatch lệnh in", KHÔNG chắc máy in đã in ra giấy (đã
+    # gặp thực tế: Odoo báo đã gửi mà hàng đợi máy in không có job nào). 3 field dưới đây là
+    # kết quả ĐỐI CHIẾU với số job Windows thật sự đã in (do script watchdog trên máy kho báo
+    # về, xem stock_warehouse._iot_reconcile_printed_jobs) — để không "im lặng nuốt lỗi".
+    verify_state = fields.Selection([
+        ('waiting', 'Chờ đối chiếu'),
+        ('printed_ok', 'Máy in xác nhận đã in'),
+        ('suspect', 'NGHI CHƯA IN RA'),
+        ('no_data', 'Không đối chiếu được'),
+    ], string='Đối chiếu máy in', default='waiting', index=True, tracking=True)
+    verify_note = fields.Char(string='Ghi chú đối chiếu', tracking=True)
+    verified_at = fields.Datetime(string='Thời điểm đối chiếu', copy=False)
+
     def create(self, vals_list):
         # mail_create_nolog: bỏ dòng chatter tự động "<_description kỹ thuật> được tạo" mà
         # mail.thread tự ghi khi tạo record có field tracking=True — người dùng thường (sale/
@@ -239,8 +253,11 @@ class HlvIotPrintQueue(models.Model):
         thực tế không ra giấy (VD: IoT Box mất kết nối máy in sau khi lệnh đã gửi — Odoo không có
         cách báo lỗi này lại cho hệ thống theo thời gian thực, kho phải tự nhận biết và bấm nút
         này). Khác action_retry ở chỗ áp dụng được cho CẢ state='printed', không chỉ 'error'."""
+        # Reset luôn kết quả đối chiếu: lần gửi mới phải được đối chiếu lại từ đầu, nếu không
+        # bản ghi sẽ mãi mang nhãn "NGHI CHƯA IN RA" của lần trước dù lần này in được.
         self.filtered(lambda q: q.state in ('printed', 'error')).write({
             'state': 'pending', 'error_message': False, 'printed_by_id': False, 'printed_at': False,
+            'verify_state': 'waiting', 'verify_note': False, 'verified_at': False,
         })
 
     def action_cancel(self):
@@ -318,6 +335,10 @@ class HlvIotPrintQueue(models.Model):
             'requested_at': self.requested_at.isoformat() if self.requested_at else False,
             'printed_by_name': self.printed_by_id.name or '',
             'printed_at': self.printed_at.isoformat() if self.printed_at else False,
+            # Kết quả đối chiếu với hàng đợi in thật của Windows ở máy kho — FE PHẢI hiện
+            # 'suspect' thật nổi, đây là ca "Odoo báo đã gửi in mà giấy không ra".
+            'verify_state': self.verify_state or 'waiting',
+            'verify_note': self.verify_note or '',
             # Mã phiếu lấy hàng + trạng thái của TỪNG phiếu được yêu cầu in trong bản ghi này —
             # 1 yêu cầu có thể gồm nhiều phiếu nếu sale gửi in thêm phiếu mới vào request cũ.
             'pickings': [

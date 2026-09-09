@@ -859,6 +859,25 @@
                                       <t t-esc="q.warehouse_action === 'rejected' ? 'Kho: Từ chối xử lý' : 'Kho: Xử lý sau'"/>
                                   </span>
                               </div>
+                              <!-- Kết quả đối chiếu với hàng đợi in thật của Windows ở máy kho:
+                                   'suspect' = Odoo đã gửi lệnh in nhưng máy in KHÔNG in ra giấy.
+                                   Phải hiện thật nổi + có nút gửi lại ngay, tuyệt đối không im
+                                   lặng bỏ qua (xem stock_warehouse._iot_reconcile_printed_jobs). -->
+                              <div t-if="q.verify_state === 'suspect'" class="alert alert-danger py-1 px-2 mb-1" style="font-size:.75rem">
+                                  <div class="fw-bold">
+                                      <i class="fa fa-exclamation-triangle me-1"/>NGHI CHƯA IN RA GIẤY
+                                  </div>
+                                  <div t-if="q.verify_note" class="text-danger"><t t-esc="q.verify_note"/></div>
+                                  <button type="button" class="btn btn-sm btn-danger mt-1"
+                                          t-on-click="() => this.requeueIotPrintQueueItem(q)">
+                                      <i class="fa fa-repeat me-1"/>Gửi lại lệnh in ngay
+                                  </button>
+                              </div>
+                              <div t-if="q.verify_state === 'printed_ok'" class="mb-1">
+                                  <span class="badge text-bg-success" t-att-title="q.verify_note">
+                                      <i class="fa fa-check me-1"/>Máy in xác nhận đã in
+                                  </span>
+                              </div>
                               <div t-if="q.pickings and q.pickings.length" class="mb-1 d-flex flex-wrap gap-1">
                                   <t t-foreach="q.pickings" t-as="pk" t-key="pk.id">
                                       <span class="badge text-bg-light border d-inline-flex align-items-center gap-1"
