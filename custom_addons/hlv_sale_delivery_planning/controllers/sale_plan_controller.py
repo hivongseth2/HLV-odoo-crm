@@ -2625,6 +2625,11 @@ function renderPrintQueueList(){
       +'<div class="pq-meta"><i class="fa fa-clock-o me-1"></i>Yêu cầu: '+esc(pqFormatTime(i.requested_at))
       +(i.printed_at?' &middot; <i class="fa fa-print me-1"></i>Đã gửi lệnh in: '+esc(pqFormatTime(i.printed_at)):'')+'</div>'
       +(i.warehouse_action&&i.warehouse_action!=='none'?'<div class="pq-badge cancelled mt-1" style="display:inline-block"><i class="fa fa-info-circle me-1"></i>'+esc(WH_ACTION_LABEL[i.warehouse_action]||i.warehouse_action)+'</div>':'')
+      // Kết quả đối chiếu với hàng đợi in thật ở máy kho — sale cũng phải thấy để biết phiếu
+      // mình gửi có RA GIẤY hay không, không chỉ biết "đã gửi lệnh in" (xem
+      // stock_warehouse._iot_reconcile_printed_jobs). Kho là người bấm gửi lại.
+      +(i.verify_state==='suspect'?'<div class="pq-error"><i class="fa fa-exclamation-triangle me-1"></i><b>NGHI CHƯA IN RA GIẤY</b> — kho cần gửi lại lệnh in.'+(i.verify_note?'<br/>'+esc(i.verify_note):'')+'</div>':'')
+      +(i.verify_state==='printed_ok'?'<div class="pq-meta text-success"><i class="fa fa-check me-1"></i>Máy in xác nhận đã in ra giấy</div>':'')
       +(i.error_message?'<div class="pq-error"><i class="fa fa-exclamation-triangle me-1"></i>'+esc(i.error_message)+'</div>':'')
       +'</div>';
   }).join('');

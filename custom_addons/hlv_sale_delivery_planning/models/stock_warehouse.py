@@ -1,8 +1,16 @@
+import json
 import logging
+from datetime import timedelta
 
 from odoo import api, fields, models
 
 _logger = logging.getLogger(__name__)
+
+# Số phút chờ trước khi dám kết luận 1 lệnh in "chưa ra giấy" — phải lớn hơn chu kỳ heartbeat
+# của script watchdog (mặc định 2 phút) để lệnh in có đủ thời gian chạy xong và được đếm.
+DEFAULT_VERIFY_GRACE_MINUTES = 5
+# Số điểm đo counter máy in giữ lại cho mỗi kho (2 phút/điểm => ~2 giờ) để đối chiếu ngược.
+PRINTED_COUNTER_LOG_MAX = 60
 
 # Bao lâu không nhận được heartbeat từ script watchdog trên máy chủ kho thì coi là máy đã
 # tắt/mất mạng. Có thể override ở Settings > HLV Delivery Planner.
@@ -66,6 +74,13 @@ class StockWarehouse(models.Model):
         string='Watchdog: lần cuối gửi cảnh báo',
         readonly=True, copy=False,
         help='Dùng để không gửi lặp cảnh báo mỗi lần cron chạy (xem WATCHDOG_ALERT_REPEAT_MINUTES).',
+    )
+    x_iot_printed_counter_log = fields.Text(
+        string='Watchdog: lịch sử số job máy in đã in',
+        readonly=True, copy=False,
+        help='JSON danh sách [thời điểm, tổng số job Windows đã in] do script watchdog báo về. '
+             'Dùng để ĐỐI CHIẾU: Odoo đã gửi bao nhiêu lệnh in vs máy in thật sự in bao nhiêu, '
+             'từ đó phát hiện phiếu "đã gửi lệnh in" mà không ra giấy.',
     )
 
     # ------------------------------------------------------------------
@@ -205,8 +220,172 @@ class StockWarehouse(models.Model):
                 wh.x_iot_watchdog_alert_sent_at = False
         return True
 
+    # ------------------------------------------------------------------
+    # Đối chiếu "Odoo đã gửi lệnh in" vs "máy in Windows thật sự đã in"
+    # ------------------------------------------------------------------
+
     @api.model
-    def iot_watchdog_heartbeat(self, warehouse_code, service_ok, note=''):
+    def _iot_verify_grace_minutes(self):
+        raw = self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_sale_delivery_planning.iot_verify_grace_minutes'
+        )
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 0
+        return value if value > 0 else DEFAULT_VERIFY_GRACE_MINUTES
+
+    def _iot_read_counter_log(self):
+        self.ensure_one()
+        try:
+            data = json.loads(self.x_iot_printed_counter_log or '[]')
+        except (TypeError, ValueError):
+            return []
+        out = []
+        for row in data:
+            try:
+                out.append((fields.Datetime.to_datetime(row[0]), int(row[1])))
+            except Exception:
+                continue
+        return out
+
+    def _iot_append_counter_log(self, value, now=None):
+        """Ghi 1 điểm đo (thời điểm, tổng số job đã in) vào lịch sử. Trả về True nếu phát hiện
+        counter TỤT (Spooler/máy vừa khởi động lại — counter của Windows đếm từ lúc Spooler
+        chạy, nên tụt là dấu hiệu hàng đợi in đã bị xoá sạch giữa đường)."""
+        self.ensure_one()
+        now = now or fields.Datetime.now()
+        log = self._iot_read_counter_log()
+        was_reset = bool(log) and value < log[-1][1]
+        if was_reset:
+            # Counter tụt => mọi điểm đo cũ không còn so sánh được, bỏ hết, bắt đầu lại.
+            log = []
+        log.append((now, int(value)))
+        log = log[-PRINTED_COUNTER_LOG_MAX:]
+        self.x_iot_printed_counter_log = json.dumps(
+            [[fields.Datetime.to_string(ts), val] for ts, val in log]
+        )
+        return was_reset
+
+    def _iot_counter_value_at_or_before(self, moment):
+        """Giá trị counter tại điểm đo gần nhất KHÔNG SAU `moment`. None nếu chưa có điểm nào
+        (chưa đối chiếu được vì không biết mốc bắt đầu)."""
+        self.ensure_one()
+        value = None
+        for ts, val in self._iot_read_counter_log():
+            if ts <= moment:
+                value = val
+            else:
+                break
+        return value
+
+    def _iot_reconcile_printed_jobs(self, counter_reset=False, now=None):
+        """ĐỐI CHIẾU 2 HÀNG ĐỢI cho kho này, gọi mỗi lần nhận heartbeat có số job đã in.
+
+        Nguyên tắc (cố ý làm "rộng tay" để hạn chế báo oan):
+          - Lấy các yêu cầu đã dispatch (state='printed') CHƯA đối chiếu và đã quá thời gian
+            chờ (grace) — gọi là C1..Cn theo thứ tự gửi.
+          - printed_since = counter mới nhất − counter tại thời điểm ngay trước C1 được gửi.
+            Khoảng này RỘNG NHẤT có thể (tính cả job in tay của thủ kho) nên nếu vẫn thiếu thì
+            gần như chắc chắn là thiếu thật.
+          - printed_since >= n  => coi như đủ, đánh dấu tất cả 'printed_ok'.
+          - Thiếu k = n − printed_since => hàng đợi in là FIFO, nên k phiếu GỬI SAU CÙNG là
+            những phiếu chưa ra giấy => đánh dấu 'suspect'; các phiếu trước đó 'printed_ok'.
+          - counter_reset (Spooler vừa restart) => KHÔNG kết luận được job nào đã in xong trước
+            khi bị xoá, mà không ra giấy thì thiệt hại lớn hơn in trùng => đánh 'suspect' hết
+            cho người xử lý quyết định.
+
+        Trả về recordset các yêu cầu bị đánh 'suspect' (để caller cảnh báo/gửi lại)."""
+        self.ensure_one()
+        now = now or fields.Datetime.now()
+        cutoff = now - timedelta(minutes=self._iot_verify_grace_minutes())
+        Queue = self.env['hlv.iot.print.queue'].sudo()
+        candidates = Queue.search([
+            ('warehouse_id', '=', self.id),
+            ('state', '=', 'printed'),
+            ('verify_state', '=', 'waiting'),
+            ('printed_at', '!=', False),
+            ('printed_at', '<=', cutoff),
+        ], order='printed_at asc, id asc')
+        if not candidates:
+            return Queue.browse()
+
+        if counter_reset:
+            candidates.write({
+                'verify_state': 'suspect',
+                'verify_note': 'Hàng đợi in của Windows bị xoá/khởi động lại giữa đường — '
+                               'không xác nhận được đã ra giấy hay chưa.',
+                'verified_at': now,
+            })
+            return candidates
+
+        log = self._iot_read_counter_log()
+        base = self._iot_counter_value_at_or_before(candidates[0].printed_at)
+        if base is None or not log:
+            # Chưa có điểm đo nào trước lúc gửi (VD mới bật watchdog) => không đủ dữ liệu để
+            # kết luận. Đánh 'no_data' để KHÔNG treo mãi ở 'Chờ đối chiếu' và cũng không vu oan.
+            candidates.write({
+                'verify_state': 'no_data',
+                'verify_note': 'Chưa có số liệu máy in tại thời điểm gửi lệnh in để đối chiếu.',
+                'verified_at': now,
+            })
+            return Queue.browse()
+
+        printed_since = max(log[-1][1] - base, 0)
+        ok_count = min(printed_since, len(candidates))
+        if ok_count:
+            candidates[:ok_count].write({
+                'verify_state': 'printed_ok',
+                'verify_note': 'Máy in đã in đủ số lệnh trong khoảng thời gian này.',
+                'verified_at': now,
+            })
+        suspects = candidates[ok_count:]
+        if suspects:
+            suspects.write({
+                'verify_state': 'suspect',
+                'verify_note': 'Odoo đã gửi %d lệnh in nhưng máy in chỉ in %d — phiếu này CHƯA '
+                               'RA GIẤY, cần gửi in lại.' % (len(candidates), printed_since),
+                'verified_at': now,
+            })
+        return suspects
+
+    def _iot_handle_unprinted(self, suspects):
+        """Phát hiện phiếu đã gửi mà chưa ra giấy thì KHÔNG được im lặng: ghi chatter từng bản
+        ghi, cảnh báo (bus + email), và nếu admin bật thì tự gửi lại lệnh in luôn."""
+        self.ensure_one()
+        if not suspects:
+            return
+        auto_requeue = self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_sale_delivery_planning.iot_auto_requeue_unprinted'
+        ) in ('1', 'True', 'true')
+        orders = ', '.join(suspects.mapped('sale_order_id.name'))
+        for rec in suspects:
+            rec.message_post(body=(
+                '⚠️ Đối chiếu với máy in kho: lệnh in đã gửi nhưng máy in KHÔNG in ra giấy. %s'
+                % ('Hệ thống đang tự gửi lại lệnh in.' if auto_requeue else
+                   'Kho cần bấm "Gửi lại lệnh in" để in lại.')
+            ))
+        message = (
+            'Có %d yêu cầu in đã gửi cho kho %s nhưng máy in KHÔNG in ra giấy (đơn: %s). %s'
+            % (
+                len(suspects), self.name, orders,
+                'Hệ thống đã tự gửi lại lệnh in.' if auto_requeue
+                else 'Vào "Hàng chờ in (IoT)" bấm "Gửi lại lệnh in" cho những đơn này.',
+            )
+        )
+        self._iot_watchdog_send_alert(message)
+        if auto_requeue:
+            suspects.action_requeue()
+            try:
+                self.env['bus.bus']._sendone(
+                    'delivery_planner_channel', 'iot_print_queue_changed',
+                    {'warehouse_ids': [self.id], 'sale_order_id': False},
+                )
+            except Exception:
+                _logger.debug('Không gửi được bus sau khi tự gửi lại lệnh in', exc_info=True)
+
+    @api.model
+    def iot_watchdog_heartbeat(self, warehouse_code, service_ok, note='', printed_total=None):
         """Ghi nhận 1 heartbeat từ script watchdog trên máy chủ kho. Gọi từ controller
         /api/iot_watchdog/heartbeat (xem controllers/iot_watchdog_controller.py)."""
         code = (warehouse_code or '').strip()
@@ -220,9 +399,25 @@ class StockWarehouse(models.Model):
             'x_iot_watchdog_service_ok': bool(service_ok),
             'x_iot_watchdog_note': (note or '')[:255],
         })
+
+        # Đối chiếu 2 hàng đợi ngay khi có số liệu mới từ máy kho (không cần thêm cron):
+        # Odoo đã gửi bao nhiêu lệnh in vs máy in Windows thật sự in bao nhiêu.
+        suspects_count = 0
+        if printed_total is not None:
+            try:
+                counter_reset = warehouse._iot_append_counter_log(int(printed_total))
+                suspects = warehouse._iot_reconcile_printed_jobs(counter_reset=counter_reset)
+                suspects_count = len(suspects)
+                warehouse._iot_handle_unprinted(suspects)
+            except Exception:
+                # Đối chiếu lỗi thì KHÔNG được làm hỏng heartbeat (mất heartbeat sẽ bị báo
+                # "máy kho mất kết nối" oan) — chỉ ghi log rồi bỏ qua vòng này.
+                _logger.exception('Đối chiếu hàng đợi in thất bại cho kho %s', warehouse.name)
+
         return {
             'success': True,
             'warehouse_id': warehouse.id,
             'warehouse_name': warehouse.name,
             'service_ok': bool(service_ok),
+            'unprinted_found': suspects_count,
         }

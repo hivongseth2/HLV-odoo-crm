@@ -38,12 +38,16 @@ class IotWatchdogController(http.Controller):
     @http.route('/api/iot_watchdog/heartbeat', type='json', auth='public',
                 methods=['POST'], csrf=False)
     def iot_watchdog_heartbeat(self, token=None, warehouse_code=None, service_ok=None,
-                               note='', **kwargs):
+                               note='', printed_total=None, **kwargs):
         """Script trên máy chủ kho gọi mỗi 1-2 phút. Body JSON-RPC params:
             token: chuỗi bí mật dùng chung (bắt buộc)
             warehouse_code: MÃ KHO trong Odoo (stock.warehouse.code, VD 'KBC', 'TSN')
             service_ok: true/false — service Odoo IoT trên máy đó có đang Running không
             note: chuỗi ghi chú tuỳ ý (tên máy, trạng thái máy in, đã tự restart chưa...)
+            printed_total: TỔNG số job Windows đã in trên máy in của kho (performance counter
+              '\\Print Queue(...)\\Total Jobs Printed'). Odoo dùng con số này để ĐỐI CHIẾU với
+              số lệnh in đã dispatch, phát hiện phiếu "đã gửi lệnh in" mà không ra giấy — xem
+              stock_warehouse._iot_reconcile_printed_jobs(). Bỏ trống = không đối chiếu.
         """
         ok, err = self._check_token(token)
         if not ok:
@@ -51,7 +55,7 @@ class IotWatchdogController(http.Controller):
             return {'success': False, 'message': err}
         try:
             return request.env['stock.warehouse'].sudo().iot_watchdog_heartbeat(
-                warehouse_code, service_ok, note=note,
+                warehouse_code, service_ok, note=note, printed_total=printed_total,
             )
         except Exception as e:
             _logger.exception('IoT watchdog heartbeat lỗi')
