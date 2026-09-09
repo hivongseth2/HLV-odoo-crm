@@ -127,6 +127,24 @@ class StockPicking(models.Model):
                         'point_formula': share['ranking_formula'],
                         'point_formula_html': share['ranking_formula_html'],
                     })
+                elif acc_ranking > 0:
+                    # Bù bản ghi ranking còn thiếu (hiếm khi xảy ra, nhưng
+                    # xử lý đối xứng với nhánh exchange bên dưới).
+                    self.env['hlv.loyalty.history'].sudo().create({
+                        **base_vals,
+                        'account_id': account.id,
+                        'point_amount': acc_ranking,
+                        'point_type': 'ranking',
+                        'state': 'confirmed',
+                        'description': (
+                            f'Tích điểm xếp hạng (bù) {sale_order.name} - Phiếu {self.name}'
+                            f' - TK {account.display_name}'
+                        ),
+                        'point_formula': share['ranking_formula'],
+                        'point_formula_html': share['ranking_formula_html'],
+                    })
+                    total_ranking_recorded += acc_ranking
+
                 if exchange_hist and exchange_hist.state == 'pending':
                     exchange_hist.write({
                         'point_amount': acc_exchange,
@@ -138,6 +156,29 @@ class StockPicking(models.Model):
                         'point_formula': share['exchange_formula'],
                         'point_formula_html': share['exchange_formula_html'],
                     })
+                elif acc_exchange > 0:
+                    # Bù bản ghi điểm đổi thưởng còn thiếu: trước đây phiếu
+                    # này chỉ tạo được điểm ranking (lúc validate
+                    # discount_amount=0, hoặc CK Loyalty %/tiền trên dòng
+                    # bán hàng được nhập/sửa SAU khi đã giao) — trước đây
+                    # nhánh `if existing: ... continue` bỏ qua vĩnh viễn,
+                    # không bao giờ tạo bổ sung. Giờ chạy lại (validate lại /
+                    # wizard tính lại / nút "Tạo bù điểm đổi thưởng" trên
+                    # đơn hàng) sẽ tạo bổ sung bản ghi còn thiếu này.
+                    self.env['hlv.loyalty.history'].sudo().create({
+                        **base_vals,
+                        'account_id': account.id,
+                        'point_amount': acc_exchange,
+                        'point_type': 'exchange',
+                        'state': 'pending',
+                        'description': (
+                            f'Tích điểm đổi thưởng (bù) {sale_order.name} - Phiếu {self.name}'
+                            f' - TK {account.display_name}'
+                        ),
+                        'point_formula': share['exchange_formula'],
+                        'point_formula_html': share['exchange_formula_html'],
+                    })
+                    total_exchange_recorded += acc_exchange
                 continue
 
             if acc_ranking > 0:

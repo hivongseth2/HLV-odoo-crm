@@ -29,6 +29,13 @@
                             invisible="not loyalty_voucher_id"
                             confirm="Bạn có chắc muốn xóa Voucher khỏi đơn hàng?"/>
                 </div>
+                <div invisible="state not in ['sale', 'done']">
+                    <button name="action_backfill_loyalty_points" type="object"
+                            string="Tạo bù điểm Loyalty" class="btn btn-link"
+                            icon="fa-refresh"
+                            confirm="Tính lại và tạo bổ sung điểm Loyalty (đặc biệt là điểm đổi thưởng) còn thiếu cho các phiếu đã giao của đơn này. Điểm đã có sẵn sẽ KHÔNG bị thay đổi. Tiếp tục?"
+                            help="Dùng khi phiếu đã giao chỉ tích được điểm xếp hạng mà thiếu điểm đổi thưởng (VD: CK Loyalty % được nhập/sửa SAU khi đã giao hàng)."/>
+                </div>
             </xpath>
             <!-- Tab chọn tài khoản Loyalty cộng điểm cho đơn này -->
             <xpath expr="//notebook" position="inside">

@@ -235,6 +235,60 @@ class SaleOrder(models.Model):
         if reward_lines:
             reward_lines.unlink()
 
+    def action_backfill_loyalty_points(self):
+        """Tạo bù điểm Loyalty (chủ yếu là điểm đổi thưởng) còn thiếu cho
+        các phiếu xuất kho ĐÃ GIAO của đơn này.
+
+        Trường hợp thường gặp: phiếu đã giao lúc CK Loyalty (%)/tiền trên
+        dòng bán hàng chưa được nhập, nên chỉ tạo được điểm xếp hạng —
+        điểm đổi thưởng KHÔNG được tạo. Sau đó nhân viên nhập/sửa CK
+        Loyalty trên đơn thì điểm xếp hạng cũ đã confirmed nên
+        `stock.picking._loyalty_earn_points()` coi phiếu là "đã tích điểm"
+        và bỏ qua — không tạo bổ sung. Nút này gọi lại đúng hàm tích điểm
+        gốc (đã sửa để tự bù phần thiếu) cho từng phiếu, không đụng tới
+        các bản ghi đã có sẵn.
+        """
+        self.ensure_one()
+        pickings = self.picking_ids.filtered(
+            lambda p: p.state == 'done' and p.picking_type_code == 'outgoing'
+        )
+        if not pickings:
+            raise UserError('Đơn hàng này chưa có phiếu xuất kho nào đã giao (state=done) để tạo bù điểm.')
+
+        History = self.env['hlv.loyalty.history'].sudo()
+        before_ids = set(History.search([('sale_order_id', '=', self.id)]).ids)
+        for picking in pickings:
+            picking._loyalty_earn_points()
+        created = History.search([
+            ('sale_order_id', '=', self.id),
+            ('id', 'not in', list(before_ids)),
+        ])
+
+        if not created:
+            message = 'Không có điểm nào cần tạo bù (dữ liệu đã đầy đủ, hoặc chưa đủ điều kiện tích điểm).'
+            notif_type = 'warning'
+        else:
+            ranking_created = sum(created.filtered(lambda h: h.point_type == 'ranking').mapped('point_amount'))
+            exchange_created = sum(created.filtered(lambda h: h.point_type == 'exchange').mapped('point_amount'))
+            parts = []
+            if ranking_created:
+                parts.append(f'{ranking_created:,} điểm xếp hạng')
+            if exchange_created:
+                parts.append(f'{exchange_created:,} điểm đổi thưởng (đang chờ xác nhận)')
+            message = 'Đã tạo bù: ' + ', '.join(parts) + f' qua {len(created)} bản ghi.'
+            notif_type = 'success'
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Tạo bù điểm Loyalty',
+                'message': message,
+                'sticky': False,
+                'type': notif_type,
+            },
+        }
+
     def action_confirm(self):
         """Override: Đánh dấu Voucher đã sử dụng khi xác nhận đơn hàng."""
         res = super().action_confirm()
