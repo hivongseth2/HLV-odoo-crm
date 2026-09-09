@@ -788,6 +788,24 @@
                          </span>
                      </t>
                  </div>
+                 <!-- Hàng chờ nằm im vì KHÔNG có tab điều phối nào mở ở kho: máy in vẫn Online,
+                      service vẫn chạy, nhưng lệnh in phải do TRÌNH DUYỆT ở kho đẩy xuống hộp IoT
+                      (server không vào được LAN kho). Phải nói rõ, không để phiếu nằm im. -->
+                 <t t-foreach="state.iotPrinterStatus" t-as="ps" t-key="'stuck_' + ps.warehouse_id">
+                     <div t-if="ps.pending_stuck" class="alert alert-warning m-2 py-2 px-2 mb-0"
+                          style="font-size:.78rem">
+                         <div class="fw-bold">
+                             <i class="fa fa-hourglass-half me-1"/>
+                             <t t-esc="ps.warehouse_name"/>: <t t-esc="ps.pending_stuck"/> yêu cầu in
+                             nằm chờ chưa xuống máy in (cũ nhất <t t-esc="ps.pending_oldest_minutes"/> phút)
+                         </div>
+                         <div>
+                             Lệnh in được đẩy từ trình duyệt, nên <b>máy ở kho</b> phải mở trang
+                             "Điều phối Giao hàng" này. Nếu bạn đang ngồi ở đúng máy kho đó thì hàng
+                             chờ sẽ tự in trong ít giây; nếu không, hãy gọi kho mở trang lên.
+                         </div>
+                     </div>
+                 </t>
                  <!-- Lọc theo kho / ngày yêu cầu / trạng thái phiếu lấy hàng -->
                  <div class="p-2 border-bottom bg-white d-flex flex-wrap gap-1 align-items-center" style="font-size:.78rem">
                      <select class="form-select form-select-sm" style="width:auto"

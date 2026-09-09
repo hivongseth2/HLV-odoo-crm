@@ -61,6 +61,54 @@ class IotWatchdogController(http.Controller):
             _logger.exception('IoT watchdog heartbeat lỗi')
             return {'success': False, 'message': str(e)}
 
+    @http.route('/api/iot_watchdog/claim_print_jobs', type='json', auth='public',
+                methods=['POST'], csrf=False)
+    def iot_watchdog_claim_print_jobs(self, token=None, warehouse_code=None, limit=5, **kwargs):
+        """MÁY KHO TỰ NHẬN VIỆC IN — đường in không cần trình duyệt.
+
+        Đường in qua hộp IoT bắt buộc phải có TRÌNH DUYỆT đang mở trang "Điều phối Giao hàng"
+        (server Odoo.sh không vào được LAN kho), nên đóng tab là hàng chờ nằm im. Route này lật
+        chiều lại: máy kho hỏi "có việc gì cho tôi không", nhận PDF rồi in bằng driver máy in
+        Windows của chính nó.
+
+        Params: token, warehouse_code (stock.warehouse.code), limit (1-20, mặc định 5).
+        Trả về: jobs = [{queue_id, sale_order_name, picking_names, filename, pdf_b64}].
+        Bản ghi được giữ ở 'printing' cho tới khi máy kho gọi /report_print_result.
+        """
+        ok, err = self._check_token(token)
+        if not ok:
+            _logger.warning('IoT claim_print_jobs bị từ chối: %s', err)
+            return {'success': False, 'message': err}
+        try:
+            return request.env['hlv.iot.print.queue'].sudo().claim_for_local_dispatcher(
+                warehouse_code, limit=limit,
+            )
+        except Exception as e:
+            _logger.exception('IoT claim_print_jobs lỗi')
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/api/iot_watchdog/report_print_result', type='json', auth='public',
+                methods=['POST'], csrf=False)
+    def iot_watchdog_report_print_result(self, token=None, warehouse_code=None, results=None,
+                                        **kwargs):
+        """Máy kho báo kết quả in thật của các job vừa nhận từ /claim_print_jobs.
+
+        Params: token, warehouse_code, results = [{queue_id, success, message, printer}].
+        In được -> 'Đã gửi lệnh in'; lỗi -> 'Lỗi' kèm lý do (hiện ngay trong hàng chờ, không im
+        lặng bỏ qua). Không báo gì -> bản ghi vẫn ở 'printing' và sẽ được đưa lại hàng chờ sau
+        STALE_PRINTING_RECLAIM_MINUTES phút.
+        """
+        ok, err = self._check_token(token)
+        if not ok:
+            return {'success': False, 'message': err}
+        try:
+            return request.env['hlv.iot.print.queue'].sudo().report_local_dispatch_result(
+                warehouse_code, results or [],
+            )
+        except Exception as e:
+            _logger.exception('IoT report_print_result lỗi')
+            return {'success': False, 'message': str(e)}
+
     @http.route('/api/iot_watchdog/status', type='json', auth='public',
                 methods=['POST'], csrf=False)
     def iot_watchdog_status(self, token=None, **kwargs):

@@ -18,6 +18,14 @@ DEFAULT_WATCHDOG_MAX_SILENCE_MINUTES = 5
 # Đang lỗi thì nhắc lại tối đa mỗi 30 phút (tránh spam mail mỗi lần cron chạy).
 WATCHDOG_ALERT_REPEAT_MINUTES = 30
 
+# Yêu cầu in nằm ở 'pending' quá số phút này = gần như chắc chắn KHÔNG có phiên "Điều phối
+# Giao hàng" nào đang mở để đẩy lệnh in xuống hộp IoT. Việc dispatch BẮT BUỘC do JS của trình
+# duyệt làm (server Odoo.sh không nói chuyện được với máy in trong LAN kho), nên đóng tab là
+# hàng chờ nằm im vô thời hạn — không mất dữ liệu, nhưng phải BÁO chứ không được im lặng.
+DEFAULT_PENDING_STALE_MINUTES = 10
+# Đường dẫn tới dashboard điều phối — gửi kèm cảnh báo để người ở kho bấm mở là dispatch ngay.
+DISPATCHER_ACTION_PATH = '/odoo/action-hlv_sale_delivery_planning.action_delivery_planner_dashboard'
+
 
 class StockWarehouse(models.Model):
     _inherit = 'stock.warehouse'
@@ -98,6 +106,38 @@ class StockWarehouse(models.Model):
             value = 0
         return value if value > 0 else DEFAULT_WATCHDOG_MAX_SILENCE_MINUTES
 
+    @api.model
+    def _iot_pending_stale_minutes(self):
+        raw = self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_sale_delivery_planning.iot_pending_stale_minutes'
+        )
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 0
+        return value if value > 0 else DEFAULT_PENDING_STALE_MINUTES
+
+    @api.model
+    def _iot_dispatcher_url(self):
+        base = (self.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').rstrip('/')
+        return (base + DISPATCHER_ACTION_PATH) if base else ''
+
+    def _iot_pending_stuck(self, now=None, stale_minutes=None):
+        """Các yêu cầu in 'pending' quá lâu = ĐÃ GỬI nhưng chưa ai đẩy xuống máy in.
+
+        Nguyên nhân gần như luôn là không có tab "Điều phối Giao hàng" nào đang mở. Chỉ tính
+        các yêu cầu kho CHƯA quyết định gì (warehouse_action='none') — phiếu kho đã chọn "xử lý
+        sau"/"từ chối" thì nằm chờ là đúng ý người dùng, không phải sự cố."""
+        self.ensure_one()
+        now = now or fields.Datetime.now()
+        minutes = stale_minutes or self._iot_pending_stale_minutes()
+        return self.env['hlv.iot.print.queue'].sudo().search([
+            ('warehouse_id', '=', self.id),
+            ('state', '=', 'pending'),
+            ('warehouse_action', '=', 'none'),
+            ('requested_at', '<=', now - timedelta(minutes=minutes)),
+        ], order='requested_at asc')
+
     def _iot_watchdog_state(self, now=None, max_silence_minutes=None):
         """Tình trạng "in được hay không" của kho này, gộp 2 nguồn tin:
           - Odoo <-> hộp IoT: iot.device.connected (Odoo có nhận diện được hộp/máy in không).
@@ -122,6 +162,16 @@ class StockWarehouse(models.Model):
         )
         watchdog_ok = not (watchdog_silent or watchdog_service_down)
 
+        # Máy in + máy chủ kho có thể OK hết mà phiếu vẫn không ra giấy, vì thiếu người
+        # DISPATCH (không tab điều phối nào mở). Đây là sự cố riêng, phải soi riêng.
+        pending_stuck = self._iot_pending_stuck(now=now)
+        pending_stuck_count = len(pending_stuck)
+        pending_oldest_minutes = 0
+        if pending_stuck:
+            pending_oldest_minutes = int(
+                (now - pending_stuck[0].requested_at).total_seconds() / 60.0
+            )
+
         problems = []
         if not device:
             problems.append('Kho chưa gán máy in IoT.')
@@ -136,11 +186,20 @@ class StockWarehouse(models.Model):
             )
         elif watchdog_service_down:
             problems.append('Service Odoo IoT trên máy chủ kho đang KHÔNG chạy (Stopped).')
+        if pending_stuck:
+            problems.append(
+                '%d yêu cầu in đang chờ chưa được gửi xuống máy in (cũ nhất %d phút) — CẦN MỞ '
+                'trang "Điều phối Giao hàng" trên máy ở kho: lệnh in được đẩy từ trình duyệt, '
+                'server không tự gửi xuống máy in được.'
+                % (pending_stuck_count, pending_oldest_minutes)
+            )
 
         return {
             'ok': not problems,
             'message': ' '.join(problems),
             'device_connected': device_connected,
+            'pending_stuck': pending_stuck_count,
+            'pending_oldest_minutes': pending_oldest_minutes,
             'watchdog_installed': watchdog_installed,
             'watchdog_ok': watchdog_ok,
             'watchdog_last_seen': self.x_iot_watchdog_last_seen,
@@ -414,10 +473,27 @@ class StockWarehouse(models.Model):
                 # "máy kho mất kết nối" oan) — chỉ ghi log rồi bỏ qua vòng này.
                 _logger.exception('Đối chiếu hàng đợi in thất bại cho kho %s', warehouse.name)
 
+        # Hàng chờ nằm im vì KHÔNG có tab điều phối nào mở: máy ở kho là nơi duy nhất có người
+        # ngồi và mở được tab đó, nên trả về đây để watchdog báo NGAY tại máy đó.
+        pending_stuck = warehouse._iot_pending_stuck()
+        pending_stuck_message = ''
+        if pending_stuck:
+            pending_stuck_message = (
+                '%d yeu cau in dang cho chua duoc gui xuong may in (cu nhat %d phut). '
+                'MO trang "Dieu phoi Giao hang" tren may nay de in.'
+                % (
+                    len(pending_stuck),
+                    int((fields.Datetime.now() - pending_stuck[0].requested_at).total_seconds() / 60.0),
+                )
+            )
+
         return {
             'success': True,
             'warehouse_id': warehouse.id,
             'warehouse_name': warehouse.name,
             'service_ok': bool(service_ok),
             'unprinted_found': suspects_count,
+            'pending_stuck': len(pending_stuck),
+            'pending_stuck_message': pending_stuck_message,
+            'dispatcher_url': self._iot_dispatcher_url(),
         }
