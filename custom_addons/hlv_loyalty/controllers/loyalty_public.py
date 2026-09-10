@@ -144,6 +144,11 @@ def _load_account_data(account):
         'tiers': tiers,
         'program': program,
         'partner': root,
+        'account': account,
+        # Portal KHÔNG hiện tên công ty (partner.name) và mã KH (partner.ref)
+        # nữa — chỉ hiện tên người thu mua gắn với tài khoản đang đăng nhập;
+        # tài khoản chưa khai buyer_name thì để trống.
+        'buyer_name': account.buyer_name or '',
         'active_vouchers': active_vouchers,
         'active_vouchers_count': active_vouchers_count,
         'recent_history': recent_history,

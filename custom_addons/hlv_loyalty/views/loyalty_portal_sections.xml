@@ -201,6 +201,12 @@
                             <div class="tc-flip-front">
                                 <t t-if="is_current">
                                     <span class="tc-badge you">BẠN</span>
+                                    <!-- Điểm tích lũy hiện ngay trên thẻ hạng đang giữ
+                                         (đã bỏ khỏi lưới điểm ở dashboard). -->
+                                    <span class="tc-pts">
+                                        <span class="tc-pts-num"><t t-out="'{:,}'.format(partner.loyalty_total_points or 0)"/></span>
+                                        <span class="tc-pts-lbl">điểm tích lũy</span>
+                                    </span>
                                 </t>
                                 <img class="sr-tier-card-asset"
                                      t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
