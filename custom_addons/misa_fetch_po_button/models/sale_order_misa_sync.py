@@ -1334,6 +1334,22 @@ class SaleOrder(models.Model):
                 lambda picking: picking.state not in ('done', 'cancel')
             ).write({'partner_id': shipping_partner.id})
 
+    def _misa_sync_open_picking_delivery_type(self, data):
+        """Đẩy CustomField21 (cùng nguồn với Ghi chú MISA x_studio_misa_note)
+        xuống các phiếu kho còn mở của đơn. x_pick_delivery_type là field của
+        module hlv_sale_delivery_planning, theo từng lần lấy hàng (không dùng
+        chung cấp đơn hàng), nên chỉ ghi nếu module đó có cài (field tồn tại).
+        """
+        self.ensure_one()
+        delivery_type = (data.get('CustomField21') or '').strip()
+        if not delivery_type:
+            return
+        open_pickings = self.picking_ids.filtered(
+            lambda picking: picking.state not in ('done', 'cancel')
+        )
+        if open_pickings and 'x_pick_delivery_type' in open_pickings._fields:
+            open_pickings.write({'x_pick_delivery_type': delivery_type})
+
     def _sync_misa_header_in_place(self, data, headers):
         """Cập nhật header trên chính SO hiện tại, không thay record và không đụng move."""
         self.ensure_one()
@@ -1493,6 +1509,7 @@ class SaleOrder(models.Model):
         self.write(vals)
         if not (customer_changed and self.env.context.get('misa_defer_changes')):
             self._misa_sync_open_picking_contact()
+        self._misa_sync_open_picking_delivery_type(data)
 
     def action_resync_from_misa(self, prefetched_lines=None, misa_headers=None):
         """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
@@ -1625,6 +1642,7 @@ class SaleOrder(models.Model):
             stock_lines.sudo()._action_launch_stock_rule()
             self.invalidate_recordset(['picking_ids'])
             self._misa_sync_open_picking_contact()
+            self._misa_sync_open_picking_delivery_type(data)
             new_pickings = self.picking_ids.filtered(
                 lambda picking: picking.id not in old_picking_ids
                 and picking.state != 'cancel'
@@ -1703,6 +1721,10 @@ class SaleOrder(models.Model):
         self._misa_clear_sale_edit_lock()
         if self.state in ('draft', 'sent'):
             self.action_confirm()
+        # action_confirm() ở trên mới thật sự tạo picking cho đơn bootstrap (SO
+        # mới) — lúc _sync_misa_header_in_place() chạy trước đó, picking_ids
+        # còn rỗng nên phải đẩy lại delivery type ở đây mới ăn vào picking mới.
+        self._misa_sync_open_picking_delivery_type(data)
         self._auto_apply_misa_tags()
         if warehouse_changed and pickings_to_rebuild:
             self.message_post(body=_(
