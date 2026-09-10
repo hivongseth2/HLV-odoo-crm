@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from odoo import models, fields, api
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -438,7 +438,12 @@ class HlvLoyaltySaleOrderAccountLine(models.Model):
     )
     account_id = fields.Many2one(
         'hlv.loyalty.portal.account', string='Tài khoản Loyalty', required=True,
-        domain="[('partner_id', '=', parent.loyalty_root_partner_id), ('active', '=', True)]",
+        domain="[('active', '=', True)]",
+        help='Không bắt buộc phải cùng công ty với khách hàng trên đơn — cho phép '
+             'cộng điểm chéo sang tài khoản Loyalty của công ty khác khi cần '
+             '(vd 2 công ty có quan hệ nội bộ, hoặc dữ liệu khách hàng đang bị '
+             'trùng tên/MST chưa dedupe xong). Sale sẽ được xác nhận rõ số điểm/'
+             'công ty nhận điểm trước khi tạo đơn ở phía MISA Extension.',
     )
     earning_amount = fields.Monetary(
         string='Số tiền cộng điểm', currency_field='currency_id',
@@ -449,22 +454,6 @@ class HlvLoyaltySaleOrderAccountLine(models.Model):
              '(33.3%) → nhận khoảng 66.667đ lần này.',
     )
 
-    @api.onchange('account_id')
-    def _onchange_account_id(self):
-        if self.account_id:
-            self.earning_pct = self.account_id.default_earning_pct
-
-    @api.constrains('order_id', 'account_id')
-    def _check_account_same_company(self):
-        for line in self:
-            if not line.order_id.partner_id:
-                continue
-            root = line.order_id.partner_id._get_loyalty_root()
-            if line.account_id.partner_id.id != root.id:
-                raise ValidationError(
-                    f'Tài khoản Loyalty "{line.account_id.display_name}" không thuộc '
-                    f'công ty của khách hàng trên đơn "{line.order_id.name}".'
-                )
     _sql_constraints = [
         ('earning_amount_non_negative', 'CHECK(earning_amount >= 0)',
          'Số tiền cộng điểm không được âm!'),
