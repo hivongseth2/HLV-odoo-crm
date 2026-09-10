@@ -243,8 +243,16 @@
             var dots = document.querySelectorAll('#loyalty-tiers .sr-tier-dot');
             if (!grid || !cards.length) return;
 
+            // Căn thẻ hạng hiện tại vào giữa carousel bằng cách set scrollLeft
+            // của CHÍNH container. KHÔNG dùng scrollIntoView: hàm đó cuộn mọi
+            // ancestor cuộn được, kể cả chính document — mà section này nằm
+            // cuối trang nên trình duyệt sẽ kéo tuột cả trang xuống rồi mới
+            // trả về, đúng hiện tượng "vào trang là nhảy loạn" trên mobile.
             var current = document.querySelector('#loyalty-tiers .sr-tier-card.current');
-            if (current) current.scrollIntoView({inline: 'center', block: 'nearest'});
+            if (current) {
+                grid.scrollLeft = current.offsetLeft
+                    - (grid.clientWidth - current.offsetWidth) / 2;
+            }
 
             if (!dots.length) return;
             function updateDots() {
