@@ -1721,6 +1721,10 @@ class SaleOrder(models.Model):
         self._misa_clear_sale_edit_lock()
         if self.state in ('draft', 'sent'):
             self.action_confirm()
+        # action_confirm() ở trên mới thật sự tạo picking cho đơn bootstrap (SO
+        # mới) — lúc _sync_misa_header_in_place() chạy trước đó, picking_ids
+        # còn rỗng nên phải đẩy lại delivery type ở đây mới ăn vào picking mới.
+        self._misa_sync_open_picking_delivery_type(data)
         self._auto_apply_misa_tags()
         if warehouse_changed and pickings_to_rebuild:
             self.message_post(body=_(
