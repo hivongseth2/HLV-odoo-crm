@@ -526,7 +526,7 @@ class MisaExtensionController(http.Controller):
                     sync_baseline_source = "sale_order"
 
                 loyalty_lines = getattr(so, 'loyalty_account_line_ids', False)
-                loyalty_earning_pct = loyalty_lines[0].earning_pct if loyalty_lines else False
+                loyalty_earning_amount = loyalty_lines[0].earning_amount if loyalty_lines else False
                 loyalty_account_id = loyalty_lines[0].account_id.id if loyalty_lines else False
                 loyalty_account_name = loyalty_lines[0].account_id.display_name if loyalty_lines else False
                 loyalty_account_lines_data = []
@@ -535,7 +535,7 @@ class MisaExtensionController(http.Controller):
                         loyalty_account_lines_data.append({
                             "account_id": line.account_id.id,
                             "account_name": line.account_id.display_name,
-                            "earning_pct": line.earning_pct,
+                            "earning_amount": line.earning_amount,
                         })
 
                 payload = {
@@ -553,7 +553,7 @@ class MisaExtensionController(http.Controller):
                     "misa_sale_edit_locked_at": (
                         fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
                     ),
-                    "loyalty_earning_pct": loyalty_earning_pct,
+                    "loyalty_earning_amount": loyalty_earning_amount,
                     "loyalty_account_id": loyalty_account_id,
                     "loyalty_account_name": loyalty_account_name,
                     "loyalty_account_lines": loyalty_account_lines_data,
@@ -1121,27 +1121,50 @@ class MisaExtensionController(http.Controller):
             root.display_name, root.id, len(loyalty_accounts),
         )
 
+        # hlv_loyalty không còn khái niệm "% mặc định của tài khoản" nữa —
+        # mọi số tiền cộng điểm giờ phải nhập tường minh trên từng đơn, không
+        # có giá trị suy ra sẵn. `default_account_id` chỉ còn ý nghĩa "tài
+        # khoản nào của khách nên tự chọn sẵn trên đơn", không kèm số tiền.
         accounts_data = []
-        default_pct = 0.0
         default_account_id = False
 
         for acc in loyalty_accounts:
+<<<<<<< HEAD
             pct = float(acc.default_earning_pct or 0.0)
             if acc.is_default:
                 default_pct = pct
+=======
+            is_customer_account = acc.id in customer_account_ids
+            if is_customer_account and acc.is_default:
+>>>>>>> 77dad6c04 (refactor(misa): replace loyalty earning_pct with explicit earning_amount)
                 default_account_id = acc.id
             accounts_data.append({
                 "id": acc.id,
                 "buyer_name": acc.buyer_name or "",
                 "username": acc.username or "",
                 "display_name": acc.display_name or acc.buyer_name or acc.username or "Default Account",
+<<<<<<< HEAD
                 "default_earning_pct": pct,
+=======
+                "partner_id": acc.partner_id.id,
+                "partner_name": acc.partner_id.display_name or acc.partner_id.name or "",
+>>>>>>> 77dad6c04 (refactor(misa): replace loyalty earning_pct with explicit earning_amount)
                 "is_default": bool(acc.is_default),
             })
 
+<<<<<<< HEAD
         if not default_account_id and accounts_data:
             default_pct = accounts_data[0]["default_earning_pct"]
             default_account_id = accounts_data[0]["id"]
+=======
+        if not default_account_id and customer_account_ids:
+            first_customer_account = next(
+                (account for account in accounts_data if account["is_customer_account"]),
+                False,
+            )
+            if first_customer_account:
+                default_account_id = first_customer_account["id"]
+>>>>>>> 77dad6c04 (refactor(misa): replace loyalty earning_pct with explicit earning_amount)
 
         return request.make_response(
             json.dumps({
@@ -1150,7 +1173,6 @@ class MisaExtensionController(http.Controller):
                     "partner_id": root.id,
                     "partner_name": root.name,
                     "default_account_id": default_account_id,
-                    "default_pct": default_pct,
                     "accounts": accounts_data,
                 }
             }),
@@ -1158,6 +1180,158 @@ class MisaExtensionController(http.Controller):
         )
 
     # ============================================================
+<<<<<<< HEAD
+=======
+    # POST /api/extension/so/loyalty_points_preview
+    # ============================================================
+    @http.route(
+        "/api/extension/so/loyalty_points_preview",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_loyalty_points_preview(self, **payload):
+        """
+        Ước tính tiền quy đổi và điểm cho các tài khoản Loyalty trước khi đơn
+        được tạo/giao. Endpoint dựng các dòng tạm trong memory rồi gọi trực
+        tiếp các hàm tính đang dùng khi ghi lịch sử điểm trên stock.picking;
+        controller không duy trì một bản công thức riêng.
+
+        Body JSON:
+        {
+            "token": "...",
+            "partner_id": 123,
+            "lines": [{"qty": 2, "price": 1000000, "loyalty_discount_pct": 5}],
+            "accounts": [{"account_id": 5, "earning_amount": 200000}, {"account_id": 8, "earning_amount": 100000}]
+        }
+
+        `earning_amount` = số tiền tài khoản đó được cộng NẾU đơn giao đủ
+        100% (không còn %). Preview giả định đơn giao đủ 100% ngay bây giờ
+        (delivery_ratio=1.0) nên tiền quy đổi hiển thị = đúng earning_amount
+        đã nhập.
+        """
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")]
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        accounts_payload = payload.get('accounts') or []
+        if not isinstance(accounts_payload, list) or not accounts_payload:
+            return json_response({"ok": False, "error": "missing_accounts", "message": "Thiếu danh sách 'accounts'."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        program = env['hlv.loyalty.program'].sudo().search([('active', '=', True)], limit=1)
+        if not program:
+            return json_response({"ok": True, "data": {"has_program": False, "total_ranking_points": 0, "accounts": []}})
+
+        allocations = []
+        for item in accounts_payload:
+            if not isinstance(item, dict) or not item.get('account_id'):
+                continue
+            acc = env['hlv.loyalty.portal.account'].sudo().browse(int(item['account_id'])).exists()
+            if not acc:
+                continue
+            try:
+                amount = float(item.get('earning_amount') or 0.0)
+            except (ValueError, TypeError):
+                amount = 0.0
+            allocations.append((acc, amount))
+
+        raw_lines = payload.get('lines') or []
+        order_amount = 0.0
+        has_lines = False
+        for item in raw_lines if isinstance(raw_lines, list) else []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                qty = float(item.get('qty') or 0.0)
+                price = float(item.get('price') or 0.0)
+            except (ValueError, TypeError):
+                continue
+            has_lines = True
+            order_amount += price * qty
+
+        # Tương thích payload extension cũ trong thời gian triển khai đồng bộ.
+        if not has_lines:
+            try:
+                order_amount = float(payload.get('order_amount_untaxed') or 0.0)
+            except (ValueError, TypeError):
+                order_amount = 0.0
+
+        # Không còn "CK Loyalty %"/discount_amount trong hlv_loyalty nữa —
+        # điểm xếp hạng chỉ còn phụ thuộc doanh số, và điểm đổi thưởng chỉ
+        # còn phụ thuộc earning_amount đã gán cho từng tài khoản. Preview coi
+        # đơn như giao đủ 100% ngay bây giờ (delivery_ratio=1.0): delivered
+        # subtotal == order_total_amount == order_amount, giống hệt công
+        # thức thật ở `stock.picking._loyalty_earn_points()`.
+        preview_picking = env['stock.picking'].sudo().new({})
+        ranking_points = 0
+        if order_amount > 0 and program.earning_amount > 0:
+            ranking_points = int(order_amount / program.earning_amount) * program.earning_points
+
+        base_data = {
+            "has_program": True,
+            "earning_amount": program.earning_amount,
+            "earning_points": program.earning_points,
+            "order_amount_untaxed": order_amount,
+            "total_ranking_points": ranking_points,
+        }
+
+        if not allocations:
+            return json_response({"ok": True, "data": {**base_data, "accounts": []}})
+
+        shares = preview_picking._split_loyalty_points_by_account(
+            allocations,
+            order_amount,
+            order_amount,
+            1.0,
+            program,
+            ranking_points,
+        )
+        accounts_data = []
+        for (acc, amount), share in zip(allocations, shares):
+            # delivery_ratio=1.0 ở preview nên tiền quy đổi lần này = đúng
+            # earning_amount đã nhập cho tài khoản đó.
+            accounts_data.append({
+                "account_id": acc.id,
+                "display_name": acc.display_name,
+                "buyer_name": acc.buyer_name or "",
+                "username": acc.username or "",
+                "partner_id": acc.partner_id.id,
+                "partner_name": acc.partner_id.display_name,
+                "earning_amount": amount,
+                "conversion_amount": amount,
+                "ranking_points": share['ranking_points'],
+                "exchange_points": share['exchange_points'],
+            })
+
+        return json_response({
+            "ok": True,
+            "data": {
+                **base_data,
+                "total_conversion_amount": sum(account['conversion_amount'] for account in accounts_data),
+                "total_exchange_points": sum(
+                    share['exchange_points'] for share in shares
+                ),
+                "accounts": accounts_data,
+            },
+        })
+
+    # ============================================================
+>>>>>>> 77dad6c04 (refactor(misa): replace loyalty earning_pct with explicit earning_amount)
     # POST /api/extension/pr/create
     # ============================================================
     @http.route(
