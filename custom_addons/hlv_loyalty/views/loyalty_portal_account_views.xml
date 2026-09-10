@@ -36,7 +36,6 @@
                         <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False),('active','=',True)]" context="{'show_vat': True}"/>
                         <field name="buyer_name" placeholder="VD: Anh A - phòng thu mua 1"/>
                         <field name="portal_phone" placeholder="vd: 0912345678"/>
-                        <field name="default_earning_pct" placeholder="VD: 5 = 5%"/>
                         <field name="is_default"/>
                         <field name="active"/>
                     </group>
@@ -75,7 +74,6 @@
             <field name="buyer_name" string="Tên thu mua" optional="show"/>
             <field name="username"/>
             <field name="portal_phone"/>
-            <field name="default_earning_pct" string="% mặc định" optional="show"/>
             <field name="is_default" optional="show"/>
             <field name="default_bank_name" string="Ngân hàng nhận hiện kim" optional="hide"/>
             <field name="default_account_number" string="STK nhận hiện kim" optional="hide"/>

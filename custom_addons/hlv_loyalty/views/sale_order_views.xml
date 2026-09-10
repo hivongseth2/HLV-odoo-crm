@@ -6,11 +6,6 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <!-- Thêm cột CK Loyalty vào dòng sản phẩm -->
-            <xpath expr="//field[@name='order_line']/list//field[@name='discount']" position="after">
-                <field name="loyalty_discount_pct" string="CK Loyalty (%)" optional="show"
-                       column_invisible="parent.state not in ['sale','done','draft','sent']"/>
-            </xpath>
             <!-- Thêm trường Voucher vào phần thông tin đơn hàng -->
             <xpath expr="//group[@name='sale_header']" position="inside">
                 <label for="loyalty_voucher_code" string="Mã Voucher"/>
@@ -34,7 +29,7 @@
                             string="Tạo bù điểm Loyalty" class="btn btn-link"
                             icon="fa-refresh"
                             confirm="Tính lại và tạo bổ sung điểm Loyalty (đặc biệt là điểm đổi thưởng) còn thiếu cho các phiếu đã giao của đơn này. Điểm đã có sẵn sẽ KHÔNG bị thay đổi. Tiếp tục?"
-                            help="Dùng khi phiếu đã giao chỉ tích được điểm xếp hạng mà thiếu điểm đổi thưởng (VD: CK Loyalty % được nhập/sửa SAU khi đã giao hàng)."/>
+                            help="Dùng khi phiếu đã giao chỉ tích được điểm xếp hạng mà thiếu điểm đổi thưởng (VD: bảng 'Tài khoản cộng điểm Loyalty' bên dưới được cấu hình/sửa số tiền SAU khi đã giao hàng)."/>
                 </div>
             </xpath>
             <!-- Tab chọn tài khoản Loyalty cộng điểm cho đơn này -->
@@ -42,14 +37,23 @@
                 <page string="Tài khoản cộng điểm Loyalty" name="loyalty_account_lines">
                     <field name="loyalty_root_partner_id" invisible="1"/>
                     <p class="text-muted">
-                        Chọn 1 hoặc nhiều tài khoản Loyalty để chia điểm của đơn này theo %.
-                        % tự điền theo cấu hình mặc định của tài khoản, có thể sửa lại.
-                        Nếu để trống, toàn bộ điểm sẽ cộng cho tài khoản mặc định của công ty.
+                        Chọn 1 hoặc nhiều tài khoản Loyalty và nhập SỐ TIỀN mỗi tài khoản được
+                        cộng điểm đổi thưởng NẾU đơn này giao đủ 100%. Khi 1 phiếu xuất kho giao
+                        được X% giá trị đơn, tài khoản nhận đúng X% số tiền đã nhập (quy đổi ra
+                        điểm theo cấu hình chương trình Loyalty) — giao nhiều lần thì nhận nhiều lần,
+                        mỗi lần theo đúng % đã giao lần đó.
+                        VD: đơn 3.000.000đ, tài khoản A được gán 200.000đ, giao 1.000.000đ (33%)
+                        thì tài khoản A nhận khoảng 66.000đ lần này.
+                        Điểm xếp hạng của cả đơn cũng được chia giữa các tài khoản theo đúng tỷ lệ
+                        số tiền đã nhập ở đây.
+                        Nếu để trống bảng này, đơn chỉ tính điểm xếp hạng (100% cho tài khoản mặc
+                        định của công ty) — KHÔNG có điểm đổi thưởng.
                     </p>
                     <field name="loyalty_account_line_ids">
                         <list editable="bottom">
                             <field name="account_id" options="{'no_create': True}"/>
-                            <field name="earning_pct" string="% cộng điểm"/>
+                            <field name="earning_amount" string="Số tiền cộng điểm" widget="monetary"/>
+                            <field name="currency_id" column_invisible="True"/>
                         </list>
                     </field>
                 </page>

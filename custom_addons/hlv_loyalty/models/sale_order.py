@@ -433,14 +433,20 @@ class HlvLoyaltySaleOrderAccountLine(models.Model):
         'sale.order', string='Đơn bán hàng', required=True,
         ondelete='cascade', index=True,
     )
+    currency_id = fields.Many2one(
+        related='order_id.currency_id', string='Tiền tệ', readonly=True,
+    )
     account_id = fields.Many2one(
         'hlv.loyalty.portal.account', string='Tài khoản Loyalty', required=True,
         domain="[('partner_id', '=', parent.loyalty_root_partner_id), ('active', '=', True)]",
     )
-    earning_pct = fields.Float(
-        string='% cộng điểm', digits=(5, 2),
-        help='% áp dụng lên tổng tiền hàng thực giao của đơn để tính điểm đổi thưởng '
-             'cho tài khoản này (độc lập với % của các tài khoản khác trên cùng đơn).',
+    earning_amount = fields.Monetary(
+        string='Số tiền cộng điểm', currency_field='currency_id',
+        help='Tổng số tiền tài khoản này được cộng điểm đổi thưởng NẾU đơn giao đủ '
+             '100%. Khi phiếu xuất kho giao được X% giá trị đơn, tài khoản nhận đúng '
+             'X% số tiền này (quy đổi ra điểm theo cấu hình chương trình Loyalty). '
+             'VD: đơn 3.000.000đ, tài khoản này gán 200.000đ, giao 1.000.000đ '
+             '(33.3%) → nhận khoảng 66.667đ lần này.',
     )
 
     @api.onchange('account_id')
@@ -459,3 +465,7 @@ class HlvLoyaltySaleOrderAccountLine(models.Model):
                     f'Tài khoản Loyalty "{line.account_id.display_name}" không thuộc '
                     f'công ty của khách hàng trên đơn "{line.order_id.name}".'
                 )
+    _sql_constraints = [
+        ('earning_amount_non_negative', 'CHECK(earning_amount >= 0)',
+         'Số tiền cộng điểm không được âm!'),
+    ]
