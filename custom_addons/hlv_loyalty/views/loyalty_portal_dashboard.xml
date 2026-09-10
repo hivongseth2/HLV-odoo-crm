@@ -16,7 +16,7 @@
              sẽ khiến 'Đăng xuất' là flex item DUY NHẤT còn lại và bị đẩy sang trái. -->
         <div class="sr-topbar">
             <span class="sr-topbar-greet">
-                Xin chào, <strong><t t-out="partner.name"/></strong>
+                Xin chào<t t-if="buyer_name">, <strong><t t-out="buyer_name"/></strong></t>
             </span>
             <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
         </div>
@@ -40,14 +40,14 @@
                     <div class="sr-mcard-avatar">
                         <t t-if="partner.image_1920">
                             <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
-                                 t-att-alt="partner.name or ''"/>
+                                 t-att-alt="buyer_name"/>
                         </t>
                         <t t-else="">
                             <span class="ms ms-fill">storefront</span>
                         </t>
                     </div>
                     <div class="sr-mcard-id">
-                        <div class="sr-mcard-name"><t t-out="partner.name"/></div>
+                        <div class="sr-mcard-name"><t t-out="buyer_name"/></div>
                         <t t-if="partner.loyalty_tier_id">
                             <span class="sr-mcard-tier"><t t-out="partner.loyalty_tier_id.name"/></span>
                         </t>
@@ -93,23 +93,20 @@
                             <t t-if="partner.image_1920">
                                 <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
                                      style="width:100%;height:100%;object-fit:cover"
-                                     t-att-alt="partner.name or ''"/>
+                                     t-att-alt="buyer_name"/>
                             </t>
                             <t t-else="">
                                 <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">storefront</span>
                             </t>
                         </div>
                         <div>
-                            <h1 class="sr-cust-name"><t t-out="partner.name"/></h1>
+                            <h1 class="sr-cust-name"><t t-out="buyer_name"/></h1>
                             <div class="sr-cust-meta">
                                 <t t-if="masked_phone">
                                     <span class="sr-meta-item"><span class="ms">call</span><t t-out="masked_phone"/></span>
                                 </t>
                                 <t t-if="masked_email">
                                     <span class="sr-meta-item"><span class="ms">mail</span><t t-out="masked_email"/></span>
-                                </t>
-                                <t t-if="partner.ref">
-                                    <span class="sr-meta-item"><span class="ms">verified_user</span>ID: <t t-out="partner.ref"/></span>
                                 </t>
                             </div>
                         </div>
@@ -133,7 +130,10 @@
         <!-- Body -->
         <div class="sr-body sr-body-hero">
 
-            <!-- ── Tổng quan điểm (hiện trên CẢ desktop lẫn mobile) ──────────
+            <!-- ── Tổng quan điểm đổi thưởng (hiện trên CẢ desktop lẫn mobile) ──
+                 Chỉ còn điểm ĐỔI THƯỞNG khả dụng + điểm chờ xác nhận. Điểm tích
+                 lũy đã chuyển vào thẻ hạng ở mục "Hệ thống cấp bậc thành viên";
+                 điểm đang treo bỏ hẳn khỏi giao diện khách.
                  Đặt ngoài .sr-main-row vì .sr-main-row bị ẩn hẳn trên mobile
                  (xem media query .sr-main-row{display:none} trong CSS), nên
                  khối này phải nằm riêng mới hiện được ở cả 2 giao diện. -->
@@ -144,25 +144,7 @@
                         <span class="sr-pts-lbl">Điểm đổi thưởng</span>
                     </div>
                     <div class="sr-pts-val"><t t-out="'{:,}'.format(exchange_available_points or 0)"/></div>
-                    <div class="sr-pts-unit">khả dụng sau khi trừ điểm treo</div>
-                </a>
-                <a href="/loyalty/history" class="sr-pts-card sr-pts-ranking">
-                    <div class="sr-pts-head">
-                        <span class="ms ms-fill sr-pts-icon">workspace_premium</span>
-                        <span class="sr-pts-lbl">Điểm tích lũy</span>
-                    </div>
-                    <div class="sr-pts-val"><t t-out="'{:,}'.format(partner.loyalty_total_points or 0)"/></div>
-                    <div class="sr-pts-unit">dùng để xếp hạng thành viên</div>
-                </a>
-                <a href="/loyalty/redeem?tab=history" class="sr-pts-card sr-pts-hold">
-                    <div class="sr-pts-head">
-                        <span class="ms sr-pts-icon">pending_actions</span>
-                        <span class="sr-pts-lbl">Điểm đang treo</span>
-                    </div>
-                    <div class="sr-pts-val">
-                        <t t-if="reward_pending_points">-</t><t t-out="'{:,}'.format(reward_pending_points or 0)"/>
-                    </div>
-                    <div class="sr-pts-unit">điểm ở yêu cầu chờ xử lý</div>
+                    <div class="sr-pts-unit">có thể dùng để đổi thưởng</div>
                 </a>
                 <a href="/loyalty/history" class="sr-pts-card sr-pts-wait">
                     <div class="sr-pts-head">

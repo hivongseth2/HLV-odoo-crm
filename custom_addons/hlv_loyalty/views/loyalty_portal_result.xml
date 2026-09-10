@@ -20,16 +20,13 @@
                 </nav>
                 <div class="sr-result-top">
                     <div>
-                        <h1 class="sr-cust-name"><t t-out="partner.name"/></h1>
+                        <h1 class="sr-cust-name"><t t-out="buyer_name"/></h1>
                         <div class="sr-cust-meta">
                             <t t-if="masked_phone">
                                 <span class="sr-meta-item"><span class="ms">call</span><t t-out="masked_phone"/></span>
                             </t>
                             <t t-if="masked_email">
                                 <span class="sr-meta-item"><span class="ms">mail</span><t t-out="masked_email"/></span>
-                            </t>
-                            <t t-if="partner.ref">
-                                <span class="sr-meta-item"><span class="ms">verified_user</span>ID: <t t-out="partner.ref"/></span>
                             </t>
                         </div>
                     </div>

@@ -15,7 +15,7 @@
                 <span class="ms" style="font-size:20px">arrow_back</span> Quay về Yêu cầu của tôi
             </a>
             <div class="sr-topbar-right">
-                <span class="sr-topbar-name">Xin chào, <strong><t t-out="partner.name"/></strong></span>
+                <span class="sr-topbar-name">Xin chào<t t-if="buyer_name">, <strong><t t-out="buyer_name"/></strong></t></span>
                 <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
             </div>
         </div>

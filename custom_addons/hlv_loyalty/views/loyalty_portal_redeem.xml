@@ -14,7 +14,7 @@
                 <span class="ms" style="font-size:20px">arrow_back</span> Quay về Dashboard
             </a>
             <div class="sr-topbar-right">
-                <span class="sr-topbar-name">Xin chào, <strong><t t-out="partner.name"/></strong></span>
+                <span class="sr-topbar-name">Xin chào<t t-if="buyer_name">, <strong><t t-out="buyer_name"/></strong></t></span>
                 <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
             </div>
         </div>
@@ -34,19 +34,9 @@
                         <div>
                             <div class="sr-rdm-stat-lbl">Điểm khả dụng</div>
                             <div class="sr-rdm-stat-val"><t t-out="'{:,}'.format(exchange_available_points)"/></div>
-                            <div class="sr-rdm-stat-unit">sau khi trừ điểm treo</div>
+                            <div class="sr-rdm-stat-unit">có thể dùng để đổi thưởng</div>
                         </div>
                     </div>
-                    <t t-if="reward_pending_points &gt; 0">
-                        <div class="sr-rdm-stat sr-rdm-stat-pending">
-                            <span class="ms sr-rdm-stat-icon">pending_actions</span>
-                            <div>
-                                <div class="sr-rdm-stat-lbl">Đang treo</div>
-                                <div class="sr-rdm-stat-val">-<t t-out="'{:,}'.format(reward_pending_points)"/></div>
-                                <div class="sr-rdm-stat-unit">điểm ở yêu cầu chờ xử lý</div>
-                            </div>
-                        </div>
-                    </t>
                     <t t-if="pending_points &gt; 0">
                         <div class="sr-rdm-stat sr-rdm-stat-pending">
                             <span class="ms sr-rdm-stat-icon">hourglass_top</span>
@@ -198,14 +188,11 @@
                                            placeholder="Nhập số điểm..."
                                            required="required"
                                            t-att-value="form_vals.get('points_to_redeem', '')"/>
-                                    <!-- Số điểm khả dụng/đang treo đã hiện ở khối thống kê đầu trang
+                                    <!-- Số điểm khả dụng đã hiện ở khối thống kê đầu trang
                                          (sr-rdm-stats) — ở đây chỉ nhắc lại NGẮN mức tối đa được nhập,
                                          tránh lặp lại nguyên câu 2 lần trên cùng 1 màn hình. -->
                                     <div class="sr-cf-hint">
                                         Tối đa <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong>.
-                                        <t t-if="reward_pending_points &gt; 0">
-                                            (đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm)
-                                        </t>
                                     </div>
                                     <t t-if="program and program.cash_rate_per_point > 0">
                                         <div class="sr-cash-preview sr-cash-preview-zero" id="cash-preview">
