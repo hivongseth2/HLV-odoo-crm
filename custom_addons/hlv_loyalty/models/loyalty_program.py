@@ -56,7 +56,7 @@ class HlvLoyaltyProgram(models.Model):
         string='Giá trị quy đổi tiền đổi thưởng (đ/điểm)',
         required=True, default=10000,
         digits=(15, 0),
-        help='Mỗi 1 điểm đổi thưởng = X đồng khi khách chọn đổi tiền mặt. VD: 10.000.',
+        help='Mỗi 1 điểm đổi thưởng = X đồng khi khách chọn Refund. VD: 10.000.',
     )
 
     portal_ranking_desc = fields.Text(
