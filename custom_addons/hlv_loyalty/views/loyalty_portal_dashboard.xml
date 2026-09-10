@@ -63,11 +63,9 @@
                         </button>
                     </div>
                 </div>
+                <!-- Dòng "Điểm của bạn" (nhãn trống, không có số) đã bỏ — số điểm
+                     giờ hiện đầy đủ ở lưới .sr-pts-grid ngay bên dưới thẻ này. -->
                 <div class="sr-mcard-stats">
-                    <a href="/loyalty/history" class="sr-mcard-stat-row">
-                        <span class="sr-mcard-stat-plain">Điểm của bạn</span>
-                        <span class="sr-mcard-stat-link">Xem lịch sử <span class="ms">chevron_right</span></span>
-                    </a>
                     <a href="/loyalty/vouchers" class="sr-mcard-stat-row">
                         <div class="sr-mcard-stat-num">
                             <t t-out="active_vouchers_count or 0"/> <span>quà tặng</span>
@@ -141,40 +139,40 @@
                  khối này phải nằm riêng mới hiện được ở cả 2 giao diện. -->
             <div class="sr-pts-grid">
                 <a href="/loyalty/redeem?tab=cash" class="sr-pts-card sr-pts-exchange">
-                    <span class="ms ms-fill sr-pts-icon">swap_horiz</span>
-                    <div class="sr-pts-body">
-                        <div class="sr-pts-lbl">Điểm đổi thưởng</div>
-                        <div class="sr-pts-val"><t t-out="'{:,}'.format(exchange_available_points or 0)"/></div>
-                        <div class="sr-pts-unit">khả dụng sau khi trừ điểm treo</div>
+                    <div class="sr-pts-head">
+                        <span class="ms ms-fill sr-pts-icon">swap_horiz</span>
+                        <span class="sr-pts-lbl">Điểm đổi thưởng</span>
                     </div>
+                    <div class="sr-pts-val"><t t-out="'{:,}'.format(exchange_available_points or 0)"/></div>
+                    <div class="sr-pts-unit">khả dụng sau khi trừ điểm treo</div>
                 </a>
                 <a href="/loyalty/history" class="sr-pts-card sr-pts-ranking">
-                    <span class="ms ms-fill sr-pts-icon">workspace_premium</span>
-                    <div class="sr-pts-body">
-                        <div class="sr-pts-lbl">Điểm tích lũy</div>
-                        <div class="sr-pts-val"><t t-out="'{:,}'.format(partner.loyalty_total_points or 0)"/></div>
-                        <div class="sr-pts-unit">dùng để xếp hạng thành viên</div>
+                    <div class="sr-pts-head">
+                        <span class="ms ms-fill sr-pts-icon">workspace_premium</span>
+                        <span class="sr-pts-lbl">Điểm tích lũy</span>
                     </div>
+                    <div class="sr-pts-val"><t t-out="'{:,}'.format(partner.loyalty_total_points or 0)"/></div>
+                    <div class="sr-pts-unit">dùng để xếp hạng thành viên</div>
                 </a>
                 <a href="/loyalty/redeem?tab=history" class="sr-pts-card sr-pts-hold">
-                    <span class="ms sr-pts-icon">pending_actions</span>
-                    <div class="sr-pts-body">
-                        <div class="sr-pts-lbl">Điểm đang treo</div>
-                        <div class="sr-pts-val">
-                            <t t-if="reward_pending_points">-</t><t t-out="'{:,}'.format(reward_pending_points or 0)"/>
-                        </div>
-                        <div class="sr-pts-unit">điểm ở yêu cầu chờ xử lý</div>
+                    <div class="sr-pts-head">
+                        <span class="ms sr-pts-icon">pending_actions</span>
+                        <span class="sr-pts-lbl">Điểm đang treo</span>
                     </div>
+                    <div class="sr-pts-val">
+                        <t t-if="reward_pending_points">-</t><t t-out="'{:,}'.format(reward_pending_points or 0)"/>
+                    </div>
+                    <div class="sr-pts-unit">điểm ở yêu cầu chờ xử lý</div>
                 </a>
                 <a href="/loyalty/history" class="sr-pts-card sr-pts-wait">
-                    <span class="ms sr-pts-icon">hourglass_top</span>
-                    <div class="sr-pts-body">
-                        <div class="sr-pts-lbl">Điểm chờ xác nhận</div>
-                        <div class="sr-pts-val">
-                            <t t-if="pending_points">+</t><t t-out="'{:,}'.format(pending_points or 0)"/>
-                        </div>
-                        <div class="sr-pts-unit">chờ nhân viên xác nhận</div>
+                    <div class="sr-pts-head">
+                        <span class="ms sr-pts-icon">hourglass_top</span>
+                        <span class="sr-pts-lbl">Điểm chờ xác nhận</span>
                     </div>
+                    <div class="sr-pts-val">
+                        <t t-if="pending_points">+</t><t t-out="'{:,}'.format(pending_points or 0)"/>
+                    </div>
+                    <div class="sr-pts-unit">chờ nhân viên xác nhận</div>
                 </a>
             </div>
 

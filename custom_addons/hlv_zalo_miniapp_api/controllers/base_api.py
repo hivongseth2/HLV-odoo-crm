@@ -125,6 +125,33 @@ class ZaloBaseAPI:
             headers=headers,
         )
 
+    # =========================================================================
+    # Loyalty portal account helper
+    # =========================================================================
+
+    @classmethod
+    def _get_scoped_portal_account(cls, partner, phone=None):
+        """Tim chinh xac tai khoan loyalty portal cua partner theo so dien thoai."""
+        if not partner or "hlv.loyalty.portal.account" not in request.env:
+            return None
+        Account = request.env["hlv.loyalty.portal.account"].sudo()
+        root = partner._get_loyalty_root() if hasattr(partner, "_get_loyalty_root") else partner
+        family_ids = root._get_loyalty_family_partner_ids() if hasattr(root, "_get_loyalty_family_partner_ids") else [root.id, partner.id]
+
+        normalized = cls._normalize_vn_phone(phone) if phone else ""
+        if normalized:
+            acc = Account.search([
+                ("partner_id", "in", family_ids),
+                ("portal_phone", "=", normalized),
+                ("active", "=", True),
+            ], limit=1)
+            if acc:
+                return acc
+        # Fallback to default or first account of partner
+        if hasattr(root, "loyalty_portal_account_ids") and root.loyalty_portal_account_ids:
+            return root.loyalty_portal_account_ids.filtered(lambda a: a.is_default)[:1] or root.loyalty_portal_account_ids.filtered(lambda a: a.active)[:1]
+        return None
+
     @staticmethod
     def _parse_int(value, default=0):
         try:
@@ -518,4 +545,4 @@ class ZaloBaseAPI:
             }
         except Exception as e:
             _logger.warning("Voucher verification error: %s", e)
-            return {"valid": False, "error": "Không thể kiểm tra voucher"}
+            return {"valid": False, "error": "Không thể kiểm tra voucher"}
