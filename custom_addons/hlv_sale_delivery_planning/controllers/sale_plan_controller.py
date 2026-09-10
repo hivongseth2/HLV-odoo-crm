@@ -2574,6 +2574,17 @@ function renderPrinterStatus(list){
     return '<span class="pq-printer-chip '+cls+'" title="'+esc(title)+'">'
       +'<i class="dot"></i>'+esc(p.warehouse_name)+': '+label+'</span>';
   }).join('');
+  // Hàng chờ nằm im vì kho chưa mở trang điều phối: sale PHẢI thấy để gọi kho, chứ không
+  // ngồi đợi tờ phiếu không bao giờ ra. Máy in vẫn "Online" trong ca này nên chip là không đủ.
+  var stuck=list.filter(function(p){return p.pending_stuck;});
+  if(stuck.length){
+    box.innerHTML+=stuck.map(function(p){
+      return '<div class="pq-error" style="margin-top:6px">'
+        +'<b>'+esc(p.warehouse_name)+': '+p.pending_stuck+' yêu cầu in chưa xuống máy in</b>'
+        +' (cũ nhất '+p.pending_oldest_minutes+' phút). Kho chưa mở trang "Điều phối Giao hàng"'
+        +' — gọi kho mở lên thì các phiếu này in ngay, yêu cầu KHÔNG bị mất.</div>';
+    }).join('');
+  }
 }
 // Định dạng ISO datetime (UTC, không có 'Z') từ hlv.iot.print.queue._to_summary_dict() sang giờ
 // VN (UTC+7) — cần chính xác giờ:phút (không chỉ ngày) để đối soát khi sale/kho tranh luận đã
