@@ -210,27 +210,17 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
-    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365):
-        """Tìm trên TOÀN BỘ tin nhắn của đơn bán (mail.message).
+    def _plan_message_search_domain(self, search='', aliases=None, days=365):
+        """Domain chung cho tìm kiếm tin nhắn ở drawer điều phối.
 
-        Khác với hlv.sale.plan.message (mỗi đơn 1 dòng, chỉ giữ tin CUỐI), hàm này
-        quét từng tin một nên tìm được cả tin cũ trong cùng một đơn. Dùng cho ô tìm
-        kiếm + chip alias ở drawer tin nhắn của trang điều phối giao hàng.
+        Dùng lại nguyên vẹn cho cả search_plan_messages lẫn mark_plan_messages_read
+        để nút "đánh dấu đã đọc tất cả" phủ đúng tập tin đang lọc — kể cả tin chưa
+        kéo về màn hình.
 
         - search: khớp nội dung tin, mã đơn / tên khách, hoặc tên người gửi.
-        - aliases: lọc theo alias được nhắc; SQL lọc thô bằng body ilike '@alias',
-          sau đó xác nhận lại bằng regex trên text đã bóc HTML để loại khớp sai
-          (vd '@nhàn' không được ăn theo '@nhàn bc').
+        - aliases: khớp khi body chứa '@alias' (backend render mention thành
+          <strong class="sale-plan-mention">@alias</strong>).
         """
-        search = (search or '').strip()
-        aliases = [_normalize_mention_alias(alias) for alias in (aliases or [])]
-        aliases = [alias for alias in aliases if alias]
-        if not search and not aliases:
-            return {'messages': [], 'has_more': False, 'next_offset': 0}
-
-        limit = max(1, min(int(limit or 50), 200))
-        offset = max(0, int(offset or 0))
-
         domain = [
             ('model', '=', 'sale.order'),
             ('message_type', 'in', ('comment', 'email')),
@@ -256,6 +246,31 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
             if orders:
                 term_domain.append([('res_id', 'in', orders.ids)])
             domain = expression.AND([domain, expression.OR(term_domain)])
+
+        return domain
+
+    @api.model
+    def _normalize_plan_message_filters(self, search='', aliases=None):
+        search = (search or '').strip()
+        aliases = [_normalize_mention_alias(alias) for alias in (aliases or [])]
+        return search, [alias for alias in aliases if alias]
+
+    @api.model
+    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365):
+        """Tìm trên TOÀN BỘ tin nhắn của đơn bán (mail.message).
+
+        Khác với hlv.sale.plan.message (mỗi đơn 1 dòng, chỉ giữ tin CUỐI), hàm này
+        quét từng tin một nên tìm được cả tin cũ trong cùng một đơn. Dùng cho ô tìm
+        kiếm + chip alias ở drawer tin nhắn của trang điều phối giao hàng.
+        """
+        search, aliases = self._normalize_plan_message_filters(search, aliases)
+        if not search and not aliases:
+            return {'messages': [], 'has_more': False, 'next_offset': 0}
+
+        limit = max(1, min(int(limit or 50), 200))
+        offset = max(0, int(offset or 0))
+
+        domain = self._plan_message_search_domain(search=search, aliases=aliases, days=days)
 
         Message = self.env['mail.message'].sudo()
         # Lấy dư 1 trang để biết còn tin cũ hơn hay không (nút "Tải thêm" ở FE).
@@ -336,6 +351,51 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
             'scanned': len(records),
             'dropped_empty': dropped_empty,
             'dropped_system': dropped_system,
+        }
+
+    @api.model
+    def mark_plan_messages_read(self, search='', aliases=None, days=365, max_orders=5000):
+        """Đánh dấu đã đọc MỌI đơn có tin khớp bộ lọc hiện tại của drawer.
+
+        Phủ cả tin chưa kéo về màn hình: domain lấy nguyên từ
+        _plan_message_search_domain nên đúng bằng tập kết quả tìm kiếm.
+
+        Lưu ý về độ mịn: trạng thái đã đọc lưu theo ĐƠN (hlv.sale.plan.message,
+        mỗi user 1 dòng / đơn) chứ không theo từng tin, nên đánh dấu ở đây là
+        đánh dấu cả đơn — không có cách nào đánh dấu riêng 1 tin trong đơn.
+        """
+        search, aliases = self._normalize_plan_message_filters(search, aliases)
+        if not search and not aliases:
+            return {'marked': 0, 'sale_order_ids': [], 'truncated': False}
+
+        domain = self._plan_message_search_domain(search=search, aliases=aliases, days=days)
+        max_orders = max(1, min(int(max_orders or 5000), 20000))
+        groups = self.env['mail.message'].sudo()._read_group(
+            domain, groupby=['res_id'], limit=max_orders + 1,
+        )
+        so_ids = []
+        for group in groups:
+            # _read_group trả tuple ở Odoo 17+, dict ở bản cũ — nhận cả hai.
+            value = group.get('res_id') if isinstance(group, dict) else (group[0] if group else None)
+            if value:
+                so_ids.append(value)
+        truncated = len(so_ids) > max_orders
+        so_ids = so_ids[:max_orders]
+        if not so_ids:
+            return {'marked': 0, 'sale_order_ids': [], 'truncated': False}
+
+        notifications = self.env['hlv.sale.plan.message'].sudo().search([
+            ('user_id', '=', self.env.uid),
+            ('sale_order_id', 'in', so_ids),
+            ('is_read', '=', False),
+        ])
+        marked_so_ids = notifications.mapped('sale_order_id').ids
+        if notifications:
+            notifications.write({'is_read': True})
+        return {
+            'marked': len(notifications),
+            'sale_order_ids': marked_so_ids,
+            'truncated': truncated,
         }
 
     @api.model

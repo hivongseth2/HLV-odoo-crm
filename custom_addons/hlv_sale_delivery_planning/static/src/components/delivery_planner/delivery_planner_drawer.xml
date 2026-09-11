@@ -748,11 +748,27 @@
                              <t t-esc="state.messageSearchResults.length"/> tin khớp<t t-if="state.messageSearchHasMore">, còn nữa</t>
                          </t>
                      </span>
-                     <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none"
-                             style="font-size:.72rem"
-                             t-on-click="() => this.clearMessageDrawerFilters()">
-                         <i class="fa fa-times me-1"/>Xóa lọc
-                     </button>
+                     <span class="d-flex align-items-center gap-2">
+                         <!-- Đánh dấu đã đọc theo BỘ LỌC (phủ cả tin chưa tải ra),
+                              không phải chỉ các dòng đang hiện. -->
+                         <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none"
+                                 style="font-size:.72rem"
+                                 t-att-disabled="state.messageMarkingRead"
+                                 title="Đánh dấu đã đọc mọi đơn khớp bộ lọc này, gồm cả tin chưa tải ra"
+                                 t-on-click="markFilteredMessagesRead">
+                             <t t-if="state.messageMarkingRead">
+                                 <i class="fa fa-spinner fa-spin me-1"/>Đang xử lý...
+                             </t>
+                             <t t-else="">
+                                 <i class="fa fa-check-square-o me-1"/>Đánh dấu đã đọc tất cả
+                             </t>
+                         </button>
+                         <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none"
+                                 style="font-size:.72rem"
+                                 t-on-click="() => this.clearMessageDrawerFilters()">
+                             <i class="fa fa-times me-1"/>Xóa lọc
+                         </button>
+                     </span>
                  </div>
              </div>
 
