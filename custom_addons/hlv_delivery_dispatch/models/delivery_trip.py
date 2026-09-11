@@ -322,6 +322,78 @@ class HlvDeliveryTrip(models.Model):
     # ------------------------------------------------------------------
     # Xếp điểm
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Phục vụ nút "Xếp vào chuyến" trên Bảng điều phối giao hàng
+    # ------------------------------------------------------------------
+    @api.model
+    def can_current_user_dispatch(self):
+        """Tài khoản đang đăng nhập có được xếp chuyến không.
+
+        Gọi từ OWL để ẩn nút với nhân viên kho — kiểm quyền thật vẫn nằm ở ACL.
+        """
+        return self.env.user.has_group('hlv_delivery_dispatch.group_dispatch_manager')
+
+    @api.model
+    def get_assignable_trips(self, date=None, warehouse_id=None):
+        """Danh sách chuyến còn xếp đơn được của một ngày."""
+        domain = [('state', 'in', ('draft', 'planned', 'published'))]
+        if date:
+            domain.append(('date', '=', date))
+        if warehouse_id:
+            domain.append(('warehouse_id', '=', int(warehouse_id)))
+        trips = self.search(domain, order='plan_day_id, sequence, id')
+        return [{
+            'id': trip.id,
+            'name': trip.name,
+            'zone_name': trip.zone_id.name or '',
+            'session': trip.session,
+            'state': trip.state,
+            'is_locked': trip.is_locked,
+            'stop_count': trip.stop_count,
+            'max_stops': trip.max_stops,
+            'slots_left': trip.slots_left,
+            'vehicle_name': trip.vehicle_id.display_name or '',
+            'driver_name': trip.driver_display_name or '',
+        } for trip in trips]
+
+    def assign_sale_orders(self, order_ids):
+        """Xếp một loạt đơn đang chọn trên bảng điều phối vào chuyến này.
+
+        Không dừng ở đơn lỗi đầu tiên: đơn nào xếp được thì xếp, đơn nào không thì trả
+        về lý do để điều phối biết phải xử lý gì — thường là khách chưa gắn điểm giao.
+        Trần điểm là trần mềm nên đầy chỗ không phải lý do từ chối.
+        """
+        self.ensure_one()
+        orders = self.env['sale.order'].browse(order_ids or []).exists()
+        assigned, skipped, warnings = [], [], []
+        for order in orders:
+            if order.x_trip_id and order.x_trip_id.id == self.id:
+                skipped.append({'name': order.name, 'reason': 'đã có trong chuyến này'})
+                continue
+            if order.x_trip_id:
+                skipped.append({
+                    'name': order.name,
+                    'reason': 'đang nằm ở chuyến "%s"' % order.x_trip_id.name,
+                })
+                continue
+            try:
+                self.add_sale_order(order)
+            except UserError as exc:
+                skipped.append({'name': order.name, 'reason': str(exc)})
+                continue
+            assigned.append(order.name)
+            if order.x_delivery_blocked:
+                warnings.append('%s: %s' % (order.name, order.x_delivery_block_reason))
+        self._notify_changed('assigned')
+        return {
+            'assigned': assigned,
+            'skipped': skipped,
+            'warnings': warnings,
+            'stop_count': self.stop_count,
+            'max_stops': self.max_stops,
+            'is_over_capacity': self.is_over_capacity,
+        }
+
     def add_sale_order(self, order):
         """Đưa một đơn vào chuyến, gộp vào điểm sẵn có nếu cùng điểm giao.
 

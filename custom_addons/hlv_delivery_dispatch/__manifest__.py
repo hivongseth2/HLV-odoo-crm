@@ -39,9 +39,21 @@ Xem kế hoạch chi tiết tại plan/ke-hoach-module-dieu-phoi.md
         'views/dispatch_menus.xml',
     ],
     'assets': {
+        # Nút "Xếp vào chuyến" chèn vào Bảng điều phối giao hàng của
+        # hlv_sale_delivery_planning (patch + t-inherit, không sửa module đó).
+        'web.assets_backend': [
+            'hlv_delivery_dispatch/static/src/dispatch_board/dispatch_board_templates.xml',
+            'hlv_delivery_dispatch/static/src/dispatch_board/dispatch_board_patch.js',
+        ],
+        # Thứ tự quan trọng: util -> ui (state) -> feature -> app (khởi động).
         'hlv_delivery_dispatch.assets_dispatch_page': [
             'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_page.css',
-            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_page.js',
+            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_utils.js',
+            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_ui.js',
+            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_plan.js',
+            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_register.js',
+            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_profile.js',
+            'hlv_delivery_dispatch/static/src/dispatch_page/dispatch_app.js',
         ],
     },
     'installable': True,

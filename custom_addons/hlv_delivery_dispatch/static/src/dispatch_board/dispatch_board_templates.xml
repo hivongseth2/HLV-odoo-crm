@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Nút "Xếp vào chuyến" trên Bảng điều phối giao hàng.
+
+         Chèn bằng t-inherit nên hlv_sale_delivery_planning không bị sửa. Neo vào
+         title của nút "Tạo phiếu luân chuyển" — chuỗi này giống hệt nhau ở cả hai
+         template Kanban và Bảng nên một xpath dùng được cho cả hai.
+
+         Chế độ "Thẻ" không có thanh chọn nhiều đơn nên cũng không có nút này,
+         đúng như các nút hàng loạt sẵn có.
+         ================================================================ -->
+
+    <t t-name="hlv_delivery_dispatch.TripAssignButton">
+        <button class="btn btn-sm"
+                t-if="dispatch.canDispatch"
+                t-att-class="this.selectedCount > 0 ? 'btn-primary' : 'btn-outline-secondary'"
+                t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                t-on-click="() => this.openTripAssignModal()"
+                title="Xếp các đơn đang chọn vào một chuyến giao hàng">
+            <i class="fa fa-truck me-1" title="Xếp vào chuyến"></i>
+            Xếp vào chuyến
+            <span t-if="this.selectedCount > 0" class="badge bg-white text-primary ms-1">
+                <t t-esc="this.selectedCount"/>
+            </span>
+        </button>
+    </t>
+
+    <t t-name="hlv_delivery_dispatch.TripAssignModal">
+        <div t-if="dispatch.modalOpen" class="modal d-block" style="background:rgba(0,0,0,.45);z-index:2050"
+             t-on-click="() => this.closeTripAssignModal()">
+            <div class="modal-dialog modal-dialog-centered" t-on-click.stop="">
+                <div class="modal-content">
+
+                    <div class="modal-header py-2">
+                        <h5 class="modal-title">
+                            <i class="fa fa-truck me-2" title="Xếp vào chuyến"></i>
+                            Xếp <t t-esc="this.selectedCount"/> đơn vào chuyến
+                        </h5>
+                        <button type="button" class="btn-close"
+                                t-on-click="() => this.closeTripAssignModal()"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-5">
+                                <label class="form-label small fw-bold text-muted">Ngày giao</label>
+                                <input type="date" class="form-control form-control-sm"
+                                       t-att-value="dispatch.date"
+                                       t-on-change="(ev) => this.onTripAssignDateChange(ev)"/>
+                            </div>
+                            <div class="col-7">
+                                <label class="form-label small fw-bold text-muted">Chuyến</label>
+                                <select class="form-select form-select-sm"
+                                        t-att-disabled="dispatch.loadingTrips or !dispatch.trips.length"
+                                        t-on-change="(ev) => this.onTripAssignTripChange(ev)">
+                                    <option t-foreach="dispatch.trips" t-as="trip" t-key="trip.id"
+                                            t-att-value="trip.id"
+                                            t-att-selected="trip.id === dispatch.selectedTripId">
+                                        <t t-esc="trip.name"/>
+                                        <t t-if="trip.zone_name"> · <t t-esc="trip.zone_name"/></t>
+                                        <t t-if="trip.max_stops"> · còn <t t-esc="trip.slots_left"/> chỗ</t>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div t-if="dispatch.loadingTrips" class="text-muted small">
+                            <i class="fa fa-spinner fa-spin me-1" title="Đang tải"></i>Đang tải chuyến…
+                        </div>
+
+                        <div t-if="!dispatch.loadingTrips and !dispatch.trips.length"
+                             class="alert alert-warning py-2 small mb-2">
+                            Ngày này chưa có chuyến nào.
+                            <button class="btn btn-sm btn-link p-0 align-baseline"
+                                    t-on-click="() => this.openPlanDayAction()">
+                                Mở Kế hoạch ngày để tạo chuyến
+                            </button>
+                        </div>
+
+                        <!-- Thông tin chuyến đang chọn -->
+                        <t t-set="selTrip" t-value="this.dispatchSelectedTrip"/>
+                        <div t-if="selTrip" class="border rounded p-2 small bg-light mb-2">
+                            <div>
+                                <b>Điểm:</b> <t t-esc="selTrip.stop_count"/><t t-if="selTrip.max_stops">/<t t-esc="selTrip.max_stops"/></t>
+                                <t t-if="selTrip.vehicle_name"> · <b>Xe:</b> <t t-esc="selTrip.vehicle_name"/></t>
+                                <t t-if="selTrip.driver_name"> · <b>Tài xế:</b> <t t-esc="selTrip.driver_name"/></t>
+                            </div>
+                            <div t-if="selTrip.is_locked" class="text-danger mt-1">
+                                Chuyến đang khoá — xếp thêm được, nhưng sale không đăng ký vào được nữa.
+                            </div>
+                            <div t-if="selTrip.max_stops and selTrip.slots_left &lt;= 0" class="text-warning mt-1">
+                                Đã chạm trần <t t-esc="selTrip.max_stops"/> điểm của cụm. Trần mềm nên vẫn xếp được.
+                            </div>
+                        </div>
+
+                        <div t-if="dispatch.error" class="alert alert-danger py-2 small mb-0">
+                            <t t-esc="dispatch.error"/>
+                        </div>
+
+                        <!-- Kết quả sau khi xếp -->
+                        <div t-if="dispatch.result" class="mt-2">
+                            <div t-if="dispatch.result.assigned.length"
+                                 class="alert alert-success py-2 small mb-2">
+                                Đã xếp <b><t t-esc="dispatch.result.assigned.length"/></b> đơn.
+                                Chuyến còn <t t-esc="dispatch.result.stop_count"/> điểm.
+                            </div>
+                            <div t-if="dispatch.result.warnings.length"
+                                 class="alert alert-warning py-2 small mb-2">
+                                <b>Cần xử lý thủ tục trước khi xe đi:</b>
+                                <div t-foreach="dispatch.result.warnings" t-as="warn" t-key="warn_index">
+                                    <t t-esc="warn"/>
+                                </div>
+                            </div>
+                            <div t-if="dispatch.result.skipped.length"
+                                 class="alert alert-secondary py-2 small mb-0">
+                                <b>Không xếp được <t t-esc="dispatch.result.skipped.length"/> đơn:</b>
+                                <div t-foreach="dispatch.result.skipped" t-as="row" t-key="row_index">
+                                    <t t-esc="row.name"/> — <t t-esc="row.reason"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer py-2">
+                        <button class="btn btn-sm btn-secondary"
+                                t-on-click="() => this.closeTripAssignModal()">Đóng</button>
+                        <button class="btn btn-sm btn-primary"
+                                t-att-disabled="dispatch.saving or !dispatch.selectedTripId or this.selectedCount === 0"
+                                t-on-click="() => this.assignSelectedToTrip()">
+                            <i t-if="dispatch.saving" class="fa fa-spinner fa-spin me-1" title="Đang xếp"></i>
+                            Xếp vào chuyến
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </t>
+
+    <!-- ── Chèn nút + modal vào thanh hành động của Kanban ────────────── -->
+    <t t-name="hlv_delivery_dispatch.KanbanBoardTripAssign"
+       t-inherit="hlv_sale_delivery_planning.KanbanBoard" t-inherit-mode="extension">
+        <xpath expr="//button[@title='Tạo phiếu luân chuyển từ các đơn đã chọn']" position="after">
+            <t t-call="hlv_delivery_dispatch.TripAssignButton"/>
+            <t t-call="hlv_delivery_dispatch.TripAssignModal"/>
+        </xpath>
+    </t>
+
+    <!-- ── Chèn nút + modal vào thanh hành động của Bảng ──────────────── -->
+    <t t-name="hlv_delivery_dispatch.TableBoardTripAssign"
+       t-inherit="hlv_sale_delivery_planning.TableBoard" t-inherit-mode="extension">
+        <xpath expr="//button[@title='Tạo phiếu luân chuyển từ các đơn đã chọn']" position="after">
+            <t t-call="hlv_delivery_dispatch.TripAssignButton"/>
+            <t t-call="hlv_delivery_dispatch.TripAssignModal"/>
+        </xpath>
+    </t>
+
+</templates>
