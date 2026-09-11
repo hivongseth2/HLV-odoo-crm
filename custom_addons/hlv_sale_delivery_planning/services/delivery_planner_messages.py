@@ -289,23 +289,26 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         }
 
         result = []
+        dropped_empty = 0
+        dropped_system = 0
         for rec in records:
             plain = _message_plain_text(rec.body or '')
+            if not plain and rec.body:
+                # html2plaintext trả rỗng với vài dạng HTML → bóc thẻ thủ công,
+                # nếu không cả trang kết quả sẽ bị coi là tin rỗng và biến mất.
+                plain = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', rec.body or '')).strip()
             attachment_count = len(rec.attachment_ids)
             if not plain and not attachment_count:
+                dropped_empty += 1
                 continue
-            if plain and _SKIP_MSG_RE.search(plain):
+            # Log hệ thống không bao giờ chứa @mention, nên khi đang lọc alias thì
+            # không chạy bộ lọc này — tránh nuốt nhầm tin thật.
+            if not aliases and plain and _SKIP_MSG_RE.search(plain):
+                dropped_system += 1
                 continue
             author, clean_body = _split_public_author_prefix(rec.body or '', plain)
             if not author:
                 author = rec.author_id.name if rec.author_id else (rec.email_from or '')
-            if aliases:
-                # Tách '@' khỏi ký tự liền trước (vd "[Duyên]@Hạnh BC") để mention
-                # vẫn thoả điều kiện "đứng sau khoảng trắng" của _extract_configured_mentions.
-                probe = re.sub(r'(?<!\s)@', ' @', clean_body)
-                if not _extract_configured_mentions(probe, aliases):
-                    # body ilike khớp thô nhưng không phải mention thật → bỏ.
-                    continue
             local_dt = rec.date.replace(tzinfo=pytz.UTC).astimezone(user_tz) if rec.date else None
             result.append({
                 'message_id': rec.id,
@@ -319,7 +322,21 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
                 'is_read': bool(read_by_so.get(rec.res_id, True)),
             })
 
-        return {'messages': result, 'has_more': has_more, 'next_offset': next_offset}
+        if not result and records:
+            _logger.info(
+                'search_plan_messages: quét %s tin nhưng không giữ lại tin nào '
+                '(rỗng: %s, log hệ thống: %s) — search=%r aliases=%r',
+                len(records), dropped_empty, dropped_system, search, aliases,
+            )
+        return {
+            'messages': result,
+            'has_more': has_more,
+            'next_offset': next_offset,
+            # Số liệu để soi nhanh khi kết quả rỗng bất thường (FE log ra console).
+            'scanned': len(records),
+            'dropped_empty': dropped_empty,
+            'dropped_system': dropped_system,
+        }
 
     @api.model
     def _sale_plan_message_date_bounds(self, date_from, date_to=None, tz_name='Asia/Ho_Chi_Minh'):

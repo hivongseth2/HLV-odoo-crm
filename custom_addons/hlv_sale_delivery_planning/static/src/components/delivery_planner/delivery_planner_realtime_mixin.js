@@ -222,6 +222,11 @@ export class DeliveryPlannerRealtimeMixin {
             );
             if (seq !== this._messageSearchSeq) return;
             const rows = (result && result.messages) || [];
+            if (!rows.length && result && result.scanned) {
+                // Backend quét được dòng nhưng không giữ lại tin nào — in số liệu ra
+                // console để soi nhanh thay vì phải mò log server.
+                console.debug('searchPlanMessages: không giữ lại tin nào', result);
+            }
             this.state.messageSearchResults = reset
                 ? rows
                 : [...(this.state.messageSearchResults || []), ...rows];
