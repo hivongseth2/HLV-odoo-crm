@@ -117,6 +117,8 @@ export class DeliveryPlannerDrawerMessagesMixin {
             console.error('loadDrawerMentionAliases error', e);
             this.state.drawerMentionAliases = [];
         }
+        // Danh sách alias đổi → cache nhận diện @alias của drawer tin nhắn hết hiệu lực.
+        this._mentionsTextCache = null;
     }
 
     _normalizeMentionAlias(value) {

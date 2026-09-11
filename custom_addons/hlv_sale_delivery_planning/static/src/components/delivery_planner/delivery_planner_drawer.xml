@@ -697,20 +697,62 @@
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.MessageDrawer">
         <div t-if="state.isMessageDrawerOpen"
-             class="offcanvas offcanvas-start show shadow-lg" tabindex="-1"
+             class="offcanvas offcanvas-start show shadow-lg d-flex flex-column" tabindex="-1"
              style="visibility: visible; width: 400px; z-index: 1050; position: fixed; top: 0; bottom: 0; left: 0; background: white;"
              t-on-click.stop="">
-             
+
              <div class="offcanvas-header bg-danger text-white p-3">
                  <h5 class="offcanvas-title m-0" style="color:white">
                      <i class="fa fa-bell me-2"></i>
                      Tin nhắn mới từ saler
                  </h5>
                  <button type="button" class="btn-close btn-close-white ms-auto"
-                         aria-label="Close" t-on-click="() => { state.isMessageDrawerOpen = false; }"></button>
+                         aria-label="Close" t-on-click="closeMessageDrawer"></button>
              </div>
              
-             <div class="offcanvas-body p-0 bg-light overflow-auto" style="height: calc(100vh - 70px);">
+             <!-- Tìm kiếm + lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...) -->
+             <div class="p-2 border-bottom bg-white">
+                 <div class="input-group input-group-sm">
+                     <span class="input-group-text bg-white"><i class="fa fa-search text-muted"/></span>
+                     <input type="text" class="form-control"
+                            placeholder="Tìm mã đơn, người gửi, nội dung..."
+                            t-model="state.messageDrawerSearch"/>
+                     <button t-if="state.messageDrawerSearch" type="button"
+                             class="btn btn-outline-secondary" title="Xóa tìm kiếm"
+                             t-on-click="() => { state.messageDrawerSearch = ''; }">
+                         <i class="fa fa-times"/>
+                     </button>
+                 </div>
+                 <div t-if="this.messageDrawerAliasOptions.length"
+                      class="d-flex flex-wrap gap-1 mt-2 overflow-auto" style="max-height: 92px;">
+                     <t t-foreach="this.messageDrawerAliasOptions" t-as="alias" t-key="alias.alias">
+                         <button type="button"
+                                 class="btn btn-sm py-0 px-2 rounded-pill"
+                                 style="font-size:.72rem"
+                                 t-att-class="this.isMessageAliasSelected(alias.alias) ? 'btn-danger' : 'btn-outline-secondary'"
+                                 t-att-title="alias.user_name"
+                                 t-on-click="() => this.toggleMessageAliasFilter(alias.alias)">
+                             @<t t-esc="alias.display_alias"/>
+                             <span class="ms-1 opacity-75">(<t t-esc="alias.count"/>)</span>
+                         </button>
+                     </t>
+                 </div>
+                 <div t-if="this.messageDrawerHasFilters"
+                      class="d-flex justify-content-between align-items-center mt-2 text-muted"
+                      style="font-size:.72rem">
+                     <span>
+                         Hiển thị <t t-esc="this.filteredUnreadOrders.length"/> / <t t-esc="state.globalUnreadOrders.length"/> tin
+                     </span>
+                     <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none"
+                             style="font-size:.72rem"
+                             t-on-click="() => this.clearMessageDrawerFilters()">
+                         <i class="fa fa-times me-1"/>Xóa lọc
+                     </button>
+                 </div>
+             </div>
+
+             <!-- flex:1 thay cho height cố định — thanh lọc phía trên co giãn theo số chip alias. -->
+             <div class="offcanvas-body p-0 bg-light overflow-auto" style="flex: 1 1 auto; min-height: 0;">
                  <div t-if="state.globalUnreadOrdersLoading" class="p-4 text-center text-muted">
                       <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
                  </div>
@@ -718,8 +760,12 @@
                       <i class="fa fa-envelope-open-o fa-3x text-success opacity-50 mb-3"></i><br/>
                       Tuyệt vời! Không có tin nhắn mới nào chưa đọc.
                  </div>
+                 <div t-elif="this.filteredUnreadOrders.length === 0" class="p-4 text-center text-muted">
+                      <i class="fa fa-filter fa-3x opacity-50 mb-3"></i><br/>
+                      Không có tin nhắn nào khớp bộ lọc.
+                 </div>
                  <div t-else="" class="list-group list-group-flush">
-                      <t t-foreach="state.globalUnreadOrders" t-as="uo" t-key="uo.id">
+                      <t t-foreach="this.filteredUnreadOrders" t-as="uo" t-key="uo.id">
                           <button type="button" class="list-group-item list-group-item-action p-3"
                                   t-att-class="uo._isRead ? 'opacity-50' : ''"
                                   t-on-click="() => this.openDrawerFromMessageList(uo.sale_order_id ? uo.sale_order_id[0] : uo.id)">

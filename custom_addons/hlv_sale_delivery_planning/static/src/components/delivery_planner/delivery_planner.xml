@@ -78,7 +78,7 @@
                                 <i class="fa fa-comments-o me-1"></i> Xuất tin nhắn
                             </button>
                             <button class="btn btn-outline-danger shadow-sm position-relative ms-2"
-                                    t-on-click="() => { this.state.isMessageDrawerOpen = true; }">
+                                    t-on-click="openMessageDrawer">
                                 <i class="fa fa-bell" ></i> Tin nhắn
                                 <span t-if="this.unreadMessageCount > 0"
                                       class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
@@ -412,7 +412,7 @@
                  
             <div t-if="state.isMessageDrawerOpen"
                  class="modal-backdrop fade show"
-                 t-on-click="() => { this.state.isMessageDrawerOpen = false; }"
+                 t-on-click="closeMessageDrawer"
                  style="z-index: 1040;"></div>
 
             <div t-if="state.isIotPrintQueueDrawerOpen"

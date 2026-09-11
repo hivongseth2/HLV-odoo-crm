@@ -93,6 +93,143 @@ export class DeliveryPlannerRealtimeMixin {
         return this.state.globalUnreadOrders.filter((o) => !o._isRead).length;
     }
 
+    openMessageDrawer() {
+        this.state.isMessageDrawerOpen = true;
+        // Danh sách alias cho bộ lọc — nạp 1 lần, dùng chung với ô soạn tin của drawer đơn.
+        if (!(this.state.drawerMentionAliases || []).length) {
+            this.loadDrawerMentionAliases();
+        }
+    }
+
+    closeMessageDrawer() {
+        this.state.isMessageDrawerOpen = false;
+    }
+
+    /**
+     * Bỏ dấu tiếng Việt để gõ không dấu vẫn tìm được ("nhan" khớp "Nhàn").
+     */
+    _searchNormalize(value) {
+        return String(value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '')
+            .replace(/đ/g, 'd')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /**
+     * Regex nhận diện @alias — giữ đúng luật của backend
+     * (_extract_configured_mentions trong services/delivery_planner_messages.py):
+     * alias phải đứng sau đầu dòng/khoảng trắng và kết thúc bằng ranh giới.
+     * Alias có thể chứa khoảng trắng ("nhàn bc") nên không dùng \b được.
+     */
+    _mentionRegexFor(alias) {
+        if (!this._mentionRegexCache) this._mentionRegexCache = new Map();
+        let regex = this._mentionRegexCache.get(alias);
+        if (!regex) {
+            const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            regex = new RegExp('(^|\\s)@' + escaped + '(?=$|[\\s,;:!?()\\[\\]{}<>])', 'i');
+            this._mentionRegexCache.set(alias, regex);
+        }
+        return regex;
+    }
+
+    /**
+     * Các alias được nhắc trong 1 đoạn text (preview tin nhắn).
+     * Cache theo nội dung text vì mỗi lần poll lại tạo object item mới.
+     */
+    _mentionsInText(text) {
+        const key = String(text || '');
+        if (!key) return [];
+        if (!this._mentionsTextCache) this._mentionsTextCache = new Map();
+        const cached = this._mentionsTextCache.get(key);
+        if (cached) return cached;
+
+        const found = [];
+        for (const row of this.state.drawerMentionAliases || []) {
+            const alias = this._normalizeMentionAlias(row.alias || row.display_alias);
+            if (!alias || found.some((f) => f.alias === alias)) continue;
+            if (this._mentionRegexFor(alias).test(key)) {
+                found.push({
+                    alias,
+                    display_alias: row.display_alias || row.alias || alias,
+                    user_name: row.user_name || '',
+                });
+            }
+        }
+        if (this._mentionsTextCache.size > 500) this._mentionsTextCache.clear();
+        this._mentionsTextCache.set(key, found);
+        return found;
+    }
+
+    /**
+     * Alias đang thực sự xuất hiện trong danh sách tin nhắn, kèm số tin của từng alias.
+     * Alias đang chọn luôn được giữ lại (kể cả còn 0 tin) để người dùng bỏ chọn được.
+     */
+    get messageDrawerAliasOptions() {
+        const counts = new Map();
+        for (const item of this.state.globalUnreadOrders || []) {
+            for (const mention of this._mentionsInText(item._preview)) {
+                const row = counts.get(mention.alias) || { ...mention, count: 0 };
+                row.count += 1;
+                counts.set(mention.alias, row);
+            }
+        }
+        for (const alias of this.state.messageDrawerAliasFilter || []) {
+            if (counts.has(alias)) continue;
+            const known = (this.state.drawerMentionAliases || []).find(
+                (row) => this._normalizeMentionAlias(row.alias) === alias
+            );
+            counts.set(alias, {
+                alias,
+                display_alias: (known && known.display_alias) || alias,
+                user_name: (known && known.user_name) || '',
+                count: 0,
+            });
+        }
+        return [...counts.values()].sort(
+            (a, b) => b.count - a.count || a.alias.localeCompare(b.alias)
+        );
+    }
+
+    get filteredUnreadOrders() {
+        let items = this.state.globalUnreadOrders || [];
+        const aliases = this.state.messageDrawerAliasFilter || [];
+        if (aliases.length) {
+            items = items.filter((item) => this._mentionsInText(item._preview)
+                .some((mention) => aliases.includes(mention.alias)));
+        }
+        const term = this._searchNormalize(this.state.messageDrawerSearch);
+        if (term) {
+            items = items.filter((item) => this._searchNormalize(
+                `${item.name || ''} ${item.last_message_author || ''} ${item._preview || ''}`
+            ).includes(term));
+        }
+        return items;
+    }
+
+    get messageDrawerHasFilters() {
+        return !!(this.state.messageDrawerSearch || '').trim()
+            || !!(this.state.messageDrawerAliasFilter || []).length;
+    }
+
+    isMessageAliasSelected(alias) {
+        return (this.state.messageDrawerAliasFilter || []).includes(alias);
+    }
+
+    toggleMessageAliasFilter(alias) {
+        const current = this.state.messageDrawerAliasFilter || [];
+        this.state.messageDrawerAliasFilter = current.includes(alias)
+            ? current.filter((a) => a !== alias)
+            : [...current, alias];
+    }
+
+    clearMessageDrawerFilters() {
+        this.state.messageDrawerSearch = '';
+        this.state.messageDrawerAliasFilter = [];
+    }
+
     async openDrawerFromMessageList(soId) {
         this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) =>
             (o.sale_order_id && o.sale_order_id[0] === soId) ? { ...o, _isRead: true } : o
