@@ -250,6 +250,59 @@ export class DeliveryPlannerRealtimeMixin {
         await this.runMessageSearch(false);
     }
 
+    /**
+     * Đánh dấu đã đọc mọi đơn có tin khớp bộ lọc hiện tại — kể cả tin chưa kéo
+     * về màn hình (backend dùng lại đúng domain của ô tìm kiếm / chip alias).
+     * Trạng thái đã đọc lưu theo ĐƠN nên đây là đánh dấu cả đơn, không phải từng tin.
+     */
+    async markFilteredMessagesRead() {
+        const search = (this.state.messageDrawerSearch || '').trim();
+        const aliases = [...(this.state.messageDrawerAliasFilter || [])];
+        if ((!search && !aliases.length) || this.state.messageMarkingRead) return;
+
+        const what = aliases.length
+            ? `alias ${aliases.map((a) => '@' + a).join(', ')}`
+            : `từ khoá "${search}"`;
+        if (!window.confirm(`Đánh dấu ĐÃ ĐỌC tất cả đơn có tin nhắn khớp ${what}?\nGồm cả tin chưa hiện trên màn hình.`)) {
+            return;
+        }
+
+        this.state.messageMarkingRead = true;
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.service', 'mark_plan_messages_read', [],
+                { search, aliases }
+            );
+            const markedIds = new Set((res && res.sale_order_ids) || []);
+            this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) => {
+                const soId = o.sale_order_id ? o.sale_order_id[0] : o.id;
+                return markedIds.has(soId) ? { ...o, _isRead: true } : o;
+            });
+            this.state.messageSearchResults = (this.state.messageSearchResults || []).map(
+                (msg) => markedIds.has(msg.sale_order_id) ? { ...msg, is_read: true } : msg
+            );
+            for (const so of this.state.saleOrders) {
+                if (markedIds.has(so.id)) so.has_unread_message = false;
+            }
+            const marked = (res && res.marked) || 0;
+            this.notification.add(
+                marked ? `Đã đánh dấu đã đọc ${marked} đơn.` : 'Không còn đơn chưa đọc nào khớp bộ lọc.',
+                { type: marked ? 'success' : 'info' }
+            );
+            if (res && res.truncated) {
+                this.notification.add(
+                    'Quá nhiều đơn khớp — mới xử lý phần đầu, bấm lại để chạy tiếp.',
+                    { type: 'warning' }
+                );
+            }
+        } catch (e) {
+            console.error('markPlanMessagesRead error', e);
+            this.notification.add('Không đánh dấu đã đọc được.', { type: 'danger' });
+        } finally {
+            this.state.messageMarkingRead = false;
+        }
+    }
+
     async openDrawerFromMessageList(soId) {
         this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) =>
             (o.sale_order_id && o.sale_order_id[0] === soId) ? { ...o, _isRead: true } : o

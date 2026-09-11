@@ -131,6 +131,7 @@ export class DeliveryPlannerDashboard extends Component {
             messageSearchHasMore: false,
             messageSearchLimit: 50,
             messageSearchOffset: 0,
+            messageMarkingRead: false,
             // Số tin đang nạp về drawer. Cũng là limit của polling 15s nên chỉ
             // tăng khi người dùng bấm "Tải thêm" (xem loadMoreDrawerMessages).
             messageDrawerLimit: 100,
