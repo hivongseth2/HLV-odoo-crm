@@ -134,107 +134,26 @@ export class DeliveryPlannerRealtimeMixin {
     }
 
     /**
-     * Bỏ dấu tiếng Việt để gõ không dấu vẫn tìm được ("nhan" khớp "Nhàn").
-     */
-    _searchNormalize(value) {
-        return String(value || '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/\p{Diacritic}/gu, '')
-            .replace(/đ/g, 'd')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    /**
-     * Regex nhận diện @alias — giữ đúng luật của backend
-     * (_extract_configured_mentions trong services/delivery_planner_messages.py):
-     * alias phải đứng sau đầu dòng/khoảng trắng và kết thúc bằng ranh giới.
-     * Alias có thể chứa khoảng trắng ("nhàn bc") nên không dùng \b được.
-     */
-    _mentionRegexFor(alias) {
-        if (!this._mentionRegexCache) this._mentionRegexCache = new Map();
-        let regex = this._mentionRegexCache.get(alias);
-        if (!regex) {
-            const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            regex = new RegExp('(^|\\s)@' + escaped + '(?=$|[\\s,;:!?()\\[\\]{}<>])', 'i');
-            this._mentionRegexCache.set(alias, regex);
-        }
-        return regex;
-    }
-
-    /**
-     * Các alias được nhắc trong 1 đoạn text (preview tin nhắn).
-     * Cache theo nội dung text vì mỗi lần poll lại tạo object item mới.
-     */
-    _mentionsInText(text) {
-        const key = String(text || '');
-        if (!key) return [];
-        if (!this._mentionsTextCache) this._mentionsTextCache = new Map();
-        const cached = this._mentionsTextCache.get(key);
-        if (cached) return cached;
-
-        const found = [];
-        for (const row of this.state.drawerMentionAliases || []) {
-            const alias = this._normalizeMentionAlias(row.alias || row.display_alias);
-            if (!alias || found.some((f) => f.alias === alias)) continue;
-            if (this._mentionRegexFor(alias).test(key)) {
-                found.push({
-                    alias,
-                    display_alias: row.display_alias || row.alias || alias,
-                    user_name: row.user_name || '',
-                });
-            }
-        }
-        if (this._mentionsTextCache.size > 500) this._mentionsTextCache.clear();
-        this._mentionsTextCache.set(key, found);
-        return found;
-    }
-
-    /**
-     * Alias đang thực sự xuất hiện trong danh sách tin nhắn, kèm số tin của từng alias.
-     * Alias đang chọn luôn được giữ lại (kể cả còn 0 tin) để người dùng bỏ chọn được.
+     * Chip alias = TOÀN BỘ alias đã cấu hình, vì bấm alias là tìm dưới backend
+     * trên mọi tin nhắn chứ không lọc trong danh sách 100 tin đã nạp.
+     * Alias đang chọn nổi lên đầu cho dễ bỏ chọn.
      */
     get messageDrawerAliasOptions() {
-        const counts = new Map();
-        for (const item of this.state.globalUnreadOrders || []) {
-            for (const mention of this._mentionsInText(item._preview)) {
-                const row = counts.get(mention.alias) || { ...mention, count: 0 };
-                row.count += 1;
-                counts.set(mention.alias, row);
+        const selected = this.state.messageDrawerAliasFilter || [];
+        const rows = (this.state.drawerMentionAliases || []).map((row) => ({
+            alias: this._normalizeMentionAlias(row.alias || row.display_alias),
+            display_alias: row.display_alias || row.alias || '',
+            user_name: row.user_name || '',
+        })).filter((row) => row.alias);
+        for (const alias of selected) {
+            if (!rows.some((row) => row.alias === alias)) {
+                rows.push({ alias, display_alias: alias, user_name: '' });
             }
         }
-        for (const alias of this.state.messageDrawerAliasFilter || []) {
-            if (counts.has(alias)) continue;
-            const known = (this.state.drawerMentionAliases || []).find(
-                (row) => this._normalizeMentionAlias(row.alias) === alias
-            );
-            counts.set(alias, {
-                alias,
-                display_alias: (known && known.display_alias) || alias,
-                user_name: (known && known.user_name) || '',
-                count: 0,
-            });
-        }
-        return [...counts.values()].sort(
-            (a, b) => b.count - a.count || a.alias.localeCompare(b.alias)
-        );
-    }
-
-    get filteredUnreadOrders() {
-        let items = this.state.globalUnreadOrders || [];
-        const aliases = this.state.messageDrawerAliasFilter || [];
-        if (aliases.length) {
-            items = items.filter((item) => this._mentionsInText(item._preview)
-                .some((mention) => aliases.includes(mention.alias)));
-        }
-        const term = this._searchNormalize(this.state.messageDrawerSearch);
-        if (term) {
-            items = items.filter((item) => this._searchNormalize(
-                `${item.name || ''} ${item.last_message_author || ''} ${item._preview || ''}`
-            ).includes(term));
-        }
-        return items;
+        return rows.sort((a, b) => {
+            const selDiff = (selected.includes(b.alias) ? 1 : 0) - (selected.includes(a.alias) ? 1 : 0);
+            return selDiff || a.alias.localeCompare(b.alias);
+        });
     }
 
     get messageDrawerHasFilters() {
@@ -246,16 +165,84 @@ export class DeliveryPlannerRealtimeMixin {
         return (this.state.messageDrawerAliasFilter || []).includes(alias);
     }
 
+    onMessageDrawerSearchInput(ev) {
+        this.state.messageDrawerSearch = ev.target.value;
+        if (this._messageSearchDebounce) clearTimeout(this._messageSearchDebounce);
+        this._messageSearchDebounce = setTimeout(() => {
+            this._messageSearchDebounce = null;
+            this.runMessageSearch(true);
+        }, 400);
+    }
+
     toggleMessageAliasFilter(alias) {
         const current = this.state.messageDrawerAliasFilter || [];
         this.state.messageDrawerAliasFilter = current.includes(alias)
             ? current.filter((a) => a !== alias)
             : [...current, alias];
+        this.runMessageSearch(true);
     }
 
     clearMessageDrawerFilters() {
+        if (this._messageSearchDebounce) clearTimeout(this._messageSearchDebounce);
+        this._messageSearchDebounce = null;
         this.state.messageDrawerSearch = '';
         this.state.messageDrawerAliasFilter = [];
+        this.state.messageSearchResults = [];
+        this.state.messageSearchHasMore = false;
+        this.state.messageSearchLoading = false;
+        this.state.messageSearchOffset = 0;
+    }
+
+    /**
+     * Tìm tin nhắn dưới backend (search_plan_messages): quét từng mail.message của
+     * đơn bán nên ra được cả tin cũ trong một đơn, không chỉ tin cuối như polling.
+     * reset = true: tìm lại từ đầu; false: nối thêm trang kế (nút "Tải thêm").
+     */
+    async runMessageSearch(reset = true) {
+        const search = (this.state.messageDrawerSearch || '').trim();
+        const aliases = [...(this.state.messageDrawerAliasFilter || [])];
+        if (!search && !aliases.length) {
+            this.state.messageSearchResults = [];
+            this.state.messageSearchHasMore = false;
+            this.state.messageSearchLoading = false;
+            this.state.messageSearchOffset = 0;
+            return;
+        }
+
+        // Chống race: chỉ nhận kết quả của lần tìm mới nhất.
+        this._messageSearchSeq = (this._messageSearchSeq || 0) + 1;
+        const seq = this._messageSearchSeq;
+        // Offset do backend trả về (đếm theo dòng đã quét, không phải số dòng hiển thị).
+        const offset = reset ? 0 : (this.state.messageSearchOffset || 0);
+        this.state.messageSearchLoading = true;
+        try {
+            const result = await this.orm.call(
+                'hlv.delivery.planner.service', 'search_plan_messages', [],
+                { search, aliases, limit: this.state.messageSearchLimit || 50, offset }
+            );
+            if (seq !== this._messageSearchSeq) return;
+            const rows = (result && result.messages) || [];
+            this.state.messageSearchResults = reset
+                ? rows
+                : [...(this.state.messageSearchResults || []), ...rows];
+            this.state.messageSearchHasMore = !!(result && result.has_more);
+            this.state.messageSearchOffset = (result && result.next_offset) || 0;
+        } catch (e) {
+            if (seq !== this._messageSearchSeq) return;
+            console.error('searchPlanMessages error', e);
+            this.notification.add('Không tìm được tin nhắn.', { type: 'danger' });
+            if (reset) this.state.messageSearchResults = [];
+            this.state.messageSearchHasMore = false;
+        } finally {
+            if (seq === this._messageSearchSeq) {
+                this.state.messageSearchLoading = false;
+            }
+        }
+    }
+
+    async loadMoreMessageSearch() {
+        if (this.state.messageSearchLoading || !this.state.messageSearchHasMore) return;
+        await this.runMessageSearch(false);
     }
 
     async openDrawerFromMessageList(soId) {
