@@ -9,7 +9,6 @@
                 <field name="point_id"/>
                 <field name="zone_id"/>
                 <field name="delivery_method"/>
-                <field name="procedure_before"/>
                 <field name="service_minutes"/>
                 <field name="responsible_sale_user_id"/>
                 <field name="responsible_conflict" string="Mập mờ"/>
@@ -46,8 +45,7 @@
                             <field name="default_vehicle_id"/>
                             <field name="delivery_method"/>
                         </group>
-                        <group string="Trước khi giao">
-                            <field name="procedure_before"/>
+                        <group string="Hàng hoá và lắp đặt">
                             <field name="needs_technician"/>
                             <field name="oversize_note" placeholder="VD: hàng thép dài 6m"/>
                         </group>

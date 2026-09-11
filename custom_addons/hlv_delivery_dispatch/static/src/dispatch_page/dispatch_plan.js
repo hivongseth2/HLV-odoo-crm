@@ -99,8 +99,9 @@ window.HlvDispatch = window.HlvDispatch || {};
   function renderStop(stop, index) {
     var tags = [];
     if (stop.is_mine) tags.push(badge("Đơn của tôi", "dp-badge-blue"));
-    if (stop.procedure_before && stop.procedure_before !== "none") {
-      tags.push(badge(HD.LABEL.PROCEDURE[stop.procedure_before] || "Cần thủ tục", "dp-badge-red"));
+    if (stop.has_pending_procedure) {
+      tags.push(badge("Chờ thủ tục: " + (stop.pending_procedure_orders || "có đơn"),
+        "dp-badge-red"));
     }
     if (stop.needs_technician) tags.push(badge("Cần kỹ thuật", "dp-badge-amber"));
     if (stop.state === "done") tags.push(badge("Đã giao", "dp-badge-green"));

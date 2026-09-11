@@ -90,14 +90,15 @@
                     <notebook>
                         <page string="Điểm giao" name="stops">
                             <field name="stop_ids">
-                                <list editable="bottom" decoration-danger="procedure_before != 'none'"
+                                <list editable="bottom" decoration-danger="has_pending_procedure"
                                       decoration-muted="state == 'skipped'">
                                     <field name="sequence" widget="handle"/>
                                     <field name="point_id"/>
                                     <field name="sale_order_ids" widget="many2many_tags"/>
                                     <field name="order_count" string="Đơn"/>
                                     <field name="service_minutes" string="Đứng (phút)"/>
-                                    <field name="procedure_before" string="Thủ tục"/>
+                                    <field name="has_pending_procedure" string="Chờ thủ tục"/>
+                                    <field name="pending_procedure_orders" string="Đơn chờ" optional="hide"/>
                                     <field name="needs_technician" string="Kỹ thuật"/>
                                     <field name="planned_arrival" optional="hide"/>
                                     <field name="actual_arrival" optional="hide"/>

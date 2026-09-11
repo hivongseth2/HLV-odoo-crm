@@ -18,7 +18,7 @@ MAX_ORDER_SEARCH = 40
 # Field sale được phép ghi vào bảng thói quen khách. Whitelist nằm ở SERVER — client chỉ
 # dùng danh sách này để dựng form, không phải nơi quyết định.
 SALE_EDITABLE_PROFILE_FIELDS = (
-    'zone_id', 'default_vehicle_id', 'procedure_before', 'needs_technician',
+    'zone_id', 'default_vehicle_id', 'needs_technician',
     'service_minutes', 'receiving_from', 'receiving_to', 'payment_method',
     'oversize_note', 'delivery_method', 'free_note',
 )
@@ -105,7 +105,8 @@ class DispatchController(http.Controller):
             'order_count': len(stop.sale_order_ids),
             'mine_order_count': len(mine_orders),
             'service_minutes': stop.service_minutes,
-            'procedure_before': stop.procedure_before or 'none',
+            'has_pending_procedure': stop.has_pending_procedure,
+            'pending_procedure_orders': stop.pending_procedure_orders or '',
             'needs_technician': stop.needs_technician,
             'state': stop.state,
             'orders': [
@@ -378,7 +379,6 @@ class DispatchController(http.Controller):
             'zone_name': (profile.zone_id or profile.point_id.zone_id).name or '',
             'partner_count': profile.point_id.partner_count,
             'default_vehicle_id': profile.default_vehicle_id.id or False,
-            'procedure_before': profile.procedure_before or 'none',
             'needs_technician': profile.needs_technician,
             'service_minutes': profile.service_minutes or 0,
             'receiving_from': _hour_to_text(profile.receiving_from),
@@ -423,11 +423,6 @@ class DispatchController(http.Controller):
             zones=[{'id': z.id, 'name': z.name} for z in zones],
             vehicles=[{'id': v.id, 'name': v.display_name} for v in vehicles],
             options={
-                'procedure_before': [
-                    ['none', 'Không cần'],
-                    ['customs', 'Khai hải quan trước (khu chế xuất)'],
-                    ['register', 'Đăng ký trước khi giao'],
-                ],
                 'payment_method': [
                     ['none', 'Không thu tiền'], ['cod', 'Thu COD'],
                     ['transfer', 'Chuyển khoản sau'],

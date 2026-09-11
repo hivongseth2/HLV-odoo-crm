@@ -38,9 +38,6 @@ window.HlvDispatch = window.HlvDispatch || {};
         HD.selectHtml("default_vehicle_id", profile.default_vehicle_id, S.vehicles, "— tuỳ chuyến —")) +
       fieldBlock("Hình thức giao",
         HD.selectHtml("delivery_method", profile.delivery_method, S.options.delivery_method)) +
-      fieldBlock("Thủ tục trước khi giao",
-        HD.selectHtml("procedure_before", profile.procedure_before, S.options.procedure_before),
-        "Khu chế xuất phải khai hải quan trước, có khách phải đăng ký trước mới vào được") +
       fieldBlock("Thanh toán",
         HD.selectHtml("payment_method", profile.payment_method, S.options.payment_method)) +
       fieldBlock("Đứng tại điểm (phút)",

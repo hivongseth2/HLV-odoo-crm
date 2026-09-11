@@ -53,15 +53,15 @@ class HlvDeliveryTripStop(models.Model):
     actual_arrival = fields.Datetime(string='Giờ tới thực tế')
     actual_depart = fields.Datetime(string='Giờ rời thực tế')
 
-    # Không dùng related qua one2many (profile_ids) — tính tay cho rõ ràng.
-    procedure_before = fields.Selection(
-        [
-            ('none', 'Không cần'),
-            ('customs', 'Khai hải quan trước'),
-            ('register', 'Đăng ký trước khi giao'),
-        ],
-        string='Thủ tục', compute='_compute_profile_info', store=True,
+    # Thủ tục tính từ CÁC ĐƠN đang nằm ở điểm, không đọc từ bảng thói quen: cùng một
+    # khách, đơn này sale đã tick xong thủ tục, đơn kia chưa.
+    has_pending_procedure = fields.Boolean(
+        string='Còn chờ thủ tục', compute='_compute_pending_procedure',
     )
+    pending_procedure_orders = fields.Char(
+        string='Đơn chờ thủ tục', compute='_compute_pending_procedure',
+    )
+    # Cần kỹ thuật lắp đặt thì đúng là thói quen cố định của khách.
     needs_technician = fields.Boolean(
         string='Cần kỹ thuật', compute='_compute_profile_info', store=True,
     )
@@ -77,13 +77,18 @@ class HlvDeliveryTripStop(models.Model):
             profile = stop.point_id.profile_ids[:1]
             stop.service_minutes = (profile.service_minutes if profile else 0) or 0
 
-    @api.depends('point_id', 'point_id.profile_ids.procedure_before',
-                 'point_id.profile_ids.needs_technician')
+    @api.depends('point_id', 'point_id.profile_ids.needs_technician')
     def _compute_profile_info(self):
         for stop in self:
             profile = stop.point_id.profile_ids[:1]
-            stop.procedure_before = profile.procedure_before if profile else 'none'
             stop.needs_technician = profile.needs_technician if profile else False
+
+    @api.depends('sale_order_ids', 'sale_order_ids.x_plan_procedure_done')
+    def _compute_pending_procedure(self):
+        for stop in self:
+            pending = stop.sale_order_ids.filtered(lambda o: o.x_delivery_blocked)
+            stop.has_pending_procedure = bool(pending)
+            stop.pending_procedure_orders = ', '.join(pending.mapped('name'))
 
     def action_done(self):
         self.write({'state': 'done', 'actual_depart': fields.Datetime.now()})

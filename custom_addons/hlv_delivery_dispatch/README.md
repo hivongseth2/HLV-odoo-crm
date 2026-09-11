@@ -46,6 +46,13 @@ Cài `fleet` sẽ thêm app menu "Đội xe" — chỉ cấp quyền Fleet cho n
   đã khoá thì đăng ký tự chuyển sang "dời lại".
 - **Lọc xem chéo giữa sale nằm ở controller**, không nằm trong record rule — quy tắc phụ
   thuộc cấu hình từng kho và phải so chuỗi nhiều mã sale MISA.
+- **Thủ tục trước khi giao KHÔNG nằm trong bảng thói quen khách.** Khách nào cần thủ tục
+  do `hlv.delivery.procedure.partner` (module `hlv_sale_delivery_planning`) quản, còn
+  xong hay chưa là ô tick `sale.order.x_plan_procedure_done` của **từng đơn** — cùng một
+  khách, đơn này sale đã làm xong thủ tục, đơn kia chưa. `sale.order.x_delivery_blocked`
+  và `trip.stop.has_pending_procedure` đều tính từ đó, và đều **không store** vì danh
+  sách khách cần thủ tục đọc qua ormcache, store sẽ khiến cờ chặn sai âm thầm khi danh
+  sách đổi.
 
 ## Liên hệ với `hlv_sale_delivery_planning`
 

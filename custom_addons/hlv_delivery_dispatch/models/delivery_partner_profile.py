@@ -6,11 +6,15 @@ from .dispatch_utils import split_codes
 
 _logger = logging.getLogger(__name__)
 
-# 10 cột nghiệp vụ của bảng thói quen khách. Dùng để tính độ đầy và sinh việc cho sale.
+# Các cột nghiệp vụ của bảng thói quen khách. Dùng để tính độ đầy và sinh việc cho sale.
+#
+# KHÔNG có "thủ tục trước khi giao" ở đây: việc đó do hlv.delivery.procedure.partner
+# (module hlv_sale_delivery_planning) quản, và trạng thái thật nằm ở ô tick
+# sale.order.x_plan_procedure_done của TỪNG ĐƠN — cùng một khách, đơn này sale đã làm
+# xong thủ tục, đơn kia chưa. Nó không phải thuộc tính cố định của điểm giao.
 PROFILE_BUSINESS_FIELDS = [
     ('zone_id', 'Cụm tuyến'),
     ('default_vehicle_id', 'Xe mặc định'),
-    ('procedure_before', 'Thủ tục trước khi giao'),
     ('needs_technician', 'Cần kỹ thuật lắp đặt'),
     ('service_minutes', 'Thời gian tại điểm'),
     ('receiving_from', 'Giờ nhận hàng'),
@@ -52,16 +56,6 @@ class HlvDeliveryPartnerProfile(models.Model):
     default_vehicle_id = fields.Many2one(
         'fleet.vehicle', string='Xe mặc định', tracking=True,
         domain="[('x_dispatch_enabled', '=', True)]",
-    )
-    procedure_before = fields.Selection(
-        [
-            ('none', 'Không cần'),
-            ('customs', 'Khai hải quan trước (khu chế xuất)'),
-            ('register', 'Đăng ký trước khi giao'),
-        ],
-        string='Thủ tục trước khi giao', default='none', tracking=True,
-        help='Cột này từng cứu được một chuyến: đơn bị chặn thủ tục mà phát hiện sớm thì '
-             'tài xế lấp bằng điểm khác thay vì chạy không.',
     )
     needs_technician = fields.Boolean(
         string='Cần kỹ thuật lắp đặt', tracking=True,
@@ -133,9 +127,7 @@ class HlvDeliveryPartnerProfile(models.Model):
                 value = profile[field_name]
                 # 'none'/False là giá trị mặc định, coi như CHƯA điền — mục đích của cột này
                 # là biết chỗ nào người thật đã xác nhận, không phải chỗ nào có giá trị.
-                if field_name == 'procedure_before':
-                    is_filled = bool(value) and value != 'none'
-                elif field_name == 'needs_technician':
+                if field_name == 'needs_technician':
                     is_filled = profile.verification_state == 'confirmed'
                 elif field_name == 'receiving_from':
                     is_filled = bool(profile.receiving_from or profile.receiving_to)

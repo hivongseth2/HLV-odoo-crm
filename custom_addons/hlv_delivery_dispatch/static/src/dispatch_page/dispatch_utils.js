@@ -20,9 +20,6 @@ window.HlvDispatch = window.HlvDispatch || {};
       accepted: ["Đã nhận", "dp-badge-green"], rejected: ["Từ chối", "dp-badge-red"],
       deferred: ["Dời lại", "dp-badge-amber"], cancelled: ["Đã huỷ", ""],
     },
-    PROCEDURE: {
-      customs: "Cần khai hải quan trước", register: "Cần đăng ký trước",
-    },
   };
 
   /**
