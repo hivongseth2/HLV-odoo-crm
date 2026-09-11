@@ -12,6 +12,7 @@
                 <field name="hub_to_first_minutes"/>
                 <field name="median_leg_minutes"/>
                 <field name="max_stops"/>
+                <field name="map_layer_keys" optional="show"/>
                 <field name="point_count" string="Số điểm"/>
             </list>
         </field>
@@ -43,6 +44,8 @@
                             <field name="hub_to_first_minutes"/>
                             <field name="median_leg_minutes"/>
                             <field name="max_stops"/>
+                            <field name="map_layer_keys"
+                                   placeholder="VD: Tuyến Nhơn Trạch, ROUTER TUYẾN NHƠN TRẠCH"/>
                         </group>
                     </group>
                     <div class="alert alert-info" role="status">

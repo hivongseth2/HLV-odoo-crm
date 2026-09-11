@@ -39,6 +39,12 @@ class HlvDeliveryZone(models.Model):
         string='Trần số điểm/chuyến', default=8,
         help='Trần MỀM — vượt trần chỉ cảnh báo, không chặn xếp chuyến.',
     )
+    map_layer_keys = fields.Char(
+        string='Tên lớp trên bản đồ',
+        help='Các tên lớp Google My Maps thuộc cụm này, cách nhau bởi dấu phẩy. '
+             'Import khớp lớp bản đồ với cụm qua đây trước khi so tên, nên đổi tên cụm '
+             'cũng không làm lần import sau sinh ra cụm trùng.',
+    )
 
     point_ids = fields.One2many('hlv.delivery.point', 'zone_id', string='Điểm giao')
     point_count = fields.Integer(compute='_compute_point_count')

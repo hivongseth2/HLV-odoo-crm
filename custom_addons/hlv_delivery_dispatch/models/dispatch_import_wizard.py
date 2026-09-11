@@ -56,14 +56,39 @@ class HlvDispatchImportWizard(models.TransientModel):
         return not any(hint in lowered for hint in NON_ZONE_LAYER_HINTS)
 
     def _get_zone(self, layer_name, cache):
+        """Khớp một lớp bản đồ với cụm tuyến.
+
+        Tên lớp trên My Maps không trùng tên cụm ("Tuyến Nhơn Trạch" vs "Nhơn Trạch",
+        "ROUTER TUYẾN BÌNH SƠN LONG THÀNH" vs "Lộc An – Bình Sơn"), nên so tên chính xác
+        sẽ sinh ra cụm trùng và đẩy hết điểm sang cụm rỗng định mức mặc định.
+
+        Thứ tự khớp: tên lớp đã khai trên cụm -> tên cụm đã chuẩn hoá -> tạo mới.
+        """
         if layer_name in cache:
             return cache[layer_name]
         Zone = self.env['hlv.delivery.zone']
-        zone = Zone.search([
-            ('warehouse_id', '=', self.warehouse_id.id), ('name', '=ilike', layer_name),
-        ], limit=1)
+        layer_key = normalize_name(layer_name)
+        zones = Zone.search([('warehouse_id', '=', self.warehouse_id.id)])
+
+        zone = Zone.browse()
+        for candidate in zones:
+            keys = [normalize_name(k) for k in (candidate.map_layer_keys or '').split(',')]
+            if layer_key and layer_key in [k for k in keys if k]:
+                zone = candidate
+                break
+        if not zone:
+            for candidate in zones:
+                if layer_key and normalize_name(candidate.name) == layer_key:
+                    zone = candidate
+                    break
         if not zone and self.create_missing_zone:
-            zone = Zone.create({'name': layer_name, 'warehouse_id': self.warehouse_id.id})
+            # Ghi lại tên lớp ngay lúc tạo: sau này đổi tên cụm cho gọn thì lần import
+            # tiếp theo vẫn khớp được, không sinh cụm trùng.
+            zone = Zone.create({
+                'name': layer_name,
+                'warehouse_id': self.warehouse_id.id,
+                'map_layer_keys': layer_name,
+            })
         cache[layer_name] = zone
         return zone
 
@@ -77,8 +102,9 @@ class HlvDispatchImportWizard(models.TransientModel):
             raise UserError('Chưa chọn file nào để nhập.')
         if map_rows is not None:
             lines += self._import_points(map_rows)
-        if cust_rows is not None:
-            lines += self._link_partners(cust_rows)
+        # Ghép khách chạy cả khi không có file đối chiếu: việc ghép dựa trên quét
+        # res.partner, file chỉ dùng để báo cáo khách nào còn thiếu điểm.
+        lines += self._link_partners(cust_rows or [])
         lines += self._quality_report()
         self.result_log = '\n'.join(lines)
         return {
@@ -156,13 +182,12 @@ class HlvDispatchImportWizard(models.TransientModel):
             '',
         ]
 
-    def _link_partners(self, rows):
-        """Ghép khách Odoo với điểm giao theo tên đã chuẩn hoá.
+    def _customer_names_from_rows(self, rows):
+        """Lấy tên khách từ file đối chiếu.
 
-        Chỉ ghép khách chưa có điểm — không cướp lại khách đã gán tay.
+        File hiện dùng có dạng [{"k": khoá đã chuẩn hoá, "pn": tên trong Odoo,
+        "visits": n, "orders": n}]. Vẫn nhận các dạng cũ để chạy lại được với file khác.
         """
-        Point = self.env['hlv.delivery.point']
-        Partner = self.env['res.partner']
         if isinstance(rows, dict):
             rows = rows.get('customers') or rows.get('items') or []
         names = []
@@ -170,34 +195,64 @@ class HlvDispatchImportWizard(models.TransientModel):
             if isinstance(row, str):
                 names.append(row)
             elif isinstance(row, dict):
-                names.append(row.get('name') or row.get('n') or row.get('partner_name') or '')
-        points_by_key = {p.map_name_key: p for p in Point.search([]) if p.map_name_key}
-        linked = unmatched = 0
-        unmatched_names = []
-        for name in names:
-            name = (name or '').strip()
-            if not name:
-                continue
-            key = normalize_name(name)
+                names.append(
+                    row.get('pn') or row.get('name') or row.get('n')
+                    or row.get('partner_name') or row.get('k') or ''
+                )
+        return [n.strip() for n in names if (n or '').strip()]
+
+    def _link_partners(self, rows):
+        """Gắn điểm giao cho khách trong Odoo, khớp theo TÊN đã chuẩn hoá.
+
+        Quét thẳng res.partner chứ không dò từng tên trong file: Odoo sinh nhiều mã cho
+        cùng một khách với tên viết hơi khác nhau (351 mã = 176 khách thật), nên khớp
+        theo tên chính xác sẽ bỏ sót phần lớn. File đối chiếu chỉ dùng để biết khách nào
+        đáng lẽ phải có điểm mà vẫn không ghép được.
+
+        Chỉ ghép khách chưa có điểm — không cướp lại khách đã gán tay.
+        """
+        Point = self.env['hlv.delivery.point']
+        Partner = self.env['res.partner']
+
+        points_by_key = {}
+        for point in Point.search([]):
+            if point.map_name_key:
+                points_by_key.setdefault(point.map_name_key, point)
+
+        candidates = Partner.search([
+            ('x_delivery_point_id', '=', False),
+            ('customer_rank', '>', 0),
+        ])
+        linked = 0
+        matched_keys = set()
+        for partner in candidates:
+            key = normalize_name(partner.name)
             point = points_by_key.get(key)
             if not point:
-                unmatched += 1
-                if len(unmatched_names) < 30:
-                    unmatched_names.append(name)
                 continue
-            partners = Partner.search([
-                ('name', '=ilike', name), ('x_delivery_point_id', '=', False),
-            ])
-            if partners:
-                partners.write({'x_delivery_point_id': point.id})
-                linked += len(partners)
+            partner.x_delivery_point_id = point.id
+            matched_keys.add(key)
+            linked += 1
+
         out = [
             '— Ghép khách với điểm giao —',
-            'Đã gắn điểm cho %s mã khách' % linked,
-            'Không khớp được %s tên' % unmatched,
+            'Quét %s mã khách chưa có điểm, gắn được %s mã' % (len(candidates), linked),
+            'Số điểm đã có ít nhất một mã khách: %s' % len(matched_keys),
         ]
-        if unmatched_names:
-            out.append('Cần xử lý tay: ' + ', '.join(unmatched_names))
+
+        # Đối chiếu với danh sách khách thật để biết còn thiếu ai.
+        names = self._customer_names_from_rows(rows)
+        if names:
+            missing = []
+            for name in names:
+                key = normalize_name(name)
+                if key in points_by_key:
+                    continue
+                if len(missing) < 30:
+                    missing.append(name)
+            out.append('Khách trong file chưa có điểm trên bản đồ: %s' % len(missing))
+            if missing:
+                out.append('Cần ghim thêm hoặc đặt lại tên: ' + ', '.join(missing))
         out.append('')
         return out
 
