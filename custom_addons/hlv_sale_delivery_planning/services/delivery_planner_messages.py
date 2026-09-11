@@ -4,6 +4,7 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 
 from odoo import models, api, fields, tools
+from odoo.osv import expression
 from markupsafe import Markup
 import re
 import pytz
@@ -207,6 +208,118 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
                 'attachments': attachments,
             })
         return result
+
+    @api.model
+    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365):
+        """Tìm trên TOÀN BỘ tin nhắn của đơn bán (mail.message).
+
+        Khác với hlv.sale.plan.message (mỗi đơn 1 dòng, chỉ giữ tin CUỐI), hàm này
+        quét từng tin một nên tìm được cả tin cũ trong cùng một đơn. Dùng cho ô tìm
+        kiếm + chip alias ở drawer tin nhắn của trang điều phối giao hàng.
+
+        - search: khớp nội dung tin, mã đơn / tên khách, hoặc tên người gửi.
+        - aliases: lọc theo alias được nhắc; SQL lọc thô bằng body ilike '@alias',
+          sau đó xác nhận lại bằng regex trên text đã bóc HTML để loại khớp sai
+          (vd '@nhàn' không được ăn theo '@nhàn bc').
+        """
+        search = (search or '').strip()
+        aliases = [_normalize_mention_alias(alias) for alias in (aliases or [])]
+        aliases = [alias for alias in aliases if alias]
+        if not search and not aliases:
+            return {'messages': [], 'has_more': False, 'next_offset': 0}
+
+        limit = max(1, min(int(limit or 50), 200))
+        offset = max(0, int(offset or 0))
+
+        domain = [
+            ('model', '=', 'sale.order'),
+            ('message_type', 'in', ('comment', 'email')),
+        ]
+        days = int(days or 0)
+        if days > 0:
+            floor_dt = fields.Datetime.now() - timedelta(days=days)
+            domain.append(('date', '>=', fields.Datetime.to_string(floor_dt)))
+
+        if aliases:
+            domain = expression.AND([
+                domain,
+                expression.OR([[('body', 'ilike', '@%s' % alias)] for alias in aliases]),
+            ])
+
+        if search:
+            term_domain = [[('body', 'ilike', search)], [('author_id.name', 'ilike', search)]]
+            # Gõ mã đơn / tên khách: đổi sang res_id để không phải ilike toàn bộ body.
+            orders = self.env['sale.order'].sudo().search(
+                ['|', ('name', 'ilike', search), ('partner_id.name', 'ilike', search)],
+                limit=500,
+            )
+            if orders:
+                term_domain.append([('res_id', 'in', orders.ids)])
+            domain = expression.AND([domain, expression.OR(term_domain)])
+
+        Message = self.env['mail.message'].sudo()
+        # Lấy dư 1 trang để biết còn tin cũ hơn hay không (nút "Tải thêm" ở FE).
+        records = Message.search(domain, order='date desc, id desc', limit=limit + 1, offset=offset)
+        has_more = len(records) > limit
+        records = records[:limit]
+        # next_offset đếm theo số dòng ĐÃ QUÉT chứ không theo số dòng trả về — vài tin
+        # bị loại ở vòng lọc Python bên dưới, nếu FE lấy offset = len(messages) thì
+        # trang sau sẽ nhảy trùng/sót.
+        next_offset = offset + len(records)
+        if not records:
+            return {'messages': [], 'has_more': False, 'next_offset': next_offset}
+
+        try:
+            user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        except Exception:
+            user_tz = pytz.UTC
+
+        so_ids = list({rec.res_id for rec in records if rec.res_id})
+        name_by_so = {
+            order.id: order.name or ''
+            for order in self.env['sale.order'].sudo().browse(so_ids).exists()
+        }
+        read_rows = self.env['hlv.sale.plan.message'].sudo().search_read(
+            [('user_id', '=', self.env.uid), ('sale_order_id', 'in', so_ids)],
+            ['sale_order_id', 'is_read'],
+        )
+        read_by_so = {
+            row['sale_order_id'][0]: row['is_read']
+            for row in read_rows if row.get('sale_order_id')
+        }
+
+        result = []
+        for rec in records:
+            plain = _message_plain_text(rec.body or '')
+            attachment_count = len(rec.attachment_ids)
+            if not plain and not attachment_count:
+                continue
+            if plain and _SKIP_MSG_RE.search(plain):
+                continue
+            author, clean_body = _split_public_author_prefix(rec.body or '', plain)
+            if not author:
+                author = rec.author_id.name if rec.author_id else (rec.email_from or '')
+            if aliases:
+                # Tách '@' khỏi ký tự liền trước (vd "[Duyên]@Hạnh BC") để mention
+                # vẫn thoả điều kiện "đứng sau khoảng trắng" của _extract_configured_mentions.
+                probe = re.sub(r'(?<!\s)@', ' @', clean_body)
+                if not _extract_configured_mentions(probe, aliases):
+                    # body ilike khớp thô nhưng không phải mention thật → bỏ.
+                    continue
+            local_dt = rec.date.replace(tzinfo=pytz.UTC).astimezone(user_tz) if rec.date else None
+            result.append({
+                'message_id': rec.id,
+                'sale_order_id': rec.res_id,
+                'so_name': name_by_so.get(rec.res_id, ''),
+                'author': author or '',
+                'date': local_dt.strftime('%d/%m %H:%M') if local_dt else '',
+                'date_full': local_dt.strftime('%d/%m/%Y %H:%M') if local_dt else '',
+                'preview': clean_body[:400],
+                'attachment_count': attachment_count,
+                'is_read': bool(read_by_so.get(rec.res_id, True)),
+            })
+
+        return {'messages': result, 'has_more': has_more, 'next_offset': next_offset}
 
     @api.model
     def _sale_plan_message_date_bounds(self, date_from, date_to=None, tz_name='Asia/Ho_Chi_Minh'):

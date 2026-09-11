@@ -121,9 +121,16 @@ export class DeliveryPlannerDashboard extends Component {
             globalUnreadOrders: [],
             globalUnreadOrdersLoading: false,
             // Bộ lọc trong drawer tin nhắn: tìm theo nội dung/đơn/người gửi và
-            // lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...).
+            // lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...). Khi có bộ lọc,
+            // drawer chuyển sang kết quả tìm dưới backend (search_plan_messages)
+            // — quét MỌI tin nhắn của đơn, không chỉ tin cuối như polling.
             messageDrawerSearch: '',
             messageDrawerAliasFilter: [],
+            messageSearchResults: [],
+            messageSearchLoading: false,
+            messageSearchHasMore: false,
+            messageSearchLimit: 50,
+            messageSearchOffset: 0,
             // Số tin đang nạp về drawer. Cũng là limit của polling 15s nên chỉ
             // tăng khi người dùng bấm "Tải thêm" (xem loadMoreDrawerMessages).
             messageDrawerLimit: 100,
@@ -347,6 +354,9 @@ export class DeliveryPlannerDashboard extends Component {
             }
             if (this._initialIotQueueTimeout) {
                 clearTimeout(this._initialIotQueueTimeout);
+            }
+            if (this._messageSearchDebounce) {
+                clearTimeout(this._messageSearchDebounce);
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);

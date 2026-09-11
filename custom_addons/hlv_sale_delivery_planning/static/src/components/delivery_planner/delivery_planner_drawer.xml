@@ -715,11 +715,12 @@
                  <div class="input-group input-group-sm">
                      <span class="input-group-text bg-white"><i class="fa fa-search text-muted"/></span>
                      <input type="text" class="form-control"
-                            placeholder="Tìm mã đơn, người gửi, nội dung..."
-                            t-model="state.messageDrawerSearch"/>
+                            placeholder="Tìm trong tất cả tin nhắn, mã đơn, khách, người gửi..."
+                            t-att-value="state.messageDrawerSearch"
+                            t-on-input="onMessageDrawerSearchInput"/>
                      <button t-if="state.messageDrawerSearch" type="button"
                              class="btn btn-outline-secondary" title="Xóa tìm kiếm"
-                             t-on-click="() => { state.messageDrawerSearch = ''; }">
+                             t-on-click="() => this.clearMessageDrawerFilters()">
                          <i class="fa fa-times"/>
                      </button>
                  </div>
@@ -733,7 +734,6 @@
                                  t-att-title="alias.user_name"
                                  t-on-click="() => this.toggleMessageAliasFilter(alias.alias)">
                              @<t t-esc="alias.display_alias"/>
-                             <span class="ms-1 opacity-75">(<t t-esc="alias.count"/>)</span>
                          </button>
                      </t>
                  </div>
@@ -741,7 +741,12 @@
                       class="d-flex justify-content-between align-items-center mt-2 text-muted"
                       style="font-size:.72rem">
                      <span>
-                         Hiển thị <t t-esc="this.filteredUnreadOrders.length"/> / <t t-esc="state.globalUnreadOrders.length"/> tin
+                         <t t-if="state.messageSearchLoading">
+                             <i class="fa fa-spinner fa-spin me-1"/>Đang tìm trong tất cả tin nhắn...
+                         </t>
+                         <t t-else="">
+                             <t t-esc="state.messageSearchResults.length"/> tin khớp<t t-if="state.messageSearchHasMore">, còn nữa</t>
+                         </t>
                      </span>
                      <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none"
                              style="font-size:.72rem"
@@ -753,6 +758,64 @@
 
              <!-- flex:1 thay cho height cố định — thanh lọc phía trên co giãn theo số chip alias. -->
              <div class="offcanvas-body p-0 bg-light overflow-auto" style="flex: 1 1 auto; min-height: 0;">
+
+                 <!-- ── Chế độ TÌM KIẾM: kết quả từ backend, mỗi dòng là 1 tin nhắn
+                      (không phải tin cuối của đơn) nên 1 đơn có thể xuất hiện nhiều lần. ── -->
+                 <t t-if="this.messageDrawerHasFilters">
+                     <div t-if="state.messageSearchLoading and !state.messageSearchResults.length"
+                          class="p-4 text-center text-muted">
+                          <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tìm...
+                     </div>
+                     <div t-elif="!state.messageSearchResults.length" class="p-4 text-center text-muted">
+                          <i class="fa fa-search fa-3x opacity-50 mb-3"></i><br/>
+                          Không tìm thấy tin nhắn nào khớp.
+                     </div>
+                     <div t-else="" class="list-group list-group-flush">
+                          <t t-foreach="state.messageSearchResults" t-as="msg" t-key="msg.message_id">
+                              <button type="button" class="list-group-item list-group-item-action p-3"
+                                      t-on-click="() => this.openDrawerFromMessageList(msg.sale_order_id)">
+                                  <div class="d-flex w-100 justify-content-between mb-1">
+                                      <h6 class="mb-0 fw-bold text-primary"><t t-esc="msg.so_name"/></h6>
+                                      <small t-att-class="msg.is_read ? 'text-muted' : 'text-danger'">
+                                          <i class="fa" t-att-class="msg.is_read ? 'fa-check-circle' : 'fa-circle'" style="font-size:0.6rem;"></i>
+                                          <t t-esc="msg.is_read ? 'Đã xem' : 'Chưa đọc'"/>
+                                      </small>
+                                  </div>
+                                  <p class="mb-1 small text-muted">
+                                      <i class="fa fa-user me-1"/>
+                                      <t t-esc="msg.author || 'Khách hàng'"/>
+                                      <span class="ms-2 text-muted" style="font-size:0.78rem;"
+                                            t-att-title="msg.date_full">
+                                          <i class="fa fa-clock-o me-1"/><t t-esc="msg.date"/>
+                                      </span>
+                                      <span t-if="msg.attachment_count" class="ms-2" style="font-size:0.78rem;">
+                                          <i class="fa fa-paperclip me-1"/><t t-esc="msg.attachment_count"/>
+                                      </span>
+                                  </p>
+                                  <p t-if="msg.preview" class="mb-0 small fst-italic text-dark"
+                                     style="white-space: normal; word-break: break-word; line-height: 1.35;">
+                                      <i class="fa fa-comment-o me-1 text-muted"></i>
+                                      <t t-esc="msg.preview"/>
+                                  </p>
+                              </button>
+                          </t>
+                     </div>
+                     <div t-if="state.messageSearchHasMore" class="p-2 text-center">
+                         <button type="button" class="btn btn-sm btn-outline-secondary"
+                                 t-att-disabled="state.messageSearchLoading"
+                                 t-on-click="loadMoreMessageSearch">
+                             <t t-if="state.messageSearchLoading">
+                                 <i class="fa fa-spinner fa-spin me-1"/>Đang tải...
+                             </t>
+                             <t t-else="">
+                                 <i class="fa fa-angle-double-down me-1"/>Tải thêm kết quả cũ hơn
+                             </t>
+                         </button>
+                     </div>
+                 </t>
+
+                 <t t-else="">
+                 <!-- ── Chế độ MẶC ĐỊNH: tin mới nhất của từng đơn (polling). ── -->
                  <div t-if="state.globalUnreadOrdersLoading" class="p-4 text-center text-muted">
                       <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
                  </div>
@@ -760,12 +823,8 @@
                       <i class="fa fa-envelope-open-o fa-3x text-success opacity-50 mb-3"></i><br/>
                       Tuyệt vời! Không có tin nhắn mới nào chưa đọc.
                  </div>
-                 <div t-elif="this.filteredUnreadOrders.length === 0" class="p-4 text-center text-muted">
-                      <i class="fa fa-filter fa-3x opacity-50 mb-3"></i><br/>
-                      Không có tin nhắn nào khớp bộ lọc.
-                 </div>
                  <div t-else="" class="list-group list-group-flush">
-                      <t t-foreach="this.filteredUnreadOrders" t-as="uo" t-key="uo.id">
+                      <t t-foreach="state.globalUnreadOrders" t-as="uo" t-key="uo.id">
                           <button type="button" class="list-group-item list-group-item-action p-3"
                                   t-att-class="uo._isRead ? 'opacity-50' : ''"
                                   t-on-click="() => this.openDrawerFromMessageList(uo.sale_order_id ? uo.sale_order_id[0] : uo.id)">
@@ -795,8 +854,7 @@
                       </t>
                  </div>
 
-                 <!-- Tải thêm tin cũ hơn — nằm ngoài nhánh danh sách để khi bộ lọc
-                      không khớp gì trong 100 tin đầu vẫn kéo tiếp được tin cũ. -->
+                 <!-- Tải thêm đơn cũ hơn cho danh sách mặc định. -->
                  <t t-if="!state.globalUnreadOrdersLoading and state.globalUnreadOrders.length">
                      <div t-if="state.messageDrawerHasMore" class="p-2 text-center">
                          <button type="button" class="btn btn-sm btn-outline-secondary"
@@ -814,6 +872,7 @@
                           class="p-2 text-center text-muted" style="font-size:.72rem">
                          Đã tải hết tin nhắn (<t t-esc="state.globalUnreadOrders.length"/> tin).
                      </div>
+                 </t>
                  </t>
              </div>
         </div>
