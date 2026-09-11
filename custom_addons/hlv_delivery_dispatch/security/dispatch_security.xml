@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- ============ GROUPS ============ -->
+        <record id="group_dispatch_sale" model="res.groups">
+            <field name="name">Điều phối — Sale</field>
+            <field name="category_id"
+                   ref="hlv_sale_delivery_planning.module_category_hlv_delivery_planning"/>
+            <field name="comment">Xem kế hoạch chuyến đã công bố, đăng ký chuyến cho đơn của mình, cập nhật thói quen của khách mình phụ trách.</field>
+        </record>
+
+        <record id="group_dispatch_driver" model="res.groups">
+            <field name="name">Điều phối — Tài xế</field>
+            <field name="category_id"
+                   ref="hlv_sale_delivery_planning.module_category_hlv_delivery_planning"/>
+            <field name="comment">Xem chuyến được giao và tick điểm đã giao.</field>
+        </record>
+
+        <record id="group_dispatch_manager" model="res.groups">
+            <field name="name">Điều phối — Quản lý</field>
+            <field name="category_id"
+                   ref="hlv_sale_delivery_planning.module_category_hlv_delivery_planning"/>
+            <!-- Cố tình KHÔNG implied tới group của module fleet: quyền đọc/ghi fleet.vehicle
+                 được cấp thẳng bằng ir.model.access (xmlid của model luôn ổn định, còn xmlid
+                 group của fleet thì đã thay đổi qua các bản Odoo). -->
+            <field name="implied_ids" eval="[(4, ref('group_dispatch_sale')), (4, ref('group_dispatch_driver'))]"/>
+            <field name="comment">Xếp chuyến, công bố kế hoạch, duyệt đăng ký và duyệt toạ độ điểm giao.</field>
+        </record>
+    </data>
+
+    <data noupdate="1">
+        <!-- ============ RECORD RULES ============
+
+             Lưu ý: lọc "sale có được thấy điểm của sale khác không" KHÔNG làm ở đây.
+             Quy tắc đó phụ thuộc cấu hình từng kho (x_dispatch_cross_sale_visible) và
+             phải so mã sale MISA vốn là chuỗi nhiều mã phân tách bởi dấu phẩy — viết
+             trong domain record rule sẽ vừa khó đọc vừa dễ vỡ khi field không tồn tại.
+             Nó được thực thi ở controller, nơi có Python thật.
+             Record rule ở đây là cửa chặn thô: sale không bao giờ thấy kế hoạch nháp.
+        -->
+        <record id="rule_plan_day_sale_published" model="ir.rule">
+            <field name="name">Sale chỉ thấy kế hoạch đã công bố</field>
+            <field name="model_id" ref="model_hlv_delivery_plan_day"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="domain_force">[('state', 'in', ('published', 'closed'))]</field>
+        </record>
+
+        <record id="rule_trip_sale_published" model="ir.rule">
+            <field name="name">Sale chỉ thấy chuyến đã công bố</field>
+            <field name="model_id" ref="model_hlv_delivery_trip"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="domain_force">[('state', 'in', ('published', 'departed', 'done'))]</field>
+        </record>
+
+        <record id="rule_trip_stop_sale_published" model="ir.rule">
+            <field name="name">Sale chỉ thấy điểm của chuyến đã công bố</field>
+            <field name="model_id" ref="model_hlv_delivery_trip_stop"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="domain_force">[('trip_id.state', 'in', ('published', 'departed', 'done'))]</field>
+        </record>
+
+        <record id="rule_registration_sale_own" model="ir.rule">
+            <field name="name">Sale chỉ thấy đăng ký của mình</field>
+            <field name="model_id" ref="model_hlv_delivery_trip_registration"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="domain_force">[('requested_by_id', '=', user.id)]</field>
+        </record>
+
+        <record id="rule_registration_manager_all" model="ir.rule">
+            <field name="name">Điều phối thấy mọi đăng ký</field>
+            <field name="model_id" ref="model_hlv_delivery_trip_registration"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_manager'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+
+        <!-- Thói quen khách: ai cũng đọc được, nhưng sale chỉ SỬA được khách mình phụ trách. -->
+        <record id="rule_profile_sale_read_all" model="ir.rule">
+            <field name="name">Sale đọc mọi thói quen khách</field>
+            <field name="model_id" ref="model_hlv_delivery_partner_profile"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+
+        <record id="rule_profile_sale_write_own" model="ir.rule">
+            <field name="name">Sale chỉ sửa thói quen khách mình phụ trách</field>
+            <field name="model_id" ref="model_hlv_delivery_partner_profile"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="domain_force">[('responsible_sale_user_id', '=', user.id)]</field>
+        </record>
+
+        <record id="rule_profile_task_sale_own" model="ir.rule">
+            <field name="name">Sale chỉ thấy việc được giao cho mình</field>
+            <field name="model_id" ref="model_hlv_delivery_profile_task"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_sale'))]"/>
+            <field name="domain_force">[('assigned_user_id', '=', user.id)]</field>
+        </record>
+
+        <record id="rule_profile_task_manager_all" model="ir.rule">
+            <field name="name">Điều phối thấy mọi việc cập nhật thói quen</field>
+            <field name="model_id" ref="model_hlv_delivery_profile_task"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_manager'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+
+        <record id="rule_profile_manager_all" model="ir.rule">
+            <field name="name">Điều phối sửa mọi thói quen khách</field>
+            <field name="model_id" ref="model_hlv_delivery_partner_profile"/>
+            <field name="groups" eval="[(4, ref('group_dispatch_manager'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+    </data>
+</odoo>

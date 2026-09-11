@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_dispatch_root" name="Điều phối" sequence="70"
+              groups="group_dispatch_manager"/>
+
+    <menuitem id="menu_dispatch_planning" name="Kế hoạch" parent="menu_dispatch_root"
+              sequence="10"/>
+    <menuitem id="menu_dispatch_plan_day" name="Kế hoạch ngày" parent="menu_dispatch_planning"
+              action="action_plan_day" sequence="10"/>
+    <menuitem id="menu_dispatch_trip" name="Chuyến giao hàng" parent="menu_dispatch_planning"
+              action="action_trip" sequence="20"/>
+    <menuitem id="menu_dispatch_registration" name="Đăng ký của sale"
+              parent="menu_dispatch_planning" action="action_registration" sequence="30"/>
+
+    <menuitem id="menu_dispatch_profile_task" name="Việc điền thói quen"
+              parent="menu_dispatch_planning" action="action_profile_task" sequence="40"/>
+
+    <menuitem id="menu_dispatch_data" name="Dữ liệu nền" parent="menu_dispatch_root"
+              sequence="20"/>
+    <menuitem id="menu_dispatch_point" name="Điểm giao" parent="menu_dispatch_data"
+              action="action_delivery_point" sequence="10"/>
+    <menuitem id="menu_dispatch_geo_review" name="Duyệt toạ độ" parent="menu_dispatch_data"
+              action="action_delivery_point_geo_review" sequence="20"/>
+    <menuitem id="menu_dispatch_profile" name="Thói quen khách" parent="menu_dispatch_data"
+              action="action_partner_profile" sequence="30"/>
+    <menuitem id="menu_dispatch_zone" name="Cụm tuyến" parent="menu_dispatch_data"
+              action="action_delivery_zone" sequence="40"/>
+    <menuitem id="menu_dispatch_vehicle" name="Xe điều phối" parent="menu_dispatch_data"
+              action="action_dispatch_vehicle" sequence="50"/>
+
+    <menuitem id="menu_dispatch_tools" name="Công cụ" parent="menu_dispatch_root" sequence="30"/>
+    <menuitem id="menu_dispatch_import" name="Nhập dữ liệu bản đồ" parent="menu_dispatch_tools"
+              action="action_dispatch_import" sequence="10"/>
+</odoo>

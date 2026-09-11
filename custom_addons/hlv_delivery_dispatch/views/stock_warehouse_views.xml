@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_warehouse_form_dispatch" model="ir.ui.view">
+        <field name="name">stock.warehouse.form.dispatch</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse"/>
+        <field name="arch" type="xml">
+            <sheet position="inside">
+                <group string="Điều phối chuyến giao hàng" name="dispatch_config">
+                    <group>
+                        <field name="x_dispatch_enabled"/>
+                        <field name="x_dispatch_max_trips_per_day"
+                               invisible="not x_dispatch_enabled"/>
+                        <field name="x_dispatch_capacity_mode" invisible="not x_dispatch_enabled"/>
+                    </group>
+                    <group string="Đăng ký của sale" invisible="not x_dispatch_enabled">
+                        <field name="x_dispatch_auto_accept"/>
+                        <field name="x_dispatch_deadline_time" widget="float_time"
+                               invisible="x_dispatch_deadline_offset_h != 0"/>
+                        <field name="x_dispatch_deadline_offset_h"/>
+                        <field name="x_dispatch_cross_sale_visible"/>
+                        <field name="x_dispatch_cross_sale_show_amount"
+                               invisible="not x_dispatch_cross_sale_visible"/>
+                    </group>
+                </group>
+            </sheet>
+        </field>
+    </record>
+</odoo>

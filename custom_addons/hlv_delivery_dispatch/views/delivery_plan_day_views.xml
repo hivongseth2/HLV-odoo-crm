@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_plan_day_list" model="ir.ui.view">
+        <field name="name">hlv.delivery.plan.day.list</field>
+        <field name="model">hlv.delivery.plan.day</field>
+        <field name="arch" type="xml">
+            <list string="Kế hoạch ngày" decoration-warning="over_trip_limit"
+                  decoration-muted="state == 'closed'">
+                <field name="date"/>
+                <field name="warehouse_id"/>
+                <field name="trip_count" string="Chuyến"/>
+                <field name="stop_count" string="Điểm"/>
+                <field name="order_count" string="Đơn"/>
+                <field name="version" string="Bản"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'published'"
+                       decoration-muted="state == 'closed'"/>
+                <field name="over_trip_limit" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_plan_day_form" model="ir.ui.view">
+        <field name="name">hlv.delivery.plan.day.form</field>
+        <field name="model">hlv.delivery.plan.day</field>
+        <field name="arch" type="xml">
+            <form string="Kế hoạch ngày">
+                <header>
+                    <button name="action_publish" type="object" string="Công bố cho sale"
+                            class="btn-primary" invisible="state == 'published'"
+                            confirm="Công bố sẽ cho toàn bộ sale thấy kế hoạch này và mở đăng ký chuyến. Tiếp tục?"/>
+                    <button name="action_back_to_draft" type="object" string="Rút về nháp"
+                            invisible="state != 'published'"
+                            confirm="Sale sẽ không còn thấy kế hoạch cho tới khi công bố lại. Tiếp tục?"/>
+                    <button name="action_close" type="object" string="Đóng ngày"
+                            invisible="state != 'published'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_trips" type="object" class="oe_stat_button"
+                                icon="fa-truck">
+                            <field name="trip_count" widget="statinfo" string="Chuyến"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="warehouse_id"/>
+                        </group>
+                        <group>
+                            <field name="version" readonly="1"/>
+                            <field name="published_by_id" readonly="1"/>
+                            <field name="published_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="alert" invisible="not over_trip_limit">
+                        Số chuyến vượt mức tối đa mỗi ngày của kho. Kiểm tra lại đội xe: khi hàng
+                        dài phải dùng xe tải lớn, tài xế bỏ xe nhỏ sang lái tải nên số chuyến giảm.
+                    </div>
+                    <notebook>
+                        <page string="Chuyến" name="trips">
+                            <field name="trip_ids">
+                                <list decoration-warning="is_over_capacity"
+                                      decoration-muted="state == 'cancelled'">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="zone_id"/>
+                                    <field name="session"/>
+                                    <field name="vehicle_id"/>
+                                    <field name="driver_display_name" string="Tài xế"/>
+                                    <field name="driver_name_note" string="Tên thật" optional="show"/>
+                                    <field name="planned_depart_at"/>
+                                    <field name="stop_count" string="Điểm"/>
+                                    <field name="max_stops" string="Trần"/>
+                                    <field name="order_count" string="Đơn"/>
+                                    <field name="estimated_minutes" string="Ước (phút)"/>
+                                    <field name="pending_registration_count" string="Chờ hàng"/>
+                                    <field name="is_locked" string="Khoá"/>
+                                    <field name="state" widget="badge"/>
+                                    <field name="is_over_capacity" column_invisible="True"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Đội xe hôm nay" name="fleet">
+                            <field name="vehicle_assignment_ids">
+                                <list editable="bottom">
+                                    <field name="vehicle_id"/>
+                                    <field name="driver_user_id"/>
+                                    <field name="driver_display_name" string="Tên tài xế"/>
+                                    <field name="available"/>
+                                    <field name="vehicle_warning" string="Cảnh báo"/>
+                                    <field name="note"/>
+                                </list>
+                            </field>
+                            <div class="text-muted mt-2">
+                                Xe không cố định theo tuyến — phân công lại mỗi ngày ở đây.
+                            </div>
+                        </page>
+                        <page string="Ghi chú cho sale" name="note">
+                            <field name="note" placeholder="Hiện trên trang /delivery_plan của sale"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_plan_day" model="ir.actions.act_window">
+        <field name="name">Kế hoạch ngày</field>
+        <field name="res_model">hlv.delivery.plan.day</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

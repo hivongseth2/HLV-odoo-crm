@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trip_list" model="ir.ui.view">
+        <field name="name">hlv.delivery.trip.list</field>
+        <field name="model">hlv.delivery.trip</field>
+        <field name="arch" type="xml">
+            <list string="Chuyến" decoration-warning="is_over_capacity"
+                  decoration-muted="state == 'cancelled'">
+                <field name="date"/>
+                <field name="name"/>
+                <field name="zone_id"/>
+                <field name="session"/>
+                <field name="vehicle_id"/>
+                <field name="driver_display_name" string="Tài xế"/>
+                <field name="stop_count" string="Điểm"/>
+                <field name="max_stops" string="Trần"/>
+                <field name="order_count" string="Đơn"/>
+                <field name="estimated_minutes" string="Ước (phút)"/>
+                <field name="new_registration_count" string="Chờ duyệt"/>
+                <field name="pending_registration_count" string="Chờ hàng"/>
+                <field name="is_locked"/>
+                <field name="state" widget="badge" decoration-success="state == 'published'"/>
+                <field name="is_over_capacity" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_trip_form" model="ir.ui.view">
+        <field name="name">hlv.delivery.trip.form</field>
+        <field name="model">hlv.delivery.trip</field>
+        <field name="arch" type="xml">
+            <form string="Chuyến">
+                <header>
+                    <button name="action_plan" type="object" string="Đánh dấu đã xếp"
+                            invisible="state != 'draft'"/>
+                    <button name="action_lock" type="object" string="Khoá chuyến"
+                            invisible="is_locked or state in ('done', 'cancelled')"
+                            help="Ngừng nhận đăng ký mới ngay lập tức, không cần chờ tới giờ chốt."/>
+                    <button name="action_unlock" type="object" string="Mở khoá"
+                            invisible="not is_locked or state in ('done', 'cancelled')"/>
+                    <button name="action_depart" type="object" string="Xe đã xuất phát"
+                            class="btn-primary" invisible="state != 'published'"/>
+                    <button name="action_done" type="object" string="Hoàn tất"
+                            invisible="state != 'departed'"/>
+                    <button name="action_cancel" type="object" string="Huỷ chuyến"
+                            invisible="state in ('done', 'cancelled')"
+                            confirm="Các đăng ký của sale trong chuyến này sẽ bị dời lại. Tiếp tục?"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="VD: Chuyến 1 · Nhơn Trạch sáng"/></h1>
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="not is_over_capacity">
+                        Vượt trần <field name="max_stops" readonly="1" nolabel="1"/> điểm của cụm.
+                        Đây là cảnh báo mềm — vẫn chạy được, nhưng cân nhắc tách chuyến.
+                    </div>
+                    <div class="alert alert-info" role="status" invisible="not fleet_driver_mismatch">
+                        <field name="fleet_driver_mismatch" readonly="1" nolabel="1"/>
+                    </div>
+                    <group>
+                        <group string="Tuyến">
+                            <field name="plan_day_id"/>
+                            <field name="date" readonly="1"/>
+                            <field name="zone_id"/>
+                            <field name="session"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group string="Xe và tài xế">
+                            <field name="vehicle_id"/>
+                            <field name="driver_user_id"/>
+                            <field name="driver_name_note"
+                                   placeholder="Bắt buộc khi dùng tài khoản tài xế dùng chung"/>
+                            <field name="planned_depart_at"/>
+                            <field name="piece_count"/>
+                        </group>
+                        <group string="Đăng ký">
+                            <field name="registration_deadline"/>
+                            <field name="is_locked" readonly="1"/>
+                            <field name="locked_by_id" readonly="1"/>
+                            <field name="lock_reason"/>
+                            <field name="accepts_registration" readonly="1"/>
+                        </group>
+                        <group string="Ước tính">
+                            <field name="stop_count" readonly="1"/>
+                            <field name="order_count" readonly="1"/>
+                            <field name="estimated_minutes" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Điểm giao" name="stops">
+                            <field name="stop_ids">
+                                <list editable="bottom" decoration-danger="procedure_before != 'none'"
+                                      decoration-muted="state == 'skipped'">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="point_id"/>
+                                    <field name="sale_order_ids" widget="many2many_tags"/>
+                                    <field name="order_count" string="Đơn"/>
+                                    <field name="service_minutes" string="Đứng (phút)"/>
+                                    <field name="procedure_before" string="Thủ tục"/>
+                                    <field name="needs_technician" string="Kỹ thuật"/>
+                                    <field name="planned_arrival" optional="hide"/>
+                                    <field name="actual_arrival" optional="hide"/>
+                                    <field name="actual_depart" optional="hide"/>
+                                    <field name="state"/>
+                                    <field name="skip_reason" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Đơn chờ hàng" name="waiting">
+                            <field name="pending_registration_ids" readonly="1">
+                                <list>
+                                    <field name="sale_order_id"/>
+                                    <field name="partner_id"/>
+                                    <field name="stock_state"/>
+                                    <field name="requested_by_id"/>
+                                    <field name="priority"/>
+                                </list>
+                            </field>
+                            <div class="text-muted mt-2">
+                                Các đơn đã nhận nhưng hàng chưa đủ. Cron sẽ tự xếp vào chuyến khi
+                                hàng về, miễn là chuyến chưa khoá và chưa quá hạn đăng ký.
+                            </div>
+                        </page>
+                        <page string="Tất cả đăng ký" name="registrations">
+                            <field name="registration_ids" readonly="1">
+                                <list>
+                                    <field name="sale_order_id"/>
+                                    <field name="partner_id"/>
+                                    <field name="requested_by_id"/>
+                                    <field name="state"/>
+                                    <field name="auto_accepted"/>
+                                    <field name="is_waiting_goods"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Ghi chú" name="note">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_trip_search" model="ir.ui.view">
+        <field name="name">hlv.delivery.trip.search</field>
+        <field name="model">hlv.delivery.trip</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="zone_id"/>
+                <field name="driver_user_id"/>
+                <field name="vehicle_id"/>
+                <filter name="today" string="Hôm nay"
+                        domain="[('date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="open" string="Còn nhận đăng ký"
+                        domain="[('state', '=', 'published'), ('is_locked', '=', False)]"/>
+                <filter name="over" string="Vượt trần điểm"
+                        domain="[('is_over_capacity', '=', True)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_date" string="Ngày" context="{'group_by': 'date'}"/>
+                    <filter name="group_zone" string="Cụm" context="{'group_by': 'zone_id'}"/>
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_trip" model="ir.actions.act_window">
+        <field name="name">Chuyến giao hàng</field>
+        <field name="res_model">hlv.delivery.trip</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_today': 1}</field>
+    </record>
+</odoo>

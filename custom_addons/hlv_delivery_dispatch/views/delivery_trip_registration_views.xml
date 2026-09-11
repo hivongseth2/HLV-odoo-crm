@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_registration_list" model="ir.ui.view">
+        <field name="name">hlv.delivery.trip.registration.list</field>
+        <field name="model">hlv.delivery.trip.registration</field>
+        <field name="arch" type="xml">
+            <list string="Đăng ký chuyến" decoration-warning="is_waiting_goods"
+                  decoration-bf="priority == '1'"
+                  decoration-muted="state in ('cancelled', 'rejected')">
+                <field name="create_date" string="Gửi lúc"/>
+                <field name="sale_order_id"/>
+                <field name="partner_id"/>
+                <field name="point_id"/>
+                <field name="desired_date"/>
+                <field name="trip_id"/>
+                <field name="requested_by_id"/>
+                <field name="priority" widget="badge" decoration-danger="priority == '1'"/>
+                <field name="stock_state" widget="badge"
+                       decoration-success="stock_state == 'ready'"
+                       decoration-warning="stock_state == 'partial_ready'"
+                       decoration-danger="stock_state == 'out_of_stock'"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'accepted'"
+                       decoration-info="state == 'submitted'"
+                       decoration-danger="state == 'rejected'"/>
+                <field name="auto_accepted" optional="hide"/>
+                <field name="is_waiting_goods" column_invisible="True"/>
+                <button name="action_accept" type="object" string="Nhận" icon="fa-check"
+                        class="btn-link" invisible="state != 'submitted'"/>
+                <button name="action_defer" type="object" string="Dời lại" icon="fa-clock-o"
+                        class="btn-link text-warning" invisible="state not in ('submitted', 'accepted')"/>
+                <button name="action_reject" type="object" string="Từ chối" icon="fa-ban"
+                        class="btn-link text-danger" invisible="state != 'submitted'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_registration_form" model="ir.ui.view">
+        <field name="name">hlv.delivery.trip.registration.form</field>
+        <field name="model">hlv.delivery.trip.registration</field>
+        <field name="arch" type="xml">
+            <form string="Đăng ký chuyến">
+                <header>
+                    <button name="action_submit" type="object" string="Gửi đăng ký"
+                            class="btn-primary" invisible="state not in ('draft', 'deferred')"/>
+                    <button name="action_accept" type="object" string="Nhận vào chuyến"
+                            class="btn-primary" invisible="state != 'submitted'"/>
+                    <button name="action_defer" type="object" string="Dời lại"
+                            invisible="state not in ('submitted', 'accepted')"/>
+                    <button name="action_reject" type="object" string="Từ chối"
+                            invisible="state != 'submitted'"/>
+                    <button name="action_cancel" type="object" string="Huỷ đăng ký"
+                            invisible="state in ('cancelled', 'rejected')"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-warning" role="alert" invisible="not is_waiting_goods">
+                        Đơn này <b>chưa đủ hàng</b>. Đăng ký vẫn được nhận, nhưng đơn chỉ vào chuyến
+                        khi hàng về — và nếu lúc đó chuyến đã khoá thì đăng ký sẽ tự dời lại.
+                    </div>
+                    <group>
+                        <group string="Đơn hàng">
+                            <field name="sale_order_id"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="point_id" readonly="1"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="stock_state" readonly="1"/>
+                            <field name="saler_code" readonly="1"/>
+                        </group>
+                        <group string="Yêu cầu">
+                            <field name="requested_by_id" readonly="1"/>
+                            <field name="desired_date"/>
+                            <field name="trip_id"
+                                   domain="[('date', '=', desired_date), ('state', '=', 'published')]"/>
+                            <field name="priority"/>
+                            <field name="auto_accepted" readonly="1"/>
+                            <field name="resulting_stop_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="reason" placeholder="Vì sao cần đi chuyến này"/>
+                        <field name="dispatcher_note" placeholder="Phản hồi gửi lại cho sale"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_registration_search" model="ir.ui.view">
+        <field name="name">hlv.delivery.trip.registration.search</field>
+        <field name="model">hlv.delivery.trip.registration</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="sale_order_id"/>
+                <field name="partner_id"/>
+                <field name="requested_by_id"/>
+                <field name="trip_id"/>
+                <filter name="to_handle" string="Chờ duyệt" domain="[('state', '=', 'submitted')]"/>
+                <filter name="waiting" string="Đang chờ hàng"
+                        domain="[('state', '=', 'accepted'), ('is_waiting_goods', '=', True)]"/>
+                <filter name="urgent" string="Gấp" domain="[('priority', '=', '1')]"/>
+                <filter name="mine" string="Của tôi" domain="[('requested_by_id', '=', uid)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_date" string="Ngày mong muốn"
+                            context="{'group_by': 'desired_date'}"/>
+                    <filter name="group_trip" string="Chuyến" context="{'group_by': 'trip_id'}"/>
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_registration" model="ir.actions.act_window">
+        <field name="name">Đăng ký của sale</field>
+        <field name="res_model">hlv.delivery.trip.registration</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_to_handle': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Không có đăng ký nào chờ duyệt.</p>
+            <p>Khi kho bật "Tự nhận đăng ký", đăng ký vào chuyến còn nhận sẽ tự được nhận và
+               không xuất hiện ở đây.</p>
+        </field>
+    </record>
+</odoo>

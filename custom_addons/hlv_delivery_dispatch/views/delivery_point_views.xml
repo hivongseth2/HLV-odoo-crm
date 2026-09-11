@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_delivery_point_list" model="ir.ui.view">
+        <field name="name">hlv.delivery.point.list</field>
+        <field name="model">hlv.delivery.point</field>
+        <field name="arch" type="xml">
+            <list string="Điểm giao" decoration-warning="not has_coords"
+                  decoration-muted="not active">
+                <field name="name"/>
+                <field name="zone_id"/>
+                <field name="address" optional="show"/>
+                <field name="partner_count" string="Số mã khách"/>
+                <field name="has_coords" string="Toạ độ"/>
+                <field name="geo_state" widget="badge"
+                       decoration-success="geo_state in ('confirmed', 'manual')"
+                       decoration-warning="geo_state == 'pending_review'"
+                       decoration-danger="geo_state == 'failed'"
+                       decoration-muted="geo_state == 'none'"/>
+                <field name="has_profile" string="Có thói quen"/>
+                <field name="map_synced" string="Trên bản đồ" optional="show"/>
+                <field name="active" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_delivery_point_form" model="ir.ui.view">
+        <field name="name">hlv.delivery.point.form</field>
+        <field name="model">hlv.delivery.point</field>
+        <field name="arch" type="xml">
+            <form string="Điểm giao">
+                <header>
+                    <button name="action_geocode_now" type="object" string="Tra toạ độ"
+                            invisible="geo_state == 'manual'"/>
+                    <button name="action_confirm_geo" type="object" string="Duyệt toạ độ"
+                            class="btn-primary" invisible="geo_state != 'pending_review'"/>
+                    <button name="action_open_gmaps" type="object" string="Mở Google Maps"
+                            invisible="not has_coords"/>
+                    <button name="action_mark_need_pin" type="object" string="Cần ghim tay"
+                            invisible="geo_state in ('confirmed', 'manual')"/>
+                    <button name="action_open_profile" type="object" string="Thói quen khách"/>
+                    <field name="geo_state" widget="statusbar"
+                           statusbar_visible="none,pending_review,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                        <field name="map_name_key" readonly="1" class="text-muted"/>
+                    </div>
+                    <group>
+                        <group string="Vị trí">
+                            <field name="zone_id"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="address"/>
+                            <field name="map_layer" readonly="1"/>
+                            <field name="map_synced"/>
+                            <field name="map_last_synced_at" readonly="1"/>
+                        </group>
+                        <group string="Toạ độ">
+                            <field name="latitude"/>
+                            <field name="longitude"/>
+                            <field name="geo_source" readonly="1"/>
+                            <field name="geo_checked_by_id" readonly="1"/>
+                            <field name="geo_checked_at" readonly="1"/>
+                            <label for="geo_input"/>
+                            <div class="o_row">
+                                <field name="geo_input" placeholder="10.78950, 106.99179"/>
+                                <button name="action_save_manual_geo" type="object"
+                                        string="Lưu toạ độ nhập tay" class="btn-link"/>
+                            </div>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="geo_state != 'pending_review'">
+                        Toạ độ này do máy tra, <b>chưa có người kiểm</b>. Mở Google Maps đối chiếu
+                        rồi bấm Duyệt, hoặc dán toạ độ đúng vào ô nhập tay.
+                    </div>
+                    <notebook>
+                        <page string="Mã khách Odoo" name="partners">
+                            <field name="partner_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="ref" optional="show"/>
+                                    <field name="city" optional="show"/>
+                                </list>
+                            </field>
+                            <div class="text-muted mt-2">
+                                Odoo sinh nhiều mã cho cùng một khách. Gom hết về đây để điều phối
+                                đếm đúng số <b>điểm</b>, không đếm theo mã khách.
+                            </div>
+                        </page>
+                        <page string="Thói quen khách" name="profile">
+                            <field name="profile_ids" mode="form"/>
+                        </page>
+                        <page string="Máy tra được gì" name="geo_raw">
+                            <field name="geo_raw_result" readonly="1"/>
+                        </page>
+                        <page string="Ghi chú" name="note">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_delivery_point_search" model="ir.ui.view">
+        <field name="name">hlv.delivery.point.search</field>
+        <field name="model">hlv.delivery.point</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="address"/>
+                <field name="zone_id"/>
+                <filter name="no_coords" string="Thiếu toạ độ"
+                        domain="[('has_coords', '=', False)]"/>
+                <filter name="pending_review" string="Toạ độ chờ duyệt"
+                        domain="[('geo_state', '=', 'pending_review')]"/>
+                <filter name="no_zone" string="Chưa gán cụm" domain="[('zone_id', '=', False)]"/>
+                <filter name="no_profile" string="Chưa có thói quen"
+                        domain="[('has_profile', '=', False)]"/>
+                <filter name="not_on_map" string="Chưa có trên bản đồ"
+                        domain="[('map_synced', '=', False)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_zone" string="Cụm tuyến" context="{'group_by': 'zone_id'}"/>
+                    <filter name="group_geo" string="Trạng thái toạ độ"
+                            context="{'group_by': 'geo_state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_delivery_point" model="ir.actions.act_window">
+        <field name="name">Điểm giao</field>
+        <field name="res_model">hlv.delivery.point</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_delivery_point_geo_review" model="ir.actions.act_window">
+        <field name="name">Duyệt toạ độ</field>
+        <field name="res_model">hlv.delivery.point</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('geo_state', 'in', ('pending_review', 'failed', 'none'))]</field>
+        <field name="context">{'search_default_pending_review': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Không còn toạ độ nào chờ duyệt.</p>
+            <p>Cron tra toạ độ chạy 30 phút một lần cho các điểm chưa có toạ độ.</p>
+        </field>
+    </record>
+</odoo>

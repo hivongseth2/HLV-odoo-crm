@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="dispatch_page" name="Kế hoạch giao hàng">
+        <t t-call="web.layout">
+            <t t-set="head">
+                <title>Kế hoạch giao hàng</title>
+                <meta name="viewport" content="width=device-width,initial-scale=1"/>
+                <t t-call-assets="hlv_delivery_dispatch.assets_dispatch_page"/>
+            </t>
+            <div id="dp-app">
+                <nav class="dp-nav">
+                    <a class="dp-brand" href="/delivery_plan">Kế hoạch giao hàng</a>
+                    <div class="dp-nav-right">
+                        <a class="dp-nav-link" href="/sale_plan">Tình trạng đơn</a>
+                        <span class="dp-user" id="dp-user"></span>
+                    </div>
+                </nav>
+
+                <div class="dp-toolbar">
+                    <div class="dp-field">
+                        <label for="dp-date">Ngày</label>
+                        <input type="date" id="dp-date"/>
+                    </div>
+                    <div class="dp-field">
+                        <label for="dp-warehouse">Kho</label>
+                        <select id="dp-warehouse"></select>
+                    </div>
+                    <button class="dp-btn" id="dp-prev-day">← Hôm trước</button>
+                    <button class="dp-btn" id="dp-today">Hôm nay</button>
+                    <button class="dp-btn" id="dp-next-day">Hôm sau →</button>
+                    <button class="dp-btn dp-btn-primary" id="dp-refresh">Tải lại</button>
+                    <span class="dp-spacer"></span>
+                    <button class="dp-btn dp-btn-primary" id="dp-open-register">
+                        + Đăng ký chuyến
+                    </button>
+                </div>
+
+                <div class="dp-tabs">
+                    <button class="dp-tab dp-tab-active" data-tab="plan">Kế hoạch</button>
+                    <button class="dp-tab" data-tab="mine">
+                        Đăng ký của tôi <span class="dp-badge" id="dp-mine-count">0</span>
+                    </button>
+                    <button class="dp-tab" data-tab="points">
+                        Khách tôi phụ trách
+                        <span class="dp-badge" id="dp-points-count">0</span>
+                    </button>
+                </div>
+
+                <div id="dp-loading" class="dp-loading dp-hidden">Đang tải…</div>
+                <div id="dp-alert" class="dp-alert dp-hidden"></div>
+
+                <section id="dp-pane-plan" class="dp-pane"></section>
+                <section id="dp-pane-mine" class="dp-pane dp-hidden"></section>
+                <section id="dp-pane-points" class="dp-pane dp-hidden"></section>
+
+                <div id="dp-modal" class="dp-modal dp-hidden">
+                    <div class="dp-modal-box">
+                        <div class="dp-modal-head">
+                            <strong id="dp-modal-title">Đăng ký chuyến</strong>
+                            <button class="dp-modal-close" id="dp-modal-close">×</button>
+                        </div>
+                        <div class="dp-modal-body">
+                            <div class="dp-field-block">
+                                <label for="dp-order-search">Tìm đơn của tôi</label>
+                                <input type="text" id="dp-order-search"
+                                       placeholder="Mã đơn hoặc tên khách…"/>
+                            </div>
+                            <div id="dp-order-list" class="dp-order-list"></div>
+                            <div class="dp-field-block">
+                                <label for="dp-modal-trip">Chuyến</label>
+                                <select id="dp-modal-trip"></select>
+                            </div>
+                            <div class="dp-field-block dp-hidden" id="dp-modal-date-wrap">
+                                <label for="dp-modal-date">Ngày mong muốn</label>
+                                <input type="date" id="dp-modal-date"/>
+                            </div>
+                            <div class="dp-field-block">
+                                <label class="dp-check">
+                                    <input type="checkbox" id="dp-modal-urgent"/> Gấp
+                                </label>
+                            </div>
+                            <div class="dp-field-block">
+                                <label for="dp-modal-reason">Lý do</label>
+                                <textarea id="dp-modal-reason" rows="2"
+                                          placeholder="Vì sao cần đi chuyến này"></textarea>
+                            </div>
+                            <div id="dp-modal-alert" class="dp-alert dp-hidden"></div>
+                        </div>
+                        <div class="dp-modal-foot">
+                            <button class="dp-btn" id="dp-modal-cancel">Đóng</button>
+                            <button class="dp-btn dp-btn-primary" id="dp-modal-submit">
+                                Gửi đăng ký
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

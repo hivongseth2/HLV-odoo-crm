@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_profile_list" model="ir.ui.view">
+        <field name="name">hlv.delivery.partner.profile.list</field>
+        <field name="model">hlv.delivery.partner.profile</field>
+        <field name="arch" type="xml">
+            <list string="Thói quen khách" decoration-warning="verification_state == 'expired'"
+                  decoration-muted="verification_state == 'draft'">
+                <field name="point_id"/>
+                <field name="zone_id"/>
+                <field name="delivery_method"/>
+                <field name="procedure_before"/>
+                <field name="service_minutes"/>
+                <field name="responsible_sale_user_id"/>
+                <field name="responsible_conflict" string="Mập mờ"/>
+                <field name="completeness" widget="percentage" string="Độ đầy"/>
+                <field name="verification_state" widget="badge"
+                       decoration-success="verification_state == 'confirmed'"
+                       decoration-warning="verification_state == 'expired'"/>
+                <field name="missing_fields" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_partner_profile_form" model="ir.ui.view">
+        <field name="name">hlv.delivery.partner.profile.form</field>
+        <field name="model">hlv.delivery.partner.profile</field>
+        <field name="arch" type="xml">
+            <form string="Thói quen khách">
+                <header>
+                    <button name="action_confirm" type="object" string="Xác nhận đã đúng"
+                            class="btn-primary" invisible="verification_state == 'confirmed'"/>
+                    <field name="verification_state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="point_id" options="{'no_create': True}"/></h1>
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="not responsible_conflict">
+                        Máy không suy được sale phụ trách: nhiều tài khoản cùng khớp mã sale, hoặc
+                        các mã khách của điểm này thuộc nhiều sale khác nhau. Điều phối chọn tay.
+                    </div>
+                    <group>
+                        <group string="Tuyến và xe">
+                            <field name="zone_id"/>
+                            <field name="default_vehicle_id"/>
+                            <field name="delivery_method"/>
+                        </group>
+                        <group string="Trước khi giao">
+                            <field name="procedure_before"/>
+                            <field name="needs_technician"/>
+                            <field name="oversize_note" placeholder="VD: hàng thép dài 6m"/>
+                        </group>
+                        <group string="Tại điểm">
+                            <field name="service_minutes"/>
+                            <field name="receiving_from" widget="float_time"/>
+                            <field name="receiving_to" widget="float_time"/>
+                            <field name="payment_method"/>
+                        </group>
+                        <group string="Phân công">
+                            <field name="responsible_sale_user_id"/>
+                            <field name="responsible_source"/>
+                            <field name="responsible_conflict" readonly="1"/>
+                            <field name="review_due_date"/>
+                            <field name="last_verified_by_id" readonly="1"/>
+                            <field name="last_verified_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Ghi chú tự do">
+                        <field name="free_note" nolabel="1"
+                               placeholder="VD: hàng nhẹ đi Suzuki, giao thép thì dùng xe tải 3.5 tấn"/>
+                    </group>
+                    <group string="Độ đầy dữ liệu">
+                        <field name="completeness" widget="percentage"/>
+                        <field name="missing_fields" readonly="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_partner_profile_search" model="ir.ui.view">
+        <field name="name">hlv.delivery.partner.profile.search</field>
+        <field name="model">hlv.delivery.partner.profile</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="point_id"/>
+                <field name="responsible_sale_user_id"/>
+                <filter name="mine" string="Khách tôi phụ trách"
+                        domain="[('responsible_sale_user_id', '=', uid)]"/>
+                <filter name="draft" string="Chưa điền"
+                        domain="[('verification_state', '=', 'draft')]"/>
+                <filter name="expired" string="Hết hạn soát lại"
+                        domain="[('verification_state', '=', 'expired')]"/>
+                <filter name="conflict" string="Phân công mập mờ"
+                        domain="[('responsible_conflict', '=', True)]"/>
+                <filter name="unassigned" string="Chưa có sale phụ trách"
+                        domain="[('responsible_sale_user_id', '=', False)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_sale" string="Sale phụ trách"
+                            context="{'group_by': 'responsible_sale_user_id'}"/>
+                    <filter name="group_zone" string="Cụm tuyến" context="{'group_by': 'zone_id'}"/>
+                    <filter name="group_state" string="Tình trạng xác nhận"
+                            context="{'group_by': 'verification_state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_partner_profile" model="ir.actions.act_window">
+        <field name="name">Thói quen khách</field>
+        <field name="res_model">hlv.delivery.partner.profile</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
