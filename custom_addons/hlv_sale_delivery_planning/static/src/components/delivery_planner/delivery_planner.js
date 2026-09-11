@@ -120,6 +120,10 @@ export class DeliveryPlannerDashboard extends Component {
             isMessageDrawerOpen: false,
             globalUnreadOrders: [],
             globalUnreadOrdersLoading: false,
+            // Bộ lọc trong drawer tin nhắn: tìm theo nội dung/đơn/người gửi và
+            // lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...).
+            messageDrawerSearch: '',
+            messageDrawerAliasFilter: [],
 
             // Package Modal
             isPackageModalOpen: false,
