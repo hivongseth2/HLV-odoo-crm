@@ -54,22 +54,16 @@ class HlvLoyaltyPortalAccount(models.Model):
         string='Tên thu mua',
         help='Tên người/bộ phận thu mua gắn với tài khoản này (VD: "Anh A - phòng thu mua 1").',
     )
-    default_earning_pct = fields.Float(
-        string='% cộng điểm mặc định',
-        digits=(5, 2),
-        help='% chiết khấu mặc định dùng để tính điểm đổi thưởng khi tài khoản này '
-             'được chọn trên đơn bán hàng. VD: 5 = 5%. Sales có thể sửa lại trên từng đơn.',
-    )
     is_default = fields.Boolean(
         string='Tài khoản mặc định',
         help='Tài khoản được tự động dùng để cộng điểm khi đơn bán hàng không chọn '
              'tài khoản nào. Mỗi công ty chỉ có tối đa 1 tài khoản mặc định.',
     )
 
-    # ── STK nhận hiện kim mặc định (riêng theo từng tài khoản Portal) ────────
-    default_bank_name = fields.Char(string='Ngân hàng nhận hiện kim (mặc định)')
-    default_account_number = fields.Char(string='Số tài khoản nhận hiện kim (mặc định)')
-    default_account_name = fields.Char(string='Tên chủ tài khoản nhận hiện kim (mặc định)')
+    # ── STK nhận tiền Refund mặc định (riêng theo từng tài khoản Portal) ─────
+    default_bank_name = fields.Char(string='Ngân hàng nhận Refund (mặc định)')
+    default_account_number = fields.Char(string='Số tài khoản nhận Refund (mặc định)')
+    default_account_name = fields.Char(string='Tên chủ tài khoản nhận Refund (mặc định)')
 
     # ── Điểm (mỗi tài khoản có pool điểm riêng — nguồn sự thật là hlv.loyalty.history) ──
     loyalty_history_ids = fields.One2many(

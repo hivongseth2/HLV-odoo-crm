@@ -201,6 +201,12 @@
                             <div class="tc-flip-front">
                                 <t t-if="is_current">
                                     <span class="tc-badge you">BẠN</span>
+                                    <!-- Điểm tích lũy hiện ngay trên thẻ hạng đang giữ
+                                         (đã bỏ khỏi lưới điểm ở dashboard). -->
+                                    <span class="tc-pts">
+                                        <span class="tc-pts-num"><t t-out="'{:,}'.format(partner.loyalty_total_points or 0)"/></span>
+                                        <span class="tc-pts-lbl">điểm tích lũy</span>
+                                    </span>
                                 </t>
                                 <img class="sr-tier-card-asset"
                                      t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
@@ -243,8 +249,16 @@
             var dots = document.querySelectorAll('#loyalty-tiers .sr-tier-dot');
             if (!grid || !cards.length) return;
 
+            // Căn thẻ hạng hiện tại vào giữa carousel bằng cách set scrollLeft
+            // của CHÍNH container. KHÔNG dùng scrollIntoView: hàm đó cuộn mọi
+            // ancestor cuộn được, kể cả chính document — mà section này nằm
+            // cuối trang nên trình duyệt sẽ kéo tuột cả trang xuống rồi mới
+            // trả về, đúng hiện tượng "vào trang là nhảy loạn" trên mobile.
             var current = document.querySelector('#loyalty-tiers .sr-tier-card.current');
-            if (current) current.scrollIntoView({inline: 'center', block: 'nearest'});
+            if (current) {
+                grid.scrollLeft = current.offsetLeft
+                    - (grid.clientWidth - current.offsetWidth) / 2;
+            }
 
             if (!dots.length) return;
             function updateDots() {

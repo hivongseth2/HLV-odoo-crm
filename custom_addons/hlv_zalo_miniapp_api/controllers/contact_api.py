@@ -49,29 +49,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         ]
         return Partner.search(["|", ("phone", "in", formats), ("mobile", "in", formats)], limit=1)
 
-    @classmethod
-    def _get_scoped_portal_account(cls, partner, phone=None):
-        """Tìm chính xác tài khoản loyalty portal của partner theo số điện thoại."""
-        if not partner or "hlv.loyalty.portal.account" not in request.env:
-            return None
-        Account = request.env["hlv.loyalty.portal.account"].sudo()
-        root = partner._get_loyalty_root() if hasattr(partner, "_get_loyalty_root") else partner
-        family_ids = root._get_loyalty_family_partner_ids() if hasattr(root, "_get_loyalty_family_partner_ids") else [root.id, partner.id]
-
-        normalized = cls._normalize_vn_phone(phone) if phone else ""
-        if normalized:
-            acc = Account.search([
-                ("partner_id", "in", family_ids),
-                ("portal_phone", "=", normalized),
-                ("active", "=", True),
-            ], limit=1)
-            if acc:
-                return acc
-        # Fallback to default or first account of partner
-        if hasattr(root, "loyalty_portal_account_ids") and root.loyalty_portal_account_ids:
-            return root.loyalty_portal_account_ids.filtered(lambda a: a.is_default)[:1] or root.loyalty_portal_account_ids.filtered(lambda a: a.active)[:1]
-        return None
-
     @staticmethod
     def _is_default_address(a):
         try:

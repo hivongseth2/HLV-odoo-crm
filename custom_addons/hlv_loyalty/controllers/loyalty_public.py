@@ -66,7 +66,7 @@ def _owns_record(rec, account, root):
 
 def _filter_visible_reward_requests(requests):
     """Chỉ hiện cho khách các yêu cầu đổi thưởng ĐANG cần theo dõi:
-    đang chờ xử lý, hoặc đã xử lý nhưng là đổi tiền mặt và CHƯA thực nhận
+    đang chờ xử lý, hoặc đã xử lý nhưng là Refund và CHƯA thực nhận
     tiền (còn cần biết trạng thái thanh toán). Yêu cầu đã xử lý xong (quà
     đã nhận / tiền đã nhận) hoặc đã hủy thì ẩn khỏi lịch sử khách xem —
     theo yêu cầu chỉ hiện các yêu cầu đang xử lý trên Portal.
@@ -79,7 +79,7 @@ def _filter_visible_reward_requests(requests):
 
 
 def _get_bank_confirm_data(account, bank_mode):
-    """Trạng thái hiển thị khối 'Thông tin nhận hiện kim' trên tab Đổi hiện kim.
+    """Trạng thái hiển thị khối 'Thông tin nhận tiền Refund' trên tab Refund.
 
     Mỗi tài khoản Portal có 1 STK mặc định riêng (default_bank_name/
     default_account_number/default_account_name trên hlv.loyalty.portal.account).
@@ -144,6 +144,11 @@ def _load_account_data(account):
         'tiers': tiers,
         'program': program,
         'partner': root,
+        'account': account,
+        # Portal KHÔNG hiện tên công ty (partner.name) và mã KH (partner.ref)
+        # nữa — chỉ hiện tên người thu mua gắn với tài khoản đang đăng nhập;
+        # tài khoản chưa khai buyer_name thì để trống.
+        'buyer_name': account.buyer_name or '',
         'active_vouchers': active_vouchers,
         'active_vouchers_count': active_vouchers_count,
         'recent_history': recent_history,
@@ -341,9 +346,11 @@ class LoyaltyPublicPortal(http.Controller):
         if not account:
             return request.redirect('/loyalty')
 
-        active_tab = kwargs.get('tab', 'gift')
+        # Mặc định vào thẳng tab Refund — nút "Đổi thưởng" ở dashboard /
+        # bottom-nav dùng nhiều nhất cho việc quy đổi tiền, không phải đổi quà.
+        active_tab = kwargs.get('tab', 'cash')
         if active_tab not in ('gift', 'cash', 'history'):
-            active_tab = 'gift'
+            active_tab = 'cash'
 
         root = account.partner_id._get_loyalty_root()
 
@@ -512,7 +519,7 @@ class LoyaltyPublicPortal(http.Controller):
         })
         return request.redirect(
             '/loyalty/redeem?tab=history'
-            '&success_msg=Yêu cầu đổi hiện kim đã được gửi. Chúng tôi sẽ xử lý sớm nhất!'
+            '&success_msg=Yêu cầu Refund đã được gửi. Chúng tôi sẽ xử lý sớm nhất!'
         )
 
     @http.route('/loyalty/redeem/request/<int:request_id>/cancel', type='http',

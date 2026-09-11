@@ -16,7 +16,7 @@
              sẽ khiến 'Đăng xuất' là flex item DUY NHẤT còn lại và bị đẩy sang trái. -->
         <div class="sr-topbar">
             <span class="sr-topbar-greet">
-                Xin chào, <strong><t t-out="partner.name"/></strong>
+                Xin chào<t t-if="buyer_name">, <strong><t t-out="buyer_name"/></strong></t>
             </span>
             <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
         </div>
@@ -40,14 +40,14 @@
                     <div class="sr-mcard-avatar">
                         <t t-if="partner.image_1920">
                             <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
-                                 t-att-alt="partner.name or ''"/>
+                                 t-att-alt="buyer_name"/>
                         </t>
                         <t t-else="">
                             <span class="ms ms-fill">storefront</span>
                         </t>
                     </div>
                     <div class="sr-mcard-id">
-                        <div class="sr-mcard-name"><t t-out="partner.name"/></div>
+                        <div class="sr-mcard-name"><t t-out="buyer_name"/></div>
                         <t t-if="partner.loyalty_tier_id">
                             <span class="sr-mcard-tier"><t t-out="partner.loyalty_tier_id.name"/></span>
                         </t>
@@ -63,11 +63,9 @@
                         </button>
                     </div>
                 </div>
+                <!-- Dòng "Điểm của bạn" (nhãn trống, không có số) đã bỏ — số điểm
+                     giờ hiện đầy đủ ở lưới .sr-pts-grid ngay bên dưới thẻ này. -->
                 <div class="sr-mcard-stats">
-                    <a href="/loyalty/history" class="sr-mcard-stat-row">
-                        <span class="sr-mcard-stat-plain">Điểm của bạn</span>
-                        <span class="sr-mcard-stat-link">Xem lịch sử <span class="ms">chevron_right</span></span>
-                    </a>
                     <a href="/loyalty/vouchers" class="sr-mcard-stat-row">
                         <div class="sr-mcard-stat-num">
                             <t t-out="active_vouchers_count or 0"/> <span>quà tặng</span>
@@ -76,6 +74,13 @@
                     </a>
                 </div>
             </div>
+
+            <!-- CTA Refund to, chỉ hiện trên mobile (đi thẳng vào tab Refund) -->
+            <a href="/loyalty/redeem?tab=cash" class="sr-mcta">
+                <span class="ms ms-fill">redeem</span>
+                <span class="sr-mcta-txt">Đổi thưởng</span>
+                <span class="ms sr-mcta-arrow">arrow_forward</span>
+            </a>
         </div>
 
         <!-- Profile hero (desktop) -->
@@ -88,23 +93,20 @@
                             <t t-if="partner.image_1920">
                                 <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
                                      style="width:100%;height:100%;object-fit:cover"
-                                     t-att-alt="partner.name or ''"/>
+                                     t-att-alt="buyer_name"/>
                             </t>
                             <t t-else="">
                                 <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">storefront</span>
                             </t>
                         </div>
                         <div>
-                            <h1 class="sr-cust-name"><t t-out="partner.name"/></h1>
+                            <h1 class="sr-cust-name"><t t-out="buyer_name"/></h1>
                             <div class="sr-cust-meta">
                                 <t t-if="masked_phone">
                                     <span class="sr-meta-item"><span class="ms">call</span><t t-out="masked_phone"/></span>
                                 </t>
                                 <t t-if="masked_email">
                                     <span class="sr-meta-item"><span class="ms">mail</span><t t-out="masked_email"/></span>
-                                </t>
-                                <t t-if="partner.ref">
-                                    <span class="sr-meta-item"><span class="ms">verified_user</span>ID: <t t-out="partner.ref"/></span>
                                 </t>
                             </div>
                         </div>
@@ -127,6 +129,34 @@
 
         <!-- Body -->
         <div class="sr-body sr-body-hero">
+
+            <!-- ── Tổng quan điểm đổi thưởng (hiện trên CẢ desktop lẫn mobile) ──
+                 Chỉ còn điểm ĐỔI THƯỞNG khả dụng + điểm chờ xác nhận. Điểm tích
+                 lũy đã chuyển vào thẻ hạng ở mục "Hệ thống cấp bậc thành viên";
+                 điểm đang treo bỏ hẳn khỏi giao diện khách.
+                 Đặt ngoài .sr-main-row vì .sr-main-row bị ẩn hẳn trên mobile
+                 (xem media query .sr-main-row{display:none} trong CSS), nên
+                 khối này phải nằm riêng mới hiện được ở cả 2 giao diện. -->
+            <div class="sr-pts-grid">
+                <a href="/loyalty/redeem?tab=cash" class="sr-pts-card sr-pts-exchange">
+                    <div class="sr-pts-head">
+                        <span class="ms ms-fill sr-pts-icon">swap_horiz</span>
+                        <span class="sr-pts-lbl">Điểm đổi thưởng</span>
+                    </div>
+                    <div class="sr-pts-val"><t t-out="'{:,}'.format(exchange_available_points or 0)"/></div>
+                    <div class="sr-pts-unit">có thể dùng để đổi thưởng</div>
+                </a>
+                <a href="/loyalty/history" class="sr-pts-card sr-pts-wait">
+                    <div class="sr-pts-head">
+                        <span class="ms sr-pts-icon">hourglass_top</span>
+                        <span class="sr-pts-lbl">Điểm chờ xác nhận</span>
+                    </div>
+                    <div class="sr-pts-val">
+                        <t t-if="pending_points">+</t><t t-out="'{:,}'.format(pending_points or 0)"/>
+                    </div>
+                    <div class="sr-pts-unit">chờ nhân viên xác nhận</div>
+                </a>
+            </div>
 
             <!-- Progress + actions row -->
             <div class="sr-main-row">
@@ -174,7 +204,7 @@
                             <t t-if="active_vouchers_count"><span><t t-out="active_vouchers_count"/> Voucher</span></t>
                             <t t-else=""><span>Voucher</span></t>
                         </a>
-                        <a href="/loyalty/redeem" class="sr-act-btn">
+                        <a href="/loyalty/redeem?tab=cash" class="sr-act-btn">
                             <span class="ms">redeem</span><span>Đổi thưởng</span>
                         </a>
                         <a href="#loyalty-tiers" class="sr-act-btn">

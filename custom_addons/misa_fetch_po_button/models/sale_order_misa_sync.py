@@ -1334,6 +1334,22 @@ class SaleOrder(models.Model):
                 lambda picking: picking.state not in ('done', 'cancel')
             ).write({'partner_id': shipping_partner.id})
 
+    def _misa_sync_open_picking_delivery_type(self, data):
+        """Đẩy CustomField21 (cùng nguồn với Ghi chú MISA x_studio_misa_note)
+        xuống các phiếu kho còn mở của đơn. x_pick_delivery_type là field của
+        module hlv_sale_delivery_planning, theo từng lần lấy hàng (không dùng
+        chung cấp đơn hàng), nên chỉ ghi nếu module đó có cài (field tồn tại).
+        """
+        self.ensure_one()
+        delivery_type = (data.get('CustomField21') or '').strip()
+        if not delivery_type:
+            return
+        open_pickings = self.picking_ids.filtered(
+            lambda picking: picking.state not in ('done', 'cancel')
+        )
+        if open_pickings and 'x_pick_delivery_type' in open_pickings._fields:
+            open_pickings.write({'x_pick_delivery_type': delivery_type})
+
     def _sync_misa_header_in_place(self, data, headers):
         """Cập nhật header trên chính SO hiện tại, không thay record và không đụng move."""
         self.ensure_one()
@@ -1493,6 +1509,7 @@ class SaleOrder(models.Model):
         self.write(vals)
         if not (customer_changed and self.env.context.get('misa_defer_changes')):
             self._misa_sync_open_picking_contact()
+        self._misa_sync_open_picking_delivery_type(data)
 
     def action_resync_from_misa(self, prefetched_lines=None, misa_headers=None):
         """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
@@ -1625,6 +1642,7 @@ class SaleOrder(models.Model):
             stock_lines.sudo()._action_launch_stock_rule()
             self.invalidate_recordset(['picking_ids'])
             self._misa_sync_open_picking_contact()
+            self._misa_sync_open_picking_delivery_type(data)
             new_pickings = self.picking_ids.filtered(
                 lambda picking: picking.id not in old_picking_ids
                 and picking.state != 'cancel'
@@ -1703,6 +1721,10 @@ class SaleOrder(models.Model):
         self._misa_clear_sale_edit_lock()
         if self.state in ('draft', 'sent'):
             self.action_confirm()
+        # action_confirm() ở trên mới thật sự tạo picking cho đơn bootstrap (SO
+        # mới) — lúc _sync_misa_header_in_place() chạy trước đó, picking_ids
+        # còn rỗng nên phải đẩy lại delivery type ở đây mới ăn vào picking mới.
+        self._misa_sync_open_picking_delivery_type(data)
         self._auto_apply_misa_tags()
         if warehouse_changed and pickings_to_rebuild:
             self.message_post(body=_(
@@ -1831,7 +1853,13 @@ class SaleOrder(models.Model):
         }
 
     def _sync_misa_loyalty_account_line(self, payload=None):
-        """Đồng bộ tài khoản cộng điểm Loyalty (%ck thu mua) từ MISA CRM Extension."""
+        """Đồng bộ tài khoản cộng điểm Loyalty (số tiền cộng điểm) từ MISA CRM Extension.
+
+        `hlv.loyalty.sale.order.account.line.earning_pct` đã được thay bằng
+        `earning_amount` (số tiền tài khoản nhận NẾU đơn giao đủ 100%, không
+        còn khái niệm % hay % mặc định của tài khoản nữa — mọi số tiền đều
+        phải nhập tường minh trên đơn, không có fallback).
+        """
         self.ensure_one()
         payload = payload or self.env.context.get('misa_sync_payload')
         if not payload or not isinstance(payload, dict):
@@ -1839,12 +1867,12 @@ class SaleOrder(models.Model):
 
         lines_data = payload.get('loyalty_account_lines')
         if lines_data is not None and isinstance(lines_data, list):
-            current_map = {line.account_id.id: float(line.earning_pct or 0.0) for line in self.loyalty_account_line_ids}
+            current_map = {line.account_id.id: float(line.earning_amount or 0.0) for line in self.loyalty_account_line_ids}
             target_map = {}
             for item in lines_data:
                 if isinstance(item, dict) and item.get('account_id'):
                     try:
-                        target_map[int(item['account_id'])] = float(item.get('earning_pct') or 0.0)
+                        target_map[int(item['account_id'])] = float(item.get('earning_amount') or 0.0)
                     except (ValueError, TypeError):
                         target_map[int(item['account_id'])] = 0.0
 
@@ -1854,7 +1882,7 @@ class SaleOrder(models.Model):
             if loyalty_changed:
                 if self.env.context.get('misa_audit_changes') is not None:
                     old_items = [
-                        f"{line.account_id.display_name or line.account_id.username or str(line.account_id.id)} ({line.earning_pct}%)"
+                        f"{line.account_id.display_name or line.account_id.username or str(line.account_id.id)} ({line.earning_amount:,.0f}đ)"
                         for line in self.loyalty_account_line_ids
                     ]
                     new_items = []
@@ -1866,8 +1894,8 @@ class SaleOrder(models.Model):
                                 acc_name = (acc.display_name or acc.username) if acc else (item.get('account_name') or str(acc_id))
                             except Exception:
                                 acc_name = str(item.get('account_name') or item.get('account_id'))
-                            pct = item.get('earning_pct', 0)
-                            new_items.append(f"{acc_name} ({pct}%)")
+                            amount = item.get('earning_amount', 0)
+                            new_items.append(f"{acc_name} ({amount:,.0f}đ)" if isinstance(amount, (int, float)) else f"{acc_name} ({amount}đ)")
 
                     self.env.context['misa_audit_changes'].append({
                         'change_type': 'update',
@@ -1890,29 +1918,29 @@ class SaleOrder(models.Model):
                 if not isinstance(item, dict):
                     continue
                 acc_id = item.get('account_id')
-                pct = item.get('earning_pct')
+                amount = item.get('earning_amount')
                 if not acc_id:
                     continue
                 account = self.env['hlv.loyalty.portal.account'].sudo().browse(int(acc_id)).exists()
                 if not account:
                     continue
                 try:
-                    pct_val = float(pct) if pct is not None else float(account.default_earning_pct or 0.0)
+                    amount_val = float(amount) if amount is not None else 0.0
                 except (ValueError, TypeError):
-                    pct_val = float(account.default_earning_pct or 0.0)
+                    amount_val = 0.0
 
                 synced_account_ids.append(account.id)
                 existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
                 if existing_line:
-                    existing_line.sudo().write({'earning_pct': pct_val})
-                    _logger.info("MISA SO Loyalty: Đã cập nhật %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+                    existing_line.sudo().write({'earning_amount': amount_val})
+                    _logger.info("MISA SO Loyalty: Đã cập nhật số tiền cộng điểm SO %s: account=%s, amount=%s", self.name, account.display_name, amount_val)
                 else:
                     self.env['hlv.loyalty.sale.order.account.line'].sudo().create({
                         'order_id': self.id,
                         'account_id': account.id,
-                        'earning_pct': pct_val,
+                        'earning_amount': amount_val,
                     })
-                    _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+                    _logger.info("MISA SO Loyalty: Đã tạo mới dòng số tiền cộng điểm SO %s: account=%s, amount=%s", self.name, account.display_name, amount_val)
 
             removed_lines = self.loyalty_account_line_ids.filtered(lambda l: l.account_id.id not in synced_account_ids)
             if removed_lines:
@@ -1920,18 +1948,21 @@ class SaleOrder(models.Model):
                 _logger.info("MISA SO Loyalty: Đã xóa %s dòng tài khoản Loyalty không còn trong payload của SO %s", len(removed_lines), self.name)
             return
 
-        earning_pct = payload.get('loyalty_earning_pct')
+        # Payload dạng cũ (1 tài khoản duy nhất, trước khi có bảng nhiều tài
+        # khoản) — extension hiện tại luôn gửi `loyalty_account_lines`, nhánh
+        # này chỉ còn để tương thích ngược nếu còn nơi nào gọi kiểu cũ.
+        earning_amount = payload.get('loyalty_earning_amount')
         account_id = payload.get('loyalty_account_id')
 
-        if earning_pct is None and not account_id:
+        if earning_amount is None and not account_id:
             return
 
         try:
-            pct_val = float(earning_pct) if earning_pct is not None else None
+            amount_val = float(earning_amount) if earning_amount is not None else None
         except (ValueError, TypeError):
-            pct_val = None
+            amount_val = None
 
-        if pct_val is None and not account_id:
+        if amount_val is None and not account_id:
             return
 
         root_partner = self.partner_id._get_loyalty_root() if (self.partner_id and hasattr(self.partner_id, '_get_loyalty_root')) else self.partner_id
@@ -1959,19 +1990,19 @@ class SaleOrder(models.Model):
             _logger.info("MISA SO Loyalty: Không tìm thấy hlv.loyalty.portal.account cho partner %s", root_partner.name)
             return
 
-        final_pct = pct_val if pct_val is not None else float(account.default_earning_pct or 0.0)
+        final_amount = amount_val if amount_val is not None else 0.0
 
         existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
         if existing_line:
-            existing_line.sudo().write({'earning_pct': final_pct})
-            _logger.info("MISA SO Loyalty: Đã cập nhật %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, final_pct)
+            existing_line.sudo().write({'earning_amount': final_amount})
+            _logger.info("MISA SO Loyalty: Đã cập nhật số tiền cộng điểm SO %s: account=%s, amount=%s", self.name, account.display_name, final_amount)
         else:
             self.env['hlv.loyalty.sale.order.account.line'].sudo().create({
                 'order_id': self.id,
                 'account_id': account.id,
-                'earning_pct': final_pct,
+                'earning_amount': final_amount,
             })
-            _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, final_pct)
+            _logger.info("MISA SO Loyalty: Đã tạo mới dòng số tiền cộng điểm SO %s: account=%s, amount=%s", self.name, account.display_name, final_amount)
 
 # =====================API
     @api.model

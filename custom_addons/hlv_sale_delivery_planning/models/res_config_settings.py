@@ -35,6 +35,30 @@ class ResConfigSettings(models.TransientModel):
         help='Quá số phút này không nhận được heartbeat từ máy chủ kho thì coi như máy đã '
              'tắt/mất mạng và gửi cảnh báo. Nên đặt gấp 2-3 lần chu kỳ chạy của script.',
     )
+    iot_verify_grace_minutes = fields.Integer(
+        string='Đối chiếu máy in: chờ bao nhiêu phút mới kết luận',
+        config_parameter='hlv_sale_delivery_planning.iot_verify_grace_minutes',
+        default=5,
+        help='Sau khi Odoo gửi lệnh in, chờ số phút này rồi mới đối chiếu với số job máy in '
+             'thật sự đã in. Phải LỚN HƠN chu kỳ chạy của script watchdog (mặc định 2 phút) để '
+             'lệnh in có đủ thời gian in xong, tránh kết luận oan là "chưa in".',
+    )
+    iot_auto_requeue_unprinted = fields.Boolean(
+        string='Tự động gửi lại lệnh in khi phát hiện chưa ra giấy',
+        config_parameter='hlv_sale_delivery_planning.iot_auto_requeue_unprinted',
+        help='Khi đối chiếu phát hiện phiếu đã gửi lệnh in nhưng máy in KHÔNG in ra giấy: bật = '
+             'hệ thống tự đưa yêu cầu đó về hàng chờ để in lại ngay (có thể in trùng 1 tờ nếu '
+             'đối chiếu sai); tắt = chỉ cảnh báo + hiện nhãn "NGHI CHƯA IN RA" để kho tự bấm '
+             '"Gửi lại lệnh in". Dù bật hay tắt đều KHÔNG bao giờ im lặng bỏ qua.',
+    )
+    iot_pending_stale_minutes = fields.Integer(
+        string='Yêu cầu in chờ quá bao nhiêu phút thì báo động',
+        config_parameter='hlv_sale_delivery_planning.iot_pending_stale_minutes',
+        default=10,
+        help='Yêu cầu in nằm ở "Chờ in" quá số phút này thì coi là KHÔNG CÓ AI ĐANG MỞ trang '
+             '"Điều phối Giao hàng" để gửi lệnh in xuống máy in — Odoo sẽ cảnh báo (dashboard, '
+             'email, và popup ngay trên máy ở kho). Để 0 = dùng mặc định 10 phút.',
+    )
     iot_alert_emails = fields.Char(
         string='Email nhận cảnh báo máy in IoT',
         config_parameter='hlv_sale_delivery_planning.iot_alert_emails',

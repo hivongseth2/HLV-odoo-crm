@@ -45,23 +45,45 @@ a { color:inherit; }
    trình duyệt khác bỏ qua, không ảnh hưởng. */
 @view-transition { navigation: auto; }
 
-/* ── Hiệu ứng vào trang cho các block chính (áp dụng lại mỗi lần tải trang) ── */
-@keyframes srPageIn { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
-.sr-result-hero, .sr-mcard, .sr-voucher-section, .sr-hist-section, .sr-hist-toolbar {
-    animation:srPageIn .4s ease both;
+/* Người dùng bật "Giảm chuyển động" (iOS/Android/Windows) → tắt sạch mọi
+   animation/transition của portal, tránh cảm giác giao diện nhảy. */
+@media (prefers-reduced-motion: reduce) {
+    @view-transition { navigation: none; }
+    *, *::before, *::after {
+        animation-duration:.001ms !important; animation-iteration-count:1 !important;
+        transition-duration:.001ms !important; scroll-behavior:auto !important;
+    }
 }
-.sr-main-row > * { animation:srPageIn .4s .05s ease both; }
+
+/* ── Hiệu ứng vào trang cho các block chính (áp dụng lại mỗi lần tải trang) ──
+   CHỈ mờ dần, KHÔNG translate/scale: mọi hiệu ứng dịch chuyển đều chạy lại sau
+   mỗi lần điều hướng, khiến người dùng thấy khối "bay" vào chỗ mỗi lần đổi
+   trang — trên mobile cảm giác như giao diện bị nhảy. */
+@keyframes srPageIn { from{opacity:0} to{opacity:1} }
+.sr-result-hero, .sr-mcard, .sr-voucher-section, .sr-hist-section, .sr-hist-toolbar {
+    animation:srPageIn .25s ease both;
+}
+.sr-main-row > * { animation:srPageIn .25s ease both; }
 
 /* Material Symbols */
 /* Fallback 'Inter' cho .ms: nếu font icon (tải từ Google Fonts) lỡ không tải
    được (mạng chặn/CSP của môi trường — không phải lỗi trong code này), chữ
    tên icon thô (VD "swap_horiz") sẽ hiện bằng font chữ thường của app thay
-   vì font serif mặc định của trình duyệt (nhìn như bị vỡ giao diện). Không
-   loại bỏ được hoàn toàn vấn đề tên icon hiện ra khi font chưa/không tải
-   được — muốn hết hẳn phải đổi toàn bộ icon ligature-font sang SVG. */
+   vì font serif mặc định của trình duyệt. Kèm width:1em + overflow:hidden bên
+   dưới, phần chữ thừa bị cắt nên chỉ thấy 1 ô trống cỡ icon (giống icon thiếu)
+   thay vì cả dòng chữ lạ làm vỡ layout. Muốn hết hẳn phải đổi ligature-font
+   sang SVG. */
+/* QUAN TRỌNG (chống nhảy layout): khoá ô icon = đúng 1em + overflow:hidden.
+   Icon ở đây là ligature — trước khi font Material Symbols tải xong, trình duyệt
+   vẫn dàn trang bằng font fallback với NGUYÊN chuỗi tên icon (VD "swap_horiz" =
+   11 ký tự ≈ 130px thay vì 24px). Một trang có 20-35 icon → layout phình to rồi
+   co sập lại đúng lúc font về = hiện tượng "nhảy loạn rồi mới về đúng vị trí".
+   Khoá width:1em (đúng bằng advance width của mọi glyph Material Symbols) và
+   cắt phần tràn → ô icon chiếm đúng chỗ ngay từ khung hình đầu tiên. */
 .ms { font-family:'Material Symbols Outlined','Inter',sans-serif; font-weight:normal; font-style:normal;
       font-size:24px; line-height:1; letter-spacing:normal; text-transform:none;
       display:inline-block; white-space:nowrap; direction:ltr;
+      width:1em; overflow:hidden; text-align:center;
       -webkit-font-smoothing:antialiased; vertical-align:middle; }
 .ms-fill { font-variation-settings:'FILL' 1; }
 .ms-sm   { font-size:14px; }
@@ -169,6 +191,15 @@ a { color:inherit; }
             box-shadow:0 2px 6px rgba(0,0,0,.25); backdrop-filter:blur(2px); }
 .tc-badge.popular { background:var(--c-sec-c); color:#5c420c; }
 .tc-badge.you     { background:rgba(255,255,255,.92); color:var(--c-pri); }
+
+/* Điểm tích lũy in ngay trên thẻ hạng đang giữ (góc dưới-trái, kiểu số thẻ).
+   z-index 4 = bằng .tc-badge để nằm trên ảnh thẻ + lớp shimmer ::before/::after. */
+.tc-pts { position:absolute; left:14px; bottom:12px; z-index:4; display:flex;
+          flex-direction:column; line-height:1.05; text-shadow:0 1px 3px rgba(0,0,0,.45); }
+.tc-pts-num { font-family:'Plus Jakarta Sans',sans-serif; font-weight:900; font-size:1.35rem; color:#fff; }
+.tc-pts-lbl { font-size:.58rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+              color:rgba(255,255,255,.9); }
+
 .tc-card-label { margin-top:10px; font-size:.95rem; font-weight:800; color:var(--c-ink); text-align:left; }
 
 /* ── Result / Dashboard Hero ── */
@@ -749,8 +780,8 @@ a { color:inherit; }
     }
     /* Tiers – vẫn là carousel trượt ngang trên mobile (chỉ thu nhỏ thẻ lại),
        giữ nguyên tương tác lật xem quyền lợi (tc-flip-inner) như desktop.
-       Padding trái/phải giữ = 24px như base để margin -24px vẫn bù đúng. */
-    .sr-tier-grid { gap:14px; padding:4px 24px 12px; }
+       Padding/margin ngang được set lại ở block gutter 16px cuối file. */
+    .sr-tier-grid { gap:14px; }
     .sr-tier-card { flex:0 0 220px; }
     /* Tiêu đề section — thu nhỏ trên mobile để không vỡ dòng */
     .sr-sec-title { font-size:1.3rem; }
@@ -773,9 +804,13 @@ a { color:inherit; }
 ══════════════════════════════════════════════════════════════ */
 
 /* ── Keyframes ── */
-@keyframes rdmFadeUp   { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-@keyframes rdmSlideIn  { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
-@keyframes rdmScalePop { 0%{opacity:0;transform:scale(.9)} 65%{transform:scale(1.03)} 100%{opacity:1;transform:scale(1)} }
+/* 3 keyframes "vào màn" bên dưới trước đây có translate/scale → mỗi lần mở
+   trang là cả loạt thẻ trượt/phóng vào vị trí (kèm delay so le tới .34s), nhìn
+   như layout bị nhảy. Giữ nguyên tên keyframes (nhiều nơi đang dùng) nhưng bỏ
+   hết transform, chỉ còn mờ dần. */
+@keyframes rdmFadeUp   { from{opacity:0} to{opacity:1} }
+@keyframes rdmSlideIn  { from{opacity:0} to{opacity:1} }
+@keyframes rdmScalePop { from{opacity:0} to{opacity:1} }
 @keyframes rdmShimmer  { from{background-position:200% 0} to{background-position:-200% 0} }
 /* Pulse dạng scale (không dùng box-shadow lan toả) — box-shadow trên 1 dòng
    chữ số bó khung chữ nhật sát mép chữ nên lan ra nhìn "vuông", scale mềm
@@ -883,13 +918,6 @@ a { color:inherit; }
 .sr-pkg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:18px; }
 
 /* staggered entry */
-.sr-pkg-card:nth-child(1) { animation:rdmScalePop .35s .04s ease both; }
-.sr-pkg-card:nth-child(2) { animation:rdmScalePop .35s .09s ease both; }
-.sr-pkg-card:nth-child(3) { animation:rdmScalePop .35s .14s ease both; }
-.sr-pkg-card:nth-child(4) { animation:rdmScalePop .35s .19s ease both; }
-.sr-pkg-card:nth-child(5) { animation:rdmScalePop .35s .24s ease both; }
-.sr-pkg-card:nth-child(6) { animation:rdmScalePop .35s .29s ease both; }
-.sr-pkg-card:nth-child(n+7) { animation:rdmScalePop .35s .34s ease both; }
 
 .sr-pkg-card {
     background:var(--c-glass-bg); backdrop-filter:blur(26px); -webkit-backdrop-filter:blur(26px);
@@ -908,6 +936,8 @@ a { color:inherit; }
 .sr-pkg-card:not(.sr-pkg-disabled):hover {
     border-color:var(--c-pri); box-shadow:0 8px 28px rgba(23,121,180,.16); transform:translateY(-4px);
 }
+.sr-pkg-card { animation:rdmScalePop .25s ease both; }
+.sr-req-card { animation:rdmFadeUp .25s ease both; }
 .sr-pkg-card:not(.sr-pkg-disabled):hover::before { animation:rdmShimmer .6s ease forwards; }
 .sr-pkg-disabled { opacity:.5; filter:grayscale(.5); pointer-events:none; }
 
@@ -1112,12 +1142,6 @@ a { color:inherit; }
 .sr-req-list { display:flex; flex-direction:column; gap:12px; }
 
 /* staggered entry */
-.sr-req-card:nth-child(1) { animation:rdmFadeUp .3s .04s ease both; }
-.sr-req-card:nth-child(2) { animation:rdmFadeUp .3s .08s ease both; }
-.sr-req-card:nth-child(3) { animation:rdmFadeUp .3s .12s ease both; }
-.sr-req-card:nth-child(4) { animation:rdmFadeUp .3s .16s ease both; }
-.sr-req-card:nth-child(5) { animation:rdmFadeUp .3s .20s ease both; }
-.sr-req-card:nth-child(n+6) { animation:rdmFadeUp .3s .24s ease both; }
 
 .sr-rq-detail-wrap { max-width:640px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
 
@@ -1354,6 +1378,79 @@ button.sr-rq-cancel-btn .ms { display:none; }
 .sr-mcard-stat-plain { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:1rem; color:var(--c-ink); }
 .sr-mcard-stat-link { font-size:.78rem; font-weight:700; color:var(--c-ink-v); display:flex; align-items:center; }
 .sr-mcard-stat-link .ms { font-size:18px; }
+
+/* ══════════════════════════════════════════════════════════════
+   Dashboard: CTA "Đổi thưởng" + khối tổng quan điểm
+   Gutter thống nhất trên mobile = 16px cho MỌI khối của trang chủ
+   (thẻ thành viên, CTA, lưới điểm, section cấp bậc) — trước đây mỗi
+   khối một mức (16 / 14 / 24px) nên nhìn lệch bậc thang.
+══════════════════════════════════════════════════════════════ */
+
+/* ── CTA "Đổi thưởng" (chỉ mobile, ngay dưới thẻ thành viên) ── */
+.sr-mcta { display:none; }
+
+/* ── Tổng quan điểm (desktop + mobile) — 2 card: đổi thưởng + chờ xác nhận ── */
+.sr-pts-grid {
+    display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:22px;
+}
+.sr-pts-card {
+    display:flex; flex-direction:column; gap:4px; padding:16px;
+    background:var(--c-glass-bg); backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px);
+    border:1px solid var(--c-glass-border); border-radius:18px;
+    box-shadow:var(--c-glass-hl), 0 8px 22px var(--c-glass-shadow);
+    text-decoration:none; color:inherit;
+    transition:transform .18s ease, box-shadow .18s ease;
+    align-items:center;
+}
+.sr-pts-card:hover { transform:translateY(-2px); box-shadow:var(--c-glass-hl), 0 14px 30px var(--c-glass-shadow-lg); }
+.sr-pts-head { display:flex; align-items:center; gap:7px; min-width:0; }
+.sr-pts-icon { font-size:19px; flex-shrink:0; color:var(--c-pri); }
+.sr-pts-exchange .sr-pts-icon { color:#1779b4; }
+.sr-pts-wait    .sr-pts-icon { color:#5b8a72; }
+.sr-pts-lbl { font-size:.66rem; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+    color:var(--c-ink-v); line-height:1.25; }
+.sr-pts-val { font-family:'Plus Jakarta Sans',sans-serif; font-weight:900; font-size:1.6rem;
+    line-height:1.15; color:var(--c-ink); }
+.sr-pts-wait .sr-pts-val { color:#5b8a72; }
+.sr-pts-unit { font-size:.66rem; font-weight:600; color:var(--c-ink-v); line-height:1.35; }
+
+@media (max-width:768px) {
+    /* Hero desktop bị ẩn trên mobile nên margin-top âm (kéo body lên đè lên
+       hero) không còn tác dụng gì ngoài việc kéo khối điểm đè lên thẻ thành
+       viên; padding-bottom 60px cũng thừa vì đã có .sr-bottom-nav-spacer. */
+    .sr-body-hero { margin-top:0; padding-bottom:0; }
+
+    /* Gutter 16px: .sr-body đã có padding ngang 12px → thêm 4px cho khớp
+       với .sr-mcard/.sr-mcta (margin 16px) và .sr-section (padding 16px). */
+    .sr-mcard { margin:14px 16px 12px; }
+    .sr-pts-grid { grid-template-columns:1fr 1fr; gap:10px; margin:0 4px; }
+    .sr-pts-card { padding:13px 12px; border-radius:16px; gap:3px; }
+    .sr-pts-icon { font-size:17px; }
+    .sr-pts-lbl { font-size:.58rem; letter-spacing:.2px; }
+    .sr-pts-val { font-size:1.4rem; }
+    .sr-pts-unit { font-size:.58rem; }
+
+    .sr-mcta {
+        display:flex; align-items:center; gap:10px;
+        margin:0 16px 12px; padding:15px 18px; border-radius:18px;
+        background:linear-gradient(135deg,#3a9bdc,var(--c-pri)); color:#fff;
+        font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:1.02rem;
+        text-decoration:none; box-shadow:0 8px 20px rgba(23,121,180,.32);
+        transition:transform .15s ease, box-shadow .15s ease;
+    }
+    .sr-mcta:active { transform:scale(.97); box-shadow:0 5px 14px rgba(23,121,180,.28); }
+    .sr-mcta .ms { font-size:22px; color:#fff; }
+    .sr-mcta-txt { flex:1; }
+    .sr-mcta-arrow { font-size:19px !important; opacity:.85; }
+
+    /* Section (cấp bậc thành viên): 48/64px padding dọc quá thoáng trên
+       mobile — cộng với body cũ tạo ~108px khoảng trắng chết. Padding ngang
+       hạ 24→16px cho khớp gutter chung; .sr-tier-grid phải chỉnh margin âm
+       tương ứng để dải thẻ vẫn tràn sát 2 mép màn hình. */
+    .sr-section { padding:22px 16px 28px; }
+    .sr-tier-grid { margin:0 -16px; padding:4px 16px 12px; }
+}
+
 
 /* ── Bottom navigation bar (mobile only) ── */
 .sr-bottom-nav-spacer { display:none; }

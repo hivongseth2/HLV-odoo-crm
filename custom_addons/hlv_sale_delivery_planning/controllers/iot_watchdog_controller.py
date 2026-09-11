@@ -38,12 +38,16 @@ class IotWatchdogController(http.Controller):
     @http.route('/api/iot_watchdog/heartbeat', type='json', auth='public',
                 methods=['POST'], csrf=False)
     def iot_watchdog_heartbeat(self, token=None, warehouse_code=None, service_ok=None,
-                               note='', **kwargs):
+                               note='', printed_total=None, **kwargs):
         """Script trên máy chủ kho gọi mỗi 1-2 phút. Body JSON-RPC params:
             token: chuỗi bí mật dùng chung (bắt buộc)
             warehouse_code: MÃ KHO trong Odoo (stock.warehouse.code, VD 'KBC', 'TSN')
             service_ok: true/false — service Odoo IoT trên máy đó có đang Running không
             note: chuỗi ghi chú tuỳ ý (tên máy, trạng thái máy in, đã tự restart chưa...)
+            printed_total: TỔNG số job Windows đã in trên máy in của kho (performance counter
+              '\\Print Queue(...)\\Total Jobs Printed'). Odoo dùng con số này để ĐỐI CHIẾU với
+              số lệnh in đã dispatch, phát hiện phiếu "đã gửi lệnh in" mà không ra giấy — xem
+              stock_warehouse._iot_reconcile_printed_jobs(). Bỏ trống = không đối chiếu.
         """
         ok, err = self._check_token(token)
         if not ok:
@@ -51,10 +55,58 @@ class IotWatchdogController(http.Controller):
             return {'success': False, 'message': err}
         try:
             return request.env['stock.warehouse'].sudo().iot_watchdog_heartbeat(
-                warehouse_code, service_ok, note=note,
+                warehouse_code, service_ok, note=note, printed_total=printed_total,
             )
         except Exception as e:
             _logger.exception('IoT watchdog heartbeat lỗi')
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/api/iot_watchdog/claim_print_jobs', type='json', auth='public',
+                methods=['POST'], csrf=False)
+    def iot_watchdog_claim_print_jobs(self, token=None, warehouse_code=None, limit=5, **kwargs):
+        """MÁY KHO TỰ NHẬN VIỆC IN — đường in không cần trình duyệt.
+
+        Đường in qua hộp IoT bắt buộc phải có TRÌNH DUYỆT đang mở trang "Điều phối Giao hàng"
+        (server Odoo.sh không vào được LAN kho), nên đóng tab là hàng chờ nằm im. Route này lật
+        chiều lại: máy kho hỏi "có việc gì cho tôi không", nhận PDF rồi in bằng driver máy in
+        Windows của chính nó.
+
+        Params: token, warehouse_code (stock.warehouse.code), limit (1-20, mặc định 5).
+        Trả về: jobs = [{queue_id, sale_order_name, picking_names, filename, pdf_b64}].
+        Bản ghi được giữ ở 'printing' cho tới khi máy kho gọi /report_print_result.
+        """
+        ok, err = self._check_token(token)
+        if not ok:
+            _logger.warning('IoT claim_print_jobs bị từ chối: %s', err)
+            return {'success': False, 'message': err}
+        try:
+            return request.env['hlv.iot.print.queue'].sudo().claim_for_local_dispatcher(
+                warehouse_code, limit=limit,
+            )
+        except Exception as e:
+            _logger.exception('IoT claim_print_jobs lỗi')
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/api/iot_watchdog/report_print_result', type='json', auth='public',
+                methods=['POST'], csrf=False)
+    def iot_watchdog_report_print_result(self, token=None, warehouse_code=None, results=None,
+                                        **kwargs):
+        """Máy kho báo kết quả in thật của các job vừa nhận từ /claim_print_jobs.
+
+        Params: token, warehouse_code, results = [{queue_id, success, message, printer}].
+        In được -> 'Đã gửi lệnh in'; lỗi -> 'Lỗi' kèm lý do (hiện ngay trong hàng chờ, không im
+        lặng bỏ qua). Không báo gì -> bản ghi vẫn ở 'printing' và sẽ được đưa lại hàng chờ sau
+        STALE_PRINTING_RECLAIM_MINUTES phút.
+        """
+        ok, err = self._check_token(token)
+        if not ok:
+            return {'success': False, 'message': err}
+        try:
+            return request.env['hlv.iot.print.queue'].sudo().report_local_dispatch_result(
+                warehouse_code, results or [],
+            )
+        except Exception as e:
+            _logger.exception('IoT report_print_result lỗi')
             return {'success': False, 'message': str(e)}
 
     @http.route('/api/iot_watchdog/status', type='json', auth='public',

@@ -526,7 +526,7 @@ class MisaExtensionController(http.Controller):
                     sync_baseline_source = "sale_order"
 
                 loyalty_lines = getattr(so, 'loyalty_account_line_ids', False)
-                loyalty_earning_pct = loyalty_lines[0].earning_pct if loyalty_lines else False
+                loyalty_earning_amount = loyalty_lines[0].earning_amount if loyalty_lines else False
                 loyalty_account_id = loyalty_lines[0].account_id.id if loyalty_lines else False
                 loyalty_account_name = loyalty_lines[0].account_id.display_name if loyalty_lines else False
                 loyalty_account_lines_data = []
@@ -535,7 +535,7 @@ class MisaExtensionController(http.Controller):
                         loyalty_account_lines_data.append({
                             "account_id": line.account_id.id,
                             "account_name": line.account_id.display_name,
-                            "earning_pct": line.earning_pct,
+                            "earning_amount": line.earning_amount,
                         })
 
                 payload = {
@@ -553,7 +553,7 @@ class MisaExtensionController(http.Controller):
                     "misa_sale_edit_locked_at": (
                         fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
                     ),
-                    "loyalty_earning_pct": loyalty_earning_pct,
+                    "loyalty_earning_amount": loyalty_earning_amount,
                     "loyalty_account_id": loyalty_account_id,
                     "loyalty_account_name": loyalty_account_name,
                     "loyalty_account_lines": loyalty_account_lines_data,
@@ -1176,15 +1176,16 @@ class MisaExtensionController(http.Controller):
             query, len(customer_account_ids), len(loyalty_accounts), total_matches,
         )
 
+        # hlv_loyalty không còn khái niệm "% mặc định của tài khoản" nữa —
+        # mọi số tiền cộng điểm giờ phải nhập tường minh trên từng đơn, không
+        # có giá trị suy ra sẵn. `default_account_id` chỉ còn ý nghĩa "tài
+        # khoản nào của khách nên tự chọn sẵn trên đơn", không kèm số tiền.
         accounts_data = []
-        default_pct = 0.0
         default_account_id = False
 
         for acc in loyalty_accounts:
-            pct = float(acc.default_earning_pct or 0.0)
             is_customer_account = acc.id in customer_account_ids
             if is_customer_account and acc.is_default:
-                default_pct = pct
                 default_account_id = acc.id
             accounts_data.append({
                 "id": acc.id,
@@ -1193,7 +1194,6 @@ class MisaExtensionController(http.Controller):
                 "display_name": acc.display_name or acc.buyer_name or acc.username or "Default Account",
                 "partner_id": acc.partner_id.id,
                 "partner_name": acc.partner_id.display_name or acc.partner_id.name or "",
-                "default_earning_pct": pct,
                 "is_default": bool(acc.is_default),
                 "is_customer_account": is_customer_account,
             })
@@ -1204,7 +1204,6 @@ class MisaExtensionController(http.Controller):
                 False,
             )
             if first_customer_account:
-                default_pct = first_customer_account["default_earning_pct"]
                 default_account_id = first_customer_account["id"]
 
         return request.make_response(
@@ -1214,7 +1213,6 @@ class MisaExtensionController(http.Controller):
                     "partner_id": root.id if root else False,
                     "partner_name": root.name if root else "",
                     "default_account_id": default_account_id,
-                    "default_pct": default_pct,
                     "accounts": accounts_data,
                     "query": query,
                     "limit": result_limit,
@@ -1248,8 +1246,13 @@ class MisaExtensionController(http.Controller):
             "token": "...",
             "partner_id": 123,
             "lines": [{"qty": 2, "price": 1000000, "loyalty_discount_pct": 5}],
-            "accounts": [{"account_id": 5, "earning_pct": 60}, {"account_id": 8, "earning_pct": 40}]
+            "accounts": [{"account_id": 5, "earning_amount": 200000}, {"account_id": 8, "earning_amount": 100000}]
         }
+
+        `earning_amount` = số tiền tài khoản đó được cộng NẾU đơn giao đủ
+        100% (không còn %). Preview giả định đơn giao đủ 100% ngay bây giờ
+        (delivery_ratio=1.0) nên tiền quy đổi hiển thị = đúng earning_amount
+        đã nhập.
         """
         def json_response(data, status=200):
             return request.make_response(
@@ -1284,69 +1287,42 @@ class MisaExtensionController(http.Controller):
             if not acc:
                 continue
             try:
-                pct = float(item.get('earning_pct') or 0.0)
+                amount = float(item.get('earning_amount') or 0.0)
             except (ValueError, TypeError):
-                pct = 0.0
-            allocations.append((acc, pct))
+                amount = 0.0
+            allocations.append((acc, amount))
 
         raw_lines = payload.get('lines') or []
-        delivered_lines = []
         order_amount = 0.0
-        sale_line_model = env['sale.order.line'].sudo()
+        has_lines = False
         for item in raw_lines if isinstance(raw_lines, list) else []:
             if not isinstance(item, dict):
                 continue
             try:
                 qty = float(item.get('qty') or 0.0)
                 price = float(item.get('price') or 0.0)
-                loyalty_discount_pct = float(item.get('loyalty_discount_pct') or 0.0)
             except (ValueError, TypeError):
                 continue
-            sale_line = sale_line_model.new({
-                'product_uom_qty': qty,
-                'price_unit': price,
-                'loyalty_discount_pct': loyalty_discount_pct,
-            })
-            delivered_lines.append({
-                'sale_line': sale_line,
-                'product': False,
-                'qty': qty,
-                'price_unit': price,
-            })
+            has_lines = True
             order_amount += price * qty
 
         # Tương thích payload extension cũ trong thời gian triển khai đồng bộ.
-        if not delivered_lines:
+        if not has_lines:
             try:
                 order_amount = float(payload.get('order_amount_untaxed') or 0.0)
             except (ValueError, TypeError):
                 order_amount = 0.0
 
-        try:
-            preview_partner_id = int(payload.get('partner_id') or 0)
-        except (ValueError, TypeError):
-            preview_partner_id = 0
-        partner = env['res.partner'].sudo().browse(preview_partner_id).exists()
-        if not partner:
-            # Record tạm cho phép hàm Loyalty dùng đúng nhánh fallback 0% khi
-            # chưa đối chiếu được khách hàng, không cần chép công thức ra đây.
-            partner = env['res.partner'].new({})
-
+        # Không còn "CK Loyalty %"/discount_amount trong hlv_loyalty nữa —
+        # điểm xếp hạng chỉ còn phụ thuộc doanh số, và điểm đổi thưởng chỉ
+        # còn phụ thuộc earning_amount đã gán cho từng tài khoản. Preview coi
+        # đơn như giao đủ 100% ngay bây giờ (delivery_ratio=1.0): delivered
+        # subtotal == order_total_amount == order_amount, giống hệt công
+        # thức thật ở `stock.picking._loyalty_earn_points()`.
         preview_picking = env['stock.picking'].sudo().new({})
-        discount_amount, discount_details, discount_formula_source = (
-            preview_picking._compute_loyalty_discount_amount(
-                delivered_lines, order_amount, partner,
-            )
-        )
-        # Dùng hàm quy đổi sẵn có với mốc doanh số trên record tạm; không
-        # thay đổi chương trình đang lưu hay thêm hàm vào module hlv_loyalty.
-        ranking_program = program.new({
-            'discount_per_point': program.earning_amount,
-        })
-        ranking_points = (
-            ranking_program.calculate_points(max(order_amount, 0.0))
-            * program.earning_points
-        )
+        ranking_points = 0
+        if order_amount > 0 and program.earning_amount > 0:
+            ranking_points = int(order_amount / program.earning_amount) * program.earning_points
 
         base_data = {
             "has_program": True,
@@ -1354,7 +1330,6 @@ class MisaExtensionController(http.Controller):
             "earning_points": program.earning_points,
             "order_amount_untaxed": order_amount,
             "total_ranking_points": ranking_points,
-            "discount_amount": discount_amount,
         }
 
         if not allocations:
@@ -1363,25 +1338,15 @@ class MisaExtensionController(http.Controller):
         shares = preview_picking._split_loyalty_points_by_account(
             allocations,
             order_amount,
-            discount_amount,
+            order_amount,
+            1.0,
             program,
             ranking_points,
-            discount_formula_source,
-            discount_details,
         )
         accounts_data = []
-        for (acc, pct), share in zip(allocations, shares):
-            # Loyalty gốc chỉ trả snapshot công thức, không có trường tiền
-            # riêng. Đọc tử số đã được Loyalty tính/format để hiển thị đúng
-            # số tiền (làm tròn đến đồng) như lịch sử, không tính lại phân bổ.
-            # Nếu định dạng thay đổi, bỏ trường này để UI báo chưa xác định.
-            amount_match = re.search(
-                r'floor\((-?[\d,]+)\s*/', share.get('exchange_formula') or '',
-            )
-            conversion_data = (
-                {'conversion_amount': int(amount_match.group(1).replace(',', ''))}
-                if amount_match else {}
-            )
+        for (acc, amount), share in zip(allocations, shares):
+            # delivery_ratio=1.0 ở preview nên tiền quy đổi lần này = đúng
+            # earning_amount đã nhập cho tài khoản đó.
             accounts_data.append({
                 "account_id": acc.id,
                 "display_name": acc.display_name,
@@ -1389,8 +1354,8 @@ class MisaExtensionController(http.Controller):
                 "username": acc.username or "",
                 "partner_id": acc.partner_id.id,
                 "partner_name": acc.partner_id.display_name,
-                "earning_pct": pct,
-                **conversion_data,
+                "earning_amount": amount,
+                "conversion_amount": amount,
                 "ranking_points": share['ranking_points'],
                 "exchange_points": share['exchange_points'],
             })
@@ -1399,11 +1364,7 @@ class MisaExtensionController(http.Controller):
             "ok": True,
             "data": {
                 **base_data,
-                "total_conversion_amount": (
-                    sum(account['conversion_amount'] for account in accounts_data)
-                    if all('conversion_amount' in account for account in accounts_data)
-                    else None
-                ),
+                "total_conversion_amount": sum(account['conversion_amount'] for account in accounts_data),
                 "total_exchange_points": sum(
                     share['exchange_points'] for share in shares
                 ),

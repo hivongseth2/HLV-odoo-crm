@@ -1,5 +1,7 @@
+import base64
 import html
 import logging
+from datetime import timedelta
 
 import psycopg2
 from bs4 import BeautifulSoup
@@ -15,6 +17,11 @@ REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
 # Khoá tư vấn (advisory lock) dùng riêng cho bước claim hàng chờ in — xem _claim_ids().
 # Số bất kỳ nhưng phải CỐ ĐỊNH và không đụng module khác (Odoo core dùng khoá theo id bảng).
 CLAIM_ADVISORY_LOCK_KEY = 728131001
+
+# Bản ghi kẹt ở 'printing' quá số phút này thì đưa về 'pending' để in lại: 'printing' chỉ tồn tại
+# trong khoảnh khắc giữa lúc claim và lúc dispatch xong, nên kẹt lâu = phiên/máy đã claim rồi chết
+# giữa đường (đóng tab, mất điện, script bị kill). Không có bước này thì phiếu nằm im vĩnh viễn.
+STALE_PRINTING_RECLAIM_MINUTES = 10
 
 # ĐÃ THỬ dùng write_date (thời điểm ghi cuối) để suy ra offline khi im lặng quá lâu — SAI, đã
 # rút lại: đo thực tế bằng bin/probe_iot_heartbeat_interval.py + log lỗi thật cho thấy write_date
@@ -69,6 +76,20 @@ class HlvIotPrintQueue(models.Model):
         ('deferred', 'Xử lý sau'),
         ('rejected', 'Từ chối xử lý'),
     ], string='Quyết định của kho', default='none', required=True, index=True, tracking=True)
+
+    # --- Đối chiếu với hàng đợi in của Windows tại máy kho -----------------------------
+    # state='printed' chỉ nghĩa "đã dispatch lệnh in", KHÔNG chắc máy in đã in ra giấy (đã
+    # gặp thực tế: Odoo báo đã gửi mà hàng đợi máy in không có job nào). 3 field dưới đây là
+    # kết quả ĐỐI CHIẾU với số job Windows thật sự đã in (do script watchdog trên máy kho báo
+    # về, xem stock_warehouse._iot_reconcile_printed_jobs) — để không "im lặng nuốt lỗi".
+    verify_state = fields.Selection([
+        ('waiting', 'Chờ đối chiếu'),
+        ('printed_ok', 'Máy in xác nhận đã in'),
+        ('suspect', 'NGHI CHƯA IN RA'),
+        ('no_data', 'Không đối chiếu được'),
+    ], string='Đối chiếu máy in', default='waiting', index=True, tracking=True)
+    verify_note = fields.Char(string='Ghi chú đối chiếu', tracking=True)
+    verified_at = fields.Datetime(string='Thời điểm đối chiếu', copy=False)
 
     def create(self, vals_list):
         # mail_create_nolog: bỏ dòng chatter tự động "<_description kỹ thuật> được tạo" mà
@@ -151,6 +172,15 @@ class HlvIotPrintQueue(models.Model):
         KHÔNG dùng write_date để suy ra offline nữa (đã thử, gây chặn nhầm máy đang chạy tốt)."""
         return bool(device and device.connected)
 
+    def _iot_report(self):
+        """Report template dùng để in phiếu cho kho này: ưu tiên cấu hình riêng của kho
+        (x_iot_report_id), không có thì tìm mẫu mặc định theo tên. Dùng chung cho cả đường in
+        qua trình duyệt (_do_print) và đường in trực tiếp tại máy kho (claim_for_local_dispatcher)."""
+        self.ensure_one()
+        return self.warehouse_id.x_iot_report_id or self.env['ir.actions.report'].sudo().search([
+            ('name', 'ilike', REPORT_NAME_SEARCH),
+        ], limit=1)
+
     def _do_print(self):
         """Thực hiện in 1 bản ghi ĐÃ claim (state='printing'). Set device_ids của report theo
         đúng kho rồi TRẢ VỀ report action (không tự render PDF trong Python) — phải để trình
@@ -167,9 +197,7 @@ class HlvIotPrintQueue(models.Model):
 
             # Admin có thể cấu hình report riêng theo từng kho (x_iot_report_id) — ưu tiên report
             # đó, không thì dùng mẫu mặc định (tìm theo tên).
-            report = self.warehouse_id.x_iot_report_id or self.env['ir.actions.report'].sudo().search([
-                ('name', 'ilike', REPORT_NAME_SEARCH),
-            ], limit=1)
+            report = self._iot_report()
             if not report:
                 self.write({'state': 'error', 'error_message': 'Không tìm thấy report template cho phiếu lấy hàng.'})
                 return False
@@ -239,8 +267,11 @@ class HlvIotPrintQueue(models.Model):
         thực tế không ra giấy (VD: IoT Box mất kết nối máy in sau khi lệnh đã gửi — Odoo không có
         cách báo lỗi này lại cho hệ thống theo thời gian thực, kho phải tự nhận biết và bấm nút
         này). Khác action_retry ở chỗ áp dụng được cho CẢ state='printed', không chỉ 'error'."""
+        # Reset luôn kết quả đối chiếu: lần gửi mới phải được đối chiếu lại từ đầu, nếu không
+        # bản ghi sẽ mãi mang nhãn "NGHI CHƯA IN RA" của lần trước dù lần này in được.
         self.filtered(lambda q: q.state in ('printed', 'error')).write({
             'state': 'pending', 'error_message': False, 'printed_by_id': False, 'printed_at': False,
+            'verify_state': 'waiting', 'verify_note': False, 'verified_at': False,
         })
 
     def action_cancel(self):
@@ -282,6 +313,159 @@ class HlvIotPrintQueue(models.Model):
                 'Kho đưa yêu cầu in này từ "<b>%s</b>" trở lại xử lý bình thường.'
             ) % old_label)
 
+    # ------------------------------------------------------------------
+    # In TRỰC TIẾP tại máy kho (không cần trình duyệt mở trang điều phối)
+    # ------------------------------------------------------------------
+    # Đường in cũ: server chỉ trả về report action, phải có TRÌNH DUYỆT đang mở dashboard gọi
+    # doAction() thì lệnh mới xuống hộp IoT (server Odoo.sh không vào được LAN kho). Đóng tab là
+    # hàng chờ nằm im vô thời hạn. Đường in này lật lại chiều: MÁY KHO tự hỏi Odoo "có việc gì
+    # cho tôi không", nhận PDF rồi in thẳng ra máy in Windows của nó — không phụ thuộc tab nào.
+    # Đường cũ vẫn giữ nguyên làm dự phòng (2 đường không đụng nhau vì dùng chung _claim_ids).
+
+    @api.model
+    def _reclaim_stale_printing(self, warehouse):
+        """Đưa các bản ghi kẹt ở 'printing' quá lâu về 'pending'. Kẹt = phiên đã claim rồi chết
+        giữa đường (đóng tab / mất điện / script bị kill) — không có bước này thì phiếu đã claim
+        sẽ nằm im vĩnh viễn, đúng kiểu lỗi im lặng cần tránh."""
+        cutoff = fields.Datetime.now() - timedelta(minutes=STALE_PRINTING_RECLAIM_MINUTES)
+        stale = self.sudo().search([
+            ('warehouse_id', '=', warehouse.id),
+            ('state', '=', 'printing'),
+            ('write_date', '<=', cutoff),
+        ])
+        if stale:
+            _logger.warning(
+                'IoT print queue: đưa %d bản ghi kẹt ở "printing" quá %d phút về hàng chờ (%s).',
+                len(stale), STALE_PRINTING_RECLAIM_MINUTES, stale.ids,
+            )
+            stale.write({'state': 'pending'})
+        return stale
+
+    @api.model
+    def claim_for_local_dispatcher(self, warehouse_code, limit=5):
+        """Máy chủ kho tự nhận việc: claim các yêu cầu đang chờ của kho rồi trả về PDF (base64)
+        để script watchdog in TRỰC TIẾP ra máy in Windows.
+
+        Bản ghi được giữ ở 'printing' cho tới khi máy kho báo kết quả về
+        (report_local_dispatch_result): có báo mới chuyển 'printed'/'error'. Nhờ vậy máy kho chết
+        giữa đường thì phiếu KHÔNG bị đánh dấu "đã in" oan — nó sẽ được reclaim và in lại."""
+        code = (warehouse_code or '').strip()
+        warehouse = self.env['stock.warehouse'].sudo().search([('code', '=ilike', code)], limit=1)
+        if not warehouse:
+            return {'success': False, 'message': 'Không tìm thấy kho có mã %r' % code}
+
+        self._reclaim_stale_printing(warehouse)
+        try:
+            limit = max(1, min(int(limit or 5), 20))
+        except (TypeError, ValueError):
+            limit = 5
+        pending = self.sudo().search([
+            ('warehouse_id', '=', warehouse.id),
+            ('state', '=', 'pending'),
+            ('warehouse_action', '=', 'none'),
+        ], order='requested_at asc, id asc', limit=limit)
+        if not pending:
+            return {
+                'success': True, 'warehouse_id': warehouse.id,
+                'warehouse_name': warehouse.name, 'jobs': [],
+            }
+
+        claimed = self.sudo()._claim_ids(pending.ids)
+        jobs = []
+        for rec in claimed:
+            try:
+                if not rec.picking_ids:
+                    rec.write({'state': 'error', 'error_message': 'Không có phiếu nào để in.'})
+                    continue
+                report = rec._iot_report()
+                if not report:
+                    rec.write({
+                        'state': 'error',
+                        'error_message': 'Không tìm thấy report template cho phiếu lấy hàng.',
+                    })
+                    continue
+                # Render PDF thẳng trong Python là ĐỦ cho đường này: máy kho in bằng driver máy in
+                # Windows chứ không đi qua hộp IoT (chính vì vậy mới không cần trình duyệt). Lưu ý
+                # đây đúng là lý do _do_print() KHÔNG render PDF: đường qua IoT bắt buộc phải để
+                # trình duyệt gọi report action, render sẵn PDF chỉ tải file về chứ không in.
+                pdf, _dummy = report.sudo()._render_qweb_pdf(
+                    report.report_name, res_ids=rec.picking_ids.ids,
+                )
+                jobs.append({
+                    'queue_id': rec.id,
+                    'sale_order_name': rec.sale_order_id.name or '',
+                    'picking_names': rec.picking_ids.mapped('name'),
+                    'filename': 'phieu_lay_hang_%s.pdf' % rec.id,
+                    'pdf_b64': base64.b64encode(pdf).decode('ascii'),
+                })
+            except Exception as e:
+                # Render lỗi phải rơi về 'error' để hiện trong hàng chờ cho người xử lý, KHÔNG
+                # được để kẹt ở 'printing' (im lặng mất phiếu).
+                _logger.exception('Không render được PDF cho hàng chờ in #%s', rec.id)
+                rec.write({
+                    'state': 'error',
+                    'error_message': 'Không render được PDF: %s' % str(e)[:400],
+                })
+        return {
+            'success': True,
+            'warehouse_id': warehouse.id,
+            'warehouse_name': warehouse.name,
+            'jobs': jobs,
+        }
+
+    @api.model
+    def report_local_dispatch_result(self, warehouse_code, results):
+        """Máy kho báo kết quả in THẬT: in được thì chuyển 'printed', lỗi thì 'error' + lý do.
+        Ghi rõ vào chatter là đã in bằng đường trực tiếp tại máy kho, để sau này đối soát biết
+        phiếu đó đi đường nào (trình duyệt/hộp IoT hay máy kho in thẳng)."""
+        code = (warehouse_code or '').strip()
+        warehouse = self.env['stock.warehouse'].sudo().search([('code', '=ilike', code)], limit=1)
+        if not warehouse:
+            return {'success': False, 'message': 'Không tìm thấy kho có mã %r' % code}
+
+        now = fields.Datetime.now()
+        printed, failed = 0, 0
+        for row in (results or []):
+            try:
+                rec = self.sudo().browse(int(row.get('queue_id'))).exists()
+            except (TypeError, ValueError):
+                continue
+            # Chỉ cho phép cập nhật bản ghi ĐÚNG kho của mình — token là token chung cho mọi kho.
+            if not rec or rec.warehouse_id != warehouse:
+                continue
+            printer = str(row.get('printer') or '') or 'không rõ'
+            if row.get('success'):
+                rec.write({
+                    'state': 'printed',
+                    'printed_at': now,
+                    'verify_state': 'waiting',
+                    'verify_note': False,
+                    'verified_at': False,
+                    'error_message': False,
+                })
+                rec.message_post(body=Markup(
+                    'Máy chủ kho <b>đã in trực tiếp</b> ra máy in Windows <b>%s</b> '
+                    '(không qua trình duyệt/hộp IoT).'
+                ) % printer)
+                printed += 1
+            else:
+                message = str(row.get('message') or 'không rõ lỗi')[:400]
+                rec.write({
+                    'state': 'error',
+                    'error_message': 'Máy kho in trực tiếp thất bại: %s' % message,
+                })
+                failed += 1
+
+        if printed or failed:
+            try:
+                self.env['bus.bus']._sendone(
+                    'delivery_planner_channel', 'iot_print_queue_changed',
+                    {'warehouse_ids': [warehouse.id], 'sale_order_id': False},
+                )
+            except Exception:
+                _logger.debug('Không gửi được bus sau khi máy kho báo kết quả in', exc_info=True)
+        return {'success': True, 'printed': printed, 'failed': failed}
+
     @api.model
     def count_active_for_warehouse(self, warehouse_id):
         """Số đơn đang THẬT SỰ chiếm 'chỗ' trong hàng chờ in của kho — dùng để giới hạn số đơn
@@ -318,6 +502,10 @@ class HlvIotPrintQueue(models.Model):
             'requested_at': self.requested_at.isoformat() if self.requested_at else False,
             'printed_by_name': self.printed_by_id.name or '',
             'printed_at': self.printed_at.isoformat() if self.printed_at else False,
+            # Kết quả đối chiếu với hàng đợi in thật của Windows ở máy kho — FE PHẢI hiện
+            # 'suspect' thật nổi, đây là ca "Odoo báo đã gửi in mà giấy không ra".
+            'verify_state': self.verify_state or 'waiting',
+            'verify_note': self.verify_note or '',
             # Mã phiếu lấy hàng + trạng thái của TỪNG phiếu được yêu cầu in trong bản ghi này —
             # 1 yêu cầu có thể gồm nhiều phiếu nếu sale gửi in thêm phiếu mới vào request cũ.
             'pickings': [
@@ -357,6 +545,9 @@ class HlvIotPrintQueue(models.Model):
                     wd['watchdog_last_seen'].isoformat() if wd['watchdog_last_seen'] else False
                 ),
                 'watchdog_note': wd['watchdog_note'],
+                # Số yêu cầu đã gửi mà nằm im vì không có tab điều phối nào mở để dispatch.
+                'pending_stuck': wd.get('pending_stuck', 0),
+                'pending_oldest_minutes': wd.get('pending_oldest_minutes', 0),
             })
         return result
 

@@ -1150,7 +1150,7 @@ class LoyaltyExternalAPI(http.Controller):
                 auth='public', methods=['POST'], csrf=False, cors='*')
     def submit_redeem(self, **kwargs):
         """POST /api/v1/loyalty/redeem/submit
-        Tạo yêu cầu đổi thưởng (quà hoặc tiền mặt).
+        Tạo yêu cầu đổi thưởng (quà hoặc Refund).
 
         Body — đổi quà:
         {
@@ -1159,7 +1159,7 @@ class LoyaltyExternalAPI(http.Controller):
             "package_id": 3
         }
 
-        Body — đổi tiền mặt:
+        Body — Refund:
         {
             "partner_id": 42,
             "request_type": "cash",

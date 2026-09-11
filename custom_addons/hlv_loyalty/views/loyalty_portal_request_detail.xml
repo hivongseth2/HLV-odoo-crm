@@ -15,7 +15,7 @@
                 <span class="ms" style="font-size:20px">arrow_back</span> Quay về Yêu cầu của tôi
             </a>
             <div class="sr-topbar-right">
-                <span class="sr-topbar-name">Xin chào, <strong><t t-out="partner.name"/></strong></span>
+                <span class="sr-topbar-name">Xin chào<t t-if="buyer_name">, <strong><t t-out="buyer_name"/></strong></t></span>
                 <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
             </div>
         </div>
@@ -48,7 +48,7 @@
                             <strong><t t-out="rq.name"/></strong>
                             <span t-att-class="'sr-rq-type-badge rq-type-' + rq.request_type">
                                 <t t-if="rq.request_type == 'gift'">Đổi quà</t>
-                                <t t-else="">Đổi hiện kim</t>
+                                <t t-else="">Refund</t>
                             </span>
                         </div>
                         <span t-att-class="'sr-rq-state rq-st-' + rq.state">

@@ -26,6 +26,18 @@
                                  help="Quá số phút này không nhận được tín hiệu từ máy chủ kho thì Odoo coi như máy đã tắt/mất mạng và gửi cảnh báo. Nên đặt gấp 2-3 lần chu kỳ chạy script (script chạy mỗi 2 phút thì đặt 5).">
                             <field name="iot_watchdog_max_silence_minutes"/>
                         </setting>
+                        <setting string="Đối chiếu máy in: chờ bao nhiêu phút mới kết luận"
+                                 help="Sau khi gửi lệnh in, chờ số phút này rồi mới đối chiếu với số job máy in thật sự đã in. Phải lớn hơn chu kỳ chạy script watchdog (2 phút) để lệnh in kịp in xong, tránh kết luận oan.">
+                            <field name="iot_verify_grace_minutes"/>
+                        </setting>
+                        <setting string="Tự gửi lại lệnh in khi phát hiện chưa ra giấy"
+                                 help="Bật: hệ thống tự đưa yêu cầu về hàng chờ để in lại (có thể in trùng 1 tờ nếu đối chiếu sai). Tắt: chỉ cảnh báo + hiện nhãn 'NGHI CHƯA IN RA' để kho tự bấm 'Gửi lại lệnh in'. Dù bật hay tắt đều không im lặng bỏ qua.">
+                            <field name="iot_auto_requeue_unprinted"/>
+                        </setting>
+                        <setting string="Yêu cầu in chờ quá bao nhiêu phút thì báo động"
+                                 help="Lệnh in được đẩy xuống máy in bởi TRÌNH DUYỆT đang mở trang 'Điều phối Giao hàng' (server không nói chuyện được với máy in trong LAN kho). Nếu không ai mở trang đó, yêu cầu nằm ở 'Chờ in' mãi. Quá số phút này Odoo sẽ cảnh báo trên dashboard, gửi email, và bật popup ngay trên máy ở kho.">
+                            <field name="iot_pending_stale_minutes"/>
+                        </setting>
                         <setting string="Email nhận cảnh báo"
                                  help="Ai sẽ nhận email khi service IoT ở kho bị tắt, máy chủ kho mất kết nối, hoặc Odoo không kết nối được hộp IoT. Nhiều email cách nhau bằng dấu phẩy. Để trống thì chỉ cảnh báo trên dashboard (chỉ ai đang mở mới thấy).">
                             <field name="iot_alert_emails" placeholder="kho@congty.com, it@congty.com"/>

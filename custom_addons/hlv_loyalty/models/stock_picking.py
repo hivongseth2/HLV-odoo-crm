@@ -62,22 +62,25 @@ class StockPicking(models.Model):
 
         # ── Điểm xếp hạng: mỗi earning_amount tiền hàng = earning_points điểm ──
         # (Tính 1 lần cho cả đơn — nếu có nhiều tài khoản, điểm này được
-        # CHIA theo % ở _split_loyalty_points_by_account, không tính lại
-        # riêng cho từng tài khoản để tránh mất điểm do làm tròn/mốc.)
+        # CHIA theo tỷ lệ số tiền cộng điểm ở _split_loyalty_points_by_account,
+        # không tính lại riêng cho từng tài khoản để tránh mất điểm do làm
+        # tròn/mốc.)
         ranking_points = 0
         if delivered_subtotal > 0 and program.earning_amount > 0:
             ranking_points = int(delivered_subtotal / program.earning_amount) * program.earning_points
 
-        # ── Điểm đổi thưởng: dựa trên tiền chiết khấu (1 lần cho cả đơn) ──
-        discount_amount, discount_details, discount_formula_source = (
-            self._compute_loyalty_discount_amount(delivered_lines, delivered_subtotal, partner)
-        )
-        total_exchange_points = 0
-        if discount_amount > 0 and program.discount_per_point > 0:
-            total_exchange_points = int(discount_amount / program.discount_per_point)
-
-        if ranking_points <= 0 and total_exchange_points <= 0:
-            return
+        # ── Điểm đổi thưởng: KHÔNG còn dựa vào CK Loyalty %/dòng bán hàng.
+        # Mỗi tài khoản trên bảng "Tài khoản cộng điểm Loyalty" của đơn được
+        # gán 1 SỐ TIỀN cố định (earning_amount) = tổng tiền tài khoản đó
+        # được cộng NẾU đơn giao đủ 100%. Phiếu này giao được bao nhiêu % giá
+        # trị của cả đơn thì tài khoản nhận đúng bấy nhiêu % số tiền đó (xem
+        # `_split_loyalty_points_by_account`). Không cộng dồn/đối chiếu qua
+        # nhiều phiếu — mỗi phiếu tính độc lập trên phần mình giao, giống hệt
+        # cách điểm xếp hạng đã làm từ trước.
+        order_total_amount = self._get_loyalty_order_total_amount(sale_order)
+        delivery_ratio = 0.0
+        if order_total_amount > 0:
+            delivery_ratio = min(delivered_subtotal / order_total_amount, 1.0)
 
         # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
         root_partner = partner._get_loyalty_root()
@@ -85,10 +88,11 @@ class StockPicking(models.Model):
         allocations = self._get_loyalty_account_allocations(sale_order, root_partner)
         if not allocations:
             return
+        if ranking_points <= 0 and not any(amount for _, amount in allocations):
+            return
 
         shares = self._split_loyalty_points_by_account(
-            allocations, delivered_subtotal, discount_amount, program, ranking_points,
-            discount_formula_source, discount_details,
+            allocations, delivered_subtotal, order_total_amount, delivery_ratio, program, ranking_points,
         )
 
         base_vals = {
@@ -158,9 +162,9 @@ class StockPicking(models.Model):
                     })
                 elif acc_exchange > 0:
                     # Bù bản ghi điểm đổi thưởng còn thiếu: trước đây phiếu
-                    # này chỉ tạo được điểm ranking (lúc validate
-                    # discount_amount=0, hoặc CK Loyalty %/tiền trên dòng
-                    # bán hàng được nhập/sửa SAU khi đã giao) — trước đây
+                    # này chỉ tạo được điểm ranking (lúc validate, bảng
+                    # "Tài khoản cộng điểm Loyalty"/số tiền chưa được cấu
+                    # hình, hoặc được nhập/sửa SAU khi đã giao) — trước đây
                     # nhánh `if existing: ... continue` bỏ qua vĩnh viễn,
                     # không bao giờ tạo bổ sung. Giờ chạy lại (validate lại /
                     # wizard tính lại / nút "Tạo bù điểm đổi thưởng" trên
@@ -221,21 +225,25 @@ class StockPicking(models.Model):
         )
 
     def _get_loyalty_account_allocations(self, sale_order, root_partner):
-        """Trả về danh sách [(account, pct)] để chia điểm của đơn này.
+        """Trả về danh sách [(account, earning_amount)] để chia điểm của đơn này.
 
         - Nếu đơn có cấu hình bảng "Tài khoản cộng điểm Loyalty"
-          (`loyalty_account_line_ids`), dùng đúng danh sách + % đó.
+          (`loyalty_account_line_ids`), dùng đúng danh sách tài khoản +
+          `earning_amount` (số tiền cộng điểm nếu đơn giao đủ 100%) đã nhập
+          trên từng dòng.
         - Nếu không (đơn không chọn tài khoản nào), fallback về tài khoản
           mặc định (`is_default=True`, hoặc tài khoản đầu tiên) của công ty,
-          với pct=None nghĩa là "nhận 100%, không chia tỷ lệ" — giữ nguyên
-          hành vi tính điểm như trước khi có tính năng multi-account.
+          với earning_amount=None nghĩa là "nhận 100% điểm xếp hạng, KHÔNG có
+          điểm đổi thưởng" (không còn fallback theo CK Loyalty %/dòng bán
+          hàng nữa — muốn có điểm đổi thưởng bắt buộc phải cấu hình bảng
+          tài khoản + số tiền cho đơn).
         """
         self.ensure_one()
         lines = sale_order.loyalty_account_line_ids.filtered(
             lambda l: l.account_id and l.account_id.active
         )
         if lines:
-            return [(line.account_id, line.earning_pct or 0.0) for line in lines]
+            return [(line.account_id, line.earning_amount or 0.0) for line in lines]
 
         accounts = self.env['hlv.loyalty.portal.account'].sudo().search([
             ('partner_id', '=', root_partner.id),
@@ -246,43 +254,54 @@ class StockPicking(models.Model):
         default_account = accounts.filtered('is_default')[:1] or accounts[:1]
         return [(default_account, None)]
 
+    def _get_loyalty_order_total_amount(self, sale_order):
+        """Tổng giá trị đơn hàng (dùng làm mẫu số để suy ra % đã giao của
+        phiếu này so với cả đơn). Tính từ price_unit x số lượng ĐẶT HÀNG của
+        các dòng sản phẩm thật (bỏ qua dòng section/note VÀ dòng thưởng
+        Voucher Loyalty - is_loyalty_reward_line), KHÔNG dùng amount_untaxed
+        để tránh lẫn dòng giảm giá Voucher/phí ship làm lệch tỷ lệ."""
+        return sum(
+            (line.price_unit or 0.0) * (line.product_uom_qty or 0.0)
+            for line in sale_order.order_line
+            if not line.display_type and not line.is_loyalty_reward_line
+        )
+
     def _split_loyalty_points_by_account(
-        self, allocations, delivered_subtotal, discount_amount, program, ranking_points,
-        discount_formula_source, discount_details,
+        self, allocations, delivered_subtotal, order_total_amount, delivery_ratio, program, ranking_points,
     ):
         """Chia điểm ranking + đổi thưởng của cả phiếu cho từng tài khoản.
 
-        - Chỉ 1 allocation với pct=None (fallback, đơn không cấu hình bảng
-          phân bổ): tài khoản đó nhận 100% - công thức/kết quả giữ nguyên
-          y hệt logic gốc trước khi có tính năng multi-account.
-        - Có bảng phân bổ (N dòng, mỗi dòng 1 %): mỗi tài khoản có
-          `account_discount_amount = delivered_subtotal * pct / 100`, tính
-          ĐỘC LẬP như cách %/dòng vẫn hoạt động — nhưng nếu tổng các
-          account_discount_amount vượt quá `discount_amount` (giới hạn từ
-          % dòng đơn) thì scale toàn bộ xuống theo đúng tỷ lệ để không bao
-          giờ vượt trần; % chưa được phân bổ hết thì phần thiếu không tính
-          điểm cho ai. Điểm đổi thưởng của từng tài khoản làm tròn xuống
-          (floor) độc lập theo discount_per_point.
-          Điểm xếp hạng CHIA theo đúng tỷ lệ % (chuẩn hóa theo tổng % đã
-          liệt kê trong bảng, không có khái niệm phần dư cho ranking) —
-          phần dư do làm tròn được cộng vào tài khoản cuối cùng để tổng
-          luôn khớp đúng `ranking_points`.
+        Điểm đổi thưởng KHÔNG còn dựa vào CK Loyalty %/dòng bán hàng. Mỗi
+        tài khoản trên bảng "Tài khoản cộng điểm Loyalty" của đơn được gán
+        1 SỐ TIỀN cố định (`earning_amount`) = tổng tiền tài khoản đó được
+        cộng NẾU đơn giao đủ 100%. Phiếu này giao được bao nhiêu % giá trị
+        của cả đơn (`delivery_ratio` = doanh số giao phiếu này / tổng giá
+        trị đơn) thì tài khoản nhận đúng bấy nhiêu % số tiền đó, quy đổi
+        điểm theo `discount_per_point`. Mỗi phiếu tính ĐỘC LẬP trên phần
+        mình giao (không cộng dồn/đối chiếu qua nhiều phiếu), giống hệt
+        cách điểm xếp hạng đã làm từ trước.
+
+        - Chỉ 1 allocation với earning_amount=None (fallback, đơn không cấu
+          hình bảng phân bổ): tài khoản đó nhận 100% điểm xếp hạng, KHÔNG có
+          điểm đổi thưởng (không còn fallback theo CK Loyalty % nữa — muốn
+          có điểm đổi thưởng bắt buộc phải cấu hình bảng + số tiền).
+        - Có bảng phân bổ (N dòng, mỗi dòng 1 số tiền): `ranking_points` của
+          cả đơn được chia theo tỷ lệ `earning_amount / tổng earning_amount`
+          (chuẩn hóa theo tổng số tiền đã liệt kê trong bảng — tương tự cách
+          chia % cũ, chỉ đổi từ % sang số tiền làm trọng số). Tài khoản cuối
+          cùng luôn nhận phần dư do làm tròn để tổng luôn khớp đúng
+          `ranking_points` của cả đơn.
         """
         self.ensure_one()
 
         if len(allocations) == 1 and allocations[0][1] is None:
             account = allocations[0][0]
             exchange_points = 0
-            if discount_amount > 0 and program.discount_per_point > 0:
-                exchange_points = int(discount_amount / program.discount_per_point)
-            exchange_formula = self._format_loyalty_point_formula(
-                'Điểm đổi thưởng', discount_amount, program.discount_per_point, 1,
-                exchange_points, source_label=discount_formula_source, detail_lines=discount_details,
+            exchange_formula = (
+                'Điểm đổi thưởng: đơn chưa cấu hình bảng "Tài khoản cộng điểm Loyalty" '
+                'kèm số tiền cho tài khoản này → không tính điểm đổi thưởng, chỉ tính điểm xếp hạng.'
             )
-            exchange_formula_html = self._format_loyalty_point_formula_html(
-                'Điểm đổi thưởng', discount_amount, program.discount_per_point, 1,
-                exchange_points, source_label=discount_formula_source, detail_lines=discount_details,
-            )
+            exchange_formula_html = f'<p>{escape(exchange_formula)}</p>'
             ranking_formula = self._format_loyalty_point_formula(
                 'Điểm xếp hạng', delivered_subtotal, program.earning_amount, program.earning_points,
                 ranking_points, multiplier_label='điểm/mốc',
@@ -302,67 +321,49 @@ class StockPicking(models.Model):
             }]
 
         # ── Có bảng phân bổ nhiều tài khoản ──────────────────────────────
-        raw_amounts = [
-            (account, pct or 0.0, delivered_subtotal * (pct or 0.0) / 100.0)
-            for account, pct in allocations
-        ]
-        total_raw = sum(amount for _, _, amount in raw_amounts)
-        scale = 1.0
-        if total_raw > 0 and discount_amount > 0 and total_raw > discount_amount:
-            scale = discount_amount / total_raw
-        is_scaled = scale < 0.999999
+        total_amount = sum((amount or 0.0) for _, amount in allocations) or 1.0
 
-        total_pct = sum(pct for _, pct, _ in raw_amounts) or 1.0
-
-        # Bảng tham chiếu chung (giống hệt trường hợp 1 tài khoản) để mọi
-        # tài khoản đều thấy rõ tổng chiết khấu 105.000đ kia đến từ đâu
-        # (dòng nào, % bao nhiêu) trước khi bị chia nhỏ theo % riêng.
         reference_note = (
-            f'Doanh số giao của cả đơn: {delivered_subtotal:,.0f}đ. '
-            f'{discount_formula_source} → tổng chiết khấu tham chiếu (trần) '
-            f'= {discount_amount:,.0f}đ.'
+            f'Tổng giá trị cả đơn: {order_total_amount:,.0f}đ. Phiếu này giao '
+            f'{delivered_subtotal:,.0f}đ = {delivery_ratio:.2%} giá trị đơn.'
         )
 
         shares = []
         ranking_running_total = 0
-        for idx, (account, pct, raw_amount) in enumerate(raw_amounts):
-            is_last = idx == len(raw_amounts) - 1
-            account_discount_amount = raw_amount * scale
-            account_exchange_points = 0
-            if account_discount_amount > 0 and program.discount_per_point > 0:
-                account_exchange_points = int(account_discount_amount / program.discount_per_point)
+        for idx, (account, amount) in enumerate(allocations):
+            amount = amount or 0.0
+            is_last = idx == len(allocations) - 1
 
             if is_last:
                 account_ranking_points = ranking_points - ranking_running_total
             else:
-                account_ranking_points = round(ranking_points * pct / total_pct)
+                account_ranking_points = round(ranking_points * amount / total_amount)
             ranking_running_total += account_ranking_points
 
-            account_line = (
-                f'Tài khoản "{account.display_name}" áp dụng {pct:g}% lên doanh số giao '
-                f'({delivered_subtotal:,.0f}đ) = {raw_amount:,.0f}đ'
+            account_money_this_delivery = amount * delivery_ratio
+            account_exchange_points = 0
+            if account_money_this_delivery > 0 and program.discount_per_point > 0:
+                account_exchange_points = int(account_money_this_delivery / program.discount_per_point)
+
+            source_label = (
+                f'{reference_note} Tài khoản "{account.display_name}" được gán '
+                f'{amount:,.0f}đ nếu đơn giao đủ 100% → lần này nhận '
+                f'{amount:,.0f}đ x {delivery_ratio:.2%} = {account_money_this_delivery:,.0f}đ.'
             )
-            if is_scaled:
-                account_line += (
-                    f' → do tổng % các tài khoản trên đơn vượt trần tham chiếu, quy đổi về '
-                    f'{account_discount_amount:,.0f}đ (tỷ lệ giới hạn {scale:.2%})'
-                )
-            account_line += '.'
-            source_label = f'{reference_note} {account_line}'
 
             exchange_formula = self._format_loyalty_point_formula(
-                'Điểm đổi thưởng', account_discount_amount, program.discount_per_point, 1,
-                account_exchange_points, source_label=source_label, detail_lines=discount_details,
+                'Điểm đổi thưởng', account_money_this_delivery, program.discount_per_point, 1,
+                account_exchange_points, source_label=source_label,
             )
             exchange_formula_html = self._format_loyalty_point_formula_html(
-                'Điểm đổi thưởng', account_discount_amount, program.discount_per_point, 1,
-                account_exchange_points, source_label=source_label, detail_lines=discount_details,
+                'Điểm đổi thưởng', account_money_this_delivery, program.discount_per_point, 1,
+                account_exchange_points, source_label=source_label,
             )
             ranking_formula = (
                 f'Điểm xếp hạng tài khoản "{account.display_name}": tổng điểm xếp hạng cả đơn '
                 f'{ranking_points:,} điểm (tính từ doanh số giao {delivered_subtotal:,.0f}đ), '
-                f'chia theo tỷ lệ % được phân bổ trên đơn = '
-                f'round({ranking_points:,} x {pct:g}% / {total_pct:g}%) = {account_ranking_points:,} điểm.'
+                f'chia theo tỷ lệ số tiền cộng điểm được phân bổ trên đơn = '
+                f'round({ranking_points:,} x {amount:,.0f}đ / {total_amount:,.0f}đ) = {account_ranking_points:,} điểm.'
             )
             ranking_formula_html = f'<p><strong>{escape(ranking_formula)}</strong></p>'
 
@@ -470,95 +471,6 @@ class StockPicking(models.Model):
             if qty_per_kit > 0
         ]
         return min(ratios) if ratios else 0.0
-
-    def _compute_loyalty_discount_amount(self, delivered_lines, delivered_subtotal, partner):
-        """Tính tổng "tiền chiết khấu loyalty" của cả phiếu từ danh sách dòng
-        giao đã gộp (xem `_get_loyalty_delivered_lines`). Đây là "ngân sách"
-        dùng làm trần khi chia điểm đổi thưởng cho nhiều tài khoản (xem
-        `_split_loyalty_points_by_account`).
-
-        Trả về (discount_amount, discount_details, discount_formula_source).
-        """
-        self.ensure_one()
-        discount_details = [
-            self._get_loyalty_discount_detail_for_line(line)
-            for line in delivered_lines
-            if line['sale_line']
-        ]
-        discount_amount = sum(item['discount_amount'] for item in discount_details)
-        discount_formula_source = 'Tổng chiết khấu loyalty theo dòng giao'
-        # Fallback: không có dòng nào có amount/% loyalty → dùng % mặc định của contact
-        if discount_amount <= 0:
-            root_partner_lookup = partner._get_loyalty_root()
-            # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
-            fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
-            discount_amount = delivered_subtotal * fallback_pct
-            discount_details = [
-                self._get_loyalty_discount_detail_for_line(line, fallback_pct=fallback_pct)
-                for line in delivered_lines
-            ]
-            discount_formula_source = (
-                'Doanh số giao x % chiết khấu mặc định KH '
-                f'({fallback_pct:.2%})'
-            )
-        return discount_amount, discount_details, discount_formula_source
-
-    def _get_loyalty_discount_detail_for_line(self, line, fallback_pct=None):
-        """Return loyalty discount detail for one delivered line (đã gộp
-        theo sale_line, xem `_get_loyalty_delivered_lines`)."""
-        sale_line = line['sale_line']
-        product_name = line['product'].display_name if line['product'] else ''
-        qty = line['qty'] or 0.0
-        price_unit = line['price_unit'] or 0.0
-        subtotal = price_unit * qty
-        detail = {
-            'product': product_name,
-            'qty': qty,
-            'price_unit': price_unit,
-            'subtotal': subtotal,
-            'source': 'Không tính điểm đổi thưởng',
-            'discount_rate': 0.0,
-            'discount_amount': 0.0,
-        }
-
-        if fallback_pct is not None:
-            detail.update({
-                'source': 'Fallback % mặc định khách hàng',
-                'discount_rate': fallback_pct,
-                'discount_amount': subtotal * fallback_pct,
-            })
-            return detail
-
-        if not sale_line:
-            return detail
-
-        direct_amount = getattr(sale_line, 'x_studio_loyalty_discount_amount', 0.0) or 0.0
-        if direct_amount > 0:
-            ordered_qty = sale_line.product_uom_qty or 0.0
-            if ordered_qty > 0:
-                prorated_amount = direct_amount * min(qty / ordered_qty, 1.0)
-            else:
-                prorated_amount = direct_amount
-            detail.update({
-                'source': 'Số tiền CK loyalty trực tiếp trên dòng',
-                'discount_rate': (prorated_amount / subtotal) if subtotal else 0.0,
-                'discount_amount': prorated_amount,
-                'direct_amount': direct_amount,
-                'ordered_qty': ordered_qty,
-            })
-            return detail
-
-        discount_pct = sale_line.loyalty_discount_pct or 0.0
-        if discount_pct <= 0:
-            return detail
-
-        discount_rate = discount_pct if discount_pct <= 1.0 else discount_pct / 100.0
-        detail.update({
-            'source': 'CK loyalty % trên dòng bán hàng',
-            'discount_rate': discount_rate,
-            'discount_amount': subtotal * discount_rate,
-        })
-        return detail
 
     def _format_loyalty_point_formula(
         self, label, numerator, divisor, multiplier, points,

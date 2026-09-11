@@ -14,7 +14,7 @@
                 <span class="ms" style="font-size:20px">arrow_back</span> Quay về Dashboard
             </a>
             <div class="sr-topbar-right">
-                <span class="sr-topbar-name">Xin chào, <strong><t t-out="partner.name"/></strong></span>
+                <span class="sr-topbar-name">Xin chào<t t-if="buyer_name">, <strong><t t-out="buyer_name"/></strong></t></span>
                 <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
             </div>
         </div>
@@ -26,7 +26,7 @@
                     <h1 class="sr-rdm-hero-ttl">
                         <span class="ms ms-fill">redeem</span> Đổi thưởng
                     </h1>
-                    <p class="sr-rdm-hero-sub">Dùng điểm đổi thưởng để nhận quà hoặc quy đổi thành hiện kim.</p>
+                    <p class="sr-rdm-hero-sub">Dùng điểm đổi thưởng để nhận quà hoặc Refund.</p>
                 </div>
                 <div class="sr-rdm-stats">
                     <div class="sr-rdm-stat sr-rdm-stat-exchange">
@@ -34,19 +34,9 @@
                         <div>
                             <div class="sr-rdm-stat-lbl">Điểm khả dụng</div>
                             <div class="sr-rdm-stat-val"><t t-out="'{:,}'.format(exchange_available_points)"/></div>
-                            <div class="sr-rdm-stat-unit">sau khi trừ điểm treo</div>
+                            <div class="sr-rdm-stat-unit">có thể dùng để đổi thưởng</div>
                         </div>
                     </div>
-                    <t t-if="reward_pending_points &gt; 0">
-                        <div class="sr-rdm-stat sr-rdm-stat-pending">
-                            <span class="ms sr-rdm-stat-icon">pending_actions</span>
-                            <div>
-                                <div class="sr-rdm-stat-lbl">Đang treo</div>
-                                <div class="sr-rdm-stat-val">-<t t-out="'{:,}'.format(reward_pending_points)"/></div>
-                                <div class="sr-rdm-stat-unit">điểm ở yêu cầu chờ xử lý</div>
-                            </div>
-                        </div>
-                    </t>
                     <t t-if="pending_points &gt; 0">
                         <div class="sr-rdm-stat sr-rdm-stat-pending">
                             <span class="ms sr-rdm-stat-icon">hourglass_top</span>
@@ -74,7 +64,7 @@
                 </a>
                 <a t-att-href="'/loyalty/redeem?tab=cash'"
                    t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'cash' else '')">
-                    <span class="ms">payments</span> Đổi hiện kim
+                    <span class="ms">payments</span> Refund
                 </a>
                 <a t-att-href="'/loyalty/redeem?tab=history'"
                    t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'history' else '')">
@@ -198,14 +188,11 @@
                                            placeholder="Nhập số điểm..."
                                            required="required"
                                            t-att-value="form_vals.get('points_to_redeem', '')"/>
-                                    <!-- Số điểm khả dụng/đang treo đã hiện ở khối thống kê đầu trang
+                                    <!-- Số điểm khả dụng đã hiện ở khối thống kê đầu trang
                                          (sr-rdm-stats) — ở đây chỉ nhắc lại NGẮN mức tối đa được nhập,
                                          tránh lặp lại nguyên câu 2 lần trên cùng 1 màn hình. -->
                                     <div class="sr-cf-hint">
                                         Tối đa <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong>.
-                                        <t t-if="reward_pending_points &gt; 0">
-                                            (đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm)
-                                        </t>
                                     </div>
                                     <t t-if="program and program.cash_rate_per_point > 0">
                                         <div class="sr-cash-preview sr-cash-preview-zero" id="cash-preview">
@@ -226,7 +213,7 @@
                                 </div>
                             </div>
 
-                            <!-- Thông tin nhận hiện kim KHÔNG hiện sẵn trên trang — chỉ hiện trong
+                            <!-- Thông tin nhận tiền Refund KHÔNG hiện sẵn trên trang — chỉ hiện trong
                                  popup xác nhận khi bấm Gửi yêu cầu, sai thì sửa ngay trong popup. -->
                             <div class="sr-cf-actions">
                                 <button type="button" id="cash-open-confirm" class="sr-cf-submit">
@@ -274,7 +261,7 @@
                 <div id="cash-confirm-modal" class="sr-modal-overlay" style="display:none">
                     <div class="sr-modal-box">
                         <h3 class="sr-modal-title">
-                            <span class="ms">account_balance</span> Xác nhận thông tin nhận hiện kim
+                            <span class="ms">account_balance</span> Xác nhận thông tin nhận tiền Refund
                         </h3>
 
                         <div id="cash-confirm-view" t-attf-style="display:#{'block' if bank_mode == 'confirm' else 'none'}">
@@ -496,7 +483,7 @@
                                             <strong><t t-out="rq.name"/></strong>
                                             <span t-att-class="'sr-rq-type-badge rq-type-' + rq.request_type">
                                                 <t t-if="rq.request_type == 'gift'">Đổi quà</t>
-                                                <t t-else="">Đổi hiện kim</t>
+                                                <t t-else="">Refund</t>
                                             </span>
                                         </div>
                                         <span t-att-class="'sr-rq-state rq-st-' + rq.state">

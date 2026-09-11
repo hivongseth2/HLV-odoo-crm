@@ -834,6 +834,24 @@
                          </span>
                      </t>
                  </div>
+                 <!-- Hàng chờ nằm im vì KHÔNG có tab điều phối nào mở ở kho: máy in vẫn Online,
+                      service vẫn chạy, nhưng lệnh in phải do TRÌNH DUYỆT ở kho đẩy xuống hộp IoT
+                      (server không vào được LAN kho). Phải nói rõ, không để phiếu nằm im. -->
+                 <t t-foreach="state.iotPrinterStatus" t-as="ps" t-key="'stuck_' + ps.warehouse_id">
+                     <div t-if="ps.pending_stuck" class="alert alert-warning m-2 py-2 px-2 mb-0"
+                          style="font-size:.78rem">
+                         <div class="fw-bold">
+                             <i class="fa fa-hourglass-half me-1"/>
+                             <t t-esc="ps.warehouse_name"/>: <t t-esc="ps.pending_stuck"/> yêu cầu in
+                             nằm chờ chưa xuống máy in (cũ nhất <t t-esc="ps.pending_oldest_minutes"/> phút)
+                         </div>
+                         <div>
+                             Lệnh in được đẩy từ trình duyệt, nên <b>máy ở kho</b> phải mở trang
+                             "Điều phối Giao hàng" này. Nếu bạn đang ngồi ở đúng máy kho đó thì hàng
+                             chờ sẽ tự in trong ít giây; nếu không, hãy gọi kho mở trang lên.
+                         </div>
+                     </div>
+                 </t>
                  <!-- Lọc theo kho / ngày yêu cầu / trạng thái phiếu lấy hàng -->
                  <div class="p-2 border-bottom bg-white d-flex flex-wrap gap-1 align-items-center" style="font-size:.78rem">
                      <select class="form-select form-select-sm" style="width:auto"
@@ -903,6 +921,25 @@
                                         t-att-class="q.warehouse_action === 'rejected' ? 'bg-danger' : 'bg-warning text-dark'">
                                       <i class="fa fa-info-circle me-1"/>
                                       <t t-esc="q.warehouse_action === 'rejected' ? 'Kho: Từ chối xử lý' : 'Kho: Xử lý sau'"/>
+                                  </span>
+                              </div>
+                              <!-- Kết quả đối chiếu với hàng đợi in thật của Windows ở máy kho:
+                                   'suspect' = Odoo đã gửi lệnh in nhưng máy in KHÔNG in ra giấy.
+                                   Phải hiện thật nổi + có nút gửi lại ngay, tuyệt đối không im
+                                   lặng bỏ qua (xem stock_warehouse._iot_reconcile_printed_jobs). -->
+                              <div t-if="q.verify_state === 'suspect'" class="alert alert-danger py-1 px-2 mb-1" style="font-size:.75rem">
+                                  <div class="fw-bold">
+                                      <i class="fa fa-exclamation-triangle me-1"/>NGHI CHƯA IN RA GIẤY
+                                  </div>
+                                  <div t-if="q.verify_note" class="text-danger"><t t-esc="q.verify_note"/></div>
+                                  <button type="button" class="btn btn-sm btn-danger mt-1"
+                                          t-on-click="() => this.requeueIotPrintQueueItem(q)">
+                                      <i class="fa fa-repeat me-1"/>Gửi lại lệnh in ngay
+                                  </button>
+                              </div>
+                              <div t-if="q.verify_state === 'printed_ok'" class="mb-1">
+                                  <span class="badge text-bg-success" t-att-title="q.verify_note">
+                                      <i class="fa fa-check me-1"/>Máy in xác nhận đã in
                                   </span>
                               </div>
                               <div t-if="q.pickings and q.pickings.length" class="mb-1 d-flex flex-wrap gap-1">
