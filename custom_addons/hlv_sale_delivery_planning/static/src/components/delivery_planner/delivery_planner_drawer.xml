@@ -794,6 +794,27 @@
                           </button>
                       </t>
                  </div>
+
+                 <!-- Tải thêm tin cũ hơn — nằm ngoài nhánh danh sách để khi bộ lọc
+                      không khớp gì trong 100 tin đầu vẫn kéo tiếp được tin cũ. -->
+                 <t t-if="!state.globalUnreadOrdersLoading and state.globalUnreadOrders.length">
+                     <div t-if="state.messageDrawerHasMore" class="p-2 text-center">
+                         <button type="button" class="btn btn-sm btn-outline-secondary"
+                                 t-att-disabled="state.messageDrawerLoadingMore"
+                                 t-on-click="loadMoreDrawerMessages">
+                             <t t-if="state.messageDrawerLoadingMore">
+                                 <i class="fa fa-spinner fa-spin me-1"/>Đang tải...
+                             </t>
+                             <t t-else="">
+                                 <i class="fa fa-angle-double-down me-1"/>Tải thêm 100 tin cũ hơn
+                             </t>
+                         </button>
+                     </div>
+                     <div t-elif="state.messageDrawerLimit > 100"
+                          class="p-2 text-center text-muted" style="font-size:.72rem">
+                         Đã tải hết tin nhắn (<t t-esc="state.globalUnreadOrders.length"/> tin).
+                     </div>
+                 </t>
              </div>
         </div>
     </t>

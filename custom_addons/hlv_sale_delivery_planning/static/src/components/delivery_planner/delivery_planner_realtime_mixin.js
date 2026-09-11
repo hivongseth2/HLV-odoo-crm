@@ -4,12 +4,15 @@
 export class DeliveryPlannerRealtimeMixin {
     async pollUnreadMessages(isInitial = false) {
         try {
+            const limit = this.state.messageDrawerLimit || 100;
             const notifications = await this.orm.call(
                 'hlv.sale.plan.message',
                 'list_for_current_user',
                 [],
-                { limit: 100 }
+                { limit }
             );
+            // Trả về đủ limit → còn tin cũ hơn ở DB, cho phép bấm "Tải thêm".
+            this.state.messageDrawerHasMore = notifications.length >= limit;
 
             const prevByOrderId = new Map(
                 this.state.globalUnreadOrders.map((o) => [o.sale_order_id ? o.sale_order_id[0] : o.id, o])
@@ -103,6 +106,31 @@ export class DeliveryPlannerRealtimeMixin {
 
     closeMessageDrawer() {
         this.state.isMessageDrawerOpen = false;
+    }
+
+    /**
+     * "Tải thêm": nới limit rồi poll lại (list_for_current_user sắp xếp theo
+     * last_message_date desc nên nới limit = lấy thêm tin cũ hơn).
+     * Limit này dùng chung cho polling 15s nên chặn trần để không phình payload.
+     */
+    async loadMoreDrawerMessages() {
+        if (this.state.messageDrawerLoadingMore || !this.state.messageDrawerHasMore) return;
+        const MAX_LIMIT = 500;
+        const STEP = 100;
+        const next = Math.min((this.state.messageDrawerLimit || 100) + STEP, MAX_LIMIT);
+        if (next === this.state.messageDrawerLimit) {
+            this.state.messageDrawerHasMore = false;
+            return;
+        }
+        this.state.messageDrawerLimit = next;
+        this.state.messageDrawerLoadingMore = true;
+        try {
+            // isInitial = true: chỉ nạp danh sách, không bật lại cờ nháy đỏ cho
+            // các đơn cũ vừa được kéo về.
+            await this.pollUnreadMessages(true);
+        } finally {
+            this.state.messageDrawerLoadingMore = false;
+        }
     }
 
     /**
@@ -299,7 +327,7 @@ export class DeliveryPlannerRealtimeMixin {
         this.state.globalUnreadOrders = [
             headItem,
             ...this.state.globalUnreadOrders.filter(o => !((o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id)),
-        ].slice(0, 100);
+        ].slice(0, this.state.messageDrawerLimit || 100);
 
         const so = this.state.saleOrders.find(o => o.id === payload.so_id);
         if (so) {
