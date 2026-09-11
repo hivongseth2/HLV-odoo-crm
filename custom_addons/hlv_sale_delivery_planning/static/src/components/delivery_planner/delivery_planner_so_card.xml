@@ -34,6 +34,24 @@
                         <i class="fa fa-user text-info me-1" title="Khách hàng"></i>
                         <t t-esc="so.partner_id ? so.partner_id[1] : 'Unknown'"/>
                     </div>
+                    <!-- Chỉ khách có trong "Khách cần xác nhận thủ tục" mới thấy ô này. -->
+                    <div t-if="this.showProcedureCheckbox(so)" class="form-check mt-2 mb-0"
+                         t-on-click.stop="">
+                        <!-- click.prevent: chặn ô tick tự đổi trạng thái trước khi
+                             người dùng bấm OK ở hộp xác nhận (bấm Huỷ thì giữ nguyên). -->
+                        <input type="checkbox" class="form-check-input"
+                               t-att-id="'procedure-card-' + so.id"
+                               t-att-checked="so.procedure_done"
+                               t-on-click.stop.prevent="() => this.toggleProcedureDone(so)"/>
+                        <label class="form-check-label small fw-bold cursor-pointer"
+                               t-att-class="so.procedure_done ? 'text-success' : 'text-danger'"
+                               t-att-for="'procedure-card-' + so.id"
+                               t-att-title="this.procedureDoneTitle(so)">
+                            <i class="fa me-1"
+                               t-att-class="so.procedure_done ? 'fa-check-circle' : 'fa-exclamation-circle'"></i>
+                            Đã hoàn tất thủ tục sẵn sàng giao
+                        </label>
+                    </div>
                 </div>
                 <div class="text-end">
                     <button class="btn btn-sm btn-outline-secondary mb-1"

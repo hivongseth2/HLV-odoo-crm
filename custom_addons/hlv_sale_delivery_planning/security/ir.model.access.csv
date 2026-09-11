@@ -6,3 +6,5 @@ access_stock_picking_packer_print_wizard_user,access.stock.picking.packer.print.
 access_hlv_sale_plan_mention_notification_user,access.hlv.sale.plan.mention.notification.user,model_hlv_sale_plan_mention_notification,base.group_user,1,1,1,1
 access_hlv_sale_plan_web_push_subscription_user,access.hlv.sale.plan.web.push.subscription.user,model_hlv_sale_plan_web_push_subscription,base.group_user,1,1,1,1
 access_hlv_iot_print_queue_user,access.hlv.iot.print.queue.user,model_hlv_iot_print_queue,base.group_user,1,1,1,1
+access_hlv_delivery_procedure_partner_user,access.hlv.delivery.procedure.partner.user,model_hlv_delivery_procedure_partner,base.group_user,1,0,0,0
+access_hlv_delivery_procedure_partner_manager,access.hlv.delivery.procedure.partner.manager,model_hlv_delivery_procedure_partner,sales_team.group_sale_manager,1,1,1,1

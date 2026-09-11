@@ -48,6 +48,36 @@
             <div class="offcanvas-body p-4 text-start bg-light overflow-auto"
                  style="height: calc(100vh - 70px); padding-bottom: 80px !important;">
 
+                <!-- Xác nhận thủ tục trước khi giao — chỉ khách có trong
+                     "Khách cần xác nhận thủ tục" mới thấy khối này. -->
+                <div t-if="this.showProcedureCheckbox(state.selectedOrder)"
+                     class="d-flex align-items-center justify-content-between p-3 rounded border mb-3"
+                     t-att-class="state.selectedOrder.procedure_done ? 'bg-success bg-opacity-10 border-success' : 'bg-danger bg-opacity-10 border-danger'">
+                    <div class="form-check mb-0">
+                        <!-- click.prevent: giữ nguyên ô tick nếu người dùng bấm Huỷ ở hộp xác nhận. -->
+                        <input type="checkbox" class="form-check-input" id="procedure-drawer-check"
+                               t-att-checked="state.selectedOrder.procedure_done"
+                               t-on-click.stop.prevent="() => this.toggleProcedureDone(state.selectedOrder)"/>
+                        <label class="form-check-label fw-bold cursor-pointer" for="procedure-drawer-check"
+                               t-att-class="state.selectedOrder.procedure_done ? 'text-success' : 'text-danger'">
+                            <i class="fa me-1"
+                               t-att-class="state.selectedOrder.procedure_done ? 'fa-check-circle' : 'fa-exclamation-circle'"></i>
+                            Đã hoàn tất thủ tục sẵn sàng giao
+                        </label>
+                    </div>
+                    <div class="text-muted small text-end">
+                        <t t-if="state.selectedOrder.procedure_done">
+                            <t t-if="state.selectedOrder.procedure_done_by">
+                                <i class="fa fa-user me-1"/><t t-esc="state.selectedOrder.procedure_done_by"/>
+                            </t>
+                            <t t-if="state.selectedOrder.procedure_done_at">
+                                <span class="ms-2"><i class="fa fa-clock-o me-1"/><t t-esc="state.selectedOrder.procedure_done_at"/></span>
+                            </t>
+                        </t>
+                        <t t-else="">Kho chỉ xuất hàng sau khi thủ tục được xác nhận</t>
+                    </div>
+                </div>
+
                 <!-- Thông tin SO -->
                 <div class="row bg-white p-3 rounded shadow-sm border mb-4 mx-0">
                     <div class="col-md-6 mb-2">

@@ -548,6 +548,14 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .mention-toast-close{float:right;border:0;background:transparent;color:#94a3b8;font-size:1rem;line-height:1;padding:0 0 4px 8px}
 @keyframes mentionToastIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 /* Report button */
+.proc-box{border:1px solid;border-radius:4px;padding:5px 8px}
+.proc-box-todo{border-color:#fecaca;background:#fef2f2}
+.proc-box-done{border-color:#bbf7d0;background:#f0fdf4}
+.proc-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.proc-toggle .proc-check{cursor:pointer;margin:0}
+.proc-toggle .proc-label{font-size:.7rem;font-weight:700;line-height:1.3}
+.proc-box-todo .proc-label{color:#dc2626}
+.proc-box-done .proc-label{color:#16a34a}
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
 /* Report modal */
@@ -773,6 +781,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <li class="nav-item"><a class="nav-link" href="/search_order">Chứng từ mua</a></li>
       <li class="nav-item"><a class="nav-link active" href="/sale_plan">Tình trạng đơn</a></li>
       <li class="nav-item"><a class="nav-link" href="/search_invoice">Hóa đơn MISA</a></li>
+      <!-- HLV_NAV_EXT -->
       <li class="nav-item ms-lg-2">
         <button id="print-queue-button" type="button" title="Yêu cầu in"><i class="fa fa-print"></i><span id="print-queue-count">0</span></button>
       </li>
@@ -1430,6 +1439,57 @@ function renderKanban(){
   }
 }
 
+// Ô tick "đã hoàn tất thủ tục sẵn sàng giao". Chỉ render cho đơn của khách có
+// trong bảng cấu hình (backend trả requires_procedure), dùng cho cả thẻ và drawer.
+function procedureCheckboxHtml(o,place){
+  if(!o||!o.requires_procedure) return '';
+  var done=!!o.procedure_done;
+  var who=done&&o.procedure_done_by?esc(o.procedure_done_by):'';
+  var when=done&&o.procedure_done_at?esc(o.procedure_done_at):'';
+  var meta=done&&(who||when)?'<div class="text-muted" style="font-size:.62rem">'+(who?'<i class="fa fa-user me-1"></i>'+who:'')+(when?'<span class="ms-2"><i class="fa fa-clock-o me-1"></i>'+when+'</span>':'')+'</div>':'';
+  var cls=done?'proc-box-done':'proc-box-todo';
+  return '<div class="proc-box '+cls+(place==='drawer'?' mb-3':' mt-2')+'">'
+    +'<span class="proc-toggle" data-so-id="'+o.id+'" data-next="'+(done?'0':'1')+'">'
+    +'<input type="checkbox" class="proc-check"'+(done?' checked':'')+'>'
+    +'<span class="proc-label">Đã hoàn tất thủ tục sẵn sàng giao</span>'
+    +'</span>'+meta+'</div>';
+}
+
+// Vẽ lại tại chỗ các ô tick của đơn (thẻ + drawer) sau khi đổi trạng thái,
+// khỏi phải render lại toàn bộ danh sách / tải lại tin nhắn của drawer.
+function refreshProcedureBoxes(o){
+  var els=document.querySelectorAll('.proc-toggle[data-so-id="'+o.id+'"]');
+  Array.prototype.forEach.call(els,function(el){
+    var box=el.closest('.proc-box');
+    if(!box)return;
+    var place=box.classList.contains('mb-3')?'drawer':'card';
+    var tmp=document.createElement('div');
+    tmp.innerHTML=procedureCheckboxHtml(o,place);
+    if(tmp.firstChild)box.parentNode.replaceChild(tmp.firstChild,box);
+  });
+}
+
+function toggleProcedureDone(soId,next){
+  var o=S.orders.find(function(x){return x.id===soId;});
+  if(!o)return;
+  var msg=next
+    ?'Bạn xác nhận ĐÃ HOÀN TẤT THỦ TỤC sẵn sàng giao cho đơn '+o.name+'?\n\nKho sẽ căn cứ vào xác nhận này để xuất hàng.'
+    :'Bỏ xác nhận hoàn tất thủ tục của đơn '+o.name+'?\n\nKho sẽ hiểu là đơn CHƯA xong thủ tục và chưa được giao.';
+  if(!window.confirm(msg))return;
+  fetch('/api/sale_plan/set_procedure_done',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:soId,done:next}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    var d=j.result||{};
+    if(!d.success){showPrintToast(d.message||'Không cập nhật được xác nhận thủ tục.',false);return;}
+    o.procedure_done=!!d.procedure_done;
+    o.procedure_done_by=d.procedure_done_by||'';
+    o.procedure_done_at=d.procedure_done_at||'';
+    refreshProcedureBoxes(o);
+    showPrintToast(o.procedure_done?'Đã ghi nhận hoàn tất thủ tục.':'Đã bỏ xác nhận hoàn tất thủ tục.',true);
+  }).catch(function(){showPrintToast('Lỗi kết nối.',false);});
+}
+
 function getCardBorderClass(o){
   var rd=o.real_delivery_status||o.delivery_status;
   if(rd==='full')return'border-success';
@@ -1478,6 +1538,7 @@ function renderSOCard(o){
   var pc=o.pos?o.pos.length:0;
   if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' DMH</span>';
   h+='</div>';
+  h+=procedureCheckboxHtml(o,'card');
   h+='<div class="d-flex justify-content-end align-items-center gap-1 mt-2">';
   if(reported){
     h+='<span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger me-1"></i>Đã báo cáo</span>';
@@ -2039,6 +2100,7 @@ function openDrawer(id){
     +(o.origin?'<div><i class="fa fa-sticky-note text-warning me-2"></i><span class="text-muted">Ghi chú: '+esc(o.origin)+'</span></div>':'')
     +(o.tag_ids&&o.tag_ids.length?'<div><i class="fa fa-tags text-muted me-2"></i>'+o.tag_ids.map(tagBadge).join('')+'</div>':'')
     +'</div>'
+    +procedureCheckboxHtml(o,'drawer')
     +'</div>';
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
     +'<th>Sản phẩm</th><th class="text-end">DVT</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
@@ -2255,6 +2317,8 @@ document.addEventListener('click',function(e){
     }
     load(false);return;
   }
+  var procEl=e.target.closest('.proc-toggle');
+  if(procEl){e.stopPropagation();e.preventDefault();toggleProcedureDone(parseInt(procEl.dataset.soId,10),procEl.dataset.next==='1');return;}
   var rBtn=e.target.closest('.btn-report');
   if(rBtn){e.stopPropagation();e.preventDefault();openReportModal(parseInt(rBtn.dataset.soId,10),rBtn.dataset.soName);return;}
   var pickRow=e.target.closest('.pick-row');
@@ -2943,6 +3007,21 @@ self.addEventListener('notificationclick', function(event) {
         except Exception as e:
             _logger.exception('report_order error')
             return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/set_procedure_done', type='json', auth='user', methods=['POST'])
+    def api_sale_plan_set_procedure_done(self, order_id=None, done=True, **kwargs):
+        """Tick "Đã hoàn tất thủ tục sẵn sàng giao" từ trang /sale_plan.
+
+        Service tự chặn nếu khách của đơn không nằm trong bảng cấu hình
+        hlv.delivery.procedure.partner (xem services/delivery_planner_procedure.py).
+        """
+        try:
+            return request.env['hlv.delivery.planner.service'].sudo().set_order_procedure_done(
+                order_id, bool(done)
+            )
+        except Exception as e:
+            _logger.exception('sale_plan set_procedure_done error')
+            return {'success': False, 'message': str(e)}
 
     @http.route('/api/sale_plan/messages', type='json', auth='user', methods=['POST'])
     def api_sale_plan_messages(self, order_id=None, **kwargs):

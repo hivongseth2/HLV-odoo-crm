@@ -550,4 +550,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'has_shipper_received': so_status_dict.get('has_shipper_received', False),
             'has_unread_message': bool(getattr(so, 'x_plan_unread_message', False)),
             'misa_qty_sync_pending': bool(getattr(so, 'misa_qty_sync_pending', False)),
+            # Ô tick "đã hoàn tất thủ tục sẵn sàng giao" — chỉ hiện với khách có
+            # trong hlv.delivery.procedure.partner (danh sách được ormcache).
+            **self.get_order_procedure_state(so),
         }
