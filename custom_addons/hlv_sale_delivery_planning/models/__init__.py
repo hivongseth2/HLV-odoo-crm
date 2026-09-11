@@ -12,3 +12,4 @@ from . import picking_packer_wizard
 from . import sale_plan_mention_notification
 from . import sale_plan_web_push_subscription
 from . import iot_print_queue
+from . import delivery_procedure_partner

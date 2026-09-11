@@ -24,6 +24,7 @@ import { DeliveryPlannerDrawerMessagesMixin } from "./delivery_planner_drawer_me
 import { DeliveryPlannerTransferMixin } from "./delivery_planner_transfer_mixin";
 import { DeliveryPlannerRelocationMixin } from "./delivery_planner_relocation_mixin";
 import { DeliveryPlannerIotPrintMixin } from "./delivery_planner_iot_print_mixin";
+import { DeliveryPlannerProcedureMixin } from "./delivery_planner_procedure_mixin";
 
 export class DeliveryPlannerDashboard extends Component {
     static template = "hlv_sale_delivery_planning.Dashboard";
@@ -395,6 +396,7 @@ function applyPlannerMixin(mixinClass) {
     DeliveryPlannerTransferMixin,
     DeliveryPlannerRelocationMixin,
     DeliveryPlannerIotPrintMixin,
+    DeliveryPlannerProcedureMixin,
 ].forEach(applyPlannerMixin);
 
 registry.category("actions").add("hlv_sale_delivery_planning.dashboard", DeliveryPlannerDashboard);

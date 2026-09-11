@@ -12,7 +12,7 @@ _NOTIFY_FIELDS = {
     'state', 'picking_ids', 'delivery_status', 'amount_total',
     'commitment_date', 'x_plan_need_cancel', 'x_plan_unread_message',
     'x_picking_slip_printed', 'x_studio_delivery_type', 'x_studio_htgh',
-    'tag_ids', 'order_line', 'misa_qty_sync_pending',
+    'tag_ids', 'order_line', 'misa_qty_sync_pending', 'x_plan_procedure_done',
 }
 
 
@@ -38,6 +38,29 @@ class SaleOrder(models.Model):
         default=False,
         copy=False,
         help='Được đánh dấu tự động khi phiếu lấy hàng được in từ màn hình điều phối',
+    )
+
+    # Một số khách hàng bắt buộc làm xong thủ tục (hợp đồng, duyệt giá, chứng từ...)
+    # rồi kho mới được xuất. Danh sách khách đó nằm ở hlv.delivery.procedure.partner;
+    # đơn của khách khác không hiện ô tick này trên /sale_plan và trang điều phối.
+    x_plan_procedure_done = fields.Boolean(
+        string='Đã hoàn tất thủ tục sẵn sàng giao',
+        default=False,
+        copy=False,
+        help='Sale/kho tick khi đã hoàn tất thủ tục cần thiết trước khi giao hàng.',
+    )
+
+    x_plan_procedure_done_by = fields.Many2one(
+        'res.users',
+        string='Người xác nhận thủ tục',
+        copy=False,
+        readonly=True,
+    )
+
+    x_plan_procedure_done_at = fields.Datetime(
+        string='Thời điểm xác nhận thủ tục',
+        copy=False,
+        readonly=True,
     )
 
     @api.model
