@@ -126,6 +126,7 @@ export class DeliveryPlannerDashboard extends Component {
             // — quét MỌI tin nhắn của đơn, không chỉ tin cuối như polling.
             messageDrawerSearch: '',
             messageDrawerAliasFilter: [],
+            messageDrawerUnreadOnly: false,
             messageSearchResults: [],
             messageSearchLoading: false,
             messageSearchHasMore: false,

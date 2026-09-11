@@ -156,13 +156,35 @@ export class DeliveryPlannerRealtimeMixin {
         });
     }
 
-    get messageDrawerHasFilters() {
+    /**
+     * Có tìm kiếm / chọn alias → chuyển sang danh sách kết quả từ backend.
+     * Riêng "chỉ chưa đọc" thì lọc ngay trên danh sách mặc định (đã có sẵn cờ đọc),
+     * khỏi phải gọi server.
+     */
+    get messageDrawerServerMode() {
         return !!(this.state.messageDrawerSearch || '').trim()
             || !!(this.state.messageDrawerAliasFilter || []).length;
     }
 
+    get messageDrawerHasFilters() {
+        return this.messageDrawerServerMode || !!this.state.messageDrawerUnreadOnly;
+    }
+
+    /** Danh sách mặc định (tin cuối mỗi đơn) sau khi áp bộ lọc "chỉ chưa đọc". */
+    get visibleUnreadOrders() {
+        const items = this.state.globalUnreadOrders || [];
+        return this.state.messageDrawerUnreadOnly ? items.filter((o) => !o._isRead) : items;
+    }
+
     isMessageAliasSelected(alias) {
         return (this.state.messageDrawerAliasFilter || []).includes(alias);
+    }
+
+    toggleMessageUnreadOnly() {
+        this.state.messageDrawerUnreadOnly = !this.state.messageDrawerUnreadOnly;
+        if (this.messageDrawerServerMode) {
+            this.runMessageSearch(true);
+        }
     }
 
     onMessageDrawerSearchInput(ev) {
@@ -182,11 +204,20 @@ export class DeliveryPlannerRealtimeMixin {
         this.runMessageSearch(true);
     }
 
+    /** Nút "x" trong ô tìm: chỉ xoá từ khoá, giữ nguyên alias và "chỉ chưa đọc". */
+    clearMessageDrawerSearchText() {
+        if (this._messageSearchDebounce) clearTimeout(this._messageSearchDebounce);
+        this._messageSearchDebounce = null;
+        this.state.messageDrawerSearch = '';
+        this.runMessageSearch(true);
+    }
+
     clearMessageDrawerFilters() {
         if (this._messageSearchDebounce) clearTimeout(this._messageSearchDebounce);
         this._messageSearchDebounce = null;
         this.state.messageDrawerSearch = '';
         this.state.messageDrawerAliasFilter = [];
+        this.state.messageDrawerUnreadOnly = false;
         this.state.messageSearchResults = [];
         this.state.messageSearchHasMore = false;
         this.state.messageSearchLoading = false;
@@ -218,7 +249,13 @@ export class DeliveryPlannerRealtimeMixin {
         try {
             const result = await this.orm.call(
                 'hlv.delivery.planner.service', 'search_plan_messages', [],
-                { search, aliases, limit: this.state.messageSearchLimit || 50, offset }
+                {
+                    search,
+                    aliases,
+                    limit: this.state.messageSearchLimit || 50,
+                    offset,
+                    unread_only: !!this.state.messageDrawerUnreadOnly,
+                }
             );
             if (seq !== this._messageSearchSeq) return;
             const rows = (result && result.messages) || [];
@@ -258,12 +295,16 @@ export class DeliveryPlannerRealtimeMixin {
     async markFilteredMessagesRead() {
         const search = (this.state.messageDrawerSearch || '').trim();
         const aliases = [...(this.state.messageDrawerAliasFilter || [])];
-        if ((!search && !aliases.length) || this.state.messageMarkingRead) return;
+        const unreadOnly = !!this.state.messageDrawerUnreadOnly;
+        if ((!search && !aliases.length && !unreadOnly) || this.state.messageMarkingRead) return;
 
-        const what = aliases.length
-            ? `alias ${aliases.map((a) => '@' + a).join(', ')}`
-            : `từ khoá "${search}"`;
-        if (!window.confirm(`Đánh dấu ĐÃ ĐỌC tất cả đơn có tin nhắn khớp ${what}?\nGồm cả tin chưa hiện trên màn hình.`)) {
+        const parts = [];
+        if (aliases.length) parts.push(`alias ${aliases.map((a) => '@' + a).join(', ')}`);
+        if (search) parts.push(`từ khoá "${search}"`);
+        const what = parts.length
+            ? `khớp ${parts.join(' + ')}`
+            : 'chưa đọc (toàn bộ, không lọc alias/từ khoá)';
+        if (!window.confirm(`Đánh dấu ĐÃ ĐỌC tất cả đơn có tin nhắn ${what}?\nGồm cả tin chưa hiện trên màn hình.`)) {
             return;
         }
 
@@ -271,7 +312,7 @@ export class DeliveryPlannerRealtimeMixin {
         try {
             const res = await this.orm.call(
                 'hlv.delivery.planner.service', 'mark_plan_messages_read', [],
-                { search, aliases }
+                { search, aliases, unread_only: unreadOnly }
             );
             const markedIds = new Set((res && res.sale_order_ids) || []);
             this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) => {
