@@ -210,7 +210,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
-    def _plan_message_search_domain(self, search='', aliases=None, days=365):
+    def _plan_message_search_domain(self, search='', aliases=None, days=365, unread_only=False):
         """Domain chung cho tìm kiếm tin nhắn ở drawer điều phối.
 
         Dùng lại nguyên vẹn cho cả search_plan_messages lẫn mark_plan_messages_read
@@ -220,6 +220,9 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         - search: khớp nội dung tin, mã đơn / tên khách, hoặc tên người gửi.
         - aliases: khớp khi body chứa '@alias' (backend render mention thành
           <strong class="sale-plan-mention">@alias</strong>).
+        - unread_only: chỉ đơn mà user hiện tại chưa đọc. Trạng thái đọc lưu theo
+          ĐƠN (hlv.sale.plan.message) nên đây là lọc theo đơn chưa đọc, mọi tin
+          trong đơn đó đều được coi là chưa đọc.
         """
         domain = [
             ('model', '=', 'sale.order'),
@@ -229,6 +232,14 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         if days > 0:
             floor_dt = fields.Datetime.now() - timedelta(days=days)
             domain.append(('date', '>=', fields.Datetime.to_string(floor_dt)))
+
+        if unread_only:
+            unread_so_ids = self.env['hlv.sale.plan.message'].sudo().search([
+                ('user_id', '=', self.env.uid),
+                ('is_read', '=', False),
+            ]).mapped('sale_order_id').ids
+            # Không có đơn chưa đọc → chặn bằng res_id in [0] cho ra tập rỗng.
+            domain.append(('res_id', 'in', unread_so_ids or [0]))
 
         if aliases:
             domain = expression.AND([
@@ -256,7 +267,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return search, [alias for alias in aliases if alias]
 
     @api.model
-    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365):
+    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365, unread_only=False):
         """Tìm trên TOÀN BỘ tin nhắn của đơn bán (mail.message).
 
         Khác với hlv.sale.plan.message (mỗi đơn 1 dòng, chỉ giữ tin CUỐI), hàm này
@@ -264,13 +275,15 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         kiếm + chip alias ở drawer tin nhắn của trang điều phối giao hàng.
         """
         search, aliases = self._normalize_plan_message_filters(search, aliases)
-        if not search and not aliases:
+        if not search and not aliases and not unread_only:
             return {'messages': [], 'has_more': False, 'next_offset': 0}
 
         limit = max(1, min(int(limit or 50), 200))
         offset = max(0, int(offset or 0))
 
-        domain = self._plan_message_search_domain(search=search, aliases=aliases, days=days)
+        domain = self._plan_message_search_domain(
+            search=search, aliases=aliases, days=days, unread_only=unread_only,
+        )
 
         Message = self.env['mail.message'].sudo()
         # Lấy dư 1 trang để biết còn tin cũ hơn hay không (nút "Tải thêm" ở FE).
@@ -354,7 +367,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         }
 
     @api.model
-    def mark_plan_messages_read(self, search='', aliases=None, days=365, max_orders=5000):
+    def mark_plan_messages_read(self, search='', aliases=None, days=365, max_orders=5000, unread_only=False):
         """Đánh dấu đã đọc MỌI đơn có tin khớp bộ lọc hiện tại của drawer.
 
         Phủ cả tin chưa kéo về màn hình: domain lấy nguyên từ
@@ -365,10 +378,12 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         đánh dấu cả đơn — không có cách nào đánh dấu riêng 1 tin trong đơn.
         """
         search, aliases = self._normalize_plan_message_filters(search, aliases)
-        if not search and not aliases:
+        if not search and not aliases and not unread_only:
             return {'marked': 0, 'sale_order_ids': [], 'truncated': False}
 
-        domain = self._plan_message_search_domain(search=search, aliases=aliases, days=days)
+        domain = self._plan_message_search_domain(
+            search=search, aliases=aliases, days=days, unread_only=unread_only,
+        )
         max_orders = max(1, min(int(max_orders or 5000), 20000))
         groups = self.env['mail.message'].sudo()._read_group(
             domain, groupby=['res_id'], limit=max_orders + 1,
