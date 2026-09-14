@@ -6,16 +6,21 @@
         <field name="name">purchase.order.form.pickup</field>
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
-        <field name="groups_id" eval="[(4, ref('hlv_purchase_pickup.group_pickup_runner'))]"/>
+        <!-- Phân quyền đặt bằng thuộc tính groups="" TRÊN TỪNG ELEMENT, không đặt bằng
+             field groups_id của record: Odoo 18 chặn thẳng groups_id trên view kế thừa
+             ("Inherited view cannot have 'Groups' define on the record") vì view kế thừa
+             không phải một view độc lập để bật/tắt, nó được trộn vào view gốc. -->
         <field name="arch" type="xml">
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_open_pickup_lines" type="object" class="oe_stat_button"
-                        icon="fa-truck" invisible="x_pickup_count == 0">
+                        icon="fa-truck" invisible="x_pickup_count == 0"
+                        groups="hlv_purchase_pickup.group_pickup_runner">
                     <field name="x_pickup_count" widget="statinfo" string="Lượt đi nhận"/>
                 </button>
             </xpath>
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="x_pickup_state" widget="badge"
+                       groups="hlv_purchase_pickup.group_pickup_runner"
                        decoration-success="x_pickup_state == 'received'"
                        decoration-warning="x_pickup_state == 'not_ready'"
                        decoration-info="x_pickup_state == 'scheduled'"
