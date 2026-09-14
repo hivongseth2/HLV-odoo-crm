@@ -30,9 +30,10 @@ Xem kế hoạch chi tiết tại plan/ke-hoach-module-nhan-hang.md
         'data/pickup_sequence.xml',
         'data/pickup_cron.xml',
         'views/pickup_point_views.xml',
-        # Wizard nạp TRƯỚC view chuyến: nút trên form chuyến tham chiếu action của wizard
-        # bằng %(...)d, id phải tồn tại sẵn lúc parse.
+        # Wizard và báo cáo nạp TRƯỚC view chuyến: nút trên form chuyến tham chiếu action của
+        # chúng bằng %(...)d, id phải tồn tại sẵn lúc parse.
         'views/pickup_add_po_wizard_views.xml',
+        'report/pickup_run_report.xml',
         'views/pickup_run_views.xml',
         'views/pickup_stop_views.xml',
         'views/pickup_line_views.xml',

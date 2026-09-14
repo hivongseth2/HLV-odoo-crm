@@ -12,10 +12,11 @@ import unittest
 from datetime import datetime
 
 try:
-    from odoo.addons.hlv_purchase_pickup.services import pickup_metrics
+    from odoo.addons.hlv_purchase_pickup.services import pickup_metrics, pickup_qr
 except ImportError:  # chạy bằng python trần, ngoài Odoo
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'services'))
     import pickup_metrics
+    import pickup_qr
 
 
 def at(hour, minute):
@@ -141,6 +142,30 @@ class TestStats(unittest.TestCase):
         values = [15, 18, 20, 22, 180]
         self.assertEqual(pickup_metrics.median(values), 20.0)
         self.assertEqual(pickup_metrics.average(values), 51.0)
+
+
+class TestQr(unittest.TestCase):
+
+    def test_url_mo_dung_chuyen(self):
+        self.assertEqual(
+            pickup_qr.pickup_page_url('https://hlv.odoo.com', 12),
+            'https://hlv.odoo.com/pickup?run=12',
+        )
+
+    def test_base_url_co_dau_gach_cuoi(self):
+        """web.base.url hay được khai kèm dấu / cuối — không được sinh ra //pickup."""
+        self.assertEqual(
+            pickup_qr.pickup_page_url('https://hlv.odoo.com/', 12),
+            'https://hlv.odoo.com/pickup?run=12',
+        )
+
+    def test_qr_ma_hoa_url(self):
+        """Dấu :// và ? trong URL phải được mã hoá, nếu không route barcode cắt mất đuôi."""
+        src = pickup_qr.qr_image_src('https://hlv.odoo.com/pickup?run=12', size=150)
+        self.assertIn('barcode_type=QR', src)
+        self.assertIn('https%3A%2F%2Fhlv.odoo.com%2Fpickup%3Frun%3D12', src)
+        self.assertIn('width=150', src)
+        self.assertNotIn('?run=12', src.split('value=')[1].split('&')[0])
 
 
 if __name__ == '__main__':

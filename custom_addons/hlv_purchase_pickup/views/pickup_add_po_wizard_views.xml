@@ -5,6 +5,17 @@
         <field name="model">hlv.pickup.add.po.wizard</field>
         <field name="arch" type="xml">
             <form string="Thêm đơn mua hàng vào chuyến">
+                <!-- Nới rộng modal. Thẻ style này chỉ nằm trong DOM khi wizard đang mở, nên
+                     nó cũng với tới được hộp thoại "Thêm: Đơn sẽ đi lấy" — vốn là một modal
+                     RIÊNG, không nằm trong form này nên :has() không chạm tới được. Đóng
+                     wizard là style biến mất, không ảnh hưởng phần còn lại của Odoo. -->
+                <style>
+                    .modal-dialog { max-width: min(1500px, 96vw) !important; }
+                    /* Bảng chọn đơn: để cột tự co theo nội dung thay vì bị ép cứng rồi cắt
+                       mất cột tiền ở mép phải. */
+                    .o_pickup_po_picker { table-layout: auto !important; }
+                    .o_pickup_po_picker th, .o_pickup_po_picker td { white-space: nowrap; }
+                </style>
                 <group>
                     <group string="Chuyến">
                         <field name="run_id" readonly="1"/>
@@ -19,12 +30,13 @@
                     Chỉ hiện đơn đã xác nhận và chưa nằm trong chuyến nào đang mở. Nhiều đơn
                     của cùng một nhà cung cấp sẽ tự gom về một điểm dừng.
                 </p>
-                <field name="order_ids" widget="many2many">
+                <field name="order_ids" widget="many2many"
+                       context="{'list_view_ref': 'hlv_purchase_pickup.view_purchase_order_picker_list'}">
                     <list>
-                        <field name="name"/>
-                        <field name="partner_id"/>
-                        <field name="date_order"/>
-                        <field name="amount_total"/>
+                        <field name="name" string="Số đơn"/>
+                        <field name="partner_id" string="Nhà cung cấp"/>
+                        <field name="date_order" string="Ngày đặt"/>
+                        <field name="amount_total" string="Tổng tiền" sum="Tổng"/>
                         <field name="currency_id" column_invisible="True"/>
                     </list>
                 </field>

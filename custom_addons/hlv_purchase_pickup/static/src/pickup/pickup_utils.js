@@ -1,3 +1,4 @@
+/** @odoo-module ignore */
 /* Util thuần cho trang /pickup: vào gì ra nấy, không đụng DOM, không gọi mạng, không đọc
    state. Mọi thứ có side effect nằm ở pickup_api.js, pickup_map.js và pickup_render.js. */
 window.HlvPickup = window.HlvPickup || {};

@@ -29,6 +29,27 @@
         </field>
     </record>
 
+    <!-- Danh sách rút gọn CHỈ dùng cho hộp thoại chọn đơn của wizard xếp chuyến.
+         View mặc định của purchase.order hiện YCMH gốc, Bên mua, Chứng từ — không giúp
+         quyết định "có đi lấy đơn này không", trong khi cột tiền lại bị đẩy ra ngoài mép.
+         Gắn vào wizard bằng context list_view_ref, không đụng view mặc định của ai. -->
+    <record id="view_purchase_order_picker_list" model="ir.ui.view">
+        <field name="name">purchase.order.list.pickup.picker</field>
+        <field name="model">purchase.order</field>
+        <field name="priority" eval="99"/>
+        <field name="arch" type="xml">
+            <list string="Đơn có thể đi lấy" create="false" class="o_pickup_po_picker">
+                <field name="name" string="Số đơn"/>
+                <field name="partner_id" string="Nhà cung cấp"/>
+                <field name="date_order" string="Ngày đặt"/>
+                <field name="amount_total" string="Tổng tiền" sum="Tổng"/>
+                <field name="x_pickup_state" string="Đi nhận" widget="badge"
+                       decoration-warning="x_pickup_state == 'not_ready'"/>
+                <field name="currency_id" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
     <!-- Cố tình KHÔNG inherit view danh sách đơn mua hàng: xmlid của nó đã đổi tên qua các
          bản Odoo (purchase_order_tree / purchase_order_view_tree) và trong repo này chưa có
          module nào dùng để làm chứng là id nào đúng. Sai xmlid là module không cài được, đổi

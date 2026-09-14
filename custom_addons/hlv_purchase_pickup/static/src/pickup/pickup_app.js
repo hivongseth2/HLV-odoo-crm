@@ -1,3 +1,4 @@
+/** @odoo-module ignore */
 /* Khởi động trang /pickup: nạp cấu hình, nạp chuyến, bắt sự kiện bấm nút.
    Phải nạp SAU các file khác vì gọi HP.render, HP.send, HP.startQueueWatcher. */
 window.HlvPickup = window.HlvPickup || {};
@@ -63,7 +64,10 @@ window.HlvPickup = window.HlvPickup || {};
 
   function loadRun() {
     setBusy(true);
-    return HP.rpc("/api/pickup/my_run", {}).then(function (result) {
+    /* Có run_id nghĩa là vào từ mã QR trên tờ lịch in — mở đúng chuyến đó thay vì đi tìm
+       chuyến đang dở. Giữ lại qua các lần Tải lại để quét xong không bị nhảy sang chuyến khác. */
+    var params = S.forcedRunId ? { run_id: S.forcedRunId } : {};
+    return HP.rpc("/api/pickup/my_run", params).then(function (result) {
       if (result.status === "error") {
         setAlert(result.message);
         return;
@@ -213,6 +217,8 @@ window.HlvPickup = window.HlvPickup || {};
   }
 
   function start() {
+    var app = HP.$("pk-app");
+    S.forcedRunId = parseInt((app && app.dataset.runId) || "", 10) || null;
     bindModal();
     bindClicks();
     HP.$("pk-refresh").addEventListener("click", loadRun);

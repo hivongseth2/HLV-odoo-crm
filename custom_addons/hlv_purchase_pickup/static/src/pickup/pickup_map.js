@@ -1,3 +1,4 @@
+/** @odoo-module ignore */
 /* Bản đồ Google cho trang /pickup.
 
    Trang phải chạy được KHÔNG CÓ bản đồ: chưa khai key, hết quota, hay mạng chặn

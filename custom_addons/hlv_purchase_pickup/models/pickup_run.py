@@ -3,7 +3,7 @@ from datetime import timedelta
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-from ..services import pickup_maps, pickup_metrics
+from ..services import pickup_maps, pickup_metrics, pickup_qr
 
 PARAM_MAX_OPTIMIZE = 'hlv_purchase_pickup.max_optimize_per_run'
 DEFAULT_MAX_OPTIMIZE = 5
@@ -337,6 +337,20 @@ class HlvPickupRun(models.Model):
     def action_cancel(self):
         self.write({'state': 'cancelled'})
         return True
+
+    # ------------------------------------------------------------------
+    # In lịch + mã QR
+    # ------------------------------------------------------------------
+    def pickup_page_url(self):
+        """Địa chỉ mở thẳng chuyến này trên trang /pickup. Dùng trong mã QR của tờ lịch in."""
+        self.ensure_one()
+        base = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        return pickup_qr.pickup_page_url(base, self.id)
+
+    def qr_image_src(self):
+        """Đường dẫn ảnh QR để nhúng vào báo cáo. Gọi thẳng từ QWeb nên không đặt tên _riêng."""
+        self.ensure_one()
+        return pickup_qr.qr_image_src(self.pickup_page_url())
 
     def action_open_stops(self):
         self.ensure_one()

@@ -1,3 +1,4 @@
+/** @odoo-module ignore */
 /* Gọi server và hàng đợi offline cho trang /pickup.
 
    Người đi nhận đứng trong khu công nghiệp, sóng chập chờn. Nguyên tắc: BẤM LÀ XONG — thao
@@ -18,6 +19,8 @@ window.HlvPickup = window.HlvPickup || {};
   /* State dùng chung của cả trang. Chỉ file này và pickup_app.js được ghi vào đây. */
   HP.S = {
     run: null,
+    /* Chuyến chỉ định qua /pickup?run=<id> — đến từ mã QR trên tờ lịch in. */
+    forcedRunId: null,
     requireReturn: true,
     isManager: false,
     sending: false,

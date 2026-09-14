@@ -30,6 +30,8 @@
                 <header>
                     <button name="action_assign" type="object" string="Giao chuyến"
                             class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="%(action_report_pickup_run)d" type="action"
+                            string="In lịch đi nhận" invisible="not stop_ids"/>
                     <button name="%(action_pickup_add_po_wizard)d" type="action"
                             string="Thêm đơn mua hàng"
                             invisible="state in ('done', 'cancelled')"/>

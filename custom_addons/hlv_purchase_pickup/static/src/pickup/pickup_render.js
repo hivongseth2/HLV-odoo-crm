@@ -1,3 +1,4 @@
+/** @odoo-module ignore */
 /* Dựng màn hình trang /pickup từ dữ liệu chuyến do server trả về.
 
    File này CHỈ vẽ. Không gọi mạng, không đổi state — mọi nút chỉ gắn data-action, việc xử lý

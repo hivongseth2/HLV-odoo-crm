@@ -13,7 +13,7 @@
                         t-attf-data-maps-key="#{maps_js_key or ''}"
                         id="pk-maps-config">/* cấu hình bản đồ đọc từ data-maps-key */</script>
             </t>
-            <div id="pk-app">
+            <div id="pk-app" t-attf-data-run-id="#{run_id or ''}">
                 <header class="pk-header">
                     <div class="pk-header-main">
                         <span class="pk-run-name" id="pk-run-name">Đang tải…</span>

@@ -24,7 +24,7 @@ danh sách chuyến. Báo quản trị cấp quyền này.</p>
 class PickupPageController(http.Controller):
 
     @http.route('/pickup', type='http', auth='user', methods=['GET'], csrf=False)
-    def pickup_page(self, **kwargs):
+    def pickup_page(self, run=None, **kwargs):
         # Không có group thì mọi lời gọi API sau đó đều ném AccessError và trang trông như
         # hỏng. Trả lời thẳng bằng một câu người dùng hiểu được.
         if not request.env.user.has_group(GROUP_RUNNER):
@@ -36,4 +36,19 @@ class PickupPageController(http.Controller):
         # xem ghi chú ở services/pickup_maps.py.
         return request.render('hlv_purchase_pickup.pickup_page', {
             'maps_js_key': pickup_maps.js_key(request.env),
+            # Đến từ mã QR trên tờ lịch in: /pickup?run=123. Chỉ là gợi ý mở chuyến nào,
+            # KHÔNG phải cấp quyền — API vẫn kiểm chuyến đó có phải của người quét không.
+            'run_id': _positive_int(run),
         })
+
+
+def _positive_int(value):
+    """Số nguyên dương từ tham số URL, hoặc chuỗi rỗng khi không đọc được.
+
+    Trả chuỗi rỗng thay vì 0 để QWeb in ra thuộc tính data rỗng, JS coi như không có.
+    """
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return ''
+    return number if number > 0 else ''

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_pickup_run_document">
+        <t t-call="web.external_layout">
+            <div class="page">
+                <div class="row mb-4">
+                    <div class="col-8">
+                        <h2 class="mb-2">Lịch đi nhận hàng</h2>
+                        <div><strong t-field="doc.name"/></div>
+                        <div>Ngày đi: <span t-field="doc.date"/></div>
+                        <div t-if="doc.driver_user_id">
+                            Người đi nhận: <span t-field="doc.driver_user_id.name"/>
+                        </div>
+                        <div>Kho xuất phát: <span t-field="doc.warehouse_id.name"/></div>
+                        <div t-if="doc.vehicle_note">Xe: <span t-field="doc.vehicle_note"/></div>
+                        <div t-if="doc.planned_total_minutes">
+                            Dự kiến cả chuyến: <span t-field="doc.planned_total_minutes"/> phút
+                            <t t-if="doc.planned_km"> · <span t-field="doc.planned_km"/> km</t>
+                        </div>
+                    </div>
+                    <div class="col-4 text-center">
+                        <!-- Ảnh QR do route /report/barcode của module web sinh. Nội dung là
+                             URL mở thẳng chuyến này trên /pickup — quét một cái là vào đúng
+                             màn hình, khỏi phải tự tìm chuyến của mình. -->
+                        <img t-att-src="doc.qr_image_src()" alt="QR mở màn hình đi nhận"
+                             style="width:150px;height:150px;"/>
+                        <div style="font-size:10px;" class="mt-1">
+                            Quét để mở màn hình đi nhận
+                        </div>
+                    </div>
+                </div>
+
+                <t t-set="stops" t-value="doc.stop_ids.sorted(key=lambda s: (s.sequence, s.id))"/>
+                <table class="table table-sm o_main_table">
+                    <thead>
+                        <tr>
+                            <th style="width:6%;">#</th>
+                            <th style="width:32%;">Công ty / Mã đơn</th>
+                            <th style="width:34%;">Địa chỉ / Nhà cung cấp</th>
+                            <th style="width:16%;">Ngày</th>
+                            <th style="width:12%;" class="text-center">Đã nhận</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="stops" t-as="stop">
+                            <tr style="background-color:#f2f2f2;">
+                                <td><strong t-out="stop_index + 1"/></td>
+                                <td><strong t-field="stop.point_id.name"/></td>
+                                <td>
+                                    <span t-field="stop.point_id.address"/>
+                                    <div t-if="stop.point_id.contact_phone" style="font-size:10px;">
+                                        ĐT: <span t-field="stop.point_id.contact_phone"/>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span t-if="stop.planned_arrival"
+                                          t-field="stop.planned_arrival"
+                                          t-options="{'widget': 'datetime', 'format': 'HH:mm'}"/>
+                                </td>
+                                <td/>
+                            </tr>
+                            <!-- Ghi chú của điểm in ra giấy vì đây thường là thứ quyết định
+                                 có lấy được hàng hay không: vào cổng nào, phải gọi trước. -->
+                            <tr t-if="stop.point_id.note">
+                                <td/>
+                                <td colspan="4" style="font-size:10px;font-style:italic;">
+                                    <span t-field="stop.point_id.note"/>
+                                </td>
+                            </tr>
+                            <tr t-foreach="stop.line_ids" t-as="line">
+                                <td/>
+                                <td><span t-field="line.po_name"/></td>
+                                <td><span t-field="line.po_partner_name"/></td>
+                                <td><span t-field="line.po_date"/></td>
+                                <td class="text-center" style="font-size:14px;">☐</td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+
+                <div t-if="not stops" class="text-muted">
+                    Chuyến chưa có điểm nhận nào.
+                </div>
+
+                <div class="mt-4" style="font-size:10px;">
+                    Tích vào ô bên phải khi đã nhận được đơn. Tờ giấy này chỉ để đối chiếu —
+                    thời gian đi và thời gian nhận hàng được đo từ các nút bấm trên màn hình
+                    <strong>/pickup</strong>, không lấy từ đây.
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="report_pickup_run">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="hlv_purchase_pickup.report_pickup_run_document"/>
+            </t>
+        </t>
+    </template>
+
+    <record id="action_report_pickup_run" model="ir.actions.report">
+        <field name="name">Lịch đi nhận hàng</field>
+        <field name="model">hlv.pickup.run</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_purchase_pickup.report_pickup_run</field>
+        <field name="report_file">hlv_purchase_pickup.report_pickup_run</field>
+        <field name="print_report_name">'Lich-di-nhan-%s' % (object.name or '').replace('/', '-')</field>
+        <field name="binding_model_id" ref="model_hlv_pickup_run"/>
+        <field name="binding_type">report</field>
+    </record>
+</odoo>
