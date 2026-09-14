@@ -38,6 +38,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
 
     @staticmethod
     def _search_partner_by_phone(normalized):
+        """Tim khach hang theo so dien thoai.
+
+        Loai tru dia chi con (`parent_id = False`): dia chi giao hang cung la
+        res.partner va cung luu `phone`, khong loc thi mot dia chi co the bi
+        nhan nham lam tai khoan dang nhap.
+
+        Khi nhieu khach trung so, uu tien contact da tung dang nhap Zalo roi
+        moi den ban ghi cu nhat (`id asc`) - de cung mot so luon vao cung mot
+        khach, thay vi phu thuoc thu tu sap xep mac dinh theo ten.
+        """
         Partner = request.env["res.partner"].sudo()
         digits = re.sub(r"\D", "", normalized)
         suffix = digits[1:] if digits.startswith("0") else digits
@@ -47,7 +57,17 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             "+84 " + suffix,
             "+84 " + " ".join(suffix[i:i+3] for i in range(0, len(suffix), 3)),
         ]
-        return Partner.search(["|", ("phone", "in", formats), ("mobile", "in", formats)], limit=1)
+        domain = [
+            ("parent_id", "=", False),
+            "|", ("phone", "in", formats), ("mobile", "in", formats),
+        ]
+        # Tach thanh 2 lan search thay vi order theo x_is_zalo_account: cot
+        # boolean co the con NULL o du lieu cu, ma Postgres xep NULL len dau
+        # khi ORDER BY ... DESC -> uu tien sai.
+        zalo_partner = Partner.search(
+            domain + [("x_is_zalo_account", "=", True)], order="id asc", limit=1
+        )
+        return zalo_partner or Partner.search(domain, order="id asc", limit=1)
 
     @staticmethod
     def _is_default_address(a):
@@ -203,9 +223,23 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ")
 
         PortalAccount = request.env["hlv.loyalty.portal.account"].sudo()
-        partner = self._search_partner_by_phone(normalized)
-
         is_new = False
+
+        # ① Tai khoan Portal Loyalty la nguon su that: diem duoc ghi theo
+        #    `account_id`, nen khach hang phai lay tu chinh account do. Truoc
+        #    day buoc nay chay SAU khi da do res.partner theo SDT, khien
+        #    partner cua account bi bo qua - dan den dang nhap vao mot khach
+        #    trong khi diem nam o khach khac.
+        portal_account = PortalAccount.search(
+            [("portal_phone", "=", normalized), ("active", "=", True)], limit=1
+        )
+        partner = portal_account.partner_id if portal_account else None
+
+        # ② Chua co tai khoan Portal -> do res.partner theo so dien thoai.
+        if not partner:
+            partner = self._search_partner_by_phone(normalized)
+
+        # ③ Van khong tim thay -> tao khach moi.
         if not partner:
             intl_phone = self._intl_phone(normalized)
             partner = request.env["res.partner"].sudo().create({
@@ -215,36 +249,14 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "x_is_zalo_account": True,
             })
             is_new = True
-        else:
-            if not partner.x_is_zalo_account:
-                partner.write({"x_is_zalo_account": True})
-            if not partner.phone and not partner.mobile:
-                intl_phone = self._intl_phone(normalized)
-                partner.write({"phone": intl_phone, "mobile": intl_phone})
 
-        portal_account = PortalAccount.search([("portal_phone", "=", normalized)], limit=1)
-        if portal_account:
-            if not partner:
-                partner = portal_account.partner_id
-            if not partner.x_is_zalo_account:
-                partner.write({"x_is_zalo_account": True})
-        else:
-            if not partner:
-                intl_phone = self._intl_phone(normalized)
-                partner = request.env["res.partner"].sudo().create({
-                    "name": f"Zalo {normalized}",
-                    "phone": intl_phone,
-                    "mobile": intl_phone,
-                    "x_is_zalo_account": True,
-                })
-                is_new = True
-            else:
-                if not partner.x_is_zalo_account:
-                    partner.write({"x_is_zalo_account": True})
-                if not partner.phone and not partner.mobile:
-                    intl_phone = self._intl_phone(normalized)
-                    partner.write({"phone": intl_phone, "mobile": intl_phone})
+        if not partner.x_is_zalo_account:
+            partner.write({"x_is_zalo_account": True})
+        if not partner.phone and not partner.mobile:
+            intl_phone = self._intl_phone(normalized)
+            partner.write({"phone": intl_phone, "mobile": intl_phone})
 
+        if not portal_account:
             portal_account = PortalAccount.create({
                 "partner_id": partner.id,
                 "username": f"zalo_{normalized}",
