@@ -1,0 +1,17 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pickup_run_runner,access.hlv.pickup.run.runner,model_hlv_pickup_run,group_pickup_runner,1,1,0,0
+access_pickup_run_manager,access.hlv.pickup.run.manager,model_hlv_pickup_run,group_pickup_manager,1,1,1,1
+access_pickup_stop_runner,access.hlv.pickup.stop.runner,model_hlv_pickup_stop,group_pickup_runner,1,1,0,0
+access_pickup_stop_manager,access.hlv.pickup.stop.manager,model_hlv_pickup_stop,group_pickup_manager,1,1,1,1
+access_pickup_line_runner,access.hlv.pickup.line.runner,model_hlv_pickup_line,group_pickup_runner,1,1,0,0
+access_pickup_line_manager,access.hlv.pickup.line.manager,model_hlv_pickup_line,group_pickup_manager,1,1,1,1
+access_pickup_point_runner,access.hlv.pickup.point.runner,model_hlv_pickup_point,group_pickup_runner,1,0,0,0
+access_pickup_point_manager,access.hlv.pickup.point.manager,model_hlv_pickup_point,group_pickup_manager,1,1,1,1
+access_pickup_client_event_runner,access.hlv.pickup.client.event.runner,model_hlv_pickup_client_event,group_pickup_runner,1,0,1,0
+access_pickup_client_event_manager,access.hlv.pickup.client.event.manager,model_hlv_pickup_client_event,group_pickup_manager,1,1,1,1
+access_pickup_add_po_wizard_manager,access.hlv.pickup.add.po.wizard.manager,model_hlv_pickup_add_po_wizard,group_pickup_manager,1,1,1,1
+access_purchase_order_pickup_runner,access.purchase.order.pickup.runner,purchase.model_purchase_order,group_pickup_runner,1,0,0,0
+access_purchase_order_pickup_manager,access.purchase.order.pickup.manager,purchase.model_purchase_order,group_pickup_manager,1,0,0,0
+access_purchase_order_line_pickup_manager,access.purchase.order.line.pickup.manager,purchase.model_purchase_order_line,group_pickup_manager,1,0,0,0
+access_stock_warehouse_pickup_runner,access.stock.warehouse.pickup.runner,stock.model_stock_warehouse,group_pickup_runner,1,0,0,0
+access_stock_warehouse_pickup_manager,access.stock.warehouse.pickup.manager,stock.model_stock_warehouse,group_pickup_manager,1,0,0,0

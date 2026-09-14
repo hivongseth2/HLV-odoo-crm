@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="cron_pickup_geocode" model="ir.cron">
+            <field name="name">Đi nhận hàng: tra toạ độ điểm nhận</field>
+            <field name="model_id" ref="model_hlv_pickup_point"/>
+            <field name="state">code</field>
+            <!-- Batch nhỏ: mỗi điểm là một lượt Geocoding có tính tiền, và kết quả còn phải
+                 qua người duyệt nên tra nhanh cũng không dùng được ngay. -->
+            <field name="code">model.cron_geocode_pending(limit=20)</field>
+            <field name="interval_number">6</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="cron_pickup_clean_events" model="ir.cron">
+            <field name="name">Đi nhận hàng: dọn sổ chống bấm trùng</field>
+            <field name="model_id" ref="model_hlv_pickup_client_event"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_clean_old(days=30)</field>
+            <field name="interval_number">7</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

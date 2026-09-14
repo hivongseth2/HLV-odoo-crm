@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_pickup" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.pickup</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="95"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Đi nhận hàng" string="Đi nhận hàng" name="hlv_purchase_pickup">
+                    <block title="Google Maps">
+                        <setting string="API key"
+                                 help="Hai key khác nhau, đừng dùng chung một key: key trình duyệt chắc chắn lộ ra mã nguồn trang nên phải khoá theo HTTP referrer; key máy chủ không bao giờ rời khỏi server nên khoá theo IP.">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="x_pickup_google_server_key" class="col-lg-4 o_light_label"/>
+                                    <field name="x_pickup_google_server_key" password="True"/>
+                                </div>
+                                <div class="row mt8">
+                                    <label for="x_pickup_google_js_key" class="col-lg-4 o_light_label"/>
+                                    <field name="x_pickup_google_js_key"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Trần gọi Google mỗi chuyến"
+                                 help="Mỗi lần bấm tối ưu hoặc cập nhật giờ dự kiến là một lượt có tính phí.">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="x_pickup_max_optimize" class="col-lg-4 o_light_label"/>
+                                    <field name="x_pickup_max_optimize"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="Ghi nhận tại hiện trường">
+                        <setting string="Ngưỡng cảnh báo lệch GPS"
+                                 help="Bấm 'đã tới' ở xa điểm quá ngưỡng này thì gắn cờ cho quản lý xem lại. Chỉ cảnh báo, không chặn — GPS trong nhà xưởng lệch vài trăm mét là bình thường.">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="x_pickup_gps_far_meters" class="col-lg-4 o_light_label"/>
+                                    <field name="x_pickup_gps_far_meters"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Bắt bấm 'Đã về kho'"
+                                 help="Bật thì đo được cả quãng về. Tắt thì chuyến kết thúc ở điểm cuối, đỡ một thao tác nhưng mất số liệu quãng về.">
+                            <field name="x_pickup_require_return"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

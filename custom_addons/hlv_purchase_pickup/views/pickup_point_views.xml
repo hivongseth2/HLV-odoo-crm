@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pickup_point_list" model="ir.ui.view">
+        <field name="name">hlv.pickup.point.list</field>
+        <field name="model">hlv.pickup.point</field>
+        <field name="arch" type="xml">
+            <list string="Điểm nhận hàng" decoration-warning="not has_coords">
+                <field name="name"/>
+                <field name="address" optional="show"/>
+                <field name="partner_count" string="Mã NCC"/>
+                <field name="median_service_minutes" string="Nhận (phút)"/>
+                <field name="sample_count" string="Số mẫu"/>
+                <field name="last_visit_date"/>
+                <field name="has_coords" string="Có toạ độ"/>
+                <field name="geo_state" widget="badge"
+                       decoration-success="geo_state in ('confirmed', 'manual')"
+                       decoration-warning="geo_state == 'pending_review'"
+                       decoration-danger="geo_state == 'failed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_pickup_point_form" model="ir.ui.view">
+        <field name="name">hlv.pickup.point.form</field>
+        <field name="model">hlv.pickup.point</field>
+        <field name="arch" type="xml">
+            <form string="Điểm nhận hàng">
+                <header>
+                    <button name="action_geocode" type="object" string="Hỏi Google toạ độ"
+                            invisible="not address"/>
+                    <button name="action_confirm_geo" type="object" string="Duyệt toạ độ"
+                            class="btn-primary" invisible="geo_state != 'pending_review'"/>
+                    <button name="action_save_manual_geo" type="object"
+                            string="Lưu toạ độ nhập tay" invisible="not geo_input"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_partners" type="object" class="oe_stat_button"
+                                icon="fa-address-book">
+                            <field name="partner_count" widget="statinfo" string="Mã NCC"/>
+                        </button>
+                        <button name="action_open_stops" type="object" class="oe_stat_button"
+                                icon="fa-history">
+                            <field name="sample_count" widget="statinfo" string="Lượt đo được"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Tên nhà cung cấp / nhà máy"/></h1>
+                    </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="sample_count >= 3">
+                        Chưa đủ 3 lượt đo. Con số định mức bên dưới chỉ để tham khảo, chưa nên
+                        dùng để hứa giờ với ai.
+                    </div>
+                    <group>
+                        <group string="Địa chỉ">
+                            <field name="address"/>
+                            <field name="contact_name"/>
+                            <field name="contact_phone" widget="phone"/>
+                            <field name="open_from" widget="float_time"/>
+                            <field name="open_to" widget="float_time"/>
+                        </group>
+                        <group string="Toạ độ">
+                            <field name="geo_state"/>
+                            <field name="geo_source" readonly="1"/>
+                            <field name="latitude"/>
+                            <field name="longitude"/>
+                            <field name="geo_input" placeholder="10.78950, 106.99179"/>
+                            <field name="map_url" widget="url" text="Mở Google Maps"
+                                   readonly="1" invisible="not map_url"/>
+                            <field name="google_place_id" optional="hide"/>
+                            <field name="geo_raw_result" readonly="1"
+                                   invisible="not geo_raw_result"/>
+                            <field name="geo_checked_by_id" readonly="1"
+                                   invisible="not geo_checked_by_id"/>
+                            <field name="has_coords" invisible="1"/>
+                        </group>
+                    </group>
+                    <group string="Định mức đo được">
+                        <group>
+                            <field name="median_service_minutes"/>
+                            <field name="max_service_minutes"/>
+                        </group>
+                        <group>
+                            <field name="sample_count"/>
+                            <field name="last_visit_date"/>
+                        </group>
+                    </group>
+                    <group string="Ghi chú">
+                        <field name="note" nolabel="1"
+                               placeholder="VD: vào cổng sau, phải gọi trước 30 phút, xe tải không vào được."/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_pickup_point_search" model="ir.ui.view">
+        <field name="name">hlv.pickup.point.search</field>
+        <field name="model">hlv.pickup.point</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="address"/>
+                <filter name="no_coords" string="Chưa có toạ độ"
+                        domain="[('has_coords', '=', False)]"/>
+                <filter name="pending_review" string="Chờ duyệt toạ độ"
+                        domain="[('geo_state', '=', 'pending_review')]"/>
+                <filter name="enough_sample" string="Đủ mẫu định mức"
+                        domain="[('sample_count', '>=', 3)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_pickup_point" model="ir.actions.act_window">
+        <field name="name">Điểm nhận hàng</field>
+        <field name="res_model">hlv.pickup.point</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_pickup_point_geo_review" model="ir.actions.act_window">
+        <field name="name">Duyệt toạ độ</field>
+        <field name="res_model">hlv.pickup.point</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('geo_state', 'in', ('pending_review', 'failed'))]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Không có toạ độ nào chờ duyệt</p>
+            <p>Google hay trả về tâm của cả khu công nghiệp thay vì đúng nhà máy. Toạ độ máy
+               tra phải được người xem lại trước khi dùng để cảnh báo "bấm ở xa điểm".</p>
+        </field>
+    </record>
+</odoo>

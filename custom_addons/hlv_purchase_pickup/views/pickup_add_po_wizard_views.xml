@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pickup_add_po_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.pickup.add.po.wizard.form</field>
+        <field name="model">hlv.pickup.add.po.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Thêm đơn mua hàng vào chuyến">
+                <group>
+                    <group string="Chuyến">
+                        <field name="run_id" readonly="1"/>
+                    </group>
+                    <group string="Lọc đơn">
+                        <field name="partner_id" options="{'no_create': True}"/>
+                        <field name="date_from"/>
+                        <field name="date_to"/>
+                    </group>
+                </group>
+                <p class="text-muted">
+                    Chỉ hiện đơn đã xác nhận và chưa nằm trong chuyến nào đang mở. Nhiều đơn
+                    của cùng một nhà cung cấp sẽ tự gom về một điểm dừng.
+                </p>
+                <field name="order_ids" widget="many2many">
+                    <list>
+                        <field name="name"/>
+                        <field name="partner_id"/>
+                        <field name="date_order"/>
+                        <field name="amount_total"/>
+                        <field name="currency_id" column_invisible="True"/>
+                    </list>
+                </field>
+                <field name="available_order_ids" invisible="1"/>
+                <footer>
+                    <button name="action_add" type="object" string="Thêm vào chuyến"
+                            class="btn-primary"/>
+                    <button string="Huỷ" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pickup_add_po_wizard" model="ir.actions.act_window">
+        <field name="name">Thêm đơn mua hàng</field>
+        <field name="res_model">hlv.pickup.add.po.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="model_hlv_pickup_run"/>
+        <field name="binding_view_types">form</field>
+    </record>
+</odoo>

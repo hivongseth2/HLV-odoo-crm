@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pickup_line_list" model="ir.ui.view">
+        <field name="name">hlv.pickup.line.list</field>
+        <field name="model">hlv.pickup.line</field>
+        <field name="arch" type="xml">
+            <list string="Đơn đi nhận" create="false"
+                  decoration-success="state == 'received'"
+                  decoration-warning="state == 'not_ready'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="date"/>
+                <field name="run_id"/>
+                <field name="po_name"/>
+                <field name="po_partner_name"/>
+                <field name="point_id"/>
+                <field name="po_amount" optional="show"/>
+                <field name="state" widget="badge"/>
+                <field name="received_at" optional="show"/>
+                <field name="package_note" optional="show"/>
+                <field name="note"/>
+                <field name="currency_id" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_pickup_line_form" model="ir.ui.view">
+        <field name="name">hlv.pickup.line.form</field>
+        <field name="model">hlv.pickup.line</field>
+        <field name="arch" type="xml">
+            <form string="Đơn đi nhận">
+                <header>
+                    <button name="action_received" type="object" string="Đánh dấu đã nhận"
+                            class="btn-primary" invisible="state == 'received'"/>
+                    <button name="action_open_purchase_order" type="object"
+                            string="Mở đơn mua hàng" invisible="not purchase_order_id"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info" role="status" invisible="purchase_order_id">
+                        Đơn mua hàng gốc không còn trên hệ thống. Các thông tin dưới đây là bản
+                        chép cứng lúc xếp chuyến.
+                    </div>
+                    <group>
+                        <group string="Đơn">
+                            <field name="po_name" readonly="1"/>
+                            <field name="po_partner_name" readonly="1"/>
+                            <field name="po_date" readonly="1"/>
+                            <field name="po_amount" readonly="1"/>
+                            <field name="purchase_order_id" readonly="1"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                        <group string="Đi nhận">
+                            <field name="run_id" readonly="1"/>
+                            <field name="stop_id" readonly="1"/>
+                            <field name="received_at" readonly="1"/>
+                            <field name="received_by_id" readonly="1"/>
+                            <field name="package_note"/>
+                        </group>
+                    </group>
+                    <group string="Ghi chú">
+                        <field name="note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_pickup_line_search" model="ir.ui.view">
+        <field name="name">hlv.pickup.line.search</field>
+        <field name="model">hlv.pickup.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="po_name"/>
+                <field name="po_partner_name"/>
+                <field name="point_id"/>
+                <field name="run_id"/>
+                <filter name="not_ready" string="Chưa lấy được"
+                        domain="[('state', '=', 'not_ready')]"
+                        help="Đơn nào lặp lại ở đây nhiều lần là tín hiệu về nhà cung cấp, không phải về người đi nhận."/>
+                <filter name="received" string="Đã nhận" domain="[('state', '=', 'received')]"/>
+                <group expand="0" string="Gom nhóm">
+                    <filter name="group_point" string="Điểm nhận"
+                            context="{'group_by': 'point_id'}"/>
+                    <filter name="group_state" string="Kết quả" context="{'group_by': 'state'}"/>
+                    <filter name="group_date" string="Ngày" context="{'group_by': 'date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_pickup_line_not_ready" model="ir.actions.act_window">
+        <field name="name">Đơn chưa lấy được</field>
+        <field name="res_model">hlv.pickup.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_not_ready': 1, 'search_default_group_point': 1}</field>
+    </record>
+</odoo>

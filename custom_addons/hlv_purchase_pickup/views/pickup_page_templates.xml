@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="pickup_page" name="Đi nhận hàng">
+        <t t-call="web.layout">
+            <t t-set="head">
+                <title>Đi nhận hàng</title>
+                <meta name="viewport" content="width=device-width,initial-scale=1"/>
+                <t t-call-assets="hlv_purchase_pickup.assets_pickup_page"/>
+                <!-- Key JS nằm trong data-* chứ không ghép thẳng vào src: file JS tự quyết
+                     định có nạp Google Maps hay không, nên không có key thì trang vẫn chạy
+                     bình thường, chỉ là không có bản đồ. -->
+                <script type="text/javascript"
+                        t-attf-data-maps-key="#{maps_js_key or ''}"
+                        id="pk-maps-config">/* cấu hình bản đồ đọc từ data-maps-key */</script>
+            </t>
+            <div id="pk-app">
+                <header class="pk-header">
+                    <div class="pk-header-main">
+                        <span class="pk-run-name" id="pk-run-name">Đang tải…</span>
+                        <span class="pk-run-meta" id="pk-run-meta"></span>
+                    </div>
+                    <button class="pk-btn pk-btn-ghost" id="pk-refresh" type="button">Tải lại</button>
+                </header>
+
+                <div class="pk-alert pk-hidden" id="pk-alert" role="status"></div>
+                <div class="pk-offline pk-hidden" id="pk-offline" role="status">
+                    Đang mất mạng — các thao tác đã bấm sẽ tự gửi lại khi có sóng.
+                </div>
+
+                <div class="pk-actionbar" id="pk-actionbar"></div>
+
+                <div class="pk-map pk-hidden" id="pk-map"></div>
+
+                <main class="pk-stops" id="pk-stops"></main>
+
+                <footer class="pk-footer" id="pk-footer"></footer>
+
+                <div class="pk-modal pk-hidden" id="pk-modal">
+                    <div class="pk-modal-box">
+                        <h3 class="pk-modal-title" id="pk-modal-title"></h3>
+                        <p class="pk-modal-text" id="pk-modal-text"></p>
+                        <textarea class="pk-modal-input" id="pk-modal-input" rows="2"></textarea>
+                        <div class="pk-modal-alert pk-hidden" id="pk-modal-alert"></div>
+                        <div class="pk-modal-actions">
+                            <button class="pk-btn pk-btn-ghost" id="pk-modal-cancel" type="button">Huỷ</button>
+                            <button class="pk-btn pk-btn-primary" id="pk-modal-ok" type="button">Xác nhận</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pk-loading pk-hidden" id="pk-loading">Đang gửi…</div>
+            </div>
+        </t>
+    </template>
+</odoo>

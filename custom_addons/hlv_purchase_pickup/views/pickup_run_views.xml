@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pickup_run_list" model="ir.ui.view">
+        <field name="name">hlv.pickup.run.list</field>
+        <field name="model">hlv.pickup.run</field>
+        <field name="arch" type="xml">
+            <list string="Chuyến đi nhận" decoration-muted="state == 'cancelled'"
+                  decoration-info="state == 'departed'">
+                <field name="date"/>
+                <field name="name"/>
+                <field name="driver_user_id"/>
+                <field name="warehouse_id"/>
+                <field name="stop_count" string="Điểm"/>
+                <field name="done_stop_count" string="Đã xong"/>
+                <field name="line_count" string="Đơn"/>
+                <field name="received_line_count" string="Đã nhận"/>
+                <field name="total_travel_minutes" string="Di chuyển"/>
+                <field name="total_service_minutes" string="Nhận hàng"/>
+                <field name="idle_minutes" string="Chết"/>
+                <field name="state" widget="badge" decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_pickup_run_form" model="ir.ui.view">
+        <field name="name">hlv.pickup.run.form</field>
+        <field name="model">hlv.pickup.run</field>
+        <field name="arch" type="xml">
+            <form string="Chuyến đi nhận">
+                <header>
+                    <button name="action_assign" type="object" string="Giao chuyến"
+                            class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="%(action_pickup_add_po_wizard)d" type="action"
+                            string="Thêm đơn mua hàng"
+                            invisible="state in ('done', 'cancelled')"/>
+                    <button name="action_optimize_route" type="object"
+                            string="Tối ưu thứ tự đi"
+                            invisible="state in ('done', 'cancelled')"
+                            help="Hỏi Google thứ tự đi ngắn nhất cho các điểm chưa tới."/>
+                    <button name="action_refresh_eta" type="object" string="Cập nhật giờ dự kiến"
+                            invisible="state in ('done', 'cancelled')"
+                            help="Giữ nguyên thứ tự đang có, chỉ lấy lại thời gian từng chặng."/>
+                    <button name="action_remove_empty_stops" type="object"
+                            string="Dọn điểm rỗng"
+                            invisible="state in ('done', 'cancelled')"/>
+                    <button name="action_depart" type="object" string="Xuất phát"
+                            invisible="state != 'assigned'"/>
+                    <button name="action_finish" type="object" string="Kết thúc chuyến"
+                            invisible="state != 'departed'"
+                            confirm="Các điểm chưa tới sẽ bị đánh dấu bỏ qua. Tiếp tục?"/>
+                    <button name="action_back_to_draft" type="object" string="Về nháp"
+                            invisible="state not in ('assigned', 'cancelled')"/>
+                    <button name="action_cancel" type="object" string="Huỷ chuyến"
+                            invisible="state in ('done', 'cancelled')"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Chuyến">
+                            <field name="date"/>
+                            <field name="driver_user_id"
+                                   options="{'no_create': True}"/>
+                            <field name="warehouse_id" options="{'no_create': True}"/>
+                            <field name="vehicle_note"/>
+                        </group>
+                        <group string="Dự kiến">
+                            <field name="planned_depart_at"/>
+                            <field name="planned_total_minutes" readonly="1"/>
+                            <field name="planned_km" readonly="1"/>
+                            <field name="optimize_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Thực tế">
+                            <field name="depart_at"/>
+                            <field name="returned_at"/>
+                            <field name="total_minutes"/>
+                        </group>
+                        <group string="Đo được">
+                            <field name="total_travel_minutes"/>
+                            <field name="total_service_minutes"/>
+                            <field name="idle_minutes"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Điểm nhận" name="stops">
+                            <field name="stop_ids" nolabel="1">
+                                <!-- create=false: điểm chỉ sinh ra từ việc thêm đơn mua hàng
+                                     (gom theo nhà cung cấp). Thêm dòng tay ở đây sẽ tạo điểm
+                                     không có đơn nào, và điểm rỗng thì không đo được gì. -->
+                                <list editable="bottom" create="false"
+                                      decoration-muted="state == 'skipped'"
+                                      decoration-success="state == 'done'">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="point_id" readonly="1"/>
+                                    <field name="line_count" string="Đơn"/>
+                                    <field name="planned_travel_minutes" string="Dự kiến đi"/>
+                                    <field name="planned_arrival" string="Dự kiến tới"/>
+                                    <field name="arrived_at"/>
+                                    <field name="done_at"/>
+                                    <field name="travel_minutes" string="Đi thật"/>
+                                    <field name="service_minutes" string="Nhận thật"/>
+                                    <field name="is_estimated" string="Mốc suy"/>
+                                    <field name="gps_far" string="Bấm xa"/>
+                                    <field name="state" widget="badge"/>
+                                    <field name="skip_reason" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Đơn mua hàng" name="lines">
+                            <field name="line_ids" nolabel="1" readonly="1">
+                                <list>
+                                    <field name="po_name"/>
+                                    <field name="po_partner_name"/>
+                                    <field name="point_id"/>
+                                    <field name="po_amount" optional="show"/>
+                                    <field name="state" widget="badge"
+                                           decoration-success="state == 'received'"
+                                           decoration-warning="state == 'not_ready'"/>
+                                    <field name="package_note"/>
+                                    <field name="note"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Ghi chú" name="note">
+                            <field name="note" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_pickup_run_search" model="ir.ui.view">
+        <field name="name">hlv.pickup.run.search</field>
+        <field name="model">hlv.pickup.run</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="driver_user_id"/>
+                <field name="warehouse_id"/>
+                <filter name="my_runs" string="Chuyến của tôi"
+                        domain="[('driver_user_id', '=', uid)]"/>
+                <filter name="open" string="Đang mở"
+                        domain="[('state', 'in', ('draft', 'assigned', 'departed'))]"/>
+                <filter name="today" string="Hôm nay"
+                        domain="[('date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Gom nhóm">
+                    <filter name="group_driver" string="Người đi nhận"
+                            context="{'group_by': 'driver_user_id'}"/>
+                    <filter name="group_date" string="Ngày" context="{'group_by': 'date'}"/>
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_pickup_run" model="ir.actions.act_window">
+        <field name="name">Chuyến đi nhận</field>
+        <field name="res_model">hlv.pickup.run</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Lập chuyến đi nhận hàng đầu tiên</p>
+            <p>Chọn các đơn mua hàng cần đi lấy, hệ thống tự gom theo nhà cung cấp thành các
+               điểm dừng. Giao chuyến cho một người, họ mở <b>/pickup</b> trên điện thoại.</p>
+        </field>
+    </record>
+</odoo>

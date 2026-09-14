@@ -15,6 +15,7 @@ Xem kế hoạch chi tiết tại plan/ke-hoach-module-dieu-phoi.md
     'author': 'HLV',
     'depends': [
         'hlv_sale_delivery_planning',
+        'hlv_geo_utils',
         'fleet',
         'base_geolocalize',
         'stock',

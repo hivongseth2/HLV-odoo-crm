@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="module_category_hlv_pickup" model="ir.module.category">
+            <field name="name">Đi nhận hàng</field>
+            <field name="description">Chuyến đi nhận hàng tại nhà cung cấp.</field>
+            <field name="sequence">72</field>
+        </record>
+
+        <record id="group_pickup_runner" model="res.groups">
+            <field name="name">Đi nhận hàng — Người đi nhận</field>
+            <field name="category_id" ref="module_category_hlv_pickup"/>
+            <field name="comment">Mở /pickup, xem chuyến của mình, bấm mốc đã tới và đã nhận xong.</field>
+        </record>
+
+        <record id="group_pickup_manager" model="res.groups">
+            <field name="name">Đi nhận hàng — Quản lý</field>
+            <field name="category_id" ref="module_category_hlv_pickup"/>
+            <!-- Cố tình KHÔNG implied tới group của module purchase: quyền đọc đơn mua hàng
+                 được cấp thẳng bằng ir.model.access trỏ purchase.model_purchase_order, vì
+                 xmlid của model luôn ổn định còn xmlid group thì có thể đổi qua các bản. -->
+            <field name="implied_ids" eval="[(4, ref('group_pickup_runner'))]"/>
+            <field name="comment">Lập chuyến, xếp đơn, gán người đi nhận, duyệt toạ độ, xem báo cáo định mức.</field>
+        </record>
+    </data>
+
+    <data noupdate="1">
+        <!-- Người đi nhận chỉ thấy chuyến của chính mình. Quản lý thấy tất cả, vì phải mở
+             được chuyến của người khác để hỗ trợ qua điện thoại. -->
+        <record id="rule_run_runner_own" model="ir.rule">
+            <field name="name">Người đi nhận chỉ thấy chuyến của mình</field>
+            <field name="model_id" ref="model_hlv_pickup_run"/>
+            <field name="groups" eval="[(4, ref('group_pickup_runner'))]"/>
+            <field name="domain_force">[('driver_user_id', '=', user.id)]</field>
+        </record>
+
+        <record id="rule_run_manager_all" model="ir.rule">
+            <field name="name">Quản lý thấy mọi chuyến nhận hàng</field>
+            <field name="model_id" ref="model_hlv_pickup_run"/>
+            <field name="groups" eval="[(4, ref('group_pickup_manager'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+
+        <record id="rule_stop_runner_own" model="ir.rule">
+            <field name="name">Người đi nhận chỉ thấy điểm trong chuyến của mình</field>
+            <field name="model_id" ref="model_hlv_pickup_stop"/>
+            <field name="groups" eval="[(4, ref('group_pickup_runner'))]"/>
+            <field name="domain_force">[('run_id.driver_user_id', '=', user.id)]</field>
+        </record>
+
+        <record id="rule_stop_manager_all" model="ir.rule">
+            <field name="name">Quản lý thấy mọi điểm nhận hàng</field>
+            <field name="model_id" ref="model_hlv_pickup_stop"/>
+            <field name="groups" eval="[(4, ref('group_pickup_manager'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+
+        <record id="rule_line_runner_own" model="ir.rule">
+            <field name="name">Người đi nhận chỉ thấy đơn trong chuyến của mình</field>
+            <field name="model_id" ref="model_hlv_pickup_line"/>
+            <field name="groups" eval="[(4, ref('group_pickup_runner'))]"/>
+            <field name="domain_force">[('run_id.driver_user_id', '=', user.id)]</field>
+        </record>
+
+        <record id="rule_line_manager_all" model="ir.rule">
+            <field name="name">Quản lý thấy mọi đơn đi nhận</field>
+            <field name="model_id" ref="model_hlv_pickup_line"/>
+            <field name="groups" eval="[(4, ref('group_pickup_manager'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+        </record>
+
+        <record id="rule_client_event_own" model="ir.rule">
+            <field name="name">Mỗi người chỉ thấy lần bấm của mình</field>
+            <field name="model_id" ref="model_hlv_pickup_client_event"/>
+            <field name="groups" eval="[(4, ref('group_pickup_runner'))]"/>
+            <field name="domain_force">[('user_id', '=', user.id)]</field>
+        </record>
+    </data>
+</odoo>

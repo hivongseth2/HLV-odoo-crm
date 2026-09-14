@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_pickup_root" name="Đi nhận hàng" sequence="72"
+              groups="group_pickup_runner"/>
+
+    <menuitem id="menu_pickup_operation" name="Chuyến" parent="menu_pickup_root" sequence="10"/>
+    <menuitem id="menu_pickup_run" name="Chuyến đi nhận" parent="menu_pickup_operation"
+              action="action_pickup_run" sequence="10"/>
+    <menuitem id="menu_pickup_line_not_ready" name="Đơn chưa lấy được"
+              parent="menu_pickup_operation" action="action_pickup_line_not_ready"
+              sequence="20" groups="group_pickup_manager"/>
+
+    <menuitem id="menu_pickup_data" name="Dữ liệu nền" parent="menu_pickup_root" sequence="20"
+              groups="group_pickup_manager"/>
+    <menuitem id="menu_pickup_point" name="Điểm nhận hàng" parent="menu_pickup_data"
+              action="action_pickup_point" sequence="10"/>
+    <menuitem id="menu_pickup_geo_review" name="Duyệt toạ độ" parent="menu_pickup_data"
+              action="action_pickup_point_geo_review" sequence="20"/>
+
+    <menuitem id="menu_pickup_report" name="Báo cáo" parent="menu_pickup_root" sequence="30"
+              groups="group_pickup_manager"/>
+    <menuitem id="menu_pickup_stop_report" name="Định mức thời gian" parent="menu_pickup_report"
+              action="action_pickup_stop_report" sequence="10"/>
+</odoo>

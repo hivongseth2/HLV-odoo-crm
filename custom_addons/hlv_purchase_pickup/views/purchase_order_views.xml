@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inherit form đơn mua hàng bằng xmlid core purchase.purchase_order_form — id này ổn
+         định qua các bản Odoo và là điểm mở rộng chính thức của module purchase. -->
+    <record id="view_purchase_order_form_pickup" model="ir.ui.view">
+        <field name="name">purchase.order.form.pickup</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="groups_id" eval="[(4, ref('hlv_purchase_pickup.group_pickup_runner'))]"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_pickup_lines" type="object" class="oe_stat_button"
+                        icon="fa-truck" invisible="x_pickup_count == 0">
+                    <field name="x_pickup_count" widget="statinfo" string="Lượt đi nhận"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="x_pickup_state" widget="badge"
+                       decoration-success="x_pickup_state == 'received'"
+                       decoration-warning="x_pickup_state == 'not_ready'"
+                       decoration-info="x_pickup_state == 'scheduled'"
+                       invisible="x_pickup_state == 'none'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Cố tình KHÔNG inherit view danh sách đơn mua hàng: xmlid của nó đã đổi tên qua các
+         bản Odoo (purchase_order_tree / purchase_order_view_tree) và trong repo này chưa có
+         module nào dùng để làm chứng là id nào đúng. Sai xmlid là module không cài được, đổi
+         lại chỉ được thêm một cột tuỳ chọn — không đáng. Xem tình trạng đi nhận ở menu
+         Đi nhận hàng → Đơn chưa lấy được. -->
+</odoo>

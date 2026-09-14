@@ -1,0 +1,228 @@
+/* Trang /pickup — dùng trên điện thoại, ngoài nắng, một tay.
+   Nút chính cao tối thiểu 48px và trải hết chiều ngang: người dùng đang đeo găng hoặc vừa
+   bê hàng, không ngắm trúng nút nhỏ được. */
+
+#pk-app {
+  --pk-bg: #f5f6f8;
+  --pk-card: #ffffff;
+  --pk-line: #e3e6ea;
+  --pk-text: #1f2329;
+  --pk-muted: #6b7280;
+  --pk-blue: #1a73e8;
+  --pk-green: #137333;
+  --pk-amber: #b06000;
+  --pk-red: #c5221f;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--pk-text);
+  background: var(--pk-bg);
+  min-height: 100vh;
+  padding-bottom: 72px;
+  font-size: 15px;
+}
+
+.pk-hidden { display: none !important; }
+
+/* --- Thanh trên cùng: dính lại khi cuộn để luôn biết đang ở chuyến nào --- */
+.pk-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--pk-card);
+  border-bottom: 1px solid var(--pk-line);
+}
+.pk-header-main { flex: 1; min-width: 0; }
+.pk-run-name { display: block; font-weight: 600; font-size: 16px; }
+.pk-run-meta { display: block; color: var(--pk-muted); font-size: 13px; }
+
+.pk-alert {
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fdecea;
+  color: var(--pk-red);
+  font-size: 14px;
+}
+.pk-alert-ok { background: #e6f4ea; color: var(--pk-green); }
+
+.pk-offline {
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: var(--pk-amber);
+  font-size: 14px;
+}
+
+.pk-actionbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px 0;
+}
+.pk-since { color: var(--pk-muted); font-size: 14px; }
+
+.pk-map {
+  height: 240px;
+  margin: 12px 14px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--pk-line);
+}
+
+.pk-stops { padding: 12px 14px 0; }
+
+.pk-stop {
+  background: var(--pk-card);
+  border: 1px solid var(--pk-line);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+/* Điểm phải làm tiếp được viền đậm: người dùng liếc một cái là biết bấm vào đâu. */
+.pk-stop-next { border-color: var(--pk-blue); border-width: 2px; }
+.pk-stop-done, .pk-stop-skipped, .pk-stop-failed { opacity: 0.65; }
+
+.pk-stop-head { display: flex; align-items: center; gap: 8px; }
+.pk-stop-no {
+  flex: none;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--pk-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.pk-stop-name { flex: 1; font-weight: 600; min-width: 0; }
+
+.pk-stop-facts { margin-top: 6px; color: var(--pk-muted); font-size: 13px; }
+.pk-stop-address { margin-top: 4px; color: var(--pk-muted); font-size: 13px; }
+.pk-stop-note {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff4e5;
+  color: var(--pk-amber);
+  font-size: 13px;
+}
+.pk-stop-links { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.pk-link { color: var(--pk-blue); text-decoration: none; font-size: 14px; }
+
+.pk-lines { margin-top: 10px; }
+.pk-line {
+  border-top: 1px solid var(--pk-line);
+  padding: 8px 0 4px;
+}
+.pk-line-head { display: flex; align-items: center; gap: 8px; }
+.pk-po { flex: 1; font-variant-numeric: tabular-nums; }
+.pk-line-note { color: var(--pk-muted); font-size: 13px; margin-top: 2px; }
+.pk-line-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+.pk-stop-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+/* Thao tác đã bấm nhưng chưa gửi được. Chiếm đúng chỗ của nút vừa biến mất để người dùng
+   thấy rõ là đã nhận lệnh, không phải bấm hụt. */
+.pk-pending {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: var(--pk-amber);
+  font-size: 14px;
+}
+
+.pk-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.pk-badge-grey { background: #eceff1; color: #546e7a; }
+.pk-badge-blue { background: #e8f0fe; color: var(--pk-blue); }
+.pk-badge-green { background: #e6f4ea; color: var(--pk-green); }
+.pk-badge-amber { background: #fff4e5; color: var(--pk-amber); }
+.pk-badge-red { background: #fdecea; color: var(--pk-red); }
+
+.pk-btn {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--pk-line);
+  border-radius: 8px;
+  background: var(--pk-card);
+  color: var(--pk-text);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pk-btn-wide { flex: 1; min-width: 160px; }
+.pk-btn-primary { background: var(--pk-blue); border-color: var(--pk-blue); color: #fff; }
+.pk-btn-green { background: var(--pk-green); border-color: var(--pk-green); color: #fff; }
+.pk-btn-ghost { background: var(--pk-card); }
+.pk-btn:active { opacity: 0.85; }
+
+.pk-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--pk-muted);
+}
+
+.pk-footer {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  padding: 12px 14px;
+  background: var(--pk-card);
+  border-top: 1px solid var(--pk-line);
+  color: var(--pk-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* --- Hộp thoại hỏi lý do --- */
+.pk-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pk-modal-box {
+  width: 100%;
+  max-width: 520px;
+  background: var(--pk-card);
+  border-radius: 12px 12px 0 0;
+  padding: 16px;
+}
+.pk-modal-title { margin: 0 0 4px; font-size: 17px; }
+.pk-modal-text { margin: 0 0 10px; color: var(--pk-muted); font-size: 14px; }
+.pk-modal-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--pk-line);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+}
+.pk-modal-alert { margin-top: 8px; color: var(--pk-red); font-size: 13px; }
+.pk-modal-actions { display: flex; gap: 10px; margin-top: 12px; }
+.pk-modal-actions .pk-btn { flex: 1; }
+
+.pk-loading {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: rgba(31, 35, 41, 0.9);
+  color: #fff;
+  font-size: 14px;
+}

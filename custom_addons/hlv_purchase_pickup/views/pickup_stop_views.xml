@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pickup_stop_list" model="ir.ui.view">
+        <field name="name">hlv.pickup.stop.list</field>
+        <field name="model">hlv.pickup.stop</field>
+        <field name="arch" type="xml">
+            <list string="Điểm đã ghé" create="false"
+                  decoration-muted="state in ('skipped', 'failed')"
+                  decoration-warning="is_estimated or chain_broken">
+                <field name="date"/>
+                <field name="run_id"/>
+                <field name="driver_user_id" string="Người đi"/>
+                <field name="point_id"/>
+                <field name="actual_sequence" string="Thứ tự đi"/>
+                <field name="line_count" string="Đơn"/>
+                <field name="arrived_at"/>
+                <field name="done_at"/>
+                <field name="travel_minutes" sum="Tổng di chuyển"/>
+                <field name="service_minutes" sum="Tổng nhận hàng"/>
+                <field name="planned_travel_minutes" string="Dự kiến đi" optional="show"/>
+                <field name="travel_gap_minutes" string="Lệch" optional="show"/>
+                <field name="is_estimated" string="Mốc suy"/>
+                <field name="gps_distance_m" string="Lệch GPS (m)" optional="hide"/>
+                <field name="gps_far" string="Bấm xa"/>
+                <field name="state" widget="badge" decoration-success="state == 'done'"/>
+                <field name="chain_broken" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_pickup_stop_form" model="ir.ui.view">
+        <field name="name">hlv.pickup.stop.form</field>
+        <field name="model">hlv.pickup.stop</field>
+        <field name="arch" type="xml">
+            <form string="Điểm nhận hàng">
+                <header>
+                    <button name="action_arrive" type="object" string="Đã tới"
+                            invisible="arrived_at or state != 'pending'"/>
+                    <button name="action_done" type="object" string="Đã nhận xong"
+                            class="btn-primary" invisible="done_at or state == 'pending'"/>
+                    <button name="action_reset_marks" type="object" string="Xoá mốc để bấm lại"
+                            groups="hlv_purchase_pickup.group_pickup_manager"
+                            confirm="Xoá mốc thời gian đã ghi của điểm này. Chỉ dùng khi người đi nhận bấm nhầm điểm. Tiếp tục?"
+                            invisible="not arrived_at and not done_at"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-warning" role="alert" invisible="not is_estimated">
+                        Mốc "đã tới" được suy ra vì người đi nhận chỉ bấm "đã nhận xong".
+                        Điểm này bị loại khỏi thống kê định mức.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="not gps_far">
+                        Bấm "đã tới" khi đang cách điểm
+                        <field name="gps_distance_m" readonly="1" nolabel="1"/> m.
+                        Cảnh báo thôi — GPS trong nhà xưởng lệch là bình thường; kiểm lại toạ
+                        độ của điểm nếu lượt nào cũng báo xa.
+                    </div>
+                    <div class="alert alert-info" role="status" invisible="not chain_broken">
+                        Không tính được thời gian di chuyển tới điểm này: thiếu mốc gốc hoặc
+                        mốc bấm ngược thứ tự.
+                    </div>
+                    <group>
+                        <group string="Điểm">
+                            <field name="run_id" readonly="1"/>
+                            <field name="point_id" readonly="1"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="sequence"/>
+                            <field name="actual_sequence" readonly="1"/>
+                        </group>
+                        <group string="Thời gian">
+                            <field name="arrived_at"/>
+                            <field name="done_at"/>
+                            <field name="travel_minutes"/>
+                            <field name="service_minutes"/>
+                            <field name="planned_travel_minutes"/>
+                            <field name="planned_arrival"/>
+                        </group>
+                    </group>
+                    <group string="Kết quả" invisible="state not in ('skipped', 'failed')">
+                        <field name="skip_reason"/>
+                    </group>
+                    <field name="line_ids" readonly="1">
+                        <list>
+                            <field name="po_name"/>
+                            <field name="state" widget="badge"/>
+                            <field name="package_note"/>
+                            <field name="note"/>
+                        </list>
+                    </field>
+                    <group string="Ghi chú">
+                        <field name="note" nolabel="1"/>
+                    </group>
+                    <group invisible="1">
+                        <field name="is_estimated"/>
+                        <field name="gps_far"/>
+                        <field name="chain_broken"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_pickup_stop_search" model="ir.ui.view">
+        <field name="name">hlv.pickup.stop.search</field>
+        <field name="model">hlv.pickup.stop</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="point_id"/>
+                <field name="run_id"/>
+                <field name="driver_user_id"/>
+                <filter name="measured" string="Đo được (dùng cho định mức)"
+                        domain="[('state', '=', 'done'), ('is_estimated', '=', False)]"
+                        help="Loại các điểm thiếu mốc: một điểm quên bấm sẽ kéo trung vị xuống và làm mọi dự kiến sau đó ngắn hơn thực tế."/>
+                <filter name="estimated" string="Thiếu mốc"
+                        domain="[('is_estimated', '=', True)]"/>
+                <filter name="gps_far" string="Bấm ở xa điểm"
+                        domain="[('gps_far', '=', True)]"/>
+                <filter name="skipped" string="Bỏ qua / không nhận được"
+                        domain="[('state', 'in', ('skipped', 'failed'))]"/>
+                <separator/>
+                <filter name="this_month" string="Tháng này"
+                        domain="[('date', '&gt;=', (context_today() - relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Gom nhóm">
+                    <filter name="group_point" string="Điểm nhận"
+                            context="{'group_by': 'point_id'}"/>
+                    <filter name="group_driver" string="Người đi nhận"
+                            context="{'group_by': 'driver_user_id'}"/>
+                    <filter name="group_date" string="Ngày" context="{'group_by': 'date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_pickup_stop_pivot" model="ir.ui.view">
+        <field name="name">hlv.pickup.stop.pivot</field>
+        <field name="model">hlv.pickup.stop</field>
+        <field name="arch" type="xml">
+            <pivot string="Định mức thời gian" sample="1">
+                <field name="point_id" type="row"/>
+                <field name="service_minutes" type="measure"/>
+                <field name="travel_minutes" type="measure"/>
+                <field name="travel_gap_minutes" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_pickup_stop_graph" model="ir.ui.view">
+        <field name="name">hlv.pickup.stop.graph</field>
+        <field name="model">hlv.pickup.stop</field>
+        <field name="arch" type="xml">
+            <graph string="Thời gian nhận hàng" type="bar" sample="1">
+                <field name="point_id"/>
+                <field name="service_minutes" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="action_pickup_stop_report" model="ir.actions.act_window">
+        <field name="name">Định mức thời gian</field>
+        <field name="res_model">hlv.pickup.stop</field>
+        <field name="view_mode">pivot,graph,list,form</field>
+        <field name="context">{'search_default_measured': 1, 'search_default_group_point': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có lượt nhận hàng nào đo được</p>
+            <p>Số liệu xuất hiện sau khi người đi nhận bấm đủ hai mốc <b>Đã tới</b> và
+               <b>Đã nhận xong</b> tại ít nhất một điểm.</p>
+        </field>
+    </record>
+</odoo>
