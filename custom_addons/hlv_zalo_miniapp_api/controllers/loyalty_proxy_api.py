@@ -34,12 +34,20 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         ở các yêu cầu `pending`. KHÔNG được fallback sang
         `loyalty_exchange_points` khi giá trị này bằng 0: đó là trường hợp
         khách đã treo hết điểm, fallback sẽ cho phép đổi vượt hạn mức.
+
+        Lưu ý phân biệt hai loại "chờ":
+          • `pending_reward_points`  – điểm đã có, đang bị giữ lại ở các yêu
+            cầu đổi thưởng chờ duyệt.
+          • `pending_confirm_points` – điểm ghi trong `hlv.loyalty.history`
+            với `state = 'pending'`, tức khách CHƯA thực sự có, phải chờ xác
+            nhận thì mới cộng vào số dư.
         """
         src = account or root
         return {
             'exchange_points': getattr(src, 'loyalty_exchange_points', 0) or 0,
             'pending_reward_points': getattr(src, 'loyalty_reward_pending_points', 0) or 0,
             'exchange_points_available': getattr(src, 'loyalty_exchange_available_points', 0) or 0,
+            'pending_confirm_points': getattr(src, 'loyalty_pending_points', 0) or 0,
         }
 
     @staticmethod
@@ -139,6 +147,8 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             return opt
 
         try:
+            body = self._request_json()
+            phone = kwargs.get('phone') or body.get('phone') or ''
             partner = request.env['res.partner'].sudo().browse(partner_id)
             if not partner.exists():
                 return self._response_success([])
@@ -146,8 +156,25 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
             family_partner_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [partner_id]
 
-            domain = [('partner_id', 'in', family_partner_ids)]
-            state = kwargs.get('state')
+            normalized_phone = self._normalize_vn_phone(phone or partner.phone or partner.mobile or '')
+            account = False
+            if normalized_phone and 'hlv.loyalty.portal.account' in request.env:
+                account = request.env['hlv.loyalty.portal.account'].sudo().search([
+                    ('partner_id', 'in', family_partner_ids),
+                    ('portal_phone', '=', normalized_phone),
+                    ('active', '=', True),
+                ], limit=1)
+
+            if account:
+                domain = [
+                    '|',
+                    ('account_id', '=', account.id),
+                    '&', ('account_id', '=', False), ('partner_id', 'in', family_partner_ids),
+                ]
+            else:
+                domain = [('partner_id', 'in', family_partner_ids)]
+
+            state = kwargs.get('state') or body.get('state')
             if state and state != 'all':
                 domain.append(('state', '=', state))
 

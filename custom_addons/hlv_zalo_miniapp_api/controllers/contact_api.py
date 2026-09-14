@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 import hashlib
 import hmac
 import logging
@@ -38,6 +38,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
 
     @staticmethod
     def _search_partner_by_phone(normalized):
+        """Tim khach hang theo so dien thoai.
+
+        Loai tru dia chi con (`parent_id = False`): dia chi giao hang cung la
+        res.partner va cung luu `phone`, khong loc thi mot dia chi co the bi
+        nhan nham lam tai khoan dang nhap.
+
+        Khi nhieu khach trung so, uu tien contact da tung dang nhap Zalo roi
+        moi den ban ghi cu nhat (`id asc`) - de cung mot so luon vao cung mot
+        khach, thay vi phu thuoc thu tu sap xep mac dinh theo ten.
+        """
         Partner = request.env["res.partner"].sudo()
         digits = re.sub(r"\D", "", normalized)
         suffix = digits[1:] if digits.startswith("0") else digits
@@ -47,7 +57,17 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             "+84 " + suffix,
             "+84 " + " ".join(suffix[i:i+3] for i in range(0, len(suffix), 3)),
         ]
-        return Partner.search(["|", ("phone", "in", formats), ("mobile", "in", formats)], limit=1)
+        domain = [
+            ("parent_id", "=", False),
+            "|", ("phone", "in", formats), ("mobile", "in", formats),
+        ]
+        # Tach thanh 2 lan search thay vi order theo x_is_zalo_account: cot
+        # boolean co the con NULL o du lieu cu, ma Postgres xep NULL len dau
+        # khi ORDER BY ... DESC -> uu tien sai.
+        zalo_partner = Partner.search(
+            domain + [("x_is_zalo_account", "=", True)], order="id asc", limit=1
+        )
+        return zalo_partner or Partner.search(domain, order="id asc", limit=1)
 
     @staticmethod
     def _is_default_address(a):
@@ -203,9 +223,23 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ")
 
         PortalAccount = request.env["hlv.loyalty.portal.account"].sudo()
-        partner = self._search_partner_by_phone(normalized)
-
         is_new = False
+
+        # ① Tai khoan Portal Loyalty la nguon su that: diem duoc ghi theo
+        #    `account_id`, nen khach hang phai lay tu chinh account do. Truoc
+        #    day buoc nay chay SAU khi da do res.partner theo SDT, khien
+        #    partner cua account bi bo qua - dan den dang nhap vao mot khach
+        #    trong khi diem nam o khach khac.
+        portal_account = PortalAccount.search(
+            [("portal_phone", "=", normalized), ("active", "=", True)], limit=1
+        )
+        partner = portal_account.partner_id if portal_account else None
+
+        # ② Chua co tai khoan Portal -> do res.partner theo so dien thoai.
+        if not partner:
+            partner = self._search_partner_by_phone(normalized)
+
+        # ③ Van khong tim thay -> tao khach moi.
         if not partner:
             intl_phone = self._intl_phone(normalized)
             partner = request.env["res.partner"].sudo().create({
@@ -215,27 +249,26 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "x_is_zalo_account": True,
             })
             is_new = True
-        else:
-            if not partner.x_is_zalo_account:
-                partner.write({"x_is_zalo_account": True})
-            if not partner.phone and not partner.mobile:
-                intl_phone = self._intl_phone(normalized)
-                partner.write({"phone": intl_phone, "mobile": intl_phone})
 
-        portal_account = PortalAccount.search([("portal_phone", "=", normalized)], limit=1)
+        if not partner.x_is_zalo_account:
+            partner.write({"x_is_zalo_account": True})
+        if not partner.phone and not partner.mobile:
+            intl_phone = self._intl_phone(normalized)
+            partner.write({"phone": intl_phone, "mobile": intl_phone})
+
         if not portal_account:
-            PortalAccount.create({
+            portal_account = PortalAccount.create({
                 "partner_id": partner.id,
                 "username": f"zalo_{normalized}",
                 "portal_phone": normalized,
             })
-        elif portal_account.partner_id.id != partner.id:
-            portal_account.write({"partner_id": partner.id})
 
         token = self._generate_token(partner.id, normalized)
 
         return self._response_success({
             "contact_id": partner.id,
+            "account_id": portal_account.id,
+            "buyer_name": portal_account.buyer_name or "",
             "name": partner.name,
             "phone": normalized,
             "email": partner.email or "",
@@ -406,32 +439,57 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
+            phone_to_check = partner.phone or partner.mobile or ""
+            account = self._get_scoped_portal_account(partner, phone_to_check)
+
             total_points = 0
             exchange_points = 0
+            pending_reward_points = 0
+            exchange_points_available = 0
             tier = None
             try:
-                total_points = getattr(root, 'loyalty_total_points', 0) or 0
-                exchange_points = getattr(root, 'loyalty_exchange_points', 0) or 0
-                tier_obj = getattr(root, 'loyalty_tier_id', None)
-                if tier_obj:
+                if account:
+                    total_points = account.loyalty_total_points or 0
+                    exchange_points = account.loyalty_exchange_points or 0
+                    pending_reward_points = account.loyalty_reward_pending_points or 0
+                    exchange_points_available = account.loyalty_exchange_available_points or 0
+                else:
+                    total_points = getattr(root, 'loyalty_total_points', 0) or 0
+                    exchange_points = getattr(root, 'loyalty_exchange_points', 0) or 0
+                    pending_reward_points = getattr(root, 'loyalty_reward_pending_points', 0) or 0
+                    exchange_points_available = getattr(root, 'loyalty_exchange_available_points', 0) or 0
+
+                # Tính hạng thành viên (tier) dựa trên điểm xếp hạng riêng của tài khoản
+                tiers = request.env['hlv.loyalty.tier'].sudo().search([('active', '=', True)], order='min_points desc')
+                matched_tier = next((t for t in tiers if total_points >= t.min_points), None)
+                if matched_tier:
                     tier = {
-                        "name": tier_obj.name,
-                        "icon": tier_obj.icon or "",
-                        "image_url": tier_obj.image_url or "",
+                        "id": matched_tier.id,
+                        "name": matched_tier.name,
+                        "icon": matched_tier.icon or "",
+                        "image_url": matched_tier.image_url or "",
+                        "min_points": matched_tier.min_points,
                     }
-            except Exception:
-                pass
+            except Exception as e:
+                _logger.warning("Error calculating loyalty points/tier for contact %s: %s", contact_id, e)
 
             data = {
-                "id": partner.id, "name": partner.name,
-                "phone": partner.phone or "", "mobile": partner.mobile or "",
-                "email": partner.email or "", "street": partner.street or "",
+                "id": partner.id,
+                "account_id": account.id if account else None,
+                "buyer_name": account.buyer_name or "" if account else "",
+                "name": partner.name,
+                "phone": (account.portal_phone if account else partner.phone) or "",
+                "mobile": partner.mobile or "",
+                "email": partner.email or "",
+                "street": partner.street or "",
                 "city": partner.city or "",
                 "state": partner.state_id.name if partner.state_id else "",
                 "country": partner.country_id.name if partner.country_id else "",
                 "zip": partner.zip or "", 
                 "total_points": total_points,
                 "exchange_points": exchange_points,
+                "pending_reward_points": pending_reward_points,
+                "exchange_points_available": exchange_points_available,
                 "tier": tier,
             }
 
