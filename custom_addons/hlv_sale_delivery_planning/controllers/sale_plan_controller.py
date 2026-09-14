@@ -1065,6 +1065,54 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 <script>
 (function(){
 "use strict";
+
+/* ===== Chốt phiên đăng nhập ===================================================
+   Đổi mật khẩu (hoặc logout ở tab khác) làm session_token cũ chết. Trang này là
+   SPA: HTML đã nằm sẵn trong browser, chỉ các fetch JSON-RPC phía dưới là fail —
+   mà chỗ nào cũng .catch() im lặng, nên user vẫn thấy nguyên trang với dữ liệu cũ
+   và tưởng mình còn đăng nhập. Chặn một lần ở tầng fetch thay vì sửa ~30 chỗ gọi. */
+var _authRedirected=false;
+function goToLogin(){
+  if(_authRedirected)return;
+  _authRedirected=true;
+  var here=window.location.pathname+window.location.search;
+  window.location.replace('/web/login?redirect='+encodeURIComponent(here));
+}
+function isSameOriginRequest(input){
+  var url=(typeof input==='string')?input:((input&&input.url)||'');
+  if(!url)return false;
+  if(url.charAt(0)==='/')return true;
+  return url.indexOf(window.location.origin+'/')===0;
+}
+/* Route type='http' (export excel, tải attachment) không trả 401 mà 303 về
+   /web/login; fetch tự đi theo redirect nên chỉ nhận ra được qua res.url. */
+function isLoginRedirect(res){
+  return !!(res.redirected&&res.url&&res.url.indexOf('/web/login')>=0);
+}
+/* Route type='json' luôn trả HTTP 200, session hết hạn nằm ở error.code=100
+   ("Odoo Session Expired") — không phải status code. */
+function isSessionExpiredRpc(payload){
+  var err=payload&&payload.error;
+  if(!err)return false;
+  if(err.code===100)return true;
+  var name=(err.data&&err.data.name)||'';
+  return name.indexOf('SessionExpiredException')>=0;
+}
+var _nativeFetch=window.fetch.bind(window);
+window.fetch=function(input,init){
+  return _nativeFetch(input,init).then(function(res){
+    if(!isSameOriginRequest(input))return res;
+    if(res.status===401||res.status===403||isLoginRedirect(res)){goToLogin();return res;}
+    var ct=res.headers.get('content-type')||'';
+    if(ct.indexOf('application/json')<0)return res;
+    /* clone() để chỗ gọi phía sau vẫn đọc được body nguyên vẹn. */
+    return res.clone().json().then(function(j){
+      if(isSessionExpiredRpc(j))goToLogin();
+      return res;
+    },function(){return res;});
+  });
+};
+
 var S={limit:100,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
   orders:[],warehouses:[],stats:{},whSig:'',kanbanColPageSize:{},reportedIds:{},tagsSig:''};
 
