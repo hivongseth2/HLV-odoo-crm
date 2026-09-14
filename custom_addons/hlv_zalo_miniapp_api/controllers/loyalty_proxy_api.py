@@ -34,12 +34,20 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         ở các yêu cầu `pending`. KHÔNG được fallback sang
         `loyalty_exchange_points` khi giá trị này bằng 0: đó là trường hợp
         khách đã treo hết điểm, fallback sẽ cho phép đổi vượt hạn mức.
+
+        Lưu ý phân biệt hai loại "chờ":
+          • `pending_reward_points`  – điểm đã có, đang bị giữ lại ở các yêu
+            cầu đổi thưởng chờ duyệt.
+          • `pending_confirm_points` – điểm ghi trong `hlv.loyalty.history`
+            với `state = 'pending'`, tức khách CHƯA thực sự có, phải chờ xác
+            nhận thì mới cộng vào số dư.
         """
         src = account or root
         return {
             'exchange_points': getattr(src, 'loyalty_exchange_points', 0) or 0,
             'pending_reward_points': getattr(src, 'loyalty_reward_pending_points', 0) or 0,
             'exchange_points_available': getattr(src, 'loyalty_exchange_available_points', 0) or 0,
+            'pending_confirm_points': getattr(src, 'loyalty_pending_points', 0) or 0,
         }
 
     @staticmethod
