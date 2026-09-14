@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from markupsafe import Markup
 
 from odoo import fields
@@ -34,6 +35,91 @@ class ZaloBaseAPI:
         elif len(digits) == 12 and digits.startswith("084"):
             digits = "0" + digits[3:]
         return digits
+
+    # ── Dia chi Viet Nam ────────────────────────────────────────────────
+
+    #: Tien to hanh chinh can bo truoc khi doi chieu voi res.country.state.
+    #: Odoo luu ten tinh tran ("Tuyen Quang") con picker cua Mini App tra ve
+    #: kem tien to ("Tinh Tuyen Quang").
+    VN_PROVINCE_PREFIXES = (
+        "tinh ", "thanh pho ", "tp. ", "tp ", "tt ",
+    )
+
+    #: Cac field tao nen mot dia chi hoan chinh. Dung khi dong bo dia chi giua
+    #: cac partner - phai ghi TAT CA, ke ca gia tri rong, neu khong du lieu cu
+    #: cua tinh khac se o lai va tron voi dia chi moi.
+    ADDRESS_FIELDS = ("street", "street2", "city", "zip", "state_id", "country_id")
+
+    @staticmethod
+    def _strip_accents(value):
+        return "".join(
+            ch for ch in unicodedata.normalize("NFD", value or "")
+            if unicodedata.category(ch) != "Mn"
+        )
+
+    @classmethod
+    def _vn_country(cls):
+        return request.env["res.country"].sudo().search([("code", "=", "VN")], limit=1)
+
+    @classmethod
+    def _vn_state_from_name(cls, name):
+        """Doi ten tinh/thanh sang ban ghi res.country.state cua Viet Nam.
+
+        Mini App lay danh sach tinh tu provinces.open-api.vn nen chi co TEN,
+        khong co id cua Odoo. Khong map thi dia chi tao ra se trong state_id /
+        country_id.
+
+        Tra ve recordset rong neu khong khop - de nguyen con hon gan bua.
+        """
+        if not name:
+            return request.env["res.country.state"].sudo().browse()
+
+        country = cls._vn_country()
+        State = request.env["res.country.state"].sudo()
+        if not country:
+            return State.browse()
+
+        cleaned = (name or "").strip()
+        plain = cls._strip_accents(cleaned).lower()
+        for prefix in cls.VN_PROVINCE_PREFIXES:
+            if plain.startswith(prefix):
+                cleaned = cleaned[len(prefix):].strip()
+                break
+
+        domain = [("country_id", "=", country.id)]
+        state = State.search(domain + [("name", "=", cleaned)], limit=1)
+        if state:
+            return state
+        return State.search(domain + [("name", "ilike", cleaned)], limit=1)
+
+    @classmethod
+    def _resolve_address_location(cls, body, fallback_name=""):
+        """Suy ra state_id / country_id cho mot dia chi.
+
+        Uu tien id do client gui len; neu khong co thi map theo ten tinh
+        (`province_name`, sau do den `fallback_name` - thuong la `city`).
+        Tra ve dict rong khi khong xac dinh duoc de caller khong ghi de.
+        """
+        vals = {}
+
+        state_id = body.get("state_id")
+        if state_id:
+            state = request.env["res.country.state"].sudo().browse(state_id)
+            state = state if state.exists() else None
+        else:
+            state = cls._vn_state_from_name(body.get("province_name") or fallback_name)
+
+        if state:
+            vals["state_id"] = state.id
+            vals["country_id"] = state.country_id.id
+            return vals
+
+        country_id = body.get("country_id")
+        if country_id:
+            country = request.env["res.country"].sudo().browse(country_id)
+            if country.exists():
+                vals["country_id"] = country.id
+        return vals
 
     @staticmethod
     def _get_secret_key():

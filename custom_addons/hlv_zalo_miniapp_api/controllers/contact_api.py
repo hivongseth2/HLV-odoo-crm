@@ -619,18 +619,13 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "street": body["street"],
                 "street2": body.get("street2", ""),
                 "city": body["city"],
-                "state_id": body.get("state_id"),
-                "country_id": body.get("country_id"),
                 "zip": body.get("zip", ""),
                 "phone": body.get("phone", partner.phone or ""),
             }
-
-            if vals.get("state_id"):
-                state = request.env["res.country.state"].sudo().browse(vals["state_id"])
-                vals["state_id"] = state.id if state.exists() else False
-            if vals.get("country_id"):
-                country = request.env["res.country"].sudo().browse(vals["country_id"])
-                vals["country_id"] = country.id if country.exists() else False
+            # Mini App chi gui TEN tinh (picker dung provinces.open-api.vn),
+            # nen phai map sang res.country.state; neu khong dia chi se trong
+            # state_id/country_id va Odoo in ra dia chi thieu tinh/quoc gia.
+            vals.update(self._resolve_address_location(body, fallback_name=body["city"]))
 
             address = request.env["res.partner"].sudo().create(vals)
             return self._response_success({
@@ -671,12 +666,10 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 if field in body:
                     update_vals[field] = body[field]
 
-            if "state_id" in body:
-                state = request.env["res.country.state"].sudo().browse(body["state_id"])
-                update_vals["state_id"] = state.id if state.exists() else False
-            if "country_id" in body:
-                country = request.env["res.country"].sudo().browse(body["country_id"])
-                update_vals["country_id"] = country.id if country.exists() else False
+            if {"state_id", "country_id", "province_name", "city"} & set(body):
+                update_vals.update(
+                    self._resolve_address_location(body, fallback_name=body.get("city", ""))
+                )
 
             if update_vals:
                 address.write(update_vals)
@@ -727,13 +720,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 sibling_addresses.write({"x_is_default_delivery": False})
                 address.write({"x_is_default_delivery": True})
 
-            # Cập nhật địa chỉ chính của contact theo địa chỉ mặc định mới
+            # Cập nhật địa chỉ chính của contact theo địa chỉ mặc định mới.
+            #
+            # Phải ghi trọn bộ ADDRESS_FIELDS, kể cả field rỗng. Trước đây chỉ
+            # copy street + city nên state_id/country_id/street2 cũ của tỉnh
+            # khác ở lại, trộn với street/city mới thành địa chỉ lai — đơn hàng
+            # in ra kiểu "… Tuyên Quang / Ho Chi Minh / Phú Yên Việt Nam".
             parent_partner = address.parent_id
             if parent_partner.exists():
-                parent_partner.write({
-                    "street": address.street or parent_partner.street,
-                    "city": address.city or parent_partner.city,
-                })
+                parent_partner.write(self._address_vals_from(address))
 
             return self._response_success({
                 "id": address.id, "name": address.name or "",
@@ -742,6 +737,19 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         except Exception as e:
             _logger.exception("address_set_default error")
             return self._response_error("SERVER_ERROR", str(e), 500)
+
+    @classmethod
+    def _address_vals_from(cls, address):
+        """Trích trọn bộ địa chỉ của một partner để ghi sang partner khác.
+
+        Trả cả giá trị rỗng (không dùng `or partner.field`) để xóa sạch dữ liệu
+        cũ — đó chính là điểm gây ra địa chỉ lai trước đây.
+        """
+        vals = {}
+        for field in cls.ADDRESS_FIELDS:
+            value = address[field]
+            vals[field] = value.id if field.endswith("_id") else (value or "")
+        return vals
 
     # POST /api/v1/zalo/contacts/addresses/delete
     @http.route("/api/v1/zalo/contacts/addresses/delete", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
