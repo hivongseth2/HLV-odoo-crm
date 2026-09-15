@@ -39,13 +39,15 @@ class StockPicking(models.Model):
         if not partner:
             return
 
+        # Không kiểm tra sớm "root_partner có tài khoản Loyalty active không"
+        # ở đây: đơn có thể cộng điểm chéo sang tài khoản của khách hàng khác
+        # qua `loyalty_account_line_ids` (xem help text field account_id),
+        # nên root_partner của đơn hoàn toàn có thể không có tài khoản nào.
+        # Việc "có tài khoản để cộng điểm hay không" đã được xác định đúng ở
+        # `_get_loyalty_account_allocations` bên dưới (allocations rỗng thì
+        # return) — không lặp lại kiểm tra ở đây kẻo chặn nhầm trường hợp
+        # cộng điểm chéo.
         root_partner = partner._get_loyalty_root()
-        has_active_portal_account = self.env['hlv.loyalty.portal.account'].sudo().search_count([
-            ('partner_id', '=', root_partner.id),
-            ('active', '=', True),
-        ])
-        if not has_active_portal_account:
-            return
 
         # Tìm chương trình loyalty đang active
         program = self.env['hlv.loyalty.program'].sudo().search([
@@ -81,9 +83,6 @@ class StockPicking(models.Model):
         delivery_ratio = 0.0
         if order_total_amount > 0:
             delivery_ratio = min(delivered_subtotal / order_total_amount, 1.0)
-
-        # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
-        root_partner = partner._get_loyalty_root()
 
         allocations = self._get_loyalty_account_allocations(sale_order, root_partner)
         if not allocations:
