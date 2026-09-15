@@ -1,0 +1,204 @@
+<t t-name="hlv_a4_report.bbbg_a5_co_po_doc_copy_1">
+    <t t-call="web.html_container">
+      <t t-call="web.report_layout">
+        <style type="text/css">
+          /* ====== Fonts ri&amp;#234;ng cho A5 ====== */
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+            font-weight:400; font-style:normal; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+            font-weight:700; font-style:normal; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+            font-weight:400; font-style:italic; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+            font-weight:700; font-style:italic; font-display:swap;
+          }
+
+          html, body, .o_report_layout, .o_report_layout * {
+            font-family:'HLV-TNR','DejaVu Sans',sans-serif !important;
+          }
+
+          .a5-wrap { font-size:11px; line-height:1.35; }
+          .a5-title { font-size:15px; font-weight:800; }
+          .a5-sub   { font-size:11px; }
+          .a5-strong { font-weight:700; }
+
+          table { border-collapse:collapse; width:100%; }
+          .tbl th, .tbl td { border:1px solid #000; padding:5px; }
+          .tbl th { text-align:center; }
+
+   
+          .header-logo { width:180px; text-align:center; vertical-align:middle; padding-right:6px; }
+          .header-logo img { height:90px; width:150px; object-fit:contain; }
+          .header-info { vertical-align:top; padding-left:8px; }
+
+          .sign td { text-align:center; font-weight:600; font-size:10px }
+          .sign .pad { height:80px; } /* kho&amp;#7843;ng tr&amp;#7889;ng k&amp;#253; */
+        </style>
+    <t t-foreach="docs" t-as="o">
+          <t t-set="so" t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False"/>
+
+          <t t-set="is_done" t-value="o.state == 'done'"/>
+        <t t-set="lines" t-value="o.move_ids"/>
+
+          <div class="page a5-wrap">
+            <table style="margin-top:10px;">
+      <tbody>
+        <tr>
+                <td class="header-logo">
+                  <t t-if="o.company_id.logo">
+                    <img t-att-src="image_data_uri(o.company_id.logo)"/>
+                  </t>
+                  <t t-else="">
+                    <img t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id"/>
+                  </t>
+                </td>
+                <td class="header-info">
+                  <div class="a5-strong" style="font-size:13px;">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</div>
+                  <div class="a5-sub">
+                    <t t-esc="o.company_id.partner_id.street or ''"/>
+                  </div>
+                  <div class="a5-sub">Mã số thuế: <span t-esc="o.company_id.vat or ''"/></div>
+                  <div class="a5-sub">Website: <span t-esc="o.company_id.website or ''"/></div>
+                </td>
+              </tr></tbody>
+            </table>
+
+            <table style="margin-top:0; width:100%; border:none;">
+              <tr>
+                <td style="width:15%; border:none;"/>
+
+                <td style="width:70%; text-align:center; vertical-align:top; border:none;">
+                  <div class="a5-title">BIÊN BẢN BÀN GIAO</div>
+                  
+                  <div class="a5-sub" style="white-space: nowrap;">
+                   (Số phiếu xuất: <span t-esc="o.name"/> – ngày ..... tháng ..... năm ........)
+                  </div>
+                </td>
+
+                <td style="width:15%; text-align:right; vertical-align:top; border:none; padding-right: 0;">
+                  <t t-if="so and so.name">
+                    <img t-att-src="o._qr_data_uri(so.name)" style="width:65px; height:65px; display:block; margin-left: auto;"/>
+                    
+                    <div style="font-size:7px; font-weight:bold; margin-top:2px; text-align:center; width:65px; margin-left: auto;">
+                      <t t-esc="so.name"/>
+                    </div>
+                  </t>
+                </td>
+              </tr>
+            </table>
+
+            <table style="font-size:11px; margin-top:6px;">
+      <tbody>
+        <tr>
+                <td style="width:160px;" class="a5-strong">Đại diện bên nhận (A)</td>
+                <td class="a5-strong" t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>
+              </tr><tr>
+                
+                
+              </tr><tr>
+                <td>Địa chỉ</td>
+                <td>
+                  <t t-set="p" t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id"/>
+                  <t t-set="addr_to_show" t-value="(so and so.misa_shipping_address or (p.street or '') + (p.street2 and (', ' + p.street2) or ''))"/>
+                  <t t-esc="addr_to_show"/>
+                </td>
+              </tr><tr>
+                <td style="padding-top:4px;" class="a5-strong">Đại diện bên giao (B)</td>
+                <td style="padding-top:4px;" class="a5-strong">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</td>
+              </tr><tr>
+               
+              </tr><tr>
+                <td>Địa chỉ</td>
+                <td>
+                  <t t-esc="o.company_id.partner_id.street or ''"/>
+                </td>
+              </tr></tbody>
+            </table>
+
+            <div style="margin:10px 6px 4px 0;" class="a5-strong">Bên B đã bàn giao cho bên A:</div>
+
+            <table class="tbl" style="font-size: 11px; margin-top: 4px;">
+              <thead>
+                <tr>
+                  <th class="col-stt">STT</th>
+                  <th>Tên hàng</th>
+                  <th class="col-uom">Đơn vị tính</th>
+                  <th class="col-qty">Số lượng</th>
+                  <th class="col-note">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                <t t-set="idx" t-value="0"/>
+                <t t-foreach="lines" t-as="l">
+                  <t t-set="qty_show" t-value="0.0"/>
+                  <t t-if="l._name == 'stock.move'">
+                    <t t-set="qty_show" t-value="l.quantity or 0.0"/>
+                  </t>
+                  <t t-elif="l._name == 'stock.move.line'">
+                    <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0"/>
+                    <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
+                      <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)"/>
+                    </t>
+                  </t>
+
+                  <t t-if="qty_show &gt; 0">
+                    <tr>
+                      <td class="col-stt"><t t-esc="idx + 1"/></td>
+                      <td>
+                        <span t-esc="l.product_id and l.product_id.display_name or ''"/>
+                        <!--<t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">-->
+                        <!--  <div style="font-size:10px; color:#444;" t-esc="l.description_picking"/>-->
+                        <!--</t>-->
+                      </td>
+                      <td class="col-uom">
+                        <t t-if="l._name == 'stock.move.line'">
+                          <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                        </t>
+                        <t t-else="">
+                          <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                        </t>
+                      </td>
+                      <td class="col-qty"><span t-esc="'%0.2f' % qty_show"/></td>
+                      <td class="col-note"><t t-esc="(so and so.origin) or ''"/></td>
+                    </tr>
+                    <t t-set="idx" t-value="idx + 1"/>
+                  </t>
+                </t>
+
+                <t t-if="idx == 0">
+                  <tr>
+                    <td colspan="5" style="text-align: center; font-style: italic; padding: 8px;">
+                      Không có dòng hàng.
+                    </td>
+                  </tr>
+                </t>
+              </tbody>
+            </table>
+
+            <table class="sign" style="margin-top:16px;">
+      <tbody>
+        <tr>
+                <td style="width:50%;">ĐẠI DIỆN BÊN NHẬN<br/>(Ký, họ tên)</td>
+                <td style="width:50%;">ĐẠI DIỆN BÊN GIAO<br/>(Ký, họ tên)</td>
+              </tr><tr>
+                <td class="pad"/>
+                <td class="pad"/>
+              </tr></tbody>
+            </table>
+
+          </div>
+        </t>
+      </t>
+    </t>
+  </t>

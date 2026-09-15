@@ -1,0 +1,71 @@
+<data>
+  <data>
+    <xpath position="inside" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table" meta-style="width:100%; margin-top:30px; border-collapse: collapse;">
+      <tbody>
+        <o-diff-hole for="8"/>
+      </tbody>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table//o-diff-hole[@for='8']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table/tr"/>
+    </xpath>
+  </data>
+  <data>
+    <xpath position="inside" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]" meta-style="width:100%; font-size:13px; margin-top:10px;">
+      <tbody>
+        <o-diff-hole for="40"/>
+        <o-diff-hole for="43"/>
+        <o-diff-hole for="46"/>
+        <o-diff-hole for="51"/>
+        <o-diff-hole for="54"/>
+        <o-diff-hole for="57"/>
+      </tbody>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]//o-diff-hole[@for='40']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]/tr"/>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]//o-diff-hole[@for='43']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]/tr"/>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]//o-diff-hole[@for='46']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]/tr"/>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]//o-diff-hole[@for='51']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]/tr"/>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]//o-diff-hole[@for='54']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]/tr"/>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]//o-diff-hole[@for='57']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[2]/tr"/>
+    </xpath>
+  </data>
+  <data>
+    <xpath position="attributes" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[3]" meta-style="width:100%; border-collapse:collapse; margin-top:6px; font-size:13px;">
+      <attribute name="style">width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13px;</attribute>
+    </xpath>
+  </data>
+  <data>
+    <xpath position="inside" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[3]/tbody/t[2]/t[4]/tr/td[5]" meta-style="border:1px solid #000; padding:6px;">
+     <span t-esc="(l._name == 'stock.move' and l.sale_line_id and l.sale_line_id.note) or (l._name == 'stock.move.line' and l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.note) or ''"/>
+    </xpath>
+  </data>
+  <data>
+    <xpath position="attributes" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[3]/tbody/t[3]/tr/td" meta-colspan="5" meta-style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
+      <attribute name="style">border: 1px solid rgb(0, 0, 0); padding: 8px; text-align: center; font-style: italic;</attribute>
+    </xpath>
+  </data>
+  <data>
+    <xpath position="inside" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[4]" meta-style="width:100%; margin-top:24px; text-align:center;">
+      <tbody>
+        <o-diff-hole for="106"/>
+        <o-diff-hole for="111"/>
+      </tbody>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[4]//o-diff-hole[@for='106']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[4]/tr"/>
+    </xpath>
+    <xpath expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[4]//o-diff-hole[@for='111']" position="replace">
+      <xpath position="move" expr="/t[@t-call='web.html_container']//t[@t-call='web.report_layout']/div/t/div/table[4]/tr"/>
+    </xpath>
+  </data>
+</data>

@@ -1,0 +1,247 @@
+<t t-name="hlv_a4_report.bbbg_combo_doc">
+        <t t-call="web.html_container">
+            <t t-call="web.report_layout">
+                <style type="text/css">
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+                    font-weight: 400;
+                    font-style: normal;
+                    font-display: swap;
+                    }
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf')
+                    format('truetype');
+                    font-weight: 700;
+                    font-style: normal;
+                    font-display: swap;
+                    }
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf')
+                    format('truetype');
+                    font-weight: 400;
+                    font-style: italic;
+                    font-display: swap;
+                    }
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf')
+                    format('truetype');
+                    font-weight: 700;
+                    font-style: italic;
+                    font-display: swap;
+                    }
+
+                    html, body, .o_report_layout, .o_report_layout * {
+                    font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
+                    }
+
+                    .hlv-title {
+                    font-weight: 700;
+                    }
+                </style>
+
+                <t t-foreach="docs" t-as="picking">
+                    <t t-set="so" t-value="picking.sale_id or (picking.move_ids and picking.move_ids[0].sale_line_id and picking.move_ids[0].sale_line_id.order_id)"/>
+                    
+                    <!-- Sale line đã in dòng combo rồi, dùng để chặn in trùng. Dựng dòng
+                         thẳng từ stock.move thay vì gọi helper: helper lấy số combo từ
+                         sale.order.line.qty_delivered - trường này chỉ tính move đã done nên
+                         phiếu mới ở trạng thái Sẵn sàng sẽ ra 0 và biên bản mất hết dòng. -->
+                    <t t-set="priced_sol_ids" t-value="[]"/>
+
+                    <div class="page">
+
+                        <table style="width:100%; margin-top:30px; border-collapse: collapse;">
+                            <tr>
+                                <td style="width:200px; text-align:left; vertical-align:middle;">
+                                    <t t-if="picking.company_id.logo">
+                                        <img t-att-src="image_data_uri(picking.company_id.logo)" style="max-height:120px; width:auto; max-width:180px; object-fit:contain;"/>
+                                    </t>
+                                    <t t-else="">
+                                        <img t-att-src="'/web/image/res.company/%s/logo' % picking.company_id.id" style="max-height:120px; width:auto;"/>
+                                    </t>
+                                </td>
+                        
+                                <td style="vertical-align:top; padding-left:10px; padding-right: 10px;">
+                                    <div style="font-weight:700; font-size:16px; margin-bottom: 5px;">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</div>
+                                    <div style="font-size: 13px;">
+                                        <t t-esc="picking.company_id.partner_id.street or ''"/>
+                                    </div>
+                                    <div style="font-size: 13px;">Mã số thuế: <span t-esc="picking.company_id.vat or ''"/></div>
+                                    <div style="font-size: 13px;">Website: <span t-esc="picking.company_id.website or ''"/></div>
+                                </td>
+                        
+                                <td style="width:100px; vertical-align:top; text-align:right;">
+                                    <t t-if="so and so.name">
+                                        <img t-att-src="picking._qr_data_uri(so.name)" style="width:90px; height:90px; display:block; margin-left: auto;"/>
+                                        <div style="font-size:12px; font-weight:bold; margin-top:2px; text-align:center; width:100px; margin-left: auto;">
+                                            <t t-esc="so.name"/>
+                                        </div>
+                                    </t>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <div style="text-align:center; margin-top:-5px">
+                            <div style="font-size:20px; font-weight:800;">BIÊN BẢN BÀN GIAO</div>
+                            <div style="white-space: nowrap;">(Số phiếu xuất: <span t-esc="picking.name"/> – ngày ..... tháng ..... năm ........)</div>
+                        </div>
+
+                        <table style="width:100%; font-size:13px; margin-top:10px;">
+                            <tr>
+                                <td style="width:120px;">Đại diện bên nhận (A)</td>
+                                <td style="font-weight:700; padding-left:8px;" t-esc="picking.partner_id and picking.partner_id.commercial_partner_id.name or ''"/>
+                            </tr>
+                            <tr>
+                                <td style="width:120px;">Ông (Bà)</td>
+                                <td style="padding-left:8px;"/>
+                            </tr>
+                            <tr>
+                                <td style="width:120px;">Địa chỉ</td>
+                                <td class="h6-fs" style="width:260px; padding-left:8px;">
+                                    <t t-set="p" t-value="picking.partner_id and picking.partner_id.commercial_partner_id or picking.partner_id"/>
+                                    <t t-set="addr_to_show" t-value="(picking.sale_id and picking.sale_id.misa_shipping_address) or (p.street or '') + (p.street2 and (', ' + p.street2) or '')"/>
+        
+                                    <t t-esc="addr_to_show"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="width:120px; padding-top:6px;">Đại diện bên giao (B)</td>
+                                <td style="padding-top:6px; padding-left:8px;">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</td>
+                            </tr>
+                            <tr>
+                                <td style="width:120px;">Ông (Bà)</td>
+                                <td style="padding-left:8px;"/>
+                            </tr>
+                            <tr>
+                                <td class="label" style="width:120px;">Địa chỉ</td>
+                                <td style="padding-left:8px;">
+                                    <t t-esc="picking.company_id.partner_id.street or ''"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <div style="margin:15px 15px 6px 0;">Bên B đã bàn giao cho bên A:</div>
+                        <table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:13px;">
+                            <thead>
+                                <tr>
+                                    <th style="border:1px solid #000; padding:6px; width:40px; text-align:center;">STT</th>
+                                    <th style="border:1px solid #000; padding:6px; text-align:center;">Tên hàng</th>
+                                    <th style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Đơn vị tính</th>
+                                    <th style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Số lượng</th>
+                                    <th style="border:1px solid #000; padding:6px; width:90px; text-align:center;">Ghi chú</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-set="idx" t-value="1"/>
+                                <t t-foreach="picking.move_ids" t-as="l">
+                                    <!-- l.quantity: phiếu đã xuất kho thì là số thực xuất, chưa
+                                         xuất thì là số đã giữ kho (reserved) -->
+                                    <t t-set="qty_show" t-value="l.quantity or 0.0"/>
+                                    <t t-set="sl" t-value="l.sale_line_id"/>
+
+                                    <!-- Combo bán theo BOM Kit (phantom) KHÔNG có move của chính
+                                         nó: khi xuất kho Odoo nổ dòng bán thành nhiều move thành
+                                         phần, tất cả cùng trỏ về 1 sale.order.line. Nhận biết move
+                                         thành phần: sản phẩm trên move khác sản phẩm trên dòng bán. -->
+                                    <t t-set="is_kit_comp" t-value="bool(sl) and l.product_id != sl.product_id"/>
+
+                                    <t t-if="qty_show &gt; 0">
+
+                                        <!-- DÒNG COMBO: in đúng 1 lần, ngay trước thành phần đầu tiên -->
+                                        <t t-if="is_kit_comp and sl.id not in priced_sol_ids">
+                                            <t t-set="ignore" t-value="priced_sol_ids.append(sl.id)"/>
+
+                                            <!-- Số combo thực xuất = SL thành phần đã xuất / SL thành
+                                                 phần cần cho 1 combo (tỷ lệ khai trên BOM Kit). Quy đổi
+                                                 bằng chính thành phần đầu tiên này; combo giao trọn bộ
+                                                 thì mọi thành phần đều ra cùng một kết quả. Không tra
+                                                 được tỷ lệ BOM (bom_line_id trống) thì lấy SL combo
+                                                 trên dòng bán. -->
+                                            <t t-set="kit_line_qty" t-value="l.bom_line_id.product_qty or 0.0"/>
+                                            <t t-set="combo_qty" t-value="kit_line_qty and (qty_show * (l.bom_line_id.bom_id.product_qty or 1.0) / kit_line_qty) or (sl.product_uom_qty or 0.0)"/>
+
+                                            <tr>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <t t-esc="idx"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px;">
+                                                    <span t-esc="sl.product_id and sl.product_id.display_name or ''"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <span t-esc="(sl.product_uom and sl.product_uom.name) or ''"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <span t-esc="'%0.2f' % combo_qty"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px;"/>
+                                            </tr>
+                                            <t t-set="idx" t-value="idx + 1"/>
+                                        </t>
+
+                                        <!-- THÀNH PHẦN COMBO: thụt lề, không đánh STT -->
+                                        <t t-if="is_kit_comp">
+                                            <tr>
+                                                <td style="border:1px solid #000; padding:6px;"/>
+                                                <td style="border:1px solid #000; padding:6px;">
+                                                    <span style="padding-left:24px;" t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <span t-esc="'%0.2f' % qty_show"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px;"/>
+                                            </tr>
+                                        </t>
+
+                                        <t t-else="">
+                                            <!-- HÀNG THƯỜNG (không phải thành phần combo) -->
+                                            <tr>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <t t-esc="idx"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px;">
+                                                    <span t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                    <span t-esc="'%0.2f' % qty_show"/>
+                                                </td>
+                                                <td style="border:1px solid #000; padding:6px;"/>
+                                            </tr>
+                                            <t t-set="idx" t-value="idx + 1"/>
+                                        </t>
+                                    </t>
+                                </t>
+                                <t t-if="idx == 1">
+                                    <tr>
+                                        <td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
+                                            Không có dòng hàng.
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <table style="width:100%; margin-top:24px; text-align:center;">
+                            <tr>
+                                <td style="width:50%; font-weight:700;">ĐẠI DIỆN BÊN NHẬN<br/><span style="font-style:italic; font-weight:400;">(Ký, họ tên)</span></td>
+                                <td style="width:50%; font-weight:700;">ĐẠI DIỆN BÊN GIAO<br/><span style="font-style:italic; font-weight:400;">(Ký, họ tên)</span></td>
+                            </tr>
+                            <tr>
+                                <td style="height:100px;"/>
+                                <td style="height:100px;"/>
+                            </tr>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </t>
