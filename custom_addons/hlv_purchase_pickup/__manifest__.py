@@ -38,6 +38,7 @@ Xem kế hoạch chi tiết tại plan/ke-hoach-module-nhan-hang.md
         'views/pickup_stop_views.xml',
         'views/pickup_line_views.xml',
         'views/purchase_order_views.xml',
+        'views/res_partner_views.xml',
         'views/res_config_settings_views.xml',
         'views/pickup_page_templates.xml',
         'views/pickup_menus.xml',

@@ -111,16 +111,15 @@ window.HlvPickup = window.HlvPickup || {};
   /**
    * Tối ưu lộ trình các điểm CHƯA TỚI, tính từ chỗ đang đứng.
    *
+   * Một lần bấm = một lần gọi, xong là để đó. Không theo dõi liên tục: người đi nhận cần
+   * chỉ đường thì bấm "Chỉ đường" để Google Maps dẫn, việc của màn hình này chỉ là gợi ý
+   * nên ghé điểm nào trước.
+   *
    * Cố tình gọi thẳng chứ KHÔNG đẩy vào hàng đợi offline như các nút ghi mốc: xếp lại lộ
-   * trình rồi để đó gửi sau là vô nghĩa — lúc gửi được thì người ta đã đi tiếp rồi. Mỗi lần
-   * bấm cũng là một lượt gọi Google có tính phí nên phải hỏi lại trước.
+   * trình rồi để đó gửi sau là vô nghĩa — lúc gửi được thì người ta đã đi tiếp rồi.
    */
   function optimizeRoute() {
     if (S.sending || !S.run) {
-      return Promise.resolve();
-    }
-    if (!window.confirm("Sắp lại thứ tự các điểm chưa tới cho gần nhất, tính từ chỗ bạn " +
-        "đang đứng?")) {
       return Promise.resolve();
     }
     setBusy(true);

@@ -32,6 +32,19 @@ class HlvPickupStop(models.Model):
     date = fields.Date(related='run_id.date', store=True, index=True)
     driver_user_id = fields.Many2one(related='run_id.driver_user_id', store=True, index=True)
 
+    # Địa chỉ và điện thoại hiện ngay trên dòng điểm dừng, sửa được tại chỗ. readonly=False
+    # nên sửa ở đây là GHI THẲNG vào điểm — đúng ý khi vá một địa chỉ sai. Muốn đi một địa
+    # chỉ khác của cùng công ty thì đổi ``point_id`` chứ đừng sửa lên địa chỉ cũ.
+    point_address = fields.Char(
+        related='point_id.address', readonly=False, string='Địa chỉ',
+    )
+    point_phone = fields.Char(
+        related='point_id.contact_phone', readonly=False, string='Điện thoại',
+    )
+    point_contact = fields.Char(
+        related='point_id.contact_name', readonly=False, string='Người liên hệ',
+    )
+
     line_ids = fields.One2many('hlv.pickup.line', 'stop_id', string='Đơn nhận tại đây')
     line_count = fields.Integer(compute='_compute_line_stats', store=True, string='Số đơn')
     pending_line_count = fields.Integer(compute='_compute_line_stats', string='Đơn chưa xử lý')

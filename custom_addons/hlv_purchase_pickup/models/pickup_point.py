@@ -23,7 +23,9 @@ class HlvPickupPoint(models.Model):
     _name = 'hlv.pickup.point'
     _description = 'Điểm nhận hàng'
     _inherit = ['mail.thread']
-    _order = 'name'
+    # Gom theo công ty rồi mới tới tên: một công ty nhiều địa chỉ thì chúng phải nằm cạnh
+    # nhau, và phép chọn "điểm đầu tiên của công ty" cũng thành xác định.
+    _order = 'partner_id, name'
 
     name = fields.Char(required=True, index=True, tracking=True)
     map_name_key = fields.Char(
@@ -32,6 +34,11 @@ class HlvPickupPoint(models.Model):
              'cấp viết tên khác nhau về cùng một điểm.',
     )
     active = fields.Boolean(default=True)
+    partner_id = fields.Many2one(
+        'res.partner', string='Công ty', index=True, tracking=True,
+        help='Công ty sở hữu địa chỉ này. MỘT công ty có thể có NHIỀU điểm nhận — nhiều kho, '
+             'nhiều cổng, nhiều chi nhánh.',
+    )
     address = fields.Char(string='Địa chỉ', tracking=True)
     note = fields.Text(string='Ghi chú', help='VD: vào cổng sau, phải báo trước 30 phút.')
 
@@ -43,7 +50,9 @@ class HlvPickupPoint(models.Model):
     open_to = fields.Float(string='Nhận hàng đến')
 
     partner_ids = fields.One2many(
-        'res.partner', 'x_pickup_point_id', string='Mã nhà cung cấp',
+        'res.partner', 'x_pickup_point_id', string='Mã lấy điểm này làm mặc định',
+        help='Các mã liên hệ Odoo đang mặc định lấy hàng tại đây. Odoo sinh nhiều mã cho '
+             'cùng một nhà cung cấp, nên nhiều mã trỏ về một điểm là chuyện thường.',
     )
     partner_count = fields.Integer(compute='_compute_partner_count')
 
@@ -102,8 +111,11 @@ class HlvPickupPoint(models.Model):
         string='Lần tới gần nhất', compute='_compute_service_stats', store=True,
     )
 
+    # Trùng tên chỉ bị chặn TRONG CÙNG một công ty. Trần uniqueness toàn bảng sẽ chặn luôn
+    # trường hợp hợp lệ: hai công ty khác nhau đặt tên kho giống nhau ("Kho Nhơn Trạch").
     _sql_constraints = [
-        ('name_uniq', 'unique(name)', 'Đã có điểm nhận hàng trùng tên.'),
+        ('name_partner_uniq', 'unique(partner_id, name)',
+         'Công ty này đã có một điểm nhận hàng trùng tên.'),
     ]
 
     # ------------------------------------------------------------------
@@ -164,25 +176,48 @@ class HlvPickupPoint(models.Model):
     # Gom nhà cung cấp về điểm
     # ------------------------------------------------------------------
     @api.model
-    def find_or_create_for_partner(self, partner):
-        """Điểm nhận hàng của một nhà cung cấp — tạo mới nếu chưa có.
+    def resolve_for_partner(self, partner):
+        """Điểm nhận sẽ dùng cho một nhà cung cấp — KHÔNG tạo mới.
 
-        Thứ tự tìm: (1) điểm đã gán thẳng trên partner, (2) điểm có cùng khoá so khớp tên,
-        (3) tạo mới từ địa chỉ của partner. Luôn gán ngược lại ``x_pickup_point_id`` để lần
-        sau khỏi phải đoán.
+        Một công ty có thể có nhiều điểm nhận (nhiều kho, nhiều cổng, chi nhánh). Thứ tự ưu
+        tiên: (1) điểm mặc định đã gán trên liên hệ, (2) điểm đầu tiên thuộc công ty đó,
+        (3) điểm có cùng khoá so khớp tên — nhánh này để dữ liệu cũ (điểm tạo trước khi có
+        field ``partner_id``) vẫn tìm được.
+
+        Trả về recordset 1 bản ghi, hoặc recordset RỖNG khi chưa có điểm nào. Hàm không ghi
+        gì nên gọi được từ compute — tạo bản ghi trong compute là cách nhanh nhất để sinh ra
+        dữ liệu rác mỗi lần người dùng mở form.
         """
         partner = partner.sudo()
         if partner.x_pickup_point_id:
             return partner.x_pickup_point_id
 
+        owner = partner.commercial_partner_id or partner
+        point = self.search([('partner_id', '=', owner.id)], limit=1)
+        if point:
+            return point
+
         key = normalize_name(partner.name)
-        point = self.search([('map_name_key', '=', key)], limit=1) if key else self.browse()
+        return self.search([('map_name_key', '=', key)], limit=1) if key else self.browse()
+
+    @api.model
+    def find_or_create_for_partner(self, partner):
+        """Như ``resolve_for_partner`` nhưng tạo điểm mới nếu chưa có.
+
+        Luôn gán ngược ``x_pickup_point_id`` và ``partner_id`` để lần sau khỏi phải đoán —
+        đây cũng là cách dữ liệu cũ tự lành dần thay vì phải chạy script chuyển đổi.
+        """
+        partner = partner.sudo()
+        owner = partner.commercial_partner_id or partner
+        point = self.resolve_for_partner(partner)
         if not point:
             point = self.create({
                 # Tên là field bắt buộc và có ràng buộc duy nhất. Liên hệ không tên (dữ liệu
                 # import lỗi) vẫn phải xếp chuyến được, nên đặt tên theo mã để không chặn.
                 'name': partner.name or 'NCC #%s' % partner.id,
+                'partner_id': owner.id,
                 'address': partner_address_text(partner),
+                'contact_name': partner.name if partner != owner else '',
                 'contact_phone': partner_phone(partner),
                 'latitude': partner.partner_latitude or 0.0,
                 'longitude': partner.partner_longitude or 0.0,
@@ -191,8 +226,34 @@ class HlvPickupPoint(models.Model):
                 ) else 'none',
                 'geo_source': 'partner' if partner.partner_latitude else False,
             })
-        partner.x_pickup_point_id = point.id
+        if not point.partner_id:
+            point.partner_id = owner.id
+        if partner.x_pickup_point_id != point:
+            partner.x_pickup_point_id = point.id
         return point
+
+    def action_add_address(self):
+        """Tạo thêm một địa chỉ nhận hàng nữa cho cùng công ty.
+
+        Dùng khi nhà cung cấp có 2-3 nơi lấy hàng: mỗi nơi là một điểm riêng vì toạ độ, giờ
+        mở cửa và định mức thời gian của chúng khác nhau — nhét chung một điểm thì mọi con số
+        đo được thành trung bình của những chỗ không liên quan gì nhau.
+        """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Thêm địa chỉ nhận hàng',
+            'res_model': 'hlv.pickup.point',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_partner_id': self.partner_id.id,
+                'default_name': '%s — địa chỉ %d' % (
+                    self.partner_id.name or self.name,
+                    len(self.partner_id.x_pickup_point_ids) + 1,
+                ),
+            },
+        }
 
     # ------------------------------------------------------------------
     # Toạ độ

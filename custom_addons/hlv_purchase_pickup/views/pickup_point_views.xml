@@ -5,8 +5,10 @@
         <field name="model">hlv.pickup.point</field>
         <field name="arch" type="xml">
             <list string="Điểm nhận hàng" decoration-warning="not has_coords">
+                <field name="partner_id" optional="show"/>
                 <field name="name"/>
                 <field name="address" optional="show"/>
+                <field name="contact_phone" optional="show" widget="phone"/>
                 <field name="partner_count" string="Mã NCC"/>
                 <field name="median_service_minutes" string="Nhận (phút)"/>
                 <field name="sample_count" string="Số mẫu"/>
@@ -26,6 +28,10 @@
         <field name="arch" type="xml">
             <form string="Điểm nhận hàng">
                 <header>
+                    <button name="action_add_address" type="object"
+                            string="Thêm địa chỉ khác cho công ty này"
+                            invisible="not partner_id"
+                            help="Nhà cung cấp có 2-3 nơi lấy hàng thì mỗi nơi là một điểm riêng."/>
                     <button name="action_geocode" type="object" string="Hỏi Google toạ độ"
                             invisible="not address"/>
                     <button name="action_confirm_geo" type="object" string="Duyệt toạ độ"
@@ -54,6 +60,7 @@
                     </div>
                     <group>
                         <group string="Địa chỉ">
+                            <field name="partner_id"/>
                             <field name="address"/>
                             <field name="contact_name"/>
                             <field name="contact_phone" widget="phone"/>

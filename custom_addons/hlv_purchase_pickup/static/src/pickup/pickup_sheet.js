@@ -39,6 +39,32 @@ window.HlvPickup = window.HlvPickup || {};
   function applyTransform(offset, animate) {
     sheet.style.transition = animate ? "transform .25s ease" : "none";
     sheet.style.transform = "translateY(" + Math.round(offset) + "px)";
+    /* Công bố chiều cao đang che cho CSS dùng: nút tròn và dòng ghi chú trên bản đồ phải
+       nằm TRÊN mép tấm trượt, không thì chúng bị che mất tiêu — đúng lỗi "nút tối ưu lộ
+       trình đâu rồi". */
+    var app = HP.$("pk-app");
+    if (app) {
+      app.style.setProperty("--pk-sheet-visible",
+        Math.round(sheet.offsetHeight - offset) + "px");
+    }
+  }
+
+  /**
+   * Đặt lại vị trí tấm trượt, nhưng ĐO Ở KHUNG HÌNH SAU.
+   *
+   * Đo ngay lúc vừa gán innerHTML là nguồn của lỗi "tấm trượt hở cả phần thân": lúc
+   * ``init()`` chạy thì màn hình bước 3 còn đang ẩn nên mọi phép đo ra 0, và ngay cả khi đã
+   * hiện, chiều cao phần đầu chỉ đúng sau khi trình duyệt bố trí lại. Hoãn sang
+   * requestAnimationFrame thì lúc đo luôn có số thật.
+   */
+  function scheduleApply(animate) {
+    window.requestAnimationFrame(function () {
+      /* Màn hình đang ẩn thì đo không có nghĩa — để nguyên, lần hiện sau sẽ đặt lại. */
+      if (!sheet || !sheet.offsetHeight) {
+        return;
+      }
+      applyTransform(translateFor(snap), animate);
+    });
   }
 
   /** Nấc gần nhất với độ cao đang nhìn thấy — dùng khi thả tay. */
@@ -63,7 +89,7 @@ window.HlvPickup = window.HlvPickup || {};
     /** Đặt nấc và trượt tới đó. animate=false dùng khi vẽ lại nội dung, tránh giật. */
     setSnap: function (name, animate) {
       snap = SNAPS.indexOf(name) > -1 ? name : "peek";
-      applyTransform(translateFor(snap), animate !== false);
+      scheduleApply(animate !== false);
     },
 
     /** Chạm thanh nắm: peek → half → full → peek. */
@@ -90,9 +116,7 @@ window.HlvPickup = window.HlvPickup || {};
 
     /** Gọi lại sau khi nội dung phần đầu đổi, vì nấc peek đo theo chiều cao phần đầu. */
     refresh: function () {
-      if (sheet) {
-        applyTransform(translateFor(snap), false);
-      }
+      scheduleApply(false);
     },
 
     init: function () {
@@ -104,6 +128,15 @@ window.HlvPickup = window.HlvPickup || {};
       HP.sheet.setSnap("peek", false);
       bindDrag();
       window.addEventListener("resize", HP.sheet.refresh);
+
+      /* Phần đầu đổi chiều cao mỗi khi sang điểm khác (tên dài ngắn khác nhau, có/không có
+         giờ dự kiến). Theo dõi trực tiếp thay vì trông chờ nơi gọi nhớ refresh — quên một
+         chỗ là tấm trượt hở ra phần thân đúng như lỗi đã gặp. */
+      if (window.ResizeObserver) {
+        new window.ResizeObserver(function () {
+          HP.sheet.refresh();
+        }).observe(HP.$("pk-sheet-head"));
+      }
     },
   };
 

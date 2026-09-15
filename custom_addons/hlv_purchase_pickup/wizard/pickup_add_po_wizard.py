@@ -57,6 +57,44 @@ class HlvPickupAddPoWizard(models.TransientModel):
                 domain.append(('date_order', '<=', wizard.date_to))
             wizard.available_order_ids = self.env['purchase.order'].search(domain, limit=500)
 
+    point_preview = fields.Text(
+        string='Điểm nhận sẽ dùng', compute='_compute_point_preview',
+        help='Địa chỉ và điện thoại mặc định của từng nhà cung cấp trong danh sách đã chọn. '
+             'Sau khi thêm vào chuyến, sửa được từng dòng ở tab Điểm nhận.',
+    )
+
+    @api.depends('order_ids')
+    def _compute_point_preview(self):
+        """Cho thấy trước sẽ tới đâu, gọi cho ai — TRƯỚC khi bấm thêm vào chuyến.
+
+        Dùng ``resolve_for_partner`` chứ không phải ``find_or_create_for_partner``: hàm sau
+        tạo bản ghi, mà tạo bản ghi trong compute thì chỉ cần người dùng mở wizard rồi đóng
+        lại là đã sinh ra một loạt điểm rác.
+        """
+        Point = self.env['hlv.pickup.point']
+        for wizard in self:
+            seen = set()
+            lines = []
+            for order in wizard.order_ids:
+                partner = order.partner_id
+                if partner.id in seen:
+                    continue
+                seen.add(partner.id)
+                point = Point.resolve_for_partner(partner)
+                if not point:
+                    lines.append('• %s → sẽ tạo điểm mới từ địa chỉ của liên hệ'
+                                 % partner.display_name)
+                    continue
+                others = len(point.partner_id.x_pickup_point_ids) - 1 if point.partner_id else 0
+                lines.append('• %s\n    %s\n    %s%s' % (
+                    point.name,
+                    point.address or '(chưa có địa chỉ — sẽ không hiện trên bản đồ)',
+                    point.contact_phone or '(chưa có điện thoại)',
+                    '  ·  công ty còn %d địa chỉ khác, đổi được ở tab Điểm nhận' % others
+                    if others > 0 else '',
+                ))
+            wizard.point_preview = '\n'.join(lines)
+
     def action_add(self):
         self.ensure_one()
         if not self.order_ids:

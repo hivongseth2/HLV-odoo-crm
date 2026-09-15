@@ -110,8 +110,17 @@
                                       decoration-muted="state == 'skipped'"
                                       decoration-success="state == 'done'">
                                     <field name="sequence" widget="handle"/>
-                                    <field name="point_id" readonly="1"/>
+                                    <!-- Đổi được sang địa chỉ khác CỦA CÙNG CÔNG TY. Domain
+                                         kèm cả điểm chưa gán công ty để dữ liệu cũ vẫn chọn
+                                         được. -->
+                                    <field name="point_id"
+                                           domain="['|', ('partner_id', '=', partner_id), ('partner_id', '=', False)]"
+                                           context="{'default_partner_id': partner_id}"/>
+                                    <field name="point_address" optional="show"/>
+                                    <field name="point_phone" optional="show" widget="phone"/>
+                                    <field name="point_contact" optional="hide"/>
                                     <field name="line_count" string="Đơn"/>
+                                    <field name="partner_id" column_invisible="True"/>
                                     <field name="planned_travel_minutes" string="Dự kiến đi"/>
                                     <field name="planned_arrival" string="Dự kiến tới"/>
                                     <field name="arrived_at"/>
@@ -126,12 +135,16 @@
                             </field>
                         </page>
                         <page string="Đơn mua hàng" name="lines">
-                            <field name="line_ids" nolabel="1" readonly="1">
-                                <list>
-                                    <field name="po_name"/>
-                                    <field name="po_partner_name"/>
-                                    <field name="point_id"/>
-                                    <field name="po_amount" optional="show"/>
+                            <field name="line_ids" nolabel="1">
+                                <!-- Chuyển đơn sang điểm khác: nhà cung cấp có 2-3 địa chỉ
+                                     thì hàng của cùng một đơn đặt có thể nằm ở hai nơi. -->
+                                <list editable="bottom" create="false" delete="false">
+                                    <field name="po_name" readonly="1"/>
+                                    <field name="po_partner_name" readonly="1"/>
+                                    <field name="stop_id" string="Điểm nhận"
+                                           domain="[('run_id', '=', parent.id)]"
+                                           options="{'no_create': True}"/>
+                                    <field name="po_amount" optional="show" readonly="1"/>
                                     <field name="state" widget="badge"
                                            decoration-success="state == 'received'"
                                            decoration-warning="state == 'not_ready'"/>

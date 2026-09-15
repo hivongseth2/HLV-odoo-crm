@@ -226,11 +226,15 @@
 .pk-map { width: 100%; height: 100%; background: var(--pk-bg); }
 
 /* Lời giải thích khi bản đồ không vẽ được — nổi trên nền bản đồ, không đẩy gì đi chỗ khác. */
+/* Cả dòng ghi chú và hàng nút tròn đều neo theo mép trên tấm trượt (biến do pickup_sheet.js
+   cập nhật). Chặn trên ở 55vh để khi tấm trượt mở hết, chúng trôi xuống dưới nó chứ không
+   bay lên giữa màn hình. */
 .pk-mapnote {
   position: absolute;
   left: 8px;
   right: 8px;
-  bottom: 12px;
+  bottom: calc(min(var(--pk-sheet-visible, 190px), 55vh) + 12px);
+  transition: bottom .25s ease;
   z-index: 5;
   padding: 10px 12px;
   border-radius: 10px;
@@ -244,15 +248,16 @@
 .pk-fabs {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  bottom: calc(min(var(--pk-sheet-visible, 190px), 55vh) + 12px);
+  transition: bottom .25s ease;
   z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .pk-fab {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   border: none;
   background: var(--pk-card);
@@ -278,6 +283,9 @@
   border-radius: 16px 16px 0 0;
   box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.22);
   will-change: transform;
+  /* Nằm ngoài màn hình cho tới khi JS đo xong và đặt đúng nấc. Không có dòng này thì lúc
+     chưa đo được, tấm trượt hiện ra mở toang che hết bản đồ. */
+  transform: translateY(100%);
 }
 /* Thanh nắm phải rộng hết chiều ngang: trên xe rung lắc, ngón tay không trúng một vạch nhỏ. */
 .pk-sheet-grab {

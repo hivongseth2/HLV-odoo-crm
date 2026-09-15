@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- base.view_partner_form và xpath //div[@name='button_box'] đã có 8 module khác trong
+         repo này dùng, nên là điểm mở rộng đủ ổn định. -->
+    <record id="view_partner_form_pickup" model="ir.ui.view">
+        <field name="name">res.partner.form.pickup</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_pickup_points" type="object" class="oe_stat_button"
+                        icon="fa-map-marker" invisible="x_pickup_point_count == 0"
+                        groups="hlv_purchase_pickup.group_pickup_manager">
+                    <field name="x_pickup_point_count" widget="statinfo" string="Điểm nhận"/>
+                </button>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Nhận hàng" name="pickup"
+                      groups="hlv_purchase_pickup.group_pickup_manager">
+                    <group>
+                        <field name="x_pickup_point_id"
+                               domain="['|', ('partner_id', '=', id), ('partner_id', '=', False)]"
+                               context="{'default_partner_id': id}"/>
+                    </group>
+                    <p class="text-muted">
+                        Một công ty có thể có nhiều nơi lấy hàng. Mỗi nơi phải là một điểm
+                        riêng vì toạ độ, giờ mở cửa và định mức thời gian của chúng khác nhau
+                        — nhét chung một điểm thì con số đo được thành trung bình của những
+                        chỗ không liên quan gì nhau.
+                    </p>
+                    <field name="x_pickup_point_ids" nolabel="1"
+                           context="{'default_partner_id': id}">
+                        <list>
+                            <field name="name"/>
+                            <field name="address"/>
+                            <field name="contact_name" optional="show"/>
+                            <field name="contact_phone" widget="phone"/>
+                            <field name="has_coords" string="Có toạ độ"/>
+                            <field name="median_service_minutes" string="Nhận (phút)"/>
+                            <field name="sample_count" string="Số mẫu"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

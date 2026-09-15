@@ -219,18 +219,25 @@ window.HlvPickup = window.HlvPickup || {};
       return html + pendingMark() + "</section>";
     }
 
-    html += '<div class="pk-stop-actions">';
+    /* Điểm kế tiếp đã có nút chính ở đầu tấm trượt rồi. Lặp lại nó ở đây thì hai nút giống
+       hệt nhau nằm sát nhau, trông như lỗi và dễ bấm nhầm — nên chỉ giữ "Bỏ qua", vốn không
+       có ở đầu tấm trượt. */
+    var buttons = [];
     if (stop.state === "pending") {
-      html += '<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="arrive" ' +
-        'data-stop-id="' + stop.id + '" type="button">Đã tới</button>';
-      html += '<button class="pk-btn pk-btn-ghost" data-action="skip" data-stop-id="' +
-        stop.id + '" type="button">Bỏ qua</button>';
-    } else if (stop.state === "arrived") {
-      html += '<button class="pk-btn pk-btn-green pk-btn-wide" data-action="stop-done" ' +
-        'data-stop-id="' + stop.id + '" type="button">Đã nhận xong — rời điểm</button>';
+      if (!isNext) {
+        buttons.push('<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="arrive" ' +
+          'data-stop-id="' + stop.id + '" type="button">Đã tới</button>');
+      }
+      buttons.push('<button class="pk-btn pk-btn-ghost" data-action="skip" data-stop-id="' +
+        stop.id + '" type="button">Bỏ qua</button>');
+    } else if (stop.state === "arrived" && !isNext) {
+      buttons.push('<button class="pk-btn pk-btn-green pk-btn-wide" data-action="stop-done" ' +
+        'data-stop-id="' + stop.id + '" type="button">Đã nhận xong — rời điểm</button>');
     }
-    html += "</div></section>";
-    return html;
+    if (buttons.length) {
+      html += '<div class="pk-stop-actions">' + buttons.join("") + "</div>";
+    }
+    return html + "</section>";
   }
 
   /**

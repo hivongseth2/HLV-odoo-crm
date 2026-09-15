@@ -191,7 +191,12 @@ class HlvPickupRun(models.Model):
                 stop = self.env['hlv.pickup.stop'].create({
                     'run_id': self.id,
                     'point_id': point.id,
-                    'partner_id': order.partner_id.id,
+                    # Lưu CÔNG TY chứ không lưu liên hệ con của đơn: điểm nhận cũng gắn vào
+                    # công ty, hai bên phải cùng một mức thì bộ lọc "các địa chỉ khác của
+                    # công ty này" mới tìm ra gì. Người liên hệ cụ thể nằm trên điểm.
+                    'partner_id': (
+                        order.partner_id.commercial_partner_id or order.partner_id
+                    ).id,
                     'sequence': (len(stop_by_point) + 1) * 10,
                 })
                 stop_by_point[point.id] = stop

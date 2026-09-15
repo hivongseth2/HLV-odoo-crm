@@ -41,6 +41,9 @@
                     </list>
                 </field>
                 <field name="available_order_ids" invisible="1"/>
+                <group string="Điểm nhận sẽ dùng" invisible="not order_ids">
+                    <field name="point_preview" nolabel="1" readonly="1"/>
+                </group>
                 <footer>
                     <button name="action_add" type="object" string="Thêm vào chuyến"
                             class="btn-primary"/>
