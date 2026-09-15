@@ -36,9 +36,16 @@ window.HlvPickup = window.HlvPickup || {};
       HP.$("pk-screen-" + name).classList.toggle("pk-hidden", name !== step);
     });
     HP.$("pk-back").classList.toggle("pk-hidden", step === "pick");
+    /* Bước "Đi nhận" chuyển cả trang sang chế độ bản đồ toàn màn: đầu trang nổi lên trên
+       bản đồ, thanh bước ẩn đi. Các bước khác vẫn là trang cuộn bình thường. */
+    HP.$("pk-app").classList.toggle("pk-run-mode", step === "run");
+    HP.$("pk-steps").classList.toggle("pk-hidden", step === "run");
   }
 
   function renderSteps(step) {
+    if (step === "run") {
+      return;
+    }
     var current = SCREENS.indexOf(step);
     HP.$("pk-steps").innerHTML = STEP_LABEL.map(function (label, index) {
       var cls = "pk-step";
@@ -227,30 +234,88 @@ window.HlvPickup = window.HlvPickup || {};
   }
 
   /**
-   * Khu kết thúc chuyến, nằm CUỐI danh sách điểm chứ không nằm trên đầu.
-   * Nút "Đã về kho" chỉ hiện khi mọi điểm đã xong — trước đó nó chỉ là cái bẫy bấm nhầm.
-   * Vẫn chừa lối kết thúc sớm, nhưng là một dòng chữ nhỏ có hỏi lại, không phải nút to.
+   * Lối kết thúc SỚM, nằm cuối danh sách điểm.
+   * Khi còn điểm chưa xong thì đây chỉ là một dòng chữ nhỏ có hỏi lại — không phải nút to
+   * đặt cạnh nút chính để bấm nhầm. Khi đã đi hết điểm, nút kết thúc chuyển lên đầu tấm
+   * trượt (xem renderSheetHead) nên chỗ này để trống, tránh hai nút làm cùng một việc.
    */
   function renderFinish(run, queued) {
     var box = HP.$("pk-finish");
-    if (queued.runs[run.id]) {
-      box.innerHTML = pendingMark();
-      return;
-    }
     var left = run.stop_count - run.done_stop_count;
-    if (left > 0) {
-      box.innerHTML = '<div class="pk-finish-note">Còn ' + left + " điểm chưa xong.</div>" +
-        '<button class="pk-linkbtn" data-action="finish" type="button">Kết thúc sớm</button>';
+    if (queued.runs[run.id] || left <= 0) {
+      box.innerHTML = "";
       return;
     }
-    if (!HP.S.requireReturn) {
-      box.innerHTML = '<button class="pk-btn pk-btn-green pk-btn-block" data-action="finish" ' +
-        'type="button">Kết thúc chuyến</button>';
+    box.innerHTML = '<div class="pk-finish-note">Còn ' + left + " điểm chưa xong.</div>" +
+      '<button class="pk-linkbtn" data-action="finish" type="button">Kết thúc sớm</button>';
+  }
+
+  /** Nút kết thúc chuyến, dùng ở đầu tấm trượt khi mọi điểm đã xong. */
+  function finishButton() {
+    var label = HP.S.requireReturn ? "Đã về kho — kết thúc chuyến" : "Kết thúc chuyến";
+    return '<button class="pk-btn pk-btn-green pk-btn-block" data-action="finish" ' +
+      'type="button">' + label + "</button>";
+  }
+
+  /**
+   * Đầu tấm trượt — phần duy nhất nhìn thấy khi tấm trượt đang thu gọn.
+   * Chỉ chứa thứ cần liếc khi đang ngồi trên xe: đi được bao nhiêu rồi, điểm kế tiếp là ai,
+   * và đúng MỘT nút để bấm. Danh sách đầy đủ nằm trong thân, kéo lên mới thấy.
+   */
+  function renderSheetHead(run, queued) {
+    var head = HP.$("pk-sheet-head");
+    var html = '<div class="pk-sheet-progress">' + HP.esc([
+      run.done_stop_count + "/" + run.stop_count + " điểm",
+      "đi " + (HP.duration(run.total_travel_minutes) || "0'"),
+      "nhận " + (HP.duration(run.total_service_minutes) || "0'"),
+      run.received_line_count + "/" + run.line_count + " đơn",
+    ].join(" · ")) + "</div>";
+
+    var next = HP.nextStop(run.stops);
+    if (!next) {
+      head.innerHTML = html +
+        (queued.runs[run.id] ? pendingMark()
+          : '<div class="pk-finish-note">Đã đi hết các điểm.</div>' + finishButton());
       return;
     }
-    box.innerHTML = '<div class="pk-finish-note">Đã đi hết các điểm. Về tới kho thì bấm nút dưới.</div>' +
-      '<button class="pk-btn pk-btn-green pk-btn-block" data-action="finish" type="button">' +
-      "Đã về kho — kết thúc chuyến</button>";
+
+    var index = 0;
+    run.stops.forEach(function (stop, position) {
+      if (stop.id === next.id) {
+        index = position + 1;
+      }
+    });
+
+    var meta = [];
+    if ((next.lines || []).length) {
+      meta.push(next.lines.length + " đơn");
+    }
+    if (!next.arrived_at && next.planned_arrival) {
+      meta.push("dự kiến tới " + HP.timeOf(next.planned_arrival));
+    }
+    if (next.arrived_at) {
+      meta.push("tới lúc " + HP.timeOf(next.arrived_at));
+    }
+
+    html += '<div class="pk-next">' +
+      '<span class="pk-stop-no">' + index + "</span>" +
+      '<span class="pk-next-main"><strong>' + HP.esc(next.point_name) + "</strong>" +
+      '<span class="pk-next-meta">' + HP.esc(meta.join(" · ")) + "</span></span></div>";
+
+    if (queued.stops[next.id]) {
+      head.innerHTML = html + pendingMark();
+      return;
+    }
+
+    var action = next.state === "arrived"
+      ? '<button class="pk-btn pk-btn-green pk-btn-wide" data-action="stop-done" ' +
+        'data-stop-id="' + next.id + '" type="button">Đã nhận xong</button>'
+      : '<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="arrive" ' +
+        'data-stop-id="' + next.id + '" type="button">Đã tới</button>';
+
+    head.innerHTML = html + '<div class="pk-next-actions">' + action +
+      '<a class="pk-btn pk-btn-ghost" target="_blank" rel="noopener" href="' +
+      HP.esc(HP.directionsUrl(next)) + '">Chỉ đường</a></div>';
   }
 
   // ------------------------------------------------------------------
@@ -300,30 +365,18 @@ window.HlvPickup = window.HlvPickup || {};
     meta.textContent = parts.join(" · ");
   }
 
-  function renderFooter(run, step) {
-    var footer = HP.$("pk-footer");
-    var show = step === "run" && run && run.depart_at;
-    footer.classList.toggle("pk-hidden", !show);
-    if (!show) {
-      return;
-    }
-    footer.textContent = [
-      "Xuất phát " + HP.timeOf(run.depart_at),
-      "Di chuyển " + (HP.duration(run.total_travel_minutes) || "0'"),
-      "Nhận hàng " + (HP.duration(run.total_service_minutes) || "0'"),
-      run.received_line_count + "/" + run.line_count + " đơn",
-    ].join(" · ");
-  }
-
   /** Vẽ lại toàn bộ trang. run = null nghĩa là chưa chọn chuyến nào. */
   HP.render = function (run) {
+    /* Đổi sang chuyến khác thì cho bản đồ căn khung lại từ đầu. */
+    if (run && HP.S.run && HP.S.run.id !== run.id) {
+      HP.resetMapView();
+    }
     HP.S.run = run;
     var step = HP.stepOf(run, HP.S.forcePick);
     var queued = HP.queuedKeys();
 
     renderSteps(step);
     renderHeader(run, step);
-    renderFooter(run, step);
     showScreen(step);
 
     if (step === "depart") {
@@ -347,7 +400,10 @@ window.HlvPickup = window.HlvPickup || {};
         return renderStop(stop, index, next && stop.id === next.id, queued);
       }).join("");
     }
+    renderSheetHead(run, queued);
     renderFinish(run, queued);
     HP.renderMap(run);
+    /* Nấc thu gọn đo theo chiều cao phần đầu, mà phần đầu vừa đổi nội dung. */
+    HP.sheet.refresh();
   };
 })(window.HlvPickup);

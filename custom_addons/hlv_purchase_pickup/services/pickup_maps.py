@@ -99,12 +99,13 @@ def route_legs(env, origin, waypoints, destination=None, optimize=True):
 
         {'order': [chỉ số waypoint theo thứ tự nên đi],
          'legs': [{'minutes', 'km'}, ...],   # legs[0] là chặng xuất phát → điểm đầu
-         'total_minutes': int, 'total_km': float}
+         'total_minutes': int, 'total_km': float,
+         'polyline': str}                    # đường đi đã nén, để vẽ lên bản đồ
 
     Danh sách waypoint rỗng trả về kết quả rỗng chứ không gọi Google.
     """
     if not waypoints:
-        return {'order': [], 'legs': [], 'total_minutes': 0, 'total_km': 0.0}
+        return {'order': [], 'legs': [], 'total_minutes': 0, 'total_km': 0.0, 'polyline': ''}
     if len(waypoints) > MAX_WAYPOINTS:
         raise UserError(
             'Chuyến có %d điểm, vượt mức %d điểm mà Google sắp được trong một lần. '
@@ -123,7 +124,7 @@ def route_legs(env, origin, waypoints, destination=None, optimize=True):
     routes = payload.get('routes') or []
     if not routes:
         return {'order': list(range(len(waypoints))), 'legs': [], 'total_minutes': 0,
-                'total_km': 0.0}
+                'total_km': 0.0, 'polyline': ''}
 
     route = routes[0]
     order = route.get('waypoint_order') if optimize else list(range(len(waypoints)))
@@ -138,6 +139,9 @@ def route_legs(env, origin, waypoints, destination=None, optimize=True):
         'legs': legs,
         'total_minutes': sum(leg['minutes'] for leg in legs),
         'total_km': round(sum(leg['km'] for leg in legs), 1),
+        # Đường đi thật theo đường bộ, dạng chuỗi nén của Google. Vẽ đường thẳng nối các
+        # điểm thì trông như đi xuyên nhà dân, vô dụng với người đang cầm lái.
+        'polyline': (route.get('overview_polyline') or {}).get('points') or '',
     }
 
 

@@ -187,27 +187,151 @@
 .pk-tile-value { display: block; font-size: 20px; font-weight: 600; }
 .pk-tile-label { display: block; color: var(--pk-muted); font-size: 12px; margin-top: 2px; }
 
-.pk-map {
-  height: 240px;
-  margin-bottom: 12px;
-  border-radius: 10px;
+/* =================================================================
+   Bước "Đi nhận" — bản đồ toàn màn, tấm trượt đè lên trên
+   ================================================================= */
+/* Cả trang thành một khung cố định: người dùng kéo bản đồ và kéo tấm trượt, KHÔNG được cuộn
+   cả trang phía sau — cuộn nhầm lớp là cảm giác vỡ ngay lập tức trên điện thoại. */
+.pk-run-mode {
+  position: fixed;
+  inset: 0;
   overflow: hidden;
-  border: 1px solid var(--pk-line);
+  padding-bottom: 0;
 }
-/* Khi không vẽ được bản đồ, khối này thành một dòng giải thích — bỏ chiều cao cố định để
-   nó không chiếm 240px trống. */
-.pk-map.pk-map-note {
-  height: auto;
-  padding: 12px;
+.pk-run-mode .pk-screen { padding: 0; }
+
+/* Đầu trang nổi lên trên bản đồ thành một thẻ bo góc, thay vì chiếm một dải ngang. */
+.pk-run-mode .pk-header {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 8px;
+  right: 8px;
+  z-index: 15;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.pk-run-mode .pk-alert,
+.pk-run-mode .pk-offline {
+  position: absolute;
+  top: calc(76px + env(safe-area-inset-top));
+  left: 8px;
+  right: 8px;
+  z-index: 15;
+  margin: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+.pk-mapwrap { position: absolute; inset: 0; z-index: 1; }
+.pk-map { width: 100%; height: 100%; background: var(--pk-bg); }
+
+/* Lời giải thích khi bản đồ không vẽ được — nổi trên nền bản đồ, không đẩy gì đi chỗ khác. */
+.pk-mapnote {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--pk-card);
   color: var(--pk-muted);
   font-size: 13px;
   line-height: 1.5;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
-.pk-map-missing {
-  margin: -6px 0 12px;
-  color: var(--pk-amber);
+
+.pk-fabs {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pk-fab {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--pk-card);
+  color: var(--pk-blue);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.pk-fab:active { background: #e8f0fe; }
+
+/* --- Tấm trượt --- */
+.pk-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--pk-card);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.22);
+  will-change: transform;
+}
+/* Thanh nắm phải rộng hết chiều ngang: trên xe rung lắc, ngón tay không trúng một vạch nhỏ. */
+.pk-sheet-grab {
+  flex: none;
+  width: 100%;
+  padding: 10px 0 6px;
+  border: none;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+}
+.pk-sheet-bar {
+  display: block;
+  width: 44px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: #c4c9ce;
+}
+.pk-sheet-head {
+  flex: none;
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--pk-line);
+}
+.pk-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px calc(20px + env(safe-area-inset-bottom));
+}
+
+.pk-sheet-progress {
+  color: var(--pk-muted);
   font-size: 12px;
+  margin-bottom: 8px;
+}
+.pk-next { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.pk-next-main { flex: 1; min-width: 0; }
+.pk-next-main strong { display: block; font-size: 15px; }
+.pk-next-meta { display: block; color: var(--pk-muted); font-size: 13px; margin-top: 2px; }
+.pk-next-actions { display: flex; gap: 8px; }
+.pk-next-actions .pk-btn { flex: 1; }
+.pk-next-actions .pk-btn-ghost {
+  flex: none;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Chạm ghim trên bản đồ thì điểm tương ứng trong danh sách nháy lên một nhịp. */
+.pk-stop-flash { animation: pk-flash 1.2s ease; }
+@keyframes pk-flash {
+  0%, 100% { box-shadow: none; }
+  30% { box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
 }
 
 .pk-stop {
@@ -306,17 +430,6 @@
   padding: 32px 16px;
   text-align: center;
   color: var(--pk-muted);
-}
-
-.pk-footer {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  padding: 12px 14px;
-  background: var(--pk-card);
-  border-top: 1px solid var(--pk-line);
-  color: var(--pk-muted);
-  font-size: 13px;
-  text-align: center;
 }
 
 /* --- Hộp thoại hỏi lý do --- */

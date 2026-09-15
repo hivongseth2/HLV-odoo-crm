@@ -108,6 +108,43 @@ window.HlvPickup = window.HlvPickup || {};
     });
   }
 
+  /**
+   * Tối ưu lộ trình các điểm CHƯA TỚI, tính từ chỗ đang đứng.
+   *
+   * Cố tình gọi thẳng chứ KHÔNG đẩy vào hàng đợi offline như các nút ghi mốc: xếp lại lộ
+   * trình rồi để đó gửi sau là vô nghĩa — lúc gửi được thì người ta đã đi tiếp rồi. Mỗi lần
+   * bấm cũng là một lượt gọi Google có tính phí nên phải hỏi lại trước.
+   */
+  function optimizeRoute() {
+    if (S.sending || !S.run) {
+      return Promise.resolve();
+    }
+    if (!window.confirm("Sắp lại thứ tự các điểm chưa tới cho gần nhất, tính từ chỗ bạn " +
+        "đang đứng?")) {
+      return Promise.resolve();
+    }
+    setBusy(true);
+    return HP.currentPosition().then(function (gps) {
+      return HP.rpc("/api/pickup/optimize", {
+        run_id: S.run.id,
+        gps: gps,
+        client_event_id: HP.eventId(),
+      });
+    }).then(function (result) {
+      if (result.status === "error") {
+        setAlert(result.message);
+        return;
+      }
+      setAlert("Đã sắp lại thứ tự đi.", true);
+      HP.resetMapView();
+      HP.render(result.run);
+    }).catch(function (error) {
+      setAlert(error.message || "Không tối ưu được lộ trình.");
+    }).finally(function () {
+      setBusy(false);
+    });
+  }
+
   /** Nút Tải lại: ở bước chọn thì tải lại danh sách, trong chuyến thì tải lại chuyến đó. */
   function reload() {
     return S.forcePick || !S.openedRunId ? loadRunList() : openRun(S.openedRunId);
@@ -271,8 +308,11 @@ window.HlvPickup = window.HlvPickup || {};
 
     bindModal();
     bindClicks();
+    HP.sheet.init();
     HP.$("pk-refresh").addEventListener("click", reload);
     HP.$("pk-back").addEventListener("click", loadRunList);
+    HP.$("pk-recenter").addEventListener("click", HP.centerOnMe);
+    HP.$("pk-optimize").addEventListener("click", optimizeRoute);
     HP.$("pk-date").addEventListener("change", function (event) {
       S.date = event.target.value || HP.todayStr();
       loadRunList();

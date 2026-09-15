@@ -101,6 +101,11 @@ class HlvPickupRun(models.Model):
         string='Điểm thiếu toạ độ', compute='_compute_point_no_coords_count',
         help='Điểm thiếu toạ độ thì không hiện trên bản đồ và không tính được thứ tự đi.',
     )
+    route_polyline = fields.Char(
+        string='Đường đi (nén)', readonly=True, copy=False,
+        help='Chuỗi polyline Google trả về ở lần tính đường gần nhất, dùng để vẽ đường đi '
+             'thật lên bản đồ của trang /pickup.',
+    )
     optimize_count = fields.Integer(
         string='Số lần tối ưu', readonly=True, copy=False,
         help='Mỗi lần bấm là một lượt gọi Google có tính tiền. Có trần để một chuyến bị bấm '
@@ -209,6 +214,15 @@ class HlvPickupRun(models.Model):
         """Hỏi Google thứ tự đi ngắn nhất rồi ghi lại thứ tự kế hoạch và giờ dự kiến."""
         return self._fetch_route(optimize=True)
 
+    def optimize_from(self, origin_place=None):
+        """Tối ưu thứ tự các điểm chưa tới, tính từ một vị trí cho trước.
+
+        origin_place: dict ``{'lat', 'lng'}`` — vị trí hiện tại của người đi nhận; None thì
+        lấy kho. Đang đi giữa đường mà vẫn tính từ kho thì thứ tự trả về là thứ tự tối ưu
+        cho lúc mới xuất phát, không phải cho chỗ người ta đang đứng.
+        """
+        return self._fetch_route(optimize=True, origin=origin_place)
+
     def action_refresh_eta(self):
         """Giữ nguyên thứ tự đang có, chỉ lấy lại thời gian từng chặng và giờ dự kiến tới.
 
@@ -216,7 +230,7 @@ class HlvPickupRun(models.Model):
         """
         return self._fetch_route(optimize=False)
 
-    def _fetch_route(self, optimize):
+    def _fetch_route(self, optimize, origin=None):
         """Gọi Google cho các điểm CHƯA TỚI của chuyến rồi ghi kết quả.
 
         Chỉ đụng tới điểm chưa tới. Điểm đã đi rồi mà bị đảo chỗ thì thứ tự kế hoạch không
@@ -230,7 +244,7 @@ class HlvPickupRun(models.Model):
                 '— sửa thứ tự tay nếu cần đổi tiếp.' % (self.optimize_count, limit)
             )
 
-        origin = self._origin_place()
+        origin = origin or self._origin_place()
         pending = self.stop_ids.filtered(lambda s: s.state == 'pending').sorted(
             lambda s: (s.sequence, s.id)
         )
@@ -256,6 +270,7 @@ class HlvPickupRun(models.Model):
             'optimize_count': self.optimize_count + 1,
             'planned_total_minutes': result['total_minutes'],
             'planned_km': result['total_km'],
+            'route_polyline': result.get('polyline') or '',
         })
         return True
 
