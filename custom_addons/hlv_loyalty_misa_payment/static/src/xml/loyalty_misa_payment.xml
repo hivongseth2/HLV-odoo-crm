@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hlv_loyalty_misa_payment.Panel">
+        <div class="o_loyalty_misa_payment mt-3 mb-3">
+            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                <span class="fw-bold text-uppercase small" style="letter-spacing:1px;">Thu tiền hóa đơn MISA</span>
+                <span t-if="state.loading" class="badge text-bg-light">Đang kiểm tra MISA…</span>
+                <t t-if="!state.loading and !state.error and data.available and !data.error">
+                    <span class="badge" t-att-class="stateClass(data.summary_state)" t-esc="data.summary_label"/>
+                    <span t-if="data.invoice_no" class="text-muted small">
+                        Hóa đơn <b t-esc="data.invoice_no"/>
+                        <span t-if="invoiceSourceLabel"> — <t t-esc="invoiceSourceLabel"/></span>
+                    </span>
+                </t>
+                <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-secondary"
+                            t-att-disabled="state.loading" t-on-click="onRefresh">
+                        Tra lại từ MISA
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            t-att-disabled="state.loading or !state.data" t-on-click="onShowRaw">
+                        Xem dữ liệu thô
+                    </button>
+                </div>
+            </div>
+
+            <div t-if="state.error" class="alert alert-danger py-2 mb-0">
+                <b>Không tra được MISA:</b> <t t-esc="state.error"/>
+            </div>
+
+            <t t-elif="!state.loading and state.data">
+                <div t-if="!data.available" class="alert alert-light border py-2 mb-0 text-muted">
+                    <t t-esc="data.message"/>
+                </div>
+                <div t-elif="data.error" class="alert alert-danger py-2 mb-0">
+                    <b>Không tra được MISA:</b> <t t-esc="data.error"/>
+                </div>
+                <t t-else="">
+                    <div t-if="!data.invoice_no" class="alert alert-warning py-2 mb-0">
+                        <t t-esc="data.summary_label"/>
+                    </div>
+
+                    <t t-else="">
+                        <div class="table-responsive mb-2">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Số hóa đơn</th>
+                                        <th>Ký hiệu</th>
+                                        <th>Ngày HĐ</th>
+                                        <th>Số chứng từ</th>
+                                        <th>Khách hàng</th>
+                                        <th class="text-end">Tổng tiền</th>
+                                        <th>Thu tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="data.vouchers" t-as="voucher" t-key="voucher_index">
+                                        <td class="fw-bold" t-esc="voucher.invoice_no"/>
+                                        <td t-esc="voucher.invoice_series"/>
+                                        <td t-esc="formatDate(voucher.invoice_date)"/>
+                                        <td t-esc="voucher.refno_finance"/>
+                                        <td t-esc="voucher.partner_name"/>
+                                        <td class="text-end" t-esc="formatMoney(voucher.total_amount)"/>
+                                        <td>
+                                            <span class="badge" t-att-class="stateClass(voucher.paid_state)"
+                                                  t-esc="voucher.paid_label"/>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="!data.vouchers.length">
+                                        <td colspan="7" class="text-muted">
+                                            MISA không trả về chứng từ nào đúng số hóa đơn này.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div t-if="data.other_vouchers.length" class="alert alert-warning py-2">
+                            <b>Lưu ý:</b> MISA còn trả về
+                            <t t-esc="data.other_vouchers.length"/> chứng từ KHÁC số hóa đơn đang tra
+                            (tìm theo kiểu chứa nên lẫn hóa đơn gần giống) — không tính vào kết luận:
+                            <t t-foreach="data.other_vouchers" t-as="other" t-key="other_index">
+                                <span class="badge text-bg-light ms-1">
+                                    <t t-esc="other.invoice_no"/> — <t t-esc="other.paid_label"/>
+                                </span>
+                            </t>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Mã hàng</th>
+                                        <th>Tên hàng</th>
+                                        <th>Đơn hàng</th>
+                                        <th class="text-end">SL tích điểm</th>
+                                        <th class="text-end">SL trên hóa đơn</th>
+                                        <th class="text-end">Tiền trên HĐ (chưa VAT)</th>
+                                        <th>Số hóa đơn</th>
+                                        <th>Thu tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="data.lines" t-as="line" t-key="line_index">
+                                        <td t-esc="line.item_code or '—'"/>
+                                        <td>
+                                            <t t-esc="line.product_name"/>
+                                            <div t-if="line.match_scope === 'code_only'" class="small text-warning">
+                                                Khớp theo mã hàng, hóa đơn ghi mã đơn hàng khác — cần kiểm tra tay.
+                                            </div>
+                                            <div t-if="line.qty_shortfall" class="small text-warning">
+                                                Còn <t t-esc="formatQty(line.qty_shortfall)"/> chưa thấy trên hóa đơn.
+                                            </div>
+                                        </td>
+                                        <td t-esc="line.order_code or '—'"/>
+                                        <td class="text-end" t-esc="formatQty(line.qty)"/>
+                                        <td class="text-end" t-esc="formatQty(line.invoiced_qty)"/>
+                                        <td class="text-end" t-esc="formatMoney(line.invoiced_amount)"/>
+                                        <td t-esc="invoiceNosOf(line)"/>
+                                        <td>
+                                            <span class="badge" t-att-class="stateClass(line.paid_state)"
+                                                  t-esc="lineStateLabel(line.paid_state)"/>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="!data.lines.length">
+                                        <td colspan="8" class="text-muted">
+                                            Phiếu kho này không có dòng hàng tích điểm nào để đối chiếu.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </div>
+    </t>
+
+    <t t-name="hlv_loyalty_misa_payment.RawDialog">
+        <Dialog title="'Dữ liệu thô MISA'" size="'xl'">
+            <p class="text-muted small">
+                Đúng nguyên văn MISA trả về cho 3 bước: tra số hóa đơn, tìm chứng từ bán hàng
+                (sa_voucher_get) và chi tiết từng dòng hàng (get_paging_detail).
+            </p>
+            <pre class="o_loyalty_misa_payment_raw" t-esc="rawText"/>
+            <t t-set-slot="footer">
+                <button class="btn btn-primary" t-on-click="onCopy">Copy</button>
+                <button class="btn btn-secondary" t-on-click="() => this.props.close()">Đóng</button>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>

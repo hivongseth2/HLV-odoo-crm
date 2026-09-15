@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Chèn bảng "Thu tiền MISA" vào form Lịch sử điểm. Widget tự gọi MISA ngay khi form mở,
+         không qua field nào của bản ghi (số liệu chỉ để xem, không lưu). -->
+    <record id="view_loyalty_history_form_misa_payment" model="ir.ui.view">
+        <field name="name">hlv.loyalty.history.form.misa.payment</field>
+        <field name="model">hlv.loyalty.history</field>
+        <field name="inherit_id" ref="hlv_loyalty.view_loyalty_history_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@string='Công thức tính điểm']" position="before">
+                <widget name="hlv_loyalty_misa_payment"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

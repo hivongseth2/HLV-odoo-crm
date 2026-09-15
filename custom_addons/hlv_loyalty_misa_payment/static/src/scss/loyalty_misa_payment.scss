@@ -1,0 +1,13 @@
+// Khối JSON thô trong hộp thoại "Xem dữ liệu thô": giữ nguyên xuống dòng của JSON nhưng phải
+// tự cuộn, vì 1 chứng từ MISA có hàng chục field và dòng rất dài — không giới hạn thì hộp
+// thoại bị kéo rộng tràn màn hình.
+.o_loyalty_misa_payment_raw {
+    max-height: 60vh;
+    overflow: auto;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 12px;
+    white-space: pre;
+}
