@@ -252,15 +252,25 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             page += 1
         return lines
 
+    def get_vouchers_by_inv_no(self, inv_no):
+        """TẤT CẢ chứng từ bán hàng (sa_voucher_get) mà MISA trả về khi tìm theo SỐ HÓA ĐƠN.
+
+        get_voucher_search_payload() tìm theo kiểu CHỨA (operator 1) trên 4 property cùng lúc,
+        nên 1 số hóa đơn có thể ra NHIỀU dòng: số hóa đơn khác cùng chứa chuỗi này (gõ "005309"
+        ra cả "1005309"), hoặc chính hóa đơn đó tồn tại nhiều bản (thay thế/điều chỉnh). Hàm
+        này trả nguyên list để nơi gọi tự lọc/hiển thị hết; get_voucher_by_inv_no() bên dưới
+        giữ hành vi cũ (lấy dòng đầu) cho các luồng chỉ cần 1 chứng từ."""
+        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/paging_filter_v2"
+        payload = self.env['misa.config'].get_voucher_search_payload(inv_no)
+        data = self._fetch_misa_json_with_session_retry(url, payload, "sa_voucher_get")
+        return data.get("Data", {}).get("PageData", []) or []
+
     def get_voucher_by_inv_no(self, inv_no):
         """Tra 1 CHỨNG TỪ BÁN HÀNG (sa_voucher_get — hóa đơn thật đã lập trên MISA) theo SỐ
         HÓA ĐƠN — dùng cho case "hải quan": hóa đơn được xuất TRƯỚC khi có phiếu xuất kho
         Odoo, nên không có refno picking nào để tra theo luồng sa_invoice_request thông
         thường; đây là cách duy nhất tìm ra chứng từ chỉ bằng số hóa đơn."""
-        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/paging_filter_v2"
-        payload = self.env['misa.config'].get_voucher_search_payload(inv_no)
-        data = self._fetch_misa_json_with_session_retry(url, payload, "sa_voucher_get")
-        page_data = data.get("Data", {}).get("PageData", []) or []
+        page_data = self.get_vouchers_by_inv_no(inv_no)
         return page_data[0] if page_data else None
 
     def get_voucher_lines(self, refid):
