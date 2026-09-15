@@ -3,6 +3,8 @@ import math
 from odoo import models
 import pytz
 
+from .sale_line_amount_utils import compute_line_amounts
+
 
 class DeliveryPlannerServiceFormatter(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
@@ -318,29 +320,14 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                         if _kits_ratio != float('inf') and _kits_ratio > 0:
                             eff_qty_del = min(_kits_ratio, line.product_uom_qty)
             # --- Price / financial fields ---
-            price_unit = line.price_unit
-            discount = line.discount
-            price_after_discount = price_unit * (1.0 - discount / 100.0)
-            if eff_qty_del > 0:
-                if line.tax_id:
-                    tax_res = line.tax_id.with_context(round=False).compute_all(
-                        price_after_discount,
-                        currency=line.order_id.currency_id,
-                        quantity=eff_qty_del,
-                        product=line.product_id,
-                        partner=line.order_id.partner_shipping_id,
-                    )
-                    delivered_subtotal = tax_res['total_excluded']
-                    delivered_tax = sum(t['amount'] for t in tax_res['taxes'])
-                    delivered_total = tax_res['total_included']
-                else:
-                    delivered_subtotal = price_after_discount * eff_qty_del
-                    delivered_tax = 0.0
-                    delivered_total = delivered_subtotal
-            else:
-                delivered_subtotal = 0.0
-                delivered_tax = 0.0
-                delivered_total = 0.0
+            # Công thức dùng chung với bảng dòng hàng của phiếu xuất kho
+            # (xem services/sale_line_amount_utils.py).
+            amounts = compute_line_amounts(line, eff_qty_del)
+            price_unit = amounts['price_unit']
+            discount = amounts['discount']
+            delivered_subtotal = amounts['subtotal']
+            delivered_tax = amounts['tax']
+            delivered_total = amounts['total']
 
             so_lines_data.append({
                 'id': line.id,
