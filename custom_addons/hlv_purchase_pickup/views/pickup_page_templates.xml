@@ -13,8 +13,13 @@
                         t-attf-data-maps-key="#{maps_js_key or ''}"
                         id="pk-maps-config">/* cấu hình bản đồ đọc từ data-maps-key */</script>
             </t>
+            <!-- Màn hình chia 4 bước đúng theo trình tự làm việc thật: chọn chuyến → xuất
+                 phát → đi từng điểm → về kho. Gom hết vào một màn sẽ hiện nút "Đã về kho"
+                 ngay khi chưa tới điểm nào, và bấm nhầm là đóng chuyến giữa chừng. -->
             <div id="pk-app" t-attf-data-run-id="#{run_id or ''}">
                 <header class="pk-header">
+                    <button class="pk-btn pk-btn-icon pk-hidden" id="pk-back" type="button"
+                            aria-label="Chọn chuyến khác">←</button>
                     <div class="pk-header-main">
                         <span class="pk-run-name" id="pk-run-name">Đang tải…</span>
                         <span class="pk-run-meta" id="pk-run-meta"></span>
@@ -22,18 +27,43 @@
                     <button class="pk-btn pk-btn-ghost" id="pk-refresh" type="button">Tải lại</button>
                 </header>
 
+                <div class="pk-steps pk-hidden" id="pk-steps"></div>
+
                 <div class="pk-alert pk-hidden" id="pk-alert" role="status"></div>
                 <div class="pk-offline pk-hidden" id="pk-offline" role="status">
                     Đang mất mạng — các thao tác đã bấm sẽ tự gửi lại khi có sóng.
                 </div>
 
-                <div class="pk-actionbar" id="pk-actionbar"></div>
+                <!-- Bước 1: chọn ngày rồi chọn chuyến -->
+                <section class="pk-screen pk-hidden" id="pk-screen-pick">
+                    <div class="pk-field">
+                        <label for="pk-date">Ngày đi</label>
+                        <input type="date" id="pk-date"/>
+                    </div>
+                    <div id="pk-run-list"></div>
+                    <p class="pk-hint">
+                        Hoặc quét mã QR trên tờ lịch in để vào thẳng chuyến, khỏi phải chọn.
+                    </p>
+                </section>
 
-                <div class="pk-map pk-hidden" id="pk-map"></div>
+                <!-- Bước 2: xác nhận chuyến rồi xuất phát -->
+                <section class="pk-screen pk-hidden" id="pk-screen-depart">
+                    <div id="pk-depart-summary"></div>
+                </section>
 
-                <main class="pk-stops" id="pk-stops"></main>
+                <!-- Bước 3: đi từng điểm -->
+                <section class="pk-screen pk-hidden" id="pk-screen-run">
+                    <div class="pk-map pk-hidden" id="pk-map"></div>
+                    <div class="pk-stops" id="pk-stops"></div>
+                    <div class="pk-finish" id="pk-finish"></div>
+                </section>
 
-                <footer class="pk-footer" id="pk-footer"></footer>
+                <!-- Bước 4: đã xong -->
+                <section class="pk-screen pk-hidden" id="pk-screen-done">
+                    <div id="pk-done-summary"></div>
+                </section>
+
+                <footer class="pk-footer pk-hidden" id="pk-footer"></footer>
 
                 <div class="pk-modal pk-hidden" id="pk-modal">
                     <div class="pk-modal-box">

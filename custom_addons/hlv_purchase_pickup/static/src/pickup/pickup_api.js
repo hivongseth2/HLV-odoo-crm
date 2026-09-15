@@ -19,8 +19,12 @@ window.HlvPickup = window.HlvPickup || {};
   /* State dùng chung của cả trang. Chỉ file này và pickup_app.js được ghi vào đây. */
   HP.S = {
     run: null,
-    /* Chuyến chỉ định qua /pickup?run=<id> — đến từ mã QR trên tờ lịch in. */
-    forcedRunId: null,
+    /* Chuyến đang mở, để nút Tải lại biết phải tải lại cái gì. */
+    openedRunId: null,
+    /* Buộc về bước chọn chuyến dù S.run còn dữ liệu cũ. */
+    forcePick: false,
+    /* Ngày đang chọn ở bước 1, dạng "YYYY-MM-DD". */
+    date: null,
     requireReturn: true,
     isManager: false,
     sending: false,

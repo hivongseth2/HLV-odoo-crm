@@ -91,6 +91,40 @@ class PickupApiController(http.Controller):
             ) not in ('False', 'false', '0', ''),
         )
 
+    @http.route('/api/pickup/my_runs', type='json', auth='user', methods=['POST'])
+    def api_my_runs(self, date=None, **kwargs):
+        """Danh sách chuyến của tôi trong một ngày — màn hình chọn chuyến.
+
+        Chuyến ĐANG ĐI của ngày khác vẫn được kèm vào: chuyến khởi hành chiều muộn mà kết
+        thúc sau nửa đêm là có thật, mất nó khỏi danh sách thì người đi nhận không còn đường
+        nào quay lại chuyến đang dở.
+        """
+        self._check_access()
+        day = date or fields.Date.to_string(fields.Date.context_today(request.env.user))
+        Run = request.env['hlv.pickup.run']
+        mine = [('driver_user_id', '=', request.env.user.id)]
+        runs = Run.search(
+            mine + [('date', '=', day), ('state', '!=', 'cancelled')], order='id',
+        )
+        elsewhere = Run.search(
+            mine + [('state', '=', 'departed'), ('date', '!=', day)], order='date desc',
+        )
+        return _ok(date=day, runs=[self._run_brief(r) for r in (elsewhere | runs)])
+
+    def _run_brief(self, run):
+        """Đủ để dựng một dòng trong danh sách chọn chuyến, không kèm điểm và đơn."""
+        return {
+            'id': run.id,
+            'name': run.name,
+            'date': fields.Date.to_string(run.date),
+            'state': run.state,
+            'warehouse_name': run.warehouse_id.name or '',
+            'stop_count': run.stop_count,
+            'done_stop_count': run.done_stop_count,
+            'line_count': run.line_count,
+            'depart_at': fields.Datetime.to_string(run.depart_at) if run.depart_at else '',
+        }
+
     @http.route('/api/pickup/my_run', type='json', auth='user', methods=['POST'])
     def api_my_run(self, date=None, run_id=None, **kwargs):
         """Chuyến đang đi của tôi.
@@ -108,16 +142,16 @@ class PickupApiController(http.Controller):
         return _ok(run=self._run_payload(run))
 
     def _find_current_run(self, date):
-        Run = request.env['hlv.pickup.run']
-        base = [('driver_user_id', '=', request.env.user.id)]
-        running = Run.search(base + [('state', '=', 'departed')], order='date desc', limit=1)
-        if running:
-            return running
-        day = date or fields.Date.to_string(fields.Date.context_today(request.env.user))
-        return Run.search(
-            base + [('date', '=', day), ('state', 'in', ('assigned', 'draft'))],
-            order='id desc', limit=1,
-        )
+        """Chỉ tự mở lại chuyến ĐANG ĐI.
+
+        Cố tình không tự chọn giùm chuyến chưa xuất phát: người đi nhận phải tự chọn chuyến
+        ở màn hình đầu rồi mới bấm xuất phát. Ngược lại, chuyến đang đi dở mà bắt chọn lại
+        mỗi lần mở trang thì phiền vô ích — đó là lý do trường hợp này được mở thẳng.
+        """
+        return request.env['hlv.pickup.run'].search([
+            ('driver_user_id', '=', request.env.user.id),
+            ('state', '=', 'departed'),
+        ], order='date desc', limit=1)
 
     def _run_payload(self, run):
         return {

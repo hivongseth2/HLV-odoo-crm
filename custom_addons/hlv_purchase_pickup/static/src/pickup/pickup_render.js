@@ -1,57 +1,60 @@
 /** @odoo-module ignore */
 /* Dựng màn hình trang /pickup từ dữ liệu chuyến do server trả về.
 
-   File này CHỈ vẽ. Không gọi mạng, không đổi state — mọi nút chỉ gắn data-action, việc xử lý
-   nằm ở pickup_app.js. Vẽ lại toàn bộ sau mỗi thao tác thay vì sửa từng mẩu DOM: người dùng
-   mất sóng giữa chừng, chỉ có dữ liệu server mới là sự thật. */
+   Màn hình chia 4 BƯỚC, và bước hiện tại được SUY RA từ dữ liệu chuyến chứ không lưu riêng
+   một biến: chỉ cần một chỗ sai đồng bộ là người đi nhận thấy nút không đúng với việc đang
+   làm. Trình tự: chọn chuyến → xuất phát → đi từng điểm → về kho.
+
+   File này CHỈ vẽ. Không gọi mạng, không đổi dữ liệu — mọi nút chỉ gắn data-action, việc xử
+   lý nằm ở pickup_app.js. Vẽ lại toàn bộ sau mỗi thao tác thay vì sửa từng mẩu DOM: người
+   dùng mất sóng giữa chừng, chỉ có dữ liệu server mới là sự thật. */
 window.HlvPickup = window.HlvPickup || {};
 
 (function (HP) {
   "use strict";
 
+  var SCREENS = ["pick", "depart", "run", "done"];
+  var STEP_LABEL = ["Chọn chuyến", "Xuất phát", "Đi nhận", "Về kho"];
+
+  /**
+   * Bước đang ở, suy ra từ chuyến.
+   * Không có chuyến (hoặc người dùng bấm đổi chuyến) → "pick"; chưa bấm xuất phát →
+   * "depart"; đang đi → "run"; chuyến đã đóng → "done".
+   */
+  HP.stepOf = function (run, forcePick) {
+    if (forcePick || !run || run.state === "cancelled") {
+      return "pick";
+    }
+    if (!run.depart_at) {
+      return "depart";
+    }
+    return run.state === "done" ? "done" : "run";
+  };
+
+  function showScreen(step) {
+    SCREENS.forEach(function (name) {
+      HP.$("pk-screen-" + name).classList.toggle("pk-hidden", name !== step);
+    });
+    HP.$("pk-back").classList.toggle("pk-hidden", step === "pick");
+  }
+
+  function renderSteps(step) {
+    var current = SCREENS.indexOf(step);
+    HP.$("pk-steps").innerHTML = STEP_LABEL.map(function (label, index) {
+      var cls = "pk-step";
+      if (index === current) {
+        cls += " pk-step-now";
+      } else if (index < current) {
+        cls += " pk-step-past";
+      }
+      return '<span class="' + cls + '">' + (index + 1) + ". " + HP.esc(label) + "</span>";
+    }).join("");
+    HP.$("pk-steps").classList.remove("pk-hidden");
+  }
+
   function badge(map, state) {
     var entry = map[state] || [state, "pk-badge-grey"];
     return '<span class="pk-badge ' + entry[1] + '">' + HP.esc(entry[0]) + "</span>";
-  }
-
-  function renderHeader(run) {
-    HP.$("pk-run-name").textContent = run ? run.name : "Không có chuyến";
-    var meta = HP.$("pk-run-meta");
-    if (!run) {
-      meta.textContent = "";
-      return;
-    }
-    var parts = [run.date, HP.LABEL.RUN[run.state] || run.state,
-      run.done_stop_count + "/" + run.stop_count + " điểm"];
-    if (run.vehicle_note) {
-      parts.push(run.vehicle_note);
-    }
-    meta.textContent = parts.join(" · ");
-  }
-
-  function renderActionBar(run, queued) {
-    var bar = HP.$("pk-actionbar");
-    if (!run) {
-      bar.innerHTML = "";
-      return;
-    }
-    if (queued.runs[run.id]) {
-      bar.innerHTML = pendingMark();
-      return;
-    }
-    var html = "";
-    if (!run.depart_at && run.state !== "cancelled") {
-      html += '<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="depart" type="button">' +
-        "Xuất phát</button>";
-    }
-    if (run.depart_at) {
-      html += '<span class="pk-since">Xuất phát ' + HP.esc(HP.timeOf(run.depart_at)) + "</span>";
-    }
-    if (run.state === "departed" && HP.S.requireReturn) {
-      html += '<button class="pk-btn pk-btn-ghost" data-action="finish" type="button">' +
-        "Đã về kho</button>";
-    }
-    bar.innerHTML = html;
   }
 
   /* Thao tác đã bấm nhưng chưa gửi được. Phải hiện ra và phải GIẤU nút đi: không hiện gì
@@ -61,6 +64,63 @@ window.HlvPickup = window.HlvPickup || {};
     return '<div class="pk-pending">⏳ Đã bấm, đang chờ có sóng để gửi lên.</div>';
   }
 
+  // ------------------------------------------------------------------
+  // Bước 1 — chọn chuyến
+  // ------------------------------------------------------------------
+  /** Vẽ danh sách chuyến của một ngày. runs rỗng thì nói rõ là ngày đó không có chuyến. */
+  HP.renderRunList = function (runs) {
+    var box = HP.$("pk-run-list");
+    if (!runs || !runs.length) {
+      box.innerHTML = '<div class="pk-empty">Ngày này bạn không có chuyến nào. ' +
+        "Chọn ngày khác, hoặc hỏi người điều phối.</div>";
+      return;
+    }
+    box.innerHTML = runs.map(function (run) {
+      var facts = [run.date, run.stop_count + " điểm", run.line_count + " đơn"];
+      if (run.warehouse_name) {
+        facts.push(run.warehouse_name);
+      }
+      return '<button class="pk-runcard" type="button" data-action="open-run" ' +
+        'data-run-id="' + run.id + '">' +
+        '<span class="pk-runcard-head"><strong>' + HP.esc(run.name) + "</strong>" +
+        badge(HP.LABEL.RUN_BADGE, run.state) + "</span>" +
+        '<span class="pk-runcard-meta">' + HP.esc(facts.join(" · ")) + "</span>" +
+        "</button>";
+    }).join("");
+  };
+
+  // ------------------------------------------------------------------
+  // Bước 2 — xuất phát
+  // ------------------------------------------------------------------
+  function renderDepart(run, queued) {
+    var rows = (run.stops || []).map(function (stop, index) {
+      return '<li><strong>' + (index + 1) + ". " + HP.esc(stop.point_name) + "</strong>" +
+        '<span class="pk-preview-meta">' + HP.esc(stop.address || "") + "</span>" +
+        '<span class="pk-preview-meta">' +
+        HP.esc((stop.lines || []).map(function (line) {
+          return line.po_name;
+        }).join(", ")) + "</span></li>";
+    }).join("");
+
+    var html = '<div class="pk-card">' +
+      "<h3>Chuyến sắp đi</h3>" +
+      '<div class="pk-preview-facts">' +
+      HP.esc(run.stop_count + " điểm · " + run.line_count + " đơn" +
+        (run.warehouse_name ? " · xuất phát từ " + run.warehouse_name : "")) +
+      "</div>" +
+      (rows ? '<ol class="pk-preview">' + rows + "</ol>"
+        : '<div class="pk-empty">Chuyến chưa có điểm nào.</div>') +
+      "</div>";
+
+    html += queued.runs[run.id] ? pendingMark()
+      : '<button class="pk-btn pk-btn-primary pk-btn-block" data-action="depart" ' +
+        'type="button">Xuất phát</button>';
+    HP.$("pk-depart-summary").innerHTML = html;
+  }
+
+  // ------------------------------------------------------------------
+  // Bước 3 — đi từng điểm
+  // ------------------------------------------------------------------
   function renderLine(line, stopState, queued) {
     var html = '<div class="pk-line" data-line-id="' + line.id + '">';
     html += '<div class="pk-line-head"><span class="pk-po">' + HP.esc(line.po_name) + "</span>" +
@@ -160,45 +220,124 @@ window.HlvPickup = window.HlvPickup || {};
     return html;
   }
 
-  function renderFooter(run) {
-    var footer = HP.$("pk-footer");
-    if (!run || !run.depart_at) {
-      footer.textContent = "";
+  /**
+   * Khu kết thúc chuyến, nằm CUỐI danh sách điểm chứ không nằm trên đầu.
+   * Nút "Đã về kho" chỉ hiện khi mọi điểm đã xong — trước đó nó chỉ là cái bẫy bấm nhầm.
+   * Vẫn chừa lối kết thúc sớm, nhưng là một dòng chữ nhỏ có hỏi lại, không phải nút to.
+   */
+  function renderFinish(run, queued) {
+    var box = HP.$("pk-finish");
+    if (queued.runs[run.id]) {
+      box.innerHTML = pendingMark();
       return;
     }
-    var parts = [
-      "Di chuyển " + (HP.duration(run.total_travel_minutes) || "0'"),
-      "Nhận hàng " + (HP.duration(run.total_service_minutes) || "0'"),
-      "Cả chuyến " + (HP.duration(run.total_minutes) || "0'"),
-      run.received_line_count + "/" + run.line_count + " đơn",
-    ];
-    footer.textContent = parts.join(" · ");
+    var left = run.stop_count - run.done_stop_count;
+    if (left > 0) {
+      box.innerHTML = '<div class="pk-finish-note">Còn ' + left + " điểm chưa xong.</div>" +
+        '<button class="pk-linkbtn" data-action="finish" type="button">Kết thúc sớm</button>';
+      return;
+    }
+    if (!HP.S.requireReturn) {
+      box.innerHTML = '<button class="pk-btn pk-btn-green pk-btn-block" data-action="finish" ' +
+        'type="button">Kết thúc chuyến</button>';
+      return;
+    }
+    box.innerHTML = '<div class="pk-finish-note">Đã đi hết các điểm. Về tới kho thì bấm nút dưới.</div>' +
+      '<button class="pk-btn pk-btn-green pk-btn-block" data-action="finish" type="button">' +
+      "Đã về kho — kết thúc chuyến</button>";
   }
 
-  /** Vẽ lại toàn bộ trang theo payload chuyến. run = null nghĩa là hôm nay không có chuyến. */
+  // ------------------------------------------------------------------
+  // Bước 4 — đã xong
+  // ------------------------------------------------------------------
+  function renderDone(run) {
+    HP.$("pk-done-summary").innerHTML = '<div class="pk-card pk-card-done">' +
+      "<h3>Chuyến đã kết thúc</h3>" +
+      '<div class="pk-done-grid">' +
+      statTile("Di chuyển", HP.duration(run.total_travel_minutes) || "0'") +
+      statTile("Nhận hàng", HP.duration(run.total_service_minutes) || "0'") +
+      statTile("Cả chuyến", HP.duration(run.total_minutes) || "0'") +
+      statTile("Đơn nhận được", run.received_line_count + "/" + run.line_count) +
+      "</div></div>" +
+      '<button class="pk-btn pk-btn-ghost pk-btn-block" data-action="pick" type="button">' +
+      "Về danh sách chuyến</button>";
+  }
+
+  function statTile(label, value) {
+    return '<div class="pk-tile"><span class="pk-tile-value">' + HP.esc(value) + "</span>" +
+      '<span class="pk-tile-label">' + HP.esc(label) + "</span></div>";
+  }
+
+  // ------------------------------------------------------------------
+  // Đầu trang và chân trang
+  // ------------------------------------------------------------------
+  function renderHeader(run, step) {
+    var title = HP.$("pk-run-name");
+    var meta = HP.$("pk-run-meta");
+    if (step === "pick" || !run) {
+      title.textContent = "Chọn chuyến đi nhận";
+      meta.textContent = "";
+      return;
+    }
+    title.textContent = run.name;
+    var parts = [run.date, HP.LABEL.RUN[run.state] || run.state];
+    if (run.depart_at) {
+      parts.push(run.done_stop_count + "/" + run.stop_count + " điểm");
+    }
+    if (run.vehicle_note) {
+      parts.push(run.vehicle_note);
+    }
+    meta.textContent = parts.join(" · ");
+  }
+
+  function renderFooter(run, step) {
+    var footer = HP.$("pk-footer");
+    var show = step === "run" && run && run.depart_at;
+    footer.classList.toggle("pk-hidden", !show);
+    if (!show) {
+      return;
+    }
+    footer.textContent = [
+      "Xuất phát " + HP.timeOf(run.depart_at),
+      "Di chuyển " + (HP.duration(run.total_travel_minutes) || "0'"),
+      "Nhận hàng " + (HP.duration(run.total_service_minutes) || "0'"),
+      run.received_line_count + "/" + run.line_count + " đơn",
+    ].join(" · ");
+  }
+
+  /** Vẽ lại toàn bộ trang. run = null nghĩa là chưa chọn chuyến nào. */
   HP.render = function (run) {
     HP.S.run = run;
+    var step = HP.stepOf(run, HP.S.forcePick);
     var queued = HP.queuedKeys();
-    renderHeader(run);
-    renderActionBar(run, queued);
-    renderFooter(run);
+
+    renderSteps(step);
+    renderHeader(run, step);
+    renderFooter(run, step);
+    showScreen(step);
+
+    if (step === "depart") {
+      renderDepart(run, queued);
+      return;
+    }
+    if (step === "done") {
+      renderDone(run);
+      return;
+    }
+    if (step !== "run") {
+      return;
+    }
 
     var container = HP.$("pk-stops");
-    if (!run) {
-      container.innerHTML = '<div class="pk-empty">Hôm nay bạn chưa được giao chuyến nào. ' +
-        "Nếu chắc là có, bấm Tải lại hoặc hỏi người điều phối.</div>";
-      HP.$("pk-map").classList.add("pk-hidden");
-      return;
-    }
     if (!run.stops.length) {
       container.innerHTML = '<div class="pk-empty">Chuyến chưa có điểm nào.</div>';
-      return;
+    } else {
+      var next = HP.nextStop(run.stops);
+      container.innerHTML = run.stops.map(function (stop, index) {
+        return renderStop(stop, index, next && stop.id === next.id, queued);
+      }).join("");
     }
-
-    var next = HP.nextStop(run.stops);
-    container.innerHTML = run.stops.map(function (stop, index) {
-      return renderStop(stop, index, next && stop.id === next.id, queued);
-    }).join("");
+    renderFinish(run, queued);
     HP.renderMap(run);
   };
 })(window.HlvPickup);

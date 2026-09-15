@@ -57,24 +57,134 @@
   font-size: 14px;
 }
 
-.pk-actionbar {
+/* --- Thanh 4 bước: luôn cho biết đang ở đâu trong trình tự --- */
+.pk-steps {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px 0;
+  overflow-x: auto;
+  font-size: 12px;
+}
+.pk-step {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eceff1;
+  color: #78909c;
+  white-space: nowrap;
+}
+.pk-step-past { background: #e6f4ea; color: var(--pk-green); }
+.pk-step-now { background: var(--pk-blue); color: #fff; font-weight: 600; }
+
+.pk-screen { padding: 12px 14px 0; }
+
+.pk-field { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.pk-field label { color: var(--pk-muted); font-size: 14px; }
+.pk-field input[type="date"] {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--pk-line);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--pk-card);
+  color: var(--pk-text);
+}
+
+.pk-hint { color: var(--pk-muted); font-size: 13px; margin-top: 14px; }
+
+/* --- Thẻ chuyến ở bước chọn --- */
+.pk-runcard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--pk-card);
+  border: 1px solid var(--pk-line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+.pk-runcard-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 12px 14px 0;
+  gap: 8px;
+  font-size: 15px;
 }
-.pk-since { color: var(--pk-muted); font-size: 14px; }
+.pk-runcard-head strong { flex: 1; }
+.pk-runcard-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--pk-muted);
+  font-size: 13px;
+}
+
+/* --- Bước xuất phát --- */
+.pk-card {
+  background: var(--pk-card);
+  border: 1px solid var(--pk-line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.pk-card h3 { margin: 0 0 6px; font-size: 16px; }
+.pk-preview-facts { color: var(--pk-muted); font-size: 13px; margin-bottom: 10px; }
+.pk-preview { margin: 0; padding-left: 18px; }
+.pk-preview li { margin-bottom: 8px; }
+.pk-preview-meta {
+  display: block;
+  color: var(--pk-muted);
+  font-size: 12px;
+}
+
+/* --- Khu kết thúc chuyến, cuối danh sách điểm --- */
+.pk-finish { padding: 4px 0 20px; }
+.pk-finish-note {
+  color: var(--pk-muted);
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.pk-linkbtn {
+  display: block;
+  margin: 0 auto;
+  border: none;
+  background: none;
+  color: var(--pk-muted);
+  font-size: 13px;
+  text-decoration: underline;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 8px;
+}
+
+/* --- Bước đã xong --- */
+.pk-card-done { border-color: var(--pk-green); }
+.pk-done-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+.pk-tile {
+  background: var(--pk-bg);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+.pk-tile-value { display: block; font-size: 20px; font-weight: 600; }
+.pk-tile-label { display: block; color: var(--pk-muted); font-size: 12px; margin-top: 2px; }
 
 .pk-map {
   height: 240px;
-  margin: 12px 14px 0;
+  margin-bottom: 12px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--pk-line);
 }
-
-.pk-stops { padding: 12px 14px 0; }
 
 .pk-stop {
   background: var(--pk-card);
@@ -161,6 +271,8 @@
   cursor: pointer;
 }
 .pk-btn-wide { flex: 1; min-width: 160px; }
+.pk-btn-block { display: block; width: 100%; margin-bottom: 20px; }
+.pk-btn-icon { min-width: 44px; padding: 0 12px; font-size: 18px; line-height: 1; }
 .pk-btn-primary { background: var(--pk-blue); border-color: var(--pk-blue); color: #fff; }
 .pk-btn-green { background: var(--pk-green); border-color: var(--pk-green); color: #fff; }
 .pk-btn-ghost { background: var(--pk-card); }

@@ -1,6 +1,6 @@
 /** @odoo-module ignore */
-/* Khởi động trang /pickup: nạp cấu hình, nạp chuyến, bắt sự kiện bấm nút.
-   Phải nạp SAU các file khác vì gọi HP.render, HP.send, HP.startQueueWatcher. */
+/* Khởi động trang /pickup: nạp cấu hình, điều hướng 4 bước, bắt sự kiện bấm nút.
+   Phải nạp SAU các file khác vì gọi HP.render, HP.renderRunList, HP.send, HP.startQueueWatcher. */
 window.HlvPickup = window.HlvPickup || {};
 
 (function (HP) {
@@ -25,7 +25,7 @@ window.HlvPickup = window.HlvPickup || {};
     HP.$("pk-offline").classList.toggle("pk-hidden", !offline);
   }
 
-  /** Áp kết quả một lời gọi lên màn hình. Kết quả không kèm chuyến thì giữ nguyên màn hình. */
+  /** Áp kết quả một lời gọi lên màn hình. */
   function apply(result) {
     if (!result) {
       return;
@@ -62,19 +62,49 @@ window.HlvPickup = window.HlvPickup || {};
     });
   }
 
-  function loadRun() {
+  // ------------------------------------------------------------------
+  // Điều hướng giữa các bước
+  // ------------------------------------------------------------------
+  /** Bước 1: nạp danh sách chuyến của ngày đang chọn. */
+  function loadRunList() {
+    S.forcePick = true;
     setBusy(true);
-    /* Có run_id nghĩa là vào từ mã QR trên tờ lịch in — mở đúng chuyến đó thay vì đi tìm
-       chuyến đang dở. Giữ lại qua các lần Tải lại để quét xong không bị nhảy sang chuyến khác. */
-    var params = S.forcedRunId ? { run_id: S.forcedRunId } : {};
-    return HP.rpc("/api/pickup/my_run", params).then(function (result) {
+    return HP.rpc("/api/pickup/my_runs", { date: S.date }).then(function (result) {
       if (result.status === "error") {
         setAlert(result.message);
         return;
       }
       setAlert("");
-      HP.render(result.run || null);
+      HP.renderRunList(result.runs || []);
+      HP.render(null);
+    }).catch(function (error) {
+      setAlert(error.message || "Không tải được danh sách chuyến.");
+    }).finally(function () {
+      setBusy(false);
+    });
+  }
+
+  /**
+   * Mở một chuyến. runId rỗng nghĩa là để server tự tìm chuyến ĐANG ĐI (lúc mới vào trang).
+   * Không có chuyến nào đang dở thì quay về bước chọn chuyến.
+   */
+  function openRun(runId) {
+    setBusy(true);
+    var params = runId ? { run_id: runId } : {};
+    return HP.rpc("/api/pickup/my_run", params).then(function (result) {
+      if (result.status === "error") {
+        setAlert(result.message);
+        return loadRunList();
+      }
+      setAlert("");
+      if (!result.run) {
+        return loadRunList();
+      }
+      S.forcePick = false;
+      S.openedRunId = result.run.id;
+      HP.render(result.run);
       showOffline();
+      return null;
     }).catch(function (error) {
       setAlert(error.message || "Không tải được chuyến.");
     }).finally(function () {
@@ -82,9 +112,14 @@ window.HlvPickup = window.HlvPickup || {};
     });
   }
 
-  /* ----------------------------------------------------------------
-     Hộp thoại hỏi lý do — thay cho prompt() vốn bị chặn trên nhiều trình duyệt di động
-     ---------------------------------------------------------------- */
+  /** Nút Tải lại: ở bước chọn thì tải lại danh sách, trong chuyến thì tải lại chuyến đó. */
+  function reload() {
+    return S.forcePick || !S.openedRunId ? loadRunList() : openRun(S.openedRunId);
+  }
+
+  // ------------------------------------------------------------------
+  // Hộp thoại hỏi lý do — thay cho prompt() vốn bị chặn trên nhiều trình duyệt di động
+  // ------------------------------------------------------------------
   var pendingAsk = null;
 
   function ask(title, text, placeholder) {
@@ -126,16 +161,29 @@ window.HlvPickup = window.HlvPickup || {};
     });
   }
 
-  /* ----------------------------------------------------------------
-     Sự kiện
-     ---------------------------------------------------------------- */
+  // ------------------------------------------------------------------
+  // Sự kiện
+  // ------------------------------------------------------------------
   var HANDLERS = {
+    "open-run": function (node) {
+      return openRun(parseInt(node.dataset.runId, 10));
+    },
+
+    pick: function () {
+      return loadRunList();
+    },
+
     depart: function () {
       return send("/api/pickup/run_depart", { run_id: S.run.id });
     },
 
     finish: function () {
-      if (!window.confirm("Kết thúc chuyến? Các điểm chưa tới sẽ bị đánh dấu bỏ qua.")) {
+      var left = S.run.stop_count - S.run.done_stop_count;
+      var question = left > 0
+        ? "Còn " + left + " điểm chưa tới. Kết thúc chuyến bây giờ? Các điểm đó sẽ bị đánh " +
+          "dấu bỏ qua."
+        : "Kết thúc chuyến?";
+      if (!window.confirm(question)) {
         return Promise.resolve();
       }
       return send("/api/pickup/run_finish", { run_id: S.run.id });
@@ -218,17 +266,34 @@ window.HlvPickup = window.HlvPickup || {};
 
   function start() {
     var app = HP.$("pk-app");
-    S.forcedRunId = parseInt((app && app.dataset.runId) || "", 10) || null;
+    /* Có run_id nghĩa là vào từ mã QR trên tờ lịch in — mở thẳng chuyến đó, bỏ qua bước
+       chọn ngày. Đây là toàn bộ lý do tồn tại của mã QR. */
+    var fromQr = parseInt((app && app.dataset.runId) || "", 10) || null;
+
+    S.date = HP.todayStr();
+    HP.$("pk-date").value = S.date;
+
     bindModal();
     bindClicks();
-    HP.$("pk-refresh").addEventListener("click", loadRun);
+    HP.$("pk-refresh").addEventListener("click", reload);
+    HP.$("pk-back").addEventListener("click", loadRunList);
+    HP.$("pk-date").addEventListener("change", function (event) {
+      S.date = event.target.value || HP.todayStr();
+      loadRunList();
+    });
     window.addEventListener("online", showOffline);
     window.addEventListener("offline", showOffline);
     HP.startQueueWatcher(function (run) {
       HP.render(run);
       showOffline();
     });
-    loadConfig().then(loadRun);
+
+    loadConfig().then(function () {
+      /* Không có mã QR thì vẫn thử mở chuyến ĐANG ĐI trước: người đi nhận mở lại trang giữa
+         đường mà phải chọn ngày rồi chọn chuyến lại là phiền vô ích. Không có chuyến nào
+         đang dở thì openRun tự rơi về bước chọn. */
+      return openRun(fromQr);
+    });
   }
 
   if (document.readyState === "loading") {

@@ -30,6 +30,22 @@ window.HlvPickup = window.HlvPickup || {};
       done: "Đã xong",
       cancelled: "Đã huỷ",
     },
+    /* Cùng nội dung với RUN nhưng kèm màu, dùng cho thẻ chuyến ở màn hình chọn. */
+    RUN_BADGE: {
+      draft: ["Nháp", "pk-badge-grey"],
+      assigned: ["Chưa xuất phát", "pk-badge-grey"],
+      departed: ["Đang đi", "pk-badge-blue"],
+      done: ["Đã xong", "pk-badge-green"],
+      cancelled: ["Đã huỷ", "pk-badge-red"],
+    },
+  };
+
+  /** Ngày hôm nay theo giờ máy người dùng, dạng "YYYY-MM-DD" (khớp input type=date). */
+  HP.todayStr = function () {
+    var now = new Date();
+    return now.getFullYear() +
+      "-" + ("0" + (now.getMonth() + 1)).slice(-2) +
+      "-" + ("0" + now.getDate()).slice(-2);
   };
 
   /**
