@@ -2292,6 +2292,8 @@ function openDrawer(id){
   loadMessages(o.id);
   $('drawer').classList.add('open');
   $('drawer-overlay').classList.add('open');
+  // XEM PHIẾU XUẤT KHO: móc duy nhất cho sale_plan_out_picking.js (tính năng rời).
+  document.dispatchEvent(new CustomEvent('sale_plan:drawer_open',{detail:{order_id:o.id,order_name:o.name}}));
 }
 
 function closeDrawer(){
@@ -2821,6 +2823,9 @@ load(false);
 });
 })();
 </script>
+<!-- XEM PHIẾU XUẤT KHO: tính năng rời, xoá thẻ script này là gỡ xong phần UI.
+     Đổi ?v= khi sửa file để trình duyệt không dùng bản cache cũ. -->
+<script src="/hlv_sale_delivery_planning/static/src/sale_plan_out_picking/sale_plan_out_picking.js?v=1"></script>
 </body></html>"""
 
 
