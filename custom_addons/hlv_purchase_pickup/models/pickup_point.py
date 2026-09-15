@@ -5,7 +5,7 @@ from odoo.exceptions import UserError
 
 from odoo.addons.hlv_geo_utils.tools.geo_text import normalize_name, parse_latlng
 
-from ..services import pickup_maps, pickup_metrics
+from ..services import pickup_maps, pickup_metrics, pickup_ui
 from ..services.pickup_address import partner_address_text, partner_phone
 
 _logger = logging.getLogger(__name__)
@@ -231,6 +231,37 @@ class HlvPickupPoint(models.Model):
         if partner.x_pickup_point_id != point:
             partner.x_pickup_point_id = point.id
         return point
+
+    def action_refresh_address(self):
+        """Đọc lại địa chỉ từ liên hệ Odoo, ghi đè địa chỉ đang lưu.
+
+        Cần khi cách đọc địa chỉ thay đổi: các điểm tạo trước đây ghép cả phường/thành phố
+        vào sau ``street``, mà dữ liệu hệ này để TOÀN BỘ chuỗi trong ``street``, nên địa chỉ
+        đã lưu bị lặp hai lần phường và thành phố.
+
+        KHÔNG đụng tới toạ độ. Toạ độ đã có người duyệt là dữ liệu quý hơn địa chỉ chữ; đổi
+        địa chỉ nhiều thì bấm "Hỏi Google toạ độ" rồi duyệt lại.
+        """
+        changed = 0
+        skipped = self.browse()
+        for point in self:
+            source = point.partner_id or point.partner_ids[:1]
+            if not source:
+                skipped |= point
+                continue
+            address = partner_address_text(source)
+            if address and address != point.address:
+                point.address = address
+                changed += 1
+
+        message = 'Đã cập nhật địa chỉ cho %d điểm.' % changed
+        if skipped:
+            message += ' Không gắn với liên hệ nào nên bỏ qua: %s.' % ', '.join(
+                skipped.mapped('name')
+            )
+        return pickup_ui.notification(
+            message, 'warning' if skipped else 'success', title='Địa chỉ điểm nhận',
+        )
 
     def action_add_address(self):
         """Tạo thêm một địa chỉ nhận hàng nữa cho cùng công ty.

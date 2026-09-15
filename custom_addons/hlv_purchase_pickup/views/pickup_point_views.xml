@@ -32,6 +32,9 @@
                             string="Thêm địa chỉ khác cho công ty này"
                             invisible="not partner_id"
                             help="Nhà cung cấp có 2-3 nơi lấy hàng thì mỗi nơi là một điểm riêng."/>
+                    <button name="action_refresh_address" type="object"
+                            string="Lấy lại địa chỉ từ liên hệ"
+                            help="Đọc lại địa chỉ từ liên hệ Odoo. Không đụng tới toạ độ."/>
                     <button name="action_geocode" type="object" string="Hỏi Google toạ độ"
                             invisible="not address"/>
                     <button name="action_confirm_geo" type="object" string="Duyệt toạ độ"
@@ -118,6 +121,17 @@
                         domain="[('sample_count', '>=', 3)]"/>
             </search>
         </field>
+    </record>
+
+    <!-- Chạy hàng loạt từ danh sách: chọn nhiều điểm rồi vào menu Tác vụ. Cần thiết vì các
+         điểm tạo trước lần sửa cách đọc địa chỉ đều đang giữ chuỗi lặp. -->
+    <record id="action_pickup_point_refresh_address" model="ir.actions.server">
+        <field name="name">Lấy lại địa chỉ từ liên hệ</field>
+        <field name="model_id" ref="model_hlv_pickup_point"/>
+        <field name="binding_model_id" ref="model_hlv_pickup_point"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_refresh_address()</field>
     </record>
 
     <record id="action_pickup_point" model="ir.actions.act_window">

@@ -157,10 +157,17 @@ window.HlvPickup = window.HlvPickup || {};
     return html + "</div>";
   }
 
-  function renderStop(stop, index, isNext, queued) {
+  /**
+   * Một thẻ điểm dừng — dùng cho CẢ hai chỗ: đầu tấm trượt (điểm đang làm) và danh sách các
+   * điểm còn lại. Một hàm cho cả hai để không có hai bản đánh dấu lệch nhau, vốn là thứ đã
+   * làm điểm đang làm trông như nằm ở cấp khác so với các điểm sau.
+   *
+   * variant "head": thẻ phẳng, không viền, không bóng — nó đã nằm trong khung tấm trượt.
+   */
+  function renderStop(stop, index, queued, variant) {
     var classes = ["pk-stop", "pk-stop-" + stop.state];
-    if (isNext) {
-      classes.push("pk-stop-next");
+    if (variant === "head") {
+      classes.push("pk-stop-flat");
     }
     var html = '<section class="' + classes.join(" ") + '" data-stop-id="' + stop.id + '">';
 
@@ -219,20 +226,19 @@ window.HlvPickup = window.HlvPickup || {};
       return html + pendingMark() + "</section>";
     }
 
-    /* Điểm kế tiếp đã có nút chính ở đầu tấm trượt rồi. Lặp lại nó ở đây thì hai nút giống
-       hệt nhau nằm sát nhau, trông như lỗi và dễ bấm nhầm — nên chỉ giữ "Bỏ qua", vốn không
-       có ở đầu tấm trượt. */
+    /* Mỗi thẻ có đủ nút của chính nó. Không còn phải bỏ nút để tránh trùng, vì điểm đang
+       làm chỉ xuất hiện MỘT chỗ — ở đầu tấm trượt. */
     var buttons = [];
     if (stop.state === "pending") {
-      if (!isNext) {
-        buttons.push('<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="arrive" ' +
-          'data-stop-id="' + stop.id + '" type="button">Đã tới</button>');
-      }
+      buttons.push('<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="arrive" ' +
+        'data-stop-id="' + stop.id + '" type="button">Đã tới</button>');
       buttons.push('<button class="pk-btn pk-btn-ghost" data-action="skip" data-stop-id="' +
         stop.id + '" type="button">Bỏ qua</button>');
-    } else if (stop.state === "arrived" && !isNext) {
+    } else if (stop.state === "arrived") {
       buttons.push('<button class="pk-btn pk-btn-green pk-btn-wide" data-action="stop-done" ' +
-        'data-stop-id="' + stop.id + '" type="button">Đã nhận xong — rời điểm</button>');
+        'data-stop-id="' + stop.id + '" type="button">Đã nhận xong</button>');
+      buttons.push('<button class="pk-btn pk-btn-ghost" data-action="skip" data-stop-id="' +
+        stop.id + '" type="button">Bỏ qua</button>');
     }
     if (buttons.length) {
       html += '<div class="pk-stop-actions">' + buttons.join("") + "</div>";
@@ -266,10 +272,13 @@ window.HlvPickup = window.HlvPickup || {};
 
   /**
    * Đầu tấm trượt — phần duy nhất nhìn thấy khi tấm trượt đang thu gọn.
-   * Chỉ chứa thứ cần liếc khi đang ngồi trên xe: đi được bao nhiêu rồi, điểm kế tiếp là ai,
-   * và đúng MỘT nút để bấm. Danh sách đầy đủ nằm trong thân, kéo lên mới thấy.
+   *
+   * Đây là THẺ ĐẦY ĐỦ của điểm đang làm, dựng bằng đúng ``renderStop`` như các điểm khác.
+   * Trước đây phần đầu chỉ có tên và một nút, còn thẻ của điểm đó vẫn nằm trong danh sách —
+   * thành ra điểm đang làm bị xé làm hai chỗ và trông như ở cấp khác với các điểm sau.
+   * Giờ nó chỉ xuất hiện MỘT chỗ, và danh sách bên dưới chỉ còn các điểm còn lại.
    */
-  function renderSheetHead(run, queued) {
+  function renderSheetHead(run, queued, current) {
     var head = HP.$("pk-sheet-head");
     var html = '<div class="pk-sheet-progress">' + HP.esc([
       run.done_stop_count + "/" + run.stop_count + " điểm",
@@ -278,8 +287,7 @@ window.HlvPickup = window.HlvPickup || {};
       run.received_line_count + "/" + run.line_count + " đơn",
     ].join(" · ")) + "</div>";
 
-    var next = HP.nextStop(run.stops);
-    if (!next) {
+    if (!current) {
       head.innerHTML = html +
         (queued.runs[run.id] ? pendingMark()
           : '<div class="pk-finish-note">Đã đi hết các điểm.</div>' + finishButton());
@@ -288,41 +296,11 @@ window.HlvPickup = window.HlvPickup || {};
 
     var index = 0;
     run.stops.forEach(function (stop, position) {
-      if (stop.id === next.id) {
+      if (stop.id === current.id) {
         index = position + 1;
       }
     });
-
-    var meta = [];
-    if ((next.lines || []).length) {
-      meta.push(next.lines.length + " đơn");
-    }
-    if (!next.arrived_at && next.planned_arrival) {
-      meta.push("dự kiến tới " + HP.timeOf(next.planned_arrival));
-    }
-    if (next.arrived_at) {
-      meta.push("tới lúc " + HP.timeOf(next.arrived_at));
-    }
-
-    html += '<div class="pk-next">' +
-      '<span class="pk-stop-no">' + index + "</span>" +
-      '<span class="pk-next-main"><strong>' + HP.esc(next.point_name) + "</strong>" +
-      '<span class="pk-next-meta">' + HP.esc(meta.join(" · ")) + "</span></span></div>";
-
-    if (queued.stops[next.id]) {
-      head.innerHTML = html + pendingMark();
-      return;
-    }
-
-    var action = next.state === "arrived"
-      ? '<button class="pk-btn pk-btn-green pk-btn-wide" data-action="stop-done" ' +
-        'data-stop-id="' + next.id + '" type="button">Đã nhận xong</button>'
-      : '<button class="pk-btn pk-btn-primary pk-btn-wide" data-action="arrive" ' +
-        'data-stop-id="' + next.id + '" type="button">Đã tới</button>';
-
-    head.innerHTML = html + '<div class="pk-next-actions">' + action +
-      '<a class="pk-btn pk-btn-ghost" target="_blank" rel="noopener" href="' +
-      HP.esc(HP.directionsUrl(next)) + '">Chỉ đường</a></div>';
+    head.innerHTML = html + renderStop(current, index - 1, queued, "head");
   }
 
   // ------------------------------------------------------------------
@@ -398,18 +376,39 @@ window.HlvPickup = window.HlvPickup || {};
       return;
     }
 
+    /* Điểm đang làm nằm ở đầu tấm trượt, nên danh sách bên dưới BỎ nó ra. Có nó ở cả hai
+       chỗ là nguồn của cảm giác "điểm 1 không cùng cấp với điểm 2". */
+    var current = HP.nextStop(run.stops);
+    var rest = run.stops.filter(function (stop) {
+      return !current || stop.id !== current.id;
+    });
+
     var container = HP.$("pk-stops");
     if (!run.stops.length) {
       container.innerHTML = '<div class="pk-empty">Chuyến chưa có điểm nào.</div>';
+    } else if (!rest.length) {
+      container.innerHTML = '<div class="pk-empty">Không còn điểm nào khác.</div>';
     } else {
-      var next = HP.nextStop(run.stops);
-      container.innerHTML = run.stops.map(function (stop, index) {
-        return renderStop(stop, index, next && stop.id === next.id, queued);
-      }).join("");
+      container.innerHTML = '<div class="pk-list-title">Các điểm khác (' + rest.length +
+        ")</div>" + rest.map(function (stop) {
+          /* Giữ SỐ THỨ TỰ THẬT trong chuyến, không đánh số lại theo danh sách đã lọc — số
+             trên thẻ phải khớp với số trên ghim bản đồ. */
+          var position = 0;
+          run.stops.forEach(function (item, at) {
+            if (item.id === stop.id) {
+              position = at;
+            }
+          });
+          return renderStop(stop, position, queued, "list");
+        }).join("");
     }
-    renderSheetHead(run, queued);
+
+    renderSheetHead(run, queued, current);
     renderFinish(run, queued);
     HP.renderMap(run);
+    /* Vẽ lại xong thì đưa thân về đầu: đang cuộn giữa danh sách mà nội dung đổi thì thẻ
+       trên cùng bị cắt mất phần đầu, trông như thẻ lỗi. */
+    HP.$("pk-sheet-body").scrollTop = 0;
     /* Nấc thu gọn đo theo chiều cao phần đầu, mà phần đầu vừa đổi nội dung. */
     HP.sheet.refresh();
   };

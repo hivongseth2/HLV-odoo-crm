@@ -3,7 +3,7 @@ from datetime import timedelta
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-from ..services import pickup_maps, pickup_metrics, pickup_qr
+from ..services import pickup_maps, pickup_metrics, pickup_qr, pickup_ui
 
 PARAM_MAX_OPTIMIZE = 'hlv_purchase_pickup.max_optimize_per_run'
 DEFAULT_MAX_OPTIMIZE = 5
@@ -393,7 +393,9 @@ class HlvPickupRun(models.Model):
         self.ensure_one()
         points = self.stop_ids.mapped('point_id').filtered(lambda p: not p.has_coords)
         if not points:
-            return self._notify('Mọi điểm trong chuyến đã có toạ độ.', 'success')
+            return pickup_ui.notification(
+                'Mọi điểm trong chuyến đã có toạ độ.', title='Toạ độ điểm nhận',
+            )
 
         no_address = points.filtered(lambda p: not p.address)
         done = 0
@@ -415,19 +417,11 @@ class HlvPickupRun(models.Model):
                          % ', '.join(no_address.mapped('name')))
         if error_message:
             parts.append(error_message)
-        return self._notify(' '.join(parts), 'warning' if (no_address or error_message) else 'success')
-
-    def _notify(self, message, kind):
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Toạ độ điểm nhận',
-                'message': message,
-                'type': kind,
-                'sticky': kind != 'success',
-            },
-        }
+        return pickup_ui.notification(
+            ' '.join(parts),
+            'warning' if (no_address or error_message) else 'success',
+            title='Toạ độ điểm nhận',
+        )
 
     # ------------------------------------------------------------------
     # In lịch + mã QR

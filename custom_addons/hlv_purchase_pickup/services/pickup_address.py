@@ -8,13 +8,22 @@ Tách riêng vì cả điểm nhận hàng lẫn wizard xếp đơn vào chuyế
 def partner_address_text(partner):
     """Địa chỉ một dòng của một liên hệ.
 
-    partner: recordset ``res.partner`` (1 bản ghi).
-    Trả về chuỗi đã bỏ phần rỗng và khoảng trắng thừa; liên hệ không khai gì trả chuỗi rỗng.
+    **Có ``street`` thì chỉ lấy ``street``.** Dữ liệu của hệ này lưu TOÀN BỘ chuỗi địa chỉ
+    vào ``street`` ("108 Nguyễn Công Trứ, Phường Sài Gòn, TP Hồ Chí Minh, Việt Nam"), nên
+    ghép thêm city/state/country vào sau sẽ ra chuỗi lặp hai lần phường và thành phố.
+
+    Chỉ khi ``street`` trống mới ghép từ các field còn lại — để liên hệ nào nhập theo kiểu
+    tách field chuẩn của Odoo vẫn ra được địa chỉ dùng được.
+
+    partner: recordset ``res.partner`` (1 bản ghi) hoặc bất cứ đối tượng có các thuộc tính
+    tương ứng. Không có gì để lấy thì trả chuỗi rỗng.
     """
     if not partner:
         return ''
+    street = (partner.street or '').strip()
+    if street:
+        return street
     parts = [
-        partner.street,
         partner.street2,
         partner.city,
         partner.state_id.name if partner.state_id else '',

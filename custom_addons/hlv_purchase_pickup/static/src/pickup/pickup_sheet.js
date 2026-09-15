@@ -100,12 +100,16 @@ window.HlvPickup = window.HlvPickup || {};
 
     /** Mở tới nửa màn rồi cuộn tới một điểm — dùng khi chạm ghim trên bản đồ. */
     focusStop: function (stopId) {
+      /* Ghim của điểm ĐANG LÀM không có thẻ trong danh sách (nó ở đầu tấm trượt), nên thu
+         gọn lại là vừa đủ thấy nó. */
+      var node = HP.$("pk-sheet-body")
+        .querySelector('.pk-stop[data-stop-id="' + stopId + '"]');
+      if (!node) {
+        HP.sheet.setSnap("peek");
+        return;
+      }
       if (snap === "peek") {
         HP.sheet.setSnap("half");
-      }
-      var node = document.querySelector('.pk-stop[data-stop-id="' + stopId + '"]');
-      if (!node) {
-        return;
       }
       node.scrollIntoView({ behavior: "smooth", block: "start" });
       node.classList.add("pk-stop-flash");

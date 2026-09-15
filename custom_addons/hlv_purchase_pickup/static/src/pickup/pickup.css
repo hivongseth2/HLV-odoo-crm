@@ -322,19 +322,6 @@
   font-size: 12px;
   margin-bottom: 8px;
 }
-.pk-next { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
-.pk-next-main { flex: 1; min-width: 0; }
-.pk-next-main strong { display: block; font-size: 15px; }
-.pk-next-meta { display: block; color: var(--pk-muted); font-size: 13px; margin-top: 2px; }
-.pk-next-actions { display: flex; gap: 8px; }
-.pk-next-actions .pk-btn { flex: 1; }
-.pk-next-actions .pk-btn-ghost {
-  flex: none;
-  display: flex;
-  align-items: center;
-  text-decoration: none;
-}
-
 /* Chạm ghim trên bản đồ thì điểm tương ứng trong danh sách nháy lên một nhịp. */
 .pk-stop-flash { animation: pk-flash 1.2s ease; }
 @keyframes pk-flash {
@@ -350,7 +337,22 @@
   margin-bottom: 12px;
 }
 /* Điểm phải làm tiếp được viền đậm: người dùng liếc một cái là biết bấm vào đâu. */
-.pk-stop-next { border-color: var(--pk-blue); border-width: 2px; }
+/* Thẻ của điểm đang làm ở đầu tấm trượt: phẳng, không viền, không lề — nó đã nằm trong
+   khung của tấm trượt rồi, thêm một lớp viền nữa là thành hộp trong hộp. */
+.pk-stop-flat {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+}
+.pk-list-title {
+  color: var(--pk-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-bottom: 8px;
+}
 .pk-stop-done, .pk-stop-skipped, .pk-stop-failed { opacity: 0.65; }
 
 .pk-stop-head { display: flex; align-items: center; gap: 8px; }

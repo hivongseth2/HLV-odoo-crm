@@ -10,11 +10,15 @@ import os
 import sys
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 
 try:
-    from odoo.addons.hlv_purchase_pickup.services import pickup_metrics, pickup_qr
+    from odoo.addons.hlv_purchase_pickup.services import (
+        pickup_address, pickup_metrics, pickup_qr,
+    )
 except ImportError:  # chạy bằng python trần, ngoài Odoo
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'services'))
+    import pickup_address
     import pickup_metrics
     import pickup_qr
 
@@ -166,6 +170,47 @@ class TestQr(unittest.TestCase):
         self.assertIn('https%3A%2F%2Fhlv.odoo.com%2Fpickup%3Frun%3D12', src)
         self.assertIn('width=150', src)
         self.assertNotIn('?run=12', src.split('value=')[1].split('&')[0])
+
+
+class FakePartner(SimpleNamespace):
+    """Đủ thuộc tính để thay res.partner — nhờ vậy test chạy được không cần Odoo."""
+
+    def __init__(self, street='', street2='', city='', state=None, country=None):
+        super().__init__(
+            street=street, street2=street2, city=city,
+            state_id=SimpleNamespace(name=state) if state else None,
+            country_id=SimpleNamespace(name=country) if country else None,
+        )
+
+
+class TestAddress(unittest.TestCase):
+
+    def test_co_street_thi_chi_lay_street(self):
+        """Dữ liệu hệ này để CẢ chuỗi địa chỉ trong street. Ghép thêm là ra chuỗi lặp."""
+        partner = FakePartner(
+            street='108 Nguyễn Công Trứ, Phường Sài Gòn, TP Hồ Chí Minh, Việt Nam',
+            street2='Phường Sài Gòn', city='Quận 1',
+            state='TP Hồ Chí Minh', country='Việt Nam',
+        )
+        self.assertEqual(
+            pickup_address.partner_address_text(partner),
+            '108 Nguyễn Công Trứ, Phường Sài Gòn, TP Hồ Chí Minh, Việt Nam',
+        )
+
+    def test_khong_co_street_thi_ghep_field_con_lai(self):
+        partner = FakePartner(city='Biên Hoà', state='Đồng Nai', country='Việt Nam')
+        self.assertEqual(
+            pickup_address.partner_address_text(partner),
+            'Biên Hoà, Đồng Nai, Việt Nam',
+        )
+
+    def test_street_chi_co_khoang_trang_coi_nhu_rong(self):
+        partner = FakePartner(street='   ', city='Nhơn Trạch')
+        self.assertEqual(pickup_address.partner_address_text(partner), 'Nhơn Trạch')
+
+    def test_khong_khai_gi(self):
+        self.assertEqual(pickup_address.partner_address_text(FakePartner()), '')
+        self.assertEqual(pickup_address.partner_address_text(None), '')
 
 
 if __name__ == '__main__':
