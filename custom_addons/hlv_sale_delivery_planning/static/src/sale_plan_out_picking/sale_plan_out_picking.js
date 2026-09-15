@@ -38,6 +38,10 @@ function fq(value) {
     return num.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 }
 
+function fm(value) {
+    return Number(value || 0).toLocaleString('vi-VN') + '₫';
+}
+
 function callJson(url, params) {
     return fetch(url, {
         method: 'POST',
@@ -63,7 +67,7 @@ function injectStyles() {
         '.spop-modal{display:none;position:fixed;inset:0;z-index:2150;background:rgba(15,23,42,.45);',
         'align-items:center;justify-content:center;padding:16px}',
         '.spop-modal.open{display:flex}',
-        '.spop-dialog{background:#fff;border-radius:10px;width:min(920px,100%);max-height:88vh;display:flex;',
+        '.spop-dialog{background:#fff;border-radius:10px;width:min(1100px,100%);max-height:88vh;display:flex;',
         'flex-direction:column;box-shadow:0 24px 60px rgba(15,23,42,.28);overflow:hidden}',
         '.spop-header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc}',
         '.spop-title{font-weight:700;font-size:.95rem;color:#0f172a;flex:1;line-height:1.3}',
@@ -86,10 +90,17 @@ function injectStyles() {
         'background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px}',
         '.spop-info div{font-size:.78rem;color:#334155}',
         '.spop-info b{color:#0f172a}',
-        '.spop-table{width:100%;border-collapse:collapse;font-size:.78rem}',
+        // Bảng 8 cột không vừa màn hình hẹp → cho cuộn ngang trong khung riêng.
+        '.spop-table-wrap{overflow-x:auto}',
+        '.spop-table{width:100%;border-collapse:collapse;font-size:.78rem;min-width:760px}',
         '.spop-table th,.spop-table td{border:1px solid #e2e8f0;padding:6px 8px;vertical-align:top}',
         '.spop-table th{background:#f1f5f9;color:#475569;font-size:.72rem;text-transform:uppercase;letter-spacing:.3px}',
-        '.spop-table td.num{text-align:right;white-space:nowrap}',
+        '.spop-table td.num,.spop-table th.num{text-align:right;white-space:nowrap}',
+        '.spop-table tfoot td{background:#f8fafc;font-size:.8rem}',
+        '.spop-money{font-variant-numeric:tabular-nums}',
+        '.spop-amt-sub{color:#15803d}',
+        '.spop-amt-tax{color:#b45309}',
+        '.spop-amt-total{color:#1d4ed8}',
         '.spop-sub{font-size:.7rem;color:#64748b}',
         '.spop-empty{padding:28px 12px;text-align:center;color:#64748b;font-size:.85rem}',
         '@media(max-width:640px){.spop-dialog{max-height:94vh}}',
@@ -284,8 +295,12 @@ function detailHtml(picking) {
     if (!lines.length) {
         return html + '<div class="spop-empty">Phiếu không có dòng sản phẩm.</div>';
     }
-    html += '<table class="spop-table"><thead><tr>'
+    // Tiền tính trên SL thực giao của riêng phiếu này (backend đã tính sẵn).
+    var totalSubtotal = 0, totalTax = 0, totalTotal = 0;
+    html += '<div class="spop-table-wrap"><table class="spop-table"><thead><tr>'
         + '<th>Sản phẩm</th><th>ĐVT</th><th class="num">Yêu cầu</th><th class="num">Thực giao</th>'
+        + '<th class="num">Đơn giá</th><th class="num">TT thực xuất</th>'
+        + '<th class="num">VAT</th><th class="num">TT + VAT</th>'
         + '</tr></thead><tbody>';
     lines.forEach(function (line) {
         var breakdown = (line.breakdown || []).map(function (item) {
@@ -296,15 +311,30 @@ function detailHtml(picking) {
             return '<div class="spop-sub"><i class="fa fa-cube me-1"></i>' + parts.join(' · ') + '</div>';
         }).join('');
         var shortage = Number(line.qty_demand || 0) - Number(line.qty_done || 0);
+        totalSubtotal += Number(line.delivered_subtotal || 0);
+        totalTax += Number(line.delivered_tax || 0);
+        totalTotal += Number(line.delivered_total || 0);
         html += '<tr>'
             + '<td>' + esc(line.product_name) + breakdown + '</td>'
             + '<td>' + esc(line.uom_name) + '</td>'
             + '<td class="num">' + fq(line.qty_demand) + '</td>'
             + '<td class="num"><b>' + fq(line.qty_done) + '</b>'
             + (shortage > 0 ? '<div class="spop-sub" style="color:#b91c1c">thiếu ' + fq(shortage) + '</div>' : '')
-            + '</td></tr>';
+            + '</td>'
+            + '<td class="num spop-money">' + fm(line.price_unit)
+            + (line.discount ? '<div class="spop-sub" style="color:#b91c1c">-' + fq(line.discount) + '%</div>' : '')
+            + '</td>'
+            + '<td class="num spop-money spop-amt-sub">' + fm(line.delivered_subtotal) + '</td>'
+            + '<td class="num spop-money spop-amt-tax">' + fm(line.delivered_tax) + '</td>'
+            + '<td class="num spop-money spop-amt-total">' + fm(line.delivered_total) + '</td>'
+            + '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody><tfoot><tr>'
+        + '<td colspan="5" class="num"><b>Tổng</b></td>'
+        + '<td class="num spop-money spop-amt-sub"><b>' + fm(totalSubtotal) + '</b></td>'
+        + '<td class="num spop-money spop-amt-tax"><b>' + fm(totalTax) + '</b></td>'
+        + '<td class="num spop-money spop-amt-total"><b>' + fm(totalTotal) + '</b></td>'
+        + '</tr></tfoot></table></div>';
     html += '<div class="spop-sub mt-2"><i class="fa fa-lock me-1"></i>Màn hình chỉ xem — '
         + 'mọi thay đổi phiếu thực hiện trong Odoo.</div>';
     return html;

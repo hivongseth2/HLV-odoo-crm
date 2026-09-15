@@ -22,6 +22,7 @@ import logging
 from odoo import http, tools
 from odoo.http import request
 
+from ..services.sale_line_amount_utils import compute_line_amounts
 from .picking_export_helper import (
     PICKING_STATE_LABELS,
     _format_date_done,
@@ -75,7 +76,11 @@ class SalePlanOutPickingController(http.Controller):
         }
 
     def _picking_move_line(self, move):
-        """Một dòng sản phẩm, kèm kiện/lô nếu có (chỉ hiện khi kho thực sự dùng)."""
+        """Một dòng sản phẩm, kèm kiện/lô nếu có (chỉ hiện khi kho thực sự dùng).
+
+        Tiền tính theo SL thực giao CỦA PHIẾU NÀY, không phải SL đã giao của cả
+        đơn — một đơn giao nhiều chuyến thì mỗi phiếu ra tiền của riêng chuyến đó.
+        """
         breakdown = []
         for line in move.move_line_ids:
             package = line.result_package_id.name or ''
@@ -87,12 +92,18 @@ class SalePlanOutPickingController(http.Controller):
                 'lot': lot,
                 'qty': line.quantity,
             })
+        amounts = compute_line_amounts(move.sale_line_id, move.quantity)
         return {
             'product_name': move.product_id.display_name or '',
             'uom_name': move.product_uom.name or '',
             'qty_demand': move.product_uom_qty,
             'qty_done': move.quantity,
             'breakdown': breakdown,
+            'price_unit': round(amounts['price_unit'], 0),
+            'discount': amounts['discount'],
+            'delivered_subtotal': round(amounts['subtotal'], 0),
+            'delivered_tax': round(amounts['tax'], 0),
+            'delivered_total': round(amounts['total'], 0),
         }
 
     def _picking_detail(self, picking, order, utc_tz, user_tz):
@@ -105,7 +116,13 @@ class SalePlanOutPickingController(http.Controller):
         detail.update({
             'type_name': picking.picking_type_id.name or '',
             'order_name': order.name or '',
-            'partner_name': picking.partner_id.display_name or '',
+            # display_name của liên hệ con là "công ty, tên liên hệ" — với khách
+            # có contact trùng tên công ty thì ra chuỗi lặp 2 lần. Lấy liên hệ gốc.
+            'partner_name': (
+                picking.partner_id.commercial_partner_id.name
+                or picking.partner_id.name
+                or ''
+            ),
             'shipping_address': (
                 getattr(order, 'misa_shipping_address', '')
                 or getattr(picking.partner_id, 'contact_address_complete', '')
