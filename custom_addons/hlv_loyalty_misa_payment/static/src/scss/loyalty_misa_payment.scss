@@ -1,6 +1,253 @@
-// Khối JSON thô trong hộp thoại "Xem dữ liệu thô": giữ nguyên xuống dòng của JSON nhưng phải
-// tự cuộn, vì 1 chứng từ MISA có hàng chục field và dòng rất dài — không giới hạn thì hộp
-// thoại bị kéo rộng tràn màn hình.
+// Card "Thu tiền hóa đơn MISA" trên form Lịch sử điểm.
+//
+// Tông màu đi qua 3 biến CSS (--lmp-line/--lmp-soft/--lmp-ink) đặt ở class .o_lmp--<tông>, nên
+// thêm/đổi 1 tông chỉ sửa đúng 1 khối — thân card, thẻ hóa đơn và pill tự ăn theo mà không chỗ
+// nào phải khai lại mã màu.
+
+.o_lmp {
+    --lmp-line: #ced4da;
+    --lmp-soft: #f6f7f9;
+    --lmp-ink: #495057;
+
+    margin: 1rem 0;
+    border: 1px solid #dee2e6;
+    border-left: 4px solid var(--lmp-line);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+
+    &--paid    { --lmp-line: #198754; --lmp-soft: #e9f6ef; --lmp-ink: #15653f; }
+    &--unpaid  { --lmp-line: #dc3545; --lmp-soft: #fdeced; --lmp-ink: #a52834; }
+    &--partial { --lmp-line: #fd7e14; --lmp-soft: #fff4ea; --lmp-ink: #a75510; }
+    &--info    { --lmp-line: #0d9bb8; --lmp-soft: #e8f7fb; --lmp-ink: #0b7185; }
+    &--neutral { --lmp-line: #adb5bd; --lmp-soft: #f6f7f9; --lmp-ink: #495057; }
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        background: var(--lmp-soft);
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    &__icon {
+        font-size: 24px;
+        line-height: 1;
+        color: var(--lmp-line);
+    }
+
+    &__headtext {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    &__over {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #868e96;
+    }
+
+    &__title {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--lmp-ink);
+    }
+
+    &__sub {
+        font-size: 12px;
+        color: #6c757d;
+    }
+
+    &__actions {
+        display: flex;
+        gap: 6px;
+        flex: 0 0 auto;
+    }
+
+    // ==== Thẻ hóa đơn ====
+    // Dạng thẻ (không phải 1 bảng 7 cột) vì đa số trường hợp chỉ có ĐÚNG 1 hóa đơn: bảng 1
+    // dòng nhìn nặng và phải rê mắt ngang mới đọc được số hóa đơn, còn thẻ thì số hóa đơn +
+    // tình trạng thu tiền nằm ngay hàng đầu. Nhiều hóa đơn thì các thẻ tự xếp cạnh nhau.
+    &__invoices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px 14px;
+    }
+
+    &__inv {
+        flex: 1 1 260px;
+        min-width: 0;
+        border: 1px solid #e9ecef;
+        border-top: 3px solid var(--lmp-line);
+        border-radius: 5px;
+        padding: 8px 12px 10px;
+
+        &--paid    { --lmp-line: #198754; }
+        &--unpaid  { --lmp-line: #dc3545; }
+        &--partial { --lmp-line: #fd7e14; }
+        &--info    { --lmp-line: #0d9bb8; }
+        &--neutral { --lmp-line: #adb5bd; }
+    }
+
+    &__inv-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    &__inv-no {
+        font-size: 18px;
+        font-weight: 700;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: -0.5px;
+    }
+
+    &__inv-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        margin-top: 2px;
+        font-size: 11px;
+        color: #868e96;
+
+        span + span::before {
+            content: "·";
+            margin-right: 10px;
+        }
+    }
+
+    &__inv-amount {
+        margin-top: 4px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+
+    &__inv-partner {
+        font-size: 11px;
+        color: #6c757d;
+        // Tên công ty khách hàng rất dài, cắt 1 dòng để thẻ không cao gấp đôi thẻ bên cạnh.
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    // ==== Bảng dòng hàng ====
+    &__lines {
+        width: 100%;
+        margin: 0;
+        font-size: 13px;
+        border-collapse: collapse;
+
+        thead th {
+            padding: 6px 12px;
+            background: #fbfbfc;
+            border-top: 1px solid #e9ecef;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: #868e96;
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f1f3f5;
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
+    }
+
+    &__code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        background: #f1f3f5;
+        border-radius: 3px;
+        padding: 1px 6px;
+        white-space: nowrap;
+    }
+
+    &__muted {
+        color: #868e96;
+    }
+
+    &__nowrap {
+        white-space: nowrap;
+    }
+
+    &__warn {
+        margin-top: 2px;
+        font-size: 11px;
+        color: #a75510;
+    }
+
+    // ==== Pill trạng thái ====
+    &__pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 1px 9px;
+        border: 1px solid var(--lmp-line);
+        border-radius: 999px;
+        background: var(--lmp-soft);
+        color: var(--lmp-ink);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+
+        &--paid    { --lmp-line: #198754; --lmp-soft: #e9f6ef; --lmp-ink: #15653f; }
+        &--unpaid  { --lmp-line: #dc3545; --lmp-soft: #fdeced; --lmp-ink: #a52834; }
+        &--partial { --lmp-line: #fd7e14; --lmp-soft: #fff4ea; --lmp-ink: #a75510; }
+        &--info    { --lmp-line: #0d9bb8; --lmp-soft: #e8f7fb; --lmp-ink: #0b7185; }
+        &--neutral { --lmp-line: #adb5bd; --lmp-soft: #f6f7f9; --lmp-ink: #495057; }
+    }
+
+    &__chip {
+        display: inline-block;
+        padding: 1px 7px;
+        border: 1px solid #e0e0e0;
+        border-radius: 3px;
+        background: #fff;
+        font-size: 11px;
+    }
+
+    &__note {
+        margin: 0 14px 12px;
+        padding: 7px 10px;
+        border-radius: 4px;
+        background: #fff8e6;
+        border: 1px solid #ffe08a;
+        color: #8a6116;
+        font-size: 12px;
+    }
+
+    &__empty {
+        padding: 10px 2px;
+        color: #868e96;
+        font-size: 12px;
+    }
+
+    &__foot {
+        padding: 6px 14px 8px;
+        border-top: 1px solid #f1f3f5;
+        font-size: 11px;
+        color: #adb5bd;
+    }
+}
+
+// Khối JSON thô trong hộp thoại "Dữ liệu thô": giữ nguyên xuống dòng của JSON nhưng phải tự
+// cuộn, vì 1 chứng từ MISA có hàng chục field và dòng rất dài — không giới hạn thì hộp thoại
+// bị kéo rộng tràn màn hình.
 .o_loyalty_misa_payment_raw {
     max-height: 60vh;
     overflow: auto;
