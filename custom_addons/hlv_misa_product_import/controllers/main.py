@@ -1,24 +1,9 @@
 import logging
-import hmac
 import re
 from odoo import http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
-
-PW_PARAM_KEY = "website_public_inventory_18.search_password"
-SESSION_KEY_OK = "inv_pw_ok"
-
-
-def _get_pw():
-    return request.env["ir.config_parameter"].sudo().get_param(PW_PARAM_KEY, default="") or ""
-
-
-def _check_pw():
-    conf = _get_pw()
-    if not conf:
-        return True
-    return bool(request.session.get(SESSION_KEY_OK))
 
 
 def _parse_tax_rate(tax_text):
@@ -30,42 +15,20 @@ def _parse_tax_rate(tax_text):
 
 class MisaProductImportController(http.Controller):
 
-    @http.route('/misa/product/import', type='http', auth='public', website=True)
+    @http.route('/misa/product/import', type='http', auth='user', website=True)
     def product_import_page(self, **kw):
         """Trang import sản phẩm từ MISA CRM"""
-        conf_pw = _get_pw()
-
-        # --- AUTH ---
-        if conf_pw and not _check_pw():
-            if request.httprequest.method == "POST":
-                inp = (kw.get("inv_password") or "").strip()
-                if hmac.compare_digest(inp, conf_pw):
-                    request.session[SESSION_KEY_OK] = True
-                    return request.redirect("/misa/product/import")
-                else:
-                    return request.render("hlv_misa_product_import.page_product_import", {
-                        "pw_ok": False, "pw_err": True,
-                    })
-            return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": False, "pw_err": False,
-            })
-
-        # --- LOGGED IN ---
         return request.render("hlv_misa_product_import.page_product_import", {
-            "pw_ok": True,
             "step": "input",
         })
 
-    @http.route('/misa/product/search', type='http', auth='public', website=True, methods=['POST'], csrf=True)
+    @http.route('/misa/product/search', type='http', auth='user', website=True, methods=['POST'], csrf=True)
     def product_search(self, **kw):
         """Tìm kiếm sản phẩm trên MISA CRM"""
-        if not _check_pw():
-            return request.redirect("/misa/product/import")
-
         code = (kw.get("product_code") or "").strip()
         if not code:
             return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": True, "step": "input",
+                "step": "input",
                 "error": "Vui lòng nhập mã sản phẩm.",
             })
 
@@ -75,7 +38,7 @@ class MisaProductImportController(http.Controller):
         )
         if existing:
             return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": True, "step": "input",
+                "step": "input",
                 "error": f"Sản phẩm mã '{code}' đã tồn tại trong Odoo! (Tên: {existing.name})",
             })
 
@@ -87,13 +50,13 @@ class MisaProductImportController(http.Controller):
         except Exception as e:
             _logger.exception("MISA search error")
             return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": True, "step": "input", "code": code,
+                "step": "input", "code": code,
                 "error": f"Lỗi khi tìm trên MISA CRM: {e}",
             })
 
         if not results:
             return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": True, "step": "input", "code": code,
+                "step": "input", "code": code,
                 "error": f"Không tìm thấy sản phẩm mã '{code}' trên MISA CRM.",
             })
 
@@ -104,18 +67,14 @@ class MisaProductImportController(http.Controller):
         )
 
         return request.render("hlv_misa_product_import.page_product_import", {
-            "pw_ok": True,
             "step": "confirm",
             "code": code,
             "product": matched,
         })
 
-    @http.route('/misa/product/create', type='http', auth='public', website=True, methods=['POST'], csrf=True)
+    @http.route('/misa/product/create', type='http', auth='user', website=True, methods=['POST'], csrf=True)
     def product_create(self, **kw):
         """Tạo sản phẩm trong Odoo"""
-        if not _check_pw():
-            return request.redirect("/misa/product/import")
-
         code = (kw.get("product_code") or "").strip()
         name = (kw.get("product_name") or code).strip()
         price = float(kw.get("product_price") or 0)
@@ -131,7 +90,7 @@ class MisaProductImportController(http.Controller):
         )
         if existing:
             return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": True, "step": "input",
+                "step": "input",
                 "error": f"Sản phẩm mã '{code}' đã tồn tại!",
             })
 
@@ -166,12 +125,11 @@ class MisaProductImportController(http.Controller):
         except Exception as e:
             _logger.exception("Create product error")
             return request.render("hlv_misa_product_import.page_product_import", {
-                "pw_ok": True, "step": "input", "code": code,
+                "step": "input", "code": code,
                 "error": f"Lỗi khi tạo sản phẩm: {e}",
             })
 
         return request.render("hlv_misa_product_import.page_product_import", {
-            "pw_ok": True,
             "step": "done",
             "created_product": {
                 "name": product.name,
