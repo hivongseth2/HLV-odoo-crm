@@ -7,7 +7,9 @@
         <field name="model">hlv.loyalty.history</field>
         <field name="inherit_id" ref="hlv_loyalty.view_loyalty_history_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//group[@string='Công thức tính điểm']" position="before">
+            <!-- Chọn group theo NỘI DUNG (group nào chứa field công thức tính điểm) chứ không
+                 theo @string: Odoo 18 chặn dùng 'string' làm selector khi inherit view. -->
+            <xpath expr="//group[field[@name='point_formula_html']]" position="before">
                 <widget name="hlv_loyalty_misa_payment"/>
             </xpath>
         </field>
