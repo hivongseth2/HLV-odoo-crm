@@ -97,6 +97,10 @@ class HlvPickupRun(models.Model):
     )
     planned_total_minutes = fields.Integer(string='Dự kiến cả chuyến (phút)', readonly=True)
     planned_km = fields.Float(string='Dự kiến (km)', digits=(8, 1), readonly=True)
+    point_no_coords_count = fields.Integer(
+        string='Điểm thiếu toạ độ', compute='_compute_point_no_coords_count',
+        help='Điểm thiếu toạ độ thì không hiện trên bản đồ và không tính được thứ tự đi.',
+    )
     optimize_count = fields.Integer(
         string='Số lần tối ưu', readonly=True, copy=False,
         help='Mỗi lần bấm là một lượt gọi Google có tính tiền. Có trần để một chuyến bị bấm '
@@ -117,6 +121,13 @@ class HlvPickupRun(models.Model):
             run.received_line_count = len(run.line_ids.filtered(
                 lambda l: l.state in ('received', 'partial')
             ))
+
+    @api.depends('stop_ids.point_id.has_coords')
+    def _compute_point_no_coords_count(self):
+        for run in self:
+            run.point_no_coords_count = len(
+                run.stop_ids.mapped('point_id').filtered(lambda p: not p.has_coords)
+            )
 
     @api.depends('depart_at', 'returned_at', 'stop_ids.arrived_at', 'stop_ids.done_at',
                  'stop_ids.sequence')
@@ -348,6 +359,55 @@ class HlvPickupRun(models.Model):
     def action_cancel(self):
         self.write({'state': 'cancelled'})
         return True
+
+    # ------------------------------------------------------------------
+    # Toạ độ của các điểm trong chuyến
+    # ------------------------------------------------------------------
+    def action_geocode_points(self):
+        """Tra toạ độ cho các điểm trong chuyến còn thiếu.
+
+        Không ném UserError giữa chừng: UserError làm Odoo rollback cả transaction, nên các
+        điểm đã tra xong trước đó sẽ mất trắng. Gặp lỗi thì dừng vòng lặp và báo bằng thông
+        báo, giữ lại phần đã làm được.
+        """
+        self.ensure_one()
+        points = self.stop_ids.mapped('point_id').filtered(lambda p: not p.has_coords)
+        if not points:
+            return self._notify('Mọi điểm trong chuyến đã có toạ độ.', 'success')
+
+        no_address = points.filtered(lambda p: not p.address)
+        done = 0
+        error_message = ''
+        for point in points - no_address:
+            try:
+                point._geocode_once()
+                done += 1
+            except UserError as error:
+                error_message = str(error)
+                break
+
+        parts = ['Đã tra %d điểm.' % done] if done else ['Chưa tra được điểm nào.']
+        if done:
+            parts.append('Toạ độ đang ở trạng thái CHỜ DUYỆT — vào Điểm nhận hàng để duyệt '
+                         'trước khi dùng.')
+        if no_address:
+            parts.append('Chưa khai địa chỉ nên không tra được: %s.'
+                         % ', '.join(no_address.mapped('name')))
+        if error_message:
+            parts.append(error_message)
+        return self._notify(' '.join(parts), 'warning' if (no_address or error_message) else 'success')
+
+    def _notify(self, message, kind):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Toạ độ điểm nhận',
+                'message': message,
+                'type': kind,
+                'sticky': kind != 'success',
+            },
+        }
 
     # ------------------------------------------------------------------
     # In lịch + mã QR

@@ -36,6 +36,10 @@
                     <button name="%(action_pickup_add_po_wizard)d" type="action"
                             string="Thêm đơn mua hàng"
                             invisible="state in ('done', 'cancelled')"/>
+                    <button name="action_geocode_points" type="object"
+                            string="Tra toạ độ điểm thiếu"
+                            invisible="point_no_coords_count == 0"
+                            help="Hỏi Google toạ độ của các điểm chưa có. Kết quả vào trạng thái chờ duyệt."/>
                     <button name="action_optimize_route" type="object"
                             string="Tối ưu thứ tự đi"
                             invisible="state in ('done', 'cancelled')"
@@ -60,6 +64,13 @@
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="point_no_coords_count == 0">
+                        <field name="point_no_coords_count" readonly="1" nolabel="1"/>
+                        điểm chưa có toạ độ: chúng sẽ không hiện trên bản đồ của trang /pickup
+                        và không tính được vào thứ tự đi. Bấm <b>Tra toạ độ điểm thiếu</b> ở
+                        trên, rồi duyệt lại ở Đi nhận hàng → Duyệt toạ độ.
                     </div>
                     <group>
                         <group string="Chuyến">

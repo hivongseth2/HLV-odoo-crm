@@ -54,6 +54,7 @@
                 <!-- Bước 3: đi từng điểm -->
                 <section class="pk-screen pk-hidden" id="pk-screen-run">
                     <div class="pk-map pk-hidden" id="pk-map"></div>
+                    <div class="pk-map-missing pk-hidden" id="pk-map-missing"></div>
                     <div class="pk-stops" id="pk-stops"></div>
                     <div class="pk-finish" id="pk-finish"></div>
                 </section>

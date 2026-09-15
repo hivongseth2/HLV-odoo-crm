@@ -51,29 +51,63 @@ window.HlvPickup = window.HlvPickup || {};
   }
 
   /**
+   * Nói rõ vì sao không có bản đồ, thay vì ẩn đi không một lời nào.
+   * Ẩn im lặng khiến người dùng không phân biệt được "chưa làm tính năng" với "thiếu cấu
+   * hình" — và cũng không biết phải làm gì để có bản đồ.
+   */
+  function showNote(box, message) {
+    box.classList.remove("pk-hidden");
+    box.classList.add("pk-map-note");
+    box.textContent = message;
+    HP.$("pk-map-missing").classList.add("pk-hidden");
+  }
+
+  /** Báo số điểm vắng mặt trên bản đồ — không có dòng này thì bản đồ trông như đã đủ điểm. */
+  function showMissing(count) {
+    var note = HP.$("pk-map-missing");
+    note.classList.toggle("pk-hidden", !count);
+    note.textContent = count
+      ? count + " điểm chưa có toạ độ nên không hiện trên bản đồ."
+      : "";
+  }
+
+  /**
    * Vẽ lại bản đồ theo dữ liệu chuyến.
    * run: payload từ server. Điểm thiếu toạ độ bị bỏ qua — vẽ được điểm nào hay điểm đó,
-   * còn hơn là ẩn cả bản đồ vì một điểm chưa duyệt toạ độ.
+   * còn hơn là bỏ cả bản đồ vì một điểm chưa duyệt toạ độ.
    */
   HP.renderMap = function (run) {
     var box = HP.$("pk-map");
     if (!box || !run) {
       return;
     }
-    var points = (run.stops || []).filter(function (stop) {
+    var stops = run.stops || [];
+    var points = stops.filter(function (stop) {
       return stop.lat && stop.lng;
     });
+
+    /* Thiếu key là gốc rễ: không có key thì vừa không vẽ được bản đồ, vừa không tra được
+       toạ độ. Báo cái này trước, báo chuyện toạ độ sau. */
+    if (!apiKey()) {
+      showNote(box, "Chưa khai API key Google Maps (trình duyệt) nên không có bản đồ. " +
+        "Quản trị vào Cài đặt → Đi nhận hàng để khai.");
+      return;
+    }
     if (!points.length) {
-      box.classList.add("pk-hidden");
+      showNote(box, stops.length + " điểm của chuyến chưa có toạ độ nên chưa vẽ được bản đồ. " +
+        "Quản lý vào Đi nhận hàng → Điểm nhận hàng để tra và duyệt toạ độ.");
       return;
     }
 
     loadLibrary().then(function (ready) {
       if (!ready) {
-        box.classList.add("pk-hidden");
+        showNote(box, "Không tải được Google Maps. Kiểm tra mạng, hoặc key đã bị khoá sai " +
+          "HTTP referrer.");
         return;
       }
       box.classList.remove("pk-hidden");
+      box.classList.remove("pk-map-note");
+      showMissing(stops.length - points.length);
       var gmaps = window.google.maps;
       if (!map) {
         map = new gmaps.Map(box, { zoom: 11, mapTypeControl: false, streetViewControl: false });

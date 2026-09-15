@@ -194,6 +194,21 @@
   overflow: hidden;
   border: 1px solid var(--pk-line);
 }
+/* Khi không vẽ được bản đồ, khối này thành một dòng giải thích — bỏ chiều cao cố định để
+   nó không chiếm 240px trống. */
+.pk-map.pk-map-note {
+  height: auto;
+  padding: 12px;
+  background: var(--pk-card);
+  color: var(--pk-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pk-map-missing {
+  margin: -6px 0 12px;
+  color: var(--pk-amber);
+  font-size: 12px;
+}
 
 .pk-stop {
   background: var(--pk-card);
