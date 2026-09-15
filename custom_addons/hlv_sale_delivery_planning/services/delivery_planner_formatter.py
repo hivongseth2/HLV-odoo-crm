@@ -3,6 +3,7 @@ import math
 from odoo import models
 import pytz
 
+from .kit_qty_utils import kit_qty_from_components
 from .sale_line_amount_utils import compute_line_amounts
 
 
@@ -257,16 +258,14 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if is_kit and line.product_id:
                 _pack_bom = _kit_bom_for_product(line.product_id)
                 if _pack_bom:
-                    _bom_qty = _pack_bom.product_qty or 1.0
-                    _packed_kits_ratio = float('inf')
-                    for _comp in _pack_bom.bom_line_ids:
-                        _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
-                        if _qty_per_kit > 0 and _comp.product_id:
-                            _comp_packed = qty_packed_by_product_id.get(_comp.product_id.id, 0.0)
-                            if not _comp_packed:
-                                _comp_packed = qty_packed_map.get(_comp.product_id.display_name, 0.0)
-                            _packed_kits_ratio = min(_packed_kits_ratio, _comp_packed / _qty_per_kit)
-                    if _packed_kits_ratio != float('inf') and _packed_kits_ratio > 0:
+                    _packed_kits_ratio = kit_qty_from_components(
+                        _pack_bom,
+                        lambda comp: (
+                            qty_packed_by_product_id.get(comp.id, 0.0)
+                            or qty_packed_map.get(comp.display_name, 0.0)
+                        ),
+                    )
+                    if _packed_kits_ratio > 0:
                         qty_packed = min(_packed_kits_ratio, line.product_uom_qty)
 
             # Raw warehouse free_qty (không capped theo line) để hiển thị "Tồn Kho"
@@ -308,16 +307,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                         if _mpid:
                             _done_by_prod[_mpid] = _done_by_prod.get(_mpid, 0.0) + (_m.get('quantity') or 0.0)
                     if _done_by_prod:
-                        _bom_qty = _fb_bom.product_qty or 1.0
-                        _kits_ratio = float('inf')
-                        for _comp in _fb_bom.bom_line_ids:
-                            _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
-                            if _qty_per_kit > 0 and _comp.product_id:
-                                _kits_ratio = min(
-                                    _kits_ratio,
-                                    _done_by_prod.get(_comp.product_id.id, 0.0) / _qty_per_kit,
-                                )
-                        if _kits_ratio != float('inf') and _kits_ratio > 0:
+                        _kits_ratio = kit_qty_from_components(
+                            _fb_bom, lambda comp: _done_by_prod.get(comp.id, 0.0)
+                        )
+                        if _kits_ratio > 0:
                             eff_qty_del = min(_kits_ratio, line.product_uom_qty)
             # --- Price / financial fields ---
             # Công thức dùng chung với bảng dòng hàng của phiếu xuất kho

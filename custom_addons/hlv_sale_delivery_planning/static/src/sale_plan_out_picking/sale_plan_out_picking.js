@@ -230,8 +230,9 @@ function rowHtml(picking) {
         + '<span class="spop-row-name">' + esc(picking.name) + '</span>'
         + badgeHtml(picking)
         + (when ? '<span class="spop-meta">' + when + '</span>' : '')
-        + '<span class="spop-meta"><i class="fa fa-cubes me-1"></i>'
-        + fq(picking.qty_done) + '/' + fq(picking.qty_demand) + ' (' + picking.line_count + ' SP)</span>'
+        + '<span class="spop-meta" title="Số lượng theo mã hàng thực xuất — combo đếm theo thành phần">'
+        + '<i class="fa fa-cubes me-1"></i>'
+        + fq(picking.qty_done) + '/' + fq(picking.qty_demand) + ' (' + picking.line_count + ' mã)</span>'
         + (picking.warehouse_name
             ? '<span class="spop-meta"><i class="fa fa-building me-1"></i>' + esc(picking.warehouse_name) + '</span>'
             : '')
@@ -262,6 +263,21 @@ function showDetail(pickingId) {
     }).catch(function () {
         setBody(errorHtml('Lỗi kết nối khi tải chi tiết phiếu.'));
     });
+}
+
+function moneyCell(cls, value, hasAmount) {
+    return '<td class="num spop-money ' + cls + '">'
+        + (hasAmount === false ? '—' : fm(value)) + '</td>';
+}
+
+function breakdownHtml(breakdown) {
+    return (breakdown || []).map(function (item) {
+        var parts = [];
+        if (item.package) parts.push('Kiện ' + esc(item.package));
+        if (item.lot) parts.push('Lô ' + esc(item.lot));
+        parts.push(fq(item.qty));
+        return '<div class="spop-sub"><i class="fa fa-cube me-1"></i>' + parts.join(' · ') + '</div>';
+    }).join('');
 }
 
 function infoItem(label, value, icon) {
@@ -303,30 +319,34 @@ function detailHtml(picking) {
         + '<th class="num">VAT</th><th class="num">TT + VAT</th>'
         + '</tr></thead><tbody>';
     lines.forEach(function (line) {
-        var breakdown = (line.breakdown || []).map(function (item) {
-            var parts = [];
-            if (item.package) parts.push('Kiện ' + esc(item.package));
-            if (item.lot) parts.push('Lô ' + esc(item.lot));
-            parts.push(fq(item.qty));
-            return '<div class="spop-sub"><i class="fa fa-cube me-1"></i>' + parts.join(' · ') + '</div>';
-        }).join('');
+        // Combo: các thành phần chỉ là chi tiết của dòng, tiền nằm ở dòng combo.
+        var detail = (line.components || []).map(function (component) {
+            return '<div class="spop-sub"><i class="fa fa-level-up fa-rotate-90 me-1"></i>'
+                + esc(component.product_name) + ' · ' + fq(component.qty_done)
+                + ' ' + esc(component.uom_name)
+                + breakdownHtml(component.breakdown) + '</div>';
+        }).join('') + breakdownHtml(line.breakdown);
+        var kitBadge = line.is_kit
+            ? ' <span class="spop-badge spop-badge-ready">Combo</span>'
+            : '';
         var shortage = Number(line.qty_demand || 0) - Number(line.qty_done || 0);
         totalSubtotal += Number(line.delivered_subtotal || 0);
         totalTax += Number(line.delivered_tax || 0);
         totalTotal += Number(line.delivered_total || 0);
         html += '<tr>'
-            + '<td>' + esc(line.product_name) + breakdown + '</td>'
+            + '<td>' + esc(line.product_name) + kitBadge + detail + '</td>'
             + '<td>' + esc(line.uom_name) + '</td>'
             + '<td class="num">' + fq(line.qty_demand) + '</td>'
             + '<td class="num"><b>' + fq(line.qty_done) + '</b>'
             + (shortage > 0 ? '<div class="spop-sub" style="color:#b91c1c">thiếu ' + fq(shortage) + '</div>' : '')
             + '</td>'
-            + '<td class="num spop-money">' + fm(line.price_unit)
+            + '<td class="num spop-money">'
+            + (line.has_amount === false ? '—' : fm(line.price_unit))
             + (line.discount ? '<div class="spop-sub" style="color:#b91c1c">-' + fq(line.discount) + '%</div>' : '')
             + '</td>'
-            + '<td class="num spop-money spop-amt-sub">' + fm(line.delivered_subtotal) + '</td>'
-            + '<td class="num spop-money spop-amt-tax">' + fm(line.delivered_tax) + '</td>'
-            + '<td class="num spop-money spop-amt-total">' + fm(line.delivered_total) + '</td>'
+            + moneyCell('spop-amt-sub', line.delivered_subtotal, line.has_amount)
+            + moneyCell('spop-amt-tax', line.delivered_tax, line.has_amount)
+            + moneyCell('spop-amt-total', line.delivered_total, line.has_amount)
             + '</tr>';
     });
     html += '</tbody><tfoot><tr>'
