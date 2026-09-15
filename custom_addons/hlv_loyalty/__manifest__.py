@@ -8,7 +8,7 @@
         - Sử dụng Voucher trên toàn hệ thống (cross-company)
         - Xử lý hoàn hàng / hủy Voucher / hết hạn
     """,
-    "version": "18.0.1.16.0",
+    "version": "18.0.1.17.0",
     "category": "Sales",
     "author": "HLV",
     "depends": ["sale_management", "stock", "mail", "website", "mrp"],
@@ -53,6 +53,17 @@
         "web.assets_backend": [
             "hlv_loyalty/static/src/css/loyalty_backend.css",
             "hlv_loyalty/static/src/js/loyalty_notifications.js",
+        ],
+        # Bundle riêng cho trang portal public. Phải đi qua bundle chứ không dùng
+        # <link href="/hlv_loyalty/static/..."> : Odoo trả file static kèm
+        # Cache-Control max-age=86400, nên Cloudflare trước prd giữ bản CSS cũ
+        # trọn 24h sau mỗi lần deploy trong khi QWeb view đã là bản mới -> vỡ layout.
+        # URL của bundle có hash nội dung, đổi CSS là đổi URL, không thể trả bản cũ.
+        "hlv_loyalty.assets_loyalty_portal": [
+            "hlv_loyalty/static/src/css/loyalty_portal.css",
+        ],
+        "hlv_loyalty.assets_loyalty_login": [
+            "hlv_loyalty/static/src/css/loyalty_login.css",
         ],
     },
     "installable": True,

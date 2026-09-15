@@ -22,7 +22,7 @@
                  trong lúc chờ tải font thay vì hiện chữ thô, tránh chớp chữ lạ. -->
             <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block"/>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
-            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css"/>
+            <t t-call-assets="hlv_loyalty.assets_loyalty_portal" t-js="false"/>
         </t>
         <t t-out="0"/>
 
