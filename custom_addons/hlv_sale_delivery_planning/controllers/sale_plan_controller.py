@@ -2825,7 +2825,7 @@ load(false);
 </script>
 <!-- XEM PHIẾU XUẤT KHO: tính năng rời, xoá thẻ script này là gỡ xong phần UI.
      Đổi ?v= khi sửa file để trình duyệt không dùng bản cache cũ. -->
-<script src="/hlv_sale_delivery_planning/static/src/sale_plan_out_picking/sale_plan_out_picking.js?v=2"></script>
+<script src="/hlv_sale_delivery_planning/static/src/sale_plan_out_picking/sale_plan_out_picking.js?v=3"></script>
 </body></html>"""
 
 

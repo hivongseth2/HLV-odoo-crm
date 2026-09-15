@@ -18,10 +18,12 @@ Chỉ đọc: không có route nào ghi dữ liệu. Phiếu luôn được lấ
 """
 
 import logging
+from collections import OrderedDict
 
 from odoo import http, tools
 from odoo.http import request
 
+from ..services.kit_qty_utils import kit_qty_from_components
 from ..services.sale_line_amount_utils import compute_line_amounts
 from .picking_export_helper import (
     PICKING_STATE_LABELS,
@@ -75,12 +77,8 @@ class SalePlanOutPickingController(http.Controller):
             'backorder_of': picking.backorder_id.name if picking.backorder_id else '',
         }
 
-    def _picking_move_line(self, move):
-        """Một dòng sản phẩm, kèm kiện/lô nếu có (chỉ hiện khi kho thực sự dùng).
-
-        Tiền tính theo SL thực giao CỦA PHIẾU NÀY, không phải SL đã giao của cả
-        đơn — một đơn giao nhiều chuyến thì mỗi phiếu ra tiền của riêng chuyến đó.
-        """
+    def _move_breakdown(self, move):
+        """Kiện/lô của một move — chỉ trả dòng nào thực sự có kiện hoặc lô."""
         breakdown = []
         for line in move.move_line_ids:
             package = line.result_package_id.name or ''
@@ -92,23 +90,138 @@ class SalePlanOutPickingController(http.Controller):
                 'lot': lot,
                 'qty': line.quantity,
             })
-        amounts = compute_line_amounts(move.sale_line_id, move.quantity)
+        return breakdown
+
+    def _move_row(self, move):
+        """Một move hiển thị thô: sản phẩm, ĐVT, yêu cầu, thực giao, kiện/lô."""
         return {
             'product_name': move.product_id.display_name or '',
             'uom_name': move.product_uom.name or '',
             'qty_demand': move.product_uom_qty,
             'qty_done': move.quantity,
-            'breakdown': breakdown,
-            'price_unit': round(amounts['price_unit'], 0),
-            'discount': amounts['discount'],
-            'delivered_subtotal': round(amounts['subtotal'], 0),
-            'delivered_tax': round(amounts['tax'], 0),
-            'delivered_total': round(amounts['total'], 0),
+            'breakdown': self._move_breakdown(move),
         }
+
+    def _phantom_bom_by_product(self, products):
+        """{product_id: mrp.bom phantom} cho các sản phẩm truyền vào.
+
+        Tìm theo product_tmpl_id rồi ưu tiên BOM gắn đúng biến thể — cùng cách
+        nhận diện kit mà dashboard đang dùng (services/delivery_planner_formatter.py).
+        """
+        if not products or 'mrp.bom' not in request.env:
+            return {}
+        boms = request.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', products.product_tmpl_id.ids),
+            ('type', '=', 'phantom'),
+        ])
+        by_product, by_template = {}, {}
+        for bom in boms:
+            if bom.product_id:
+                by_product[bom.product_id.id] = bom
+            else:
+                by_template.setdefault(bom.product_tmpl_id.id, bom)
+        return {
+            product.id: by_product.get(product.id) or by_template.get(product.product_tmpl_id.id)
+            for product in products
+            if by_product.get(product.id) or by_template.get(product.product_tmpl_id.id)
+        }
+
+    def _picking_detail_lines(self, picking):
+        """Dòng hàng của phiếu, gom theo DÒNG ĐƠN BÁN chứ không theo move.
+
+        Combo (phantom BOM) nổ ra nhiều move thành phần nhưng tất cả cùng trỏ về
+        một dòng SO. Tính tiền theo từng move thì mỗi thành phần ăn trọn đơn giá
+        của cả combo → tổng tiền phình lên đúng bằng số thành phần. Vì vậy: gom
+        move theo sale_line, quy SL thành phần về số BỘ combo, rồi mới tính tiền
+        một lần cho cả dòng; các move thành phần chỉ hiển thị làm chi tiết.
+        """
+        moves = picking.move_ids.filtered(lambda m: m.state != 'cancel')
+        groups = OrderedDict()
+        extras = []
+        for move in moves:
+            sale_line = move.sale_line_id
+            if not sale_line:
+                # Move thêm tay trong phiếu, không gắn dòng SO → không có tiền.
+                extras.append(move)
+                continue
+            groups.setdefault(sale_line.id, {'sale_line': sale_line, 'moves': []})
+            groups[sale_line.id]['moves'].append(move)
+
+        sale_products = request.env['product.product'].browse(list({
+            group['sale_line'].product_id.id
+            for group in groups.values() if group['sale_line'].product_id
+        }))
+        bom_by_product = self._phantom_bom_by_product(sale_products)
+
+        lines = []
+        for group in groups.values():
+            sale_line = group['sale_line']
+            group_moves = group['moves']
+            bom = bom_by_product.get(sale_line.product_id.id)
+            # Kit thật sự khi BOM phantom có và move mang sản phẩm thành phần.
+            is_kit = bool(bom) and any(
+                move.product_id != sale_line.product_id for move in group_moves
+            )
+            if is_kit:
+                done_by_product, demand_by_product = {}, {}
+                for move in group_moves:
+                    done_by_product[move.product_id.id] = (
+                        done_by_product.get(move.product_id.id, 0.0) + move.quantity
+                    )
+                    demand_by_product[move.product_id.id] = (
+                        demand_by_product.get(move.product_id.id, 0.0) + move.product_uom_qty
+                    )
+                qty_done = kit_qty_from_components(
+                    bom, lambda comp: done_by_product.get(comp.id, 0.0)
+                )
+                qty_demand = kit_qty_from_components(
+                    bom, lambda comp: demand_by_product.get(comp.id, 0.0)
+                )
+                components = [self._move_row(move) for move in group_moves]
+                breakdown = []
+            else:
+                qty_done = sum(move.quantity for move in group_moves)
+                qty_demand = sum(move.product_uom_qty for move in group_moves)
+                components = []
+                breakdown = [
+                    item for move in group_moves for item in self._move_breakdown(move)
+                ]
+
+            amounts = compute_line_amounts(sale_line, qty_done)
+            lines.append({
+                'has_amount': True,
+                'product_name': sale_line.product_id.display_name or '',
+                'uom_name': sale_line.product_uom.name or '',
+                'qty_demand': qty_demand,
+                'qty_done': qty_done,
+                'is_kit': is_kit,
+                'components': components,
+                'breakdown': breakdown,
+                'price_unit': round(amounts['price_unit'], 0),
+                'discount': amounts['discount'],
+                'delivered_subtotal': round(amounts['subtotal'], 0),
+                'delivered_tax': round(amounts['tax'], 0),
+                'delivered_total': round(amounts['total'], 0),
+            })
+
+        for move in extras:
+            row = self._move_row(move)
+            # Không gắn dòng SO thì không có đơn giá để tính — FE hiện dấu "—".
+            row.update({
+                'has_amount': False,
+                'is_kit': False,
+                'components': [],
+                'price_unit': 0.0,
+                'discount': 0.0,
+                'delivered_subtotal': 0.0,
+                'delivered_tax': 0.0,
+                'delivered_total': 0.0,
+            })
+            lines.append(row)
+        return lines
 
     def _picking_detail(self, picking, order, utc_tz, user_tz):
         """Thông tin đầy đủ của một phiếu: giao cái gì, giao khi nào, ai giao."""
-        moves = picking.move_ids.filtered(lambda m: m.state != 'cancel')
         # shipper_* do module giao nhận khác thêm vào — dùng getattr để trang vẫn
         # chạy được khi module đó chưa cài.
         shipper_user = getattr(picking, 'shipper_user_id', False)
@@ -139,7 +252,7 @@ class SalePlanOutPickingController(http.Controller):
             'shipper_received': bool(getattr(picking, 'shipper_received', False)),
             'htgh': getattr(order, 'x_studio_htgh', '') or '',
             'note': tools.html2plaintext(picking.note or '') if picking.note else '',
-            'lines': [self._picking_move_line(move) for move in moves],
+            'lines': self._picking_detail_lines(picking),
         })
         return detail
 
