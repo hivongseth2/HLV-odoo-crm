@@ -5,24 +5,28 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { Dialog } from "@web/core/dialog/dialog";
 
-// Màu badge theo trạng thái thu tiền. Dùng chung cho cả kết luận tổng, từng chứng từ và từng
-// dòng hàng để người dùng không phải học 2 bảng màu khác nhau trên cùng 1 màn hình.
-const STATE_CLASSES = {
-    paid: "text-bg-success",
-    unpaid: "text-bg-danger",
-    partial: "text-bg-warning",
-    not_found: "text-bg-secondary",
-    no_invoice: "text-bg-secondary",
-    no_line: "text-bg-secondary",
-    unknown: "text-bg-info",
+// Mỗi trạng thái thu tiền chỉ khai MỘT lần ở đây (tông màu + icon + tiêu đề ngắn), rồi card
+// tổng, thẻ hóa đơn và pill trên từng dòng hàng đều lấy từ đó — không thì 3 chỗ tự chọn màu
+// riêng, sửa một chỗ là lệch nhau ngay.
+const STATE_STYLE = {
+    paid: { tone: "paid", icon: "fa-check-circle", title: "Đã thu tiền" },
+    unpaid: { tone: "unpaid", icon: "fa-exclamation-circle", title: "Chưa thu tiền" },
+    partial: { tone: "partial", icon: "fa-adjust", title: "Thu tiền một phần" },
+    not_found: { tone: "neutral", icon: "fa-question-circle", title: "Không khớp được hóa đơn" },
+    no_invoice: { tone: "neutral", icon: "fa-file-o", title: "Chưa có hóa đơn MISA" },
+    no_line: { tone: "neutral", icon: "fa-question-circle", title: "Không có dòng hàng" },
+    unknown: { tone: "info", icon: "fa-question-circle", title: "Không rõ tình trạng" },
 };
 
-const LINE_STATE_LABELS = {
-    paid: "Đã thu tiền",
-    unpaid: "Chưa thu tiền",
-    partial: "Thu một phần",
+const NEUTRAL_STYLE = { tone: "neutral", icon: "fa-question-circle", title: "Không rõ" };
+
+// Nhãn ngắn cho pill trên từng dòng hàng — cột hẹp nên không dùng lại title dài ở trên.
+const LINE_LABELS = {
+    paid: "Đã thu",
+    unpaid: "Chưa thu",
+    partial: "Một phần",
     unknown: "Không rõ",
-    not_found: "Không có trên hóa đơn",
+    not_found: "Không có trên HĐ",
 };
 
 function formatNumber(value, decimals = 0) {
@@ -64,7 +68,7 @@ export class MisaPaymentRawDialog extends Component {
     }
 }
 
-/** Bảng "Hóa đơn MISA đã thu tiền chưa" trên form Lịch sử điểm.
+/** Card "Thu tiền hóa đơn MISA" trên form Lịch sử điểm.
  *
  *  Tự gọi khi mở form (không chờ người dùng bấm) vì đây chính là thông tin cần có TRƯỚC khi
  *  quyết định xác nhận điểm. Cố tình KHÔNG await trong onWillStart: form phải hiện ra ngay,
@@ -78,7 +82,7 @@ export class LoyaltyMisaPaymentPanel extends Component {
     setup() {
         this.orm = useService("orm");
         this.dialog = useService("dialog");
-        this.state = useState({ loading: false, data: null, error: null });
+        this.state = useState({ loading: false, data: null, error: null, fetchedAt: "" });
         onWillStart(() => this.load());
         onWillUpdateProps((nextProps) => {
             // Bấm mũi tên qua bản ghi kế tiếp không dựng lại component — phải tự nhận ra bản
@@ -108,6 +112,7 @@ export class LoyaltyMisaPaymentPanel extends Component {
                 return; // Đã chuyển sang bản ghi khác trong lúc chờ — bỏ kết quả cũ.
             }
             this.state.data = data;
+            this.state.fetchedAt = new Date().toLocaleTimeString("vi-VN");
         } catch (error) {
             this.state.error = error.data?.message || error.message || String(error);
         } finally {
@@ -119,22 +124,66 @@ export class LoyaltyMisaPaymentPanel extends Component {
         return this.state.data || {};
     }
 
-    stateClass(state) {
-        return STATE_CLASSES[state] || "text-bg-secondary";
+    /** Tông màu + icon + tiêu đề của cả card. Đang tải/lỗi thắng kết luận từ MISA. */
+    get cardStyle() {
+        if (this.state.loading) {
+            return { tone: "neutral", icon: "fa-spinner fa-spin", title: "Đang kiểm tra MISA…" };
+        }
+        if (this.state.error || this.data.error) {
+            return { tone: "unpaid", icon: "fa-times-circle", title: "Không tra được MISA" };
+        }
+        if (!this.state.data || !this.data.available) {
+            return { tone: "neutral", icon: "fa-info-circle", title: "Không có dữ liệu để tra" };
+        }
+        return STATE_STYLE[this.data.summary_state] || NEUTRAL_STYLE;
     }
 
-    lineStateLabel(state) {
-        return LINE_STATE_LABELS[state] || state;
+    get subline() {
+        if (this.state.loading) {
+            return "Đang gọi MISA lấy số hóa đơn và tình trạng thu tiền…";
+        }
+        if (this.state.error || this.data.error) {
+            return this.state.error || this.data.error;
+        }
+        if (!this.data.available) {
+            return this.data.message || "";
+        }
+        return this.data.summary_label || "";
     }
 
-    get invoiceSourceLabel() {
-        if (this.data.invoice_source === "picking") {
-            return "số hóa đơn lấy từ phiếu kho (đã đối soát trước đó)";
+    /** Chú thích nguồn số hóa đơn + thời điểm tra, để người dùng biết đang xem số liệu lúc nào. */
+    get footnote() {
+        if (!this.data.invoice_no) {
+            return "";
         }
-        if (this.data.invoice_source === "live") {
-            return "số hóa đơn tra sống từ MISA";
-        }
-        return "";
+        const source =
+            this.data.invoice_source === "picking"
+                ? "số hóa đơn lấy từ phiếu kho (đã đối soát trước đó)"
+                : "số hóa đơn tra sống từ MISA";
+        return `Tra lúc ${this.state.fetchedAt} — ${source}. Số liệu chỉ để xem, không lưu vào Odoo.`;
+    }
+
+    /** Class tông màu cho 1 trạng thái, dùng chung cho card (o_lmp) và pill (o_lmp__pill). */
+    toneClass(state, prefix) {
+        return `${prefix}--${(STATE_STYLE[state] || NEUTRAL_STYLE).tone}`;
+    }
+
+    stateIcon(state) {
+        return (STATE_STYLE[state] || NEUTRAL_STYLE).icon;
+    }
+
+    lineLabel(state) {
+        return LINE_LABELS[state] || state;
+    }
+
+    /** Ẩn cột "Số hóa đơn" của bảng dòng hàng khi cả phiếu chỉ có 1 hóa đơn — khi đó cột này
+     *  chỉ lặp lại đúng con số đã in to ở thẻ hóa đơn ngay phía trên. */
+    get showLineInvoiceColumn() {
+        return (this.data.vouchers || []).length > 1;
+    }
+
+    get lineColspan() {
+        return this.showLineInvoiceColumn ? 7 : 6;
     }
 
     formatQty(value) {
@@ -145,10 +194,14 @@ export class LoyaltyMisaPaymentPanel extends Component {
         return formatNumber(value, 0);
     }
 
-    /** MISA trả ngày dạng ISO đầy đủ ("2026-09-08T00:00:00.000+07:00") — chỉ lấy phần ngày,
-     *  và trả chuỗi rỗng khi thiếu (t-esc của false sẽ in ra chữ "false"). */
+    /** MISA trả ngày dạng ISO đầy đủ ("2026-09-08T00:00:00.000+07:00") — đổi sang dd/mm/yyyy
+     *  cho quen mắt, và trả chuỗi rỗng khi thiếu (t-esc của false sẽ in ra chữ "false"). */
     formatDate(value) {
-        return value ? String(value).slice(0, 10) : "";
+        if (!value) {
+            return "";
+        }
+        const [year, month, day] = String(value).slice(0, 10).split("-");
+        return day && month && year ? `${day}/${month}/${year}` : String(value).slice(0, 10);
     }
 
     invoiceNosOf(line) {
