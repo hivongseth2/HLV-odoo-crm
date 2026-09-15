@@ -6,7 +6,10 @@
                 <div class="row mb-4">
                     <div class="col-8">
                         <h2 class="mb-2">Lịch đi nhận hàng</h2>
-                        <div><strong t-field="doc.name"/></div>
+                        <div>
+                            <strong t-field="doc.name"/>
+                            · ca <span t-field="doc.session"/>
+                        </div>
                         <div>Ngày đi: <span t-field="doc.date"/></div>
                         <div t-if="doc.driver_user_id">
                             Người đi nhận: <span t-field="doc.driver_user_id.name"/>

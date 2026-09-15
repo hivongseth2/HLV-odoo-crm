@@ -109,7 +109,9 @@ class PickupApiController(http.Controller):
         elsewhere = Run.search(
             mine + [('state', '=', 'departed'), ('date', '!=', day)], order='date desc',
         )
-        return _ok(date=day, runs=[self._run_brief(r) for r in (elsewhere | runs)])
+        # Chuyến đang đi luôn nằm trên cùng: mở lại trang giữa đường thì đó là thứ cần bấm.
+        ordered = (elsewhere | runs).sorted(key=lambda r: (r.state != 'departed', r.id))
+        return _ok(date=day, runs=[self._run_brief(r) for r in ordered])
 
     def _run_brief(self, run):
         """Đủ để dựng một dòng trong danh sách chọn chuyến, không kèm điểm và đơn."""
@@ -118,6 +120,11 @@ class PickupApiController(http.Controller):
             'name': run.name,
             'date': fields.Date.to_string(run.date),
             'state': run.state,
+            # Nhãn ca lấy từ server thay vì khai lại ở JS: nó chỉ để hiển thị, không gắn với
+            # class CSS nào, nên không có lý do gì để có hai bản danh sách nhãn.
+            'session_label': dict(
+                run._fields['session'].selection
+            ).get(run.session, ''),
             'warehouse_name': run.warehouse_id.name or '',
             'stop_count': run.stop_count,
             'done_stop_count': run.done_stop_count,
@@ -126,32 +133,19 @@ class PickupApiController(http.Controller):
         }
 
     @http.route('/api/pickup/my_run', type='json', auth='user', methods=['POST'])
-    def api_my_run(self, date=None, run_id=None, **kwargs):
-        """Chuyến đang đi của tôi.
+    def api_my_run(self, run_id=None, **kwargs):
+        """Chi tiết một chuyến.
 
-        Không có ``run_id`` thì tự tìm: ưu tiên chuyến đang dở (kể cả của hôm trước — chuyến
-        đi muộn qua nửa đêm là có thật), sau đó mới tới chuyến được giao trong ngày.
+        Luôn phải nói rõ ``run_id``. Cố tình KHÔNG đoán giùm chuyến nào: một ngày có thể có
+        chuyến sáng và chuyến chiều, đoán sai là người đi nhận bấm mốc thời gian vào nhầm
+        chuyến — hỏng dữ liệu của cả hai.
         """
         self._check_access()
         try:
-            run = self._get_run(run_id) if run_id else self._find_current_run(date)
+            run = self._get_run(run_id)
         except (UserError, AccessError) as error:
             return _err(str(error))
-        if not run:
-            return _ok(run=None)
         return _ok(run=self._run_payload(run))
-
-    def _find_current_run(self, date):
-        """Chỉ tự mở lại chuyến ĐANG ĐI.
-
-        Cố tình không tự chọn giùm chuyến chưa xuất phát: người đi nhận phải tự chọn chuyến
-        ở màn hình đầu rồi mới bấm xuất phát. Ngược lại, chuyến đang đi dở mà bắt chọn lại
-        mỗi lần mở trang thì phiền vô ích — đó là lý do trường hợp này được mở thẳng.
-        """
-        return request.env['hlv.pickup.run'].search([
-            ('driver_user_id', '=', request.env.user.id),
-            ('state', '=', 'departed'),
-        ], order='date desc', limit=1)
 
     def _run_payload(self, run):
         return {
@@ -159,6 +153,7 @@ class PickupApiController(http.Controller):
             'name': run.name,
             'date': fields.Date.to_string(run.date),
             'state': run.state,
+            'session_label': dict(run._fields['session'].selection).get(run.session, ''),
             'warehouse_name': run.warehouse_id.name or '',
             'vehicle_note': run.vehicle_note or '',
             'note': run.note or '',

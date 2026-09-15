@@ -115,6 +115,15 @@
   font-size: 15px;
 }
 .pk-runcard-head strong { flex: 1; }
+.pk-runcard-session {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--pk-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
 .pk-runcard-meta {
   display: block;
   margin-top: 4px;

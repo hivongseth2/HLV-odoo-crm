@@ -84,14 +84,10 @@ window.HlvPickup = window.HlvPickup || {};
     });
   }
 
-  /**
-   * Mở một chuyến. runId rỗng nghĩa là để server tự tìm chuyến ĐANG ĐI (lúc mới vào trang).
-   * Không có chuyến nào đang dở thì quay về bước chọn chuyến.
-   */
+  /** Mở một chuyến cụ thể. Mở không được thì rơi về bước chọn chuyến chứ không để trang trắng. */
   function openRun(runId) {
     setBusy(true);
-    var params = runId ? { run_id: runId } : {};
-    return HP.rpc("/api/pickup/my_run", params).then(function (result) {
+    return HP.rpc("/api/pickup/my_run", { run_id: runId }).then(function (result) {
       if (result.status === "error") {
         setAlert(result.message);
         return loadRunList();
@@ -289,10 +285,11 @@ window.HlvPickup = window.HlvPickup || {};
     });
 
     loadConfig().then(function () {
-      /* Không có mã QR thì vẫn thử mở chuyến ĐANG ĐI trước: người đi nhận mở lại trang giữa
-         đường mà phải chọn ngày rồi chọn chuyến lại là phiền vô ích. Không có chuyến nào
-         đang dở thì openRun tự rơi về bước chọn. */
-      return openRun(fromQr);
+      /* Không có mã QR thì LUÔN bắt đầu ở bước chọn chuyến, kể cả khi đang có chuyến dở.
+         Một ngày có thể có chuyến sáng và chuyến chiều; tự mở giùm một chuyến là mời người
+         đi nhận bấm mốc vào nhầm chuyến. Chuyến đang đi đã được xếp lên đầu danh sách nên
+         mở lại cũng chỉ tốn một lần chạm. */
+      return fromQr ? openRun(fromQr) : loadRunList();
     });
   }
 

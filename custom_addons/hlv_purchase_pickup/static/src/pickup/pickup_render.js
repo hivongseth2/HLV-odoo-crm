@@ -80,9 +80,15 @@ window.HlvPickup = window.HlvPickup || {};
       if (run.warehouse_name) {
         facts.push(run.warehouse_name);
       }
+      /* Ca đứng riêng và to hơn phần còn lại: khi một ngày có chuyến sáng và chuyến chiều,
+         đây là thứ duy nhất phân biệt được hai thẻ chỉ khác nhau con số cuối mã chuyến. */
+      var session = run.session_label
+        ? '<span class="pk-runcard-session">' + HP.esc(run.session_label) + "</span>"
+        : "";
       return '<button class="pk-runcard" type="button" data-action="open-run" ' +
         'data-run-id="' + run.id + '">' +
-        '<span class="pk-runcard-head"><strong>' + HP.esc(run.name) + "</strong>" +
+        '<span class="pk-runcard-head">' + session +
+        "<strong>" + HP.esc(run.name) + "</strong>" +
         badge(HP.LABEL.RUN_BADGE, run.state) + "</span>" +
         '<span class="pk-runcard-meta">' + HP.esc(facts.join(" · ")) + "</span>" +
         "</button>";
@@ -280,7 +286,11 @@ window.HlvPickup = window.HlvPickup || {};
       return;
     }
     title.textContent = run.name;
-    var parts = [run.date, HP.LABEL.RUN[run.state] || run.state];
+    var parts = [run.date];
+    if (run.session_label) {
+      parts.push("ca " + run.session_label.toLowerCase());
+    }
+    parts.push(HP.LABEL.RUN[run.state] || run.state);
     if (run.depart_at) {
       parts.push(run.done_stop_count + "/" + run.stop_count + " điểm");
     }

@@ -37,6 +37,17 @@ class HlvPickupRun(models.Model):
         help='Nơi bắt đầu chuyến — dùng làm điểm gốc khi tính đường đi và giờ dự kiến.',
     )
     company_id = fields.Many2one(related='warehouse_id.company_id', store=True, index=True)
+    session = fields.Selection(
+        [
+            ('morning', 'Sáng'),
+            ('afternoon', 'Chiều'),
+            ('full', 'Cả ngày'),
+        ],
+        string='Ca', default='morning', required=True, index=True, tracking=True,
+        help='Một ngày thường có chuyến sáng và chuyến chiều. Không có trường này thì ở màn '
+             'hình chọn chuyến, hai chuyến cùng ngày chỉ khác nhau mỗi con số cuối mã chuyến '
+             '— người đi nhận rất dễ mở nhầm.',
+    )
     vehicle_note = fields.Char(
         string='Xe', help='Ghi tay biển số hoặc loại xe. Chuyến đi nhận thường mượn xe nên '
                           'không gắn cứng vào đội xe.',
