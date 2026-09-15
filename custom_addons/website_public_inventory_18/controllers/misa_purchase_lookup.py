@@ -1,22 +1,12 @@
 from odoo import http
 from odoo.http import request
 import logging
-import hmac
 
 _logger = logging.getLogger(__name__)
 
-PW_PARAM_KEY = "website_public_inventory_18.search_password"
-SESSION_KEY_OK = "inv_pw_ok"
-SESSION_KEY_ERR = "inv_pw_err"
-
-def _get_search_password():
-    return request.env["ir.config_parameter"].sudo().get_param(PW_PARAM_KEY, default="") or ""
-
-def _consteq(a, b):
-    return hmac.compare_digest(str(a or ""), str(b or ""))
 
 class MisaPurchaseLookupController(http.Controller):
-    """Controller cho trang web tra cứu chứng từ MISA công khai"""
+    """Controller cho trang web tra cứu chứng từ MISA (yêu cầu đăng nhập Odoo)"""
 
     # Mapping các giá trị trạng thái
     PAID_STATUS_MAP = {
@@ -89,30 +79,12 @@ class MisaPurchaseLookupController(http.Controller):
             'modified_by': voucher.get('modified_by', ''),
         }
 
-    @http.route(['/misa/purchase/lookup', '/misa/purchase/lookup/page/<int:page>'], type='http', auth='public', website=True)
+    @http.route(['/misa/purchase/lookup', '/misa/purchase/lookup/page/<int:page>'], type='http', auth='user', website=True)
     def misa_purchase_lookup(self, page=1, **kwargs):
-        """Trang tra cứu chứng từ mua hàng MISA (có phân trang)"""
-        
-        # 1. AUTHENTICATION LOGIC (Shared with Inventory Lookup)
-        conf_pw = _get_search_password()
-        if conf_pw:
-            # Check if session has auth
-            if not request.session.get(SESSION_KEY_OK):
-                # Handle POST Login attempt
-                if request.httprequest.method == "POST" and kwargs.get('inv_password'):
-                    inp = (kwargs.get("inv_password") or "").strip()
-                    if _consteq(inp, conf_pw):
-                        request.session[SESSION_KEY_OK] = True
-                        request.session.pop(SESSION_KEY_ERR, None)
-                        return request.redirect(request.httprequest.path)
-                    else:
-                        request.session[SESSION_KEY_ERR] = True
-                        return request.render('website_public_inventory_18.misa_purchase_lookup', {"pw_ok": False, "pw_err": True})
-                # Not logged in
-                else:
-                    return request.render('website_public_inventory_18.misa_purchase_lookup', {"pw_ok": False, "pw_err": False})
+        """Trang tra cứu chứng từ mua hàng MISA (có phân trang).
 
-        # --- LOGGED IN ---
+        auth='user': Odoo tự redirect về /web/login khi chưa đăng nhập.
+        """
         journal_memo = kwargs.get('journal_memo', '').strip()
         vouchers = []
         error = None
@@ -155,5 +127,4 @@ class MisaPurchaseLookupController(http.Controller):
             'searched': searched,
             'voucher_count': count,
             'pager': pager,
-            'pw_ok': True, # Authenticated
         })

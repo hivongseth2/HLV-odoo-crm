@@ -37,29 +37,6 @@
         </xpath>
     </template>
 
-    <template id="cancel_request_login" name="Login">
-        <t t-call="hlv_order_cancel_request.cancel_request_layout">
-            <form method="post" class="mt-4">
-                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                
-                <div class="mb-3">
-                    <label for="password" class="form-label">Mật khẩu truy cập</label>
-                    <input type="password" class="form-control" id="password" name="password" required="required" placeholder="Nhập mật khẩu..."/>
-                </div>
-                
-                <t t-if="error">
-                    <div class="alert alert-danger" role="alert">
-                        <t t-esc="error"/>
-                    </div>
-                </t>
-
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary">Đăng nhập</button>
-                </div>
-            </form>
-        </t>
-    </template>
-
     <template id="cancel_request_form" name="Request Form">
         <t t-call="hlv_order_cancel_request.cancel_request_layout">
             <style>

@@ -1,9 +1,9 @@
 {
     'name': 'Sales Order Cancellation Request',
     'version': '1.0',
-    'summary': 'Allows sales to request order cancellation via a public website page',
+    'summary': 'Allows sales to request order cancellation via a logged-in website page',
     'description': """
-        This module allows salespeople to request order cancellation or modification via a password-protected website page.
+        This module allows salespeople to request order cancellation or modification via a website page that requires an Odoo login.
         Notifications are sent via Zalo to accountants and warehouse managers.
     """,
     'category': 'Sales',
