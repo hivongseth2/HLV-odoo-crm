@@ -517,7 +517,13 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     @http.route("/api/v1/zalo/contacts/update", type="http", auth="public", methods=["PUT", "OPTIONS"], csrf=False)
     def contact_update(self, **params):
-        """Body: {"contact_id": 1, "name": "...", "email": "...", "phone": "...", "street": "...", "city": "..."}"""
+        """Body: {"contact_id": 1, "buyer_name": "...", "email": "...", "phone": "...", "street": "...", "city": "..."}
+
+        `res.partner.name` CỐ TÌNH không cho sửa: với khách doanh nghiệp đó là
+        tên pháp nhân, dùng chung cho hoá đơn và mọi chứng từ kế toán — không
+        phải thứ để khách tự đổi từ Mini App. Tên khách tự đặt được lưu ở
+        `buyer_name` của tài khoản Portal, tách riêng theo từng người thu mua.
+        """
         if request.httprequest.method == "OPTIONS":
             return self._response_options()
         try:
@@ -535,8 +541,23 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if not partner.exists() or not partner.active:
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
+            # Tìm tài khoản Portal TRƯỚC khi ghi SĐT mới: việc chọn tài khoản
+            # dựa trên `portal_phone` khớp SĐT hiện tại của khách.
+            account = self._get_scoped_portal_account(
+                partner, partner.phone or partner.mobile or ""
+            )
+
+            if "buyer_name" in body:
+                if not account:
+                    return self._response_error(
+                        "NO_PORTAL_ACCOUNT",
+                        "Khách hàng chưa có tài khoản Loyalty để lưu tên hiển thị",
+                        status=400,
+                    )
+                account.write({"buyer_name": (body.get("buyer_name") or "").strip()})
+
             update_vals = {}
-            for field in ["name", "email", "street", "city", "zip"]:
+            for field in ["email", "street", "city", "zip"]:
                 if field in body:
                     update_vals[field] = body[field]
 
@@ -550,7 +571,12 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if update_vals:
                 partner.write(update_vals)
 
-            return self._response_success({"id": partner.id, "name": partner.name, "message": "Đã cập nhật"})
+            return self._response_success({
+                "id": partner.id,
+                "name": partner.name,
+                "buyer_name": account.buyer_name or "" if account else "",
+                "message": "Đã cập nhật",
+            })
         except Exception as e:
             _logger.exception("contact_update error")
             return self._response_error("SERVER_ERROR", str(e), 500)
