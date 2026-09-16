@@ -8,13 +8,19 @@ format khác nhau). Các endpoint ở đây:
   • Kế thừa ZaloBaseAPI → dùng chung CORS headers, response format chuẩn
     `{success: true, data: ...}`.
   • Chỉ đọc dữ liệu ORM (`sudo().search`), KHÔNG duplicate business logic.
+
+Xác thực: mọi endpoint chạm tới dữ liệu của một khách cụ thể đều bắt buộc
+Bearer token và token phải thuộc đúng `partner_id` được yêu cầu — nếu không,
+bất kỳ ai cũng duyệt được id để đọc voucher và yêu cầu đổi thưởng của người
+khác. Riêng danh sách gói quà là dữ liệu chung, không gắn với khách nào nên
+vẫn để công khai.
 """
 
 import logging
 
 from odoo import http
 from odoo.exceptions import UserError
-from odoo.http import request
+from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
 
@@ -146,6 +152,10 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         if opt:
             return opt
 
+        auth = self._auth_and_verify_owner(partner_id)
+        if isinstance(auth, Response):
+            return auth
+
         try:
             body = self._request_json()
             phone = kwargs.get('phone') or body.get('phone') or ''
@@ -235,6 +245,11 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
         if not partner_id:
             return self._response_error("MISSING_PARTNER_ID", "Thiếu partner_id", status=400)
+
+        auth = self._auth_and_verify_owner(self._parse_int(partner_id, 0))
+        if isinstance(auth, Response):
+            return auth
+
         if not package_id:
             return self._response_error("MISSING_PACKAGE_ID", "Thiếu package_id", status=400)
 
@@ -343,6 +358,11 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
         if not partner_id:
             return self._response_error("MISSING_PARTNER_ID", "Thiếu partner_id", status=400)
+
+        auth = self._auth_and_verify_owner(self._parse_int(partner_id, 0))
+        if isinstance(auth, Response):
+            return auth
+
         if points <= 0:
             return self._response_error("INVALID_POINTS", "Số điểm muốn đổi phải lớn hơn 0", status=400)
         if not bank_name or not account_number or not account_name:
@@ -426,6 +446,10 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         if opt:
             return opt
 
+        auth = self._auth_and_verify_owner(partner_id)
+        if isinstance(auth, Response):
+            return auth
+
         try:
             body = self._request_json()
             phone = kwargs.get('phone') or body.get('phone') or ''
@@ -485,6 +509,11 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
         if not partner_id:
             return self._response_error("MISSING_PARTNER_ID", "Thiếu partner_id", status=400)
+
+        auth = self._auth_and_verify_owner(self._parse_int(partner_id, 0))
+        if isinstance(auth, Response):
+            return auth
+
         if request_id <= 0:
             return self._response_error("MISSING_REQUEST_ID", "Thiếu request_id", status=400)
 
