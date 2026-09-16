@@ -351,7 +351,6 @@
 }
 
 /* --- Chỉ đường cả tuyến --- */
-.pk-routebtn { text-decoration: none; display: flex; align-items: center; justify-content: center; }
 .pk-routebtn-note {
   margin: -12px 0 12px;
   color: var(--pk-amber);
@@ -446,7 +445,13 @@
 .pk-badge-amber { background: #fff4e5; color: var(--pk-amber); }
 .pk-badge-red { background: #fdecea; color: var(--pk-red); }
 
+/* inline-flex + căn giữa ngay ở lớp gốc, không để riêng cho từng nút: thẻ <button> tự căn
+   giữa chữ nên lỗi không lộ ra, còn <a> thì chữ rơi về góc trên trái. Đặt ở đây thì mọi nút
+   dùng thẻ gì cũng trông như nhau. */
 .pk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 48px;
   padding: 0 16px;
   border: 1px solid var(--pk-line);
@@ -455,10 +460,13 @@
   color: var(--pk-text);
   font-size: 15px;
   font-weight: 500;
+  font-family: inherit;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
 }
 .pk-btn-wide { flex: 1; min-width: 160px; }
-.pk-btn-block { display: block; width: 100%; margin-bottom: 20px; }
+.pk-btn-block { display: flex; width: 100%; margin-bottom: 20px; }
 .pk-btn-icon { min-width: 44px; padding: 0 12px; font-size: 18px; line-height: 1; }
 .pk-btn-primary { background: var(--pk-blue); border-color: var(--pk-blue); color: #fff; }
 .pk-btn-green { background: var(--pk-green); border-color: var(--pk-green); color: #fff; }

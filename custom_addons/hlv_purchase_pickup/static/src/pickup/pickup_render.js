@@ -366,7 +366,7 @@ window.HlvPickup = window.HlvPickup || {};
       return "";
     }
     var over = remaining.length > HP.MAX_DIR_POINTS;
-    return '<a class="pk-btn pk-btn-primary pk-btn-block pk-routebtn" target="_blank" ' +
+    return '<a class="pk-btn pk-btn-primary pk-btn-block" target="_blank" ' +
       'rel="noopener" href="' + HP.esc(HP.directionsAllUrl(run.stops)) + '">' +
       "Chỉ đường cả tuyến · " + Math.min(remaining.length, HP.MAX_DIR_POINTS) + " điểm</a>" +
       (over ? '<div class="pk-routebtn-note">Google Maps chỉ nhận ' + HP.MAX_DIR_POINTS +
