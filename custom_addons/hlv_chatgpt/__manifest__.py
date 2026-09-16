@@ -10,6 +10,7 @@
         'security/chatgpt_security.xml',
         'security/ir.model.access.csv',
         'views/chatgpt_config_view.xml',
+        'views/chatgpt_admin_view.xml',
         'views/chatgpt_session_view.xml',
     ],
     'assets': {

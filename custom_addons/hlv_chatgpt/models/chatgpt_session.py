@@ -17,7 +17,9 @@ except ImportError:
     OpenAI = None
 
 # Số vòng gọi API tối đa cho một lượt (mỗi vòng = 1 lần gọi model + 1 lượt chạy tool).
-MAX_TOOL_STEPS = 8
+# Prompt quy định lộ trình 4 bước search, cộng tra nhóm, tạo sản phẩm và vòng chốt lời
+# là đã 7-8 vòng; để 8 thì lượt tạo sản phẩm dễ bị cắt ngang ngay trước câu trả lời.
+MAX_TOOL_STEPS = 12
 # Chỉ dùng khi session chưa có last_response_id (session cũ trước khi nâng cấp).
 COLD_START_HISTORY_LIMIT = 10
 
@@ -81,11 +83,12 @@ class HlvChatgptSession(models.Model):
         executor = self.env['hlv.chatgpt.tool.executor']
         tool_cache = {}
 
+        is_admin = self._is_admin_sender()
         previous_response_id = self.last_response_id or False
         next_input = (
-            [msg.to_openai_input() for msg in pending]
+            [msg.to_openai_input(is_admin=is_admin) for msg in pending]
             if previous_response_id
-            else self._cold_start_input(pending)
+            else self._cold_start_input(pending, is_admin)
         )
 
         # Giữ lại id của lần gọi thành công gần nhất: nếu bước sau lỗi, ngữ cảnh đã gửi
@@ -117,7 +120,7 @@ class HlvChatgptSession(models.Model):
                     )
                     can_rebuild_context = False
                     previous_response_id = False
-                    next_input = self._cold_start_input(pending)
+                    next_input = self._cold_start_input(pending, is_admin)
                     continue
                 _logger.exception("OpenAI Responses API error")
                 error_text = _("Lỗi gọi OpenAI: %s") % error
@@ -162,6 +165,18 @@ class HlvChatgptSession(models.Model):
         if sent_messages:
             sent_messages.sudo().write({'to_send': False})
 
+    def _is_admin_sender(self):
+        """Người gửi của session này có quyền quản trị không.
+
+        Zalo: chỉ dựa vào whitelist hlv.chatgpt.admin. Lời tự xưng trong tin nhắn
+        không có giá trị vì ai cũng gõ được.
+        Giao diện Odoo: dựa vào group Quản lý Chat AI của chính người đang bấm nút.
+        """
+        self.ensure_one()
+        if self.zalo_user_id:
+            return self.env['hlv.chatgpt.admin'].is_admin_zalo_user(self.zalo_user_id)
+        return self.env.user.has_group('hlv_chatgpt.group_hlv_chatgpt_manager')
+
     # =========================================================================
     # 2. DỰNG NGỮ CẢNH ĐẦU VÀO
     # =========================================================================
@@ -174,7 +189,7 @@ class HlvChatgptSession(models.Model):
             ('to_send', '=', True),
         ], order='id asc')
 
-    def _cold_start_input(self, pending):
+    def _cold_start_input(self, pending, is_admin=False):
         """Dựng ngữ cảnh khi session chưa có last_response_id.
 
         Chỉ xảy ra với session tạo trước khi nâng cấp, hoặc session vừa được tạo mới.
@@ -188,8 +203,11 @@ class HlvChatgptSession(models.Model):
             ('role', 'in', ['user', 'assistant']),
         ], order='id desc', limit=COLD_START_HISTORY_LIMIT)
 
-        payload = [msg.to_openai_input(with_image=False) for msg in history.sorted('id')]
-        payload += [msg.to_openai_input() for msg in pending]
+        payload = [
+            msg.to_openai_input(with_image=False, is_admin=is_admin)
+            for msg in history.sorted('id')
+        ]
+        payload += [msg.to_openai_input(is_admin=is_admin) for msg in pending]
         return payload
 
     # =========================================================================

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_chatgpt_admin_list" model="ir.ui.view">
+        <field name="name">hlv.chatgpt.admin.list</field>
+        <field name="model">hlv.chatgpt.admin</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="zalo_user_id"/>
+                <field name="note"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_chatgpt_admin_form" model="ir.ui.view">
+        <field name="name">hlv.chatgpt.admin.form</field>
+        <field name="model">hlv.chatgpt.admin</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Họ tên quản trị viên"/></h1>
+                    </div>
+                    <group>
+                        <field name="zalo_user_id" placeholder="Nhắn 'id' vào Zalo OA để lấy"/>
+                        <field name="note"/>
+                        <field name="active"/>
+                    </group>
+                    <div class="alert alert-warning" role="alert">
+                        Người trong danh sách này được AI chấp nhận tạo mã theo yêu cầu mà
+                        không cần đủ checklist thông tin. Chỉ thêm người thực sự có thẩm quyền.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_chatgpt_admin" model="ir.actions.act_window">
+        <field name="name">Quản trị viên Chat AI</field>
+        <field name="res_model">hlv.chatgpt.admin</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Thêm quản trị viên đầu tiên</p>
+            <p>Chỉ những Zalo User ID trong danh sách này mới được AI coi là quản lý.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_hlv_chatgpt_admin" parent="menu_hlv_chatgpt_root"
+              action="action_hlv_chatgpt_admin" sequence="90" groups="base.group_system"/>
+</odoo>
