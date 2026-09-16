@@ -25,7 +25,10 @@ class ZaloConfigAPI(ZaloBaseAPI, http.Controller):
             return self._response_options()
         try:
             get_param = request.env["ir.config_parameter"].sudo().get_param
-            oa_id = get_param("hlv_zalo_miniapp.oa_id", "3668388836585145887")
+            # Không đặt OA id mặc định trong code: sai một chỗ là khách bị dẫn
+            # sang OA khác mà không ai phát hiện. Chưa cấu hình thì trả rỗng,
+            # Mini App sẽ tự dùng `oaIDtoOpenChat` trong app-config.
+            oa_id = get_param("hlv_zalo_miniapp.oa_id", "")
             oa_name = get_param("hlv_zalo_miniapp.oa_name", "Hoàng Long Vũ")
             oa_subtext = get_param(
                 "hlv_zalo_miniapp.oa_subtext",
