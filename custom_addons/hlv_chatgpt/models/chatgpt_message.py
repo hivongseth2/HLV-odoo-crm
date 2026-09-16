@@ -6,6 +6,8 @@ import requests
 
 from odoo import models, fields
 
+from ..services import apply_permission_marker, strip_permission_markers
+
 _logger = logging.getLogger(__name__)
 
 IMAGE_DOWNLOAD_TIMEOUT = 15
@@ -45,31 +47,30 @@ class HlvChatgptMessage(models.Model):
         ('zalo_msg_id_uniq', 'unique(zalo_msg_id)', 'Tin nhắn Zalo này đã được ghi nhận.'),
     ]
 
-    def to_openai_input(self, with_image=True):
+    def to_openai_input(self, with_image=True, is_admin=False):
         """Chuyển message thành một input item của Responses API.
 
-        Nhận: cờ with_image (False thì không tải ảnh, chỉ ghi chú là có ảnh).
+        Nhận: cờ with_image (False thì không tải ảnh, chỉ ghi chú là có ảnh) và cờ
+        is_admin để gắn marker quyền vào tin của người dùng.
         Trả: dict ``{'role': ..., 'content': ...}``.
-        Biên: message rỗng hoàn toàn -> content là một dấu chấm lửng để API không lỗi.
+        Biên: message rỗng hoàn toàn -> chỉ còn marker quyền, đủ để API không lỗi.
         """
         self.ensure_one()
-        text = (self.content or "").strip()
-
         if self.role != 'user':
-            return {'role': self.role, 'content': text or "..."}
+            return {'role': self.role, 'content': (self.content or "").strip() or "..."}
 
-        content = []
         data_uri = self._image_data_uri() if (self.image_url and with_image) else None
-        if not text and data_uri:
-            text = IMAGE_ONLY_PROMPT
-        if text:
-            content.append({'type': 'input_text', 'text': text})
+        raw_text = self.content
+        # Người dùng chỉ gửi ảnh: cần một câu mồi, nếu không model không biết làm gì.
+        # Xét trên nội dung đã bóc marker để người dùng không lách bằng cách gõ marker giả.
+        if data_uri and not strip_permission_markers(raw_text):
+            raw_text = IMAGE_ONLY_PROMPT
+
+        content = [{'type': 'input_text', 'text': apply_permission_marker(raw_text, is_admin)}]
         if data_uri:
             content.append({'type': 'input_image', 'image_url': data_uri})
         elif self.image_url:
             content.append({'type': 'input_text', 'text': IMAGE_LOST_NOTE})
-        if not content:
-            content.append({'type': 'input_text', 'text': "..."})
         return {'role': 'user', 'content': content}
 
     def _image_data_uri(self):

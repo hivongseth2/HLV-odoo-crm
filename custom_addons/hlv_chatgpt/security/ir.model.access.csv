@@ -4,3 +4,4 @@ access_hlv_chatgpt_session_user,hlv.chatgpt.session user,model_hlv_chatgpt_sessi
 access_hlv_chatgpt_session_manager,hlv.chatgpt.session manager,model_hlv_chatgpt_session,hlv_chatgpt.group_hlv_chatgpt_manager,1,1,1,1
 access_hlv_chatgpt_message_user,hlv.chatgpt.message user,model_hlv_chatgpt_message,base.group_user,1,1,1,0
 access_hlv_chatgpt_message_manager,hlv.chatgpt.message manager,model_hlv_chatgpt_message,hlv_chatgpt.group_hlv_chatgpt_manager,1,1,1,1
+access_hlv_chatgpt_admin_system,hlv.chatgpt.admin system,model_hlv_chatgpt_admin,base.group_system,1,1,1,1
