@@ -1,10 +1,13 @@
 {
     'name': 'HLV ChatGPT Manager',
-    'version': '1.0',
-    'summary': 'Chat AI Multi-Agent (Router + Specialists) sử dụng Prompt ID',
+    'version': '1.1',
+    'summary': 'Chat AI quản lý sản phẩm MISA qua OpenAI Responses API (Stored Prompt)',
     'author': 'HLV',
-    'depends': ['base', 'product', 'stock'],
+    # misa_fetch_po_button cung cấp misa.api.utils / misa.config: mọi tool đều cần.
+    'depends': ['base', 'product', 'stock', 'misa_fetch_po_button'],
+    'external_dependencies': {'python': ['openai']},
     'data': [
+        'security/chatgpt_security.xml',
         'security/ir.model.access.csv',
         'views/chatgpt_config_view.xml',
         'views/chatgpt_session_view.xml',
