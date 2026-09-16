@@ -171,7 +171,12 @@ window.HlvPickup = window.HlvPickup || {};
     }
     var html = '<section class="' + classes.join(" ") + '" data-stop-id="' + stop.id + '">';
 
+    /* Tay nắm kéo chỉ có ở thẻ trong danh sách và chỉ với điểm CHƯA XONG. Thẻ ở đầu tấm
+       trượt không cần: nó vốn đã là điểm đi kế tiếp. */
+    var canDrag = variant !== "head" &&
+      (stop.state === "pending" || stop.state === "arrived");
     html += '<div class="pk-stop-head">' +
+      (canDrag ? '<span class="pk-drag" aria-label="Kéo để đổi thứ tự">⠿</span>' : "") +
       '<span class="pk-stop-no">' + (index + 1) + "</span>" +
       '<span class="pk-stop-name">' + HP.esc(stop.point_name) + "</span>" +
       badge(HP.LABEL.STOP, stop.state) + "</div>";
@@ -260,7 +265,8 @@ window.HlvPickup = window.HlvPickup || {};
       return;
     }
     box.innerHTML = '<div class="pk-finish-note">Còn ' + left + " điểm chưa xong.</div>" +
-      '<button class="pk-linkbtn" data-action="finish" type="button">Kết thúc sớm</button>';
+      '<button class="pk-btn pk-btn-ghost pk-btn-block" data-action="finish" type="button">' +
+      "Kết thúc chuyến sớm</button>";
   }
 
   /** Nút kết thúc chuyến, dùng ở đầu tấm trượt khi mọi điểm đã xong. */
@@ -350,6 +356,39 @@ window.HlvPickup = window.HlvPickup || {};
     meta.textContent = parts.join(" · ");
   }
 
+  /**
+   * Thanh "chỉ đường cả tuyến" — một nút đẩy TẤT CẢ điểm còn lại sang Google Maps theo đúng
+   * thứ tự đang xếp. Trang này không dẫn đường; việc đó giao hẳn cho Google Maps.
+   */
+  function renderRouteBar(run) {
+    var remaining = HP.remainingStops(run.stops);
+    if (remaining.length < 2) {
+      return "";
+    }
+    var over = remaining.length > HP.MAX_DIR_POINTS;
+    return '<a class="pk-btn pk-btn-primary pk-btn-block pk-routebtn" target="_blank" ' +
+      'rel="noopener" href="' + HP.esc(HP.directionsAllUrl(run.stops)) + '">' +
+      "Chỉ đường cả tuyến · " + Math.min(remaining.length, HP.MAX_DIR_POINTS) + " điểm</a>" +
+      (over ? '<div class="pk-routebtn-note">Google Maps chỉ nhận ' + HP.MAX_DIR_POINTS +
+        " điểm một lần, nên link chỉ gồm " + HP.MAX_DIR_POINTS +
+        " điểm đầu. Xong thì bấm lại để đi tiếp.</div>" : "");
+  }
+
+  /**
+   * Một nhóm thẻ điểm dừng có tiêu đề. Nhóm rỗng thì không vẽ gì cả.
+   * ``hint`` là dòng gợi ý nhỏ bên cạnh tiêu đề (VD cách đổi thứ tự).
+   */
+  function renderGroup(title, stops, queued, positionOf, hint) {
+    if (!stops.length) {
+      return "";
+    }
+    return '<div class="pk-list-title">' + HP.esc(title) +
+      (hint ? '<span class="pk-list-hint">' + HP.esc(hint) + "</span>" : "") + "</div>" +
+      '<div class="pk-group">' + stops.map(function (stop) {
+        return renderStop(stop, positionOf(stop), queued, "list");
+      }).join("") + "</div>";
+  }
+
   /** Vẽ lại toàn bộ trang. run = null nghĩa là chưa chọn chuyến nào. */
   HP.render = function (run) {
     /* Đổi sang chuyến khác thì cho bản đồ căn khung lại từ đầu. */
@@ -382,25 +421,35 @@ window.HlvPickup = window.HlvPickup || {};
     var rest = run.stops.filter(function (stop) {
       return !current || stop.id !== current.id;
     });
+    /* Tách hai nhóm: điểm CÒN PHẢI ĐI thì kéo đổi thứ tự được, điểm ĐÃ XONG thì không —
+       đổi thứ tự một điểm đã ghé là vô nghĩa. */
+    var todo = rest.filter(function (stop) {
+      return stop.state === "pending" || stop.state === "arrived";
+    });
+    var visited = rest.filter(function (stop) {
+      return todo.indexOf(stop) === -1;
+    });
+
+    /* Giữ SỐ THỨ TỰ THẬT trong chuyến, không đánh số lại theo danh sách đã lọc — số trên
+       thẻ phải khớp với số trên ghim bản đồ. */
+    function positionOf(stop) {
+      var position = 0;
+      run.stops.forEach(function (item, at) {
+        if (item.id === stop.id) {
+          position = at;
+        }
+      });
+      return position;
+    }
 
     var container = HP.$("pk-stops");
     if (!run.stops.length) {
       container.innerHTML = '<div class="pk-empty">Chuyến chưa có điểm nào.</div>';
-    } else if (!rest.length) {
-      container.innerHTML = '<div class="pk-empty">Không còn điểm nào khác.</div>';
     } else {
-      container.innerHTML = '<div class="pk-list-title">Các điểm khác (' + rest.length +
-        ")</div>" + rest.map(function (stop) {
-          /* Giữ SỐ THỨ TỰ THẬT trong chuyến, không đánh số lại theo danh sách đã lọc — số
-             trên thẻ phải khớp với số trên ghim bản đồ. */
-          var position = 0;
-          run.stops.forEach(function (item, at) {
-            if (item.id === stop.id) {
-              position = at;
-            }
-          });
-          return renderStop(stop, position, queued, "list");
-        }).join("");
+      container.innerHTML = renderRouteBar(run) +
+        renderGroup('Còn phải đi (' + todo.length + ')', todo, queued, positionOf,
+          todo.length > 1 ? "kéo ⠿ để đổi thứ tự" : "") +
+        renderGroup('Đã xong (' + visited.length + ')', visited, queued, positionOf, "");
     }
 
     renderSheetHead(run, queued, current);

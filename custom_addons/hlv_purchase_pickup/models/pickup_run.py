@@ -101,11 +101,6 @@ class HlvPickupRun(models.Model):
         string='Điểm thiếu toạ độ', compute='_compute_point_no_coords_count',
         help='Điểm thiếu toạ độ thì không hiện trên bản đồ và không tính được thứ tự đi.',
     )
-    route_polyline = fields.Char(
-        string='Đường đi (nén)', readonly=True, copy=False,
-        help='Chuỗi polyline Google trả về ở lần tính đường gần nhất, dùng để vẽ đường đi '
-             'thật lên bản đồ của trang /pickup.',
-    )
     optimize_count = fields.Integer(
         string='Số lần tối ưu', readonly=True, copy=False,
         help='Mỗi lần bấm là một lượt gọi Google có tính tiền. Có trần để một chuyến bị bấm '
@@ -204,6 +199,30 @@ class HlvPickupRun(models.Model):
             added += 1
         return added
 
+    def reorder_stops(self, stop_ids):
+        """Đánh số lại thứ tự kế hoạch theo đúng danh sách id truyền vào.
+
+        Nhận danh sách ĐẦY ĐỦ id điểm của chuyến. Cố tình không nhận danh sách một phần rồi
+        tự suy chỗ cho các điểm còn lại: suy sai thì thứ tự đi bị đảo mà không ai biết vì sao.
+
+        Chỉ đổi ``sequence`` — tức thứ tự KẾ HOẠCH. Mọi con số đo được vẫn tính theo thứ tự
+        đi THỰC TẾ (``actual_sequence``, suy từ giờ bấm "đã tới"), nên tài xế xếp lại đường
+        đi không làm sai số liệu của các điểm đã ghé.
+        """
+        self.ensure_one()
+        if self.state in ('done', 'cancelled'):
+            raise UserError('Chuyến "%s" đã kết thúc nên không xếp lại được.' % self.name)
+
+        wanted = [int(sid) for sid in (stop_ids or [])]
+        if set(wanted) != set(self.stop_ids.ids):
+            raise UserError(
+                'Danh sách thứ tự không khớp với các điểm của chuyến. Bấm Tải lại rồi thử '
+                'lại — có thể điều phối vừa đổi chuyến.'
+            )
+        for index, stop_id in enumerate(wanted):
+            self.stop_ids.browse(stop_id).sequence = (index + 1) * 10
+        return True
+
     def action_remove_empty_stops(self):
         """Xoá các điểm không còn đơn nào — sau khi quản lý gỡ bớt đơn khỏi chuyến."""
         for run in self:
@@ -275,7 +294,6 @@ class HlvPickupRun(models.Model):
             'optimize_count': self.optimize_count + 1,
             'planned_total_minutes': result['total_minutes'],
             'planned_km': result['total_km'],
-            'route_polyline': result.get('polyline') or '',
         })
         return True
 

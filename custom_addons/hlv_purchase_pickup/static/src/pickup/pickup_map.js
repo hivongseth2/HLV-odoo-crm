@@ -16,6 +16,10 @@ window.HlvPickup = window.HlvPickup || {};
   var meMarker = null;
   var loading = null;
   var fitted = false;
+  /* Vị trí đã lấy được gần nhất. Lấy MỘT LẦN lúc mở bản đồ rồi dùng lại, thay vì theo dõi
+     liên tục: theo dõi liên tục ăn pin, mà việc ở đây chỉ cần biết đại khái đang ở đâu để
+     vẽ thứ tự đi. Bấm nút ◎ thì lấy lại. */
+  var myPos = null;
 
   var COLOR = {
     done: "#9aa0a6",
@@ -41,9 +45,7 @@ window.HlvPickup = window.HlvPickup || {};
     }
     loading = new Promise(function (resolve) {
       var script = document.createElement("script");
-      /* geometry: cần để giải mã đường đi Google trả về dạng polyline nén. */
-      script.src = "https://maps.googleapis.com/maps/api/js?libraries=geometry&key=" +
-        encodeURIComponent(key);
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key);
       script.async = true;
       script.onload = function () {
         resolve(!!(window.google && window.google.maps));
@@ -89,20 +91,50 @@ window.HlvPickup = window.HlvPickup || {};
     return stop.id === nextId ? COLOR.next : COLOR.pending;
   }
 
-  function drawRoute(gmaps, encoded) {
+  /**
+   * Đường GẠCH NỐI chỉ THỨ TỰ ĐI, không phải lối đi trên đường bộ.
+   *
+   * Cố tình không vẽ đường bộ thật: đường bộ phải hỏi Google rồi lưu lại, mà bản lưu đó
+   * thành sai ngay khi người đi nhận xong một điểm hoặc di chuyển khỏi chỗ đã bấm — một
+   * đường vẽ sai còn tệ hơn không vẽ. Muốn dẫn đường thì bấm "Chỉ đường", Google Maps làm
+   * việc đó tốt hơn.
+   *
+   * Nối từ vị trí hiện tại (nếu biết) qua các điểm CHƯA XONG theo thứ tự. Tính ngay trên
+   * máy nên không bao giờ lệch với hiện trạng.
+   */
+  function drawOrderLine(gmaps, stops) {
     if (routeLine) {
       routeLine.setMap(null);
       routeLine = null;
     }
-    if (!encoded || !gmaps.geometry) {
+    var path = [];
+    if (myPos) {
+      path.push(new gmaps.LatLng(myPos.lat, myPos.lng));
+    }
+    stops.forEach(function (stop) {
+      var pending = stop.state === "pending" || stop.state === "arrived";
+      if (pending && stop.lat && stop.lng) {
+        path.push(new gmaps.LatLng(stop.lat, stop.lng));
+      }
+    });
+    if (path.length < 2) {
       return;
     }
     routeLine = new gmaps.Polyline({
-      path: gmaps.geometry.encoding.decodePath(encoded),
+      path: path,
       map: map,
-      strokeColor: COLOR.next,
-      strokeOpacity: 0.75,
-      strokeWeight: 5,
+      strokeOpacity: 0,
+      icons: [{
+        icon: {
+          path: "M 0,-1 0,1",
+          strokeColor: COLOR.next,
+          strokeOpacity: 0.9,
+          strokeWeight: 4,
+          scale: 3,
+        },
+        offset: "0",
+        repeat: "16px",
+      }],
     });
   }
 
@@ -197,35 +229,35 @@ window.HlvPickup = window.HlvPickup || {};
         bounds.extend(position);
       });
 
-      drawRoute(gmaps, run.route_polyline);
+      drawOrderLine(gmaps, stops);
 
       /* Chỉ căn khung MỘT LẦN cho mỗi chuyến: sau mỗi lần bấm nút, màn hình được vẽ lại —
          tự kéo bản đồ về khung tổng thể mỗi lần như vậy sẽ huỷ chỗ người dùng vừa phóng to. */
       if (!fitted) {
         map.fitBounds(bounds, 60);
         fitted = true;
+        /* Lấy vị trí ngay lần đầu để đường thứ tự có điểm bắt đầu là chỗ đang đứng. Không
+           chờ người dùng bấm ◎ — họ sẽ chỉ thấy một đường nối các điểm với nhau và hỏi vì
+           sao nó không đi qua mình. */
+        HP.markMyPosition();
       }
     });
   };
 
-  /** Quên khung đã căn — gọi khi đổi sang chuyến khác. */
-  HP.resetMapView = function () {
-    fitted = false;
-  };
-
   /**
-   * Đưa bản đồ về vị trí hiện tại và ghim lại.
-   * Không lấy được vị trí thì báo lên khối ghi chú chứ không im lặng.
+   * Lấy vị trí hiện tại, ghim lên bản đồ và vẽ lại đường thứ tự.
+   * KHÔNG di chuyển khung nhìn — dùng khi tự chạy lúc mở bản đồ.
+   * Trả promise luôn resolve: true nếu lấy được.
    */
-  HP.centerOnMe = function () {
+  HP.markMyPosition = function () {
     if (!map) {
       return Promise.resolve(false);
     }
     return HP.currentPosition().then(function (gps) {
       if (!gps) {
-        note("Không lấy được vị trí. Bật định vị cho trình duyệt rồi thử lại.");
         return false;
       }
+      myPos = gps;
       var gmaps = window.google.maps;
       var here = new gmaps.LatLng(gps.lat, gps.lng);
       if (!meMarker) {
@@ -244,7 +276,29 @@ window.HlvPickup = window.HlvPickup || {};
         });
       }
       meMarker.setPosition(here);
-      map.panTo(here);
+      if (HP.S.run) {
+        drawOrderLine(gmaps, HP.S.run.stops || []);
+      }
+      return true;
+    });
+  };
+
+  /** Quên khung đã căn — gọi khi đổi sang chuyến khác. */
+  HP.resetMapView = function () {
+    fitted = false;
+  };
+
+  /**
+   * Lấy lại vị trí RỒI đưa khung nhìn về đó — dùng cho nút ◎.
+   * Không lấy được thì báo lên khối ghi chú chứ không im lặng.
+   */
+  HP.centerOnMe = function () {
+    return HP.markMyPosition().then(function (ok) {
+      if (!ok) {
+        note("Không lấy được vị trí. Bật định vị cho trình duyệt rồi thử lại.");
+        return false;
+      }
+      map.panTo(new window.google.maps.LatLng(myPos.lat, myPos.lng));
       map.setZoom(15);
       return true;
     });

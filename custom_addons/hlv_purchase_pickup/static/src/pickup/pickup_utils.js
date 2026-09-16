@@ -123,9 +123,57 @@ window.HlvPickup = window.HlvPickup || {};
     return current;
   };
 
-  /** Link chỉ đường Google Maps tới một điểm. Thiếu toạ độ thì dùng địa chỉ chữ. */
+  /* Google Maps URL API nhận tối đa 9 điểm trung gian, cộng điểm đến là 10. Quá số này thì
+     phải cắt bớt — không có cách nào nhồi thêm vào một đường link. */
+  HP.MAX_DIR_POINTS = 10;
+
+  /** Một điểm dừng thành tham số cho Google Maps: ưu tiên toạ độ, không có thì địa chỉ chữ. */
+  function placeOf(stop) {
+    if (stop.lat && stop.lng) {
+      return stop.lat + "," + stop.lng;
+    }
+    return stop.address || stop.point_name || "";
+  }
+
+  /** Link chỉ đường Google Maps tới MỘT điểm. */
   HP.directionsUrl = function (stop) {
-    var target = stop.lat && stop.lng ? stop.lat + "," + stop.lng : stop.address || stop.point_name;
-    return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(target);
+    return "https://www.google.com/maps/dir/?api=1&destination=" +
+      encodeURIComponent(placeOf(stop));
+  };
+
+  /**
+   * Các điểm còn phải đi, theo thứ tự đang xếp.
+   * Điểm đã xong / bỏ qua không tính; điểm không có cả toạ độ lẫn địa chỉ cũng bỏ vì không
+   * chỉ đường tới được.
+   */
+  HP.remainingStops = function (stops) {
+    return (stops || []).filter(function (stop) {
+      var todo = stop.state === "pending" || stop.state === "arrived";
+      return todo && placeOf(stop);
+    });
+  };
+
+  /**
+   * Link chỉ đường Google Maps qua TẤT CẢ các điểm còn lại, theo đúng thứ tự đang xếp.
+   *
+   * Cố tình KHÔNG truyền điểm xuất phát: để trống thì Google Maps tự lấy vị trí hiện tại
+   * của điện thoại. Truyền toạ độ mình đo được thì nó thành vị trí lúc bấm, sai ngay khi xe
+   * chạy tiếp — mà việc dẫn đường đã giao cho Google, không phải việc của trang này.
+   *
+   * Trả về chuỗi rỗng khi không còn điểm nào chỉ đường được.
+   */
+  HP.directionsAllUrl = function (stops) {
+    var places = HP.remainingStops(stops).map(placeOf).slice(0, HP.MAX_DIR_POINTS);
+    if (!places.length) {
+      return "";
+    }
+    var url = "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" +
+      encodeURIComponent(places[places.length - 1]);
+    var waypoints = places.slice(0, -1);
+    if (waypoints.length) {
+      /* Dấu | phân tách các chặng nên phải để nguyên; chỉ mã hoá từng chặng. */
+      url += "&waypoints=" + waypoints.map(encodeURIComponent).join("|");
+    }
+    return url;
   };
 })(window.HlvPickup);

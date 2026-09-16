@@ -144,6 +144,50 @@ window.HlvPickup = window.HlvPickup || {};
     });
   }
 
+  /**
+   * Tài xế kéo đổi thứ tự các điểm chưa tới.
+   *
+   * ``ids`` là thứ tự mới của riêng nhóm vừa kéo. Thứ tự gửi lên là thứ tự ĐẦY ĐỦ của cả
+   * chuyến: điểm đang làm trước, rồi nhóm vừa kéo, rồi các điểm đã xong. Gửi cả danh sách
+   * thay vì gửi từng cặp đổi chỗ để máy chủ không phải suy đoán gì — nó chỉ việc đánh số lại.
+   *
+   * Sắp lại ngay trên máy TRƯỚC khi gửi: mất sóng thì thao tác nằm trong hàng đợi, mà màn
+   * hình vẽ lại từ dữ liệu cũ sẽ làm thứ tự nhảy về chỗ cũ ngay trước mắt người vừa kéo.
+   */
+  function reorderStops(ids) {
+    if (!S.run) {
+      return Promise.resolve();
+    }
+    var byId = {};
+    S.run.stops.forEach(function (stop) {
+      byId[stop.id] = stop;
+    });
+
+    var current = HP.nextStop(S.run.stops);
+    var ordered = current ? [current] : [];
+    ids.forEach(function (id) {
+      if (byId[id] && (!current || id !== current.id)) {
+        ordered.push(byId[id]);
+      }
+    });
+    /* Điểm đã xong và bất cứ điểm nào không nằm trong nhóm vừa kéo đều xuống cuối, giữ
+       nguyên thứ tự tương đối. */
+    S.run.stops.forEach(function (stop) {
+      if (ordered.indexOf(stop) === -1) {
+        ordered.push(stop);
+      }
+    });
+
+    S.run.stops = ordered;
+    HP.render(S.run);
+    return send("/api/pickup/reorder", {
+      run_id: S.run.id,
+      stop_ids: ordered.map(function (stop) {
+        return stop.id;
+      }),
+    });
+  }
+
   /** Nút Tải lại: ở bước chọn thì tải lại danh sách, trong chuyến thì tải lại chuyến đó. */
   function reload() {
     return S.forcePick || !S.openedRunId ? loadRunList() : openRun(S.openedRunId);
@@ -308,6 +352,7 @@ window.HlvPickup = window.HlvPickup || {};
     bindModal();
     bindClicks();
     HP.sheet.init();
+    HP.initReorder(HP.$("pk-stops"), reorderStops);
     HP.$("pk-refresh").addEventListener("click", reload);
     HP.$("pk-back").addEventListener("click", loadRunList);
     HP.$("pk-recenter").addEventListener("click", HP.centerOnMe);

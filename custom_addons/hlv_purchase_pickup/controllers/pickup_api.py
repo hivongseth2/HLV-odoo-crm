@@ -167,7 +167,6 @@ class PickupApiController(http.Controller):
             'total_service_minutes': run.total_service_minutes,
             'total_minutes': run.total_minutes,
             'origin': self._partner_coords(run.warehouse_id.partner_id),
-            'route_polyline': run.route_polyline or '',
             'stops': [
                 self._stop_payload(stop)
                 for stop in run.stop_ids.sorted(lambda s: (s.sequence, s.id))
@@ -315,6 +314,23 @@ class PickupApiController(http.Controller):
                 run.optimize_from(
                     {'lat': here['lat'], 'lng': here['lng']} if here else None
                 )
+            return _ok(run=self._run_payload(run))
+        except (UserError, AccessError) as error:
+            return _err(str(error))
+
+    @http.route('/api/pickup/reorder', type='json', auth='user', methods=['POST'])
+    def api_reorder(self, run_id=None, stop_ids=None, client_event_id=None, **kwargs):
+        """Tài xế kéo đổi thứ tự điểm dừng.
+
+        Qua hàng đợi offline như các nút ghi mốc (khác nút tối ưu): thứ tự là DANH SÁCH TUYỆT
+        ĐỐI nên gửi lại bao nhiêu lần cũng ra cùng một kết quả, và kéo xong lúc mất sóng thì
+        vẫn phải được ghi nhận khi có sóng.
+        """
+        self._check_access()
+        try:
+            run = self._get_run(run_id)
+            if self._claim(client_event_id, 'reorder', run):
+                run.reorder_stops(stop_ids)
             return _ok(run=self._run_payload(run))
         except (UserError, AccessError) as error:
             return _err(str(error))

@@ -51,6 +51,7 @@ Xem kế hoạch chi tiết tại plan/ke-hoach-module-nhan-hang.md
             'hlv_purchase_pickup/static/src/pickup/pickup_api.js',
             'hlv_purchase_pickup/static/src/pickup/pickup_map.js',
             'hlv_purchase_pickup/static/src/pickup/pickup_sheet.js',
+            'hlv_purchase_pickup/static/src/pickup/pickup_reorder.js',
             'hlv_purchase_pickup/static/src/pickup/pickup_render.js',
             'hlv_purchase_pickup/static/src/pickup/pickup_app.js',
         ],
