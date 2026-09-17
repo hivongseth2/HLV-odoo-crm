@@ -65,6 +65,23 @@ class ResCompany(models.Model):
         help='Bắt buộc hiển thị theo điều khoản của hầu hết nhà cung cấp tile.',
     )
 
+    # --- Định mức tính kế hoạch ---------------------------------------------
+    vtracking_avg_speed_kmh = fields.Float(
+        string='Tốc độ trung bình (km/h)', default=35.0,
+        help='Tính cả dừng đèn đỏ và kẹt xe, nên thấp hơn tốc độ đồng hồ. Sửa theo địa '
+             'bàn: nội thành chậm hơn tuyến khu công nghiệp.',
+    )
+    vtracking_minutes_per_stop = fields.Integer(
+        string='Thời gian mỗi điểm giao (phút)', default=10,
+        help='Từ lúc tới nơi đến lúc rời đi: tìm chỗ đỗ, bốc hàng, ký nhận.',
+    )
+    vtracking_road_factor = fields.Float(
+        string='Hệ số đường bộ', default=1.3,
+        help='Quãng đường tính theo đường chim bay rồi nhân hệ số này. 1.3 nghĩa là đường '
+             'thật dài hơn đường chim bay 30%. Đo lại bằng km GPS thực tế rồi chỉnh cho '
+             'khớp địa bàn.',
+    )
+
     # --- Tra toạ độ ---------------------------------------------------------
     # Hai ô dưới đây đọc/ghi thẳng tham số hệ thống của `base_geolocalize`, KHÔNG tạo
     # tham số riêng: hai chỗ cùng giữ một khoá Google là kiểu lỗi mà người dùng đổi khoá

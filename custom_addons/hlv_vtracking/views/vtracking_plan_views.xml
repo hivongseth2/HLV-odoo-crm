@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_plan_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.list</field>
+        <field name="model">hlv.vtracking.plan</field>
+        <field name="arch" type="xml">
+            <list string="Kế hoạch giao hàng"
+                  decoration-muted="state == 'cancelled'"
+                  decoration-warning="missing_coords_count &gt; 0">
+                <field name="date"/>
+                <field name="session"/>
+                <field name="vehicle_id"/>
+                <field name="driver_id" optional="show"/>
+                <field name="line_count" sum="Tổng phiếu"/>
+                <field name="amount_total" sum="Tổng tiền" widget="monetary"/>
+                <field name="distance_km" sum="Tổng km"/>
+                <field name="duration_display" string="Dự kiến"/>
+                <field name="missing_coords_count" string="Thiếu toạ độ" optional="show"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-success="state in ('confirmed', 'done')"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_plan_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.form</field>
+        <field name="model">hlv.vtracking.plan</field>
+        <field name="arch" type="xml">
+            <form string="Kế hoạch giao hàng">
+                <header>
+                    <button name="action_confirm" type="object" string="Chốt kế hoạch"
+                            class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_back_to_draft" type="object" string="Về nháp"
+                            invisible="state != 'confirmed'"/>
+                    <button name="action_done" type="object" string="Đánh dấu xong"
+                            invisible="state != 'confirmed'"/>
+                    <button name="action_resequence_by_distance" type="object"
+                            string="Sắp thứ tự theo điểm gần nhất"
+                            invisible="state not in ('draft', 'confirmed')"/>
+                    <button name="action_refresh_lines" type="object"
+                            string="Đọc lại từ phiếu"/>
+                    <button name="action_cancel" type="object" string="Huỷ"
+                            invisible="state in ('cancelled', 'done')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,confirmed,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Chuyến">
+                            <field name="date"/>
+                            <field name="session"/>
+                            <field name="vehicle_id"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="driver_id" readonly="1"/>
+                            <field name="start_place_id"
+                                   options="{'no_create': True}"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Dự kiến">
+                            <field name="line_count"/>
+                            <field name="amount_total" widget="monetary"/>
+                            <field name="distance_km"/>
+                            <field name="drive_minutes" string="Chạy (phút)"/>
+                            <field name="service_minutes" string="Giao (phút)"/>
+                            <field name="duration_display" string="Tổng thời gian"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="missing_coords_count == 0">
+                        Có <field name="missing_coords_count" readonly="1" nolabel="1"
+                                  class="oe_inline"/> phiếu chưa tra được toạ độ — quãng
+                        đường và thời gian bên trên đang <strong>thiếu phần của chúng</strong>.
+                        Mở tab Phiếu giao, sửa địa chỉ rồi bấm "Tra lại toạ độ".
+                    </div>
+
+                    <notebook>
+                        <page string="Phiếu giao">
+                            <field name="line_ids">
+                                <list editable="bottom" decoration-warning="not has_coords">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="picking_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="source_name" string="Đơn bán" readonly="1"/>
+                                    <field name="partner_id" readonly="1"/>
+                                    <field name="address" readonly="1"/>
+                                    <field name="amount" widget="monetary" readonly="1"
+                                           sum="Tổng tiền"/>
+                                    <field name="geo_state" string="Toạ độ" readonly="1"/>
+                                    <field name="has_coords" column_invisible="1"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                    <field name="delivered" string="Đã giao" readonly="1"
+                                           optional="show"/>
+                                    <button name="action_retry_geocode" type="object"
+                                            icon="fa-search-plus" title="Tra lại toạ độ"/>
+                                    <button name="action_open_picking" type="object"
+                                            icon="fa-external-link" title="Mở phiếu"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="Thực tế">
+                            <!-- Khai sẵn, số liệu sẽ do hlv_barcode_shipper cung cấp. Hiện
+                                 ra ngay từ bây giờ để người dùng biết chỗ này sẽ có gì, và
+                                 để không ai nhầm số dự kiến thành số thực tế. -->
+                            <div class="alert alert-info" role="alert"
+                                 invisible="has_actual_data">
+                                Phần này lấy số từ module <strong>hlv_barcode_shipper</strong>
+                                (tài xế quét nhận và giao phiếu) và từ lịch sử GPS của xe.
+                                <strong>Chưa nối</strong> — sẽ làm ở bước sau.
+                            </div>
+                            <group>
+                                <group string="Đã giao">
+                                    <field name="actual_line_count"/>
+                                    <field name="actual_amount_total" widget="monetary"/>
+                                </group>
+                                <group string="Hành trình thật">
+                                    <field name="actual_distance_km"/>
+                                    <field name="actual_start_at"/>
+                                    <field name="actual_end_at"/>
+                                </group>
+                            </group>
+                            <field name="has_actual_data" invisible="1"/>
+                        </page>
+
+                        <page string="Ghi chú">
+                            <field name="note" placeholder="Dặn dò tài xế, lưu ý tuyến…"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vtracking_plan_search" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.search</field>
+        <field name="model">hlv.vtracking.plan</field>
+        <field name="arch" type="xml">
+            <search string="Kế hoạch giao hàng">
+                <field name="vehicle_id"/>
+                <field name="driver_id"/>
+                <field name="date"/>
+                <filter name="today" string="Hôm nay"
+                        domain="[('date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="draft" string="Còn nháp" domain="[('state', '=', 'draft')]"/>
+                <filter name="missing_geo" string="Có phiếu thiếu toạ độ"
+                        domain="[('missing_coords_count', '&gt;', 0)]"/>
+                <separator/>
+                <filter name="morning" string="Sáng" domain="[('session', '=', 'morning')]"/>
+                <filter name="afternoon" string="Chiều" domain="[('session', '=', 'afternoon')]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_date" string="Ngày" context="{'group_by': 'date'}"/>
+                    <filter name="group_vehicle" string="Xe" context="{'group_by': 'vehicle_id'}"/>
+                    <filter name="group_session" string="Buổi" context="{'group_by': 'session'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_plan" model="ir.actions.act_window">
+        <field name="name">Kế hoạch giao hàng</field>
+        <field name="res_model">hlv.vtracking.plan</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vtracking_plan_search"/>
+        <field name="context">{'search_default_group_date': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Lập kế hoạch giao hàng đầu tiên</p>
+            <p>
+                Mỗi kế hoạch là một xe trong một buổi của một ngày. Thêm phiếu giao vào,
+                hệ thống tự tra toạ độ theo địa chỉ trên phiếu rồi tính quãng đường và
+                thời gian dự kiến.
+            </p>
+        </field>
+    </record>
+
+    <!-- ============ Kho toạ độ đã tra ============ -->
+    <record id="view_vtracking_address_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.address.list</field>
+        <field name="model">hlv.vtracking.address</field>
+        <field name="arch" type="xml">
+            <list string="Kho toạ độ" create="0"
+                  decoration-warning="geo_state == 'pending_review'"
+                  decoration-danger="geo_state == 'failed'">
+                <field name="raw_address"/>
+                <field name="normalized_address" optional="hide"/>
+                <field name="geo_state"/>
+                <field name="geo_source" optional="hide"/>
+                <field name="hit_count" string="Dùng lại" sum="Tổng lượt tiết kiệm"/>
+                <field name="last_used_at" optional="show"/>
+                <field name="latitude" optional="hide"/>
+                <field name="longitude" optional="hide"/>
+                <button name="action_geocode_retry" type="object" icon="fa-search-plus"
+                        title="Tra lại"/>
+                <button name="action_confirm" type="object" icon="fa-check"
+                        title="Duyệt toạ độ" invisible="geo_state != 'pending_review'"/>
+                <button name="action_open_gmaps" type="object" icon="fa-map-marker"
+                        title="Mở Google Maps" invisible="not has_coords"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_address_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.address.form</field>
+        <field name="model">hlv.vtracking.address</field>
+        <field name="arch" type="xml">
+            <form string="Toạ độ đã tra" create="0">
+                <header>
+                    <button name="action_geocode_retry" type="object" string="Tra lại"
+                            class="btn-primary" invisible="geo_state == 'manual'"/>
+                    <button name="action_confirm" type="object" string="Duyệt toạ độ"
+                            invisible="geo_state != 'pending_review'"/>
+                    <button name="action_open_gmaps" type="object" string="Mở Google Maps"
+                            invisible="not has_coords"/>
+                    <field name="geo_state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Địa chỉ">
+                            <field name="raw_address" readonly="1"/>
+                            <field name="normalized_address" readonly="1"/>
+                            <field name="address_key" readonly="1"/>
+                        </group>
+                        <group string="Toạ độ">
+                            <field name="latitude" readonly="1"/>
+                            <field name="longitude" readonly="1"/>
+                            <field name="geo_source" readonly="1"/>
+                            <field name="has_coords" readonly="1"/>
+                            <field name="hit_count" readonly="1"/>
+                            <field name="last_used_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Nhập toạ độ tay">
+                        <field name="geo_input" placeholder="10.78950, 106.99179"/>
+                        <button name="action_save_manual_geo" type="object"
+                                string="Lưu toạ độ đã dán" class="btn-secondary"/>
+                    </group>
+                    <group string="Kết quả máy trả về" invisible="not geo_raw_result">
+                        <field name="geo_raw_result" nolabel="1" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vtracking_address_search" model="ir.ui.view">
+        <field name="name">hlv.vtracking.address.search</field>
+        <field name="model">hlv.vtracking.address</field>
+        <field name="arch" type="xml">
+            <search string="Kho toạ độ">
+                <field name="raw_address"/>
+                <field name="address_key"/>
+                <filter name="pending" string="Chờ duyệt"
+                        domain="[('geo_state', '=', 'pending_review')]"/>
+                <filter name="failed" string="Máy không tìm được"
+                        domain="[('geo_state', '=', 'failed')]"/>
+                <filter name="reused" string="Đã dùng lại" domain="[('hit_count', '&gt;', 0)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_address" model="ir.actions.act_window">
+        <field name="name">Kho toạ độ</field>
+        <field name="res_model">hlv.vtracking.address</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vtracking_address_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa tra địa chỉ nào</p>
+            <p>
+                Mỗi địa chỉ giao chỉ tra một lần rồi lưu ở đây; lần sau gặp lại địa chỉ đó
+                hệ thống dùng luôn toạ độ đã lưu, không gọi ra ngoài nữa. Cột
+                <strong>Dùng lại</strong> cho thấy tiết kiệm được bao nhiêu lượt.
+            </p>
+        </field>
+    </record>
+
+</odoo>

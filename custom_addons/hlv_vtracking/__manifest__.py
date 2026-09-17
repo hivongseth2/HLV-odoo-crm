@@ -34,6 +34,8 @@ xem plan/ke-hoach-module-vtracking.md.
         # khoảng cách phải cho ra CÙNG kết quả ở mọi module HLV — điều phối giao hàng và
         # đi nhận hàng đã dùng chung nó.
         'hlv_geo_utils',
+        # Phiếu giao (stock.picking) là đơn vị xếp lên xe trong kế hoạch giao hàng.
+        'stock',
     ],
     'external_dependencies': {'python': ['requests', 'pytz']},
     'data': [
@@ -45,6 +47,8 @@ xem plan/ke-hoach-module-vtracking.md.
         # Nạp trước wizard nhập xe: action của wizard mở list/form xe khai ở file trên.
         'views/vtracking_import_wizard_views.xml',
         'views/vtracking_place_views.xml',
+        'views/vtracking_plan_views.xml',
+        'views/vtracking_plan_add_views.xml',
         'views/vtracking_position_views.xml',
         'views/vtracking_api_key_views.xml',
         # Nạp trước menu: menu trỏ tới action khai trong file này.

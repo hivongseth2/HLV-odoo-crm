@@ -237,11 +237,21 @@ class FleetVehicle(models.Model):
             ('company_id', '=', company.id),
         ])
         place_types = self.env['hlv.vtracking.place.type'].sudo().search([])
+
+        # Kế hoạch của hôm nay, gắn thẳng vào từng xe: popup xe cần đọc ngay, không nên
+        # bắt trình duyệt tự ghép hai danh sách.
+        plans = self.env['hlv.vtracking.plan'].plan_payload_for_vehicles(vehicles.ids)
+        vehicle_payloads = []
+        for vehicle in vehicles:
+            payload = vehicle._vtracking_map_payload()
+            payload['plans'] = plans.get(vehicle.id, [])
+            vehicle_payloads.append(payload)
+
         return {
             'tile_url': company.vtracking_map_tile_url or '',
             'tile_attribution': company.vtracking_map_attribution or '',
             'stale_minutes': STALE_MINUTES,
-            'vehicles': [v._vtracking_map_payload() for v in vehicles],
+            'vehicles': vehicle_payloads,
             'places': [p._map_payload() for p in places],
             'place_types': [{
                 'id': t.id,

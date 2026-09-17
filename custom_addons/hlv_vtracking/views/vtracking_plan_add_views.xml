@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_plan_add_picking_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.add.picking.form</field>
+        <field name="model">hlv.vtracking.plan.add.picking</field>
+        <field name="arch" type="xml">
+            <form string="Xếp phiếu lên xe">
+                <group>
+                    <field name="mode" widget="radio"/>
+                </group>
+                <group invisible="mode != 'existing'">
+                    <field name="plan_id" options="{'no_create': True}"
+                           required="mode == 'existing'"/>
+                </group>
+                <group invisible="mode != 'new'">
+                    <group>
+                        <field name="vehicle_id" options="{'no_create': True}"
+                               required="mode == 'new'"/>
+                        <field name="start_place_id" options="{'no_create': True}"/>
+                    </group>
+                    <group>
+                        <field name="date" required="mode == 'new'"/>
+                        <field name="session" required="mode == 'new'"/>
+                    </group>
+                </group>
+                <group>
+                    <field name="to_add_count"/>
+                    <field name="already_planned_count"/>
+                    <field name="no_address_count"/>
+                </group>
+                <div class="alert alert-warning" role="alert"
+                     invisible="no_address_count == 0">
+                    Có phiếu không có địa chỉ giao — vẫn xếp được, nhưng không tra được toạ
+                    độ nên <strong>không tính vào quãng đường</strong>. Điền ô "Địa chỉ giao
+                    hàng" trên phiếu rồi bấm "Tra lại toạ độ" trong kế hoạch.
+                </div>
+                <div class="alert alert-info" role="alert"
+                     invisible="already_planned_count == 0">
+                    Phiếu đã nằm trong kế hoạch khác thì bỏ qua, không tự chuyển xe. Muốn
+                    đổi xe thì xoá khỏi kế hoạch cũ trước.
+                </div>
+                <field name="picking_ids" nolabel="1" readonly="1">
+                    <list>
+                        <field name="name"/>
+                        <field name="partner_id"/>
+                        <field name="scheduled_date"/>
+                        <field name="plan_id" string="Kế hoạch hiện tại"/>
+                        <field name="state"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_add" type="object" string="Xếp lên xe"
+                            class="btn-primary"/>
+                    <button string="Huỷ" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Hiện trong menu Thao tác của danh sách phiếu giao: đó là chỗ người điều phối
+         đang đứng khi quyết định xe nào chở phiếu nào. -->
+    <record id="action_vtracking_plan_add_picking" model="ir.actions.act_window">
+        <field name="name">Xếp lên xe (V-Tracking)</field>
+        <field name="res_model">hlv.vtracking.plan.add.picking</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="groups_id" eval="[(4, ref('hlv_vtracking.group_vtracking_manager'))]"/>
+    </record>
+
+</odoo>

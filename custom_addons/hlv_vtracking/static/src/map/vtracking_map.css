@@ -139,6 +139,34 @@
     margin-bottom: 4px;
 }
 
+/* Khối kế hoạch trong popup xe. Gạch ngăn phía trên để tách rõ với phần trạng thái xe:
+   trên là xe đang ở đâu, dưới là xe phải giao những gì — hai chuyện khác nhau. */
+.o_vt_plan {
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid #dee2e6;
+}
+
+.o_vt_plan_head {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    margin-bottom: 2px;
+}
+
+.o_vt_plan_empty,
+.o_vt_plan_pending {
+    margin-top: 5px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.o_vt_plan_warn {
+    color: #b45309;
+}
+
 /* Chip lọc kiêm chú giải màu, nằm trong cột trái. */
 .o_vt_chips {
     display: flex;

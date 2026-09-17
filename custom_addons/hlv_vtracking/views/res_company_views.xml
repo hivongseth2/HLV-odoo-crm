@@ -32,6 +32,17 @@
                             <field name="vtracking_map_attribution"/>
                         </group>
                     </group>
+                    <group string="Định mức tính kế hoạch giao hàng">
+                        <div class="text-muted mb-2" colspan="2">
+                            Quãng đường tính theo đường chim bay nhân hệ số, KHÔNG gọi
+                            Google Directions — con số này để so các phương án xếp xe với
+                            nhau, không dùng để hứa giờ với khách. Khi có km GPS thực tế
+                            thì chỉnh hệ số cho khớp địa bàn.
+                        </div>
+                        <field name="vtracking_avg_speed_kmh"/>
+                        <field name="vtracking_minutes_per_stop"/>
+                        <field name="vtracking_road_factor"/>
+                    </group>
                     <group string="Tra toạ độ địa điểm">
                         <div class="text-muted mb-2" colspan="2">
                             Hai ô này là tham số <strong>toàn hệ thống</strong> của module

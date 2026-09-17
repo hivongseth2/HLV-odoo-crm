@@ -120,6 +120,88 @@ xe tạo mới; để trống thì module dùng dòng **"Chưa rõ / Chưa phân
 Tạo xong, module gọi đồng bộ một lượt để điền vị trí ngay — trừ khi bạn tắt **Bật theo dõi
 cho xe tạo mới**.
 
+## Kế hoạch giao hàng
+
+Đơn vị kế hoạch là **(xe · buổi · ngày)** — ví dụ *60D-00750 · Sáng · 17/09/2026*. Kế
+hoạch cả ngày là một buổi đặc biệt (`Cả ngày`), không phải một cấp riêng, để không phải
+hỏi "kế hoạch ngày và kế hoạch buổi cái nào đè cái nào".
+
+Đơn vị xếp lên xe là **phiếu giao** (`stock.picking`).
+
+### Xếp phiếu lên xe
+
+Ở danh sách phiếu giao: chọn phiếu → menu **Thao tác > Xếp lên xe (V-Tracking)**. Chọn kế
+hoạch có sẵn, hoặc khai luôn (xe, ngày, buổi) để tạo mới tại chỗ.
+
+Một phiếu chỉ nằm trong **một** kế hoạch (ràng buộc ở CSDL). Phiếu đã có kế hoạch thì bị
+bỏ qua chứ không tự chuyển xe — đổi xe là quyết định của người điều phối, không phải hệ
+quả phụ của một lần xếp hàng loạt.
+
+### Tra toạ độ và kho toạ độ dùng lại
+
+Địa chỉ lấy từ ô **Địa chỉ giao hàng** trên phiếu (`x_studio_a_ch_giao_hng`); không có thì
+lùi về địa chỉ liên hệ của khách. Tiền lấy thẳng ô **Tổng tiền sau thuế**
+(`x_studio_ng_tin_sau_thu`) — không tự cộng lại từ dòng hàng, vì đó là con số kho và kế
+toán đang nhìn.
+
+Cả hai đọc qua `_fields` nên module vẫn cài được ở nơi chưa tạo các field Studio đó.
+
+**Tra nội bộ trước, không có mới gọi ra ngoài.** Mọi lượt tra đi qua
+`hlv.vtracking.address.resolve()` — đường vào duy nhất:
+
+1. Chuẩn hoá địa chỉ thành khoá: bỏ dấu, mở viết tắt (`P.5` → `phuong 5`, `Q.1` → `quan 1`,
+   `KCN` → `khu cong nghiep`, `TP.HCM` → `ho chi minh`), bỏ hết ký tự không phải chữ/số.
+2. Tìm khoá đó trong **V-Tracking > Cấu hình > Kho toạ độ**. Có thì dùng luôn, tăng đếm
+   *Dùng lại*.
+3. Không có mới gọi geocoder, rồi lưu lại cho lần sau.
+
+Nhờ chuẩn hoá, ba cách viết này ra cùng một khoá và chỉ tốn **một** lượt gọi:
+
+```
+260/49 Nguyễn Thái Sơn, P.5, Gò Vấp, TP.HCM
+260/49 nguyen thai son, phuong 5, go vap, tphcm
+260/49  Nguyễn Thái Sơn , P5 , Gò Vấp , TP HCM
+```
+
+Cột **Dùng lại** cho thấy cache tiết kiệm được bao nhiêu lượt. Bản ghi `failed` không tự
+tra lại: máy đã trượt với đúng chuỗi đó thì lần sau cũng trượt — bấm nút *Tra lại* hoặc
+dán toạ độ tay.
+
+### Quãng đường và thời gian
+
+| Con số | Cách tính |
+|---|---|
+| Quãng đường | Đường chim bay nối các điểm theo thứ tự ghé (kể cả điểm xuất phát), **nhân hệ số đường bộ** |
+| Thời gian chạy | Quãng đường ÷ tốc độ trung bình |
+| Thời gian giao | Số phiếu × phút mỗi điểm |
+| Tổng | Chạy + giao, hiện dạng `2h15'` |
+
+Ba tham số khai ở **Cấu hình > Kết nối vTracking**, mục *Định mức tính kế hoạch*: tốc độ
+trung bình (mặc định 35 km/h), phút mỗi điểm (10), hệ số đường bộ (1.3).
+
+**Không gọi Google Directions.** Gọi Directions mỗi lần đổi thứ tự điểm là trả tiền cho
+một con số chỉ dùng để so các phương án với nhau. Khi có km GPS thực tế thì chỉnh hệ số
+cho khớp địa bàn — đó là cách làm nó chính xác dần.
+
+Phiếu chưa có toạ độ **không** vào được quãng đường; ô *Điểm thiếu toạ độ* và cảnh báo
+trên form nói rõ con số đang thiếu phần nào. Nút **Sắp thứ tự theo điểm gần nhất** cho
+một thứ tự khởi đầu đỡ tệ hơn thứ tự nhập tay (không phải lời giải tối ưu), phiếu thiếu
+toạ độ dồn xuống cuối.
+
+### Kế hoạch ≠ thực tế
+
+Kế hoạch là **bản dự thảo**. Tab *Thực tế* và các ô `actual_*` đã khai sẵn nhưng **đang
+để trống có chủ ý** — số liệu sẽ đến từ `hlv_barcode_shipper` (tài xế quét nhận/giao) và
+từ lịch sử GPS của xe. Chưa nối; làm ở bước sau.
+
+Đừng suy số thực tế từ kế hoạch: hai nguồn khác nhau, trộn vào là mất khả năng đối chiếu.
+
+### Trên bản đồ
+
+Bấm vào xe, popup hiện **kế hoạch hôm nay** của xe đó (mọi buổi): số phiếu, tiền, km và
+thời gian dự kiến — kèm dòng *Thực tế: chưa nối module shipper* để không ai nhầm số dự
+kiến thành số đã giao.
+
 ## Địa điểm trên bản đồ
 
 Ngoài xe, bản đồ hiện các **địa điểm cố định**: kho, đối tác, nhà cung cấp…

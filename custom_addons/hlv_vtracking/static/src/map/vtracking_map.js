@@ -256,7 +256,44 @@ export class VtrackingMap extends Component {
             .join("");
         return `<div class="o_vt_popup"><div class="o_vt_popup_title">${this.escape(
             vehicle.name
-        )}</div>${body}</div>`;
+        )}</div>${body}${this.planHtml(vehicle)}</div>`;
+    }
+
+    /** Khối kế hoạch/thực tế trong popup xe. Rỗng khi xe không có kế hoạch hôm nay. */
+    planHtml(vehicle) {
+        const plans = vehicle.plans || [];
+        if (!plans.length) {
+            return `<div class="o_vt_plan_empty">Hôm nay chưa có kế hoạch giao.</div>`;
+        }
+        return plans.map((plan) => this.onePlanHtml(plan)).join("");
+    }
+
+    onePlanHtml(plan) {
+        const money = (value) => (value || 0).toLocaleString("vi-VN");
+        const warn = plan.missing_coords_count
+            ? `<div class="o_vt_plan_warn">${plan.missing_coords_count} phiếu chưa có toạ độ — km đang thiếu</div>`
+            : "";
+        // Phần thực tế luôn hiện, kể cả khi chưa có số: người xem phải thấy được rằng
+        // "kế hoạch 12 đơn" chưa nói gì về việc đã giao mấy đơn.
+        const actual = plan.has_actual_data
+            ? `<div><strong>Đã giao:</strong> ${plan.actual_line_count} phiếu · ${money(
+                  plan.actual_amount_total
+              )} · ${plan.actual_distance_km || 0} km thực chạy</div>`
+            : `<div class="o_vt_plan_pending">Thực tế: chưa nối module shipper</div>`;
+        return `
+            <div class="o_vt_plan">
+                <div class="o_vt_plan_head">${this.escape(plan.session_label)} · ${this.escape(
+            plan.state === "draft" ? "nháp" : plan.state === "confirmed" ? "đã chốt" : plan.state
+        )}</div>
+                <div><strong>Kế hoạch:</strong> ${plan.line_count} phiếu · ${money(
+            plan.amount_total
+        )}</div>
+                <div><strong>Dự kiến:</strong> ${plan.distance_km || 0} km · ${this.escape(
+            plan.duration_display || "—"
+        )}</div>
+                ${warn}
+                ${actual}
+            </div>`;
     }
 
     escape(value) {

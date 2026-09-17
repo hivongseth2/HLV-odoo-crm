@@ -12,3 +12,10 @@ access_vtracking_place_type_manager,vtracking.place.type.manager,model_hlv_vtrac
 access_vtracking_place_user,vtracking.place.user,model_hlv_vtracking_place,hlv_vtracking.group_vtracking_user,1,0,0,0
 access_vtracking_place_manager,vtracking.place.manager,model_hlv_vtracking_place,hlv_vtracking.group_vtracking_manager,1,1,1,1
 access_vtracking_place_from_partner,vtracking.place.from.partner,model_hlv_vtracking_place_from_partner,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_address_user,vtracking.address.user,model_hlv_vtracking_address,hlv_vtracking.group_vtracking_user,1,0,0,0
+access_vtracking_address_manager,vtracking.address.manager,model_hlv_vtracking_address,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_plan_user,vtracking.plan.user,model_hlv_vtracking_plan,hlv_vtracking.group_vtracking_user,1,0,0,0
+access_vtracking_plan_manager,vtracking.plan.manager,model_hlv_vtracking_plan,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_plan_line_user,vtracking.plan.line.user,model_hlv_vtracking_plan_line,hlv_vtracking.group_vtracking_user,1,0,0,0
+access_vtracking_plan_line_manager,vtracking.plan.line.manager,model_hlv_vtracking_plan_line,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_plan_add_picking,vtracking.plan.add.picking,model_hlv_vtracking_plan_add_picking,hlv_vtracking.group_vtracking_manager,1,1,1,1
