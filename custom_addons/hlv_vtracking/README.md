@@ -49,9 +49,30 @@ chưa được cấp nhóm.
 
 ### Nếu "Kiểm tra kết nối" báo lỗi chứng chỉ SSL
 
-Máy chủ vTracking dùng IP trần (`171.229.16.202:8443`) nên chứng chỉ nhiều khả năng tự
-ký. Cách đúng là xin phía vTracking một tên miền có chứng chỉ hợp lệ. Nếu chưa có, tắt
-**Kiểm tra chứng chỉ SSL** trong cấu hình — chấp nhận là không xác thực được máy chủ.
+Đã kiểm chứng chỉ của host mặc định ngày **17/09/2026**:
+
+```
+Subject : CN=*.innoway.vn
+Issuer  : Sectigo RSA Domain Validation Secure Server CA
+SAN     : *.innoway.vn, innoway.vn   (không có IP nào)
+Hiệu lực: 08/03/2023 → 07/03/2024    ← ĐÃ HẾT HẠN
+```
+
+Chứng chỉ là **thật** (Sectigo cấp), không phải tự ký. Nhưng hai thứ cùng sai: nó cấp cho
+tên miền chứ không cho IP, **và** nó đã hết hạn hơn hai năm. Vì vậy đổi sang gọi bằng tên
+miền cũng không cứu được.
+
+→ Hiện chỉ có một cách chạy được: **tắt "Kiểm tra chứng chỉ SSL"** trong cấu hình, chấp
+nhận là không xác thực được máy chủ. Đồng thời yêu cầu vTracking gia hạn chứng chỉ và cấp
+một tên miền — khi họ làm xong thì bật lại.
+
+### Nếu báo HTTP 403 kèm chữ "nginx"
+
+Phản hồi đó đến từ **proxy**, không phải từ ứng dụng vTracking (ứng dụng từ chối key thì
+trả JSON). Thường là IP public của máy chủ Odoo chưa nằm trong danh sách cho phép của
+vTracking. Đổi API key bao nhiêu lần cũng vô ích — phải hỏi vTracking về whitelist IP.
+
+Module phân biệt sẵn hai trường hợp này và nói rõ nên đi hỏi phía nào.
 
 ---
 

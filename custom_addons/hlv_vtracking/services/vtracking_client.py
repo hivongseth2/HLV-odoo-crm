@@ -11,8 +11,10 @@ Tài liệu chỉ có 2 endpoint:
 
 import logging
 import time
+import warnings
 
 import requests
+from urllib3.exceptions import InsecureRequestWarning
 
 _logger = logging.getLogger(__name__)
 
@@ -159,6 +161,30 @@ class VTrackingClient:
             'sample_plate': (payload.get('vehicles') or [{}])[0].get('license_plate', ''),
         }
 
+    @staticmethod
+    def _auth_error_message(response):
+        """Câu giải thích cho 401/403 — phân biệt bị proxy chặn với bị ứng dụng từ chối.
+
+        Đo được ngày 17/09/2026: gọi bằng key sai trả về HTML 403 của **nginx**, không
+        phải JSON của ứng dụng. Khi cái chặn là proxy chứ không phải ứng dụng thì đổi key
+        bao nhiêu lần cũng vô ích — thường là máy chủ Odoo chưa nằm trong whitelist IP.
+        Phân biệt được hai trường hợp này giúp khỏi mất buổi đi dò nhầm phía.
+        """
+        body = (response.text or '').strip()
+        blocked_by_proxy = 'nginx' in body.lower() or body.lower().startswith('<html')
+        if blocked_by_proxy:
+            return (
+                'vTracking trả HTTP %s và phản hồi đến từ máy chủ proxy (nginx), không phải '
+                'từ ứng dụng vTracking. Thường là địa chỉ IP của máy chủ Odoo chưa được '
+                'vTracking cho vào danh sách cho phép. Hãy hỏi vTracking xem API key có bị '
+                'khoá theo IP không, và báo cho họ IP public của máy chủ Odoo.'
+                % response.status_code
+            )
+        return (
+            'vTracking từ chối API key (HTTP %s). Kiểm tra lại giá trị đã dán vào ô "API key '
+            'vTracking". Chi tiết: %s' % (response.status_code, body[:200])
+        )
+
     def _request(self, method, path, params=None, json_body=None):
         """Gọi API, tự lùi dần khi gặp 429. Trả về dict đã giải JSON.
 
@@ -175,18 +201,32 @@ class VTrackingClient:
             elif attempt:
                 time.sleep(THROTTLE_SECONDS)
             try:
-                response = requests.request(
-                    method, url, headers=headers, params=params, json=json_body,
-                    timeout=self.timeout, verify=self.verify_ssl,
-                )
+                with warnings.catch_warnings():
+                    # Tắt verify là quyết định có chủ ý của người cấu hình; urllib3 cảnh
+                    # báo lại ở MỖI request nên không chặn thì log Odoo ngập cảnh báo và
+                    # che mất những dòng đáng đọc. Chỉ tắt trong đúng lời gọi này, không
+                    # tắt toàn cục để module khác không bị ảnh hưởng.
+                    if not self.verify_ssl:
+                        warnings.simplefilter('ignore', InsecureRequestWarning)
+                    response = requests.request(
+                        method, url, headers=headers, params=params, json=json_body,
+                        timeout=self.timeout, verify=self.verify_ssl,
+                    )
             except requests.exceptions.SSLError as exc:
-                # Host là IP trần nên đây là lỗi hay gặp nhất lúc cài đặt — nói thẳng
-                # cách xử lý thay vì để người dùng đọc traceback của requests.
+                # Lỗi hay gặp nhất lúc cài đặt. Nói thẳng cách xử lý thay vì để người
+                # dùng đọc traceback của requests.
+                #
+                # Thực tế đo được ngày 17/09/2026 với host mặc định: chứng chỉ do Sectigo
+                # cấp cho *.innoway.vn (KHÔNG phải tự ký) nhưng đã hết hạn 07/03/2024, và
+                # không có IP nào trong SAN. Nghĩa là gọi bằng IP thì sai host, mà đổi
+                # sang tên miền cũng vẫn hỏng vì hết hạn — không có cách nào bật kiểm tra
+                # mà vẫn gọi được, cho tới khi nhà cung cấp gia hạn chứng chỉ.
                 raise VTrackingError(
-                    'Lỗi chứng chỉ SSL khi gọi %s. Máy chủ vTracking dùng IP trần nên '
-                    'chứng chỉ nhiều khả năng tự ký: xin phía vTracking một tên miền có '
-                    'chứng chỉ hợp lệ, hoặc tắt "Kiểm tra chứng chỉ SSL" trong cấu hình. '
-                    'Chi tiết: %s' % (self.base_url, exc)
+                    'Lỗi chứng chỉ SSL khi gọi %s. Kiểm tra chứng chỉ của máy chủ bằng '
+                    '`openssl s_client -connect <host>:<port>`: nếu nó hết hạn hoặc cấp '
+                    'cho tên miền khác thì phải yêu cầu vTracking cấp lại, còn muốn dùng '
+                    'ngay thì tắt "Kiểm tra chứng chỉ SSL" trong cấu hình — chấp nhận là '
+                    'không xác thực được máy chủ. Chi tiết: %s' % (self.base_url, exc)
                 ) from exc
             except requests.exceptions.RequestException as exc:
                 last_error = VTrackingError('Không gọi được vTracking: %s' % exc)
@@ -198,6 +238,9 @@ class VTrackingClient:
                 )
                 _logger.warning('vTracking 429 tại %s, lùi lại lần %s.', path, attempt + 1)
                 continue
+
+            if response.status_code in (401, 403):
+                raise VTrackingError(self._auth_error_message(response), status_code=response.status_code)
 
             if response.status_code != 200:
                 raise VTrackingError(
