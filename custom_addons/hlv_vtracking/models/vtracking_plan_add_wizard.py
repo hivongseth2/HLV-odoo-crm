@@ -1,13 +1,13 @@
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-# Trần số phiếu xếp một lần. Mỗi phiếu có thể kéo theo một lượt tra toạ độ, mà tra là
-# việc chậm và tốn tiền — chọn nhầm cả nghìn phiếu sẽ treo giao diện.
-MAX_PICKINGS = 100
+# Trần số chứng từ xếp một lần. Mỗi chứng từ có thể kéo theo một lượt tra toạ độ, mà tra
+# là việc chậm và tốn tiền — chọn nhầm cả nghìn sẽ treo giao diện.
+MAX_DOCUMENTS = 100
 
 
 class HlvVtrackingPlanAddPicking(models.TransientModel):
-    """Xếp các phiếu giao đang chọn lên xe.
+    """Xếp phiếu giao — hoặc đơn bán chưa có phiếu — lên xe.
 
     Cho phép chọn kế hoạch có sẵn HOẶC khai (xe, ngày, buổi) để tạo mới ngay tại đây:
     người điều phối đang đứng ở danh sách phiếu, bắt họ sang màn khác tạo kế hoạch rồi
@@ -15,9 +15,16 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     """
 
     _name = 'hlv.vtracking.plan.add.picking'
-    _description = 'Xếp phiếu vào kế hoạch giao'
+    _description = 'Xếp chứng từ vào kế hoạch giao'
 
-    picking_ids = fields.Many2many('stock.picking', string='Phiếu giao', required=True)
+    source_type = fields.Selection(
+        [('picking', 'Phiếu giao đã có'), ('sale', 'Đơn bán chưa có phiếu')],
+        default='picking', required=True, string='Xếp theo',
+        help='Chọn "Đơn bán" khi chốt chuyến từ sáng mà kho chưa soạn hàng. Phiếu xuất '
+             'sinh ra sau sẽ tự gắn vào kế hoạch.',
+    )
+    picking_ids = fields.Many2many('stock.picking', string='Phiếu giao')
+    sale_order_ids = fields.Many2many('sale.order', string='Đơn bán')
 
     mode = fields.Selection(
         [('existing', 'Kế hoạch có sẵn'), ('new', 'Tạo kế hoạch mới')],
@@ -38,6 +45,20 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     start_place_id = fields.Many2one(
         'hlv.vtracking.place', string='Xuất phát từ', domain="[('has_coords', '=', True)]",
     )
+    warehouse_id = fields.Many2one(
+        'stock.warehouse', string='Kho xuất phát', compute='_compute_warehouse_id',
+        store=True, readonly=False,
+        help='Lấy theo kho gắn với địa điểm xuất phát. Dùng để lọc chứng từ của đúng kho '
+             'đó — xếp phiếu kho khác lên xe đang đứng ở kho này là chuyến không chạy được.',
+    )
+    filter_by_warehouse = fields.Boolean(
+        string='Chỉ lấy chứng từ của kho đó', default=True,
+    )
+
+    # Domain tính bằng Python thay vì nhồi biểu thức vào XML: nó phụ thuộc kho xuất phát
+    # và ô "chỉ lấy chứng từ của kho đó", viết trong view sẽ thành một dòng không ai đọc nổi.
+    picking_domain = fields.Binary(compute='_compute_domains')
+    sale_domain = fields.Binary(compute='_compute_domains')
 
     already_planned_count = fields.Integer(compute='_compute_preview', string='Đã có kế hoạch')
     to_add_count = fields.Integer(compute='_compute_preview', string='Sẽ xếp')
@@ -45,52 +66,118 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     not_ready_count = fields.Integer(
         compute='_compute_preview', string='Không ở trạng thái Sẵn sàng',
     )
+    other_warehouse_count = fields.Integer(
+        compute='_compute_preview', string='Khác kho xuất phát',
+    )
 
-    @api.depends('picking_ids')
+    # ------------------------------------------------------------------
+    # Compute
+    # ------------------------------------------------------------------
+    @api.depends('mode', 'plan_id', 'start_place_id')
+    def _compute_warehouse_id(self):
+        for wizard in self:
+            place = wizard.plan_id.start_place_id if wizard.mode == 'existing' else wizard.start_place_id
+            wizard.warehouse_id = place.warehouse_id.id or False
+
+    @api.depends('warehouse_id', 'filter_by_warehouse')
+    def _compute_domains(self):
+        """Chứng từ nào được phép chọn.
+
+        Luôn loại chứng từ đã nằm trong kế hoạch khác. Lọc theo kho là tuỳ chọn vì có
+        chuyến gom hàng của hai kho — mặc định bật, vì đó là trường hợp thường gặp.
+        """
+        for wizard in self:
+            picking_domain = [
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', '=', 'assigned'),
+                ('plan_id', '=', False),
+            ]
+            sale_domain = [
+                ('state', 'in', ('sale', 'done')),
+                ('vtracking_plan_id', '=', False),
+            ]
+            if wizard.filter_by_warehouse and wizard.warehouse_id:
+                picking_domain.append(
+                    ('picking_type_id.warehouse_id', '=', wizard.warehouse_id.id)
+                )
+                sale_domain.append(('warehouse_id', '=', wizard.warehouse_id.id))
+            wizard.picking_domain = picking_domain
+            wizard.sale_domain = sale_domain
+
+    @api.depends('picking_ids', 'sale_order_ids', 'source_type', 'warehouse_id')
     def _compute_preview(self):
         for wizard in self:
-            planned = wizard.picking_ids.filtered('plan_line_ids')
-            addable = wizard.picking_ids - planned
+            if wizard.source_type == 'picking':
+                planned = wizard.picking_ids.filtered('plan_line_ids')
+                addable = wizard.picking_ids - planned
+                wizard.no_address_count = len(
+                    addable.filtered(lambda p: not p._vtracking_delivery_address())
+                )
+                wizard.not_ready_count = len(addable.filtered(lambda p: p.state != 'assigned'))
+                wizard.other_warehouse_count = len(addable.filtered(
+                    lambda p: wizard.warehouse_id
+                    and p.picking_type_id.warehouse_id != wizard.warehouse_id
+                )) if wizard.warehouse_id else 0
+            else:
+                planned = wizard.sale_order_ids.filtered('vtracking_plan_line_ids')
+                addable = wizard.sale_order_ids - planned
+                wizard.no_address_count = len(addable.filtered(
+                    lambda o: not (o.partner_shipping_id or o.partner_id).contact_address
+                ))
+                wizard.not_ready_count = 0
+                wizard.other_warehouse_count = len(addable.filtered(
+                    lambda o: wizard.warehouse_id and o.warehouse_id != wizard.warehouse_id
+                )) if wizard.warehouse_id else 0
             wizard.already_planned_count = len(planned)
             wizard.to_add_count = len(addable)
-            wizard.no_address_count = len(
-                addable.filtered(lambda p: not p._vtracking_delivery_address())
-            )
-            # Cảnh báo chứ không chặn: phiếu chưa Sẵn sàng vẫn xếp trước được khi hàng
-            # chắc chắn về kịp, còn phiếu Huỷ/Hoàn tất thì gần như luôn là chọn nhầm.
-            wizard.not_ready_count = len(
-                addable.filtered(lambda p: p.state != 'assigned')
-            )
 
     @api.model
     def default_get(self, fields_list):
         values = super().default_get(fields_list)
-        picking_ids = self.env.context.get('active_ids') or []
-        if self.env.context.get('active_model') == 'stock.picking' and picking_ids:
-            values['picking_ids'] = [fields.Command.set(picking_ids)]
+        active_ids = self.env.context.get('active_ids') or []
+        active_model = self.env.context.get('active_model')
+        if active_model == 'stock.picking' and active_ids:
+            values['source_type'] = 'picking'
+            values['picking_ids'] = [fields.Command.set(active_ids)]
+        elif active_model == 'sale.order' and active_ids:
+            values['source_type'] = 'sale'
+            values['sale_order_ids'] = [fields.Command.set(active_ids)]
+        if self.env.context.get('default_plan_id'):
+            values['mode'] = 'existing'
         return values
 
+    # ------------------------------------------------------------------
+    # Hành động
+    # ------------------------------------------------------------------
     def action_add(self):
         self.ensure_one()
-        if len(self.picking_ids) > MAX_PICKINGS:
+        documents = (
+            self.picking_ids if self.source_type == 'picking' else self.sale_order_ids
+        )
+        if len(documents) > MAX_DOCUMENTS:
             raise UserError(
-                'Chọn tối đa %s phiếu một lần. Đang chọn %s — chia nhỏ ra để việc tra toạ '
-                'độ không treo màn hình.' % (MAX_PICKINGS, len(self.picking_ids))
+                'Chọn tối đa %s chứng từ một lần. Đang chọn %s — chia nhỏ ra để việc tra '
+                'toạ độ không treo màn hình.' % (MAX_DOCUMENTS, len(documents))
             )
 
         plan = self._get_or_create_plan()
-        # Phiếu đã nằm trong kế hoạch khác thì BỎ QUA chứ không chuyển sang: chuyển xe là
-        # quyết định của người điều phối, không phải hệ quả phụ của một lần xếp hàng loạt.
-        addable = self.picking_ids.filtered(lambda p: not p.plan_line_ids)
+        # Chứng từ đã nằm trong kế hoạch khác thì BỎ QUA chứ không chuyển sang: chuyển xe
+        # là quyết định của người điều phối, không phải hệ quả phụ của một lần xếp loạt.
+        if self.source_type == 'picking':
+            addable = documents.filtered(lambda p: not p.plan_line_ids)
+            field_name = 'picking_id'
+        else:
+            addable = documents.filtered(lambda o: not o.vtracking_plan_line_ids)
+            field_name = 'sale_order_id'
         if not addable:
-            raise UserError('Mọi phiếu đang chọn đều đã nằm trong một kế hoạch giao.')
+            raise UserError('Mọi chứng từ đang chọn đều đã nằm trong một kế hoạch giao.')
 
         start_sequence = max(plan.line_ids.mapped('sequence') or [0])
         self.env['hlv.vtracking.plan.line'].create([{
             'plan_id': plan.id,
-            'picking_id': picking.id,
+            field_name: document.id,
             'sequence': start_sequence + (index + 1) * 10,
-        } for index, picking in enumerate(addable)])
+        } for index, document in enumerate(addable)])
 
         return {
             'type': 'ir.actions.act_window',
@@ -105,7 +192,7 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
         """Kế hoạch đích. Tạo mới nếu người dùng chọn chế độ "mới".
 
         Dùng lại kế hoạch trùng (xe, ngày, buổi) nếu đã có thay vì báo lỗi ràng buộc: từ
-        góc nhìn người dùng, "xếp thêm phiếu cho xe đó buổi đó" là việc hợp lệ.
+        góc nhìn người dùng, "xếp thêm chứng từ cho xe đó buổi đó" là việc hợp lệ.
         """
         self.ensure_one()
         if self.mode == 'existing':

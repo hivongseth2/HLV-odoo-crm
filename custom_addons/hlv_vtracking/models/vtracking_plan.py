@@ -218,8 +218,20 @@ class HlvVtrackingPlan(models.Model):
         chỉ sau đó thì kế hoạch không tự biết. Chụp lại chứ không đọc thẳng để con số trên
         kế hoạch đã chốt không đổi sau lưng người điều phối.
         """
-        self.mapped('line_ids')._sync_from_picking()
+        self.mapped('line_ids')._sync_from_source()
         return True
+
+    def action_add_documents(self):
+        """Mở hộp thoại xếp thêm phiếu/đơn vào chính kế hoạch này."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Xếp thêm vào %s' % self.name,
+            'res_model': 'hlv.vtracking.plan.add.picking',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_plan_id': self.id, 'default_mode': 'existing'},
+        }
 
     def action_resequence_by_distance(self):
         """Sắp thứ tự ghé theo kiểu "đi tới điểm gần nhất chưa ghé".

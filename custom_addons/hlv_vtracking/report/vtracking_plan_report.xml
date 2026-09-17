@@ -83,7 +83,9 @@
                                         <div t-field="line.picking_name"/>
                                         <div class="text-muted small" t-field="line.source_name"/>
                                     </td>
-                                    <td t-field="line.partner_id.display_name"/>
+                                    <!-- Bọc trong span: QWeb không cho đặt t-field thẳng
+                                         lên <td> (widget không chạy trên ô bảng). -->
+                                    <td><span t-field="line.partner_id.display_name"/></td>
                                     <td>
                                         <span t-field="line.address"/>
                                         <!-- Đánh dấu ngay trên tờ in: điểm chưa có toạ độ

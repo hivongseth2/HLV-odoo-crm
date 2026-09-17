@@ -34,8 +34,9 @@ xem plan/ke-hoach-module-vtracking.md.
         # khoảng cách phải cho ra CÙNG kết quả ở mọi module HLV — điều phối giao hàng và
         # đi nhận hàng đã dùng chung nó.
         'hlv_geo_utils',
-        # Phiếu giao (stock.picking) là đơn vị xếp lên xe trong kế hoạch giao hàng.
-        'stock',
+        # Phiếu giao (stock.picking) là đơn vị xếp lên xe. sale_stock để có picking.sale_id
+        # và để xếp được ĐƠN BÁN vào kế hoạch khi kho chưa soạn hàng, phiếu xuất chưa có.
+        'sale_stock',
     ],
     'external_dependencies': {'python': ['requests', 'pytz']},
     'data': [

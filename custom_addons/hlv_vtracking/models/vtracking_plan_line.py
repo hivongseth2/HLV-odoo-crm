@@ -1,48 +1,67 @@
 import logging
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
 
 class HlvVtrackingPlanLine(models.Model):
-    """Một phiếu giao trong kế hoạch, kèm thứ tự ghé và toạ độ điểm đến.
+    """Một điểm giao trong kế hoạch — trỏ tới phiếu giao, hoặc tới đơn bán khi phiếu
+    chưa có.
 
-    Địa chỉ, tiền và toạ độ được **chụp lại** lúc xếp chứ không đọc thẳng từ phiếu mỗi
-    lần hiển thị. Hai lý do: con số trên kế hoạch đã chốt không được đổi sau lưng người
-    điều phối, và tra toạ độ là việc tốn tiền nên phải làm một lần rồi giữ.
+    Vì sao cho phép chưa có phiếu: điều phối chốt "chiều nay giao đơn này" từ sáng, trong
+    khi kho còn chưa soạn hàng nên phiếu xuất chưa tồn tại. Bắt phải có phiếu mới xếp được
+    thì kế hoạch buổi chiều không lập được vào buổi sáng — đúng lúc cần lập nhất.
+
+    Khi phiếu xuất của đơn đó được tạo, hệ thống tự gắn vào dòng này (xem
+    ``stock.picking.create``). Trước đó, địa chỉ và tiền lấy tạm từ đơn bán.
+
+    Địa chỉ, tiền và toạ độ được **chụp lại** chứ không đọc thẳng mỗi lần hiển thị: con số
+    trên kế hoạch đã chốt không được đổi sau lưng người điều phối, và tra toạ độ là việc
+    tốn tiền nên phải làm một lần rồi giữ.
     """
 
     _name = 'hlv.vtracking.plan.line'
-    _description = 'Phiếu trong kế hoạch giao'
+    _description = 'Điểm giao trong kế hoạch'
     _order = 'plan_id, sequence, id'
-    _rec_name = 'picking_id'
+    _rec_name = 'display_reference'
 
     plan_id = fields.Many2one(
         'hlv.vtracking.plan', required=True, index=True, ondelete='cascade', string='Kế hoạch',
     )
     sequence = fields.Integer(default=10, string='Thứ tự ghé')
+
+    # --- Nguồn: phiếu giao, hoặc đơn bán khi phiếu chưa có ------------------
     picking_id = fields.Many2one(
-        'stock.picking', string='Phiếu giao', required=True, index=True, ondelete='cascade',
+        'stock.picking', string='Phiếu giao', index=True, ondelete='cascade',
+    )
+    sale_order_id = fields.Many2one(
+        'sale.order', string='Đơn bán', index=True, ondelete='cascade',
+        help='Điền khi xếp đơn vào kế hoạch lúc kho chưa soạn hàng, phiếu xuất chưa có.',
+    )
+    line_state = fields.Selection(
+        [('waiting_picking', 'Chờ phiếu xuất'), ('ready', 'Đã có phiếu')],
+        compute='_compute_line_state', store=True, string='Tình trạng', index=True,
+    )
+    display_reference = fields.Char(
+        compute='_compute_display_reference', store=True, string='Chứng từ',
     )
 
-    # --- Chụp lại từ phiếu --------------------------------------------------
+    # --- Chụp lại từ nguồn --------------------------------------------------
     picking_name = fields.Char(related='picking_id.name', string='Mã phiếu', store=True)
     source_name = fields.Char(
         string='Đơn bán', readonly=True,
-        help='Số đơn bán gắn với phiếu. Điều phối gọi nhau bằng số đơn chứ không bằng mã '
-             'phiếu xuất kho.',
+        help='Số đơn bán. Điều phối gọi nhau bằng số đơn chứ không bằng mã phiếu xuất kho.',
     )
-    partner_id = fields.Many2one(
-        related='picking_id.partner_id', string='Khách hàng', store=True, readonly=True,
-    )
+    partner_id = fields.Many2one('res.partner', string='Khách hàng', readonly=True)
     address = fields.Char(string='Địa chỉ giao', readonly=True)
-    amount = fields.Monetary(
-        string='Tiền hàng', readonly=True, currency_field='currency_id',
-    )
+    amount = fields.Monetary(string='Tiền hàng', readonly=True, currency_field='currency_id')
     currency_id = fields.Many2one(related='plan_id.currency_id', readonly=True)
-    scheduled_date = fields.Datetime(related='picking_id.scheduled_date', readonly=True)
+    scheduled_date = fields.Datetime(string='Ngày giao dự kiến', readonly=True)
+    warehouse_id = fields.Many2one(
+        'stock.warehouse', string='Kho xuất', readonly=True, index=True,
+    )
 
     # --- Toạ độ, lấy từ kho toạ độ dùng chung -------------------------------
     address_id = fields.Many2one(
@@ -65,11 +84,37 @@ class HlvVtrackingPlanLine(models.Model):
     company_id = fields.Many2one(related='plan_id.company_id', store=True, index=True)
 
     _sql_constraints = [
-        # Một phiếu chỉ nằm trong một kế hoạch: hai xe cùng chở một phiếu là lỗi xếp,
-        # phát hiện lúc ghi rẻ hơn phát hiện lúc tài xế đã ra đường.
+        # Một phiếu / một đơn chỉ nằm trong một kế hoạch: hai xe cùng chở một chứng từ là
+        # lỗi xếp, phát hiện lúc ghi rẻ hơn phát hiện lúc tài xế đã ra đường.
+        # Postgres cho phép nhiều NULL trong cột unique, nên dòng chờ phiếu không vướng.
         ('picking_uniq', 'unique(picking_id)',
          'Phiếu này đã nằm trong một kế hoạch giao khác.'),
+        ('sale_order_uniq', 'unique(sale_order_id)',
+         'Đơn bán này đã nằm trong một kế hoạch giao khác.'),
     ]
+
+    # ------------------------------------------------------------------
+    # Compute
+    # ------------------------------------------------------------------
+    @api.depends('picking_id')
+    def _compute_line_state(self):
+        for line in self:
+            line.line_state = 'ready' if line.picking_id else 'waiting_picking'
+
+    @api.depends('picking_id', 'picking_id.name', 'sale_order_id', 'sale_order_id.name')
+    def _compute_display_reference(self):
+        for line in self:
+            line.display_reference = (
+                line.picking_id.name or line.sale_order_id.name or 'Chưa có chứng từ'
+            )
+
+    @api.constrains('picking_id', 'sale_order_id')
+    def _check_has_source(self):
+        for line in self:
+            if not line.picking_id and not line.sale_order_id:
+                raise ValidationError(
+                    'Mỗi dòng kế hoạch phải trỏ tới một phiếu giao hoặc một đơn bán.'
+                )
 
     # ------------------------------------------------------------------
     # Tạo và đồng bộ
@@ -77,41 +122,68 @@ class HlvVtrackingPlanLine(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         lines = super().create(vals_list)
-        lines._sync_from_picking()
+        lines._sync_from_source()
         return lines
 
-    def _sync_from_picking(self):
-        """Chụp lại địa chỉ, đơn bán, tiền từ phiếu và tra toạ độ qua kho dùng chung.
+    def _sync_from_source(self):
+        """Chụp lại địa chỉ, khách, tiền từ nguồn và tra toạ độ qua kho dùng chung.
 
-        Tra toạ độ đi qua ``hlv.vtracking.address.resolve()`` — nơi duy nhất được phép
-        gọi ra ngoài, và chỉ gọi khi trong kho chưa có địa chỉ đó.
+        Nguồn ưu tiên là PHIẾU: khi phiếu đã có thì địa chỉ trên phiếu là thứ kho thật sự
+        sẽ giao tới, còn địa chỉ trên đơn chỉ là dự kiến.
+
+        Tra toạ độ đi qua ``hlv.vtracking.address.resolve()`` — nơi duy nhất được phép gọi
+        ra ngoài, và chỉ gọi khi trong kho chưa có địa chỉ đó.
         """
         Address = self.env['hlv.vtracking.address']
         for line in self:
-            picking = line.picking_id
-            if not picking:
+            values = line._source_values()
+            if not values:
                 continue
-            raw_address = picking._vtracking_delivery_address()
-            values = {
-                'address': raw_address,
-                'source_name': picking._vtracking_source_name(),
-                'amount': picking._vtracking_amount(),
-            }
+            raw_address = values.get('address') or ''
             # Địa chỉ không đổi thì giữ nguyên bản ghi toạ độ cũ, khỏi tra lại.
             if raw_address and (not line.address_id or line.address != raw_address):
                 values['address_id'] = Address.resolve(raw_address).id or False
             line.write(values)
         return True
 
+    def _source_values(self):
+        """dict giá trị chụp từ phiếu (nếu có) hoặc từ đơn bán. Rỗng nếu không có nguồn."""
+        self.ensure_one()
+        picking = self.picking_id
+        if picking:
+            return {
+                'address': picking._vtracking_delivery_address(),
+                'source_name': picking._vtracking_source_name(),
+                'amount': picking._vtracking_amount(),
+                'partner_id': picking.partner_id.id or False,
+                'scheduled_date': picking.scheduled_date or False,
+                'warehouse_id': picking.picking_type_id.warehouse_id.id or False,
+            }
+
+        order = self.sale_order_id
+        if not order:
+            return {}
+        # Chưa có phiếu: lấy tạm từ đơn. Địa chỉ giao của đơn là địa chỉ DỰ KIẾN — khi
+        # phiếu ra đời, `_sync_from_source` sẽ ghi đè bằng địa chỉ trên phiếu.
+        shipping = order.partner_shipping_id or order.partner_id
+        return {
+            'address': (shipping.contact_address or '').replace('\n', ', ').strip(' ,'),
+            'source_name': order.name or '',
+            'amount': order.amount_total or 0.0,
+            'partner_id': order.partner_id.id or False,
+            'scheduled_date': order.commitment_date or False,
+            'warehouse_id': order.warehouse_id.id or False,
+        }
+
     def action_retry_geocode(self):
-        """Tra lại toạ độ cho các dòng chưa có — dùng sau khi sửa địa chỉ trên phiếu."""
+        """Tra lại toạ độ — dùng sau khi sửa địa chỉ trên phiếu hoặc trên đơn."""
         Address = self.env['hlv.vtracking.address']
         for line in self:
-            raw_address = line.picking_id._vtracking_delivery_address()
+            raw_address = (line._source_values() or {}).get('address') or ''
             if not raw_address:
                 raise UserError(
-                    'Phiếu %s không có địa chỉ giao. Điền ô "Địa chỉ giao hàng" trên phiếu '
-                    'rồi thử lại.' % line.picking_name
+                    'Chứng từ %s không có địa chỉ giao. Điền ô "Địa chỉ giao hàng" rồi '
+                    'thử lại.' % line.display_reference
                 )
             record = Address.resolve(raw_address)
             if record and not record.has_coords:
@@ -119,12 +191,56 @@ class HlvVtrackingPlanLine(models.Model):
             line.write({'address': raw_address, 'address_id': record.id or False})
         return True
 
-    def action_open_picking(self):
+    def action_open_source(self):
+        """Mở phiếu nếu đã có, còn không thì mở đơn bán."""
         self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'stock.picking',
-            'res_id': self.picking_id.id,
-            'view_mode': 'form',
-            'target': 'current',
-        }
+        if self.picking_id:
+            return {
+                'type': 'ir.actions.act_window', 'res_model': 'stock.picking',
+                'res_id': self.picking_id.id, 'view_mode': 'form', 'target': 'current',
+            }
+        if self.sale_order_id:
+            return {
+                'type': 'ir.actions.act_window', 'res_model': 'sale.order',
+                'res_id': self.sale_order_id.id, 'view_mode': 'form', 'target': 'current',
+            }
+        raise UserError('Dòng này chưa gắn với chứng từ nào.')
+
+    # ------------------------------------------------------------------
+    # Nối phiếu mới sinh vào dòng đang chờ
+    # ------------------------------------------------------------------
+    @api.model
+    def attach_new_pickings(self, pickings):
+        """Gắn phiếu xuất mới sinh vào dòng kế hoạch đang chờ phiếu của cùng đơn bán.
+
+        Gọi từ ``stock.picking.create``. Chỉ nhận phiếu XUẤT: đơn bán còn sinh phiếu lấy
+        hàng, phiếu đóng gói — gắn nhầm thì kế hoạch trỏ vào một chứng từ không giao cho
+        khách.
+        """
+        outgoing = pickings.filtered(
+            lambda p: p.picking_type_id.code == 'outgoing' and p.sale_id
+        )
+        if not outgoing:
+            return False
+        waiting = self.sudo().search([
+            ('picking_id', '=', False),
+            ('sale_order_id', 'in', outgoing.mapped('sale_id').ids),
+        ])
+        if not waiting:
+            return False
+        by_order = {}
+        for picking in outgoing:
+            by_order.setdefault(picking.sale_id.id, picking)
+        attached = self.browse()
+        for line in waiting:
+            picking = by_order.get(line.sale_order_id.id)
+            # Phiếu đã nằm ở dòng khác thì bỏ qua: ràng buộc unique sẽ chặn, nhưng chặn
+            # bằng lỗi ở giữa lúc xác nhận đơn bán thì người dùng không hiểu vì sao.
+            if not picking or picking.plan_line_ids:
+                continue
+            line.picking_id = picking.id
+            attached |= line
+        if attached:
+            attached._sync_from_source()
+            _logger.info('V-Tracking: nối %s phiếu xuất mới vào kế hoạch đang chờ.', len(attached))
+        return True

@@ -87,8 +87,11 @@
                     <button name="action_resequence_by_distance" type="object"
                             string="Sắp thứ tự theo điểm gần nhất"
                             invisible="state not in ('draft', 'confirmed')"/>
+                    <button name="action_add_documents" type="object"
+                            string="Thêm phiếu / đơn" class="btn-primary"
+                            invisible="state not in ('draft', 'confirmed')"/>
                     <button name="action_refresh_lines" type="object"
-                            string="Đọc lại từ phiếu"/>
+                            string="Đọc lại từ chứng từ"/>
                     <button name="action_cancel" type="object" string="Huỷ"
                             invisible="state in ('cancelled', 'done')"/>
                     <field name="state" widget="statusbar"
@@ -131,23 +134,22 @@
                     <notebook>
                         <page string="Phiếu giao">
                             <field name="line_ids">
-                                <list editable="bottom" decoration-warning="not has_coords">
+                                <!-- Không editable: thêm chứng từ đi qua nút "Thêm phiếu /
+                                     đơn" để chọn được nhiều cái một lần và lọc theo kho.
+                                     Sửa tay ở đây chỉ còn là kéo thứ tự ghé. -->
+                                <list decoration-warning="not has_coords"
+                                      decoration-muted="line_state == 'waiting_picking'">
                                     <field name="sequence" widget="handle"/>
-                                    <!-- Chỉ cho chọn phiếu XUẤT đang Sẵn sàng và chưa xếp
-                                         xe: phiếu Huỷ/Hoàn tất không còn gì để giao, phiếu
-                                         nội bộ không phải việc của điều phối giao hàng. -->
-                                    <field name="picking_id"
-                                           options="{'no_create': True, 'no_open': True}"
-                                           domain="[('picking_type_code', '=', 'outgoing'),
-                                                    ('state', '=', 'assigned'),
-                                                    ('plan_id', '=', False)]"
-                                           context="{'list_view_ref': 'hlv_vtracking.view_stock_picking_pick_list',
-                                                     'search_view_ref': 'hlv_vtracking.view_stock_picking_pick_search',
-                                                     'search_default_ready': 1,
-                                                     'search_default_unplanned': 1}"/>
+                                    <field name="display_reference" string="Chứng từ" readonly="1"/>
+                                    <field name="line_state" string="Tình trạng" readonly="1"
+                                           widget="badge"
+                                           decoration-warning="line_state == 'waiting_picking'"
+                                           decoration-success="line_state == 'ready'"/>
                                     <field name="source_name" string="Đơn bán" readonly="1"/>
                                     <field name="partner_id" readonly="1"/>
                                     <field name="address" readonly="1"/>
+                                    <field name="warehouse_id" string="Kho" readonly="1"
+                                           optional="show"/>
                                     <field name="amount" widget="monetary" readonly="1"
                                            sum="Tổng tiền"/>
                                     <field name="geo_state" string="Toạ độ" readonly="1"/>
@@ -157,8 +159,8 @@
                                            optional="show"/>
                                     <button name="action_retry_geocode" type="object"
                                             icon="fa-search-plus" title="Tra lại toạ độ"/>
-                                    <button name="action_open_picking" type="object"
-                                            icon="fa-external-link" title="Mở phiếu"/>
+                                    <button name="action_open_source" type="object"
+                                            icon="fa-external-link" title="Mở chứng từ"/>
                                 </list>
                             </field>
                         </page>

@@ -28,6 +28,23 @@ class StockPicking(models.Model):
         for picking in self:
             picking.plan_id = picking.plan_line_ids[:1].plan_id
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Nối phiếu xuất mới sinh vào dòng kế hoạch đang chờ phiếu của cùng đơn bán.
+
+        Điều phối chốt "chiều nay giao đơn này" từ sáng, lúc kho chưa soạn hàng nên phiếu
+        xuất chưa tồn tại. Không nối tự động ở đây thì người điều phối phải nhớ quay lại
+        sửa từng kế hoạch sau khi kho soạn xong — việc không ai nhớ nổi.
+        """
+        pickings = super().create(vals_list)
+        try:
+            self.env['hlv.vtracking.plan.line'].attach_new_pickings(pickings)
+        except Exception:  # noqa: BLE001
+            # Tạo phiếu là việc của kho và không được hỏng vì kế hoạch giao. Nối trượt
+            # thì dòng kế hoạch vẫn ở trạng thái "Chờ phiếu xuất", nối tay được.
+            _logger.exception('V-Tracking: không nối được phiếu mới vào kế hoạch đang chờ.')
+        return pickings
+
     # ------------------------------------------------------------------
     # Đọc dữ liệu Studio
     # ------------------------------------------------------------------

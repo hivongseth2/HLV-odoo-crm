@@ -128,14 +128,53 @@ hỏi "kế hoạch ngày và kế hoạch buổi cái nào đè cái nào".
 
 Đơn vị xếp lên xe là **phiếu giao** (`stock.picking`).
 
-### Xếp phiếu lên xe
+### Xếp lên xe
 
-Ở danh sách phiếu giao: chọn phiếu → menu **Thao tác > Xếp lên xe (V-Tracking)**. Chọn kế
-hoạch có sẵn, hoặc khai luôn (xe, ngày, buổi) để tạo mới tại chỗ.
+Ba đường vào, đều mở cùng một hộp thoại và **chọn được nhiều chứng từ một lần**:
 
-Một phiếu chỉ nằm trong **một** kế hoạch (ràng buộc ở CSDL). Phiếu đã có kế hoạch thì bị
-bỏ qua chứ không tự chuyển xe — đổi xe là quyết định của người điều phối, không phải hệ
-quả phụ của một lần xếp hàng loạt.
+- Danh sách **phiếu giao** → Thao tác > *Xếp lên xe (V-Tracking)*
+- Danh sách **đơn bán** → Thao tác > *Xếp lên xe (V-Tracking)*
+- Trong kế hoạch → nút **Thêm phiếu / đơn**
+
+Chọn kế hoạch có sẵn, hoặc khai luôn (xe, ngày, buổi) để tạo mới tại chỗ.
+
+Chỉ hiện phiếu **xuất kho** đang **Sẵn sàng** và **chưa xếp xe** — phiếu nội bộ, phiếu
+Huỷ/Hoàn tất không lọt vào. Sắp xếp ngày giao mới nhất trước.
+
+**Lọc theo kho xuất phát:** nếu địa điểm xuất phát của kế hoạch có gắn kho Odoo
+(`hlv.vtracking.place.warehouse_id`), hộp thoại mặc định chỉ hiện chứng từ của đúng kho
+đó — xe đang đứng ở kho này thì không lấy được hàng ở kho khác. Bỏ tick *Chỉ lấy chứng từ
+của kho đó* khi thực sự gom hàng hai kho.
+
+Một phiếu (và một đơn) chỉ nằm trong **một** kế hoạch — ràng buộc ở CSDL. Chứng từ đã có
+kế hoạch thì bị bỏ qua chứ không tự chuyển xe: đổi xe là quyết định của người điều phối,
+không phải hệ quả phụ của một lần xếp hàng loạt.
+
+### Xếp đơn khi kho chưa soạn hàng
+
+Điều phối chốt "chiều nay giao đơn này" từ sáng, lúc kho chưa soạn nên **phiếu xuất chưa
+tồn tại**. Bắt phải có phiếu mới xếp được thì kế hoạch buổi chiều không lập được vào buổi
+sáng — đúng lúc cần lập nhất.
+
+Vì vậy dòng kế hoạch trỏ tới **phiếu giao** *hoặc* **đơn bán**:
+
+| Tình trạng dòng | Nghĩa là |
+|---|---|
+| **Chờ phiếu xuất** | Mới có đơn bán. Địa chỉ và tiền lấy tạm từ đơn |
+| **Đã có phiếu** | Phiếu xuất đã gắn. Địa chỉ và tiền lấy theo phiếu |
+
+Khi kho tạo phiếu xuất cho đơn đó, hệ thống **tự gắn** phiếu vào dòng đang chờ và cập
+nhật lại địa chỉ, tiền — không ai phải nhớ quay lại sửa kế hoạch. Chỉ nhận phiếu **xuất**;
+phiếu lấy hàng và phiếu đóng gói của cùng đơn không bị gắn nhầm.
+
+Nếu bước tự gắn trượt (lỗi dữ liệu chẳng hạn), việc tạo phiếu của kho **không** bị hỏng —
+dòng vẫn ở *Chờ phiếu xuất* và gắn tay được.
+
+### In kế hoạch
+
+Nút **In** trên kế hoạch. Đầu tờ là bốn con số tài xế cần (số phiếu · tiền · km · thời
+gian), rồi bảng theo thứ tự ghé với ô ☐ để tích tay, cuối là hai ô ký. Điểm chưa có toạ độ
+được đánh dấu ngay trên tờ in vì km ở đầu tờ chưa tính phần của chúng.
 
 ### Tra toạ độ và kho toạ độ dùng lại
 

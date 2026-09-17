@@ -43,6 +43,11 @@ class HlvVtrackingPlace(models.Model):
         'res.partner', string='Đối tác', index=True, tracking=True,
         help='Để trống nếu địa điểm không ứng với đối tác nào, ví dụ bãi đỗ xe.',
     )
+    warehouse_id = fields.Many2one(
+        'stock.warehouse', string='Kho trong Odoo', index=True, tracking=True,
+        help='Chỉ điền cho địa điểm loại Kho. Nhờ đó khi kế hoạch xuất phát từ kho này, '
+             'màn chọn phiếu biết ưu tiên phiếu xuất của đúng kho đó.',
+    )
     address = fields.Char(
         string='Địa chỉ để tra toạ độ', tracking=True,
         help='Để trống thì lấy địa chỉ của đối tác. Điền tay khi địa chỉ trong Odoo quá '

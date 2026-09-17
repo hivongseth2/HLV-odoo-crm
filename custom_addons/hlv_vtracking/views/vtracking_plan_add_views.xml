@@ -5,57 +5,100 @@
         <field name="name">hlv.vtracking.plan.add.picking.form</field>
         <field name="model">hlv.vtracking.plan.add.picking</field>
         <field name="arch" type="xml">
-            <form string="Xếp phiếu lên xe">
+            <form string="Xếp lên xe">
                 <group>
-                    <field name="mode" widget="radio"/>
-                </group>
-                <group invisible="mode != 'existing'">
-                    <field name="plan_id" options="{'no_create': True}"
-                           required="mode == 'existing'"/>
-                </group>
-                <group invisible="mode != 'new'">
                     <group>
+                        <field name="source_type" widget="radio"/>
+                        <field name="mode" widget="radio"/>
+                    </group>
+                    <group>
+                        <field name="plan_id" options="{'no_create': True}"
+                               invisible="mode != 'existing'"
+                               required="mode == 'existing'"/>
                         <field name="vehicle_id" options="{'no_create': True}"
-                               required="mode == 'new'"/>
-                        <field name="start_place_id" options="{'no_create': True}"/>
-                    </group>
-                    <group>
-                        <field name="date" required="mode == 'new'"/>
-                        <field name="session" required="mode == 'new'"/>
+                               invisible="mode != 'new'" required="mode == 'new'"/>
+                        <field name="date" invisible="mode != 'new'" required="mode == 'new'"/>
+                        <field name="session" invisible="mode != 'new'" required="mode == 'new'"/>
+                        <field name="start_place_id" options="{'no_create': True}"
+                               invisible="mode != 'new'"/>
+                        <field name="warehouse_id" readonly="1"/>
+                        <field name="filter_by_warehouse" invisible="not warehouse_id"/>
                     </group>
                 </group>
+
+                <!-- Chọn nhiều một lần bằng many2many_tags: nhanh hơn hẳn thêm từng dòng,
+                     và vẫn thấy được danh sách đang chọn để bỏ bớt. -->
+                <group invisible="source_type != 'picking'">
+                    <field name="picking_ids" nolabel="1" widget="many2many"
+                           required="source_type == 'picking'"
+                           domain="picking_domain"
+                           context="{'list_view_ref': 'hlv_vtracking.view_stock_picking_pick_list',
+                                     'search_view_ref': 'hlv_vtracking.view_stock_picking_pick_search',
+                                     'search_default_ready': 1,
+                                     'search_default_unplanned': 1}">
+                        <list create="0">
+                            <field name="name" string="Phiếu"/>
+                            <field name="origin" string="Đơn bán"/>
+                            <field name="partner_id"/>
+                            <field name="scheduled_date" widget="date"/>
+                            <field name="state" widget="badge"/>
+                        </list>
+                    </field>
+                </group>
+
+                <group invisible="source_type != 'sale'">
+                    <field name="sale_order_ids" nolabel="1" widget="many2many"
+                           required="source_type == 'sale'"
+                           domain="sale_domain"
+                           context="{'list_view_ref': 'hlv_vtracking.view_sale_order_pick_list'}">
+                        <list create="0">
+                            <field name="name" string="Đơn bán"/>
+                            <field name="partner_id"/>
+                            <field name="commitment_date" widget="date"/>
+                            <field name="warehouse_id"/>
+                            <field name="amount_total" widget="monetary"/>
+                            <field name="currency_id" column_invisible="1"/>
+                        </list>
+                    </field>
+                </group>
+
+                <field name="picking_domain" invisible="1"/>
+                <field name="sale_domain" invisible="1"/>
                 <group>
                     <field name="to_add_count"/>
                     <field name="already_planned_count"/>
                     <field name="no_address_count"/>
-                    <field name="not_ready_count"/>
+                    <field name="not_ready_count" invisible="source_type != 'picking'"/>
+                    <field name="other_warehouse_count" invisible="not warehouse_id"/>
                 </group>
+
                 <div class="alert alert-warning" role="alert"
-                     invisible="not_ready_count == 0">
-                    Có phiếu <strong>không ở trạng thái Sẵn sàng</strong> (Nháp, Chờ, Hoàn
-                    tất hoặc Huỷ). Vẫn xếp được — nhưng phiếu Hoàn tất/Huỷ thì gần như luôn
-                    là chọn nhầm.
+                     invisible="other_warehouse_count == 0">
+                    Có chứng từ <strong>không thuộc kho xuất phát</strong>. Xe đang đứng ở
+                    kho này thì không lấy được hàng ở kho khác — kiểm lại trước khi xếp.
+                </div>
+                <div class="alert alert-warning" role="alert"
+                     invisible="not_ready_count == 0 or source_type != 'picking'">
+                    Có phiếu <strong>không ở trạng thái Sẵn sàng</strong>. Vẫn xếp được,
+                    nhưng phiếu Hoàn tất/Huỷ thì gần như luôn là chọn nhầm.
                 </div>
                 <div class="alert alert-warning" role="alert"
                      invisible="no_address_count == 0">
-                    Có phiếu không có địa chỉ giao — vẫn xếp được, nhưng không tra được toạ
-                    độ nên <strong>không tính vào quãng đường</strong>. Điền ô "Địa chỉ giao
-                    hàng" trên phiếu rồi bấm "Tra lại toạ độ" trong kế hoạch.
+                    Có chứng từ không có địa chỉ giao — vẫn xếp được, nhưng không tra được
+                    toạ độ nên <strong>không tính vào quãng đường</strong>.
                 </div>
                 <div class="alert alert-info" role="alert"
                      invisible="already_planned_count == 0">
-                    Phiếu đã nằm trong kế hoạch khác thì bỏ qua, không tự chuyển xe. Muốn
-                    đổi xe thì xoá khỏi kế hoạch cũ trước.
+                    Chứng từ đã nằm trong kế hoạch khác thì bỏ qua, không tự chuyển xe.
                 </div>
-                <field name="picking_ids" nolabel="1" readonly="1">
-                    <list>
-                        <field name="name"/>
-                        <field name="partner_id"/>
-                        <field name="scheduled_date"/>
-                        <field name="plan_id" string="Kế hoạch hiện tại"/>
-                        <field name="state"/>
-                    </list>
-                </field>
+                <div class="alert alert-info" role="alert"
+                     invisible="source_type != 'sale'">
+                    Xếp theo <strong>đơn bán</strong> dùng khi chốt chuyến từ sáng mà kho
+                    chưa soạn hàng. Dòng kế hoạch ở trạng thái <em>Chờ phiếu xuất</em>; khi
+                    kho tạo phiếu xuất cho đơn đó, hệ thống <strong>tự gắn</strong> phiếu
+                    vào dòng và cập nhật lại địa chỉ, tiền theo phiếu.
+                </div>
+
                 <footer>
                     <button name="action_add" type="object" string="Xếp lên xe"
                             class="btn-primary"/>
@@ -65,14 +108,41 @@
         </field>
     </record>
 
-    <!-- Hiện trong menu Thao tác của danh sách phiếu giao: đó là chỗ người điều phối
-         đang đứng khi quyết định xe nào chở phiếu nào. -->
+    <record id="view_sale_order_pick_list" model="ir.ui.view">
+        <field name="name">sale.order.vtracking.pick.list</field>
+        <field name="model">sale.order</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <list string="Chọn đơn bán" create="0" default_order="commitment_date desc, id desc">
+                <field name="name" string="Đơn bán"/>
+                <field name="partner_id"/>
+                <field name="commitment_date" string="Hẹn giao" widget="date"/>
+                <field name="warehouse_id" string="Kho"/>
+                <field name="vtracking_plan_id" string="Đã xếp xe"/>
+                <field name="amount_total" widget="monetary"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Hiện trong menu Thao tác của cả phiếu giao lẫn đơn bán: điều phối có thể xuất
+         phát từ một trong hai chỗ tuỳ lúc kho đã soạn hàng hay chưa. -->
     <record id="action_vtracking_plan_add_picking" model="ir.actions.act_window">
         <field name="name">Xếp lên xe (V-Tracking)</field>
         <field name="res_model">hlv.vtracking.plan.add.picking</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
         <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="groups_id" eval="[(4, ref('hlv_vtracking.group_vtracking_manager'))]"/>
+    </record>
+
+    <record id="action_vtracking_plan_add_sale" model="ir.actions.act_window">
+        <field name="name">Xếp lên xe (V-Tracking)</field>
+        <field name="res_model">hlv.vtracking.plan.add.picking</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="sale.model_sale_order"/>
         <field name="binding_view_types">list,form</field>
         <field name="groups_id" eval="[(4, ref('hlv_vtracking.group_vtracking_manager'))]"/>
     </record>
