@@ -139,83 +139,101 @@
     margin-bottom: 4px;
 }
 
-/* Chú giải kiêm bộ lọc lớp địa điểm. z-index 500 để nằm trên tile của Leaflet (400)
-   nhưng dưới popup (700) — popup che mất chú giải thì chấp nhận được, ngược lại thì không. */
-.o_vt_legend {
-    position: absolute;
-    z-index: 500;
-    right: 12px;
-    top: 12px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 8px 10px;
-    font-size: 12px;
-    max-width: 220px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-.o_vt_legend_title {
-    font-weight: 700;
-    margin-bottom: 4px;
-}
-
-.o_vt_legend_row {
+/* Chip lọc kiêm chú giải màu, nằm trong cột trái. */
+.o_vt_chips {
     display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.o_vt_chip {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 0;
+    gap: 4px;
+    padding: 2px 7px;
+    border: 1px solid #dee2e6;
+    border-radius: 11px;
+    font-size: 11px;
+    line-height: 17px;
     cursor: pointer;
     user-select: none;
+    background: #fff;
 }
 
-.o_vt_legend_row:hover {
-    opacity: 0.75;
+.o_vt_chip:hover {
+    border-color: #adb5bd;
 }
 
-/* Lớp đang tắt vẫn phải đọc được tên — mờ đi chứ không ẩn, nếu không người xem
+/* Loại đang tắt vẫn phải đọc được tên — mờ đi chứ không ẩn, nếu không người xem
    không biết còn loại nào để bật lại. */
-.o_vt_legend_off {
-    opacity: 0.4;
+.o_vt_chip_off {
+    opacity: 0.45;
     text-decoration: line-through;
 }
 
-.o_vt_legend_dot {
+.o_vt_chip_dot {
     border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
     flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
 }
 
-/* Cùng tỉ lệ với bán kính ghim trong vtracking_map_places.js — đổi một bên thì đổi cả hai,
-   nếu không chú giải sẽ mô tả sai thứ đang hiện trên bản đồ. */
-.o_vt_legend_dot_small { width: 8px; height: 8px; }
-.o_vt_legend_dot_normal { width: 11px; height: 11px; }
-.o_vt_legend_dot_large { width: 16px; height: 16px; }
+/* Cùng tỉ lệ với bán kính ghim trong vtracking_map_places.js — đổi một bên thì đổi cả
+   hai, nếu không chip sẽ mô tả sai thứ đang hiện trên bản đồ. */
+.o_vt_chip_dot_small { width: 6px; height: 6px; }
+.o_vt_chip_dot_normal { width: 8px; height: 8px; }
+.o_vt_chip_dot_large { width: 11px; height: 11px; }
 
-.o_vt_legend_name {
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* Xe không có một màu cố định (màu đổi theo trạng thái) nên chip xe dùng màu trung tính
+   viền đậm, để không hứa hẹn một màu mà bản đồ không dùng. */
+.o_vt_chip_dot_vehicle {
+    background: #fff;
+    border: 2px solid #0d9488;
+    width: 9px;
+    height: 9px;
 }
 
-.o_vt_legend_count {
+.o_vt_chip_num {
     color: #6c757d;
 }
 
-/* Nhãn luôn hiện của loại "nổi bật" (kho). Nền trong suốt, không viền: bản đồ đã đủ
-   rối, nhãn chỉ cần đọc được. */
-.o_vt_place_label {
+.o_vt_group {
+    padding: 6px 10px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    background: #f8f9fa;
+    border-bottom: 1px solid #f1f3f5;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.o_vt_warn {
+    color: #b45309;
+}
+
+/* Nhãn luôn hiện của loại "nổi bật" (kho).
+   Phải ghi đè `.leaflet-tooltip` của Leaflet, mà CSS Leaflet được nạp động vào <head>
+   SAU asset của Odoo — cùng độ đặc hiệu thì Leaflet thắng và nhãn giữ nguyên nền trắng
+   + viền, trông như một cái hộp to che mất bản đồ. Ghép hai class để thắng chắc chắn. */
+.leaflet-tooltip.o_vt_place_label {
     background: transparent;
     border: none;
     box-shadow: none;
-    font-weight: 700;
-    font-size: 11px;
-    color: #212529;
-    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+    padding: 0 3px;
+    font-weight: 600;
+    font-size: 10px;
+    line-height: 13px;
+    /* Mờ vừa đủ đọc: nhãn là lớp phụ trợ, đường và địa danh của bản đồ mới là thứ chính. */
+    color: rgba(33, 37, 41, 0.72);
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+    white-space: nowrap;
 }
 
-.o_vt_place_label::before {
+.leaflet-tooltip.o_vt_place_label::before {
     display: none;
 }

@@ -6,6 +6,8 @@
    30 giây, địa điểm gần như không đổi nên chỉ tải một lần rồi giữ nguyên. Gộp chung sẽ
    khiến mỗi lượt làm tươi xe kéo theo việc vẽ lại hàng trăm ghim đứng yên. */
 
+import { shortLabel } from "./vtracking_map_utils";
+
 // Bán kính ghim theo cỡ khai ở loại địa điểm. Kho để "Lớn" thì nhìn thấy ngay giữa hàng
 // trăm ghim đối tác — đó là lý do cỡ là thuộc tính của LOẠI, không phải của từng điểm.
 const SIZE_RADIUS = { small: 5, normal: 7, large: 11 };
@@ -39,9 +41,11 @@ export function drawPlaces(L, map, places, hiddenTypeIds) {
         });
         marker.bindPopup(placePopup(place));
         if (place.show_label) {
-            marker.bindTooltip(place.name, {
+            // Nhãn cố định dùng tên RÚT GỌN; tên đầy đủ vẫn nằm trong popup khi bấm vào.
+            marker.bindTooltip(shortLabel(place.name), {
                 permanent: true,
                 direction: "right",
+                offset: [radius, 0],
                 className: "o_vt_place_label",
             });
         } else {

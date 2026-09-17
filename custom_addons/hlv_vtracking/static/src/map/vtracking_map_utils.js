@@ -67,3 +67,66 @@ export function formatSpeed(value) {
     const speed = Number(value);
     return `${Number.isFinite(speed) ? Math.round(speed) : 0} km/h`;
 }
+
+/**
+ * Rút gọn tên để in làm nhãn cố định trên bản đồ.
+ *
+ * Tên đối tác trong Odoo thường là pháp nhân đầy đủ ("CÔNG TY TNHH VI NA HOÀNG LONG VŨ -
+ * TÂN SƠN NHÌ"), in nguyên vào nhãn thì một địa điểm che mất cả một góc bản đồ. Ưu tiên
+ * cắt ở dấu gạch ngang phân nhánh — phần sau dấu gạch thường mới là thứ phân biệt hai
+ * cơ sở, nên giữ nó và bỏ phần pháp nhân lặp lại ở mọi điểm.
+ *
+ * @param {string} value tên đầy đủ
+ * @param {number} maxLength số ký tự tối đa (mặc định 24)
+ * @returns {string} tên đã rút gọn. null/undefined trả "".
+ */
+export function shortLabel(value, maxLength = 24) {
+    const text = String(value == null ? "" : value).trim();
+    if (text.length <= maxLength) {
+        return text;
+    }
+    const dashIndex = text.lastIndexOf(" - ");
+    if (dashIndex > 0) {
+        const tail = text.slice(dashIndex + 3).trim();
+        if (tail && tail.length <= maxLength) {
+            return tail;
+        }
+    }
+    return text.slice(0, maxLength - 1).trimEnd() + "…";
+}
+
+/**
+ * Chuẩn hoá chuỗi để so khớp khi tìm: thường hoá và BỎ DẤU tiếng Việt.
+ *
+ * Bỏ dấu là bắt buộc chứ không phải tiện nghi: tên địa điểm trong Odoo có dấu
+ * ("Nhơn Trạch") còn người tìm thường gõ không dấu ("nhon trach"). Không bỏ dấu thì ô
+ * tìm kiếm gần như vô dụng với dữ liệu tiếng Việt.
+ *
+ * @param {string} value chuỗi bất kỳ
+ * @returns {string} chuỗi thường, không dấu. null/undefined trả "".
+ */
+export function searchKey(value) {
+    return String(value == null ? "" : value)
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D")
+        .toLowerCase();
+}
+
+/**
+ * Lọc danh sách theo chuỗi tìm kiếm, so trên các trường chỉ định.
+ * @param {Array<Object>} items danh sách cần lọc
+ * @param {string} needle chuỗi người dùng gõ; rỗng thì trả nguyên danh sách
+ * @param {Array<string>} fields tên các trường đem ra so
+ * @returns {Array<Object>} phần tử khớp, giữ nguyên thứ tự ban đầu
+ */
+export function filterBySearch(items, needle, fields) {
+    const key = searchKey(needle).trim();
+    if (!key) {
+        return items;
+    }
+    return items.filter((item) =>
+        fields.some((field) => searchKey(item[field]).includes(key))
+    );
+}

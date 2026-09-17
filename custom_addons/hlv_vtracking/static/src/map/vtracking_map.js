@@ -14,7 +14,7 @@ import { Component, onWillStart, onWillUnmount, onMounted, useRef, useState } fr
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { loadLeaflet } from "./vtracking_leaflet_loader";
-import { statusColor, formatAgo, formatSpeed } from "./vtracking_map_utils";
+import { statusColor, formatAgo, formatSpeed, filterBySearch } from "./vtracking_map_utils";
 import { clearPlaces, drawPlaces } from "./vtracking_map_places";
 
 // Bản đồ tự tải lại theo chu kỳ này. 30 giây khớp với nhịp cron đồng bộ chậm nhất mà vẫn
@@ -37,7 +37,9 @@ export class VtrackingMap extends Component {
             places: [],
             placeTypes: [],
             hiddenTypeIds: [],
+            showVehicles: true,
             selectedId: null,
+            selectedPlaceId: null,
             search: "",
             loading: true,
             mapError: "",
@@ -124,6 +126,11 @@ export class VtrackingMap extends Component {
         this.drawPlaceLayer();
     }
 
+    toggleVehicles() {
+        this.state.showVehicles = !this.state.showVehicles;
+        this.drawMarkers();
+    }
+
     isTypeVisible(typeId) {
         return !this.state.hiddenTypeIds.includes(typeId);
     }
@@ -132,14 +139,37 @@ export class VtrackingMap extends Component {
         return this.state.places.filter((p) => p.type_id === typeId).length;
     }
 
+    // ------------------------------------------------------------------
+    // Lọc danh sách bên trái
+    // ------------------------------------------------------------------
+    // Ô tìm kiếm áp cho CẢ xe lẫn địa điểm: người dùng gõ "nhon trach" mà không cần
+    // biết trước thứ mình tìm là xe đang ở đó hay cái kho ở đó.
     get visibleVehicles() {
-        const needle = this.state.search.trim().toLowerCase();
-        if (!needle) {
-            return this.state.vehicles;
+        if (!this.state.showVehicles) {
+            return [];
         }
-        return this.state.vehicles.filter((v) =>
-            `${v.name} ${v.driver_name} ${v.geocoding}`.toLowerCase().includes(needle)
+        return filterBySearch(this.state.vehicles, this.state.search, [
+            "name",
+            "driver_name",
+            "device_driver_name",
+            "geocoding",
+        ]);
+    }
+
+    get visiblePlaces() {
+        const shown = this.state.places.filter(
+            (place) => !this.state.hiddenTypeIds.includes(place.type_id)
         );
+        return filterBySearch(shown, this.state.search, [
+            "name",
+            "partner_name",
+            "address",
+            "type_name",
+        ]);
+    }
+
+    get hasResults() {
+        return this.visibleVehicles.length > 0 || this.visiblePlaces.length > 0;
     }
 
     get locatedCount() {
@@ -170,8 +200,9 @@ export class VtrackingMap extends Component {
         }
         const L = this.leaflet;
         const seen = new Set();
+        const vehicles = this.state.showVehicles ? this.state.vehicles : [];
 
-        for (const vehicle of this.state.vehicles) {
+        for (const vehicle of vehicles) {
             if (!vehicle.latitude || !vehicle.longitude) {
                 continue;
             }
@@ -251,6 +282,7 @@ export class VtrackingMap extends Component {
     // ------------------------------------------------------------------
     selectVehicle(vehicleId, pan = true) {
         this.state.selectedId = vehicleId;
+        this.state.selectedPlaceId = null;
         const vehicle = this.state.vehicles.find((v) => v.id === vehicleId);
         if (!vehicle || !this.map) {
             return;
@@ -260,6 +292,17 @@ export class VtrackingMap extends Component {
             this.map.setView([vehicle.latitude, vehicle.longitude], 16);
         }
         marker?.openPopup();
+    }
+
+    selectPlace(placeId) {
+        this.state.selectedPlaceId = placeId;
+        this.state.selectedId = null;
+        const place = this.state.places.find((p) => p.id === placeId);
+        if (!place || !this.map) {
+            return;
+        }
+        this.map.setView([place.latitude, place.longitude], 16);
+        this.placeMarkers.get(placeId)?.openPopup();
     }
 
     onSearchInput(ev) {
