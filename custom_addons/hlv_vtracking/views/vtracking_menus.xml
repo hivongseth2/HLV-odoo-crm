@@ -22,8 +22,15 @@
               parent="menu_vtracking_root" action="action_vtracking_import_vehicles"
               sequence="25" groups="hlv_vtracking.group_vtracking_manager"/>
 
+    <menuitem id="menu_vtracking_places" name="Địa điểm"
+              parent="menu_vtracking_root" action="action_vtracking_place" sequence="30"/>
+
+    <menuitem id="menu_vtracking_place_from_partner" name="Tạo địa điểm từ đối tác"
+              parent="menu_vtracking_root" action="action_vtracking_place_from_partner"
+              sequence="35" groups="hlv_vtracking.group_vtracking_manager"/>
+
     <menuitem id="menu_vtracking_positions" name="Lịch sử vị trí"
-              parent="menu_vtracking_root" action="action_vtracking_position" sequence="30"/>
+              parent="menu_vtracking_root" action="action_vtracking_position" sequence="40"/>
 
     <menuitem id="menu_vtracking_config" name="Cấu hình"
               parent="menu_vtracking_root" sequence="90"
@@ -32,6 +39,10 @@
     <menuitem id="menu_vtracking_settings" name="Kết nối vTracking"
               parent="menu_vtracking_config" action="action_vtracking_settings"
               sequence="10"/>
+
+    <menuitem id="menu_vtracking_place_types" name="Loại địa điểm"
+              parent="menu_vtracking_config" action="action_vtracking_place_type"
+              sequence="15"/>
 
     <menuitem id="menu_vtracking_api_keys" name="Khoá API"
               parent="menu_vtracking_config" action="action_vtracking_api_key"

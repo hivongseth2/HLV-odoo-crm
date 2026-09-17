@@ -219,21 +219,37 @@ class FleetVehicle(models.Model):
     # ------------------------------------------------------------------
     @api.model
     def get_vtracking_map_data(self):
-        """Toàn bộ dữ liệu một lần vẽ bản đồ cần: cấu hình tile + danh sách xe.
+        """Toàn bộ dữ liệu một lần vẽ bản đồ cần: cấu hình tile, xe, và địa điểm.
 
-        Gộp vào một lời gọi thay vì hai: bản đồ tự tải lại theo chu kỳ, mỗi chu kỳ hai
-        request là gấp đôi tải cho một thứ gần như không đổi.
+        Gộp vào một lời gọi thay vì ba: bản đồ tự tải lại theo chu kỳ, mỗi chu kỳ thêm
+        một request là thêm tải cho thứ gần như không đổi.
+
+        Địa điểm chỉ trả về cái ĐÃ có toạ độ — địa điểm chưa tra được là việc xử lý ở màn
+        quản lý địa điểm, không phải thứ để nhìn trên bản đồ.
         """
         company = self.env.company
         vehicles = self.sudo().search([
             ('vtracking_enabled', '=', True),
             ('company_id', 'in', [company.id, False]),
         ], order='license_plate')
+        places = self.env['hlv.vtracking.place'].sudo().search([
+            ('has_coords', '=', True),
+            ('company_id', '=', company.id),
+        ])
+        place_types = self.env['hlv.vtracking.place.type'].sudo().search([])
         return {
             'tile_url': company.vtracking_map_tile_url or '',
             'tile_attribution': company.vtracking_map_attribution or '',
             'stale_minutes': STALE_MINUTES,
             'vehicles': [v._vtracking_map_payload() for v in vehicles],
+            'places': [p._map_payload() for p in places],
+            'place_types': [{
+                'id': t.id,
+                'name': t.name,
+                'color': t.color,
+                'size': t.size,
+                'visible_by_default': t.visible_by_default,
+            } for t in place_types],
         }
 
     def _vtracking_map_payload(self):

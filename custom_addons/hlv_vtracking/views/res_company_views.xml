@@ -32,6 +32,16 @@
                             <field name="vtracking_map_attribution"/>
                         </group>
                     </group>
+                    <group string="Tra toạ độ địa điểm">
+                        <div class="text-muted mb-2" colspan="2">
+                            Hai ô này là tham số <strong>toàn hệ thống</strong> của module
+                            base_geolocalize, không riêng công ty đang mở. Đổi ở đây là đổi
+                            cho mọi chỗ khác đang tra toạ độ.
+                        </div>
+                        <field name="geocode_provider"/>
+                        <field name="geocode_google_key" password="True"
+                               invisible="geocode_provider != 'googlemap'"/>
+                    </group>
                     <div class="alert alert-info" role="alert">
                         Chỉ xe bật <strong>"Theo dõi vTracking"</strong> mới được đồng bộ, mới
                         hiện trên bản đồ và mới trả ra API. Bật cờ đó ở

@@ -2,8 +2,8 @@
 
 Theo dõi định vị đội xe qua **vTracking 2.0 Open API** (bản tài liệu 1.0.3).
 
-Module **độc lập**, chỉ phụ thuộc `fleet` (Đội xe) của Odoo. Không dính tới điều phối
-giao hàng.
+Phụ thuộc: `fleet` (Đội xe), `base_geolocalize` (chỉ dùng service `base.geocoder`),
+`hlv_geo_utils` (addon thuần hàm). **Không** dính tới điều phối giao hàng.
 
 ---
 
@@ -120,6 +120,81 @@ xe tạo mới; để trống thì module dùng dòng **"Chưa rõ / Chưa phân
 Tạo xong, module gọi đồng bộ một lượt để điền vị trí ngay — trừ khi bạn tắt **Bật theo dõi
 cho xe tạo mới**.
 
+## Địa điểm trên bản đồ
+
+Ngoài xe, bản đồ hiện các **địa điểm cố định**: kho, đối tác, nhà cung cấp…
+
+### Loại địa điểm
+
+**V-Tracking > Cấu hình > Loại địa điểm.** Loại quyết định ghim hiện thế nào:
+
+| Thuộc tính | Tác dụng |
+|---|---|
+| Màu | Màu ghim |
+| Cỡ | Nhỏ / Vừa / **Lớn — nổi bật** |
+| Luôn hiện tên | Hiện tên cạnh ghim không cần rê chuột |
+| Hiện sẵn | Tắt thì người xem phải tự bật lớp đó lên |
+
+Cài sẵn 5 loại: **Kho** (đỏ, cỡ lớn, luôn hiện tên), Đối tác, Khách hàng, Nhà cung cấp,
+Khác (tắt sẵn). Sửa hoặc thêm loại tuỳ ý — đây là dữ liệu của bạn, nâng cấp module không
+đè lên.
+
+Cỡ là thuộc tính của **loại**, không của từng điểm: đó là cách để kho nổi bật giữa hàng
+trăm ghim đối tác mà không phải chỉnh tay từng cái.
+
+### Tạo địa điểm
+
+- **Tạo tay**: V-Tracking > Địa điểm > Mới.
+- **Hàng loạt từ đối tác**: V-Tracking > Tạo địa điểm từ đối tác — chọn nhiều công ty,
+  chọn loại, tick "Tra toạ độ ngay". Đối tác đã có địa điểm thì bỏ qua, không tạo trùng.
+  Tối đa 200 đối tác một lần.
+
+### Tra toạ độ
+
+Dùng `base.geocoder` của **base_geolocalize** — không tự viết HTTP client. Chọn nhà cung
+cấp ở **V-Tracking > Cấu hình > Kết nối vTracking**, mục *Tra toạ độ địa điểm*:
+
+- **OpenStreetMap** — miễn phí, 1 lượt/giây.
+- **Google Maps** — cần khoá API, tính tiền theo lượt. Tra **tên doanh nghiệp** tốt hơn
+  hẳn, nên với địa chỉ khu công nghiệp thì nên dùng Google.
+
+Hai ô đó ghi thẳng vào tham số hệ thống của base_geolocalize
+(`base_geolocalize.geo_provider`, `base_geolocalize.google_map_api_key`) nên **áp dụng
+toàn hệ thống**, không riêng một công ty. Cố ý làm vậy: hai chỗ cùng giữ một khoá Google
+là kiểu lỗi mà người dùng đổi khoá ở chỗ này rồi không hiểu vì sao chỗ kia vẫn hỏng.
+
+Chuỗi gửi đi tra ghép **tên địa điểm + địa chỉ đối tác** (xem ô *Địa chỉ dùng khi tra*),
+vì địa chỉ trong Odoo thường chỉ tới cấp phường.
+
+### Máy tra rồi người duyệt
+
+Toạ độ máy tra vào trạng thái **Chờ duyệt**, không dùng ngay. Soát bằng bộ lọc *Chờ duyệt
+toạ độ*, bấm **Duyệt toạ độ** khi đúng.
+
+Máy tra trượt thì mở Google Maps, chuột phải vào đúng chỗ, copy cặp số rồi dán vào ô
+*Dán toạ độ*. **Toạ độ nhập tay không bao giờ bị máy đè lên** — kể cả khi bấm tra lại
+hay khi tác vụ nền chạy.
+
+Tác vụ nền *V-Tracking: tra toạ độ địa điểm mới* chạy mỗi giờ, mỗi lượt 20 điểm, chỉ đụng
+điểm **chưa tra**. Bật sẵn vì nó không đụng tài khoản vTracking — nhưng nếu bạn chuyển
+sang Google thì cân nhắc lại, Google tính tiền theo lượt.
+
+### Trên bản đồ
+
+Góc phải là bảng chú giải kiêm bộ lọc: bấm vào một loại để bật/tắt lớp đó. Lớp địa điểm
+chỉ tải **một lần** lúc mở màn hình — lượt làm tươi 30 giây là để theo dõi xe, vẽ lại
+hàng trăm ghim đứng yên mỗi lần là phí.
+
+### Quan hệ với `hlv.delivery.point`
+
+Module `hlv_delivery_dispatch` đã có model điểm giao hàng riêng, cùng luồng "máy tra →
+người duyệt". Hai bên **không dùng chung dữ liệu**, vì V-Tracking cố ý chỉ phụ thuộc
+`fleet` + `base_geolocalize`.
+
+Phạm vi khác nhau: `hlv.delivery.point` là điểm giao hàng có cụm tuyến, thói quen khách,
+gắn với chuyến; `hlv.vtracking.place` chỉ là địa điểm tham chiếu trên bản đồ. Nếu sau này
+cần một nguồn duy nhất thì nối ở module cầu nối, đừng cho module này phụ thuộc điều phối.
+
 ## Bản đồ
 
 **V-Tracking > Bản đồ đội xe.** Danh sách xe bên trái, ghim trên bản đồ, tự tải lại mỗi
@@ -171,6 +246,12 @@ Hành trình một xe trong một ngày. Tham số: `date` (YYYY-MM-DD, mặc đ
 Mặc định là `stored` có chủ ý: để một ứng dụng chạy vòng lặp không vô tình bắn hàng loạt
 request sang vTracking và làm khoá bị chặn.
 
+### `GET /api/v1/fleet/places`
+
+Địa điểm cố định (kho, đối tác…) kèm màu và cỡ của từng loại, để app vẽ giống Odoo.
+Tham số: `type` lọc theo mã loại, `confirmed_only=1` chỉ lấy toạ độ đã duyệt hoặc nhập
+tay — dùng khi app không muốn hiển thị phỏng đoán của máy.
+
 ### `GET /api/v1/fleet/map-config`
 
 Nguồn tile bản đồ, để ứng dụng ngoài vẽ cùng nền bản đồ với Odoo.
@@ -192,6 +273,11 @@ Cài đặt chung** — bấm menu của module này lại làm mất màn hình
 
 Ranh giới này để: gọi thử client từ shell mà không cần dựng env, và test thuật toán trong
 `tools/` mà không cần Odoo.
+
+Hàm dùng chung toàn hệ thống (đọc chuỗi toạ độ dán tay, đo khoảng cách) lấy từ
+**`hlv_geo_utils`**, không viết lại — điều phối giao hàng và đi nhận hàng đã dùng chung nó,
+và cùng một chuỗi toạ độ phải cho ra cùng một kết quả ở mọi module. `tools/` của module này
+chỉ giữ thứ riêng của vTracking: chuẩn hoá biển số, đổi epoch mili-giây, bóc payload.
 
 ---
 

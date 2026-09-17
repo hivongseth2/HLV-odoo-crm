@@ -24,15 +24,27 @@ xem plan/ke-hoach-module-vtracking.md.
 """,
     'category': 'Human Resources/Fleet',
     'author': 'HLV',
-    'depends': ['fleet'],
+    'depends': [
+        'fleet',
+        # base_geolocalize chỉ dùng như service tra toạ độ (base.geocoder) — không dùng
+        # partner_latitude/longitude của nó, vì toạ độ phải nằm ở ĐỊA ĐIỂM chứ không ở
+        # từng mã đối tác (nhiều mã khách thường trỏ về cùng một địa chỉ vật lý).
+        'base_geolocalize',
+        # Addon thuần hàm (không model/view/controller). Đọc chuỗi toạ độ dán tay và đo
+        # khoảng cách phải cho ra CÙNG kết quả ở mọi module HLV — điều phối giao hàng và
+        # đi nhận hàng đã dùng chung nó.
+        'hlv_geo_utils',
+    ],
     'external_dependencies': {'python': ['requests', 'pytz']},
     'data': [
         'security/vtracking_security.xml',
         'security/ir.model.access.csv',
+        'data/vtracking_place_type_data.xml',
         'data/vtracking_cron.xml',
         'views/fleet_vehicle_views.xml',
         # Nạp trước wizard nhập xe: action của wizard mở list/form xe khai ở file trên.
         'views/vtracking_import_wizard_views.xml',
+        'views/vtracking_place_views.xml',
         'views/vtracking_position_views.xml',
         'views/vtracking_api_key_views.xml',
         # Nạp trước menu: menu trỏ tới action khai trong file này.
@@ -45,6 +57,7 @@ xem plan/ke-hoach-module-vtracking.md.
         'web.assets_backend': [
             'hlv_vtracking/static/src/map/vtracking_map.css',
             'hlv_vtracking/static/src/map/vtracking_map_utils.js',
+            'hlv_vtracking/static/src/map/vtracking_map_places.js',
             'hlv_vtracking/static/src/map/vtracking_leaflet_loader.js',
             'hlv_vtracking/static/src/map/vtracking_map.js',
             'hlv_vtracking/static/src/map/vtracking_map.xml',

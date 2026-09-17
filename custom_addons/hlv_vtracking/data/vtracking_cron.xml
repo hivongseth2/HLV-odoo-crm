@@ -26,6 +26,19 @@
             <field name="active" eval="False"/>
         </record>
 
+        <!-- Tra toạ độ địa điểm mới khai. Bật sẵn vì nó gọi base.geocoder (Nominatim
+             miễn phí theo mặc định), không đụng tài khoản vTracking. Đổi sang Google thì
+             cân nhắc lại: Google tính tiền theo lượt. -->
+        <record id="cron_vtracking_geocode_places" model="ir.cron">
+            <field name="name">V-Tracking: tra toạ độ địa điểm mới</field>
+            <field name="model_id" ref="model_hlv_vtracking_place"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_geocode_pending()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="cron_vtracking_gc_positions" model="ir.cron">
             <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
             <field name="model_id" ref="model_hlv_vtracking_position"/>

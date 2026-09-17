@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- noupdate: đây là dữ liệu khởi tạo để dùng được ngay, không phải cấu hình do module
+         quản. Nâng cấp module không được đè lên màu/cỡ mà người dùng đã chỉnh. -->
+    <data noupdate="1">
+
+        <record id="place_type_warehouse" model="hlv.vtracking.place.type">
+            <field name="name">Kho</field>
+            <field name="code">warehouse</field>
+            <field name="sequence">1</field>
+            <field name="color">#b91c1c</field>
+            <!-- Kho là mốc quy chiếu của mọi chuyến nên phải nổi bật nhất và luôn hiện tên;
+                 số lượng kho ít nên nhãn không làm rối bản đồ. -->
+            <field name="size">large</field>
+            <field name="show_label" eval="True"/>
+        </record>
+
+        <record id="place_type_partner" model="hlv.vtracking.place.type">
+            <field name="name">Đối tác</field>
+            <field name="code">partner</field>
+            <field name="sequence">10</field>
+            <field name="color">#7c3aed</field>
+            <field name="size">normal</field>
+        </record>
+
+        <record id="place_type_customer" model="hlv.vtracking.place.type">
+            <field name="name">Khách hàng</field>
+            <field name="code">customer</field>
+            <field name="sequence">20</field>
+            <field name="color">#0369a1</field>
+            <field name="size">normal</field>
+        </record>
+
+        <record id="place_type_supplier" model="hlv.vtracking.place.type">
+            <field name="name">Nhà cung cấp</field>
+            <field name="code">supplier</field>
+            <field name="sequence">30</field>
+            <field name="color">#b45309</field>
+            <field name="size">small</field>
+        </record>
+
+        <record id="place_type_other" model="hlv.vtracking.place.type">
+            <field name="name">Khác</field>
+            <field name="code">other</field>
+            <field name="sequence">90</field>
+            <field name="color">#525252</field>
+            <field name="size">small</field>
+            <!-- Tắt sẵn: loại "Khác" thường là nơi chứa điểm tạp, bật mặc định sẽ làm
+                 bản đồ rối ngay lần mở đầu tiên. -->
+            <field name="visible_by_default" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

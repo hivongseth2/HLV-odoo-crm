@@ -15,6 +15,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { loadLeaflet } from "./vtracking_leaflet_loader";
 import { statusColor, formatAgo, formatSpeed } from "./vtracking_map_utils";
+import { clearPlaces, drawPlaces } from "./vtracking_map_places";
 
 // Bản đồ tự tải lại theo chu kỳ này. 30 giây khớp với nhịp cron đồng bộ chậm nhất mà vẫn
 // đủ tươi để nhìn xe di chuyển; ngắn hơn chỉ làm tăng tải cho Odoo chứ dữ liệu không mới hơn.
@@ -33,6 +34,9 @@ export class VtrackingMap extends Component {
         this.mapRef = useRef("map");
         this.state = useState({
             vehicles: [],
+            places: [],
+            placeTypes: [],
+            hiddenTypeIds: [],
             selectedId: null,
             search: "",
             loading: true,
@@ -43,6 +47,7 @@ export class VtrackingMap extends Component {
         this.leaflet = null;
         this.map = null;
         this.markers = new Map();
+        this.placeMarkers = new Map();
         this.timer = null;
 
         onWillStart(async () => {
@@ -81,6 +86,50 @@ export class VtrackingMap extends Component {
         this.state.loading = false;
         this.state.lastRefresh = new Date();
         this.drawMarkers();
+
+        // Địa điểm gần như không đổi nên chỉ nhận ở lượt tải ĐẦU: lượt làm tươi 30 giây
+        // là để theo dõi xe, vẽ lại hàng trăm ghim đứng yên mỗi lần là phí.
+        if (!this.placesLoaded) {
+            this.state.places = data.places;
+            this.state.placeTypes = data.place_types;
+            this.state.hiddenTypeIds = data.place_types
+                .filter((t) => !t.visible_by_default)
+                .map((t) => t.id);
+            this.placesLoaded = true;
+            this.drawPlaceLayer();
+        }
+    }
+
+    drawPlaceLayer() {
+        if (!this.map || !this.leaflet) {
+            return;
+        }
+        clearPlaces(this.placeMarkers);
+        this.placeMarkers = drawPlaces(
+            this.leaflet,
+            this.map,
+            this.state.places,
+            new Set(this.state.hiddenTypeIds)
+        );
+    }
+
+    togglePlaceType(typeId) {
+        const hidden = this.state.hiddenTypeIds;
+        const index = hidden.indexOf(typeId);
+        if (index === -1) {
+            hidden.push(typeId);
+        } else {
+            hidden.splice(index, 1);
+        }
+        this.drawPlaceLayer();
+    }
+
+    isTypeVisible(typeId) {
+        return !this.state.hiddenTypeIds.includes(typeId);
+    }
+
+    placeCountOfType(typeId) {
+        return this.state.places.filter((p) => p.type_id === typeId).length;
     }
 
     get visibleVehicles() {
@@ -111,6 +160,7 @@ export class VtrackingMap extends Component {
             maxZoom: 19,
         }).addTo(this.map);
         this.drawMarkers();
+        this.drawPlaceLayer();
         this.fitToVehicles();
     }
 

@@ -138,3 +138,84 @@
     font-weight: 700;
     margin-bottom: 4px;
 }
+
+/* Chú giải kiêm bộ lọc lớp địa điểm. z-index 500 để nằm trên tile của Leaflet (400)
+   nhưng dưới popup (700) — popup che mất chú giải thì chấp nhận được, ngược lại thì không. */
+.o_vt_legend {
+    position: absolute;
+    z-index: 500;
+    right: 12px;
+    top: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 12px;
+    max-width: 220px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.o_vt_legend_title {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.o_vt_legend_row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.o_vt_legend_row:hover {
+    opacity: 0.75;
+}
+
+/* Lớp đang tắt vẫn phải đọc được tên — mờ đi chứ không ẩn, nếu không người xem
+   không biết còn loại nào để bật lại. */
+.o_vt_legend_off {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.o_vt_legend_dot {
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    flex: 0 0 auto;
+}
+
+/* Cùng tỉ lệ với bán kính ghim trong vtracking_map_places.js — đổi một bên thì đổi cả hai,
+   nếu không chú giải sẽ mô tả sai thứ đang hiện trên bản đồ. */
+.o_vt_legend_dot_small { width: 8px; height: 8px; }
+.o_vt_legend_dot_normal { width: 11px; height: 11px; }
+.o_vt_legend_dot_large { width: 16px; height: 16px; }
+
+.o_vt_legend_name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.o_vt_legend_count {
+    color: #6c757d;
+}
+
+/* Nhãn luôn hiện của loại "nổi bật" (kho). Nền trong suốt, không viền: bản đồ đã đủ
+   rối, nhãn chỉ cần đọc được. */
+.o_vt_place_label {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-weight: 700;
+    font-size: 11px;
+    color: #212529;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+}
+
+.o_vt_place_label::before {
+    display: none;
+}

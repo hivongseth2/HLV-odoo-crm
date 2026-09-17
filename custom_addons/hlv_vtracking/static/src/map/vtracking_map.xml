@@ -52,6 +52,23 @@
 
             <section class="o_vt_main">
                 <div t-if="state.mapError" class="o_vt_maperror" t-esc="state.mapError"/>
+
+                <!-- Chú giải kiêm bộ lọc: bấm vào một loại là bật/tắt lớp đó. Đặt đè lên
+                     bản đồ thay vì trong cột trái để cột trái chỉ nói về xe. -->
+                <div t-if="state.placeTypes.length" class="o_vt_legend">
+                    <div class="o_vt_legend_title">Địa điểm</div>
+                    <div t-foreach="state.placeTypes" t-as="ptype" t-key="ptype.id"
+                         class="o_vt_legend_row"
+                         t-att-class="{ 'o_vt_legend_off': !isTypeVisible(ptype.id) }"
+                         t-on-click="() => this.togglePlaceType(ptype.id)">
+                        <span class="o_vt_legend_dot"
+                              t-att-class="'o_vt_legend_dot_' + ptype.size"
+                              t-attf-style="background: #{ptype.color}"/>
+                        <span class="o_vt_legend_name" t-esc="ptype.name"/>
+                        <span class="o_vt_legend_count" t-esc="placeCountOfType(ptype.id)"/>
+                    </div>
+                </div>
+
                 <div class="o_vt_map" t-ref="map"/>
             </section>
         </div>

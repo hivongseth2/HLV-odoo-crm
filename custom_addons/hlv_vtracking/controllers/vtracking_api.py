@@ -128,6 +128,41 @@ class VtrackingPublicAPI(http.Controller):
             'points': [self._ping_payload(ping) for ping in pings],
         })
 
+    @http.route('/api/v1/fleet/places', type='http', auth='public',
+                methods=['GET', 'OPTIONS'], csrf=False, save_session=False)
+    def list_places(self, **params):
+        """Địa điểm cố định trên bản đồ (kho, đối tác...) kèm cách hiển thị của từng loại.
+
+        Chỉ trả địa điểm ĐÃ có toạ độ: địa điểm chưa tra được là việc cần xử lý trong
+        Odoo, gửi ra ngoài thì ứng dụng cũng không vẽ được gì.
+
+        Tham số: ``type`` lọc theo mã loại (``code``), ``confirmed_only=1`` chỉ lấy toạ độ
+        đã duyệt hoặc nhập tay — dùng khi ứng dụng không muốn hiển thị phỏng đoán của máy.
+        """
+        preflight = self._preflight()
+        if preflight:
+            return preflight
+        api_key = self._authenticate()
+        if isinstance(api_key, Response):
+            return api_key
+
+        domain = [('has_coords', '=', True), ('company_id', '=', api_key.company_id.id)]
+        if params.get('type'):
+            domain.append(('type_id.code', '=', params['type']))
+        if params.get('confirmed_only') in ('1', 'true', 'True'):
+            domain.append(('geo_state', 'in', ('confirmed', 'manual')))
+
+        places = request.env['hlv.vtracking.place'].sudo().search(domain, order='type_id, name')
+        types = request.env['hlv.vtracking.place.type'].sudo().search([])
+        return self._ok({
+            'count': len(places),
+            'types': [{
+                'id': t.id, 'code': t.code or '', 'name': t.name,
+                'color': t.color, 'size': t.size,
+            } for t in types],
+            'places': [p._map_payload() for p in places],
+        })
+
     @http.route('/api/v1/fleet/map-config', type='http', auth='public',
                 methods=['GET', 'OPTIONS'], csrf=False, save_session=False)
     def map_config(self, **_params):

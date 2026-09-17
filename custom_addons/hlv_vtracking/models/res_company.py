@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 # Tile mặc định: OpenStreetMap. Không cần khoá API nên cài xong là bản đồ chạy được
@@ -64,6 +64,45 @@ class ResCompany(models.Model):
         string='Ghi công bản đồ', default=DEFAULT_TILE_ATTRIBUTION,
         help='Bắt buộc hiển thị theo điều khoản của hầu hết nhà cung cấp tile.',
     )
+
+    # --- Tra toạ độ ---------------------------------------------------------
+    # Hai ô dưới đây đọc/ghi thẳng tham số hệ thống của `base_geolocalize`, KHÔNG tạo
+    # tham số riêng: hai chỗ cùng giữ một khoá Google là kiểu lỗi mà người dùng đổi khoá
+    # ở chỗ này rồi không hiểu vì sao chỗ kia vẫn hỏng. Hệ quả phải chấp nhận: giá trị áp
+    # dụng TOÀN HỆ THỐNG, không riêng công ty đang mở.
+    geocode_provider = fields.Selection(
+        [('openstreetmap', 'OpenStreetMap (miễn phí, 1 lượt/giây)'),
+         ('googlemap', 'Google Maps (cần khoá API, tính tiền theo lượt)')],
+        string='Nhà cung cấp tra toạ độ',
+        compute='_compute_geocode_settings', inverse='_inverse_geocode_provider',
+        help='Áp dụng cho toàn hệ thống. Google tra tên doanh nghiệp tốt hơn hẳn, nên với '
+             'địa chỉ khu công nghiệp thì nên dùng Google.',
+    )
+    geocode_google_key = fields.Char(
+        string='Khoá API Google Maps',
+        compute='_compute_geocode_settings', inverse='_inverse_geocode_google_key',
+        help='Áp dụng cho toàn hệ thống (tham số base_geolocalize.google_map_api_key).',
+    )
+
+    @api.depends_context('uid')
+    def _compute_geocode_settings(self):
+        # Không phụ thuộc field nào của bản ghi — giá trị nằm ở tham số hệ thống.
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        provider = get_param('base_geolocalize.geo_provider') or 'openstreetmap'
+        key = get_param('base_geolocalize.google_map_api_key') or ''
+        for company in self:
+            company.geocode_provider = provider
+            company.geocode_google_key = key
+
+    def _inverse_geocode_provider(self):
+        set_param = self.env['ir.config_parameter'].sudo().set_param
+        for company in self:
+            set_param('base_geolocalize.geo_provider', company.geocode_provider or 'openstreetmap')
+
+    def _inverse_geocode_google_key(self):
+        set_param = self.env['ir.config_parameter'].sudo().set_param
+        for company in self:
+            set_param('base_geolocalize.google_map_api_key', company.geocode_google_key or '')
 
     # ------------------------------------------------------------------
     # Hành động
