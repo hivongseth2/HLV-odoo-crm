@@ -17,9 +17,22 @@ module nhìn thấy gì — không có tham số nào nới được nó, kể c
 
 ---
 
+## Quyền
+
+| Nhóm | Thấy được gì |
+|---|---|
+| **Xem bản đồ đội xe** (`group_vtracking_user`) | Menu V-Tracking, bản đồ, danh sách xe, lịch sử vị trí. Không sửa được gì |
+| **Quản trị V-Tracking** (`group_vtracking_manager`) | Thêm: bật/tắt theo dõi xe, cấu hình kết nối, cấp khoá API |
+
+Cấp ở **Cài đặt > Người dùng & Công ty > Người dùng**, mở user, mục **V-Tracking**.
+
+Tài khoản quản trị được gán nhóm quản trị sẵn lúc cài. Người khác thì **không tự có** —
+Odoo không tự thêm ai vào nhóm của module mới, nên ai không thấy menu V-Tracking là do
+chưa được cấp nhóm.
+
 ## Bật lần đầu
 
-1. Cài module. Menu **V-Tracking** xuất hiện.
+1. Cài module. Menu **V-Tracking** xuất hiện (với tài khoản đã có nhóm ở trên).
 2. **V-Tracking > Cấu hình > Kết nối vTracking**: điền địa chỉ máy chủ và API key do
    vTracking cấp, bấm **Kiểm tra kết nối**.
 3. **V-Tracking > Xe theo dõi**: bỏ bộ lọc "Đang theo dõi" để thấy cả đội, bật cột
@@ -100,6 +113,10 @@ Nguồn tile bản đồ, để ứng dụng ngoài vẽ cùng nền bản đồ
 ---
 
 ## Cấu trúc code
+
+Màn cấu hình là một form của **`res.company`**, không phải `res.config.settings`. Lý do:
+action của `res.config.settings` luôn được Odoo mở trong app Cài đặt và **thay chỗ trang
+Cài đặt chung** — bấm menu của module này lại làm mất màn hình cài đặt gốc.
 
 | Thư mục | Được làm gì | Không được làm gì |
 |---|---|---|

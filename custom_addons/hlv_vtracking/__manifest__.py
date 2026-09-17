@@ -33,9 +33,11 @@ xem plan/ke-hoach-module-vtracking.md.
         'views/fleet_vehicle_views.xml',
         'views/vtracking_position_views.xml',
         'views/vtracking_api_key_views.xml',
-        'views/res_config_settings_views.xml',
+        # Nạp trước menu: menu trỏ tới action khai trong file này.
+        'views/res_company_views.xml',
         'views/vtracking_menus.xml',
     ],
+    'post_init_hook': 'post_init_hook',
     'assets': {
         # Thứ tự quan trọng: util thuần -> bộ nạp thư viện -> component dùng cả hai.
         'web.assets_backend': [

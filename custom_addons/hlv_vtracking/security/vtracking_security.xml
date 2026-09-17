@@ -20,6 +20,15 @@
         <field name="comment">Cấu hình kết nối vTracking, bật/tắt theo dõi xe, cấp khoá API.</field>
     </record>
 
+    <!-- Gán quản trị viên vào nhóm quản trị ngay lúc cài, nếu không thì cài xong không ai
+         thấy menu V-Tracking và không rõ vì sao. noupdate="1" để lần nâng cấp module sau
+         không gán lại nhóm mà người ta đã cố ý bỏ. -->
+    <data noupdate="1">
+        <record id="base.user_admin" model="res.users">
+            <field name="groups_id" eval="[(4, ref('hlv_vtracking.group_vtracking_manager'))]"/>
+        </record>
+    </data>
+
     <record id="rule_vtracking_position_company" model="ir.rule">
         <field name="name">Bản tin vị trí theo công ty</field>
         <field name="model_id" ref="model_hlv_vtracking_position"/>

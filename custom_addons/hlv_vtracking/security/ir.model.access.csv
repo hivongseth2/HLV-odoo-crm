@@ -4,3 +4,4 @@ access_vtracking_position_manager,vtracking.position.manager,model_hlv_vtracking
 access_vtracking_api_key_manager,vtracking.api.key.manager,model_hlv_vtracking_api_key,hlv_vtracking.group_vtracking_manager,1,1,1,1
 access_fleet_vehicle_vtracking_user,fleet.vehicle.vtracking.user,fleet.model_fleet_vehicle,hlv_vtracking.group_vtracking_user,1,0,0,0
 access_fleet_vehicle_vtracking_manager,fleet.vehicle.vtracking.manager,fleet.model_fleet_vehicle,hlv_vtracking.group_vtracking_manager,1,1,0,0
+access_res_company_vtracking_manager,res.company.vtracking.manager,base.model_res_company,hlv_vtracking.group_vtracking_manager,1,1,0,0
