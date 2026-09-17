@@ -47,6 +47,25 @@ def tracked_vehicles(env, company=None):
     return env['fleet.vehicle'].sudo().search(domain)
 
 
+def fetch_remote_vehicles(env, company=None):
+    """TOÀN BỘ xe trên tài khoản vTracking, đã bóc sẵn thành dict phẳng.
+
+    Khác ``sync_vehicles`` ở chỗ không lọc theo xe đã khai trong Odoo: đây là nguồn cho
+    màn nhập xe, mà mục đích của màn đó chính là thấy những xe Odoo **chưa** có.
+
+    Xe trùng biển số trong chính phản hồi của vTracking chỉ giữ bản ghi đầu — nếu không,
+    màn nhập sẽ mời người dùng tạo hai xe cùng biển.
+    """
+    company = company or env.company
+    client = get_client(company)
+    by_key = {}
+    for raw in client.iter_vehicles(expand=company.vtracking_expand_children):
+        parsed = parse_vehicle(raw)
+        if parsed and parsed['plate_key'] not in by_key:
+            by_key[parsed['plate_key']] = parsed
+    return list(by_key.values())
+
+
 def sync_vehicles(env, company=None):
     """Kéo vị trí hiện tại của các xe đang theo dõi về ``fleet.vehicle``.
 

@@ -35,8 +35,11 @@ chưa được cấp nhóm.
 1. Cài module. Menu **V-Tracking** xuất hiện (với tài khoản đã có nhóm ở trên).
 2. **V-Tracking > Cấu hình > Kết nối vTracking**: điền địa chỉ máy chủ và API key do
    vTracking cấp, bấm **Kiểm tra kết nối**.
-3. **V-Tracking > Xe theo dõi**: bỏ bộ lọc "Đang theo dõi" để thấy cả đội, bật cột
-   **Theo dõi vTracking** cho xe cần giám sát.
+3. Khai xe, theo một trong hai cách:
+   - **V-Tracking > Nhập xe từ vTracking** — tạo xe thẳng từ danh sách trên tài khoản
+     vTracking. Nhanh nhất khi Đội xe còn trống. Xem mục *Nhập xe* bên dưới.
+   - **V-Tracking > Xe theo dõi** — nếu xe đã khai sẵn trong Đội xe: bỏ bộ lọc "Đang theo
+     dõi" để thấy cả đội, rồi bật cột **Theo dõi vTracking** cho xe cần giám sát.
 4. Mở một xe bất kỳ, bấm **Đồng bộ ngay**. Thông báo sẽ nói rõ xe nào ghép được, biển số
    nào có trên vTracking mà chưa khai trong Đội xe, và xe nào khai rồi mà vTracking không
    trả về.
@@ -66,15 +69,56 @@ miền cũng không cứu được.
 nhận là không xác thực được máy chủ. Đồng thời yêu cầu vTracking gia hạn chứng chỉ và cấp
 một tên miền — khi họ làm xong thì bật lại.
 
-### Nếu báo HTTP 403 kèm chữ "nginx"
+### Nếu báo HTTP 403
 
-Phản hồi đó đến từ **proxy**, không phải từ ứng dụng vTracking (ứng dụng từ chối key thì
-trả JSON). Thường là IP public của máy chủ Odoo chưa nằm trong danh sách cho phép của
-vTracking. Đổi API key bao nhiêu lần cũng vô ích — phải hỏi vTracking về whitelist IP.
+Gần như luôn là **API key sai** — hay gặp nhất là key bị cắt mất đuôi khi sao chép.
 
-Module phân biệt sẵn hai trường hợp này và nói rõ nên đi hỏi phía nào.
+Đừng suy ra "bị proxy chặn IP" chỉ vì thân phản hồi là trang HTML của nginx: backend trả
+403 với thân rỗng và nginx thay bằng trang lỗi mặc định của nó, nên nhìn thân phản hồi
+không biết được ai từ chối.
+
+Phép thử phân biệt: gọi một path bịa đặt.
+
+```bash
+curl -sS -k -o /dev/null -w 'HTTP %{http_code}\n' 'https://171.229.16.202:8443/khong-ton-tai'
+```
+
+- Ra mã **khác 403** (đo được 503 ngày 17/09/2026) → proxy không chặn IP, vấn đề là key.
+- Ra **403** y như request thật → lúc đó mới là bị chặn ở lớp proxy, đi hỏi whitelist IP.
 
 ---
+
+## Nhập xe từ vTracking
+
+**V-Tracking > Nhập xe từ vTracking.** Màn hình gọi vTracking lấy toàn bộ xe của tài
+khoản, rồi cho biết xe nào Odoo đã có, xe nào chưa. Tick xe muốn tạo và bấm **Tạo xe đã
+chọn**.
+
+### Chống trùng
+
+Đối chiếu bằng **biển số đã chuẩn hoá** (bỏ hết ký tự không phải chữ/số, viết hoa), không
+bằng chuỗi thô. `60D-00750`, `60D00750`, `60d 00750`, `60D.00750` đều ra cùng một khoá
+`60D00750` nên được coi là một xe.
+
+Kiểm ở ba chỗ, vì mỗi chỗ bắt một kiểu trùng khác nhau:
+
+| Chỗ kiểm | Bắt được gì |
+|---|---|
+| Lúc dựng danh sách | Xe đã có trong Đội xe — dòng bị khoá, không tick được |
+| Ngay trước khi ghi | Xe do **người khác vừa tạo** trong lúc màn hình đang mở |
+| Trong vòng lặp tạo | Hai dòng cùng biển số trong chính phản hồi của vTracking |
+
+Xe đang nằm trong **lưu trữ** (archived) cũng tính là đã có: tạo thêm một chiếc nữa rồi
+mới phát hiện bản cũ trong thùng lưu trữ còn tệ hơn là không tạo được.
+
+### Dòng xe
+
+`fleet.vehicle.model_id` là bắt buộc trong Odoo. Chọn dòng xe ở đầu màn hình để áp cho mọi
+xe tạo mới; để trống thì module dùng dòng **"Chưa rõ / Chưa phân loại"** (tự tạo lần đầu)
+để luồng không bế tắc khi Đội xe chưa khai dòng xe nào. Sửa lại trên từng xe sau cũng được.
+
+Tạo xong, module gọi đồng bộ một lượt để điền vị trí ngay — trừ khi bạn tắt **Bật theo dõi
+cho xe tạo mới**.
 
 ## Bản đồ
 

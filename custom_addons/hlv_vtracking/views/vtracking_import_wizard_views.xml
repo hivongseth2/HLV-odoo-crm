@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_import_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.import.wizard.form</field>
+        <field name="model">hlv.vtracking.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Nhập xe từ vTracking">
+                <div class="alert alert-info" role="alert">
+                    Đối chiếu theo <strong>biển số đã chuẩn hoá</strong> (bỏ gạch, chấm,
+                    khoảng trắng), nên <code>60D-00750</code> và <code>60D00750</code> được
+                    coi là cùng một xe. Xe đã có trong Đội xe không tạo lại được, kể cả xe
+                    đang nằm trong lưu trữ.
+                </div>
+                <group>
+                    <group>
+                        <field name="model_id" options="{'no_create_edit': True}"/>
+                        <field name="enable_tracking"/>
+                    </group>
+                    <group>
+                        <field name="new_count"/>
+                        <field name="exists_count"/>
+                        <field name="selected_count"/>
+                    </group>
+                </group>
+                <div class="mb-2">
+                    <button name="action_select_all_new" type="object" string="Chọn hết xe chưa có"
+                            class="btn-link"/>
+                    <button name="action_unselect_all" type="object" string="Bỏ chọn tất cả"
+                            class="btn-link"/>
+                    <button name="action_reload" type="object" string="Tải lại từ vTracking"
+                            class="btn-link"/>
+                </div>
+                <field name="line_ids" nolabel="1">
+                    <list create="0" delete="0" editable="bottom"
+                          decoration-muted="state == 'exists'">
+                        <field name="state" readonly="1"/>
+                        <field name="license_plate" readonly="1"/>
+                        <field name="vehicle_name" readonly="1"/>
+                        <field name="org_name" readonly="1" optional="hide"/>
+                        <field name="remote_status" readonly="1" optional="show"/>
+                        <field name="existing_vehicle_id" readonly="1"/>
+                        <field name="to_create" readonly="state == 'exists'"/>
+                        <field name="plate_key" readonly="1" optional="hide"/>
+                        <field name="vtracking_id" readonly="1" optional="hide"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_create_vehicles" type="object" string="Tạo xe đã chọn"
+                            class="btn-primary"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Server action vì việc mở màn hình phải gọi vTracking trước để dựng danh sách. -->
+    <record id="action_vtracking_import_vehicles" model="ir.actions.server">
+        <field name="name">Nhập xe từ vTracking</field>
+        <field name="model_id" ref="model_hlv_vtracking_import_wizard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_import()</field>
+    </record>
+
+</odoo>

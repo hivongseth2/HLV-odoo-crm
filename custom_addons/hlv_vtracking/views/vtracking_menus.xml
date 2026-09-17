@@ -18,6 +18,10 @@
     <menuitem id="menu_vtracking_vehicles" name="Xe theo dõi"
               parent="menu_vtracking_root" action="action_vtracking_vehicles" sequence="20"/>
 
+    <menuitem id="menu_vtracking_import" name="Nhập xe từ vTracking"
+              parent="menu_vtracking_root" action="action_vtracking_import_vehicles"
+              sequence="25" groups="hlv_vtracking.group_vtracking_manager"/>
+
     <menuitem id="menu_vtracking_positions" name="Lịch sử vị trí"
               parent="menu_vtracking_root" action="action_vtracking_position" sequence="30"/>
 

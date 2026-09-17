@@ -163,26 +163,25 @@ class VTrackingClient:
 
     @staticmethod
     def _auth_error_message(response):
-        """Câu giải thích cho 401/403 — phân biệt bị proxy chặn với bị ứng dụng từ chối.
+        """Câu giải thích cho 401/403.
 
-        Đo được ngày 17/09/2026: gọi bằng key sai trả về HTML 403 của **nginx**, không
-        phải JSON của ứng dụng. Khi cái chặn là proxy chứ không phải ứng dụng thì đổi key
-        bao nhiêu lần cũng vô ích — thường là máy chủ Odoo chưa nằm trong whitelist IP.
-        Phân biệt được hai trường hợp này giúp khỏi mất buổi đi dò nhầm phía.
+        KHÔNG suy ra "bị proxy chặn" từ việc thân phản hồi là HTML của nginx: đo ngày
+        17/09/2026 cho thấy backend trả 403 với thân rỗng và nginx thay bằng trang lỗi
+        mặc định của nó, nên nhìn thân phản hồi không phân biệt được ai từ chối. Phép thử
+        đúng là gọi một path bịa đặt — nếu ra mã KHÁC 403 (đo được 503) thì proxy không
+        chặn IP, và 403 là do key.
+
+        Vì vậy nêu nguyên nhân nhiều khả năng nhất trước, nguyên nhân hiếm sau, thay vì
+        đoán chắc một phía rồi chỉ sai hướng.
         """
         body = (response.text or '').strip()
-        blocked_by_proxy = 'nginx' in body.lower() or body.lower().startswith('<html')
-        if blocked_by_proxy:
-            return (
-                'vTracking trả HTTP %s và phản hồi đến từ máy chủ proxy (nginx), không phải '
-                'từ ứng dụng vTracking. Thường là địa chỉ IP của máy chủ Odoo chưa được '
-                'vTracking cho vào danh sách cho phép. Hãy hỏi vTracking xem API key có bị '
-                'khoá theo IP không, và báo cho họ IP public của máy chủ Odoo.'
-                % response.status_code
-            )
+        # Thân HTML là trang lỗi mặc định của web server, không mang thông tin gì.
+        detail = '' if body.lower().startswith('<html') else ' Chi tiết: %s' % body[:200]
         return (
             'vTracking từ chối API key (HTTP %s). Kiểm tra lại giá trị đã dán vào ô "API key '
-            'vTracking". Chi tiết: %s' % (response.status_code, body[:200])
+            'vTracking" — nhất là key bị cắt mất phần đuôi khi sao chép. Nếu chắc chắn key '
+            'đúng thì hỏi vTracking xem key có bị khoá theo IP không, và báo cho họ IP '
+            'public của máy chủ Odoo.%s' % (response.status_code, detail)
         )
 
     def _request(self, method, path, params=None, json_body=None):

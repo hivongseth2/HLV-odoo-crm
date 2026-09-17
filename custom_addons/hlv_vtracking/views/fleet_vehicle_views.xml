@@ -131,6 +131,11 @@
                 "Theo dõi vTracking" cho những xe cần giám sát. Chỉ xe bật cờ này mới được
                 đồng bộ vị trí, hiện trên bản đồ và trả ra API.
             </p>
+            <p>
+                Chưa khai xe nào trong Đội xe? Dùng
+                <em>V-Tracking &gt; Nhập xe từ vTracking</em> để tạo xe thẳng từ danh sách
+                trên tài khoản vTracking.
+            </p>
         </field>
     </record>
 
