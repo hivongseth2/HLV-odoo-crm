@@ -1,0 +1,140 @@
+/* Bản đồ đội xe — danh sách bên trái, bản đồ chiếm phần còn lại.
+   Chiều cao lấy 100% của khung action nên bản đồ luôn vừa màn hình, không sinh thanh cuộn
+   lồng nhau (bản đồ có thanh cuộn riêng thì cuộn chuột sẽ zoom nhầm). */
+
+.o_vt_screen {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    background: #ffffff;
+}
+
+.o_vt_side {
+    width: 320px;
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #dee2e6;
+    min-height: 0;
+}
+
+.o_vt_side_head {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.o_vt_side_meta {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.o_vt_list {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.o_vt_empty {
+    padding: 16px;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.o_vt_item {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-bottom: 1px solid #f1f3f5;
+    cursor: pointer;
+}
+
+.o_vt_item:hover {
+    background: #f8f9fa;
+}
+
+.o_vt_item_active {
+    background: #e7f1ff;
+}
+
+.o_vt_item_body {
+    min-width: 0;
+}
+
+.o_vt_item_name {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.o_vt_item_sub {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.o_vt_muted {
+    color: #6c757d;
+}
+
+.o_vt_alarm {
+    display: inline-block;
+    margin-left: 6px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 50%;
+    background: #dc3545;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Chấm trạng thái phải trùng màu với ghim trên bản đồ — đổi một chỗ thì đổi cả hai,
+   nếu không danh sách và bản đồ sẽ nói hai điều khác nhau về cùng một xe.
+   Nguồn màu: static/src/map/vtracking_map_utils.js */
+.o_vt_dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex: 0 0 10px;
+    background: #6b7280;
+}
+
+.o_vt_dot_run { background: #0d9488; }
+.o_vt_dot_stop { background: #f59e0b; }
+.o_vt_dot_park { background: #2563eb; }
+.o_vt_dot_offline { background: #9ca3af; }
+.o_vt_dot_badgps { background: #a855f7; }
+.o_vt_dot_stale { background: #9ca3af; }
+
+.o_vt_main {
+    flex: 1 1 auto;
+    position: relative;
+    min-width: 0;
+}
+
+.o_vt_map {
+    position: absolute;
+    inset: 0;
+}
+
+.o_vt_maperror {
+    position: absolute;
+    z-index: 500;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    padding: 10px 12px;
+    background: #fff3cd;
+    border: 1px solid #ffe69c;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.o_vt_popup_title {
+    font-weight: 700;
+    margin-bottom: 4px;
+}

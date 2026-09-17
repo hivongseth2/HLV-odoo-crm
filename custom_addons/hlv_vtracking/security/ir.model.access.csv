@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_vtracking_position_user,vtracking.position.user,model_hlv_vtracking_position,hlv_vtracking.group_vtracking_user,1,0,0,0
+access_vtracking_position_manager,vtracking.position.manager,model_hlv_vtracking_position,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_api_key_manager,vtracking.api.key.manager,model_hlv_vtracking_api_key,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_fleet_vehicle_vtracking_user,fleet.vehicle.vtracking.user,fleet.model_fleet_vehicle,hlv_vtracking.group_vtracking_user,1,0,0,0
+access_fleet_vehicle_vtracking_manager,fleet.vehicle.vtracking.manager,fleet.model_fleet_vehicle,hlv_vtracking.group_vtracking_manager,1,1,0,0

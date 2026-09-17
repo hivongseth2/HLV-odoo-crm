@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Vị trí hiện tại. 10 phút: một request cho cả đội nên tốn rất ít, nhưng ngắn
+             hơn cũng không làm dữ liệu tươi hơn vì thiết bị gửi thưa khi xe đỗ. -->
+        <record id="cron_vtracking_sync_vehicles" model="ir.cron">
+            <field name="name">V-Tracking: cập nhật vị trí đội xe</field>
+            <field name="model_id" ref="fleet.model_fleet_vehicle"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_vtracking_sync_vehicles()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <!-- Hành trình ngày hôm trước. Chạy sau nửa đêm để ngày đã khép lại: lấy hành
+             trình của ngày đang chạy thì lần nào cũng thiếu phần cuối ngày. -->
+        <record id="cron_vtracking_fetch_journeys" model="ir.cron">
+            <field name="name">V-Tracking: kéo hành trình ngày hôm trước</field>
+            <field name="model_id" ref="fleet.model_fleet_vehicle"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_vtracking_fetch_journeys()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <record id="cron_vtracking_gc_positions" model="ir.cron">
+            <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
+            <field name="model_id" ref="model_hlv_vtracking_position"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_gc_positions()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

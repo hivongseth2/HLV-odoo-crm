@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hlv_vtracking.Map">
+        <div class="o_vt_screen">
+            <aside class="o_vt_side">
+                <div class="o_vt_side_head">
+                    <input type="search" class="form-control form-control-sm"
+                           placeholder="Tìm biển số, tài xế, vị trí…"
+                           t-on-input="onSearchInput"/>
+                    <div class="o_vt_side_meta">
+                        <span t-esc="locatedCount"/> / <span t-esc="state.vehicles.length"/> xe có toạ độ
+                        <span t-if="state.lastRefresh" class="o_vt_muted">
+                            · cập nhật <t t-esc="state.lastRefresh.toLocaleTimeString()"/>
+                        </span>
+                    </div>
+                </div>
+
+                <div t-if="state.loading" class="o_vt_empty">Đang tải…</div>
+
+                <div t-else="" class="o_vt_list">
+                    <div t-if="!visibleVehicles.length" class="o_vt_empty">
+                        Không có xe nào. Bật "Theo dõi vTracking" trên xe trong Đội xe để xe
+                        hiện ở đây.
+                    </div>
+                    <div t-foreach="visibleVehicles" t-as="vehicle" t-key="vehicle.id"
+                         class="o_vt_item"
+                         t-att-class="{ 'o_vt_item_active': vehicle.id === state.selectedId }"
+                         t-on-click="() => this.selectVehicle(vehicle.id)">
+                        <span t-att-class="statusClass(vehicle)"/>
+                        <div class="o_vt_item_body">
+                            <div class="o_vt_item_name">
+                                <t t-esc="vehicle.name"/>
+                                <span t-if="vehicle.alarm_text" class="o_vt_alarm"
+                                      t-att-title="vehicle.alarm_text">!</span>
+                            </div>
+                            <div class="o_vt_item_sub">
+                                <t t-esc="vehicle.status_label"/>
+                                <t t-if="vehicle.status === 'run'">
+                                    · <t t-esc="formatSpeed(vehicle.speed)"/>
+                                </t>
+                            </div>
+                            <div class="o_vt_item_sub o_vt_muted" t-esc="vehicle.geocoding"/>
+                            <div class="o_vt_item_sub o_vt_muted">
+                                <t t-esc="formatAgo(vehicle.position_at)"/>
+                                <t t-if="!vehicle.latitude"> · chưa có toạ độ</t>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="o_vt_main">
+                <div t-if="state.mapError" class="o_vt_maperror" t-esc="state.mapError"/>
+                <div class="o_vt_map" t-ref="map"/>
+            </section>
+        </div>
+    </t>
+
+</templates>

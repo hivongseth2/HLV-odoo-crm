@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_vtracking_map" model="ir.actions.client">
+        <field name="name">Bản đồ đội xe</field>
+        <field name="tag">hlv_vtracking_map</field>
+    </record>
+
+    <!-- Không khai web_icon: chưa có file icon nên khai vào chỉ sinh cảnh báo lúc nạp
+         module. Thêm khi nào có icon thật. -->
+    <menuitem id="menu_vtracking_root" name="V-Tracking"
+              sequence="90"
+              groups="hlv_vtracking.group_vtracking_user"/>
+
+    <menuitem id="menu_vtracking_map" name="Bản đồ đội xe"
+              parent="menu_vtracking_root" action="action_vtracking_map" sequence="10"/>
+
+    <menuitem id="menu_vtracking_vehicles" name="Xe theo dõi"
+              parent="menu_vtracking_root" action="action_vtracking_vehicles" sequence="20"/>
+
+    <menuitem id="menu_vtracking_positions" name="Lịch sử vị trí"
+              parent="menu_vtracking_root" action="action_vtracking_position" sequence="30"/>
+
+    <menuitem id="menu_vtracking_config" name="Cấu hình"
+              parent="menu_vtracking_root" sequence="90"
+              groups="hlv_vtracking.group_vtracking_manager"/>
+
+    <menuitem id="menu_vtracking_settings" name="Kết nối vTracking"
+              parent="menu_vtracking_config" action="action_vtracking_config_settings"
+              sequence="10"/>
+
+    <menuitem id="menu_vtracking_api_keys" name="Khoá API"
+              parent="menu_vtracking_config" action="action_vtracking_api_key"
+              sequence="20"/>
+
+</odoo>
