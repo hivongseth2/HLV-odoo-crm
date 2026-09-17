@@ -9,18 +9,22 @@
                 <group>
                     <group>
                         <field name="source_type" widget="radio"/>
-                        <field name="mode" widget="radio"/>
+                        <!-- Mở từ trong một kế hoạch thì không có gì để chọn: chứng từ
+                             chỉ có thể xếp vào chính kế hoạch đang mở. -->
+                        <field name="plan_locked" invisible="1"/>
+                        <field name="mode" widget="radio" invisible="plan_locked"/>
                     </group>
                     <group>
                         <field name="plan_id" options="{'no_create': True}"
                                invisible="mode != 'existing'"
+                               readonly="plan_locked"
                                required="mode == 'existing'"/>
                         <field name="vehicle_id" options="{'no_create': True}"
-                               invisible="mode != 'new'" required="mode == 'new'"/>
-                        <field name="date" invisible="mode != 'new'" required="mode == 'new'"/>
-                        <field name="session" invisible="mode != 'new'" required="mode == 'new'"/>
+                               invisible="mode != 'new' or plan_locked" required="mode == 'new'"/>
+                        <field name="date" invisible="mode != 'new' or plan_locked" required="mode == 'new'"/>
+                        <field name="session" invisible="mode != 'new' or plan_locked" required="mode == 'new'"/>
                         <field name="start_place_id" options="{'no_create': True}"
-                               invisible="mode != 'new'"/>
+                               invisible="mode != 'new' or plan_locked"/>
                         <field name="warehouse_id" readonly="1"/>
                         <field name="filter_by_warehouse" invisible="not warehouse_id"/>
                     </group>
@@ -54,6 +58,9 @@
                         <list create="0">
                             <field name="name" string="Đơn bán"/>
                             <field name="partner_id"/>
+                            <field name="delivery_status" string="Giao hàng" widget="badge"
+                                   decoration-warning="delivery_status == 'partial'"
+                                   decoration-info="delivery_status in ('pending', 'started')"/>
                             <field name="commitment_date" widget="date"/>
                             <field name="warehouse_id"/>
                             <field name="amount_total" widget="monetary"/>
@@ -116,6 +123,9 @@
             <list string="Chọn đơn bán" create="0" default_order="commitment_date desc, id desc">
                 <field name="name" string="Đơn bán"/>
                 <field name="partner_id"/>
+                <field name="delivery_status" string="Giao hàng" widget="badge"
+                       decoration-warning="delivery_status == 'partial'"
+                       decoration-info="delivery_status in ('pending', 'started')"/>
                 <field name="commitment_date" string="Hẹn giao" widget="date"/>
                 <field name="warehouse_id" string="Kho"/>
                 <field name="vtracking_plan_id" string="Đã xếp xe"/>

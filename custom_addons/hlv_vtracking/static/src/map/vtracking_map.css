@@ -167,6 +167,44 @@
     color: #b45309;
 }
 
+/* Danh sách điểm giao trong popup. Bỏ bullet và thụt lề mặc định của <ul> vì popup hẹp,
+   mỗi ký tự ngang đều đáng giá. */
+.o_vt_plan_lines {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    border-top: 1px dotted #dee2e6;
+}
+
+.o_vt_plan_lines li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 3px 0;
+    border-bottom: 1px dotted #f1f3f5;
+}
+
+.o_vt_line_no {
+    color: #6c757d;
+    flex: 0 0 auto;
+}
+
+.o_vt_line_main {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.o_vt_line_amount {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.o_vt_line_flags {
+    flex: 1 0 100%;
+    font-size: 11px;
+}
+
 /* Chip lọc kiêm chú giải màu, nằm trong cột trái. */
 .o_vt_chips {
     display: flex;

@@ -9,6 +9,23 @@ from ..tools.vtracking_address import address_key, normalize_address
 
 _logger = logging.getLogger(__name__)
 
+# Khung toạ độ Việt Nam (rộng rãi, có kể cả đảo). Kết quả rơi ra ngoài khung này gần như
+# luôn là geocoder khớp nhầm sang một nước khác — địa chỉ tiếng Việt viết tắt rất dễ bị
+# hiểu thành tên đường ở nước ngoài. Một điểm sai kiểu đó làm quãng đường cả kế hoạch nhảy
+# lên hàng nghìn km mà không ai biết vì sao, nên phải chặn ngay chỗ này.
+VN_LAT_MIN, VN_LAT_MAX = 8.0, 23.6
+VN_LNG_MIN, VN_LNG_MAX = 102.0, 110.0
+
+
+def is_inside_vietnam(latitude, longitude):
+    """Toạ độ có nằm trong khung Việt Nam không. Hàm thuần, dùng để lọc kết quả geocode."""
+    if latitude is None or longitude is None:
+        return False
+    return (
+        VN_LAT_MIN <= latitude <= VN_LAT_MAX
+        and VN_LNG_MIN <= longitude <= VN_LNG_MAX
+    )
+
 
 class HlvVtrackingAddress(models.Model):
     """Kho toạ độ đã tra, tra theo địa chỉ chữ.
@@ -42,6 +59,11 @@ class HlvVtrackingAddress(models.Model):
     latitude = fields.Float(string='Vĩ độ', digits=(10, 7))
     longitude = fields.Float(string='Kinh độ', digits=(10, 7))
     has_coords = fields.Boolean(compute='_compute_has_coords', store=True)
+    outside_vietnam = fields.Boolean(
+        compute='_compute_has_coords', store=True, string='Ngoài Việt Nam',
+        help='Toạ độ nằm ngoài khung Việt Nam — gần như luôn là geocoder khớp nhầm. Một '
+             'điểm như vậy đủ để quãng đường cả kế hoạch nhảy lên hàng nghìn km.',
+    )
     geo_state = fields.Selection(
         [
             ('pending_review', 'Máy tra — chờ duyệt'),
@@ -82,6 +104,9 @@ class HlvVtrackingAddress(models.Model):
     def _compute_has_coords(self):
         for record in self:
             record.has_coords = bool(record.latitude) and bool(record.longitude)
+            record.outside_vietnam = record.has_coords and not is_inside_vietnam(
+                record.latitude, record.longitude,
+            )
 
     # ------------------------------------------------------------------
     # Đường vào duy nhất
@@ -159,6 +184,24 @@ class HlvVtrackingAddress(models.Model):
                     'geo_state': 'failed',
                     'geo_raw_result': 'Không tìm thấy toạ độ cho: %s' % address,
                 })
+                continue
+            if not is_inside_vietnam(result[0], result[1]):
+                # Không lưu toạ độ này: giữ lại thì nó lặng lẽ chui vào phép tính quãng
+                # đường và làm hỏng cả kế hoạch. Thà để trống rồi dán tay.
+                record.write({
+                    'geo_state': 'failed',
+                    'geo_raw_result': (
+                        'Toạ độ tra được (%s, %s) nằm NGOÀI Việt Nam — nhà cung cấp đã khớp '
+                        'nhầm sang nơi khác. Địa chỉ gửi đi: %s\n'
+                        'Hãy sửa địa chỉ cho đầy đủ hơn (thêm tỉnh/thành, "Việt Nam") rồi '
+                        'tra lại, hoặc dán toạ độ tay từ Google Maps.'
+                        % (result[0], result[1], address)
+                    ),
+                })
+                _logger.warning(
+                    'V-Tracking: geocode trả toạ độ ngoài VN (%s, %s) cho "%s".',
+                    result[0], result[1], address,
+                )
                 continue
             record.write({
                 'latitude': result[0],

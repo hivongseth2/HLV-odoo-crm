@@ -30,6 +30,11 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
         [('existing', 'Kế hoạch có sẵn'), ('new', 'Tạo kế hoạch mới')],
         default='new', required=True, string='Xếp vào',
     )
+    plan_locked = fields.Boolean(
+        readonly=True,
+        help='True khi mở từ bên trong một kế hoạch: lúc đó không có gì để chọn, chứng từ '
+             'chỉ có thể xếp vào chính kế hoạch đang mở.',
+    )
     plan_id = fields.Many2one(
         'hlv.vtracking.plan', string='Kế hoạch',
         domain="[('state', 'in', ('draft', 'confirmed'))]",
@@ -43,7 +48,10 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
         string='Buổi', default='morning',
     )
     start_place_id = fields.Many2one(
-        'hlv.vtracking.place', string='Xuất phát từ', domain="[('has_coords', '=', True)]",
+        'hlv.vtracking.place', string='Xuất phát từ',
+        domain="[('has_coords', '=', True), ('warehouse_id', '!=', False)]",
+        help='Chỉ chọn được địa điểm đã gắn với một kho trong Odoo — xe luôn xuất phát từ '
+             'kho, và phải biết là kho nào thì mới lọc được chứng từ của đúng kho đó.',
     )
     warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho xuất phát', compute='_compute_warehouse_id',
@@ -73,10 +81,19 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     # ------------------------------------------------------------------
     # Compute
     # ------------------------------------------------------------------
-    @api.depends('mode', 'plan_id', 'start_place_id')
+    @api.depends('mode', 'plan_id', 'plan_id.start_place_id', 'start_place_id')
     def _compute_warehouse_id(self):
+        """Kho làm mốc để lọc chứng từ.
+
+        Khi xếp vào kế hoạch có sẵn thì mốc là kho của CHÍNH kế hoạch đó — điểm xuất phát
+        đã chọn ở ngoài, hỏi lại trong này là thừa và còn tạo ra khả năng khai hai giá trị
+        khác nhau cho cùng một chuyến.
+        """
         for wizard in self:
-            place = wizard.plan_id.start_place_id if wizard.mode == 'existing' else wizard.start_place_id
+            if wizard.mode == 'existing' or wizard.plan_locked:
+                place = wizard.plan_id.start_place_id
+            else:
+                place = wizard.start_place_id
             wizard.warehouse_id = place.warehouse_id.id or False
 
     @api.depends('warehouse_id', 'filter_by_warehouse')
@@ -92,8 +109,11 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
                 ('state', '=', 'assigned'),
                 ('plan_id', '=', False),
             ]
+            # Đơn đã giao đủ hoặc đã huỷ thì không còn gì để xếp lên xe. `delivery_status`
+            # là trạng thái giao của Odoo: pending / started / partial / full.
             sale_domain = [
-                ('state', 'in', ('sale', 'done')),
+                ('state', '=', 'sale'),
+                ('delivery_status', '!=', 'full'),
                 ('vtracking_plan_id', '=', False),
             ]
             if wizard.filter_by_warehouse and wizard.warehouse_id:
@@ -143,7 +163,9 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
             values['source_type'] = 'sale'
             values['sale_order_ids'] = [fields.Command.set(active_ids)]
         if self.env.context.get('default_plan_id'):
+            # Mở từ bên trong một kế hoạch: khoá luôn đích đến, không hỏi lại.
             values['mode'] = 'existing'
+            values['plan_locked'] = True
         return values
 
     # ------------------------------------------------------------------

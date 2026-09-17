@@ -310,5 +310,18 @@ class HlvVtrackingPlan(models.Model):
                 'actual_line_count': plan.actual_line_count,
                 'actual_amount_total': plan.actual_amount_total,
                 'actual_distance_km': plan.actual_distance_km,
+                # Danh sách chứng từ theo đúng thứ tự ghé: bấm vào xe là phải biết nó
+                # đang phải giao NHỮNG GÌ, không chỉ giao BAO NHIÊU.
+                'lines': [{
+                    'id': line.id,
+                    'reference': line.display_reference,
+                    'source_name': line.source_name or '',
+                    'partner_name': line.partner_id.display_name or '',
+                    'address': line.address or '',
+                    'amount': line.amount,
+                    'waiting_picking': line.line_state == 'waiting_picking',
+                    'has_coords': line.has_coords,
+                    'delivered': line.delivered,
+                } for line in plan.line_ids.sorted(lambda l: (l.sequence, l.id))],
             })
         return result

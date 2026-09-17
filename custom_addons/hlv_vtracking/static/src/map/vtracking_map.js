@@ -227,7 +227,9 @@ export class VtrackingMap extends Component {
             // bindTooltip/bindPopup gọi lại mỗi lượt làm tươi để nội dung đổi theo dữ
             // liệu mới; Leaflet thay nội dung cũ chứ không chồng thêm.
             marker.bindTooltip(vehicle.name);
-            marker.bindPopup(this.popupHtml(vehicle));
+            // Rộng và cao hơn mặc định vì popup chứa cả danh sách điểm giao; maxHeight
+            // để Leaflet tự cho cuộn thay vì đẩy popup tràn khỏi màn hình.
+            marker.bindPopup(this.popupHtml(vehicle), { maxWidth: 360, maxHeight: 420 });
         }
 
         // Xe bị tắt theo dõi giữa chừng phải biến mất khỏi bản đồ, nếu không ghim sẽ đứng
@@ -270,8 +272,10 @@ export class VtrackingMap extends Component {
 
     onePlanHtml(plan) {
         const money = (value) => (value || 0).toLocaleString("vi-VN");
+        const stateLabel =
+            { draft: "nháp", confirmed: "đã chốt", done: "xong" }[plan.state] || plan.state;
         const warn = plan.missing_coords_count
-            ? `<div class="o_vt_plan_warn">${plan.missing_coords_count} phiếu chưa có toạ độ — km đang thiếu</div>`
+            ? `<div class="o_vt_plan_warn">${plan.missing_coords_count} điểm chưa có toạ độ — km đang thiếu</div>`
             : "";
         // Phần thực tế luôn hiện, kể cả khi chưa có số: người xem phải thấy được rằng
         // "kế hoạch 12 đơn" chưa nói gì về việc đã giao mấy đơn.
@@ -282,18 +286,52 @@ export class VtrackingMap extends Component {
             : `<div class="o_vt_plan_pending">Thực tế: chưa nối module shipper</div>`;
         return `
             <div class="o_vt_plan">
-                <div class="o_vt_plan_head">${this.escape(plan.session_label)} · ${this.escape(
-            plan.state === "draft" ? "nháp" : plan.state === "confirmed" ? "đã chốt" : plan.state
-        )}</div>
-                <div><strong>Kế hoạch:</strong> ${plan.line_count} phiếu · ${money(
+                <div class="o_vt_plan_head">${this.escape(
+                    plan.session_label
+                )} · ${this.escape(stateLabel)}</div>
+                <div><strong>Kế hoạch:</strong> ${plan.line_count} điểm · ${money(
             plan.amount_total
         )}</div>
                 <div><strong>Dự kiến:</strong> ${plan.distance_km || 0} km · ${this.escape(
             plan.duration_display || "—"
         )}</div>
                 ${warn}
+                ${this.planLinesHtml(plan)}
                 ${actual}
             </div>`;
+    }
+
+    /** Danh sách chứng từ của một kế hoạch, theo đúng thứ tự ghé. */
+    planLinesHtml(plan) {
+        const lines = plan.lines || [];
+        if (!lines.length) {
+            return "";
+        }
+        const rows = lines
+            .map((line, index) => {
+                // Ba dấu hiệu cần thấy ngay: chưa có phiếu, chưa có toạ độ, đã giao.
+                const flags = [];
+                if (line.waiting_picking) {
+                    flags.push(`<span class="o_vt_plan_warn">chờ phiếu</span>`);
+                }
+                if (!line.has_coords) {
+                    flags.push(`<span class="o_vt_plan_warn">chưa có toạ độ</span>`);
+                }
+                const tick = line.delivered ? "✓ " : "";
+                const money = (line.amount || 0).toLocaleString("vi-VN");
+                return `<li>
+                    <span class="o_vt_line_no">${index + 1}.</span>
+                    <span class="o_vt_line_main">${tick}${this.escape(
+                    line.reference
+                )} · ${this.escape(line.partner_name || "—")}</span>
+                    <span class="o_vt_line_amount">${money}</span>
+                    ${flags.length ? `<div class="o_vt_line_flags">${flags.join(" · ")}</div>` : ""}
+                </li>`;
+            })
+            .join("");
+        // Cuộn trong popup thay vì cắt bớt: xe chở 15 điểm thì phải xem được cả 15, mà
+        // popup cao quá màn hình thì không đóng lại được.
+        return `<ul class="o_vt_plan_lines">${rows}</ul>`;
     }
 
     escape(value) {

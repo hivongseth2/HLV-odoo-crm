@@ -109,7 +109,8 @@
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="driver_id" readonly="1"/>
                             <field name="start_place_id"
-                                   options="{'no_create': True}"/>
+                                   options="{'no_create': True}"
+                                   domain="[('has_coords', '=', True), ('warehouse_id', '!=', False)]"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                         <group string="Dự kiến">
@@ -247,10 +248,11 @@
         <field name="arch" type="xml">
             <list string="Kho toạ độ" create="0"
                   decoration-warning="geo_state == 'pending_review'"
-                  decoration-danger="geo_state == 'failed'">
+                  decoration-danger="geo_state == 'failed' or outside_vietnam">
                 <field name="raw_address"/>
                 <field name="normalized_address" optional="hide"/>
                 <field name="geo_state"/>
+                <field name="outside_vietnam" string="Ngoài VN" optional="show"/>
                 <field name="geo_source" optional="hide"/>
                 <field name="hit_count" string="Dùng lại" sum="Tổng lượt tiết kiệm"/>
                 <field name="last_used_at" optional="show"/>
@@ -321,6 +323,9 @@
                 <filter name="failed" string="Máy không tìm được"
                         domain="[('geo_state', '=', 'failed')]"/>
                 <filter name="reused" string="Đã dùng lại" domain="[('hit_count', '&gt;', 0)]"/>
+                <separator/>
+                <filter name="outside_vn" string="Toạ độ ngoài Việt Nam"
+                        domain="[('outside_vietnam', '=', True)]"/>
             </search>
         </field>
     </record>
