@@ -42,6 +42,9 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     already_planned_count = fields.Integer(compute='_compute_preview', string='Đã có kế hoạch')
     to_add_count = fields.Integer(compute='_compute_preview', string='Sẽ xếp')
     no_address_count = fields.Integer(compute='_compute_preview', string='Không có địa chỉ')
+    not_ready_count = fields.Integer(
+        compute='_compute_preview', string='Không ở trạng thái Sẵn sàng',
+    )
 
     @api.depends('picking_ids')
     def _compute_preview(self):
@@ -52,6 +55,11 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
             wizard.to_add_count = len(addable)
             wizard.no_address_count = len(
                 addable.filtered(lambda p: not p._vtracking_delivery_address())
+            )
+            # Cảnh báo chứ không chặn: phiếu chưa Sẵn sàng vẫn xếp trước được khi hàng
+            # chắc chắn về kịp, còn phiếu Huỷ/Hoàn tất thì gần như luôn là chọn nhầm.
+            wizard.not_ready_count = len(
+                addable.filtered(lambda p: p.state != 'assigned')
             )
 
     @api.model

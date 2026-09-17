@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_report_vtracking_plan" model="ir.actions.report">
+        <field name="name">Kế hoạch giao hàng</field>
+        <field name="model">hlv.vtracking.plan</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_vtracking.report_vtracking_plan</field>
+        <field name="report_file">hlv_vtracking.report_vtracking_plan</field>
+        <field name="print_report_name">'KHGH-%s-%s' % (object.vehicle_id.license_plate or '', object.date or '')</field>
+        <field name="binding_model_id" ref="model_hlv_vtracking_plan"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_vtracking_plan">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="plan">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h3 class="mb-1">Kế hoạch giao hàng</h3>
+                        <h5 class="text-muted mb-3">
+                            <span t-field="plan.name"/>
+                        </h5>
+
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div><strong>Xe:</strong> <span t-field="plan.vehicle_id.license_plate"/></div>
+                                <div><strong>Tài xế:</strong>
+                                    <span t-field="plan.driver_id.display_name"/>
+                                </div>
+                                <div t-if="plan.start_place_id">
+                                    <strong>Xuất phát:</strong>
+                                    <span t-field="plan.start_place_id.name"/>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div><strong>Ngày:</strong> <span t-field="plan.date"/></div>
+                                <div><strong>Buổi:</strong>
+                                    <span t-field="plan.session"/>
+                                </div>
+                                <div><strong>Trạng thái:</strong>
+                                    <span t-field="plan.state"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Số tổng để ngay đầu: tài xế cầm tờ này chỉ cần biết hôm nay
+                             bao nhiêu điểm, bao nhiêu tiền, chạy bao xa. -->
+                        <table class="table table-sm table-bordered mb-3">
+                            <tr>
+                                <td><strong>Số phiếu</strong><br/><span t-field="plan.line_count"/></td>
+                                <td><strong>Tổng tiền</strong><br/>
+                                    <span t-field="plan.amount_total"
+                                          t-options="{'widget': 'monetary', 'display_currency': plan.currency_id}"/>
+                                </td>
+                                <td><strong>Quãng đường</strong><br/>
+                                    <span t-field="plan.distance_km"/> km
+                                </td>
+                                <td><strong>Thời gian dự kiến</strong><br/>
+                                    <span t-field="plan.duration_display"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th style="width:6%">TT</th>
+                                    <th style="width:16%">Phiếu / Đơn bán</th>
+                                    <th style="width:24%">Khách hàng</th>
+                                    <th style="width:30%">Địa chỉ giao</th>
+                                    <th class="text-end" style="width:14%">Tiền hàng</th>
+                                    <th class="text-center" style="width:10%">Đã giao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-set="index" t-value="0"/>
+                                <tr t-foreach="plan.line_ids.sorted(lambda l: (l.sequence, l.id))"
+                                    t-as="line">
+                                    <t t-set="index" t-value="index + 1"/>
+                                    <td><span t-esc="index"/></td>
+                                    <td>
+                                        <div t-field="line.picking_name"/>
+                                        <div class="text-muted small" t-field="line.source_name"/>
+                                    </td>
+                                    <td t-field="line.partner_id.display_name"/>
+                                    <td>
+                                        <span t-field="line.address"/>
+                                        <!-- Đánh dấu ngay trên tờ in: điểm chưa có toạ độ
+                                             không nằm trong con số km ở trên. -->
+                                        <span t-if="not line.has_coords" class="text-muted small">
+                                            (chưa có toạ độ)
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <span t-field="line.amount"
+                                              t-options="{'widget': 'monetary', 'display_currency': plan.currency_id}"/>
+                                    </td>
+                                    <!-- Ô trống để tài xế tích tay. Đây là bản KẾ HOẠCH;
+                                         số thực tế sẽ do module shipper ghi nhận. -->
+                                    <td class="text-center">☐</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div t-if="plan.missing_coords_count" class="text-muted small mb-3">
+                            Có <span t-field="plan.missing_coords_count"/> phiếu chưa có toạ
+                            độ — quãng đường và thời gian ở trên chưa tính phần của chúng.
+                        </div>
+
+                        <div t-if="plan.note" class="mb-3">
+                            <strong>Ghi chú:</strong>
+                            <div t-field="plan.note"/>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-6 text-center">
+                                <div><strong>Người lập kế hoạch</strong></div>
+                                <div class="text-muted small">(ký, ghi rõ họ tên)</div>
+                            </div>
+                            <div class="col-6 text-center">
+                                <div><strong>Tài xế nhận</strong></div>
+                                <div class="text-muted small">(ký, ghi rõ họ tên)</div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

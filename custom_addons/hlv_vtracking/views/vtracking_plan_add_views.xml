@@ -28,7 +28,14 @@
                     <field name="to_add_count"/>
                     <field name="already_planned_count"/>
                     <field name="no_address_count"/>
+                    <field name="not_ready_count"/>
                 </group>
+                <div class="alert alert-warning" role="alert"
+                     invisible="not_ready_count == 0">
+                    Có phiếu <strong>không ở trạng thái Sẵn sàng</strong> (Nháp, Chờ, Hoàn
+                    tất hoặc Huỷ). Vẫn xếp được — nhưng phiếu Hoàn tất/Huỷ thì gần như luôn
+                    là chọn nhầm.
+                </div>
                 <div class="alert alert-warning" role="alert"
                      invisible="no_address_count == 0">
                     Có phiếu không có địa chỉ giao — vẫn xếp được, nhưng không tra được toạ

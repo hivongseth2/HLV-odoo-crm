@@ -1,6 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- View gọn dùng riêng cho hộp thoại chọn phiếu. View phiếu mặc định của hệ thống có
+         hàng chục cột Studio, mở ra là phải kéo ngang mới thấy thứ cần nhìn.
+         default_order: hàng mới về trước — phiếu cũ 20 ngày thường là ca đặc biệt, không
+         phải thứ xếp hằng ngày. -->
+    <record id="view_stock_picking_pick_list" model="ir.ui.view">
+        <field name="name">stock.picking.vtracking.pick.list</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <list string="Chọn phiếu giao" create="0" default_order="scheduled_date desc, id desc">
+                <field name="name" string="Phiếu"/>
+                <field name="origin" string="Đơn bán"/>
+                <field name="partner_id" string="Khách hàng"/>
+                <field name="scheduled_date" string="Ngày giao" widget="date"/>
+                <field name="plan_id" string="Đã xếp xe"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'assigned'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search riêng: bộ lọc mặc định đúng thứ cần xếp, và tìm được bằng tên khách,
+         số đơn, địa chỉ — ba thứ người điều phối nhớ được. -->
+    <record id="view_stock_picking_pick_search" model="ir.ui.view">
+        <field name="name">stock.picking.vtracking.pick.search</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <search string="Chọn phiếu giao">
+                <field name="name" string="Phiếu / đơn bán" filter_domain="['|', ('name', 'ilike', self), ('origin', 'ilike', self)]"/>
+                <field name="partner_id"/>
+                <field name="scheduled_date"/>
+                <filter name="ready" string="Sẵn sàng" domain="[('state', '=', 'assigned')]"/>
+                <filter name="unplanned" string="Chưa xếp xe" domain="[('plan_id', '=', False)]"/>
+                <separator/>
+                <filter name="late" string="Quá hạn giao"
+                        domain="[('scheduled_date', '&lt;', context_today().strftime('%Y-%m-%d 00:00:00'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_partner" string="Khách hàng"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_date" string="Ngày giao"
+                            context="{'group_by': 'scheduled_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <record id="view_vtracking_plan_list" model="ir.ui.view">
         <field name="name">hlv.vtracking.plan.list</field>
         <field name="model">hlv.vtracking.plan</field>
@@ -86,8 +133,18 @@
                             <field name="line_ids">
                                 <list editable="bottom" decoration-warning="not has_coords">
                                     <field name="sequence" widget="handle"/>
+                                    <!-- Chỉ cho chọn phiếu XUẤT đang Sẵn sàng và chưa xếp
+                                         xe: phiếu Huỷ/Hoàn tất không còn gì để giao, phiếu
+                                         nội bộ không phải việc của điều phối giao hàng. -->
                                     <field name="picking_id"
-                                           options="{'no_create': True}"/>
+                                           options="{'no_create': True, 'no_open': True}"
+                                           domain="[('picking_type_code', '=', 'outgoing'),
+                                                    ('state', '=', 'assigned'),
+                                                    ('plan_id', '=', False)]"
+                                           context="{'list_view_ref': 'hlv_vtracking.view_stock_picking_pick_list',
+                                                     'search_view_ref': 'hlv_vtracking.view_stock_picking_pick_search',
+                                                     'search_default_ready': 1,
+                                                     'search_default_unplanned': 1}"/>
                                     <field name="source_name" string="Đơn bán" readonly="1"/>
                                     <field name="partner_id" readonly="1"/>
                                     <field name="address" readonly="1"/>

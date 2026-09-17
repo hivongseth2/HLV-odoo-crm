@@ -49,6 +49,7 @@ xem plan/ke-hoach-module-vtracking.md.
         'views/vtracking_place_views.xml',
         'views/vtracking_plan_views.xml',
         'views/vtracking_plan_add_views.xml',
+        'report/vtracking_plan_report.xml',
         'views/vtracking_position_views.xml',
         'views/vtracking_api_key_views.xml',
         # Nạp trước menu: menu trỏ tới action khai trong file này.
