@@ -6,22 +6,39 @@ Util thuần: chỉ đọc object được truyền vào, không đụng ``self.
 
 import re
 
-# Chú thích nguồn của file_search, VD: 【4:0†source】. Người dùng cuối không cần thấy.
-_FILE_CITATION_RE = re.compile(r"【[^】]*】")
+# Chú thích nguồn do file_search chèn. Người dùng cuối không cần thấy, và trên Zalo thì
+# đây là rác thuần túy. OpenAI trả về ở hai dạng tùy model nên phải quét cả hai:
+#   - 【4:0†source】
+#   - filecite + turn0file6 + turn0file9, bọc trong ký tự Private Use Area của Unicode
+_CITATION_PATTERNS = (
+    re.compile(r"【[^】]*】"),
+    # Ký tự Private Use Area bọc quanh chú thích; xóa trước để lộ phần chữ bên trong.
+    re.compile(r"[-]"),
+    re.compile(r"(?:file|video|image)cite(?:turn\d+[a-z]+\d+)*"),
+    re.compile(r"turn\d+(?:file|view|search|news)\d+"),
+)
+
+# Xóa citation xong thường còn khoảng trắng thừa, và dấu câu bị đẩy ra khỏi từ.
+_MULTI_SPACE_RE = re.compile(r"[ \t]{2,}")
+_SPACE_BEFORE_PUNCT_RE = re.compile(r" +([.,;:!?)])")
 
 _TEXT_CONTENT_TYPES = ("output_text", "text")
 
 
 def strip_file_citations(text):
-    """Xóa chú thích nguồn dạng 【...】 do file_search chèn vào.
+    """Xóa chú thích nguồn do file_search chèn vào câu trả lời.
 
     Nhận: chuỗi bất kỳ hoặc None.
-    Trả: chuỗi đã làm sạch, đã strip hai đầu.
-    Biên: None -> "".
+    Trả: chuỗi đã làm sạch, đã gom khoảng trắng thừa, đã strip hai đầu.
+    Biên: None -> "". Chuỗi toàn chú thích -> "".
     """
     if not text:
         return ""
-    return _FILE_CITATION_RE.sub("", text).strip()
+    for pattern in _CITATION_PATTERNS:
+        text = pattern.sub("", text)
+    text = _MULTI_SPACE_RE.sub(" ", text)
+    text = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
+    return text.strip()
 
 
 def _text_of(content_item):
