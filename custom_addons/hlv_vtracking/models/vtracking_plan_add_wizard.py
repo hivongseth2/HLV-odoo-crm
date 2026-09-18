@@ -1,9 +1,7 @@
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-# Trần số chứng từ xếp một lần. Mỗi chứng từ có thể kéo theo một lượt tra toạ độ, mà tra
-# là việc chậm và tốn tiền — chọn nhầm cả nghìn sẽ treo giao diện.
-MAX_DOCUMENTS = 100
+from ..services import plan_documents
 
 
 class HlvVtrackingPlanAddPicking(models.TransientModel):
@@ -107,28 +105,11 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
         chuyến gom hàng của hai kho — mặc định bật, vì đó là trường hợp thường gặp.
         """
         for wizard in self:
-            picking_domain = [
-                ('picking_type_code', '=', 'outgoing'),
-                ('state', '=', 'assigned'),
-                ('plan_id', '=', False),
-                # Phiếu vẫn Sẵn sàng nhưng ĐƠN đã khoá sổ hoặc đã huỷ thì không còn gì để
-                # giao — thường là phiếu sót lại sau khi đơn được xử lý bằng đường khác.
-                # Phiếu không gắn đơn nào (chuyển kho, trả hàng) vẫn cho xếp.
-                '|', ('sale_id', '=', False),
-                     ('sale_id.state', 'not in', ('done', 'cancel')),
-            ]
-            # Đơn đã giao đủ hoặc đã huỷ thì không còn gì để xếp lên xe. `delivery_status`
-            # là trạng thái giao của Odoo: pending / started / partial / full.
-            sale_domain = [
-                ('state', '=', 'sale'),
-                ('delivery_status', '!=', 'full'),
+            warehouse = wizard.warehouse_id if wizard.filter_by_warehouse else None
+            picking_domain = plan_documents.loadable_picking_domain(warehouse)
+            sale_domain = plan_documents.open_order_domain(warehouse) + [
                 ('vtracking_plan_id', '=', False),
             ]
-            if wizard.filter_by_warehouse and wizard.warehouse_id:
-                picking_domain.append(
-                    ('picking_type_id.warehouse_id', '=', wizard.warehouse_id.id)
-                )
-                sale_domain.append(('warehouse_id', '=', wizard.warehouse_id.id))
             wizard.picking_domain = picking_domain
             wizard.sale_domain = sale_domain
 
@@ -158,7 +139,7 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
                 )) if wizard.warehouse_id else 0
             wizard.already_planned_count = len(planned)
             wizard.to_add_count = len(addable)
-            wizard.closed_order_count = len(wizard._closed_orders(addable))
+            wizard.closed_order_count = len(plan_documents.closed_order_labels(addable))
 
     @api.model
     def default_get(self, fields_list):
@@ -181,46 +162,27 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     # Hành động
     # ------------------------------------------------------------------
     def action_add(self):
+        """Xếp chứng từ đang chọn vào kế hoạch. Luật xếp nằm ở ``services/plan_documents``."""
         self.ensure_one()
-        documents = (
-            self.picking_ids if self.source_type == 'picking' else self.sale_order_ids
-        )
-        if len(documents) > MAX_DOCUMENTS:
-            raise UserError(
-                'Chọn tối đa %s chứng từ một lần. Đang chọn %s — chia nhỏ ra để việc tra '
-                'toạ độ không treo màn hình.' % (MAX_DOCUMENTS, len(documents))
-            )
-
         plan = self._get_or_create_plan()
-        # Chứng từ đã nằm trong kế hoạch khác thì BỎ QUA chứ không chuyển sang: chuyển xe
-        # là quyết định của người điều phối, không phải hệ quả phụ của một lần xếp loạt.
-        if self.source_type == 'picking':
-            addable = documents.filtered(lambda p: not p.plan_line_ids)
-            field_name = 'picking_id'
-        else:
-            addable = documents.filtered(lambda o: not o.vtracking_plan_line_ids)
-            field_name = 'sale_order_id'
-        if not addable:
-            raise UserError('Mọi chứng từ đang chọn đều đã nằm trong một kế hoạch giao.')
-
-        # Chặn ở đây chứ không chỉ dựa vào domain: chứng từ chọn từ danh sách đi vào qua
-        # `active_ids` mà không qua domain, và đơn có thể vừa bị đóng trong lúc hộp thoại
-        # đang mở. Báo lỗi thay vì lặng lẽ bỏ qua — người dùng cần biết đơn nào đã đóng.
-        closed = self._closed_orders(addable)
+        result = plan_documents.add_documents(
+            plan,
+            pickings=self.picking_ids if self.source_type == 'picking' else None,
+            orders=self.sale_order_ids if self.source_type == 'sale' else None,
+        )
+        # Với người bấm nút, đơn đã đóng là LỖI phải thấy chứ không lặng lẽ bỏ qua: họ
+        # cần biết đơn nào đã đóng, không phải chỉ thấy số xếp được ít hơn dự kiến.
+        closed = [
+            item['detail'] for item in result['rejected']
+            if item['reason'] == plan_documents.REASON_ORDER_CLOSED
+        ]
         if closed:
             raise UserError(
-                'Không xếp được vì đơn bán đã khoá sổ hoặc đã huỷ: %s.\n'
-                'Bỏ những chứng từ này ra rồi thử lại.'
-                % ', '.join(sorted(closed))
+                'Không xếp được vì có đơn đã khoá sổ hoặc đã huỷ: %s '
+                'Bỏ những chứng từ này ra rồi thử lại.' % ' '.join(sorted(closed))
             )
-
-        start_sequence = max(plan.line_ids.mapped('sequence') or [0])
-        self.env['hlv.vtracking.plan.line'].create([{
-            'plan_id': plan.id,
-            field_name: document.id,
-            'sequence': start_sequence + (index + 1) * 10,
-        } for index, document in enumerate(addable)])
-
+        if not result['added_line_ids']:
+            raise UserError('Mọi chứng từ đang chọn đều đã nằm trong một kế hoạch giao.')
         return {
             'type': 'ir.actions.act_window',
             'name': plan.name,
@@ -230,49 +192,16 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
             'target': 'current',
         }
 
-    def _closed_orders(self, documents):
-        """Tên các đơn bán đã khoá sổ / đã huỷ trong tập chứng từ. Trả về set tên.
-
-        Nhận cả phiếu giao lẫn đơn bán — phiếu thì soi đơn gắn với nó. Phiếu không gắn đơn
-        (chuyển kho, trả hàng) không bị chặn: nó không có đơn nào để đóng.
-        """
-        self.ensure_one()
-        closed = set()
-        for document in documents:
-            order = document if document._name == 'sale.order' else document.sale_id
-            if order and order.state in ('done', 'cancel'):
-                closed.add('%s (%s)' % (
-                    order.name,
-                    'đã khoá sổ' if order.state == 'done' else 'đã huỷ',
-                ))
-        return closed
-
     def _get_or_create_plan(self):
-        """Kế hoạch đích. Tạo mới nếu người dùng chọn chế độ "mới".
-
-        Dùng lại kế hoạch trùng (xe, ngày, buổi) nếu đã có thay vì báo lỗi ràng buộc: từ
-        góc nhìn người dùng, "xếp thêm chứng từ cho xe đó buổi đó" là việc hợp lệ.
-        """
+        """Kế hoạch đích: cái đang chọn, hoặc cái của (xe, ngày, buổi) vừa khai."""
         self.ensure_one()
         if self.mode == 'existing':
             if not self.plan_id:
                 raise UserError('Chưa chọn kế hoạch để xếp vào.')
             return self.plan_id
-
         if not self.vehicle_id:
             raise UserError('Chưa chọn xe cho kế hoạch mới.')
-        Plan = self.env['hlv.vtracking.plan']
-        existing = Plan.search([
-            ('vehicle_id', '=', self.vehicle_id.id),
-            ('date', '=', self.date),
-            ('session', '=', self.session),
-            ('company_id', '=', self.env.company.id),
-        ], limit=1)
-        if existing:
-            return existing
-        return Plan.create({
-            'vehicle_id': self.vehicle_id.id,
-            'date': self.date,
-            'session': self.session,
-            'start_place_id': self.start_place_id.id or False,
-        })
+        plan, _created = plan_documents.get_or_create_plan(
+            self.env, self.vehicle_id, self.date, self.session, self.start_place_id,
+        )
+        return plan

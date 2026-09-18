@@ -37,6 +37,9 @@ xem plan/ke-hoach-module-vtracking.md.
         # Phiếu giao (stock.picking) là đơn vị xếp lên xe. sale_stock để có picking.sale_id
         # và để xếp được ĐƠN BÁN vào kế hoạch khi kho chưa soạn hàng, phiếu xuất chưa có.
         'sale_stock',
+        # API cho AI lập kế hoạch cần biết hàng của đơn bán đã VỀ chưa: đơn mua nối với
+        # đơn bán qua purchase.order.origin, và số đã nhận nằm ở purchase_stock.
+        'purchase_stock',
     ],
     'external_dependencies': {'python': ['requests', 'pytz']},
     'data': [

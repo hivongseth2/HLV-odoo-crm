@@ -8,6 +8,7 @@
             <list string="Khoá API">
                 <field name="name"/>
                 <field name="company_id" groups="base.group_multi_company"/>
+                <field name="allow_write" widget="boolean_toggle"/>
                 <field name="request_count"/>
                 <field name="last_used_at"/>
                 <field name="last_used_ip" optional="hide"/>
@@ -36,6 +37,7 @@
                         <group>
                             <field name="key" widget="CopyClipboardChar"/>
                             <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="allow_write"/>
                             <field name="active"/>
                         </group>
                         <group>

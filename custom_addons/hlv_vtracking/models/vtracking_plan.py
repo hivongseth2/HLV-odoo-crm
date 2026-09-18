@@ -2,16 +2,14 @@ import logging
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
-from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km, total_path_km
-from odoo.addons.hlv_vtracking.tools.vtracking_partner import root_partner_name
+from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km
+from odoo.addons.hlv_vtracking.tools.vtracking_route import (
+    estimate_route, format_minutes, route_params,
+)
+from odoo.addons.hlv_vtracking.services.plan_payload import SESSION_LABELS
 
 _logger = logging.getLogger(__name__)
 
-SESSION_LABELS = {
-    'morning': 'Sáng',
-    'afternoon': 'Chiều',
-    'full_day': 'Cả ngày',
-}
 
 
 class HlvVtrackingPlan(models.Model):
@@ -138,42 +136,46 @@ class HlvVtrackingPlan(models.Model):
     def _compute_route(self):
         """Quãng đường và thời gian dự kiến của cả kế hoạch.
 
-        Dùng đường chim bay nhân hệ số đường bộ thay vì gọi Google Directions: gọi
-        Directions cho mọi lần sửa thứ tự điểm là tốn tiền cho một con số chỉ dùng để so
-        các phương án với nhau. Hệ số khai ở cấu hình, chỉnh theo địa bàn.
+        Phép tính nằm ở ``tools/vtracking_route`` — API cho AI và màn hình này phải ra
+        cùng một con số cho cùng một chuyến.
         """
         for plan in self:
-            company = plan.company_id
-            speed = company.vtracking_avg_speed_kmh or 35.0
-            per_stop = company.vtracking_minutes_per_stop or 10
-            road_factor = company.vtracking_road_factor or 1.3
+            estimate = estimate_route(plan._route_start(), plan._route_stops(), plan._route_params())
+            plan.missing_coords_count = estimate['missing_coords_count']
+            plan.distance_km = estimate['distance_km']
+            plan.drive_minutes = estimate['drive_minutes']
+            plan.service_minutes = estimate['service_minutes']
+            plan.total_minutes = estimate['total_minutes']
+            plan.duration_display = format_minutes(estimate['total_minutes'])
 
-            ordered = plan.line_ids.sorted(lambda line: (line.sequence, line.id))
-            points = [
-                (line.latitude, line.longitude)
-                for line in ordered if line.latitude and line.longitude
-            ]
-            plan.missing_coords_count = len(ordered) - len(points)
+    def _ordered_lines(self):
+        """Các dòng theo đúng thứ tự ghé."""
+        self.ensure_one()
+        return self.line_ids.sorted(lambda line: (line.sequence, line.id))
 
-            if plan.start_place_id and plan.start_place_id.has_coords:
-                points.insert(0, (plan.start_place_id.latitude, plan.start_place_id.longitude))
+    def _route_start(self):
+        """Toạ độ điểm xuất phát, hoặc None nếu chưa chọn / chưa có toạ độ."""
+        self.ensure_one()
+        place = self.start_place_id
+        return (place.latitude, place.longitude) if place.has_coords else None
 
-            straight_km = total_path_km(points)
-            plan.distance_km = round(straight_km * road_factor, 1)
-            plan.drive_minutes = int(round(plan.distance_km / speed * 60)) if speed else 0
-            plan.service_minutes = per_stop * len(ordered)
-            plan.total_minutes = plan.drive_minutes + plan.service_minutes
-            plan.duration_display = plan._format_minutes(plan.total_minutes)
+    def _route_stops(self):
+        """Toạ độ từng điểm theo thứ tự ghé; None cho điểm chưa tra được toạ độ."""
+        self.ensure_one()
+        return [
+            (line.latitude, line.longitude) if line.latitude and line.longitude else None
+            for line in self._ordered_lines()
+        ]
 
-    @api.model
-    def _format_minutes(self, minutes):
-        """Số phút -> "2h15'" cho dễ đọc. 0 phút trả về "—"."""
-        if not minutes:
-            return '—'
-        hours, mins = divmod(int(minutes), 60)
-        if not hours:
-            return "%d'" % mins
-        return "%dh%02d'" % (hours, mins)
+    def _route_params(self):
+        """Định mức tính lộ trình của công ty sở hữu kế hoạch."""
+        self.ensure_one()
+        company = self.company_id
+        return route_params(
+            company.vtracking_avg_speed_kmh,
+            company.vtracking_minutes_per_stop,
+            company.vtracking_road_factor,
+        )
 
     @api.depends('actual_line_count', 'actual_start_at')
     def _compute_has_actual_data(self):
@@ -277,67 +279,3 @@ class HlvVtrackingPlan(models.Model):
             'domain': [('plan_id', '=', self.id)],
             'context': {'default_plan_id': self.id},
         }
-
-    # ------------------------------------------------------------------
-    # Dữ liệu cho bản đồ
-    # ------------------------------------------------------------------
-    @api.model
-    def plan_payload_for_vehicles(self, vehicle_ids, day=None):
-        """dict {vehicle_id: [kế hoạch của ngày đó]} để bản đồ hiện khi bấm vào xe.
-
-        Trả về MỌI buổi của ngày chứ không chỉ buổi hiện tại: người xem cần thấy cả ngày
-        của xe, và "bây giờ là buổi nào" là câu hỏi không có câu trả lời rõ ràng lúc 12h.
-        """
-        day = day or fields.Date.context_today(self)
-        plans = self.sudo().search([
-            ('vehicle_id', 'in', vehicle_ids),
-            ('date', '=', day),
-            ('state', '!=', 'cancelled'),
-        ], order='session')
-        result = {}
-        for plan in plans:
-            result.setdefault(plan.vehicle_id.id, []).append({
-                'id': plan.id,
-                'session': plan.session,
-                'session_label': SESSION_LABELS.get(plan.session, ''),
-                'state': plan.state,
-                'line_count': plan.line_count,
-                'amount_total': plan.amount_total,
-                'distance_km': plan.distance_km,
-                'duration_display': plan.duration_display,
-                'missing_coords_count': plan.missing_coords_count,
-                # Phần thực tế: khai sẵn, chờ nối với hlv_barcode_shipper.
-                'has_actual_data': plan.has_actual_data,
-                'actual_line_count': plan.actual_line_count,
-                'actual_amount_total': plan.actual_amount_total,
-                'actual_distance_km': plan.actual_distance_km,
-                # Điểm xuất phát, để vẽ được chặng đầu kho → điểm 1. Thiếu nó thì lộ trình
-                # trên bản đồ bắt đầu lơ lửng ở điểm giao đầu tiên.
-                'start': {
-                    'name': plan.start_place_id.name,
-                    'latitude': plan.start_place_id.latitude,
-                    'longitude': plan.start_place_id.longitude,
-                } if plan.start_place_id.has_coords else None,
-                # Danh sách chứng từ theo đúng thứ tự ghé: bấm vào xe là phải biết nó
-                # đang phải giao NHỮNG GÌ, không chỉ giao BAO NHIÊU.
-                'lines': [{
-                    'id': line.id,
-                    # Số thứ tự ghé THẬT, đếm cả điểm chưa có toạ độ. Nhờ vậy số hiện trên
-                    # bản đồ khớp với số trên tờ kế hoạch in ra, dù điểm thiếu toạ độ
-                    # không vẽ được lên bản đồ.
-                    'seq_no': index + 1,
-                    'reference': line.display_reference,
-                    'source_name': line.source_name or '',
-                    'partner_name': root_partner_name(line.partner_id),
-                    'address': line.address or '',
-                    'amount': line.amount,
-                    'latitude': line.latitude or None,
-                    'longitude': line.longitude or None,
-                    'waiting_picking': line.line_state == 'waiting_picking',
-                    'has_coords': line.has_coords,
-                    'delivered': line.delivered,
-                } for index, line in enumerate(
-                    plan.line_ids.sorted(lambda l: (l.sequence, l.id))
-                )],
-            })
-        return result

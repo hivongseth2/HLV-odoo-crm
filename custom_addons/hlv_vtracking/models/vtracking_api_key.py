@@ -35,6 +35,12 @@ class HlvVtrackingApiKey(models.Model):
         help='Gửi lên trong header X-API-Key.',
     )
     active = fields.Boolean(default=True)
+    allow_write = fields.Boolean(
+        string='Cho phép ghi', default=False,
+        help='Bật thì khoá này được TẠO và SỬA kế hoạch giao hàng qua API (dùng cho AI lập '
+             'kế hoạch). Mặc định tắt: khoá cấp cho ứng dụng chỉ xem bản đồ không được '
+             'phép, chỉ vì có khoá, mà sửa luôn kế hoạch.',
+    )
     company_id = fields.Many2one(
         'res.company', string='Công ty', required=True, index=True,
         default=lambda self: self.env.company,

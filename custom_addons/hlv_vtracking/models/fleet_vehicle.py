@@ -4,7 +4,7 @@ from datetime import timedelta
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-from ..services import vtracking_sync
+from ..services import map_data, vtracking_sync
 from ..services.vtracking_client import VTrackingError
 from ..tools.vtracking_parse import alarm_labels, normalize_plate
 
@@ -219,48 +219,8 @@ class FleetVehicle(models.Model):
     # ------------------------------------------------------------------
     @api.model
     def get_vtracking_map_data(self):
-        """Toàn bộ dữ liệu một lần vẽ bản đồ cần: cấu hình tile, xe, và địa điểm.
-
-        Gộp vào một lời gọi thay vì ba: bản đồ tự tải lại theo chu kỳ, mỗi chu kỳ thêm
-        một request là thêm tải cho thứ gần như không đổi.
-
-        Địa điểm chỉ trả về cái ĐÃ có toạ độ — địa điểm chưa tra được là việc xử lý ở màn
-        quản lý địa điểm, không phải thứ để nhìn trên bản đồ.
-        """
-        company = self.env.company
-        vehicles = self.sudo().search([
-            ('vtracking_enabled', '=', True),
-            ('company_id', 'in', [company.id, False]),
-        ], order='license_plate')
-        places = self.env['hlv.vtracking.place'].sudo().search([
-            ('has_coords', '=', True),
-            ('company_id', '=', company.id),
-        ])
-        place_types = self.env['hlv.vtracking.place.type'].sudo().search([])
-
-        # Kế hoạch của hôm nay, gắn thẳng vào từng xe: popup xe cần đọc ngay, không nên
-        # bắt trình duyệt tự ghép hai danh sách.
-        plans = self.env['hlv.vtracking.plan'].plan_payload_for_vehicles(vehicles.ids)
-        vehicle_payloads = []
-        for vehicle in vehicles:
-            payload = vehicle._vtracking_map_payload()
-            payload['plans'] = plans.get(vehicle.id, [])
-            vehicle_payloads.append(payload)
-
-        return {
-            'tile_url': company.vtracking_map_tile_url or '',
-            'tile_attribution': company.vtracking_map_attribution or '',
-            'stale_minutes': STALE_MINUTES,
-            'vehicles': vehicle_payloads,
-            'places': [p._map_payload() for p in places],
-            'place_types': [{
-                'id': t.id,
-                'name': t.name,
-                'color': t.color,
-                'size': t.size,
-                'visible_by_default': t.visible_by_default,
-            } for t in place_types],
-        }
+        """Dữ liệu một lần vẽ bản đồ. Gọi từ màn bản đồ; phần dựng nằm ở ``services/map_data``."""
+        return map_data.build_map_data(self.env, STALE_MINUTES)
 
     def _vtracking_map_payload(self):
         """Một xe ở dạng dict để vẽ ghim. Xe chưa có toạ độ vẫn trả về.

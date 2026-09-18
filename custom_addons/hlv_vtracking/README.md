@@ -432,6 +432,23 @@ Nguồn tile bản đồ, để ứng dụng ngoài vẽ cùng nền bản đồ
 
 ---
 
+## API cho AI lập kế hoạch
+
+Bộ endpoint `/api/v1/ai/*` để một AI agent (Claude) đọc tình hình đơn hàng, kho, xe rồi đề
+xuất hoặc lập kế hoạch giao hàng. Tài liệu viết cho chính AI đó đọc:
+
+- [docs/AI_API_GUIDE.md](docs/AI_API_GUIDE.md) — quy trình suy nghĩ, luật nghiệp vụ, chỗ dễ hiểu sai.
+- [docs/AI_API_REFERENCE.md](docs/AI_API_REFERENCE.md) — tra cứu 16 endpoint.
+
+Cấp khoá ở **Cấu hình > Khoá API**. Khoá mặc định **chỉ đọc**; bật **Cho phép ghi** thì mới
+tạo/sửa kế hoạch được. Mọi thao tác ghi qua API để lại một dòng trên chatter của kế hoạch,
+ghi tên khoá đã làm.
+
+Code: `controllers/ai/` (endpoint mỏng) → `services/ai/` (nghiệp vụ) → `tools/` (hàm thuần).
+Luật xếp chứng từ (`services/plan_documents.py`) và phép tính lộ trình
+(`tools/vtracking_route.py`) dùng **chung** giữa giao diện người dùng và API — AI không
+thấy một tập phiếu khác, và không ra một con số km khác, so với người điều phối.
+
 ## Cấu trúc code
 
 Màn cấu hình là một form của **`res.company`**, không phải `res.config.settings`. Lý do:
