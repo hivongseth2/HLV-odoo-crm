@@ -140,11 +140,23 @@ class HlvVtrackingAddress(models.Model):
 
         record = self.create({
             'raw_address': raw_address,
-            'normalized_address': normalize_address(raw_address),
+            'normalized_address': self._normalized_for_provider(raw_address),
             'address_key': key,
         })
         record._geocode()
         return record
+
+    @api.model
+    def _normalized_for_provider(self, raw_address):
+        """Chuỗi gửi đi tra, cắt theo đúng thứ nhà cung cấp hiện tại dùng được.
+
+        Google tra được cả tên doanh nghiệp nên giữ lại cụm tên; Nominatim thì không —
+        gửi tên công ty vào chỉ làm nó đi tìm một doanh nghiệp cùng tên ở nơi khác.
+        """
+        provider = self.env['ir.config_parameter'].sudo().get_param(
+            'base_geolocalize.geo_provider'
+        )
+        return normalize_address(raw_address, drop_company=provider != 'googlemap')
 
     def _mark_hit(self):
         """Ghi nhận một lần dùng lại. Không để lỗi thống kê làm hỏng việc chính."""
@@ -172,7 +184,12 @@ class HlvVtrackingAddress(models.Model):
             if record.geo_state == 'manual':
                 # Toạ độ người dán tay là nguồn đáng tin nhất, máy không được đè lên.
                 continue
-            address = record.normalized_address or record.raw_address
+            # Tính lại theo nhà cung cấp đang dùng: đổi từ OpenStreetMap sang Google rồi
+            # bấm "Tra lại" phải gửi đi chuỗi hợp với Google, không phải chuỗi cũ.
+            address = record._normalized_for_provider(record.raw_address)
+            if address and address != record.normalized_address:
+                record.normalized_address = address
+            address = address or record.raw_address
             try:
                 result = self.env['base.geocoder'].sudo().geo_find(address)
             except Exception as exc:  # noqa: BLE001 — provider lỗi không được làm gãy cả lô

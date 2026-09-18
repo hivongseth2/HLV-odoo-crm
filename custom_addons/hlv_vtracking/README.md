@@ -202,6 +202,39 @@ Nhờ chuẩn hoá, ba cách viết này ra cùng một khoá và chỉ tốn **
 260/49  Nguyễn Thái Sơn , P5 , Gò Vấp , TP HCM
 ```
 
+### Chuỗi gửi đi tra ≠ địa chỉ gốc
+
+Ô **Địa chỉ gốc** giữ nguyên văn để đối chiếu. Ô **Địa chỉ đã chuẩn hoá** mới là chuỗi
+thật sự gửi đi, và nó được cắt gọn:
+
+| Bỏ đi | Vì sao |
+|---|---|
+| Cụm tên công ty ở đầu | Odoo ghép tên khách vào `contact_address`; gửi tên đi làm Nominatim đi tìm doanh nghiệp cùng tên ở nơi khác |
+| Cụm rỗng (`, ,`) | Rác từ ô street2 bỏ trống |
+| Cụm trùng, cụm nằm trong cụm khác | Người nhập đã gõ đủ tỉnh/huyện vào street, Odoo lại ghép thêm city/state/country |
+
+Ví dụ thật, từ 118 ký tự còn 34:
+
+```
+CÔNG TY TRÁCH NHIỆM HỮU HẠN DONGJIN TEXTILE VINA, Huyện Nhơn Trạch,
+Đồng Nai, Việt Nam, , Đồng Nai, Đồng Nai Việt Nam
+        ↓
+huyen nhon trach, dong nai viet nam
+```
+
+Ngoại lệ: khi nhà cung cấp là **Google**, cụm tên công ty được **giữ lại** — Google tra
+được cả tên doanh nghiệp. Đổi nhà cung cấp rồi bấm *Tra lại* thì chuỗi được tính lại cho
+khớp.
+
+### Toạ độ ngoài Việt Nam bị từ chối
+
+Kết quả geocode rơi ngoài khung Việt Nam (vĩ độ 8–23.6, kinh độ 102–110) **không được
+lưu** — ghi rõ toạ độ sai là bao nhiêu và cách xử lý. Một điểm sai kiểu đó đủ làm quãng
+đường cả kế hoạch nhảy lên hàng nghìn km mà không ai biết vì sao.
+
+Dữ liệu sai đã lưu từ trước: lọc bằng *Toạ độ ngoài Việt Nam* trong **Cấu hình > Kho toạ
+độ**, sửa địa chỉ hoặc dán toạ độ tay, rồi bấm **Đọc lại từ chứng từ** trên kế hoạch.
+
 Cột **Dùng lại** cho thấy cache tiết kiệm được bao nhiêu lượt. Bản ghi `failed` không tự
 tra lại: máy đã trượt với đúng chuỗi đó thì lần sau cũng trượt — bấm nút *Tra lại* hoặc
 dán toạ độ tay.

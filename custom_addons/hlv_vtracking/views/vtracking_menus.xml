@@ -6,9 +6,8 @@
         <field name="tag">hlv_vtracking_map</field>
     </record>
 
-    <!-- Không khai web_icon: chưa có file icon nên khai vào chỉ sinh cảnh báo lúc nạp
-         module. Thêm khi nào có icon thật. -->
     <menuitem id="menu_vtracking_root" name="V-Tracking"
+              web_icon="hlv_vtracking,static/description/icon.png"
               sequence="90"
               groups="hlv_vtracking.group_vtracking_user"/>
 
