@@ -190,7 +190,13 @@ class HlvVtrackingPlaceImport(models.TransientModel):
         places = self.env['hlv.vtracking.place'].create([
             line._place_values(self.type_id) for line in lines
         ])
-        _logger.info('V-Tracking: nhập %s điểm giao từ bản đồ.', len(places))
+        # Toạ độ từ bản đồ là người ghim nên đáng tin — mồi thẳng vào kho toạ độ để phiếu
+        # có địa chỉ giống không phải gọi geocoder lần nào.
+        seeded = places._seed_address_cache()
+        _logger.info(
+            'V-Tracking: nhập %s điểm giao từ bản đồ, mồi %s địa chỉ vào kho toạ độ.',
+            len(places), seeded,
+        )
         return {
             'type': 'ir.actions.act_window',
             'name': 'Điểm giao vừa nhập',

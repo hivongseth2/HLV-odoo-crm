@@ -74,6 +74,9 @@
                             class="btn-primary" invisible="geo_state != 'pending_review'"/>
                     <button name="action_open_gmaps" type="object" string="Mở Google Maps"
                             invisible="not has_coords"/>
+                    <button name="action_seed_address_cache" type="object"
+                            string="Mồi kho toạ độ"
+                            invisible="geo_state not in ('confirmed', 'manual')"/>
                     <field name="geo_state" widget="statusbar"
                            statusbar_visible="none,pending_review,confirmed"/>
                 </header>
@@ -88,7 +91,8 @@
                         <group string="Phân loại">
                             <field name="type_id"/>
                             <field name="zone_id" options="{'no_create': True}"/>
-                            <field name="partner_id"/>
+                            <field name="partner_id" domain="[('is_company', '=', True)]"/>
+                            <field name="partner_ref" readonly="1"/>
                             <field name="phone"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                             <field name="active"/>
@@ -155,6 +159,17 @@
         </field>
     </record>
 
+    <!-- Thao tác hàng loạt: chọn nhiều điểm rồi mồi một lượt. Dùng sau khi nhập bản đồ,
+         hoặc sau khi duyệt một loạt toạ độ. -->
+    <record id="action_vtracking_place_seed_cache" model="ir.actions.server">
+        <field name="name">Mồi kho toạ độ</field>
+        <field name="model_id" ref="model_hlv_vtracking_place"/>
+        <field name="binding_model_id" ref="model_hlv_vtracking_place"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_seed_address_cache()</field>
+    </record>
+
     <record id="action_vtracking_place" model="ir.actions.act_window">
         <field name="name">Địa điểm</field>
         <field name="res_model">hlv.vtracking.place</field>
@@ -182,7 +197,8 @@
                 </group>
                 <group>
                     <field name="partner_ids" widget="many2many_tags"
-                           options="{'no_create': True}"/>
+                           options="{'no_create': True}"
+                           domain="[('is_company', '=', True)]"/>
                 </group>
                 <group>
                     <field name="to_create_count"/>

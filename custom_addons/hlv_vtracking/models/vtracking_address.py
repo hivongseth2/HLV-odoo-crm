@@ -1,9 +1,6 @@
-import json
 import logging
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
-from odoo.addons.hlv_geo_utils.tools.geo_text import parse_latlng
 
 from ..tools.vtracking_address import address_key, normalize_address
 
@@ -74,7 +71,7 @@ class HlvVtrackingAddress(models.Model):
         string='Tình trạng', default='pending_review', required=True, index=True,
     )
     geo_source = fields.Selection(
-        [('geocode', 'Máy tra'), ('manual', 'Nhập tay')],
+        [('geocode', 'Máy tra'), ('manual', 'Nhập tay'), ('place', 'Từ địa điểm')],
         string='Nguồn', readonly=True,
     )
     geo_raw_result = fields.Text(string='Kết quả máy trả về', readonly=True)
@@ -147,6 +144,45 @@ class HlvVtrackingAddress(models.Model):
         return record
 
     @api.model
+    def seed(self, raw_address, latitude, longitude, source='place'):
+        """Mồi sẵn một cặp địa chỉ → toạ độ ĐÃ BIẾT vào kho, không gọi geocoder.
+
+        Dùng khi đã có toạ độ đáng tin từ nguồn khác — điểm giao người ghim trên bản đồ
+        chẳng hạn. Mồi trước thì lần đầu gặp địa chỉ đó trên phiếu đã tra trúng ngay: vừa
+        không tốn lượt gọi, vừa dùng đúng toạ độ người ghim thay vì phỏng đoán của máy.
+
+        Trả về bản ghi, hoặc recordset rỗng nếu địa chỉ không rút được khoá.
+
+        **Không đè lên bản ghi người đã sửa tay** (``manual``) hay đã duyệt (``confirmed``):
+        mồi là để lấp chỗ trống, không phải để ghi đè công sức của người khác.
+        """
+        key = address_key(raw_address)
+        if not key or not latitude or not longitude:
+            return self.browse()
+        existing = self.search([
+            ('address_key', '=', key), ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        values = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'geo_source': source,
+            # Toạ độ đã biết chắc thì không cần ai duyệt lại, và máy không được đè lên.
+            'geo_state': 'manual',
+            'geo_raw_result': False,
+        }
+        if existing:
+            if existing.geo_state in ('manual', 'confirmed'):
+                return existing
+            existing.write(values)
+            return existing
+        return self.create(dict(
+            values,
+            raw_address=raw_address,
+            normalized_address=self._normalized_for_provider(raw_address),
+            address_key=key,
+        ))
+
+    @api.model
     def _normalized_for_provider(self, raw_address):
         """Chuỗi gửi đi tra, cắt theo đúng thứ nhà cung cấp hiện tại dùng được.
 
@@ -170,99 +206,3 @@ class HlvVtrackingAddress(models.Model):
             _logger.warning('Không ghi được số lần dùng lại của địa chỉ %s.', self.id)
         return self
 
-    # ------------------------------------------------------------------
-    # Tra toạ độ
-    # ------------------------------------------------------------------
-    def _geocode(self):
-        """Gọi ``base.geocoder`` cho các bản ghi chưa có toạ độ đã duyệt.
-
-        Gửi đi bản ĐÃ CHUẨN HOÁ chứ không phải nguyên văn: bỏ dấu và mở viết tắt giúp
-        provider khớp tốt hơn hẳn với địa chỉ gõ tắt kiểu "P.5, Q.GV".
-        """
-        done = 0
-        for record in self:
-            if record.geo_state == 'manual':
-                # Toạ độ người dán tay là nguồn đáng tin nhất, máy không được đè lên.
-                continue
-            # Tính lại theo nhà cung cấp đang dùng: đổi từ OpenStreetMap sang Google rồi
-            # bấm "Tra lại" phải gửi đi chuỗi hợp với Google, không phải chuỗi cũ.
-            address = record._normalized_for_provider(record.raw_address)
-            if address and address != record.normalized_address:
-                record.normalized_address = address
-            address = address or record.raw_address
-            try:
-                result = self.env['base.geocoder'].sudo().geo_find(address)
-            except Exception as exc:  # noqa: BLE001 — provider lỗi không được làm gãy cả lô
-                _logger.warning('Tra toạ độ lỗi cho "%s": %s', address, exc)
-                record.write({'geo_state': 'failed', 'geo_raw_result': 'Lỗi khi tra: %s' % exc})
-                continue
-            if not result:
-                record.write({
-                    'geo_state': 'failed',
-                    'geo_raw_result': 'Không tìm thấy toạ độ cho: %s' % address,
-                })
-                continue
-            if not is_inside_vietnam(result[0], result[1]):
-                # Không lưu toạ độ này: giữ lại thì nó lặng lẽ chui vào phép tính quãng
-                # đường và làm hỏng cả kế hoạch. Thà để trống rồi dán tay.
-                record.write({
-                    'geo_state': 'failed',
-                    'geo_raw_result': (
-                        'Toạ độ tra được (%s, %s) nằm NGOÀI Việt Nam — nhà cung cấp đã khớp '
-                        'nhầm sang nơi khác. Địa chỉ gửi đi: %s\n'
-                        'Hãy sửa địa chỉ cho đầy đủ hơn (thêm tỉnh/thành, "Việt Nam") rồi '
-                        'tra lại, hoặc dán toạ độ tay từ Google Maps.'
-                        % (result[0], result[1], address)
-                    ),
-                })
-                _logger.warning(
-                    'V-Tracking: geocode trả toạ độ ngoài VN (%s, %s) cho "%s".',
-                    result[0], result[1], address,
-                )
-                continue
-            record.write({
-                'latitude': result[0],
-                'longitude': result[1],
-                'geo_source': 'geocode',
-                'geo_state': 'pending_review',
-                'geo_raw_result': json.dumps(
-                    {'address': address, 'lat': result[0], 'lng': result[1]}, ensure_ascii=False,
-                ),
-            })
-            done += 1
-        return done
-
-    def action_geocode_retry(self):
-        """Tra lại — dùng khi lần trước trượt hoặc khi đã đổi nhà cung cấp."""
-        return self._geocode()
-
-    def action_confirm(self):
-        self.write({'geo_state': 'confirmed'})
-        return True
-
-    def action_save_manual_geo(self):
-        for record in self:
-            parsed = parse_latlng(record.geo_input)
-            if not parsed:
-                raise UserError(
-                    'Không đọc được toạ độ "%s". Dán đúng dạng: 10.78950, 106.99179'
-                    % (record.geo_input or '')
-                )
-            record.write({
-                'latitude': parsed[0],
-                'longitude': parsed[1],
-                'geo_source': 'manual',
-                'geo_state': 'manual',
-                'geo_input': False,
-            })
-        return True
-
-    def action_open_gmaps(self):
-        self.ensure_one()
-        if not self.has_coords:
-            raise UserError('Bản ghi này chưa có toạ độ.')
-        return {
-            'type': 'ir.actions.act_url',
-            'url': 'https://www.google.com/maps?q=%s,%s' % (self.latitude, self.longitude),
-            'target': 'new',
-        }

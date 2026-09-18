@@ -22,7 +22,17 @@ class HlvVtrackingPlaceImportLine(models.TransientModel):
     coords_error = fields.Char(string='Lỗi toạ độ', readonly=True)
 
     zone_id = fields.Many2one('hlv.vtracking.zone', string='Cụm tuyến')
-    partner_id = fields.Many2one('res.partner', string='Đối tác trong Odoo')
+    partner_id = fields.Many2one(
+        'res.partner', string='Đối tác trong Odoo',
+        help='Chỉ chọn PHÁP NHÂN, không chọn liên hệ con. Ba mã khách của cùng một công ty '
+             'phải trỏ về một điểm giao, nên gắn vào liên hệ con thì đơn của mã khác sẽ '
+             'không tìm thấy điểm.',
+    )
+    partner_ref = fields.Char(
+        related='partner_id.ref', string='Mã khách', readonly=True,
+        help='Hiện ngay cạnh để soát: tên pháp nhân dài và nhiều công ty tên gần giống '
+             'nhau, mã thì ngắn và duy nhất.',
+    )
     existing_place_id = fields.Many2one(
         'hlv.vtracking.place', string='Điểm đã có', readonly=True,
     )
