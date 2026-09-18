@@ -101,6 +101,25 @@
 
             <section class="o_vt_main">
                 <div t-if="state.mapError" class="o_vt_maperror" t-esc="state.mapError"/>
+
+                <!-- Thanh lộ trình: nút tắt nằm ngoài popup vì popup thường đã đóng lúc
+                     người dùng muốn bỏ lộ trình đi. -->
+                <div t-if="routeInfo" class="o_vt_routebar">
+                    <span class="o_vt_routebar_dash"/>
+                    <span>
+                        Lộ trình dự kiến — <b t-esc="routeInfo.vehicleName"/>
+                        · <t t-esc="routeInfo.sessionLabel"/>
+                        · <t t-esc="routeInfo.distance"/> km
+                        · <t t-esc="routeInfo.duration"/>
+                    </span>
+                    <span t-if="routeInfo.drawn &lt; routeInfo.total" class="o_vt_warn">
+                        (vẽ <t t-esc="routeInfo.drawn"/>/<t t-esc="routeInfo.total"/> điểm —
+                        số còn lại chưa có toạ độ)
+                    </span>
+                    <button class="btn btn-sm btn-link o_vt_routebar_close" type="button"
+                            t-on-click="() => this.hideRoute()">Ẩn</button>
+                </div>
+
                 <div class="o_vt_map" t-ref="map"/>
             </section>
         </div>

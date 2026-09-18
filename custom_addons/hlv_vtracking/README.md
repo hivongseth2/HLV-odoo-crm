@@ -271,8 +271,28 @@ từ lịch sử GPS của xe. Chưa nối; làm ở bước sau.
 ### Trên bản đồ
 
 Bấm vào xe, popup hiện **kế hoạch hôm nay** của xe đó (mọi buổi): số phiếu, tiền, km và
-thời gian dự kiến — kèm dòng *Thực tế: chưa nối module shipper* để không ai nhầm số dự
-kiến thành số đã giao.
+thời gian dự kiến, danh sách điểm giao theo thứ tự ghé — kèm dòng *Thực tế: chưa nối
+module shipper* để không ai nhầm số dự kiến thành số đã giao.
+
+Mỗi kế hoạch có hai nút: **Xem bảng** (hộp thoại đầy đủ) và **Lộ trình**.
+
+#### Lộ trình dự kiến
+
+Bấm **Lộ trình** vẽ đường đi lên bản đồ: điểm xuất phát (kho, ghim đỏ) → từng điểm giao
+theo thứ tự ghé, mỗi điểm một ghim tròn tím đánh số. Số trên bản đồ **khớp với số trên tờ
+kế hoạch in ra**, kể cả khi có điểm bị bỏ qua vì thiếu toạ độ.
+
+Đường vẽ **nét đứt** có chủ ý: đây là đường nối thẳng giữa các điểm, **không phải đường đi
+thật** — module không gọi Google Directions. Nét liền sẽ khiến người xem tin rằng xe chạy
+đúng theo vệt đó.
+
+Thanh thông tin hiện trên đầu bản đồ với mẫu nét đứt (kiêm chú giải), km, thời gian, và
+báo rõ khi chỉ vẽ được một phần: *vẽ 6/8 điểm — số còn lại chưa có toạ độ*. Nút **Ẩn** ở
+thanh đó, không nằm trong popup, vì lúc muốn tắt thì popup thường đã đóng.
+
+Chọn kế hoạch khác thì lộ trình cũ tự thay; bấm lại đúng kế hoạch đang hiện thì tắt. Lộ
+trình được vẽ lại sau mỗi lượt làm tươi 30 giây, nên đổi thứ tự điểm trong Odoo là bản đồ
+cập nhật theo.
 
 ## Địa điểm trên bản đồ
 

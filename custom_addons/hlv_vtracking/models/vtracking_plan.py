@@ -311,18 +311,33 @@ class HlvVtrackingPlan(models.Model):
                 'actual_line_count': plan.actual_line_count,
                 'actual_amount_total': plan.actual_amount_total,
                 'actual_distance_km': plan.actual_distance_km,
+                # Điểm xuất phát, để vẽ được chặng đầu kho → điểm 1. Thiếu nó thì lộ trình
+                # trên bản đồ bắt đầu lơ lửng ở điểm giao đầu tiên.
+                'start': {
+                    'name': plan.start_place_id.name,
+                    'latitude': plan.start_place_id.latitude,
+                    'longitude': plan.start_place_id.longitude,
+                } if plan.start_place_id.has_coords else None,
                 # Danh sách chứng từ theo đúng thứ tự ghé: bấm vào xe là phải biết nó
                 # đang phải giao NHỮNG GÌ, không chỉ giao BAO NHIÊU.
                 'lines': [{
                     'id': line.id,
+                    # Số thứ tự ghé THẬT, đếm cả điểm chưa có toạ độ. Nhờ vậy số hiện trên
+                    # bản đồ khớp với số trên tờ kế hoạch in ra, dù điểm thiếu toạ độ
+                    # không vẽ được lên bản đồ.
+                    'seq_no': index + 1,
                     'reference': line.display_reference,
                     'source_name': line.source_name or '',
                     'partner_name': root_partner_name(line.partner_id),
                     'address': line.address or '',
                     'amount': line.amount,
+                    'latitude': line.latitude or None,
+                    'longitude': line.longitude or None,
                     'waiting_picking': line.line_state == 'waiting_picking',
                     'has_coords': line.has_coords,
                     'delivered': line.delivered,
-                } for line in plan.line_ids.sorted(lambda l: (l.sequence, l.id))],
+                } for index, line in enumerate(
+                    plan.line_ids.sorted(lambda l: (l.sequence, l.id))
+                )],
             })
         return result

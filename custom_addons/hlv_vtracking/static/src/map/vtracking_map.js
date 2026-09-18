@@ -23,6 +23,7 @@ import {
     planLineFlags,
 } from "./vtracking_map_utils";
 import { clearPlaces, drawPlaces } from "./vtracking_map_places";
+import { clearRoute, drawRoute, routableStopCount } from "./vtracking_map_route";
 import { VtrackingPlanTable } from "./vtracking_plan_table";
 
 // Bản đồ tự tải lại theo chu kỳ này. 30 giây khớp với nhịp cron đồng bộ chậm nhất mà vẫn
@@ -49,6 +50,7 @@ export class VtrackingMap extends Component {
             showVehicles: true,
             selectedId: null,
             selectedPlaceId: null,
+            routePlanId: null,
             search: "",
             loading: true,
             mapError: "",
@@ -59,6 +61,7 @@ export class VtrackingMap extends Component {
         this.map = null;
         this.markers = new Map();
         this.placeMarkers = new Map();
+        this.routeLayer = null;
         this.timer = null;
 
         onWillStart(async () => {
@@ -116,6 +119,12 @@ export class VtrackingMap extends Component {
                 .map((t) => t.id);
             this.placesLoaded = true;
             this.drawPlaceLayer();
+        }
+
+        // Lộ trình đang hiện phải vẽ lại theo dữ liệu vừa tải: kế hoạch có thể đã đổi
+        // thứ tự điểm hoặc thêm bớt phiếu trong lúc màn hình đang mở.
+        if (this.state.routePlanId) {
+            this.drawRouteLayer();
         }
     }
 
@@ -208,6 +217,7 @@ export class VtrackingMap extends Component {
         }).addTo(this.map);
         this.drawMarkers();
         this.drawPlaceLayer();
+        this.drawRouteLayer();
         this.fitToVehicles();
     }
 
@@ -304,9 +314,14 @@ export class VtrackingMap extends Component {
             <div class="o_vt_plan">
                 <div class="o_vt_plan_head">
                     <span>${this.escape(plan.session_label)} · ${this.escape(stateLabel)}</span>
-                    <button type="button" class="o_vt_plan_table_btn" data-vt-plan-id="${
-                        plan.id
-                    }">Xem bảng</button>
+                    <span class="o_vt_plan_btns">
+                        <button type="button" class="o_vt_plan_table_btn" data-vt-route-id="${
+                            plan.id
+                        }">${this.state.routePlanId === plan.id ? "Ẩn lộ trình" : "Lộ trình"}</button>
+                        <button type="button" class="o_vt_plan_table_btn" data-vt-plan-id="${
+                            plan.id
+                        }">Xem bảng</button>
+                    </span>
                 </div>
                 <div><strong>Kế hoạch:</strong> ${plan.line_count} điểm · ${formatMoney(
             plan.amount_total
@@ -348,20 +363,84 @@ export class VtrackingMap extends Component {
         return `<ul class="o_vt_plan_lines">${rows}</ul>`;
     }
 
-    /** Bấm "Xem bảng" trong popup -> hộp thoại bảng kế hoạch. */
+    /** Bấm nút trong popup: "Xem bảng" mở hộp thoại, "Xem lộ trình" vẽ lên bản đồ. */
     handlePopupClick(ev) {
-        const button = ev.target.closest?.("[data-vt-plan-id]");
-        if (!button) {
+        const tableButton = ev.target.closest?.("[data-vt-plan-id]");
+        if (tableButton) {
+            const plan = this.findPlan(Number(tableButton.dataset.vtPlanId));
+            if (plan) {
+                this.dialog.add(VtrackingPlanTable, {
+                    plan: plan.plan,
+                    vehicleName: plan.vehicleName,
+                });
+            }
             return;
         }
-        const planId = Number(button.dataset.vtPlanId);
+        const routeButton = ev.target.closest?.("[data-vt-route-id]");
+        if (routeButton) {
+            this.toggleRoute(Number(routeButton.dataset.vtRouteId));
+        }
+    }
+
+    /** Tìm kế hoạch theo id trong mọi xe. Trả về {plan, vehicleName} hoặc null. */
+    findPlan(planId) {
         for (const vehicle of this.state.vehicles) {
             const plan = (vehicle.plans || []).find((p) => p.id === planId);
             if (plan) {
-                this.dialog.add(VtrackingPlanTable, { plan, vehicleName: vehicle.name });
-                return;
+                return { plan, vehicleName: vehicle.name };
             }
         }
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // Lộ trình dự kiến
+    // ------------------------------------------------------------------
+    toggleRoute(planId) {
+        // Bấm lại đúng kế hoạch đang hiện thì tắt: không có nút "ẩn" riêng, vì nút riêng
+        // chỉ nằm trong popup mà popup thì thường đã bị đóng lúc người dùng muốn tắt.
+        this.state.routePlanId = this.state.routePlanId === planId ? null : planId;
+        this.drawRouteLayer();
+    }
+
+    drawRouteLayer() {
+        if (!this.map || !this.leaflet) {
+            return;
+        }
+        clearRoute(this.map, this.routeLayer);
+        this.routeLayer = null;
+        if (!this.state.routePlanId) {
+            return;
+        }
+        const found = this.findPlan(this.state.routePlanId);
+        if (!found) {
+            // Kế hoạch biến mất sau một lượt làm tươi (bị xoá, đổi ngày) — quên nó đi
+            // thay vì giữ một id trỏ vào hư không.
+            this.state.routePlanId = null;
+            return;
+        }
+        this.routeLayer = drawRoute(this.leaflet, this.map, found.plan);
+    }
+
+    get routeInfo() {
+        const found = this.state.routePlanId && this.findPlan(this.state.routePlanId);
+        if (!found) {
+            return null;
+        }
+        const plan = found.plan;
+        return {
+            vehicleName: found.vehicleName,
+            sessionLabel: plan.session_label,
+            drawn: routableStopCount(plan),
+            total: plan.line_count,
+            distance: plan.distance_km || 0,
+            duration: plan.duration_display || "—",
+        };
+    }
+
+    hideRoute() {
+        this.state.routePlanId = null;
+        this.drawRouteLayer();
     }
 
     escape(value) {

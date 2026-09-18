@@ -386,3 +386,64 @@
     background: #d1f0e8;
     color: #0f766e;
 }
+
+/* ---- Lộ trình dự kiến ---- */
+
+/* Ghim số thứ tự ghé. divIcon của Leaflet mặc định có nền trắng và viền — bỏ đi rồi tự
+   dựng, nếu không mỗi số nằm trong một cái hộp vuông thừa. */
+.o_vt_route_pin {
+    background: transparent;
+    border: none;
+}
+
+.o_vt_route_pin span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #6d28d9;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* Thanh thông tin lộ trình, đè trên bản đồ. z-index 500: trên tile (400), dưới popup (700). */
+.o_vt_routebar {
+    position: absolute;
+    z-index: 500;
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Mẫu nét đứt đúng như đường vẽ trên bản đồ, để thanh này cũng là chú giải. */
+.o_vt_routebar_dash {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 0;
+    border-top: 3px dashed #6d28d9;
+}
+
+.o_vt_routebar_close {
+    margin-left: auto;
+    padding: 0 4px;
+}
+
+.o_vt_plan_btns {
+    display: inline-flex;
+    gap: 4px;
+}
