@@ -80,7 +80,8 @@ class HlvVtrackingPlace(models.Model):
         string='Tình trạng toạ độ', default='none', required=True, index=True, tracking=True,
     )
     geo_source = fields.Selection(
-        [('geocode', 'Máy tra'), ('manual', 'Nhập tay'), ('partner', 'Lấy từ đối tác')],
+        [('geocode', 'Máy tra'), ('manual', 'Nhập tay'), ('partner', 'Lấy từ đối tác'),
+         ('map', 'Bản đồ router')],
         string='Nguồn toạ độ', readonly=True,
     )
     geo_raw_result = fields.Text(string='Kết quả máy trả về', readonly=True)

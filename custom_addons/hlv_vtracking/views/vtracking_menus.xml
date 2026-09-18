@@ -27,6 +27,10 @@
     <menuitem id="menu_vtracking_places" name="Địa điểm"
               parent="menu_vtracking_root" action="action_vtracking_place" sequence="30"/>
 
+    <menuitem id="menu_vtracking_place_import" name="Nhập điểm từ bản đồ"
+              parent="menu_vtracking_root" action="action_vtracking_place_import"
+              sequence="33" groups="hlv_vtracking.group_vtracking_manager"/>
+
     <menuitem id="menu_vtracking_place_from_partner" name="Tạo địa điểm từ đối tác"
               parent="menu_vtracking_root" action="action_vtracking_place_from_partner"
               sequence="35" groups="hlv_vtracking.group_vtracking_manager"/>

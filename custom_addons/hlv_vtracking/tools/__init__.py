@@ -4,3 +4,4 @@ from . import vtracking_partner
 from . import vtracking_route
 from . import vtracking_stage
 from . import vtracking_planning
+from . import vtracking_map_import

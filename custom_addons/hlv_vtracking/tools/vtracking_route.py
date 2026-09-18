@@ -10,8 +10,10 @@ thật — dùng để so các phương án, không dùng để hứa giờ vớ
 **Thời gian** có hai cách tính, ưu tiên cách thứ nhất:
 
 1. **Định mức đo được của cụm tuyến** (``hub_to_first_minutes`` / ``median_leg_minutes``).
-   Chính xác hơn vì nó đo từ 332 chuyến thật, đã gồm cả bốc dỡ, ký nhận, tìm chỗ đỗ.
-2. Suy từ quãng đường ÷ tốc độ trung bình — dùng khi điểm chưa gán cụm.
+   Chính xác hơn vì đo từ 332 chuyến thật. **Mỗi chặng ĐÃ GỒM bốc dỡ và ký nhận tại điểm**
+   — nên không cộng thêm ``minutes_per_stop``, cộng là tính hai lần.
+2. Suy từ quãng đường ÷ tốc độ trung bình — dùng khi điểm chưa gán cụm. Cách này chỉ ra
+   thời gian CHẠY thuần nên phải cộng ``minutes_per_stop`` cho thời gian đứng tại điểm.
 
 Cách 1 tồn tại vì đối chiếu kế hoạch với thực tế ngày 11/09 bắt được rằng dùng một con số
 chung cho mọi cụm là sai: Nhơn Trạch 40 phút còn Long Thành 57 phút.
@@ -41,6 +43,11 @@ def route_params(speed_kmh=None, minutes_per_stop=None, road_factor=None, zone=N
         'median_leg_minutes': None,
         'return_minutes': 0,
         'zone_based': False,
+        # Định mức cụm đo từ chuyến thật nên MỖI CHẶNG đã gồm cả bốc dỡ và ký nhận tại
+        # điểm. Cộng thêm `minutes_per_stop` nữa là tính hai lần: chuyến Nhơn Trạch 8 điểm
+        # đo được 134 phút, cộng đúp thành 211 — đủ để kết luận sai là chuyến không kịp
+        # buổi sáng rồi cắt bớt điểm.
+        'service_in_leg': False,
     }
     if zone:
         params.update({
@@ -48,6 +55,7 @@ def route_params(speed_kmh=None, minutes_per_stop=None, road_factor=None, zone=N
             'median_leg_minutes': zone.get('median_leg_minutes') or None,
             'return_minutes': zone.get('return_minutes') or 0,
             'zone_based': True,
+            'service_in_leg': True,
         })
     return params
 
@@ -68,6 +76,11 @@ def estimate_legs(start, stops, params):
          'arrive_offset_minutes': int,    # phút tính từ lúc xuất phát tới khi TỚI điểm này
          'depart_offset_minutes': int}    # ... tới khi RỜI điểm này
 
+    Với định mức cụm, mốc đo là lúc **GIAO XONG** (định mức lấy từ ``date_done`` của phiếu),
+    nên ``depart`` bằng ``arrive``: thời gian đứng tại điểm đã nằm trong chặng kế tiếp.
+    Với cách tính từ km thì ``arrive`` là lúc tới nơi, và ``depart`` = ``arrive`` +
+    ``minutes_per_stop``.
+
     ``leg_km`` là None với điểm thiếu toạ độ. Điểm kế tiếp được đo từ điểm GẦN NHẤT CÓ
     TOẠ ĐỘ trước nó (nối thẳng qua điểm thiếu): theo bất đẳng thức tam giác đó là cận dưới
     chặt nhất có thể có, và khớp với cách ``total_path_km`` của hlv_geo_utils bỏ qua điểm
@@ -85,7 +98,7 @@ def estimate_legs(start, stops, params):
         leg_minutes = _leg_minutes(leg_km, index, previous, params)
         clock += leg_minutes or 0
         arrive = clock
-        clock += params['minutes_per_stop']
+        clock += 0 if params['service_in_leg'] else params['minutes_per_stop']
         legs.append({
             'leg_km': leg_km,
             'leg_minutes': leg_minutes,
@@ -143,7 +156,9 @@ def estimate_route(start, stops, params):
     legs = estimate_legs(start, stops, params)
     distance = round(sum(leg['leg_km'] or 0.0 for leg in legs), 1)
     drive = sum(leg['leg_minutes'] or 0 for leg in legs)
-    service = params['minutes_per_stop'] * len(stops)
+    # Định mức cụm: thời gian tại điểm đã nằm trong từng chặng, không cộng lần nữa.
+    # Tính từ km: km ÷ tốc độ chỉ ra thời gian CHẠY thuần, phải cộng thời gian đứng.
+    service = 0 if params['service_in_leg'] else params['minutes_per_stop'] * len(stops)
     back = params['return_minutes'] if stops else 0
     return {
         'distance_km': distance,

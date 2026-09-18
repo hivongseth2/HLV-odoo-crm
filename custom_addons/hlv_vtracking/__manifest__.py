@@ -53,6 +53,7 @@ xem plan/ke-hoach-module-vtracking.md.
         'views/vtracking_import_wizard_views.xml',
         'views/vtracking_zone_views.xml',
         'views/vtracking_place_views.xml',
+        'views/vtracking_place_import_views.xml',
         'views/vtracking_plan_views.xml',
         'views/vtracking_plan_add_views.xml',
         'report/vtracking_plan_report.xml',

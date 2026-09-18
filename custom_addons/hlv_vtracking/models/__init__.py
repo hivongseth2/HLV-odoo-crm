@@ -9,6 +9,8 @@ from . import vtracking_zone
 from . import vtracking_place_type
 from . import vtracking_place
 from . import vtracking_place_wizard
+from . import vtracking_place_import_line
+from . import vtracking_place_import_wizard
 from . import vtracking_address
 from . import vtracking_plan
 from . import vtracking_plan_actions
