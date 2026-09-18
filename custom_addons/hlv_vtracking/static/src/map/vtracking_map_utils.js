@@ -130,3 +130,41 @@ export function filterBySearch(items, needle, fields) {
         fields.some((field) => searchKey(item[field]).includes(key))
     );
 }
+
+/**
+ * Số tiền theo cách đọc quen của người Việt.
+ * @param {number} value số tiền
+ * @returns {string} ví dụ "3.500.000". Không phải số trả "0".
+ */
+export function formatMoney(value) {
+    const amount = Number(value);
+    return (Number.isFinite(amount) ? amount : 0).toLocaleString("vi-VN");
+}
+
+/**
+ * Ba dấu hiệu cần thấy ngay của một điểm giao.
+ *
+ * Gom vào đây để popup trên bản đồ và bảng kế hoạch nói CÙNG một thứ: hai chỗ tự nhìn
+ * cờ riêng là sớm muộn cũng lệch nhau, mà lệch ở đây nghĩa là điều phối đọc hai màn hình
+ * ra hai kết luận khác nhau về cùng một điểm giao.
+ *
+ * @param {Object} line một phần tử trong plan.lines
+ * @returns {Array<{label: string, tone: string}>} tone là "warn" hoặc "ok"; rỗng khi
+ *          điểm giao đã đủ điều kiện và chưa giao.
+ */
+export function planLineFlags(line) {
+    const flags = [];
+    if (!line) {
+        return flags;
+    }
+    if (line.waiting_picking) {
+        flags.push({ label: "chờ phiếu", tone: "warn" });
+    }
+    if (!line.has_coords) {
+        flags.push({ label: "chưa có toạ độ", tone: "warn" });
+    }
+    if (line.delivered) {
+        flags.push({ label: "đã giao", tone: "ok" });
+    }
+    return flags;
+}

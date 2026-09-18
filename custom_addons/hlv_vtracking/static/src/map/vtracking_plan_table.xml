@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hlv_vtracking.PlanTable">
+        <Dialog title="title" size="'xl'">
+            <div class="o_vt_table_head">
+                <span><strong t-esc="props.plan.line_count"/> điểm</span>
+                <span>·</span>
+                <span><strong t-esc="money(amountTotal)"/></span>
+                <span>·</span>
+                <span><t t-esc="props.plan.distance_km or 0"/> km</span>
+                <span t-if="props.plan.duration_display">
+                    · <t t-esc="props.plan.duration_display"/>
+                </span>
+                <span t-if="deliveredCount" class="o_vt_table_ok">
+                    · đã giao <t t-esc="deliveredCount"/>/<t t-esc="lines.length"/>
+                </span>
+                <span t-if="props.plan.missing_coords_count" class="o_vt_table_warn">
+                    · <t t-esc="props.plan.missing_coords_count"/> điểm chưa có toạ độ,
+                    km đang thiếu phần của chúng
+                </span>
+            </div>
+
+            <div t-if="!lines.length" class="o_vt_empty">Kế hoạch này chưa có điểm giao nào.</div>
+
+            <div t-else="" class="table-responsive">
+                <table class="table table-sm o_vt_table">
+                    <thead>
+                        <tr>
+                            <th class="o_vt_table_num">#</th>
+                            <th>Chứng từ</th>
+                            <th>Đơn bán</th>
+                            <th>Khách hàng</th>
+                            <th>Địa chỉ giao</th>
+                            <th class="o_vt_table_money">Tiền hàng</th>
+                            <th>Tình trạng</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="lines" t-as="line" t-key="line.id"
+                            t-att-class="{ 'o_vt_table_done': line.delivered }">
+                            <td class="o_vt_table_num" t-esc="line_index + 1"/>
+                            <td t-esc="line.reference"/>
+                            <td t-esc="line.source_name or '—'"/>
+                            <td t-esc="line.partner_name or '—'"/>
+                            <td class="o_vt_table_addr" t-esc="line.address or '—'"/>
+                            <td class="o_vt_table_money" t-esc="money(line.amount)"/>
+                            <td>
+                                <span t-foreach="flags(line)" t-as="flag" t-key="flag.label"
+                                      t-attf-class="o_vt_table_flag o_vt_table_#{flag.tone}"
+                                      t-esc="flag.label"/>
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="5">Tổng</td>
+                            <td class="o_vt_table_money" t-esc="money(amountTotal)"/>
+                            <td/>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <t t-set-slot="footer">
+                <button class="btn btn-primary" t-on-click="() => this.openPlanRecord()">
+                    Mở kế hoạch để sửa
+                </button>
+                <button class="btn btn-secondary" t-on-click="() => this.props.close()">
+                    Đóng
+                </button>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>

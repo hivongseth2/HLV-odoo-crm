@@ -148,12 +148,35 @@
 }
 
 .o_vt_plan_head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     font-weight: 700;
     text-transform: uppercase;
     font-size: 10px;
     letter-spacing: 0.03em;
     color: #6c757d;
     margin-bottom: 2px;
+}
+
+/* Nút mở bảng kế hoạch. Nhạt và nhỏ: nó là lối đi phụ, danh sách ngay bên dưới mới là
+   thứ người xem cần đọc trước. */
+.o_vt_plan_table_btn {
+    flex: 0 0 auto;
+    border: 1px solid #ced4da;
+    background: #fff;
+    color: #0d6efd;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: none;
+    cursor: pointer;
+}
+
+.o_vt_plan_table_btn:hover {
+    background: #e7f1ff;
 }
 
 .o_vt_plan_empty,
@@ -302,4 +325,64 @@
 
 .leaflet-tooltip.o_vt_place_label::before {
     display: none;
+}
+
+/* --- Bảng kế hoạch trong hộp thoại ------------------------------------- */
+
+.o_vt_table_head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+    color: #495057;
+}
+
+.o_vt_table_warn {
+    color: #b45309;
+}
+
+.o_vt_table_ok {
+    color: #0f766e;
+}
+
+/* Số thứ tự và tiền canh phải, chữ số đều bề ngang: cột tiền phải cộng nhẩm được. */
+.o_vt_table .o_vt_table_num,
+.o_vt_table .o_vt_table_money {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.o_vt_table .o_vt_table_addr {
+    max-width: 320px;
+    overflow-wrap: anywhere;
+}
+
+.o_vt_table tfoot td {
+    font-weight: 700;
+    border-top: 2px solid #dee2e6;
+}
+
+/* Điểm đã giao mờ đi thay vì gạch ngang: vẫn phải đọc được số tiền trên dòng đó. */
+.o_vt_table_done {
+    color: #6c757d;
+}
+
+.o_vt_table_flag {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 0 5px;
+    border-radius: 8px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.o_vt_table_flag.o_vt_table_warn {
+    background: #fff3cd;
+    color: #b45309;
+}
+
+.o_vt_table_flag.o_vt_table_ok {
+    background: #d1f0e8;
+    color: #0f766e;
 }

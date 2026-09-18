@@ -3,6 +3,7 @@ import logging
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km, total_path_km
+from odoo.addons.hlv_vtracking.tools.vtracking_partner import root_partner_name
 
 _logger = logging.getLogger(__name__)
 
@@ -316,7 +317,7 @@ class HlvVtrackingPlan(models.Model):
                     'id': line.id,
                     'reference': line.display_reference,
                     'source_name': line.source_name or '',
-                    'partner_name': line.partner_id.display_name or '',
+                    'partner_name': root_partner_name(line.partner_id),
                     'address': line.address or '',
                     'amount': line.amount,
                     'waiting_picking': line.line_state == 'waiting_picking',

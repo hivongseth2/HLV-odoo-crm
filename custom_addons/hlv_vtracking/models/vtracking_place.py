@@ -4,6 +4,7 @@ import logging
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 from odoo.addons.hlv_geo_utils.tools.geo_text import parse_latlng
+from odoo.addons.hlv_vtracking.tools.vtracking_partner import root_partner_name
 
 _logger = logging.getLogger(__name__)
 
@@ -271,7 +272,7 @@ class HlvVtrackingPlace(models.Model):
             'show_label': self.type_id.show_label,
             'latitude': self.latitude,
             'longitude': self.longitude,
-            'partner_name': self.partner_id.display_name or '',
+            'partner_name': root_partner_name(self.partner_id),
             'phone': self.phone or '',
             'address': self.address_used or '',
             'geo_state': self.geo_state,

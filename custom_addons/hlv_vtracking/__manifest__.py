@@ -65,6 +65,8 @@ xem plan/ke-hoach-module-vtracking.md.
             'hlv_vtracking/static/src/map/vtracking_map_utils.js',
             'hlv_vtracking/static/src/map/vtracking_map_places.js',
             'hlv_vtracking/static/src/map/vtracking_leaflet_loader.js',
+            'hlv_vtracking/static/src/map/vtracking_plan_table.js',
+            'hlv_vtracking/static/src/map/vtracking_plan_table.xml',
             'hlv_vtracking/static/src/map/vtracking_map.js',
             'hlv_vtracking/static/src/map/vtracking_map.xml',
         ],

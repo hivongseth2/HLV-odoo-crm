@@ -14,8 +14,16 @@ import { Component, onWillStart, onWillUnmount, onMounted, useRef, useState } fr
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { loadLeaflet } from "./vtracking_leaflet_loader";
-import { statusColor, formatAgo, formatSpeed, filterBySearch } from "./vtracking_map_utils";
+import {
+    statusColor,
+    formatAgo,
+    formatSpeed,
+    formatMoney,
+    filterBySearch,
+    planLineFlags,
+} from "./vtracking_map_utils";
 import { clearPlaces, drawPlaces } from "./vtracking_map_places";
+import { VtrackingPlanTable } from "./vtracking_plan_table";
 
 // Bản đồ tự tải lại theo chu kỳ này. 30 giây khớp với nhịp cron đồng bộ chậm nhất mà vẫn
 // đủ tươi để nhìn xe di chuyển; ngắn hơn chỉ làm tăng tải cho Odoo chứ dữ liệu không mới hơn.
@@ -31,6 +39,7 @@ export class VtrackingMap extends Component {
 
     setup() {
         this.orm = useService("orm");
+        this.dialog = useService("dialog");
         this.mapRef = useRef("map");
         this.state = useState({
             vehicles: [],
@@ -62,8 +71,15 @@ export class VtrackingMap extends Component {
             }
         });
 
+        // Nút trong popup nằm trong HTML thô do Leaflet dựng, Owl không gắn được
+        // t-on-click vào đó. Nghe uỷ quyền ở khung bản đồ: popup của Leaflet nằm bên
+        // trong khung này, và khung sống lâu hơn từng popup nên không phải gắn lại mỗi
+        // lượt làm tươi.
+        this.onMapClick = (ev) => this.handlePopupClick(ev);
+
         onMounted(() => {
             this.buildMap();
+            this.mapRef.el?.addEventListener("click", this.onMapClick);
             this.timer = setInterval(() => this.reload(), REFRESH_MS);
         });
 
@@ -71,6 +87,7 @@ export class VtrackingMap extends Component {
             if (this.timer) {
                 clearInterval(this.timer);
             }
+            this.mapRef.el?.removeEventListener("click", this.onMapClick);
             if (this.map) {
                 this.map.remove();
                 this.map = null;
@@ -271,7 +288,6 @@ export class VtrackingMap extends Component {
     }
 
     onePlanHtml(plan) {
-        const money = (value) => (value || 0).toLocaleString("vi-VN");
         const stateLabel =
             { draft: "nháp", confirmed: "đã chốt", done: "xong" }[plan.state] || plan.state;
         const warn = plan.missing_coords_count
@@ -280,16 +296,19 @@ export class VtrackingMap extends Component {
         // Phần thực tế luôn hiện, kể cả khi chưa có số: người xem phải thấy được rằng
         // "kế hoạch 12 đơn" chưa nói gì về việc đã giao mấy đơn.
         const actual = plan.has_actual_data
-            ? `<div><strong>Đã giao:</strong> ${plan.actual_line_count} phiếu · ${money(
+            ? `<div><strong>Đã giao:</strong> ${plan.actual_line_count} phiếu · ${formatMoney(
                   plan.actual_amount_total
               )} · ${plan.actual_distance_km || 0} km thực chạy</div>`
             : `<div class="o_vt_plan_pending">Thực tế: chưa nối module shipper</div>`;
         return `
             <div class="o_vt_plan">
-                <div class="o_vt_plan_head">${this.escape(
-                    plan.session_label
-                )} · ${this.escape(stateLabel)}</div>
-                <div><strong>Kế hoạch:</strong> ${plan.line_count} điểm · ${money(
+                <div class="o_vt_plan_head">
+                    <span>${this.escape(plan.session_label)} · ${this.escape(stateLabel)}</span>
+                    <button type="button" class="o_vt_plan_table_btn" data-vt-plan-id="${
+                        plan.id
+                    }">Xem bảng</button>
+                </div>
+                <div><strong>Kế hoạch:</strong> ${plan.line_count} điểm · ${formatMoney(
             plan.amount_total
         )}</div>
                 <div><strong>Dự kiến:</strong> ${plan.distance_km || 0} km · ${this.escape(
@@ -309,16 +328,11 @@ export class VtrackingMap extends Component {
         }
         const rows = lines
             .map((line, index) => {
-                // Ba dấu hiệu cần thấy ngay: chưa có phiếu, chưa có toạ độ, đã giao.
-                const flags = [];
-                if (line.waiting_picking) {
-                    flags.push(`<span class="o_vt_plan_warn">chờ phiếu</span>`);
-                }
-                if (!line.has_coords) {
-                    flags.push(`<span class="o_vt_plan_warn">chưa có toạ độ</span>`);
-                }
+                const flags = planLineFlags(line)
+                    .filter((flag) => flag.tone === "warn")
+                    .map((flag) => `<span class="o_vt_plan_warn">${this.escape(flag.label)}</span>`);
                 const tick = line.delivered ? "✓ " : "";
-                const money = (line.amount || 0).toLocaleString("vi-VN");
+                const money = formatMoney(line.amount);
                 return `<li>
                     <span class="o_vt_line_no">${index + 1}.</span>
                     <span class="o_vt_line_main">${tick}${this.escape(
@@ -332,6 +346,22 @@ export class VtrackingMap extends Component {
         // Cuộn trong popup thay vì cắt bớt: xe chở 15 điểm thì phải xem được cả 15, mà
         // popup cao quá màn hình thì không đóng lại được.
         return `<ul class="o_vt_plan_lines">${rows}</ul>`;
+    }
+
+    /** Bấm "Xem bảng" trong popup -> hộp thoại bảng kế hoạch. */
+    handlePopupClick(ev) {
+        const button = ev.target.closest?.("[data-vt-plan-id]");
+        if (!button) {
+            return;
+        }
+        const planId = Number(button.dataset.vtPlanId);
+        for (const vehicle of this.state.vehicles) {
+            const plan = (vehicle.plans || []).find((p) => p.id === planId);
+            if (plan) {
+                this.dialog.add(VtrackingPlanTable, { plan, vehicleName: vehicle.name });
+                return;
+            }
+        }
     }
 
     escape(value) {
