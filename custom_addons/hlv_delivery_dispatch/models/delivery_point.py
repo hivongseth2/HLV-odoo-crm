@@ -15,8 +15,9 @@ GEOCODE_BATCH_SIZE = 20
 class HlvDeliveryPoint(models.Model):
     """Điểm giao vật lý — gom nhiều mã khách Odoo về MỘT địa điểm.
 
-    Đây là model quan trọng nhất của module. Odoo sinh nhiều mã cho cùng một khách
-    (351 mã = 176 khách thật). Nếu xếp chuyến theo partner_id thì cùng một nhà máy bị
+    Đây là model quan trọng nhất của module. Một khách có nhiều liên hệ con, mỗi liên hệ
+    là một địa chỉ giao (đo 18/09/2026: 836/3282 mã trên phiếu OUT là liên hệ con). Nếu
+    xếp chuyến theo partner_id thì cùng một nhà máy bị
     đếm thành 3 điểm và phá vỡ trần 8 điểm/chuyến. Mọi phép đếm điểm, mọi trần cụm,
     mọi thói quen khách đều gắn vào đây chứ không gắn vào res.partner.
     """

@@ -1,9 +1,13 @@
 """Chuẩn hoá chuỗi liên quan tới địa điểm — hàm thuần, vào gì ra nấy.
 
-Chuẩn hoá tên đối tác là phần quan trọng nhất ở đây: Odoo sinh nhiều mã cho cùng một
-đối tác (351 mã = 176 khách thật theo số liệu đối chiếu 01/06→10/09), và tên trên
-Google My Maps viết khác tên trong Odoo. Mọi việc ghép bản đồ ↔ Odoo và mọi lần
-re-import đều phải đi qua ``normalize_name`` để không sinh điểm trùng.
+Chuẩn hoá tên đối tác là phần quan trọng nhất ở đây: tên trên Google My Maps viết khác
+tên trong Odoo, nên mọi việc ghép bản đồ ↔ Odoo và mọi lần re-import đều phải đi qua
+``normalize_name`` để không sinh điểm trùng.
+
+CẢNH BÁO PHẠM VI: chỉ khớp tên của PHÁP NHÂN, đừng khớp tên của liên hệ con. Đo 18/09/2026
+trên phiếu OUT 01/06→18/09: 166 mã có tên "****" (liên hệ sàn TMĐT bị che tên) thuộc 165
+pháp nhân khác nhau, và "Ms Hoa" là 4 liên hệ ở ba công ty khác hẳn nhau. Khớp theo tên
+liên hệ nhập tất cả chúng làm một.
 
 Nằm ở addon riêng vì cả chiều giao hàng lẫn chiều nhận hàng đều dùng: cùng một địa chỉ
 phải ra cùng một khoá so khớp ở cả hai module.

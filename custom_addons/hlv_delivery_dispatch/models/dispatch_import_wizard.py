@@ -204,9 +204,8 @@ class HlvDispatchImportWizard(models.TransientModel):
     def _link_partners(self, rows):
         """Gắn điểm giao cho khách trong Odoo, khớp theo TÊN đã chuẩn hoá.
 
-        Quét thẳng res.partner chứ không dò từng tên trong file: Odoo sinh nhiều mã cho
-        cùng một khách với tên viết hơi khác nhau (351 mã = 176 khách thật), nên khớp
-        theo tên chính xác sẽ bỏ sót phần lớn. File đối chiếu chỉ dùng để biết khách nào
+        Quét thẳng res.partner chứ không dò từng tên trong file: cùng một khách có nhiều
+        mã với tên viết hơi khác nhau, nên khớp theo tên chính xác sẽ bỏ sót phần lớn. File đối chiếu chỉ dùng để biết khách nào
         đáng lẽ phải có điểm mà vẫn không ghép được.
 
         Chỉ ghép khách chưa có điểm — không cướp lại khách đã gán tay.

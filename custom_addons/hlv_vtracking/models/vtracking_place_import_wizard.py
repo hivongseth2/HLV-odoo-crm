@@ -138,7 +138,7 @@ class HlvVtrackingPlaceImport(models.TransientModel):
 
         Ghép theo tên chuẩn hoá vì tên trên bản đồ khác tên trong Odoo ("Jungwoo vina" ↔
         "CÔNG TY TNHH JUNGWOO VINA"). Chỉ nhận PHÁP NHÂN GỐC: Odoo sinh nhiều mã cho cùng
-        một công ty (351 mã = 176 khách thật), gắn điểm vào mã con thì đơn của mã khác sẽ
+        một công ty (đo 18/09/2026: 836/3282 mã trên phiếu là liên hệ con), gắn điểm vào mã con thì đơn của mã khác sẽ
         không tìm thấy điểm.
         """
         keys = {normalize_name(point['name']) for point in points}

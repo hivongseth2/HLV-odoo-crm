@@ -1,8 +1,9 @@
 """Thói quen giao hàng của một điểm giao — thứ người điều phối biết mà Odoo không biết.
 
-Treo vào **điểm giao** chứ không vào từng mã khách: đo được 351 mã khách trong Odoo ứng
-với 176 công ty thật, nên gắn vào mã khách thì ba mã của một nhà máy sẽ có ba bộ thói quen
-rời nhau và hai trong ba sẽ lạc hậu.
+Treo vào **điểm giao** chứ không vào từng mã khách. Một khách có nhiều liên hệ con, mỗi
+liên hệ là một địa chỉ giao — đo 18/09/2026 trên 6404 phiếu OUT (01/06→18/09): 3282 mã
+khách trên phiếu, trong đó 836 mã là liên hệ con. Gắn thói quen vào mã khách thì mỗi địa
+chỉ giao của cùng một nhà máy có một bộ riêng, và chúng lệch nhau ngay lần sửa đầu tiên.
 
 Cũng không gắn vào pháp nhân gốc: ``procedure_required`` là tính chất của **chỗ giao**
 (khu chế xuất thì phải khai hải quan), không phải của công ty. Một khách có kho ngoài khu

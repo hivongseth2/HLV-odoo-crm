@@ -154,8 +154,10 @@ class HlvVtrackingPlanLine(models.Model):
     def _compute_place_id(self):
         """Ghép chứng từ với điểm giao qua PHÁP NHÂN GỐC của khách.
 
-        Odoo sinh nhiều mã cho cùng một công ty (đo được 351 mã = 176 khách thật), nên so
-        thẳng ``partner_id`` sẽ trượt phần lớn. ``commercial_partner_id`` là pháp nhân gốc.
+        Mỗi khách có nhiều liên hệ con, mỗi liên hệ là một địa chỉ giao — đo 18/09/2026 trên
+        phiếu OUT 3 tháng: 836/3282 mã là liên hệ con, nên so thẳng ``partner_id`` trượt chừng
+        ấy mã. KHÔNG lùi về khớp theo TÊN khi khớp pháp nhân gốc trượt: cùng lần đo, 166 mã
+        tên "****" thuộc 165 pháp nhân khác nhau (`bin/check_partner_dedup_structure.py`).
 
         Điểm này KHÔNG quyết định cụm tuyến — cụm suy từ toạ độ của chính địa chỉ giao,
         xem ``_compute_zone_id``. Nó dùng để treo thói quen khách, và làm nguồn dự phòng
