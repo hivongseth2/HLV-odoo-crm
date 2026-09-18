@@ -9,7 +9,7 @@ from ...tools.vtracking_address import address_key
 from .. import plan_documents
 from . import chatter_service, fulfillment_service, supply_service
 from .serialize import (
-    coords_block, iso_datetime, one_line_address, optional_field, partner_block, plain_text,
+    coords_block, iso_datetime, optional_field, partner_block, plain_text,
 )
 
 DEFAULT_LIMIT = 50
@@ -129,8 +129,9 @@ def delivery_block(order):
     )[:1]
     shipping = order.partner_shipping_id or order.partner_id
     address = (
-        out_picking._vtracking_delivery_address() if out_picking else None
-    ) or one_line_address(shipping)
+        out_picking._vtracking_delivery_address() if out_picking
+        else order._vtracking_delivery_address()
+    )
     return {
         'address': address,
         'address_source': 'picking' if out_picking else 'order',

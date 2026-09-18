@@ -82,6 +82,14 @@ class ResCompany(models.Model):
              'khớp địa bàn.',
     )
 
+    vtracking_zone_match_km = fields.Float(
+        string='Bán kính nhận cụm (km)', default=3.0,
+        help='Địa chỉ cách điểm giao đã biết gần nhất trong khoảng này thì nhận luôn cụm '
+             'của điểm đó; xa hơn vẫn đoán nhưng đánh dấu "chưa chắc" để người soát. Đo '
+             'trên 86 ghim bản đồ: 3 km cho 100% đúng phần tự gán, nới lên 5 km thì tụt '
+             'còn 96%.',
+    )
+
     # --- Tra toạ độ ---------------------------------------------------------
     # Hai ô dưới đây đọc/ghi thẳng tham số hệ thống của `base_geolocalize`, KHÔNG tạo
     # tham số riêng: hai chỗ cùng giữ một khoá Google là kiểu lỗi mà người dùng đổi khoá

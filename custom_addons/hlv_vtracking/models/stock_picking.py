@@ -6,7 +6,11 @@ _logger = logging.getLogger(__name__)
 
 # Field do Studio tạo trên bản cài này, không có trong mã nguồn Odoo. Đọc qua ``_fields``
 # để module vẫn cài được ở nơi chưa tạo các field đó.
-STUDIO_ADDRESS_FIELD = 'x_studio_a_ch_giao_hng'
+#
+# THỨ TỰ QUAN TRỌNG: `x_studio_a_ch_giao_hng` là field TÍNH TỪ liên hệ của khách nên nó
+# gần như luôn có giá trị. Đặt nó trước thì không bao giờ đọc tới địa chỉ giao thật mà kho
+# gõ tay ở `x_studio_dia_chi_giao_hang` — và mọi phiếu sẽ geocode nhầm về trụ sở khách.
+STUDIO_ADDRESS_FIELDS = ('x_studio_dia_chi_giao_hang', 'x_studio_a_ch_giao_hng')
 STUDIO_AMOUNT_FIELD = 'x_studio_tng_tin_sau_thu'
 
 
@@ -51,16 +55,17 @@ class StockPicking(models.Model):
     def _vtracking_delivery_address(self):
         """Địa chỉ dùng để tra toạ độ cho phiếu này.
 
-        Ưu tiên ô địa chỉ giao gõ tay trên phiếu: đó là nơi kho ghi địa chỉ THẬT của
-        chuyến này, có thể khác địa chỉ mặc định của khách. Không có thì lùi về địa chỉ
-        liên hệ của đối tác.
+        Thử lần lượt các ô ở ``STUDIO_ADDRESS_FIELDS`` rồi mới lùi về địa chỉ liên hệ của
+        khách. Ô đầu là địa chỉ giao kho gõ tay — nơi ghi địa chỉ THẬT của chuyến này, có
+        thể khác hẳn trụ sở khách.
         """
         self.ensure_one()
-        studio_value = ''
-        if STUDIO_ADDRESS_FIELD in self._fields:
-            studio_value = (self[STUDIO_ADDRESS_FIELD] or '').strip()
-        if studio_value:
-            return studio_value
+        for field_name in STUDIO_ADDRESS_FIELDS:
+            if field_name not in self._fields:
+                continue
+            value = (self[field_name] or '').strip()
+            if value:
+                return value
         return (self.partner_id.contact_address or '').replace('\n', ', ').strip(' ,')
 
     def _vtracking_amount(self):

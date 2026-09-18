@@ -33,6 +33,7 @@ Không tham số. Gọi một lần đầu phiên.
   "today": "2026-09-18", "timezone": "Asia/Ho_Chi_Minh",
   "sessions": [{"code": "morning", "label": "Sáng"}, {"code": "afternoon", ...}, {"code": "full_day", ...}],
   "route_params": {"speed_kmh": 35.0, "minutes_per_stop": 10, "road_factor": 1.3},
+  "zone_match_km": 3.0,
   "zones": [{"id": 1, "name": "Nhơn Trạch", "code": "NT", "warehouse_id": 1,
              "hub_to_first_minutes": 40, "median_leg_minutes": 13, "return_minutes": 25,
              "max_stops": 8, "min_stops_worth_trip": 3, "place_count": 48}],
@@ -53,6 +54,11 @@ cả hai là sai cả hai. Các số này được cập nhật sau mỗi lần 
 nên **đừng dùng số ghi cứng trong skill hay prompt**.
 
 `route_params` chung của công ty chỉ là **giá trị lùi** cho điểm chưa gán cụm.
+
+**Cụm của một điểm giao suy từ TOẠ ĐỘ**, không suy từ khách hàng: hệ thống tìm điểm giao đã
+biết gần nhất rồi lấy cụm của điểm đó. Nhờ vậy một khách giao ở hai nơi thuộc hai cụm khác
+nhau (nhà máy và kho) vẫn ra đúng hai cụm. `zone_match_km` là bán kính còn tin được — xa
+hơn thì vẫn đoán nhưng đánh dấu `zone_uncertain`.
 
 ## 2. `GET /fleet`
 
@@ -179,6 +185,8 @@ Tóm tắt như mục 8, thêm `note`, `route_params`, và `lines[]` theo thứ 
 | `partner_name`, `address`, `amount` | Khách, địa chỉ, tiền |
 | `latitude`, `longitude`, `has_coords` | Toạ độ điểm giao |
 | `zone_id`, `zone_name` | Cụm tuyến của điểm — quyết định định mức thời gian |
+| `zone_source` | `coords` (suy từ toạ độ — tin được) · `place` (đoán theo khách) · `manual` (người gán) · `none` |
+| `zone_uncertain` | `true` = máy phải đoán. **Nêu lại cho người dùng**, đừng im lặng dùng |
 | `waiting_picking` | `true` = xếp theo đơn, phiếu xuất chưa có |
 | `leg_km`, `leg_minutes` | Chặng từ điểm trước tới điểm này. `null` = điểm này thiếu toạ độ |
 | `arrive_offset_minutes`, `depart_offset_minutes` | Phút tính **từ lúc xe xuất phát** |

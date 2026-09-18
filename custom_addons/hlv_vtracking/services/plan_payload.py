@@ -99,6 +99,8 @@ def plan_lines(plan, with_legs=False):
             'longitude': line.longitude or None,
             'zone_id': line.zone_id.id or None,
             'zone_name': line.zone_id.name or None,
+            'zone_source': line.zone_source,
+            'zone_uncertain': line.zone_uncertain,
             'waiting_picking': line.line_state == 'waiting_picking',
             'has_coords': line.has_coords,
             'delivered': line.delivered,

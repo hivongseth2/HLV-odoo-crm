@@ -66,11 +66,32 @@ class HlvVtrackingPlanLine(models.Model):
     # --- Điểm giao và cụm tuyến ---------------------------------------------
     place_id = fields.Many2one(
         'hlv.vtracking.place', string='Điểm giao', compute='_compute_place_id', store=True,
-        help='Điểm giao vật lý ứng với khách của chứng từ này. Là nơi treo thói quen khách '
-             'và cụm tuyến.',
+        help='Điểm giao vật lý ứng với khách của chứng từ này. Là nơi treo thói quen khách, '
+             'và là nguồn DỰ PHÒNG để suy cụm khi địa chỉ chưa tra được toạ độ.',
     )
     zone_id = fields.Many2one(
-        related='place_id.zone_id', string='Cụm tuyến', store=True, index=True,
+        'hlv.vtracking.zone', string='Cụm tuyến', index=True,
+        compute='_compute_zone_id', inverse='_inverse_zone_id', store=True, readonly=False,
+        help='Suy từ TOẠ ĐỘ của địa chỉ giao trên chứng từ này. Sửa tay được — sửa rồi thì '
+             'máy không đè lên nữa.',
+    )
+    zone_source = fields.Selection(
+        [
+            ('coords', 'Theo toạ độ'),
+            ('place', 'Theo điểm giao của khách'),
+            ('manual', 'Gán tay'),
+            ('none', 'Chưa xác định'),
+        ],
+        string='Cụm suy từ', default='none', readonly=True, copy=False,
+    )
+    zone_distance_km = fields.Float(
+        string='Cách điểm mẫu (km)', digits=(10, 2), readonly=True, copy=False,
+        help='Khoảng cách tới điểm giao đã biết gần nhất. Càng nhỏ càng chắc.',
+    )
+    zone_uncertain = fields.Boolean(
+        string='Cụm chưa chắc', readonly=True, copy=False,
+        help='Điểm mẫu gần nhất ở xa, hoặc phải đoán theo khách vì chưa có toạ độ. Nên soát '
+             'lại trước khi tin vào định mức thời gian.',
     )
 
     # --- Toạ độ, lấy từ kho toạ độ dùng chung -------------------------------
@@ -134,11 +155,11 @@ class HlvVtrackingPlanLine(models.Model):
         """Ghép chứng từ với điểm giao qua PHÁP NHÂN GỐC của khách.
 
         Odoo sinh nhiều mã cho cùng một công ty (đo được 351 mã = 176 khách thật), nên so
-        thẳng ``partner_id`` sẽ trượt phần lớn. ``commercial_partner_id`` là pháp nhân gốc
-        — ba mã của một nhà máy cùng trỏ về một điểm, và cùng dùng một bộ thói quen.
+        thẳng ``partner_id`` sẽ trượt phần lớn. ``commercial_partner_id`` là pháp nhân gốc.
 
-        Lưu ý ngược lại: có khách thật sự có hai nhà máy. Khi đó phải tạo hai điểm và gán
-        tay ``place_id``, vì máy không phân biệt được bằng mỗi cái tên.
+        Điểm này KHÔNG quyết định cụm tuyến — cụm suy từ toạ độ của chính địa chỉ giao,
+        xem ``_compute_zone_id``. Nó dùng để treo thói quen khách, và làm nguồn dự phòng
+        khi địa chỉ chưa tra được toạ độ.
         """
         Place = self.env['hlv.vtracking.place']
         for line in self:
@@ -197,9 +218,8 @@ class HlvVtrackingPlanLine(models.Model):
             return {}
         # Chưa có phiếu: lấy tạm từ đơn. Địa chỉ giao của đơn là địa chỉ DỰ KIẾN — khi
         # phiếu ra đời, `_sync_from_source` sẽ ghi đè bằng địa chỉ trên phiếu.
-        shipping = order.partner_shipping_id or order.partner_id
         return {
-            'address': (shipping.contact_address or '').replace('\n', ', ').strip(' ,'),
+            'address': order._vtracking_delivery_address(),
             'source_name': order.name or '',
             'amount': order.amount_total or 0.0,
             'partner_id': order.partner_id.id or False,

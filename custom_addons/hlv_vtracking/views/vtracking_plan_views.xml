@@ -146,7 +146,7 @@
                                 <!-- Không editable: thêm chứng từ đi qua nút "Thêm phiếu /
                                      đơn" để chọn được nhiều cái một lần và lọc theo kho.
                                      Sửa tay ở đây chỉ còn là kéo thứ tự ghé. -->
-                                <list decoration-warning="not has_coords"
+                                <list decoration-warning="not has_coords or zone_uncertain"
                                       decoration-muted="line_state == 'waiting_picking'">
                                     <field name="sequence" widget="handle"/>
                                     <field name="display_reference" string="Chứng từ" readonly="1"/>
@@ -157,8 +157,13 @@
                                     <field name="source_name" string="Đơn bán" readonly="1"/>
                                     <field name="partner_id" readonly="1"/>
                                     <field name="address" readonly="1"/>
-                                    <field name="zone_id" string="Cụm" readonly="1"
-                                           optional="show"/>
+                                    <field name="zone_id" string="Cụm"
+                                           options="{'no_create': True}"/>
+                                    <field name="zone_source" string="Cụm suy từ" readonly="1"
+                                           optional="hide"/>
+                                    <field name="zone_distance_km" string="Cách mẫu (km)"
+                                           readonly="1" optional="hide"/>
+                                    <field name="zone_uncertain" column_invisible="1"/>
                                     <field name="warehouse_id" string="Kho" readonly="1"
                                            optional="show"/>
                                     <field name="amount" widget="monetary" readonly="1"

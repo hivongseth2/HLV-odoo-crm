@@ -131,7 +131,7 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
                 planned = wizard.sale_order_ids.filtered('vtracking_plan_line_ids')
                 addable = wizard.sale_order_ids - planned
                 wizard.no_address_count = len(addable.filtered(
-                    lambda o: not (o.partner_shipping_id or o.partner_id).contact_address
+                    lambda o: not o._vtracking_delivery_address()
                 ))
                 wizard.not_ready_count = 0
                 wizard.other_warehouse_count = len(addable.filtered(

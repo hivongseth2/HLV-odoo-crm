@@ -15,4 +15,5 @@ from . import vtracking_address
 from . import vtracking_plan
 from . import vtracking_plan_actions
 from . import vtracking_plan_line
+from . import vtracking_plan_line_zone
 from . import vtracking_plan_add_wizard

@@ -42,6 +42,46 @@ def zone_warnings(zone, line_count, other_zone_names=()):
     return messages
 
 
+# Cách điểm mẫu gần nhất dưới ngưỡng này thì tin được. Đo trên 86 ghim bản đồ bằng kiểu
+# leave-one-out: ngưỡng 3 km cho 100% đúng trên 47/55 điểm dám tự gán; nới lên 5 km thì tự
+# gán được 52 điểm nhưng tụt xuống 96%. Gán sai cụm nghĩa là xe chạy nhầm tuyến, còn hỏi
+# người thì chỉ mất một cú click — nên chọn chặt.
+DEFAULT_ZONE_MATCH_KM = 3.0
+
+
+def nearest_zone(coords, samples, near_km=DEFAULT_ZONE_MATCH_KM):
+    """Suy cụm tuyến từ TOẠ ĐỘ, bằng điểm mẫu đã biết gần nhất.
+
+    coords: tuple ``(lat, lng)`` của điểm cần suy, hoặc None.
+    samples: list tuple ``(zone_key, (lat, lng))`` — các điểm đã biết chắc thuộc cụm nào.
+    near_km: dưới ngưỡng này thì coi là chắc chắn.
+
+    Trả về ``(zone_key, distance_km, confident)``; ``(None, None, False)`` khi không có
+    toạ độ hoặc chưa có điểm mẫu nào.
+
+    Vì sao suy từ toạ độ chứ không từ khách hàng: một khách có thể có hai nơi giao thuộc
+    hai cụm khác nhau (nhà máy và kho). Hỏi "khách này thuộc cụm nào" thì hai địa chỉ ra
+    cùng một đáp án và một trong hai sẽ sai. Hỏi "toạ độ này gần cụm nào" thì đúng cả hai.
+
+    Không dùng tâm cụm + bán kính: cụm Long Thành trải dài 21 km và Mỹ Xuân 29 km, vẽ
+    vòng tròn quanh tâm chúng sẽ trùm lên cả cụm khác.
+    """
+    if not coords or not coords[0] or not coords[1] or not samples:
+        return None, None, False
+    best_key, best_distance = None, None
+    for zone_key, sample in samples:
+        if not sample or not sample[0] or not sample[1]:
+            continue
+        distance = haversine_km(coords, sample)
+        if distance is None:
+            continue
+        if best_distance is None or distance < best_distance:
+            best_key, best_distance = zone_key, distance
+    if best_key is None:
+        return None, None, False
+    return best_key, round(best_distance, 2), best_distance <= near_km
+
+
 def nearest_first_order(start, points):
     """Thứ tự ghé theo kiểu "đi tới điểm gần nhất chưa ghé".
 

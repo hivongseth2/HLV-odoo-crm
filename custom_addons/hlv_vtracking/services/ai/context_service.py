@@ -36,6 +36,9 @@ BUSINESS_RULES = [
     'vào kế hoạch mới.',
     'Định mức thời gian nằm ở CỤM TUYẾN (zones), không phải một con số chung. Lấy từ '
     '/context mỗi phiên — đừng dùng số ghi cứng trong skill.',
+    'Cụm tuyến của một điểm giao suy từ TOẠ ĐỘ của địa chỉ giao trên chứng từ, không suy '
+    'từ khách hàng — một khách có thể giao ở hai nơi thuộc hai cụm khác nhau. Dòng có '
+    'zone_uncertain = true nghĩa là máy phải đoán: nêu lại cho người dùng.',
     'Ra MỘT danh sách ưu tiên theo cụm, không lập hai chuyến cứng sáng/chiều. Đơn rớt vì '
     'thủ tục thì điểm kế tiếp lấp vào ngay.',
     'Đơn vị tính tải chuyến là ĐIỂM, không phải đơn: nhiều đơn cùng một khách tốn thêm ~0 '
@@ -61,6 +64,7 @@ def build_context(env, company):
             {'code': code, 'label': label, 'can_load': can_load}
             for code, (label, can_load) in STAGES.items()
         ],
+        'zone_match_km': company.vtracking_zone_match_km or 3.0,
         'zones': zone_blocks(env, company),
         'warehouses': warehouse_blocks(env, company),
         'vehicles': vehicle_blocks(env, company),

@@ -184,9 +184,8 @@ def resolve_stop(env, stop):
         order = env['sale.order'].browse(int(stop['sale_order_id'])).exists()
         if not order:
             raise UserError('Không có đơn bán id %s.' % stop['sale_order_id'])
-        shipping = order.partner_shipping_id or order.partner_id
         label = order.name
-        address = (shipping.contact_address or '').replace('\n', ', ').strip(' ,')
+        address = order._vtracking_delivery_address()
     elif stop.get('latitude') and stop.get('longitude'):
         point = (float(stop['latitude']), float(stop['longitude']))
         label = stop.get('label') or 'toạ độ'

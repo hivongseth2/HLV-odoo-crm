@@ -42,6 +42,7 @@
                         <field name="vtracking_avg_speed_kmh"/>
                         <field name="vtracking_minutes_per_stop"/>
                         <field name="vtracking_road_factor"/>
+                        <field name="vtracking_zone_match_km"/>
                     </group>
                     <group string="Tra toạ độ địa điểm">
                         <div class="text-muted mb-2" colspan="2">

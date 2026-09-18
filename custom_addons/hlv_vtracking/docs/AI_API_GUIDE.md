@@ -127,6 +127,10 @@ chiều mai thì được. Nhưng hãy **nói rõ rủi ro** trong phần trình
 (`route_params.road_factor`). Dùng để **so sánh phương án**. Đừng báo cho người dùng như giờ
 giao chính xác; hãy nói "ước khoảng".
 
+**`zone_uncertain = true`** = hệ thống phải **đoán** cụm cho điểm đó: hoặc điểm mẫu gần
+nhất ở xa, hoặc chưa có toạ độ nên phải suy theo khách. Định mức thời gian của cả kế hoạch
+dựa vào cụm, nên đoán sai cụm là sai cả giờ giấc. Nêu lại cho người dùng, đừng im lặng dùng.
+
 **`missing_coords_count > 0`** = có điểm chưa tra được toạ độ. Khi đó `distance_km` và
 `total_minutes` là **cận dưới** — thực tế dài hơn. Phải nêu điều này khi báo cáo.
 
