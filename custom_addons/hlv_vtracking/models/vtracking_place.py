@@ -44,6 +44,10 @@ class HlvVtrackingPlace(models.Model):
         'res.partner', string='Đối tác', index=True, tracking=True,
         help='Để trống nếu địa điểm không ứng với đối tác nào, ví dụ bãi đỗ xe.',
     )
+    zone_id = fields.Many2one(
+        'hlv.vtracking.zone', string='Cụm tuyến', index=True, tracking=True,
+        help='Quyết định định mức thời gian dùng khi tính kế hoạch đi qua điểm này.',
+    )
     warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho trong Odoo', index=True, tracking=True,
         help='Chỉ điền cho địa điểm loại Kho. Nhờ đó khi kế hoạch xuất phát từ kho này, '
@@ -267,6 +271,8 @@ class HlvVtrackingPlace(models.Model):
             'name': self.name,
             'type_id': self.type_id.id,
             'type_name': self.type_id.name,
+            'zone_id': self.zone_id.id or None,
+            'zone_name': self.zone_id.name or '',
             'color': self.type_id.color,
             'size': self.type_id.size,
             'show_label': self.type_id.show_label,

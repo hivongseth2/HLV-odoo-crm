@@ -58,6 +58,7 @@
                 <field name="date"/>
                 <field name="session"/>
                 <field name="vehicle_id"/>
+                <field name="zone_id" optional="show"/>
                 <field name="driver_id" optional="show"/>
                 <field name="line_count" sum="Tổng phiếu"/>
                 <field name="amount_total" sum="Tổng tiền" widget="monetary"/>
@@ -111,6 +112,7 @@
                             <field name="start_place_id"
                                    options="{'no_create': True}"
                                    domain="[('has_coords', '=', True), ('warehouse_id', '!=', False)]"/>
+                            <field name="zone_id" options="{'no_create': True}"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                         <group string="Dự kiến">
@@ -119,10 +121,16 @@
                             <field name="distance_km"/>
                             <field name="drive_minutes" string="Chạy (phút)"/>
                             <field name="service_minutes" string="Giao (phút)"/>
+                            <field name="return_minutes" string="Về kho (phút)"/>
                             <field name="duration_display" string="Tổng thời gian"/>
                             <field name="currency_id" invisible="1"/>
                         </group>
                     </group>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not zone_warning">
+                        <field name="zone_warning" readonly="1" nolabel="1"/>
+                    </div>
 
                     <div class="alert alert-warning" role="alert"
                          invisible="missing_coords_count == 0">
@@ -149,6 +157,8 @@
                                     <field name="source_name" string="Đơn bán" readonly="1"/>
                                     <field name="partner_id" readonly="1"/>
                                     <field name="address" readonly="1"/>
+                                    <field name="zone_id" string="Cụm" readonly="1"
+                                           optional="show"/>
                                     <field name="warehouse_id" string="Kho" readonly="1"
                                            optional="show"/>
                                     <field name="amount" widget="monetary" readonly="1"
@@ -219,6 +229,7 @@
                 <group expand="0" string="Nhóm theo">
                     <filter name="group_date" string="Ngày" context="{'group_by': 'date'}"/>
                     <filter name="group_vehicle" string="Xe" context="{'group_by': 'vehicle_id'}"/>
+                    <filter name="group_zone" string="Cụm tuyến" context="{'group_by': 'zone_id'}"/>
                     <filter name="group_session" string="Buổi" context="{'group_by': 'session'}"/>
                 </group>
             </search>

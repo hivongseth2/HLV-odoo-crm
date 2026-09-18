@@ -63,6 +63,16 @@ class HlvVtrackingPlanLine(models.Model):
         'stock.warehouse', string='Kho xuất', readonly=True, index=True,
     )
 
+    # --- Điểm giao và cụm tuyến ---------------------------------------------
+    place_id = fields.Many2one(
+        'hlv.vtracking.place', string='Điểm giao', compute='_compute_place_id', store=True,
+        help='Điểm giao vật lý ứng với khách của chứng từ này. Là nơi treo thói quen khách '
+             'và cụm tuyến.',
+    )
+    zone_id = fields.Many2one(
+        related='place_id.zone_id', string='Cụm tuyến', store=True, index=True,
+    )
+
     # --- Toạ độ, lấy từ kho toạ độ dùng chung -------------------------------
     address_id = fields.Many2one(
         'hlv.vtracking.address', string='Toạ độ đã tra', readonly=True, ondelete='set null',
@@ -119,6 +129,28 @@ class HlvVtrackingPlanLine(models.Model):
     # ------------------------------------------------------------------
     # Tạo và đồng bộ
     # ------------------------------------------------------------------
+    @api.depends('partner_id')
+    def _compute_place_id(self):
+        """Ghép chứng từ với điểm giao qua PHÁP NHÂN GỐC của khách.
+
+        Odoo sinh nhiều mã cho cùng một công ty (đo được 351 mã = 176 khách thật), nên so
+        thẳng ``partner_id`` sẽ trượt phần lớn. ``commercial_partner_id`` là pháp nhân gốc
+        — ba mã của một nhà máy cùng trỏ về một điểm, và cùng dùng một bộ thói quen.
+
+        Lưu ý ngược lại: có khách thật sự có hai nhà máy. Khi đó phải tạo hai điểm và gán
+        tay ``place_id``, vì máy không phân biệt được bằng mỗi cái tên.
+        """
+        Place = self.env['hlv.vtracking.place']
+        for line in self:
+            root = line.partner_id.commercial_partner_id
+            if not root:
+                line.place_id = False
+                continue
+            line.place_id = Place.search([
+                ('partner_id.commercial_partner_id', '=', root.id),
+                ('company_id', '=', line.company_id.id or self.env.company.id),
+            ], limit=1)
+
     @api.model_create_multi
     def create(self, vals_list):
         lines = super().create(vals_list)

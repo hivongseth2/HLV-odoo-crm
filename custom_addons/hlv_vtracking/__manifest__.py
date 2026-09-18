@@ -46,10 +46,12 @@ xem plan/ke-hoach-module-vtracking.md.
         'security/vtracking_security.xml',
         'security/ir.model.access.csv',
         'data/vtracking_place_type_data.xml',
+        'data/vtracking_zone_data.xml',
         'data/vtracking_cron.xml',
         'views/fleet_vehicle_views.xml',
         # Nạp trước wizard nhập xe: action của wizard mở list/form xe khai ở file trên.
         'views/vtracking_import_wizard_views.xml',
+        'views/vtracking_zone_views.xml',
         'views/vtracking_place_views.xml',
         'views/vtracking_plan_views.xml',
         'views/vtracking_plan_add_views.xml',

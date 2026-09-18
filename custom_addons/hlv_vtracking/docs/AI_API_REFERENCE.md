@@ -33,6 +33,9 @@ Không tham số. Gọi một lần đầu phiên.
   "today": "2026-09-18", "timezone": "Asia/Ho_Chi_Minh",
   "sessions": [{"code": "morning", "label": "Sáng"}, {"code": "afternoon", ...}, {"code": "full_day", ...}],
   "route_params": {"speed_kmh": 35.0, "minutes_per_stop": 10, "road_factor": 1.3},
+  "zones": [{"id": 1, "name": "Nhơn Trạch", "code": "NT", "warehouse_id": 1,
+             "hub_to_first_minutes": 40, "median_leg_minutes": 13, "return_minutes": 25,
+             "max_stops": 8, "min_stops_worth_trip": 3, "place_count": 48}],
   "fulfillment_stages": [{"code": "ready_to_ship", "label": "...", "can_load": true}, ...],
   "warehouses": [{"id": 1, "name": "Kho Bến Cam", "code": "KBC", "delivery_steps": "pick_pack_ship",
                   "start_place_id": 3, "coords": {"latitude": 10.70, "longitude": 106.92}}],
@@ -43,6 +46,13 @@ Không tham số. Gọi một lần đầu phiên.
 
 `warehouses[].start_place_id` là giá trị truyền vào `start_place_id` khi tạo kế hoạch xuất
 phát từ kho đó. `null` = kho chưa được gắn địa điểm trên bản đồ (không tính được chặng đầu).
+
+**`zones[]` là nguồn định mức duy nhất được tin.** Mỗi cụm có thời gian riêng, đo từ chuyến
+thật: Nhơn Trạch ra khỏi kho mất 40 phút còn Long Thành 57 phút — dùng một con số chung cho
+cả hai là sai cả hai. Các số này được cập nhật sau mỗi lần đối chiếu kế hoạch với thực tế,
+nên **đừng dùng số ghi cứng trong skill hay prompt**.
+
+`route_params` chung của công ty chỉ là **giá trị lùi** cho điểm chưa gán cụm.
 
 ## 2. `GET /fleet`
 
@@ -152,7 +162,8 @@ Tham số: `date` **hoặc** `date_from` + `date_to` (tối đa 31 ngày); `vehi
 
 `id`, `name`, `date`, `session`, `state` (`draft`/`confirmed`/`done`/`cancelled`),
 `vehicle_id`, `vehicle_plate`, `line_count`, `amount_total`, `distance_km`, `drive_minutes`,
-`service_minutes`, `total_minutes`, `duration_display`, `missing_coords_count`, `start`,
+`service_minutes`, `return_minutes`, `total_minutes`, `duration_display`,
+`missing_coords_count`, `zone_id`, `zone_name`, `zone_warning`, `start`,
 và khối thực tế `has_actual_data`, `actual_line_count`, `actual_amount_total`,
 `actual_distance_km` (**hiện luôn rỗng** — chờ nối với module shipper).
 
@@ -167,10 +178,17 @@ Tóm tắt như mục 8, thêm `note`, `route_params`, và `lines[]` theo thứ 
 | `reference`, `picking_id`, `sale_order_id`, `source_name` | Chứng từ |
 | `partner_name`, `address`, `amount` | Khách, địa chỉ, tiền |
 | `latitude`, `longitude`, `has_coords` | Toạ độ điểm giao |
+| `zone_id`, `zone_name` | Cụm tuyến của điểm — quyết định định mức thời gian |
 | `waiting_picking` | `true` = xếp theo đơn, phiếu xuất chưa có |
 | `leg_km`, `leg_minutes` | Chặng từ điểm trước tới điểm này. `null` = điểm này thiếu toạ độ |
 | `arrive_offset_minutes`, `depart_offset_minutes` | Phút tính **từ lúc xe xuất phát** |
 | `delivered` | Đã giao chưa (hiện luôn `false` — chờ module shipper) |
+
+`zone_warning` báo khi kế hoạch **vượt trần điểm**, **dưới ngưỡng đáng chạy**, hoặc **gom
+nhiều cụm**. Đây là cảnh báo, không phải lỗi — nhưng phải nêu lại cho người dùng.
+
+`total_minutes` gồm cả **chặng về kho** (`return_minutes`) khi cụm có khai: một chuyến chỉ
+xong khi xe về tới kho, và với cụm xa thì chặng về đáng kể (Châu Đức 80 phút).
 
 Giờ tới thật = giờ xuất phát bạn giả định + `arrive_offset_minutes`. Hệ thống không lưu giờ
 xuất phát; buổi sáng/chiều bắt đầu mấy giờ là điều phải hỏi người dùng.

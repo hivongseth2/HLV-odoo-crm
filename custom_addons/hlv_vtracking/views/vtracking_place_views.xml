@@ -44,6 +44,7 @@
                   decoration-muted="geo_state == 'none'">
                 <field name="name"/>
                 <field name="type_id"/>
+                <field name="zone_id" optional="show"/>
                 <field name="partner_id" optional="show"/>
                 <field name="address_used" string="Địa chỉ tra" optional="show"/>
                 <field name="geo_state"/>
@@ -86,6 +87,7 @@
                     <group>
                         <group string="Phân loại">
                             <field name="type_id"/>
+                            <field name="zone_id" options="{'no_create': True}"/>
                             <field name="partner_id"/>
                             <field name="phone"/>
                             <field name="company_id" groups="base.group_multi_company"/>
@@ -134,6 +136,8 @@
                 <field name="name"/>
                 <field name="partner_id"/>
                 <field name="type_id"/>
+                <field name="zone_id"/>
+                <filter name="no_zone" string="Chưa gán cụm" domain="[('zone_id', '=', False)]"/>
                 <filter name="pending" string="Chờ duyệt toạ độ"
                         domain="[('geo_state', '=', 'pending_review')]"/>
                 <filter name="failed" string="Máy không tìm được"
@@ -143,6 +147,7 @@
                 <filter name="has_coords" string="Đã có toạ độ" domain="[('has_coords', '=', True)]"/>
                 <group expand="0" string="Nhóm theo">
                     <filter name="group_type" string="Loại" context="{'group_by': 'type_id'}"/>
+                    <filter name="group_zone" string="Cụm tuyến" context="{'group_by': 'zone_id'}"/>
                     <filter name="group_geo" string="Tình trạng toạ độ"
                             context="{'group_by': 'geo_state'}"/>
                 </group>

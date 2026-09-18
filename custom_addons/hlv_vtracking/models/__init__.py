@@ -5,10 +5,12 @@ from . import sale_order
 from . import vtracking_position
 from . import vtracking_api_key
 from . import vtracking_import_wizard
+from . import vtracking_zone
 from . import vtracking_place_type
 from . import vtracking_place
 from . import vtracking_place_wizard
 from . import vtracking_address
 from . import vtracking_plan
+from . import vtracking_plan_actions
 from . import vtracking_plan_line
 from . import vtracking_plan_add_wizard

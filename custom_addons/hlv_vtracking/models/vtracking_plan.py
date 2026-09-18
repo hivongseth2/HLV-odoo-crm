@@ -1,8 +1,8 @@
 import logging
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError, ValidationError
-from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km
+from odoo.exceptions import ValidationError
+from odoo.addons.hlv_vtracking.tools.vtracking_planning import zone_warnings
 from odoo.addons.hlv_vtracking.tools.vtracking_route import (
     estimate_route, format_minutes, route_params,
 )
@@ -51,6 +51,12 @@ class HlvVtrackingPlan(models.Model):
         help='Thường là kho. Quãng đường tính từ đây tới điểm đầu tiên rồi lần lượt qua '
              'các điểm; để trống thì chỉ tính từ điểm giao đầu tiên trở đi.',
     )
+    zone_id = fields.Many2one(
+        'hlv.vtracking.zone', string='Cụm tuyến', index=True, tracking=True,
+        compute='_compute_zone_id', store=True, readonly=False,
+        help='Máy suy từ các điểm trong kế hoạch, sửa tay được. Định mức thời gian lấy '
+             'theo cụm này; để trống thì lùi về định mức chung của công ty.',
+    )
     state = fields.Selection(
         [
             ('draft', 'Nháp'),
@@ -82,6 +88,10 @@ class HlvVtrackingPlan(models.Model):
     )
     drive_minutes = fields.Integer(compute='_compute_route', store=True, string='Thời gian chạy (phút)')
     service_minutes = fields.Integer(compute='_compute_route', store=True, string='Thời gian giao (phút)')
+    return_minutes = fields.Integer(
+        compute='_compute_route', store=True, string='Về kho (phút)',
+        help='Chặng điểm cuối → kho, lấy theo cụm. Một chuyến chỉ xong khi xe về tới kho.',
+    )
     total_minutes = fields.Integer(compute='_compute_route', store=True, string='Tổng thời gian (phút)')
     duration_display = fields.Char(compute='_compute_route', store=True, string='Dự kiến')
     missing_coords_count = fields.Integer(
@@ -105,6 +115,7 @@ class HlvVtrackingPlan(models.Model):
     actual_start_at = fields.Datetime(string='Xuất phát thực tế', readonly=True, copy=False)
     actual_end_at = fields.Datetime(string='Về thực tế', readonly=True, copy=False)
     has_actual_data = fields.Boolean(compute='_compute_has_actual_data')
+    zone_warning = fields.Char(compute='_compute_zone_warning', string='Cảnh báo cụm')
 
     _sql_constraints = [
         ('vehicle_date_session_uniq', 'unique(vehicle_id, date, session, company_id)',
@@ -131,7 +142,9 @@ class HlvVtrackingPlan(models.Model):
             plan.amount_total = sum(plan.line_ids.mapped('amount'))
 
     @api.depends('line_ids', 'line_ids.sequence', 'line_ids.latitude', 'line_ids.longitude',
-                 'start_place_id', 'company_id.vtracking_avg_speed_kmh',
+                 'start_place_id', 'zone_id', 'zone_id.hub_to_first_minutes',
+                 'zone_id.median_leg_minutes', 'zone_id.return_minutes',
+                 'company_id.vtracking_avg_speed_kmh',
                  'company_id.vtracking_minutes_per_stop', 'company_id.vtracking_road_factor')
     def _compute_route(self):
         """Quãng đường và thời gian dự kiến của cả kế hoạch.
@@ -145,6 +158,7 @@ class HlvVtrackingPlan(models.Model):
             plan.distance_km = estimate['distance_km']
             plan.drive_minutes = estimate['drive_minutes']
             plan.service_minutes = estimate['service_minutes']
+            plan.return_minutes = estimate['return_minutes']
             plan.total_minutes = estimate['total_minutes']
             plan.duration_display = format_minutes(estimate['total_minutes'])
 
@@ -168,14 +182,45 @@ class HlvVtrackingPlan(models.Model):
         ]
 
     def _route_params(self):
-        """Định mức tính lộ trình của công ty sở hữu kế hoạch."""
+        """Định mức tính lộ trình: ưu tiên cụm tuyến, lùi về tham số chung của công ty.
+
+        Cụm khai thời gian đo được từ thực tế (40' ra Nhơn Trạch, 57' ra Long Thành) nên
+        chính xác hơn hẳn suy ngược từ tốc độ trung bình chung.
+        """
         self.ensure_one()
         company = self.company_id
         return route_params(
             company.vtracking_avg_speed_kmh,
             company.vtracking_minutes_per_stop,
             company.vtracking_road_factor,
+            zone=self.zone_id.route_params() if self.zone_id else None,
         )
+
+    @api.depends('line_ids.zone_id', 'start_place_id.warehouse_id')
+    def _compute_zone_id(self):
+        """Cụm của kế hoạch = cụm của ĐA SỐ điểm trong đó.
+
+        Chuyến gom hai cụm là có thật, nên không ép mọi điểm cùng cụm; lấy cụm chiếm đa số
+        để có một bộ định mức dùng được, và cảnh báo lệch để người điều phối tự cân.
+        """
+        for plan in self:
+            zones = [line.zone_id for line in plan.line_ids if line.zone_id]
+            if not zones:
+                plan.zone_id = plan.zone_id or False
+                continue
+            plan.zone_id = max(set(zones), key=zones.count)
+
+    @api.depends('zone_id', 'line_count', 'line_ids.zone_id')
+    def _compute_zone_warning(self):
+        """Cảnh báo số điểm và việc gom nhiều cụm. Luật nằm ở ``tools/vtracking_planning``."""
+        for plan in self:
+            zone = plan.zone_id
+            params = dict(zone.route_params(), name=zone.name) if zone else None
+            others = [
+                line.zone_id.name for line in plan.line_ids
+                if line.zone_id and line.zone_id != zone
+            ]
+            plan.zone_warning = ' '.join(zone_warnings(params, plan.line_count, others)) or False
 
     @api.depends('actual_line_count', 'actual_start_at')
     def _compute_has_actual_data(self):
@@ -195,87 +240,3 @@ class HlvVtrackingPlan(models.Model):
     # ------------------------------------------------------------------
     # Hành động
     # ------------------------------------------------------------------
-    def action_confirm(self):
-        for plan in self:
-            if not plan.line_ids:
-                raise UserError('Kế hoạch "%s" chưa có phiếu nào.' % plan.name)
-        self.write({'state': 'confirmed'})
-        return True
-
-    def action_back_to_draft(self):
-        self.write({'state': 'draft'})
-        return True
-
-    def action_done(self):
-        self.write({'state': 'done'})
-        return True
-
-    def action_cancel(self):
-        self.write({'state': 'cancelled'})
-        return True
-
-    def action_refresh_lines(self):
-        """Đọc lại địa chỉ, tiền và toạ độ từ phiếu.
-
-        Cần nút này vì dòng kế hoạch chụp lại số liệu lúc xếp: phiếu sửa tiền hay sửa địa
-        chỉ sau đó thì kế hoạch không tự biết. Chụp lại chứ không đọc thẳng để con số trên
-        kế hoạch đã chốt không đổi sau lưng người điều phối.
-        """
-        self.mapped('line_ids')._sync_from_source()
-        return True
-
-    def action_add_documents(self):
-        """Mở hộp thoại xếp thêm phiếu/đơn vào chính kế hoạch này."""
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Xếp thêm vào %s' % self.name,
-            'res_model': 'hlv.vtracking.plan.add.picking',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {'default_plan_id': self.id, 'default_mode': 'existing'},
-        }
-
-    def action_resequence_by_distance(self):
-        """Sắp thứ tự ghé theo kiểu "đi tới điểm gần nhất chưa ghé".
-
-        Không phải lời giải tối ưu cho bài toán người giao hàng, chỉ là điểm khởi đầu đỡ
-        tệ hơn thứ tự nhập tay. Người điều phối vẫn kéo tay lại được.
-        """
-        for plan in self:
-            remaining = list(plan.line_ids.filtered(lambda line: line.latitude and line.longitude))
-            if not remaining:
-                continue
-            if plan.start_place_id and plan.start_place_id.has_coords:
-                current = (plan.start_place_id.latitude, plan.start_place_id.longitude)
-            else:
-                first = remaining.pop(0)
-                first.sequence = 10
-                current = (first.latitude, first.longitude)
-            step = 20
-            while remaining:
-                nearest = min(
-                    remaining,
-                    key=lambda line: haversine_km(current, (line.latitude, line.longitude)) or 9e9,
-                )
-                nearest.sequence = step
-                current = (nearest.latitude, nearest.longitude)
-                remaining.remove(nearest)
-                step += 10
-            # Phiếu thiếu toạ độ dồn xuống cuối: không biết ở đâu thì không xếp vào giữa
-            # tuyến được, để cuối cho người điều phối tự quyết.
-            for line in plan.line_ids.filtered(lambda l: not (l.latitude and l.longitude)):
-                line.sequence = step
-                step += 10
-        return True
-
-    def action_open_lines(self):
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Phiếu trong %s' % self.name,
-            'res_model': 'hlv.vtracking.plan.line',
-            'view_mode': 'list,form',
-            'domain': [('plan_id', '=', self.id)],
-            'context': {'default_plan_id': self.id},
-        }

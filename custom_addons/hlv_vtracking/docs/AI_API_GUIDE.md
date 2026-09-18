@@ -47,9 +47,17 @@ Mọi phản hồi cùng một khung:
 
 ### Bước 1 — Nắm bối cảnh (một lần mỗi phiên)
 
-`GET /context` → kho (kèm `start_place_id` của từng kho), xe, các buổi, định mức tính đường,
-bảng giai đoạn kho, và **`business_rules`** — danh sách luật nghiệp vụ. **Đọc `business_rules`
-trước tiên**: nó là bản mới nhất, tài liệu này có thể cũ hơn.
+`GET /context` → kho, xe, các buổi, **`zones`** (định mức từng cụm), bảng giai đoạn kho, và
+**`business_rules`** — danh sách luật nghiệp vụ. **Đọc `business_rules` trước tiên**: nó là
+bản mới nhất, tài liệu này có thể cũ hơn.
+
+**`zones` là nguồn định mức duy nhất.** Mỗi cụm có thời gian riêng đo từ chuyến thật —
+Nhơn Trạch ra khỏi kho 40 phút, Long Thành 57 phút. Con số này được sửa lại sau mỗi lần đối
+chiếu kế hoạch với thực tế, nên đừng nhớ nó giữa các phiên; gọi lại `/context` mỗi lần.
+
+Mỗi cụm còn có `max_stops` (trần điểm, **mềm** — vượt chỉ cảnh báo) và
+`min_stops_worth_trip` (**dưới ngưỡng này thì đừng chạy chuyến** — gộp sang chuyến khác
+hoặc gửi chuyển phát nhanh).
 
 ### Bước 2 — Xem xe
 

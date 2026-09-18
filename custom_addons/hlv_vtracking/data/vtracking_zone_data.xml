@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Năm cụm tuyến kho Bến Cam, kèm định mức ĐÃ ĐO từ 332 chuyến / 1.427 điểm
+         (01/06 → 10/09/2026), đã hiệu chỉnh sau lần đối chiếu kế hoạch ↔ thực tế 11/09.
+         Nguồn: plan/ke-hoach-ai-dieu-phoi.md §1.2
+
+         noupdate: đây là dữ liệu khởi tạo, KHÔNG phải cấu hình do module quản. Sau mỗi
+         lần đối chiếu, người điều phối (hoặc AI) sẽ sửa các con số này — nâng cấp module
+         không được đè lên thứ đã học được.
+
+         Chưa gán warehouse_id: bản cài nào cũng có id kho khác nhau. Mở Cấu hình > Cụm
+         tuyến gán kho một lần sau khi cài. -->
+    <data noupdate="1">
+
+        <record id="zone_nhon_trach" model="hlv.vtracking.zone">
+            <field name="name">Nhơn Trạch</field>
+            <field name="code">NT</field>
+            <field name="sequence">10</field>
+            <field name="color">#0d9488</field>
+            <!-- Cụm dày nhất: 58% số điểm, trung vị 9 điểm/ngày, p90 15. Các điểm cách
+                 nhau 1–5 km trong cùng khu công nghiệp nên chịu được nhiều điểm nhất. -->
+            <field name="hub_to_first_minutes">40</field>
+            <field name="median_leg_minutes">13</field>
+            <field name="return_minutes">25</field>
+            <field name="max_stops">8</field>
+            <field name="min_stops_worth_trip">3</field>
+        </record>
+
+        <record id="zone_long_thanh_binh_son" model="hlv.vtracking.zone">
+            <field name="name">Long Thành – Bình Sơn</field>
+            <field name="code">LABS</field>
+            <field name="sequence">20</field>
+            <field name="color">#2563eb</field>
+            <!-- 57 phút chứ không phải 42: đo được ngày 11/09. Trần nâng từ 7 lên 9 vì
+                 các chặng trong cụm chỉ 7–13 phút, bốn điểm cuối nằm trong vòng 1 km. -->
+            <field name="hub_to_first_minutes">57</field>
+            <field name="median_leg_minutes">13</field>
+            <field name="return_minutes">30</field>
+            <field name="max_stops">9</field>
+            <field name="min_stops_worth_trip">3</field>
+        </record>
+
+        <record id="zone_my_xuan_phu_my" model="hlv.vtracking.zone">
+            <field name="name">Mỹ Xuân – Phú Mỹ – Gò Dầu</field>
+            <field name="code">MXPM</field>
+            <field name="sequence">30</field>
+            <field name="color">#b45309</field>
+            <!-- Kho → cụm hơn một tiếng mỗi chiều, nên phải bù bằng ít điểm hơn. -->
+            <field name="hub_to_first_minutes">65</field>
+            <field name="median_leg_minutes">20</field>
+            <field name="return_minutes">65</field>
+            <field name="max_stops">6</field>
+            <field name="min_stops_worth_trip">3</field>
+        </record>
+
+        <record id="zone_chau_duc_vung_tau" model="hlv.vtracking.zone">
+            <field name="name">Châu Đức – Vũng Tàu</field>
+            <field name="code">CDVT</field>
+            <field name="sequence">40</field>
+            <field name="color">#7c3aed</field>
+            <!-- Xa nhất. Trung vị 0 điểm/ngày nhưng p90 = 2 và có ngày lên 6 — chỉ đi khi
+                 gom đủ, hoặc ghép đuôi chuyến Mỹ Xuân. -->
+            <field name="hub_to_first_minutes">80</field>
+            <field name="median_leg_minutes">25</field>
+            <field name="return_minutes">80</field>
+            <field name="max_stops">4</field>
+            <field name="min_stops_worth_trip">3</field>
+        </record>
+
+        <record id="zone_ho_chi_minh" model="hlv.vtracking.zone">
+            <field name="name">Hồ Chí Minh</field>
+            <field name="code">HCM</field>
+            <field name="sequence">50</field>
+            <field name="color">#be123c</field>
+            <!-- Kẹt xe làm thời gian khó đoán. Dưới 3 điểm thì chuyển phát nhanh rẻ hơn
+                 chạy xe — đó là lý do min_stops_worth_trip để 3. -->
+            <field name="hub_to_first_minutes">70</field>
+            <field name="median_leg_minutes">25</field>
+            <field name="return_minutes">70</field>
+            <field name="max_stops">5</field>
+            <field name="min_stops_worth_trip">3</field>
+        </record>
+
+    </data>
+</odoo>

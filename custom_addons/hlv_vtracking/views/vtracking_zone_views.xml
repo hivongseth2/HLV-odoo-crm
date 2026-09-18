@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_zone_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.zone.list</field>
+        <field name="model">hlv.vtracking.zone</field>
+        <field name="arch" type="xml">
+            <list string="Cụm tuyến" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="warehouse_id"/>
+                <field name="hub_to_first_minutes" string="Kho → điểm đầu"/>
+                <field name="median_leg_minutes" string="Điểm → điểm"/>
+                <field name="return_minutes" string="Về kho"/>
+                <field name="max_stops" string="Trần điểm"/>
+                <field name="min_stops_worth_trip" string="Tối thiểu"/>
+                <field name="place_count" string="Số điểm"/>
+                <field name="color" optional="hide"/>
+                <field name="active" widget="boolean_toggle" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_zone_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.zone.form</field>
+        <field name="model">hlv.vtracking.zone</field>
+        <field name="arch" type="xml">
+            <form string="Cụm tuyến">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_places" type="object" class="oe_stat_button"
+                                icon="fa-map-marker">
+                            <field name="place_count" widget="statinfo" string="Điểm giao"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Nhơn Trạch"/></h1>
+                    </div>
+                    <group>
+                        <group string="Nhận dạng">
+                            <field name="code" placeholder="NT"/>
+                            <field name="warehouse_id"/>
+                            <field name="color" placeholder="#2563eb"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Định mức thời gian">
+                            <field name="hub_to_first_minutes"/>
+                            <field name="median_leg_minutes"/>
+                            <field name="return_minutes"/>
+                            <field name="max_stops"/>
+                            <field name="min_stops_worth_trip"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Định mức ở đây <strong>đè lên</strong> tốc độ trung bình chung của công
+                        ty khi kế hoạch thuộc cụm này. Đó là chủ ý: đo từ chuyến thật chính xác
+                        hơn hẳn suy ngược từ km — <em>kho → điểm đầu</em> đo được 40 phút với
+                        Nhơn Trạch nhưng 57 phút với Long Thành, dùng một con số chung cho cả
+                        hai là sai cả hai.
+                        <br/>
+                        Sau mỗi lần đối chiếu kế hoạch với thực tế, cập nhật lại các ô này.
+                    </div>
+                    <group>
+                        <field name="note" placeholder="Ghi chú về cụm: đường khó, giờ kẹt xe…"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_vtracking_zone" model="ir.actions.act_window">
+        <field name="name">Cụm tuyến</field>
+        <field name="res_model">hlv.vtracking.zone</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Khai cụm tuyến</p>
+            <p>
+                Cụm tuyến là nơi ở của định mức thời gian: kho → điểm đầu, điểm → điểm, về
+                kho, trần điểm mỗi chuyến. Gán điểm giao vào cụm thì kế hoạch đi qua điểm đó
+                sẽ tính theo định mức của cụm thay vì tốc độ trung bình chung.
+            </p>
+        </field>
+    </record>
+
+</odoo>

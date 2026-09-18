@@ -19,3 +19,5 @@ access_vtracking_plan_manager,vtracking.plan.manager,model_hlv_vtracking_plan,hl
 access_vtracking_plan_line_user,vtracking.plan.line.user,model_hlv_vtracking_plan_line,hlv_vtracking.group_vtracking_user,1,0,0,0
 access_vtracking_plan_line_manager,vtracking.plan.line.manager,model_hlv_vtracking_plan_line,hlv_vtracking.group_vtracking_manager,1,1,1,1
 access_vtracking_plan_add_picking,vtracking.plan.add.picking,model_hlv_vtracking_plan_add_picking,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_zone_user,vtracking.zone.user,model_hlv_vtracking_zone,hlv_vtracking.group_vtracking_user,1,0,0,0
+access_vtracking_zone_manager,vtracking.zone.manager,model_hlv_vtracking_zone,hlv_vtracking.group_vtracking_manager,1,1,1,1

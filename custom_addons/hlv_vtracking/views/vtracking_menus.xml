@@ -42,6 +42,10 @@
               parent="menu_vtracking_config" action="action_vtracking_settings"
               sequence="10"/>
 
+    <menuitem id="menu_vtracking_zones" name="Cụm tuyến"
+              parent="menu_vtracking_config" action="action_vtracking_zone"
+              sequence="12"/>
+
     <menuitem id="menu_vtracking_place_types" name="Loại địa điểm"
               parent="menu_vtracking_config" action="action_vtracking_place_type"
               sequence="15"/>
