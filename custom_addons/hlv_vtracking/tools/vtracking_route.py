@@ -60,7 +60,7 @@ def route_params(speed_kmh=None, minutes_per_stop=None, road_factor=None, zone=N
     return params
 
 
-def estimate_legs(start, stops, params):
+def estimate_legs(start, stops, params, extra_minutes=None):
     """Từng chặng của lộ trình, kèm giờ tới cộng dồn.
 
     start: tuple ``(lat, lng)`` điểm xuất phát, hoặc None.
@@ -68,6 +68,9 @@ def estimate_legs(start, stops, params):
         độ. Điểm thiếu toạ độ vẫn tính thời gian giao (xe vẫn phải ghé) nhưng không có
         quãng đường riêng.
     params: kết quả của ``route_params``.
+    extra_minutes: list song song với ``stops``, số phút điểm đó đứng LÂU HƠN điểm thường
+        (cổng xa, chờ cân, qua nhiều lớp bảo vệ). Thiếu phần tử thì phần thiếu coi như 0.
+        Phút lâu hơn không làm trễ giờ TỚI chính điểm đó, nhưng làm trễ mọi điểm sau nó.
 
     Trả về list dict, mỗi phần tử ứng với MỘT điểm trong ``stops``::
 
@@ -90,6 +93,7 @@ def estimate_legs(start, stops, params):
     ``hub_to_first_minutes``, các chặng sau lấy ``median_leg_minutes``. Điểm thiếu toạ độ
     vẫn được tính thời gian chạy — xe vẫn phải đi tới đó, chỉ là mình không đo được bao xa.
     """
+    extras = _padded_extras(extra_minutes, len(stops))
     legs = []
     previous = start
     clock = 0
@@ -98,7 +102,7 @@ def estimate_legs(start, stops, params):
         leg_minutes = _leg_minutes(leg_km, index, previous, params)
         clock += leg_minutes or 0
         arrive = clock
-        clock += 0 if params['service_in_leg'] else params['minutes_per_stop']
+        clock += (0 if params['service_in_leg'] else params['minutes_per_stop']) + extras[index]
         legs.append({
             'leg_km': leg_km,
             'leg_minutes': leg_minutes,
@@ -140,7 +144,7 @@ def _leg_minutes(leg_km, index, previous, params):
     return int(round(leg_km / params['speed_kmh'] * 60))
 
 
-def estimate_route(start, stops, params):
+def estimate_route(start, stops, params, extra_minutes=None):
     """Tổng hợp cả lộ trình.
 
     Tham số như ``estimate_legs``. Trả về dict::
@@ -148,17 +152,25 @@ def estimate_route(start, stops, params):
         {'distance_km', 'drive_minutes', 'service_minutes', 'return_minutes',
          'total_minutes', 'missing_coords_count', 'legs'}
 
+    ``service_minutes`` gồm cả phút lâu hơn thường lệ của từng điểm (xem ``extra_minutes``
+    ở ``estimate_legs``).
+
     ``total_minutes`` gồm cả chặng VỀ KHO khi cụm có khai ``return_minutes``: một chuyến
     chỉ xong khi xe về tới kho, và với cụm xa thì chặng về đáng kể (Châu Đức 80 phút).
 
     Lộ trình rỗng trả về toàn số 0 và ``legs`` rỗng.
     """
-    legs = estimate_legs(start, stops, params)
+    extras = _padded_extras(extra_minutes, len(stops))
+    legs = estimate_legs(start, stops, params, extras)
     distance = round(sum(leg['leg_km'] or 0.0 for leg in legs), 1)
     drive = sum(leg['leg_minutes'] or 0 for leg in legs)
     # Định mức cụm: thời gian tại điểm đã nằm trong từng chặng, không cộng lần nữa.
     # Tính từ km: km ÷ tốc độ chỉ ra thời gian CHẠY thuần, phải cộng thời gian đứng.
-    service = 0 if params['service_in_leg'] else params['minutes_per_stop'] * len(stops)
+    #
+    # Phút lâu hơn thường lệ của từng khách thì CỘNG trong cả hai cách tính: nó là phần
+    # VƯỢT trên mức thường, nên không có sẵn trong định mức cụm lẫn trong minutes_per_stop.
+    service = (0 if params['service_in_leg'] else params['minutes_per_stop'] * len(stops))
+    service += sum(extras)
     back = params['return_minutes'] if stops else 0
     return {
         'distance_km': distance,
@@ -179,3 +191,13 @@ def format_minutes(minutes):
     if not hours:
         return "%d'" % mins
     return "%dh%02d'" % (hours, mins)
+
+
+def _padded_extras(extra_minutes, count):
+    """List phút-lâu-hơn dài đúng ``count``, phần thiếu điền 0, giá trị âm coi như 0.
+
+    Gọi bên ngoài không cần biết có bao nhiêu điểm: thiếu thì bù, thừa thì cắt. Âm bị chặn
+    vì "giao nhanh hơn thường lệ" không rút ngắn được chặng — chặng đã là số đo thực tế.
+    """
+    extras = [max(int(value or 0), 0) for value in (extra_minutes or [])][:count]
+    return extras + [0] * (count - len(extras))

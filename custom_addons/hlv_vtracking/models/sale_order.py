@@ -1,8 +1,14 @@
 from odoo import api, fields, models
 
+from ..tools.vtracking_channel import delivery_channel
+
 # Địa chỉ giao MISA đẩy sang. Đọc qua ``_fields`` vì module này không phụ thuộc module
 # đồng bộ MISA — thiếu nó thì lùi về địa chỉ liên hệ, không được gãy.
 MISA_SHIPPING_ADDRESS_FIELD = 'misa_shipping_address'
+
+# Ô "hình thức giao hàng" sale gõ tay. Một nơi khai duy nhất — phiếu giao cũng đọc hằng số
+# này chứ không gõ lại tên field.
+STUDIO_CHANNEL_FIELD = 'x_studio_htgh'
 
 
 class SaleOrder(models.Model):
@@ -41,3 +47,14 @@ class SaleOrder(models.Model):
                 return value
         shipping = self.partner_shipping_id or self.partner_id
         return (shipping.contact_address or '').replace('\n', ', ').strip(' ,')
+
+    def _vtracking_delivery_channel(self):
+        """Kênh giao của đơn: xe công ty, khách tự lấy, CPN hay Grab.
+
+        Đọc ô sale gõ tay rồi suy ra mã. Trả ``''`` khi ô trống — bên gọi tự lùi về thói
+        quen của điểm giao, vì ô trống nghĩa là "như mọi khi", không phải "xe công ty".
+        """
+        self.ensure_one()
+        if STUDIO_CHANNEL_FIELD not in self._fields:
+            return ''
+        return delivery_channel(self[STUDIO_CHANNEL_FIELD]) or ''

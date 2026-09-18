@@ -48,6 +48,24 @@ class AiPlanController(http.Controller):
         """Một kế hoạch đầy đủ: từng điểm theo thứ tự ghé, km từng chặng, giờ tới cộng dồn."""
         return plan_service.plan_detail(self._plan(ctx, plan_id))
 
+    @http.route('/api/v1/ai/plans/<int:plan_id>/vs-actual',
+                methods=['GET', 'OPTIONS'], **ROUTE_DEFAULTS)
+    @api_endpoint()
+    def plan_vs_actual(self, ctx, plan_id, **_params):
+        """Đối chiếu kế hoạch với thực tế: từng điểm dự kiến mấy giờ, thật sự mấy giờ.
+
+        Đây là nguồn để sửa định mức. ``summary.mean_variance`` giữ dấu — luôn dương nghĩa
+        là định mức của cụm đó quá lạc quan, không phải hôm đó xui.
+        """
+        return plan_service.plan_vs_actual(self._plan(ctx, plan_id))
+
+    @http.route('/api/v1/ai/plans/<int:plan_id>/refresh-actual',
+                methods=['POST', 'OPTIONS'], **ROUTE_DEFAULTS)
+    @api_endpoint(write=True)
+    def plan_refresh_actual(self, ctx, plan_id, **_params):
+        """Đọc lại số thực tế ngay, không chờ tác vụ nền mỗi giờ."""
+        return plan_service.refresh_actual(self._plan(ctx, plan_id), ctx.api_key.name)
+
     # ------------------------------------------------------------------
     # Ghi
     # ------------------------------------------------------------------

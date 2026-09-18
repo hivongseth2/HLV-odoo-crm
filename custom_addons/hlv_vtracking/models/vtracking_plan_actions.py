@@ -9,6 +9,7 @@ from odoo import models
 from odoo.exceptions import UserError
 
 from odoo.addons.hlv_vtracking.tools.vtracking_planning import nearest_first_order
+from odoo.addons.hlv_vtracking.models.vtracking_partner_profile import PROCEDURE_LABELS
 
 
 class HlvVtrackingPlanActions(models.Model):
@@ -18,8 +19,36 @@ class HlvVtrackingPlanActions(models.Model):
         for plan in self:
             if not plan.line_ids:
                 raise UserError('Kế hoạch "%s" chưa có phiếu nào.' % plan.name)
+            plan._check_procedures()
         self.write({'state': 'confirmed'})
         return True
+
+    def _check_procedures(self):
+        """Chặn xác nhận khi còn điểm chưa xong thủ tục vào cổng.
+
+        Đây là chỗ CHẶN chứ không phải cảnh báo: xe tới khu chế xuất mà chưa khai hải quan
+        thì bảo vệ không cho vào, hàng phải chở về kho — mất trắng cả lượt chạy lẫn chỗ của
+        những điểm khác lẽ ra xếp được. Lỗi này đã xảy ra thật ngay ngày đầu chạy tay.
+
+        Xong thủ tục rồi thì tích ô "Thủ tục đã xong" trên dòng. Không có đường vòng nào
+        khác — cố tình bỏ qua thì phải gỡ điểm đó khỏi kế hoạch.
+        """
+        self.ensure_one()
+        blocked = self.line_ids.filtered('procedure_blocked')
+        if not blocked:
+            return True
+        detail = '\n'.join(
+            '  · %s — %s' % (
+                line.display_reference,
+                PROCEDURE_LABELS.get(line.procedure_required, line.procedure_required),
+            )
+            for line in blocked
+        )
+        raise UserError(
+            'Kế hoạch "%s" còn %s điểm chưa xong thủ tục vào cổng:\n\n%s\n\n'
+            'Làm xong thủ tục thì tích ô "Thủ tục đã xong" trên từng dòng rồi xác nhận lại.'
+            % (self.name, len(blocked), detail)
+        )
 
     def action_back_to_draft(self):
         self.write({'state': 'draft'})

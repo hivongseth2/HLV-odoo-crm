@@ -103,10 +103,10 @@ class HlvVtrackingPlanLine(models.Model):
     geo_state = fields.Selection(related='address_id.geo_state', store=True, string='Toạ độ')
     has_coords = fields.Boolean(related='address_id.has_coords', store=True)
 
-    # --- Thực tế (chờ hlv_barcode_shipper) ----------------------------------
+    # --- Thực tế (xem thêm vtracking_plan_line_actual.py) --------------------
     delivered = fields.Boolean(
         string='Đã giao', readonly=True, copy=False,
-        help='Sẽ do module shipper đánh dấu khi tài xế quét nhận/giao phiếu.',
+        help='Phiếu đã ở trạng thái Hoàn tất, tức shipper đã xác nhận giao tại chỗ khách.',
     )
     delivered_at = fields.Datetime(string='Giao lúc', readonly=True, copy=False)
 

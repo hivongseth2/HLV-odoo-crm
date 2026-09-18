@@ -2,6 +2,7 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 from ..services import plan_documents
+from ..tools.vtracking_channel import needs_company_truck
 
 
 class HlvVtrackingPlanAddPicking(models.TransientModel):
@@ -78,6 +79,12 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     closed_order_count = fields.Integer(
         compute='_compute_preview', string='Đơn đã khoá sổ / huỷ',
     )
+    no_truck_count = fields.Integer(
+        compute='_compute_preview', string='Không cần xe công ty',
+        help='Chứng từ ghi khách tự lấy, gửi CPN hoặc book Grab. Xếp lên xe là thừa một '
+             'điểm dừng — lỗi đã xảy ra thật khi xếp tay.',
+    )
+    no_truck_labels = fields.Char(compute='_compute_preview', string='Cụ thể là')
 
     # ------------------------------------------------------------------
     # Compute
@@ -140,6 +147,24 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
             wizard.already_planned_count = len(planned)
             wizard.to_add_count = len(addable)
             wizard.closed_order_count = len(plan_documents.closed_order_labels(addable))
+            wizard._set_no_truck(addable)
+
+    def _set_no_truck(self, documents):
+        """Đếm chứng từ mà xe công ty không phải chạy.
+
+        Cảnh báo chứ không chặn: ô "hình thức giao hàng" là chữ gõ tay, đọc sai một dòng mà
+        chặn luôn thì người điều phối không xếp được đơn đáng xếp. Nêu tên ra để họ tự quyết.
+        """
+        self.ensure_one()
+        odd = [
+            document for document in documents
+            if not needs_company_truck(document._vtracking_delivery_channel())
+        ]
+        self.no_truck_count = len(odd)
+        names = [document.display_name for document in odd[:5]]
+        if len(odd) > 5:
+            names.append('và %s cái nữa' % (len(odd) - 5))
+        self.no_truck_labels = ', '.join(names)
 
     @api.model
     def default_get(self, fields_list):

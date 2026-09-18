@@ -2,6 +2,9 @@ import logging
 
 from odoo import api, fields, models
 
+from ..tools.vtracking_channel import delivery_channel
+from .sale_order import STUDIO_CHANNEL_FIELD
+
 _logger = logging.getLogger(__name__)
 
 # Field do Studio tạo trên bản cài này, không có trong mã nguồn Odoo. Đọc qua ``_fields``
@@ -99,3 +102,18 @@ class StockPicking(models.Model):
         if 'sale_id' in self._fields and self.sale_id:
             return self.sale_id.name or ''
         return self.origin or ''
+
+    def _vtracking_delivery_channel(self):
+        """Kênh giao của phiếu. Ô trên PHIẾU thắng, không có thì hỏi đơn bán.
+
+        Phiếu thắng vì nó là thứ kho đang cầm: sale chốt "gửi CPN" từ lúc đặt hàng, nhưng
+        đến ngày giao khách đổi ý ghé lấy thì người sửa là kho, sửa trên phiếu.
+        """
+        self.ensure_one()
+        if STUDIO_CHANNEL_FIELD in self._fields:
+            channel = delivery_channel(self[STUDIO_CHANNEL_FIELD])
+            if channel:
+                return channel
+        if 'sale_id' in self._fields and self.sale_id:
+            return self.sale_id._vtracking_delivery_channel()
+        return ''

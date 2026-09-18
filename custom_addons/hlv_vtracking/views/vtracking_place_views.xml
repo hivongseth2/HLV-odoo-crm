@@ -90,6 +90,7 @@
                     <group>
                         <group string="Phân loại">
                             <field name="type_id"/>
+                            <field name="profile_id" invisible="1"/>
                             <field name="zone_id" options="{'no_create': True}"/>
                             <field name="partner_id" domain="[('is_company', '=', True)]"/>
                             <field name="partner_ref" readonly="1"/>
@@ -106,6 +107,27 @@
                             <field name="geo_checked_at" readonly="1"/>
                         </group>
                     </group>
+                    <group string="Thói quen giao hàng">
+                        <field name="profile_ids" nolabel="1" colspan="2">
+                            <list editable="bottom">
+                                <field name="procedure_required"/>
+                                <field name="delivery_method"/>
+                                <field name="extra_service_minutes"/>
+                                <field name="receiving_from" widget="float_time"/>
+                                <field name="receiving_to" widget="float_time"/>
+                                <field name="payment_method" optional="hide"/>
+                                <field name="default_vehicle_id" optional="hide"
+                                       options="{'no_create': True}"/>
+                                <field name="free_note"/>
+                            </list>
+                        </field>
+                        <div class="text-muted" colspan="2">
+                            Một điểm chỉ khai được MỘT bộ thói quen. Khai "Thủ tục trước khi
+                            giao" ở đây là kế hoạch chứa điểm này sẽ bị chặn cho tới khi người
+                            điều phối xác nhận đã làm xong thủ tục.
+                        </div>
+                    </group>
+
                     <group string="Địa chỉ dùng để tra toạ độ">
                         <field name="address"
                                placeholder="Để trống thì ghép từ tên địa điểm và địa chỉ đối tác"/>

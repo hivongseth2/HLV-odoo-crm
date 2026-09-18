@@ -39,6 +39,19 @@
             <field name="active" eval="True"/>
         </record>
 
+        <!-- Đối chiếu kế hoạch với thực tế. Mỗi giờ chứ không phải mỗi ngày: người
+             điều phối cần thấy chuyến sáng đã đi tới đâu ngay trong buổi chiều, chứ
+             không phải tới hôm sau. Chỉ đọc lại 2 ngày gần nhất nên rất nhẹ. -->
+        <record id="cron_vtracking_fill_actuals" model="ir.cron">
+            <field name="name">V-Tracking: đọc số thực tế của kế hoạch</field>
+            <field name="model_id" ref="model_hlv_vtracking_plan"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_fill_actuals()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="cron_vtracking_gc_positions" model="ir.cron">
             <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
             <field name="model_id" ref="model_hlv_vtracking_position"/>

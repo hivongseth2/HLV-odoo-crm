@@ -17,11 +17,16 @@ SESSION_LABELS = {
 }
 
 
+def iso_datetime(value):
+    """Datetime của Odoo -> chuỗi ISO, hoặc None. Giờ là UTC như Odoo lưu."""
+    return fields.Datetime.to_string(value) if value else None
+
+
 def plan_summary(plan):
     """Phần đầu của một kế hoạch: xe, buổi, tổng số, dự kiến, và ô thực tế.
 
-    Ô ``actual_*`` luôn có mặt dù đang rỗng: chúng chờ module shipper điền, và bên đọc
-    phải thấy rõ "kế hoạch 12 điểm" chưa nói gì về việc đã giao mấy điểm.
+    Ô ``actual_*`` luôn có mặt dù đang rỗng: bên đọc phải thấy rõ "kế hoạch 12 điểm" chưa
+    nói gì về việc đã giao mấy điểm.
     """
     return {
         'id': plan.id,
@@ -44,10 +49,21 @@ def plan_summary(plan):
         'zone_id': plan.zone_id.id or None,
         'zone_name': plan.zone_id.name or None,
         'zone_warning': plan.zone_warning or None,
+        # Đếm sẵn để bên gọi không phải duyệt hết line mới biết kế hoạch có xác nhận được
+        # không. Còn dòng nào chặn là action_confirm sẽ báo lỗi.
+        'procedure_blocked_count': len(plan.line_ids.filtered('procedure_blocked')),
+        'no_truck_count': len(plan.line_ids.filtered(lambda line: not line.needs_truck)),
         'has_actual_data': plan.has_actual_data,
         'actual_line_count': plan.actual_line_count,
         'actual_amount_total': plan.actual_amount_total,
         'actual_distance_km': plan.actual_distance_km,
+        'actual_returned_count': plan.actual_returned_count,
+        'actual_start_at': iso_datetime(plan.actual_start_at),
+        'actual_end_at': iso_datetime(plan.actual_end_at),
+        # 'done' = thiếu mốc hàng lên xe nên thời lượng thực tế là CẬN DƯỚI.
+        'actual_start_source': plan.actual_start_source,
+        'actual_duration_display': plan.actual_duration_display or None,
+        'variance': plan._variance_summary(),
         'start': plan_start(plan),
     }
 
@@ -80,7 +96,10 @@ def plan_lines(plan, with_legs=False):
     """
     lines = plan._ordered_lines()
     legs = (
-        estimate_legs(plan._route_start(), plan._route_stops(), plan._route_params())
+        estimate_legs(
+            plan._route_start(), plan._route_stops(), plan._route_params(),
+            plan._route_extra_minutes(),
+        )
         if with_legs else []
     )
     result = []
@@ -102,6 +121,20 @@ def plan_lines(plan, with_legs=False):
             'zone_source': line.zone_source,
             'zone_uncertain': line.zone_uncertain,
             'waiting_picking': line.line_state == 'waiting_picking',
+            # Thói quen khách — AI phải đọc được để biết điểm nào đang bị chặn và điểm nào
+            # lẽ ra không cần chiếm một chỗ trên xe.
+            'procedure_required': line.procedure_required or 'none',
+            'procedure_ready': line.procedure_ready,
+            'procedure_blocked': line.procedure_blocked,
+            'delivery_channel': line.delivery_channel or None,
+            'needs_truck': line.needs_truck,
+            'extra_service_minutes': line.extra_service_minutes or 0,
+            'driver_note': line.driver_note or None,
+            # Thực tế — nguồn khác hẳn phần dự kiến ở trên, đừng trộn hai bên.
+            'delivered_at': iso_datetime(line.delivered_at),
+            'returned': line.returned,
+            'return_reason': line.return_reason or None,
+            'variance_minutes': line.variance_minutes if line.delivered_at else None,
             'has_coords': line.has_coords,
             'delivered': line.delivered,
         }

@@ -131,6 +131,33 @@ giao chính xác; hãy nói "ước khoảng".
 nhất ở xa, hoặc chưa có toạ độ nên phải suy theo khách. Định mức thời gian của cả kế hoạch
 dựa vào cụm, nên đoán sai cụm là sai cả giờ giấc. Nêu lại cho người dùng, đừng im lặng dùng.
 
+**`procedure_blocked = true` là CHẶN, không phải cảnh báo.** Điểm nằm trong khu chế xuất
+phải khai hải quan, hoặc khách yêu cầu đăng ký người và xe trước. Xe tới nơi mà chưa xong
+thì bảo vệ không cho vào cổng, hàng phải chở về — mất trắng cả lượt chạy. `confirm-plan` sẽ
+**báo lỗi** chừng nào còn dòng như vậy. Đừng tự tìm cách đi vòng: hãy nói cho người dùng
+biết điểm nào vướng thủ tục gì, để họ làm thủ tục rồi tích "Thủ tục đã xong".
+
+**`needs_truck = false` = đừng xếp điểm đó lên xe.** Khách tự ghé lấy, gửi CPN hoặc book
+Grab. Xếp vào là thừa một điểm dừng, và tài xế sẽ tới một nơi không ai chờ hàng. Nếu người
+dùng vẫn muốn xếp (lần này khác thường lệ) thì được — nhưng phải hỏi lại trước.
+
+**`extra_service_minutes` đã được cộng vào `total_minutes`.** Đừng cộng thêm lần nữa. Nó là
+phần VƯỢT trên mức thường; định mức cụm (`median_leg_minutes`) đã bao thời gian dỡ hàng và
+ký nhận của một điểm bình thường rồi.
+
+**Số thực tế và số dự kiến là HAI NGUỒN.** `distance_km`/`total_minutes` là dự kiến;
+`actual_distance_km`/`actual_duration_display` đo từ phiếu giao và GPS. Đừng suy cái này ra
+cái kia, và đừng báo cáo cái này như cái kia. `actual_distance_km = 0` nghĩa là **không đo
+được** (lịch sử GPS chỉ giữ 30 ngày), không phải xe không chạy.
+
+**`actual_start_source = "done"` = thời lượng thực tế là cận dưới.** Thiếu mốc lúc hàng lên
+xe nên chuyến được tính từ lúc giao điểm ĐẦU TIÊN — mất trọn chặng từ kho ra đó. Nêu rõ khi
+báo cáo, đừng so thẳng với `total_minutes` dự kiến (đã gồm chặng ấy).
+
+**`returned = true` là điểm đã tới mà không giao được.** Nó vẫn tốn thời gian và quãng đường
+y như một điểm giao thành công. Đọc `return_reason` — đây là dữ liệu đáng học nhất và cũng
+là dữ liệu hay bị bỏ qua nhất.
+
 **`missing_coords_count > 0`** = có điểm chưa tra được toạ độ. Khi đó `distance_km` và
 `total_minutes` là **cận dưới** — thực tế dài hơn. Phải nêu điều này khi báo cáo.
 

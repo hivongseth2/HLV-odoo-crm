@@ -20,9 +20,10 @@ class HlvVtrackingPlan(models.Model):
     đặc biệt (``full_day``) chứ không phải một cấp riêng, để không phải hỏi "kế hoạch ngày
     và kế hoạch buổi cái nào đè cái nào".
 
-    Đây là BẢN DỰ THẢO. Số liệu thực tế (nhận đơn nào, giao lúc mấy giờ) sẽ do
-    ``hlv_barcode_shipper`` cung cấp ở bước sau — các ô ``actual_*`` đã khai sẵn và đang
-    để trống có chủ ý.
+    Kế hoạch là BẢN DỰ THẢO; số thực tế là một nguồn KHÁC. Các ô ``actual_*`` do
+    ``services/vtracking_actual.py`` đọc từ phiếu giao (app shipper) và từ lịch sử GPS —
+    xem ``vtracking_plan_actual.py``. Không bao giờ suy số thực tế từ kế hoạch: trộn hai
+    nguồn là mất luôn khả năng đối chiếu, mà đối chiếu chính là chỗ định mức được sửa.
     """
 
     _name = 'hlv.vtracking.plan'
@@ -100,17 +101,17 @@ class HlvVtrackingPlan(models.Model):
              'đang thiếu phần của chúng.',
     )
 
-    # --- Thực tế (chờ hlv_barcode_shipper) ----------------------------------
-    # Khai sẵn để màn hình và API có chỗ đọc ngay từ bây giờ; điền vào là việc của bước
-    # nối với module shipper. Đừng suy số thực tế từ kế hoạch — đó là hai nguồn khác nhau,
-    # trộn vào nhau thì không còn đối chiếu được nữa.
+    # --- Thực tế ------------------------------------------------------------
+    # Chỉ ``services/vtracking_actual.py`` được ghi vào nhóm ô này. Đừng suy số thực tế từ
+    # kế hoạch — đó là hai nguồn khác nhau, trộn vào nhau thì không còn đối chiếu được.
     actual_line_count = fields.Integer(string='Số phiếu đã giao', readonly=True, copy=False)
     actual_amount_total = fields.Monetary(
         string='Tiền đã giao', readonly=True, copy=False, currency_field='currency_id',
     )
     actual_distance_km = fields.Float(
         string='Km thực chạy', readonly=True, copy=False, digits=(10, 1),
-        help='Sẽ lấy từ lịch sử GPS của xe trong khung giờ của kế hoạch.',
+        help='Đo từ lịch sử GPS của xe trong khung giờ của chuyến. 0 nghĩa là KHÔNG ĐO '
+             'ĐƯỢC (lịch sử đã quá hạn lưu trữ), không phải xe không chạy.',
     )
     actual_start_at = fields.Datetime(string='Xuất phát thực tế', readonly=True, copy=False)
     actual_end_at = fields.Datetime(string='Về thực tế', readonly=True, copy=False)
@@ -145,7 +146,8 @@ class HlvVtrackingPlan(models.Model):
                  'start_place_id', 'zone_id', 'zone_id.hub_to_first_minutes',
                  'zone_id.median_leg_minutes', 'zone_id.return_minutes',
                  'company_id.vtracking_avg_speed_kmh',
-                 'company_id.vtracking_minutes_per_stop', 'company_id.vtracking_road_factor')
+                 'company_id.vtracking_minutes_per_stop', 'company_id.vtracking_road_factor',
+                 'line_ids.extra_service_minutes')
     def _compute_route(self):
         """Quãng đường và thời gian dự kiến của cả kế hoạch.
 
@@ -153,7 +155,10 @@ class HlvVtrackingPlan(models.Model):
         cùng một con số cho cùng một chuyến.
         """
         for plan in self:
-            estimate = estimate_route(plan._route_start(), plan._route_stops(), plan._route_params())
+            estimate = estimate_route(
+                plan._route_start(), plan._route_stops(), plan._route_params(),
+                plan._route_extra_minutes(),
+            )
             plan.missing_coords_count = estimate['missing_coords_count']
             plan.distance_km = estimate['distance_km']
             plan.drive_minutes = estimate['drive_minutes']
@@ -180,6 +185,15 @@ class HlvVtrackingPlan(models.Model):
             (line.latitude, line.longitude) if line.latitude and line.longitude else None
             for line in self._ordered_lines()
         ]
+
+    def _route_extra_minutes(self):
+        """Phút đứng LÂU HƠN thường lệ của từng điểm, theo đúng thứ tự ghé.
+
+        Lấy từ thói quen của điểm giao. Khách nào không khai thì 0 — định mức cụm đã bao
+        thời gian giao của một điểm bình thường rồi.
+        """
+        self.ensure_one()
+        return [line.extra_service_minutes or 0 for line in self._ordered_lines()]
 
     def _route_params(self):
         """Định mức tính lộ trình: ưu tiên cụm tuyến, lùi về tham số chung của công ty.

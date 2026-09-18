@@ -91,6 +91,9 @@
                     <button name="action_add_documents" type="object"
                             string="Thêm phiếu / đơn" class="btn-primary"
                             invisible="state not in ('draft', 'confirmed')"/>
+                    <button name="action_refresh_actual" type="object"
+                            string="Đọc lại thực tế"
+                            invisible="state not in ('confirmed', 'done')"/>
                     <button name="action_refresh_lines" type="object"
                             string="Đọc lại từ chứng từ"/>
                     <button name="action_cancel" type="object" string="Huỷ"
@@ -146,7 +149,8 @@
                                 <!-- Không editable: thêm chứng từ đi qua nút "Thêm phiếu /
                                      đơn" để chọn được nhiều cái một lần và lọc theo kho.
                                      Sửa tay ở đây chỉ còn là kéo thứ tự ghé. -->
-                                <list decoration-warning="not has_coords or zone_uncertain"
+                                <list decoration-danger="procedure_blocked"
+                                      decoration-warning="not has_coords or zone_uncertain"
                                       decoration-muted="line_state == 'waiting_picking'">
                                     <field name="sequence" widget="handle"/>
                                     <field name="display_reference" string="Chứng từ" readonly="1"/>
@@ -154,6 +158,22 @@
                                            widget="badge"
                                            decoration-warning="line_state == 'waiting_picking'"
                                            decoration-success="line_state == 'ready'"/>
+                                    <field name="procedure_required" string="Thủ tục"
+                                           readonly="1" widget="badge"
+                                           decoration-danger="procedure_blocked"
+                                           decoration-success="not procedure_blocked"
+                                           invisible="procedure_required in ('none', False)"/>
+                                    <field name="procedure_ready" string="Xong thủ tục"
+                                           invisible="procedure_required in ('none', False)"/>
+                                    <field name="procedure_blocked" column_invisible="1"/>
+                                    <field name="delivery_channel" string="Kênh" readonly="1"
+                                           optional="show"
+                                           decoration-danger="not needs_truck"/>
+                                    <field name="needs_truck" column_invisible="1"/>
+                                    <field name="extra_service_minutes" string="Lâu hơn (phút)"
+                                           readonly="1" optional="hide"/>
+                                    <field name="driver_note" string="Dặn tài xế" readonly="1"
+                                           optional="hide"/>
                                     <field name="source_name" string="Đơn bán" readonly="1"/>
                                     <field name="partner_id" readonly="1"/>
                                     <field name="address" readonly="1"/>
@@ -173,6 +193,18 @@
                                     <field name="currency_id" column_invisible="1"/>
                                     <field name="delivered" string="Đã giao" readonly="1"
                                            optional="show"/>
+                                    <field name="delivered_at" string="Giao lúc" readonly="1"
+                                           optional="show"/>
+                                    <field name="variance_minutes" string="Lệch (phút)"
+                                           readonly="1" optional="show"/>
+                                    <field name="returned" string="Chở về" readonly="1"
+                                           optional="hide"/>
+                                    <field name="return_reason" string="Lý do chở về"
+                                           readonly="1" optional="hide"/>
+                                    <field name="shipper_id" string="Người giao" readonly="1"
+                                           optional="hide"/>
+                                    <field name="received_at" string="Lên xe lúc" readonly="1"
+                                           optional="hide"/>
                                     <button name="action_retry_geocode" type="object"
                                             icon="fa-search-plus" title="Tra lại toạ độ"/>
                                     <button name="action_open_source" type="object"
@@ -182,25 +214,48 @@
                         </page>
 
                         <page string="Thực tế">
-                            <!-- Khai sẵn, số liệu sẽ do hlv_barcode_shipper cung cấp. Hiện
-                                 ra ngay từ bây giờ để người dùng biết chỗ này sẽ có gì, và
-                                 để không ai nhầm số dự kiến thành số thực tế. -->
                             <div class="alert alert-info" role="alert"
                                  invisible="has_actual_data">
-                                Phần này lấy số từ module <strong>hlv_barcode_shipper</strong>
-                                (tài xế quét nhận và giao phiếu) và từ lịch sử GPS của xe.
-                                <strong>Chưa nối</strong> — sẽ làm ở bước sau.
+                                Chưa có dữ liệu thực tế cho chuyến này. Số liệu đến từ
+                                <strong>app shipper</strong> (quét nhận hàng ở kho, xác nhận
+                                giao tại khách) và từ lịch sử GPS của xe. Tác vụ nền đọc lại
+                                mỗi giờ; bấm <strong>Đọc lại thực tế</strong> nếu cần ngay.
+                            </div>
+                            <div class="alert alert-warning" role="alert"
+                                 invisible="actual_start_source != 'done'">
+                                Không có mốc <strong>lúc hàng lên xe</strong> nên thời gian
+                                chuyến được tính từ lúc giao điểm đầu — tức là
+                                <strong>ngắn hơn thực tế</strong>, thiếu chặng từ kho ra điểm
+                                đầu tiên.
+                            </div>
+                            <div class="alert alert-danger" role="alert"
+                                 invisible="actual_returned_count == 0">
+                                Chuyến này có phiếu <strong>chở về kho</strong> — đã tới nơi
+                                nhưng không giao được. Xem cột "Lý do chở về" ở tab Điểm giao: đây là dữ liệu
+                                đáng học nhất của cả chuyến.
                             </div>
                             <group>
                                 <group string="Đã giao">
                                     <field name="actual_line_count"/>
                                     <field name="actual_amount_total" widget="monetary"/>
+                                    <field name="actual_returned_count"/>
                                 </group>
                                 <group string="Hành trình thật">
                                     <field name="actual_distance_km"/>
                                     <field name="actual_start_at"/>
                                     <field name="actual_end_at"/>
+                                    <field name="actual_duration_display"/>
+                                    <field name="actual_start_source"/>
                                 </group>
+                            </group>
+                            <group string="Đối chiếu giờ giấc">
+                                <field name="variance_summary" nolabel="1" colspan="2"/>
+                                <div class="text-muted" colspan="2">
+                                    Lệch trung bình giữ dấu (dương = chuyến nào cũng chậm hơn
+                                    dự kiến, tức <strong>định mức cụm quá lạc quan</strong>);
+                                    dao động bỏ dấu, cho thấy giờ giấc có ổn định không. Chênh
+                                    trong 15 phút coi như đúng hẹn.
+                                </div>
                             </group>
                             <field name="has_actual_data" invisible="1"/>
                         </page>

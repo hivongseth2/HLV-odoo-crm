@@ -188,9 +188,19 @@ Tóm tắt như mục 8, thêm `note`, `route_params`, và `lines[]` theo thứ 
 | `zone_source` | `coords` (suy từ toạ độ — tin được) · `place` (đoán theo khách) · `manual` (người gán) · `none` |
 | `zone_uncertain` | `true` = máy phải đoán. **Nêu lại cho người dùng**, đừng im lặng dùng |
 | `waiting_picking` | `true` = xếp theo đơn, phiếu xuất chưa có |
+| `procedure_required` | `none` · `customs` (khai hải quan) · `register` (đăng ký trước) · `both` |
+| `procedure_ready` | Người điều phối đã xác nhận làm xong thủ tục chưa |
+| `procedure_blocked` | `true` = **kế hoạch không xác nhận được** khi còn dòng này |
+| `delivery_channel` | `company` · `pickup` · `express` · `grab` · `other` · `null` (không rõ) |
+| `needs_truck` | `false` = điểm này đang chiếm một chỗ trên xe mà lẽ ra không cần |
+| `extra_service_minutes` | Phút đứng **lâu hơn** điểm thường trong cụm (0 = như thường lệ) |
+| `driver_note` | Cổng vào, SĐT người nhận, đường khó — chuyển nguyên văn cho tài xế |
 | `leg_km`, `leg_minutes` | Chặng từ điểm trước tới điểm này. `null` = điểm này thiếu toạ độ |
 | `arrive_offset_minutes`, `depart_offset_minutes` | Phút tính **từ lúc xe xuất phát** |
 | `delivered` | Đã giao chưa (hiện luôn `false` — chờ module shipper) |
+
+Ở phần tóm tắt kế hoạch còn có `procedure_blocked_count` và `no_truck_count` — đếm sẵn để
+không phải duyệt hết `lines[]` mới biết kế hoạch có xác nhận được không.
 
 `zone_warning` báo khi kế hoạch **vượt trần điểm**, **dưới ngưỡng đáng chạy**, hoặc **gom
 nhiều cụm**. Đây là cảnh báo, không phải lỗi — nhưng phải nêu lại cho người dùng.
@@ -201,7 +211,41 @@ xong khi xe về tới kho, và với cụm xa thì chặng về đáng kể (Ch
 Giờ tới thật = giờ xuất phát bạn giả định + `arrive_offset_minutes`. Hệ thống không lưu giờ
 xuất phát; buổi sáng/chiều bắt đầu mấy giờ là điều phải hỏi người dùng.
 
-## 10. `POST /estimate` — không ghi gì
+## 10. `GET /plans/<id>/vs-actual`
+
+Đối chiếu chuyến đã chạy với kế hoạch của nó. **Đây là nguồn để sửa định mức** — không có
+nó thì mọi con số trong `hlv.vtracking.zone` mãi là ước lượng ban đầu.
+
+```json
+{"summary": {"measured": 7, "on_time": 5, "late": 2, "early": 0,
+             "mean_variance": 11, "mean_abs_variance": 14,
+             "worst": {"planned": 96, "actual": 133, "variance": 37, "on_time": false}},
+ "start_source": "received",
+ "stops": [{"line_id": 88, "seq_no": 1, "reference": "WH/OUT/01234",
+            "zone_name": "Nhơn Trạch", "planned": 40, "actual": 43, "variance": 3,
+            "on_time": true, "delivered": true, "returned": false, "return_reason": null}],
+ "plan": { ...tóm tắt kế hoạch... }}
+```
+
+| Khoá | Nghĩa |
+|---|---|
+| `planned`, `actual` | Phút **tính từ lúc xe xuất phát**, không phải giờ trong ngày |
+| `variance` | `actual - planned`. **Dương = tới chậm hơn kế hoạch**. `null` = không đo được |
+| `on_time` | Chênh trong 15 phút |
+| `mean_variance` | Giữ dấu. Luôn dương ở một cụm = **định mức cụm đó quá lạc quan** |
+| `mean_abs_variance` | Bỏ dấu. Mức **dao động** — định mức đúng trung bình mà dao động lớn thì vẫn không hứa giờ với khách được |
+| `returned` | Đã tới nơi nhưng **không giao được**, hàng chở về kho |
+| `start_source` | `received` (lúc hàng lên xe — tin được) · `done` (lúc giao điểm đầu — **thời lượng là cận dưới**) · `none` |
+
+`measured: 0` nghĩa là chưa đối chiếu được điểm nào — khác hẳn "đo được và đúng y hẹn".
+Đừng báo cáo trung bình khi `measured` bằng 0.
+
+## 11. `POST /plans/<id>/refresh-actual` 🔒
+
+Đọc lại số thực tế ngay thay vì chờ tác vụ nền (chạy mỗi giờ). Không sửa gì trong kế hoạch,
+chỉ đọc lại từ phiếu giao và GPS. Trả về đúng dạng của `/vs-actual`.
+
+## 12. `POST /estimate` — không ghi gì
 
 ```json
 {"start_place_id": 3,
@@ -217,7 +261,7 @@ Tối đa 60 điểm. Trả `distance_km`, `drive_minutes`, `service_minutes`, `
 **Chỉ dùng toạ độ đã có sẵn**, không gọi geocoder. Điểm chưa có toạ độ vẫn được tính thời
 gian giao và đánh dấu `has_coords: false`.
 
-## 11. `POST /plans` 🔒
+## 13. `POST /plans` 🔒
 
 ```json
 {"vehicle_id": 5, "date": "2026-09-19", "session": "morning", "start_place_id": 3}
@@ -227,7 +271,7 @@ Trả chi tiết kế hoạch + `created`. Đã có kế hoạch cho (xe, ngày,
 sẵn với `created: false` — **không phải lỗi**. Lỗi 422 khi xe chưa bật theo dõi, hoặc điểm
 xuất phát chưa có toạ độ / chưa gắn kho.
 
-## 12. `POST /plans/<id>/documents` 🔒
+## 14. `POST /plans/<id>/documents` 🔒
 
 ```json
 {"picking_ids": [1201, 1203], "sale_order_ids": [812]}
@@ -244,23 +288,23 @@ Tối đa 100 chứng từ một lần. Trả:
 
 Xếp vào kế hoạch sẽ **tra toạ độ** địa chỉ chưa có trong kho toạ độ (có thể tốn lượt Google).
 
-## 13. `POST /plans/<id>/remove-lines` 🔒
+## 15. `POST /plans/<id>/remove-lines` 🔒
 
 `{"line_ids": [55]}` — **id dòng**, không phải id phiếu. Trả `removed_line_ids` + `plan`.
 Id không thuộc kế hoạch này bị bỏ qua: đối chiếu `removed_line_ids` với thứ bạn gửi.
 
-## 14. `POST /plans/<id>/resequence` 🔒
+## 16. `POST /plans/<id>/resequence` 🔒
 
 `{"line_ids": [56, 55, 57]}` — thứ tự mong muốn. Dòng không nêu giữ thứ tự tương đối và dồn
 xuống cuối. Hoặc `{"strategy": "nearest"}` — hệ thống sắp theo "tới điểm gần nhất chưa ghé"
 (điểm khởi đầu tốt, không phải tối ưu). Trả chi tiết kế hoạch sau khi sắp.
 
-## 15. `POST /plans/<id>/state` 🔒
+## 17. `POST /plans/<id>/state` 🔒
 
 `{"action": "confirm"}` — một trong `confirm`, `back_to_draft`, `cancel`, `done`.
 Kế hoạch `done` / `cancelled` không sửa được nữa (422).
 
-## 16. `POST /geocode` 🔒
+## 18. `POST /geocode` 🔒
 
 `{"address": "..."}` → `address_id`, `normalized_address`, `geo_state`, `latitude`,
 `longitude`, `from_cache`. Tìm trong kho toạ độ trước; không có mới gọi geocoder ngoài —

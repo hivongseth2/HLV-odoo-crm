@@ -35,6 +35,10 @@
               parent="menu_vtracking_root" action="action_vtracking_place_from_partner"
               sequence="35" groups="hlv_vtracking.group_vtracking_manager"/>
 
+    <menuitem id="menu_vtracking_habits" name="Thói quen khách"
+              parent="menu_vtracking_root" action="action_vtracking_partner_profile"
+              sequence="36"/>
+
     <menuitem id="menu_vtracking_positions" name="Lịch sử vị trí"
               parent="menu_vtracking_root" action="action_vtracking_position" sequence="40"/>
 
@@ -57,6 +61,10 @@
     <menuitem id="menu_vtracking_addresses" name="Kho toạ độ"
               parent="menu_vtracking_config" action="action_vtracking_address"
               sequence="18"/>
+
+    <menuitem id="menu_vtracking_seed_habits" name="Mồi thói quen đã biết"
+              parent="menu_vtracking_config" action="action_vtracking_seed_habits"
+              sequence="19"/>
 
     <menuitem id="menu_vtracking_api_keys" name="Khoá API"
               parent="menu_vtracking_config" action="action_vtracking_api_key"

@@ -57,6 +57,15 @@ class HlvVtrackingPlace(models.Model):
         help='Chuỗi thật sự gửi đi tra toạ độ. Xem để biết vì sao máy tra trượt.',
     )
     phone = fields.Char(related='partner_id.phone', readonly=True)
+    profile_ids = fields.One2many(
+        'hlv.vtracking.partner.profile', 'place_id', string='Thói quen giao hàng',
+    )
+    profile_id = fields.Many2one(
+        'hlv.vtracking.partner.profile', string='Thói quen', compute='_compute_profile_id',
+        store=True,
+        help='Một điểm chỉ có một bộ thói quen (ràng buộc unique trên bộ thói quen). Cột '
+             'này để mọi chỗ khác viết place.profile_id thay vì profile_ids[:1].',
+    )
     note = fields.Text()
 
     # --- Toạ độ -------------------------------------------------------------
@@ -95,6 +104,11 @@ class HlvVtrackingPlace(models.Model):
     # ------------------------------------------------------------------
     # Compute
     # ------------------------------------------------------------------
+    @api.depends('profile_ids')
+    def _compute_profile_id(self):
+        for place in self:
+            place.profile_id = place.profile_ids[:1]
+
     @api.depends('latitude', 'longitude')
     def _compute_has_coords(self):
         for place in self:

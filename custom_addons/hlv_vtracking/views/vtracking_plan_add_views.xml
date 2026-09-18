@@ -78,12 +78,21 @@
                     <field name="not_ready_count" invisible="source_type != 'picking'"/>
                     <field name="other_warehouse_count" invisible="not warehouse_id"/>
                     <field name="closed_order_count"/>
+                    <field name="no_truck_count"/>
+                    <field name="no_truck_labels" invisible="no_truck_count == 0"/>
                 </group>
 
                 <div class="alert alert-danger" role="alert"
                      invisible="closed_order_count == 0">
                     Có chứng từ thuộc <strong>đơn bán đã khoá sổ hoặc đã huỷ</strong> —
                     không xếp được. Bỏ chúng ra khỏi danh sách rồi thử lại.
+                </div>
+
+                <div class="alert alert-warning" role="alert"
+                     invisible="no_truck_count == 0">
+                    Có chứng từ ghi <strong>khách tự lấy / gửi CPN / book Grab</strong> —
+                    xe công ty không phải chạy. Xếp lên xe là thừa một điểm dừng. Vẫn xếp
+                    được nếu lần này khác thường lệ.
                 </div>
 
                 <div class="alert alert-warning" role="alert"

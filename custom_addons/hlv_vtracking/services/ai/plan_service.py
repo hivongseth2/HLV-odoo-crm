@@ -7,7 +7,7 @@ hoạch bị đổi sau lưng sẽ không ai biết hỏi ai.
 
 from odoo.exceptions import UserError
 
-from .. import plan_documents, plan_payload
+from .. import plan_documents, plan_payload, vtracking_actual
 from ...tools.vtracking_route import estimate_route, format_minutes, route_params
 from .order_service import cached_coords
 from .serialize import iso_date
@@ -48,9 +48,23 @@ def plan_detail(plan):
     return detail
 
 
+def plan_vs_actual(plan):
+    """Bảng đối chiếu kế hoạch ↔ thực tế của một chuyến, kèm phần tóm tắt kế hoạch."""
+    result = plan.vs_actual()
+    result['plan'] = plan_payload.plan_summary(plan)
+    return result
+
+
 # ----------------------------------------------------------------------
 # Ghi
 # ----------------------------------------------------------------------
+def refresh_actual(plan, actor):
+    """Đọc lại số thực tế từ phiếu giao và GPS. Không sửa kế hoạch, chỉ đọc lại thực tế."""
+    vtracking_actual.fill_plan_actuals(plan)
+    log_action(plan, actor, 'đọc lại số thực tế')
+    return plan_vs_actual(plan)
+
+
 def create_plan(env, vehicle, day, session, start_place, actor):
     """Tạo kế hoạch cho (xe, ngày, buổi), hoặc trả lại cái đã có. Trả ``(plan, created)``."""
     if not vehicle.vtracking_enabled:

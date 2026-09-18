@@ -18,9 +18,12 @@ Nguyên tắc ranh giới: **chỉ xe bật "Theo dõi vTracking" trong Đội x
 mới hiện trên bản đồ, mới trả ra API.** Tài khoản vTracking có thể chứa xe của pháp nhân
 khác; cờ đó là thứ duy nhất quyết định module này nhìn thấy gì.
 
-Module ĐỘC LẬP: chỉ phụ thuộc Đội xe (fleet) của Odoo. Không dính tới điều phối giao
-hàng. Việc nối dữ liệu GPS với kế hoạch giao hàng thuộc về một module cầu nối riêng —
-xem plan/ke-hoach-module-vtracking.md.
+4. Kế hoạch giao hàng theo xe · buổi · ngày, có cụm tuyến, định mức thời gian, thói quen
+   khách và vòng đối chiếu kế hoạch ↔ thực tế.
+
+Ban đầu module này độc lập hoàn toàn với điều phối giao hàng. Nay nó đã ôm luôn phần lập
+kế hoạch, nên phụ thuộc thêm sale_stock, purchase_stock và hlv_barcode_shipper — xem lý do
+ở từng dòng trong `depends`.
 """,
     'category': 'Human Resources/Fleet',
     'author': 'HLV',
@@ -40,6 +43,11 @@ xem plan/ke-hoach-module-vtracking.md.
         # API cho AI lập kế hoạch cần biết hàng của đơn bán đã VỀ chưa: đơn mua nối với
         # đơn bán qua purchase.order.origin, và số đã nhận nằm ở purchase_stock.
         'purchase_stock',
+        # Nguồn THỰC TẾ của vòng đối chiếu: shipper_receive_time (lúc hàng lên xe),
+        # shipper_returned + shipper_return_reason (giao hụt). Phụ thuộc CỨNG chứ không
+        # đọc mềm qua `_fields` như với field Studio: đối chiếu kế hoạch với thực tế là
+        # tính năng cốt lõi, đọc mềm chỉ khiến mọi ô thực tế rỗng mà không ai biết vì sao.
+        'hlv_barcode_shipper',
     ],
     'external_dependencies': {'python': ['requests', 'pytz']},
     'data': [
@@ -53,6 +61,7 @@ xem plan/ke-hoach-module-vtracking.md.
         'views/vtracking_import_wizard_views.xml',
         'views/vtracking_zone_views.xml',
         'views/vtracking_place_views.xml',
+        'views/vtracking_partner_profile_views.xml',
         'views/vtracking_place_import_views.xml',
         'views/vtracking_plan_views.xml',
         'views/vtracking_plan_add_views.xml',
