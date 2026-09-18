@@ -77,6 +77,9 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
     other_warehouse_count = fields.Integer(
         compute='_compute_preview', string='Khác kho xuất phát',
     )
+    closed_order_count = fields.Integer(
+        compute='_compute_preview', string='Đơn đã khoá sổ / huỷ',
+    )
 
     # ------------------------------------------------------------------
     # Compute
@@ -108,6 +111,11 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
                 ('picking_type_code', '=', 'outgoing'),
                 ('state', '=', 'assigned'),
                 ('plan_id', '=', False),
+                # Phiếu vẫn Sẵn sàng nhưng ĐƠN đã khoá sổ hoặc đã huỷ thì không còn gì để
+                # giao — thường là phiếu sót lại sau khi đơn được xử lý bằng đường khác.
+                # Phiếu không gắn đơn nào (chuyển kho, trả hàng) vẫn cho xếp.
+                '|', ('sale_id', '=', False),
+                     ('sale_id.state', 'not in', ('done', 'cancel')),
             ]
             # Đơn đã giao đủ hoặc đã huỷ thì không còn gì để xếp lên xe. `delivery_status`
             # là trạng thái giao của Odoo: pending / started / partial / full.
@@ -150,6 +158,7 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
                 )) if wizard.warehouse_id else 0
             wizard.already_planned_count = len(planned)
             wizard.to_add_count = len(addable)
+            wizard.closed_order_count = len(wizard._closed_orders(addable))
 
     @api.model
     def default_get(self, fields_list):
@@ -194,6 +203,17 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
         if not addable:
             raise UserError('Mọi chứng từ đang chọn đều đã nằm trong một kế hoạch giao.')
 
+        # Chặn ở đây chứ không chỉ dựa vào domain: chứng từ chọn từ danh sách đi vào qua
+        # `active_ids` mà không qua domain, và đơn có thể vừa bị đóng trong lúc hộp thoại
+        # đang mở. Báo lỗi thay vì lặng lẽ bỏ qua — người dùng cần biết đơn nào đã đóng.
+        closed = self._closed_orders(addable)
+        if closed:
+            raise UserError(
+                'Không xếp được vì đơn bán đã khoá sổ hoặc đã huỷ: %s.\n'
+                'Bỏ những chứng từ này ra rồi thử lại.'
+                % ', '.join(sorted(closed))
+            )
+
         start_sequence = max(plan.line_ids.mapped('sequence') or [0])
         self.env['hlv.vtracking.plan.line'].create([{
             'plan_id': plan.id,
@@ -209,6 +229,23 @@ class HlvVtrackingPlanAddPicking(models.TransientModel):
             'view_mode': 'form',
             'target': 'current',
         }
+
+    def _closed_orders(self, documents):
+        """Tên các đơn bán đã khoá sổ / đã huỷ trong tập chứng từ. Trả về set tên.
+
+        Nhận cả phiếu giao lẫn đơn bán — phiếu thì soi đơn gắn với nó. Phiếu không gắn đơn
+        (chuyển kho, trả hàng) không bị chặn: nó không có đơn nào để đóng.
+        """
+        self.ensure_one()
+        closed = set()
+        for document in documents:
+            order = document if document._name == 'sale.order' else document.sale_id
+            if order and order.state in ('done', 'cancel'):
+                closed.add('%s (%s)' % (
+                    order.name,
+                    'đã khoá sổ' if order.state == 'done' else 'đã huỷ',
+                ))
+        return closed
 
     def _get_or_create_plan(self):
         """Kế hoạch đích. Tạo mới nếu người dùng chọn chế độ "mới".

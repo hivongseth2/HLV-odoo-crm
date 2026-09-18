@@ -21,6 +21,7 @@ import {
     formatMoney,
     filterBySearch,
     planLineFlags,
+    shortLabel,
 } from "./vtracking_map_utils";
 import { clearPlaces, drawPlaces } from "./vtracking_map_places";
 import { clearRoute, drawRoute, routableStopCount } from "./vtracking_map_route";
@@ -29,6 +30,10 @@ import { VtrackingPlanTable } from "./vtracking_plan_table";
 // Bản đồ tự tải lại theo chu kỳ này. 30 giây khớp với nhịp cron đồng bộ chậm nhất mà vẫn
 // đủ tươi để nhìn xe di chuyển; ngắn hơn chỉ làm tăng tải cho Odoo chứ dữ liệu không mới hơn.
 const REFRESH_MS = 30000;
+
+// Số điểm hiện trong popup xe. Đủ để liếc xem chuyến đi đâu, không biến popup thành một
+// khung cuộn dài. Xem đầy đủ thì bấm "Xem bảng".
+const POPUP_LINE_LIMIT = 4;
 
 // Khung nhìn mặc định khi chưa có xe nào có toạ độ: Đông Nam Bộ.
 const DEFAULT_CENTER = [10.85, 106.9];
@@ -256,7 +261,7 @@ export class VtrackingMap extends Component {
             marker.bindTooltip(vehicle.name);
             // Rộng và cao hơn mặc định vì popup chứa cả danh sách điểm giao; maxHeight
             // để Leaflet tự cho cuộn thay vì đẩy popup tràn khỏi màn hình.
-            marker.bindPopup(this.popupHtml(vehicle), { maxWidth: 360, maxHeight: 420 });
+            marker.bindPopup(this.popupHtml(vehicle), { maxWidth: 420, minWidth: 320, maxHeight: 440 });
         }
 
         // Xe bị tắt theo dõi giữa chừng phải biến mất khỏi bản đồ, nếu không ghim sẽ đứng
@@ -341,26 +346,32 @@ export class VtrackingMap extends Component {
         if (!lines.length) {
             return "";
         }
-        const rows = lines
-            .map((line, index) => {
+        // Popup của Leaflet hẹp và không đổi cỡ được; nhồi cả 15 điểm vào đó thì mỗi
+        // điểm xuống ba dòng và phải cuộn trong một khung bé xíu. Popup chỉ liếc nhanh
+        // vài điểm đầu, xem đủ thì bấm "Xem bảng" — hộp thoại đó rộng bằng màn hình.
+        const shown = lines.slice(0, POPUP_LINE_LIMIT);
+        const rows = shown
+            .map((line) => {
                 const flags = planLineFlags(line)
                     .filter((flag) => flag.tone === "warn")
-                    .map((flag) => `<span class="o_vt_plan_warn">${this.escape(flag.label)}</span>`);
+                    .map((flag) => `<span class="o_vt_plan_warn">${this.escape(flag.label)}</span>`)
+                    .join(" ");
                 const tick = line.delivered ? "✓ " : "";
-                const money = formatMoney(line.amount);
                 return `<li>
-                    <span class="o_vt_line_no">${index + 1}.</span>
+                    <span class="o_vt_line_no">${line.seq_no}.</span>
                     <span class="o_vt_line_main">${tick}${this.escape(
                     line.reference
-                )} · ${this.escape(line.partner_name || "—")}</span>
-                    <span class="o_vt_line_amount">${money}</span>
-                    ${flags.length ? `<div class="o_vt_line_flags">${flags.join(" · ")}</div>` : ""}
+                )} · ${this.escape(shortLabel(line.partner_name || "—", 28))}</span>
+                    <span class="o_vt_line_amount">${formatMoney(line.amount)}</span>
+                    ${flags ? `<span class="o_vt_line_flags">${flags}</span>` : ""}
                 </li>`;
             })
             .join("");
-        // Cuộn trong popup thay vì cắt bớt: xe chở 15 điểm thì phải xem được cả 15, mà
-        // popup cao quá màn hình thì không đóng lại được.
-        return `<ul class="o_vt_plan_lines">${rows}</ul>`;
+        const rest = lines.length - shown.length;
+        const more = rest > 0
+            ? `<li class="o_vt_line_more">… còn ${rest} điểm nữa — bấm <b>Xem bảng</b></li>`
+            : "";
+        return `<ul class="o_vt_plan_lines">${rows}${more}</ul>`;
     }
 
     /** Bấm nút trong popup: "Xem bảng" mở hộp thoại, "Xem lộ trình" vẽ lên bản đồ. */

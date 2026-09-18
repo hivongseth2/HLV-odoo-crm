@@ -199,12 +199,22 @@
     border-top: 1px dotted #dee2e6;
 }
 
+/* Mỗi điểm đúng MỘT dòng: nowrap + ellipsis. Cho xuống dòng thì bốn điểm chiếm hết
+   popup và người xem phải cuộn trong một khung bé xíu. */
 .o_vt_plan_lines li {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 5px;
     padding: 3px 0;
     border-bottom: 1px dotted #f1f3f5;
+    white-space: nowrap;
+}
+
+.o_vt_line_more {
+    color: #6c757d;
+    font-style: italic;
+    border-bottom: none !important;
 }
 
 .o_vt_line_no {
@@ -215,7 +225,8 @@
 .o_vt_line_main {
     flex: 1 1 auto;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .o_vt_line_amount {
@@ -224,7 +235,7 @@
 }
 
 .o_vt_line_flags {
-    flex: 1 0 100%;
+    flex: 0 0 auto;
     font-size: 11px;
 }
 

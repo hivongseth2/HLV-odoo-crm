@@ -77,7 +77,14 @@
                     <field name="no_address_count"/>
                     <field name="not_ready_count" invisible="source_type != 'picking'"/>
                     <field name="other_warehouse_count" invisible="not warehouse_id"/>
+                    <field name="closed_order_count"/>
                 </group>
+
+                <div class="alert alert-danger" role="alert"
+                     invisible="closed_order_count == 0">
+                    Có chứng từ thuộc <strong>đơn bán đã khoá sổ hoặc đã huỷ</strong> —
+                    không xếp được. Bỏ chúng ra khỏi danh sách rồi thử lại.
+                </div>
 
                 <div class="alert alert-warning" role="alert"
                      invisible="other_warehouse_count == 0">
