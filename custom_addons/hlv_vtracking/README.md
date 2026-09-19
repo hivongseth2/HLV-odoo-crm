@@ -439,6 +439,9 @@ xuất hoặc lập kế hoạch giao hàng. Tài liệu viết cho chính AI đ
 
 - [docs/AI_API_GUIDE.md](docs/AI_API_GUIDE.md) — quy trình suy nghĩ, luật nghiệp vụ, chỗ dễ hiểu sai.
 - [docs/AI_API_REFERENCE.md](docs/AI_API_REFERENCE.md) — tra cứu 19 endpoint.
+- [`.claude/skills/dieu-phoi-giao-hang/`](../../.claude/skills/dieu-phoi-giao-hang/) —
+  skill điều phối cho Claude Code: quy trình, bẫy đã mắc, và lớp gọi API. Mở Claude Code
+  trong repo là dùng được; chỉ cần tạo khoá API theo `references/setup.md`.
 
 Cấp khoá ở **Cấu hình > Khoá API**. Khoá mặc định **chỉ đọc**; bật **Cho phép ghi** thì mới
 tạo/sửa kế hoạch được. Mọi thao tác ghi qua API để lại một dòng trên chatter của kế hoạch,

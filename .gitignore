@@ -4,7 +4,11 @@ __pycache__/
 .vscode/
 *.log
 .env
-.claude/
+# Cài đặt cục bộ của Claude Code (settings.local.json, lịch sử...) không vào git,
+# NHƯNG skill thì có: nó là tài sản chung — đồng nghiệp pull về là dùng được ngay,
+# và nó tự lên server cùng repo khi deploy.
+.claude/*
+!.claude/skills/
 .agent/
 .clinerules/
 CLAUDE.md
