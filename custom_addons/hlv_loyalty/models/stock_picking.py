@@ -2,7 +2,7 @@
 import logging
 from collections import defaultdict
 from html import escape
-from odoo import models, fields, api
+from odoo import models, fields
 
 _logger = logging.getLogger(__name__)
 
@@ -115,12 +115,7 @@ class StockPicking(models.Model):
         # trùng theo `account_id` ở dưới không bắt được ca này vì tài khoản đã
         # khác. Muốn chuyển điểm sang tài khoản mới thì phải hủy bản ghi xếp
         # hạng cũ trước (hủy xong trần này tự mở lại).
-        ranking_already_recorded = sum(self.env['hlv.loyalty.history'].sudo().search([
-            ('picking_id', '=', self.id),
-            ('transaction_type', '=', 'earn'),
-            ('point_type', '=', 'ranking'),
-            ('state', '!=', 'cancelled'),
-        ]).mapped('point_amount'))
+        ranking_already_recorded = self.env['hlv.loyalty.history']._get_picking_ranking_total(self)
         ranking_budget = max(ranking_points - ranking_already_recorded, 0)
 
         total_ranking_recorded = 0
@@ -141,7 +136,16 @@ class StockPicking(models.Model):
                 ('account_id', '=', account.id),
             ])
             if existing:
-                ranking_hist = existing.filtered(lambda h: h.point_type == 'ranking')[:1]
+                # Ranking bỏ qua bản ghi đã hủy để nút "Thu hồi điểm" trên đơn
+                # rồi tích lại được cho đúng tài khoản; hoàn hàng không cancel
+                # bản ghi ranking (nó tạo bản ghi âm) nên trần `ranking_budget`
+                # ở trên vẫn chặn được việc hồi sinh điểm của hàng đã trả.
+                # Exchange thì NGƯỢC LẠI — hoàn hàng hủy thẳng bản ghi pending,
+                # nên bản ghi đã hủy vẫn phải tính là "đã xử lý", nếu không
+                # điểm của hàng đã trả sẽ sống lại mỗi lần chạy tích điểm.
+                ranking_hist = existing.filtered(
+                    lambda h: h.point_type == 'ranking' and h.state != 'cancelled'
+                )[:1]
                 exchange_hist = existing.filtered(lambda h: h.point_type == 'exchange')[:1]
                 if ranking_hist:
                     # Luôn confirmed ngay khi tạo (đã vào số dư) → chỉ cập

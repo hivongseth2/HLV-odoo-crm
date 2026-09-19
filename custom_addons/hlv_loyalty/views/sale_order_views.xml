@@ -31,6 +31,14 @@
                             confirm="Tính lại và tạo bổ sung điểm Loyalty (đặc biệt là điểm đổi thưởng) còn thiếu cho các phiếu đã giao của đơn này. Điểm đã có sẵn sẽ KHÔNG bị thay đổi. Tiếp tục?"
                             help="Dùng khi phiếu đã giao chỉ tích được điểm xếp hạng mà thiếu điểm đổi thưởng (VD: bảng 'Tài khoản cộng điểm Loyalty' bên dưới được cấu hình/sửa số tiền SAU khi đã giao hàng)."/>
                 </div>
+                <div invisible="state not in ['sale', 'done']"
+                     groups="hlv_loyalty.group_loyalty_admin">
+                    <button name="action_revoke_all_loyalty_points" type="object"
+                            string="Thu hồi toàn bộ điểm" class="btn btn-link text-danger"
+                            icon="fa-undo"
+                            confirm="Hủy TOÀN BỘ điểm Loyalty (xếp hạng + đổi thưởng) của đơn này, kể cả bản ghi đã xác nhận. Điểm sẽ bị trừ khỏi số dư khách hàng. Tiếp tục?"
+                            help="Thu hồi trọn gói cả đơn. Muốn thu hồi riêng từng loại điểm thì mở bản ghi tương ứng trong Lịch sử điểm."/>
+                </div>
             </xpath>
             <!-- Tab chọn tài khoản Loyalty cộng điểm cho đơn này -->
             <xpath expr="//notebook" position="inside">

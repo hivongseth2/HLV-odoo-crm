@@ -289,6 +289,23 @@ class SaleOrder(models.Model):
             },
         }
 
+    def action_revoke_all_loyalty_points(self):
+        """Thu hồi toàn bộ điểm Loyalty (xếp hạng + đổi thưởng) của đơn này.
+
+        Hủy luôn bản ghi hoàn hàng của đơn vì chúng chỉ tồn tại để đối ứng bản
+        ghi tích điểm; bỏ sót sẽ làm số dư âm. Bản ghi `redeem` (khách đã đổi
+        thưởng) KHÔNG đụng tới.
+        """
+        self.ensure_one()
+        histories = self.env['hlv.loyalty.history'].sudo().search([
+            ('sale_order_id', '=', self.id),
+            ('transaction_type', 'in', ['earn', 'return']),
+            ('state', '!=', 'cancelled'),
+        ])
+        if not histories:
+            raise UserError('Đơn hàng này không có điểm Loyalty nào để thu hồi.')
+        return histories._revoke_and_notify()
+
     def action_confirm(self):
         """Override: Đánh dấu Voucher đã sử dụng khi xác nhận đơn hàng."""
         res = super().action_confirm()

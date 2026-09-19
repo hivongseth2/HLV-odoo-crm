@@ -20,6 +20,16 @@
                             type="object" class="btn-secondary"
                             invisible="state != 'pending'"
                             groups="hlv_loyalty.group_loyalty_operator"/>
+                    <button name="action_revoke_points" string="Thu hồi điểm xếp hạng"
+                            type="object" class="btn-secondary text-danger"
+                            invisible="state == 'cancelled' or transaction_type != 'earn' or point_type != 'ranking'"
+                            groups="hlv_loyalty.group_loyalty_admin"
+                            confirm="Thu hồi điểm xếp hạng của bản ghi này? Điểm đã xác nhận sẽ bị trừ khỏi số dư khách hàng."/>
+                    <button name="action_revoke_points" string="Thu hồi điểm đổi thưởng"
+                            type="object" class="btn-secondary text-danger"
+                            invisible="state == 'cancelled' or transaction_type != 'earn' or point_type != 'exchange'"
+                            groups="hlv_loyalty.group_loyalty_admin"
+                            confirm="Thu hồi điểm đổi thưởng của bản ghi này? Điểm đã xác nhận sẽ bị trừ khỏi số dư khách hàng."/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="pending,confirmed"/>
                 </header>
