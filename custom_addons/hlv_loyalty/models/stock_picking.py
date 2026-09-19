@@ -104,11 +104,31 @@ class StockPicking(models.Model):
             'delivery_company_id': self.company_id.id,
         }
 
+        # Điểm xếp hạng được tính 1 lần cho CẢ PHIẾU (`ranking_points`) rồi mới
+        # chia cho các tài khoản, nên tổng điểm xếp hạng đã ghi cho phiếu này
+        # (mọi tài khoản, bỏ bản ghi đã hủy) không bao giờ được vượt quá
+        # `ranking_points`. Nếu không chốt trần này, việc SỬA bảng "Tài khoản
+        # cộng điểm Loyalty" sang tài khoản khác rồi chạy lại (validate lại /
+        # wizard tính lại / nút "Tạo bù điểm Loyalty") sẽ tạo thêm nguyên một
+        # bộ điểm xếp hạng cho tài khoản mới, trong khi bản ghi của tài khoản
+        # cũ đã confirmed vẫn nằm lại → đơn bị đếm đôi điểm xếp hạng. Chống
+        # trùng theo `account_id` ở dưới không bắt được ca này vì tài khoản đã
+        # khác. Muốn chuyển điểm sang tài khoản mới thì phải hủy bản ghi xếp
+        # hạng cũ trước (hủy xong trần này tự mở lại).
+        ranking_already_recorded = sum(self.env['hlv.loyalty.history'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('transaction_type', '=', 'earn'),
+            ('point_type', '=', 'ranking'),
+            ('state', '!=', 'cancelled'),
+        ]).mapped('point_amount'))
+        ranking_budget = max(ranking_points - ranking_already_recorded, 0)
+
         total_ranking_recorded = 0
         total_exchange_recorded = 0
         for share in shares:
             account = share['account']
-            acc_ranking = share['ranking_points']
+            acc_ranking = min(share['ranking_points'], ranking_budget)
+            ranking_budget -= acc_ranking
             acc_exchange = share['exchange_points']
             if acc_ranking <= 0 and acc_exchange <= 0:
                 continue
