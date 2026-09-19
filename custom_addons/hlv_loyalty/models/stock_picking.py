@@ -144,17 +144,18 @@ class StockPicking(models.Model):
                 ('transaction_type', '=', 'earn'),
                 ('account_id', '=', account.id),
             ])
-            # Ranking bỏ qua bản ghi đã hủy để nút "Thu hồi điểm" trên đơn rồi
-            # tích lại được cho đúng tài khoản; hoàn hàng không hủy bản ghi
-            # ranking (nó tạo bản ghi âm) nên trần `ranking_budget` ở trên vẫn
-            # chặn được việc hồi sinh điểm của hàng đã trả. Exchange thì NGƯỢC
-            # LẠI — hoàn hàng hủy thẳng bản ghi đang chờ, nên bản ghi đã hủy
-            # vẫn phải tính là "đã xử lý", nếu không điểm của hàng đã trả sẽ
-            # sống lại mỗi lần chạy tích điểm.
+            # Bản ghi bị người dùng chủ động hủy/thu hồi (`cancel_reason` =
+            # 'revoke') coi như chưa có, để thu hồi xong tích lại được cho đúng
+            # tài khoản. Bản ghi bị hủy do HOÀN HÀNG thì ngược lại, vẫn tính là
+            # "đã xử lý" — nếu không, điểm của hàng đã trả sẽ sống lại mỗi lần
+            # chạy tích điểm. Ranking hoàn hàng không hủy bản ghi (nó tạo bản
+            # ghi âm) nên chỉ cần loại mọi bản ghi đã hủy là đủ.
             ranking_hist = existing.filtered(
                 lambda h: h.point_type == 'ranking' and h.state != 'cancelled'
             )[:1]
-            exchange_hist = existing.filtered(lambda h: h.point_type == 'exchange')[:1]
+            exchange_hist = existing.filtered(
+                lambda h: h.point_type == 'exchange' and h.cancel_reason != 'revoke'
+            )[:1]
 
             plan.append({
                 'account': account,
@@ -716,6 +717,7 @@ class StockPicking(models.Model):
                     # Hoàn toàn bộ: hủy bản ghi pending gốc
                     exchange_hist.write({
                         'state': 'cancelled',
+                        'cancel_reason': 'return',
                         'description': (
                             exchange_hist.description
                             + f' [Hủy do hoàn hàng {self.name}]'
