@@ -135,8 +135,13 @@
                 .msu-table tbody tr:last-child td{border-bottom:none}
                 .msu-table tbody tr:nth-child(even){background:#fbfbfa}
                 .msu-table tbody tr:hover{background:#f3f6fb}
-                .msu-table-compact thead th{padding:8px 10px}
-                .msu-table-compact tbody td{padding:7px 10px}
+                .msu-table-compact{font-size:.8rem;table-layout:auto}
+                .msu-table-compact thead th{padding:7px 8px}
+                .msu-table-compact tbody td{padding:6px 8px}
+                /* Cột số/trạng thái co sát nội dung, phần thừa dồn hết cho cột tên hàng —
+                   để bảng vừa bề ngang drawer thay vì đẩy ra thành thanh cuộn ngang. */
+                .msu-table-compact th:not(:first-child),
+                .msu-table-compact td:not(:first-child){width:1%;white-space:nowrap}
                 .msu-goods-code{display:block;color:#8b8d94;font-size:.74rem;margin-top:2px}
                 .msu-goods-component td:first-child{padding-left:26px}
                 .msu-goods-component{color:#8b8d94}
@@ -181,7 +186,7 @@
                 /* 440px cũ không đủ cho hàng nút thao tác có chữ + bảng hàng hóa -> drawer tự
                    sinh thanh cuộn NGANG. Rộng ra và cho hàng nút xuống dòng (xem
                    .msu-drawer-actions) để chỉ còn cuộn dọc. */
-                .msu-drawer{background:#fff;width:min(720px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
+                .msu-drawer{background:#fff;width:min(920px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
                 .msu-drawer-wide{width:min(1120px,97vw)}
                 @keyframes msuDrawerIn{from{transform:translateX(24px);opacity:.5}to{transform:translateX(0);opacity:1}}
                 .msu-drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:20px 20px 16px;border-bottom:1px solid #eceae4}
@@ -777,6 +782,15 @@
                             url.searchParams.set('saler_code', code);
                         }
                         return url.toString();
+                    }
+                    // MISA trả ngày ở dạng ISO kèm giờ/offset ("2026-08-28T00:00:00.000+07:00")
+                    // — chỉ lấy phần ngày theo ĐÚNG chuỗi trả về, KHÔNG dựng new Date() (sẽ bị
+                    // lệch 1 ngày khi trình duyệt ở múi giờ khác). Không nhận dạng được thì trả
+                    // nguyên chuỗi, thà hiện thô còn hơn nuốt mất dữ liệu.
+                    function fmtDate(value) {
+                        if (!value) { return ''; }
+                        var m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                        return m ? (m[3] + '/' + m[2] + '/' + m[1]) : String(value);
                     }
                     function fmtCompactMoney(n) {
                         n = n || 0;
@@ -2253,7 +2267,7 @@
                             metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đề nghị</span><span class="msu-meta-value">' + esc(detail.request.refno || '(không rõ số)') + '</span></div>');
                         }
                         if (detail.invoice) {
-                            metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Hóa đơn</span><span class="msu-meta-value">' + esc(detail.invoice.inv_no || '') + (detail.invoice.inv_date ? (' — ' + esc(detail.invoice.inv_date)) : '') + '</span></div>');
+                            metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Hóa đơn</span><span class="msu-meta-value">' + esc(detail.invoice.inv_no || '') + (detail.invoice.inv_date ? (' — ' + esc(fmtDate(detail.invoice.inv_date))) : '') + '</span></div>');
                             metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Khách hàng</span><span class="msu-meta-value">' + esc(detail.invoice.account_object_name || '—') + '</span></div>');
                             metaItems.push('<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền HĐ</span><span class="msu-meta-value">' + fmtMoney(detail.invoice.total_amount) + '</span></div>');
                         }
@@ -2510,8 +2524,13 @@
                             esc(GOODS_DELIVERY_LABELS[deliveryState] || deliveryState) + '</span>';
                     }
                     function goodsNameCell(r) {
-                        return '<b>' + esc(r.product_name) + '</b>' +
-                            (r.default_code ? '<span class="msu-goods-code">' + esc(r.default_code) + '</span>' : '');
+                        // product_name là display_name của Odoo, thường đã có sẵn tiền tố
+                        // "[MÃ] " — chỉ hiện thêm dòng mã hàng khi nó THẬT SỰ chưa có, tránh
+                        // lặp y hệt 2 lần và làm cột tên phình ra vô ích.
+                        var name = r.product_name || '';
+                        var showCode = r.default_code && name.indexOf(r.default_code) === -1;
+                        return '<b>' + esc(name) + '</b>' +
+                            (showCode ? '<span class="msu-goods-code">' + esc(r.default_code) + '</span>' : '');
                     }
                     function goodsNoteHtml(message) {
                         return '<p class="msu-muted" style="font-size:.82rem;margin:0">' + esc(message) + '</p>';
@@ -2541,9 +2560,10 @@
                             '</tr>';
                         }).join('');
                         return '<div class="msu-table-scroll"><table class="msu-table msu-table-compact"><thead><tr>' +
-                            '<th>Hàng</th><th>ĐVT</th><th class="msu-col-num">SL phiếu này</th>' +
-                            '<th class="msu-col-num">Đã giao / Đặt</th><th class="msu-col-num">Còn phải giao</th>' +
-                            '<th>Tiến độ giao</th><th class="msu-col-num">Thành tiền</th>' +
+                            '<th>Hàng</th><th>ĐVT</th><th class="msu-col-num" title="Số lượng xuất ở chính phiếu này">SL xuất</th>' +
+                            '<th class="msu-col-num" title="Đã giao / Đã đặt — tính trên CẢ đơn, gộp mọi đợt giao">Đã giao / Đặt</th>' +
+                            '<th class="msu-col-num" title="Số còn phải giao của cả đơn">Còn lại</th>' +
+                            '<th>Tiến độ</th><th class="msu-col-num">Thành tiền</th>' +
                             '</tr></thead><tbody>' + body + '</tbody></table></div>';
                     }
 
@@ -2564,8 +2584,8 @@
                         }).join('');
                         return '<div class="msu-table-scroll"><table class="msu-table msu-table-compact"><thead><tr>' +
                             '<th>Hàng</th><th>ĐVT</th><th class="msu-col-num">SL đặt</th>' +
-                            '<th class="msu-col-num">Đã giao</th><th class="msu-col-num">Còn phải giao</th>' +
-                            '<th>Tiến độ giao</th><th class="msu-col-num">Thành tiền</th>' +
+                            '<th class="msu-col-num">Đã giao</th><th class="msu-col-num" title="Số còn phải giao">Còn lại</th>' +
+                            '<th>Tiến độ</th><th class="msu-col-num">Thành tiền</th>' +
                             '</tr></thead><tbody>' + body + '</tbody></table></div>';
                     }
 
