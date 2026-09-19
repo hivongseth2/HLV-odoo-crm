@@ -16,3 +16,4 @@ from . import misa_invoice_exception
 from . import misa_invoice_dashboard_data
 from . import misa_invoice_picking_list
 from . import misa_invoice_public_api
+from . import misa_invoice_goods_detail
