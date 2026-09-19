@@ -337,8 +337,24 @@ class ZaloBaseAPI:
             return self._response_error("FORBIDDEN", "Không có quyền truy cập", 403)
         return result
 
+    @staticmethod
+    def _token_signature(secret, payload):
+        return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
     def _verify_token(self, token):
-        """Verify HMAC token với secret key."""
+        """Verify HMAC token với secret key.
+
+        PHẢI khớp từng chữ với `ZaloContactAPI._verify_token` (bản override
+        dùng cho nhóm endpoint contact). Đây là bản mà `ZaloLoyaltyProxyAPI`
+        dùng — nó kế thừa thẳng ZaloBaseAPI, không đi qua ZaloContactAPI. Sửa
+        một bản mà quên bản kia thì token phát ra sẽ qua được nhóm endpoint
+        này nhưng bị chặn ở nhóm kia, khách đang dùng thì bị đá ra giữa chừng.
+
+        Payload CỐ TÌNH không chứa số điện thoại: token được ký bằng SĐT lấy
+        từ Zalo, trong khi chỗ kiểm lại lấy `res.partner.phone`. Khách doanh
+        nghiệp đăng nhập bằng SĐT người thu mua (lưu ở `portal_phone`) nên hai
+        số này khác nhau -> chữ ký luôn lệch -> 401.
+        """
         try:
             parts = token.split(".")
             if len(parts) != 3:
@@ -353,14 +369,20 @@ class ZaloBaseAPI:
             if not partner.exists():
                 return None
 
-            phone = partner.phone or partner.mobile or ""
-            phone = self._normalize_vn_phone(phone)
-
-            expected_payload = f"{partner_id}:{phone}:{timestamp}"
-            expected_sig = hmac.new(secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
+            expected_sig = self._token_signature(secret, f"{partner_id}:{timestamp}")
 
             if not hmac.compare_digest(signature, expected_sig):
-                return None
+                # Token phát trước bản này còn nhét SĐT vào payload. Vẫn chấp
+                # nhận để người đang đăng nhập không bị văng ra khi nâng cấp;
+                # sau 30 ngày mọi token cũ tự hết hạn.
+                legacy_phone = self._normalize_vn_phone(
+                    partner.phone or partner.mobile or ""
+                )
+                legacy_sig = self._token_signature(
+                    secret, f"{partner_id}:{legacy_phone}:{timestamp}"
+                )
+                if not hmac.compare_digest(signature, legacy_sig):
+                    return None
 
             # Kiểm tra hết hạn: 30 ngày
             if time.time() - timestamp > 30 * 24 * 3600:
