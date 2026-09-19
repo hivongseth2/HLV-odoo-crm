@@ -228,6 +228,32 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_picking_siblings error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/picking_goods', type='json', auth='user', methods=['POST'])
+    def api_picking_goods(self, picking_id=None, saler_code='', **kwargs):
+        try:
+            rows = request.env['stock.picking'].sudo().get_misa_invoice_public_picking_goods(
+                int(picking_id), saler_code
+            )
+            return {'status': 'success', 'rows': rows}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_picking_goods error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/order_goods', type='json', auth='user', methods=['POST'])
+    def api_order_goods(self, order_id=None, saler_code='', **kwargs):
+        try:
+            rows = request.env['stock.picking'].sudo().get_misa_invoice_public_order_goods(
+                int(order_id), saler_code
+            )
+            return {'status': 'success', 'rows': rows}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_order_goods error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/picking_full_detail', type='json', auth='user', methods=['POST'])
     def api_picking_full_detail(self, picking_id=None, saler_code='', **kwargs):
         try:

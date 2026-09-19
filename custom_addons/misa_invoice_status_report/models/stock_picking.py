@@ -3174,6 +3174,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
         Odoo tự nổ ra khi giao hàng đều trỏ về CÙNG 1 sale.order.line của sản phẩm combo,
         và giá chỉ nằm ở đó (giá sản phẩm con = 0) — nên gán toàn bộ price_subtotal của
         dòng combo cho 1 dòng đại diện, còn các sản phẩm con hiển thị giá trị = 0.
+
+        Mỗi dòng kèm 'sale_line_id' (dòng đơn bán nguồn, False nếu phiếu không gắn đơn) để
+        nơi gọi tra thêm tiến độ giao của chính dòng đó mà không phải dò lại move — xem
+        _misa_invoice_goods_line_rows (misa_invoice_goods_detail.py).
         """
         moves = picking.move_ids_without_package.filtered(lambda m: m.quantity > 0)
         groups = {}
@@ -3212,6 +3216,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     ),
                     'is_combo': True,
                     'order_code': order_code,
+                    'sale_line_id': sale_line.id,
                 })
                 for move in group_moves:
                     lines.append({
@@ -3225,6 +3230,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         'post_tax_unit_price': 0.0,
                         'is_component': True,
                         'order_code': order_code,
+                        'sale_line_id': sale_line.id,
                     })
                 continue
 
@@ -3247,6 +3253,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'tax_value': tax_value,
                     'post_tax_unit_price': post_tax_unit_price,
                     'order_code': order_code,
+                    'sale_line_id': sale_line.id if sale_line else False,
                 })
         return lines
 

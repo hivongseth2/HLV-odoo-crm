@@ -135,6 +135,11 @@
                 .msu-table tbody tr:last-child td{border-bottom:none}
                 .msu-table tbody tr:nth-child(even){background:#fbfbfa}
                 .msu-table tbody tr:hover{background:#f3f6fb}
+                .msu-table-compact thead th{padding:8px 10px}
+                .msu-table-compact tbody td{padding:7px 10px}
+                .msu-goods-code{display:block;color:#8b8d94;font-size:.74rem;margin-top:2px}
+                .msu-goods-component td:first-child{padding-left:26px}
+                .msu-goods-component{color:#8b8d94}
                 .msu-row-clickable{cursor:pointer}
                 .msu-row-status-matched{background:rgba(12,163,12,.06)}
                 .msu-row-status-nomatch{background:rgba(250,178,25,.10)}
@@ -156,6 +161,10 @@
                 .msu-badge-state-partial{background:#fef8e9;color:#92600a}
                 .msu-badge-state-invoiced{background:#eaf8ea;color:#0ca30c}
                 .msu-badge-state-not_checked{background:#f1f0eb;color:#52514e}
+                /* Tiến độ GIAO HÀNG của 1 dòng hàng (khác hẳn trạng thái xuất HĐ ở trên):
+                   done = đã giao đủ số đặt, partial = giao dở, none = chưa giao món nào. */
+                .msu-badge-state-done{background:#eaf8ea;color:#0ca30c}
+                .msu-badge-state-none{background:#fdf1f1;color:#d03b3b}
                 .msu-status-cell{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
                 .msu-badge-exception{display:inline-flex;align-items:center;gap:4px;background:#fff7ec;border:1px solid #f2d9ae;color:#92600a;padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:800;white-space:nowrap}
 
@@ -169,8 +178,11 @@
 
                 /* ---- Drawer (chi tiết 1 phiếu) ---- */
                 .msu-drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1900;display:flex;justify-content:flex-end}
-                .msu-drawer{background:#fff;width:min(440px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
-                .msu-drawer-wide{width:min(920px,97vw)}
+                /* 440px cũ không đủ cho hàng nút thao tác có chữ + bảng hàng hóa -> drawer tự
+                   sinh thanh cuộn NGANG. Rộng ra và cho hàng nút xuống dòng (xem
+                   .msu-drawer-actions) để chỉ còn cuộn dọc. */
+                .msu-drawer{background:#fff;width:min(720px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
+                .msu-drawer-wide{width:min(1120px,97vw)}
                 @keyframes msuDrawerIn{from{transform:translateX(24px);opacity:.5}to{transform:translateX(0);opacity:1}}
                 .msu-drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:20px 20px 16px;border-bottom:1px solid #eceae4}
                 .msu-drawer-title{font-size:1.05rem;font-weight:800;color:#111827;margin:0}
@@ -189,9 +201,9 @@
                 .msu-drawer-sibling:hover{background:#f1f0eb}
                 .msu-drawer-reason{background:#fdf1f1;border:1px solid #f3caca;border-radius:8px;padding:10px 12px;font-size:.84rem;color:#7a2020}
                 .msu-drawer-reason-good{background:#f0f9f0;border:1px solid #bfe3bf;border-radius:8px;padding:10px 12px;font-size:.84rem;color:#0a6b0a}
-                .msu-drawer-actions{display:flex;gap:8px;padding:16px 20px 20px;border-top:1px solid #eceae4;position:sticky;bottom:0;background:#fff}
-                .msu-drawer-actions .msu-btn-group{flex:1;display:flex}
-                .msu-drawer-actions .msu-btn{flex:1;justify-content:center;gap:6px}
+                .msu-drawer-actions{display:flex;flex-wrap:wrap;gap:8px;padding:16px 20px 20px;border-top:1px solid #eceae4;position:sticky;bottom:0;background:#fff}
+                .msu-drawer-actions .msu-btn-group{flex:1;display:flex;flex-wrap:wrap;min-width:0}
+                .msu-drawer-actions .msu-btn{flex:1;justify-content:center;gap:6px;min-width:0}
 
                 /* ---- Modal ---- */
                 .msu-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -2199,6 +2211,12 @@
                                         '</tr></thead><tbody>' + pickingRowsHtml + '</tbody></table>' +
                                     '</div>' +
                                 '</div>' +
+                                // Đi theo DÒNG ĐƠN BÁN nên thấy được cả món đã đặt mà chưa có
+                                // phiếu nào giao — bảng phiếu ở trên không bao giờ thấy.
+                                '<div class="msu-drawer-section">' +
+                                    '<p class="msu-drawer-section-title">Hàng trong đơn — món nào đã giao đủ, món nào còn thiếu</p>' +
+                                    '<div id="msu-drawer-order-goods"><span class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải...</span></div>' +
+                                '</div>' +
                             '</div>';
 
                         document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
@@ -2216,6 +2234,7 @@
                         document.getElementById('msu-drawer-order-check-btn').addEventListener('click', function() {
                             checkOrderNow(row.id, this);
                         });
+                        loadOrderGoods(row.id);
                     }
 
                     // Kiểm tra MISA ngay cho TẤT CẢ phiếu của 1 đơn hàng (nút trong drawer đơn
@@ -2574,6 +2593,116 @@
                         }).catch(function(e) { toast('Lỗi xóa lượt khớp: ' + e.message, 'error'); });
                     }
 
+                    // ===== Hàng hóa trong phiếu / trong đơn =====
+                    // Trả lời "phiếu này có gì bên trong" và "món nào của đơn còn chưa giao"
+                    // ngay trong drawer, thay vì phải mở lại phiếu trong backend Odoo. Chỉ đọc
+                    // dữ liệu Odoo (rẻ) — trạng thái xuất HĐ theo TỪNG dòng hàng là chuyện
+                    // khác, phải hỏi MISA, xem nút "Xem đối chiếu đề nghị / hóa đơn" bên dưới.
+                    var GOODS_DELIVERY_LABELS = {done: 'Đã giao đủ', partial: 'Giao 1 phần', none: 'Chưa giao'};
+
+                    function fmtQty(n) {
+                        // Số lượng có thể lẻ do quy đổi đơn vị tính — cắt còn 3 chữ số thập
+                        // phân, không hiện kiểu 5.0000000001.
+                        return (Math.round((n || 0) * 1000) / 1000).toLocaleString('vi-VN');
+                    }
+                    function goodsDeliveryBadge(deliveryState) {
+                        if (!deliveryState) { return '<span class="msu-muted">—</span>'; }
+                        return '<span class="msu-badge-state msu-badge-state-' + deliveryState + '">' +
+                            esc(GOODS_DELIVERY_LABELS[deliveryState] || deliveryState) + '</span>';
+                    }
+                    function goodsNameCell(r) {
+                        return '<b>' + esc(r.product_name) + '</b>' +
+                            (r.default_code ? '<span class="msu-goods-code">' + esc(r.default_code) + '</span>' : '');
+                    }
+                    function goodsNoteHtml(message) {
+                        return '<p class="msu-muted" style="font-size:.82rem;margin:0">' + esc(message) + '</p>';
+                    }
+
+                    // Hàng của 1 PHIẾU: số lượng xuất ở chính phiếu này, kèm tiến độ giao của
+                    // dòng đơn bán tương ứng (đặt/đã giao là số của CẢ đơn, gộp mọi đợt giao —
+                    // đó mới là thứ cho biết còn phải giao nữa hay không).
+                    function renderPickingGoodsTable(rows) {
+                        if (!rows.length) { return goodsNoteHtml('Phiếu này không có dòng hàng nào đã xuất.'); }
+                        var body = rows.map(function(r) {
+                            // Dòng sản phẩm con của combo không có số đặt/đã giao riêng (nằm ở
+                            // dòng combo đại diện) — để trống thay vì lặp lại số của combo.
+                            var progressCells = r.has_delivery_progress
+                                ? '<td class="msu-col-num">' + fmtQty(r.delivered_qty) + ' / ' + fmtQty(r.ordered_qty) + '</td>' +
+                                  '<td class="msu-col-num' + (r.remaining_qty > 0 ? ' msu-col-diff-bad' : '') + '">' + fmtQty(r.remaining_qty) + '</td>' +
+                                  '<td>' + goodsDeliveryBadge(r.delivery_state) + '</td>'
+                                : '<td class="msu-col-num"><span class="msu-muted">—</span></td>' +
+                                  '<td class="msu-col-num"><span class="msu-muted">—</span></td>' +
+                                  '<td><span class="msu-muted">—</span></td>';
+                            return '<tr' + (r.is_component ? ' class="msu-goods-component"' : '') + '>' +
+                                '<td>' + goodsNameCell(r) + '</td>' +
+                                '<td>' + esc(r.uom_name || '') + '</td>' +
+                                '<td class="msu-col-num">' + fmtQty(r.qty) + '</td>' +
+                                progressCells +
+                                '<td class="msu-col-num">' + fmtMoney(r.value) + '</td>' +
+                            '</tr>';
+                        }).join('');
+                        return '<div class="msu-table-scroll"><table class="msu-table msu-table-compact"><thead><tr>' +
+                            '<th>Hàng</th><th>ĐVT</th><th class="msu-col-num">SL phiếu này</th>' +
+                            '<th class="msu-col-num">Đã giao / Đặt</th><th class="msu-col-num">Còn phải giao</th>' +
+                            '<th>Tiến độ giao</th><th class="msu-col-num">Thành tiền</th>' +
+                            '</tr></thead><tbody>' + body + '</tbody></table></div>';
+                    }
+
+                    // Hàng của 1 ĐƠN: đi theo dòng đơn bán nên thấy được cả món ĐÃ ĐẶT mà chưa
+                    // có phiếu nào giao (bảng phiếu ở trên không bao giờ thấy những món đó).
+                    function renderOrderGoodsTable(rows) {
+                        if (!rows.length) { return goodsNoteHtml('Đơn này không có dòng hàng nào.'); }
+                        var body = rows.map(function(r) {
+                            return '<tr>' +
+                                '<td>' + goodsNameCell(r) + '</td>' +
+                                '<td>' + esc(r.uom_name || '') + '</td>' +
+                                '<td class="msu-col-num">' + fmtQty(r.ordered_qty) + '</td>' +
+                                '<td class="msu-col-num">' + fmtQty(r.delivered_qty) + '</td>' +
+                                '<td class="msu-col-num' + (r.remaining_qty > 0 ? ' msu-col-diff-bad' : '') + '">' + fmtQty(r.remaining_qty) + '</td>' +
+                                '<td>' + goodsDeliveryBadge(r.delivery_state) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(r.value) + '</td>' +
+                            '</tr>';
+                        }).join('');
+                        return '<div class="msu-table-scroll"><table class="msu-table msu-table-compact"><thead><tr>' +
+                            '<th>Hàng</th><th>ĐVT</th><th class="msu-col-num">SL đặt</th>' +
+                            '<th class="msu-col-num">Đã giao</th><th class="msu-col-num">Còn phải giao</th>' +
+                            '<th>Tiến độ giao</th><th class="msu-col-num">Thành tiền</th>' +
+                            '</tr></thead><tbody>' + body + '</tbody></table></div>';
+                    }
+
+                    // Tải riêng (không nằm sẵn trong row) vì chỉ cần khi mở drawer — cùng cơ
+                    // chế với loadSiblings, tránh tốn thêm 1 truy vấn cho MỌI dòng danh sách.
+                    // isStillOpen kiểm lại sau khi RPC về: người dùng có thể đã đóng/đổi drawer
+                    // trong lúc chờ, lúc đó bỏ kết quả cũ thay vì ghi đè drawer đang xem.
+                    function loadGoods(url, params, containerId, renderFn, isStillOpen) {
+                        rpc(url, params).then(function(res) {
+                            if (!isStillOpen()) { return; }
+                            var container = document.getElementById(containerId);
+                            if (container) { container.innerHTML = renderFn(res.rows || []); }
+                        }).catch(function(e) {
+                            var container = document.getElementById(containerId);
+                            if (container) { container.innerHTML = goodsNoteHtml('Lỗi tải danh sách hàng: ' + e.message); }
+                        });
+                    }
+
+                    function loadPickingGoods(pickingId) {
+                        loadGoods(
+                            '/misa_sale_status/api/picking_goods',
+                            {picking_id: pickingId, saler_code: state.salerCode},
+                            'msu-drawer-goods', renderPickingGoodsTable,
+                            function() { return drawerKind === 'picking' && drawerOpenId === pickingId; }
+                        );
+                    }
+
+                    function loadOrderGoods(orderId) {
+                        loadGoods(
+                            '/misa_sale_status/api/order_goods',
+                            {order_id: orderId, saler_code: state.salerCode},
+                            'msu-drawer-order-goods', renderOrderGoodsTable,
+                            function() { return drawerKind === 'order' && drawerOpenId === orderId; }
+                        );
+                    }
+
                     function renderDrawerContent(row) {
                         var exceptionHtml = row.exception
                             ? '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Ngoại lệ</p><div class="msu-drawer-reason">' + esc(row.exception_reason || '') + '</div></div>'
@@ -2605,6 +2734,18 @@
                         var siblingsHtml = row.sale_order_name
                             ? '<div class="msu-drawer-section" id="msu-drawer-siblings-section"><p class="msu-drawer-section-title">Phiếu xuất kho khác cùng đơn hàng</p><div class="msu-drawer-list" id="msu-drawer-siblings-list"><span class="msu-muted">Đang tải...</span></div></div>'
                             : '';
+                        // Bảng hàng tải sau (loadPickingGoods) để drawer mở ra tức thì —
+                        // row sẵn có trong bộ nhớ không mang theo dòng hàng.
+                        var goodsHtml =
+                            '<div class="msu-drawer-section">' +
+                                '<p class="msu-drawer-section-title">Hàng trong phiếu — đã xuất kho và phần còn phải giao của đơn</p>' +
+                                '<div id="msu-drawer-goods"><span class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải...</span></div>' +
+                                '<div style="margin-top:10px">' +
+                                    '<button type="button" class="msu-btn msu-btn-outline-primary msu-btn-xs" id="msu-drawer-invoice-detail-btn" title="Đọc live từ MISA: từng dòng hàng đã nằm trong đề nghị/hóa đơn nào, còn lệch gì">' +
+                                        '<i class="fa fa-file-text-o"></i> Xem đối chiếu đề nghị / hóa đơn trên MISA' +
+                                    '</button>' +
+                                '</div>' +
+                            '</div>';
                         var diffClass = row.amount_mismatch ? ' msu-col-diff-bad' : '';
                         var drawerPartialInvoiceBadge = row.partial_invoice
                             ? ' <span class="msu-badge-state msu-badge-state-requested" title="Có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho (đề nghị gộp chung nhiều phiếu/đơn)">Chưa đủ tiền</span>'
@@ -2628,12 +2769,16 @@
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Mã đề nghị (gắn tay)</span><span class="msu-meta-value">' + (row.manual_refno ? esc(row.manual_refno) : '—') + '</span></div>' +
                                     '</div>' +
                                 '</div>' +
-                                gapSummaryHtml + groupHtml + siblingsHtml + exceptionHtml +
+                                goodsHtml + gapSummaryHtml + groupHtml + siblingsHtml + exceptionHtml +
                             '</div>' +
                             '<div class="msu-drawer-actions">' + actionButtonsHtml(row, {size: 'sm', withText: true}) + '</div>';
 
                         document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
                         bindActionButtons(drawerEl);
+                        document.getElementById('msu-drawer-invoice-detail-btn').addEventListener('click', function() {
+                            openInvoiceDetailModal(row.id, row.name);
+                        });
+                        loadPickingGoods(row.id);
                         if (row.sale_order_name) { loadSiblings(row.id); }
                     }
 
