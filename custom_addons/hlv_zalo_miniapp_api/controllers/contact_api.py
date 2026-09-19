@@ -440,7 +440,12 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     @http.route("/api/v1/zalo/contacts/detail", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def contact_detail(self, **params):
-        """Body: {"contact_id": 1}"""
+        """Body: {"contact_id": 1, "phone": "0988796044"}
+
+        `phone` là SĐT khách đã dùng để đăng nhập. Một công ty có thể có nhiều
+        tài khoản Portal (mỗi người thu mua một tài khoản, điểm riêng), nên
+        phải biết đúng SĐT đăng nhập mới chọn đúng tài khoản.
+        """
         if request.httprequest.method == "OPTIONS":
             return self._response_options()
         try:
@@ -459,7 +464,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
-            phone_to_check = partner.phone or partner.mobile or ""
+
+            # SĐT đăng nhập do client gửi lên là nguồn ưu tiên. `partner.phone`
+            # là số của pháp nhân (thường là số người thu mua cũ), dùng nó sẽ
+            # chọn nhầm sang tài khoản Portal khác của cùng công ty.
+            phone_to_check = (
+                self._normalize_vn_phone(body.get("phone") or "")
+                or partner.phone
+                or partner.mobile
+                or ""
+            )
             account = self._get_scoped_portal_account(partner, phone_to_check)
 
             total_points = 0
