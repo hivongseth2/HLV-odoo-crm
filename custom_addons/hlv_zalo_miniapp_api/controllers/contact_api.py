@@ -87,11 +87,25 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         return key
 
     @staticmethod
-    def _generate_token(partner_id, phone):
+    def _token_signature(secret, payload):
+        return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _generate_token(partner_id):
+        """Token = partner_id.timestamp.chữ_ký
+
+        Payload CỐ TÌNH không chứa số điện thoại. Bản cũ ký bằng SĐT lấy từ
+        Zalo nhưng lúc kiểm lại lấy `res.partner.phone` — hai số này chỉ trùng
+        khi khách đăng nhập đúng bằng số ghi trên hồ sơ. Khách doanh nghiệp
+        đăng nhập bằng SĐT người thu mua (lưu ở `portal_phone`) trong khi
+        `res.partner.phone` là số công ty, nên chữ ký luôn lệch -> 401.
+
+        Bỏ SĐT khỏi payload không làm yếu bảo mật: không có secret thì không
+        ký được, quyền sở hữu vẫn được kiểm riêng bằng `_auth_and_verify_owner`.
+        """
         secret = ZaloContactAPI._get_secret_key()
         timestamp = int(time.time())
-        payload = f"{partner_id}:{phone}:{timestamp}"
-        signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        signature = ZaloContactAPI._token_signature(secret, f"{partner_id}:{timestamp}")
         return f"{partner_id}.{timestamp}.{signature}"
 
     def _verify_token(self, token):
@@ -110,14 +124,20 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if not partner.exists():
                 return None
 
-            phone = partner.phone or partner.mobile or ""
-            phone = ZaloContactAPI._normalize_vn_phone(phone)
-
-            expected_payload = f"{partner_id}:{phone}:{timestamp}"
-            expected_sig = hmac.new(secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
+            expected_sig = ZaloContactAPI._token_signature(secret, f"{partner_id}:{timestamp}")
 
             if not hmac.compare_digest(signature, expected_sig):
-                return None
+                # Token phát trước bản này còn nhét SĐT vào payload. Vẫn chấp
+                # nhận để người đang đăng nhập không bị văng ra khi nâng cấp;
+                # sau 30 ngày mọi token cũ tự hết hạn và nhánh này thành vô dụng.
+                legacy_phone = ZaloContactAPI._normalize_vn_phone(
+                    partner.phone or partner.mobile or ""
+                )
+                legacy_sig = ZaloContactAPI._token_signature(
+                    secret, f"{partner_id}:{legacy_phone}:{timestamp}"
+                )
+                if not hmac.compare_digest(signature, legacy_sig):
+                    return None
 
             # Kiểm tra hết hạn: 30 ngày
             if time.time() - timestamp > 30 * 24 * 3600:
@@ -263,7 +283,7 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "portal_phone": normalized,
             })
 
-        token = self._generate_token(partner.id, normalized)
+        token = self._generate_token(partner.id)
 
         return self._response_success({
             "contact_id": partner.id,
