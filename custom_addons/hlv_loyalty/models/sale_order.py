@@ -235,17 +235,26 @@ class SaleOrder(models.Model):
         if reward_lines:
             reward_lines.unlink()
 
-    def action_backfill_loyalty_points(self):
-        """Tạo bù cả điểm xếp hạng lẫn điểm đổi thưởng còn thiếu."""
-        return self._backfill_loyalty_points(['ranking', 'exchange'])
+    def _get_loyalty_backfill_pickings(self):
+        """Các phiếu xuất kho đã giao của đơn — nơi duy nhất điểm được tính."""
+        self.ensure_one()
+        return self.picking_ids.filtered(
+            lambda p: p.state == 'done' and p.picking_type_code == 'outgoing'
+        )
 
-    def action_backfill_loyalty_ranking_points(self):
-        """Chỉ tạo bù điểm xếp hạng còn thiếu."""
-        return self._backfill_loyalty_points(['ranking'])
-
-    def action_backfill_loyalty_exchange_points(self):
-        """Chỉ tạo bù điểm đổi thưởng còn thiếu."""
-        return self._backfill_loyalty_points(['exchange'])
+    def action_open_backfill_loyalty_wizard(self):
+        """Mở wizard chọn loại điểm cần bù và xem trước số điểm."""
+        self.ensure_one()
+        if not self._get_loyalty_backfill_pickings():
+            raise UserError('Đơn hàng này chưa có phiếu xuất kho nào đã giao (state=done) để tạo bù điểm.')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Tạo bù điểm Loyalty',
+            'res_model': 'hlv.loyalty.backfill.points.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_order_id': self.id},
+        }
 
     def _backfill_loyalty_points(self, point_types):
         """Tạo bù điểm Loyalty còn thiếu cho các phiếu xuất kho ĐÃ GIAO của đơn.
@@ -258,9 +267,7 @@ class SaleOrder(models.Model):
         từng phiếu, không đụng tới các bản ghi đã có sẵn.
         """
         self.ensure_one()
-        pickings = self.picking_ids.filtered(
-            lambda p: p.state == 'done' and p.picking_type_code == 'outgoing'
-        )
+        pickings = self._get_loyalty_backfill_pickings()
         if not pickings:
             raise UserError('Đơn hàng này chưa có phiếu xuất kho nào đã giao (state=done) để tạo bù điểm.')
 

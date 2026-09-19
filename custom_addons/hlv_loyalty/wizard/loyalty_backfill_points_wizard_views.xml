@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_loyalty_backfill_points_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.backfill.points.wizard.form</field>
+        <field name="model">hlv.loyalty.backfill.points.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Tạo bù điểm Loyalty">
+                <group>
+                    <field name="order_id"/>
+                    <field name="point_scope" widget="radio"/>
+                </group>
+                <group string="Số điểm sẽ được tạo bù">
+                    <field name="preview_ranking"/>
+                    <field name="preview_exchange"/>
+                </group>
+                <field name="preview_detail" nolabel="1" readonly="1"/>
+                <p class="text-muted">
+                    Chỉ tạo bổ sung phần còn thiếu — các bản ghi điểm đã có sẵn KHÔNG bị thay đổi.
+                    Điểm đổi thưởng tạo ra ở trạng thái Chờ xác nhận.
+                </p>
+                <footer>
+                    <button name="action_confirm_backfill"
+                            string="Xác nhận tạo bù"
+                            type="object"
+                            class="btn-primary"
+                            invisible="not preview_ranking and not preview_exchange"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
