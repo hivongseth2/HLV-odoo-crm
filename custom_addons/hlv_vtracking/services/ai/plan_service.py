@@ -58,6 +58,20 @@ def plan_vs_actual(plan):
 # ----------------------------------------------------------------------
 # Ghi
 # ----------------------------------------------------------------------
+def write_notes(plan, reasoning, excluded, actor):
+    """AI ghi lý giải + danh sách đơn bị loại lên kế hoạch.
+
+    Không đổi gì trong lộ trình — chỉ là lời giải thích. Trả về tóm tắt kế hoạch để bên gọi
+    thấy ngay ô ``ai_excluded_note`` sau khi ghi.
+    """
+    if reasoning is None and excluded is None:
+        raise UserError('Phải gửi ít nhất một trong hai: "reasoning" hoặc "excluded".')
+    plan.write_ai_notes(reasoning=reasoning, excluded=excluded, actor=actor)
+    summary = plan_payload.plan_summary(plan)
+    summary['ai_excluded_note'] = plan.ai_excluded_note or None
+    return summary
+
+
 def refresh_actual(plan, actor):
     """Đọc lại số thực tế từ phiếu giao và GPS. Không sửa kế hoạch, chỉ đọc lại thực tế."""
     vtracking_actual.fill_plan_actuals(plan)

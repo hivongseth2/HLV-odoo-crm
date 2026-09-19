@@ -12,14 +12,8 @@ và nhà máy trong khu thì hai nơi có thủ tục khác nhau.
 
 from odoo import api, fields, models
 
+from ..tools.vtracking_blocking import PROCEDURE_LABELS
 from ..tools.vtracking_channel import CHANNEL_LABELS, needs_company_truck
-
-PROCEDURE_LABELS = {
-    'none': 'Không cần',
-    'customs': 'Khai hải quan',
-    'register': 'Đăng ký trước',
-    'both': 'Hải quan + đăng ký',
-}
 
 
 class HlvVtrackingPartnerProfile(models.Model):

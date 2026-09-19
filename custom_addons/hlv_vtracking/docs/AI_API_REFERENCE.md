@@ -112,6 +112,19 @@ Mỗi phần tử `orders[]`:
              "waiting_purchases": ["DMH22289"],
              "expected_arrival": "2026-09-10T03:00:00Z", "expected_arrival_date": "2026-09-10"},
   "plan": null,
+  "dispatch": {
+    "blocking": [{"code": "customs", "label": "Phải khai hải quan trước khi xe vào", "hard": true}],
+    "blocked": true,
+    "delivery_channel": "company",
+    "needs_truck": true,
+    "zone": {"id": 2, "name": "Long Thành", "source": "coords",
+             "distance_km": 0.8, "uncertain": false},
+    "place_id": 41,
+    "driver_note": "Cổng số 2, gọi bảo vệ trước 15 phút"
+  },
+  "revisit_risk": {"within_days": 2,
+                   "other_orders": [{"order_id": 903, "order_name": "DH1255...",
+                                     "expected_arrival_date": "2026-09-19"}]},
   "latest_note": {"date": "...Z", "author": "Nhân viên Đà Nẵng", "body": "Khách nghỉ lễ đến 3/9, ngày 4/9 giao"}
 }
 ```
@@ -120,6 +133,25 @@ Mỗi phần tử `orders[]`:
 - `delivery.address_source`: `picking` = lấy từ phiếu xuất (đáng tin hơn), `order` = từ đơn.
 - `supply.supply_state`: `no_purchase` (lấy từ tồn kho) · `waiting` (**hàng chưa về đủ**) · `arrived`.
 - `plan`: `null` hoặc danh sách `{plan_id, plan_name, plan_state, line_id, reference}`.
+
+**`dispatch` — phần quan trọng nhất để lọc đơn.**
+
+| Khoá | Nghĩa |
+|---|---|
+| `blocking[]` | Cờ chặn đã chuẩn hoá: `customs` · `register` (**cứng**) · `pickup` · `express` · `grab` (mềm) |
+| `blocked` | Có cờ **cứng**. Xếp vào kế hoạch thì `confirm-plan` sẽ **báo lỗi** |
+| `needs_truck` | `false` = khách tự lấy / gửi ngoài, **đừng chiếm một chỗ trên xe** |
+| `zone.source` | `coords` (suy từ toạ độ — tin được) · `place` (đoán theo khách) |
+| `zone.uncertain` | `true` = máy phải đoán. Định mức thời gian dựa vào cụm, đoán sai cụm là sai cả giờ giấc |
+| `driver_note` | Cổng vào, SĐT người nhận, đường khó — chuyển nguyên văn cho tài xế |
+
+`zone` chỉ dùng toạ độ **đã có sẵn** trong kho toạ độ; endpoint này **không bao giờ gọi
+geocoder**. Đơn chưa có toạ độ thì `zone.source = "place"` (đoán theo khách) hoặc `null`.
+
+**`revisit_risk`** — khách này còn đơn KHÁC sắp có hàng trong 2 ngày tới. Giao hôm nay thì
+vài hôm nữa xe phải chạy lại đúng chỗ đó; chờ một hôm gộp hai đơn là tiết kiệm nguyên một
+lượt. Cân nhắc cùng `commitment_date` rồi **nêu lại cho người dùng**, đừng tự hoãn đơn.
+`null` = không có rủi ro.
 
 ## 4. `GET /orders/<id>` · `GET /orders/by-name?name=<số đơn>`
 
@@ -288,23 +320,42 @@ Tối đa 100 chứng từ một lần. Trả:
 
 Xếp vào kế hoạch sẽ **tra toạ độ** địa chỉ chưa có trong kho toạ độ (có thể tốn lượt Google).
 
-## 15. `POST /plans/<id>/remove-lines` 🔒
+## 15. `POST /plans/<id>/notes` 🔒
+
+Ghi **lý giải** của bạn lên kế hoạch. Không đổi lộ trình.
+
+```json
+{"reasoning": "Ưu tiên Long Thành vì 4/6 đơn hẹn hôm nay...",
+ "excluded": [{"name": "DH125...", "reason": "Coherent chưa khai hải quan, trễ 26 ngày"},
+              {"name": "DH126...", "reason": "Imarket gửi CPN, không cần xe"}]}
+```
+
+- `reasoning` → **chatter** của kế hoạch, kèm tên khoá API và dấu thời gian. Là nhật ký,
+  gọi lại không ghi đè.
+- `excluded` → ô **"Đơn bị loại và lý do"** trên form, hiện thành tab *AI cân nhắc*.
+  **Ghi đè** ô cũ — nó là ảnh chụp của lần cân nhắc gần nhất.
+- Gửi một trong hai cũng được. Gửi cả hai thì rõ nhất.
+
+Đây là chỗ **bắt buộc dùng**: tờ kế hoạch in ra chỉ có danh sách điểm, không có câu "vì
+sao không đi Coherent". Không ghi thì người điều phối không kiểm được bạn đúng hay sai.
+
+## 16. `POST /plans/<id>/remove-lines` 🔒
 
 `{"line_ids": [55]}` — **id dòng**, không phải id phiếu. Trả `removed_line_ids` + `plan`.
 Id không thuộc kế hoạch này bị bỏ qua: đối chiếu `removed_line_ids` với thứ bạn gửi.
 
-## 16. `POST /plans/<id>/resequence` 🔒
+## 17. `POST /plans/<id>/resequence` 🔒
 
 `{"line_ids": [56, 55, 57]}` — thứ tự mong muốn. Dòng không nêu giữ thứ tự tương đối và dồn
 xuống cuối. Hoặc `{"strategy": "nearest"}` — hệ thống sắp theo "tới điểm gần nhất chưa ghé"
 (điểm khởi đầu tốt, không phải tối ưu). Trả chi tiết kế hoạch sau khi sắp.
 
-## 17. `POST /plans/<id>/state` 🔒
+## 18. `POST /plans/<id>/state` 🔒
 
 `{"action": "confirm"}` — một trong `confirm`, `back_to_draft`, `cancel`, `done`.
 Kế hoạch `done` / `cancelled` không sửa được nữa (422).
 
-## 18. `POST /geocode` 🔒
+## 19. `POST /geocode` 🔒
 
 `{"address": "..."}` → `address_id`, `normalized_address`, `geo_state`, `latitude`,
 `longitude`, `from_cache`. Tìm trong kho toạ độ trước; không có mới gọi geocoder ngoài —

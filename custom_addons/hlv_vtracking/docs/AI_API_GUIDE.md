@@ -131,6 +131,20 @@ giao chính xác; hãy nói "ước khoảng".
 nhất ở xa, hoặc chưa có toạ độ nên phải suy theo khách. Định mức thời gian của cả kế hoạch
 dựa vào cụm, nên đoán sai cụm là sai cả giờ giấc. Nêu lại cho người dùng, đừng im lặng dùng.
 
+**Lọc đơn bằng `dispatch.blocked` và `dispatch.needs_truck` TRƯỚC khi nghĩ tới lộ trình.**
+`/orders/pending` trả sẵn hai cờ đó. `blocked = true` nghĩa là điểm vướng thủ tục — xếp vào
+thì `confirm-plan` báo lỗi. `needs_truck = false` nghĩa là khách tự lấy hoặc gửi CPN — xếp
+vào là thừa một điểm dừng. Đừng tự đọc chuỗi `delivery.method_note` để suy lại: nó đã được
+chuẩn hoá thành `dispatch.delivery_channel` rồi.
+
+**`revisit_risk` khác `supply`.** `supply` nói về ĐƠN NÀY; `revisit_risk` nói khách còn đơn
+KHÁC sắp có hàng trong 2 ngày. Giao hôm nay rồi mai lại phải chạy đúng chỗ đó là mất trọn
+một lượt. **Nêu lại cho người dùng và để họ quyết** — đừng tự hoãn đơn đã tới hẹn giao.
+
+**Ghi lý giải bằng `POST /plans/<id>/notes` trước khi báo cáo là xong.** Tờ kế hoạch in ra
+chỉ có danh sách điểm. Không có `excluded` thì không ai biết bạn đã cân nhắc Coherent và bỏ
+vì lý do gì — và cũng không ai sửa được bạn khi bạn bỏ nhầm.
+
 **`procedure_blocked = true` là CHẶN, không phải cảnh báo.** Điểm nằm trong khu chế xuất
 phải khai hải quan, hoặc khách yêu cầu đăng ký người và xe trước. Xe tới nơi mà chưa xong
 thì bảo vệ không cho vào cổng, hàng phải chở về — mất trắng cả lượt chạy. `confirm-plan` sẽ

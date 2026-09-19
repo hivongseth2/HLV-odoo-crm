@@ -263,6 +263,18 @@
                         <page string="Ghi chú">
                             <field name="note" placeholder="Dặn dò tài xế, lưu ý tuyến…"/>
                         </page>
+
+                        <page string="AI cân nhắc" invisible="not ai_excluded_note">
+                            <div class="alert alert-warning" role="alert">
+                                Đây là những đơn AI <strong>đã xem và quyết định KHÔNG xếp</strong>.
+                                Soát trước khi xác nhận: bỏ sót một đơn đáng giao tốn hơn xếp
+                                thừa một đơn. Dòng suy luận đầy đủ nằm ở chatter bên dưới.
+                            </div>
+                            <group>
+                                <field name="ai_reasoning_at" readonly="1"/>
+                            </group>
+                            <field name="ai_excluded_note" nolabel="1" readonly="1"/>
+                        </page>
                     </notebook>
                 </sheet>
                 <chatter/>

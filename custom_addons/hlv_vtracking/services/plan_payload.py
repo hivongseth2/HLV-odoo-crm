@@ -64,6 +64,7 @@ def plan_summary(plan):
         'actual_start_source': plan.actual_start_source,
         'actual_duration_display': plan.actual_duration_display or None,
         'variance': plan._variance_summary(),
+        'ai_excluded_note': plan.ai_excluded_note or None,
         'start': plan_start(plan),
     }
 

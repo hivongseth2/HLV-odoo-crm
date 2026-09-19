@@ -7,7 +7,7 @@ nào (``delivery``), và có ai dặn gì không (``latest_note`` / chatter).
 
 from ...tools.vtracking_address import address_key
 from .. import plan_documents
-from . import chatter_service, fulfillment_service, supply_service
+from . import chatter_service, dispatch_service, fulfillment_service, supply_service
 from .serialize import (
     coords_block, iso_datetime, optional_field, partner_block, plain_text,
 )
@@ -46,7 +46,19 @@ def pending_orders(env, company, params, limit=DEFAULT_LIMIT, offset=0):
 
     purchases = supply_service.purchases_by_order_name(env, orders.mapped('name'))
     notes = chatter_service.latest_notes(orders)
-    items = [order_brief(order, purchases.get(order.name), notes.get(order.id)) for order in orders]
+    # Ba thứ dưới đây đọc MỘT lần cho cả trang: mỗi đơn một truy vấn thì endpoint này ì.
+    samples = dispatch_service.zone_samples(env, company)
+    places = places_by_order(env, company, orders)
+    revisits = dispatch_service.revisit_map(env, company, orders)
+    near_km = company.vtracking_zone_match_km or dispatch_service.DEFAULT_ZONE_MATCH_KM
+    items = []
+    for order in orders:
+        item = order_brief(order, purchases.get(order.name), notes.get(order.id))
+        item['dispatch'] = dispatch_service.dispatch_block(
+            order, places.get(order.id), item['delivery']['coords'], samples, near_km,
+        )
+        item['revisit_risk'] = revisits.get(order.id)
+        items.append(item)
 
     if params.get('stage'):
         items = [item for item in items if item['fulfillment']['stage'] == params['stage']]
@@ -58,6 +70,28 @@ def pending_orders(env, company, params, limit=DEFAULT_LIMIT, offset=0):
         'limit': limit,
         'count': len(items),
         'orders': items,
+    }
+
+
+def places_by_order(env, company, orders):
+    """``{order.id: place}`` — điểm giao của khách trên từng đơn.
+
+    Ghép qua PHÁP NHÂN GỐC vì mỗi khách có nhiều liên hệ con làm địa chỉ giao. Một truy vấn
+    cho cả trang, không phải mỗi đơn một lần.
+    """
+    roots = orders.mapped('partner_id.commercial_partner_id')
+    if not roots:
+        return {}
+    places = env['hlv.vtracking.place'].sudo().search([
+        ('partner_id.commercial_partner_id', 'in', roots.ids),
+        ('company_id', '=', company.id),
+    ])
+    by_root = {}
+    for place in places:
+        by_root.setdefault(place.partner_id.commercial_partner_id.id, place)
+    return {
+        order.id: by_root.get(order.partner_id.commercial_partner_id.id)
+        for order in orders
     }
 
 
@@ -98,6 +132,15 @@ def order_detail(order, chatter_limit=15):
     detail['lines'] = [order_line_block(line) for line in order.order_line if not line.display_type]
     detail['chatter'] = chatter_service.record_messages(order, limit=chatter_limit)
     detail.pop('latest_note', None)
+    # Chi tiết một đơn thì tra cụm và cờ chặn là rẻ — không cần lo như lúc liệt kê cả trang.
+    company = order.company_id
+    place = places_by_order(order.env, company, order).get(order.id)
+    detail['dispatch'] = dispatch_service.dispatch_block(
+        order, place, detail['delivery']['coords'],
+        dispatch_service.zone_samples(order.env, company),
+        company.vtracking_zone_match_km or dispatch_service.DEFAULT_ZONE_MATCH_KM,
+    )
+    detail['revisit_risk'] = dispatch_service.revisit_map(order.env, company, order).get(order.id)
     return detail
 
 

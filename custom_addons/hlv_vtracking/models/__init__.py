@@ -19,6 +19,7 @@ from . import vtracking_address_geo
 from . import vtracking_plan
 from . import vtracking_plan_actions
 from . import vtracking_plan_actual
+from . import vtracking_plan_notes
 from . import vtracking_plan_line
 from . import vtracking_plan_line_zone
 from . import vtracking_plan_line_profile

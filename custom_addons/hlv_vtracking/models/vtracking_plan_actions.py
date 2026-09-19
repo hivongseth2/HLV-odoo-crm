@@ -9,7 +9,7 @@ from odoo import models
 from odoo.exceptions import UserError
 
 from odoo.addons.hlv_vtracking.tools.vtracking_planning import nearest_first_order
-from odoo.addons.hlv_vtracking.models.vtracking_partner_profile import PROCEDURE_LABELS
+from odoo.addons.hlv_vtracking.tools.vtracking_blocking import PROCEDURE_LABELS
 
 
 class HlvVtrackingPlanActions(models.Model):

@@ -124,6 +124,22 @@ class AiPlanController(http.Controller):
         result['plan'] = plan_service.plan_detail(plan)
         return result
 
+    @http.route('/api/v1/ai/plans/<int:plan_id>/notes', methods=['POST', 'OPTIONS'],
+                **ROUTE_DEFAULTS)
+    @api_endpoint(write=True)
+    def plan_notes(self, ctx, plan_id, **_params):
+        """Ghi lý giải của AI lên kế hoạch. Không đổi lộ trình.
+
+        Body: ``{"reasoning": "...", "excluded": [{"name": "DH123", "reason": "..."}]}``.
+        ``reasoning`` vào chatter (nhật ký, không ghi đè); ``excluded`` ghi đè ô "Đơn bị
+        loại và lý do" trên form — đó là ảnh chụp của lần cân nhắc gần nhất.
+        """
+        body = ctx.json_body()
+        return plan_service.write_notes(
+            self._plan(ctx, plan_id), body.get('reasoning'), body.get('excluded'),
+            ctx.api_key.name,
+        )
+
     @http.route('/api/v1/ai/plans/<int:plan_id>/remove-lines', methods=['POST', 'OPTIONS'], **ROUTE_DEFAULTS)
     @api_endpoint(write=True)
     def remove_lines(self, ctx, plan_id, **_params):
