@@ -153,15 +153,24 @@
                     </div>
                     <field name="loyalty_history_ids" readonly="1" nolabel="1">
                         <list create="0" delete="0" limit="10"
-                              decoration-success="point_amount &gt; 0"
-                              decoration-danger="point_amount &lt; 0">
+                              decoration-muted="state == 'cancelled'"
+                              decoration-success="point_amount &gt; 0 and state == 'confirmed'"
+                              decoration-danger="point_amount &lt; 0 and state == 'confirmed'">
                             <field name="date" string="Ngày"/>
                             <field name="transaction_type" widget="badge"
                                    decoration-success="transaction_type == 'earn'"
                                    decoration-warning="transaction_type == 'redeem'"
                                    decoration-danger="transaction_type == 'return'"
                                    decoration-info="transaction_type == 'manual'"/>
-                            <field name="point_amount" string="Điểm" sum="Tổng"/>
+                            <field name="point_type" string="Loại điểm" widget="badge"/>
+                            <!-- Không cộng tổng cột điểm: bảng trộn cả điểm xếp hạng lẫn
+                                 điểm đổi thưởng, lẫn dòng chờ xác nhận/đã hủy chưa vào số
+                                 dư — tổng đó vô nghĩa. Số dư thật xem ở khối phía trên. -->
+                            <field name="point_amount" string="Điểm"/>
+                            <field name="state" string="Trạng thái" widget="badge"
+                                   decoration-success="state == 'confirmed'"
+                                   decoration-warning="state == 'pending'"
+                                   decoration-muted="state == 'cancelled'"/>
                             <field name="description" string="Mô tả"/>
                             <field name="company_name" groups="base.group_multi_company"
                                    string="Chi nhánh"/>
