@@ -111,6 +111,102 @@ class HlvLoyaltyHistory(models.Model):
             if rec.state == 'pending':
                 rec.state = 'cancelled'
 
+    @api.model
+    def _get_picking_ranking_total(self, picking):
+        """Tổng điểm xếp hạng còn hiệu lực đã ghi cho 1 phiếu kho.
+
+        Nhận: recordset `stock.picking` (1 bản ghi).
+        Trả: tổng `point_amount` của mọi tài khoản, bỏ bản ghi đã hủy; 0 nếu
+        phiếu chưa có bản ghi nào.
+        """
+        return sum(self.sudo().search([
+            ('picking_id', '=', picking.id),
+            ('transaction_type', '=', 'earn'),
+            ('point_type', '=', 'ranking'),
+            ('state', '!=', 'cancelled'),
+        ]).mapped('point_amount'))
+
+    def action_revoke_points(self):
+        """Thu hồi điểm của bản ghi đang mở.
+
+        Khác `action_cancel` (chỉ hủy được bản ghi đang chờ): hàm này thu hồi
+        được cả điểm ĐÃ xác nhận — tức đã vào số dư khách — nên dùng khi cần
+        sửa sai (vd điểm tích nhầm tài khoản).
+        """
+        self.ensure_one()
+        if self.transaction_type != 'earn':
+            raise UserError('Chỉ thu hồi được điểm của giao dịch Tích điểm.')
+        if self.state == 'cancelled':
+            raise UserError('Bản ghi này đã bị hủy trước đó.')
+
+        # Bản ghi hoàn hàng đối ứng phải bị hủy cùng lúc, nếu không số dư sẽ
+        # âm: phần cộng biến mất còn phần trừ vẫn nằm lại. Không tự ghép cặp ở
+        # đây vì bản ghi hoàn hàng gắn với PHIẾU HOÀN chứ không phải phiếu giao
+        # gốc — ghép theo đơn + tài khoản có thể trúng nhầm phiếu giao khác của
+        # cùng đơn. Chặn lại và đẩy sang nút thu hồi trọn gói trên đơn.
+        if self.sale_order_id and self.sudo().search_count([
+            ('sale_order_id', '=', self.sale_order_id.id),
+            ('account_id', '=', self.account_id.id),
+            ('point_type', '=', self.point_type),
+            ('transaction_type', '=', 'return'),
+            ('state', '!=', 'cancelled'),
+        ]):
+            raise UserError(
+                'Đơn này đã có giao dịch hoàn hàng cho cùng tài khoản và loại điểm. '
+                'Hãy dùng nút "Thu hồi toàn bộ điểm" trên đơn bán hàng để thu hồi '
+                'trọn gói, tránh để số dư âm.'
+            )
+
+        return self._revoke_and_notify()
+
+    def _revoke_and_notify(self):
+        """Hủy các bản ghi điểm này (kể cả đã xác nhận), trả về thông báo.
+
+        Hủy bản ghi chứ không tạo bản ghi âm, vì số dư tài khoản chỉ cộng các
+        bản ghi `confirmed`: hủy là đủ để rút điểm khỏi số dư, đồng thời mở lại
+        trần chống trùng điểm xếp hạng trong `stock.picking._loyalty_earn_points`
+        để tích lại được cho đúng tài khoản. Bản ghi âm chỉ dùng cho hoàn hàng —
+        ở đó hàng đã giao thật nên cần giữ vết cả chiều cộng lẫn chiều trừ.
+        """
+        ranking_revoked = sum(
+            self.filtered(lambda h: h.point_type == 'ranking').mapped('point_amount')
+        )
+        exchange_revoked = sum(
+            self.filtered(lambda h: h.point_type == 'exchange').mapped('point_amount')
+        )
+
+        # Model này không kế thừa mail.thread nên không có chatter lưu vết —
+        # ghi người thu hồi vào mô tả để còn đối soát sau.
+        user_name = self.env.user.name
+        for history in self:
+            history.write({
+                'state': 'cancelled',
+                'description': f'{history.description or ""} [Thu hồi bởi {user_name}]',
+            })
+
+        for picking in self.filtered(lambda h: h.point_type == 'ranking').picking_id:
+            picking.sudo().loyalty_points_earned = self._get_picking_ranking_total(picking)
+
+        parts = []
+        if ranking_revoked:
+            parts.append(f'{ranking_revoked:,} điểm xếp hạng')
+        if exchange_revoked:
+            parts.append(f'{exchange_revoked:,} điểm đổi thưởng')
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Thu hồi điểm Loyalty',
+                'message': (
+                    f'Đã thu hồi {" và ".join(parts) if parts else "0 điểm"} '
+                    f'qua {len(self)} bản ghi.'
+                ),
+                'sticky': False,
+                'type': 'success',
+            },
+        }
+
     def action_recalculate_points(self):
         """Tính lại điểm đổi thưởng đang chờ xác nhận, theo dữ liệu mới
         nhất của phiếu giao / dòng bán hàng.
