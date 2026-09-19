@@ -109,6 +109,10 @@ class HlvLoyaltyBackfillPointsWizard(models.TransientModel):
                 'Không có điểm nào để tạo bù với lựa chọn hiện tại. '
                 'Hãy đổi loại điểm hoặc kiểm tra lại bảng "Tài khoản cộng điểm Loyalty" trên đơn.'
             )
-        return self.order_id._backfill_loyalty_points(
+        notification = self.order_id._backfill_loyalty_points(
             self.POINT_TYPES_BY_SCOPE[self.point_scope]
         )
+        # Wizard trả về client action `display_notification` thì Odoo chỉ hiện
+        # thông báo và GIỮ NGUYÊN dialog — phải nói rõ đóng ở bước kế tiếp.
+        notification['params']['next'] = {'type': 'ir.actions.act_window_close'}
+        return notification
