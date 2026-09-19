@@ -236,17 +236,26 @@ class SaleOrder(models.Model):
             reward_lines.unlink()
 
     def action_backfill_loyalty_points(self):
-        """Tạo bù điểm Loyalty (chủ yếu là điểm đổi thưởng) còn thiếu cho
-        các phiếu xuất kho ĐÃ GIAO của đơn này.
+        """Tạo bù cả điểm xếp hạng lẫn điểm đổi thưởng còn thiếu."""
+        return self._backfill_loyalty_points(['ranking', 'exchange'])
 
-        Trường hợp thường gặp: phiếu đã giao lúc CK Loyalty (%)/tiền trên
-        dòng bán hàng chưa được nhập, nên chỉ tạo được điểm xếp hạng —
-        điểm đổi thưởng KHÔNG được tạo. Sau đó nhân viên nhập/sửa CK
-        Loyalty trên đơn thì điểm xếp hạng cũ đã confirmed nên
-        `stock.picking._loyalty_earn_points()` coi phiếu là "đã tích điểm"
-        và bỏ qua — không tạo bổ sung. Nút này gọi lại đúng hàm tích điểm
-        gốc (đã sửa để tự bù phần thiếu) cho từng phiếu, không đụng tới
-        các bản ghi đã có sẵn.
+    def action_backfill_loyalty_ranking_points(self):
+        """Chỉ tạo bù điểm xếp hạng còn thiếu."""
+        return self._backfill_loyalty_points(['ranking'])
+
+    def action_backfill_loyalty_exchange_points(self):
+        """Chỉ tạo bù điểm đổi thưởng còn thiếu."""
+        return self._backfill_loyalty_points(['exchange'])
+
+    def _backfill_loyalty_points(self, point_types):
+        """Tạo bù điểm Loyalty còn thiếu cho các phiếu xuất kho ĐÃ GIAO của đơn.
+
+        Trường hợp thường gặp: lúc phiếu được giao thì bảng "Tài khoản cộng
+        điểm Loyalty" chưa được cấu hình, nên chỉ tạo được điểm xếp hạng —
+        điểm đổi thưởng KHÔNG được tạo. Sau đó nhân viên nhập/sửa bảng này thì
+        điểm xếp hạng cũ đã confirmed khiến phiếu bị coi là "đã tích điểm".
+        Hàm này gọi lại đúng hàm tích điểm gốc (đã xử lý bù phần thiếu) cho
+        từng phiếu, không đụng tới các bản ghi đã có sẵn.
         """
         self.ensure_one()
         pickings = self.picking_ids.filtered(
@@ -258,7 +267,7 @@ class SaleOrder(models.Model):
         History = self.env['hlv.loyalty.history'].sudo()
         before_ids = set(History.search([('sale_order_id', '=', self.id)]).ids)
         for picking in pickings:
-            picking._loyalty_earn_points()
+            picking._loyalty_earn_points(point_types=point_types)
         created = History.search([
             ('sale_order_id', '=', self.id),
             ('id', 'not in', list(before_ids)),

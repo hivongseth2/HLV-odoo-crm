@@ -24,9 +24,15 @@ class StockPicking(models.Model):
                 picking._loyalty_return_points()
         return res
 
-    def _loyalty_earn_points(self):
-        """Tích điểm loyalty khi phiếu xuất kho hoàn tất giao hàng."""
+    def _loyalty_earn_points(self, point_types=None):
+        """Tích điểm loyalty khi phiếu xuất kho hoàn tất giao hàng.
+
+        `point_types`: giới hạn loại điểm được ghi ('ranking' / 'exchange').
+        Để trống = ghi cả hai (mặc định khi validate phiếu). Nút "Tạo bù điểm"
+        trên đơn dùng tham số này để bù riêng từng loại.
+        """
         self.ensure_one()
+        allowed_point_types = set(point_types or ('ranking', 'exchange'))
 
         # Chỉ áp dụng cho phiếu xuất kho giao hàng cho khách
         if self.picking_type_code != 'outgoing':
@@ -123,9 +129,12 @@ class StockPicking(models.Model):
         total_exchange_recorded = 0
         for share in shares:
             account = share['account']
-            acc_ranking = min(share['ranking_points'], ranking_budget)
+            acc_ranking = (
+                min(share['ranking_points'], ranking_budget)
+                if 'ranking' in allowed_point_types else 0
+            )
             ranking_budget -= acc_ranking
-            acc_exchange = share['exchange_points']
+            acc_exchange = share['exchange_points'] if 'exchange' in allowed_point_types else 0
             if acc_ranking <= 0 and acc_exchange <= 0:
                 continue
 
@@ -172,6 +181,12 @@ class StockPicking(models.Model):
                         'point_formula_html': share['ranking_formula_html'],
                     })
                     total_ranking_recorded += acc_ranking
+
+                # Không đụng tới điểm đổi thưởng khi lần chạy này không được
+                # phép ghi loại đó — nhánh dưới cập nhật thẳng `point_amount`
+                # nên sẽ ghi đè bản ghi đang chờ về 0.
+                if 'exchange' not in allowed_point_types:
+                    continue
 
                 if exchange_hist and exchange_hist.state == 'pending':
                     exchange_hist.write({
@@ -241,7 +256,10 @@ class StockPicking(models.Model):
                 })
                 total_exchange_recorded += acc_exchange
 
-        self.loyalty_points_earned = ranking_points
+        # Lấy tổng đã ghi thực tế thay vì `ranking_points` vừa tính: khi chỉ bù
+        # riêng điểm đổi thưởng, hoặc sau khi điểm xếp hạng đã bị thu hồi, con
+        # số tính được không còn phản ánh điểm phiếu này thực sự đang giữ.
+        self.loyalty_points_earned = self.env['hlv.loyalty.history']._get_picking_ranking_total(self)
         _logger.info(
             'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s) qua %d tài khoản',
             total_ranking_recorded, total_exchange_recorded, partner.name, self.name,
