@@ -25,19 +25,10 @@
                             confirm="Bạn có chắc muốn xóa Voucher khỏi đơn hàng?"/>
                 </div>
                 <div invisible="state not in ['sale', 'done']">
-                    <button name="action_backfill_loyalty_points" type="object"
-                            string="Tạo bù cả 2 loại điểm" class="btn btn-link"
+                    <button name="action_open_backfill_loyalty_wizard" type="object"
+                            string="Tạo bù điểm Loyalty" class="btn btn-link"
                             icon="fa-refresh"
-                            confirm="Tính lại và tạo bổ sung điểm xếp hạng + điểm đổi thưởng còn thiếu cho các phiếu đã giao của đơn này. Điểm đã có sẵn sẽ KHÔNG bị thay đổi. Tiếp tục?"
-                            help="Dùng khi phiếu đã giao chưa tích đủ điểm (VD: bảng 'Tài khoản cộng điểm Loyalty' bên dưới được cấu hình/sửa số tiền SAU khi đã giao hàng)."/>
-                    <button name="action_backfill_loyalty_ranking_points" type="object"
-                            string="Tạo bù điểm xếp hạng" class="btn btn-link"
-                            icon="fa-refresh"
-                            confirm="Chỉ tạo bổ sung ĐIỂM XẾP HẠNG còn thiếu cho các phiếu đã giao của đơn này. Điểm đã có sẵn sẽ KHÔNG bị thay đổi. Tiếp tục?"/>
-                    <button name="action_backfill_loyalty_exchange_points" type="object"
-                            string="Tạo bù điểm đổi thưởng" class="btn btn-link"
-                            icon="fa-refresh"
-                            confirm="Chỉ tạo bổ sung ĐIỂM ĐỔI THƯỞNG còn thiếu cho các phiếu đã giao của đơn này. Điểm đã có sẵn sẽ KHÔNG bị thay đổi. Tiếp tục?"/>
+                            help="Chọn loại điểm cần bù và xem trước số điểm sẽ được tạo trước khi xác nhận. Dùng khi phiếu đã giao chưa tích đủ điểm (VD: bảng 'Tài khoản cộng điểm Loyalty' bên dưới được cấu hình/sửa số tiền SAU khi đã giao hàng)."/>
                 </div>
                 <div invisible="state not in ['sale', 'done']"
                      groups="hlv_loyalty.group_loyalty_admin">

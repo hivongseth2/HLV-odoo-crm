@@ -24,26 +24,36 @@ class StockPicking(models.Model):
                 picking._loyalty_return_points()
         return res
 
-    def _loyalty_earn_points(self, point_types=None):
-        """Tích điểm loyalty khi phiếu xuất kho hoàn tất giao hàng.
+    def _get_loyalty_earn_plan(self, point_types=None):
+        """Tính trước lần tích điểm này sẽ ghi những gì — KHÔNG đụng tới DB.
 
-        `point_types`: giới hạn loại điểm được ghi ('ranking' / 'exchange').
-        Để trống = ghi cả hai (mặc định khi validate phiếu). Nút "Tạo bù điểm"
-        trên đơn dùng tham số này để bù riêng từng loại.
+        Dùng chung cho cả lúc ghi thật (`_loyalty_earn_points`) lẫn lúc xem
+        trước ở wizard "Tạo bù điểm", để con số người dùng duyệt không thể
+        lệch với con số thực sự được ghi.
+
+        `point_types`: giới hạn loại điểm ('ranking' / 'exchange'); để trống =
+        cả hai.
+
+        Trả: list dict, mỗi tài khoản một phần tử gồm `account`, `share` (điểm
+        đã chia + công thức), `ranking_hist` / `exchange_hist` (bản ghi đã có,
+        recordset rỗng nếu chưa có), `ranking_amount` / `exchange_amount` (số
+        điểm lần này được phép ghi), `ranking_to_create` / `exchange_to_create`
+        (số điểm sẽ TẠO MỚI), `skip_exchange` và `is_backfill`. Trả [] nếu
+        phiếu chưa đủ điều kiện tích điểm.
         """
         self.ensure_one()
         allowed_point_types = set(point_types or ('ranking', 'exchange'))
 
         # Chỉ áp dụng cho phiếu xuất kho giao hàng cho khách
         if self.picking_type_code != 'outgoing':
-            return
+            return []
         if not self.sale_id:
-            return
+            return []
 
         sale_order = self.sale_id
         partner = sale_order.partner_id
         if not partner:
-            return
+            return []
 
         root_partner = partner._get_loyalty_root()
         has_active_portal_account = self.env['hlv.loyalty.portal.account'].sudo().search_count([
@@ -51,14 +61,14 @@ class StockPicking(models.Model):
             ('active', '=', True),
         ])
         if not has_active_portal_account:
-            return
+            return []
 
         # Tìm chương trình loyalty đang active
         program = self.env['hlv.loyalty.program'].sudo().search([
             ('active', '=', True),
         ], limit=1)
         if not program:
-            return
+            return []
 
         # Tính tổng tiền hàng thực giao trong phiếu này (cho điểm xếp hạng)
         delivered_lines = self._get_loyalty_delivered_lines()
@@ -93,23 +103,13 @@ class StockPicking(models.Model):
 
         allocations = self._get_loyalty_account_allocations(sale_order, root_partner)
         if not allocations:
-            return
+            return []
         if ranking_points <= 0 and not any(amount for _, amount in allocations):
-            return
+            return []
 
         shares = self._split_loyalty_points_by_account(
             allocations, delivered_subtotal, order_total_amount, delivery_ratio, program, ranking_points,
         )
-
-        base_vals = {
-            'partner_id': root_partner.id,
-            'transaction_type': 'earn',
-            'picking_id': self.id,
-            'sale_order_id': sale_order.id,
-            'company_id': self.company_id.id,
-            'sale_company_id': sale_order.company_id.id,
-            'delivery_company_id': self.company_id.id,
-        }
 
         # Điểm xếp hạng được tính 1 lần cho CẢ PHIẾU (`ranking_points`) rồi mới
         # chia cho các tài khoản, nên tổng điểm xếp hạng đã ghi cho phiếu này
@@ -125,8 +125,7 @@ class StockPicking(models.Model):
         ranking_already_recorded = self.env['hlv.loyalty.history']._get_picking_ranking_total(self)
         ranking_budget = max(ranking_points - ranking_already_recorded, 0)
 
-        total_ranking_recorded = 0
-        total_exchange_recorded = 0
+        plan = []
         for share in shares:
             account = share['account']
             acc_ranking = (
@@ -138,132 +137,134 @@ class StockPicking(models.Model):
             if acc_ranking <= 0 and acc_exchange <= 0:
                 continue
 
-            # Kiểm tra xem tài khoản này đã tích điểm cho phiếu này chưa
-            # (tránh duplicate khi validate lại / recalculate).
+            # Tài khoản này đã tích điểm cho phiếu này chưa (tránh duplicate
+            # khi validate lại / tính lại).
             existing = self.env['hlv.loyalty.history'].sudo().search([
                 ('picking_id', '=', self.id),
                 ('transaction_type', '=', 'earn'),
                 ('account_id', '=', account.id),
             ])
-            if existing:
-                # Ranking bỏ qua bản ghi đã hủy để nút "Thu hồi điểm" trên đơn
-                # rồi tích lại được cho đúng tài khoản; hoàn hàng không cancel
-                # bản ghi ranking (nó tạo bản ghi âm) nên trần `ranking_budget`
-                # ở trên vẫn chặn được việc hồi sinh điểm của hàng đã trả.
-                # Exchange thì NGƯỢC LẠI — hoàn hàng hủy thẳng bản ghi pending,
-                # nên bản ghi đã hủy vẫn phải tính là "đã xử lý", nếu không
-                # điểm của hàng đã trả sẽ sống lại mỗi lần chạy tích điểm.
-                ranking_hist = existing.filtered(
-                    lambda h: h.point_type == 'ranking' and h.state != 'cancelled'
-                )[:1]
-                exchange_hist = existing.filtered(lambda h: h.point_type == 'exchange')[:1]
-                if ranking_hist:
-                    # Luôn confirmed ngay khi tạo (đã vào số dư) → chỉ cập
-                    # nhật công thức để đối chiếu, không tự sửa điểm đã chốt.
-                    ranking_hist.write({
-                        'point_formula': share['ranking_formula'],
-                        'point_formula_html': share['ranking_formula_html'],
-                    })
-                elif acc_ranking > 0:
-                    # Bù bản ghi ranking còn thiếu (hiếm khi xảy ra, nhưng
-                    # xử lý đối xứng với nhánh exchange bên dưới).
-                    self.env['hlv.loyalty.history'].sudo().create({
-                        **base_vals,
-                        'account_id': account.id,
-                        'point_amount': acc_ranking,
-                        'point_type': 'ranking',
-                        'state': 'confirmed',
-                        'description': (
-                            f'Tích điểm xếp hạng (bù) {sale_order.name} - Phiếu {self.name}'
-                            f' - TK {account.display_name}'
-                        ),
-                        'point_formula': share['ranking_formula'],
-                        'point_formula_html': share['ranking_formula_html'],
-                    })
-                    total_ranking_recorded += acc_ranking
+            # Ranking bỏ qua bản ghi đã hủy để nút "Thu hồi điểm" trên đơn rồi
+            # tích lại được cho đúng tài khoản; hoàn hàng không hủy bản ghi
+            # ranking (nó tạo bản ghi âm) nên trần `ranking_budget` ở trên vẫn
+            # chặn được việc hồi sinh điểm của hàng đã trả. Exchange thì NGƯỢC
+            # LẠI — hoàn hàng hủy thẳng bản ghi đang chờ, nên bản ghi đã hủy
+            # vẫn phải tính là "đã xử lý", nếu không điểm của hàng đã trả sẽ
+            # sống lại mỗi lần chạy tích điểm.
+            ranking_hist = existing.filtered(
+                lambda h: h.point_type == 'ranking' and h.state != 'cancelled'
+            )[:1]
+            exchange_hist = existing.filtered(lambda h: h.point_type == 'exchange')[:1]
 
-                # Không đụng tới điểm đổi thưởng khi lần chạy này không được
-                # phép ghi loại đó — nhánh dưới cập nhật thẳng `point_amount`
-                # nên sẽ ghi đè bản ghi đang chờ về 0.
-                if 'exchange' not in allowed_point_types:
-                    continue
+            plan.append({
+                'account': account,
+                'share': share,
+                'ranking_hist': ranking_hist,
+                'exchange_hist': exchange_hist,
+                'ranking_amount': acc_ranking,
+                'exchange_amount': acc_exchange,
+                'ranking_to_create': 0 if ranking_hist else acc_ranking,
+                'exchange_to_create': 0 if exchange_hist else acc_exchange,
+                # Lần chạy không được phép ghi điểm đổi thưởng thì không đụng
+                # gì tới nó — nhánh ghi cập nhật thẳng `point_amount` nên sẽ
+                # đè bản ghi đang chờ về 0.
+                'skip_exchange': 'exchange' not in allowed_point_types,
+                'is_backfill': bool(existing),
+            })
+        return plan
 
-                if exchange_hist and exchange_hist.state == 'pending':
-                    exchange_hist.write({
-                        'point_amount': acc_exchange,
-                        'point_formula': share['exchange_formula'],
-                        'point_formula_html': share['exchange_formula_html'],
-                    })
-                elif exchange_hist:
-                    exchange_hist.write({
-                        'point_formula': share['exchange_formula'],
-                        'point_formula_html': share['exchange_formula_html'],
-                    })
-                elif acc_exchange > 0:
-                    # Bù bản ghi điểm đổi thưởng còn thiếu: trước đây phiếu
-                    # này chỉ tạo được điểm ranking (lúc validate, bảng
-                    # "Tài khoản cộng điểm Loyalty"/số tiền chưa được cấu
-                    # hình, hoặc được nhập/sửa SAU khi đã giao) — trước đây
-                    # nhánh `if existing: ... continue` bỏ qua vĩnh viễn,
-                    # không bao giờ tạo bổ sung. Giờ chạy lại (validate lại /
-                    # wizard tính lại / nút "Tạo bù điểm đổi thưởng" trên
-                    # đơn hàng) sẽ tạo bổ sung bản ghi còn thiếu này.
-                    self.env['hlv.loyalty.history'].sudo().create({
-                        **base_vals,
-                        'account_id': account.id,
-                        'point_amount': acc_exchange,
-                        'point_type': 'exchange',
-                        'state': 'pending',
-                        'description': (
-                            f'Tích điểm đổi thưởng (bù) {sale_order.name} - Phiếu {self.name}'
-                            f' - TK {account.display_name}'
-                        ),
-                        'point_formula': share['exchange_formula'],
-                        'point_formula_html': share['exchange_formula_html'],
-                    })
-                    total_exchange_recorded += acc_exchange
-                continue
+    def _loyalty_earn_points(self, point_types=None):
+        """Ghi điểm loyalty cho phiếu xuất kho đã giao hàng.
 
-            if acc_ranking > 0:
-                self.env['hlv.loyalty.history'].sudo().create({
+        `point_types`: giới hạn loại điểm được ghi ('ranking' / 'exchange').
+        Để trống = ghi cả hai (mặc định khi validate phiếu). Wizard "Tạo bù
+        điểm" trên đơn dùng tham số này để bù riêng từng loại.
+        """
+        self.ensure_one()
+        plan = self._get_loyalty_earn_plan(point_types)
+        if not plan:
+            return
+
+        sale_order = self.sale_id
+        base_vals = {
+            'partner_id': sale_order.partner_id._get_loyalty_root().id,
+            'transaction_type': 'earn',
+            'picking_id': self.id,
+            'sale_order_id': sale_order.id,
+            'company_id': self.company_id.id,
+            'sale_company_id': sale_order.company_id.id,
+            'delivery_company_id': self.company_id.id,
+        }
+        History = self.env['hlv.loyalty.history'].sudo()
+
+        total_ranking_recorded = 0
+        total_exchange_recorded = 0
+        for item in plan:
+            account = item['account']
+            share = item['share']
+            suffix = ' (bù)' if item['is_backfill'] else ''
+
+            if item['ranking_hist']:
+                # Ranking luôn confirmed ngay khi tạo (đã vào số dư) → chỉ cập
+                # nhật công thức để đối chiếu, không tự sửa điểm đã chốt.
+                item['ranking_hist'].write({
+                    'point_formula': share['ranking_formula'],
+                    'point_formula_html': share['ranking_formula_html'],
+                })
+            elif item['ranking_to_create'] > 0:
+                History.create({
                     **base_vals,
                     'account_id': account.id,
-                    'point_amount': acc_ranking,
+                    'point_amount': item['ranking_to_create'],
                     'point_type': 'ranking',
                     'state': 'confirmed',
                     'description': (
-                        f'Tích điểm xếp hạng {sale_order.name} - Phiếu {self.name}'
-                        f' - TK {account.display_name}'
+                        f'Tích điểm xếp hạng{suffix} {sale_order.name}'
+                        f' - Phiếu {self.name} - TK {account.display_name}'
                     ),
                     'point_formula': share['ranking_formula'],
                     'point_formula_html': share['ranking_formula_html'],
                 })
-                total_ranking_recorded += acc_ranking
+                total_ranking_recorded += item['ranking_to_create']
 
-            if acc_exchange > 0:
-                self.env['hlv.loyalty.history'].sudo().create({
+            if item['skip_exchange']:
+                continue
+
+            if item['exchange_hist'] and item['exchange_hist'].state == 'pending':
+                item['exchange_hist'].write({
+                    'point_amount': item['exchange_amount'],
+                    'point_formula': share['exchange_formula'],
+                    'point_formula_html': share['exchange_formula_html'],
+                })
+            elif item['exchange_hist']:
+                item['exchange_hist'].write({
+                    'point_formula': share['exchange_formula'],
+                    'point_formula_html': share['exchange_formula_html'],
+                })
+            elif item['exchange_to_create'] > 0:
+                History.create({
                     **base_vals,
                     'account_id': account.id,
-                    'point_amount': acc_exchange,
+                    'point_amount': item['exchange_to_create'],
                     'point_type': 'exchange',
                     'state': 'pending',
                     'description': (
-                        f'Tích điểm đổi thưởng {sale_order.name} - Phiếu {self.name}'
-                        f' - TK {account.display_name}'
+                        f'Tích điểm đổi thưởng{suffix} {sale_order.name}'
+                        f' - Phiếu {self.name} - TK {account.display_name}'
                     ),
                     'point_formula': share['exchange_formula'],
                     'point_formula_html': share['exchange_formula_html'],
                 })
-                total_exchange_recorded += acc_exchange
+                total_exchange_recorded += item['exchange_to_create']
 
-        # Lấy tổng đã ghi thực tế thay vì `ranking_points` vừa tính: khi chỉ bù
-        # riêng điểm đổi thưởng, hoặc sau khi điểm xếp hạng đã bị thu hồi, con
-        # số tính được không còn phản ánh điểm phiếu này thực sự đang giữ.
-        self.loyalty_points_earned = self.env['hlv.loyalty.history']._get_picking_ranking_total(self)
+        # Lấy tổng đã ghi thực tế thay vì số vừa tính: khi chỉ bù riêng điểm
+        # đổi thưởng, hoặc sau khi điểm xếp hạng đã bị thu hồi, con số tính
+        # được không còn phản ánh điểm phiếu này thực sự đang giữ.
+        self.loyalty_points_earned = History._get_picking_ranking_total(self)
         _logger.info(
-            'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s) qua %d tài khoản',
-            total_ranking_recorded, total_exchange_recorded, partner.name, self.name,
-            sale_order.name, len(shares),
+            'Loyalty: Tích ranking=%d exchange=%d từ phiếu %s (SO: %s) qua %d tài khoản',
+            total_ranking_recorded, total_exchange_recorded, self.name,
+            sale_order.name, len(plan),
         )
 
     def _get_loyalty_account_allocations(self, sale_order, root_partner):

@@ -5,3 +5,4 @@ from . import loyalty_point_adjustment_wizard
 from . import loyalty_recalculate_points_wizard
 from . import loyalty_point_transfer_wizard
 from . import loyalty_migrate_account_points_wizard
+from . import loyalty_backfill_points_wizard
