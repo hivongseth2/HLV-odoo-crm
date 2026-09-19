@@ -22,14 +22,14 @@
                             groups="hlv_loyalty.group_loyalty_operator"/>
                     <button name="action_revoke_points" string="Thu hồi điểm xếp hạng"
                             type="object" class="btn-secondary text-danger"
-                            invisible="state == 'cancelled' or transaction_type != 'earn' or point_type != 'ranking'"
+                            invisible="state != 'confirmed' or transaction_type != 'earn' or point_type != 'ranking'"
                             groups="hlv_loyalty.group_loyalty_admin"
-                            confirm="Thu hồi điểm xếp hạng của bản ghi này? Điểm đã xác nhận sẽ bị trừ khỏi số dư khách hàng."/>
+                            confirm="Thu hồi điểm xếp hạng của bản ghi này? Điểm sẽ bị trừ khỏi số dư khách hàng."/>
                     <button name="action_revoke_points" string="Thu hồi điểm đổi thưởng"
                             type="object" class="btn-secondary text-danger"
-                            invisible="state == 'cancelled' or transaction_type != 'earn' or point_type != 'exchange'"
+                            invisible="state != 'confirmed' or transaction_type != 'earn' or point_type != 'exchange'"
                             groups="hlv_loyalty.group_loyalty_admin"
-                            confirm="Thu hồi điểm đổi thưởng của bản ghi này? Điểm đã xác nhận sẽ bị trừ khỏi số dư khách hàng."/>
+                            confirm="Thu hồi điểm đổi thưởng của bản ghi này? Điểm sẽ bị trừ khỏi số dư khách hàng."/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="pending,confirmed"/>
                 </header>
@@ -83,6 +83,7 @@
                                    decoration-info="transaction_type == 'transfer'"
                                    decoration-muted="transaction_type == 'manual'"/>
                             <field name="description"/>
+                            <field name="cancel_reason" invisible="state != 'cancelled'"/>
                         </group>
                         <group string="Tham chiếu">
                             <field name="picking_id"/>

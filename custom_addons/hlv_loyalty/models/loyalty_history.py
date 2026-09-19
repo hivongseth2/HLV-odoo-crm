@@ -49,6 +49,13 @@ class HlvLoyaltyHistory(models.Model):
         ('confirmed', 'Đã xác nhận'),
         ('cancelled', 'Đã hủy'),
     ], string='Trạng thái', default='confirmed', index=True, tracking=True)
+    cancel_reason = fields.Selection([
+        ('return', 'Hoàn hàng'),
+        ('revoke', 'Thu hồi thủ công'),
+    ], string='Lý do hủy', readonly=True, copy=False,
+        help='Phân biệt bản ghi bị hủy do hoàn hàng (điểm không được tích lại, '
+             'vì hàng đã trả) với bản ghi bị người dùng chủ động hủy/thu hồi '
+             '(được phép tích lại qua nút "Tạo bù điểm Loyalty").')
 
     description = fields.Char(string='Mô tả')
     point_formula = fields.Text(
@@ -109,7 +116,7 @@ class HlvLoyaltyHistory(models.Model):
         """Hủy bản ghi điểm đang chờ."""
         for rec in self:
             if rec.state == 'pending':
-                rec.state = 'cancelled'
+                rec.write({'state': 'cancelled', 'cancel_reason': 'revoke'})
 
     @api.model
     def _get_picking_ranking_total(self, picking):
@@ -136,8 +143,11 @@ class HlvLoyaltyHistory(models.Model):
         self.ensure_one()
         if self.transaction_type != 'earn':
             raise UserError('Chỉ thu hồi được điểm của giao dịch Tích điểm.')
-        if self.state == 'cancelled':
-            raise UserError('Bản ghi này đã bị hủy trước đó.')
+        if self.state != 'confirmed':
+            raise UserError(
+                'Chỉ thu hồi được điểm ĐÃ xác nhận (điểm đã vào số dư khách). '
+                'Bản ghi đang chờ xác nhận thì dùng nút "Hủy".'
+            )
 
         # Bản ghi hoàn hàng đối ứng phải bị hủy cùng lúc, nếu không số dư sẽ
         # âm: phần cộng biến mất còn phần trừ vẫn nằm lại. Không tự ghép cặp ở
@@ -181,6 +191,7 @@ class HlvLoyaltyHistory(models.Model):
         for history in self:
             history.write({
                 'state': 'cancelled',
+                'cancel_reason': 'revoke',
                 'description': f'{history.description or ""} [Thu hồi bởi {user_name}]',
             })
 
