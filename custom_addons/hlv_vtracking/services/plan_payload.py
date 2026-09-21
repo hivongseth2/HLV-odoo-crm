@@ -133,7 +133,7 @@ def plan_lines(plan, with_legs=False):
             'delivered_at': iso_datetime(line.delivered_at),
             'returned': line.returned,
             'return_reason': line.return_reason or None,
-            'variance_minutes': line.variance_minutes if line.delivered_at else None,
+            'variance_minutes': line.variance_minutes if line.variance_measured else None,
             'has_coords': line.has_coords,
             'delivered': line.delivered,
         }

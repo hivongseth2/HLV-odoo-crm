@@ -204,8 +204,10 @@
                                            optional="show"/>
                                     <field name="delivered_at" string="Giao lúc" readonly="1"
                                            optional="show"/>
+                                    <field name="variance_measured" column_invisible="1"/>
                                     <field name="variance_minutes" string="Lệch (phút)"
-                                           readonly="1" optional="show"/>
+                                           readonly="1" optional="show"
+                                           invisible="not variance_measured"/>
                                     <field name="returned" string="Chở về" readonly="1"
                                            optional="hide"/>
                                     <field name="return_reason" string="Lý do chở về"

@@ -50,7 +50,7 @@ class HlvVtrackingPlanActual(models.Model):
             minutes = minutes_between(plan.actual_start_at, plan.actual_end_at)
             plan.actual_duration_display = format_minutes(minutes) if minutes else ''
 
-    @api.depends('line_ids.variance_minutes', 'line_ids.delivered_at', 'actual_line_count')
+    @api.depends('line_ids.variance_minutes', 'line_ids.variance_measured', 'actual_line_count')
     def _compute_variance_summary(self):
         for plan in self:
             summary = plan._variance_summary()
@@ -63,14 +63,14 @@ class HlvVtrackingPlanActual(models.Model):
     def _variance_summary(self):
         """Tóm tắt chênh lệch giờ giấc của cả chuyến. Dùng cho màn hình lẫn API.
 
-        Chỉ tính các điểm ĐÃ GIAO: điểm chưa giao thì lệch 0 phút không có nghĩa gì, mà đưa
-        vào trung bình lại kéo con số về phía "đúng hẹn" một cách giả tạo.
+        Chỉ tính các điểm ĐÃ ĐO được lệch: điểm chưa giao, hay đã giao mà thiếu toạ độ, đều
+        mang lệch 0 phút — đưa vào trung bình là kéo con số về phía "đúng hẹn" giả tạo.
         """
         self.ensure_one()
         return summarize_variance([
             {'variance': line.variance_minutes,
              'on_time': abs(line.variance_minutes) <= ON_TIME_TOLERANCE_MINUTES}
-            for line in self.line_ids if line.delivered_at
+            for line in self.line_ids if line.variance_measured
         ])
 
     def action_refresh_actual(self):

@@ -8,7 +8,9 @@ Tất cả đều ``readonly`` và ``copy=False``: sao chép một kế hoạch 
 của nó là tạo ra dữ liệu thực tế giả.
 """
 
-from odoo import fields, models
+from odoo import api, fields, models
+
+from ..tools.vtracking_actual import accuracy
 
 
 class HlvVtrackingPlanLineActual(models.Model):
@@ -30,6 +32,28 @@ class HlvVtrackingPlanLineActual(models.Model):
     )
     variance_minutes = fields.Integer(
         string='Lệch giờ (phút)', readonly=True, copy=False,
-        help='Thực tế trừ kế hoạch. Dương = tới chậm hơn dự kiến. Để trống nghĩa là chưa đo '
-             'được, khác hẳn 0 nghĩa là đúng y hẹn.',
+        help='Thực tế trừ kế hoạch. Dương = tới chậm hơn dự kiến. Chỉ có nghĩa khi "Đã đo '
+             'lệch" được tick — Odoo lưu ô trống thành 0, trùng với "đúng y hẹn".',
     )
+    variance_measured = fields.Boolean(
+        string='Đã đo lệch', readonly=True, copy=False, index=True,
+        help='Có cả giờ dự kiến lẫn giờ giao thật để so. Điểm đã giao mà thiếu toạ độ hoặc '
+             'thiếu mốc xuất phát thì không đo được.',
+    )
+    # Hai ô dưới chỉ để cộng dồn trong báo cáo "Độ chính xác dự báo" — lấy TRUNG BÌNH ra
+    # phút lệch tuyệt đối và phần trăm điểm đúng hẹn. Báo cáo lọc sẵn variance_measured.
+    abs_variance_minutes = fields.Integer(
+        string='Lệch tuyệt đối (phút)', compute='_compute_accuracy', store=True,
+        aggregator='avg',
+    )
+    on_time_rate = fields.Float(
+        string='Đúng hẹn (%)', compute='_compute_accuracy', store=True, aggregator='avg',
+        digits=(5, 1),
+    )
+
+    @api.depends('variance_minutes', 'variance_measured')
+    def _compute_accuracy(self):
+        for line in self:
+            values = accuracy(line.variance_minutes if line.variance_measured else None)
+            line.abs_variance_minutes = values['abs_minutes']
+            line.on_time_rate = values['on_time_rate']

@@ -39,6 +39,19 @@
               parent="menu_vtracking_root" action="action_vtracking_partner_profile"
               sequence="36"/>
 
+    <!-- Theo dõi vòng tự hiệu chỉnh: dự báo đúng tới đâu, định mức đổi thế nào. -->
+    <menuitem id="menu_vtracking_calibration" name="Hiệu chỉnh định mức"
+              parent="menu_vtracking_root" sequence="38"/>
+    <menuitem id="menu_vtracking_accuracy" name="Độ chính xác dự báo"
+              parent="menu_vtracking_calibration" action="action_vtracking_accuracy"
+              sequence="10"/>
+    <menuitem id="menu_vtracking_calibration_log" name="Nhật ký hiệu chỉnh"
+              parent="menu_vtracking_calibration" action="action_vtracking_calibration_log"
+              sequence="20"/>
+    <menuitem id="menu_vtracking_calibration_zones" name="Đề xuất theo cụm"
+              parent="menu_vtracking_calibration" action="action_vtracking_zone"
+              sequence="30"/>
+
     <menuitem id="menu_vtracking_positions" name="Lịch sử vị trí"
               parent="menu_vtracking_root" action="action_vtracking_position" sequence="40"/>
 

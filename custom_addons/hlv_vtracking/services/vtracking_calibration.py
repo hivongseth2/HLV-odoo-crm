@@ -43,8 +43,11 @@ def calibrate_company(env, company, today=None):
     }
     result = suggestions(samples, current)
     now = fields.Datetime.now()
+    Log = env['hlv.vtracking.calibration.log']
     for zone in zones:
-        zone.write(zone._calibration_values(result.get(zone.id, {}), plan_count, now))
+        by_kind = result.get(zone.id, {})
+        zone.write(zone._calibration_values(by_kind, plan_count, now))
+        Log._log_computed(zone, by_kind, plan_count)
     with_suggestion = len(zones.filtered('calib_has_suggestion'))
     _logger.info(
         'V-Tracking hiệu chỉnh %s: %s chuyến, %s mẫu, %s cụm có đề xuất',

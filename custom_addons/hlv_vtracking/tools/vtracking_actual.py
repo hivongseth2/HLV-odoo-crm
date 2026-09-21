@@ -52,6 +52,23 @@ def leg_variance(planned_offsets, actual_offsets):
     return result
 
 
+def accuracy(variance):
+    """Độ chính xác dự báo của MỘT điểm, dạng cộng dồn được trong báo cáo pivot.
+
+    :param variance: phút thực tế trừ kế hoạch, None nếu không đo được
+    :returns: dict ``{'abs_minutes': int, 'on_time_rate': float}`` — ``on_time_rate`` là 100
+        khi lệch trong ``ON_TIME_TOLERANCE_MINUTES``, ngược lại 0, để lấy TRUNG BÌNH ra đúng
+        phần trăm điểm đúng hẹn. ``variance`` None thì cả hai là 0 — bên gọi phải lọc bỏ
+        điểm chưa đo, không được tính nó là đúng hẹn.
+    """
+    if variance is None:
+        return {'abs_minutes': 0, 'on_time_rate': 0.0}
+    return {
+        'abs_minutes': abs(variance),
+        'on_time_rate': 100.0 if abs(variance) <= ON_TIME_TOLERANCE_MINUTES else 0.0,
+    }
+
+
 def summarize_variance(items):
     """Tóm tắt một list kết quả của ``leg_variance``.
 

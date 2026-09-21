@@ -60,7 +60,12 @@ def write_variance(plan, lines):
     planned = [leg['arrive_offset_minutes'] for leg in estimate_legs(**plan._route_kwargs())]
     actual = [minutes_between(plan.actual_start_at, line.delivered_at) for line in lines]
     for line, item in zip(lines, leg_variance(planned, actual)):
-        line.variance_minutes = item['variance'] or 0
+        # Integer của Odoo không lưu được NULL: "không đo được" và "đúng y hẹn" đều thành 0.
+        # Cờ riêng là cách duy nhất để báo cáo độ chính xác không đếm điểm chưa đo là đúng hẹn.
+        line.write({
+            'variance_minutes': item['variance'] or 0,
+            'variance_measured': item['variance'] is not None,
+        })
     return True
 
 

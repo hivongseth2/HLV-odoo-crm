@@ -233,7 +233,9 @@ class FleetVehicle(models.Model):
             'id': self.id,
             'name': self.license_plate or self.display_name,
             'model_name': self.model_id.display_name or '',
-            'driver_name': self.driver_id.display_name or '',
+            # Tài xế điều phối (tên shipper) là danh tính dùng khi đối chiếu phiếu, nên
+            # đứng trước tài xế của Fleet core.
+            'driver_name': self.dispatch_driver_name or self.driver_id.display_name or '',
             'device_driver_name': self.vtracking_driver_name or '',
             'latitude': self.vtracking_latitude or None,
             'longitude': self.vtracking_longitude or None,

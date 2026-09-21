@@ -310,11 +310,18 @@ export class VtrackingMap extends Component {
             : "";
         // Phần thực tế luôn hiện, kể cả khi chưa có số: người xem phải thấy được rằng
         // "kế hoạch 12 đơn" chưa nói gì về việc đã giao mấy đơn.
+        // Số thực tế đến từ lúc shipper quét nhận / giao xong phiếu. Cron đối chiếu mỗi giờ
+        // nhưng BỎ QUA kế hoạch nháp — nên nháp phải nói rõ là cần chốt, không thì người
+        // xem tưởng đang chờ shipper.
+        const pendingText = plan.state === "draft"
+            ? "Thực tế: kế hoạch còn nháp — chốt thì mới đối chiếu"
+            : "Thực tế: shipper chưa quét nhận phiếu nào (cập nhật mỗi giờ)";
         const actual = plan.has_actual_data
             ? `<div><strong>Đã giao:</strong> ${plan.actual_line_count} phiếu · ${formatMoney(
                   plan.actual_amount_total
               )} · ${plan.actual_distance_km || 0} km thực chạy</div>`
-            : `<div class="o_vt_plan_pending">Thực tế: chưa nối module shipper</div>`;
+            : `<div class="o_vt_plan_pending">${pendingText}</div>`;
+        const stopCount = plan.stop_count || plan.line_count;
         return `
             <div class="o_vt_plan">
                 <div class="o_vt_plan_head">
@@ -328,7 +335,7 @@ export class VtrackingMap extends Component {
                         }">Xem bảng</button>
                     </span>
                 </div>
-                <div><strong>Kế hoạch:</strong> ${plan.line_count} điểm · ${formatMoney(
+                <div><strong>Kế hoạch:</strong> ${stopCount} điểm · ${plan.line_count} phiếu · ${formatMoney(
             plan.amount_total
         )}</div>
                 <div><strong>Dự kiến:</strong> ${plan.distance_km || 0} km · ${this.escape(
@@ -369,7 +376,7 @@ export class VtrackingMap extends Component {
             .join("");
         const rest = lines.length - shown.length;
         const more = rest > 0
-            ? `<li class="o_vt_line_more">… còn ${rest} điểm nữa — bấm <b>Xem bảng</b></li>`
+            ? `<li class="o_vt_line_more">… còn ${rest} phiếu nữa — bấm <b>Xem bảng</b></li>`
             : "";
         return `<ul class="o_vt_plan_lines">${rows}${more}</ul>`;
     }

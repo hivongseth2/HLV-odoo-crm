@@ -11,6 +11,7 @@ Cron chạy HẰNG NGÀY, ghi đề xuất. Không tự sửa định mức — 
 from odoo import api, fields, models
 
 from ..services.vtracking_calibration import calibrate_company
+from .vtracking_calibration_log import KIND_SELECTION
 
 # kind trong tools/vtracking_calibration -> field định mức của cụm
 NORM_FIELDS = {
@@ -18,7 +19,7 @@ NORM_FIELDS = {
     'leg': 'median_leg_minutes',
     'return': 'return_minutes',
 }
-KIND_LABELS = {'hub': 'Kho → điểm đầu', 'leg': 'Điểm → điểm', 'return': 'Về kho'}
+KIND_LABELS = dict(KIND_SELECTION)
 
 
 class HlvVtrackingZoneCalibration(models.Model):
@@ -69,6 +70,10 @@ class HlvVtrackingZoneCalibration(models.Model):
                 changes.append('%s %s → %s phút (%s mẫu)' % (
                     KIND_LABELS[kind], zone[field], suggest, zone['calib_%s_count' % kind],
                 ))
+                zone.env['hlv.vtracking.calibration.log']._log_applied(
+                    zone, kind, zone[field], suggest, zone['calib_%s_median' % kind],
+                    zone['calib_%s_count' % kind],
+                )
                 values[field] = suggest
                 values['calib_%s_suggest' % kind] = 0
             if not values:

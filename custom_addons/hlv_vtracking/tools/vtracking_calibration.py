@@ -144,3 +144,28 @@ def suggestions(samples, current, min_samples=MIN_SAMPLES):
                 'suggest': value if (enough and changed) else None,
             }
     return result
+
+
+def log_rows(by_kind):
+    """Kết quả của ``suggestions`` cho MỘT cụm -> các dòng nhật ký hiệu chỉnh.
+
+    by_kind: ``{kind: {'median', 'count', 'current', 'suggest'}}`` (có thể rỗng).
+
+    Trả về list dict ``{'kind', 'norm_minutes', 'measured_minutes', 'suggest_minutes',
+    'sample_count'}`` theo thứ tự ``KINDS``. Loại chưa có mẫu nào thì bỏ — một dòng "0 mẫu"
+    mỗi ngày chỉ làm nhật ký dài ra mà không nói gì. Chưa có đề xuất thì ``suggest_minutes``
+    là 0.
+    """
+    rows = []
+    for kind in KINDS:
+        item = by_kind.get(kind) or {}
+        if not item.get('count'):
+            continue
+        rows.append({
+            'kind': kind,
+            'norm_minutes': item.get('current') or 0,
+            'measured_minutes': item.get('median') or 0,
+            'suggest_minutes': item.get('suggest') or 0,
+            'sample_count': item['count'],
+        })
+    return rows

@@ -262,17 +262,33 @@ toạ độ dồn xuống cuối.
 
 ### Kế hoạch ≠ thực tế
 
-Kế hoạch là **bản dự thảo**. Tab *Thực tế* và các ô `actual_*` đã khai sẵn nhưng **đang
-để trống có chủ ý** — số liệu sẽ đến từ `hlv_barcode_shipper` (tài xế quét nhận/giao) và
-từ lịch sử GPS của xe. Chưa nối; làm ở bước sau.
+Kế hoạch là **bản dự thảo**. Tab *Thực tế* lấy số từ `hlv_barcode_shipper` (lúc shipper
+quét nhận hàng, lúc phiếu giao xong, hàng chở về) và từ lịch sử GPS của xe. Cron đọc lại
+mỗi giờ cho kế hoạch **đã chốt / xong** trong 2 ngày gần nhất; kế hoạch nháp chưa ai chạy
+nên không đọc.
 
 Đừng suy số thực tế từ kế hoạch: hai nguồn khác nhau, trộn vào là mất khả năng đối chiếu.
+
+### Hiệu chỉnh định mức
+
+Menu **Hiệu chỉnh định mức** — theo dõi vòng tự học:
+
+- **Độ chính xác dự báo** — mỗi điểm đã giao: dự kiến tới lúc nào, thực tế tới lúc nào.
+  Pivot theo cụm × tuần: *Đúng hẹn (%)* (lệch ≤ 15 phút) và *Lệch tuyệt đối* (phút). Chỉ
+  gồm điểm **đo được** — đã giao mà thiếu toạ độ hay thiếu mốc xuất phát thì không có mặt,
+  vì lệch "0" của chúng là không biết chứ không phải đúng giờ (`variance_measured`).
+- **Nhật ký hiệu chỉnh** — mỗi tối cron đo lại trung vị từng định mức của từng cụm, ghi một
+  dòng (định mức lúc đó, đo được, đề xuất, số mẫu). Mỗi lần bấm *Áp dụng* cũng ghi một dòng:
+  cũ → mới, ai bấm. Dạng biểu đồ cho thấy định mức từng cụm trôi theo tuần.
+- **Đề xuất theo cụm** — chính màn Cụm tuyến: cột *→ đề xuất* và nút *Áp dụng*.
+
+Máy **chỉ đề xuất**, không tự sửa định mức: cần ≥ 10 mẫu và lệch ≥ 2 phút mới có đề xuất.
 
 ### Trên bản đồ
 
 Bấm vào xe, popup hiện **kế hoạch hôm nay** của xe đó (mọi buổi): số phiếu, tiền, km và
-thời gian dự kiến, danh sách điểm giao theo thứ tự ghé — kèm dòng *Thực tế: chưa nối
-module shipper* để không ai nhầm số dự kiến thành số đã giao.
+thời gian dự kiến, danh sách điểm giao theo thứ tự ghé — kèm dòng *Thực tế* lấy từ mốc shipper quét — chưa ai quét thì ghi rõ là chưa có, để
+không ai nhầm số dự kiến thành số đã giao.
 
 Mỗi kế hoạch có hai nút: **Xem bảng** (hộp thoại đầy đủ) và **Lộ trình**.
 
@@ -501,8 +517,7 @@ ghi liền nhau cách nhau 145 phút). Đừng suy ra thời gian dừng bằng 
 
 ## Chưa làm
 
-- Nối dữ liệu GPS với kế hoạch giao hàng (đối chiếu kế hoạch ↔ thực tế, hiệu chỉnh định
-  mức cụm tuyến). Việc đó thuộc một module cầu nối riêng — xem
-  `plan/ke-hoach-module-vtracking.md`.
+- Tự học thời gian đứng tại từng khách (`extra_service_minutes`) — hiện mới hiệu chỉnh
+  cấp cụm.
 - Xem lại hành trình một ngày trên bản đồ (hiện chỉ có danh sách bản tin trong form xe).
 - Thông báo khi có cảnh báo lái quá giờ — dữ liệu đã lấy về, chưa đẩy ra ai.

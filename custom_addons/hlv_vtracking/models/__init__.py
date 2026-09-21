@@ -9,6 +9,7 @@ from . import vtracking_api_key
 from . import vtracking_import_wizard
 from . import vtracking_zone
 from . import vtracking_zone_calibration
+from . import vtracking_calibration_log
 from . import vtracking_place_type
 from . import vtracking_partner_profile
 from . import vtracking_partner_profile_seed

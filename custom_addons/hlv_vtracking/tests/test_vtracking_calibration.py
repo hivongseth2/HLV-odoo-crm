@@ -104,3 +104,41 @@ class TestDeXuat(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestNhatKy(unittest.TestCase):
+
+    def test_bo_loai_chua_co_mau(self):
+        by_kind = {
+            'hub': {'median': 42, 'count': 12, 'current': 40, 'suggest': 42},
+            'leg': {'median': 13, 'count': 3, 'current': 13, 'suggest': None},
+            'return': {'median': None, 'count': 0, 'current': 25, 'suggest': None},
+        }
+        self.assertEqual(calibration.log_rows(by_kind), [
+            {'kind': 'hub', 'norm_minutes': 40, 'measured_minutes': 42,
+             'suggest_minutes': 42, 'sample_count': 12},
+            {'kind': 'leg', 'norm_minutes': 13, 'measured_minutes': 13,
+             'suggest_minutes': 0, 'sample_count': 3},
+        ])
+
+    def test_cum_khong_co_mau_nao(self):
+        self.assertEqual(calibration.log_rows({}), [])
+
+
+class TestDoChinhXac(unittest.TestCase):
+    """Báo cáo lấy TRUNG BÌNH ``on_time_rate`` ra phần trăm đúng hẹn — sai ở đây là con
+    số trên màn hình sai mà không ai thấy."""
+
+    actual = standalone.load_tool('vtracking_actual')
+
+    def test_trong_nguong_la_dung_hen(self):
+        tolerance = self.actual.ON_TIME_TOLERANCE_MINUTES
+        self.assertEqual(self.actual.accuracy(-tolerance),
+                         {'abs_minutes': tolerance, 'on_time_rate': 100.0})
+
+    def test_ngoai_nguong_la_lech(self):
+        late = self.actual.ON_TIME_TOLERANCE_MINUTES + 1
+        self.assertEqual(self.actual.accuracy(late), {'abs_minutes': late, 'on_time_rate': 0.0})
+
+    def test_khong_do_duoc_khong_tinh_la_dung_hen(self):
+        self.assertEqual(self.actual.accuracy(None), {'abs_minutes': 0, 'on_time_rate': 0.0})

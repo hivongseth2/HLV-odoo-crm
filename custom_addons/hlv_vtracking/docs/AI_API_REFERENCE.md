@@ -230,7 +230,7 @@ Tham số: `date` **hoặc** `date_from` + `date_to` (tối đa 31 ngày); `vehi
 `service_minutes`, `return_minutes`, `total_minutes`, `duration_display`,
 `missing_coords_count`, `zone_id`, `zone_name`, `zone_warning`, `start`,
 và khối thực tế `has_actual_data`, `actual_line_count`, `actual_amount_total`,
-`actual_distance_km` (**hiện luôn rỗng** — chờ nối với module shipper).
+`actual_distance_km` — điền từ mốc shipper (nhận hàng, giao xong) bởi cron đối chiếu mỗi giờ; rỗng khi chưa ai quét phiếu.
 
 ## 9. `GET /plans/<id>`
 
@@ -257,7 +257,7 @@ Tóm tắt như mục 8, thêm `note`, `route_params`, và `lines[]` theo thứ 
 | `leg_km`, `leg_minutes` | Chặng từ điểm trước tới điểm này. `null` = điểm này thiếu toạ độ |
 | `same_point` | `true` = cùng chỗ với dòng ngay trước (cách < 50 m, hoặc cùng địa chỉ khi thiếu toạ độ). Chặng 0 km / 0 phút — **nhiều đơn một điểm chỉ tính một lần**. Xếp các đơn cùng khách LIỀN NHAU thì mới được gộp |
 | `arrive_offset_minutes`, `depart_offset_minutes` | Phút tính **từ lúc xe xuất phát** |
-| `delivered` | Đã giao chưa (hiện luôn `false` — chờ module shipper) |
+| `delivered` | Đã giao chưa — theo phiếu xuất đã hoàn tất (`date_done`), cập nhật mỗi giờ |
 
 Ở phần tóm tắt kế hoạch còn có `procedure_blocked_count` và `no_truck_count` — đếm sẵn để
 không phải duyệt hết `lines[]` mới biết kế hoạch có xác nhận được không.
