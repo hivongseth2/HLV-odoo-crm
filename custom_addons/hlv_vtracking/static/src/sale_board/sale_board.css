@@ -1,0 +1,119 @@
+/* Trang /giao-hang. Chỉ những gì Bootstrap không có sẵn: bản đồ, danh sách điểm, ghim xe. */
+
+.vt-navbar {
+    background: #1f2d3d;
+}
+
+.vt-map {
+    height: 380px;
+    border-radius: .375rem;
+    border: 1px solid #dee2e6;
+}
+
+.vt-plans .card-header {
+    background: #f8f9fa;
+}
+
+/* Chuyến có đơn của người đang xem: viền trái đậm để lướt mắt là thấy ngay. */
+.card.vt-mine {
+    border-left: 4px solid #0d6efd;
+}
+
+.vt-stops {
+    max-height: 22rem;
+    overflow-y: auto;
+}
+
+.vt-stop {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+    padding: .4rem .75rem;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.vt-stop:last-child {
+    border-bottom: 0;
+}
+
+.vt-stop-mine {
+    background: #e7f1ff;
+}
+
+.vt-stop-done .vt-stop-main {
+    color: #6c757d;
+}
+
+.vt-seq {
+    flex: 0 0 1.4rem;
+    text-align: right;
+    color: #6c757d;
+}
+
+.vt-stop-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.vt-eta {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.vt-flags {
+    flex: 0 0 auto;
+    display: flex;
+    gap: .25rem;
+}
+
+.vt-list {
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.vt-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.vt-row:last-child {
+    border-bottom: 0;
+}
+
+.vt-answer {
+    background: #f8f9fa;
+    border-left: 3px solid #0d6efd;
+    padding: .4rem .6rem;
+    border-radius: .25rem;
+    white-space: normal;
+}
+
+/* Ghim xe: chấm trạng thái kèm biển số, để nhìn bản đồ là biết xe nào ở đâu mà không
+   phải bấm từng chấm. */
+.vt-marker {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    white-space: nowrap;
+}
+
+.vt-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+.vt-plate {
+    font-size: 11px;
+    font-weight: 600;
+    color: #212529;
+    background: rgba(255, 255, 255, .85);
+    padding: 0 .2rem;
+    border-radius: .2rem;
+}

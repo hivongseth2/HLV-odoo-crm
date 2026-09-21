@@ -1,6 +1,6 @@
 {
     'name': 'V-Tracking',
-    'version': '18.0.1.1.0',
+    'version': '18.0.1.2.0',
     'summary': 'Theo dõi định vị đội xe qua vTracking Open API — bản đồ trong Odoo và API cho app ngoài',
     'description': """
 Bọc toàn bộ vTracking 2.0 Open API (bản 1.0.3) — đúng 2 endpoint nhà cung cấp có:
@@ -70,6 +70,7 @@ kế hoạch, nên phụ thuộc thêm sale_stock, purchase_stock và hlv_barcod
         'views/vtracking_plan_add_views.xml',
         'views/vtracking_calibration_views.xml',
         'views/vtracking_ai_request_views.xml',
+        'views/vtracking_sale_board_templates.xml',
         'report/vtracking_plan_report.xml',
         'views/vtracking_position_views.xml',
         'views/vtracking_api_key_views.xml',
