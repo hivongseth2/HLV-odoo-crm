@@ -6,7 +6,7 @@ file này chỉ nối API với chúng và dựng dữ liệu bối cảnh cho A
 
 from odoo.exceptions import UserError
 
-from ...models.vtracking_plan_notes import format_reasoning
+from ...tools.vtracking_notes import format_reasoning
 from .serialize import iso_datetime
 
 VERDICTS = ('feasible', 'conditional', 'not_feasible', 'info')
