@@ -117,10 +117,25 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         """Tạo/refresh 1 bản ghi hàng chờ in cho picking này — phần lõi DÙNG CHUNG cho cả luồng
         sale bấm "Xác nhận in" (confirm_print_pick_slip) và luồng hệ thống TỰ ĐỘNG gửi khi phiếu
         vừa đủ hàng (auto_confirm_print_pick_slip). Không kiểm tra khóa/quyền/trạng thái phiếu ở
-        đây — các điều kiện đó khác nhau giữa 2 luồng, caller phải tự kiểm trước khi gọi."""
+        đây — các điều kiện đó khác nhau giữa 2 luồng, caller phải tự kiểm trước khi gọi. Riêng
+        việc soát số trên phiếu so với tồn thật thì kiểm Ở ĐÂY, vì nó giống nhau ở cả 2 luồng."""
         wh = picking.picking_type_id.warehouse_id
         if not wh:
             return {'success': False, 'message': 'Không xác định được kho của phiếu này'}
+
+        # Chốt cuối trước khi in: phiếu 'Sẵn sàng' vẫn có thể ghi lấy nhiều hơn tồn thật (đã gặp
+        # KBC/PICK/12106 — xem stock_picking._pick_slip_stock_mismatch). Kiểm ở ĐÂY vì đây là lõi
+        # dùng chung: chặn 1 chỗ là chặn cả đường sale bấm tay lẫn đường cron tự gửi, không có
+        # đường nào lọt ra máy in với số sai.
+        mismatch = picking._pick_slip_stock_mismatch()
+        if mismatch:
+            return {
+                'success': False,
+                'stock_mismatch': True,
+                'message': 'Phiếu %s ghi lấy nhiều hơn tồn thực tế, chưa in được — %s. '
+                           'Kiểm lại số trên phiếu (hoặc nhờ kho kiểm tồn tại vị trí đó) '
+                           'trước khi gửi in.' % (picking.name, mismatch),
+            }
 
         Queue = self.env['hlv.iot.print.queue'].sudo()
         existing = Queue.search([
