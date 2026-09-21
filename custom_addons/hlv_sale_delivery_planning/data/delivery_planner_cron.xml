@@ -12,6 +12,22 @@
         <field name="active">True</field>
     </record>
 
+    <!-- Tự động gửi in phiếu lấy hàng đã giữ đủ hàng. Phải là cron (không phải hook lúc phiếu
+         chuyển 'assigned') vì stock.picking.state là field compute+store — ORM ghi nó qua đường
+         flush recompute (_write), không qua write(), nên hook ở write() chưa từng chạy. Xem
+         models/stock_picking.py:cron_auto_queue_print_when_full. Chỉ quét phiếu của kho ĐÃ gán
+         máy in IoT và chưa in, nên kho chưa cấu hình sẽ không bị đẩy rác vào hàng chờ. -->
+    <record id="ir_cron_hlv_auto_queue_print_when_full" model="ir.cron">
+        <field name="name">Delivery Planner: Tự động gửi in phiếu lấy hàng đủ hàng</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_auto_queue_print_when_full(limit=50)</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="active">True</field>
+    </record>
+
     <!-- Soát máy chủ kho / máy in IoT: gửi cảnh báo khi service ở kho tắt, máy kho mất kết nối,
          hoặc Odoo không kết nối được hộp IoT. Nguồn tín hiệu là heartbeat do script watchdog
          trên chính máy kho gửi về (xem bin/iot_watchdog_windows.ps1 + controllers/iot_watchdog_controller.py). -->
