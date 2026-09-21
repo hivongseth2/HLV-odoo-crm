@@ -130,6 +130,8 @@ class HlvVtrackingAddress(models.Model):
             ('company_id', '=', self.env.company.id),
         ], limit=1)
         if existing:
+            # Cách viết đã được gộp vào địa chỉ khác -> dùng bản gốc (xem vtracking_address_merge).
+            existing = existing._canonical()
             existing._mark_hit()
             return existing
         if not allow_remote:
@@ -162,6 +164,8 @@ class HlvVtrackingAddress(models.Model):
         existing = self.search([
             ('address_key', '=', key), ('company_id', '=', self.env.company.id),
         ], limit=1)
+        if existing:
+            existing = existing._canonical()
         values = {
             'latitude': latitude,
             'longitude': longitude,
@@ -189,9 +193,8 @@ class HlvVtrackingAddress(models.Model):
         Google tra được cả tên doanh nghiệp nên giữ lại cụm tên; Nominatim thì không —
         gửi tên công ty vào chỉ làm nó đi tìm một doanh nghiệp cùng tên ở nơi khác.
         """
-        provider = self.env['ir.config_parameter'].sudo().get_param(
-            'base_geolocalize.geo_provider'
-        )
+        # Tham số lưu ID nhà cung cấp chứ không lưu tên — đọc qua helper, đừng so chuỗi.
+        provider = self.env['res.company']._geocode_provider_tech_name()
         return normalize_address(raw_address, drop_company=provider != 'googlemap')
 
     def _mark_hit(self):

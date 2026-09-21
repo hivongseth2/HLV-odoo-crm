@@ -14,11 +14,13 @@ from . import vtracking_partner_profile
 from . import vtracking_partner_profile_seed
 from . import vtracking_place
 from . import vtracking_place_geo
+from . import vtracking_place_merge
 from . import vtracking_place_wizard
 from . import vtracking_place_import_line
 from . import vtracking_place_import_wizard
 from . import vtracking_address
 from . import vtracking_address_geo
+from . import vtracking_address_merge
 from . import vtracking_plan
 from . import vtracking_plan_actions
 from . import vtracking_plan_actual

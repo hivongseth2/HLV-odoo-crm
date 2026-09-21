@@ -21,6 +21,18 @@ Base URL `/api/v1/ai` · header `X-API-Key` · khung phản hồi và quy ước
 | 14 | POST 🔒 | `/plans/<id>/resequence` | Đặt lại thứ tự ghé |
 | 15 | POST 🔒 | `/plans/<id>/state` | Chốt / về nháp / huỷ / xong |
 | 16 | POST 🔒 | `/geocode` | Tra toạ độ một địa chỉ (có thể tốn tiền) |
+| 16b | POST 🔒 | `/plans/<id>/start` | Đổi điểm xuất phát của kế hoạch đã tạo |
+| | | **Dữ liệu nền — xem mục 20–24** | |
+| 20 | GET | `/addresses` · `/addresses/<id>` | Kho toạ độ: lọc, xem |
+| 20 | POST 🔒 | `/addresses/<id>` · `/addresses/<id>/geocode` | Nhập toạ độ tay / duyệt · tra lại (tốn tiền) |
+| 20 | GET · POST 🔒 | `/addresses/duplicates` · `/addresses/merge` | Dò trùng · gộp |
+| 21 | GET · POST 🔒 | `/places` | Lọc địa điểm · tạo địa điểm |
+| 21 | GET · POST 🔒 | `/places/<id>` | Xem · sửa địa điểm |
+| 21 | POST 🔒 | `/places/<id>/geocode` · `/places/<id>/confirm-geo` | Tra lại toạ độ (tốn tiền) · duyệt toạ độ |
+| 21 | GET · POST 🔒 | `/places/duplicates` · `/places/merge` | Dò trùng · gộp |
+| 22 | POST 🔒 | `/places/<id>/profile` · `/profiles/seed-known` | Sửa thói quen khách · mồi thói quen đã biết |
+| 23 | POST 🔒 | `/zones/<id>` · `/zones/<id>/apply-calibration` · `/zones/recalibrate` | Sửa định mức · áp dụng đề xuất · tính lại đề xuất |
+| 24 | POST 🔒 · GET | `/vehicles/<id>` · `/drivers` | Sửa chuyên chở + tài xế + điểm xuất phát của xe · danh sách tài xế |
 
 ---
 
@@ -396,6 +408,134 @@ Kế hoạch `done` / `cancelled` không sửa được nữa (422).
 **lượt gọi mới tốn tiền**, nên chỉ dùng khi thật sự cần toạ độ của một địa chỉ chưa từng
 xuất hiện. Toạ độ rơi ngoài Việt Nam bị từ chối: `latitude`/`longitude` là `null`,
 `geo_state = "failed"`.
+
+---
+
+# Dữ liệu nền — sửa địa chỉ, toạ độ, gộp trùng, thói quen, định mức, xe
+
+Ba luật chung cho mọi endpoint dưới đây:
+
+1. **Gộp trùng luôn hai bước.** `.../duplicates` chỉ để XEM đề xuất; `.../merge` gộp đúng
+   các id được gửi. Không có lối "tự gộp hết". Đưa đề xuất cho người dùng duyệt trước.
+2. **Tra toạ độ có thể tốn tiền** (Google tính theo lượt). Toạ độ `manual` (nhập tay) không
+   bao giờ bị tra đè — gọi `.../geocode` lên bản `manual` trả 422.
+3. **Sửa là ghi đúng ô được gửi.** Gửi `null` là xoá ô. Ô không nằm trong danh sách được
+   sửa bị bỏ qua; không còn ô nào hợp lệ thì trả 422 kèm danh sách ô sửa được. Mọi thao tác
+   ghi lên địa điểm để lại dòng `API (<tên khoá>): ...` trên chatter.
+
+Toạ độ trong body nhận hai dạng: `{"coords": "10.7489, 106.9241"}` hoặc
+`{"latitude": 10.7489, "longitude": 106.9241}`.
+
+## 20. Kho toạ độ — `/addresses`
+
+Kho toạ độ là bảng cache "chuỗi địa chỉ → toạ độ" mà kế hoạch dùng. Một dòng kế hoạch trỏ
+tới đúng một bản ghi ở đây (`address_id`).
+
+| Endpoint | Việc |
+|---|---|
+| `GET addresses` | Lọc: `search`, `geo_state` (`pending_review` / `confirmed` / `manual` / `failed`), `has_coords=0\|1`, `outside_vietnam=1`, `include_aliases=1`, `limit` (≤200), `offset` |
+| `GET addresses/<id>` | Một bản ghi |
+| `POST addresses/<id>` 🔒 | `{"coords": "..."}` → ghi tay (`manual`), hoặc `{"confirm": true}` → duyệt toạ độ máy tìm |
+| `POST addresses/<id>/geocode` 🔒 | Tra lại toạ độ. **Tốn tiền** |
+| `GET addresses/duplicates` | Nhóm nghi trùng |
+| `POST addresses/merge` 🔒 | `{"keep_id": 5, "merge_ids": [7, 9]}` |
+
+Mỗi bản ghi: `id`, `raw_address`, `normalized_address`, `latitude`, `longitude` (null nếu
+rơi ngoài Việt Nam), `geo_state`, `geo_source`, `outside_vietnam`, `alias_of_id`,
+`hit_count`, `last_used_at`, `plan_line_count`.
+
+**Dò trùng** trả `{"group_count", "groups": [{"ids", "keep_id", "score", "addresses": [...]}]}`.
+Hai địa chỉ bị coi là trùng khi **cả ba** đúng: giống chữ (Jaccard ≥ 0.75 sau khi bỏ từ hành
+chính như "phường", "tỉnh"), **khớp hệt** các mã định danh (số nhà, số lô, chữ lô một ký
+tự — "Lô D" khác "Lô N"), và toạ độ cách nhau ≤ 1 km. **Không bao giờ gộp chỉ vì trùng toạ
+độ**: geocoder trả tâm KCN cho hàng chục công ty khác nhau. `keep_id` là bản gợi ý giữ (toạ
+độ tin cậy nhất, dùng nhiều nhất) — người dùng được chọn bản khác.
+
+**Gộp** không xoá: bản gộp thành **bí danh** (`alias_of_id`) của bản giữ, nên lần sau gặp lại
+đúng chuỗi cũ vẫn ra toạ độ của bản giữ mà không tra lại. Dòng kế hoạch trỏ bản gộp được
+chuyển sang bản giữ; bản giữ đang thiếu toạ độ thì lấy của bản gộp. Trả `keep_id`,
+`merged_ids`, `plan_lines_moved`, `keep`.
+
+## 21. Địa điểm — `/places`
+
+Địa điểm là "nơi xe ghé": kho, khách, nhà cung cấp. Một khách có thể có nhiều địa điểm (hai
+nhà máy). Thói quen khách gắn vào địa điểm.
+
+| Endpoint | Việc |
+|---|---|
+| `GET places` | Lọc: `search` (tên / địa chỉ / tên khách), `type_code`, `zone_id`, `geo_state`, `has_coords=0\|1`, `no_zone=1`, `no_profile=1`, `no_partner=1`, `include_archived=1`, `limit`, `offset` |
+| `POST places` 🔒 | Tạo. Bắt buộc `name`. `type_code` mặc định `customer` (còn `warehouse`, `partner`, `supplier`, `other`) |
+| `GET places/<id>` | Một địa điểm kèm `profile` — mở được cả bản đã lưu trữ |
+| `POST places/<id>` 🔒 | Sửa |
+| `POST places/<id>/geocode` 🔒 | Tra lại toạ độ từ `address`. **Tốn tiền** |
+| `POST places/<id>/confirm-geo` 🔒 | Duyệt toạ độ máy tìm |
+| `GET places/duplicates` | Nhóm nghi trùng |
+| `POST places/merge` 🔒 | `{"keep_id": 5, "merge_ids": [7]}` |
+
+Ô sửa được: `name`, `partner_id`, `zone_id`, `warehouse_id`, `address`, `note`, `active`,
+cộng `type_code` và toạ độ. Địa điểm kiểu `warehouse` **phải** có `warehouse_id` — đó là
+điều kiện để nó hiện làm điểm xuất phát trong `context`.
+
+```json
+POST places/12
+{"type_code": "warehouse", "warehouse_id": 1, "coords": "10.7489944, 106.9241992"}
+```
+
+**Dò trùng** trả nhóm `{"ids", "keep_id", "reasons", "places"}`. `reasons`:
+- `same_name` — cùng tên sau khi chuẩn hoá.
+- `same_spot` — cách nhau < 50 m **và** tên này chứa tên kia.
+- `same_customer` — cùng khách gốc. Dòng kế hoạch chỉ ghép với một địa điểm của khách, nên
+  địa điểm thừa không bao giờ được dùng — nhưng **có thể là hai nhà máy thật**. Nhóm chỉ có
+  lý do này thì phải hỏi người dùng trước khi gộp.
+
+`keep_id` gợi ý: bản có thói quen khách → bản gắn kho → toạ độ đáng tin nhất.
+
+**Gộp**: bản giữ được điền các ô đang trống từ bản gộp; thói quen khách được chuyển sang
+(hoặc điền vào thói quen sẵn có); kế hoạch, xe, dòng kế hoạch trỏ bản gộp được chuyển sang
+bản giữ; bản gộp bị **lưu trữ**, không xoá — gộp nhầm thì `POST places/<id> {"active": true}`.
+Trả `keep_id`, `merged_ids`, `plans_moved`, `vehicles_moved`, `plan_lines_moved`,
+`profiles_moved`, `keep`.
+
+## 22. Thói quen khách
+
+| Endpoint | Việc |
+|---|---|
+| `POST places/<id>/profile` 🔒 | Tạo hoặc sửa thói quen của địa điểm — chỉ ghi ô được gửi |
+| `POST profiles/seed-known` 🔒 | Mồi các thói quen đã biết vào địa điểm khớp tên. Trả `created`, `updated`, `skipped` |
+
+Ô: `procedure_required`, `delivery_method`, `default_vehicle_id`, `extra_service_minutes`,
+`receiving_from`, `receiving_to` (giờ dạng số, 13.5 = 13:30), `payment_method`, `free_note`.
+Giá trị hợp lệ của ô lựa chọn được liệt kê trong lỗi 422 nếu gửi sai.
+
+## 23. Cụm tuyến — định mức
+
+| Endpoint | Việc |
+|---|---|
+| `POST zones/<id>` 🔒 | Sửa `name`, `code`, `hub_to_first_minutes`, `median_leg_minutes`, `return_minutes`, `max_stops`, `min_stops_worth_trip`, `warehouse_id`, `note`, `active` |
+| `POST zones/<id>/apply-calibration` 🔒 | Ghi đề xuất học từ thực tế vào định mức. 422 nếu chưa có đề xuất |
+| `POST zones/recalibrate` 🔒 | Tính lại đề xuất ngay, không chờ cron hằng ngày. Trả mọi cụm |
+
+Sửa định mức là đổi giờ ước của **mọi** kế hoạch nháp dùng cụm đó — nên cả ba trả
+`{"before", "after"}` để nói lại được với người dùng mình vừa đổi gì. Mỗi cụm có
+`calibration.{hub,leg,return}.{measured, samples, suggest}`.
+
+## 24. Xe và tài xế
+
+| Endpoint | Việc |
+|---|---|
+| `POST vehicles/<id>` 🔒 | Sửa chuyên chở + phân công của xe |
+| `GET drivers` | Tài khoản có `shipper_name` — chọn được làm tài xế — kèm xe đang gắn |
+
+Ô của xe (viết có hay không có tiền tố `dispatch_` đều được): `role` (`van` / `truck` /
+`technical` / `motorbike`), `payload_kg`, `cargo_length_m`, `cargo_width_m`,
+`cargo_height_m`, `max_item_length_m`, `max_pieces`, `note`, `driver_user_id`,
+`start_place_id`. Một tài khoản chỉ gắn được một xe. Trả `capacity` và `assignment`
+như trong `context`.
+
+```json
+POST vehicles/4
+{"role": "van", "payload_kg": 1000, "driver_user_id": 27, "start_place_id": 12}
+```
 
 ---
 

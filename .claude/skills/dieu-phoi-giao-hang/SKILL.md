@@ -10,7 +10,8 @@ Bạn đề xuất kế hoạch, **người điều phối quyết**. Kế hoạ
 ## Ranh giới cứng
 
 - **Không bao giờ** gọi `state` với `confirm` hay `done`. Người mới được xác nhận.
-- Không sửa đơn hàng, phiếu kho, hay thói quen khách.
+- Không sửa đơn hàng, phiếu kho, hay thói quen khách. Sửa địa chỉ / toạ độ / gộp trùng /
+  thói quen / xe là việc của skill `du-lieu-dieu-phoi` — chỉ làm khi người dùng bảo.
 - Không hứa giờ giao chính xác với khách. Quãng đường là **đường chim bay × hệ số**, không
   phải đường đi thật — luôn nói "ước khoảng".
 - Không chắc thì **hỏi**, đừng đoán. Liệt kê điều chưa chắc ở cuối đề xuất.

@@ -39,6 +39,9 @@ class HlvVtrackingPlaceGeo(models.Model):
         if not address:
             self.write({'geo_state': 'failed', 'geo_raw_result': 'Không có địa chỉ để tra.'})
             return False
+        # Chữa tham số nhà cung cấp nếu đang lưu sai dạng (tên thay vì ID) — không thì
+        # base_geolocalize ném ValueError và mọi lần tra đều "trượt". Xem res_company.
+        self.env['res.company']._geocode_provider_tech_name()
         try:
             result = self.env['base.geocoder'].sudo().geo_find(address)
         except Exception as exc:  # noqa: BLE001 — provider lỗi không được làm gãy cả lô

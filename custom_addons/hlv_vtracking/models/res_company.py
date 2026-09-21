@@ -112,17 +112,47 @@ class ResCompany(models.Model):
     @api.depends_context('uid')
     def _compute_geocode_settings(self):
         # Không phụ thuộc field nào của bản ghi — giá trị nằm ở tham số hệ thống.
-        get_param = self.env['ir.config_parameter'].sudo().get_param
-        provider = get_param('base_geolocalize.geo_provider') or 'openstreetmap'
-        key = get_param('base_geolocalize.google_map_api_key') or ''
+        provider = self._geocode_provider_tech_name() or 'openstreetmap'
+        key = self.env['ir.config_parameter'].sudo().get_param('base_geolocalize.google_map_api_key') or ''
         for company in self:
             company.geocode_provider = provider
             company.geocode_google_key = key
 
     def _inverse_geocode_provider(self):
-        set_param = self.env['ir.config_parameter'].sudo().set_param
         for company in self:
-            set_param('base_geolocalize.geo_provider', company.geocode_provider or 'openstreetmap')
+            self._set_geocode_provider(company.geocode_provider or 'openstreetmap')
+
+    # ------------------------------------------------------------------
+    # Tham số nhà cung cấp — lưu ID, không lưu tên
+    # ------------------------------------------------------------------
+    # ``base_geolocalize`` đọc tham số này bằng ``int(prov_id)`` rồi browse
+    # ``base.geo_provider``, KHÔNG bắt lỗi. Lưu tên ('googlemap') vào đó thì mọi lần tra toạ
+    # độ ném ValueError — bị nuốt ở tầng trên và hiện ra thành "máy không tìm được", nên
+    # nhìn như Google trượt trong khi thật ra chưa gọi Google lần nào.
+    @api.model
+    def _geocode_provider_tech_name(self):
+        """'googlemap' / 'openstreetmap' đang được chọn, '' nếu chưa chọn.
+
+        Gặp giá trị dạng tên (do bản cũ của module này ghi) thì đổi luôn thành ID cho đúng
+        cách ``base_geolocalize`` đọc — tự chữa, không cần người vào sửa tay.
+        """
+        raw = self.env['ir.config_parameter'].sudo().get_param('base_geolocalize.geo_provider')
+        if not raw:
+            return ''
+        Provider = self.env['base.geo_provider'].sudo()
+        if str(raw).isdigit():
+            return Provider.browse(int(raw)).exists().tech_name or ''
+        self._set_geocode_provider(str(raw))
+        return str(raw)
+
+    @api.model
+    def _set_geocode_provider(self, tech_name):
+        """Chọn nhà cung cấp theo tên kỹ thuật, ghi ĐÚNG dạng ID mà base_geolocalize cần."""
+        provider = self.env['base.geo_provider'].sudo().search([('tech_name', '=', tech_name)], limit=1)
+        if provider:
+            self.env['ir.config_parameter'].sudo().set_param(
+                'base_geolocalize.geo_provider', str(provider.id),
+            )
 
     def _inverse_geocode_google_key(self):
         set_param = self.env['ir.config_parameter'].sudo().set_param
