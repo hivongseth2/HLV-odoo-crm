@@ -554,7 +554,7 @@
                       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                      <div id="holdRequestAlert" class="alert alert-danger d-none" role="alert"></div>
+                      <div id="holdRequestAlert" class="alert alert-danger" role="alert" style="display:none;"></div>
                       <div class="mb-2">
                         <div class="fw-bold text-primary" id="holdRequestProductName"></div>
                         <div class="text-muted small" id="holdRequestWarehouseName"></div>
@@ -853,7 +853,7 @@
                   var available = parseFloat($btn.data('available')) || 0;
 
                   $('#holdRequestForm')[0].reset();
-                  $('#holdRequestAlert').addClass('d-none').text('');
+                  hideHoldAlert();
                   $('#holdRequestForm').data('pid', $btn.data('pid'));
                   $('#holdRequestForm').data('wid', $btn.data('wid'));
                   $('#holdRequestProductName').text($btn.data('pname') || '');
@@ -910,14 +910,26 @@
                   }
               });
 
+              // Bật/tắt alert bằng inline style thay vì class d-none: trên trang website có CSS
+              // (core/theme) ép display:none lên alert này nên gỡ d-none không làm nó hiện ra,
+              // người dùng bấm "Gửi yêu cầu" thấy im lặng tưởng nút hỏng.
+              function showHoldAlert(msg) {
+                  var $alert = $('#holdRequestAlert').text(msg).css('display', 'block');
+                  $alert[0].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+              }
+              function hideHoldAlert() {
+                  $('#holdRequestAlert').text('').css('display', 'none');
+              }
+
               $(document).on('submit', '#holdRequestForm', function(e) {
                   e.preventDefault();
                   var $form = $(this);
                   var $submitBtn = $('#holdRequestSubmitBtn');
-                  var $alert = $('#holdRequestAlert').addClass('d-none').text('');
+                  hideHoldAlert();
 
                   if (!$('#holdCustomerId').val()) {
-                      $alert.removeClass('d-none').text('Vui lòng chọn khách hàng từ danh sách gợi ý.');
+                      showHoldAlert('Vui lòng chọn khách hàng từ danh sách gợi ý.');
+                      $('#holdCustomerSearch').focus();
                       return;
                   }
 
@@ -943,12 +955,12 @@
                           if (res.ok) {
                               window.location.href = '/search_stock/my_holds';
                           } else {
-                              $alert.removeClass('d-none').text(res.error || 'Không thể gửi yêu cầu.');
+                              showHoldAlert(res.error || 'Không thể gửi yêu cầu.');
                           }
                       },
                       error: function() {
                           $submitBtn.prop('disabled', false).text('Gửi yêu cầu');
-                          $alert.removeClass('d-none').text('Lỗi kết nối. Vui lòng thử lại.');
+                          showHoldAlert('Lỗi kết nối. Vui lòng thử lại.');
                       }
                   });
               });
