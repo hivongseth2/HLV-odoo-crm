@@ -40,13 +40,27 @@ Không tham số. Gọi một lần đầu phiên.
   "fulfillment_stages": [{"code": "ready_to_ship", "label": "...", "can_load": true}, ...],
   "warehouses": [{"id": 1, "name": "Kho Bến Cam", "code": "KBC", "delivery_steps": "pick_pack_ship",
                   "start_place_id": 3, "coords": {"latitude": 10.70, "longitude": 106.92}}],
-  "vehicles": [{"id": 5, "license_plate": "60K-12177", "model": "...", "driver": null}],
+  "vehicles": [{"id": 5, "license_plate": "60K-12177", "model": "...", "driver": null,
+                "capacity": {"role": "van", "role_label": "Xe tải nhỏ / van — chạy tuyến hằng ngày",
+                             "payload_kg": 950, "cargo_m": {"length": 2.8, "width": 1.4, "height": 1.4},
+                             "max_item_length_m": 4.0, "max_pieces": 15,
+                             "note": "Kim Long. Hàng dài quá 4 m thì KHÔNG dùng xe này.",
+                             "declared": true}}],
   "business_rules": ["...", "..."]
 }
 ```
 
 `warehouses[].start_place_id` là giá trị truyền vào `start_place_id` khi tạo kế hoạch xuất
-phát từ kho đó. `null` = kho chưa được gắn địa điểm trên bản đồ (không tính được chặng đầu).
+phát từ kho đó. **Luôn truyền nó** — bỏ trống thì kế hoạch vẫn tạo được nhưng không tính
+chặng kho → điểm đầu và chặng về, thời gian trên kế hoạch thấp hơn thực tế cả tiếng.
+`null` = địa điểm loại Kho chưa được gắn ô *Kho trong Odoo* (V-Tracking → Địa điểm) — nêu
+lại cho người dùng.
+
+**`vehicles[].capacity` — đọc trước khi chọn xe.** Ô chưa khai là `null`, không phải 0
+(0 kg nghĩa là "không chở được gì", `null` nghĩa là "chưa ai khai"). `note` là lời dặn của
+người điều phối viết cho người mới — đọc nguyên văn. `declared: false` = xe chưa khai gì cả:
+đừng tự đoán xe đó là loại gì, **hỏi người dùng**. `role: "truck"` chỉ dùng khi hàng quá
+khổ; `role: "technical"` là xe đi lắp đặt, không chạy tuyến giao thường.
 
 **`zones[]` là nguồn định mức duy nhất được tin.** Mỗi cụm có thời gian riêng, đo từ chuyến
 thật: Nhơn Trạch ra khỏi kho mất 40 phút còn Long Thành 57 phút — dùng một con số chung cho
@@ -75,6 +89,7 @@ Mỗi phần tử `vehicles[]`:
 | `status` | `run` / `stop` / `park` / `offline` / `badgps` |
 | `position_at`, `is_stale` | Tin GPS gần nhất lúc nào; `true` = quá 30 phút không có tin |
 | `alarm_text` | Cảnh báo đang bật (lái quá giờ, SOS…), rỗng nếu không có |
+| `capacity` | Xe chở được gì — giống khối `capacity` ở `/context` |
 | `plans[]` | Kế hoạch của ngày `date` — tóm tắt, không kèm từng điểm |
 | `day_load` | Cộng dồn cả ngày: `plan_count`, `stop_count`, `amount_total`, `distance_km`, `total_minutes` |
 | `free_sessions` | Buổi còn xếp được: tập con của `morning`, `afternoon`, `full_day` |
@@ -228,6 +243,7 @@ Tóm tắt như mục 8, thêm `note`, `route_params`, và `lines[]` theo thứ 
 | `extra_service_minutes` | Phút đứng **lâu hơn** điểm thường trong cụm (0 = như thường lệ) |
 | `driver_note` | Cổng vào, SĐT người nhận, đường khó — chuyển nguyên văn cho tài xế |
 | `leg_km`, `leg_minutes` | Chặng từ điểm trước tới điểm này. `null` = điểm này thiếu toạ độ |
+| `same_point` | `true` = cùng chỗ với dòng ngay trước (cách < 50 m, hoặc cùng địa chỉ khi thiếu toạ độ). Chặng 0 km / 0 phút — **nhiều đơn một điểm chỉ tính một lần**. Xếp các đơn cùng khách LIỀN NHAU thì mới được gộp |
 | `arrive_offset_minutes`, `depart_offset_minutes` | Phút tính **từ lúc xe xuất phát** |
 | `delivered` | Đã giao chưa (hiện luôn `false` — chờ module shipper) |
 
@@ -236,6 +252,10 @@ không phải duyệt hết `lines[]` mới biết kế hoạch có xác nhận 
 
 `zone_warning` báo khi kế hoạch **vượt trần điểm**, **dưới ngưỡng đáng chạy**, hoặc **gom
 nhiều cụm**. Đây là cảnh báo, không phải lỗi — nhưng phải nêu lại cho người dùng.
+
+Chuyến gom nhiều cụm vẫn tính đúng giờ: **mỗi điểm dùng định mức của cụm chính nó**,
+chặng VƯỢT cụm tính theo km ÷ tốc độ + thời gian đứng (không có số đo cho chặng liên cụm),
+chặng về lấy theo cụm của điểm cuối.
 
 `total_minutes` gồm cả **chặng về kho** (`return_minutes`) khi cụm có khai: một chuyến chỉ
 xong khi xe về tới kho, và với cụm xa thì chặng về đáng kể (Châu Đức 80 phút).
@@ -292,6 +312,10 @@ Tối đa 60 điểm. Trả `distance_km`, `drive_minutes`, `service_minutes`, `
 
 **Chỉ dùng toạ độ đã có sẵn**, không gọi geocoder. Điểm chưa có toạ độ vẫn được tính thời
 gian giao và đánh dấu `has_coords: false`.
+
+Tính **đúng như kế hoạch thật**: mỗi điểm được suy cụm từ toạ độ (`stops[].zone_id`,
+`zone_name`, `zone_uncertain`) và dùng định mức của cụm đó. Con số thử ở đây là con số sẽ
+thấy trên kế hoạch khi tạo — nên so phương án bằng endpoint này là tin được.
 
 ## 13. `POST /plans` 🔒
 

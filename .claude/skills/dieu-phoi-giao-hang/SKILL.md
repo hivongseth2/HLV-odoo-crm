@@ -41,6 +41,15 @@ Lấy cụm tuyến, **định mức thời gian từng cụm**, danh sách xe, 
 > **Không có con số định mức nào trong tài liệu này, và đừng tự nhớ.** Định mức được
 > hiệu chỉnh liên tục từ dữ liệu thực tế. Số bạn nhớ từ lần trước gần như chắc chắn đã cũ.
 
+Từ `context` lấy luôn hai thứ dùng ở bước 7:
+
+- **`warehouses[].start_place_id`** của kho xuất hàng — truyền vào `post plans`. Bỏ trống
+  thì thời gian trên kế hoạch thiếu chặng kho → điểm đầu và chặng về. `null` thì nêu lại
+  cho người dùng: địa điểm loại Kho chưa gắn ô *Kho trong Odoo*.
+- **`vehicles[].capacity`** — chọn xe theo khối này, không theo biển số. Đọc `note`
+  nguyên văn. `role: truck` chỉ dùng cho hàng quá khổ, `technical` là xe đi lắp đặt.
+  `declared: false` → **đừng đoán** xe đó là xe gì, hỏi người dùng.
+
 ### 2. Gom đơn thành ĐIỂM
 
 Đơn vị tính tải chuyến là **điểm dừng**, không phải số đơn. Nhiều đơn cùng một khách giao
@@ -98,6 +107,10 @@ cụm. Cảnh báo, không phải lỗi — nhưng phải nêu lại.
 
 Tờ kế hoạch in ra chỉ có danh sách điểm. Không ghi `excluded` thì không ai biết bạn đã cân
 nhắc đơn nào và bỏ vì sao — và cũng không ai sửa được bạn khi bạn bỏ nhầm.
+
+`reasoning` viết **chữ thường, không HTML** (HTML bị escape, hiện nguyên thẻ ra). Chatter
+hiểu hai quy ước: dòng **VIẾT HOA kết thúc bằng `:`** thành tiêu đề in đậm, dòng trống
+thành ngắt đoạn. Ví dụ `"...\n\nCẦN KIỂM TRƯỚC KHI XE CHẠY:\n1. ...\n2. ..."`.
 
 ## Bảy cái bẫy đã mắc phải thật
 

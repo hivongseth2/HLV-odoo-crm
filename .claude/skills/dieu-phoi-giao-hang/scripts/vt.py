@@ -144,6 +144,11 @@ def call(method, path, body=None):
 
 
 def main(argv):
+    # Console Windows mặc định cp1252: in tên khách tiếng Việt là UnicodeEncodeError, dù API
+    # đã trả dữ liệu đúng. Ép UTF-8 ở đây thay vì bắt người dùng nhớ đặt PYTHONIOENCODING.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8')
     if len(argv) < 3 or argv[1].lower() not in ('get', 'post'):
         fail('Dùng: vt.py get|post <đường dẫn> [body JSON hoặc @file]')
     method = argv[1].upper()

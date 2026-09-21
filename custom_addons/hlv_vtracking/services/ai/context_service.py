@@ -131,4 +131,6 @@ def vehicle_blocks(env, company):
         'license_plate': vehicle.license_plate or None,
         'model': vehicle.model_id.display_name or None,
         'driver': vehicle.driver_id.name or None,
+        # Chở được gì: AI phải đọc khối này trước khi chọn xe cho hàng quá khổ / nhiều kiện.
+        'capacity': vehicle._dispatch_capacity_payload(),
     } for vehicle in vehicles]

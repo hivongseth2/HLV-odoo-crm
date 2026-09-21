@@ -1,5 +1,6 @@
 from . import res_company
 from . import fleet_vehicle
+from . import fleet_vehicle_capacity
 from . import stock_picking
 from . import sale_order
 from . import vtracking_position

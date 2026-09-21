@@ -143,6 +143,9 @@ class HlvVtrackingPlan(models.Model):
             plan.amount_total = sum(plan.line_ids.mapped('amount'))
 
     @api.depends('line_ids', 'line_ids.sequence', 'line_ids.latitude', 'line_ids.longitude',
+                 'line_ids.address_id', 'line_ids.zone_id',
+                 'line_ids.zone_id.hub_to_first_minutes', 'line_ids.zone_id.median_leg_minutes',
+                 'line_ids.zone_id.return_minutes',
                  'start_place_id', 'zone_id', 'zone_id.hub_to_first_minutes',
                  'zone_id.median_leg_minutes', 'zone_id.return_minutes',
                  'company_id.vtracking_avg_speed_kmh',
@@ -155,10 +158,7 @@ class HlvVtrackingPlan(models.Model):
         cùng một con số cho cùng một chuyến.
         """
         for plan in self:
-            estimate = estimate_route(
-                plan._route_start(), plan._route_stops(), plan._route_params(),
-                plan._route_extra_minutes(),
-            )
+            estimate = estimate_route(**plan._route_kwargs())
             plan.missing_coords_count = estimate['missing_coords_count']
             plan.distance_km = estimate['distance_km']
             plan.drive_minutes = estimate['drive_minutes']
@@ -171,6 +171,45 @@ class HlvVtrackingPlan(models.Model):
         """Các dòng theo đúng thứ tự ghé."""
         self.ensure_one()
         return self.line_ids.sorted(lambda line: (line.sequence, line.id))
+
+    def _route_kwargs(self):
+        """Toàn bộ đầu vào của ``estimate_route`` / ``estimate_legs`` cho kế hoạch này.
+
+        Một chỗ duy nhất: màn hình, API cho AI, và đối chiếu kế hoạch với thực tế đều tính
+        lộ trình từ cùng bộ tham số. Thêm một tham số mà quên một chỗ gọi là mỗi màn hình
+        ra một con số giờ tới khác nhau cho cùng một chuyến.
+        """
+        self.ensure_one()
+        return {
+            'start': self._route_start(),
+            'stops': self._route_stops(),
+            'params': self._route_params(),
+            'extra_minutes': self._route_extra_minutes(),
+            'stop_zones': self._route_stop_zones(),
+            'stop_keys': self._route_stop_keys(),
+        }
+
+    def _route_stop_zones(self):
+        """Định mức cụm của TỪNG điểm theo thứ tự ghé.
+
+        Dòng chưa có cụm thì dùng cụm của cả kế hoạch — giống cách tính trước khi có định
+        mức từng điểm, để kế hoạch toàn điểm chưa gán cụm không đổi con số.
+        """
+        self.ensure_one()
+        fallback = self.zone_id.route_params() if self.zone_id else None
+        return [
+            line.zone_id.route_params() if line.zone_id else fallback
+            for line in self._ordered_lines()
+        ]
+
+    def _route_stop_keys(self):
+        """Khoá nhận diện "cùng một điểm" khi thiếu toạ độ: bản ghi địa chỉ đã chuẩn hoá.
+
+        KHÔNG dùng khách hàng hay ``place_id`` làm khoá: một khách có thể có hai nhà máy ở
+        hai nơi, gom theo khách sẽ bỏ mất một điểm dừng thật.
+        """
+        self.ensure_one()
+        return [line.address_id.id or None for line in self._ordered_lines()]
 
     def _route_start(self):
         """Toạ độ điểm xuất phát, hoặc None nếu chưa chọn / chưa có toạ độ."""

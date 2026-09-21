@@ -44,9 +44,11 @@ class HlvVtrackingPlace(models.Model):
     partner_ref = fields.Char(related='partner_id.ref', string='Mã khách', readonly=True)
     warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho trong Odoo', index=True, tracking=True,
-        help='Chỉ điền cho địa điểm loại Kho. Nhờ đó khi kế hoạch xuất phát từ kho này, '
-             'màn chọn phiếu biết ưu tiên phiếu xuất của đúng kho đó.',
+        help='Chỉ điền cho địa điểm loại Kho. Đây là mối nối DUY NHẤT giữa kho Odoo và toạ '
+             'độ trên bản đồ: để trống thì kế hoạch xuất phát từ kho này không tính được '
+             'chặng kho → điểm đầu và chặng về, và AI thấy start_place_id = null.',
     )
+    type_code = fields.Char(related='type_id.code', string='Mã loại')
     address = fields.Char(
         string='Địa chỉ để tra toạ độ', tracking=True,
         help='Để trống thì lấy địa chỉ của đối tác. Điền tay khi địa chỉ trong Odoo quá '

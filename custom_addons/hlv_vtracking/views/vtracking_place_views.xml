@@ -90,6 +90,10 @@
                     <group>
                         <group string="Phân loại">
                             <field name="type_id"/>
+                            <field name="type_code" invisible="1"/>
+                            <field name="warehouse_id" options="{'no_create': True}"
+                                   invisible="type_code != 'warehouse'"
+                                   required="type_code == 'warehouse'"/>
                             <field name="profile_id" invisible="1"/>
                             <field name="zone_id" options="{'no_create': True}"/>
                             <field name="partner_id" domain="[('is_company', '=', True)]"/>

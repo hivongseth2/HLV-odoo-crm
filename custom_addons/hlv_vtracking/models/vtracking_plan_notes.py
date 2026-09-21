@@ -13,6 +13,8 @@ Hai chỗ chứa, cố ý khác nhau:
   cuộn chatter đi tìm.
 """
 
+from markupsafe import Markup
+
 from odoo import fields, models
 from odoo.exceptions import UserError
 
@@ -50,11 +52,34 @@ class HlvVtrackingPlanNotes(models.Model):
             values['ai_excluded_note'] = format_excluded(excluded)
         self.write(values)
         if reasoning:
-            self.message_post(
-                body='<b>AI (%s) lý giải:</b><br/>%s' % (actor, reasoning.replace('\n', '<br/>')),
-                message_type='notification',
-            )
+            self.message_post(body=format_reasoning(actor, reasoning), message_type='notification')
         return True
+
+
+def format_reasoning(actor, reasoning):
+    """Lý giải dạng chữ -> HTML an toàn để đăng lên chatter.
+
+    Odoo 17+ escape mọi ``body`` kiểu ``str``, nên truyền chuỗi có ``<br/>`` thì chatter
+    hiện nguyên thẻ ra. Phải là ``Markup`` — nhưng KHÔNG được bọc thẳng chuỗi AI gửi vào,
+    vì như vậy bên gọi API chèn được HTML tuỳ ý vào chatter. Ở đây chỉ phần khung là
+    Markup; từng dòng nội dung đi qua ``Markup % ...`` / ``join`` nên vẫn bị escape.
+
+    Hiểu hai quy ước đơn giản để chatter dễ đọc:
+    - dòng viết HOA toàn bộ và kết thúc bằng ``:`` -> tiêu đề in đậm
+    - dòng rỗng -> ngắt đoạn
+    """
+    rows = []
+    for line in reasoning.split('\n'):
+        text = line.strip()
+        if not text:
+            # Nối bằng <br/> nên một dòng rỗng tự thành đúng một dòng trống.
+            rows.append(Markup(''))
+        elif text.endswith(':') and text == text.upper() and any(c.isalpha() for c in text):
+            rows.append(Markup('<b>%s</b>') % text)
+        else:
+            rows.append(Markup('%s') % text)
+    body = Markup('<br/>').join(rows)
+    return Markup('<b>AI (%s) lý giải:</b><br/>%s') % (actor, body)
 
 
 def format_excluded(excluded):

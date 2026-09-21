@@ -40,6 +40,7 @@ def fleet_status(env, company, day):
     for vehicle in vehicles:
         vehicle_plans = plans.get(vehicle.id, [])
         item = vehicle._vtracking_map_payload()
+        item['capacity'] = vehicle._dispatch_capacity_payload()
         item['plans'] = [
             {key: value for key, value in plan.items() if key != 'lines'}
             for plan in vehicle_plans

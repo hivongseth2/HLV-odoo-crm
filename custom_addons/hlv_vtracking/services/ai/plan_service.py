@@ -8,6 +8,7 @@ hoạch bị đổi sau lưng sẽ không ai biết hỏi ai.
 from odoo.exceptions import UserError
 
 from .. import plan_documents, plan_payload, vtracking_actual
+from ...tools.vtracking_planning import DEFAULT_ZONE_MATCH_KM, nearest_zone
 from ...tools.vtracking_route import estimate_route, format_minutes, route_params
 from .order_service import cached_coords
 from .serialize import iso_date
@@ -187,7 +188,15 @@ def what_if(env, company, start_place, stops):
     )
     start = (start_place.latitude, start_place.longitude) if start_place and start_place.has_coords else None
     resolved = [resolve_stop(env, stop) for stop in stops]
-    estimate = estimate_route(start, [item['point'] for item in resolved], params)
+    # Suy cụm từng điểm theo đúng luật của dòng kế hoạch thật. Thiếu bước này thì thử
+    # phương án ra một con số (tốc độ chung) còn tạo kế hoạch ra con số khác (định mức cụm)
+    # — AI chọn phương án dựa trên con số không bao giờ xuất hiện trên kế hoạch.
+    stop_zones = assign_stop_zones(env, company, resolved)
+    estimate = estimate_route(
+        start, [item['point'] for item in resolved], params,
+        stop_zones=stop_zones,
+        stop_keys=[item['address'] or None for item in resolved],
+    )
 
     legs = estimate.pop('legs')
     for item, leg in zip(resolved, legs):
@@ -198,6 +207,28 @@ def what_if(env, company, start_place, stops):
     estimate['start'] = {'place_id': start_place.id, 'name': start_place.name} if start_place else None
     estimate['stops'] = resolved
     return estimate
+
+
+def assign_stop_zones(env, company, resolved):
+    """Suy cụm cho từng điểm giả định, ghi ``zone_id`` / ``zone_name`` / ``zone_uncertain``
+    vào chính các dict đó, và trả về list định mức cụm song song để tính lộ trình.
+
+    Dùng lại đúng tập điểm mẫu và ngưỡng của dòng kế hoạch thật
+    (``hlv.vtracking.plan.line._zone_samples``) — hai chỗ tự suy cụm theo hai cách là hai
+    đáp án cho cùng một địa chỉ.
+    """
+    samples = env['hlv.vtracking.plan.line']._zone_samples(company.id)
+    near_km = company.vtracking_zone_match_km or DEFAULT_ZONE_MATCH_KM
+    Zone = env['hlv.vtracking.zone']
+    zones = []
+    for item in resolved:
+        zone_id, _distance, confident = nearest_zone(item['point'], samples, near_km)
+        zone = Zone.browse(zone_id) if zone_id else Zone
+        item['zone_id'] = zone.id or None
+        item['zone_name'] = zone.name or None
+        item['zone_uncertain'] = bool(zone) and not confident
+        zones.append(zone.route_params() if zone else None)
+    return zones
 
 
 def resolve_stop(env, stop):

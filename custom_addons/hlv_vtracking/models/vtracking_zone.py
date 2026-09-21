@@ -97,6 +97,9 @@ class HlvVtrackingZone(models.Model):
         """
         self.ensure_one()
         return {
+            # Để tools/vtracking_route phân biệt chặng TRONG một cụm (dùng median_leg) với
+            # chặng VƯỢT cụm (không có số đo, tính theo km).
+            'zone_id': self.id,
             'hub_to_first_minutes': self.hub_to_first_minutes or DEFAULT_HUB_MINUTES,
             'median_leg_minutes': self.median_leg_minutes or DEFAULT_LEG_MINUTES,
             'return_minutes': self.return_minutes or DEFAULT_RETURN_MINUTES,

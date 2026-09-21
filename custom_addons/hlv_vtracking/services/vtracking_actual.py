@@ -57,10 +57,7 @@ def write_variance(plan, lines):
     Dương = tới CHẬM hơn kế hoạch. Điểm không đo được để trống chứ không ghi 0 — 0 nghĩa là
     đúng y hẹn, khác hẳn "không biết".
     """
-    planned = [leg['arrive_offset_minutes'] for leg in estimate_legs(
-        plan._route_start(), plan._route_stops(), plan._route_params(),
-        plan._route_extra_minutes(),
-    )]
+    planned = [leg['arrive_offset_minutes'] for leg in estimate_legs(**plan._route_kwargs())]
     actual = [minutes_between(plan.actual_start_at, line.delivered_at) for line in lines]
     for line, item in zip(lines, leg_variance(planned, actual)):
         line.variance_minutes = item['variance'] or 0

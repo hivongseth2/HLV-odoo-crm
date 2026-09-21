@@ -96,13 +96,7 @@ def plan_lines(plan, with_legs=False):
     xuất phát). Bản đồ không cần nên mặc định tắt; AI cần để biết điểm nào tới lúc nào.
     """
     lines = plan._ordered_lines()
-    legs = (
-        estimate_legs(
-            plan._route_start(), plan._route_stops(), plan._route_params(),
-            plan._route_extra_minutes(),
-        )
-        if with_legs else []
-    )
+    legs = estimate_legs(**plan._route_kwargs()) if with_legs else []
     result = []
     for index, line in enumerate(lines):
         item = {

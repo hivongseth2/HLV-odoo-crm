@@ -111,10 +111,7 @@ class HlvVtrackingPlanActual(models.Model):
         """
         self.ensure_one()
         lines = self._ordered_lines()
-        planned = [leg['arrive_offset_minutes'] for leg in estimate_legs(
-            self._route_start(), self._route_stops(), self._route_params(),
-            self._route_extra_minutes(),
-        )]
+        planned = [leg['arrive_offset_minutes'] for leg in estimate_legs(**self._route_kwargs())]
         actual = [minutes_between(self.actual_start_at, line.delivered_at) for line in lines]
         items = leg_variance(planned, actual)
         stops = [
