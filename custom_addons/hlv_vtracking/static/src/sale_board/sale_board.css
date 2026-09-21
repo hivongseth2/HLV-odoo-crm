@@ -1,55 +1,180 @@
-/* Trang /giao-hang. Chỉ những gì Bootstrap không có sẵn: bản đồ, danh sách điểm, ghim xe. */
+/* Trang /giao-hang.
+
+   Bảng màu giữ ở mức tối thiểu: nền trắng, chữ xám đậm, MỘT màu nhấn cho "của tôi". Người
+   bán hàng mở trang này cả ngày; cái gì cũng nổi bật thì chẳng còn gì nổi bật. */
+
+:root {
+    --vt-line: #e4e7ec;
+    --vt-ink: #1f2d3d;
+    --vt-muted: #6b7684;
+    --vt-mine: #0b63ce;
+    --vt-mine-soft: #eef4fd;
+    --vt-radius: 10px;
+}
+
+body {
+    background: #f6f7f9;
+    color: var(--vt-ink);
+}
 
 .vt-navbar {
-    background: #1f2d3d;
+    background: var(--vt-ink);
 }
 
-/* Bản đồ cao theo màn hình: đây là thứ người ta nhìn lâu nhất trên trang này. */
-.vt-map {
-    height: 62vh;
-    min-height: 420px;
-    border-radius: .375rem;
-    border: 1px solid #dee2e6;
+/* ------------------------------------------------------------ thanh công cụ */
+
+.vt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    background: #fff;
+    border: 1px solid var(--vt-line);
+    border-radius: var(--vt-radius);
+    padding: .5rem .75rem;
+    margin-bottom: .75rem;
+    position: sticky;
+    top: 0;
+    z-index: 900;
 }
 
-.vt-plans .card-header {
-    background: #f8f9fa;
+.vt-push {
+    margin-left: auto;
 }
 
-/* Chuyến có đơn của người đang xem: viền trái đậm để lướt mắt là thấy ngay. */
-.card.vt-mine {
-    border-left: 4px solid #0d6efd;
+.vt-muted {
+    color: var(--vt-muted);
+    font-size: .8125rem;
 }
+
+/* ------------------------------------------------------------ chuyến */
+
+.vt-plans.is-loading {
+    opacity: .55;
+    transition: opacity .15s;
+}
+
+.vt-plan {
+    background: #fff;
+    border: 1px solid var(--vt-line);
+    border-radius: var(--vt-radius);
+    margin-bottom: .6rem;
+    overflow: hidden;
+}
+
+/* Chuyến có đơn của mình: nền tiêu đề nhạt, KHÔNG viền màu bên trái — viền dày làm trang
+   trông như bảng cảnh báo. */
+.vt-plan.is-mine .vt-plan-head {
+    background: var(--vt-mine-soft);
+}
+
+.vt-plan-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .55rem .75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.vt-plan-head:hover {
+    background: #f3f5f8;
+}
+
+.vt-plan.is-mine .vt-plan-head:hover {
+    background: #e4eefc;
+}
+
+.vt-caret {
+    color: var(--vt-muted);
+    width: .75rem;
+}
+
+.vt-plate {
+    font-weight: 700;
+    letter-spacing: .01em;
+}
+
+.vt-plan-meta {
+    margin-left: auto;
+    color: var(--vt-muted);
+    font-size: .8125rem;
+    white-space: nowrap;
+}
+
+.vt-plan-body {
+    display: none;
+    border-top: 1px solid var(--vt-line);
+}
+
+.vt-plan.is-open .vt-plan-body {
+    display: block;
+}
+
+.vt-plan-foot {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem .75rem;
+    border-top: 1px solid var(--vt-line);
+    background: #fafbfc;
+}
+
+.vt-plan-foot .vt-btn {
+    margin-left: auto;
+}
+
+/* Tiến độ giao: một vạch mảnh ngay dưới tiêu đề, không cần con số. */
+.vt-progress {
+    height: 3px;
+    background: #eef0f3;
+}
+
+.vt-progress span {
+    display: block;
+    height: 100%;
+    background: #12a150;
+}
+
+/* ------------------------------------------------------------ điểm giao */
 
 .vt-stops {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     max-height: 26rem;
     overflow-y: auto;
 }
 
 .vt-stop {
     display: flex;
-    align-items: flex-start;
-    gap: .5rem;
-    padding: .4rem .75rem;
-    border-bottom: 1px solid #f1f3f5;
+    gap: .6rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid #f2f4f6;
 }
 
 .vt-stop:last-child {
     border-bottom: 0;
 }
 
-.vt-stop-mine {
-    background: #e7f1ff;
+.vt-stop:hover {
+    background: #fafbfc;
 }
 
-.vt-stop-done .vt-stop-main {
-    color: #6c757d;
+.vt-stop.is-mine {
+    background: var(--vt-mine-soft);
+}
+
+.vt-stop.is-done .vt-stop-name {
+    color: var(--vt-muted);
 }
 
 .vt-seq {
-    flex: 0 0 1.4rem;
+    flex: 0 0 1.25rem;
     text-align: right;
-    color: #6c757d;
+    color: var(--vt-muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .vt-stop-main {
@@ -57,19 +182,193 @@
     min-width: 0;
 }
 
-.vt-eta {
-    flex: 0 0 auto;
-    font-variant-numeric: tabular-nums;
+.vt-stop-name {
+    display: block;
+    font-weight: 600;
 }
 
-.vt-flags {
+.vt-check {
+    color: #12a150;
+}
+
+.vt-stop-address {
+    display: block;
+    color: var(--vt-muted);
+    font-size: .8125rem;
+}
+
+/* Nút của từng điểm chỉ hiện khi rê chuột vào: mười điểm mà điểm nào cũng hai nút thì rối.
+   Máy cảm ứng không rê được nên hiện sẵn. */
+.vt-stop-actions {
+    display: flex;
+    gap: .35rem;
+    margin-top: .25rem;
+    opacity: 0;
+    transition: opacity .12s;
+}
+
+.vt-stop:hover .vt-stop-actions,
+.vt-stop:focus-within .vt-stop-actions {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .vt-stop-actions {
+        opacity: 1;
+    }
+}
+
+.vt-stop-side {
     flex: 0 0 auto;
     display: flex;
-    gap: .25rem;
+    align-items: flex-start;
+    gap: .35rem;
+}
+
+.vt-eta {
+    color: var(--vt-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: .8125rem;
+}
+
+/* ------------------------------------------------------------ nhãn, nút */
+
+.vt-chip,
+.vt-tag {
+    display: inline-block;
+    border-radius: 999px;
+    font-size: .75rem;
+    line-height: 1.5;
+    padding: 0 .5rem;
+    white-space: nowrap;
+}
+
+.vt-chip {
+    background: #eef0f3;
+    color: #41505f;
+}
+
+.vt-chip-soft {
+    background: transparent;
+    border: 1px solid var(--vt-line);
+    color: var(--vt-muted);
+}
+
+.vt-chip-mine,
+.vt-tag-mine {
+    background: var(--vt-mine);
+    color: #fff;
+}
+
+.vt-tag-warn {
+    background: #fff4d6;
+    color: #8a5a00;
+}
+
+.vt-tag-danger {
+    background: #fde8e8;
+    color: #a4262c;
+}
+
+.vt-tag-ok {
+    background: #e3f6ea;
+    color: #0c6b38;
+}
+
+.vt-tag-soft {
+    background: #eef0f3;
+    color: #41505f;
+}
+
+.vt-btn {
+    border: 1px solid var(--vt-line);
+    background: #fff;
+    color: var(--vt-ink);
+    border-radius: 6px;
+    font-size: .8125rem;
+    padding: .2rem .6rem;
+    cursor: pointer;
+}
+
+.vt-btn:hover {
+    border-color: #c6ccd4;
+    background: #f7f8fa;
+}
+
+.vt-btn-mini {
+    font-size: .75rem;
+    padding: .1rem .45rem;
+}
+
+.vt-btn-primary {
+    background: var(--vt-mine);
+    border-color: var(--vt-mine);
+    color: #fff;
+}
+
+.vt-btn-primary:hover {
+    background: #0a56b3;
+    border-color: #0a56b3;
+}
+
+.vt-btn-ghost {
+    border-color: transparent;
+    color: var(--vt-mine);
+}
+
+.vt-btn.is-active {
+    background: var(--vt-mine);
+    border-color: var(--vt-mine);
+    color: #fff;
+}
+
+/* Chấm trạng thái xe, dùng chung màu với ghim trên bản đồ. */
+.vt-status {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    background: #adb5bd;
+}
+
+.vt-status-run { background: #12a150; }
+.vt-status-stop { background: #f08c00; }
+.vt-status-park { background: #6b7684; }
+.vt-status-badgps { background: #d64545; }
+
+/* ------------------------------------------------------------ cột phải */
+
+.vt-side {
+    position: sticky;
+    top: 4rem;
+}
+
+.vt-map {
+    height: 58vh;
+    min-height: 380px;
+    border-radius: var(--vt-radius);
+    border: 1px solid var(--vt-line);
+}
+
+.vt-panel {
+    background: #fff;
+    border: 1px solid var(--vt-line);
+    border-radius: var(--vt-radius);
+    margin-top: .75rem;
+    overflow: hidden;
+}
+
+.vt-panel-head {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--vt-line);
+    font-weight: 600;
 }
 
 .vt-list {
-    max-height: 18rem;
+    max-height: 17rem;
     overflow-y: auto;
 }
 
@@ -78,23 +377,71 @@
     align-items: center;
     gap: .5rem;
     padding: .5rem .75rem;
-    border-bottom: 1px solid #f1f3f5;
+    border-bottom: 1px solid #f2f4f6;
 }
 
 .vt-row:last-child {
     border-bottom: 0;
 }
 
-.vt-answer {
-    background: #f8f9fa;
-    border-left: 3px solid #0d6efd;
-    padding: .4rem .6rem;
-    border-radius: .25rem;
-    white-space: normal;
+.vt-row:hover {
+    background: #fafbfc;
 }
 
-/* Ghim xe: chấm trạng thái kèm biển số, để nhìn bản đồ là biết xe nào ở đâu mà không
-   phải bấm từng chấm. */
+.vt-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.vt-row-title {
+    font-weight: 600;
+}
+
+.vt-empty,
+.vt-alert {
+    padding: .75rem;
+    color: var(--vt-muted);
+    font-size: .875rem;
+}
+
+.vt-alert {
+    background: #fde8e8;
+    color: #a4262c;
+    border-radius: var(--vt-radius);
+}
+
+/* ------------------------------------------------------------ ngăn kéo AI */
+
+.vt-drawer {
+    width: 34rem;
+    max-width: 92vw;
+}
+
+.vt-request {
+    padding: .75rem;
+    border-bottom: 1px solid var(--vt-line);
+}
+
+.vt-request header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .25rem;
+}
+
+.vt-answer {
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: .5rem .65rem;
+    font-size: .875rem;
+}
+
+#vt-request-count.is-zero {
+    display: none;
+}
+
+/* ------------------------------------------------------------ bản đồ */
+
 .vt-marker {
     display: flex;
     align-items: center;
@@ -103,33 +450,24 @@
 }
 
 .vt-dot {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     border-radius: 50%;
     border: 2px solid;
     display: inline-block;
     flex: 0 0 auto;
 }
 
-.vt-plate {
+.vt-plate-tag {
     font-size: 11px;
     font-weight: 600;
-    color: #212529;
-    background: rgba(255, 255, 255, .85);
+    color: var(--vt-ink);
+    background: rgba(255, 255, 255, .88);
     padding: 0 .2rem;
-    border-radius: .2rem;
+    border-radius: 3px;
 }
 
-/* Đầu mỗi chuyến bấm được để gập/mở. */
-.vt-plan-head {
-    cursor: pointer;
-}
-
-.vt-caret {
-    width: .8rem;
-}
-
-/* Số thứ tự ghé vẽ trên bản đồ khi bật "Xem lộ trình". */
+/* Số thứ tự ghé, vẽ khi bật "Xem lộ trình". */
 .vt-route-no {
     display: flex;
     align-items: center;
@@ -137,20 +475,24 @@
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: #0d6efd;
+    background: #41505f;
     color: #fff;
     font-size: 11px;
     font-weight: 700;
     border: 2px solid #fff;
-    box-shadow: 0 0 3px rgba(0, 0, 0, .4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
 }
 
-/* Điểm của chính người đang xem: đổi màu để tìm được ngay trên bản đồ. */
 .vt-route-no.vt-route-mine {
-    background: #d63384;
+    background: var(--vt-mine);
 }
 
-.vt-drawer {
-    width: 34rem;
-    max-width: 92vw;
+@media (max-width: 991px) {
+    .vt-side {
+        position: static;
+    }
+
+    .vt-map {
+        height: 45vh;
+    }
 }

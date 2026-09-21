@@ -43,7 +43,7 @@ window.VtSaleMap = (function () {
         return L.divIcon({
             className: "vt-marker",
             html: `<span class="vt-dot" style="background:${fill};border-color:${color}"></span>
-                   <span class="vt-plate">${vehicle.name || ""}</span>`,
+                   <span class="vt-plate-tag">${vehicle.name || ""}</span>`,
             iconSize: [90, 18],
             iconAnchor: [9, 9],
         });
@@ -156,9 +156,19 @@ window.VtSaleMap = (function () {
         routePlanId = null;
     }
 
+    /* Kéo bản đồ tới một điểm giao khi người dùng bấm "Xem trên bản đồ" ở danh sách. */
+    function focus(latitude, longitude, label) {
+        ensureMap({});
+        map.setView([latitude, longitude], 15);
+        L.popup({ closeButton: true })
+            .setLatLng([latitude, longitude])
+            .setContent(escapeHtml(label || ""))
+            .openOn(map);
+    }
+
     function shownRoute() {
         return routePlanId;
     }
 
-    return { update, toggleRoute, clearRoute, shownRoute };
+    return { update, toggleRoute, clearRoute, shownRoute, focus };
 })();

@@ -125,6 +125,7 @@ def _stop_block(line, my_order_ids):
         'waiting_picking': line['waiting_picking'],
         'procedure_blocked': line['procedure_blocked'],
         'arrive_offset_minutes': line.get('arrive_offset_minutes'),
+        'sale_order_id': line['sale_order_id'],
         'latitude': line['latitude'],
         'longitude': line['longitude'],
         'mine': line['sale_order_id'] in my_order_ids,

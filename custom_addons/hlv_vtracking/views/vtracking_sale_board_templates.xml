@@ -3,7 +3,7 @@
 
     <!-- Trang tự dựng HTML thay vì dùng layout website: /sale_plan (trang sale đang dùng
          hằng ngày) cũng làm vậy, nên hai trang nhìn giống nhau và không kéo theo cả bộ
-         asset của website cho một trang chỉ có bảng và bản đồ. -->
+         asset của website cho một trang chỉ có danh sách và bản đồ. -->
     <template id="sale_board_page" name="Kế hoạch giao hàng (sale)">
         &lt;!DOCTYPE html&gt;
         <html lang="vi">
@@ -12,65 +12,69 @@
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <title>Kế hoạch giao hàng</title>
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
-                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css"/>
                 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
                 <link rel="stylesheet" href="/hlv_vtracking/static/src/sale_board/sale_board.css"/>
             </head>
             <body>
-                <nav class="navbar navbar-expand-lg navbar-dark vt-navbar">
+                <nav class="navbar navbar-dark vt-navbar py-2">
                     <div class="container-fluid">
-                        <span class="navbar-brand"><i class="fa fa-truck me-2"/>Kế hoạch giao hàng</span>
-                        <ul class="navbar-nav ms-auto flex-row gap-3">
-                            <li class="nav-item"><a class="nav-link" href="/sale_plan">Tình trạng đơn</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/search_stock">Tồn kho</a></li>
-                            <li class="nav-item">
-                                <span class="nav-link text-white-50">
-                                    <i class="fa fa-user me-1"/><t t-esc="user_name"/>
-                                </span>
-                            </li>
-                        </ul>
+                        <span class="navbar-brand mb-0">Kế hoạch giao hàng</span>
+                        <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link text-white-50" href="/sale_plan">Tình trạng đơn</a>
+                            <a class="nav-link text-white-50" href="/search_stock">Tồn kho</a>
+                            <span class="text-white-50 small"><t t-esc="user_name"/></span>
+                        </div>
                     </div>
                 </nav>
 
                 <div class="container-fluid py-3">
-                    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-vt-day="-1">
-                            <i class="fa fa-chevron-left"/>
-                        </button>
-                        <input type="date" id="vt-date" class="form-control form-control-sm" style="width: 11rem"/>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-vt-day="1">
-                            <i class="fa fa-chevron-right"/>
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="vt-today">Hôm nay</button>
-                        <span class="text-muted small ms-2">Tôi là</span>
-                        <select id="vt-saler" class="form-select form-select-sm" style="width: 12rem"
+                    <div class="vt-toolbar">
+                        <button type="button" class="vt-btn" data-vt-day="-1" title="Ngày trước">‹</button>
+                        <input type="date" id="vt-date" class="form-control form-control-sm"
+                               style="width: 10.5rem"/>
+                        <button type="button" class="vt-btn" data-vt-day="1" title="Ngày sau">›</button>
+                        <button type="button" class="vt-btn" id="vt-today">Hôm nay</button>
+
+                        <span class="vt-muted ms-2">Tôi là</span>
+                        <select id="vt-saler" class="form-select form-select-sm" style="width: 11rem"
                                 title="Cả phòng dùng chung một tài khoản, nên chọn mã sale MISA của bạn ở đây">
                             <option value="">— chọn mã sale —</option>
                         </select>
-                        <span id="vt-summary" class="text-muted small"/>
-                        <button type="button" class="btn btn-outline-primary btn-sm ms-auto" id="vt-open-drawer">
-                            <i class="fa fa-comments me-1"/>Tôi đã nhờ AI
-                            <span class="badge bg-primary ms-1" id="vt-request-count">0</span>
+
+                        <div class="form-check form-switch mb-0 ms-1">
+                            <input class="form-check-input" type="checkbox" id="vt-mine-only"/>
+                            <label class="form-check-label vt-muted" for="vt-mine-only">
+                                Chỉ chuyến có đơn của tôi
+                            </label>
+                        </div>
+
+                        <span id="vt-summary" class="vt-muted"/>
+
+                        <button type="button" class="vt-btn vt-push" id="vt-open-drawer">
+                            Tôi đã nhờ AI
+                            <span class="vt-tag vt-tag-mine is-zero" id="vt-request-count">0</span>
                         </button>
-                        <span id="vt-updated" class="text-muted small"/>
+                        <span id="vt-updated" class="vt-muted"/>
                     </div>
 
                     <div class="row g-3">
                         <div class="col-lg-7">
                             <div id="vt-plans" class="vt-plans">
-                                <div class="text-muted">Đang tải…</div>
+                                <div class="vt-empty">Đang tải…</div>
                             </div>
                         </div>
                         <div class="col-lg-5">
-                            <div id="vt-map" class="vt-map mb-3"/>
-                            <div class="card">
-                                <div class="card-header py-2 d-flex align-items-center gap-2">
-                                    <span class="fw-bold">Đơn của tôi chưa được xếp chuyến</span>
-                                    <input type="search" id="vt-search" class="form-control form-control-sm ms-auto"
-                                           style="max-width: 14rem"
-                                           placeholder="Tìm số đơn, số phiếu, khách…"/>
-                                </div>
-                                <div class="card-body p-0">
+                            <div class="vt-side">
+                                <div id="vt-map" class="vt-map"/>
+                                <div class="vt-panel">
+                                    <div class="vt-panel-head">
+                                        <span>Đơn của tôi chưa xếp chuyến</span>
+                                        <span class="vt-chip" id="vt-unplanned-count">0</span>
+                                        <input type="search" id="vt-search"
+                                               class="form-control form-control-sm ms-auto"
+                                               style="max-width: 13rem"
+                                               placeholder="Tìm số đơn, số phiếu, khách…"/>
+                                    </div>
                                     <div id="vt-unplanned" class="vt-list"/>
                                 </div>
                             </div>
@@ -79,7 +83,7 @@
                 </div>
 
                 <!-- Ngăn kéo "Tôi đã nhờ AI": câu trả lời của AI dài, để trong cột bên phải
-                     thì chiếm hết chỗ của bản đồ. Mở ra khi cần đọc, đóng lại khi xong. -->
+                     thì chiếm hết chỗ của bản đồ. Mở khi cần đọc, đóng lại khi xong. -->
                 <div class="offcanvas offcanvas-end vt-drawer" tabindex="-1" id="vt-drawer">
                     <div class="offcanvas-header">
                         <h5 class="offcanvas-title">Tôi đã nhờ AI</h5>
@@ -95,13 +99,13 @@
                     <div class="modal-dialog">
                         <div class="modal-content">
                             <div class="modal-header">
-                                <h5 class="modal-title">Nhờ AI xếp lịch</h5>
+                                <h5 class="modal-title">Nhờ AI xem giúp</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal"/>
                             </div>
                             <div class="modal-body">
-                                <div class="mb-2 small text-muted" id="vt-request-target"/>
+                                <div class="vt-muted mb-2" id="vt-request-target"/>
                                 <div class="mb-2">
-                                    <label class="form-label small mb-1">Loại yêu cầu</label>
+                                    <label class="form-label small mb-1">Tôi muốn</label>
                                     <select id="vt-request-type" class="form-select form-select-sm">
                                         <option value="earlier">Xin giao sớm hơn</option>
                                         <option value="reschedule">Xin dời ngày / buổi khác</option>
@@ -113,7 +117,8 @@
                                 <div class="row g-2 mb-2">
                                     <div class="col-7">
                                         <label class="form-label small mb-1">Ngày mong muốn</label>
-                                        <input type="date" id="vt-request-date" class="form-control form-control-sm"/>
+                                        <input type="date" id="vt-request-date"
+                                               class="form-control form-control-sm"/>
                                     </div>
                                     <div class="col-5">
                                         <label class="form-label small mb-1">Buổi</label>
@@ -128,14 +133,16 @@
                                 <textarea id="vt-request-message" class="form-control form-control-sm" rows="4"
                                           placeholder="Ví dụ: khách xin nhận sáng mai trước 10h, hàng đã đóng gói xong."/>
                                 <div class="form-text">
-                                    AI sẽ kiểm hàng, thủ tục và chỗ trống trên xe rồi trả lời ngay tại
-                                    trang này. Kế hoạch đã chốt thì AI chỉ đề xuất, điều phối duyệt mới áp.
+                                    AI kiểm hàng, thủ tục và chỗ trống trên xe rồi trả lời ngay tại
+                                    trang này. Quyết định cuối vẫn là của người điều phối.
                                 </div>
                                 <div id="vt-request-error" class="text-danger small mt-2"/>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Thôi</button>
-                                <button type="button" class="btn btn-primary btn-sm" id="vt-request-send">Gửi cho AI</button>
+                                <button type="button" class="vt-btn" data-bs-dismiss="modal">Thôi</button>
+                                <button type="button" class="vt-btn vt-btn-primary" id="vt-request-send">
+                                    Gửi cho AI
+                                </button>
                             </div>
                         </div>
                     </div>

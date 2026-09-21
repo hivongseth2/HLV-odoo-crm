@@ -1,16 +1,26 @@
-/* Trang /giao-hang: bảng chuyến trong ngày, đơn của tôi, và nút nhờ AI.
+/* Trang /giao-hang cho người bán hàng: chuyến trong ngày, xe đang ở đâu, và xin điều
+   chỉnh lịch cho ĐƠN CỦA MÌNH.
 
-   Gọi Odoo bằng JSON-RPC thường (/giao-hang/...), không dùng khung OWL: trang này nằm
-   ngoài backend, người bán hàng mở nó như một trang web bình thường. */
+   Nguyên tắc dựng màn này: người bán hàng không điều phối. Họ không xếp chuyến, không đổi
+   thứ tự ghé — họ chỉ cần biết hàng của khách mình đi lúc nào, và xin đổi khi khách hỏi.
+   Nên mọi nút bấm đều gắn vào MỘT ĐƠN cụ thể, không có nút nào tác động lên cả chuyến.
+
+   Gọi Odoo bằng JSON-RPC thường; trang này nằm ngoài backend nên không dùng khung OWL. */
 
 (function () {
     const POSITION_REFRESH_MS = 30000;   // vị trí xe: đủ nhanh để thấy xe đang chạy
     const BOARD_REFRESH_MS = 120000;     // chuyến và yêu cầu: đổi chậm hơn nhiều
-
-    // Mã sale nhớ trong trình duyệt: cả phòng dùng chung tài khoản Odoo, nên "tôi là ai"
-    // là chuyện của cái máy đang ngồi, không phải của tài khoản.
+    // Cả phòng dùng chung một tài khoản Odoo, nên "tôi là ai" là chuyện của cái máy đang
+    // ngồi, không phải của tài khoản.
     const SALER_KEY = "vt_saler_code";
-    const state = { date: null, config: {}, pending: false, plans: [], saler: "", search: "" };
+    const STATE_LABEL = { draft: "nháp", confirmed: "đã chốt", done: "xong" };
+
+    const state = {
+        date: null, config: {}, plans: [], vehicles: [],
+        saler: "", search: "", mineOnly: false, pending: false,
+    };
+
+    // ------------------------------------------------------------ tiện ích
 
     function rpc(url, params) {
         return fetch(url, {
@@ -42,80 +52,98 @@
         return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     }
 
-    function shiftDate(days) {
-        const current = new Date(state.date + "T00:00:00");
-        current.setDate(current.getDate() + days);
-        setDate(current.toISOString().slice(0, 10));
-    }
-
-    function setDate(value) {
-        state.date = value;
-        el("vt-date").value = value;
-        loadBoard();
+    /* Giờ tới ước tính: cộng số phút vào giờ bắt đầu buổi. Giờ đồng hồ dễ hình dung hơn
+       "+93 phút", nhưng luôn kèm dấu ~ để không ai đọc thành giờ đã hẹn với khách. */
+    function etaLabel(minutes, sessionLabel) {
+        if (minutes == null) {
+            return "";
+        }
+        const base = (sessionLabel || "").indexOf("Chiều") === 0 ? 13 * 60 : 8 * 60;
+        const total = base + minutes;
+        const hour = String(Math.floor(total / 60) % 24).padStart(2, "0");
+        const minute = String(total % 60).padStart(2, "0");
+        return `~${hour}:${minute}`;
     }
 
     // ---------------------------------------------------------------- vẽ
 
-    const STATE_LABEL = { draft: "nháp", confirmed: "đã chốt", done: "xong" };
-
-    /* Mỗi chuyến là một khối gập được: mở sẵn chuyến có đơn của mình, gập những chuyến
-       còn lại. Năm xe mười điểm mở hết một lúc thì không ai đọc nổi. */
-    function planCard(plan, index) {
-        const stops = plan.stops.map(stopRow).join("");
-        const mine = plan.has_mine ? '<span class="badge bg-primary">có đơn của tôi</span>' : "";
-        const progress = plan.delivered_count
-            ? `<span class="text-success small">đã giao ${plan.delivered_count}/${plan.stops.length}</span>`
-            : "";
+    function planCard(plan) {
         const open = plan.has_mine || state.plans.length === 1;
+        const total = plan.stops.length;
+        const percent = total ? Math.round((plan.delivered_count / total) * 100) : 0;
+        const vehicle = state.vehicles.find((item) => item.name === plan.vehicle_plate);
+        const dot = vehicle
+            ? `<span class="vt-status vt-status-${vehicle.status}"
+                     title="${escapeHtml(vehicle.status_label)}"></span>`
+            : "";
         return `
-            <div class="card mb-2 ${plan.has_mine ? "vt-mine" : ""}">
-                <div class="card-header py-2 d-flex flex-wrap align-items-center gap-2 vt-plan-head"
-                     data-vt-toggle="plan-${index}" role="button">
-                    <i class="fa fa-chevron-${open ? "down" : "right"} text-muted vt-caret"></i>
-                    <span class="fw-bold">${escapeHtml(plan.vehicle_plate)}</span>
-                    <span class="text-muted">${escapeHtml(plan.session_label)}</span>
-                    <span class="badge bg-light text-dark">${escapeHtml(STATE_LABEL[plan.state] || plan.state)}</span>
-                    ${plan.zone_name ? `<span class="text-muted small">${escapeHtml(plan.zone_name)}</span>` : ""}
-                    ${mine}${progress}
-                    <span class="ms-auto small text-muted">
-                        ${plan.stop_count} điểm · ${plan.line_count} phiếu ·
-                        ~${plan.distance_km || 0} km · ${escapeHtml(plan.duration_display || "—")}
+            <section class="vt-plan ${plan.has_mine ? "is-mine" : ""} ${open ? "is-open" : ""}">
+                <header class="vt-plan-head" data-vt-toggle="${plan.id}" role="button" tabindex="0">
+                    <span class="vt-caret">${open ? "▾" : "▸"}</span>
+                    ${dot}
+                    <span class="vt-plate">${escapeHtml(plan.vehicle_plate)}</span>
+                    <span class="vt-chip">${escapeHtml(plan.session_label)}</span>
+                    <span class="vt-chip vt-chip-soft">${escapeHtml(STATE_LABEL[plan.state] || plan.state)}</span>
+                    ${plan.zone_name ? `<span class="vt-muted">${escapeHtml(plan.zone_name)}</span>` : ""}
+                    ${plan.has_mine ? '<span class="vt-chip vt-chip-mine">có đơn của tôi</span>' : ""}
+                    <span class="vt-plan-meta">
+                        ${plan.stop_count} điểm · ~${plan.distance_km || 0} km ·
+                        ${escapeHtml(plan.duration_display || "—")}
                     </span>
+                </header>
+                <div class="vt-progress" title="Đã giao ${plan.delivered_count}/${total} điểm">
+                    <span style="width:${percent}%"></span>
                 </div>
-                <div class="collapse ${open ? "show" : ""}" id="plan-${index}">
-                    <div class="card-body p-0"><div class="vt-stops">${stops}</div></div>
-                    <div class="card-footer py-1 d-flex align-items-center gap-2 flex-wrap">
-                        <span class="small text-muted">
+                <div class="vt-plan-body">
+                    <ol class="vt-stops">${plan.stops.map((stop) => stopRow(stop, plan)).join("")}</ol>
+                    <footer class="vt-plan-foot">
+                        <span class="vt-muted">
                             ${plan.driver_name ? "Tài xế " + escapeHtml(plan.driver_name) : "Chưa gán tài xế"}
                             ${plan.start_name ? " · xuất phát " + escapeHtml(plan.start_name) : ""}
                         </span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
-                                data-vt-route="${plan.id}">Xem lộ trình</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary"
-                                data-vt-plan="${plan.id}">Nhờ AI xem chuyến này</button>
-                    </div>
+                        <button type="button" class="vt-btn vt-btn-ghost" data-vt-route="${plan.id}">
+                            Xem lộ trình trên bản đồ
+                        </button>
+                    </footer>
                 </div>
-            </div>`;
+            </section>`;
     }
 
-    function stopRow(stop) {
+    function stopRow(stop, plan) {
         const flags = [];
-        if (stop.returned) flags.push('<span class="badge bg-danger">chở về</span>');
-        if (stop.waiting_picking) flags.push('<span class="badge bg-warning text-dark">chờ phiếu</span>');
-        if (stop.procedure_blocked) flags.push('<span class="badge bg-danger">vướng thủ tục</span>');
-        const eta = stop.arrive_offset_minutes != null
-            ? `<span class="vt-eta text-muted">+${stop.arrive_offset_minutes}′</span>`
+        if (stop.returned) flags.push('<span class="vt-tag vt-tag-danger">chở về</span>');
+        if (stop.procedure_blocked) flags.push('<span class="vt-tag vt-tag-danger">vướng thủ tục</span>');
+        if (stop.waiting_picking) flags.push('<span class="vt-tag vt-tag-warn">chờ phiếu</span>');
+        // Nút chỉ hiện ở ĐIỂM CỦA MÌNH: xin đổi lịch cho đơn người khác không phải việc của
+        // người bán hàng này.
+        const ask = stop.mine && stop.sale_order_id
+            ? `<button type="button" class="vt-btn vt-btn-mini" data-vt-order="${stop.sale_order_id}"
+                       data-vt-order-name="${escapeHtml(stop.reference)}">Xin đổi lịch</button>`
+            : "";
+        const locate = stop.latitude
+            ? `<button type="button" class="vt-btn vt-btn-mini vt-btn-ghost"
+                       data-vt-locate="${stop.latitude},${stop.longitude}"
+                       data-vt-label="${escapeHtml(stop.partner_name || "")}">Xem trên bản đồ</button>`
             : "";
         return `
-            <div class="vt-stop ${stop.mine ? "vt-stop-mine" : ""} ${stop.delivered ? "vt-stop-done" : ""}">
+            <li class="vt-stop ${stop.mine ? "is-mine" : ""} ${stop.delivered ? "is-done" : ""}">
                 <span class="vt-seq">${stop.sequence}</span>
                 <span class="vt-stop-main">
-                    ${stop.delivered ? "✓ " : ""}${escapeHtml(stop.partner_name || "—")}
-                    <span class="text-muted small d-block">${escapeHtml(stop.address || "")}</span>
+                    <span class="vt-stop-name">
+                        ${stop.delivered ? '<span class="vt-check">✓</span>' : ""}
+                        ${escapeHtml(stop.partner_name || "—")}
+                        ${stop.mine ? '<span class="vt-tag vt-tag-mine">đơn của tôi</span>' : ""}
+                    </span>
+                    <span class="vt-stop-address">${escapeHtml(stop.address || "")}</span>
+                    <span class="vt-stop-actions">${ask}${locate}</span>
                 </span>
-                ${eta}
-                <span class="vt-flags">${flags.join(" ")}</span>
-            </div>`;
+                <span class="vt-stop-side">
+                    <span class="vt-eta" title="Giờ tới ước tính, không phải giờ đã hẹn">
+                        ${etaLabel(stop.arrive_offset_minutes, plan.session_label)}
+                    </span>
+                    ${flags.join("")}
+                </span>
+            </li>`;
     }
 
     function unplannedRow(order) {
@@ -124,61 +152,75 @@
             : "chưa có ngày hẹn";
         return `
             <div class="vt-row">
-                <div class="flex-grow-1">
-                    <div class="fw-semibold">${escapeHtml(order.name)}</div>
-                    <div class="small text-muted">${escapeHtml(order.partner_name)} · ${due}</div>
+                <div class="vt-row-main">
+                    <div class="vt-row-title">${escapeHtml(order.name)}</div>
+                    <div class="vt-muted">${escapeHtml(order.partner_name)} · ${due}</div>
                 </div>
-                <button type="button" class="btn btn-sm btn-primary" data-vt-order="${order.id}"
-                        data-vt-order-name="${escapeHtml(order.name)}">Nhờ AI</button>
+                <button type="button" class="vt-btn vt-btn-primary" data-vt-order="${order.id}"
+                        data-vt-order-name="${escapeHtml(order.name)}">Nhờ AI xếp</button>
             </div>`;
     }
 
     function requestRow(item) {
-        const tone = { feasible: "success", conditional: "warning", not_feasible: "danger" }[item.verdict] || "secondary";
-        const verdict = item.verdict
-            ? `<span class="badge bg-${tone}">${escapeHtml(item.verdict_label)}</span>`
-            : `<span class="badge bg-light text-dark">${escapeHtml(item.state_label)}</span>`;
+        const tone = { feasible: "ok", conditional: "warn", not_feasible: "danger" }[item.verdict] || "soft";
+        const badge = item.verdict
+            ? `<span class="vt-tag vt-tag-${tone}">${escapeHtml(item.verdict_label)}</span>`
+            : `<span class="vt-tag vt-tag-soft">${escapeHtml(item.state_label)}</span>`;
         return `
-            <div class="vt-row flex-column align-items-start">
-                <div class="d-flex w-100 align-items-center gap-2">
-                    <span class="fw-semibold">${escapeHtml(item.order_name || item.type_label)}</span>
-                    ${verdict}
-                    <span class="ms-auto small text-muted">${escapeHtml((item.created_at || "").slice(0, 16))}</span>
-                </div>
-                <div class="small text-muted">${escapeHtml(item.message)}</div>
-                ${item.answer ? `<div class="vt-answer small mt-1">${item.answer}</div>` : ""}
-            </div>`;
+            <article class="vt-request">
+                <header>
+                    <span class="vt-row-title">${escapeHtml(item.order_name || item.type_label)}</span>
+                    ${badge}
+                    <span class="vt-muted vt-push">${escapeHtml((item.created_at || "").slice(0, 16))}</span>
+                </header>
+                <p class="vt-muted">${escapeHtml(item.message)}</p>
+                ${item.answer ? `<div class="vt-answer">${item.answer}</div>` : ""}
+            </article>`;
     }
 
     function render(data) {
         state.config = { tile_url: data.tile_url, tile_attribution: data.tile_attribution };
         state.plans = data.plans;
+        state.vehicles = data.vehicles;
         fillSalerOptions(data.saler_codes);
-        el("vt-plans").innerHTML = data.plans.length
-            ? data.plans.map(planCard).join("")
-            : '<div class="text-muted">Ngày này chưa có chuyến nào.</div>';
-        el("vt-unplanned").innerHTML = data.my_unplanned.length
-            ? data.my_unplanned.map(unplannedRow).join("")
-            : data.mine_configured
-                ? '<div class="vt-row text-muted">Không có đơn nào chờ xếp.</div>'
-                : `<div class="vt-row text-warning-emphasis">
-                       Tài khoản chưa khai <b>mã sale MISA</b> nên không nhận ra đơn nào là
-                       của bạn. Báo quản trị khai ở Cài đặt &gt; Người dùng.
-                   </div>`;
+        renderPlans();
+        renderUnplanned(data.my_unplanned, data.mine_configured);
         renderRequests(data.my_requests);
-        const mine = data.plans.filter((plan) => plan.has_mine).length;
-        el("vt-summary").textContent =
-            `${data.plans.length} chuyến · ${mine} chuyến có đơn của tôi · ${data.my_unplanned.length} đơn chưa xếp`;
         window.VtSaleMap.update(data.vehicles, state.config);
         stamp();
+    }
+
+    function renderPlans() {
+        const plans = state.mineOnly ? state.plans.filter((plan) => plan.has_mine) : state.plans;
+        el("vt-plans").innerHTML = plans.length
+            ? plans.map(planCard).join("")
+            : `<div class="vt-empty">${state.mineOnly
+                ? "Ngày này không có chuyến nào chở đơn của bạn."
+                : "Ngày này chưa có chuyến nào."}</div>`;
+        const mine = state.plans.filter((plan) => plan.has_mine).length;
+        el("vt-summary").innerHTML = `<b>${state.plans.length}</b> chuyến · <b>${mine}</b> có đơn của tôi`;
+        markRouteButtons();
+    }
+
+    function renderUnplanned(orders, mineConfigured) {
+        el("vt-unplanned-count").textContent = orders.length;
+        if (orders.length) {
+            el("vt-unplanned").innerHTML = orders.map(unplannedRow).join("");
+            return;
+        }
+        el("vt-unplanned").innerHTML = mineConfigured || state.saler
+            ? '<div class="vt-empty">Không có đơn nào chờ xếp.</div>'
+            : '<div class="vt-empty">Chọn <b>mã sale</b> của bạn ở thanh trên để thấy đơn của mình.</div>';
     }
 
     function renderRequests(requests) {
         el("vt-requests").innerHTML = requests.length
             ? requests.map(requestRow).join("")
-            : '<div class="vt-row text-muted">Chưa gửi yêu cầu nào.</div>';
-        // Đếm số yêu cầu CÒN MỞ: đó là thứ người ta cần biết còn phải theo dõi mấy cái.
-        el("vt-request-count").textContent = requests.filter((item) => item.open).length;
+            : '<div class="vt-empty">Chưa gửi yêu cầu nào.</div>';
+        // Đếm yêu cầu CÒN MỞ: đó là thứ người ta cần biết còn phải theo dõi mấy cái.
+        const waiting = requests.filter((item) => item.open).length;
+        el("vt-request-count").textContent = waiting;
+        el("vt-request-count").classList.toggle("is-zero", !waiting);
     }
 
     function fillSalerOptions(codes) {
@@ -200,9 +242,8 @@
         const shown = window.VtSaleMap.shownRoute();
         for (const button of document.querySelectorAll("[data-vt-route]")) {
             const active = Number(button.dataset.vtRoute) === shown;
-            button.classList.toggle("btn-secondary", active);
-            button.classList.toggle("btn-outline-secondary", !active);
-            button.textContent = active ? "Tắt lộ trình" : "Xem lộ trình";
+            button.classList.toggle("is-active", active);
+            button.textContent = active ? "Tắt lộ trình" : "Xem lộ trình trên bản đồ";
         }
     }
 
@@ -213,18 +254,26 @@
     // ---------------------------------------------------------------- tải
 
     function loadBoard() {
+        el("vt-plans").classList.add("is-loading");
         return rpc("/giao-hang/du-lieu",
                    { date: state.date, saler_code: state.saler, search: state.search })
             .then(render)
             .catch((error) => {
                 el("vt-plans").innerHTML =
-                    `<div class="alert alert-danger">Không tải được dữ liệu: ${escapeHtml(error.message)}</div>`;
-            });
+                    `<div class="vt-alert">Không tải được dữ liệu: ${escapeHtml(error.message)}</div>`;
+            })
+            .finally(() => el("vt-plans").classList.remove("is-loading"));
+    }
+
+    function loadUnplanned() {
+        return rpc("/giao-hang/don-chua-xep", { saler_code: state.saler, search: state.search })
+            .then((data) => renderUnplanned(data.my_unplanned, true));
     }
 
     function loadPositions() {
         return rpc("/giao-hang/vi-tri", {})
             .then((data) => {
+                state.vehicles = data.vehicles;
                 window.VtSaleMap.update(data.vehicles, state.config);
                 stamp();
             })
@@ -233,30 +282,30 @@
             });
     }
 
-    function loadUnplanned() {
-        return rpc("/giao-hang/don-chua-xep", { saler_code: state.saler, search: state.search })
-            .then((data) => {
-                el("vt-unplanned").innerHTML = data.my_unplanned.length
-                    ? data.my_unplanned.map(unplannedRow).join("")
-                    : '<div class="vt-row text-muted">Không tìm thấy đơn nào.</div>';
-            });
+    function setDate(value) {
+        state.date = value;
+        el("vt-date").value = value;
+        window.VtSaleMap.clearRoute();
+        loadBoard();
+    }
+
+    function shiftDate(days) {
+        const current = new Date(state.date + "T00:00:00");
+        current.setDate(current.getDate() + days);
+        setDate(current.toISOString().slice(0, 10));
     }
 
     // ------------------------------------------------------------ yêu cầu
 
-    let modal = null;
-    const target = { sale_order_id: null, plan_id: null };
+    const target = { sale_order_id: null };
 
-    function openRequest(options) {
-        target.sale_order_id = options.orderId || null;
-        target.plan_id = options.planId || null;
-        el("vt-request-target").textContent = options.label;
+    function openRequest(orderId, label) {
+        target.sale_order_id = orderId;
+        el("vt-request-target").textContent = label || "";
         el("vt-request-message").value = "";
         el("vt-request-error").textContent = "";
-        el("vt-request-type").value = options.planId ? "reschedule" : "earlier";
         el("vt-request-date").value = state.date;
-        modal = modal || new bootstrap.Modal(el("vt-request-modal"));
-        modal.show();
+        bootstrap.Modal.getOrCreateInstance(el("vt-request-modal")).show();
     }
 
     function sendRequest() {
@@ -267,7 +316,6 @@
         el("vt-request-send").disabled = true;
         rpc("/giao-hang/yeu-cau", {
             sale_order_id: target.sale_order_id,
-            plan_id: target.plan_id,
             request_type: el("vt-request-type").value,
             desired_date: el("vt-request-date").value || null,
             desired_session: el("vt-request-session").value || null,
@@ -278,8 +326,9 @@
                     el("vt-request-error").textContent = result.error;
                     return;
                 }
-                el("vt-requests").innerHTML = result.my_requests.map(requestRow).join("");
-                modal.hide();
+                renderRequests(result.my_requests);
+                bootstrap.Modal.getOrCreateInstance(el("vt-request-modal")).hide();
+                bootstrap.Offcanvas.getOrCreateInstance(el("vt-drawer")).show();
             })
             .catch((error) => {
                 el("vt-request-error").textContent = error.message;
@@ -290,25 +339,18 @@
             });
     }
 
-    // ------------------------------------------------------------- khởi động
+    // ------------------------------------------------------------- sự kiện
 
     document.addEventListener("click", (event) => {
         const orderButton = event.target.closest("[data-vt-order]");
         if (orderButton) {
-            openRequest({
-                orderId: Number(orderButton.dataset.vtOrder),
-                label: "Đơn " + orderButton.dataset.vtOrderName,
-            });
+            openRequest(Number(orderButton.dataset.vtOrder), orderButton.dataset.vtOrderName);
             return;
         }
-        const planButton = event.target.closest("[data-vt-plan]");
-        if (planButton) {
-            openRequest({ planId: Number(planButton.dataset.vtPlan), label: "Chuyến đang xem" });
-            return;
-        }
-        const dayButton = event.target.closest("[data-vt-day]");
-        if (dayButton) {
-            shiftDate(Number(dayButton.dataset.vtDay));
+        const locate = event.target.closest("[data-vt-locate]");
+        if (locate) {
+            const [lat, lng] = locate.dataset.vtLocate.split(",").map(Number);
+            window.VtSaleMap.focus(lat, lng, locate.dataset.vtLabel);
             return;
         }
         const routeButton = event.target.closest("[data-vt-route]");
@@ -320,12 +362,16 @@
             }
             return;
         }
+        const dayButton = event.target.closest("[data-vt-day]");
+        if (dayButton) {
+            shiftDate(Number(dayButton.dataset.vtDay));
+            return;
+        }
         const head = event.target.closest("[data-vt-toggle]");
         if (head) {
-            const body = document.getElementById(head.dataset.vtToggle);
-            const caret = head.querySelector(".vt-caret");
-            const shown = body.classList.toggle("show");
-            caret.className = `fa fa-chevron-${shown ? "down" : "right"} text-muted vt-caret`;
+            const card = head.closest(".vt-plan");
+            const open = card.classList.toggle("is-open");
+            head.querySelector(".vt-caret").textContent = open ? "▾" : "▸";
         }
     });
 
@@ -341,6 +387,10 @@
             localStorage.setItem(SALER_KEY, state.saler);
             window.VtSaleMap.clearRoute();
             loadBoard();
+        });
+        el("vt-mine-only").addEventListener("change", (event) => {
+            state.mineOnly = event.target.checked;
+            renderPlans();
         });
         // Chờ người dùng gõ xong mới hỏi server: mỗi phím một request là vô ích.
         let typing = null;
