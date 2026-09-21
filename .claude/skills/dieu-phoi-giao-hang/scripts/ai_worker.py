@@ -40,6 +40,13 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 BUS_MESSAGE_TYPE = 'hlv_vtracking/ai_request'
 CLAUDE_TIMEOUT = 900
 RECONNECT_MIN, RECONNECT_MAX = 5, 120
+# Nhịp gửi lại lệnh đăng ký kênh. Đây là cách giữ nhịp DUY NHẤT dùng được: đo trên chính
+# odoo.sh thấy sau khi client gửi một khung PING của giao thức websocket, Odoo vẫn giữ kết
+# nối nhưng THÔI đẩy tin xuống — im lặng, không báo lỗi. Nên tắt ping của thư viện và tự
+# gửi lại "subscribe": nó vừa giữ đường, vừa xác nhận Odoo còn nhớ kênh của mình.
+KEEPALIVE_SECONDS = 30
+# Quét lại danh sách phiếu còn chờ, phòng khi có tin rơi mà không ai hay.
+SWEEP_SECONDS = 300
 LOG_FILE = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'hlv_ai_worker' / 'worker.log'
 
 # Claude chỉ được đọc repo và gọi đúng lớp API. Không cho Write/Edit: worker chạy không ai
@@ -234,26 +241,48 @@ async def listen(claude_bin, worker_name):
             cookie = odoo_session_cookie(base)
             async with websockets.connect(
                 url, additional_headers={'Cookie': cookie, 'Origin': base},
-                ping_interval=20, ping_timeout=20, max_size=2 ** 20,
+                ping_interval=None, max_size=2 ** 20,
             ) as socket_:
-                await socket_.send(json.dumps({
-                    'event_name': 'subscribe', 'data': {'channels': [], 'last': last_id},
-                }))
+                async def subscribe():
+                    await socket_.send(json.dumps({
+                        'event_name': 'subscribe', 'data': {'channels': [], 'last': last_id},
+                    }))
+
+                await subscribe()
                 _logger.info('Đã nối Odoo, đang chờ yêu cầu.')
                 delay = RECONNECT_MIN
                 await asyncio.to_thread(sweep_pending, claude_bin, worker_name)
-                async for raw in socket_:
-                    ids, last = request_ids_from_frame(raw)
-                    last_id = max(last_id, last)
-                    for request_id in ids:
-                        await asyncio.to_thread(process_request, request_id, claude_bin,
-                                                worker_name)
+                keeper = asyncio.create_task(_keepalive(subscribe, claude_bin, worker_name))
+                try:
+                    async for raw in socket_:
+                        ids, last = request_ids_from_frame(raw)
+                        last_id = max(last_id, last)
+                        for request_id in ids:
+                            await asyncio.to_thread(process_request, request_id, claude_bin,
+                                                    worker_name)
+                finally:
+                    keeper.cancel()
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 — worker phải sống sót qua mọi sự cố mạng
             _logger.warning('Mất kết nối (%s). Thử lại sau %ss.', exc, delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, RECONNECT_MAX)
+
+
+async def _keepalive(subscribe, claude_bin, worker_name):
+    """Gửi lại "subscribe" đều đặn, và thỉnh thoảng quét lại phiếu còn chờ.
+
+    Gửi trượt (Odoo đã quên kênh, hoặc đường đứt) thì ném lỗi ở đây, vòng ngoài bắt được và
+    nối lại — thà nối lại thừa còn hơn nằm nghe một đường đã chết.
+    """
+    elapsed = 0
+    while True:
+        await asyncio.sleep(KEEPALIVE_SECONDS)
+        elapsed += KEEPALIVE_SECONDS
+        await subscribe()
+        if elapsed % SWEEP_SECONDS == 0:
+            await asyncio.to_thread(sweep_pending, claude_bin, worker_name)
 
 
 def setup_logging():
