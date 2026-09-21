@@ -145,7 +145,12 @@
             : '<div class="text-muted">Ngày này chưa có chuyến nào.</div>';
         el("vt-unplanned").innerHTML = data.my_unplanned.length
             ? data.my_unplanned.map(unplannedRow).join("")
-            : '<div class="vt-row text-muted">Không có đơn nào chờ xếp.</div>';
+            : data.mine_configured
+                ? '<div class="vt-row text-muted">Không có đơn nào chờ xếp.</div>'
+                : `<div class="vt-row text-warning-emphasis">
+                       Tài khoản chưa khai <b>mã sale MISA</b> nên không nhận ra đơn nào là
+                       của bạn. Báo quản trị khai ở Cài đặt &gt; Người dùng.
+                   </div>`;
         el("vt-requests").innerHTML = data.my_requests.length
             ? data.my_requests.map(requestRow).join("")
             : '<div class="vt-row text-muted">Chưa gửi yêu cầu nào.</div>';

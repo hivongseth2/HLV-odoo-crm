@@ -4,8 +4,10 @@
     background: #1f2d3d;
 }
 
+/* Bản đồ cao theo màn hình: đây là thứ người ta nhìn lâu nhất trên trang này. */
 .vt-map {
-    height: 380px;
+    height: 62vh;
+    min-height: 420px;
     border-radius: .375rem;
     border: 1px solid #dee2e6;
 }
@@ -20,7 +22,7 @@
 }
 
 .vt-stops {
-    max-height: 22rem;
+    max-height: 26rem;
     overflow-y: auto;
 }
 

@@ -29,8 +29,12 @@ def board_data(env, day=None):
         ('vtracking_enabled', '=', True),
         ('company_id', 'in', [company.id, False]),
     ], order='license_plate')
-    plans_by_vehicle = plan_payload.plans_by_vehicle(env, vehicles.ids, day)
     my_order_ids = set(_my_order_ids(env))
+    plans = env['hlv.vtracking.plan'].sudo().search([
+        ('vehicle_id', 'in', vehicles.ids),
+        ('date', '=', day),
+        ('state', '!=', 'cancelled'),
+    ], order='vehicle_id, session')
 
     return {
         'date': fields.Date.to_string(day),
@@ -39,13 +43,12 @@ def board_data(env, day=None):
         'tile_url': company.vtracking_map_tile_url or '',
         'tile_attribution': company.vtracking_map_attribution or '',
         'vehicles': [_vehicle_block(vehicle) for vehicle in vehicles],
-        'plans': [
-            _plan_block(plan, my_order_ids)
-            for vehicle in vehicles
-            for plan in plans_by_vehicle.get(vehicle.id, [])
-        ],
+        'plans': [_plan_block(plan, my_order_ids) for plan in plans],
         'my_unplanned': my_unplanned_orders(env),
         'my_requests': my_requests(env),
+        # Chưa khai mã sale MISA thì không đơn nào tính là "của tôi" — trang phải nói ra,
+        # nếu không người dùng tưởng mình không có đơn nào.
+        'mine_configured': _mine_domain(env) is not None,
     }
 
 
@@ -76,20 +79,26 @@ def _vehicle_block(vehicle):
 
 
 def _plan_block(plan, my_order_ids):
-    """Một chuyến, gọn cho người bán hàng đọc. Điểm nào có đơn của họ thì đánh dấu ``mine``."""
-    stops = [_stop_block(line, my_order_ids) for line in plan['lines']]
+    """Một chuyến, gọn cho người bán hàng đọc. Điểm nào có đơn của họ thì đánh dấu ``mine``.
+
+    ``with_legs=True`` để có giờ tới ước tính từng điểm — đó chính là thứ người bán hàng
+    cần khi khách hỏi "mấy giờ xe tới".
+    """
+    summary = plan_payload.plan_summary(plan)
+    stops = [_stop_block(line, my_order_ids)
+             for line in plan_payload.plan_lines(plan, with_legs=True)]
     return {
-        'id': plan['id'],
-        'vehicle_plate': plan['vehicle_plate'],
-        'driver_name': plan['driver_name'],
-        'session_label': plan['session_label'],
-        'state': plan['state'],
-        'zone_name': plan['zone_name'],
-        'stop_count': plan['stop_count'],
-        'line_count': plan['line_count'],
-        'distance_km': plan['distance_km'],
-        'duration_display': plan['duration_display'],
-        'start_name': (plan.get('start') or {}).get('name'),
+        'id': summary['id'],
+        'vehicle_plate': summary['vehicle_plate'],
+        'driver_name': summary['driver_name'],
+        'session_label': summary['session_label'],
+        'state': summary['state'],
+        'zone_name': summary['zone_name'],
+        'stop_count': summary['stop_count'],
+        'line_count': summary['line_count'],
+        'distance_km': summary['distance_km'],
+        'duration_display': summary['duration_display'],
+        'start_name': (summary.get('start') or {}).get('name'),
         'delivered_count': sum(1 for stop in stops if stop['delivered']),
         'has_mine': any(stop['mine'] for stop in stops),
         'stops': stops,
@@ -98,8 +107,8 @@ def _plan_block(plan, my_order_ids):
 
 def _stop_block(line, my_order_ids):
     return {
-        'sequence': line['sequence'],
-        'reference': line['display_reference'],
+        'sequence': line['seq_no'],
+        'reference': line['reference'],
         'partner_name': line['partner_name'],
         'address': line['address'],
         'zone_name': line['zone_name'],
@@ -112,12 +121,31 @@ def _stop_block(line, my_order_ids):
     }
 
 
+def _mine_domain(env):
+    """Domain "đơn của tôi" — THEO MÃ SALE MISA, không theo người tạo đơn.
+
+    Nhiều nhân viên dùng chung một tài khoản Odoo, nên ``user_id`` không nói được đơn của
+    ai. Trang /sale_plan đã có đúng luật này (mã khai trên tài khoản, kèm tuỳ chọn ôm đơn
+    không có mã như đơn Shopee) — gọi lại hàm đó thay vì chép luật sang đây.
+
+    Trả về None khi tài khoản chưa khai mã nào: giống /sale_plan, coi như KHÔNG đơn nào là
+    của mình, thay vì mở ra tất cả.
+    """
+    service_name = 'hlv.delivery.planner.service'
+    if service_name not in env:
+        # Bản cài không có module trang sale: lùi về người phụ trách đơn.
+        return [('user_id', '=', env.user.id)]
+    # Không sudo: hàm bên đó đọc ``self.env.user`` để lấy mã của CHÍNH người đang xem.
+    return env[service_name]._get_mine_only_domain()
+
+
 def _my_order_ids(env):
-    """Id đơn bán do chính người đang xem phụ trách. Dùng để tô điểm trên bảng chuyến."""
-    return env['sale.order'].sudo().search([
-        ('user_id', '=', env.user.id),
-        ('state', 'in', ('sale', 'done')),
-    ]).ids
+    """Id đơn bán thuộc về người đang xem. Dùng để tô điểm trên bảng chuyến."""
+    domain = _mine_domain(env)
+    if domain is None:
+        return []
+    return env['sale.order'].sudo().search(
+        domain + [('state', 'in', ('sale', 'done'))]).ids
 
 
 def my_unplanned_orders(env):
@@ -126,9 +154,11 @@ def my_unplanned_orders(env):
     Đây là chỗ người bán hàng bấm "Nhờ AI xếp lịch" — nên chỉ liệt kê đơn thật sự còn phải
     giao, sắp theo ngày hẹn gần nhất trước.
     """
+    domain = _mine_domain(env)
+    if domain is None:
+        return []
     today = fields.Date.context_today(env['sale.order'])
-    orders = env['sale.order'].sudo().search([
-        ('user_id', '=', env.user.id),
+    orders = env['sale.order'].sudo().search(domain + [
         ('state', 'in', ('sale', 'done')),
         ('delivery_status', '!=', 'full'),
         ('vtracking_plan_id', '=', False),
