@@ -18,11 +18,16 @@ hoạt động, mới thực sự in ra máy. Hàng chờ là bản ghi bền (p
 import base64
 import logging
 
-from odoo import fields, models
+from odoo import api, fields, models
 
 _logger = logging.getLogger(__name__)
 
 REPORT_NAME_SEARCH = 'Hoạt động lấy hàng TSN'
+
+# Ô "Hình thức giao hàng" sale gõ tay ở cấp ĐƠN (field Odoo Studio). KHÔNG phải
+# x_studio_delivery_type — field đó là "Loại vận chuyển" (HLV vận chuyển / khách tự lấy...),
+# nghĩa khác hẳn. Khai một chỗ duy nhất để chỗ khác đọc lại chứ không gõ lại tên field.
+ORDER_DELIVERY_TYPE_FIELD = 'x_studio_htgh'
 
 
 class DeliveryPlannerServiceIotPrint(models.AbstractModel):
@@ -30,6 +35,45 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
 
     def _get_sale_order_for_picking(self, picking):
         return picking.sale_id or picking.move_ids.sale_line_id.order_id[:1]
+
+    @api.model
+    def _order_delivery_type_field(self):
+        """Tên field HTGH cấp đơn nếu nó còn tồn tại, ngược lại None.
+
+        Là field Odoo Studio nên có thể bị xoá/đổi tên ngoài code — chỗ nào dùng cũng phải hỏi
+        qua đây trước, đừng gõ thẳng tên field vào domain: field không còn mà vẫn đưa vào domain
+        là cron chết mỗi phút."""
+        return ORDER_DELIVERY_TYPE_FIELD if ORDER_DELIVERY_TYPE_FIELD in self.env['sale.order']._fields else None
+
+    def _order_delivery_type(self, sale_order):
+        """HTGH ghi ở cấp đơn, '' nếu đơn để trống hoặc field Studio không còn."""
+        field_name = self._order_delivery_type_field()
+        if not sale_order or not field_name:
+            return ''
+        return (sale_order[field_name] or '').strip()
+
+    def _backfill_picking_delivery_type(self, picking, sale_order):
+        """Phiếu thiếu HTGH thì lấy HTGH của ĐƠN ghi xuống phiếu. Trả về True nếu sau bước này
+        phiếu đã có HTGH để in.
+
+        Chỉ dùng cho luồng TỰ ĐỘNG in: sale bấm tay thì vẫn phải tự nhập cho đúng lần lấy hàng
+        này (1 đơn nhiều backorder có thể giao mỗi lần một kiểu — đó là lý do field nằm ở phiếu
+        chứ không ở đơn, xem stock_picking.x_pick_delivery_type). Còn khi hệ thống tự in thì không
+        có ai để hỏi, mà HTGH của đơn là thông tin sale đã gõ — dùng nó đúng hơn là chặn in.
+
+        GHI thật xuống phiếu (không chỉ dùng tạm để render) để phiếu in ra, dashboard và lần in
+        lại sau đều thấy cùng một giá trị."""
+        if picking.x_pick_delivery_type:
+            return True
+        value = self._order_delivery_type(sale_order)
+        if not value:
+            return False
+        picking.sudo().write({'x_pick_delivery_type': value})
+        _logger.info(
+            'Auto print: lấy HTGH %r từ đơn %s ghi xuống phiếu %s (phiếu chưa có HTGH).',
+            value, sale_order.name, picking.name,
+        )
+        return True
 
     def _is_pick_slip_locked(self):
         """Cờ tạm khóa tính năng in phiếu lấy hàng qua sale plan trước khi chính thức vận
@@ -241,11 +285,14 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         sale_order = self._get_sale_order_for_picking(picking)
         if not sale_order:
             return {'success': False, 'message': 'Không xác định được đơn hàng của phiếu này'}
-        if not picking.x_pick_delivery_type:
+        # Phiếu chưa có HTGH thì lấy của đơn bỏ xuống rồi in tiếp — đo trên PRD: 69/77 phiếu đang
+        # "Sẵn sàng" bị chặn chỉ vì thiếu HTGH ở cấp phiếu, trong khi đơn đã có sẵn giá trị.
+        if not self._backfill_picking_delivery_type(picking, sale_order):
             return {
                 'success': False,
                 'missing_delivery_type': True,
-                'message': 'Phiếu này chưa có Hình thức giao hàng, không thể tự động gửi in.',
+                'message': 'Phiếu này chưa có Hình thức giao hàng và đơn %s cũng không có, '
+                           'không thể tự động gửi in.' % sale_order.name,
             }
         if picking.state != 'assigned':
             return {'success': False, 'no_stock': True, 'message': 'Phiếu chưa giữ đủ hàng.'}

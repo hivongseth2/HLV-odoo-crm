@@ -25,6 +25,7 @@ def section(t):
 
 Picking = env['stock.picking'].sudo()  # noqa: F821
 Queue = env['hlv.iot.print.queue'].sudo()  # noqa: F821
+Service = env['hlv.delivery.planner.service'].sudo()  # noqa: F821
 
 base_domain = [
     ('state', '=', 'assigned'),
@@ -32,12 +33,14 @@ base_domain = [
     ('return_id', '=', False),
 ]
 
-section("1) Vì sao 88 phiếu 'assigned' rụng dần qua từng điều kiện")
+section("1) Phiếu PICK 'assigned' rụng dần qua từng điều kiện")
 steps = [
     ("PICK đang 'assigned' (chưa lọc gì)", []),
     ("+ chưa từng tự động gửi in", [('x_auto_print_requested', '=', False)]),
     ("+ CHƯA in (x_printed = False)", [('x_printed', '=', False)]),
-    ("+ đã có Hình thức giao hàng", [('x_pick_delivery_type', '!=', False)]),
+    # HTGH: phiếu tự có, hoặc đơn có để lấy xuống — dùng đúng helper của code, không gõ lại điều
+    # kiện ở đây (gõ lại là script kiểm một kiểu, cron chạy một kiểu).
+    ("+ có HTGH (ở phiếu hoặc lấy được từ đơn)", Picking._auto_print_delivery_type_domain()),
     ("+ kho ĐÃ gán máy in IoT", [('picking_type_id.warehouse_id.x_iot_printer_device_id', '!=', False)]),
 ]
 cumulative = list(base_domain)
@@ -66,8 +69,14 @@ for wh, picks in by_wh.items():
     print(f"    mẫu phiếu       : {wh.x_iot_report_id.name if wh.x_iot_report_id else '(mặc định: Hoạt động lấy hàng TSN)'}")
     for p in picks[:15]:
         so = p.sale_id or p.move_ids.sale_line_id.order_id[:1]
+        # Hiện rõ HTGH lấy từ đâu: phiếu tự có, hay sẽ lấy từ đơn bỏ xuống lúc gửi in.
+        htgh = p.x_pick_delivery_type or ''
+        source = 'phiếu'
+        if not htgh:
+            htgh = Service._order_delivery_type(so)
+            source = 'từ đơn'
         print(f"      {p.name:22s} {so.name if so else '(không rõ đơn)':22s} "
-              f"HTGH={(p.x_pick_delivery_type or '')[:18]:18s} scheduled={p.scheduled_date}")
+              f"HTGH[{source}]={htgh[:18]:18s} scheduled={p.scheduled_date}")
     if len(picks) > 15:
         print(f"      ... và {len(picks) - 15} phiếu nữa")
 
@@ -77,12 +86,13 @@ print(f"  Tổng bị loại: {len(excluded)}")
 reasons = {}
 for p in excluded:
     wh = p.picking_type_id.warehouse_id
+    so = p.sale_id or p.move_ids.sale_line_id.order_id[:1]
     if p.x_printed:
         key = 'đã in rồi (x_printed)'
     elif p.x_auto_print_requested:
         key = 'đã tự động gửi in trước đó'
-    elif not p.x_pick_delivery_type:
-        key = 'thiếu Hình thức giao hàng (sale nhập là tự vào lượt sau)'
+    elif not p.x_pick_delivery_type and not Service._order_delivery_type(so):
+        key = 'không có HTGH ở cả phiếu lẫn đơn (sale nhập là tự vào lượt sau)'
     elif not (wh and wh.x_iot_printer_device_id):
         key = f'kho chưa gán máy in IoT: {wh.name if wh else "(không rõ kho)"}'
     else:

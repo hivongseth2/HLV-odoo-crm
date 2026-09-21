@@ -99,16 +99,36 @@ class StockPicking(models.Model):
             gửi lại nữa — nếu cần in lại thì dùng "Đưa lại vào hàng chờ" ở hàng chờ in.
           - kho phải ĐÃ gán máy in IoT: kho chưa gán thì yêu cầu chỉ vào hàng chờ để nằm đó rồi
             báo lỗi (xem iot_print_queue._do_print), làm rác hàng chờ của kho khác.
-          - x_pick_delivery_type: thiếu HTGH thì service từ chối in; chờ sale nhập xong lượt
-            cron sau tự bắt lại, nên KHÔNG cần đánh dấu gì ở đây."""
+          - HTGH: xem _auto_print_delivery_type_domain()."""
         return [
             ('state', '=', 'assigned'),
             ('picking_type_id.sequence_code', 'ilike', 'PICK'),
             ('return_id', '=', False),
             ('x_auto_print_requested', '=', False),
             ('x_printed', '=', False),
-            ('x_pick_delivery_type', '!=', False),
             ('picking_type_id.warehouse_id.x_iot_printer_device_id', '!=', False),
+        ] + self._auto_print_delivery_type_domain()
+
+    @api.model
+    def _auto_print_delivery_type_domain(self):
+        """Điều kiện HTGH: phiếu tự có HTGH, HOẶC đơn của phiếu có HTGH để lấy xuống (xem
+        services/delivery_planner_iot_print._backfill_picking_delivery_type). Đo trên PRD: 69/77
+        phiếu "Sẵn sàng" bị loại chỉ vì thiếu HTGH ở cấp phiếu dù đơn đã có — lọc cứng theo
+        x_pick_delivery_type là auto-print gần như không bao giờ có việc để làm.
+
+        Nhánh sale_id = False là phiếu không liên kết đơn qua procurement group: service còn tự
+        truy đơn qua move_ids.sale_line_id nên vẫn có thể in được. KHÔNG đưa đường
+        move_ids.sale_line_id.order_id vào domain vì nó thành subquery 3 tầng trên toàn bộ đơn/
+        dòng đơn, chạy mỗi phút thì quá nặng — thà để vài phiếu lẻ đó được quét lại mỗi lượt
+        (phiếu không có đơn thật sẽ bị đánh dấu ngay lượt đầu và tự rơi khỏi danh sách) còn hơn
+        im lặng bỏ sót chúng."""
+        field_name = self.env['hlv.delivery.planner.service']._order_delivery_type_field()
+        if not field_name:
+            return [('x_pick_delivery_type', '!=', False)]
+        return [
+            '|', ('x_pick_delivery_type', '!=', False),
+            '|', ('sale_id.%s' % field_name, '!=', False),
+                 ('sale_id', '=', False),
         ]
 
     @api.model
