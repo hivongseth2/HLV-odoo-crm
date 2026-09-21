@@ -54,6 +54,18 @@
                         <field name="geocode_google_key" password="True"
                                invisible="geocode_provider != 'googlemap'"/>
                     </group>
+                    <group string="Worker AI xử lý yêu cầu của nhân viên">
+                        <div class="text-muted mb-2" colspan="2">
+                            Yêu cầu nhân viên gửi được đẩy ngay tới tài khoản này qua kênh
+                            thông báo của Odoo; máy chạy worker đăng nhập bằng chính tài
+                            khoản đó và nằm chờ. Để trống thì phiếu vẫn tạo được nhưng
+                            không ai được gọi — nằm chờ tới khi có người bấm
+                            <em>Gửi lại cho AI</em>. Dùng một tài khoản RIÊNG, đừng dùng
+                            tài khoản của người: mật khẩu của nó nằm trên máy chạy worker.
+                        </div>
+                        <field name="ai_worker_user_id"
+                               options="{'no_create': True, 'no_open': True}"/>
+                    </group>
                     <div class="alert alert-info" role="alert">
                         Chỉ xe bật <strong>"Theo dõi vTracking"</strong> mới được đồng bộ, mới
                         hiện trên bản đồ và mới trả ra API. Bật cờ đó ở
