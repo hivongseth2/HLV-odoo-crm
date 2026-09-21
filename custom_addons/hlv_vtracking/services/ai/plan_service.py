@@ -87,15 +87,33 @@ def create_plan(env, vehicle, day, session, start_place, actor):
             'Xe %s chưa bật "Theo dõi vTracking" nên không lập kế hoạch được.'
             % (vehicle.license_plate or vehicle.display_name)
         )
-    if start_place and not (start_place.has_coords and start_place.warehouse_id):
-        raise UserError(
-            'Điểm xuất phát "%s" phải có toạ độ và phải gắn với một kho trong Odoo.'
-            % start_place.name
-        )
+    # Không truyền thì lấy điểm xuất phát mặc định của xe: AI hay quên tham số này, và thiếu
+    # nó là kế hoạch hụt cả chặng kho -> điểm đầu lẫn chặng về.
+    start_place = start_place or vehicle.dispatch_start_place_id or None
+    check_start_place(start_place)
     plan, created = plan_documents.get_or_create_plan(env, vehicle, day, session, start_place)
     if created:
         log_action(plan, actor, 'tạo kế hoạch')
     return plan, created
+
+
+def check_start_place(start_place):
+    """Điểm xuất phát phải có toạ độ (để tính chặng đầu) và gắn kho (để biết xe chở chứng
+    từ của kho nào). None thì cho qua — kế hoạch chưa có điểm xuất phát vẫn hợp lệ."""
+    if start_place and not (start_place.has_coords and start_place.warehouse_id):
+        raise UserError(
+            'Điểm xuất phát "%s" phải có toạ độ và phải gắn với một kho trong Odoo '
+            '(V-Tracking > Địa điểm > ô "Kho trong Odoo").' % start_place.name
+        )
+
+
+def set_start_place(plan, start_place, actor):
+    """Đổi điểm xuất phát của kế hoạch đã tạo. Lộ trình tự tính lại."""
+    ensure_editable(plan)
+    check_start_place(start_place)
+    plan.start_place_id = start_place
+    log_action(plan, actor, 'đổi điểm xuất phát thành "%s"' % start_place.name)
+    return plan
 
 
 def add_documents(plan, pickings, orders, actor):

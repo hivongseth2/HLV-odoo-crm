@@ -1,6 +1,7 @@
 from . import res_company
 from . import fleet_vehicle
 from . import fleet_vehicle_capacity
+from . import fleet_vehicle_assignment
 from . import stock_picking
 from . import sale_order
 from . import vtracking_position
@@ -21,6 +22,7 @@ from . import vtracking_plan
 from . import vtracking_plan_actions
 from . import vtracking_plan_actual
 from . import vtracking_plan_notes
+from . import vtracking_plan_driver
 from . import vtracking_plan_line
 from . import vtracking_plan_line_zone
 from . import vtracking_plan_line_profile

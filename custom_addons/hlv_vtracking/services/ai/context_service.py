@@ -133,4 +133,6 @@ def vehicle_blocks(env, company):
         'driver': vehicle.driver_id.name or None,
         # Chở được gì: AI phải đọc khối này trước khi chọn xe cho hàng quá khổ / nhiều kiện.
         'capacity': vehicle._dispatch_capacity_payload(),
+        # Ai lái (theo tài khoản quét barcode) và xe thường xuất phát từ đâu.
+        'assignment': vehicle._dispatch_assignment_payload(),
     } for vehicle in vehicles]

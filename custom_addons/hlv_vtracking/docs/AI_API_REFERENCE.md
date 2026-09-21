@@ -327,6 +327,16 @@ Trả chi tiết kế hoạch + `created`. Đã có kế hoạch cho (xe, ngày,
 sẵn với `created: false` — **không phải lỗi**. Lỗi 422 khi xe chưa bật theo dõi, hoặc điểm
 xuất phát chưa có toạ độ / chưa gắn kho.
 
+Không truyền `start_place_id` thì lấy **điểm xuất phát mặc định của xe**
+(`vehicles[].assignment.start_place_id` ở `/context`). Tài xế của kế hoạch mặc định là tài
+xế gắn với xe (`assignment.driver_user_id`), hiển thị bằng `shipper_name`.
+
+## 13b. `POST /plans/<id>/start` 🔒
+
+`{"start_place_id": 3}` — đổi điểm xuất phát của kế hoạch **đã tạo**. Cần vì `POST /plans`
+gặp kế hoạch có sẵn thì trả lại nguyên trạng. Lộ trình tự tính lại. Điểm phải có toạ độ và
+gắn kho, nếu không trả 422.
+
 ## 14. `POST /plans/<id>/documents` 🔒
 
 ```json

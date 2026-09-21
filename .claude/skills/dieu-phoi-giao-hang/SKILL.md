@@ -46,6 +46,8 @@ Từ `context` lấy luôn hai thứ dùng ở bước 7:
 - **`warehouses[].start_place_id`** của kho xuất hàng — truyền vào `post plans`. Bỏ trống
   thì thời gian trên kế hoạch thiếu chặng kho → điểm đầu và chặng về. `null` thì nêu lại
   cho người dùng: địa điểm loại Kho chưa gắn ô *Kho trong Odoo*.
+- **`vehicles[].assignment`** — tài xế của xe (`driver_name` = tên shipper) và điểm xuất
+  phát mặc định. Kế hoạch lỡ tạo thiếu điểm xuất phát thì sửa bằng `post plans/<id>/start`.
 - **`vehicles[].capacity`** — chọn xe theo khối này, không theo biển số. Đọc `note`
   nguyên văn. `role: truck` chỉ dùng cho hàng quá khổ, `technical` là xe đi lắp đặt.
   `declared: false` → **đừng đoán** xe đó là xe gì, hỏi người dùng.

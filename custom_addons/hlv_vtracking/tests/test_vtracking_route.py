@@ -16,6 +16,7 @@ import types
 import unittest
 
 try:
+    from odoo.addons.hlv_vtracking.tools import vtracking_planning as planning
     from odoo.addons.hlv_vtracking.tools import vtracking_route as route
 except ImportError:  # chạy bằng python trần, ngoài Odoo
     HERE = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +37,8 @@ except ImportError:  # chạy bằng python trần, ngoài Odoo
     _load('odoo.addons.hlv_geo_utils.tools.geo_distance',
           os.path.join(ADDONS, 'hlv_geo_utils', 'tools', 'geo_distance.py'))
     route = _load('vtracking_route', os.path.join(ADDONS, 'hlv_vtracking', 'tools', 'vtracking_route.py'))
+    planning = _load('vtracking_planning',
+                     os.path.join(ADDONS, 'hlv_vtracking', 'tools', 'vtracking_planning.py'))
 
 
 KHO = (10.7489944, 106.9241992)
@@ -164,6 +167,29 @@ class TestChuyenThat2109(unittest.TestCase):
         self.assertEqual(sum(1 for leg in legs if not leg['same_point']), 5)
         # NOX: ba đơn tới cùng một lúc
         self.assertEqual(len({leg['arrive_offset_minutes'] for leg in legs[2:5]}), 1)
+
+
+class TestCanhBaoTheoDiem(unittest.TestCase):
+    """Trần và ngưỡng của cụm đo bằng ĐIỂM — so với số phiếu là báo sai."""
+
+    ZONE = {'name': 'Nhơn Trạch', 'max_stops': 8, 'min_stops_worth_trip': 3}
+
+    def test_chin_phieu_nam_diem_khong_vuot_tran(self):
+        # Trước khi sửa, hàm nhận số PHIẾU: 9 phiếu -> "vượt trần 8" dù chỉ 5 điểm.
+        self.assertEqual(planning.zone_warnings(self.ZONE, 5), [])
+
+    def test_vuot_tran_that(self):
+        messages = planning.zone_warnings(self.ZONE, 9)
+        self.assertTrue(any('Vượt trần 8' in m for m in messages))
+
+    def test_duoi_nguong(self):
+        messages = planning.zone_warnings(self.ZONE, 2)
+        self.assertTrue(any('dưới ngưỡng 3' in m for m in messages))
+
+    def test_gom_cum_khong_con_noi_tinh_theo_cum_chinh(self):
+        message = planning.zone_warnings(self.ZONE, 5, ['Long Thành'])[0]
+        self.assertIn('Mỗi điểm tính theo định mức cụm của nó', message)
+        self.assertNotIn('Định mức đang tính theo', message)
 
 
 if __name__ == '__main__':

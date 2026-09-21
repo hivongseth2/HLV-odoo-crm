@@ -100,6 +100,11 @@ class HlvVtrackingPlan(models.Model):
         help='Phiếu chưa tra được toạ độ thì không tính được vào quãng đường — con số km '
              'đang thiếu phần của chúng.',
     )
+    stop_count = fields.Integer(
+        compute='_compute_route', store=True, string='Số điểm dừng',
+        help='Số chỗ xe thật sự phải dừng — nhiều phiếu liền nhau cùng một chỗ tính là một. '
+             'Trần điểm và ngưỡng đáng chạy của cụm so với con số NÀY, không so với số phiếu.',
+    )
 
     # --- Thực tế ------------------------------------------------------------
     # Chỉ ``services/vtracking_actual.py`` được ghi vào nhóm ô này. Đừng suy số thực tế từ
@@ -160,6 +165,7 @@ class HlvVtrackingPlan(models.Model):
         for plan in self:
             estimate = estimate_route(**plan._route_kwargs())
             plan.missing_coords_count = estimate['missing_coords_count']
+            plan.stop_count = sum(1 for leg in estimate['legs'] if not leg['same_point'])
             plan.distance_km = estimate['distance_km']
             plan.drive_minutes = estimate['drive_minutes']
             plan.service_minutes = estimate['service_minutes']
@@ -263,9 +269,13 @@ class HlvVtrackingPlan(models.Model):
                 continue
             plan.zone_id = max(set(zones), key=zones.count)
 
-    @api.depends('zone_id', 'line_count', 'line_ids.zone_id')
+    @api.depends('zone_id', 'stop_count', 'line_ids.zone_id')
     def _compute_zone_warning(self):
-        """Cảnh báo số điểm và việc gom nhiều cụm. Luật nằm ở ``tools/vtracking_planning``."""
+        """Cảnh báo số điểm và việc gom nhiều cụm. Luật nằm ở ``tools/vtracking_planning``.
+
+        So với ``stop_count`` (điểm dừng) chứ không phải ``line_count`` (phiếu): 8 phiếu
+        ở 5 chỗ là chuyến 5 điểm, so theo phiếu thì báo vượt trần sai.
+        """
         for plan in self:
             zone = plan.zone_id
             params = dict(zone.route_params(), name=zone.name) if zone else None
@@ -273,7 +283,7 @@ class HlvVtrackingPlan(models.Model):
                 line.zone_id.name for line in plan.line_ids
                 if line.zone_id and line.zone_id != zone
             ]
-            plan.zone_warning = ' '.join(zone_warnings(params, plan.line_count, others)) or False
+            plan.zone_warning = ' '.join(zone_warnings(params, plan.stop_count, others)) or False
 
     @api.depends('actual_line_count', 'actual_start_at')
     def _compute_has_actual_data(self):

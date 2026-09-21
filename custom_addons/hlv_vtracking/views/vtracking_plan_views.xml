@@ -59,8 +59,10 @@
                 <field name="session"/>
                 <field name="vehicle_id"/>
                 <field name="zone_id" optional="show"/>
-                <field name="driver_id" optional="show"/>
+                <field name="driver_name" string="Tài xế" optional="show"/>
+                <field name="driver_id" optional="hide"/>
                 <field name="line_count" sum="Tổng phiếu"/>
+                <field name="stop_count" sum="Tổng điểm" optional="show"/>
                 <field name="amount_total" sum="Tổng tiền" widget="monetary"/>
                 <field name="distance_km" sum="Tổng km"/>
                 <field name="duration_display" string="Dự kiến"/>
@@ -111,6 +113,8 @@
                             <field name="session"/>
                             <field name="vehicle_id"
                                    options="{'no_create': True, 'no_open': True}"/>
+                            <field name="driver_user_id" options="{'no_create': True}"/>
+                            <field name="driver_name" readonly="1"/>
                             <field name="driver_id" readonly="1"/>
                             <field name="start_place_id"
                                    options="{'no_create': True}"
@@ -133,6 +137,11 @@
                     <div class="alert alert-warning" role="alert"
                          invisible="not zone_warning">
                         <field name="zone_warning" readonly="1" nolabel="1"/>
+                    </div>
+
+                    <div class="alert alert-info" role="status"
+                         invisible="not driver_mismatch">
+                        <field name="driver_mismatch" readonly="1" nolabel="1"/>
                     </div>
 
                     <div class="alert alert-warning" role="alert"

@@ -41,13 +41,15 @@ def fleet_status(env, company, day):
         vehicle_plans = plans.get(vehicle.id, [])
         item = vehicle._vtracking_map_payload()
         item['capacity'] = vehicle._dispatch_capacity_payload()
+        item['assignment'] = vehicle._dispatch_assignment_payload()
         item['plans'] = [
             {key: value for key, value in plan.items() if key != 'lines'}
             for plan in vehicle_plans
         ]
         item['day_load'] = {
             'plan_count': len(vehicle_plans),
-            'stop_count': sum(plan['line_count'] for plan in vehicle_plans),
+            'stop_count': sum(plan['stop_count'] for plan in vehicle_plans),
+            'line_count': sum(plan['line_count'] for plan in vehicle_plans),
             'amount_total': sum(plan['amount_total'] for plan in vehicle_plans),
             'distance_km': round(sum(plan['distance_km'] for plan in vehicle_plans), 1),
             'total_minutes': sum(plan['total_minutes'] for plan in vehicle_plans),

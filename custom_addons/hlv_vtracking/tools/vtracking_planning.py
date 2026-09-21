@@ -8,11 +8,12 @@ chỉ lộ ra khi xe đã ra đường.
 from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km
 
 
-def zone_warnings(zone, line_count, other_zone_names=()):
+def zone_warnings(zone, stop_count, other_zone_names=()):
     """Cảnh báo về số điểm và việc gom nhiều cụm. Trả về list câu, rỗng nếu không có gì.
 
     zone: dict định mức cụm (``hlv.vtracking.zone.route_params()``), hoặc None.
-    line_count: số điểm đang có trong kế hoạch.
+    stop_count: số ĐIỂM DỪNG của kế hoạch — nhiều phiếu cùng một chỗ tính là một. Truyền
+        số phiếu vào đây là báo vượt trần sai: trần của cụm đo bằng điểm.
     other_zone_names: tên các cụm KHÁC cũng có mặt trong kế hoạch.
 
     Trần điểm là trần **mềm** — chỉ cảnh báo, không chặn: điều phối biết rõ hơn hệ thống
@@ -20,24 +21,25 @@ def zone_warnings(zone, line_count, other_zone_names=()):
     chỉ có đúng một điểm, mỗi chuyến như vậy tốn cả chặng kho → cụm cho một lần giao.
     """
     messages = []
-    if zone and line_count:
+    if zone and stop_count:
         max_stops = zone.get('max_stops') or 0
         minimum = zone.get('min_stops_worth_trip') or 0
         name = zone.get('name') or 'cụm đang chọn'
-        if max_stops and line_count > max_stops:
+        if max_stops and stop_count > max_stops:
             messages.append(
-                'Vượt trần %s điểm của cụm %s (đang %s điểm).' % (max_stops, name, line_count)
+                'Vượt trần %s điểm của cụm %s (đang %s điểm).' % (max_stops, name, stop_count)
             )
-        if minimum and line_count < minimum:
+        if minimum and stop_count < minimum:
             messages.append(
                 'Chỉ %s điểm — dưới ngưỡng %s của cụm %s. Cân nhắc gộp sang chuyến khác '
-                'hoặc gửi chuyển phát nhanh.' % (line_count, minimum, name)
+                'hoặc gửi chuyển phát nhanh.' % (stop_count, minimum, name)
             )
     others = sorted(set(other_zone_names))
     if others:
         messages.append(
-            'Gom nhiều cụm: %s. Định mức đang tính theo %s.'
-            % (', '.join(others), (zone or {}).get('name') or 'cụm chính')
+            'Gom nhiều cụm: %s. Mỗi điểm tính theo định mức cụm của nó; chặng nối giữa '
+            'hai cụm chưa có số đo nên ước theo km. Trần điểm đang so theo cụm %s.'
+            % (', '.join(others), (zone or {}).get('name') or 'chính')
         )
     return messages
 

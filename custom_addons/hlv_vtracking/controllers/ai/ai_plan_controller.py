@@ -97,6 +97,22 @@ class AiPlanController(http.Controller):
         detail['created'] = created
         return detail
 
+    @http.route('/api/v1/ai/plans/<int:plan_id>/start', methods=['POST', 'OPTIONS'], **ROUTE_DEFAULTS)
+    @api_endpoint(write=True)
+    def set_start(self, ctx, plan_id, **_params):
+        """Đổi điểm xuất phát của kế hoạch đã tạo. Body: ``{"start_place_id": 3}``.
+
+        Cần vì ``POST /plans`` gặp kế hoạch có sẵn thì trả lại nguyên trạng — kế hoạch tạo
+        lúc chưa có điểm xuất phát sẽ thiếu chặng kho → điểm đầu mãi mãi nếu không có lối này.
+        """
+        plan = self._plan(ctx, plan_id)
+        body = ctx.json_body()
+        if not body.get('start_place_id'):
+            raise ApiError('BAD_PARAM', 'Thiếu "start_place_id".')
+        place = ctx.browse_or_404('hlv.vtracking.place', body['start_place_id'], 'địa điểm xuất phát')
+        plan_service.set_start_place(plan, place, ctx.api_key.name)
+        return plan_service.plan_detail(plan)
+
     @http.route('/api/v1/ai/plans/<int:plan_id>/documents', methods=['POST', 'OPTIONS'], **ROUTE_DEFAULTS)
     @api_endpoint(write=True)
     def add_documents(self, ctx, plan_id, **_params):
