@@ -52,6 +52,20 @@
             <field name="active" eval="True"/>
         </record>
 
+        <!-- Học lại định mức cụm từ chuyến đã chạy. Hằng ngày, chạy sau giờ hành chính
+             để số thực tế của cả ngày đã được cron trên đọc xong. Chỉ ghi ĐỀ XUẤT — người
+             điều phối bấm "Áp dụng" trên cụm tuyến. -->
+        <record id="cron_vtracking_calibrate_norms" model="ir.cron">
+            <field name="name">V-Tracking: đề xuất định mức cụm từ thực tế</field>
+            <field name="model_id" ref="model_hlv_vtracking_zone"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_calibrate_norms()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="nextcall" eval="(DateTime.now().replace(hour=13, minute=0, second=0)).strftime('%Y-%m-%d %H:%M:%S')"/>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="cron_vtracking_gc_positions" model="ir.cron">
             <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
             <field name="model_id" ref="model_hlv_vtracking_position"/>

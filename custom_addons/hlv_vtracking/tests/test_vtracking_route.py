@@ -9,36 +9,15 @@ kéo theo ``import odoo`` và chết trước khi chạy được test nào.)
 chiếu kế hoạch với thực tế. Sai ở đây là sai mọi con số của module.
 """
 
-import importlib.util
-import os
-import sys
-import types
 import unittest
 
 try:
-    from odoo.addons.hlv_vtracking.tools import vtracking_planning as planning
-    from odoo.addons.hlv_vtracking.tools import vtracking_route as route
-except ImportError:  # chạy bằng python trần, ngoài Odoo
-    HERE = os.path.dirname(os.path.abspath(__file__))
-    ADDONS = os.path.abspath(os.path.join(HERE, '..', '..'))
+    from . import standalone
+except ImportError:  # chạy bằng python trần: thư mục tests là gốc
+    import standalone
 
-    def _load(name, path):
-        spec = importlib.util.spec_from_file_location(name, path)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        spec.loader.exec_module(module)
-        return module
-
-    # vtracking_route import haversine qua đường dẫn addon của Odoo — dựng đúng đường dẫn
-    # đó từ file thật, không viết lại hàm.
-    for package in ('odoo', 'odoo.addons', 'odoo.addons.hlv_geo_utils',
-                    'odoo.addons.hlv_geo_utils.tools'):
-        sys.modules.setdefault(package, types.ModuleType(package))
-    _load('odoo.addons.hlv_geo_utils.tools.geo_distance',
-          os.path.join(ADDONS, 'hlv_geo_utils', 'tools', 'geo_distance.py'))
-    route = _load('vtracking_route', os.path.join(ADDONS, 'hlv_vtracking', 'tools', 'vtracking_route.py'))
-    planning = _load('vtracking_planning',
-                     os.path.join(ADDONS, 'hlv_vtracking', 'tools', 'vtracking_planning.py'))
+route = standalone.load_tool('vtracking_route')
+planning = standalone.load_tool('vtracking_planning')
 
 
 KHO = (10.7489944, 106.9241992)
