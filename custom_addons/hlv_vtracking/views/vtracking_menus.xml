@@ -11,76 +11,79 @@
               sequence="90"
               groups="hlv_vtracking.group_vtracking_user"/>
 
-    <menuitem id="menu_vtracking_map" name="Bản đồ đội xe"
+    <!-- Thanh menu gom theo VIỆC người dùng đang làm, không theo model: năm mục ngang,
+         còn lại sổ ra khi bấm. Menu con có con nữa thì Odoo vẽ thành tiêu đề nhóm trong
+         danh sách sổ xuống. Giữ nguyên xmlid cũ, chỉ đổi cha — link đã lưu không gãy. -->
+
+    <menuitem id="menu_vtracking_map" name="Bản đồ"
               parent="menu_vtracking_root" action="action_vtracking_map" sequence="10"/>
 
-    <menuitem id="menu_vtracking_vehicles" name="Xe theo dõi"
-              parent="menu_vtracking_root" action="action_vtracking_vehicles" sequence="20"/>
-
-    <menuitem id="menu_vtracking_import" name="Nhập xe từ vTracking"
-              parent="menu_vtracking_root" action="action_vtracking_import_vehicles"
-              sequence="25" groups="hlv_vtracking.group_vtracking_manager"/>
-
+    <!-- ============ Giao hàng: lập kế hoạch + xem nó dự báo đúng tới đâu ============ -->
+    <menuitem id="menu_vtracking_delivery" name="Giao hàng"
+              parent="menu_vtracking_root" sequence="20"/>
     <menuitem id="menu_vtracking_plan" name="Kế hoạch giao hàng"
-              parent="menu_vtracking_root" action="action_vtracking_plan" sequence="15"/>
-
-    <menuitem id="menu_vtracking_places" name="Địa điểm"
-              parent="menu_vtracking_root" action="action_vtracking_place" sequence="30"/>
-
-    <menuitem id="menu_vtracking_place_import" name="Nhập điểm từ bản đồ"
-              parent="menu_vtracking_root" action="action_vtracking_place_import"
-              sequence="33" groups="hlv_vtracking.group_vtracking_manager"/>
-
-    <menuitem id="menu_vtracking_place_from_partner" name="Tạo địa điểm từ đối tác"
-              parent="menu_vtracking_root" action="action_vtracking_place_from_partner"
-              sequence="35" groups="hlv_vtracking.group_vtracking_manager"/>
-
-    <menuitem id="menu_vtracking_habits" name="Thói quen khách"
-              parent="menu_vtracking_root" action="action_vtracking_partner_profile"
-              sequence="36"/>
-
-    <!-- Theo dõi vòng tự hiệu chỉnh: dự báo đúng tới đâu, định mức đổi thế nào. -->
+              parent="menu_vtracking_delivery" action="action_vtracking_plan" sequence="10"/>
     <menuitem id="menu_vtracking_calibration" name="Hiệu chỉnh định mức"
-              parent="menu_vtracking_root" sequence="38"/>
+              parent="menu_vtracking_delivery" sequence="20"/>
     <menuitem id="menu_vtracking_accuracy" name="Độ chính xác dự báo"
               parent="menu_vtracking_calibration" action="action_vtracking_accuracy"
               sequence="10"/>
     <menuitem id="menu_vtracking_calibration_log" name="Nhật ký hiệu chỉnh"
               parent="menu_vtracking_calibration" action="action_vtracking_calibration_log"
               sequence="20"/>
-    <menuitem id="menu_vtracking_calibration_zones" name="Đề xuất theo cụm"
+    <!-- Cụm tuyến ở đây chứ không ở Cấu hình: đề xuất định mức và nút Áp dụng nằm trên
+         chính màn này. Người dùng thường chỉ xem được (ACL), quản trị mới sửa. -->
+    <menuitem id="menu_vtracking_zones" name="Cụm tuyến &amp; định mức"
               parent="menu_vtracking_calibration" action="action_vtracking_zone"
               sequence="30"/>
 
+    <!-- ============ Đội xe: xe và dấu vết GPS ============ -->
+    <menuitem id="menu_vtracking_fleet" name="Đội xe"
+              parent="menu_vtracking_root" sequence="30"/>
+    <menuitem id="menu_vtracking_vehicles" name="Xe theo dõi"
+              parent="menu_vtracking_fleet" action="action_vtracking_vehicles" sequence="10"/>
     <menuitem id="menu_vtracking_positions" name="Lịch sử vị trí"
-              parent="menu_vtracking_root" action="action_vtracking_position" sequence="40"/>
+              parent="menu_vtracking_fleet" action="action_vtracking_position" sequence="20"/>
+    <menuitem id="menu_vtracking_import" name="Nhập xe từ vTracking"
+              parent="menu_vtracking_fleet" action="action_vtracking_import_vehicles"
+              sequence="30" groups="hlv_vtracking.group_vtracking_manager"/>
 
+    <!-- ============ Địa điểm: nơi xe ghé, thói quen khách, toạ độ ============ -->
+    <menuitem id="menu_vtracking_place_root" name="Địa điểm"
+              parent="menu_vtracking_root" sequence="40"/>
+    <menuitem id="menu_vtracking_places" name="Địa điểm"
+              parent="menu_vtracking_place_root" action="action_vtracking_place" sequence="10"/>
+    <menuitem id="menu_vtracking_habits" name="Thói quen khách"
+              parent="menu_vtracking_place_root" action="action_vtracking_partner_profile"
+              sequence="20"/>
+    <menuitem id="menu_vtracking_addresses" name="Kho toạ độ"
+              parent="menu_vtracking_place_root" action="action_vtracking_address"
+              sequence="30" groups="hlv_vtracking.group_vtracking_manager"/>
+    <menuitem id="menu_vtracking_place_tools" name="Nhập dữ liệu"
+              parent="menu_vtracking_place_root" sequence="40"
+              groups="hlv_vtracking.group_vtracking_manager"/>
+    <menuitem id="menu_vtracking_place_import" name="Nhập điểm từ bản đồ"
+              parent="menu_vtracking_place_tools" action="action_vtracking_place_import"
+              sequence="10"/>
+    <menuitem id="menu_vtracking_place_from_partner" name="Tạo địa điểm từ đối tác"
+              parent="menu_vtracking_place_tools" action="action_vtracking_place_from_partner"
+              sequence="20"/>
+    <menuitem id="menu_vtracking_seed_habits" name="Mồi thói quen đã biết"
+              parent="menu_vtracking_place_tools" action="action_vtracking_seed_habits"
+              sequence="30"/>
+
+    <!-- ============ Cấu hình: chỉ quản trị ============ -->
     <menuitem id="menu_vtracking_config" name="Cấu hình"
               parent="menu_vtracking_root" sequence="90"
               groups="hlv_vtracking.group_vtracking_manager"/>
-
     <menuitem id="menu_vtracking_settings" name="Kết nối vTracking"
               parent="menu_vtracking_config" action="action_vtracking_settings"
               sequence="10"/>
-
-    <menuitem id="menu_vtracking_zones" name="Cụm tuyến"
-              parent="menu_vtracking_config" action="action_vtracking_zone"
-              sequence="12"/>
-
     <menuitem id="menu_vtracking_place_types" name="Loại địa điểm"
               parent="menu_vtracking_config" action="action_vtracking_place_type"
-              sequence="15"/>
-
-    <menuitem id="menu_vtracking_addresses" name="Kho toạ độ"
-              parent="menu_vtracking_config" action="action_vtracking_address"
-              sequence="18"/>
-
-    <menuitem id="menu_vtracking_seed_habits" name="Mồi thói quen đã biết"
-              parent="menu_vtracking_config" action="action_vtracking_seed_habits"
-              sequence="19"/>
-
+              sequence="20"/>
     <menuitem id="menu_vtracking_api_keys" name="Khoá API"
               parent="menu_vtracking_config" action="action_vtracking_api_key"
-              sequence="20"/>
+              sequence="30"/>
 
 </odoo>

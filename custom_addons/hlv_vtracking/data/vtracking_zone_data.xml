@@ -8,7 +8,7 @@
          lần đối chiếu, người điều phối (hoặc AI) sẽ sửa các con số này — nâng cấp module
          không được đè lên thứ đã học được.
 
-         Chưa gán warehouse_id: bản cài nào cũng có id kho khác nhau. Mở Cấu hình > Cụm
+         Chưa gán warehouse_id: bản cài nào cũng có id kho khác nhau. Mở Giao hàng > Hiệu chỉnh định mức > Cụm
          tuyến gán kho một lần sau khi cài. -->
     <data noupdate="1">
 

@@ -65,7 +65,7 @@ Không tham số. Gọi một lần đầu phiên.
 `warehouses[].start_place_id` là giá trị truyền vào `start_place_id` khi tạo kế hoạch xuất
 phát từ kho đó. **Luôn truyền nó** — bỏ trống thì kế hoạch vẫn tạo được nhưng không tính
 chặng kho → điểm đầu và chặng về, thời gian trên kế hoạch thấp hơn thực tế cả tiếng.
-`null` = địa điểm loại Kho chưa được gắn ô *Kho trong Odoo* (V-Tracking → Địa điểm) — nêu
+`null` = địa điểm loại Kho chưa được gắn ô *Kho trong Odoo* (V-Tracking → Địa điểm → Địa điểm) — nêu
 lại cho người dùng.
 
 **`vehicles[].capacity` — đọc trước khi chọn xe.** Ô chưa khai là `null`, không phải 0

@@ -190,7 +190,7 @@ Cả hai đọc qua `_fields` nên module vẫn cài được ở nơi chưa t�
 
 1. Chuẩn hoá địa chỉ thành khoá: bỏ dấu, mở viết tắt (`P.5` → `phuong 5`, `Q.1` → `quan 1`,
    `KCN` → `khu cong nghiep`, `TP.HCM` → `ho chi minh`), bỏ hết ký tự không phải chữ/số.
-2. Tìm khoá đó trong **V-Tracking > Cấu hình > Kho toạ độ**. Có thì dùng luôn, tăng đếm
+2. Tìm khoá đó trong **V-Tracking > Địa điểm > Kho toạ độ**. Có thì dùng luôn, tăng đếm
    *Dùng lại*.
 3. Không có mới gọi geocoder, rồi lưu lại cho lần sau.
 
@@ -232,7 +232,7 @@ Kết quả geocode rơi ngoài khung Việt Nam (vĩ độ 8–23.6, kinh độ
 lưu** — ghi rõ toạ độ sai là bao nhiêu và cách xử lý. Một điểm sai kiểu đó đủ làm quãng
 đường cả kế hoạch nhảy lên hàng nghìn km mà không ai biết vì sao.
 
-Dữ liệu sai đã lưu từ trước: lọc bằng *Toạ độ ngoài Việt Nam* trong **Cấu hình > Kho toạ
+Dữ liệu sai đã lưu từ trước: lọc bằng *Toạ độ ngoài Việt Nam* trong **Địa điểm > Kho toạ
 độ**, sửa địa chỉ hoặc dán toạ độ tay, rồi bấm **Đọc lại từ chứng từ** trên kế hoạch.
 
 Cột **Dùng lại** cho thấy cache tiết kiệm được bao nhiêu lượt. Bản ghi `failed` không tự
@@ -271,7 +271,7 @@ nên không đọc.
 
 ### Hiệu chỉnh định mức
 
-Menu **Hiệu chỉnh định mức** — theo dõi vòng tự học:
+Menu **Giao hàng > Hiệu chỉnh định mức** — theo dõi vòng tự học:
 
 - **Độ chính xác dự báo** — mỗi điểm đã giao: dự kiến tới lúc nào, thực tế tới lúc nào.
   Pivot theo cụm × tuần: *Đúng hẹn (%)* (lệch ≤ 15 phút) và *Lệch tuyệt đối* (phút). Chỉ
@@ -280,7 +280,7 @@ Menu **Hiệu chỉnh định mức** — theo dõi vòng tự học:
 - **Nhật ký hiệu chỉnh** — mỗi tối cron đo lại trung vị từng định mức của từng cụm, ghi một
   dòng (định mức lúc đó, đo được, đề xuất, số mẫu). Mỗi lần bấm *Áp dụng* cũng ghi một dòng:
   cũ → mới, ai bấm. Dạng biểu đồ cho thấy định mức từng cụm trôi theo tuần.
-- **Đề xuất theo cụm** — chính màn Cụm tuyến: cột *→ đề xuất* và nút *Áp dụng*.
+- **Cụm tuyến & định mức** — chuyển từ Cấu hình sang đây: cột *→ đề xuất* và nút *Áp dụng*.
 
 Máy **chỉ đề xuất**, không tự sửa định mức: cần ≥ 10 mẫu và lệch ≥ 2 phút mới có đề xuất.
 
