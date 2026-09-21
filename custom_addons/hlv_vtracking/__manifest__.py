@@ -40,6 +40,9 @@ kế hoạch, nên phụ thuộc thêm sale_stock, purchase_stock và hlv_barcod
         # Phiếu giao (stock.picking) là đơn vị xếp lên xe. sale_stock để có picking.sale_id
         # và để xếp được ĐƠN BÁN vào kế hoạch khi kho chưa soạn hàng, phiếu xuất chưa có.
         'sale_stock',
+        # Phiếu yêu cầu gửi AI do người bán hàng tạo: cần nhóm quyền của sale để phân
+        # quyền đúng, và menu Thao tác trên đơn bán để họ gửi mà không rời màn đang làm.
+        'sales_team',
         # API cho AI lập kế hoạch cần biết hàng của đơn bán đã VỀ chưa: đơn mua nối với
         # đơn bán qua purchase.order.origin, và số đã nhận nằm ở purchase_stock.
         'purchase_stock',
@@ -66,6 +69,7 @@ kế hoạch, nên phụ thuộc thêm sale_stock, purchase_stock và hlv_barcod
         'views/vtracking_plan_views.xml',
         'views/vtracking_plan_add_views.xml',
         'views/vtracking_calibration_views.xml',
+        'views/vtracking_ai_request_views.xml',
         'report/vtracking_plan_report.xml',
         'views/vtracking_position_views.xml',
         'views/vtracking_api_key_views.xml',

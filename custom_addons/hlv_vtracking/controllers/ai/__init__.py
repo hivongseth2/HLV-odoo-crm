@@ -4,3 +4,4 @@ from . import ai_order_controller
 from . import ai_plan_controller
 from . import ai_location_controller
 from . import ai_master_controller
+from . import ai_request_controller

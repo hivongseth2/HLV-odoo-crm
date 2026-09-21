@@ -33,6 +33,8 @@ Base URL `/api/v1/ai` · header `X-API-Key` · khung phản hồi và quy ước
 | 22 | POST 🔒 | `/places/<id>/profile` · `/profiles/seed-known` | Sửa thói quen khách · mồi thói quen đã biết |
 | 23 | POST 🔒 | `/zones/<id>` · `/zones/<id>/apply-calibration` · `/zones/recalibrate` | Sửa định mức · áp dụng đề xuất · tính lại đề xuất |
 | 24 | POST 🔒 · GET | `/vehicles/<id>` · `/drivers` | Sửa chuyên chở + tài xế + điểm xuất phát của xe · danh sách tài xế |
+| 25 | GET | `/requests` · `/requests/<id>` | Yêu cầu nhân viên gửi AI |
+| 25 | POST 🔒 | `/requests/<id>/claim` · `/answer` · `/fail` | Nhận việc · trả lời · báo bí |
 
 ---
 
@@ -536,6 +538,41 @@ như trong `context`.
 POST vehicles/4
 {"role": "van", "payload_kg": 1000, "driver_user_id": 27, "start_place_id": 12}
 ```
+
+## 25. Yêu cầu của nhân viên — `/requests`
+
+Nhân viên bán hàng bấm *Thao tác → Nhờ AI xếp lịch* trên đơn bán, viết mong muốn ("khách
+xin nhận sáng mai trước 10h"). Odoo đẩy ngay một tin qua bus tới máy chạy worker; worker
+gọi Claude, Claude dùng skill `xu-ly-yeu-cau-dieu-phoi` và trả lời qua các endpoint dưới.
+
+| Endpoint | Việc |
+|---|---|
+| `GET requests` | Lọc `state` (mặc định `pending`, `all` xem hết), `limit`, `offset`. Sắp theo phiếu cũ trước |
+| `GET requests/<id>` | Một phiếu |
+| `POST requests/<id>/claim` 🔒 | `{"worker": "laptop-Luan"}` → `{"claimed": true\|false}` |
+| `POST requests/<id>/answer` 🔒 | `{"verdict", "answer", "applied"}` |
+| `POST requests/<id>/fail` 🔒 | `{"error": "..."}` |
+
+Mỗi phiếu: `id`, `state`, `approved`, `request_type` + `request_type_label`, `message`,
+`requester`, `created_at`, `waiting_minutes`, `sale_order_id`/`sale_order_name`,
+`picking_id`, `plan_id`/`plan_name`/**`plan_state`**, `desired_date`, `desired_session`,
+`verdict`, `applied`, `attempt_count`.
+
+**Bắt buộc `claim` trước khi `answer`.** `claimed: false` nghĩa là máy khác đã nhận phiếu
+đó — bỏ qua, đừng thử lại. `answer` gọi khi phiếu không ở trạng thái *AI đang xem* sẽ bị
+từ chối 422: đó là chốt chặn để hai worker không trả lời chồng nhau.
+
+`verdict` là một trong `feasible` (được), `conditional` (được nếu…), `not_feasible`
+(không được), `info` (chỉ trả lời câu hỏi). `answer` là chữ thường, xuống dòng bình thường;
+dòng VIẾT HOA kết thúc bằng `:` thành tiêu đề đậm. Người gửi nhận thông báo ngay khi có
+câu trả lời.
+
+`applied: true` **chỉ** khi đã thật sự sửa kế hoạch xong → phiếu chuyển *Xong*.
+`applied: false` → phiếu ở *AI đã trả lời*, chờ người điều phối bấm *Duyệt* hoặc *Từ chối*.
+
+**Kế hoạch đã chốt thì không sửa.** Thấy `plan_state: "confirmed"` thì chỉ mô tả phương án.
+Người điều phối bấm *Duyệt* → Odoo đưa kế hoạch về nháp (do người bấm, không phải AI) và
+phiếu quay lại `pending` với `approved: true`; lúc đó mới được sửa.
 
 ---
 

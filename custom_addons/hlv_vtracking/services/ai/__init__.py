@@ -4,3 +4,4 @@ from . import order_service
 from . import dispatch_service
 from . import picking_service
 from . import plan_service
+from . import request_service

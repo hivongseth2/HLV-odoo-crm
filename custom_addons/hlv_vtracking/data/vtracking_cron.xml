@@ -66,6 +66,19 @@
             <field name="active" eval="True"/>
         </record>
 
+        <!-- Dự phòng cho tin bus gửi trượt (worker tắt đúng lúc phiếu được tạo, mất
+             mạng...). Chỉ bắn lại tin cho phiếu còn chờ; phiếu đã có người nhận thì
+             ``claim`` từ chối nên gọi lại vô hại. -->
+        <record id="cron_vtracking_ping_ai_requests" model="ir.cron">
+            <field name="name">V-Tracking: gọi lại AI cho yêu cầu còn chờ</field>
+            <field name="model_id" ref="model_hlv_vtracking_ai_request"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_retry_stale()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="cron_vtracking_gc_positions" model="ir.cron">
             <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
             <field name="model_id" ref="model_hlv_vtracking_position"/>

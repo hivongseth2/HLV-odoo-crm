@@ -159,6 +159,15 @@ class ResCompany(models.Model):
         for company in self:
             set_param('base_geolocalize.google_map_api_key', company.geocode_google_key or '')
 
+    # Tài khoản mà máy chạy worker AI đăng nhập vào để giữ websocket. Yêu cầu mới được
+    # đẩy qua kênh bus của chính tài khoản này — để trống thì AI không được gọi dậy, phiếu
+    # nằm chờ cho tới khi có người bấm "Gửi lại".
+    ai_worker_user_id = fields.Many2one(
+        'res.users', string='Tài khoản worker AI',
+        help='Tài khoản riêng cho máy chạy AI, chỉ cần quyền V-Tracking. Đừng dùng tài '
+             'khoản của người: worker đăng nhập bằng mật khẩu lưu trên máy đó.',
+    )
+
     # ------------------------------------------------------------------
     # Hành động
     # ------------------------------------------------------------------

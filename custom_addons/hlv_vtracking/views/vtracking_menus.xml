@@ -23,6 +23,9 @@
               parent="menu_vtracking_root" sequence="20"/>
     <menuitem id="menu_vtracking_plan" name="Kế hoạch giao hàng"
               parent="menu_vtracking_delivery" action="action_vtracking_plan" sequence="10"/>
+    <menuitem id="menu_vtracking_ai_requests" name="Yêu cầu gửi AI"
+              parent="menu_vtracking_delivery" action="action_vtracking_ai_request"
+              sequence="15"/>
     <menuitem id="menu_vtracking_calibration" name="Hiệu chỉnh định mức"
               parent="menu_vtracking_delivery" sequence="20"/>
     <menuitem id="menu_vtracking_accuracy" name="Độ chính xác dự báo"
