@@ -21,15 +21,20 @@ MAX_UNPLANNED = 40
 MAX_MY_REQUESTS = 15
 
 
-def board_data(env, day=None):
-    """Toàn bộ dữ liệu một lần vẽ trang: chuyến trong ngày, xe, đơn của tôi, yêu cầu của tôi."""
+def board_data(env, day=None, saler_code=None, search=None):
+    """Toàn bộ dữ liệu một lần vẽ trang: chuyến trong ngày, xe, đơn của tôi, yêu cầu của tôi.
+
+    ``saler_code``: nhiều nhân viên dùng CHUNG một tài khoản Odoo, nên "của tôi" không suy
+    được từ tài khoản. Người xem tự chọn mã sale MISA của mình trên trang; rỗng nghĩa là
+    lấy toàn bộ mã đã khai cho tài khoản.
+    """
     day = day or fields.Date.context_today(env['hlv.vtracking.plan'])
     company = env.company
     vehicles = env['fleet.vehicle'].sudo().search([
         ('vtracking_enabled', '=', True),
         ('company_id', 'in', [company.id, False]),
     ], order='license_plate')
-    my_order_ids = set(_my_order_ids(env))
+    my_order_ids = set(_my_order_ids(env, saler_code))
     plans = env['hlv.vtracking.plan'].sudo().search([
         ('vehicle_id', 'in', vehicles.ids),
         ('date', '=', day),
@@ -44,11 +49,13 @@ def board_data(env, day=None):
         'tile_attribution': company.vtracking_map_attribution or '',
         'vehicles': [_vehicle_block(vehicle) for vehicle in vehicles],
         'plans': [_plan_block(plan, my_order_ids) for plan in plans],
-        'my_unplanned': my_unplanned_orders(env),
+        'my_unplanned': my_unplanned_orders(env, saler_code, search),
         'my_requests': my_requests(env),
+        'saler_codes': saler_code_options(env),
+        'saler_code': saler_code or '',
         # Chưa khai mã sale MISA thì không đơn nào tính là "của tôi" — trang phải nói ra,
         # nếu không người dùng tưởng mình không có đơn nào.
-        'mine_configured': _mine_domain(env) is not None,
+        'mine_configured': _mine_domain(env, saler_code) is not None,
     }
 
 
@@ -99,6 +106,7 @@ def _plan_block(plan, my_order_ids):
         'distance_km': summary['distance_km'],
         'duration_display': summary['duration_display'],
         'start_name': (summary.get('start') or {}).get('name'),
+        'start': _coords(summary.get('start') or {}),
         'delivered_count': sum(1 for stop in stops if stop['delivered']),
         'has_mine': any(stop['mine'] for stop in stops),
         'stops': stops,
@@ -117,11 +125,48 @@ def _stop_block(line, my_order_ids):
         'waiting_picking': line['waiting_picking'],
         'procedure_blocked': line['procedure_blocked'],
         'arrive_offset_minutes': line.get('arrive_offset_minutes'),
+        'latitude': line['latitude'],
+        'longitude': line['longitude'],
         'mine': line['sale_order_id'] in my_order_ids,
     }
 
 
-def _mine_domain(env):
+def _coords(block):
+    """Chỉ toạ độ của điểm xuất phát, hoặc None — trang dùng để vẽ lộ trình."""
+    if not block or not block.get('latitude'):
+        return None
+    return {'latitude': block['latitude'], 'longitude': block['longitude'],
+            'name': block.get('name') or ''}
+
+
+def saler_code_options(env):
+    """Các mã sale MISA chọn được trên trang.
+
+    Ưu tiên mã đã khai cho tài khoản. Tài khoản dùng chung thường chưa khai gì, nên lùi về
+    các mã ĐANG có trên đơn còn phải giao — người bán hàng nhận ra mã của mình trong đó.
+    """
+    Order = env['sale.order']
+    if 'x_studio_misa_saler_code' not in Order._fields:
+        return []
+    configured = _configured_codes(env)
+    if configured:
+        return configured
+    groups = Order.sudo()._read_group(
+        [('state', 'in', ('sale', 'done')), ('delivery_status', '!=', 'full')],
+        ['x_studio_misa_saler_code'], ['__count'],
+    )
+    return sorted({(code or '').strip() for code, _count in groups if (code or '').strip()})
+
+
+def _configured_codes(env):
+    """Mã khai sẵn cho tài khoản (nếu bản cài có trang /sale_plan)."""
+    service_name = 'hlv.delivery.planner.service'
+    if service_name not in env:
+        return []
+    return env[service_name]._get_current_user_misa_codes()
+
+
+def _mine_domain(env, saler_code=None):
     """Domain "đơn của tôi" — THEO MÃ SALE MISA, không theo người tạo đơn.
 
     Nhiều nhân viên dùng chung một tài khoản Odoo, nên ``user_id`` không nói được đơn của
@@ -131,6 +176,10 @@ def _mine_domain(env):
     Trả về None khi tài khoản chưa khai mã nào: giống /sale_plan, coi như KHÔNG đơn nào là
     của mình, thay vì mở ra tất cả.
     """
+    if saler_code:
+        # Người xem tự khai mình là ai — đây mới là thứ dùng được khi cả phòng chung một
+        # tài khoản Odoo.
+        return [('x_studio_misa_saler_code', '=ilike', saler_code)]
     service_name = 'hlv.delivery.planner.service'
     if service_name not in env:
         # Bản cài không có module trang sale: lùi về người phụ trách đơn.
@@ -139,24 +188,31 @@ def _mine_domain(env):
     return env[service_name]._get_mine_only_domain()
 
 
-def _my_order_ids(env):
+def _my_order_ids(env, saler_code=None):
     """Id đơn bán thuộc về người đang xem. Dùng để tô điểm trên bảng chuyến."""
-    domain = _mine_domain(env)
+    domain = _mine_domain(env, saler_code)
     if domain is None:
         return []
     return env['sale.order'].sudo().search(
         domain + [('state', 'in', ('sale', 'done'))]).ids
 
 
-def my_unplanned_orders(env):
+def my_unplanned_orders(env, saler_code=None, search=None):
     """Đơn của tôi còn phải giao mà CHƯA nằm trong kế hoạch nào.
 
     Đây là chỗ người bán hàng bấm "Nhờ AI xếp lịch" — nên chỉ liệt kê đơn thật sự còn phải
     giao, sắp theo ngày hẹn gần nhất trước.
     """
-    domain = _mine_domain(env)
+    domain = _mine_domain(env, saler_code)
     if domain is None:
         return []
+    if search:
+        # Tìm cả theo phiếu xuất: người bán hàng hay cầm số phiếu kho đọc lên, không phải
+        # lúc nào cũng nhớ số đơn.
+        domain = domain + ['|', '|',
+                           ('name', 'ilike', search),
+                           ('partner_id.name', 'ilike', search),
+                           ('picking_ids.name', 'ilike', search)]
     today = fields.Date.context_today(env['sale.order'])
     orders = env['sale.order'].sudo().search(domain + [
         ('state', 'in', ('sale', 'done')),

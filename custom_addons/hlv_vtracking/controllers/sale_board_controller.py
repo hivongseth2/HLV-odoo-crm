@@ -38,9 +38,17 @@ class VtrackingSaleBoardController(http.Controller):
         })
 
     @http.route('/giao-hang/du-lieu', type='json', auth='user')
-    def board_data(self, date=None, **_kwargs):
+    def board_data(self, date=None, saler_code=None, search=None, **_kwargs):
         _check_internal()
-        return sale_board.board_data(request.env, _parse_date(date))
+        return sale_board.board_data(request.env, _parse_date(date),
+                                     _clean_text(saler_code), _clean_text(search))
+
+    @http.route('/giao-hang/don-chua-xep', type='json', auth='user')
+    def unplanned_orders(self, saler_code=None, search=None, **_kwargs):
+        """Chỉ danh sách đơn chưa xếp — gõ vào ô tìm kiếm không cần tải lại cả trang."""
+        _check_internal()
+        return {'my_unplanned': sale_board.my_unplanned_orders(
+            request.env, _clean_text(saler_code), _clean_text(search))}
 
     @http.route('/giao-hang/vi-tri', type='json', auth='user')
     def vehicle_positions(self, **_kwargs):
@@ -56,6 +64,13 @@ class VtrackingSaleBoardController(http.Controller):
             return sale_board.create_request(request.env, _clean_request(values))
         except UserError as exc:
             return {'error': str(exc.args[0] if exc.args else exc)}
+
+
+def _clean_text(value):
+    """Chuỗi từ trình duyệt -> chuỗi đã cắt, hoặc None. Giới hạn độ dài: ô tìm kiếm đi
+    thẳng vào domain, không để ai dán cả trang văn bản vào đó."""
+    text = (value or '').strip()
+    return text[:80] or None
 
 
 def _parse_date(value):

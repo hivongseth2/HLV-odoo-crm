@@ -20,6 +20,9 @@ window.VtSaleMap = (function () {
     let map = null;
     let markers = new Map();
     let fitted = false;
+    // Lộ trình đang vẽ: đường nối và các số thứ tự ghé. Giữ riêng để xoá gọn khi tắt.
+    let routeLayer = null;
+    let routePlanId = null;
 
     function ensureMap(config) {
         if (map) {
@@ -100,5 +103,62 @@ window.VtSaleMap = (function () {
         }
     }
 
-    return { update };
+    /* Vẽ (hoặc tắt) lộ trình của một chuyến: kho -> các điểm theo đúng thứ tự ghé.
+
+       Đường thẳng nối các điểm, KHÔNG phải đường đi thật — cả module tính km theo đường
+       chim bay, vẽ đường cong giả ở đây chỉ khiến người xem tin vào thứ không có. */
+    function toggleRoute(plan) {
+        if (routePlanId === plan.id) {
+            clearRoute();
+            return false;
+        }
+        clearRoute();
+        const points = [];
+        if (plan.start) {
+            points.push([plan.start.latitude, plan.start.longitude]);
+        }
+        const stops = plan.stops.filter((stop) => stop.latitude && stop.longitude);
+        stops.forEach((stop) => points.push([stop.latitude, stop.longitude]));
+        if (points.length < 2) {
+            return false;
+        }
+        ensureMap({});
+        routeLayer = L.layerGroup().addTo(map);
+        L.polyline(points, { color: "#0d6efd", weight: 3, opacity: .8, dashArray: "6 4" })
+            .addTo(routeLayer);
+        if (plan.start) {
+            L.circleMarker(points[0], { radius: 6, color: "#0d6efd", fillColor: "#fff", fillOpacity: 1 })
+                .bindTooltip("Xuất phát: " + (plan.start.name || ""), { direction: "top" })
+                .addTo(routeLayer);
+        }
+        stops.forEach((stop) => {
+            L.marker([stop.latitude, stop.longitude], {
+                icon: L.divIcon({
+                    className: "vt-route-stop",
+                    html: `<span class="vt-route-no ${stop.mine ? "vt-route-mine" : ""}">${stop.sequence}</span>`,
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11],
+                }),
+            })
+                .bindTooltip(`${stop.sequence}. ${stop.partner_name || ""}`, { direction: "top" })
+                .addTo(routeLayer);
+        });
+        map.fitBounds(points, { padding: [40, 40] });
+        routePlanId = plan.id;
+        return true;
+    }
+
+    function clearRoute() {
+        if (routeLayer) {
+            routeLayer.remove();
+            routeLayer = null;
+        }
+        routePlanId = null;
+    }
+
+    function shownRoute() {
+        return routePlanId;
+    }
+
+    return { update, toggleRoute, clearRoute, shownRoute };
 })();

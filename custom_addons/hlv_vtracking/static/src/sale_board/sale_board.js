@@ -7,7 +7,10 @@
     const POSITION_REFRESH_MS = 30000;   // vị trí xe: đủ nhanh để thấy xe đang chạy
     const BOARD_REFRESH_MS = 120000;     // chuyến và yêu cầu: đổi chậm hơn nhiều
 
-    const state = { date: null, config: {}, pending: false };
+    // Mã sale nhớ trong trình duyệt: cả phòng dùng chung tài khoản Odoo, nên "tôi là ai"
+    // là chuyện của cái máy đang ngồi, không phải của tài khoản.
+    const SALER_KEY = "vt_saler_code";
+    const state = { date: null, config: {}, pending: false, plans: [], saler: "", search: "" };
 
     function rpc(url, params) {
         return fetch(url, {
@@ -55,15 +58,20 @@
 
     const STATE_LABEL = { draft: "nháp", confirmed: "đã chốt", done: "xong" };
 
-    function planCard(plan) {
+    /* Mỗi chuyến là một khối gập được: mở sẵn chuyến có đơn của mình, gập những chuyến
+       còn lại. Năm xe mười điểm mở hết một lúc thì không ai đọc nổi. */
+    function planCard(plan, index) {
         const stops = plan.stops.map(stopRow).join("");
-        const mine = plan.has_mine ? '<span class="badge bg-primary ms-2">có đơn của tôi</span>' : "";
+        const mine = plan.has_mine ? '<span class="badge bg-primary">có đơn của tôi</span>' : "";
         const progress = plan.delivered_count
-            ? `<span class="text-success ms-2">đã giao ${plan.delivered_count}/${plan.stops.length}</span>`
+            ? `<span class="text-success small">đã giao ${plan.delivered_count}/${plan.stops.length}</span>`
             : "";
+        const open = plan.has_mine || state.plans.length === 1;
         return `
             <div class="card mb-2 ${plan.has_mine ? "vt-mine" : ""}">
-                <div class="card-header py-2 d-flex flex-wrap align-items-center gap-2">
+                <div class="card-header py-2 d-flex flex-wrap align-items-center gap-2 vt-plan-head"
+                     data-vt-toggle="plan-${index}" role="button">
+                    <i class="fa fa-chevron-${open ? "down" : "right"} text-muted vt-caret"></i>
                     <span class="fw-bold">${escapeHtml(plan.vehicle_plate)}</span>
                     <span class="text-muted">${escapeHtml(plan.session_label)}</span>
                     <span class="badge bg-light text-dark">${escapeHtml(STATE_LABEL[plan.state] || plan.state)}</span>
@@ -74,14 +82,18 @@
                         ~${plan.distance_km || 0} km · ${escapeHtml(plan.duration_display || "—")}
                     </span>
                 </div>
-                <div class="card-body p-0"><div class="vt-stops">${stops}</div></div>
-                <div class="card-footer py-1 d-flex align-items-center">
-                    <span class="small text-muted">
-                        ${plan.driver_name ? "Tài xế " + escapeHtml(plan.driver_name) : "Chưa gán tài xế"}
-                        ${plan.start_name ? " · xuất phát " + escapeHtml(plan.start_name) : ""}
-                    </span>
-                    <button type="button" class="btn btn-sm btn-outline-primary ms-auto"
-                            data-vt-plan="${plan.id}">Nhờ AI xem chuyến này</button>
+                <div class="collapse ${open ? "show" : ""}" id="plan-${index}">
+                    <div class="card-body p-0"><div class="vt-stops">${stops}</div></div>
+                    <div class="card-footer py-1 d-flex align-items-center gap-2 flex-wrap">
+                        <span class="small text-muted">
+                            ${plan.driver_name ? "Tài xế " + escapeHtml(plan.driver_name) : "Chưa gán tài xế"}
+                            ${plan.start_name ? " · xuất phát " + escapeHtml(plan.start_name) : ""}
+                        </span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                                data-vt-route="${plan.id}">Xem lộ trình</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                data-vt-plan="${plan.id}">Nhờ AI xem chuyến này</button>
+                    </div>
                 </div>
             </div>`;
     }
@@ -140,6 +152,8 @@
 
     function render(data) {
         state.config = { tile_url: data.tile_url, tile_attribution: data.tile_attribution };
+        state.plans = data.plans;
+        fillSalerOptions(data.saler_codes);
         el("vt-plans").innerHTML = data.plans.length
             ? data.plans.map(planCard).join("")
             : '<div class="text-muted">Ngày này chưa có chuyến nào.</div>';
@@ -151,14 +165,45 @@
                        Tài khoản chưa khai <b>mã sale MISA</b> nên không nhận ra đơn nào là
                        của bạn. Báo quản trị khai ở Cài đặt &gt; Người dùng.
                    </div>`;
-        el("vt-requests").innerHTML = data.my_requests.length
-            ? data.my_requests.map(requestRow).join("")
-            : '<div class="vt-row text-muted">Chưa gửi yêu cầu nào.</div>';
+        renderRequests(data.my_requests);
         const mine = data.plans.filter((plan) => plan.has_mine).length;
         el("vt-summary").textContent =
             `${data.plans.length} chuyến · ${mine} chuyến có đơn của tôi · ${data.my_unplanned.length} đơn chưa xếp`;
         window.VtSaleMap.update(data.vehicles, state.config);
         stamp();
+    }
+
+    function renderRequests(requests) {
+        el("vt-requests").innerHTML = requests.length
+            ? requests.map(requestRow).join("")
+            : '<div class="vt-row text-muted">Chưa gửi yêu cầu nào.</div>';
+        // Đếm số yêu cầu CÒN MỞ: đó là thứ người ta cần biết còn phải theo dõi mấy cái.
+        el("vt-request-count").textContent = requests.filter((item) => item.open).length;
+    }
+
+    function fillSalerOptions(codes) {
+        const select = el("vt-saler");
+        if (select.dataset.filled === "1") {
+            return;
+        }
+        for (const code of codes || []) {
+            const option = document.createElement("option");
+            option.value = code;
+            option.textContent = code;
+            select.appendChild(option);
+        }
+        select.value = state.saler;
+        select.dataset.filled = "1";
+    }
+
+    function markRouteButtons() {
+        const shown = window.VtSaleMap.shownRoute();
+        for (const button of document.querySelectorAll("[data-vt-route]")) {
+            const active = Number(button.dataset.vtRoute) === shown;
+            button.classList.toggle("btn-secondary", active);
+            button.classList.toggle("btn-outline-secondary", !active);
+            button.textContent = active ? "Tắt lộ trình" : "Xem lộ trình";
+        }
     }
 
     function stamp() {
@@ -168,7 +213,8 @@
     // ---------------------------------------------------------------- tải
 
     function loadBoard() {
-        return rpc("/giao-hang/du-lieu", { date: state.date })
+        return rpc("/giao-hang/du-lieu",
+                   { date: state.date, saler_code: state.saler, search: state.search })
             .then(render)
             .catch((error) => {
                 el("vt-plans").innerHTML =
@@ -184,6 +230,15 @@
             })
             .catch(() => {
                 /* Mất mạng một nhịp không đáng báo động: nhịp sau tự cập nhật lại. */
+            });
+    }
+
+    function loadUnplanned() {
+        return rpc("/giao-hang/don-chua-xep", { saler_code: state.saler, search: state.search })
+            .then((data) => {
+                el("vt-unplanned").innerHTML = data.my_unplanned.length
+                    ? data.my_unplanned.map(unplannedRow).join("")
+                    : '<div class="vt-row text-muted">Không tìm thấy đơn nào.</div>';
             });
     }
 
@@ -254,15 +309,49 @@
         const dayButton = event.target.closest("[data-vt-day]");
         if (dayButton) {
             shiftDate(Number(dayButton.dataset.vtDay));
+            return;
+        }
+        const routeButton = event.target.closest("[data-vt-route]");
+        if (routeButton) {
+            const plan = state.plans.find((item) => item.id === Number(routeButton.dataset.vtRoute));
+            if (plan) {
+                window.VtSaleMap.toggleRoute(plan);
+                markRouteButtons();
+            }
+            return;
+        }
+        const head = event.target.closest("[data-vt-toggle]");
+        if (head) {
+            const body = document.getElementById(head.dataset.vtToggle);
+            const caret = head.querySelector(".vt-caret");
+            const shown = body.classList.toggle("show");
+            caret.className = `fa fa-chevron-${shown ? "down" : "right"} text-muted vt-caret`;
         }
     });
 
     document.addEventListener("DOMContentLoaded", () => {
         state.date = todayString();
+        state.saler = localStorage.getItem(SALER_KEY) || "";
         el("vt-date").value = state.date;
         el("vt-date").addEventListener("change", (event) => setDate(event.target.value));
         el("vt-today").addEventListener("click", () => setDate(todayString()));
         el("vt-request-send").addEventListener("click", sendRequest);
+        el("vt-saler").addEventListener("change", (event) => {
+            state.saler = event.target.value;
+            localStorage.setItem(SALER_KEY, state.saler);
+            window.VtSaleMap.clearRoute();
+            loadBoard();
+        });
+        // Chờ người dùng gõ xong mới hỏi server: mỗi phím một request là vô ích.
+        let typing = null;
+        el("vt-search").addEventListener("input", (event) => {
+            state.search = event.target.value;
+            clearTimeout(typing);
+            typing = setTimeout(loadUnplanned, 300);
+        });
+        el("vt-open-drawer").addEventListener("click", () => {
+            bootstrap.Offcanvas.getOrCreateInstance(el("vt-drawer")).show();
+        });
         loadBoard();
         setInterval(loadPositions, POSITION_REFRESH_MS);
         setInterval(loadBoard, BOARD_REFRESH_MS);

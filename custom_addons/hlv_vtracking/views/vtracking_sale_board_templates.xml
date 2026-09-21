@@ -42,8 +42,17 @@
                             <i class="fa fa-chevron-right"/>
                         </button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="vt-today">Hôm nay</button>
-                        <span id="vt-summary" class="text-muted small ms-2"/>
-                        <span id="vt-updated" class="text-muted small ms-auto"/>
+                        <span class="text-muted small ms-2">Tôi là</span>
+                        <select id="vt-saler" class="form-select form-select-sm" style="width: 12rem"
+                                title="Cả phòng dùng chung một tài khoản, nên chọn mã sale MISA của bạn ở đây">
+                            <option value="">— chọn mã sale —</option>
+                        </select>
+                        <span id="vt-summary" class="text-muted small"/>
+                        <button type="button" class="btn btn-outline-primary btn-sm ms-auto" id="vt-open-drawer">
+                            <i class="fa fa-comments me-1"/>Tôi đã nhờ AI
+                            <span class="badge bg-primary ms-1" id="vt-request-count">0</span>
+                        </button>
+                        <span id="vt-updated" class="text-muted small"/>
                     </div>
 
                     <div class="row g-3">
@@ -54,21 +63,30 @@
                         </div>
                         <div class="col-lg-5">
                             <div id="vt-map" class="vt-map mb-3"/>
-                            <div class="card mb-3">
-                                <div class="card-header py-2 fw-bold">
-                                    Đơn của tôi chưa được xếp chuyến
+                            <div class="card">
+                                <div class="card-header py-2 d-flex align-items-center gap-2">
+                                    <span class="fw-bold">Đơn của tôi chưa được xếp chuyến</span>
+                                    <input type="search" id="vt-search" class="form-control form-control-sm ms-auto"
+                                           style="max-width: 14rem"
+                                           placeholder="Tìm số đơn, số phiếu, khách…"/>
                                 </div>
                                 <div class="card-body p-0">
                                     <div id="vt-unplanned" class="vt-list"/>
                                 </div>
                             </div>
-                            <div class="card">
-                                <div class="card-header py-2 fw-bold">Tôi đã nhờ AI</div>
-                                <div class="card-body p-0">
-                                    <div id="vt-requests" class="vt-list"/>
-                                </div>
-                            </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Ngăn kéo "Tôi đã nhờ AI": câu trả lời của AI dài, để trong cột bên phải
+                     thì chiếm hết chỗ của bản đồ. Mở ra khi cần đọc, đóng lại khi xong. -->
+                <div class="offcanvas offcanvas-end vt-drawer" tabindex="-1" id="vt-drawer">
+                    <div class="offcanvas-header">
+                        <h5 class="offcanvas-title">Tôi đã nhờ AI</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"/>
+                    </div>
+                    <div class="offcanvas-body p-0">
+                        <div id="vt-requests"/>
                     </div>
                 </div>
 
