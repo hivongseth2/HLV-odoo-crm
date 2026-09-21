@@ -2,6 +2,13 @@
 """
 force_auto_print_test.py
 =============================
+[CẬP NHẬT 21/09/2026] Kết luận "web worker chạy code cũ" ở dưới đã được XÁC ĐỊNH LÀ SAI.
+Script này gọi TRỰC TIẾP _auto_queue_print_when_full() nên chỉ chứng minh logic bên trong chạy
+được, KHÔNG chứng minh được hook có bao giờ được ORM gọi hay không. Nguyên nhân thật:
+stock.picking.state là field compute+store nên reservation không đi qua write() — hook cũ ở
+write() chưa từng chạy (đo được: 88 phiếu 'assigned', 0 phiếu có cờ). Đã chuyển sang cron
+stock_picking.cron_auto_queue_print_when_full. Xem bin/check_auto_print_hook_fires.py (chẩn đoán)
+và bin/check_auto_print_candidates.py (dry-run cron).
 Đơn DH125524949235630 / phiếu KBC/PICK/11494: đã "Sẵn sàng" (đủ hàng 100%, xác nhận qua
 check_auto_print_when_full.py), setting auto_print_pick_slip_when_full đang BẬT, không bị khóa,
 nhưng KHÔNG có bản ghi nào trong hàng chờ in IoT — nghi ngờ web worker đang chạy CHƯA load code
