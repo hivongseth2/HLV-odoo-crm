@@ -436,3 +436,32 @@
 .vt-strip-item.is-mine .vt-strip-doc {
     color: var(--vt-mine-dark);
 }
+
+
+/* Nút quay lại của màn chi tiết chuyến. Đặt trên cùng cột trái, ngay chỗ mắt đang nhìn
+   sau khi bấm "Xem chi tiết". */
+.vt-back {
+    border: 0;
+    background: none;
+    padding: 0 0 .5rem;
+    color: var(--vt-mine);
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.vt-back:hover {
+    color: var(--vt-mine-dark);
+    text-decoration: underline;
+}
+
+/* Một điểm trong dải: bấm được thì phải nhìn ra là bấm được. */
+.vt-strip-item.is-clickable {
+    cursor: pointer;
+}
+
+.vt-strip-item.is-clickable:hover {
+    border-color: var(--vt-mine);
+    background: var(--vt-mine-soft);
+}

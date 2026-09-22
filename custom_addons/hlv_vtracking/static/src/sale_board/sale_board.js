@@ -119,8 +119,14 @@
     function stripItem(stop, plan) {
         const eta = etaLabel(stop.arrive_offset_minutes, plan.session_label);
         return `
-            <li class="vt-strip-item ${stop.mine ? "is-mine" : ""} ${stop.delivered ? "is-done" : ""}"
-                title="${escapeHtml(stop.partner_name || "")}">
+            <li class="vt-strip-item ${stop.mine ? "is-mine" : ""} ${stop.delivered ? "is-done" : ""}
+                       ${stop.picking_id || stop.sale_order_id ? "is-clickable" : ""}"
+                title="${escapeHtml(stop.partner_name || "")}"
+                ${stop.picking_id
+                    ? `data-vt-doc="picking" data-vt-doc-id="${stop.picking_id}"`
+                    : stop.sale_order_id
+                        ? `data-vt-doc="order" data-vt-doc-id="${stop.sale_order_id}"`
+                        : ""}>
                 <span class="vt-seq">${stop.sequence}</span>
                 <span class="vt-strip-main">
                     <span class="vt-strip-name">${escapeHtml(stop.partner_name || "—")}</span>
@@ -179,14 +185,17 @@
        là nơi DUY NHẤT còn dùng stopRow — thẻ chuyến bên trái chỉ hiện dải điểm rút gọn. */
     function planDetail(plan) {
         return `
+            <button type="button" class="vt-back" data-vt-unselect="1">
+                &#8592; Danh sách chuyến
+            </button>
             <div class="vt-panel-head">
                 <span class="vt-plate">${escapeHtml(plan.vehicle_plate)}</span>
                 <span class="vt-session vt-session-${plan.session || "other"}">
                     ${escapeHtml(plan.session_label)}
                 </span>
                 ${plan.zone_name ? `<span class="vt-zone">${escapeHtml(plan.zone_name)}</span>` : ""}
-                <button type="button" class="vt-btn vt-btn-mini vt-btn-ghost ms-auto"
-                        data-vt-unselect="1" title="Đóng, ẩn bản đồ">✕</button>
+                <button type="button" class="vt-btn vt-btn-mini vt-btn-ghost vt-push"
+                        data-vt-unselect="1" title="Quay lại danh sách chuyến">✕</button>
             </div>
             <div class="vt-detail-meta">
                 ${planMetaText(plan)}
@@ -290,7 +299,7 @@
         if (!plan) {
             return;
         }
-        el("vt-detail-panel").innerHTML = planDetail(plan);
+        el("vt-detail-view").innerHTML = `<div class="vt-panel">${planDetail(plan)}</div>`;
         if (window.VtSaleMap.isOpen()) {
             window.VtSaleMap.showRoute(plan, fit === true);
         }
@@ -306,6 +315,9 @@
         // trên khung còn ẩn thì bản đồ ra méo.
         el("vt-detail-empty").classList.add("is-hidden");
         el("vt-detail").classList.remove("is-hidden");
+        el("vt-list-view").classList.add("is-hidden");
+        el("vt-detail-view").classList.remove("is-hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
         window.VtSaleMap.open(state.config);
         window.VtSaleMap.update(state.vehicles);
         window.VtSaleMap.showPlaces(state.places);
@@ -318,7 +330,9 @@
         window.VtSaleMap.clearRoute();
         el("vt-detail").classList.add("is-hidden");
         el("vt-detail-empty").classList.remove("is-hidden");
-        el("vt-detail-panel").innerHTML = "";
+        el("vt-detail-view").classList.add("is-hidden");
+        el("vt-detail-view").innerHTML = "";
+        el("vt-list-view").classList.remove("is-hidden");
         markSelectedCard();
     }
 
@@ -339,8 +353,9 @@
             return;
         }
         el("vt-unplanned").innerHTML = mineConfigured || state.saler
-            ? '<div class="vt-empty">Không có đơn nào chờ xếp.</div>'
-            : '<div class="vt-empty">Chọn <b>mã sale</b> của bạn ở thanh trên để thấy đơn của mình.</div>';
+            ? '<tr><td colspan="5" class="vt-empty">Không có đơn nào chờ xếp.</td></tr>'
+            : '<tr><td colspan="5" class="vt-empty">Chọn <b>mã sale</b> của bạn ở thanh trên'
+              + ' để thấy đơn của mình.</td></tr>';
     }
 
     function renderRequests(requests) {

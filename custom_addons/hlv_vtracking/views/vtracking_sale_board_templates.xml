@@ -112,6 +112,11 @@
 
                     <div class="row g-3">
                         <div class="col-lg-7">
+                            <!-- Cột trái có HAI màn, không bao giờ hiện cùng lúc: danh sách
+                                 chuyến, và chi tiết một chuyến. Trước đây chi tiết nằm ở cột
+                                 phải dưới bản đồ nên trang dài gấp đôi và phải cuộn liên tục
+                                 giữa hai cột. -->
+                            <div id="vt-list-view">
                             <h2 class="vt-h2">Các chuyến giao hàng</h2>
                             <div id="vt-plans" class="vt-plans">
                                 <div class="vt-empty">Đang tải…</div>
@@ -140,6 +145,10 @@
                                     </table>
                                 </div>
                             </div>
+                            </div>
+
+                            <!-- Màn chi tiết một chuyến. Rỗng khi chưa chọn chuyến nào. -->
+                            <div id="vt-detail-view" class="is-hidden"/>
                         </div>
                         <div class="col-lg-5">
                             <div class="vt-side">
@@ -175,7 +184,6 @@
                                 </div>
                                 <div id="vt-detail" class="vt-detail is-hidden">
                                     <div id="vt-map" class="vt-map"/>
-                                    <div class="vt-panel" id="vt-detail-panel"/>
                                 </div>
                             </div>
                         </div>
