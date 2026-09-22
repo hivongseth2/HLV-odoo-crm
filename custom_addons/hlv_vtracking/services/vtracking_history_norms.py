@@ -1,0 +1,96 @@
+"""Học định mức từ LỊCH SỬ PHIẾU, không cần kế hoạch.
+
+Vì sao cần: định mức chỉ học được từ chuyến đã chạy, mà kế hoạch trong Odoo mới có từ hôm
+nay. Trong khi đó nhật ký quét mã vạch đã ghi hàng nghìn lần giao suốt nhiều tháng — đủ để
+đo ngay, thay vì chờ vài tuần cho kế hoạch tích luỹ.
+
+Một "chuyến dựng lại" = các lần quét *hoàn thành đơn* của CÙNG một người trong CÙNG một
+ngày, sắp theo giờ quét. Mốc xuất phát là lần quét *nhận hàng* cuối cùng của người đó trong
+ngày — cùng định nghĩa với ``actual_start_at`` của kế hoạch, nên hai nguồn mẫu so được với
+nhau.
+
+Phép tính nằm ở ``tools/vtracking_calibration`` (thuần, có test); file này chỉ lo đọc dữ
+liệu và ghép phiếu với cụm.
+"""
+
+import logging
+from collections import defaultdict
+from datetime import timedelta
+
+from odoo import fields
+
+from ..tools.vtracking_calibration import trip_samples
+from .vtracking_place_lookup import places_by_root_partner
+
+_logger = logging.getLogger(__name__)
+
+# Cửa sổ nhìn lại. Dài hơn cửa sổ của kế hoạch (60 ngày) vì đây là dữ liệu đã có sẵn: lấy
+# rộng để cụm ít chuyến cũng gom đủ mẫu.
+LOOKBACK_DAYS = 180
+# Một người quét nhiều phiếu trong ngày mới thành chuyến; một điểm thì không đo được chặng.
+MIN_STOPS = 2
+
+
+def history_samples(env, company, today=None, days=LOOKBACK_DAYS):
+    """Mẫu đo dựng từ nhật ký quét. Trả ``(samples, trip_count)``.
+
+    Bỏ qua phiếu đã nằm trong một kế hoạch: chỗ đó đã được đếm ở nguồn mẫu của kế hoạch,
+    đếm thêm lần nữa là nhân đôi trọng số của đúng những chuyến gần đây nhất.
+    """
+    today = today or fields.Date.context_today(env['hlv.vtracking.plan'])
+    since = fields.Datetime.to_datetime(today - timedelta(days=days))
+    Scan = env['barcode.scan.log'].sudo()
+
+    completes = Scan.search([
+        ('scan_type', '=', 'complete'), ('status', '=', 'success'),
+        ('scan_time', '>=', since), ('picking_id', '!=', False), ('user_id', '!=', False),
+    ], order='scan_time asc')
+    if not completes:
+        return [], 0
+
+    planned = set(env['hlv.vtracking.plan.line'].sudo().search([
+        ('picking_id', 'in', completes.picking_id.ids),
+    ]).mapped('picking_id').ids)
+    places = places_by_root_partner(env, company)
+
+    trips = defaultdict(list)
+    for scan in completes:
+        picking = scan.picking_id
+        if picking.id in planned:
+            continue
+        place = places.get(picking.partner_id.commercial_partner_id.id)
+        if not place or not place.zone_id:
+            continue
+        trips[(scan.user_id.id, scan.scan_time.date())].append({
+            'delivered_at': scan.scan_time,
+            'zone_id': place.zone_id.id,
+            'point': (place.latitude, place.longitude) if place.has_coords else None,
+            'key': place.id,
+        })
+
+    departures = _departures(Scan, since)
+    samples, trip_count = [], 0
+    for (user_id, day), stops in trips.items():
+        if len(stops) < MIN_STOPS:
+            continue
+        trip_count += 1
+        start_at = departures.get((user_id, day))
+        samples += trip_samples(start_at, bool(start_at), stops)
+    _logger.info('V-Tracking: %s chuyến dựng từ nhật ký quét, %s mẫu đo.',
+                 trip_count, len(samples))
+    return samples, trip_count
+
+
+def _departures(Scan, since):
+    """dict {(người, ngày): lúc quét NHẬN hàng cuối cùng} — mốc xe rời kho.
+
+    Lấy lần cuối chứ không lấy lần đầu: xe chỉ đi khi đã nhận xong phiếu cuối của chuyến.
+    """
+    receives = Scan.search([
+        ('scan_type', '=', 'receive'), ('status', '=', 'success'),
+        ('scan_time', '>=', since), ('user_id', '!=', False),
+    ], order='scan_time asc')
+    result = {}
+    for scan in receives:
+        result[(scan.user_id.id, scan.scan_time.date())] = scan.scan_time
+    return result

@@ -98,6 +98,9 @@
                             <field name="zone_id" options="{'no_create': True}"/>
                             <field name="partner_id" domain="[('is_company', '=', True)]"/>
                             <field name="partner_ref" readonly="1"/>
+                            <field name="alias_partner_ids" widget="many2many_tags"
+                                   options="{'no_create': True}"
+                                   domain="[('is_company', '=', True), ('id', '!=', partner_id)]"/>
                             <field name="phone"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                             <field name="active"/>

@@ -7,6 +7,7 @@ nào (``delivery``), và có ai dặn gì không (``latest_note`` / chatter).
 
 from ...tools.vtracking_address import address_key
 from .. import plan_documents
+from ..vtracking_place_lookup import places_by_root_partner
 from . import chatter_service, dispatch_service, fulfillment_service, supply_service
 from .serialize import (
     coords_block, iso_datetime, optional_field, partner_block, plain_text,
@@ -79,16 +80,8 @@ def places_by_order(env, company, orders):
     Ghép qua PHÁP NHÂN GỐC vì mỗi khách có nhiều liên hệ con làm địa chỉ giao. Một truy vấn
     cho cả trang, không phải mỗi đơn một lần.
     """
-    roots = orders.mapped('partner_id.commercial_partner_id')
-    if not roots:
-        return {}
-    places = env['hlv.vtracking.place'].sudo().search([
-        ('partner_id.commercial_partner_id', 'in', roots.ids),
-        ('company_id', '=', company.id),
-    ])
-    by_root = {}
-    for place in places:
-        by_root.setdefault(place.partner_id.commercial_partner_id.id, place)
+    by_root = places_by_root_partner(env, company,
+                                     orders.mapped('partner_id.commercial_partner_id'))
     return {
         order.id: by_root.get(order.partner_id.commercial_partner_id.id)
         for order in orders

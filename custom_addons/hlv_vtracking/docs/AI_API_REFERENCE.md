@@ -476,14 +476,19 @@ nhà máy). Thói quen khách gắn vào địa điểm.
 | `GET places/duplicates` | Nhóm nghi trùng |
 | `POST places/merge` 🔒 | `{"keep_id": 5, "merge_ids": [7]}` |
 
-Ô sửa được: `name`, `partner_id`, `zone_id`, `warehouse_id`, `address`, `note`, `active`,
-cộng `type_code` và toạ độ. Địa điểm kiểu `warehouse` **phải** có `warehouse_id` — đó là
+Ô sửa được: `name`, `partner_id`, `alias_partner_ids`, `zone_id`, `warehouse_id`, `address`,
+`note`, `active`, cộng `type_code` và toạ độ. Địa điểm kiểu `warehouse` **phải** có `warehouse_id` — đó là
 điều kiện để nó hiện làm điểm xuất phát trong `context`.
 
 ```json
 POST places/12
 {"type_code": "warehouse", "warehouse_id": 1, "coords": "10.7489944, 106.9241992"}
 ```
+
+`alias_partner_ids` là **mã khách khác cùng điểm**. Cùng một công ty nhưng Odoo có nhiều mã
+khách gốc (đo 22/09/2026: Summit Polymers là #132 và #21366) — mã không khai ở đây thì phiếu
+ghi mã đó coi như khách chưa có điểm: không có cụm, không có thói quen. Gửi cả danh sách, nó
+ghi đè (`null` hoặc `[]` là xoá hết). Chỉ khai mã GỐC; liên hệ con tự quy về công ty cha.
 
 **Dò trùng** trả nhóm `{"ids", "keep_id", "reasons", "places"}`. `reasons`:
 - `same_name` — cùng tên sau khi chuẩn hoá.
@@ -496,7 +501,7 @@ POST places/12
 
 **Gộp**: bản giữ được điền các ô đang trống từ bản gộp; thói quen khách được chuyển sang
 (hoặc điền vào thói quen sẵn có); kế hoạch, xe, dòng kế hoạch trỏ bản gộp được chuyển sang
-bản giữ; bản gộp bị **lưu trữ**, không xoá — gộp nhầm thì `POST places/<id> {"active": true}`.
+bản giữ; mã khách của bản gộp thành **mã phụ** của bản giữ; bản gộp bị **lưu trữ**, không xoá — gộp nhầm thì `POST places/<id> {"active": true}`.
 Trả `keep_id`, `merged_ids`, `plans_moved`, `vehicles_moved`, `plan_lines_moved`,
 `profiles_moved`, `keep`.
 

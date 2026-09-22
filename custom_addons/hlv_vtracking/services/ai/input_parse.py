@@ -36,6 +36,7 @@ def pick_values(body, record, allowed):
 
     - selection: phải là một trong các mã hợp lệ (báo lỗi kèm danh sách mã)
     - many2one: id số nguyên, bản ghi phải tồn tại
+    - many2many: danh sách id, ghi ĐÈ cả danh sách (``null`` hoặc ``[]`` là xoá hết)
     - integer / float / char / text / boolean: ép kiểu
     """
     values = {}
@@ -44,6 +45,9 @@ def pick_values(body, record, allowed):
             continue
         raw = body[name]
         field = record._fields[name]
+        if field.type == 'many2many':
+            values[name] = [(6, 0, _to_ids(raw, name, record, field))]
+            continue
         if raw is None:
             values[name] = False
             continue
@@ -67,6 +71,21 @@ def pick_values(body, record, allowed):
         else:
             values[name] = str(raw).strip()
     return values
+
+
+def _to_ids(raw, name, record, field):
+    """Danh sách id cho một ô many2many. Kiểm bản ghi có thật để không ghi id rác."""
+    if raw is None:
+        return []
+    if not isinstance(raw, (list, tuple)):
+        raise UserError('"%s" phải là danh sách id, nhận được "%s".' % (name, raw))
+    ids = [_to_int(item, name) for item in raw]
+    found = record.env[field.comodel_name].browse(ids).exists()
+    missing = sorted(set(ids) - set(found.ids))
+    if missing:
+        raise UserError('"%s": không có %s id %s.'
+                        % (name, field.comodel_name, ', '.join(str(i) for i in missing)))
+    return found.ids
 
 
 def _to_int(value, name):

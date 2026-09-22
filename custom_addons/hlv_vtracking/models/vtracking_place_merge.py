@@ -57,6 +57,8 @@ class HlvVtrackingPlaceMerge(models.Model):
           trống rồi bỏ bộ thừa. Mất thói quen khách là mất công người điền.
         - Mọi thứ đang trỏ tới bản gộp (điểm xuất phát của kế hoạch và của xe, điểm giao
           của dòng kế hoạch) chuyển sang bản giữ.
+        - Mã khách của bản gộp thành **mã phụ** của bản giữ. Không làm bước này thì gộp
+          xong là phiếu ghi mã đó mất điểm — đúng chỗ hỏng mà lệnh gộp định sửa.
         """
         keep.ensure_one()
         duplicates = (self - keep).filtered(lambda place: place.company_id == keep.company_id)
@@ -73,6 +75,10 @@ class HlvVtrackingPlaceMerge(models.Model):
                     'latitude': donor.latitude, 'longitude': donor.longitude,
                     'geo_state': donor.geo_state, 'geo_source': donor.geo_source,
                 })
+
+        aliases = (duplicates.partner_id | duplicates.alias_partner_ids) - keep.partner_id
+        if aliases:
+            keep.alias_partner_ids = [(4, partner.id) for partner in aliases]
 
         profiles_moved = self._merge_profiles(keep, duplicates)
         moved = self._repoint_references(keep, duplicates)

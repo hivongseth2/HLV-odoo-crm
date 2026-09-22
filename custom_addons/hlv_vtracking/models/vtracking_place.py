@@ -41,6 +41,13 @@ class HlvVtrackingPlace(models.Model):
         'hlv.vtracking.zone', string='Cụm tuyến', index=True, tracking=True,
         help='Quyết định định mức thời gian dùng khi tính kế hoạch đi qua điểm này.',
     )
+    alias_partner_ids = fields.Many2many(
+        'res.partner', 'hlv_vtracking_place_alias_rel', 'place_id', 'partner_id',
+        string='Mã khách khác cùng điểm',
+        help='Cùng một công ty nhưng Odoo có nhiều mã khách gốc khác nhau — khai các mã '
+             'còn lại ở đây để phiếu ghi mã nào cũng về đúng điểm này. Chỉ khai mã GỐC; '
+             'liên hệ con đã tự quy về công ty cha.',
+    )
     partner_ref = fields.Char(related='partner_id.ref', string='Mã khách', readonly=True)
     warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho trong Odoo', index=True, tracking=True,

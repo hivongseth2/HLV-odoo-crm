@@ -11,7 +11,8 @@ from ...tools.vtracking_dedup import place_duplicate_groups
 from .input_parse import coords_from_body, pick_values
 from .serialize import coords_block, iso_datetime
 
-PLACE_FIELDS = ('name', 'partner_id', 'zone_id', 'warehouse_id', 'address', 'note', 'active')
+PLACE_FIELDS = ('name', 'partner_id', 'alias_partner_ids', 'zone_id', 'warehouse_id',
+                'address', 'note', 'active')
 PROFILE_FIELDS = (
     'procedure_required', 'delivery_method', 'default_vehicle_id', 'extra_service_minutes',
     'receiving_from', 'receiving_to', 'payment_method', 'free_note',
@@ -45,6 +46,7 @@ def place_block(place, with_profile=True):
         'partner_id': place.partner_id.id or None,
         'partner_name': place.partner_id.display_name or None,
         'root_partner_id': place.partner_id.commercial_partner_id.id or None,
+        'alias_partner_ids': place.alias_partner_ids.ids,
         'zone_id': place.zone_id.id or None,
         'zone_name': place.zone_id.name or None,
         'warehouse_id': place.warehouse_id.id or None,

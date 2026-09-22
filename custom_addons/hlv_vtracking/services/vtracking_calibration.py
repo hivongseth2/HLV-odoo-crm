@@ -14,6 +14,7 @@ from odoo import fields
 from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km
 
 from ..tools.vtracking_calibration import suggestions, trip_samples
+from .vtracking_history_norms import history_samples
 
 _logger = logging.getLogger(__name__)
 
@@ -34,6 +35,12 @@ def calibrate_company(env, company, today=None):
     if not zones:
         return 0
     samples, plan_count = collect_samples(env, company, today)
+    # Hai nguồn mẫu, cùng một cách đo: chuyến đã có kế hoạch trong Odoo, và chuyến dựng lại
+    # từ nhật ký quét mã vạch. Nguồn thứ hai là thứ duy nhất có số ngay hôm nay — kế hoạch
+    # trong Odoo mới bắt đầu tích luỹ.
+    history, history_trips = history_samples(env, company, today)
+    samples += history
+    plan_count += history_trips
     current = {
         zone.id: {
             'hub': zone.hub_to_first_minutes,
@@ -50,8 +57,9 @@ def calibrate_company(env, company, today=None):
         Log._log_computed(zone, by_kind, plan_count)
     with_suggestion = len(zones.filtered('calib_has_suggestion'))
     _logger.info(
-        'V-Tracking hiệu chỉnh %s: %s chuyến, %s mẫu, %s cụm có đề xuất',
-        company.name, plan_count, len(samples), with_suggestion,
+        'V-Tracking hiệu chỉnh %s: %s chuyến (%s dựng từ nhật ký quét), %s mẫu, '
+        '%s cụm có đề xuất',
+        company.name, plan_count, history_trips, len(samples), with_suggestion,
     )
     return with_suggestion
 

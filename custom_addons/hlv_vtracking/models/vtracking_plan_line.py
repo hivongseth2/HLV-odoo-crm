@@ -3,6 +3,8 @@ import logging
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from ..services.vtracking_place_lookup import place_for_partner
+
 _logger = logging.getLogger(__name__)
 
 
@@ -159,20 +161,15 @@ class HlvVtrackingPlanLine(models.Model):
         ấy mã. KHÔNG lùi về khớp theo TÊN khi khớp pháp nhân gốc trượt: cùng lần đo, 166 mã
         tên "****" thuộc 165 pháp nhân khác nhau (`bin/check_partner_dedup_structure.py`).
 
+        Cách ghép (kể cả mã khách trùng) nằm ở ``services/vtracking_place_lookup``.
+
         Điểm này KHÔNG quyết định cụm tuyến — cụm suy từ toạ độ của chính địa chỉ giao,
         xem ``_compute_zone_id``. Nó dùng để treo thói quen khách, và làm nguồn dự phòng
         khi địa chỉ chưa tra được toạ độ.
         """
-        Place = self.env['hlv.vtracking.place']
         for line in self:
-            root = line.partner_id.commercial_partner_id
-            if not root:
-                line.place_id = False
-                continue
-            line.place_id = Place.search([
-                ('partner_id.commercial_partner_id', '=', root.id),
-                ('company_id', '=', line.company_id.id or self.env.company.id),
-            ], limit=1)
+            company = line.company_id or self.env.company
+            line.place_id = place_for_partner(self.env, company, line.partner_id)
 
     @api.model_create_multi
     def create(self, vals_list):
