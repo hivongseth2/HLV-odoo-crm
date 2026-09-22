@@ -37,6 +37,24 @@ CHANNEL_LABELS = {
 CHANNELS_WITHOUT_TRUCK = ('pickup', 'express', 'grab')
 
 
+def channel_hint(text):
+    """Mã kênh nếu chuỗi CÓ dấu hiệu rõ ràng, ngược lại ``None``. Không bao giờ trả 'other'.
+
+    Dùng cho những ô KHÔNG phải ô hình thức giao hàng — ví dụ ô "Nguồn" (``origin``) trên
+    đơn, nơi sale hay gõ "CPN", "BOOK GRAB GIAO KHÁCH", "KHÁCH GHÉ LẤY" lẫn với tên khách và
+    tên người đặt. Ở những ô như thế, không khớp luật nào nghĩa là **không biết**, chứ không
+    phải "sale đã dặn điều gì đó máy chưa hiểu" — nên trả None thay vì ``'other'``.
+
+    :param text: nguyên văn ô, có thể ``None``
+    :returns: ``'company' | 'pickup' | 'express' | 'grab' | None``
+    """
+    clean = strip_accents(text or '').lower()
+    for channel, keywords in CHANNEL_RULES:
+        if any(keyword in clean for keyword in keywords):
+            return channel
+    return None
+
+
 def delivery_channel(text):
     """Chuỗi gõ tay -> một mã trong ``CHANNEL_LABELS``, hoặc ``None`` nếu ô trống.
 
@@ -47,13 +65,9 @@ def delivery_channel(text):
     :param text: nguyên văn ô Studio, có thể ``None``
     :returns: ``'company' | 'pickup' | 'express' | 'grab' | 'other' | None``
     """
-    clean = strip_accents(text or '').lower()
-    if not clean.strip():
+    if not strip_accents(text or '').strip():
         return None
-    for channel, keywords in CHANNEL_RULES:
-        if any(keyword in clean for keyword in keywords):
-            return channel
-    return 'other'
+    return channel_hint(text) or 'other'
 
 
 def needs_company_truck(channel):

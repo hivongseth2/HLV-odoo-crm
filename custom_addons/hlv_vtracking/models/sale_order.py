@@ -1,6 +1,6 @@
 from odoo import api, fields, models
 
-from ..tools.vtracking_channel import delivery_channel
+from ..tools.vtracking_channel import channel_hint, delivery_channel
 
 # Địa chỉ giao MISA đẩy sang. Đọc qua ``_fields`` vì module này không phụ thuộc module
 # đồng bộ MISA — thiếu nó thì lùi về địa chỉ liên hệ, không được gãy.
@@ -51,10 +51,18 @@ class SaleOrder(models.Model):
     def _vtracking_delivery_channel(self):
         """Kênh giao của đơn: xe công ty, khách tự lấy, CPN hay Grab.
 
-        Đọc ô sale gõ tay rồi suy ra mã. Trả ``''`` khi ô trống — bên gọi tự lùi về thói
-        quen của điểm giao, vì ô trống nghĩa là "như mọi khi", không phải "xe công ty".
+        Đọc ô sale gõ tay rồi suy ra mã. Ô đó TRỐNG thì đọc thêm ô "Nguồn" (``origin``):
+        đo 22/09/2026 trên 4000 đơn gần nhất, ô hình thức giao hàng trống ở phần lớn đơn,
+        trong khi ``origin`` có 40 đơn ghi "KHÁCH GHÉ LẤY", 38 đơn "CPN", 7 đơn "BOOK GRAB"
+        — bỏ qua chỗ đó là xếp lên xe những đơn xe không phải chạy.
+
+        Chỉ đọc ``origin`` khi ô hình thức giao hàng trống, và chỉ nhận dấu hiệu RÕ (xem
+        ``channel_hint``): ``origin`` phần lớn là tên khách và tên người đặt, đọc rộng tay
+        ở đó thì mọi đơn đều thành "Khác — đọc ghi chú".
+
+        Trả ``''`` khi không đọc được gì — bên gọi tự lùi về thói quen của điểm giao, vì
+        không biết nghĩa là "như mọi khi", không phải "xe công ty".
         """
         self.ensure_one()
-        if STUDIO_CHANNEL_FIELD not in self._fields:
-            return ''
-        return delivery_channel(self[STUDIO_CHANNEL_FIELD]) or ''
+        typed = self[STUDIO_CHANNEL_FIELD] if STUDIO_CHANNEL_FIELD in self._fields else ''
+        return delivery_channel(typed) or channel_hint(self.origin) or ''

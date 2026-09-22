@@ -30,6 +30,7 @@ from odoo import fields
 
 from ..tools.vtracking_address import address_key
 from ..tools.vtracking_calibration import trip_samples
+from ..tools.vtracking_channel import needs_company_truck
 from ..tools.vtracking_planning import DEFAULT_ZONE_MATCH_KM, nearest_zone
 from .vtracking_place_lookup import places_by_root_partner
 
@@ -71,7 +72,7 @@ def history_samples(env, company, today=None, days=LOOKBACK_DAYS):
     trips = defaultdict(list)
     for scan in completes:
         picking = scan.picking_id
-        if picking.id in planned:
+        if picking.id in planned or not _went_by_company_truck(picking):
             continue
         place = places.get(picking.partner_id.commercial_partner_id.id, no_place)
         point = coords_by_key.get(address_key(picking._vtracking_delivery_address()))
@@ -98,6 +99,21 @@ def history_samples(env, company, today=None, days=LOOKBACK_DAYS):
     _logger.info('V-Tracking: %s chuyến dựng từ nhật ký quét, %s mẫu đo.',
                  trip_count, len(samples))
     return samples, trip_count
+
+
+def _went_by_company_truck(picking):
+    """Phiếu này có phải xe công ty chạy không.
+
+    Khách ghé lấy, gửi chuyển phát nhanh, book Grab: kho vẫn quét *hoàn thành đơn* lúc bàn
+    giao ngay tại kho, nên nếu tính vào thì được một "điểm giao" mất 0 phút nằm đúng chỗ
+    kho — kéo định mức chặng xuống thấp giả tạo.
+
+    Không đọc được kênh thì coi như xe công ty: ô trống nghĩa là "như mọi khi".
+    """
+    order = picking.sale_id
+    if not order:
+        return True
+    return needs_company_truck(order._vtracking_delivery_channel() or None)
 
 
 def _zone_points(env, company):
