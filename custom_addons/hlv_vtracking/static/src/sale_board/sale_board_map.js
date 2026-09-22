@@ -22,13 +22,17 @@ window.VtSaleMap = (function () {
     let fitted = false;
     // Lộ trình đang vẽ: đường nối và các số thứ tự ghé. Giữ riêng để xoá gọn khi tắt.
     let routeLayer = null;
-    let routePlanId = null;
     // Ghim kho: vẽ một lần rồi giữ nguyên. Tách khỏi lớp xe vì xe được vẽ lại mỗi nhịp
     // cập nhật vị trí (30 giây), còn kho thì không đổi — gộp chung là vẽ lại kho vô ích.
     let placeLayer = null;
 
-    function ensureMap(config) {
+    /* Dựng bản đồ. Gọi khi khung bản đồ ĐÃ hiện trên trang: Leaflet đo kích thước khung
+       lúc khởi tạo, dựng trên khung đang ẩn thì bản đồ ra méo (chỉ vẽ một dải nhỏ góc trên)
+       cho tới khi có ai gọi invalidateSize(). Vì vậy trang chỉ gọi open() sau khi đã bỏ lớp
+       ẩn, và open() tự gọi invalidateSize() cho lần mở lại. */
+    function open(config) {
         if (map) {
+            map.invalidateSize();
             return map;
         }
         map = L.map("vt-map").setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -37,6 +41,10 @@ window.VtSaleMap = (function () {
             maxZoom: 19,
         }).addTo(map);
         return map;
+    }
+
+    function isOpen() {
+        return Boolean(map);
     }
 
     function icon(vehicle) {
@@ -71,8 +79,13 @@ window.VtSaleMap = (function () {
         return div.innerHTML;
     }
 
-    function update(vehicles, config) {
-        ensureMap(config || {});
+    /* Vẽ lại vị trí xe. KHÔNG tự dựng bản đồ: nhịp này chạy mỗi 30 giây kể cả khi người
+       dùng chưa chọn chuyến nào, dựng bản đồ ở đây là tải tile cho một khung đang ẩn. Trang
+       gọi lại hàm này ngay sau khi mở bản đồ để bù nhịp đã bỏ. */
+    function update(vehicles) {
+        if (!map) {
+            return;
+        }
         const seen = new Set();
         const points = [];
         for (const vehicle of vehicles) {
@@ -112,7 +125,9 @@ window.VtSaleMap = (function () {
        Kho là mốc quy chiếu của mọi chuyến nên luôn hiện, kể cả khi chưa mở chuyến nào:
        không có nó thì một chấm xe giữa bản đồ không cho biết xe đang đi ra hay đang về. */
     function showPlaces(places) {
-        ensureMap({});
+        if (!map) {
+            return;
+        }
         if (placeLayer) {
             placeLayer.remove();
             placeLayer = null;
@@ -144,9 +159,14 @@ window.VtSaleMap = (function () {
        không phải đường xe chạy chỉ khiến người xem tin vào thứ không có. Thứ tự ghé đã đổi
        sau khi lấy đường (road_route_stale) cũng quay về nét đứt: đường lưu lại là của thứ
        tự cũ. */
-    function toggleRoute(plan) {
-        if (routePlanId === plan.id) {
-            clearRoute();
+    /* Luôn vẽ, không bật/tắt: việc "bấm lại để đóng" do trang quyết định (đóng cả cột chi
+       tiết lẫn bản đồ), không phải việc của lớp vẽ.
+
+       ``fit`` = có căn lại khung nhìn về toàn tuyến hay không. Lượt làm tươi định kỳ gọi
+       với fit=false: vẽ lại đường cho khớp dữ liệu mới nhưng KHÔNG kéo bản đồ về chỗ khác —
+       người đang phóng to xem một điểm mà cứ 2 phút bị giật về toàn tuyến là không xem được. */
+    function showRoute(plan, fit) {
+        if (!map) {
             return false;
         }
         clearRoute();
@@ -159,7 +179,6 @@ window.VtSaleMap = (function () {
         if (points.length < 2) {
             return false;
         }
-        ensureMap({});
         routeLayer = L.layerGroup().addTo(map);
         const roadPoints = roadRoutePoints(plan);
         if (roadPoints.length >= 2) {
@@ -186,8 +205,9 @@ window.VtSaleMap = (function () {
                 .bindTooltip(`${stop.sequence}. ${stop.partner_name || ""}`, { direction: "top" })
                 .addTo(routeLayer);
         });
-        map.fitBounds(points, { padding: [40, 40] });
-        routePlanId = plan.id;
+        if (fit !== false) {
+            map.fitBounds(points, { padding: [40, 40] });
+        }
         return true;
     }
 
@@ -205,12 +225,13 @@ window.VtSaleMap = (function () {
             routeLayer.remove();
             routeLayer = null;
         }
-        routePlanId = null;
     }
 
     /* Kéo bản đồ tới một điểm giao khi người dùng bấm "Xem trên bản đồ" ở danh sách. */
     function focus(latitude, longitude, label) {
-        ensureMap({});
+        if (!map) {
+            return;
+        }
         map.setView([latitude, longitude], 15);
         L.popup({ closeButton: true })
             .setLatLng([latitude, longitude])
@@ -218,9 +239,5 @@ window.VtSaleMap = (function () {
             .openOn(map);
     }
 
-    function shownRoute() {
-        return routePlanId;
-    }
-
-    return { update, showPlaces, toggleRoute, clearRoute, shownRoute, focus };
+    return { open, isOpen, update, showPlaces, showRoute, clearRoute, focus };
 })();

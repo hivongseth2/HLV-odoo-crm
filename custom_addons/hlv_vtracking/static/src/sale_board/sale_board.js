@@ -16,8 +16,10 @@
     const STATE_LABEL = { draft: "nháp", confirmed: "đã chốt", done: "xong" };
 
     const state = {
-        date: null, config: {}, plans: [], vehicles: [],
+        date: null, config: {}, plans: [], vehicles: [], places: [],
         saler: "", search: "", mineOnly: false, pending: false,
+        // Chuyến đang xem ở cột phải. null = chưa chọn -> chưa dựng bản đồ.
+        selectedPlanId: null,
     };
 
     // ------------------------------------------------------------ tiện ích
@@ -67,8 +69,14 @@
 
     // ---------------------------------------------------------------- vẽ
 
+    /* Thẻ chuyến ở danh sách: CHỈ phần đọc một nhịp là hiểu — xe, buổi, cụm, ba con số,
+       và dải điểm ghé. Toàn bộ chi tiết (địa chỉ, chứng từ, nút xin đổi lịch) nằm ở cột
+       phải khi chọn chuyến.
+
+       Trước đây mỗi thẻ tự mở sẵn cả danh sách điểm kèm nút, nên ba chuyến là đã phải cuộn
+       và không còn nhìn ra chuyến nào là chuyến nào — đó chính là chỗ rối. */
     function planCard(plan) {
-        const open = plan.has_mine || state.plans.length === 1;
+        const selected = plan.id === state.selectedPlanId;
         const total = plan.stops.length;
         const percent = total ? Math.round((plan.delivered_count / total) * 100) : 0;
         const vehicle = state.vehicles.find((item) => item.name === plan.vehicle_plate);
@@ -77,9 +85,9 @@
                      title="${escapeHtml(vehicle.status_label)}"></span>`
             : "";
         return `
-            <section class="vt-plan ${plan.has_mine ? "is-mine" : ""} ${open ? "is-open" : ""}">
-                <header class="vt-plan-head" data-vt-toggle="${plan.id}" role="button" tabindex="0">
-                    <span class="vt-caret">${open ? "▾" : "▸"}</span>
+            <section class="vt-plan ${plan.has_mine ? "is-mine" : ""} ${selected ? "is-selected" : ""}"
+                     data-vt-select="${plan.id}" role="button" tabindex="0">
+                <header class="vt-plan-head">
                     ${dot}
                     <span class="vt-plate">${escapeHtml(plan.vehicle_plate)}</span>
                     <span class="vt-session vt-session-${plan.session || "other"}">
@@ -88,27 +96,35 @@
                     ${plan.zone_name ? `<span class="vt-zone">${escapeHtml(plan.zone_name)}</span>` : ""}
                     <span class="vt-chip vt-chip-soft">${escapeHtml(STATE_LABEL[plan.state] || plan.state)}</span>
                     ${plan.has_mine ? '<span class="vt-chip vt-chip-mine">có đơn của tôi</span>' : ""}
-                    <span class="vt-plan-meta">
-                        ${plan.stop_count} điểm · ~${plan.distance_km || 0} km ·
-                        ${escapeHtml(plan.duration_display || "—")}
-                    </span>
+                    <span class="vt-plan-open">Xem chi tiết ›</span>
                 </header>
+                <div class="vt-plan-meta">${planMetaText(plan)}</div>
                 <div class="vt-progress" title="Đã giao ${plan.delivered_count}/${total} điểm">
                     <span style="width:${percent}%"></span>
                 </div>
-                <div class="vt-plan-body">
-                    <ol class="vt-stops">${plan.stops.map((stop) => stopRow(stop, plan)).join("")}</ol>
-                    <footer class="vt-plan-foot">
-                        <span class="vt-muted">
-                            ${plan.driver_name ? "Tài xế " + escapeHtml(plan.driver_name) : "Chưa gán tài xế"}
-                            ${plan.start_name ? " · xuất phát " + escapeHtml(plan.start_name) : ""}
-                        </span>
-                        <button type="button" class="vt-btn vt-btn-ghost" data-vt-route="${plan.id}">
-                            Xem lộ trình trên bản đồ
-                        </button>
-                    </footer>
-                </div>
+                <ol class="vt-strip">${plan.stops.map((stop) => stripItem(stop, plan)).join("")}</ol>
             </section>`;
+    }
+
+    /* Ba con số của chuyến. Hiện km ĐƯỜNG THẬT khi đã lấy được (ghi rõ "đường bộ"), không
+       thì km chim bay kèm dấu ~ — hai con số khác nguồn, đọc phải biết đang xem cái nào. */
+    function planMetaText(plan) {
+        const km = plan.road_distance_km
+            ? `${plan.road_distance_km} km đường bộ`
+            : `~${plan.distance_km || 0} km`;
+        return `${plan.stop_count} điểm · ${km} · ${escapeHtml(plan.duration_display || "—")}`;
+    }
+
+    /* Một điểm trong dải điểm của thẻ: số thứ tự, tên khách rút gọn, giờ tới ước tính. */
+    function stripItem(stop, plan) {
+        const eta = etaLabel(stop.arrive_offset_minutes, plan.session_label);
+        return `
+            <li class="vt-strip-item ${stop.mine ? "is-mine" : ""} ${stop.delivered ? "is-done" : ""}"
+                title="${escapeHtml(stop.partner_name || "")}">
+                <span class="vt-seq">${stop.sequence}</span>
+                <span class="vt-strip-name">${escapeHtml(stop.partner_name || "—")}</span>
+                <span class="vt-strip-eta">${eta}</span>
+            </li>`;
     }
 
     function stopRow(stop, plan) {
@@ -156,6 +172,34 @@
             </li>`;
     }
 
+    /* Cột phải khi đã chọn một chuyến: đầy đủ từng điểm, kèm nút của người bán hàng. Đây
+       là nơi DUY NHẤT còn dùng stopRow — thẻ chuyến bên trái chỉ hiện dải điểm rút gọn. */
+    function planDetail(plan) {
+        return `
+            <div class="vt-panel-head">
+                <span class="vt-plate">${escapeHtml(plan.vehicle_plate)}</span>
+                <span class="vt-session vt-session-${plan.session || "other"}">
+                    ${escapeHtml(plan.session_label)}
+                </span>
+                ${plan.zone_name ? `<span class="vt-zone">${escapeHtml(plan.zone_name)}</span>` : ""}
+                <button type="button" class="vt-btn vt-btn-mini vt-btn-ghost ms-auto"
+                        data-vt-unselect="1" title="Đóng, ẩn bản đồ">✕</button>
+            </div>
+            <div class="vt-detail-meta">
+                ${planMetaText(plan)}
+                <span class="vt-muted">
+                    · ${plan.driver_name ? "tài xế " + escapeHtml(plan.driver_name) : "chưa gán tài xế"}
+                    ${plan.start_name ? " · xuất phát " + escapeHtml(plan.start_name) : ""}
+                </span>
+            </div>
+            <ol class="vt-stops">${plan.stops.map((stop) => stopRow(stop, plan)).join("")}</ol>
+            <footer class="vt-plan-foot">
+                <button type="button" class="vt-btn vt-btn-ghost" data-vt-route="${plan.id}">
+                    Xem toàn bộ hành trình
+                </button>
+            </footer>`;
+    }
+
     function unplannedRow(order) {
         const due = order.commitment_date
             ? `hẹn ${escapeHtml(order.commitment_date.slice(0, 10))}`
@@ -200,14 +244,17 @@
         state.config = { tile_url: data.tile_url, tile_attribution: data.tile_attribution };
         state.plans = data.plans;
         state.vehicles = data.vehicles;
+        state.places = data.places || [];
         fillSalerOptions(data.saler_codes);
         renderPlans();
         renderUnplanned(data.my_unplanned, data.mine_configured);
         renderRequests(data.my_requests);
-        window.VtSaleMap.update(data.vehicles, state.config);
-        // Kho chỉ vẽ ở đây, KHÔNG vẽ trong loadPositions(): nhịp cập nhật vị trí chạy mỗi
-        // 30 giây mà kho thì không đổi.
-        window.VtSaleMap.showPlaces(data.places);
+        // Vẽ lên bản đồ chỉ khi nó ĐÃ được mở (người dùng đã chọn một chuyến). Chưa mở thì
+        // dữ liệu vẫn nằm trong state, lúc mở sẽ vẽ một lượt — xem showDetail().
+        if (window.VtSaleMap.isOpen()) {
+            window.VtSaleMap.update(state.vehicles);
+            window.VtSaleMap.showPlaces(state.places);
+        }
         stamp();
     }
 
@@ -218,13 +265,72 @@
             : `<div class="vt-empty">${state.mineOnly
                 ? "Ngày này không có chuyến nào chở đơn của bạn."
                 : "Ngày này chưa có chuyến nào."}</div>`;
-        const mine = state.plans.filter((plan) => plan.has_mine).length;
-        el("vt-summary").innerHTML = `<b>${state.plans.length}</b> chuyến · <b>${mine}</b> có đơn của tôi`;
-        markRouteButtons();
+        el("vt-kpi-plans").textContent = plans.length;
+        el("vt-kpi-stops").textContent = plans.reduce(
+            (total, plan) => total + (plan.stop_count || 0), 0);
+        // Chuyến đang chọn có thể biến mất sau khi đổi ngày / bật lọc "chỉ đơn của tôi" —
+        // bỏ chọn luôn thay vì để cột phải hiện một chuyến không còn trong danh sách.
+        if (state.selectedPlanId && !plans.some((plan) => plan.id === state.selectedPlanId)) {
+            hideDetail();
+            return;
+        }
+        renderDetail();
+    }
+
+    /* Vẽ lại cột phải theo chuyến đang chọn. Gọi cả sau mỗi lượt làm tươi 120 giây, nên
+       chuyến đang mở tự cập nhật (điểm vừa giao xong, giờ tới đổi) mà không phải chọn lại.
+
+       ``fit``: chỉ lúc người dùng vừa CHỌN chuyến mới căn khung nhìn về toàn tuyến. Lượt làm
+       tươi định kỳ thì không — xem showRoute() trong sale_board_map.js. */
+    function renderDetail(fit) {
+        const plan = state.plans.find((item) => item.id === state.selectedPlanId);
+        if (!plan) {
+            return;
+        }
+        el("vt-detail-panel").innerHTML = planDetail(plan);
+        if (window.VtSaleMap.isOpen()) {
+            window.VtSaleMap.showRoute(plan, fit === true);
+        }
+    }
+
+    function showDetail(planId) {
+        state.selectedPlanId = planId;
+        const plan = state.plans.find((item) => item.id === planId);
+        if (!plan) {
+            return;
+        }
+        // Bỏ lớp ẩn TRƯỚC khi dựng bản đồ: Leaflet đo kích thước khung lúc khởi tạo, dựng
+        // trên khung còn ẩn thì bản đồ ra méo.
+        el("vt-detail-empty").classList.add("is-hidden");
+        el("vt-detail").classList.remove("is-hidden");
+        window.VtSaleMap.open(state.config);
+        window.VtSaleMap.update(state.vehicles);
+        window.VtSaleMap.showPlaces(state.places);
+        renderDetail(true);
+        markSelectedCard();
+    }
+
+    function hideDetail() {
+        state.selectedPlanId = null;
+        window.VtSaleMap.clearRoute();
+        el("vt-detail").classList.add("is-hidden");
+        el("vt-detail-empty").classList.remove("is-hidden");
+        el("vt-detail-panel").innerHTML = "";
+        markSelectedCard();
+    }
+
+    /* Đổi viền thẻ đang chọn mà KHÔNG vẽ lại cả danh sách: vẽ lại làm mất vị trí cuộn của
+       người đang xem chuyến thứ năm. */
+    function markSelectedCard() {
+        for (const card of document.querySelectorAll("[data-vt-select]")) {
+            card.classList.toggle("is-selected",
+                                  Number(card.dataset.vtSelect) === state.selectedPlanId);
+        }
     }
 
     function renderUnplanned(orders, mineConfigured) {
         el("vt-unplanned-count").textContent = orders.length;
+        el("vt-kpi-unplanned").textContent = orders.length;
         if (orders.length) {
             el("vt-unplanned").innerHTML = orders.map(unplannedRow).join("");
             return;
@@ -257,15 +363,6 @@
         }
         select.value = state.saler;
         select.dataset.filled = "1";
-    }
-
-    function markRouteButtons() {
-        const shown = window.VtSaleMap.shownRoute();
-        for (const button of document.querySelectorAll("[data-vt-route]")) {
-            const active = Number(button.dataset.vtRoute) === shown;
-            button.classList.toggle("is-active", active);
-            button.textContent = active ? "Tắt lộ trình" : "Xem lộ trình trên bản đồ";
-        }
     }
 
     function stamp() {
@@ -465,11 +562,16 @@
         }
         const routeButton = event.target.closest("[data-vt-route]");
         if (routeButton) {
+            // Vẽ lại chứ không bật/tắt: nút này để CĂN LẠI khung nhìn về toàn tuyến sau khi
+            // người dùng đã phóng to xem một điểm.
             const plan = state.plans.find((item) => item.id === Number(routeButton.dataset.vtRoute));
             if (plan) {
-                window.VtSaleMap.toggleRoute(plan);
-                markRouteButtons();
+                window.VtSaleMap.showRoute(plan);
             }
+            return;
+        }
+        if (event.target.closest("[data-vt-unselect]")) {
+            hideDetail();
             return;
         }
         const dayButton = event.target.closest("[data-vt-day]");
@@ -477,11 +579,28 @@
             shiftDate(Number(dayButton.dataset.vtDay));
             return;
         }
-        const head = event.target.closest("[data-vt-toggle]");
-        if (head) {
-            const card = head.closest(".vt-plan");
-            const open = card.classList.toggle("is-open");
-            head.querySelector(".vt-caret").textContent = open ? "▾" : "▸";
+        const card = event.target.closest("[data-vt-select]");
+        if (card) {
+            const planId = Number(card.dataset.vtSelect);
+            // Bấm lại chuyến đang xem thì đóng: đó là cách tắt bản đồ nhanh nhất, khỏi phải
+            // với tay lên nút ✕.
+            if (planId === state.selectedPlanId) {
+                hideDetail();
+            } else {
+                showDetail(planId);
+            }
+        }
+    });
+
+    /* Bàn phím: thẻ chuyến là role="button" nên Enter/Space phải chọn được như chuột. */
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+            return;
+        }
+        const card = event.target.closest && event.target.closest("[data-vt-select]");
+        if (card) {
+            event.preventDefault();
+            showDetail(Number(card.dataset.vtSelect));
         }
     });
 
@@ -495,7 +614,7 @@
         el("vt-saler").addEventListener("change", (event) => {
             state.saler = event.target.value;
             localStorage.setItem(SALER_KEY, state.saler);
-            window.VtSaleMap.clearRoute();
+            hideDetail();
             loadBoard();
         });
         el("vt-mine-only").addEventListener("change", (event) => {

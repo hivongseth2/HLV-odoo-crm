@@ -1,0 +1,222 @@
+/* Trang /giao-hang — cột phải (bản đồ + chi tiết chuyến), ngăn kéo AI và các lớp vẽ trên
+   bản đồ.
+
+   Tách khỏi sale_board.css khi file đó vượt mức 700 dòng của repo. Ranh giới: file kia lo
+   KHUNG CHÍNH (thanh công cụ, dải số, thẻ chuyến, danh sách điểm, nhãn/nút), file này lo
+   những gì nằm NGOÀI cột chính. Biến màu khai ở :root của file kia — biến CSS là toàn cục
+   nên không cần khai lại, chỉ cần nạp file đó trước. */
+
+/* ------------------------------------------------------------ cột phải */
+
+.vt-side {
+    position: sticky;
+    top: 4rem;
+}
+
+.vt-map {
+    height: 58vh;
+    min-height: 380px;
+    border-radius: var(--vt-radius);
+    border: 1px solid var(--vt-line);
+}
+
+.is-hidden {
+    display: none;
+}
+
+/* Chưa chọn chuyến: một ô nhắc việc thay cho bản đồ. Cùng chiều cao với bản đồ để cột phải
+   không nhảy lên nhảy xuống khi chọn rồi bỏ chọn. */
+.vt-detail-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    height: 58vh;
+    min-height: 380px;
+    padding: 1.5rem;
+    text-align: center;
+    background: #fff;
+    border: 1px dashed var(--vt-line);
+    border-radius: var(--vt-radius);
+    color: var(--vt-muted);
+    font-size: .875rem;
+}
+
+.vt-detail-empty-mark {
+    font-size: 2rem;
+    line-height: 1;
+    color: #c9d2dd;
+}
+
+.vt-detail-meta {
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--vt-line);
+    font-size: .8125rem;
+    color: var(--vt-muted);
+}
+
+.vt-panel {
+    background: #fff;
+    border: 1px solid var(--vt-line);
+    border-radius: var(--vt-radius);
+    margin-top: .75rem;
+    overflow: hidden;
+}
+
+.vt-panel-head {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--vt-line);
+    font-weight: 600;
+}
+
+.vt-list {
+    max-height: 17rem;
+    overflow-y: auto;
+}
+
+.vt-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid #f2f4f6;
+}
+
+.vt-row:last-child {
+    border-bottom: 0;
+}
+
+.vt-row:hover {
+    background: #fafbfc;
+}
+
+.vt-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.vt-row-title {
+    font-weight: 600;
+}
+
+.vt-empty,
+.vt-alert {
+    padding: .75rem;
+    color: var(--vt-muted);
+    font-size: .875rem;
+}
+
+.vt-alert {
+    background: #fde8e8;
+    color: #a4262c;
+    border-radius: var(--vt-radius);
+}
+
+/* ------------------------------------------------------------ ngăn kéo AI */
+
+.vt-drawer {
+    width: 34rem;
+    max-width: 92vw;
+}
+
+.vt-request {
+    padding: .75rem;
+    border-bottom: 1px solid var(--vt-line);
+}
+
+.vt-request header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .25rem;
+}
+
+.vt-answer-box > summary {
+    cursor: pointer;
+    color: var(--vt-mine);
+    font-size: .8125rem;
+    list-style: none;
+    padding: .15rem 0;
+}
+
+.vt-answer-box > summary::before {
+    content: "▸ ";
+}
+
+.vt-answer-box[open] > summary::before {
+    content: "▾ ";
+}
+
+.vt-answer {
+    margin-top: .35rem;
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: .5rem .65rem;
+    font-size: .875rem;
+}
+
+#vt-request-count.is-zero {
+    display: none;
+}
+
+/* ------------------------------------------------------------ bản đồ */
+
+.vt-marker {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    white-space: nowrap;
+}
+
+.vt-dot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+.vt-plate-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vt-ink);
+    background: rgba(255, 255, 255, .88);
+    padding: 0 .2rem;
+    border-radius: 3px;
+}
+
+/* Số thứ tự ghé, vẽ khi bật "Xem lộ trình". */
+.vt-route-no {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #41505f;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+}
+
+.vt-route-no.vt-route-mine {
+    background: var(--vt-mine);
+}
+
+@media (max-width: 991px) {
+    .vt-side {
+        position: static;
+    }
+
+    .vt-map,
+    .vt-detail-empty {
+        height: 45vh;
+    }
+}

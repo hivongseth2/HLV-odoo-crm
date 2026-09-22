@@ -423,9 +423,30 @@ hàng trăm ghim đứng yên mỗi lần là phí.
 
 Trang `/giao-hang` (bản đồ cho người bán hàng) chỉ vẽ **kho**, không vẽ đối tác/khách hàng:
 số ghim khách lên tới hàng trăm, vẽ hết là lấp mất xe — mà điểm giao của chuyến đã có ghim
-số thứ tự riêng khi bấm xem lộ trình. Kho thì luôn hiện, kể cả khi chưa mở chuyến nào: không
-có nó thì một chấm xe giữa bản đồ không cho biết xe đang đi ra hay đang về. Lọc theo **mã
-loại** (`type_id.code = 'warehouse'`) chứ không theo tên, vì tên loại người dùng sửa được.
+số thứ tự riêng khi xem lộ trình. Kho hiện ngay khi bản đồ mở: không có nó thì một chấm xe
+giữa bản đồ không cho biết xe đang đi ra hay đang về. Lọc theo **mã loại**
+(`type_id.code = 'warehouse'`) chứ không theo tên, vì tên loại người dùng sửa được.
+
+#### Bản đồ trang `/giao-hang` chỉ dựng khi chọn chuyến
+
+Cột phải mặc định là một ô nhắc *"Bấm một chuyến bên trái…"*, **chưa dựng bản đồ**. Bấm một
+thẻ chuyến mới dựng Leaflet, vẽ xe + kho và vẽ lộ trình của đúng chuyến đó; bấm lại thẻ đang
+chọn (hoặc nút ✕) thì đóng.
+
+Lý do: chưa chọn chuyến thì bản đồ chỉ là một ô trống chiếm nửa màn hình, mà vẫn tải tile và
+vẽ lại mỗi 30 giây. Kéo theo hai luật trong code, đừng phá:
+
+- `VtSaleMap.update()` / `showPlaces()` / `showRoute()` **không tự dựng** bản đồ, chỉ trả về
+  ngay khi chưa mở. Chỉ `open()` dựng, và trang chỉ gọi `open()` **sau** khi đã bỏ lớp ẩn —
+  Leaflet đo kích thước khung lúc khởi tạo, dựng trên khung đang ẩn thì bản đồ ra méo.
+- Lượt làm tươi 120 giây vẽ lại lộ trình với `fit=false`: khớp dữ liệu mới nhưng không kéo
+  khung nhìn. Người đang phóng to xem một điểm mà cứ 2 phút bị giật về toàn tuyến thì không
+  xem được gì.
+
+Thẻ chuyến ở cột trái cũng gọn lại: xe, buổi, cụm, ba con số, và một **dải điểm cuộn ngang**
+(số thứ tự + tên khách + giờ tới). Toàn bộ chi tiết — địa chỉ, chứng từ, nút *Xin đổi lịch* —
+nằm ở cột phải. Trước đây mỗi thẻ tự mở sẵn cả danh sách điểm kèm nút, ba chuyến là đã phải
+cuộn và không còn nhìn ra chuyến nào là chuyến nào.
 
 ### Quan hệ với `hlv.delivery.point`
 
