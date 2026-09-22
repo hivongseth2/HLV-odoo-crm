@@ -20,8 +20,12 @@
     border: 1px solid var(--vt-line);
 }
 
+/* !important là cố ý và cần thiết: đây là lớp TIỆN ÍCH, phải thắng mọi rule display của
+   component bất kể thứ tự khai. Không có nó thì .vt-detail-empty{display:flex} khai bên
+   dưới sẽ đè lại (cùng độ ưu tiên, rule sau thắng) — đã gãy thật đúng như vậy: ô "bấm một
+   chuyến" không ẩn, bản đồ bị đẩy xuống dưới nó. */
 .is-hidden {
-    display: none;
+    display: none !important;
 }
 
 /* Chưa chọn chuyến: một ô nhắc việc thay cho bản đồ. Cùng chiều cao với bản đồ để cột phải
@@ -73,9 +77,11 @@
     font-weight: 600;
 }
 
+/* Không giới hạn chiều cao + cuộn trong hộp nữa: hộp này đã chuyển xuống cột trái rộng cả
+   nửa trang, cuộn lồng trong đó làm dòng đầu bị che sau tiêu đề và phải cuộn hai lần mới
+   tới cuối danh sách. Để cả trang cuộn một lần. */
 .vt-list {
-    max-height: 17rem;
-    overflow-y: auto;
+    overflow: visible;
 }
 
 .vt-row {
