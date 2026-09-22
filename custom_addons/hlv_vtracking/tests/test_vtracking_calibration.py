@@ -142,3 +142,38 @@ class TestDoChinhXac(unittest.TestCase):
 
     def test_khong_do_duoc_khong_tinh_la_dung_hen(self):
         self.assertEqual(self.actual.accuracy(None), {'abs_minutes': 0, 'on_time_rate': 0.0})
+
+
+class TestBamGop(unittest.TestCase):
+    """Kho bấm gộp: nhiều phiếu cách nhau nhiều km mang cùng một dấu thời gian.
+
+    Đo trên chính kho này 23% phiếu xuất hai tháng bị bấm kiểu đó — lấy làm mẫu thì trung
+    vị tụt xuống gần 0 và định mức học được sai theo.
+    """
+
+    def test_hai_diem_xa_nhau_ma_cach_1_phut_la_bam_gop(self):
+        stops = [stop(40, NT, A), stop(41, NT, D)]  # A -> D khoảng 11 km
+        self.assertEqual(calibration.clerical_flags(stops), [True, True])
+
+    def test_hai_khach_canh_nhau_cach_2_phut_van_la_that(self):
+        gan_A = (A[0] + 0.004, A[1])  # cách ~0,45 km, xe chạy 2 phút là hợp lý
+        stops = [stop(40, NT, A), stop(42, NT, gan_A)]
+        self.assertEqual(calibration.clerical_flags(stops), [False, False])
+
+    def test_chuoi_ba_moc_sat_nhau_thieu_toa_do_cung_bi_loai(self):
+        stops = [stop(40, NT, None), stop(41, NT, None), stop(42, NT, None)]
+        self.assertEqual(calibration.clerical_flags(stops), [True, True, True])
+
+    def test_chang_dinh_vao_moc_bam_gop_cung_bi_loai(self):
+        # Điểm 2 và 3 bị bấm gộp. Chặng 2->3 hỏng đã đành, nhưng chặng 1->2 cũng hỏng: nó
+        # đo TỚI đúng cái mốc giả đó. Chỉ mẫu hub (dựa trên mốc thật của điểm 1) còn dùng
+        # được.
+        stops = [stop(40, NT, A), stop(55, NT, C), stop(56, NT, D)]
+        samples = calibration.trip_samples(START, True, stops)
+        self.assertEqual(samples, [('hub', NT, 40)])
+
+    def test_diem_cuoi_bi_bam_gop_thi_khong_lay_mau_ve_kho(self):
+        stops = [stop(40, NT, A), stop(41, NT, D)]
+        samples = calibration.trip_samples(START, True, stops,
+                                           START + timedelta(minutes=70))
+        self.assertEqual(samples, [])

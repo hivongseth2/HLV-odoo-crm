@@ -59,8 +59,12 @@ def calibrate_company(env, company, today=None):
 def collect_samples(env, company, today, days=LOOKBACK_DAYS):
     """Mẫu đo từ mọi chuyến có số thực tế trong ``days`` ngày gần nhất.
 
-    Trả về ``(samples, plan_count)``. Điểm chở về (giao hụt) không lấy làm mẫu: xe có tới
-    nhưng thời gian ở đó không phải thời gian GIAO.
+    Trả về ``(samples, plan_count)``. Hai loại điểm bị loại:
+
+    * **chở về** (giao hụt) — xe có tới nhưng thời gian ở đó không phải thời gian GIAO;
+    * **giờ giao không phải do shipper quét** (``delivered_source != 'scan'``) — đó là lúc
+      kho bấm trong Odoo, thường là bấm gộp một loạt sau khi xe về. Đo trên kho này 23%
+      phiếu xuất rơi vào dạng đó; lấy làm mẫu thì trung vị tụt xuống gần 0.
     """
     plans = env['hlv.vtracking.plan'].sudo().search([
         ('company_id', '=', company.id),
@@ -80,6 +84,7 @@ def collect_samples(env, company, today, days=LOOKBACK_DAYS):
             }
             for line in plan.line_ids
             if line.delivered and line.delivered_at and not line.returned
+            and line.delivered_source == 'scan'
         ]
         samples += trip_samples(
             plan.actual_start_at, plan.actual_start_source == 'received', stops,

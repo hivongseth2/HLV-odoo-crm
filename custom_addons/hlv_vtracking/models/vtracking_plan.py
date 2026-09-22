@@ -2,9 +2,11 @@ import logging
 
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
-from odoo.addons.hlv_vtracking.tools.vtracking_planning import zone_warnings
+from odoo.addons.hlv_vtracking.tools.vtracking_planning import (
+    extra_service_minutes, zone_warnings,
+)
 from odoo.addons.hlv_vtracking.tools.vtracking_route import (
-    estimate_route, format_minutes, route_params,
+    estimate_route, format_minutes, route_params, same_point,
 )
 from odoo.addons.hlv_vtracking.services.plan_payload import SESSION_LABELS
 
@@ -234,11 +236,34 @@ class HlvVtrackingPlan(models.Model):
     def _route_extra_minutes(self):
         """Phút đứng LÂU HƠN thường lệ của từng điểm, theo đúng thứ tự ghé.
 
-        Lấy từ thói quen của điểm giao. Khách nào không khai thì 0 — định mức cụm đã bao
-        thời gian giao của một điểm bình thường rồi.
+        Hai phần cộng lại:
+
+        * **Theo số phiếu** — bốn phiếu tại một điểm mất hơn hẳn một phiếu (ký, đếm, dỡ).
+          Định mức cụm đo trên điểm một phiếu nên chỉ cộng phần dôi ra.
+        * **Theo thói quen khách** — cổng xa, chờ cân, qua nhiều lớp bảo vệ.
+
+        Nhiều phiếu cùng MỘT điểm nằm liền nhau trong danh sách (xem ``same_point``): phần
+        theo số phiếu dồn hết vào dòng ĐẦU của nhóm, vì các dòng sau không được tính thời
+        gian đứng lần nữa.
         """
         self.ensure_one()
-        return [line.extra_service_minutes or 0 for line in self._ordered_lines()]
+        lines = self._ordered_lines()
+        stops = self._route_stops()
+        keys = self._route_stop_keys()
+        extras = [line.extra_service_minutes or 0 for line in lines]
+
+        group_start, count = 0, 0
+        for index in range(len(lines)):
+            if index and same_point(stops[index - 1], stops[index],
+                                    keys[index - 1], keys[index]):
+                count += 1
+                continue
+            if count:
+                extras[group_start] += extra_service_minutes(count)
+            group_start, count = index, 1
+        if count:
+            extras[group_start] += extra_service_minutes(count)
+        return extras
 
     def _route_params(self):
         """Định mức tính lộ trình: ưu tiên cụm tuyến, lùi về tham số chung của công ty.

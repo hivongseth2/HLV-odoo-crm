@@ -87,13 +87,22 @@
         return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     }
 
-    /* Giờ tới ước tính: cộng số phút vào giờ bắt đầu buổi. Giờ đồng hồ dễ hình dung hơn
-       "+93 phút", nhưng luôn kèm dấu ~ để không ai đọc thành giờ đã hẹn với khách. */
+    /* Giờ tới ước tính: cộng số phút vào giờ XE RỜI KHO THẬT.
+
+       07:55 và 13:10, không phải 07:30/13:00 ghi trên phiếu: đo trên chính kho này, chất
+       hàng mất 25-40 phút sau giờ ghi. Lấy giờ trên phiếu làm mốc thì mọi giờ tới lệch sẵn
+       nửa tiếng, và sale hứa với khách theo con số lệch đó.
+
+       Luôn kèm dấu ~ để không ai đọc thành giờ đã hẹn. */
+    const DEPART_MINUTES = { morning: 7 * 60 + 55, afternoon: 13 * 60 + 10 };
+
     function etaLabel(minutes, sessionLabel) {
         if (minutes == null) {
             return "";
         }
-        const base = (sessionLabel || "").indexOf("Chiều") === 0 ? 13 * 60 : 8 * 60;
+        const base = (sessionLabel || "").indexOf("Chiều") === 0
+            ? DEPART_MINUTES.afternoon
+            : DEPART_MINUTES.morning;
         const total = base + minutes;
         const hour = String(Math.floor(total / 60) % 24).padStart(2, "0");
         const minute = String(total % 60).padStart(2, "0");

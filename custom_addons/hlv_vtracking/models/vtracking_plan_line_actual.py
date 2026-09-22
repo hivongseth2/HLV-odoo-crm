@@ -22,6 +22,13 @@ class HlvVtrackingPlanLineActual(models.Model):
              'vậy vẫn TỐN thời gian và quãng đường của chuyến, nên phải đếm riêng.',
     )
     return_reason = fields.Char(string='Lý do chở về', readonly=True, copy=False)
+    delivered_source = fields.Selection(
+        [('scan', 'Shipper quét tại điểm'), ('odoo', 'Bấm trong Odoo')],
+        string='Nguồn giờ giao', readonly=True, copy=False, index=True,
+        help='Giờ giao lấy từ nhật ký quét mã vạch hay từ ô "Hoàn tất" trong Odoo. Phần '
+             'học lại định mức chỉ dùng giờ quét: giờ bấm trong Odoo thường là lúc kho '
+             'bấm gộp một loạt phiếu sau khi xe về, không phải lúc xe tới điểm.',
+    )
     received_at = fields.Datetime(
         string='Hàng lên xe lúc', readonly=True, copy=False,
         help='Lúc shipper quét nhận phiếu tại kho.',

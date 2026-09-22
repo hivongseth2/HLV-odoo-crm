@@ -23,6 +23,8 @@ nên mỗi mẫu ``leg`` đã gồm cả bốc dỡ và ký nhận tại điểm
 dùng ``median_leg_minutes``.
 """
 
+from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km
+
 from .vtracking_actual import minutes_between
 from .vtracking_route import same_point
 
@@ -38,11 +40,80 @@ MIN_SAMPLES = 10
 # điều phối bấm áp dụng cho những thay đổi 1 phút vô nghĩa.
 MIN_CHANGE_MINUTES = 2
 
+# --- BẤM GỘP -----------------------------------------------------------------------
+# Tài xế không dùng app thì kho bấm xong một loạt phiếu sau khi xe đã về: nhiều điểm cách
+# nhau nhiều cây số mang cùng một dấu thời gian đến từng phút. Đo trên chính kho này: 23%
+# phiếu xuất trong hai tháng bị bấm kiểu đó. Lấy các mốc ấy làm mẫu thì trung vị tụt xuống
+# gần 0 và định mức học được sẽ sai.
+#
+# Lớp chặn THỨ NHẤT nằm ở ``services/vtracking_calibration``: chỉ nhận điểm có giờ do
+# shipper QUÉT (``barcode.scan.log``), bỏ hết giờ bấm trong Odoo. Phần dưới đây là lớp thứ
+# hai, cho trường hợp chính cái máy quét bị dùng để quét gộp cả xấp phiếu lúc xe đã về.
+#
+# Dấu hiệu là VẬN TỐC SUY RA: hai điểm cách 8 km mà cách nhau 1 phút thì không phải xe chạy
+# nhanh, mà là người bấm nhanh.
+GROUPED_CLICK_MINUTES = 2
+MAX_IMPLIED_KMH = 70
+# Thiếu toạ độ thì không suy được vận tốc; lúc đó cần một CHUỖI dài mới dám kết luận, vì
+# hai điểm liền nhau cách nhau 2 phút hoàn toàn có thể là hai khách cạnh nhau trong một KCN.
+MIN_BATCH_POINTS = 3
+
 KINDS = ('hub', 'leg', 'return')
 
 
 def _usable(minutes):
     return minutes is not None and MIN_SAMPLE_MINUTES <= minutes <= MAX_SAMPLE_MINUTES
+
+
+def implied_kmh(km, minutes):
+    """Vận tốc suy ra từ quãng đường và thời gian. None khi không tính được.
+
+    Quãng đường là đường chim bay nên vận tốc suy ra luôn THẤP hơn thực tế — càng chắc
+    chắn khi nó vẫn vượt ngưỡng: đường thật còn dài hơn thế.
+    """
+    if km is None or not minutes or minutes <= 0:
+        return None
+    return km / (minutes / 60.0)
+
+
+def clerical_flags(points, gap_minutes=GROUPED_CLICK_MINUTES,
+                   max_kmh=MAX_IMPLIED_KMH, min_batch=MIN_BATCH_POINTS):
+    """Điểm nào có dấu thời gian do BẤM GỘP mà ra. Hàm thuần.
+
+    :param points: list dict ``{'delivered_at', 'point'}`` đã sắp theo giờ giao
+    :returns: list bool cùng độ dài — True nghĩa là mốc giờ của điểm đó không đáng tin
+
+    Hai đường nhận biết:
+      * cặp liền nhau cách nhau ``gap_minutes`` phút mà vận tốc suy ra vượt ``max_kmh``;
+      * chuỗi từ ``min_batch`` điểm trở lên mà mọi khoảng cách đều dưới ``gap_minutes``
+        phút — dùng khi thiếu toạ độ, lúc đó không suy được vận tốc.
+    """
+    flags = [False] * len(points)
+    if len(points) < 2:
+        return flags
+
+    gaps = []
+    for index, (before, after) in enumerate(zip(points, points[1:])):
+        minutes = minutes_between(before['delivered_at'], after['delivered_at'])
+        close = minutes is not None and minutes <= gap_minutes
+        gaps.append(close)
+        if not close:
+            continue
+        speed = implied_kmh(haversine_km(before.get('point'), after.get('point')), minutes)
+        if speed is not None and speed > max_kmh:
+            flags[index] = flags[index + 1] = True
+
+    # Chuỗi dài các mốc sát nhau: đánh dấu cả chuỗi.
+    run = 0
+    for index, close in enumerate(gaps + [False]):
+        if close:
+            run += 1
+            continue
+        if run + 1 >= min_batch:
+            for position in range(index - run, index + 1):
+                flags[position] = True
+        run = 0
+    return flags
 
 
 def trip_samples(start_at, start_is_scan, stops, back_at=None):
@@ -76,23 +147,28 @@ def trip_samples(start_at, start_is_scan, stops, back_at=None):
     if not points:
         return []
 
+    # Mốc do bấm gộp không phải giờ xe tới: bỏ hẳn, đừng đưa vào bất kỳ loại mẫu nào.
+    clerical = clerical_flags(points)
+
     samples = []
     first = points[0]
-    if start_is_scan and first.get('zone_id'):
+    if start_is_scan and first.get('zone_id') and not clerical[0]:
         minutes = minutes_between(start_at, first['delivered_at'])
         if _usable(minutes):
             samples.append(('hub', first['zone_id'], minutes))
 
-    for before, after in zip(points, points[1:]):
+    for index, (before, after) in enumerate(zip(points, points[1:])):
         zone_id = after.get('zone_id')
         if not zone_id or zone_id != before.get('zone_id'):
+            continue
+        if clerical[index] or clerical[index + 1]:
             continue
         minutes = minutes_between(before['delivered_at'], after['delivered_at'])
         if _usable(minutes):
             samples.append(('leg', zone_id, minutes))
 
     last = points[-1]
-    if back_at and last.get('zone_id'):
+    if back_at and last.get('zone_id') and not clerical[-1]:
         minutes = minutes_between(last['delivered_at'], back_at)
         if _usable(minutes):
             samples.append(('return', last['zone_id'], minutes))

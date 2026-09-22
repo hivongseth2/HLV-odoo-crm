@@ -255,11 +255,13 @@ Tóm tắt như mục 8, thêm `note`, `route_params`, và `lines[]` theo thứ 
 | `delivery_channel` | `company` · `pickup` · `express` · `grab` · `other` · `null` (không rõ) |
 | `needs_truck` | `false` = điểm này đang chiếm một chỗ trên xe mà lẽ ra không cần |
 | `extra_service_minutes` | Phút đứng **lâu hơn** điểm thường trong cụm (0 = như thường lệ) |
+| | Ngoài ô này, lộ trình còn tự cộng phần đứng **theo số phiếu tại điểm**: 1 phiếu 4′ · 2–3 phiếu 15′ · 4 phiếu 22′ · từ 5 phiếu 30′ (định mức cụm đo trên điểm một phiếu, nên chỉ cộng phần dôi ra) |
 | `driver_note` | Cổng vào, SĐT người nhận, đường khó — chuyển nguyên văn cho tài xế |
 | `leg_km`, `leg_minutes` | Chặng từ điểm trước tới điểm này. `null` = điểm này thiếu toạ độ |
 | `same_point` | `true` = cùng chỗ với dòng ngay trước (cách < 50 m, hoặc cùng địa chỉ khi thiếu toạ độ). Chặng 0 km / 0 phút — **nhiều đơn một điểm chỉ tính một lần**. Xếp các đơn cùng khách LIỀN NHAU thì mới được gộp |
 | `arrive_offset_minutes`, `depart_offset_minutes` | Phút tính **từ lúc xe xuất phát** |
-| `delivered` | Đã giao chưa — theo phiếu xuất đã hoàn tất (`date_done`), cập nhật mỗi giờ |
+| `delivered` | Đã giao chưa — theo phiếu xuất đã hoàn tất, cập nhật mỗi giờ |
+| `delivered_source` | `scan` = shipper quét tại điểm (giờ thật) · `odoo` = ai đó bấm trong Odoo, thường là bấm gộp cả xấp sau khi xe về. **Đừng đo giờ giấc bằng mốc `odoo`** — phần học lại định mức đã tự bỏ chúng |
 
 Ở phần tóm tắt kế hoạch còn có `procedure_blocked_count` và `no_truck_count` — đếm sẵn để
 không phải duyệt hết `lines[]` mới biết kế hoạch có xác nhận được không.

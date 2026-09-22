@@ -173,3 +173,24 @@ class TestCanhBaoTheoDiem(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestThoiGianDungTheoSoPhieu(unittest.TestCase):
+    """Đứng tại điểm tính theo SỐ PHIẾU: bốn phiếu một điểm mất hơn hẳn một phiếu."""
+
+    planning = standalone.load_tool('vtracking_planning')
+
+    def test_bang_dinh_muc(self):
+        self.assertEqual([self.planning.service_minutes(n) for n in (1, 2, 3, 4, 5, 9)],
+                         [4, 15, 15, 22, 30, 30])
+
+    def test_mot_phieu_khong_cong_them(self):
+        self.assertEqual(self.planning.extra_service_minutes(1), 0)
+
+    def test_phan_doi_ra_so_voi_diem_mot_phieu(self):
+        self.assertEqual(self.planning.extra_service_minutes(3), 11)
+        self.assertEqual(self.planning.extra_service_minutes(5), 26)
+
+    def test_so_phieu_khong_hop_le_coi_nhu_mot(self):
+        self.assertEqual(self.planning.service_minutes(0), 4)
+        self.assertEqual(self.planning.service_minutes(None), 4)

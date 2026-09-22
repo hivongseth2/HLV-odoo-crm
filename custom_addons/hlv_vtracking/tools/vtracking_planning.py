@@ -119,3 +119,33 @@ def nearest_first_order(start, points):
         current = coords
         remaining = [item for item in remaining if item[0] != key]
     return ordered + unlocated
+
+
+# Thời gian đứng tại một điểm, đo trên chính kho này, theo SỐ PHIẾU giao tại điểm đó.
+# Không theo khách: cùng cụm Nhơn Trạch, buổi sáng (1-7 phiếu/điểm) trung vị 13 phút, buổi
+# chiều (đúng 1 phiếu/điểm) trung vị 3 phút — khác biệt nằm ở số phiếu phải ký và dỡ, không
+# nằm ở khách. Gán theo khách là cách đã phải bỏ.
+SERVICE_BY_PICKINGS = ((1, 4), (3, 15), (4, 22))
+SERVICE_MANY_PICKINGS = 30
+
+
+def service_minutes(picking_count):
+    """Số phút đứng tại một điểm có ``picking_count`` phiếu. Hàm thuần.
+
+    1 phiếu 4' · 2-3 phiếu 15' · 4 phiếu 22' · từ 5 phiếu 30'. Số phiếu <= 0 coi như 1 —
+    điểm nào cũng phải dừng.
+    """
+    count = max(int(picking_count or 1), 1)
+    for limit, minutes in SERVICE_BY_PICKINGS:
+        if count <= limit:
+            return minutes
+    return SERVICE_MANY_PICKINGS
+
+
+def extra_service_minutes(picking_count):
+    """Phần đứng LÂU HƠN một điểm một-phiếu, để cộng vào ``extra_minutes`` của lộ trình.
+
+    Định mức cụm đã bao thời gian đứng của một điểm bình thường (một phiếu), nên chỉ phần
+    dôi ra mới được cộng — cộng cả ``service_minutes`` là tính hai lần.
+    """
+    return max(service_minutes(picking_count) - service_minutes(1), 0)

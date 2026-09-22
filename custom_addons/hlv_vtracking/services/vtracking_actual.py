@@ -40,8 +40,9 @@ def fill_plan_actuals(plans):
     filled = 0
     for plan in plans:
         lines = plan._ordered_lines()
+        scans = complete_scans(lines.picking_id)
         for line in lines:
-            line.write(line_actual_values(line))
+            line.write(line_actual_values(line, scans))
         plan.write(plan_actual_values(plan, lines))
         write_variance(plan, lines)
         filled += 1 if plan.actual_line_count or plan.actual_start_at else 0
@@ -69,21 +70,50 @@ def write_variance(plan, lines):
     return True
 
 
-def line_actual_values(line):
-    """Giá trị thực tế của MỘT điểm giao, đọc từ phiếu.
+def complete_scans(pickings):
+    """dict {picking_id: scan_time} của lần quét "Hoàn thành đơn" ĐẦU TIÊN mỗi phiếu.
+
+    ``barcode.scan.log`` là dấu vết do chính shipper bấm tại điểm giao, nên nó là giờ giao
+    THẬT. ``date_done`` thì không: kho hay bấm xong một loạt phiếu sau khi xe đã về, và
+    những mốc đó cách nhau vài giây dù các điểm cách nhau nhiều cây số.
+
+    Lấy lần quét ĐẦU: quét lại lần hai (sửa sai, mạng rớt) không làm giờ giao muộn đi.
+    """
+    if not pickings:
+        return {}
+    logs = pickings.env['barcode.scan.log'].sudo().search([
+        ('picking_id', 'in', pickings.ids),
+        ('scan_type', '=', 'complete'),
+        ('status', '=', 'success'),
+    ], order='scan_time asc')
+    scans = {}
+    for log in logs:
+        scans.setdefault(log.picking_id.id, log.scan_time)
+    return scans
+
+
+def line_actual_values(line, scans=None):
+    """Giá trị thực tế của MỘT điểm giao, đọc từ phiếu và nhật ký quét.
 
     Dòng chưa có phiếu xuất thì mọi ô thực tế về rỗng — chưa có phiếu nghĩa là chưa có gì
     xảy ra, không phải "đã giao 0 đồng".
+
+    ``delivered_source`` nói giờ giao lấy từ đâu: ``scan`` là shipper quét tại điểm,
+    ``odoo`` là ai đó bấm trong Odoo. Phần học lại định mức chỉ tin nguồn ``scan``.
     """
     picking = line.picking_id
     if not picking:
         return {'delivered': False, 'delivered_at': False, 'returned': False,
-                'return_reason': False, 'received_at': False, 'shipper_id': False}
+                'return_reason': False, 'received_at': False, 'shipper_id': False,
+                'delivered_source': False}
     delivered = picking.state == 'done'
+    scanned_at = (scans or {}).get(picking.id)
     return {
         'delivered': delivered,
+        # Ưu tiên giờ quét; không có thì lùi về date_done — và ghi rõ là đã phải lùi.
         # Chỉ lấy date_done khi phiếu THẬT SỰ xong: phiếu huỷ cũng có thể mang date_done.
-        'delivered_at': picking.date_done if delivered else False,
+        'delivered_at': (scanned_at or picking.date_done) if delivered else False,
+        'delivered_source': ('scan' if scanned_at else 'odoo') if delivered else False,
         'returned': picking.shipper_returned,
         'return_reason': picking.shipper_return_reason or False,
         'received_at': picking.shipper_receive_time or False,

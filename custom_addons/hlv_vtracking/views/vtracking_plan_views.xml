@@ -231,6 +231,8 @@
                                            optional="show"/>
                                     <field name="delivered_at" string="Giao lúc" readonly="1"
                                            optional="show"/>
+                                    <field name="delivered_source" string="Nguồn giờ" readonly="1"
+                                           optional="show"/>
                                     <field name="variance_measured" column_invisible="1"/>
                                     <field name="variance_minutes" string="Lệch (phút)"
                                            readonly="1" optional="show"

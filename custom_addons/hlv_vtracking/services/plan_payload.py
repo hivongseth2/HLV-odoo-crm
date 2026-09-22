@@ -143,6 +143,9 @@ def plan_lines(plan, with_legs=False):
             'driver_note': line.driver_note or None,
             # Thực tế — nguồn khác hẳn phần dự kiến ở trên, đừng trộn hai bên.
             'delivered_at': iso_datetime(line.delivered_at),
+            # 'scan' = shipper quét tại điểm (giờ thật), 'odoo' = bấm trong Odoo (thường là
+            # bấm gộp sau khi xe về — đừng dùng để đo giờ giấc).
+            'delivered_source': line.delivered_source or None,
             'returned': line.returned,
             'return_reason': line.return_reason or None,
             'variance_minutes': line.variance_minutes if line.variance_measured else None,
