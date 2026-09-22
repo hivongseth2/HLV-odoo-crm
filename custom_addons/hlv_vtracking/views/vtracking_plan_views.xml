@@ -166,6 +166,11 @@
                         <field name="zone_warning" readonly="1" nolabel="1"/>
                     </div>
 
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not rule_warning">
+                        <field name="rule_warning" readonly="1" nolabel="1"/>
+                    </div>
+
                     <div class="alert alert-info" role="status"
                          invisible="not driver_mismatch">
                         <field name="driver_mismatch" readonly="1" nolabel="1"/>

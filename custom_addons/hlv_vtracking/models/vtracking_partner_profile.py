@@ -65,6 +65,12 @@ class HlvVtrackingPartnerProfile(models.Model):
     )
 
     # --- Thời gian tại điểm -------------------------------------------------
+    must_be_last = fields.Boolean(
+        string='Phải là điểm cuối chuyến',
+        help='Khách không cho mang hàng của khách khác vào công ty, nên chuyến nào có họ '
+             'thì họ phải được ghé SAU CÙNG. Đã xảy ra thật: xe bị chặn ở cổng vì trên xe '
+             'còn hàng của khách khác.',
+    )
     extra_service_minutes = fields.Integer(
         string='Phút lâu hơn thường lệ', default=0, tracking=True,
         help='CỘNG THÊM so với điểm thường trong cùng cụm, không phải tổng thời gian tại '

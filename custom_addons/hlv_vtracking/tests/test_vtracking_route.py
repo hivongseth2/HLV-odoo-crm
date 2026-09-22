@@ -194,3 +194,38 @@ class TestThoiGianDungTheoSoPhieu(unittest.TestCase):
     def test_so_phieu_khong_hop_le_coi_nhu_mot(self):
         self.assertEqual(self.planning.service_minutes(0), 4)
         self.assertEqual(self.planning.service_minutes(None), 4)
+
+
+class TestLuatKhach(unittest.TestCase):
+    """Ba luật học từ chuyện đã xảy ra thật ở kho, Odoo không tự biết."""
+
+    planning = standalone.load_tool('vtracking_planning')
+
+    def diem(self, ten, cuoi=False):
+        return {'partner_name': ten, 'must_be_last': cuoi}
+
+    def test_khach_phai_cuoi_chuyen_ma_xep_giua(self):
+        stops = [self.diem('Tôn Nam Kim', cuoi=True), self.diem('NOX ASEAN')]
+        warnings = self.planning.rule_warnings(stops)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('Tôn Nam Kim', warnings[0])
+        self.assertIn('CUỐI', warnings[0])
+
+    def test_xep_dung_cuoi_thi_khong_canh_bao(self):
+        stops = [self.diem('NOX ASEAN'), self.diem('Tôn Nam Kim', cuoi=True)]
+        self.assertEqual(self.planning.rule_warnings(stops), [])
+
+    def test_khach_da_co_chuyen_khac_trong_ngay(self):
+        warnings = self.planning.rule_warnings([self.diem('Lotte Chemical')],
+                                               other_day_partners=['Lotte Chemical'])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('hai lần trong ngày', warnings[0])
+
+    def test_tai_xe_cam_hai_chuyen_cung_buoi(self):
+        warnings = self.planning.rule_warnings([self.diem('NOX ASEAN')],
+                                               driver_conflicts=['KH/2026/0012'])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('KH/2026/0012', warnings[0])
+
+    def test_chuyen_binh_thuong_khong_co_canh_bao_nao(self):
+        self.assertEqual(self.planning.rule_warnings([self.diem('NOX ASEAN')]), [])

@@ -51,6 +51,7 @@
                             <field name="default_vehicle_id" options="{'no_create': True}"/>
                         </group>
                         <group string="Tại điểm">
+                            <field name="must_be_last"/>
                             <field name="extra_service_minutes"/>
                             <field name="receiving_from" widget="float_time"/>
                             <field name="receiving_to" widget="float_time"/>

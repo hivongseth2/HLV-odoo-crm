@@ -3,7 +3,7 @@ import logging
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 from odoo.addons.hlv_vtracking.tools.vtracking_planning import (
-    extra_service_minutes, zone_warnings,
+    extra_service_minutes, rule_warnings, zone_warnings,
 )
 from odoo.addons.hlv_vtracking.tools.vtracking_route import (
     estimate_route, format_minutes, route_params, same_point,
@@ -124,6 +124,11 @@ class HlvVtrackingPlan(models.Model):
     actual_end_at = fields.Datetime(string='Về thực tế', readonly=True, copy=False)
     has_actual_data = fields.Boolean(compute='_compute_has_actual_data')
     zone_warning = fields.Char(compute='_compute_zone_warning', string='Cảnh báo cụm')
+    rule_warning = fields.Text(
+        compute='_compute_rule_warning', string='Cảnh báo luật khách',
+        help='Những luật Odoo không tự biết: khách phải là điểm cuối, một công ty không '
+             'nhận hai lần trong ngày, một người không cầm hai chuyến cùng buổi.',
+    )
 
     _sql_constraints = [
         ('vehicle_date_session_uniq', 'unique(vehicle_id, date, session, company_id)',
@@ -309,6 +314,60 @@ class HlvVtrackingPlan(models.Model):
                 if line.zone_id and line.zone_id != zone
             ]
             plan.zone_warning = ' '.join(zone_warnings(params, plan.stop_count, others)) or False
+
+    @api.depends('line_ids.sequence', 'line_ids.must_be_last', 'line_ids.partner_id',
+                 'driver_user_id', 'date', 'session')
+    def _compute_rule_warning(self):
+        """Cảnh báo luật khách. Câu chữ nằm ở ``tools/vtracking_planning``.
+
+        Đây là CẢNH BÁO, không phải chặn: kho vẫn có thể có lý do riêng để làm khác. Chặn
+        cứng chỉ dành cho thủ tục vào cổng (xem ``action_confirm``) — chỗ đó sai thì xe tới
+        nơi cũng không vào được.
+        """
+        for plan in self:
+            stops = [{'partner_name': line.partner_id.display_name,
+                      'must_be_last': line.must_be_last}
+                     for line in plan._ordered_lines()]
+            plan.rule_warning = '\n'.join(rule_warnings(
+                stops, plan._partners_in_other_plans(), plan._driver_conflicts(),
+            )) or False
+
+    def _partners_in_other_plans(self):
+        """Khách của chuyến này đã nằm trong một chuyến KHÁC cùng ngày.
+
+        Xét theo pháp nhân gốc: hai liên hệ con của cùng một công ty vẫn chung một cổng bảo
+        vệ, và cổng đó là chỗ từ chối nhận lần thứ hai.
+        """
+        self.ensure_one()
+        partners = self.line_ids.partner_id.commercial_partner_id
+        if not partners or not self.date:
+            return []
+        others = self.env['hlv.vtracking.plan'].sudo().search([
+            ('id', '!=', self._origin.id or self.id),
+            ('date', '=', self.date),
+            ('company_id', '=', self.company_id.id),
+            ('state', '!=', 'cancelled'),
+        ])
+        seen = others.line_ids.partner_id.commercial_partner_id
+        return [partner.display_name for partner in partners if partner in seen]
+
+    def _driver_conflicts(self):
+        """Chuyến khác CÙNG BUỔI mà tài xế của chuyến này đang cầm.
+
+        Đếm người chứ không đếm xe: kho có năm xe nhưng chỉ hai người giao, nên hai chuyến
+        cùng buổi cùng một người là một chuyến không chạy được.
+        """
+        self.ensure_one()
+        if not self.driver_user_id or not self.date:
+            return []
+        others = self.env['hlv.vtracking.plan'].sudo().search([
+            ('id', '!=', self._origin.id or self.id),
+            ('date', '=', self.date),
+            ('session', '=', self.session),
+            ('driver_user_id', '=', self.driver_user_id.id),
+            ('state', '!=', 'cancelled'),
+        ])
+        return others.mapped('name')
 
     @api.depends('actual_line_count', 'actual_start_at')
     def _compute_has_actual_data(self):

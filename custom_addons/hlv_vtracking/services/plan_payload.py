@@ -63,6 +63,7 @@ def plan_summary(plan):
         'zone_id': plan.zone_id.id or None,
         'zone_name': plan.zone_id.name or None,
         'zone_warning': plan.zone_warning or None,
+        'rule_warning': plan.rule_warning or None,
         # Đếm sẵn để bên gọi không phải duyệt hết line mới biết kế hoạch có xác nhận được
         # không. Còn dòng nào chặn là action_confirm sẽ báo lỗi.
         'procedure_blocked_count': len(plan.line_ids.filtered('procedure_blocked')),

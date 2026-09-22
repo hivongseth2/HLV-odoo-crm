@@ -44,6 +44,10 @@ class HlvVtrackingPlanLineProfile(models.Model):
         help='Sai nghĩa là điểm này đang chiếm một chỗ trên xe mà lẽ ra không cần — khách '
              'tự lấy, gửi CPN hoặc book Grab.',
     )
+    must_be_last = fields.Boolean(
+        related='profile_id.must_be_last', store=True, readonly=True,
+        string='Điểm cuối chuyến',
+    )
     extra_service_minutes = fields.Integer(
         related='profile_id.extra_service_minutes', store=True, readonly=True,
         string='Phút lâu hơn thường lệ',

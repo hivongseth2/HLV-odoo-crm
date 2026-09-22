@@ -149,3 +149,40 @@ def extra_service_minutes(picking_count):
     dôi ra mới được cộng — cộng cả ``service_minutes`` là tính hai lần.
     """
     return max(service_minutes(picking_count) - service_minutes(1), 0)
+
+
+def rule_warnings(stops, other_day_partners=(), driver_conflicts=()):
+    """Cảnh báo luật nghiệp vụ của một chuyến. Hàm thuần, trả list câu.
+
+    :param stops: list dict theo đúng thứ tự ghé, mỗi phần tử
+        ``{'partner_name': str, 'must_be_last': bool}``
+    :param other_day_partners: tên khách đã nằm trong CHUYẾN KHÁC cùng ngày
+    :param driver_conflicts: mô tả các chuyến khác cùng buổi mà người này đang cầm
+
+    Ba luật đều học từ chuyện đã xảy ra thật ở kho, không phải quy ước:
+
+    * Có khách không cho mang hàng của khách khác vào cổng, nên phải là ĐIỂM CUỐI.
+    * Giao một công ty hai lần trong ngày thì lần hai hay bị chặn ở cổng — họ phải mở kho
+      nhận hai lượt.
+    * Hai chuyến cùng buổi mà cùng một người cầm thì chỉ một chuyến chạy được; đếm XE
+      không nói lên điều đó, phải đếm NGƯỜI.
+    """
+    warnings = []
+    for index, stop in enumerate(stops):
+        if stop.get('must_be_last') and index != len(stops) - 1:
+            warnings.append(
+                '%s phải là điểm giao CUỐI của chuyến (không cho mang hàng khách khác vào), '
+                'đang xếp thứ %s/%s.' % (stop.get('partner_name') or 'Khách này',
+                                         index + 1, len(stops))
+            )
+    if other_day_partners:
+        warnings.append(
+            'Đã có chuyến khác trong ngày giao cho %s — một công ty nhận hai lần trong ngày '
+            'thường bị chặn ở cổng.' % ', '.join(sorted(set(other_day_partners)))
+        )
+    for conflict in driver_conflicts:
+        warnings.append(
+            'Tài xế đang cầm chuyến %s cùng buổi — hai chuyến cùng lúc thì chỉ một chuyến '
+            'chạy được.' % conflict
+        )
+    return warnings
