@@ -274,12 +274,16 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
         return self._enqueue_pick_print_request(picking, sale_order, requested_by_id=self.env.uid)
 
     def auto_confirm_print_pick_slip(self, picking):
-        """Gửi yêu cầu in TỰ ĐỘNG (không phải sale bấm) ngay khi phiếu PICK vừa được giữ ĐỦ hàng
-        cho TẤT CẢ sản phẩm (state='assigned') — xem hook gọi hàm này ở
-        models/stock_picking.py:_auto_queue_print_when_full(), chỉ chạy khi setting
-        hlv_sale_delivery_planning.auto_print_pick_slip_when_full đang BẬT. Vẫn tôn trọng khóa
-        tạm tính năng (lock_pick_slip_requests) — nếu đang khóa thì auto-print cũng phải chờ,
-        không được vượt qua khóa mà sale bấm tay không vượt qua được."""
+        """Gửi yêu cầu in TỰ ĐỘNG (không phải sale bấm) khi phiếu PICK đã giữ ĐỦ hàng cho TẤT CẢ
+        sản phẩm — xem điểm vào ở models/stock_picking_auto_print.py:cron_auto_queue_print_when_full(),
+        chỉ chạy khi setting hlv_sale_delivery_planning.auto_print_pick_slip_when_full đang BẬT.
+        Vẫn tôn trọng khóa tạm tính năng (lock_pick_slip_requests) — nếu đang khóa thì auto-print
+        cũng phải chờ, không được vượt qua khóa mà sale bấm tay không vượt qua được.
+
+        "Đủ hàng" đo bằng _pick_slip_short_moves(), KHÔNG bằng state='assigned': loại hoạt động
+        PICK của mọi kho đang là move_type='direct' nên Odoo đánh 'assigned' ngay khi chỉ giữ
+        được một phần. Tin state đã gây sự cố thật ngày 22/09 — 11 đơn được tự động gửi in
+        trong khi phiếu còn thiếu hàng, kho cầm giấy đi lấy thứ không có."""
         if self._is_pick_slip_locked():
             return {'success': False, 'locked': True, 'message': 'Tính năng đang tạm khóa.'}
         sale_order = self._get_sale_order_for_picking(picking)
@@ -295,7 +299,27 @@ class DeliveryPlannerServiceIotPrint(models.AbstractModel):
                            'không thể tự động gửi in.' % sale_order.name,
             }
         if picking.state != 'assigned':
-            return {'success': False, 'no_stock': True, 'message': 'Phiếu chưa giữ đủ hàng.'}
+            return {'success': False, 'no_stock': True, 'message': 'Phiếu chưa sẵn sàng.'}
+        short = picking._pick_slip_short_moves()
+        if short:
+            # no_stock nằm trong nhóm chặn TẠM THỜI, nên hàng về là lượt cron sau tự gửi —
+            # không cần ai bấm lại.
+            missing = ', '.join(
+                '%s thiếu %g' % (
+                    move.product_id.default_code or move.product_id.display_name,
+                    move.product_uom_qty - move.quantity,
+                )
+                for move in short[:3]
+            )
+            if len(short) > 3:
+                missing += ' (và %d dòng khác)' % (len(short) - 3)
+            return {
+                'success': False,
+                'no_stock': True,
+                'message': 'Phiếu %s chưa giữ đủ hàng, chưa tự động in — %s.' % (
+                    picking.name, missing,
+                ),
+            }
         return self.with_context(hlv_auto_print_trigger=True)._enqueue_pick_print_request(
             picking, sale_order
         )

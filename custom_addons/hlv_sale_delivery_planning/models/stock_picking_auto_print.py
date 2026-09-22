@@ -90,11 +90,35 @@ class StockPicking(models.Model):
             'hlv_sale_delivery_planning.auto_print_pick_slip_when_full'
         ) in ('1', 'True', 'true', True)
 
+    def _pick_slip_short_moves(self):
+        """Các move CHƯA giữ đủ hàng của phiếu này. Rỗng nghĩa là phiếu giữ đủ mọi sản phẩm.
+
+        Vì sao KHÔNG tin state='assigned': với loại hoạt động có move_type='direct' ("Giao
+        ngay khi có hàng"), Odoo đánh phiếu là 'assigned' NGAY KHI CHỈ GIỮ ĐƯỢC MỘT PHẦN.
+        Chỉ move_type='one' mới giữ phiếu ở 'confirmed' tới khi đủ hết. Đo trên PRD 22/09:
+        CẢ 9 loại hoạt động PICK của mọi kho đều là 'direct', và 51/85 phiếu đang 'Sẵn sàng'
+        thực ra còn thiếu hàng — 14 phiếu trong đó đã in ra giấy. Nên "assigned" ở đây chỉ
+        có nghĩa "có gì đó để lấy", không phải "đủ hàng".
+
+        So ``quantity`` (số kho sẽ lấy / đã giữ) với ``product_uom_qty`` (nhu cầu), theo
+        precision của đúng đơn vị dòng đó — đơn vị lẻ (mét, kg) so bằng == sẽ báo thiếu oan
+        vì sai số thập phân.
+        """
+        self.ensure_one()
+        short = []
+        for move in self.move_ids:
+            if move.state == 'cancel':
+                continue
+            rounding = move.product_uom.rounding or move.product_id.uom_id.rounding or 0.01
+            if float_compare(move.quantity, move.product_uom_qty, precision_rounding=rounding) < 0:
+                short.append(move)
+        return short
+
     @api.model
     def _auto_print_candidate_domain(self):
         """Phiếu đủ điều kiện để hệ thống TỰ gửi in. Từng điều kiện có lý do riêng:
-          - state='assigned': mọi move còn active đã reserve ĐỦ (khác 'partially_available' —
-            chỉ giữ được một phần, in ra thì kho lấy thiếu).
+          - state='assigned': lọc thô cho rẻ, KHÔNG có nghĩa là đủ hàng (xem
+            _pick_slip_short_moves) — phải lọc lại bằng hàm đó sau khi search.
           - x_printed: phiếu đã in rồi (kho in tay, hoặc lượt tự động trước đã in) thì không
             gửi lại nữa — nếu cần in lại thì dùng "Đưa lại vào hàng chờ" ở hàng chờ in.
           - kho phải ĐÃ gán máy in IoT: kho chưa gán thì yêu cầu chỉ vào hàng chờ để nằm đó rồi
@@ -144,7 +168,13 @@ class StockPicking(models.Model):
         Availability, scheduler, module khác gọi _action_assign) và không im lặng bỏ sót."""
         if not self._auto_print_when_full_enabled():
             return 0
-        picks = self.search(self._auto_print_candidate_domain(), order='id', limit=limit)
+        # Lấy pool rộng hơn limit rồi mới lọc "đủ hàng": điều kiện đủ hàng KHÔNG viết được
+        # thành domain (phải so từng move), mà phiếu thiếu hàng chiếm đa số trong nhóm
+        # 'assigned' (đo trên PRD: 51/85). Search đúng `limit` rồi lọc sẽ có lượt trả về
+        # rỗng dù vẫn còn phiếu đủ hàng nằm ngay sau đó — phiếu đủ hàng bị phiếu thiếu chặn
+        # đường. Nhân 4 là đủ rộng cho tỉ lệ đó mà vẫn có trần, không quét cả bảng.
+        pool = self.search(self._auto_print_candidate_domain(), order='id', limit=limit * 4)
+        picks = pool.filtered(lambda p: not p._pick_slip_short_moves())[:limit]
         if not picks:
             return 0
         picks._auto_queue_print_when_full()
@@ -161,6 +191,10 @@ class StockPicking(models.Model):
             and p._is_pick_slip_picking()
             and not p.x_auto_print_requested
             and not p.x_printed
+            # Chặn ở đây NỮA dù cron đã lọc: hàm này còn được gọi tay trên shell cho một
+            # phiếu cụ thể, và đây là ca đã gây ra sự cố thật (in 11 phiếu thiếu hàng ngày
+            # 22/09) nên không để nó phụ thuộc vào việc bên gọi có lọc đúng hay không.
+            and not p._pick_slip_short_moves()
         )
         if not picks:
             return
