@@ -49,6 +49,39 @@
         return div.innerHTML;
     }
 
+    /* Bỏ phần "CÔNG TY TNHH…" ở đầu tên khách.
+
+       Gần như mọi khách ở đây đều bắt đầu bằng đúng mấy chữ đó, nên chúng không phân biệt
+       được gì mà chiếm hết chỗ của phần TÊN THẬT — thứ duy nhất giúp nhận ra khách. Cắt ở
+       đây là việc trình bày, dữ liệu trong Odoo giữ nguyên. */
+    const COMPANY_PREFIXES = [
+        "CÔNG TY TRÁCH NHIỆM HỮU HẠN MỘT THÀNH VIÊN",
+        "CÔNG TY TRÁCH NHIỆM HỮU HẠN",
+        "CÔNG TY TNHH MTV",
+        "CÔNG TY TNHH MỘT THÀNH VIÊN",
+        "CÔNG TY TNHH",
+        "CÔNG TY CỔ PHẦN",
+        "CÔNG TY CP",
+        "CÔNG TY",
+        "CHI NHÁNH CÔNG TY TNHH",
+        "CHI NHÁNH CÔNG TY",
+        "CHI NHÁNH",
+        "DOANH NGHIỆP TƯ NHÂN",
+    ];
+
+    function shortCompany(name) {
+        let text = (name || "").trim();
+        const upper = text.toUpperCase();
+        for (const prefix of COMPANY_PREFIXES) {
+            if (upper.startsWith(prefix)) {
+                text = text.slice(prefix.length).trim();
+                break;
+            }
+        }
+        // Cắt hết chữ đầu thì giữ nguyên tên gốc, thà dài còn hơn trống.
+        return text || (name || "");
+    }
+
     function todayString() {
         const now = new Date();
         return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -121,9 +154,9 @@
 
     /* Một điểm trong dải điểm của thẻ: số thứ tự, MÃ ĐƠN, giờ tới ước tính.
 
-       Không hiện tên công ty ở đây: tên khách Việt Nam dài 40-60 ký tự nên ô nào cũng bị
-       cắt cụt thành "CÔNG TY TNHH C…" — đọc xong vẫn không biết là ai. Mã đơn ngắn, duy
-       nhất, và là thứ sale đọc cho khách nghe. Tên đầy đủ nằm ở màn chi tiết chuyến. */
+       Tên khách bỏ phần "CÔNG TY TNHH…" (xem shortCompany): để nguyên thì ô nào cũng bị
+       cắt thành "CÔNG TY TNHH C…" — đọc xong vẫn không biết là ai. Mã đơn nằm dưới tên vì
+       đó là thứ sale đọc cho khách nghe. */
     function stripItem(stop, plan) {
         const eta = etaLabel(stop.arrive_offset_minutes, plan.session_label);
         return `
@@ -136,8 +169,11 @@
                         ? `data-vt-doc="order" data-vt-doc-id="${stop.sale_order_id}"`
                         : ""}>
                 <span class="vt-seq">${stop.sequence}</span>
-                <span class="vt-strip-doc">
-                    ${escapeHtml(stop.sale_order_name || stop.picking_name || "—")}
+                <span class="vt-strip-main">
+                    <span class="vt-strip-name">${escapeHtml(shortCompany(stop.partner_name))}</span>
+                    <span class="vt-strip-doc">
+                        ${escapeHtml(stop.sale_order_name || stop.picking_name || "—")}
+                    </span>
                 </span>
                 <span class="vt-strip-eta">
                     ${stop.delivered ? '<span class="vt-check">✓</span> ' : ""}${eta}

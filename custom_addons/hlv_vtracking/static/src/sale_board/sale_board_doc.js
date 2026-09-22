@@ -115,19 +115,39 @@ window.VtSaleDoc = (function () {
             </table>`;
     }
 
+    /* Một phiếu xuất ở dạng nút, kèm CÂU TRẢ LỜI cho "phiếu này đang ở đâu".
+
+       Trước đây nút chỉ ghi mã + "Done", nên phiếu đã giao xong từ tháng trước trông y hệt
+       phiếu đang trên xe hôm nay — người xem tưởng hàng đang đi. Giờ mỗi nút nói rõ: đã
+       giao ngày nào, hay đang ở chuyến nào, hay chưa được xếp chuyến. */
+    function pickingChip(item) {
+        let tone = "vt-status-park";
+        let text = item.state_label;
+        if (item.state === "done") {
+            tone = "vt-status-run";
+            text = item.date_done ? "đã giao " + stamp(item.date_done) : "đã giao xong";
+        } else if (item.state === "cancel") {
+            tone = "vt-status-badgps";
+            text = "đã huỷ";
+        } else if (item.vehicle_plate) {
+            tone = "vt-status-stop";
+            text = "đang chở · chuyến " + item.vehicle_plate;
+        } else {
+            text = item.state_label + " · chưa xếp chuyến";
+        }
+        return `
+            <button type="button" class="vt-btn vt-btn-mini" data-vt-doc="picking" data-vt-doc-id="${item.id}">
+                <span class="vt-status ${tone}"></span>
+                <span class="vt-num">${esc(item.name)}</span>
+                <span class="vt-muted">${esc(text)}</span>
+            </button>`;
+    }
+
     function otherPickings(doc) {
         if (!doc.other_pickings || !doc.other_pickings.length) {
             return "";
         }
-        const chips = doc.other_pickings.map((item) => `
-            <button type="button" class="vt-btn vt-btn-mini" data-vt-doc="picking" data-vt-doc-id="${item.id}">
-                <span class="vt-status ${item.state === "done" ? "vt-status-run" : "vt-status-park"}"></span>
-                <span class="vt-num">${esc(item.name)}</span>
-                <span class="vt-muted">
-                    ${item.date_done ? "đã giao " + esc(stamp(item.date_done)) : esc(item.state_label)}
-                    ${item.vehicle_plate ? " · chuyến " + esc(item.vehicle_plate) : ""}
-                </span>
-            </button>`).join("");
+        const chips = doc.other_pickings.map(pickingChip).join("");
         return `<div class="vt-doc-others"><span class="vt-muted">Phiếu khác của đơn này:</span>${chips}</div>`;
     }
 
@@ -195,13 +215,8 @@ window.VtSaleDoc = (function () {
                 </td>
             </tr>`).join("");
         const pickings = doc.pickings.length
-            ? doc.pickings.map((item) => `
-                <button type="button" class="vt-btn vt-btn-mini" data-vt-doc="picking" data-vt-doc-id="${item.id}">
-                    <span class="vt-num">${esc(item.name)}</span>
-                    <span class="vt-muted">${esc(item.state_label)}
-                        ${item.vehicle_plate ? " · " + esc(item.vehicle_plate) : ""}</span>
-                </button>`).join("")
-            : '<span class="vt-muted">Chưa có phiếu kho nào.</span>';
+            ? doc.pickings.map(pickingChip).join("")
+            : '<span class="vt-muted">Chưa có phiếu xuất nào.</span>';
         return `
             <div class="vt-doc-head">
                 <span class="vt-doc-title">
@@ -224,7 +239,9 @@ window.VtSaleDoc = (function () {
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
-            <div class="vt-doc-others"><span class="vt-muted">Phiếu kho:</span>${pickings}</div>`;
+            <div class="vt-doc-others">
+                <span class="vt-muted">Phiếu xuất của đơn:</span>${pickings}
+            </div>`;
     }
 
     function backButton() {
