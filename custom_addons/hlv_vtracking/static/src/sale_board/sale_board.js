@@ -392,6 +392,7 @@
         return rpc("/giao-hang/vi-tri", {})
             .then((data) => {
                 state.vehicles = data.vehicles;
+                renderFleet(data.vehicles);
                 window.VtSaleMap.update(data.vehicles, state.config);
                 stamp();
             })

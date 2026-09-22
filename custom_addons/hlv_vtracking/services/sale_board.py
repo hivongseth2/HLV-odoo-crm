@@ -270,6 +270,9 @@ def my_unplanned_orders(env, saler_code=None, search=None):
         if order.commitment_date else None,
         'delivery_status': order.delivery_status or '',
         'amount_total': order.amount_total,
+        # Nơi giao: bảng đơn chưa xếp cần nó để người bán hàng biết đơn nào cùng hướng với
+        # chuyến đang chạy, khỏi phải mở từng đơn ra xem.
+        'address': order._vtracking_delivery_address(),
     } for order in orders if order.id not in planned_ids]
 
 

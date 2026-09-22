@@ -4,21 +4,89 @@
    bán hàng mở trang này cả ngày; cái gì cũng nổi bật thì chẳng còn gì nổi bật. */
 
 :root {
-    --vt-line: #e4e7ec;
-    --vt-ink: #1f2d3d;
-    --vt-muted: #6b7684;
-    --vt-mine: #0b63ce;
-    --vt-mine-soft: #eef4fd;
-    --vt-radius: 10px;
+    /* Nền kem + mực gần đen: dịu mắt hơn trắng/đen thuần khi nhìn cả ngày. Một màu nhấn
+       (xanh mòng két) cho "của tôi" và "đang chọn"; cam đất cho cảnh báo; xanh lá cho việc
+       đã xong. Không có màu thứ tư. */
+    --vt-bg: #F7F6F3;
+    --vt-line: #E2E0DA;
+    --vt-line-soft: #F1EFEA;
+    --vt-ink: #1C2024;
+    --vt-muted: #5B6168;
+    --vt-mine: #175B72;
+    --vt-mine-dark: #0F4256;
+    --vt-mine-soft: #E8F0F3;
+    --vt-mine-line: #C6DCE4;
+    --vt-warn: #B4532A;
+    --vt-warn-ink: #8F3F1F;
+    --vt-warn-soft: #FBEDE6;
+    --vt-done: #3F6B4F;
+    --vt-radius: 12px;
+    --vt-font: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --vt-font-title: 'Lora', Georgia, serif;
 }
 
 body {
-    background: #f6f7f9;
+    background: var(--vt-bg);
     color: var(--vt-ink);
+    font-family: var(--vt-font);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Mọi con số dùng tabular-nums để cột giờ, cột ngày và mã chứng từ thẳng hàng. */
+.vt-num,
+.vt-eta,
+.vt-seq,
+.vt-kpi-num,
+.vt-strip-eta {
+    font-variant-numeric: tabular-nums;
+}
+
+.vt-nowrap {
+    white-space: nowrap;
+}
+
+.vt-right {
+    text-align: right;
+}
+
+.vt-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Nhãn chỉ dành cho trình đọc màn hình: ô tìm kiếm và ô ngày vẫn phải có <label>. */
+.vt-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
 }
 
 .vt-navbar {
     background: var(--vt-ink);
+}
+
+.vt-navbar .navbar-brand {
+    font-family: var(--vt-font-title);
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.vt-h2,
+.vt-h3 {
+    font-family: var(--vt-font-title);
+    font-weight: 600;
+    margin: 0;
+}
+
+.vt-h2 {
+    font-size: 16px;
+}
+
+.vt-h3 {
+    font-size: 15px;
 }
 
 /* ------------------------------------------------------------ thanh công cụ */
@@ -67,8 +135,25 @@ body {
     padding: .7rem .9rem;
 }
 
+.vt-kpi-mark {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--vt-mine-soft);
+    color: var(--vt-mine);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vt-kpi.is-warn .vt-kpi-mark {
+    background: var(--vt-warn-soft);
+    color: var(--vt-warn);
+}
+
 .vt-kpi-num {
-    font-size: 1.6rem;
+    font-size: 26px;
     font-weight: 600;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -89,240 +174,6 @@ body {
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 .5rem;
-}
-
-/* -------------------------------------------------- dải điểm rút gọn trong thẻ chuyến */
-
-/* Cuộn NGANG chứ không xuống dòng: chuyến 12 điểm mà xuống dòng thì thẻ cao gấp ba, đúng
-   cái làm danh sách rối trước đây. Cuộn ngang giữ mọi thẻ cùng một chiều cao. */
-.vt-strip {
-    list-style: none;
-    display: flex;
-    gap: .35rem;
-    margin: 0;
-    padding: 0 .75rem .6rem;
-    overflow-x: auto;
-}
-
-.vt-strip-item {
-    display: flex;
-    align-items: center;
-    gap: .3rem;
-    flex: 0 0 auto;
-    max-width: 11rem;
-    padding: .25rem .5rem;
-    border: 1px solid var(--vt-line);
-    border-radius: 999px;
-    background: #fafbfc;
-    font-size: .75rem;
-}
-
-.vt-strip-item.is-mine {
-    border-color: var(--vt-mine);
-    background: var(--vt-mine-soft);
-}
-
-.vt-strip-item.is-done {
-    opacity: .55;
-}
-
-.vt-strip-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.vt-strip-eta {
-    color: var(--vt-muted);
-    font-variant-numeric: tabular-nums;
-}
-
-/* ------------------------------------------------------------ chuyến */
-
-.vt-plans.is-loading {
-    opacity: .55;
-    transition: opacity .15s;
-}
-
-.vt-plan {
-    background: #fff;
-    border: 1px solid var(--vt-line);
-    border-radius: var(--vt-radius);
-    margin-bottom: .6rem;
-    overflow: hidden;
-    cursor: pointer;
-}
-
-.vt-plan:hover {
-    border-color: #c9d2dd;
-}
-
-/* Chuyến đang xem ở cột phải. Viền đậm + một vạch bên trái: phải nhận ra ngay thẻ nào đang
-   ứng với bản đồ đang hiện, nhất là sau khi cuộn xuống. */
-.vt-plan.is-selected {
-    border-color: var(--vt-mine);
-    box-shadow: inset 3px 0 0 var(--vt-mine);
-}
-
-.vt-plan-open {
-    margin-left: auto;
-    color: var(--vt-mine);
-    font-size: .8125rem;
-    white-space: nowrap;
-}
-
-/* Chuyến có đơn của mình: nền tiêu đề nhạt, KHÔNG viền màu bên trái — viền dày làm trang
-   trông như bảng cảnh báo. */
-.vt-plan.is-mine .vt-plan-head {
-    background: var(--vt-mine-soft);
-}
-
-.vt-plan-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem;
-    padding: .55rem .75rem;
-    cursor: pointer;
-    user-select: none;
-}
-
-.vt-plan-head:hover {
-    background: #f3f5f8;
-}
-
-.vt-plan.is-mine .vt-plan-head:hover {
-    background: #e4eefc;
-}
-
-.vt-plate {
-    font-weight: 700;
-    letter-spacing: .01em;
-}
-
-.vt-plan-meta {
-    padding: 0 .75rem .45rem;
-    color: var(--vt-muted);
-    font-size: .8125rem;
-}
-
-.vt-plan-foot {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    padding: .4rem .75rem;
-    border-top: 1px solid var(--vt-line);
-    background: #fafbfc;
-}
-
-.vt-plan-foot .vt-btn {
-    margin-left: auto;
-}
-
-/* Tiến độ giao: một vạch mảnh ngay dưới tiêu đề, không cần con số. */
-.vt-progress {
-    height: 3px;
-    background: #eef0f3;
-}
-
-.vt-progress span {
-    display: block;
-    height: 100%;
-    background: #12a150;
-}
-
-/* ------------------------------------------------------------ điểm giao */
-
-.vt-stops {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-height: 26rem;
-    overflow-y: auto;
-}
-
-.vt-stop {
-    display: flex;
-    gap: .6rem;
-    padding: .5rem .75rem;
-    border-bottom: 1px solid #f2f4f6;
-}
-
-.vt-stop:last-child {
-    border-bottom: 0;
-}
-
-.vt-stop:hover {
-    background: #fafbfc;
-}
-
-.vt-stop.is-mine {
-    background: var(--vt-mine-soft);
-}
-
-.vt-stop.is-done .vt-stop-name {
-    color: var(--vt-muted);
-}
-
-.vt-seq {
-    flex: 0 0 1.25rem;
-    text-align: right;
-    color: var(--vt-muted);
-    font-variant-numeric: tabular-nums;
-}
-
-.vt-stop-main {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.vt-stop-name {
-    display: block;
-    font-weight: 600;
-}
-
-.vt-check {
-    color: #12a150;
-}
-
-.vt-stop-address {
-    display: block;
-    color: var(--vt-muted);
-    font-size: .8125rem;
-}
-
-/* Nút của từng điểm chỉ hiện khi rê chuột vào: mười điểm mà điểm nào cũng hai nút thì rối.
-   Máy cảm ứng không rê được nên hiện sẵn. */
-.vt-stop-actions {
-    display: flex;
-    gap: .35rem;
-    margin-top: .25rem;
-    opacity: 0;
-    transition: opacity .12s;
-}
-
-.vt-stop:hover .vt-stop-actions,
-.vt-stop:focus-within .vt-stop-actions {
-    opacity: 1;
-}
-
-@media (hover: none) {
-    .vt-stop-actions {
-        opacity: 1;
-    }
-}
-
-.vt-stop-side {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: flex-start;
-    gap: .35rem;
-}
-
-.vt-eta {
-    color: var(--vt-muted);
-    font-variant-numeric: tabular-nums;
-    font-size: .8125rem;
 }
 
 /* ------------------------------------------------------------ nhãn, nút */
@@ -354,18 +205,18 @@ body {
 }
 
 .vt-session-morning {
-    background: #fff1cc;
-    color: #8a5a00;
+    background: var(--vt-mine-soft);
+    color: var(--vt-mine-dark);
 }
 
 .vt-session-afternoon {
-    background: #e6e9fb;
-    color: #34409a;
+    background: var(--vt-warn-soft);
+    color: var(--vt-warn-ink);
 }
 
 .vt-session-full_day {
-    background: #e3f6ea;
-    color: #0c6b38;
+    background: #E6EFE8;
+    color: #2C5B3D;
 }
 
 .vt-zone {
@@ -506,8 +357,21 @@ body {
 }
 
 .vt-btn-primary:hover {
-    background: #0a56b3;
-    border-color: #0a56b3;
+    background: var(--vt-mine-dark);
+    border-color: var(--vt-mine-dark);
+}
+
+/* Nút phụ trong bảng: đủ rõ để bấm, không tranh chỗ với nút chính. */
+.vt-btn-soft {
+    background: var(--vt-mine-soft);
+    border-color: var(--vt-mine-line);
+    color: var(--vt-mine-dark);
+    font-weight: 500;
+}
+
+.vt-btn-soft:hover {
+    background: #DCE9EE;
+    border-color: var(--vt-mine);
 }
 
 .vt-btn-ghost {
@@ -530,7 +394,19 @@ body {
     background: #adb5bd;
 }
 
-.vt-status-run { background: #12a150; }
-.vt-status-stop { background: #f08c00; }
-.vt-status-park { background: #6b7684; }
-.vt-status-badgps { background: #d64545; }
+.vt-status-run {
+    background: var(--vt-done);
+    /* Vòng sáng quanh chấm: xe ĐANG CHẠY là thứ duy nhất trên trang cần nhìn ra từ xa. */
+    box-shadow: 0 0 0 3px rgba(63, 107, 79, .16);
+}
+
+.vt-status-stop { background: #C2772F; }
+.vt-status-park { background: #8A9099; }
+.vt-status-badgps { background: var(--vt-warn); }
+
+/* Tin GPS quá cũ: chấm rỗng ruột — nhìn là biết không còn đáng tin. */
+.vt-status.is-stale {
+    background: #FFFFFF;
+    border: 2px solid var(--vt-warn);
+    box-shadow: none;
+}
