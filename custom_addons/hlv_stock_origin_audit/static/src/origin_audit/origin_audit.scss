@@ -1,0 +1,395 @@
+.o_soa_root {
+    padding: 22px 26px 60px;
+    background: #f0eef1;
+    font-size: 13px;
+    color: #1f2430;
+    height: 100%;
+    overflow: auto;
+    box-sizing: border-box;
+
+    * { box-sizing: border-box; }
+}
+
+.o_soa_topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.o_soa_title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.o_soa_subtitle {
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.o_soa_tabs {
+    display: flex;
+    gap: 6px;
+}
+
+.o_soa_tab {
+    border: 1px solid #d6d3d9;
+    background: #fff;
+    border-radius: 6px;
+    padding: 7px 14px;
+    cursor: pointer;
+    font-weight: 500;
+
+    &.active {
+        background: #714b67;
+        border-color: #714b67;
+        color: #fff;
+    }
+}
+
+.o_soa_panel {
+    background: #fff;
+    border: 1px solid #e3e0e6;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.o_soa_panel_title {
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.o_soa_section_title {
+    font-weight: 600;
+    margin: 16px 0 8px;
+}
+
+.o_soa_error {
+    background: #fdecec;
+    border: 1px solid #f0b4b4;
+    color: #8f1f1f;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.o_soa_empty {
+    color: #6b7280;
+    padding: 8px 0;
+}
+
+.o_soa_note {
+    color: #6b7280;
+    margin-top: 8px;
+    font-size: 12px;
+}
+
+.o_soa_muted { color: #6b7280; }
+
+.o_soa_filters {
+    display: flex;
+    align-items: flex-end;
+    gap: 18px;
+    flex-wrap: wrap;
+
+    label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-weight: 500;
+    }
+
+    input, select {
+        border: 1px solid #d6d3d9;
+        border-radius: 6px;
+        padding: 5px 8px;
+        min-width: 80px;
+    }
+
+    select { min-width: 180px; }
+}
+
+.o_soa_btn {
+    background: #714b67;
+    border: 1px solid #714b67;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 18px;
+    cursor: pointer;
+    font-weight: 500;
+
+    &[disabled] { opacity: 0.6; cursor: default; }
+}
+
+.o_soa_btn_sm {
+    background: #fff;
+    border: 1px solid #d6d3d9;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover { background: #f6f4f7; }
+}
+
+.o_soa_actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 14px 0 10px;
+}
+
+/* ---- luật kiểm tra ---- */
+.o_soa_rules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.o_soa_rule {
+    border: 1px solid #d6d3d9;
+    border-radius: 999px;
+    padding: 5px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    user-select: none;
+
+    &.on {
+        background: #efe8ee;
+        border-color: #714b67;
+        color: #4a2f43;
+    }
+
+    &.heavy .o_soa_rule_name { font-style: italic; }
+}
+
+.o_soa_rule_tag {
+    font-size: 11px;
+    color: #9a6b00;
+    background: #fdf3dc;
+    border-radius: 4px;
+    padding: 0 5px;
+}
+
+.o_soa_rule_count {
+    font-weight: 600;
+    background: #714b67;
+    color: #fff;
+    border-radius: 999px;
+    padding: 0 7px;
+    font-size: 11px;
+}
+
+/* ---- bảng ---- */
+.o_soa_table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th, td {
+        border-bottom: 1px solid #ececef;
+        padding: 7px 8px;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    th {
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    td.num, th.num { text-align: right; white-space: nowrap; }
+
+    tr.sel td { background: #f7f2f6; }
+}
+
+/* ---- tìm sản phẩm ---- */
+.o_soa_search {
+    position: relative;
+
+    input {
+        width: 100%;
+        border: 1px solid #d6d3d9;
+        border-radius: 6px;
+        padding: 8px 12px;
+    }
+}
+
+.o_soa_suggest {
+    position: absolute;
+    z-index: 5;
+    left: 16px;
+    right: 16px;
+    background: #fff;
+    border: 1px solid #d6d3d9;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    max-height: 260px;
+    overflow: auto;
+}
+
+.o_soa_suggest_item {
+    padding: 7px 12px;
+    cursor: pointer;
+
+    &:hover { background: #f6f4f7; }
+}
+
+/* ---- kết quả điều tra ---- */
+.o_soa_result_head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.o_soa_verdict {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-top: 2px;
+}
+
+.o_soa_kpis {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 14px 0 6px;
+}
+
+.o_soa_kpi {
+    border: 1px solid #e3e0e6;
+    border-radius: 8px;
+    padding: 8px 14px;
+    min-width: 130px;
+    background: #fbfafc;
+
+    .k { color: #6b7280; font-size: 12px; }
+    .v { font-size: 18px; font-weight: 600; }
+    .v.alert { color: #b42318; }
+}
+
+.o_soa_anomalies {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.o_soa_anomaly {
+    border-left: 4px solid #d6d3d9;
+    background: #fbfafc;
+    border-radius: 0 6px 6px 0;
+    padding: 8px 12px;
+
+    &.o_soa_sev_alert { border-left-color: #b42318; background: #fdf3f2; }
+    &.o_soa_sev_warn { border-left-color: #b54708; background: #fffaf2; }
+    &.o_soa_sev_info { border-left-color: #175cd3; background: #f5f8ff; }
+}
+
+.o_soa_anomaly_head {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ---- cây nguồn gốc ---- */
+.o_soa_tree { margin-top: 4px; }
+
+.o_soa_node { margin-bottom: 8px; }
+
+.o_soa_node_card {
+    border: 1px solid #e3e0e6;
+    border-left: 4px solid #98a2b3;
+    border-radius: 0 6px 6px 0;
+    padding: 8px 12px;
+    background: #fff;
+
+    &.o_soa_sev_alert { border-left-color: #b42318; background: #fdf3f2; }
+    &.o_soa_sev_warn { border-left-color: #b54708; background: #fffaf2; }
+    &.o_soa_sev_info { border-left-color: #175cd3; background: #f8fafd; }
+    &.o_soa_sev_ok { border-left-color: #12805c; }
+}
+
+.o_soa_node_head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.o_soa_node_qty {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.o_soa_node_label { font-weight: 600; }
+
+.o_soa_node_date { color: #6b7280; }
+
+.o_soa_node_body { margin-top: 2px; }
+
+.o_soa_node_refs {
+    margin-top: 4px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+
+.o_soa_node_notes {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #8f4b00;
+}
+
+.o_soa_children {
+    margin-left: 26px;
+    padding-left: 12px;
+    border-left: 1px dashed #cfcbd4;
+    margin-top: 8px;
+}
+
+.o_soa_link {
+    color: #714b67;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.o_soa_ref { color: #4b5563; }
+
+.o_soa_dir {
+    font-weight: 600;
+
+    &.in { color: #12805c; }
+    &.out { color: #b42318; }
+}
+
+/* ---- chip mức nghi ngờ ---- */
+.o_soa_chip {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 1px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+    background: #eef0f3;
+    color: #344054;
+
+    &.big { font-size: 13px; padding: 4px 14px; }
+    &.o_soa_sev_alert { background: #fee4e2; color: #912018; }
+    &.o_soa_sev_warn { background: #fef0c7; color: #93370d; }
+    &.o_soa_sev_info { background: #e0eaff; color: #1849a9; }
+    &.o_soa_sev_ok { background: #d1fadf; color: #05603a; }
+}

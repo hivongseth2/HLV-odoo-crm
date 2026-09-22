@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_stock_origin_audit" model="ir.actions.client">
+        <field name="name">Điều tra nguồn gốc tồn kho</field>
+        <field name="tag">hlv_stock_origin_audit.dashboard</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem
+        id="menu_stock_origin_audit"
+        name="Điều tra nguồn gốc tồn kho"
+        parent="stock.menu_stock_root"
+        action="action_stock_origin_audit"
+        sequence="96"/>
+</odoo>

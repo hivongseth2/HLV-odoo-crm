@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+  <t t-name="hlv_stock_origin_audit.OriginNode" owl="1">
+    <div class="o_soa_node">
+      <div t-attf-class="o_soa_node_card o_soa_sev_{{node.severity_code}}">
+        <div class="o_soa_node_head">
+          <span class="o_soa_node_qty" t-esc="node.qty_text"/>
+          <span class="o_soa_node_label" t-esc="node.label"/>
+          <span class="o_soa_node_date" t-esc="node.date_str"/>
+        </div>
+        <div class="o_soa_node_body">
+          <span t-if="node.src_name">Từ <b t-esc="node.src_name"/></span>
+          <span t-if="node.dest_name"> → <b t-esc="node.dest_name"/></span>
+          <span t-if="node.partner"> · KH/NCC: <b t-esc="node.partner"/></span>
+          <span t-if="node.user"> · Người tạo: <b t-esc="node.user"/></span>
+          <span t-if="node.lot_name"> · Lô <b t-esc="node.lot_name"/></span>
+        </div>
+        <div class="o_soa_node_refs">
+          <a t-if="node.picking_id" href="#" class="o_soa_link"
+             t-on-click.prevent="() => this.openPicking(node.picking_id)">
+            <t t-esc="node.picking_name or node.reference"/>
+          </a>
+          <span t-elif="node.reference" class="o_soa_ref" t-esc="node.reference"/>
+          <span t-else="" class="o_soa_ref o_soa_muted">không phiếu</span>
+          <span t-if="node.origin_doc" class="o_soa_ref">gốc: <t t-esc="node.origin_doc"/></span>
+          <span t-if="node.age_days !== null" class="o_soa_ref o_soa_muted">
+            <t t-esc="node.age_days"/> ngày trước
+          </span>
+        </div>
+        <div t-if="node.notes.length" class="o_soa_node_notes">
+          <div t-foreach="node.notes" t-as="note" t-key="note_index" t-esc="note"/>
+        </div>
+      </div>
+      <div t-if="node.children.length" class="o_soa_children">
+        <t t-foreach="node.children" t-as="child" t-key="child_index">
+          <t t-call="hlv_stock_origin_audit.OriginNode">
+            <t t-set="node" t-value="child"/>
+          </t>
+        </t>
+      </div>
+    </div>
+  </t>
+
+  <t t-name="hlv_stock_origin_audit.Dashboard" owl="1">
+    <div class="o_soa_root">
+
+      <div class="o_soa_topbar">
+        <div>
+          <h2 class="o_soa_title">Điều tra nguồn gốc tồn kho</h2>
+          <div class="o_soa_subtitle">
+            Hàng đang nằm ở một vị trí thì vào kho bằng đường nào, ai làm, phiếu nào.
+          </div>
+        </div>
+        <div class="o_soa_tabs">
+          <button t-attf-class="o_soa_tab {{ state.tab === 'scan' ? 'active' : '' }}"
+                  t-on-click="() => this.setTab('scan')">Quét bất thường</button>
+          <button t-attf-class="o_soa_tab {{ state.tab === 'investigate' ? 'active' : '' }}"
+                  t-on-click="() => this.setTab('investigate')">Điều tra một sản phẩm</button>
+        </div>
+      </div>
+
+      <div t-if="state.error" class="o_soa_error">
+        <b>Lỗi:</b> <t t-esc="state.error"/>
+      </div>
+
+      <!-- ============================ QUÉT ============================ -->
+      <div t-if="state.tab === 'scan'">
+        <div class="o_soa_panel o_soa_filters">
+          <label>
+            Kho
+            <select t-on-change="onWarehouseChange">
+              <option value="">Toàn công ty</option>
+              <option t-foreach="state.options.warehouses" t-as="wh" t-key="wh.id"
+                      t-att-value="wh.id" t-esc="wh.name"/>
+            </select>
+          </label>
+          <label>
+            Soi move trong
+            <input type="number" min="1" t-att-value="state.filters.days"
+                   t-on-change="onDaysChange"/>
+            ngày
+          </label>
+          <label>
+            Coi là tồn đọng sau
+            <input type="number" min="0" t-att-value="state.filters.stuckDays"
+                   t-on-change="onStuckDaysChange"/>
+            ngày
+          </label>
+          <button class="o_soa_btn" t-on-click="runScan" t-att-disabled="state.scanLoading">
+            <t t-if="state.scanLoading">Đang quét...</t>
+            <t t-else="">Quét</t>
+          </button>
+        </div>
+
+        <div class="o_soa_panel">
+          <div class="o_soa_panel_title">Luật kiểm tra</div>
+          <div class="o_soa_rules">
+            <div t-foreach="state.options.rules" t-as="rule" t-key="rule.code"
+                 t-attf-class="o_soa_rule {{ hasRule(rule.code) ? 'on' : '' }} {{ rule.heavy ? 'heavy' : '' }}"
+                 t-on-click="() => this.toggleRule(rule.code)"
+                 t-att-title="rule.explain">
+              <span class="o_soa_rule_name" t-esc="rule.label"/>
+              <span t-if="rule.heavy" class="o_soa_rule_tag">nặng</span>
+              <span t-if="ruleCount(rule.code) !== ''" class="o_soa_rule_count"
+                    t-esc="ruleCount(rule.code)"/>
+            </div>
+          </div>
+        </div>
+
+        <div t-if="state.scan" class="o_soa_panel">
+          <div class="o_soa_panel_title">
+            <t t-esc="state.scan.findings.length"/> trường hợp ·
+            <t t-esc="state.scan.scope_label"/> ·
+            quét lúc <t t-esc="state.scan.generated_str"/>
+          </div>
+          <div t-if="!state.scan.findings.length" class="o_soa_empty">
+            Không tìm thấy bất thường nào với các luật đang bật.
+          </div>
+          <table t-else="" class="o_soa_table">
+            <thead>
+              <tr>
+                <th>Mức</th><th>Bất thường</th><th>Sản phẩm</th><th>Vị trí</th>
+                <th class="num">SL</th><th>Chi tiết</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-foreach="state.scan.findings" t-as="row" t-key="row_index">
+                <td>
+                  <span t-attf-class="o_soa_chip o_soa_sev_{{row.severity_code}}"
+                        t-esc="severityLabel(row.severity_code)"/>
+                </td>
+                <td><b t-esc="row.label"/></td>
+                <td>
+                  <span t-esc="row.product_name"/>
+                  <span t-if="row.lot_name" class="o_soa_muted"> · lô <t t-esc="row.lot_name"/></span>
+                </td>
+                <td t-esc="row.location_name"/>
+                <td class="num" t-esc="row.qty_text"/>
+                <td>
+                  <div t-esc="row.detail"/>
+                  <div class="o_soa_muted">
+                    <span t-if="row.date_str" t-esc="row.date_str"/>
+                    <span t-if="row.reference"> · <t t-esc="row.reference"/></span>
+                    <span t-if="row.user"> · <t t-esc="row.user"/></span>
+                  </div>
+                </td>
+                <td>
+                  <button class="o_soa_btn_sm" t-on-click="() => this.investigateRow(row)">
+                    Điều tra
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div t-if="state.scan.findings.length" class="o_soa_note">
+            Mỗi luật trả tối đa <t t-esc="state.scan.rule_limit"/> dòng — xử lý xong thì quét lại.
+          </div>
+        </div>
+      </div>
+
+      <!-- ========================== ĐIỀU TRA ========================== -->
+      <div t-if="state.tab === 'investigate'">
+        <div class="o_soa_panel o_soa_search">
+          <input type="text" placeholder="Gõ tên hoặc mã sản phẩm..."
+                 t-att-value="state.term" t-on-input="onTermInput"/>
+          <div t-if="state.suggestions.length" class="o_soa_suggest">
+            <div t-foreach="state.suggestions" t-as="sug" t-key="sug.id"
+                 class="o_soa_suggest_item" t-on-click="() => this.pickProduct(sug)"
+                 t-esc="sug.name"/>
+          </div>
+        </div>
+
+        <div t-if="state.overviewLoading" class="o_soa_panel o_soa_empty">Đang tải...</div>
+
+        <div t-if="state.overview and !state.overviewLoading" class="o_soa_panel">
+          <div class="o_soa_panel_title">
+            <t t-esc="state.overview.product.name"/> · đang tồn
+            <t t-esc="state.overview.total_text"/> <t t-esc="state.overview.product.uom"/>
+            ở <t t-esc="state.overview.rows.length"/> vị trí
+          </div>
+          <div t-if="!state.overview.rows.length" class="o_soa_empty">
+            Sản phẩm này không còn tồn ở vị trí nội bộ nào.
+            <button class="o_soa_btn_sm" t-on-click="loadRecent">Xem các lượt nhập gần đây</button>
+          </div>
+          <table t-else="" class="o_soa_table">
+            <thead>
+              <tr>
+                <th>Vị trí</th><th>Lô</th><th class="num">Tồn</th><th class="num">Giữ chỗ</th>
+                <th>Vào kho lúc</th><th>Cờ</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-foreach="state.overview.rows" t-as="row" t-key="row_index"
+                  t-attf-class="{{ state.result and state.result.location.id === row.location_id ? 'sel' : '' }}">
+                <td t-esc="row.location_name"/>
+                <td t-esc="row.lot_name"/>
+                <td class="num" t-esc="row.quantity_text"/>
+                <td class="num" t-esc="row.reserved_text"/>
+                <td>
+                  <t t-esc="row.in_date_str"/>
+                  <span t-if="row.age_days !== null" class="o_soa_muted">
+                    (<t t-esc="row.age_days"/> ngày)
+                  </span>
+                </td>
+                <td>
+                  <span t-foreach="row.flags" t-as="flag" t-key="flag_index"
+                        t-attf-class="o_soa_chip o_soa_sev_{{row.severity_code}}" t-esc="flag"/>
+                </td>
+                <td>
+                  <button class="o_soa_btn_sm"
+                          t-on-click="() => this.investigateOverviewRow(row)">Điều tra</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div t-if="state.resultLoading" class="o_soa_panel o_soa_empty">Đang truy ngược...</div>
+
+        <div t-if="state.result and !state.resultLoading" class="o_soa_panel">
+          <div class="o_soa_result_head">
+            <div>
+              <div class="o_soa_panel_title">
+                <t t-esc="state.result.location.name"/>
+                <span t-if="state.result.location.role" class="o_soa_chip o_soa_sev_warn">
+                  Vị trí <t t-esc="state.result.location.role"/>
+                </span>
+                <span t-if="state.result.lot" class="o_soa_muted">
+                  · lô <t t-esc="state.result.lot.name"/>
+                </span>
+              </div>
+              <div class="o_soa_verdict" t-esc="state.result.verdict"/>
+            </div>
+            <span t-attf-class="o_soa_chip big o_soa_sev_{{state.result.severity_code}}"
+                  t-esc="severityLabel(state.result.severity_code)"/>
+          </div>
+
+          <div class="o_soa_kpis">
+            <div class="o_soa_kpi">
+              <div class="k">Tồn thực tế</div>
+              <div class="v"><t t-esc="state.result.quant.quantity_text"/></div>
+            </div>
+            <div class="o_soa_kpi">
+              <div class="k">Truy được nguồn</div>
+              <div class="v"><t t-esc="state.result.traced_text"/></div>
+            </div>
+            <div class="o_soa_kpi" t-if="state.result.unexplained > 0.001">
+              <div class="k">Không rõ nguồn</div>
+              <div class="v alert"><t t-esc="state.result.unexplained_text"/></div>
+            </div>
+            <div class="o_soa_kpi">
+              <div class="k">Số lượt di chuyển</div>
+              <div class="v"><t t-esc="state.result.event_count"/></div>
+            </div>
+          </div>
+
+          <div t-if="state.result.anomalies.length" class="o_soa_anomalies">
+            <div t-foreach="state.result.anomalies" t-as="item" t-key="item_index"
+                 t-attf-class="o_soa_anomaly o_soa_sev_{{item.severity_code}}">
+              <div class="o_soa_anomaly_head">
+                <b t-esc="item.label"/>
+                <span t-esc="item.detail"/>
+              </div>
+              <div class="o_soa_muted" t-esc="item.explain"/>
+            </div>
+          </div>
+
+          <div class="o_soa_section_title">Nguồn gốc của lượng đang tồn</div>
+          <div t-if="!state.result.origins.length" class="o_soa_empty">
+            Không lần ra lượt nhập nào còn tồn tại vị trí này.
+          </div>
+          <div t-else="" class="o_soa_tree">
+            <t t-foreach="state.result.origins" t-as="origin" t-key="origin_index">
+              <t t-call="hlv_stock_origin_audit.OriginNode">
+                <t t-set="node" t-value="origin"/>
+              </t>
+            </t>
+          </div>
+
+          <div class="o_soa_actions">
+            <button class="o_soa_btn_sm" t-on-click="toggleLedger">
+              <t t-if="state.showLedger">Ẩn sổ cái vị trí</t>
+              <t t-else="">Xem sổ cái vị trí</t>
+            </button>
+            <button class="o_soa_btn_sm"
+                    t-on-click="() => this.openMoveLines(state.result.product.id, state.result.location.id)">
+              Mở chi tiết di chuyển trong Odoo
+            </button>
+            <button class="o_soa_btn_sm" t-on-click="loadRecent">Các lượt nhập kho gần đây</button>
+          </div>
+
+          <table t-if="state.showLedger" class="o_soa_table">
+            <thead>
+              <tr>
+                <th>Thời điểm</th><th>Chiều</th><th class="num">SL</th><th class="num">Số dư</th>
+                <th>Đối ứng</th><th>Chứng từ</th><th>Người tạo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-foreach="state.result.ledger" t-as="line" t-key="line_index">
+                <td t-esc="line.date_str"/>
+                <td>
+                  <span t-attf-class="o_soa_dir {{line.direction}}">
+                    <t t-if="line.direction === 'in'">Vào</t>
+                    <t t-else="">Ra</t>
+                  </span>
+                </td>
+                <td class="num" t-esc="line.qty_text"/>
+                <td class="num" t-esc="line.balance_text"/>
+                <td t-esc="line.counterpart"/>
+                <td>
+                  <a t-if="line.picking_id" href="#" class="o_soa_link"
+                     t-on-click.prevent="() => this.openPicking(line.picking_id)"
+                     t-esc="line.reference"/>
+                  <span t-else="" t-esc="line.reference"/>
+                  <span t-if="line.is_inventory" class="o_soa_chip o_soa_sev_alert">kiểm kho</span>
+                </td>
+                <td t-esc="line.user"/>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div t-if="state.recentLoading" class="o_soa_panel o_soa_empty">Đang tải...</div>
+        <div t-if="state.recent and !state.recentLoading" class="o_soa_panel">
+          <div class="o_soa_panel_title">Các lượt hàng từ ngoài vào kho (90 ngày)</div>
+          <div t-if="!state.recent.length" class="o_soa_empty">
+            Không có lượt nhập nào trong 90 ngày.
+          </div>
+          <table t-else="" class="o_soa_table">
+            <thead>
+              <tr>
+                <th>Thời điểm</th><th>Loại nguồn</th><th class="num">SL</th>
+                <th>Từ</th><th>Vào</th><th>Chứng từ</th><th>Người tạo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-foreach="state.recent" t-as="row" t-key="row_index">
+                <td t-esc="row.date_str"/>
+                <td>
+                  <span t-attf-class="o_soa_chip o_soa_sev_{{row.severity_code}}" t-esc="row.label"/>
+                </td>
+                <td class="num" t-esc="row.qty_text"/>
+                <td t-esc="row.src_name"/>
+                <td t-esc="row.dest_name"/>
+                <td>
+                  <a t-if="row.picking_id" href="#" class="o_soa_link"
+                     t-on-click.prevent="() => this.openPicking(row.picking_id)"
+                     t-esc="row.reference"/>
+                  <span t-else="" t-esc="row.reference"/>
+                  <span t-if="row.origin_doc" class="o_soa_muted"> · <t t-esc="row.origin_doc"/></span>
+                </td>
+                <td t-esc="row.user"/>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </t>
+
+</templates>
