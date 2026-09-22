@@ -122,7 +122,10 @@
             <li class="vt-strip-item ${stop.mine ? "is-mine" : ""} ${stop.delivered ? "is-done" : ""}"
                 title="${escapeHtml(stop.partner_name || "")}">
                 <span class="vt-seq">${stop.sequence}</span>
-                <span class="vt-strip-name">${escapeHtml(stop.partner_name || "—")}</span>
+                <span class="vt-strip-main">
+                    <span class="vt-strip-name">${escapeHtml(stop.partner_name || "—")}</span>
+                    <span class="vt-strip-doc">${escapeHtml(stop.picking_name || stop.sale_order_name || "")}</span>
+                </span>
                 <span class="vt-strip-eta">${eta}</span>
             </li>`;
     }
@@ -463,83 +466,13 @@
     function openDocument(kind, recordId) {
         const body = el("vt-doc-body");
         body.innerHTML = '<div class="vt-empty">Đang tải…</div>';
+        el("vt-doc-foot").innerHTML = "";
         bootstrap.Modal.getOrCreateInstance(el("vt-doc-modal")).show();
         rpc("/giao-hang/chung-tu", { kind: kind, id: recordId })
-            .then((doc) => {
-                if (doc.error) {
-                    body.innerHTML = `<div class="vt-alert">${escapeHtml(doc.error)}</div>`;
-                    return;
-                }
-                el("vt-doc-title").textContent = doc.title;
-                body.innerHTML = doc.kind === "order" ? orderHtml(doc) : pickingHtml(doc);
-            })
+            .then((doc) => window.VtSaleDoc.render(doc))
             .catch((error) => {
                 body.innerHTML = `<div class="vt-alert">${escapeHtml(error.message)}</div>`;
             });
-    }
-
-    function factRow(label, value) {
-        return value ? `<div class="vt-fact"><span>${label}</span><b>${escapeHtml(value)}</b></div>` : "";
-    }
-
-    function money(value) {
-        return (value || 0).toLocaleString("vi-VN") + " đ";
-    }
-
-    function linesTable(lines, columns) {
-        if (!lines.length) {
-            return '<div class="vt-empty">Không có dòng hàng.</div>';
-        }
-        const rows = lines.map((line) => `
-            <tr>
-                <td>${escapeHtml(line.product)}</td>
-                <td class="text-end">${line.qty_ordered}</td>
-                <td class="text-end">${line.qty_delivered}</td>
-                <td>${escapeHtml(line.uom || "")}</td>
-            </tr>`).join("");
-        return `<table class="vt-table">
-                    <thead><tr><th>Hàng</th><th class="text-end">${columns[0]}</th>
-                    <th class="text-end">${columns[1]}</th><th>ĐVT</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>`;
-    }
-
-    function orderHtml(doc) {
-        const pickings = doc.pickings.length
-            ? doc.pickings.map((picking) => `
-                <button type="button" class="vt-doc" data-vt-doc="picking" data-vt-doc-id="${picking.id}">
-                    ${escapeHtml(picking.name)} · ${escapeHtml(picking.state_label)}
-                </button>`).join("")
-            : '<span class="vt-muted">Chưa có phiếu kho nào.</span>';
-        return `
-            <div class="vt-facts">
-                ${factRow("Khách", doc.partner_name)}
-                ${factRow("Trạng thái", doc.state_label)}
-                ${factRow("Ngày hẹn giao", (doc.commitment_date || "").slice(0, 10))}
-                ${factRow("Mã sale", doc.saler_code)}
-                ${factRow("Tiền hàng", money(doc.amount_total))}
-                ${factRow("Địa chỉ giao", doc.address)}
-            </div>
-            ${linesTable(doc.lines, ["Đặt", "Đã giao"])}
-            <div class="vt-doc-links"><span class="vt-muted">Phiếu kho:</span> ${pickings}</div>`;
-    }
-
-    function pickingHtml(doc) {
-        const order = doc.sale_order_id
-            ? `<button type="button" class="vt-doc" data-vt-doc="order" data-vt-doc-id="${doc.sale_order_id}">
-                   ${escapeHtml(doc.sale_order_name)}</button>`
-            : '<span class="vt-muted">Không rõ đơn</span>';
-        return `
-            <div class="vt-facts">
-                ${factRow("Khách", doc.partner_name)}
-                ${factRow("Trạng thái", doc.state_label)}
-                ${factRow("Dự kiến", (doc.scheduled_date || "").slice(0, 16))}
-                ${factRow("Hoàn tất lúc", (doc.date_done || "").slice(0, 16))}
-                ${factRow("Nguồn", doc.origin)}
-                ${factRow("Địa chỉ giao", doc.address)}
-            </div>
-            ${linesTable(doc.lines, ["Yêu cầu", "Đã lấy"])}
-            <div class="vt-doc-links"><span class="vt-muted">Đơn bán:</span> ${order}</div>`;
     }
 
     // ------------------------------------------------------------- sự kiện
@@ -547,6 +480,9 @@
     document.addEventListener("click", (event) => {
         const orderButton = event.target.closest("[data-vt-order]");
         if (orderButton) {
+            // Nút này cũng nằm trong hộp xem chứng từ: đóng hộp đó trước, nếu không hai
+            // lớp modal chồng nhau và lớp dưới khoá cuộn trang khi lớp trên đóng.
+            bootstrap.Modal.getInstance(el("vt-doc-modal"))?.hide();
             openRequest(Number(orderButton.dataset.vtOrder), orderButton.dataset.vtOrderName);
             return;
         }

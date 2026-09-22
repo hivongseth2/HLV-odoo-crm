@@ -196,13 +196,14 @@
 
                 <!-- Xem nhanh một đơn bán / phiếu kho, bấm từ danh sách điểm. -->
                 <div class="modal fade" id="vt-doc-modal" tabindex="-1">
-                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-dialog modal-xl modal-dialog-scrollable">
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title" id="vt-doc-title">Chứng từ</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal"/>
                             </div>
                             <div class="modal-body" id="vt-doc-body"/>
+                            <div class="modal-footer vt-doc-foot" id="vt-doc-foot"/>
                         </div>
                     </div>
                 </div>
@@ -265,6 +266,7 @@
                 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"/>
                 <script src="/hlv_vtracking/static/src/map/vtracking_polyline_codec.js"/>
                 <script src="/hlv_vtracking/static/src/sale_board/sale_board_map.js"/>
+                <script src="/hlv_vtracking/static/src/sale_board/sale_board_doc.js"/>
                 <script src="/hlv_vtracking/static/src/sale_board/sale_board.js"/>
             </body>
         </html>

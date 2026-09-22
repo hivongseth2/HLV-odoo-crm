@@ -252,24 +252,6 @@ body {
 }
 
 /* Hộp xem chứng từ */
-.vt-facts {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: .25rem .75rem;
-    margin-bottom: .75rem;
-}
-
-.vt-fact {
-    display: flex;
-    gap: .5rem;
-    border-bottom: 1px solid #f2f4f6;
-    padding: .2rem 0;
-}
-
-.vt-fact span {
-    color: var(--vt-muted);
-    min-width: 8rem;
-}
 
 .vt-table {
     width: 100%;

@@ -14,7 +14,7 @@ from odoo import http
 from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
-from ..services import sale_board
+from ..services import sale_board, sale_board_document
 
 _logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class VtrackingSaleBoardController(http.Controller):
         _check_internal()
         if kind not in ('order', 'picking') or not id:
             raise UserError('Thiếu chứng từ cần xem.')
-        return sale_board.document_detail(request.env, kind, id)
+        return sale_board_document.document_detail(request.env, kind, id)
 
     @http.route('/giao-hang/yeu-cau', type='json', auth='user')
     def create_request(self, **values):

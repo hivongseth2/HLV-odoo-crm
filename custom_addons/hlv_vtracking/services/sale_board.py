@@ -13,7 +13,6 @@ from odoo import fields
 
 from ..tools.vtracking_request import OPEN_STATES
 from . import plan_payload
-from .ai.order_service import order_line_block
 
 # Số ngày nhìn tới trước trong ô "đơn của tôi chưa xếp". Xa hơn nữa thì chưa ai xếp chuyến,
 # liệt kê ra chỉ làm nhiễu.
@@ -316,73 +315,3 @@ def create_request(env, values):
         'desired_session': values.get('desired_session') or False,
     })
     return {'my_requests': my_requests(env)}
-
-
-# ----------------------------------------------------------------------
-# Xem nhanh một chứng từ
-# ----------------------------------------------------------------------
-MAX_DETAIL_LINES = 60
-
-
-def document_detail(env, kind, record_id):
-    """Đơn bán hoặc phiếu kho, gọn đủ để người bán hàng trả lời khách ngay.
-
-    Cố tình KHÔNG dùng ``order_service.order_detail``: bản đó dựng cho AI nên kéo theo đơn
-    mua, chuỗi kho, cụm tuyến và cả chatter — nặng và thừa với người chỉ muốn biết "đơn này
-    gồm gì, giao tới đâu chưa".
-    """
-    if kind == 'order':
-        return _order_detail(env['sale.order'].sudo().browse(int(record_id)).exists())
-    return _picking_detail(env['stock.picking'].sudo().browse(int(record_id)).exists())
-
-
-def _order_detail(order):
-    if not order:
-        return {'error': 'Không tìm thấy đơn hàng.'}
-    return {
-        'kind': 'order',
-        'title': order.name,
-        'partner_name': order.partner_id.display_name,
-        'state_label': dict(order._fields['state'].selection).get(order.state, order.state),
-        'delivery_status': order.delivery_status or '',
-        'date_order': fields.Datetime.to_string(order.date_order) if order.date_order else None,
-        'commitment_date': fields.Datetime.to_string(order.commitment_date)
-        if order.commitment_date else None,
-        'amount_total': order.amount_total,
-        'saler_code': getattr(order, 'x_studio_misa_saler_code', '') or '',
-        'address': order._vtracking_delivery_address(),
-        # Dòng hàng dựng bằng đúng hàm mà API cho AI dùng — một chỗ đổi, hai nơi khớp.
-        'lines': [order_line_block(line) for line in order.order_line[:MAX_DETAIL_LINES]
-                  if not line.display_type],
-        'pickings': [{
-            'id': picking.id,
-            'name': picking.name,
-            'state_label': dict(picking._fields['state'].selection).get(picking.state, picking.state),
-            'scheduled_date': fields.Datetime.to_string(picking.scheduled_date)
-            if picking.scheduled_date else None,
-        } for picking in order.picking_ids],
-    }
-
-
-def _picking_detail(picking):
-    if not picking:
-        return {'error': 'Không tìm thấy phiếu kho.'}
-    return {
-        'kind': 'picking',
-        'title': picking.name,
-        'partner_name': picking.partner_id.display_name or '',
-        'state_label': dict(picking._fields['state'].selection).get(picking.state, picking.state),
-        'origin': picking.origin or '',
-        'scheduled_date': fields.Datetime.to_string(picking.scheduled_date)
-        if picking.scheduled_date else None,
-        'date_done': fields.Datetime.to_string(picking.date_done) if picking.date_done else None,
-        'address': picking._vtracking_delivery_address(),
-        'sale_order_id': picking.sale_id.id or None,
-        'sale_order_name': picking.sale_id.name or '',
-        'lines': [{
-            'product': move.product_id.display_name,
-            'uom': move.product_uom.name or '',
-            'qty_ordered': move.product_uom_qty,
-            'qty_delivered': move.quantity,
-        } for move in picking.move_ids[:MAX_DETAIL_LINES] if move.state != 'cancel'],
-    }

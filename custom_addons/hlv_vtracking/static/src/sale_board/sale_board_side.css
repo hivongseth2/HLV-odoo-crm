@@ -124,9 +124,16 @@
 
 /* ------------------------------------------------------------ ngăn kéo AI */
 
+/* Ngăn kéo rộng: câu trả lời của AI là văn bản dài nhiều đoạn, hẹp quá thì mỗi câu vắt
+   thành ba dòng và phải cuộn mãi. */
 .vt-drawer {
-    width: 34rem;
-    max-width: 92vw;
+    width: 44rem;
+    max-width: 96vw;
+}
+
+.vt-drawer .offcanvas-title {
+    font-family: var(--vt-font-title);
+    font-size: 16px;
 }
 
 .vt-request {
@@ -269,4 +276,250 @@
     font-family: var(--vt-font);
     font-size: 12.5px;
     line-height: 1.5;
+}
+
+
+/* ------------------------------------------------------------ hộp xem chứng từ */
+
+#vt-doc-modal .modal-content {
+    border: 1px solid #D8D5CD;
+    border-radius: 14px;
+    font-family: var(--vt-font);
+    color: var(--vt-ink);
+}
+
+#vt-doc-modal .modal-header {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+#vt-doc-modal .modal-title {
+    font-family: var(--vt-font-title);
+    font-size: 17px;
+}
+
+.vt-doc-foot {
+    border-top: 1px solid var(--vt-line);
+    background: #FAF9F6;
+    gap: .5rem;
+}
+
+.vt-doc-head {
+    display: flex;
+    align-items: flex-start;
+    gap: .7rem;
+    margin-bottom: .9rem;
+}
+
+.vt-doc-mark {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--vt-mine-soft);
+    color: var(--vt-mine);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vt-doc-title {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 0;
+}
+
+.vt-doc-name {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+/* Bốn mốc của phiếu. Mỗi mốc là một cột; vạch nối chạy từ chấm sang mốc kế tiếp. */
+.vt-doc-progress {
+    background: #FAF9F6;
+    border: 1px solid var(--vt-line);
+    border-radius: 11px;
+    padding: 14px 16px;
+    margin-bottom: 1rem;
+}
+
+.vt-miles {
+    display: flex;
+    align-items: flex-start;
+}
+
+.vt-mile {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    min-width: 0;
+}
+
+.vt-mile.is-last {
+    flex: 0 0 auto;
+}
+
+.vt-mile-track {
+    display: flex;
+    align-items: center;
+}
+
+.vt-mile-dot {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    border: 2px solid #D8D5CD;
+    color: #fff;
+    font-size: 11px;
+    line-height: 14px;
+    text-align: center;
+}
+
+.vt-mile.is-done .vt-mile-dot {
+    background: var(--vt-done);
+    border-color: var(--vt-done);
+}
+
+.vt-mile-line {
+    flex: 1 1 auto;
+    height: 2px;
+    background: #EDEBE5;
+}
+
+.vt-mile.is-done .vt-mile-line {
+    background: var(--vt-done);
+}
+
+.vt-mile-label {
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.vt-mile-at {
+    font-size: 11.5px;
+    color: var(--vt-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.vt-plan-line {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-top: .8rem;
+    padding-top: .7rem;
+    border-top: 1px solid var(--vt-line);
+    font-size: 12.5px;
+    color: #4A4F55;
+}
+
+.vt-plan-bar {
+    flex: 1 1 auto;
+    height: 6px;
+    border-radius: 3px;
+    background: #EDEBE5;
+    overflow: hidden;
+}
+
+.vt-plan-bar span {
+    display: block;
+    height: 100%;
+    background: var(--vt-done);
+}
+
+/* Bảng ba con số. Cột "phiếu này chở" tô nền để mắt bám vào đúng cột đang hỏi. */
+.vt-doc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.vt-doc-table th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--vt-muted);
+    padding: 0 10px 8px;
+    vertical-align: bottom;
+}
+
+.vt-doc-table th small {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.vt-doc-table td {
+    padding: 10px;
+    border-top: 1px solid var(--vt-line-soft);
+    vertical-align: top;
+}
+
+.vt-doc-table tr:first-child td {
+    border-top: 1px solid var(--vt-line);
+}
+
+.vt-cell-this {
+    background: #F4F9FB;
+    color: var(--vt-mine-dark);
+    font-weight: 600;
+}
+
+.vt-cell-left {
+    color: var(--vt-warn-ink);
+    font-weight: 600;
+}
+
+.vt-doc-sum {
+    margin-top: .6rem;
+}
+
+.vt-doc-others {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-top: .8rem;
+    padding-top: .7rem;
+    border-top: 1px solid var(--vt-line-soft);
+}
+
+.vt-doc-others .vt-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+/* Bảng thông tin đơn bán: hai cột, nhãn trái — bản cũ dùng lưới tự chia nên nhãn và giá
+   trị của hai ô khác nhau đè lên nhau khi tên khách dài. */
+.vt-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: 0 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.vt-fact {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    padding: .35rem 0;
+    border-bottom: 1px solid var(--vt-line-soft);
+    font-size: 13.5px;
+}
+
+.vt-fact span {
+    flex: 0 0 8.5rem;
+    color: var(--vt-muted);
+    font-size: 12.5px;
+}
+
+.vt-fact b {
+    min-width: 0;
+    font-weight: 600;
 }
