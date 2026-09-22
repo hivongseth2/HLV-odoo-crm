@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_rule_import_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.rule.import.form</field>
+        <field name="model">hlv.vtracking.rule.import</field>
+        <field name="arch" type="xml">
+            <form string="Nhập luật khách">
+                <group invisible="state != 'upload'">
+                    <div class="text-muted mb-2" colspan="2">
+                        Chọn file <code>khach.json</code> của bộ điều phối chạy tay. File ở
+                        ngoài hệ thống và <b>không được đưa vào mã nguồn</b> — nó là danh
+                        sách khách hàng thật. Bước này chỉ ĐỌC: bảng đề xuất hiện ra để bạn
+                        duyệt, ghi hay không là ở bước sau.
+                    </div>
+                    <field name="file_data" filename="file_name"/>
+                    <field name="file_name" invisible="1"/>
+                    <field name="source" placeholder="khach.json ngày 22/09/2026"/>
+                </group>
+
+                <div invisible="state != 'preview'">
+                    <div class="alert alert-info" role="status">
+                        Khớp được <field name="matched_count" class="oe_inline"/> khách ·
+                        <field name="problem_count" class="oe_inline"/> khách cần chọn địa
+                        điểm bằng tay. Tên khách trong file được so sau khi bỏ dấu và bỏ
+                        "công ty/TNHH"; dòng nào khớp nhiều điểm thì máy KHÔNG tự chọn —
+                        một khách có thể có hai nhà máy.
+                    </div>
+                    <field name="line_ids" nolabel="1">
+                        <list editable="bottom" create="0" delete="0"
+                              decoration-muted="match_state == 'missing'"
+                              decoration-warning="match_state == 'ambiguous'">
+                            <field name="selected" string="Ghi"/>
+                            <field name="customer_name" readonly="1"/>
+                            <field name="match_state" readonly="1"/>
+                            <field name="candidate_count" readonly="1" optional="hide"/>
+                            <field name="place_id" options="{'no_create': True}"/>
+                            <field name="values_summary" readonly="1"/>
+                            <field name="note_preview" readonly="1" optional="hide"/>
+                            <field name="payload" column_invisible="1"/>
+                        </list>
+                    </field>
+                </div>
+
+                <field name="state" invisible="1"/>
+                <footer>
+                    <button name="action_load" type="object" string="Đọc file"
+                            class="btn-primary" invisible="state != 'upload'"/>
+                    <button name="action_apply" type="object" string="Ghi các dòng đã chọn"
+                            class="btn-primary" invisible="state != 'preview'"/>
+                    <button string="Thôi" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_vtracking_rule_import" model="ir.actions.act_window">
+        <field name="name">Nhập luật khách từ file</field>
+        <field name="res_model">hlv.vtracking.rule.import</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

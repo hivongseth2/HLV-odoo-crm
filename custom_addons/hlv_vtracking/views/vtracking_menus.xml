@@ -74,6 +74,9 @@
     <menuitem id="menu_vtracking_seed_habits" name="Mồi thói quen đã biết"
               parent="menu_vtracking_place_tools" action="action_vtracking_seed_habits"
               sequence="30"/>
+    <menuitem id="menu_vtracking_rule_import" name="Nhập luật khách từ file"
+              parent="menu_vtracking_place_tools" action="action_vtracking_rule_import"
+              sequence="40"/>
 
     <!-- ============ Cấu hình: chỉ quản trị ============ -->
     <menuitem id="menu_vtracking_config" name="Cấu hình"

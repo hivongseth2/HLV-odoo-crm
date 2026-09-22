@@ -29,3 +29,5 @@ access_vtracking_calibration_log_user,vtracking.calibration.log.user,model_hlv_v
 access_vtracking_ai_request_sale,vtracking.ai.request.sale,model_hlv_vtracking_ai_request,sales_team.group_sale_salesman,1,1,1,0
 access_vtracking_ai_request_user,vtracking.ai.request.user,model_hlv_vtracking_ai_request,hlv_vtracking.group_vtracking_user,1,1,1,0
 access_vtracking_ai_request_manager,vtracking.ai.request.manager,model_hlv_vtracking_ai_request,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_rule_import,vtracking.rule.import,model_hlv_vtracking_rule_import,hlv_vtracking.group_vtracking_manager,1,1,1,1
+access_vtracking_rule_import_line,vtracking.rule.import.line,model_hlv_vtracking_rule_import_line,hlv_vtracking.group_vtracking_manager,1,1,1,1

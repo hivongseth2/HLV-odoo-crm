@@ -14,6 +14,7 @@ from . import vtracking_ai_request
 from . import vtracking_place_type
 from . import vtracking_partner_profile
 from . import vtracking_partner_profile_seed
+from . import vtracking_rule_import
 from . import vtracking_place
 from . import vtracking_place_geo
 from . import vtracking_place_merge
