@@ -9,6 +9,15 @@ ngày, sắp theo giờ quét. Mốc xuất phát là lần quét *nhận hàng*
 ngày — cùng định nghĩa với ``actual_start_at`` của kế hoạch, nên hai nguồn mẫu so được với
 nhau.
 
+Cụm của mỗi điểm suy theo ĐÚNG thứ tự mà dòng kế hoạch dùng (xem
+``models/vtracking_plan_line_zone``): toạ độ địa chỉ giao trước, điểm của khách chỉ là dự
+phòng. Đo 22/09/2026 vì sao phải thế: cả ba mã khách của Dongjin Textile đều có phiếu giao
+về cả hai nhà máy (Nhơn Trạch và KCN Long Bình, cách nhau 28 km) — hỏi theo khách thì gần
+một nửa số phiếu bị gán nhầm cụm, và định mức học từ đó là định mức của cụm khác.
+
+KHÔNG tra toạ độ ở đây: chỉ đọc kho toạ độ đã có. Tra mới là gọi ra ngoài và tốn tiền, mà
+đây là việc chạy nền hàng đêm trên hàng nghìn phiếu.
+
 Phép tính nằm ở ``tools/vtracking_calibration`` (thuần, có test); file này chỉ lo đọc dữ
 liệu và ghép phiếu với cụm.
 """
@@ -19,7 +28,9 @@ from datetime import timedelta
 
 from odoo import fields
 
+from ..tools.vtracking_address import address_key
 from ..tools.vtracking_calibration import trip_samples
+from ..tools.vtracking_planning import DEFAULT_ZONE_MATCH_KM, nearest_zone
 from .vtracking_place_lookup import places_by_root_partner
 
 _logger = logging.getLogger(__name__)
@@ -52,20 +63,28 @@ def history_samples(env, company, today=None, days=LOOKBACK_DAYS):
         ('picking_id', 'in', completes.picking_id.ids),
     ]).mapped('picking_id').ids)
     places = places_by_root_partner(env, company)
+    zone_points = _zone_points(env, company)
+    coords_by_key = _coords_by_address_key(env)
+    near_km = company.vtracking_zone_match_km or DEFAULT_ZONE_MATCH_KM
 
+    no_place = env['hlv.vtracking.place'].browse()
     trips = defaultdict(list)
     for scan in completes:
         picking = scan.picking_id
         if picking.id in planned:
             continue
-        place = places.get(picking.partner_id.commercial_partner_id.id)
-        if not place or not place.zone_id:
+        place = places.get(picking.partner_id.commercial_partner_id.id, no_place)
+        point = coords_by_key.get(address_key(picking._vtracking_delivery_address()))
+        if not point and place.has_coords:
+            point = (place.latitude, place.longitude)
+        zone_id = _zone_of(point, zone_points, near_km) or place.zone_id.id
+        if not zone_id:
             continue
         trips[(scan.user_id.id, scan.scan_time.date())].append({
             'delivered_at': scan.scan_time,
-            'zone_id': place.zone_id.id,
-            'point': (place.latitude, place.longitude) if place.has_coords else None,
-            'key': place.id,
+            'zone_id': zone_id,
+            'point': point,
+            'key': _stop_key(point, place),
         })
 
     departures = _departures(Scan, since)
@@ -79,6 +98,53 @@ def history_samples(env, company, today=None, days=LOOKBACK_DAYS):
     _logger.info('V-Tracking: %s chuyến dựng từ nhật ký quét, %s mẫu đo.',
                  trip_count, len(samples))
     return samples, trip_count
+
+
+def _zone_points(env, company):
+    """Các điểm đã biết chắc thuộc cụm nào — tập mẫu để so khoảng cách.
+
+    Cùng tập mẫu mà dòng kế hoạch dùng, để hai nơi không ra hai đáp án cho cùng một chỗ.
+    """
+    places = env['hlv.vtracking.place'].sudo().search([
+        ('zone_id', '!=', False),
+        ('has_coords', '=', True),
+        ('company_id', '=', company.id),
+    ])
+    return [(place.zone_id.id, (place.latitude, place.longitude)) for place in places]
+
+
+def _coords_by_address_key(env):
+    """``{khoá địa chỉ: (vĩ độ, kinh độ)}`` từ kho toạ độ đã tra. Không tra thêm."""
+    addresses = env['hlv.vtracking.address'].sudo().search([
+        ('has_coords', '=', True), ('address_key', '!=', False),
+    ])
+    return {address.address_key: (address.latitude, address.longitude)
+            for address in addresses}
+
+
+def _zone_of(point, zone_points, near_km):
+    """Cụm của một toạ độ, hoặc ``None`` khi không có toạ độ / không điểm mẫu nào đủ gần.
+
+    Chỉ nhận khi điểm mẫu gần nhất nằm trong ngưỡng ``near_km``. ``nearest_zone`` vẫn trả
+    về cụm gần nhất dù xa mấy — kế hoạch dùng được vì có cờ "cụm chưa chắc" cho người soát,
+    còn ở đây thì không: một lần giao Biên Hoà gán nhầm vào Nhơn Trạch là một mẫu rác nằm
+    im trong định mức, không ai thấy để sửa.
+    """
+    if not point:
+        return None
+    zone_id, _distance, confident = nearest_zone(point, zone_points, near_km)
+    return zone_id if confident else None
+
+
+def _stop_key(point, place):
+    """Khoá gom các phiếu giao CÙNG MỘT CHỖ trong một chuyến thành một điểm dừng.
+
+    Theo toạ độ trước, vì một khách có thể giao ở hai nơi; chỉ khi không có toạ độ mới gom
+    theo điểm của khách.
+    """
+    if point:
+        return ('geo', round(point[0], 5), round(point[1], 5))
+    return ('place', place.id if place else 0)
 
 
 def _departures(Scan, since):
