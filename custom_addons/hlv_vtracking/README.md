@@ -251,9 +251,13 @@ dán toạ độ tay.
 Ba tham số khai ở **Cấu hình > Kết nối vTracking**, mục *Định mức tính kế hoạch*: tốc độ
 trung bình (mặc định 35 km/h), phút mỗi điểm (10), hệ số đường bộ (1.3).
 
-**Không gọi Google Directions.** Gọi Directions mỗi lần đổi thứ tự điểm là trả tiền cho
-một con số chỉ dùng để so các phương án với nhau. Khi có km GPS thực tế thì chỉnh hệ số
-cho khớp địa bàn — đó là cách làm nó chính xác dần.
+Mặc định **không gọi Google**: gọi API mỗi lần đổi thứ tự điểm là trả tiền cho một con số
+chỉ dùng để so các phương án với nhau. Khi có km GPS thực tế thì chỉnh hệ số cho khớp địa
+bàn — đó là cách làm nó chính xác dần.
+
+Cần km đúng theo đường bộ thì bật thêm lộ trình đường thật, xem mục dưới. Con số chim bay
+vẫn giữ nguyên chứ không bị thay thế: nó là thứ **so được giữa mọi chuyến**, kể cả chuyến
+chưa lấy hoặc không lấy được đường thật.
 
 Phiếu chưa có toạ độ **không** vào được quãng đường; ô *Điểm thiếu toạ độ* và cảnh báo
 trên form nói rõ con số đang thiếu phần nào. Nút **Sắp thứ tự theo điểm gần nhất** cho
@@ -298,9 +302,51 @@ Bấm **Lộ trình** vẽ đường đi lên bản đồ: điểm xuất phát 
 theo thứ tự ghé, mỗi điểm một ghim tròn tím đánh số. Số trên bản đồ **khớp với số trên tờ
 kế hoạch in ra**, kể cả khi có điểm bị bỏ qua vì thiếu toạ độ.
 
-Đường vẽ **nét đứt** có chủ ý: đây là đường nối thẳng giữa các điểm, **không phải đường đi
-thật** — module không gọi Google Directions. Nét liền sẽ khiến người xem tin rằng xe chạy
-đúng theo vệt đó.
+Kiểu đường vẽ chính là thông tin:
+
+| Kiểu | Nghĩa |
+|---|---|
+| **Nét đứt** | Đường nối thẳng giữa các điểm — **không phải đường đi thật**. Nét liền sẽ khiến người xem tin rằng xe chạy đúng theo vệt đó. |
+| **Nét liền** | Đường đi thật lấy từ Google Routes, vẽ theo đúng đường xe chạy |
+
+#### Lộ trình đường thật (Google Routes)
+
+Tắt sẵn. Bật ở **Cấu hình > Kết nối vTracking**, mục *Lộ trình đường thật*. Dùng **chung
+khoá** với phần tra toạ độ (`base_geolocalize.google_map_api_key`) — cùng lý do như ở đó:
+hai chỗ giữ hai khoá là kiểu lỗi mà người dùng đổi một chỗ rồi không hiểu sao chỗ kia vẫn
+hỏng. Khoá đó phải được bật thêm **Routes API** trong Google Cloud Console, không chỉ
+Geocoding API; chưa bật thì mỗi chuyến chỉ ghi lại một dòng lỗi đọc được trên form.
+
+Lấy về thì **lưu lại** trên kế hoạch (`road_polyline`, `road_distance_km`,
+`road_duration_minutes`), không gọi lại mỗi lần vẽ: bản đồ tự tải lại mỗi 30 giây, gọi API
+trong đường đọc đó vừa đốt hạn mức cho thứ không đổi, vừa cộng thời gian chờ mạng vào một
+endpoint người dùng đang ngồi trước.
+
+Khi nào gọi API:
+
+- **Cron 10 phút** lấy cho chuyến từ hôm nay trở đi còn thiếu đường vẽ, tối đa 20 chuyến
+  mỗi lượt. Chuyến **đã từng lỗi** thì cron KHÔNG tự gọi lại — phải xử lý nguyên nhân rồi
+  bấm lấy lại, để một chuyến có toạ độ sai không gọi API mỗi 10 phút suốt ngày.
+- **Nút "Lấy lộ trình đường thật"** trên form kế hoạch: bấm là gọi ngay, kể cả khi đã có
+  đường cũ.
+
+Thứ tự ghé đổi sau khi lấy thì đường đã lưu là của thứ tự **cũ**: form hiện cảnh báo và
+bản đồ **quay về nét đứt** — thà vẽ thô mà đúng thứ tự hiện tại còn hơn vẽ đẹp một lộ
+trình không còn tồn tại. Không tự gọi lại ở đây vì người điều phối còn đang kéo thả sắp
+xếp, gọi mỗi lượt kéo là đốt hạn mức.
+
+Phạm vi lộ trình là **kho → điểm cuối, không gồm chặng về kho**, giống hệt ô *Quãng đường
+(km)* — để hai con số so được với nhau. Chặng về chỉ tính vào thời gian.
+
+Giới hạn: tối đa 23 điểm giữa mỗi lượt gọi. Vượt thì **báo lỗi**, không lặng lẽ cắt bớt
+điểm (cắt là vẽ ra lộ trình thiếu điểm mà người xem không biết). Chuyến thực tế 8-12 điểm
+nên gần như không chạm tới.
+
+Thời gian Google trả về (`road_duration_minutes`) chỉ là thời gian **chạy thuần** và
+KHÔNG thay thế ô *Dự kiến*: ô đó dùng định mức đo từ chuyến thật, gồm cả bốc dỡ và ký
+nhận tại điểm, sát hơn với cách đội xe chạy. Cố tình gọi bản **không có traffic**
+(`TRAFFIC_UNAWARE`): con số được lưu lại và đem so giữa các chuyến nên phải ổn định, còn
+muốn giờ sát thực tế thì định mức cụm tốt hơn.
 
 Thanh thông tin hiện trên đầu bản đồ với mẫu nét đứt (kiêm chú giải), km, thời gian, và
 báo rõ khi chỉ vẽ được một phần: *vẽ 6/8 điểm — số còn lại chưa có toạ độ*. Nút **Ẩn** ở
@@ -374,6 +420,12 @@ sang Google thì cân nhắc lại, Google tính tiền theo lượt.
 Góc phải là bảng chú giải kiêm bộ lọc: bấm vào một loại để bật/tắt lớp đó. Lớp địa điểm
 chỉ tải **một lần** lúc mở màn hình — lượt làm tươi 30 giây là để theo dõi xe, vẽ lại
 hàng trăm ghim đứng yên mỗi lần là phí.
+
+Trang `/giao-hang` (bản đồ cho người bán hàng) chỉ vẽ **kho**, không vẽ đối tác/khách hàng:
+số ghim khách lên tới hàng trăm, vẽ hết là lấp mất xe — mà điểm giao của chuyến đã có ghim
+số thứ tự riêng khi bấm xem lộ trình. Kho thì luôn hiện, kể cả khi chưa mở chuyến nào: không
+có nó thì một chấm xe giữa bản đồ không cho biết xe đang đi ra hay đang về. Lọc theo **mã
+loại** (`type_id.code = 'warehouse'`) chứ không theo tên, vì tên loại người dùng sửa được.
 
 ### Quan hệ với `hlv.delivery.point`
 
@@ -478,6 +530,7 @@ Cài đặt chung** — bấm menu của module này lại làm mất màn hình
 |---|---|---|
 | `tools/` | Hàm thuần: chuẩn hoá biển số, đổi thời gian, bóc payload | Không `env`, không mạng, không side effect |
 | `services/vtracking_client.py` | Nói HTTP với vTracking, phân trang, lùi dần khi 429 | Không biết Odoo là gì |
+| `services/google_routes.py` | Nói HTTP với Google Routes, đổi lỗi thành câu đọc được | Không dựng body, không đọc số — phần đó ở `tools/vtracking_road_route.py` để test được |
 | `services/vtracking_sync.py` | Nối hai lớp trên, ghi vào Odoo | — |
 | `models/`, `controllers/` | Mô hình dữ liệu, giao diện, API | Không chứa hàm dùng chung |
 
@@ -521,3 +574,5 @@ ghi liền nhau cách nhau 145 phút). Đừng suy ra thời gian dừng bằng 
   cấp cụm.
 - Xem lại hành trình một ngày trên bản đồ (hiện chỉ có danh sách bản tin trong form xe).
 - Thông báo khi có cảnh báo lái quá giờ — dữ liệu đã lấy về, chưa đẩy ra ai.
+- Lộ trình đường thật chưa tự lấy lại khi đổi thứ tự ghé (cố ý: tránh gọi API mỗi lượt kéo
+  thả) — hiện phải bấm nút. Nếu về sau thấy bất tiện thì nên gọi khi **chốt** kế hoạch.

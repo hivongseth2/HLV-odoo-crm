@@ -82,6 +82,17 @@ class ResCompany(models.Model):
              'khớp địa bàn.',
     )
 
+    # Tắt sẵn: bật là bắt đầu gọi Google Routes theo lượt, có tính tiền. Người quản trị
+    # phải chủ động bật sau khi đã bật Routes API cho khoá trong Google Cloud Console —
+    # mặc định bật sẽ thành hoá đơn bất ngờ cho công ty chỉ muốn dùng phần ước lượng.
+    vtracking_road_route_enabled = fields.Boolean(
+        string='Lấy lộ trình đường thật (Google Routes)', default=False,
+        help='Bật thì hệ thống lấy đường đi thật của từng chuyến từ Google Routes: bản đồ '
+             'vẽ nét liền theo đúng đường xe chạy và có thêm số km đường thật. Dùng CHUNG '
+             'khoá với phần tra toạ độ, nhưng khoá đó phải được bật thêm Routes API. Tắt '
+             'thì mọi thứ vẫn chạy bằng ước lượng đường chim bay như trước.',
+    )
+
     vtracking_zone_match_km = fields.Float(
         string='Bán kính nhận cụm (km)', default=3.0,
         help='Địa chỉ cách điểm giao đã biết gần nhất trong khoảng này thì nhận luôn cụm '

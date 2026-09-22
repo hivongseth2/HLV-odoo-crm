@@ -54,6 +54,19 @@
                         <field name="geocode_google_key" password="True"
                                invisible="geocode_provider != 'googlemap'"/>
                     </group>
+                    <group string="Lộ trình đường thật">
+                        <div class="text-muted mb-2" colspan="2">
+                            Bật thì mỗi chuyến được lấy đường đi thật từ <strong>Google
+                            Routes</strong>: bản đồ vẽ nét liền theo đúng đường xe chạy,
+                            và có thêm ô km đường thật cạnh ô km chim bay. Dùng CHUNG khoá
+                            với phần tra toạ độ ở trên, nhưng khoá đó phải được bật thêm
+                            <strong>Routes API</strong> trong Google Cloud Console — bật ở
+                            đây mà chưa bật trong Console thì mỗi chuyến chỉ ghi lại một
+                            dòng lỗi. Mỗi chuyến chỉ gọi một lượt rồi lưu lại; đổi thứ tự
+                            ghé mới cần lấy lại.
+                        </div>
+                        <field name="vtracking_road_route_enabled"/>
+                    </group>
                     <group string="Worker AI xử lý yêu cầu của nhân viên">
                         <div class="text-muted mb-2" colspan="2">
                             Yêu cầu nhân viên gửi được đẩy ngay tới tài khoản này qua kênh

@@ -84,6 +84,9 @@ kế hoạch, nên phụ thuộc thêm sale_stock, purchase_stock và hlv_barcod
         'web.assets_backend': [
             'hlv_vtracking/static/src/map/vtracking_map.css',
             'hlv_vtracking/static/src/map/vtracking_map_utils.js',
+            # Bộ giải mã polyline: biến toàn cục, dùng chung với trang /giao-hang
+            # (xem đầu file vì sao không phải module) — phải nạp trước file vẽ lộ trình.
+            'hlv_vtracking/static/src/map/vtracking_polyline_codec.js',
             'hlv_vtracking/static/src/map/vtracking_map_places.js',
             'hlv_vtracking/static/src/map/vtracking_map_route.js',
             'hlv_vtracking/static/src/map/vtracking_leaflet_loader.js',

@@ -25,6 +25,7 @@ from . import vtracking_address_geo
 from . import vtracking_address_merge
 from . import vtracking_plan
 from . import vtracking_plan_actions
+from . import vtracking_plan_road_route
 from . import vtracking_plan_actual
 from . import vtracking_plan_notes
 from . import vtracking_plan_driver

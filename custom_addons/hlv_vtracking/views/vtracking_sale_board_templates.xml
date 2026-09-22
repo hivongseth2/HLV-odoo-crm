@@ -163,6 +163,7 @@
 
                 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"/>
                 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"/>
+                <script src="/hlv_vtracking/static/src/map/vtracking_polyline_codec.js"/>
                 <script src="/hlv_vtracking/static/src/sale_board/sale_board_map.js"/>
                 <script src="/hlv_vtracking/static/src/sale_board/sale_board.js"/>
             </body>

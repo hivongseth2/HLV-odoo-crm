@@ -79,6 +79,21 @@
             <field name="active" eval="True"/>
         </record>
 
+        <!-- Lộ trình đường thật cho chuyến còn thiếu. Bật sẵn nhưng vô hại khi chưa cấu
+             hình: chính hàm này thoát ngay nếu công ty chưa bật
+             vtracking_road_route_enabled, nên không gọi Google lần nào.
+             10 phút thay vì ngắn hơn: kế hoạch được soạn dần trong ngày, và mỗi lượt gọi
+             là tiền — không cần đường vẽ có trong vòng một phút. -->
+        <record id="cron_vtracking_fetch_road_routes" model="ir.cron">
+            <field name="name">V-Tracking: lấy lộ trình đường thật (Google Routes)</field>
+            <field name="model_id" ref="model_hlv_vtracking_plan"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_fetch_road_routes()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="cron_vtracking_gc_positions" model="ir.cron">
             <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
             <field name="model_id" ref="model_hlv_vtracking_position"/>

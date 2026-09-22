@@ -5,6 +5,7 @@ from . import vtracking_channel
 from . import vtracking_blocking
 from . import vtracking_habits
 from . import vtracking_route
+from . import vtracking_road_route
 from . import vtracking_stage
 from . import vtracking_planning
 from . import vtracking_actual

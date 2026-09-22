@@ -49,6 +49,7 @@ def board_data(env, day=None, saler_code=None, search=None):
         'tile_url': company.vtracking_map_tile_url or '',
         'tile_attribution': company.vtracking_map_attribution or '',
         'vehicles': [_vehicle_block(vehicle) for vehicle in vehicles],
+        'places': _warehouse_places(env),
         'plans': [_plan_block(plan, my_order_ids) for plan in plans],
         'my_unplanned': my_unplanned_orders(env, saler_code, search),
         'my_requests': my_requests(env),
@@ -86,6 +87,30 @@ def _vehicle_block(vehicle):
     }
 
 
+def _warehouse_places(env):
+    """Các KHO để vẽ cố định trên bản đồ, kèm toạ độ.
+
+    Chỉ địa điểm loại Kho: bản đồ trang này để người bán hàng nhìn xe đang ở đâu so với
+    kho và so với điểm giao, nên kho là mốc quy chiếu cần thấy cả khi không mở chuyến nào.
+    Ghim đối tác/khách hàng thì KHÔNG vẽ ở đây — số lượng lớn (hàng trăm) sẽ lấp hết xe,
+    và điểm giao của chuyến đã có ghim số thứ tự riêng khi bấm xem lộ trình.
+
+    Lấy theo mã loại (``type_id.code``) chứ không theo tên: tên loại người dùng sửa được.
+    """
+    places = env['hlv.vtracking.place'].sudo().search([
+        ('has_coords', '=', True),
+        ('type_id.code', '=', 'warehouse'),
+        ('company_id', '=', env.company.id),
+    ])
+    return [{
+        'id': place.id,
+        'name': place.name,
+        'latitude': place.latitude,
+        'longitude': place.longitude,
+        'color': place.type_id.color or '#b91c1c',
+    } for place in places]
+
+
 def _plan_block(plan, my_order_ids):
     """Một chuyến, gọn cho người bán hàng đọc. Điểm nào có đơn của họ thì đánh dấu ``mine``.
 
@@ -106,6 +131,9 @@ def _plan_block(plan, my_order_ids):
         'stop_count': summary['stop_count'],
         'line_count': summary['line_count'],
         'distance_km': summary['distance_km'],
+        'road_distance_km': summary['road_distance_km'],
+        'road_polyline': summary['road_polyline'],
+        'road_route_stale': summary['road_route_stale'],
         'duration_display': summary['duration_display'],
         'start_name': (summary.get('start') or {}).get('name'),
         'start': _coords(summary.get('start') or {}),

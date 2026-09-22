@@ -23,6 +23,9 @@ window.VtSaleMap = (function () {
     // Lộ trình đang vẽ: đường nối và các số thứ tự ghé. Giữ riêng để xoá gọn khi tắt.
     let routeLayer = null;
     let routePlanId = null;
+    // Ghim kho: vẽ một lần rồi giữ nguyên. Tách khỏi lớp xe vì xe được vẽ lại mỗi nhịp
+    // cập nhật vị trí (30 giây), còn kho thì không đổi — gộp chung là vẽ lại kho vô ích.
+    let placeLayer = null;
 
     function ensureMap(config) {
         if (map) {
@@ -103,10 +106,44 @@ window.VtSaleMap = (function () {
         }
     }
 
+    /* Vẽ các KHO lên bản đồ. Gọi một lần mỗi lần tải lại cả trang, không gọi trong nhịp
+       cập nhật vị trí xe.
+
+       Kho là mốc quy chiếu của mọi chuyến nên luôn hiện, kể cả khi chưa mở chuyến nào:
+       không có nó thì một chấm xe giữa bản đồ không cho biết xe đang đi ra hay đang về. */
+    function showPlaces(places) {
+        ensureMap({});
+        if (placeLayer) {
+            placeLayer.remove();
+            placeLayer = null;
+        }
+        const items = (places || []).filter((place) => place.latitude && place.longitude);
+        if (!items.length) {
+            return;
+        }
+        placeLayer = L.layerGroup().addTo(map);
+        for (const place of items) {
+            L.circleMarker([place.latitude, place.longitude], {
+                radius: 9,
+                weight: 3,
+                color: "#ffffff",
+                fillColor: place.color || "#b91c1c",
+                fillOpacity: 1,
+            })
+                // Nhãn hiện thường trực: số kho ít nên không làm rối, mà phải đọc được tên
+                // kho ngay chứ không bắt bấm vào từng ghim.
+                .bindTooltip(place.name || "Kho", { permanent: true, direction: "right" })
+                .addTo(placeLayer);
+        }
+    }
+
     /* Vẽ (hoặc tắt) lộ trình của một chuyến: kho -> các điểm theo đúng thứ tự ghé.
 
-       Đường thẳng nối các điểm, KHÔNG phải đường đi thật — cả module tính km theo đường
-       chim bay, vẽ đường cong giả ở đây chỉ khiến người xem tin vào thứ không có. */
+       Nét LIỀN khi chuyến đã lấy được đường đi thật từ Google Routes (plan.road_polyline);
+       nét ĐỨT khi chưa có, vì lúc đó chỉ là đường nối thẳng các điểm — vẽ liền một vệt
+       không phải đường xe chạy chỉ khiến người xem tin vào thứ không có. Thứ tự ghé đã đổi
+       sau khi lấy đường (road_route_stale) cũng quay về nét đứt: đường lưu lại là của thứ
+       tự cũ. */
     function toggleRoute(plan) {
         if (routePlanId === plan.id) {
             clearRoute();
@@ -124,8 +161,14 @@ window.VtSaleMap = (function () {
         }
         ensureMap({});
         routeLayer = L.layerGroup().addTo(map);
-        L.polyline(points, { color: "#0d6efd", weight: 3, opacity: .8, dashArray: "6 4" })
-            .addTo(routeLayer);
+        const roadPoints = roadRoutePoints(plan);
+        if (roadPoints.length >= 2) {
+            L.polyline(roadPoints, { color: "#0d6efd", weight: 4, opacity: .85 })
+                .addTo(routeLayer);
+        } else {
+            L.polyline(points, { color: "#0d6efd", weight: 3, opacity: .8, dashArray: "6 4" })
+                .addTo(routeLayer);
+        }
         if (plan.start) {
             L.circleMarker(points[0], { radius: 6, color: "#0d6efd", fillColor: "#fff", fillOpacity: 1 })
                 .bindTooltip("Xuất phát: " + (plan.start.name || ""), { direction: "top" })
@@ -146,6 +189,15 @@ window.VtSaleMap = (function () {
         map.fitBounds(points, { padding: [40, 40] });
         routePlanId = plan.id;
         return true;
+    }
+
+    /* Toạ độ đường đi thật đã giải mã, hoặc mảng rỗng khi không dùng được. Bộ giải mã dùng
+       CHUNG với bản đồ backend (vtracking_polyline_codec.js) — một bản duy nhất. */
+    function roadRoutePoints(plan) {
+        if (!plan.road_polyline || plan.road_route_stale || !window.VtPolylineCodec) {
+            return [];
+        }
+        return window.VtPolylineCodec.decode(plan.road_polyline);
     }
 
     function clearRoute() {
@@ -170,5 +222,5 @@ window.VtSaleMap = (function () {
         return routePlanId;
     }
 
-    return { update, toggleRoute, clearRoute, shownRoute, focus };
+    return { update, showPlaces, toggleRoute, clearRoute, shownRoute, focus };
 })();

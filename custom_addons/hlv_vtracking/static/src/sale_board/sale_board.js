@@ -205,6 +205,9 @@
         renderUnplanned(data.my_unplanned, data.mine_configured);
         renderRequests(data.my_requests);
         window.VtSaleMap.update(data.vehicles, state.config);
+        // Kho chỉ vẽ ở đây, KHÔNG vẽ trong loadPositions(): nhịp cập nhật vị trí chạy mỗi
+        // 30 giây mà kho thì không đổi.
+        window.VtSaleMap.showPlaces(data.places);
         stamp();
     }
 

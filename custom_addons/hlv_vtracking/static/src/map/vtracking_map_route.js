@@ -2,9 +2,17 @@
 
 /* Vẽ lộ trình DỰ KIẾN của một kế hoạch lên bản đồ.
 
-   Nét đứt là có chủ ý: đây là đường nối thẳng giữa các điểm theo thứ tự ghé, KHÔNG phải
-   đường đi thật trên bản đồ (module không gọi Google Directions). Nét liền sẽ khiến người
-   xem tin rằng xe chạy đúng theo vệt đó.
+   Hai kiểu đường, và kiểu vẽ chính là thông tin:
+
+   - NÉT LIỀN: đường đi thật lấy từ Google Routes (plan.road_polyline). Vẽ liền được vì
+     vệt đó đúng là đường xe sẽ chạy.
+   - NÉT ĐỨT: chưa lấy được đường thật (tính năng tắt, chưa tới lượt cron, hoặc API lỗi) —
+     chỉ là đường nối thẳng giữa các điểm theo thứ tự ghé. Nét đứt là có chủ ý: vẽ liền sẽ
+     khiến người xem tin rằng xe chạy đúng theo vệt đó.
+
+   Đổi thứ tự ghé sau khi đã lấy đường thật (plan.road_route_stale) thì đường lưu lại là
+   của thứ tự CŨ — lúc đó quay về nét đứt, vì thà vẽ thô mà đúng thứ tự hiện tại còn hơn
+   vẽ đẹp một lộ trình không còn tồn tại.
 
    Tách khỏi file vẽ xe và file vẽ địa điểm vì lộ trình có vòng đời riêng: nó chỉ tồn tại
    khi người dùng chọn xem một kế hoạch, và biến mất khi chọn kế hoạch khác. */
@@ -59,15 +67,7 @@ export function drawRoute(L, map, plan) {
 
     // Một điểm thì không có đoạn nào để nối; vẫn vẽ ghim để biết nó nằm đâu.
     if (points.length >= 2) {
-        layers.unshift(
-            L.polyline(points, {
-                color: ROUTE_COLOR,
-                weight: 3,
-                opacity: 0.85,
-                dashArray: "8 7",
-                lineJoin: "round",
-            })
-        );
+        layers.unshift(routeLine(L, plan, points));
     }
     if (!layers.length) {
         return null;
@@ -78,6 +78,49 @@ export function drawRoute(L, map, plan) {
         map.fitBounds(points, { padding: [50, 50], maxZoom: 14 });
     }
     return group;
+}
+
+/**
+ * Đường kẻ của lộ trình: đường đi thật nếu có, không thì đường nối thẳng các điểm.
+ * @param {Object} L thư viện Leaflet
+ * @param {Object} plan kế hoạch đang vẽ
+ * @param {Array<[number, number]>} points toạ độ các điểm theo thứ tự ghé
+ * @returns {Object} L.Polyline
+ */
+function routeLine(L, plan, points) {
+    const roadPoints = roadRoutePoints(plan);
+    if (roadPoints.length >= 2) {
+        return L.polyline(roadPoints, {
+            color: ROUTE_COLOR,
+            weight: 4,
+            opacity: 0.85,
+            lineJoin: "round",
+        });
+    }
+    return L.polyline(points, {
+        color: ROUTE_COLOR,
+        weight: 3,
+        opacity: 0.85,
+        dashArray: "8 7",
+        lineJoin: "round",
+    });
+}
+
+/**
+ * Toạ độ đường đi thật đã giải mã, hoặc mảng rỗng khi không dùng được.
+ *
+ * Đọc bộ giải mã qua biến toàn cục đúng lúc gọi (giống cách dùng window.L): file codec
+ * không phải module Odoo vì trang /giao-hang cũng dùng chung nó.
+ */
+function roadRoutePoints(plan) {
+    if (!plan.road_polyline || plan.road_route_stale) {
+        return [];
+    }
+    const codec = window.VtPolylineCodec;
+    if (!codec) {
+        return [];
+    }
+    return codec.decode(plan.road_polyline);
 }
 
 /**

@@ -44,6 +44,16 @@ def plan_summary(plan):
         'stop_count': plan.stop_count,
         'amount_total': plan.amount_total,
         'distance_km': plan.distance_km,
+        # Lộ trình đường thật: có thì bản đồ vẽ nét liền theo đúng đường xe chạy, không có
+        # thì vẽ nét đứt nối thẳng như trước. Luôn trả cả hai con số km chứ không thay thế
+        # distance_km: km chim bay là thứ so được giữa MỌI chuyến, kể cả chuyến chưa lấy
+        # được đường thật, nên bỏ nó đi là mất khả năng so sánh.
+        'road_polyline': plan.road_polyline or None,
+        'road_distance_km': plan.road_distance_km or None,
+        'road_duration_minutes': plan.road_duration_minutes or None,
+        # Thứ tự ghé đã đổi sau lần lấy đường: đường đang vẽ là của thứ tự CŨ, người xem
+        # phải biết để không tin vào nó.
+        'road_route_stale': plan.road_route_stale or None,
         'drive_minutes': plan.drive_minutes,
         'service_minutes': plan.service_minutes,
         'total_minutes': plan.total_minutes,

@@ -90,6 +90,10 @@
                     <button name="action_resequence_by_distance" type="object"
                             string="Sắp thứ tự theo điểm gần nhất"
                             invisible="state not in ('draft', 'confirmed')"/>
+                    <button name="action_fetch_road_route" type="object"
+                            string="Lấy lộ trình đường thật"
+                            invisible="state not in ('draft', 'confirmed')"
+                            help="Gọi Google Routes lấy đường đi thật và km theo đường bộ cho đúng thứ tự ghé hiện tại. Tốn một lượt gọi API mỗi lần bấm."/>
                     <button name="action_add_documents" type="object"
                             string="Thêm phiếu / đơn" class="btn-primary"
                             invisible="state not in ('draft', 'confirmed')"/>
@@ -132,7 +136,30 @@
                             <field name="duration_display" string="Tổng thời gian"/>
                             <field name="currency_id" invisible="1"/>
                         </group>
+                        <!-- Đặt cạnh nhóm "Dự kiến" chứ không trộn vào: đây là số từ Google,
+                             nguồn khác hẳn phần ước lượng chim bay bên trên. Ẩn cả nhóm khi
+                             chưa lấy lần nào để form không bày ra một loạt ô rỗng. -->
+                        <group string="Đường thật (Google Routes)"
+                               invisible="not road_route_synced_at and not road_route_error">
+                            <field name="road_distance_km"/>
+                            <field name="road_duration_minutes"/>
+                            <field name="road_route_synced_at"/>
+                            <field name="road_route_stale" invisible="1"/>
+                            <field name="road_polyline" invisible="1"/>
+                            <field name="road_route_signature" invisible="1"/>
+                        </group>
                     </group>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not road_route_stale">
+                        Thứ tự ghé đã đổi sau lần lấy lộ trình gần nhất — bản đồ đang vẽ
+                        đường nối thẳng. Bấm "Lấy lộ trình đường thật" để cập nhật.
+                    </div>
+
+                    <div class="alert alert-danger" role="alert"
+                         invisible="not road_route_error">
+                        <field name="road_route_error" readonly="1" nolabel="1"/>
+                    </div>
 
                     <div class="alert alert-warning" role="alert"
                          invisible="not zone_warning">
