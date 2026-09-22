@@ -87,9 +87,19 @@ ra không hiểu ai đổi. Rồi `answer` với `applied: true`.
 
 ### 6. Trả lời
 
+**Viết câu trả lời ra FILE rồi gửi bằng `@file`, đừng gõ thẳng vào dòng lệnh:**
+
 ```
-py ... vt.py post requests/<id>/answer '{"verdict": "feasible", "applied": true, "answer": "..."}'
+# ghi answer.json bằng công cụ ghi file (UTF-8), rồi:
+py ... vt.py post requests/<id>/answer @answer.json
 ```
+
+Lý do: dòng lệnh trên Windows đi qua bảng mã của console, chuỗi tiếng Việt dài dán thẳng
+vào đó hay rụng dấu — và câu trả lời mất dấu thì người đọc phải đoán. Gửi qua file thì nội
+dung đi nguyên vẹn.
+
+**Luôn viết tiếng Việt CÓ DẤU.** Gặp lỗi mã hoá thì sửa cách gửi (dùng file), tuyệt đối
+không bỏ dấu cho dễ.
 
 `verdict`: `feasible` được · `conditional` được nếu… · `not_feasible` không được ·
 `info` chỉ trả lời câu hỏi.
@@ -119,12 +129,16 @@ Quy ước hiển thị: dòng VIẾT HOA kết thúc bằng `:` thành tiêu đ
 py ... vt.py post requests/<id>/fail '{"error": "Yêu cầu nói về đơn khác kho, chưa rõ xe nào"}'
 ```
 
+Lý do ngắn thì gõ thẳng được; dài hoặc nhiều dấu thì vẫn dùng `@file`.
+
 Trả lời bừa tệ hơn nhận là mình không làm được: người điều phối thấy phiếu lỗi sẽ xử lý tay.
 
 ## Bẫy
 
 1. **Sửa kế hoạch đã chốt** — tài xế có thể đã cầm tờ in đi rồi. Chỉ đề xuất.
 2. **Quên `notes`** — kế hoạch đổi mà không ai biết vì sao.
+2b. **Trả lời mất dấu tiếng Việt** — gửi qua `@file` như mục 6, đừng dán chuỗi dài vào
+   dòng lệnh.
 3. **Trả lời hai lần** — `answer` chỉ gọi một lần; gọi khi phiếu không còn ở trạng thái
    "AI đang xem" sẽ bị API từ chối, và đó là chủ ý.
 4. **Nhận lời khi hàng chưa về** — xem `supply.expected_arrival_date`, đừng chỉ nhìn

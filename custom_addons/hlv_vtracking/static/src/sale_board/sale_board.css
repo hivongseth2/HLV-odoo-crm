@@ -248,6 +248,111 @@ body {
     color: #41505f;
 }
 
+/* Buổi và cụm tuyến là hai thứ người bán hàng quét mắt tìm đầu tiên, nên cho chúng màu
+   riêng thay vì chìm trong đám chữ xám. */
+.vt-session {
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .05rem .55rem;
+    background: #eef0f3;
+    color: #41505f;
+}
+
+.vt-session-morning {
+    background: #fff1cc;
+    color: #8a5a00;
+}
+
+.vt-session-afternoon {
+    background: #e6e9fb;
+    color: #34409a;
+}
+
+.vt-session-full_day {
+    background: #e3f6ea;
+    color: #0c6b38;
+}
+
+.vt-zone {
+    font-size: .75rem;
+    font-weight: 600;
+    color: #41505f;
+    border: 1px dashed #c6ccd4;
+    border-radius: 999px;
+    padding: 0 .5rem;
+}
+
+/* Mã chứng từ trên từng điểm: bấm được, nhìn như đường dẫn chứ không như nút. */
+.vt-docs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-top: .15rem;
+}
+
+.vt-doc {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--vt-mine);
+    font-size: .8125rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.vt-doc:hover {
+    text-decoration: underline;
+}
+
+/* Hộp xem chứng từ */
+.vt-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: .25rem .75rem;
+    margin-bottom: .75rem;
+}
+
+.vt-fact {
+    display: flex;
+    gap: .5rem;
+    border-bottom: 1px solid #f2f4f6;
+    padding: .2rem 0;
+}
+
+.vt-fact span {
+    color: var(--vt-muted);
+    min-width: 8rem;
+}
+
+.vt-table {
+    width: 100%;
+    font-size: .875rem;
+    border-collapse: collapse;
+}
+
+.vt-table th,
+.vt-table td {
+    border-bottom: 1px solid #f2f4f6;
+    padding: .3rem .4rem;
+    vertical-align: top;
+}
+
+.vt-table th {
+    color: var(--vt-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vt-doc-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-top: .75rem;
+}
+
 .vt-chip-soft {
     background: transparent;
     border: 1px solid var(--vt-line);
@@ -429,7 +534,24 @@ body {
     margin-bottom: .25rem;
 }
 
+.vt-answer-box > summary {
+    cursor: pointer;
+    color: var(--vt-mine);
+    font-size: .8125rem;
+    list-style: none;
+    padding: .15rem 0;
+}
+
+.vt-answer-box > summary::before {
+    content: "▸ ";
+}
+
+.vt-answer-box[open] > summary::before {
+    content: "▾ ";
+}
+
 .vt-answer {
+    margin-top: .35rem;
     background: #f7f8fa;
     border-radius: 8px;
     padding: .5rem .65rem;

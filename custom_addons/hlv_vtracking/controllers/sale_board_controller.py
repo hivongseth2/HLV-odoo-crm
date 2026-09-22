@@ -56,6 +56,14 @@ class VtrackingSaleBoardController(http.Controller):
         _check_internal()
         return sale_board.vehicle_positions(request.env)
 
+    @http.route('/giao-hang/chung-tu', type='json', auth='user')
+    def document_detail(self, kind=None, id=None, **_kwargs):
+        """Xem nhanh một đơn bán hoặc phiếu kho ngay trên trang."""
+        _check_internal()
+        if kind not in ('order', 'picking') or not id:
+            raise UserError('Thiếu chứng từ cần xem.')
+        return sale_board.document_detail(request.env, kind, id)
+
     @http.route('/giao-hang/yeu-cau', type='json', auth='user')
     def create_request(self, **values):
         """Gửi yêu cầu cho AI. Trả về danh sách yêu cầu đã cập nhật để trang vẽ lại."""
