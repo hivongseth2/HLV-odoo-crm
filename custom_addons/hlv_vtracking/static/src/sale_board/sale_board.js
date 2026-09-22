@@ -16,7 +16,7 @@
     const STATE_LABEL = { draft: "nháp", confirmed: "đã chốt", done: "xong" };
 
     const state = {
-        date: null, config: {}, plans: [], vehicles: [], places: [],
+        date: null, config: {}, plans: [], vehicles: [], doc: null, places: [],
         saler: "", search: "", mineOnly: false, pending: false,
         // Chuyến đang xem ở cột phải. null = chưa chọn -> chưa dựng bản đồ.
         selectedPlanId: null,
@@ -96,6 +96,10 @@
                     ${plan.zone_name ? `<span class="vt-zone">${escapeHtml(plan.zone_name)}</span>` : ""}
                     <span class="vt-chip vt-chip-soft">${escapeHtml(STATE_LABEL[plan.state] || plan.state)}</span>
                     ${plan.has_mine ? '<span class="vt-chip vt-chip-mine">có đơn của tôi</span>' : ""}
+                    <span class="vt-chip ${plan.delivered_count ? "vt-chip-done" : ""}"
+                          title="Số điểm đã giao xong trên tổng số điểm của chuyến">
+                        ${plan.delivered_count}/${total} đã giao
+                    </span>
                     <span class="vt-plan-open">Xem chi tiết ›</span>
                 </header>
                 <div class="vt-plan-meta">${planMetaText(plan)}</div>
@@ -115,7 +119,11 @@
         return `${plan.stop_count} điểm · ${km} · ${escapeHtml(plan.duration_display || "—")}`;
     }
 
-    /* Một điểm trong dải điểm của thẻ: số thứ tự, tên khách rút gọn, giờ tới ước tính. */
+    /* Một điểm trong dải điểm của thẻ: số thứ tự, MÃ ĐƠN, giờ tới ước tính.
+
+       Không hiện tên công ty ở đây: tên khách Việt Nam dài 40-60 ký tự nên ô nào cũng bị
+       cắt cụt thành "CÔNG TY TNHH C…" — đọc xong vẫn không biết là ai. Mã đơn ngắn, duy
+       nhất, và là thứ sale đọc cho khách nghe. Tên đầy đủ nằm ở màn chi tiết chuyến. */
     function stripItem(stop, plan) {
         const eta = etaLabel(stop.arrive_offset_minutes, plan.session_label);
         return `
@@ -128,11 +136,12 @@
                         ? `data-vt-doc="order" data-vt-doc-id="${stop.sale_order_id}"`
                         : ""}>
                 <span class="vt-seq">${stop.sequence}</span>
-                <span class="vt-strip-main">
-                    <span class="vt-strip-name">${escapeHtml(stop.partner_name || "—")}</span>
-                    <span class="vt-strip-doc">${escapeHtml(stop.picking_name || stop.sale_order_name || "")}</span>
+                <span class="vt-strip-doc">
+                    ${escapeHtml(stop.sale_order_name || stop.picking_name || "—")}
                 </span>
-                <span class="vt-strip-eta">${eta}</span>
+                <span class="vt-strip-eta">
+                    ${stop.delivered ? '<span class="vt-check">✓</span> ' : ""}${eta}
+                </span>
             </li>`;
     }
 
@@ -152,33 +161,60 @@
                        data-vt-locate="${stop.latitude},${stop.longitude}"
                        data-vt-label="${escapeHtml(stop.partner_name || "")}">Xem trên bản đồ</button>`
             : "";
+        // Đã giao thì cột giờ là giờ THẬT, chưa giao thì là ước tính — nhãn phải nói rõ,
+        // đừng để người đọc tự đoán.
         return `
             <li class="vt-stop ${stop.mine ? "is-mine" : ""} ${stop.delivered ? "is-done" : ""}">
-                <span class="vt-seq">${stop.sequence}</span>
+                <span class="vt-seq ${stop.delivered ? "is-done" : ""} ${stop.mine ? "is-mine" : ""}">
+                    ${stop.sequence}
+                </span>
                 <span class="vt-stop-main">
                     <span class="vt-stop-name">
-                        ${stop.delivered ? '<span class="vt-check">✓</span>' : ""}
                         ${escapeHtml(stop.partner_name || "—")}
                         ${stop.mine ? '<span class="vt-tag vt-tag-mine">đơn của tôi</span>' : ""}
                     </span>
                     <span class="vt-stop-address">${escapeHtml(stop.address || "")}</span>
-                    <span class="vt-docs">
-                        ${stop.sale_order_name ? `<button type="button" class="vt-doc"
-                            data-vt-doc="order" data-vt-doc-id="${stop.sale_order_id}">
-                            ${escapeHtml(stop.sale_order_name)}</button>` : ""}
-                        ${stop.picking_name ? `<button type="button" class="vt-doc"
-                            data-vt-doc="picking" data-vt-doc-id="${stop.picking_id}">
-                            ${escapeHtml(stop.picking_name)}</button>` : ""}
-                    </span>
+                    ${docsBlock(stop)}
+                    ${flags.length ? `<span class="vt-stop-flags">${flags.join("")}</span>` : ""}
                     <span class="vt-stop-actions">${ask}${locate}</span>
                 </span>
                 <span class="vt-stop-side">
-                    <span class="vt-eta" title="Giờ tới ước tính, không phải giờ đã hẹn">
+                    <span class="vt-muted">${stop.delivered ? "đã giao" : "dự kiến"}</span>
+                    <span class="vt-eta ${stop.mine ? "is-mine" : ""}"
+                          title="Giờ tới ước tính, không phải giờ đã hẹn">
                         ${etaLabel(stop.arrive_offset_minutes, plan.session_label)}
                     </span>
-                    ${flags.join("")}
                 </span>
             </li>`;
+    }
+
+    /* Mã đơn và mã phiếu xuất của một điểm. Ở ĐIỂM CỦA MÌNH thì gom thành một khối có nhãn
+       (đây là thứ sale đọc cho khách nghe qua điện thoại); điểm của người khác chỉ cần hai
+       mã nhỏ, bấm xem được nhưng không chiếm chỗ. */
+    function docsBlock(stop) {
+        if (!stop.sale_order_name && !stop.picking_name) {
+            return "";
+        }
+        if (!stop.mine) {
+            return `
+                <span class="vt-docs">
+                    ${stop.sale_order_name ? `<button type="button" class="vt-doc"
+                        data-vt-doc="order" data-vt-doc-id="${stop.sale_order_id}">
+                        ${escapeHtml(stop.sale_order_name)}</button>` : ""}
+                    ${stop.picking_name ? `<button type="button" class="vt-doc"
+                        data-vt-doc="picking" data-vt-doc-id="${stop.picking_id}">
+                        ${escapeHtml(stop.picking_name)}</button>` : ""}
+                </span>`;
+        }
+        return `
+            <span class="vt-doc-card">
+                ${stop.sale_order_name ? `<button type="button" class="vt-doc-line"
+                    data-vt-doc="order" data-vt-doc-id="${stop.sale_order_id}">
+                    <small>Đơn</small>${escapeHtml(stop.sale_order_name)}</button>` : ""}
+                ${stop.picking_name ? `<button type="button" class="vt-doc-line is-picking"
+                    data-vt-doc="picking" data-vt-doc-id="${stop.picking_id}">
+                    <small>Phiếu XK</small>${escapeHtml(stop.picking_name)}</button>` : ""}
+            </span>`;
     }
 
     /* Cột phải khi đã chọn một chuyến: đầy đủ từng điểm, kèm nút của người bán hàng. Đây
@@ -214,16 +250,38 @@
 
     function unplannedRow(order) {
         const due = order.commitment_date
-            ? `hẹn ${escapeHtml(order.commitment_date.slice(0, 10))}`
-            : "chưa có ngày hẹn";
+            ? escapeHtml(formatDate(order.commitment_date))
+            : '<span class="vt-muted">chưa hẹn</span>';
+        return `
+            <tr>
+                <td class="vt-num">${escapeHtml(order.name)}</td>
+                <td>${escapeHtml(order.partner_name)}</td>
+                <td class="vt-muted">${escapeHtml(order.address || "")}</td>
+                <td class="vt-nowrap vt-num">${due}</td>
+                <td class="vt-right">
+                    <button type="button" class="vt-btn vt-btn-soft" data-vt-order="${order.id}"
+                            data-vt-order-name="${escapeHtml(order.name)}">Nhờ AI xếp</button>
+                </td>
+            </tr>`;
+    }
+
+    /* 2026-09-21 -> 21/09/2026: người bán hàng đọc ngày kiểu Việt Nam, và cột ngày phải
+       thẳng hàng nên độ dài cố định. */
+    function formatDate(value) {
+        const parts = (value || "").slice(0, 10).split("-");
+        return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : value || "";
+    }
+
+    /* Một xe trong khối "Đội xe hôm nay" ở cột phải khi chưa chọn chuyến nào. */
+    function fleetRow(vehicle) {
+        const where = vehicle.geocoding ? vehicle.geocoding.split(",")[0] : "";
+        const speed = vehicle.status === "run" ? ` · ${Math.round(vehicle.speed || 0)} km/h` : "";
         return `
             <div class="vt-row">
-                <div class="vt-row-main">
-                    <div class="vt-row-title">${escapeHtml(order.name)}</div>
-                    <div class="vt-muted">${escapeHtml(order.partner_name)} · ${due}</div>
-                </div>
-                <button type="button" class="vt-btn vt-btn-primary" data-vt-order="${order.id}"
-                        data-vt-order-name="${escapeHtml(order.name)}">Nhờ AI xếp</button>
+                <span class="vt-status vt-status-${vehicle.status} ${vehicle.is_stale ? "is-stale" : ""}"></span>
+                <span class="vt-plate vt-plate-sm">${escapeHtml(vehicle.name)}</span>
+                <span class="vt-muted">${escapeHtml(vehicle.status_label)}${speed}</span>
+                <span class="vt-muted vt-push vt-ellipsis">${escapeHtml(where)}</span>
             </div>`;
     }
 
@@ -260,6 +318,7 @@
         fillSalerOptions(data.saler_codes);
         renderPlans();
         renderUnplanned(data.my_unplanned, data.mine_configured);
+        renderFleet(data.vehicles);
         renderRequests(data.my_requests);
         // Vẽ lên bản đồ chỉ khi nó ĐÃ được mở (người dùng đã chọn một chuyến). Chưa mở thì
         // dữ liệu vẫn nằm trong state, lúc mở sẽ vẽ một lượt — xem showDetail().
@@ -356,6 +415,12 @@
             ? '<tr><td colspan="5" class="vt-empty">Không có đơn nào chờ xếp.</td></tr>'
             : '<tr><td colspan="5" class="vt-empty">Chọn <b>mã sale</b> của bạn ở thanh trên'
               + ' để thấy đơn của mình.</td></tr>';
+    }
+
+    function renderFleet(vehicles) {
+        el("vt-fleet").innerHTML = vehicles.length
+            ? vehicles.map(fleetRow).join("")
+            : '<div class="vt-empty">Chưa có xe nào bật theo dõi.</div>';
     }
 
     function renderRequests(requests) {
@@ -478,13 +543,21 @@
 
     // -------------------------------------------------------- xem chứng từ
 
-    function openDocument(kind, recordId) {
+    /* Hộp chứng từ nhảy qua lại được: phiếu -> đơn -> phiếu khác của đơn. Giữ vết để
+       người xem quay lại chỗ vừa rời, thay vì phải đóng hộp rồi tìm lại từ đầu. */
+    const docTrail = [];
+
+    function openDocument(kind, recordId, keepTrail) {
+        if (!keepTrail && state.doc) {
+            docTrail.push(state.doc);
+        }
+        state.doc = { kind: kind, id: recordId };
         const body = el("vt-doc-body");
         body.innerHTML = '<div class="vt-empty">Đang tải…</div>';
         el("vt-doc-foot").innerHTML = "";
         bootstrap.Modal.getOrCreateInstance(el("vt-doc-modal")).show();
         rpc("/giao-hang/chung-tu", { kind: kind, id: recordId })
-            .then((doc) => window.VtSaleDoc.render(doc))
+            .then((doc) => window.VtSaleDoc.render(doc, docTrail.length > 0))
             .catch((error) => {
                 body.innerHTML = `<div class="vt-alert">${escapeHtml(error.message)}</div>`;
             });
@@ -499,6 +572,13 @@
             // lớp modal chồng nhau và lớp dưới khoá cuộn trang khi lớp trên đóng.
             bootstrap.Modal.getInstance(el("vt-doc-modal"))?.hide();
             openRequest(Number(orderButton.dataset.vtOrder), orderButton.dataset.vtOrderName);
+            return;
+        }
+        if (event.target.closest("[data-vt-doc-back]")) {
+            const previous = docTrail.pop();
+            if (previous) {
+                openDocument(previous.kind, previous.id, true);
+            }
             return;
         }
         const doc = event.target.closest("[data-vt-doc]");
@@ -563,6 +643,10 @@
         el("vt-date").addEventListener("change", (event) => setDate(event.target.value));
         el("vt-today").addEventListener("click", () => setDate(todayString()));
         el("vt-request-send").addEventListener("click", sendRequest);
+        el("vt-doc-modal").addEventListener("hidden.bs.modal", () => {
+            docTrail.length = 0;
+            state.doc = null;
+        });
         el("vt-saler").addEventListener("change", (event) => {
             state.saler = event.target.value;
             localStorage.setItem(SALER_KEY, state.saler);

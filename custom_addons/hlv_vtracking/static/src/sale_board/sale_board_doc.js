@@ -143,14 +143,14 @@ window.VtSaleDoc = (function () {
                 </span>
                 <span class="vt-doc-title">
                     <span class="vt-doc-name">
-                        <span class="vt-num">${esc(doc.title)}</span>
+                        ${esc(doc.partner_name)}
                         <span class="vt-chip">${esc(doc.state_label)}</span>
                     </span>
                     <span class="vt-muted">
                         ${doc.sale_order_name ? `Đơn <button type="button" class="vt-doc"
                             data-vt-doc="order" data-vt-doc-id="${doc.sale_order_id}">
                             ${esc(doc.sale_order_name)}</button> · ` : ""}
-                        ${esc(doc.partner_name)}${doc.address ? " · giao " + esc(doc.address) : ""}
+                        giao ${esc(doc.address || "—")}
                         ${doc.commitment_date ? " · hẹn " + esc(stamp(doc.commitment_date)) : ""}
                     </span>
                 </span>
@@ -205,8 +205,11 @@ window.VtSaleDoc = (function () {
         return `
             <div class="vt-doc-head">
                 <span class="vt-doc-title">
-                    <span class="vt-doc-name"><span class="vt-num">${esc(doc.title)}</span></span>
-                    <span class="vt-muted">${esc(doc.partner_name)}</span>
+                    <span class="vt-doc-name">
+                        ${esc(doc.partner_name)}
+                        <span class="vt-chip">${esc(doc.state_label)}</span>
+                    </span>
+                    <span class="vt-muted">${esc(doc.address || "")}</span>
                 </span>
             </div>
             <div class="vt-facts">${facts}</div>
@@ -224,9 +227,14 @@ window.VtSaleDoc = (function () {
             <div class="vt-doc-others"><span class="vt-muted">Phiếu kho:</span>${pickings}</div>`;
     }
 
+    function backButton() {
+        return '<button type="button" class="vt-back" data-vt-doc-back="1">'
+            + "&#8592; Quay lại chứng từ trước</button>";
+    }
+
     // -------------------------------------------------------------- khung
 
-    function render(doc) {
+    function render(doc, canGoBack) {
         const body = document.getElementById("vt-doc-body");
         const footer = document.getElementById("vt-doc-foot");
         if (doc.error) {
@@ -235,7 +243,8 @@ window.VtSaleDoc = (function () {
             return;
         }
         document.getElementById("vt-doc-title").textContent = doc.title;
-        body.innerHTML = doc.kind === "picking" ? pickingHtml(doc) : orderHtml(doc);
+        body.innerHTML = (canGoBack ? backButton() : "")
+            + (doc.kind === "picking" ? pickingHtml(doc) : orderHtml(doc));
         const orderId = doc.kind === "picking" ? doc.sale_order_id : doc.id;
         const orderName = doc.kind === "picking" ? doc.sale_order_name : doc.title;
         footer.innerHTML = `

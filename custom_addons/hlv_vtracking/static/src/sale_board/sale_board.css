@@ -272,14 +272,6 @@ body {
     white-space: nowrap;
 }
 
-.vt-doc-links {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem;
-    margin-top: .75rem;
-}
-
 .vt-chip-soft {
     background: transparent;
     border: 1px solid var(--vt-line);

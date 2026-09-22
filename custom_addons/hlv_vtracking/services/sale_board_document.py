@@ -39,7 +39,10 @@ def order_detail(order):
         'address': order._vtracking_delivery_address(),
         'lines': [order_line_block(line) for line in order.order_line[:MAX_DETAIL_LINES]
                   if not line.display_type],
-        'pickings': [_picking_chip(picking) for picking in order.picking_ids],
+        # Chỉ phiếu XUẤT: phiếu lấy hàng và đóng gói là việc nội bộ của kho, người bán
+        # hàng nhìn vào chỉ thêm rối vì ba mã cho cùng một lần giao.
+        'pickings': [_picking_chip(picking) for picking in order.picking_ids
+                     if picking.picking_type_code == 'outgoing'],
     }
 
 

@@ -47,12 +47,6 @@
     font-size: .875rem;
 }
 
-.vt-detail-empty-mark {
-    font-size: 2rem;
-    line-height: 1;
-    color: #c9d2dd;
-}
-
 .vt-detail-meta {
     padding: .5rem .75rem;
     border-bottom: 1px solid var(--vt-line);
@@ -98,11 +92,6 @@
 
 .vt-row:hover {
     background: #fafbfc;
-}
-
-.vt-row-main {
-    flex: 1 1 auto;
-    min-width: 0;
 }
 
 .vt-row-title {
@@ -234,7 +223,6 @@
     }
 }
 
-
 /* ------------------------------------------------- chưa chọn chuyến: gợi ý + đội xe */
 
 .vt-detail-empty {
@@ -278,7 +266,6 @@
     line-height: 1.5;
 }
 
-
 /* ------------------------------------------------------------ hộp xem chứng từ */
 
 #vt-doc-modal .modal-content {
@@ -308,7 +295,18 @@
     display: flex;
     align-items: flex-start;
     gap: .7rem;
-    margin-bottom: .9rem;
+    margin-bottom: 1rem;
+}
+
+.vt-doc-head .vt-doc-name {
+    font-size: 15px;
+    line-height: 1.35;
+}
+
+/* Nút quay lại trong hộp chứng từ: nằm trên cùng thân hộp, cách phần nội dung một nhịp. */
+#vt-doc-body .vt-back {
+    display: inline-block;
+    margin-bottom: .6rem;
 }
 
 .vt-doc-mark {

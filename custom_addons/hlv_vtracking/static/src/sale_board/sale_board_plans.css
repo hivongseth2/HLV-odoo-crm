@@ -40,12 +40,6 @@
     opacity: .55;
 }
 
-.vt-strip-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .vt-strip-eta {
     color: var(--vt-muted);
     font-variant-numeric: tabular-nums;
@@ -239,7 +233,6 @@
     font-size: .8125rem;
 }
 
-
 /* ------------------------------------------------------ bảng đơn chưa xếp chuyến */
 
 .vt-table-wrap {
@@ -413,18 +406,8 @@
     font-weight: 600;
 }
 
-
-/* Dải điểm: tên khách ở trên, mã phiếu xuất (hoặc mã đơn khi chưa có phiếu) ở dưới — sale
-   đọc mã cho khách nghe, nên nó phải thấy được mà không cần mở chuyến ra. */
-.vt-strip-main {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    line-height: 1.25;
-}
-
 .vt-strip-doc {
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--vt-muted);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
@@ -436,7 +419,6 @@
 .vt-strip-item.is-mine .vt-strip-doc {
     color: var(--vt-mine-dark);
 }
-
 
 /* Nút quay lại của màn chi tiết chuyến. Đặt trên cùng cột trái, ngay chỗ mắt đang nhìn
    sau khi bấm "Xem chi tiết". */
@@ -464,4 +446,39 @@
 .vt-strip-item.is-clickable:hover {
     border-color: var(--vt-mine);
     background: var(--vt-mine-soft);
+}
+
+/* Dải điểm giờ chỉ còn một dòng (mã đơn) nên ô thấp lại và không cần chỗ cho hai hàng. */
+.vt-strip-item {
+    padding: .3rem .6rem;
+    max-width: none;
+}
+
+.vt-strip-doc {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.vt-strip-eta {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+}
+
+/* Nhãn tiến độ trên đầu thẻ: xám khi chưa giao điểm nào, xanh khi đã có điểm xong. */
+.vt-chip-done {
+    background: #E6EFE8;
+    color: #2C5B3D;
+    font-weight: 600;
+}
+
+/* Khoảng cách trong thẻ chuyến: dòng thông số sát tiêu đề hơn, dải điểm thoáng ra. */
+.vt-plan-meta {
+    padding: .1rem .75rem .5rem;
+}
+
+.vt-strip {
+    padding: 0 .75rem .7rem;
+    gap: .4rem;
 }
