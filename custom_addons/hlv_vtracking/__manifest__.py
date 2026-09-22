@@ -1,6 +1,6 @@
 {
     'name': 'V-Tracking',
-    'version': '18.0.1.3.0',
+    'version': '18.0.1.4.0',
     'summary': 'Theo dõi định vị đội xe qua vTracking Open API — bản đồ trong Odoo và API cho app ngoài',
     'description': """
 Bọc toàn bộ vTracking 2.0 Open API (bản 1.0.3) — đúng 2 endpoint nhà cung cấp có:
