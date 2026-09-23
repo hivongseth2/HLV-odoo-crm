@@ -329,6 +329,14 @@ async function startRecording() {
   hiddenAt = 0;
   statusText.classList.remove('rec-alert');
 
+  // Tắt qua tham số pack_scan.browser_recording khi agent phía server lo việc
+  // quay. Bắt buộc phải tắt nếu hai bên dùng chung một webcam USB.
+  if (typeof packBrowserRecording !== 'undefined' && !packBrowserRecording) {
+    statusText.textContent = 'Camera do agent phía server ghi (đã tắt quay bằng trình duyệt).';
+    console.info('[REC] browser recording disabled by config');
+    return;
+  }
+
   // Xin 1080p. 'ideal' không bao giờ làm getUserMedia thất bại — thiết bị chỉ có
   // 720p thì trả về 720p. Trước đây xin ideal 1280 nên kể cả khi OBS xuất 1080p,
   // trình duyệt vẫn thu nhỏ xuống 720p TRƯỚC khi nén, mất chi tiết ngay đầu vào.
