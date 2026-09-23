@@ -191,11 +191,19 @@ class PackViewController(http.Controller):
         ))
         is_repack = has_source_packages and not has_packed_lines
 
+        # Chặn đóng gói khi camera chết là mặc định: đóng gói không có video thì
+        # đằng nào cũng vô giá trị. Đặt tham số này về 'false' để chỉ cảnh báo,
+        # dùng khi một kho nào đó đang trục trặc OBS mà vẫn phải chạy hàng.
+        gate_param = request.env['ir.config_parameter'].sudo().get_param(
+            'pack_scan.camera_gate_blocking', 'true')
+        pack_cam_gate_blocking = str(gate_param).strip().lower() not in ('0', 'false', 'no', 'off')
+
         response = request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
             'origin_pick_name': origin_pick.name if origin_pick else '',
             'drive_connected': drive_connected,
+            'pack_cam_gate_blocking': pack_cam_gate_blocking,
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,

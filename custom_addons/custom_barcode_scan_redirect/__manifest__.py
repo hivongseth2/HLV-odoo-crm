@@ -7,6 +7,7 @@
     "summary": "Scan từng sản phẩm trong phiếu Pack bằng barcode + Partial Pack Management",
     "data": [
         "data/pack_video_stream_cron.xml",
+        "data/pack_video_audit_cron.xml",
         "views/pack_scan_template.xml",
         "views/menu.xml",
         "views/scan_ui_template.xml",
@@ -19,6 +20,7 @@
             "custom_barcode_scan_redirect/static/src/js/toast.js",
             "custom_barcode_scan_redirect/static/src/js/ui_utils.js",
             "custom_barcode_scan_redirect/static/src/js/server_sync.js",
+            "custom_barcode_scan_redirect/static/src/js/camera_health.js",
             "custom_barcode_scan_redirect/static/src/js/recording.js",
             "custom_barcode_scan_redirect/static/src/js/side_panel.js",
             "custom_barcode_scan_redirect/static/src/js/package_edit.js",
