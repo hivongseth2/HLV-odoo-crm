@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Treo dưới menu Tồn kho > Cấu hình. Dùng xmlid của stock vì đó là menu gốc
+       ổn định qua các bản Odoo. -->
+  <menuitem id="menu_hlv_pack_recorder_root"
+            name="Video đóng gói"
+            parent="stock.menu_stock_config_settings"
+            sequence="80"/>
+
+  <menuitem id="menu_hlv_pack_station"
+            name="Bàn đóng gói &amp; camera"
+            parent="menu_hlv_pack_recorder_root"
+            action="action_hlv_pack_station"
+            sequence="10"/>
+
+  <menuitem id="menu_hlv_pack_recording"
+            name="Nhật ký ghi hình"
+            parent="menu_hlv_pack_recorder_root"
+            action="action_hlv_pack_recording"
+            sequence="20"/>
+
+  <menuitem id="menu_hlv_pack_recording_failed"
+            name="Video hỏng / thiếu"
+            parent="menu_hlv_pack_recorder_root"
+            action="action_hlv_pack_recording_failed"
+            sequence="30"/>
+</odoo>

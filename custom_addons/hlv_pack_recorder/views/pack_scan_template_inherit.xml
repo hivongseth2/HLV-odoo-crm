@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Nối script của module này vào màn hình đóng gói. Template được kế thừa là
+       của chính nhà mình (custom_barcode_scan_redirect), không phải module core,
+       nên xmlid ổn định.
+
+       Trang đóng gói dùng web.layout nên KHÔNG nạp bundle web.assets_frontend —
+       bắt buộc phải khai thẻ script tường minh như các file khác ở đó. -->
+  <template id="pack_scan_template_recorder"
+            inherit_id="custom_barcode_scan_redirect.pack_scan_template">
+    <xpath expr="//script[@src='/custom_barcode_scan_redirect/static/src/js/scan_pack.js']"
+           position="after">
+      <script src="/hlv_pack_recorder/static/src/js/pack_recorder_hook.js"></script>
+    </xpath>
+  </template>
+</odoo>

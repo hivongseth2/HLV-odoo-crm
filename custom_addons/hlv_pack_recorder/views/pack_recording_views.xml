@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <record id="view_hlv_pack_recording_list" model="ir.ui.view">
+    <field name="name">hlv.pack.recording.list</field>
+    <field name="model">hlv.pack.recording</field>
+    <field name="arch" type="xml">
+      <list decoration-danger="state == 'failed'" decoration-muted="state == 'done'">
+        <field name="requested_at"/>
+        <field name="picking_id"/>
+        <field name="station_id"/>
+        <field name="camera_id"/>
+        <field name="state" widget="badge"
+               decoration-danger="state == 'failed'"
+               decoration-success="state == 'done'"/>
+        <field name="size_mb" string="MB" sum="Tổng MB"/>
+        <field name="error_note" optional="hide"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="view_hlv_pack_recording_search" model="ir.ui.view">
+    <field name="name">hlv.pack.recording.search</field>
+    <field name="model">hlv.pack.recording</field>
+    <field name="arch" type="xml">
+      <search>
+        <field name="picking_id"/>
+        <field name="station_id"/>
+        <field name="camera_id"/>
+        <filter name="failed" string="Hỏng" domain="[('state', '=', 'failed')]"/>
+        <filter name="in_progress" string="Đang chạy"
+                domain="[('state', 'in', ('pending', 'recording', 'stopping', 'uploading'))]"/>
+        <filter name="today" string="Hôm nay"
+                domain="[('requested_at', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+        <group expand="0" string="Nhóm theo">
+          <filter name="group_station" string="Bàn đóng gói" context="{'group_by': 'station_id'}"/>
+          <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+          <filter name="group_picking" string="Phiếu" context="{'group_by': 'picking_id'}"/>
+        </group>
+      </search>
+    </field>
+  </record>
+
+  <record id="action_hlv_pack_recording" model="ir.actions.act_window">
+    <field name="name">Video đóng gói</field>
+    <field name="res_model">hlv.pack.recording</field>
+    <field name="view_mode">list</field>
+    <field name="search_view_id" ref="view_hlv_pack_recording_search"/>
+  </record>
+
+  <record id="action_hlv_pack_recording_failed" model="ir.actions.act_window">
+    <field name="name">Video hỏng / thiếu</field>
+    <field name="res_model">hlv.pack.recording</field>
+    <field name="view_mode">list</field>
+    <field name="domain">[('state', '=', 'failed')]</field>
+    <field name="search_view_id" ref="view_hlv_pack_recording_search"/>
+  </record>
+
+</odoo>

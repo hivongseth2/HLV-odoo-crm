@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_pack_station_user,hlv.pack.station user,model_hlv_pack_station,stock.group_stock_user,1,0,0,0
+access_hlv_pack_station_manager,hlv.pack.station manager,model_hlv_pack_station,stock.group_stock_manager,1,1,1,1
+access_hlv_pack_camera_user,hlv.pack.camera user,model_hlv_pack_camera,stock.group_stock_user,1,0,0,0
+access_hlv_pack_camera_manager,hlv.pack.camera manager,model_hlv_pack_camera,stock.group_stock_manager,1,1,1,1
+access_hlv_pack_recording_user,hlv.pack.recording user,model_hlv_pack_recording,stock.group_stock_user,1,0,0,0
+access_hlv_pack_recording_manager,hlv.pack.recording manager,model_hlv_pack_recording,stock.group_stock_manager,1,1,1,1
