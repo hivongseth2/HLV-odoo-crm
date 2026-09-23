@@ -202,6 +202,7 @@ FEED_ISSUE_LABELS = {
     'black': 'khung hình đen (nguồn VLC trong OBS đã chết)',
     'static': 'ảnh tĩnh (OBS ở màn hình chờ hoặc nguồn VLC chưa chạy)',
     'nocam': 'không mở được camera (OBS chưa bật Virtual Camera)',
+    'hidden': 'màn hình đóng gói bị chuyển sang tab khác nên khung hình đứng lại',
 }
 
 
@@ -226,10 +227,15 @@ def _feed_issue_note(feed_issue):
     except (TypeError, ValueError):
         at_sec = 0
     when = 'ngay từ đầu' if at_sec < 5 else 'từ phút %d:%02d' % (at_sec // 60, at_sec % 60)
+    # Tín hiệu có về lại thì phần sau của video vẫn xem được — nói rõ để người
+    # xử lý khiếu nại biết có đáng mở file ra hay không.
+    tail = (' Tín hiệu có về lại sau đó, chỉ đoạn này là mất.'
+            if feed_issue.get('recovered')
+            else ' Nhiều khả năng hỏng tới hết video.')
     return Markup(
         '<br/>⚠️ <b>CẢNH BÁO: video này KHÔNG dùng làm bằng chứng được.</b><br/>'
-        'Phát hiện {label} {when}. Kiểm tra OBS và nguồn VLC ở máy đóng gói.'
-    ).format(label=label, when=when)
+        'Phát hiện {label} {when}.{tail} Kiểm tra OBS và nguồn VLC ở máy đóng gói.'
+    ).format(label=label, when=when, tail=tail)
 
 
 def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None):
