@@ -65,6 +65,15 @@ class PackRecorderUi(http.Controller):
             'cameras': recordings.mapped('camera_id.name'),
         }
 
+    @http.route('/pack_recorder/heartbeat', type='json', auth='user', methods=['POST'])
+    def heartbeat(self, **kw):
+        """Màn hình đóng gói báo nó vẫn đang mở, 10 giây một lần."""
+        picking, _station, err = _resolve(kw, need_station=False)
+        if err:
+            return err
+        alive = request.env['hlv.pack.recording'].sudo().touch_heartbeat(picking)
+        return {'ok': True, 'alive': alive}
+
     @http.route('/pack_recorder/stop', type='json', auth='user', methods=['POST'])
     def stop(self, **kw):
         """Màn hình đóng gói báo: phiếu xong, đóng file lại."""
