@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 """Bàn đóng gói: một máy tính, một bộ camera, một agent ghi hình."""
 import secrets
+from datetime import timedelta
 
 from odoo import api, fields, models
+
+# Agent poll 2 giây một lần. Quá ngưỡng này không thấy tin tức thì coi như nó
+# không chạy — để rộng gấp nhiều lần chu kỳ poll vì mạng chớp là chuyện thường.
+AGENT_ALIVE_WINDOW_SECONDS = 120
 
 
 class HlvPackStation(models.Model):
@@ -48,6 +53,18 @@ class HlvPackStation(models.Model):
     def _compute_camera_count(self):
         for station in self:
             station.camera_count = len(station.camera_ids)
+
+    def is_agent_alive(self):
+        """Agent của bàn này có đang chạy không.
+
+        Trả về True nếu nó gọi vào trong vòng AGENT_ALIVE_WINDOW_SECONDS giây.
+        Biên: chưa bao giờ gọi (agent_last_seen rỗng) -> False.
+        """
+        self.ensure_one()
+        if not self.agent_last_seen:
+            return False
+        return self.agent_last_seen >= fields.Datetime.now() - timedelta(
+            seconds=AGENT_ALIVE_WINDOW_SECONDS)
 
     def action_reset_token(self):
         """Sinh token mới. Agent đang chạy sẽ bị từ chối cho tới khi cập nhật token."""

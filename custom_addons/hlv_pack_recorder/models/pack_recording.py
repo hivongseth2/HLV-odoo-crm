@@ -83,6 +83,16 @@ class HlvPackRecording(models.Model):
             _logger.warning("PACK_REC bàn %s chưa khai camera nào", station.name)
             return self.browse()
 
+        # Agent không chạy thì đừng tạo bản ghi: chúng chỉ để đó rồi bị đánh hỏng,
+        # kéo theo ghi chú cảnh báo lên từng phiếu. Trong lúc triển khai dần từng
+        # bàn, việc đó chỉ tạo tiếng ồn ở những bàn chưa tới lượt cài agent.
+        # Luồng quay bằng trình duyệt vẫn chạy nguyên, nên không mất bằng chứng.
+        if not station.is_agent_alive():
+            _logger.warning(
+                "PACK_REC bàn %s: agent không phản hồi (lần cuối %s), bỏ qua ghi hình",
+                station.name, station.agent_last_seen or 'chưa bao giờ')
+            return self.browse()
+
         now = fields.Datetime.now()
 
         # Một bàn chỉ đóng một phiếu tại một thời điểm. Nhân viên bỏ phiếu cũ
