@@ -150,11 +150,22 @@ async function _collectSignatures(sourceVideo, count, intervalMs) {
   return out;
 }
 
+/** Cờ server truyền xuống: chặn hẳn hay chỉ cảnh báo khi camera hỏng. */
+function _gateIsBlocking() {
+  return (typeof packCamGateBlocking !== 'undefined') ? !!packCamGateBlocking : true;
+}
+
 function _setPackingLocked(locked) {
+  // Máy quét barcode gõ vào ô nào đang focus, nên phải vô hiệu hoá mọi ô nhập
+  // được — khoá mỗi ô quét thì nhân viên vẫn gõ tay vào cột số lượng.
   const input = document.getElementById('pack_barcode_input');
   if (input) input.disabled = locked;
-  const btn = document.getElementById('complete_pack_btn');
-  if (btn) btn.disabled = locked;
+  ['complete_pack_btn', 'btnPartialPack'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = locked;
+  });
+  document.querySelectorAll('#product_list .done-input')
+    .forEach(el => { el.disabled = locked; });
 }
 
 /** Chặn màn hình đóng gói lại cho tới khi người dùng sửa OBS và bấm Thử lại. */
@@ -238,9 +249,20 @@ async function startRecording() {
     try { mediaStream = await navigator.mediaDevices.getUserMedia(constraints); }
     catch { mediaStream = await navigator.mediaDevices.getUserMedia({ video: constraints.video, audio: false }); }
   } catch (e) {
-    statusText.textContent = 'Không thể mở camera.';
+    // Không mở được thiết bị nào: OBS chưa bật Virtual Camera, hoặc camera đang
+    // bị ứng dụng khác chiếm, hoặc trang không chạy trên HTTPS. Trước đây chỗ
+    // này chỉ ghi một dòng chữ xám rồi thoát — nhân viên vẫn quét tiếp và đóng
+    // gói xong mà không có video nào.
     console.error('[REC] getUserMedia failed:', e);
-    return;
+    if (_gateIsBlocking()) {
+      _blockPacking('nocam', statusText);
+    } else {
+      statusText.textContent = CameraHealth.describe('nocam');
+      statusText.classList.add('rec-alert');
+      toast.error('⚠ ' + CameraHealth.describe('nocam')
+        + ' Phiếu này sẽ không có video.', { ms: 8000 });
+    }
+    return;  // không có luồng thì không quay được gì
   }
 
   const vTrack = mediaStream.getVideoTracks()[0];
@@ -264,8 +286,7 @@ async function startRecording() {
   );
   if (!gate.alive) {
     console.warn('[REC] camera feed dead at gate:', gate);
-    const blocking = (typeof packCamGateBlocking !== 'undefined') ? !!packCamGateBlocking : true;
-    if (blocking) {
+    if (_gateIsBlocking()) {
       _blockPacking(gate.reason, statusText);
       return;  // khong quay, khong mo phien upload
     }

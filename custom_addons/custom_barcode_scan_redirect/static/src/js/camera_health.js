@@ -144,6 +144,9 @@ var CameraHealth = (() => {
     if (reason === 'static') {
       return 'Camera đứng hình — OBS đang ở màn hình chờ hoặc nguồn VLC chưa chạy.';
     }
+    if (reason === 'nocam') {
+      return 'Không mở được camera — OBS chưa bật Virtual Camera, hoặc thiết bị đang bị ứng dụng khác chiếm.';
+    }
     return 'Camera không có tín hiệu hợp lệ.';
   }
 

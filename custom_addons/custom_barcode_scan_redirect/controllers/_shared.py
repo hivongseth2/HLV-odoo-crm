@@ -201,6 +201,7 @@ def _notify_bg_upload_failed(picking, filepath, reason):
 FEED_ISSUE_LABELS = {
     'black': 'khung hình đen (nguồn VLC trong OBS đã chết)',
     'static': 'ảnh tĩnh (OBS ở màn hình chờ hoặc nguồn VLC chưa chạy)',
+    'nocam': 'không mở được camera (OBS chưa bật Virtual Camera)',
 }
 
 
