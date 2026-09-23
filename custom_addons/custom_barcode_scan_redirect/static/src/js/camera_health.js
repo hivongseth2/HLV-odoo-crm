@@ -147,6 +147,9 @@ var CameraHealth = (() => {
     if (reason === 'nocam') {
       return 'Không mở được camera — OBS chưa bật Virtual Camera, hoặc thiết bị đang bị ứng dụng khác chiếm.';
     }
+    if (reason === 'hidden') {
+      return 'Màn hình đóng gói bị chuyển sang tab khác lúc đang quay — đoạn đó video gần như đứng hình.';
+    }
     return 'Camera không có tín hiệu hợp lệ.';
   }
 

@@ -234,6 +234,7 @@
           const originPickName = "<t t-esc='origin_pick_name'/>";
           const driveConnected = <t t-esc="1 if drive_connected else 0"/>;
           const packCamGateBlocking = <t t-esc="1 if pack_cam_gate_blocking else 0"/>;
+          const packVideoBitrate = <t t-esc="pack_video_bitrate"/>;
         </script>
         <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 

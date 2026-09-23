@@ -91,7 +91,15 @@ var chunkBusy = Promise.resolve();
 
 const MAX_DURATION_MS = 25 * 60 * 1000;
 var stopTimer = null, countdownTimer = null, endAt = 0;
-var overlayCanvas = null, overlayCtx = null, drawRAF = 0;
+var overlayCanvas = null, overlayCtx = null, drawTimer = null;
+var hiddenAt = 0;                 // moc thoi gian tab bi chuyen sang nen
+
+// Canvas phải được vẽ đều tay thì captureStream mới có khung hình mới. Dùng
+// requestAnimationFrame thì Chrome DỪNG HẲN khi tab chạy nền, video ghi ra
+// đóng băng dù camera vẫn tốt. setInterval bị Chrome giảm tần suất xuống tối
+// thiểu 1 lần/giây ở tab nền, chậm nhưng không bao giờ đứng hẳn.
+const DRAW_INTERVAL_MS = Math.round(1000 / 24);
+const HIDDEN_IGNORE_SEC = 3;      // chuyen tab thoang qua thi bo qua
 
 function updateCountdownLabel() {
   const el = document.getElementById('recCountdown');
@@ -114,7 +122,8 @@ const WATCH_WINDOW = 4;           // 4 mẫu x 10s = phải chết liên tục 3
 
 var probeCanvas = null, probeCtx = null;
 var watchTimer = null, watchSamples = [];
-var feedIssue = null;             // {reason, atSec} - lan dau phat hien mat tin hieu
+var feedDead = false;             // trang thai HIEN TAI cua luong camera
+var feedIssue = null;             // co DINH {reason, atSec, recovered} de ghi vao chatter
 
 /**
  * Lấy chữ ký khung hình hiện tại của luồng camera.
@@ -212,19 +221,80 @@ function _startFeedWatchdog(sourceVideo, statusText) {
     if (watchSamples.length < WATCH_WINDOW) return;
 
     const verdict = CameraHealth.assessFeed(watchSamples);
-    if (verdict.alive || feedIssue) return;  // da bao mot lan roi thi thoi
 
-    const startedAt = endAt - MAX_DURATION_MS;
-    feedIssue = { reason: verdict.reason, atSec: Math.max(0, Math.round((Date.now() - startedAt) / 1000)) };
-    console.warn('[REC] camera feed died mid-recording:', feedIssue, verdict);
+    if (!verdict.alive) {
+      if (feedDead) return;  // đang mất tín hiệu, đã báo rồi thì thôi
+      feedDead = true;
 
-    // Cố ý KHÔNG dừng phiên: dừng giữa chừng là mất luôn đoạn đã quay được. Giữ
-    // phần đầu cộng một ghi chú nói rõ mất tín hiệu từ phút nào thì có ích hơn.
-    statusText.textContent = '⚠ MẤT TÍN HIỆU CAMERA — vẫn đang ghi';
-    statusText.classList.add('rec-alert');
-    toast.error('⚠ ' + CameraHealth.describe(verdict.reason) + ' Kiểm tra OBS ngay.', { ms: 8000 });
+      // Cờ dính: video đã có một đoạn hỏng thì mãi mãi là sự thật về file đó,
+      // dù sau này tín hiệu có về. Chỉ ghi lần mất ĐẦU TIÊN.
+      if (!feedIssue) {
+        const startedAt = endAt - MAX_DURATION_MS;
+        feedIssue = {
+          reason: verdict.reason,
+          atSec: Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
+        };
+      }
+      console.warn('[REC] camera feed died mid-recording:', feedIssue, verdict);
+
+      // Cố ý KHÔNG dừng phiên: dừng giữa chừng là mất luôn đoạn đã quay được. Giữ
+      // phần đầu cộng một ghi chú nói rõ mất tín hiệu từ phút nào thì có ích hơn.
+      statusText.textContent = '⚠ MẤT TÍN HIỆU CAMERA — vẫn đang ghi';
+      statusText.classList.add('rec-alert');
+      toast.error('⚠ ' + CameraHealth.describe(verdict.reason) + ' Kiểm tra OBS ngay.', { ms: 8000 });
+      return;
+    }
+
+    if (!feedDead) return;  // vẫn bình thường, không có gì phải cập nhật
+
+    // Tín hiệu về lại: banner phải theo trạng thái hiện tại, không để đỏ mãi.
+    // Nhưng feedIssue thì giữ nguyên — đoạn hỏng vẫn nằm trong file đã quay.
+    feedDead = false;
+    if (feedIssue) feedIssue.recovered = true;
+    console.info('[REC] camera feed recovered');
+    statusText.textContent = 'Đang ghi hình... (đã có đoạn mất tín hiệu)';
+    statusText.classList.remove('rec-alert');
+    toast.success('Camera đã có tín hiệu trở lại.', { ms: 4000 });
   }, WATCH_INTERVAL_MS);
 }
+
+/**
+ * Tab chạy nền vẫn vẽ được nhờ setInterval, nhưng Chrome bóp xuống ~1 khung/giây
+ * nên đoạn đó gần như đứng hình. Không sửa được bằng code — chỉ có thể nói cho
+ * người đóng gói biết và ghi lại vào chatter để sau này không tưởng nhầm là
+ * video tốt.
+ */
+function _onVisibilityChange() {
+  if (!isRecording) return;
+
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    return;
+  }
+  if (!hiddenAt) return;
+
+  const awaySec = Math.round((Date.now() - hiddenAt) / 1000);
+  hiddenAt = 0;
+  if (awaySec < HIDDEN_IGNORE_SEC) return;
+
+  const statusText = document.getElementById('recText');
+  if (!feedIssue) {
+    const startedAt = endAt - MAX_DURATION_MS;
+    feedIssue = {
+      reason: 'hidden',
+      atSec: Math.max(0, Math.round((Date.now() - startedAt) / 1000) - awaySec),
+    };
+  }
+  console.warn('[REC] tab hidden while recording for %ds', awaySec);
+  if (statusText) {
+    statusText.textContent = `Đang ghi hình... (đã rời tab ${awaySec}s, đoạn đó đứng hình)`;
+    statusText.classList.remove('rec-alert');
+  }
+  toast.warn(`⚠ Vừa rời màn hình đóng gói ${awaySec} giây — đoạn video đó gần như đứng hình. `
+    + 'Đừng chuyển tab trong lúc đang quay.', { ms: 8000 });
+}
+
+document.addEventListener('visibilitychange', _onVisibilityChange);
 
 function _stopFeedWatchdog() {
   clearInterval(watchTimer);
@@ -239,6 +309,8 @@ async function startRecording() {
   if (!statusText || !preview) return;
 
   feedIssue = null;
+  feedDead = false;
+  hiddenAt = 0;
   statusText.classList.remove('rec-alert');
 
   const constraints = {
@@ -268,6 +340,10 @@ async function startRecording() {
   const vTrack = mediaStream.getVideoTracks()[0];
   const s = vTrack.getSettings ? vTrack.getSettings() : {};
   const W = s.width || 1280, H = s.height || 720;
+  // Ghi ra console để đối chiếu với độ phân giải OBS đang xuất: nếu OBS ra 1080p
+  // mà đây báo 720p thì trình duyệt đã thu nhỏ trước khi nén, mất chi tiết ngay
+  // từ đầu vào chứ không phải do bitrate.
+  console.info('[REC] source %dx%d @%sfps', W, H, s.frameRate || '?');
 
   overlayCanvas = document.createElement('canvas');
   overlayCanvas.width = W; overlayCanvas.height = H;
@@ -307,17 +383,13 @@ async function startRecording() {
     overlayCtx.fillStyle = 'rgba(0,0,0,0.5)';
     overlayCtx.fillRect(0, H - 52, W, 52);
 
-    const left = Math.max(0, endAt - Date.now());
-    const mm = String(Math.floor(left / 60000)).padStart(2, '0');
-    const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
-
     overlayCtx.fillStyle = '#fff';
     overlayCtx.font = 'bold 24px Segoe UI, Arial';
     overlayCtx.fillText(`Time: ${new Date().toLocaleString()} `, 16, H - 16);
-
-    drawRAF = requestAnimationFrame(drawOverlay);
   }
+  clearInterval(drawTimer);
   drawOverlay();
+  drawTimer = setInterval(drawOverlay, DRAW_INTERVAL_MS);
 
   const canvasStream = overlayCanvas.captureStream(24);
   const tracks = [canvasStream.getVideoTracks()[0]];
@@ -334,7 +406,13 @@ async function startRecording() {
   if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
   else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
   else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
-  const mrOpts = mimeType ? { mimeType, videoBitsPerSecond: 1_200_000, audioBitsPerSecond: 64_000 } : {};
+  // 1.2 Mbps cho 720p24 là quá thấp với cảnh kho đầy chi tiết và chuyển động —
+  // đó là lý do chính khiến video mờ hơn hẳn luồng gốc. Cho chỉnh theo kho vì
+  // bitrate đổi thẳng thành dung lượng Drive.
+  const bitrate = (typeof packVideoBitrate !== 'undefined' && packVideoBitrate > 0)
+    ? packVideoBitrate : 2_500_000;
+  const mrOpts = mimeType ? { mimeType, videoBitsPerSecond: bitrate, audioBitsPerSecond: 64_000 } : {};
+  console.info('[REC] codec=%s bitrate=%d', mimeType || 'default', bitrate);
 
   mediaRecorder = new MediaRecorder(mixedStream, mrOpts);
   mediaRecorder.ondataavailable = (e) => {
@@ -362,8 +440,8 @@ async function startRecording() {
     statusText.textContent = 'Đã gửi video lên server để xử lý.';
     statusDot && statusDot.classList.remove('on');
 
-    if (drawRAF) cancelAnimationFrame(drawRAF);
-    drawRAF = 0; overlayCtx = null; overlayCanvas = null;
+    clearInterval(drawTimer);
+    drawTimer = null; overlayCtx = null; overlayCanvas = null;
 
     if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
 
