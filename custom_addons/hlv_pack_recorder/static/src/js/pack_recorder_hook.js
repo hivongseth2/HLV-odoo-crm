@@ -10,6 +10,8 @@
  */
 (() => {
   const STATION_STORAGE_KEY = 'hlvPackStationKey';
+  const HEARTBEAT_MS = 10000;
+  let heartbeatTimer = null;
 
   function stationKey() {
     try {
@@ -81,16 +83,16 @@
     document.getElementById('complete_pack_btn')
       ?.addEventListener('click', stopAgentRecording, { capture: true });
 
-    // Đóng tab / bấm Back giữa chừng: sendBeacon vẫn đi được khi trang đang unload.
-    window.addEventListener('beforeunload', () => {
+    // CỐ Ý không dừng ở beforeunload: F5 cũng kích hoạt sự kiện đó, mà F5 giữa
+    // chừng thì phải quay TIẾP chứ không phải cắt video của một phiếu thành hai
+    // file. Thay vào đó trang báo còn sống đều đặn; im lặng quá lâu thì server
+    // tự đóng sổ. Đóng tab, bấm Back, máy treo — cùng một cơ chế lo hết.
+    heartbeatTimer = setInterval(() => {
       if (!stationKey()) return;
-      const payload = JSON.stringify({
-        jsonrpc: '2.0', method: 'call', params: { picking_id: currentPickingId() },
-      });
-      try {
-        navigator.sendBeacon('/pack_recorder/stop',
-          new Blob([payload], { type: 'application/json' }));
-      } catch { }
-    });
+      callJson('/pack_recorder/heartbeat', { picking_id: currentPickingId() })
+        .catch(() => { });  // mạng chớp một nhịp không sao, ngưỡng để rộng rồi
+    }, HEARTBEAT_MS);
+
+    window.addEventListener('pagehide', () => clearInterval(heartbeatTimer));
   });
 })();

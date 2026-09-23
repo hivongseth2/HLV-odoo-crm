@@ -16,6 +16,12 @@ STALE_AFTER_MINUTES = 20
 # Trần an toàn cho ffmpeg, phòng khi lệnh stop không bao giờ tới được agent.
 DEFAULT_MAX_SECONDS = 30 * 60
 
+# Màn hình đóng gói báo còn sống mỗi 10 giây. Quá ngưỡng này không thấy tin tức
+# nghĩa là nhân viên đã đóng tab / bấm Back mà không bấm Hoàn tất. Để rộng hơn
+# chu kỳ báo vài lần, vì F5 hay mạng chớp cũng tạo ra khoảng lặng ngắn — dừng
+# vội là cắt đôi video của một phiếu đang đóng dở.
+HEARTBEAT_TIMEOUT_SECONDS = 60
+
 
 class HlvPackRecording(models.Model):
     _name = 'hlv.pack.recording'
@@ -48,6 +54,10 @@ class HlvPackRecording(models.Model):
     stopped_at = fields.Datetime(readonly=True)
     max_seconds = fields.Integer(default=DEFAULT_MAX_SECONDS, readonly=True)
 
+    last_heartbeat = fields.Datetime(
+        readonly=True,
+        help="Lần cuối màn hình đóng gói báo còn mở. Dùng để biết nhân viên đã bỏ đi hay chưa.",
+    )
     drive_link = fields.Char(readonly=True)
     size_mb = fields.Float(readonly=True, digits=(10, 1))
     error_note = fields.Text(readonly=True)
@@ -73,17 +83,32 @@ class HlvPackRecording(models.Model):
             _logger.warning("PACK_REC bàn %s chưa khai camera nào", station.name)
             return self.browse()
 
-        # Mở lại cùng một phiếu (F5, quay lại giữa chừng) thì dùng tiếp phiên
-        # đang chạy thay vì đẻ thêm file trùng.
+        now = fields.Datetime.now()
+
+        # Một bàn chỉ đóng một phiếu tại một thời điểm. Nhân viên bỏ phiếu cũ
+        # giữa chừng để mở phiếu khác thì đóng sổ phiếu cũ ngay, đừng để ffmpeg
+        # của nó chạy tiếp tới hết trần 30 phút.
+        others = self.search([
+            ('station_id', '=', station.id),
+            ('picking_id', '!=', picking.id),
+            ('state', 'in', ('pending', 'recording')),
+        ])
+        if others:
+            for picking_left in others.mapped('picking_id'):
+                self.stop_for_picking(picking_left)
+
+        # Mở lại cùng một phiếu (F5, bấm Back rồi vào lại) thì dùng tiếp phiên
+        # đang chạy thay vì đẻ thêm file trùng cho cùng một đơn.
         running = self.search([
             ('picking_id', '=', picking.id),
             ('state', 'in', ('pending', 'recording')),
         ])
         if running:
+            running.write({'last_heartbeat': now})
             return running
 
         return self.create([
-            {'picking_id': picking.id, 'camera_id': camera.id}
+            {'picking_id': picking.id, 'camera_id': camera.id, 'last_heartbeat': now}
             for camera in cameras
         ])
 
@@ -116,6 +141,44 @@ class HlvPackRecording(models.Model):
     # ------------------------------------------------------------------
     # Agent gọi vào
     # ------------------------------------------------------------------
+    @api.model
+    def touch_heartbeat(self, picking):
+        """Màn hình đóng gói báo nó vẫn đang mở.
+
+        Trả về số bản ghi được cập nhật; 0 nghĩa là phiếu này không có bản ghi
+        nào đang chạy (đã xong, hoặc bàn chưa khai camera).
+        """
+        if not picking:
+            return 0
+        running = self.search([
+            ('picking_id', '=', picking.id),
+            ('state', 'in', ('pending', 'recording')),
+        ])
+        running.write({'last_heartbeat': fields.Datetime.now()})
+        return len(running)
+
+    @api.model
+    def reconcile_abandoned(self, station):
+        """Đóng sổ những phiếu mà màn hình đóng gói đã biến mất.
+
+        Nhân viên đóng tab, bấm Back, hoặc máy treo giữa chừng thì không có ai
+        gửi lệnh dừng. Không dùng beforeunload của trình duyệt để làm việc này:
+        F5 cũng kích hoạt beforeunload, mà F5 giữa chừng thì phải quay TIẾP chứ
+        không phải cắt đôi video thành hai file.
+
+        Trả về recordset vừa bị đóng sổ.
+        """
+        deadline = fields.Datetime.now() - timedelta(seconds=HEARTBEAT_TIMEOUT_SECONDS)
+        abandoned = self.search([
+            ('station_id', '=', station.id),
+            ('state', 'in', ('pending', 'recording')),
+            ('last_heartbeat', '<', deadline),
+        ])
+        for picking in abandoned.mapped('picking_id'):
+            _logger.info("PACK_REC đóng sổ %s: màn hình đóng gói đã rời đi", picking.name)
+            self.stop_for_picking(picking)
+        return abandoned
+
     def mark_started(self):
         self.filtered(lambda r: r.state == 'pending').write({
             'state': 'recording',

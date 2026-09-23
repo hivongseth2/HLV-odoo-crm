@@ -67,6 +67,11 @@ class PackAgentApi(http.Controller):
         Recording = request.env['hlv.pack.recording'].sudo()
         active_ids = set(int(i) for i in (kw.get('active_ids') or []) if str(i).isdigit())
 
+        # Bám nhờ nhịp poll 2 giây của agent để phát hiện màn hình đóng gói đã
+        # biến mất — nhanh hơn nhiều so với đợi cron chạy mỗi phút, mà không tốn
+        # thêm request nào.
+        Recording.reconcile_abandoned(station)
+
         # Lệnh dừng trước: nếu một phiếu vừa xong, ưu tiên đóng file lại.
         to_stop = Recording.search([
             ('station_id', '=', station.id), ('state', '=', 'stopping'),

@@ -14,6 +14,8 @@
                decoration-danger="state == 'failed'"
                decoration-success="state == 'done'"/>
         <field name="size_mb" string="MB" sum="Tổng MB"/>
+        <field name="last_heartbeat" string="Màn hình báo lần cuối" optional="hide"/>
+        <field name="started_at" optional="hide"/>
         <field name="error_note" optional="hide"/>
       </list>
     </field>
