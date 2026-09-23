@@ -316,8 +316,11 @@ async function startRecording() {
   hiddenAt = 0;
   statusText.classList.remove('rec-alert');
 
+  // Xin 1080p. 'ideal' không bao giờ làm getUserMedia thất bại — thiết bị chỉ có
+  // 720p thì trả về 720p. Trước đây xin ideal 1280 nên kể cả khi OBS xuất 1080p,
+  // trình duyệt vẫn thu nhỏ xuống 720p TRƯỚC khi nén, mất chi tiết ngay đầu vào.
   const constraints = {
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 24 } },
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 24, max: 24 } },
     audio: { echoCancellation: true, noiseSuppression: true }
   };
   try {
@@ -343,10 +346,17 @@ async function startRecording() {
   const vTrack = mediaStream.getVideoTracks()[0];
   const s = vTrack.getSettings ? vTrack.getSettings() : {};
   const W = s.width || 1280, H = s.height || 720;
-  // Ghi ra console để đối chiếu với độ phân giải OBS đang xuất: nếu OBS ra 1080p
-  // mà đây báo 720p thì trình duyệt đã thu nhỏ trước khi nén, mất chi tiết ngay
-  // từ đầu vào chứ không phải do bitrate.
   console.info('[REC] source %dx%d @%sfps', W, H, s.frameRate || '?');
+  // Capabilities cho biết THIẾT BỊ xuất ra tối đa bao nhiêu. Nếu max ở đây cũng
+  // chỉ 1280x720 thì trần nằm ngoài trình duyệt — ở Output Resolution của OBS
+  // hoặc ở luồng VLC đang kéo substream — sửa phía này không ăn thua.
+  try {
+    const cap = vTrack.getCapabilities ? vTrack.getCapabilities() : {};
+    console.info('[REC] device max %sx%s',
+      (cap.width && cap.width.max) || '?', (cap.height && cap.height.max) || '?');
+  } catch (e) {
+    console.info('[REC] device capabilities không đọc được');
+  }
 
   overlayCanvas = document.createElement('canvas');
   overlayCanvas.width = W; overlayCanvas.height = H;
@@ -410,10 +420,12 @@ async function startRecording() {
   else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
   else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
   // 1.2 Mbps cho 720p24 là quá thấp với cảnh kho đầy chi tiết và chuyển động —
-  // đó là lý do chính khiến video mờ hơn hẳn luồng gốc. Cho chỉnh theo kho vì
-  // bitrate đổi thẳng thành dung lượng Drive.
+  // đó là lý do chính khiến video mờ hơn hẳn luồng gốc. Nâng độ phân giải mà
+  // không nâng bitrate thì còn mờ hơn, nên mặc định bám theo khung hình thật sự
+  // nhận được. Đặt pack_scan.video_bitrate > 0 để ép một giá trị cố định.
+  const autoBitrate = H >= 1080 ? 4_000_000 : 2_500_000;
   const bitrate = (typeof packVideoBitrate !== 'undefined' && packVideoBitrate > 0)
-    ? packVideoBitrate : 2_500_000;
+    ? packVideoBitrate : autoBitrate;
   const mrOpts = mimeType ? { mimeType, videoBitsPerSecond: bitrate, audioBitsPerSecond: 64_000 } : {};
   console.info('[REC] codec=%s bitrate=%d', mimeType || 'default', bitrate);
 
