@@ -16,6 +16,7 @@ Phụ thuộc:  requests, PyYAML, và ffmpeg có trong PATH.
 import argparse
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -329,20 +330,98 @@ class Agent:
         self.running = False
 
 
-def _list_dshow_devices(ffmpeg_bin):
-    """In danh sách webcam USB mà Windows đang thấy.
+def _run_ffmpeg_text(ffmpeg_bin, args):
+    """Chạy ffmpeg và trả stderr dưới dạng text.
 
-    ffmpeg trả về mã lỗi 1 cho lệnh này kể cả khi thành công (nó coi 'dummy' là
-    input hỏng), nên phải đọc stderr chứ đừng nhìn mã thoát.
+    Các lệnh liệt kê thiết bị đều thoát với mã lỗi khác 0 (ffmpeg coi 'dummy' là
+    input hỏng) nên phải đọc stderr, đừng nhìn mã thoát.
     """
     proc = subprocess.run(
-        [ffmpeg_bin, '-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'],
+        [ffmpeg_bin, '-hide_banner'] + args,
         capture_output=True, text=True, errors='replace',
     )
-    output = proc.stderr or ''
-    print("Thiết bị DirectShow Windows đang thấy:")
-    print(output)
-    print("Chép đúng tên trong dấu nháy vào mục 'device' của camera type: usb.")
+    return proc.stderr or ''
+
+
+def parse_video_devices(listing):
+    """Lọc tên webcam từ output -list_devices.
+
+    listing: stderr thô của ffmpeg.
+    Trả về: list tên thiết bị video, bỏ thiết bị audio và bỏ dòng
+        "Alternative name". Biên: không có webcam nào -> list rỗng.
+    """
+    names = []
+    for line in listing.splitlines():
+        if 'Alternative name' in line:
+            continue
+        match = re.search(r'"([^"]+)"\s*\(video\)', line)
+        if match:
+            names.append(match.group(1))
+    return names
+
+
+def parse_video_modes(listing):
+    """Lọc các chế độ hình từ output -list_options.
+
+    Trả về: list (size, [fps...]) đã gộp trùng, sắp giảm dần theo số pixel.
+        ffmpeg in mỗi độ phân giải nhiều lần cho từng pixel_format, và ghi thành
+        cặp min/max fps — gộp hết lại cho gọn.
+        Biên: không đọc được chế độ nào -> list rỗng.
+    """
+    modes = {}
+    pattern = re.compile(r'min s=(\d+x\d+) fps=([\d.]+) max s=(\d+x\d+) fps=([\d.]+)')
+    for line in listing.splitlines():
+        m = pattern.search(line)
+        if not m:
+            continue
+        for size, fps in ((m.group(1), m.group(2)), (m.group(3), m.group(4))):
+            modes.setdefault(size, set()).add(int(float(fps)))
+
+    def pixels(size):
+        w, h = size.split('x')
+        return int(w) * int(h)
+
+    return [(size, sorted(fps_set))
+            for size, fps_set in sorted(modes.items(), key=lambda kv: -pixels(kv[0]))]
+
+
+def _list_dshow_devices(ffmpeg_bin):
+    """In webcam Windows đang thấy kèm chế độ hỗ trợ và mẫu YAML điền sẵn."""
+    listing = _run_ffmpeg_text(
+        ffmpeg_bin, ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'])
+    devices = parse_video_devices(listing)
+    if not devices:
+        print("Không thấy webcam nào. Nếu camera của bàn này là camera IP thì")
+        print("không dùng lệnh này — khai thẳng URL RTSP vào agent.yaml.")
+        return 1
+
+    for device in devices:
+        print()
+        print('=' * 68)
+        print('Webcam: %s' % device)
+        modes = parse_video_modes(_run_ffmpeg_text(
+            ffmpeg_bin, ['-f', 'dshow', '-list_options', 'true', '-i', 'video=%s' % device]))
+        if modes:
+            print('  Chế độ hỗ trợ (chỉ được chọn trong danh sách này):')
+            for size, fps_list in modes:
+                print('    %-12s fps %s' % (size, ', '.join(str(f) for f in fps_list)))
+            best_size, best_fps = modes[0][0], modes[0][1][0]
+        else:
+            print('  Không đọc được chế độ hỗ trợ — thử khai 1280x720 / 15 fps.')
+            best_size, best_fps = '1280x720', 15
+
+        print()
+        print('  Chép khối này vào mục cameras: trong agent.yaml,')
+        print('  đổi "MA_CAMERA" thành đúng Mã camera khai trong Odoo:')
+        print()
+        print('    "MA_CAMERA":')
+        print('      type: usb')
+        print('      device: "%s"' % device)
+        print('      size: "%s"' % best_size)
+        print('      fps: %d' % best_fps)
+        print('      bitrate: "3M"')
+        print('      overlay_time: true')
+    print()
     return 0
 
 

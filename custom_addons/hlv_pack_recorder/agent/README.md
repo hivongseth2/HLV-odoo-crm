@@ -19,13 +19,27 @@ dính chuyện mixed content của trình duyệt, không trang web lạ nào g�
 Webcam hầu như không bao giờ xuất H.264, nên không thể chép thẳng như camera IP.
 Nhiều webcam trên một máy sẽ cộng dồn CPU — cân nhắc trước khi khai quá hai cái.
 
-Tìm tên thiết bị webcam:
+### Xem camera làm được gì
+
+**Webcam USB** — hỏi "nó làm được những gì", rồi chọn một chế độ trong danh sách:
 
 ```
 python hlv_pack_agent.py --config agent.yaml --list-cameras
 ```
 
-Chép nguyên tên trong dấu nháy mà ffmpeg in ra vào mục `device`.
+In ra tên thiết bị, mọi độ phân giải/fps nó hỗ trợ, kèm khối YAML điền sẵn để
+chép thẳng vào `agent.yaml`. Khai chế độ ngoài danh sách là ffmpeg báo lỗi.
+
+**Camera IP** — hỏi "nó đang phát cái gì". Không chọn được, vì `-c copy` chép
+nguyên luồng; muốn đổi thì vào web cấu hình camera, mục Video/Encode → Main Stream.
+
+```
+ffprobe.exe -rtsp_transport tcp -i "rtsp://user:matkhau@192.168.1.10:554/cam/realmonitor?channel=1&subtype=0"
+```
+
+Dòng `Stream #0:0: Video: h264 ... 1920x1080, 25 fps, 4096 kb/s` chính là thứ sẽ
+nằm trong file quay ra. Thấy 704x576 hay 640x480 là đang dính luồng phụ — đổi
+`subtype=1` thành `subtype=0`.
 
 ## Trước khi cài
 
