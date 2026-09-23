@@ -21,13 +21,13 @@ window.addEventListener('beforeunload', () => {
     // fetch với keepalive=true – browser giữ request sống dù trang unload
     navigator.sendBeacon
       ? navigator.sendBeacon('/pack_scan/finish_upload',
-          new Blob([JSON.stringify({ upload_id: uploadId, picking_id: _pickingId })],
+          new Blob([JSON.stringify({ upload_id: uploadId, picking_id: _pickingId, feed_issue: feedIssue })],
                    { type: 'application/json' }))
       : fetch('/pack_scan/finish_upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           keepalive: true,
-          body: JSON.stringify({ upload_id: uploadId, picking_id: _pickingId }),
+          body: JSON.stringify({ upload_id: uploadId, picking_id: _pickingId, feed_issue: feedIssue }),
         });
   }
 });
@@ -76,7 +76,7 @@ async function finishServerUploadSession() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       keepalive: true,
-      body: JSON.stringify({ upload_id: uploadId, picking_id: _pickingId })
+      body: JSON.stringify({ upload_id: uploadId, picking_id: _pickingId, feed_issue: feedIssue })
     });
   } finally {
     uploadId = null;
@@ -102,11 +102,133 @@ function updateCountdownLabel() {
   el.textContent = `${mm}:${ss}`;
 }
 
+// ==================== CAMERA FEED HEALTH ====================
+// OBS báo "camera sẵn sàng" với trình duyệt kể cả khi nó đang bơm ra màn hình
+// chờ hoặc khung đen vì nguồn VLC chết. getUserMedia() thành công, MediaRecorder
+// ghi đủ, Drive nhận file — chỉ nội dung là vô dụng. Chỉ nhìn pixel mới biết.
+const PROBE_SIZE = 48;            // đủ pixel để thấy nhiễu cảm biến, đủ nhỏ để gần như miễn phí
+const GATE_SAMPLES = 5;
+const GATE_INTERVAL_MS = 600;     // 5 mẫu x 600ms ~ 2.4 giây kiểm tra trước khi cho quét
+const WATCH_INTERVAL_MS = 10000;
+const WATCH_WINDOW = 4;           // 4 mẫu x 10s = phải chết liên tục 30s mới báo
+
+var probeCanvas = null, probeCtx = null;
+var watchTimer = null, watchSamples = [];
+var feedIssue = null;             // {reason, atSec} - lan dau phat hien mat tin hieu
+
+/**
+ * Lấy chữ ký khung hình hiện tại của luồng camera.
+ * Dò thẳng từ video gốc chứ KHÔNG dò từ overlayCanvas: overlay có vẽ đồng hồ
+ * nhảy từng giây nên khung hình lúc nào cũng "đổi", che mất việc camera đã chết.
+ */
+function _probeSignature(sourceVideo) {
+  if (!probeCanvas) {
+    probeCanvas = document.createElement('canvas');
+    probeCanvas.width = PROBE_SIZE;
+    probeCanvas.height = PROBE_SIZE;
+    probeCtx = probeCanvas.getContext('2d', { willReadFrequently: true });
+    // Tắt nội suy: thu nhỏ kiểu làm mượt sẽ bình quân hoá mất nhiễu cảm biến,
+    // mà nhiễu chính là thứ phân biệt camera thật với ảnh tĩnh của OBS.
+    probeCtx.imageSmoothingEnabled = false;
+  }
+  try {
+    probeCtx.drawImage(sourceVideo, 0, 0, PROBE_SIZE, PROBE_SIZE);
+    return CameraHealth.frameSignature(probeCtx.getImageData(0, 0, PROBE_SIZE, PROBE_SIZE));
+  } catch (e) {
+    console.warn('[REC] probe failed:', e);
+    return null;
+  }
+}
+
+async function _collectSignatures(sourceVideo, count, intervalMs) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    if (i) await new Promise(r => setTimeout(r, intervalMs));
+    const sig = _probeSignature(sourceVideo);
+    if (sig && sig.length) out.push(sig);
+  }
+  return out;
+}
+
+function _setPackingLocked(locked) {
+  const input = document.getElementById('pack_barcode_input');
+  if (input) input.disabled = locked;
+  const btn = document.getElementById('complete_pack_btn');
+  if (btn) btn.disabled = locked;
+}
+
+/** Chặn màn hình đóng gói lại cho tới khi người dùng sửa OBS và bấm Thử lại. */
+function _blockPacking(reason, statusText) {
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+
+  statusText.textContent = CameraHealth.describe(reason);
+  statusText.classList.add('rec-alert');
+  _setPackingLocked(true);
+
+  const old = document.getElementById('camBlockOverlay');
+  if (old) old.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'camBlockOverlay';
+  ov.className = 'cam-block-overlay';
+  ov.innerHTML = `
+    <div class="cam-block-box">
+      <div class="cam-block-title">⛔ Camera chưa sẵn sàng</div>
+      <div class="cam-block-msg">${CameraHealth.describe(reason)}</div>
+      <div class="cam-block-hint">
+        Mở OBS, bật nguồn VLC và bật Virtual Camera, rồi bấm Thử lại.<br/>
+        Chưa có hình thì chưa đóng gói được — video là bằng chứng khi khách khiếu nại.
+      </div>
+      <button type="button" id="camBlockRetry" class="cam-block-btn">Thử lại</button>
+    </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('camBlockRetry').addEventListener('click', async () => {
+    ov.remove();
+    _setPackingLocked(false);
+    statusText.classList.remove('rec-alert');
+    await startRecording();
+  });
+}
+
+function _startFeedWatchdog(sourceVideo, statusText) {
+  clearInterval(watchTimer);
+  watchSamples = [];
+  watchTimer = setInterval(() => {
+    const sig = _probeSignature(sourceVideo);
+    if (!sig || !sig.length) return;
+    watchSamples.push(sig);
+    if (watchSamples.length > WATCH_WINDOW) watchSamples.shift();
+    if (watchSamples.length < WATCH_WINDOW) return;
+
+    const verdict = CameraHealth.assessFeed(watchSamples);
+    if (verdict.alive || feedIssue) return;  // da bao mot lan roi thi thoi
+
+    const startedAt = endAt - MAX_DURATION_MS;
+    feedIssue = { reason: verdict.reason, atSec: Math.max(0, Math.round((Date.now() - startedAt) / 1000)) };
+    console.warn('[REC] camera feed died mid-recording:', feedIssue, verdict);
+
+    // Cố ý KHÔNG dừng phiên: dừng giữa chừng là mất luôn đoạn đã quay được. Giữ
+    // phần đầu cộng một ghi chú nói rõ mất tín hiệu từ phút nào thì có ích hơn.
+    statusText.textContent = '⚠ MẤT TÍN HIỆU CAMERA — vẫn đang ghi';
+    statusText.classList.add('rec-alert');
+    toast.error('⚠ ' + CameraHealth.describe(verdict.reason) + ' Kiểm tra OBS ngay.', { ms: 8000 });
+  }, WATCH_INTERVAL_MS);
+}
+
+function _stopFeedWatchdog() {
+  clearInterval(watchTimer);
+  watchTimer = null;
+  watchSamples = [];
+}
+
 async function startRecording() {
   const statusDot = document.getElementById('recStatus');
   const statusText = document.getElementById('recText');
   const preview = document.getElementById('recPreview');
   if (!statusText || !preview) return;
+
+  feedIssue = null;
+  statusText.classList.remove('rec-alert');
 
   const constraints = {
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 24 } },
@@ -135,6 +257,23 @@ async function startRecording() {
   rawVideo.playsInline = true;
   rawVideo.autoplay = true;
   try { await rawVideo.play(); } catch { }
+
+  statusText.textContent = 'Đang kiểm tra tín hiệu camera...';
+  const gate = CameraHealth.assessFeed(
+    await _collectSignatures(rawVideo, GATE_SAMPLES, GATE_INTERVAL_MS)
+  );
+  if (!gate.alive) {
+    console.warn('[REC] camera feed dead at gate:', gate);
+    const blocking = (typeof packCamGateBlocking !== 'undefined') ? !!packCamGateBlocking : true;
+    if (blocking) {
+      _blockPacking(gate.reason, statusText);
+      return;  // khong quay, khong mo phien upload
+    }
+    // Chế độ chỉ cảnh báo: vẫn quay, nhưng đánh dấu để chatter ghi rõ video hỏng.
+    feedIssue = { reason: gate.reason, atSec: 0 };
+    toast.error('⚠ ' + CameraHealth.describe(gate.reason)
+      + ' Video này sẽ không dùng làm bằng chứng được.', { ms: 8000 });
+  }
 
   endAt = Date.now() + MAX_DURATION_MS;
   updateCountdownLabel();
@@ -186,12 +325,14 @@ async function startRecording() {
     statusText.textContent = 'Đang ghi hình...';
     statusDot && statusDot.classList.add('on');
     stopTimer = setTimeout(() => stopRecording(), MAX_DURATION_MS);
+    _startFeedWatchdog(rawVideo, statusText);
   };
   mediaRecorder.onstop = async () => {
     isRecording = false;
     try { clearTimeout(stopTimer); } catch { }
     try { clearInterval(countdownTimer); } catch { }
     countdownTimer = null;
+    _stopFeedWatchdog();
 
     statusText.textContent = 'Đang hoàn tất upload...';
     try { await chunkBusy; } catch { }

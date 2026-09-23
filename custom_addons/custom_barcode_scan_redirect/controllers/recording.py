@@ -136,6 +136,9 @@ class RecordingController(http.Controller):
 
         upload_id = params.get('upload_id') or params.get('uploadId') or ''
         picking_id = int(params.get('picking_id') or 0)
+        # recording.js gửi kèm khi trình duyệt phát hiện luồng camera đã chết
+        # (đen hình / đứng hình) trong lúc quay. None nghĩa là tín hiệu bình thường.
+        feed_issue = params.get('feed_issue') or None
 
         _logger.info("FINISH_UPLOAD recv: upload_id=%s picking_id=%s", upload_id, picking_id)
 
@@ -172,6 +175,7 @@ class RecordingController(http.Controller):
 
         t = threading.Thread(target=_bg_upload_to_drive,
                             args=(request.db, picking_id, filepath, mimetype),
+                            kwargs={'feed_issue': feed_issue},
                             daemon=True)
         t.start()
 

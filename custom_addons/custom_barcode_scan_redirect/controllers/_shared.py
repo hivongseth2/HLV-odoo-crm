@@ -198,7 +198,40 @@ def _notify_bg_upload_failed(picking, filepath, reason):
         _logger.exception("BG_UPLOAD could not post failure note to chatter")
 
 
-def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
+FEED_ISSUE_LABELS = {
+    'black': 'khung hình đen (nguồn VLC trong OBS đã chết)',
+    'static': 'ảnh tĩnh (OBS ở màn hình chờ hoặc nguồn VLC chưa chạy)',
+}
+
+
+def _feed_issue_note(feed_issue):
+    """Dòng cảnh báo nối vào ghi chú video khi trình duyệt phát hiện luồng
+    camera đã chết trong lúc quay.
+
+    feed_issue: dict {'reason': 'black'|'static', 'atSec': int} do recording.js
+        gửi lên, hoặc None khi tín hiệu bình thường.
+    Trả về: Markup để nối vào body ghi chú, hoặc chuỗi rỗng khi không có vấn đề.
+        Biên: feed_issue sai định dạng cũng trả chuỗi rỗng — một cờ hỏng không
+        được phép làm mất luôn cái link video.
+    """
+    if not isinstance(feed_issue, dict):
+        return ''
+    reason = feed_issue.get('reason')
+    if not reason:
+        return ''
+    label = FEED_ISSUE_LABELS.get(reason, 'không có tín hiệu hợp lệ')
+    try:
+        at_sec = int(feed_issue.get('atSec') or 0)
+    except (TypeError, ValueError):
+        at_sec = 0
+    when = 'ngay từ đầu' if at_sec < 5 else 'từ phút %d:%02d' % (at_sec // 60, at_sec % 60)
+    return Markup(
+        '<br/>⚠️ <b>CẢNH BÁO: video này KHÔNG dùng làm bằng chứng được.</b><br/>'
+        'Phát hiện {label} {when}. Kiểm tra OBS và nguồn VLC ở máy đóng gói.'
+    ).format(label=label, when=when)
+
+
+def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None):
     from odoo import registry as odoo_registry
     set_path = None
     success = False
@@ -326,6 +359,7 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
                     '📹 Video đóng gói: '
                     '<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
                 ).format(url=escape(link or ''), title=escape(safe_title or 'Video'))
+                body = body + _feed_issue_note(feed_issue)
 
                 picking.message_post(
                     body=body,
