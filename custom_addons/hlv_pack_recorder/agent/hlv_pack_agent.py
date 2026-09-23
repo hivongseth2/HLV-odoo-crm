@@ -242,8 +242,12 @@ class Agent:
             return
         recorder.stop()
         if not os.path.exists(recorder.out_path) or os.path.getsize(recorder.out_path) < 51200:
-            self.report_failure(recording_id,
-                                "ffmpeg không ghi được gì: %s" % recorder.stderr_tail())
+            stderr = recorder.stderr_tail()
+            hint = explain_ffmpeg_error(stderr)
+            self.report_failure(
+                recording_id,
+                ("ffmpeg không ghi được gì — %s\n\n%s" % (hint, stderr)) if hint
+                else ("ffmpeg không ghi được gì: %s" % stderr))
             _remove(recorder.out_path)
             return
         if self.upload(recording_id, recorder.out_path):
@@ -423,6 +427,40 @@ def _list_dshow_devices(ffmpeg_bin):
         print('      overlay_time: true')
     print()
     return 0
+
+
+# Lỗi ffmpeg hay gặp, kèm nguyên nhân thật sự. Đưa thẳng vào Odoo để người
+# trực kho khỏi phải đọc log kỹ thuật rồi đoán.
+FFMPEG_HINTS = (
+    ('Error during demuxing: I/O error',
+     "webcam đang bị ứng dụng khác chiếm (trình duyệt, OBS, Teams, Zoom...). "
+     "DirectShow chỉ cho một ứng dụng giữ webcam tại một thời điểm — đóng ứng "
+     "dụng kia, hoặc tắt luồng quay bằng trình duyệt."),
+    ('Could not run filter',
+     "không dựng được bộ lọc đóng dấu giờ — kiểm đường dẫn font trong 'font'."),
+    ('Could not set video options',
+     "webcam không hỗ trợ size/fps đang khai. Chạy --list-cameras xem nó "
+     "hỗ trợ những chế độ nào."),
+    ('Connection refused',
+     "không kết nối được camera IP — sai IP/cổng, hoặc camera đang tắt."),
+    ('401 Unauthorized',
+     "sai tài khoản hoặc mật khẩu trong URL RTSP."),
+    ('Immediate exit requested',
+     "ffmpeg bị dừng ngang trước khi ghi được gì."),
+)
+
+
+def explain_ffmpeg_error(stderr):
+    """Dịch lỗi ffmpeg thành câu nói rõ nguyên nhân.
+
+    stderr: chuỗi log ffmpeg.
+    Trả về: câu giải thích, hoặc chuỗi rỗng nếu không nhận ra lỗi nào quen —
+        khi đó bên gọi cứ gửi nguyên log thô lên, còn hơn là nuốt mất.
+    """
+    for needle, hint in FFMPEG_HINTS:
+        if needle in (stderr or ''):
+            return hint
+    return ''
 
 
 def _safe(text):

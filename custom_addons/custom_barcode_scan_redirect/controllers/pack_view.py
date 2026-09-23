@@ -204,6 +204,12 @@ class PackViewController(http.Controller):
         except (TypeError, ValueError):
             video_bitrate = 0
 
+        # Công tắc tắt hẳn luồng quay bằng trình duyệt. Cần khi agent ghi hình
+        # phía server dùng chung một webcam USB: DirectShow chỉ cho một ứng dụng
+        # giữ thiết bị, nên hai bên tranh nhau là bên nào cũng hỏng.
+        browser_rec = ICP.get_param('pack_scan.browser_recording', 'true')
+        pack_browser_recording = str(browser_rec).strip().lower() not in ('0', 'false', 'no', 'off')
+
         response = request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
@@ -211,6 +217,7 @@ class PackViewController(http.Controller):
             'drive_connected': drive_connected,
             'pack_cam_gate_blocking': pack_cam_gate_blocking,
             'pack_video_bitrate': video_bitrate,
+            'pack_browser_recording': pack_browser_recording,
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,
