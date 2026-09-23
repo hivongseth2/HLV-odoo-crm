@@ -199,9 +199,10 @@ class PackViewController(http.Controller):
         pack_cam_gate_blocking = str(gate_param).strip().lower() not in ('0', 'false', 'no', 'off')
 
         try:
-            video_bitrate = int(ICP.get_param('pack_scan.video_bitrate', '2500000'))
+            # 0 = để trình duyệt tự chọn theo độ phân giải thật sự nhận được.
+            video_bitrate = int(ICP.get_param('pack_scan.video_bitrate', '0'))
         except (TypeError, ValueError):
-            video_bitrate = 2500000
+            video_bitrate = 0
 
         response = request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
