@@ -99,8 +99,19 @@ class HlvPackRecording(models.Model):
             ('picking_id', '=', picking.id),
             ('state', 'in', ('pending', 'recording')),
         ])
-        recordings.write({'state': 'stopping', 'stopped_at': fields.Datetime.now()})
-        return recordings
+
+        # Bản còn 'pending' nghĩa là agent chưa từng nhận lệnh, nên KHÔNG có
+        # ffmpeg nào để dừng. Đẩy sang 'stopping' là kẹt vĩnh viễn chờ một agent
+        # không tồn tại — đánh hỏng ngay để người dùng biết liền thay vì đợi cron.
+        never_started = recordings.filtered(lambda r: r.state == 'pending')
+        if never_started:
+            never_started.mark_failed(
+                'agent không nhận lệnh trước khi phiếu kết thúc — '
+                'agent chưa chạy, sai token, hoặc không kết nối được Odoo')
+
+        running = recordings - never_started
+        running.write({'state': 'stopping', 'stopped_at': fields.Datetime.now()})
+        return running
 
     # ------------------------------------------------------------------
     # Agent gọi vào

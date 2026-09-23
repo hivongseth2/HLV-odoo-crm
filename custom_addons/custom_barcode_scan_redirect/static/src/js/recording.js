@@ -289,9 +289,22 @@ function _onVisibilityChange() {
     };
   }
   console.warn('[REC] tab hidden while recording for %ds', awaySec);
+
+  // Khi agent ghi hình phía server đang chạy, bằng chứng không còn phụ thuộc tab
+  // này: ffmpeg quay độc lập trên máy, rời tab không mất gì. Chỉ bản quay bằng
+  // trình duyệt bị đứng hình. Đọc cờ bằng typeof để file này vẫn chạy được khi
+  // chưa cài hlv_pack_recorder.
+  const agentRecording = typeof window.hlvAgentRecording !== 'undefined'
+    && !!window.hlvAgentRecording;
+
   if (statusText) {
     statusText.textContent = `Đang ghi hình... (đã rời tab ${awaySec}s, đoạn đó đứng hình)`;
     statusText.classList.remove('rec-alert');
+  }
+  if (agentRecording) {
+    toast.info(`Bản quay bằng trình duyệt bị đứng hình ${awaySec} giây do rời tab. `
+      + 'Camera ghi phía server vẫn quay đủ, phiếu này vẫn có bằng chứng.', { ms: 6000 });
+    return;
   }
   toast.warn(`⚠ Vừa rời màn hình đóng gói ${awaySec} giây — đoạn video đó gần như đứng hình. `
     + 'Đừng chuyển tab trong lúc đang quay.', { ms: 8000 });

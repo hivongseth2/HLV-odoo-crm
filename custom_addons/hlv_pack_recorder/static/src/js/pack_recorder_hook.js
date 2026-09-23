@@ -45,12 +45,17 @@
       const r = await callJson('/pack_recorder/start', {
         picking_id: currentPickingId(), station_key: key,
       });
-      if (r && r.ok) {
+      if (r && r.ok && (r.cameras || []).length) {
+        // Cờ cho recording.js biết bằng chứng không còn phụ thuộc tab này nữa,
+        // để nó đừng doạ mất video khi nhân viên chuyển tab.
+        window.hlvAgentRecording = true;
         console.info('[PACK_REC] agent đang quay tại %s: %s', r.station, (r.cameras || []).join(', '));
       } else {
+        window.hlvAgentRecording = false;
         console.warn('[PACK_REC] không bật được agent:', r && r.error);
       }
     } catch (e) {
+      window.hlvAgentRecording = false;
       console.warn('[PACK_REC] gọi start hỏng:', e);
     }
   }
@@ -59,6 +64,7 @@
     if (!stationKey()) return;
     try {
       await callJson('/pack_recorder/stop', { picking_id: currentPickingId() });
+      window.hlvAgentRecording = false;
       console.info('[PACK_REC] đã báo agent dừng');
     } catch (e) {
       console.warn('[PACK_REC] gọi stop hỏng:', e);
