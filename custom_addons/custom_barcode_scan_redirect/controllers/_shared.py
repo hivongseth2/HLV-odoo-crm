@@ -238,7 +238,7 @@ def _feed_issue_note(feed_issue):
     ).format(label=label, when=when, tail=tail)
 
 
-def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None):
+def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None, name_suffix=''):
     from odoo import registry as odoo_registry
     set_path = None
     success = False
@@ -307,7 +307,10 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None)
             else:                          ext = os.path.splitext(filepath)[1] or '.webm'
 
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            safe_title = f"{_san(order_name)}_{_san(origin_name)}_{_san(picking.name)}_{ts}{ext}"
+            # name_suffix: mã camera, để nhiều file cùng một phiếu phân biệt được
+            # nhau trên Drive. Rỗng khi quay bằng trình duyệt (chỉ có một file).
+            suffix = f"_{_san(name_suffix)}" if name_suffix else ""
+            safe_title = f"{_san(order_name)}_{_san(origin_name)}_{_san(picking.name)}{suffix}_{ts}{ext}"
 
             # settings tạm
             set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')

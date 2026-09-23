@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <record id="view_hlv_pack_station_list" model="ir.ui.view">
+    <field name="name">hlv.pack.station.list</field>
+    <field name="model">hlv.pack.station</field>
+    <field name="arch" type="xml">
+      <list>
+        <field name="warehouse_id"/>
+        <field name="name"/>
+        <field name="station_key"/>
+        <field name="camera_count" string="Camera"/>
+        <field name="agent_last_seen"/>
+        <field name="agent_version"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="view_hlv_pack_station_form" model="ir.ui.view">
+    <field name="name">hlv.pack.station.form</field>
+    <field name="model">hlv.pack.station</field>
+    <field name="arch" type="xml">
+      <form>
+        <header>
+          <button name="action_reset_token" type="object" string="Sinh token mới"
+                  confirm="Agent đang chạy sẽ bị từ chối cho tới khi anh cập nhật token mới vào file cấu hình của nó. Tiếp tục?"/>
+        </header>
+        <sheet>
+          <widget name="web_ribbon" title="Đã lưu trữ" bg_color="text-bg-danger"
+                  invisible="active"/>
+          <group>
+            <group>
+              <field name="name" placeholder="Bàn 1"/>
+              <field name="warehouse_id"/>
+              <field name="active" invisible="1"/>
+            </group>
+            <group>
+              <field name="station_key"/>
+              <field name="agent_token" password="True"/>
+              <field name="agent_last_seen"/>
+              <field name="agent_version"/>
+            </group>
+          </group>
+          <div class="alert alert-info" role="alert">
+            Trên máy đóng gói, mở một lần đường dẫn
+            <code>/pack_recorder/set_station</code> rồi bấm chọn đúng bàn này.
+          </div>
+          <notebook>
+            <page string="Camera">
+              <field name="camera_ids">
+                <list editable="bottom">
+                  <field name="sequence" widget="handle"/>
+                  <field name="name"/>
+                  <field name="code"/>
+                  <field name="active"/>
+                </list>
+              </field>
+              <p class="text-muted">
+                <b>Mã camera</b> phải trùng khoá trong file cấu hình của agent. Odoo cố ý
+                không lưu URL hay mật khẩu camera — agent tự giữ.
+              </p>
+            </page>
+          </notebook>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="action_hlv_pack_station" model="ir.actions.act_window">
+    <field name="name">Bàn đóng gói</field>
+    <field name="res_model">hlv.pack.station</field>
+    <field name="view_mode">list,form</field>
+  </record>
+
+</odoo>
