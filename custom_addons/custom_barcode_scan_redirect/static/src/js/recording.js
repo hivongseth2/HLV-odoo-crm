@@ -117,8 +117,11 @@ function updateCountdownLabel() {
 const PROBE_SIZE = 48;            // đủ pixel để thấy nhiễu cảm biến, đủ nhỏ để gần như miễn phí
 const GATE_SAMPLES = 5;
 const GATE_INTERVAL_MS = 600;     // 5 mẫu x 600ms ~ 2.4 giây kiểm tra trước khi cho quét
-const WATCH_INTERVAL_MS = 10000;
-const WATCH_WINDOW = 4;           // 4 mẫu x 10s = phải chết liên tục 30s mới báo
+const WATCH_INTERVAL_MS = 2000;
+const WATCH_WINDOW = 4;           // 4 mẫu x 2s = phải đứng im liên tục 6s mới báo.
+// Cửa sổ ngắn không làm tăng báo nhầm: camera thật không bao giờ cho hai khung
+// hình giống hệt nhau dù cảnh đứng yên, nên 6s hay 30s cũng phân biệt được như
+// nhau — dài thêm chỉ tổ chậm.
 
 var probeCanvas = null, probeCtx = null;
 var watchTimer = null, watchSamples = [];
