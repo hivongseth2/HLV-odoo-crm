@@ -86,6 +86,16 @@ class PackAgentApi(http.Controller):
         if orphans:
             orphans.mark_failed("agent báo không còn chạy tiến trình ghi")
 
+        # Chiều ngược lại: agent đang chạy ffmpeg cho bản ghi mà Odoo đã đóng sổ
+        # (bị đánh hỏng lúc kết thúc phiếu vì lệnh start tới trễ). Bảo nó dừng,
+        # không thì tiến trình đó chạy tới hết max_seconds mới thôi.
+        stale_active = active_ids - set(to_stop.ids)
+        if stale_active:
+            zombies = Recording.browse(sorted(stale_active)).exists().filtered(
+                lambda r: r.state in ('done', 'failed'))
+            for zombie in zombies:
+                commands.append(zombie.to_command('stop'))
+
         return {
             'ok': True,
             'server_time': fields.Datetime.to_string(fields.Datetime.now()),
