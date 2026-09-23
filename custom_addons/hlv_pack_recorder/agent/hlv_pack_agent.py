@@ -32,27 +32,87 @@ UPLOAD_RETRIES = 3
 
 log = logging.getLogger('hlv_pack_agent')
 
+# Webcam USB không tự đóng dấu giờ lên hình như camera IP, mà nó vốn đã phải nén
+# lại rồi nên thêm chữ gần như miễn phí. Dùng %{localtime} dạng mặc định thay vì
+# tự khai định dạng: khai định dạng phải escape dấu hai chấm nhiều tầng, rất dễ
+# sai mà chỉ phát hiện ra lúc đang quay thật.
+TIME_OVERLAY = (
+    "drawtext=fontfile={font}:text='%{{localtime}}'"
+    ":fontcolor=white:fontsize=28:box=1:boxcolor=black@0.5:boxborderw=8"
+    ":x=16:y=h-th-16"
+)
+# Dấu hai chấm sau tên ổ đĩa phải escape BẰNG HAI BACKSLASH: bộ phân tích
+# filter của ffmpeg bóc hai tầng, một backslash bị ăn mất ở tầng đầu và
+# ffmpeg cắt chuỗi ngay dấu hai chấm -> "No option name near ...".
+DEFAULT_FONT = r'C\\:/Windows/Fonts/arial.ttf'
+
+
+def build_ffmpeg_args(camera, out_path, max_seconds, ffmpeg_bin='ffmpeg'):
+    """Dựng dòng lệnh ffmpeg cho một camera.
+
+    camera: chuỗi URL RTSP (dạng ngắn), hoặc dict có 'type':
+        'rtsp' (mặc định) — camera IP. Chép thẳng luồng đã nén bằng -c copy:
+            không giải mã, không nén lại, chất lượng đúng bản gốc, CPU ~0.
+        'usb' — webcam cắm dây qua DirectShow. Webcam hầu như không bao giờ xuất
+            H.264, nên BẮT BUỘC phải nén lại; đổi lại đóng được dấu giờ lên hình.
+    out_path: file đích.
+    max_seconds: trần thời gian, phòng khi lệnh dừng không tới được.
+
+    Trả về: list tham số đầy đủ cho subprocess.
+        Biên: thiếu 'url' (rtsp) hoặc 'device' (usb) -> ValueError.
+    """
+    if isinstance(camera, str):
+        camera = {'type': 'rtsp', 'url': camera}
+    if not isinstance(camera, dict):
+        raise ValueError('cấu hình camera phải là chuỗi URL hoặc dict')
+
+    kind = (camera.get('type') or 'rtsp').lower()
+    args = [ffmpeg_bin, '-hide_banner', '-loglevel', 'warning']
+
+    if kind == 'rtsp':
+        url = camera.get('url')
+        if not url:
+            raise ValueError("camera rtsp thiếu 'url'")
+        # -rtsp_transport tcp: UDP mất gói là vỡ hình, mà bằng chứng thì không
+        # được phép vỡ.
+        args += ['-rtsp_transport', 'tcp', '-i', url, '-c', 'copy']
+
+    elif kind == 'usb':
+        device = camera.get('device')
+        if not device:
+            raise ValueError("camera usb thiếu 'device' (tên thiết bị DirectShow)")
+        size = camera.get('size') or '1280x720'
+        fps = str(camera.get('fps') or 24)
+        bitrate = camera.get('bitrate') or '4M'
+        # -rtbufsize: webcam đẩy frame chưa nén rất nặng, buffer nhỏ là rớt khung.
+        args += [
+            '-f', 'dshow', '-rtbufsize', '256M',
+            '-video_size', size, '-framerate', fps,
+            '-i', 'video=%s' % device,
+        ]
+        if camera.get('overlay_time', True):
+            font = camera.get('font') or DEFAULT_FONT
+            args += ['-vf', TIME_OVERLAY.format(font=font)]
+        args += [
+            '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', bitrate,
+            '-pix_fmt', 'yuv420p',
+        ]
+
+    else:
+        raise ValueError("type camera lạ: %s" % kind)
+
+    args += ['-t', str(max_seconds), '-movflags', '+faststart', '-y', out_path]
+    return args
+
 
 class Recorder:
     """Một tiến trình ffmpeg đang ghi một camera."""
 
-    def __init__(self, recording_id, camera_code, rtsp_url, out_path, max_seconds):
+    def __init__(self, recording_id, camera_code, camera_cfg, out_path, max_seconds, ffmpeg_bin='ffmpeg'):
         self.recording_id = recording_id
         self.camera_code = camera_code
         self.out_path = out_path
-        # -c copy: chép thẳng luồng đã nén của camera, KHÔNG giải mã và nén lại.
-        # Đây là lý do chất lượng bằng đúng bản gốc và CPU gần như bằng 0.
-        # -rtsp_transport tcp: tránh mất gói kiểu UDP làm vỡ hình.
-        # -t: trần an toàn, phòng khi lệnh dừng không bao giờ tới.
-        cmd = [
-            'ffmpeg', '-hide_banner', '-loglevel', 'warning',
-            '-rtsp_transport', 'tcp',
-            '-i', rtsp_url,
-            '-c', 'copy',
-            '-t', str(max_seconds),
-            '-movflags', '+faststart',
-            '-y', out_path,
-        ]
+        cmd = build_ffmpeg_args(camera_cfg, out_path, max_seconds, ffmpeg_bin)
         log.info("ffmpeg start rec=%s cam=%s -> %s", recording_id, camera_code, out_path)
         self.proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
@@ -96,7 +156,10 @@ class Agent:
         self.base_url = cfg['odoo_url'].rstrip('/')
         self.station_key = cfg['station_key']
         self.token = cfg['token']
-        self.cameras = cfg.get('cameras') or {}
+        # Ép khoá về chuỗi: mã camera kiểu "0001" không có nháy sẽ được YAML đọc
+        # thành số 1, tra theo mã Odoo gửi xuống sẽ không khớp.
+        self.cameras = {str(k): v for k, v in (cfg.get('cameras') or {}).items()}
+        self.ffmpeg_bin = cfg.get('ffmpeg_path') or 'ffmpeg'
         self.work_dir = cfg.get('work_dir') or os.path.join(tempfile.gettempdir(), 'hlv_pack_rec')
         os.makedirs(self.work_dir, exist_ok=True)
         self.session = requests.Session()
@@ -152,8 +215,8 @@ class Agent:
         if recording_id in self.active:
             return  # đã chạy rồi, poll lặp lại lệnh cũ
 
-        rtsp_url = self.cameras.get(code)
-        if not rtsp_url:
+        camera_cfg = self.cameras.get(str(code))
+        if not camera_cfg:
             self.report_failure(recording_id, "agent chưa khai camera mã '%s' trong file cấu hình" % code)
             return
 
@@ -161,11 +224,14 @@ class Agent:
         out_path = os.path.join(self.work_dir, '%s_%d.mp4' % (_safe(label), recording_id))
         try:
             self.active[recording_id] = Recorder(
-                recording_id, code, rtsp_url, out_path,
+                recording_id, code, camera_cfg, out_path,
                 int(command.get('max_seconds') or 1800),
+                ffmpeg_bin=self.ffmpeg_bin,
             )
+        except ValueError as exc:
+            self.report_failure(recording_id, "cấu hình camera '%s' sai: %s" % (code, exc))
         except FileNotFoundError:
-            self.report_failure(recording_id, "không tìm thấy ffmpeg trong PATH")
+            self.report_failure(recording_id, "không chạy được ffmpeg: %s" % self.ffmpeg_bin)
         except OSError as exc:
             self.report_failure(recording_id, "không chạy được ffmpeg: %s" % exc)
 
@@ -263,6 +329,23 @@ class Agent:
         self.running = False
 
 
+def _list_dshow_devices(ffmpeg_bin):
+    """In danh sách webcam USB mà Windows đang thấy.
+
+    ffmpeg trả về mã lỗi 1 cho lệnh này kể cả khi thành công (nó coi 'dummy' là
+    input hỏng), nên phải đọc stderr chứ đừng nhìn mã thoát.
+    """
+    proc = subprocess.run(
+        [ffmpeg_bin, '-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'],
+        capture_output=True, text=True, errors='replace',
+    )
+    output = proc.stderr or ''
+    print("Thiết bị DirectShow Windows đang thấy:")
+    print(output)
+    print("Chép đúng tên trong dấu nháy vào mục 'device' của camera type: usb.")
+    return 0
+
+
 def _safe(text):
     return ''.join(c if c.isalnum() or c in '-_' else '_' for c in (text or ''))[:80]
 
@@ -278,7 +361,17 @@ def main():
     parser = argparse.ArgumentParser(description="Agent ghi video đóng gói HLV")
     parser.add_argument('--config', default='agent.yaml')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--list-cameras', action='store_true',
+                        help="Liệt kê tên thiết bị webcam USB để điền vào 'device'")
     args = parser.parse_args()
+
+    # Console Windows mặc định cp1252 nên log tiếng Việt ra một đống ký tự escape.
+    # Ép UTF-8 để người trực kho đọc được log mà không phải đoán.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, OSError):
+            pass
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -290,6 +383,9 @@ def main():
         return 2
     with open(args.config, encoding='utf-8') as fh:
         cfg = yaml.safe_load(fh) or {}
+
+    if args.list_cameras:
+        return _list_dshow_devices(cfg.get('ffmpeg_path') or 'ffmpeg')
 
     missing = [k for k in ('odoo_url', 'station_key', 'token') if not cfg.get(k)]
     if missing:
