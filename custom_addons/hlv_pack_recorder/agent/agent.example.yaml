@@ -1,22 +1,57 @@
 # Cấu hình agent ghi hình — đặt cạnh hlv_pack_agent.py, đổi tên thành agent.yaml
 #
 # File này chứa mật khẩu camera và token Odoo. Đặt quyền đọc cho riêng tài khoản
-# chạy service, đừng để trong thư mục dùng chung hay commit lên git.
+# chạy service, đừng để trong thư mục dùng chung, đừng commit lên git.
 
-# Địa chỉ Odoo. Thử ở staging trước khi đụng tới production.
+# Thử ở staging trước khi đụng tới production.
 odoo_url: "https://hoanglongvu-staging-v2-37103185.dev.odoo.com"
 
 # Lấy ở Tồn kho > Cấu hình > Video đóng gói > Bàn đóng gói & camera
 station_key: "BAN-XXXXXX"
 token: "dán token của bàn này vào đây"
 
-# Khoá bên trái phải TRÙNG cột "Mã camera" khai trong Odoo.
-# subtype=0 là luồng chính (full độ phân giải). subtype=1 là luồng phụ, mờ —
-# đừng dùng, đó đúng là lỗi đang làm video mờ ở bản quay bằng trình duyệt.
-cameras:
-  ngang: "rtsp://user:matkhau@192.168.1.10:554/cam/realmonitor?channel=1&subtype=0"
-  tren: "rtsp://user:matkhau@192.168.1.11:554/cam/realmonitor?channel=1&subtype=0"
+# ffmpeg. Để trống thì agent tìm trong PATH.
+ffmpeg_path: "C:/hlv_agent/ffmpeg.exe"
 
-# Nơi để file tạm trong lúc ghi rồi gửi lên. Để trống thì dùng thư mục temp của máy.
-# Chọn ổ còn nhiều chỗ: 1080p H.264 khoảng 30 MB mỗi phút mỗi camera.
-work_dir: "D:/hlv_pack_rec"
+# Nơi để file tạm trong lúc ghi rồi gửi lên. Gửi xong là xoá; file nào gửi không
+# được thì GIỮ LẠI có chủ ý để lấy tay. Chọn ổ còn nhiều chỗ.
+work_dir: "C:/hlv_agent/rec"
+
+# ---------------------------------------------------------------------------
+# Camera. Khoá bên trái phải TRÙNG cột "Mã camera" khai trong Odoo.
+#
+# LUÔN BỌC KHOÁ TRONG NHÁY KÉP. Mã kiểu 0001 không nháy sẽ bị YAML đọc thành số
+# 1, agent tra không thấy camera. (Agent có ép về chuỗi để đỡ, nhưng "0001" và
+# 1 vẫn là hai thứ khác nhau nếu YAML đã đọc sai ngay từ đầu.)
+# ---------------------------------------------------------------------------
+cameras:
+
+  # --- Loại 1: camera IP (RTSP) ---------------------------------------------
+  # Chép thẳng luồng đã nén: KHÔNG giải mã, KHÔNG nén lại. Chất lượng đúng bằng
+  # bản gốc, CPU gần như 0. Camera tự đóng dấu giờ lên hình nên không cần thêm.
+  #
+  # subtype=0 là luồng chính (nét). subtype=1 là luồng phụ (mờ) — đừng dùng.
+  # Dahua/Imou/KBVision: rtsp://user:pass@IP:554/cam/realmonitor?channel=1&subtype=0
+  # Hikvision:           rtsp://user:pass@IP:554/Streaming/Channels/101
+  "0001": "rtsp://user:matkhau@192.168.1.10:554/cam/realmonitor?channel=1&subtype=0"
+
+  # Dạng đầy đủ, cùng kết quả với dạng ngắn ở trên:
+  # "0002":
+  #   type: rtsp
+  #   url: "rtsp://user:matkhau@192.168.1.11:554/Streaming/Channels/101"
+
+  # --- Loại 2: webcam USB cắm dây -------------------------------------------
+  # Webcam hầu như không bao giờ xuất H.264, nên BẮT BUỘC phải nén lại — tốn CPU
+  # chứ không miễn phí như camera IP. Đổi lại agent đóng được dấu giờ lên hình,
+  # vì webcam không tự làm việc đó.
+  #
+  # Tìm đúng tên thiết bị:  python hlv_pack_agent.py --config agent.yaml --list-cameras
+  # Chép nguyên tên trong dấu nháy mà ffmpeg in ra.
+  #
+  # "0003":
+  #   type: usb
+  #   device: "HD Pro Webcam C920"
+  #   size: "1920x1080"     # webcam không hỗ trợ thì ffmpeg báo lỗi, hạ xuống 1280x720
+  #   fps: 24
+  #   bitrate: "4M"         # 1080p24 nên để 4M; 720p thì 2.5M là đủ
+  #   overlay_time: true    # đóng dấu giờ lên hình, mặc định bật

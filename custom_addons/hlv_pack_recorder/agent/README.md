@@ -6,11 +6,34 @@ không giải mã, không nén lại, chất lượng đúng bằng luồng gố
 Agent **chỉ gọi ra** Odoo, không mở cổng nào. Không cần chỉnh firewall, không
 dính chuyện mixed content của trình duyệt, không trang web lạ nào gọi vào được.
 
+## Hai loại camera, hai cách xử lý
+
+| | Camera IP (RTSP) | Webcam USB |
+|---|---|---|
+| ffmpeg làm gì | `-c copy` — chép thẳng luồng đã nén | `libx264` — bắt buộc nén lại |
+| Chất lượng | đúng bằng bản gốc | phụ thuộc bitrate khai trong config |
+| CPU | gần như 0 | tốn thật, ~1 lõi cho 1080p24 |
+| Dấu giờ trên hình | camera tự đóng sẵn | agent vẽ vào, vì webcam không tự làm |
+| Khai trong config | chuỗi URL RTSP | dict có `type: usb` và `device` |
+
+Webcam hầu như không bao giờ xuất H.264, nên không thể chép thẳng như camera IP.
+Nhiều webcam trên một máy sẽ cộng dồn CPU — cân nhắc trước khi khai quá hai cái.
+
+Tìm tên thiết bị webcam:
+
+```
+python hlv_pack_agent.py --config agent.yaml --list-cameras
+```
+
+Chép nguyên tên trong dấu nháy mà ffmpeg in ra vào mục `device`.
+
 ## Trước khi cài
 
-1. Cài **ffmpeg** và đảm bảo `ffmpeg -version` chạy được trong Command Prompt.
-   Tải bản Windows ở https://www.gyan.dev/ffmpeg/builds/ rồi thêm thư mục `bin`
-   vào PATH.
+1. Cài **ffmpeg**. Hai cách:
+   - Tải bản static rồi để `ffmpeg.exe` ngay cạnh agent, khai `ffmpeg_path`
+     trong `agent.yaml` — khỏi đụng vào PATH. Bản đã kiểm:
+     https://github.com/BtbN/FFmpeg-Builds/releases (file `win64-gpl`).
+   - Hoặc thêm thư mục `bin` của ffmpeg vào PATH rồi bỏ trống `ffmpeg_path`.
 2. Cài **Python 3.10+**, rồi `pip install requests pyyaml`.
 3. Trong Odoo: **Tồn kho → Cấu hình → Video đóng gói → Bàn đóng gói & camera**.
    Tạo một bàn, khai các camera của bàn đó. **Mã camera** ở đây phải trùng khoá
