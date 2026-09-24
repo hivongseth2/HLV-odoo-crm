@@ -58,12 +58,18 @@ class PackRecorderUi(http.Controller):
         if err:
             return err
 
-        if not station.is_agent_alive():
+        # Quy tắc "bàn nào được ghi hình" nằm ở start_for_picking, đừng chép lại
+        # ở đây: hai chỗ cùng định nghĩa một luật là bug đang chờ xảy ra.
+        recordings = request.env['hlv.pack.recording'].sudo().start_for_picking(picking, station)
+        if not recordings:
             # Không phải lỗi của nhân viên: báo qua console cho kỹ thuật, không
             # hiện gì trên màn hình để khỏi làm gián đoạn việc đóng gói.
-            return {'ok': False, 'error': 'agent_offline', 'station': station.name}
-
-        recordings = request.env['hlv.pack.recording'].sudo().start_for_picking(picking, station)
+            return {
+                'ok': False,
+                'error': 'no_recording',
+                'station': station.name,
+                'agent_status': station.agent_status,
+            }
         return {
             'ok': True,
             'station': station.name,

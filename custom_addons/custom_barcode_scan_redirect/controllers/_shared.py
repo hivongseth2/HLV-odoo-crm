@@ -238,7 +238,8 @@ def _feed_issue_note(feed_issue):
     ).format(label=label, when=when, tail=tail)
 
 
-def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None, name_suffix=''):
+def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
+                        name_suffix='', note_label='', on_uploaded=None):
     from odoo import registry as odoo_registry
     set_path = None
     success = False
@@ -365,10 +366,15 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
             link = gfile.get('alternateLink') or f"https://drive.google.com/file/d/{fid}/view"
 
             if picking.exists():
+                # note_label cho biết video đến từ camera nào và do đường nào quay.
+                # Một phiếu có thể có nhiều video (nhiều camera + bản trình duyệt),
+                # không ghi rõ thì mở chatter ra không biết cái nào là cái nào.
+                heading = ('📹 Video đóng gói — %s: ' % note_label) if note_label \
+                    else '📹 Video đóng gói: '
                 body = Markup(
-                    '📹 Video đóng gói: '
-                    '<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
-                ).format(url=escape(link or ''), title=escape(safe_title or 'Video'))
+                    '{heading}<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
+                ).format(heading=heading, url=escape(link or ''),
+                         title=escape(safe_title or 'Video'))
                 body = body + _feed_issue_note(feed_issue)
 
                 picking.message_post(
@@ -376,6 +382,14 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
                     message_type='comment',
                     subtype_xmlid='mail.mt_note',
                 )
+
+            # Điểm móc cho module khác lưu lại link mà không phải chép lại cả hàm
+            # upload này. Lỗi trong callback không được làm hỏng việc đã xong.
+            if on_uploaded:
+                try:
+                    on_uploaded(env, picking, link, safe_title)
+                except Exception:
+                    _logger.exception("BG_UPLOAD callback on_uploaded lỗi")
 
             _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
             success = True

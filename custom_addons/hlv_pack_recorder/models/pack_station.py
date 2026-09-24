@@ -143,6 +143,15 @@ class HlvPackStation(models.Model):
         station.write({'enroll_code': False, 'enroll_code_expiry': False})
         return station
 
+    def is_agent_deployed(self):
+        """Bàn này đã từng có agent chạy chưa.
+
+        Khác hẳn is_agent_alive(): "chưa bao giờ chạy" nghĩa là bàn chưa tới lượt
+        cài đặt — không phải sự cố. Còn "từng chạy rồi im" là hỏng thật, phải kêu.
+        """
+        self.ensure_one()
+        return bool(self.agent_last_seen)
+
     def is_agent_alive(self):
         """Agent của bàn này có đang chạy không.
 

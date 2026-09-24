@@ -83,14 +83,16 @@ class HlvPackRecording(models.Model):
             _logger.warning("PACK_REC bàn %s chưa khai camera nào", station.name)
             return self.browse()
 
-        # Agent không chạy thì đừng tạo bản ghi: chúng chỉ để đó rồi bị đánh hỏng,
-        # kéo theo ghi chú cảnh báo lên từng phiếu. Trong lúc triển khai dần từng
-        # bàn, việc đó chỉ tạo tiếng ồn ở những bàn chưa tới lượt cài agent.
-        # Luồng quay bằng trình duyệt vẫn chạy nguyên, nên không mất bằng chứng.
-        if not station.is_agent_alive():
-            _logger.warning(
-                "PACK_REC bàn %s: agent không phản hồi (lần cuối %s), bỏ qua ghi hình",
-                station.name, station.agent_last_seen or 'chưa bao giờ')
+        # Ranh giới ở đây là ĐÃ TỪNG TRIỂN KHAI, không phải ĐANG SỐNG:
+        #   - chưa bao giờ có agent -> bàn chưa tới lượt cài, im lặng bỏ qua cho
+        #     khỏi rác ở những bàn đang chờ triển khai.
+        #   - từng có agent rồi chết -> VẪN tạo bản ghi, để nó bị đánh hỏng kèm
+        #     lý do rõ ràng. Đây là hỏng thật, im lặng là giấu mất sự cố.
+        # Cả hai trường hợp luồng quay bằng trình duyệt đều chạy nguyên.
+        if not station.is_agent_deployed():
+            _logger.info(
+                "PACK_REC bàn %s chưa từng có agent gọi vào — bỏ qua ghi hình",
+                station.name)
             return self.browse()
 
         now = fields.Datetime.now()
@@ -207,15 +209,17 @@ class HlvPackRecording(models.Model):
         """
         self.ensure_one()
         last_seen = self.station_id.agent_last_seen
-        if not last_seen:
-            return ('agent của bàn này CHƯA BAO GIỜ gọi vào Odoo. '
-                    'Nhiều khả năng agent chưa được cài hoặc chưa khởi động trên máy đóng gói.')
         if self.station_id.is_agent_alive():
             return ('agent đang chạy (gọi lần cuối %s) nhưng phiếu kết thúc quá nhanh, '
                     'chưa kịp nhận lệnh. Nếu lặp lại nhiều lần thì kiểm tra mạng ở máy đóng gói.'
                     % fields.Datetime.to_string(last_seen))
-        return ('agent đã ngừng gọi vào Odoo từ %s — service chết, máy tắt, hoặc mất mạng.'
-                % fields.Datetime.to_string(last_seen))
+        if last_seen:
+            return ('agent đã NGỪNG gọi vào Odoo từ %s — service chết, máy tắt, hoặc mất mạng. '
+                    'Phiếu này không có video từ agent.'
+                    % fields.Datetime.to_string(last_seen))
+        # Không tới được qua đường thường vì start_for_picking đã chặn bàn chưa
+        # triển khai. Giữ lại phòng khi bản ghi được tạo bằng cách khác.
+        return 'agent của bàn này chưa bao giờ gọi vào Odoo.'
 
     def to_command(self, action):
         """Gói bản ghi thành lệnh gửi cho agent.
