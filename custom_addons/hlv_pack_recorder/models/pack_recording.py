@@ -139,10 +139,8 @@ class HlvPackRecording(models.Model):
         # ffmpeg nào để dừng. Đẩy sang 'stopping' là kẹt vĩnh viễn chờ một agent
         # không tồn tại — đánh hỏng ngay để người dùng biết liền thay vì đợi cron.
         never_started = recordings.filtered(lambda r: r.state == 'pending')
-        if never_started:
-            never_started.mark_failed(
-                'agent không nhận lệnh trước khi phiếu kết thúc — '
-                'agent chưa chạy, sai token, hoặc không kết nối được Odoo')
+        for recording in never_started:
+            recording.mark_failed(recording._never_started_reason())
 
         running = recordings - never_started
         running.write({'state': 'stopping', 'stopped_at': fields.Datetime.now()})
@@ -200,6 +198,24 @@ class HlvPackRecording(models.Model):
         for rec in self:
             _logger.warning("PACK_REC hỏng %s/%s: %s",
                             rec.picking_id.name, rec.camera_id.code, reason)
+
+    def _never_started_reason(self):
+        """Lý do bản ghi chết trước khi agent kịp nhận lệnh.
+
+        Phân biệt "agent chưa bao giờ gọi" với "agent có gọi nhưng chậm" — hai
+        ca này sửa bằng hai cách khác nhau, gộp một câu là phải đi đoán.
+        """
+        self.ensure_one()
+        last_seen = self.station_id.agent_last_seen
+        if not last_seen:
+            return ('agent của bàn này CHƯA BAO GIỜ gọi vào Odoo. '
+                    'Nhiều khả năng agent chưa được cài hoặc chưa khởi động trên máy đóng gói.')
+        if self.station_id.is_agent_alive():
+            return ('agent đang chạy (gọi lần cuối %s) nhưng phiếu kết thúc quá nhanh, '
+                    'chưa kịp nhận lệnh. Nếu lặp lại nhiều lần thì kiểm tra mạng ở máy đóng gói.'
+                    % fields.Datetime.to_string(last_seen))
+        return ('agent đã ngừng gọi vào Odoo từ %s — service chết, máy tắt, hoặc mất mạng.'
+                % fields.Datetime.to_string(last_seen))
 
     def to_command(self, action):
         """Gói bản ghi thành lệnh gửi cho agent.
