@@ -323,14 +323,10 @@ export class DeliveryPlannerDashboard extends Component {
             this.pollUnreadMessages(false);
         }, 15000);
 
-        // Xử lý hàng chờ in IoT — trì hoãn lần gọi đầu (không cần tức thời tới mức tranh worker
-        // với fetchData()), rồi poll fallback mỗi 20s phòng khi bus không ổn định.
-        this._initialIotQueueTimeout = setTimeout(() => {
-            this.processIotPrintQueue();
-        }, 2500);
-        this.iotPrintQueuePollingInterval = setInterval(() => {
-            this.processIotPrintQueue();
-        }, 20000);
+        // ĐÃ BỎ nhịp poll 20 giây của hàng chờ in IoT (24/09/2026). Nhịp đó chỉ tồn tại để
+        // thúc đường in qua trình duyệt — đường đó đã tắt (xem AUTO_DISPATCH_O_TRINH_DUYET ở
+        // delivery_planner_iot_print_mixin.js), nên giữ lại chỉ là mỗi tab bắn một RPC vô ích
+        // mỗi 20 giây. Danh sách hàng chờ vẫn tự làm mới khi có tin bus iot_print_queue_changed.
 
         onWillDestroy(() => {
             if (this.busService) {
@@ -355,17 +351,11 @@ export class DeliveryPlannerDashboard extends Component {
             if (this._initialMessagePollTimeout) {
                 clearTimeout(this._initialMessagePollTimeout);
             }
-            if (this._initialIotQueueTimeout) {
-                clearTimeout(this._initialIotQueueTimeout);
-            }
             if (this._messageSearchDebounce) {
                 clearTimeout(this._messageSearchDebounce);
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
-            }
-            if (this.iotPrintQueuePollingInterval) {
-                clearInterval(this.iotPrintQueuePollingInterval);
             }
             if (this._dataChangedDebounce) {
                 clearTimeout(this._dataChangedDebounce);
