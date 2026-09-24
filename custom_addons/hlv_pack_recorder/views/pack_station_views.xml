@@ -10,6 +10,9 @@
         <field name="name"/>
         <field name="station_key"/>
         <field name="camera_count" string="Camera"/>
+        <field name="agent_status" widget="badge"
+               decoration-success="agent_status == 'alive'"
+               decoration-danger="agent_status != 'alive'"/>
         <field name="agent_last_seen"/>
         <field name="agent_version"/>
       </list>
@@ -39,6 +42,7 @@
             <group>
               <field name="station_key"/>
               <field name="agent_token" password="True"/>
+              <field name="agent_status"/>
               <field name="agent_last_seen"/>
               <field name="agent_version"/>
             </group>

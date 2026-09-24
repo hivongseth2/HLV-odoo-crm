@@ -60,6 +60,26 @@ class HlvPackStation(models.Model):
     )
     enroll_code_expiry = fields.Datetime(readonly=True, copy=False)
     setup_command = fields.Char(compute='_compute_setup_command')
+    agent_status = fields.Selection(
+        [
+            ('never', "Chưa bao giờ gọi"),
+            ('alive', "Đang chạy"),
+            ('dead', "Đã ngừng"),
+        ],
+        string="Tình trạng agent", compute='_compute_agent_status',
+        help="Bàn không có agent đang chạy thì phiếu đóng gói ở đó sẽ KHÔNG có video "
+             "từ agent. Luồng quay bằng trình duyệt vẫn hoạt động bình thường.",
+    )
+
+    @api.depends('agent_last_seen')
+    def _compute_agent_status(self):
+        # Non-stored nên tính lại mỗi lần đọc — đúng thứ cần, vì kết quả phụ
+        # thuộc thời điểm hiện tại chứ không chỉ phụ thuộc dữ liệu.
+        for station in self:
+            if not station.agent_last_seen:
+                station.agent_status = 'never'
+            else:
+                station.agent_status = 'alive' if station.is_agent_alive() else 'dead'
 
     @api.depends('station_key')
     def _compute_setup_command(self):
