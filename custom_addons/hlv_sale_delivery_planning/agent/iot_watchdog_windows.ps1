@@ -157,6 +157,17 @@ param(
     [int]$AlertRepeatMinutes = 15,
     # Tắt popup/msg trên máy (chỉ ghi log + Event Log) — dùng cho máy không có ai ngồi.
     [switch]$NoLocalPopup,
+    # Cổng HTTP của service Odoo IoT trên chính máy này. Dùng để thử xem service có THẬT SỰ
+    # trả lời không, chứ không chỉ hỏi Windows "Status có phải Running".
+    # Vì sao cần: đã gặp thật — service Running suốt đêm nhưng sáng vẫn phải restart tay. Nó
+    # khởi động ở đợt đầu của boot, lúc card mạng chưa có IP, nên tự đăng ký với Odoo bằng
+    # 127.0.0.1 (đúng bản ghi hộp IoT "MayChu — https://127.0.0.1" thừa ra trong danh sách).
+    # Sau đó nó vẫn Running nên watchdog cũ thấy mọi thứ bình thường.
+    [int]$ServicePort = 8069,
+    # Bao nhiêu lượt LIÊN TIẾP service không trả lời thì mới restart. Để 2 (≈4 phút ở nhịp
+    # 120 giây): 1 lượt trượt có thể chỉ do service đang bận, restart ngay là cắt ngang việc in.
+    # Đặt 0 để tắt hẳn phép thử này.
+    [int]$ServiceProbeFails = 2,
     # BẬT ĐƯỜNG IN TRỰC TIẾP: máy này tự hỏi Odoo lấy phiếu cần in rồi in thẳng ra máy in
     # Windows, KHÔNG cần tab "Điều phối Giao hàng" nào mở. Chỉ bật trên MÁY Ở KHO (máy nối máy in).
     [switch]$LocalDispatch,
@@ -343,8 +354,38 @@ function Show-LocalAlert {
     }
 }
 
+function Test-IotServiceResponding {
+    <#
+      Service Odoo IoT có THẬT SỰ trả lời không — không chỉ hỏi Windows "Status = Running".
+
+      Vì sao cần: đã gặp thật trên máy kho (24/09) — service Running suốt đêm mà sáng vẫn phải
+      restart tay. Nó khởi động ở đợt đầu của boot, lúc card mạng chưa có IP, nên tự đăng ký với
+      Odoo bằng 127.0.0.1; sau đó vẫn Running nên watchdog cũ không thấy gì bất thường.
+
+      Chỉ mở một kết nối TCP tới cổng của service trên chính máy này, KHÔNG gọi endpoint HTTP
+      nào: đường dẫn API của Odoo IoT đổi theo phiên bản, còn "cổng có ai nghe và bắt tay được
+      không" thì đúng ở mọi phiên bản. Trả về $true/$false.
+    #>
+    param([int]$Port, [int]$TimeoutMs = 3000)
+    $client = $null
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $async = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        $done = $async.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
+        if ($done -and $client.Connected) {
+            $client.EndConnect($async)
+            return $true
+        }
+        return $false
+    } catch {
+        return $false
+    } finally {
+        if ($client) { try { $client.Close() } catch { } }
+    }
+}
+
 function Get-WatchdogState {
-    if (-not (Test-Path $StateFile)) { return @{ bad = $false; lastAlertUtc = $null } }
+    if (-not (Test-Path $StateFile)) { return @{ bad = $false; lastAlertUtc = $null; probeFails = 0 } }
     try {
         $raw = Get-Content -Path $StateFile -Raw -Encoding UTF8
         $obj = $raw | ConvertFrom-Json
@@ -353,18 +394,23 @@ function Get-WatchdogState {
         # Kind=Local, đem trừ với giờ UTC sẽ lệch đúng bằng múi giờ máy (VN = 7 tiếng) — làm
         # chống-spam khoá cảnh báo tới 7 giờ thay vì $AlertRepeatMinutes phút (đã gặp khi test).
         if ($obj.lastAlertUtc) { $last = ([datetime]::Parse($obj.lastAlertUtc)).ToUniversalTime() }
-        return @{ bad = [bool]$obj.bad; lastAlertUtc = $last }
+        $probe = 0
+        if ($null -ne $obj.probeFails) { $probe = [int]$obj.probeFails }
+        return @{ bad = [bool]$obj.bad; lastAlertUtc = $last; probeFails = $probe }
     } catch {
-        return @{ bad = $false; lastAlertUtc = $null }
+        return @{ bad = $false; lastAlertUtc = $null; probeFails = 0 }
     }
 }
 
 function Set-WatchdogState {
-    param([bool]$Bad, $LastAlertUtc)
+    # ProbeFails = -1 nghĩa là GIỮ NGUYÊN số lượt thử trượt đang lưu: các chỗ gọi cũ chỉ quan
+    # tâm tới bad/lastAlertUtc, không được vô tình xoá bộ đếm của phép thử service.
+    param([bool]$Bad, $LastAlertUtc, [int]$ProbeFails = -1)
     try {
         $dir = Split-Path -Parent $StateFile
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-        $payload = @{ bad = $Bad; lastAlertUtc = $null }
+        if ($ProbeFails -lt 0) { $ProbeFails = (Get-WatchdogState).probeFails }
+        $payload = @{ bad = $Bad; lastAlertUtc = $null; probeFails = $ProbeFails }
         if ($LastAlertUtc) { $payload.lastAlertUtc = ([datetime]$LastAlertUtc).ToString('o') }
         ($payload | ConvertTo-Json -Compress) | Set-Content -Path $StateFile -Encoding utf8
     } catch {
@@ -516,13 +562,24 @@ function Out-PdfToPrinter {
             }
             Write-WatchdogLog "Goi cong cu in: $q$PdfPrintExe$q $exeArgs"
             $before = Get-PrinterPrintedTotal -Printer $Printer
-            $proc = Start-Process -FilePath $PdfPrintExe -ArgumentList $exeArgs -PassThru -Wait `
+            # KHÔNG dùng -Wait. SumatraPDF với -exit-when-done chỉ thoát khi máy in IN XONG HẲN
+            # tờ đó — đo thật trên máy kho ngày 24/09: 4 phút 02 giây MỘT TỜ, hai tờ liên tiếp
+            # là 8 phút, cộng thời gian chờ tới lượt quét thành 10-12 phút mới ra giấy. Tệ hơn,
+            # trong lúc đứng chờ đó bộ đếm job chưa nhảy nên Odoo kết luận "đã gửi lệnh in mà
+            # máy in không in ra giấy", và phiếu kế tiếp bị tính là "nằm chờ quá lâu" — hai
+            # cảnh báo đều là báo động giả do chính chỗ chờ này.
+            # Giờ chỉ chờ tới khi WINDOWS NHẬN job (Test-PrintAccepted, tối đa 20 giây), phần in
+            # để spooler lo. Đổi lại "đã in" ở đây nghĩa là "đã vào hàng đợi máy in" — đúng ngữ
+            # nghĩa mà Odoo vẫn dùng cho state 'printed' (xem iot_print_queue.py), và vòng đối
+            # chiếu số job Windows vẫn bắt được ca giấy không ra.
+            $proc = Start-Process -FilePath $PdfPrintExe -ArgumentList $exeArgs -PassThru `
                 -WindowStyle Hidden -ErrorAction Stop
-            if ($proc.ExitCode -ne 0) {
+            $accepted = Test-PrintAccepted -Printer $Printer -BeforeTotal $before
+            # Chỉ đọc ExitCode khi tiến trình ĐÃ thoát: chưa thoát mà đọc là ném lỗi, mà chưa
+            # thoát cũng là chuyện bình thường ở đây (nó đang in).
+            if (-not $accepted.ok -and $proc.HasExited -and $proc.ExitCode -ne 0) {
                 return @{ ok = $false; message = "$exeName tra ve ExitCode=$($proc.ExitCode)" }
             }
-            # KHÔNG tin suông ExitCode=0 — xem Windows có thật sự nhận job không.
-            $accepted = Test-PrintAccepted -Printer $Printer -BeforeTotal $before
             if ($accepted.ok) {
                 return @{ ok = $true; message = "$exeName -> $Printer ($($accepted.how))" }
             }
@@ -555,6 +612,29 @@ function Out-PdfToPrinter {
     }
 }
 
+function Clear-OldPrintTemp {
+    <#
+      Dọn file PDF tạm của những lượt in TRƯỚC.
+
+      Trước đây xoá ngay sau khi in xong từng tờ, làm được vì script đứng chờ máy in in hết.
+      Bỏ -Wait rồi thì lúc hàm in trả về, tiến trình in vẫn đang đọc file — xoá ngay là hỏng
+      bản in. Nên chuyển sang dọn TRỄ: chỉ xoá file cũ hơn 30 phút, lúc đó chắc chắn không
+      còn ai đọc. PDF chứa thông tin đơn hàng nên vẫn phải dọn, không để nằm mãi trong TEMP.
+
+      File in LỖI cũng bị dọn theo sau 30 phút — đủ lâu để mở ra xem khi đang truy lỗi, và
+      đường dẫn của nó đã được ghi vào log.
+    #>
+    param([int]$OlderThanMinutes = 30)
+    try {
+        $cutoff = (Get-Date).AddMinutes(-$OlderThanMinutes)
+        Get-ChildItem -Path $env:TEMP -Filter 'hlv_print_*.pdf' -File -ErrorAction Stop |
+            Where-Object { $_.LastWriteTime -lt $cutoff } |
+            ForEach-Object { try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { } }
+    } catch {
+        # Dọn rác không phải việc sống còn — không cản đường in.
+    }
+}
+
 function Invoke-LocalPrintDispatch {
     <#
       MÁY KHO TỰ NHẬN VIỆC IN — không cần trình duyệt mở trang "Điều phối Giao hàng".
@@ -571,6 +651,7 @@ function Invoke-LocalPrintDispatch {
         Write-WatchdogLog 'Bo qua in truc tiep: chua chi dinh -PrinterName cho may nay.' 'WARN'
         return 0
     }
+    Clear-OldPrintTemp
     $claim = Invoke-OdooJson -Path '/api/iot_watchdog/claim_print_jobs' -Params @{
         token          = $Token
         warehouse_code = $WarehouseCode
@@ -611,13 +692,9 @@ function Invoke-LocalPrintDispatch {
             message  = [string]$res.message
             printer  = $PrinterName
         }
-        # Xoá file tạm khi ĐÃ IN ĐƯỢC: PDF chứa thông tin đơn hàng, không để rơi rớt trong TEMP.
-        # Chờ 1 nhịp cho tiến trình in đọc xong file (Start-Process -Wait đã xong với SumatraPDF,
-        # nhưng shell verb thì mở trình đọc PDF chạy nền nên có thể còn đang đọc).
-        # In LỖI thì giữ file lại làm bằng chứng (xem log ở trên).
-        if ($res.ok) {
-            try { Start-Sleep -Milliseconds 500; Remove-Item $tmp -Force -ErrorAction Stop } catch { }
-        }
+        # KHÔNG xoá file tạm ở đây nữa. Từ khi bỏ -Wait, tiến trình in VẪN CÒN ĐANG ĐỌC file này
+        # lúc hàm in trả về (nó chỉ mới đưa job vào hàng đợi) — xoá ngay là cắt mất bản in giữa
+        # chừng. File được dọn ở đầu lượt sau, xem Clear-OldPrintTemp.
     }
 
     $report = Invoke-OdooJson -Path '/api/iot_watchdog/report_print_result' -Params @{
@@ -686,6 +763,56 @@ function Invoke-WatchdogCycle {
         # Không tìm thấy service = cấu hình sai tên, hoặc Odoo IoT chưa cài như service.
         $noteParts += 'service=KHONG_TIM_THAY'
         Write-WatchdogLog "Không tìm thấy service '$ServiceName': $($_.Exception.Message)" 'ERROR'
+    }
+
+    # --- 1b. Running rồi, nhưng có TRẢ LỜI không? ------------------------------------
+    # Status='Running' chỉ nói tiến trình còn sống, không nói nó còn làm việc. Ca thật gặp ở
+    # kho: service treo sau khi khởi động sớm hơn mạng, vẫn Running, sáng nào cũng phải vào
+    # restart tay. Đếm số lượt trượt LIÊN TIẾP rồi mới restart — trượt 1 lượt có thể chỉ do
+    # service đang bận render PDF.
+    if ($serviceOk -and $ServiceProbeFails -gt 0) {
+        $probeState = Get-WatchdogState
+        if (Test-IotServiceResponding -Port $ServicePort) {
+            $noteParts += 'service_tra_loi=OK'
+            if ($probeState.probeFails -gt 0) {
+                Set-WatchdogState -Bad $probeState.bad -LastAlertUtc $probeState.lastAlertUtc -ProbeFails 0
+            }
+        } else {
+            $truot = $probeState.probeFails + 1
+            $noteParts += "service_tra_loi=KHONG($truot/$ServiceProbeFails)"
+            Write-WatchdogLog (
+                "Service '$ServiceName' dang Running nhung KHONG tra loi o cong $ServicePort " +
+                "(lan truot $truot/$ServiceProbeFails)."
+            ) 'WARN'
+            if ($truot -ge $ServiceProbeFails) {
+                if ($NoAutoRestart) {
+                    Write-WatchdogLog 'Khong tu restart vi dang chay voi -NoAutoRestart.' 'WARN'
+                    $serviceOk = $false
+                } else {
+                    Write-WatchdogLog "Restart '$ServiceName' vi treo: Running ma khong tra loi." 'ERROR'
+                    try {
+                        Restart-Service -Name $ServiceName -Force -ErrorAction Stop
+                        # 15 giây: Odoo IoT cần vài giây mới mở cổng. Thử lại ngay sau restart để
+                        # biết đã cứu được chưa, thay vì chờ tới lượt sau mới biết.
+                        Start-Sleep -Seconds 15
+                        if (Test-IotServiceResponding -Port $ServicePort) {
+                            $noteParts += 'da_restart_vi_treo=OK'
+                            Write-WatchdogLog 'Restart xong, service da tra loi lai.' 'INFO'
+                        } else {
+                            $noteParts += 'da_restart_vi_treo=VAN_KHONG_TRA_LOI'
+                            $serviceOk = $false
+                            Write-WatchdogLog 'Da restart nhung service VAN khong tra loi.' 'ERROR'
+                        }
+                    } catch {
+                        $noteParts += 'da_restart_vi_treo=LOI'
+                        $serviceOk = $false
+                        Write-WatchdogLog "Loi khi restart service: $($_.Exception.Message)" 'ERROR'
+                    }
+                }
+                $truot = 0
+            }
+            Set-WatchdogState -Bad $probeState.bad -LastAlertUtc $probeState.lastAlertUtc -ProbeFails $truot
+        }
     }
 
     # --- 2. Kiểm tra service hàng đợi in (Spooler) -----------------------------------

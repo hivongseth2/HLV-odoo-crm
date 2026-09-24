@@ -22,7 +22,7 @@ class ResConfigSettings(models.TransientModel):
              'gửi 1 lần. Vẫn tôn trọng khóa "Khóa mở/gửi in phiếu lấy hàng" ở trên nếu đang bật.',
     )
 
-    # --- Watchdog máy chủ kho (script chạy trên máy kho báo về, xem bin/iot_watchdog_windows.ps1) ---
+    # --- Watchdog máy chủ kho (script chạy trên máy kho báo về, xem custom_addons/hlv_sale_delivery_planning/agent/iot_watchdog_windows.ps1) ---
     iot_watchdog_token = fields.Char(
         string='Token watchdog máy chủ kho',
         config_parameter='hlv_sale_delivery_planning.iot_watchdog_token',

@@ -2692,7 +2692,7 @@ function renderPrinterStatus(list){
   if(!list.length){box.innerHTML='';return;}
   box.innerHTML=list.map(function(p){
     // overall_ok gộp cả 2 nguồn: Odoo có thấy hộp IoT không, VÀ máy chủ kho có còn sống +
-    // service còn chạy không (heartbeat từ bin/iot_watchdog_windows.ps1). Chỉ nhìn connected
+    // service còn chạy không (heartbeat từ custom_addons/hlv_sale_delivery_planning/agent/iot_watchdog_windows.ps1). Chỉ nhìn connected
     // là KHÔNG đủ — nó có thể giữ True mãi khi hộp IoT chết đột ngột.
     var ok=(p.overall_ok!==undefined)?p.overall_ok:p.connected;
     var cls=ok?'online':'offline';

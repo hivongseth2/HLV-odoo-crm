@@ -56,7 +56,7 @@ for r in rows:
               f"service {'Running' if r['watchdog_service_ok'] else 'KHÔNG chạy'}")
         print(f"    ghi chú từ máy chủ kho : {r['watchdog_note'] or '(không có)'}")
     else:
-        print("    watchdog máy chủ kho   : CHƯA CÀI (không giám sát) — xem bin/iot_watchdog_windows.ps1")
+        print("    watchdog máy chủ kho   : CHƯA CÀI (không giám sát) — xem custom_addons/hlv_sale_delivery_planning/agent/iot_watchdog_windows.ps1")
     print(f"    => KẾT LUẬN            : {'OK, in được' if r['overall_ok'] else 'CÓ SỰ CỐ: ' + r['problem_message']}")
 
 section("3) Đối chiếu 2 hàng đợi (Odoo đã gửi vs máy in đã in thật)")
@@ -71,7 +71,7 @@ for wh in Warehouse.search([('x_iot_printer_device_id', '!=', False)]):
     log = wh._iot_read_counter_log()
     if not log:
         print("    bộ đếm máy in          : CHƯA CÓ SỐ LIỆU — watchdog ở kho chưa gửi 'printed_total'")
-        print("                             (cần bản .ps1 mới nhất trong bin/iot_watchdog_windows.ps1)")
+        print("                             (cần bản .ps1 mới nhất trong custom_addons/hlv_sale_delivery_planning/agent/iot_watchdog_windows.ps1)")
     else:
         first_ts, first_val = log[0]
         last_ts, last_val = log[-1]

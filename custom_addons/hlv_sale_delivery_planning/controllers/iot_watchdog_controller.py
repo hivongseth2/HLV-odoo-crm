@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Endpoint nhận heartbeat từ script watchdog chạy TRÊN MÁY CHỦ KHO (bin/iot_watchdog_windows.ps1).
+"""Endpoint nhận heartbeat từ script watchdog chạy TRÊN MÁY CHỦ KHO (custom_addons/hlv_sale_delivery_planning/agent/iot_watchdog_windows.ps1).
 
 Vì sao cần: Odoo KHÔNG có cách tự biết máy chủ kho (máy chạy service IoT + nối máy in) còn sống
 hay không — iot.device.connected có thể giữ True mãi sau khi hộp IoT chết đột ngột, còn write_date
