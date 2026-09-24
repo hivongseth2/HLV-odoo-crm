@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Quét tình trạng thu tiền MISA cho các giao dịch điểm chưa xong, 1 lần/ngày lúc 20h.
+         nextcall lưu theo giờ UTC nên 20h giờ Việt Nam (UTC+7) = 13:00 UTC; đặt vào NGÀY MAI
+         để việc cài/nâng cấp module giữa ban ngày không kích hoạt ngay một lượt quét cả bảng. -->
+    <record id="ir_cron_misa_payment_scan" model="ir.cron">
+        <field name="name">Loyalty: quét thu tiền hóa đơn MISA</field>
+        <field name="model_id" ref="hlv_loyalty.model_hlv_loyalty_history"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_scan_misa_payment()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="nextcall"
+               eval="(DateTime.today() + timedelta(days=1)).strftime('%Y-%m-%d 13:00:00')"/>
+        <field name="active">True</field>
+    </record>
+</odoo>

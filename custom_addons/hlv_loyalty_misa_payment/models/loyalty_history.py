@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from odoo import api, models
+from odoo import api, fields, models
 
 from ..services.loyalty_misa_payment_utils import (
+    PAID_STATE_SELECTION,
     index_voucher_lines,
     match_loyalty_line,
     paid_state_of,
@@ -14,21 +15,38 @@ from ..services.loyalty_misa_payment_utils import (
 
 _logger = logging.getLogger(__name__)
 
+# Số giao dịch điểm quét mỗi lần cron chạy. Mỗi bản ghi tốn 2-4 lệnh gọi MISA nên không quét
+# sạch bảng trong 1 đêm; phần chưa tới lượt để đêm sau (xem _cron_scan_misa_payment: bản ghi
+# chưa tra bao giờ được ưu tiên, sau đó tới bản ghi tra lâu nhất).
+MISA_PAYMENT_SCAN_BATCH_SIZE = 200
+
 
 class HlvLoyaltyHistoryMisaPayment(models.Model):
     _inherit = 'hlv.loyalty.history'
+
+    # 3 field dưới đây là ẢNH CHỤP kết quả lần tra MISA gần nhất, KHÔNG phải nguồn sự thật —
+    # nguồn sự thật luôn là MISA. Lưu lại để (a) list Lịch sử điểm lọc/xem được ngay mà không
+    # phải gọi API cho từng dòng, (b) cron biết bản ghi nào đã xong để thôi tra lại. Mọi lần
+    # tra (cron lẫn mở form/bấm "Tra lại") đều ghi đè 3 field này — xem _misa_payment_store().
+    misa_invoice_no = fields.Char(string='Số hóa đơn MISA', copy=False, index=True, readonly=True)
+    misa_paid_state = fields.Selection(
+        PAID_STATE_SELECTION, string='Thu tiền MISA', copy=False, index=True, readonly=True,
+    )
+    misa_paid_checked_at = fields.Datetime(string='Lần tra MISA gần nhất', copy=False, readonly=True)
 
     @api.model
     def get_misa_payment_status(self, history_id, force_refresh=False):
         """Tình trạng THU TIỀN trên MISA của giao dịch điểm này, tra sống tại thời điểm gọi.
 
         Gọi từ widget trên form Lịch sử điểm (xem static/src/js/loyalty_misa_payment.js) ngay
-        khi mở form, để người xét duyệt điểm biết đơn đã thu tiền chưa trước khi bấm xác nhận.
-        KHÔNG ghi gì xuống database — số liệu MISA thay đổi liên tục, lưu lại chỉ tạo ra một
-        bản sao cũ đi theo thời gian mà không ai biết nó cũ.
+        khi mở form, để người xét duyệt điểm biết đơn đã thu tiền chưa trước khi bấm xác nhận,
+        và từ cron quét hằng đêm (_cron_scan_misa_payment).
 
         force_refresh=True: bỏ qua số hóa đơn đã lưu sẵn trên phiếu kho, tra lại từ đầu bằng
-        API MISA (nút "Tra lại từ MISA").
+        API MISA (nút "Tra lại").
+
+        Kết quả luôn được lưu lại vào misa_invoice_no/misa_paid_state (xem _misa_payment_store)
+        — tra sống mà MISA đã đổi thì bản lưu đổi theo ngay, không chờ cron.
 
         Trả dict luôn có 'available' (bool) và 'raw' (dữ liệu thô để người dùng tự đối chiếu);
         lỗi gọi MISA trả 'error' thay vì raise, để form không vỡ chỉ vì MISA đang trục trặc.
@@ -47,18 +65,87 @@ class HlvLoyaltyHistoryMisaPayment(models.Model):
             }
 
         try:
-            return self._misa_payment_report(history, picking, force_refresh)
+            report = self._misa_payment_report(history, picking, force_refresh)
         except Exception as error:
             _logger.exception(
                 "❌ [LOYALTY MISA PAID] Lỗi tra tình trạng thu tiền cho giao dịch điểm %s (phiếu %s)",
                 history.id, picking.name,
             )
-            return {
+            report = {
                 'available': True,
                 'error': str(error),
                 'picking_name': picking.name,
                 'order_name': history.sale_order_id.sudo().name or '',
             }
+
+        history._misa_payment_store(report)
+        return report
+
+    def _misa_payment_store(self, report):
+        """Lưu kết quả tra MISA lên chính bản ghi điểm.
+
+        Lần tra LỖI chỉ cập nhật mốc thời gian, KHÔNG đụng tới số hóa đơn/trạng thái đã lưu:
+        ghi đè lúc đó sẽ xóa mất kết quả đúng của lần trước chỉ vì MISA đang trục trặc. Nhưng
+        mốc thời gian thì luôn phải ghi (kể cả khi lỗi, kể cả khi số liệu không đổi) — cron dựa
+        vào nó để xoay vòng, không ghi thì bản ghi hỏng đó chiếm chỗ đầu hàng mãi mãi và phần
+        còn lại không bao giờ tới lượt.
+        """
+        self.ensure_one()
+        vals = {'misa_paid_checked_at': fields.Datetime.now()}
+        if not report.get('error'):
+            vals['misa_invoice_no'] = report.get('invoice_no') or False
+            vals['misa_paid_state'] = report.get('summary_state') or False
+        self.sudo().write(vals)
+
+    @api.model
+    def _misa_payment_scan_domain(self):
+        """Giao dịch điểm CÒN cần tra MISA.
+
+        Bỏ qua hẳn bản ghi đã có số hóa đơn VÀ đã thu tiền: đó là trạng thái cuối, MISA không
+        đổi ngược lại được, tra thêm chỉ tốn lệnh gọi. Cũng bỏ qua điểm đã hủy và các loại giao
+        dịch không sinh ra từ việc bán hàng (đổi thưởng, chuyển điểm, điều chỉnh tay) — những
+        cái đó không có hóa đơn để tra.
+        """
+        return [
+            ('picking_id', '!=', False),
+            ('transaction_type', '=', 'earn'),
+            ('state', '!=', 'cancelled'),
+            '|', ('misa_invoice_no', '=', False), ('misa_paid_state', '!=', 'paid'),
+        ]
+
+    @api.model
+    def _cron_scan_misa_payment(self, limit=MISA_PAYMENT_SCAN_BATCH_SIZE):
+        """Quét tình trạng thu tiền cho các giao dịch điểm chưa xong (chạy 1 lần/ngày).
+
+        Ưu tiên bản ghi CHƯA tra lần nào, còn dư mới lấy tiếp bản ghi tra lâu nhất — để bản ghi
+        mới phát sinh luôn có số liệu ngay đêm đầu tiên thay vì xếp hàng sau vài trăm bản ghi
+        cũ. Lỗi của 1 bản ghi (MISA trả lỗi, phiếu dữ liệu lạ) không được làm hỏng cả lượt quét
+        nên bắt riêng từng bản ghi.
+        """
+        domain = self._misa_payment_scan_domain()
+        records = self.search(domain + [('misa_paid_checked_at', '=', False)], limit=limit)
+        if len(records) < limit:
+            records |= self.search(
+                domain + [('misa_paid_checked_at', '!=', False)],
+                order='misa_paid_checked_at asc',
+                limit=limit - len(records),
+            )
+
+        checked = 0
+        for record in records:
+            try:
+                # get_misa_payment_status tự bắt lỗi MISA và trả về 'error' thay vì raise, nên
+                # phải đọc kết quả mới biết bản ghi này thật sự tra được hay không.
+                if not record.get_misa_payment_status(record.id).get('error'):
+                    checked += 1
+            except Exception:
+                _logger.exception(
+                    "❌ [LOYALTY MISA PAID CRON] Lỗi tra giao dịch điểm %s", record.id,
+                )
+        _logger.info(
+            "✅ [LOYALTY MISA PAID CRON] Đã tra %s/%s giao dịch điểm cần kiểm tra thu tiền.",
+            checked, len(records),
+        )
 
     def _misa_payment_report(self, history, picking, force_refresh):
         """Ráp báo cáo hoàn chỉnh: số hóa đơn → chứng từ MISA → đối chiếu từng dòng tích điểm."""
