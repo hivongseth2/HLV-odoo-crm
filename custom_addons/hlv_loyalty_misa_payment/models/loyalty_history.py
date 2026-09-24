@@ -15,10 +15,11 @@ from ..services.loyalty_misa_payment_utils import (
 
 _logger = logging.getLogger(__name__)
 
-# Số giao dịch điểm quét mỗi lần cron chạy. Mỗi bản ghi tốn 2-4 lệnh gọi MISA nên không quét
-# sạch bảng trong 1 đêm; phần chưa tới lượt để đêm sau (xem _cron_scan_misa_payment: bản ghi
-# chưa tra bao giờ được ưu tiên, sau đó tới bản ghi tra lâu nhất).
-MISA_PAYMENT_SCAN_BATCH_SIZE = 200
+# Số giao dịch điểm quét mỗi lần cron chạy. Để ở ir.config_parameter chứ không cứng trong code
+# vì con số hợp lý đổi theo lượng dữ liệu: lúc mới bật cần một đợt quét bù rất lớn cho vài nghìn
+# bản ghi cũ, sau đó mỗi đêm chỉ còn vài bản ghi mới phát sinh — không thể sửa code mỗi lần.
+MISA_PAYMENT_SCAN_BATCH_PARAM = 'hlv_loyalty_misa_payment.scan_batch_size'
+MISA_PAYMENT_SCAN_BATCH_DEFAULT = 500
 
 
 class HlvLoyaltyHistoryMisaPayment(models.Model):
@@ -114,14 +115,28 @@ class HlvLoyaltyHistoryMisaPayment(models.Model):
         ]
 
     @api.model
-    def _cron_scan_misa_payment(self, limit=MISA_PAYMENT_SCAN_BATCH_SIZE):
+    def _misa_payment_scan_batch_size(self):
+        """Số bản ghi quét mỗi lượt cron, đọc từ ir.config_parameter (xem hằng số cùng tên).
+
+        Giá trị rác hoặc <= 0 trong tham số hệ thống thì quay về mặc định thay vì làm hỏng cron.
+        """
+        raw = self.env['ir.config_parameter'].sudo().get_param(MISA_PAYMENT_SCAN_BATCH_PARAM)
+        try:
+            size = int(raw)
+        except (TypeError, ValueError):
+            return MISA_PAYMENT_SCAN_BATCH_DEFAULT
+        return size if size > 0 else MISA_PAYMENT_SCAN_BATCH_DEFAULT
+
+    @api.model
+    def _cron_scan_misa_payment(self, limit=None):
         """Quét tình trạng thu tiền cho các giao dịch điểm chưa xong (chạy 1 lần/ngày).
 
         Ưu tiên bản ghi CHƯA tra lần nào, còn dư mới lấy tiếp bản ghi tra lâu nhất — để bản ghi
-        mới phát sinh luôn có số liệu ngay đêm đầu tiên thay vì xếp hàng sau vài trăm bản ghi
+        mới phát sinh luôn có số liệu ngay đêm đầu tiên thay vì xếp hàng sau vài nghìn bản ghi
         cũ. Lỗi của 1 bản ghi (MISA trả lỗi, phiếu dữ liệu lạ) không được làm hỏng cả lượt quét
         nên bắt riêng từng bản ghi.
         """
+        limit = limit or self._misa_payment_scan_batch_size()
         domain = self._misa_payment_scan_domain()
         records = self.search(domain + [('misa_paid_checked_at', '=', False)], limit=limit)
         if len(records) < limit:
@@ -131,20 +146,39 @@ class HlvLoyaltyHistoryMisaPayment(models.Model):
                 limit=limit - len(records),
             )
 
-        checked = 0
+        # 1 phiếu kho thường sinh 2 bản ghi điểm (điểm xếp hạng + điểm đổi thưởng) và đôi khi
+        # nhiều hơn — tra MISA riêng cho từng bản ghi là gọi lại y hệt cùng một bộ API cho cùng
+        # một phiếu. Gom theo phiếu, tra 1 lần rồi chép kết quả sang các bản ghi còn lại: cắt
+        # được khoảng một nửa số lệnh gọi mà kết quả không đổi (báo cáo vốn chỉ phụ thuộc phiếu).
+        groups = {}
         for record in records:
+            groups.setdefault(record.picking_id.id, self.browse())
+            groups[record.picking_id.id] |= record
+
+        checked = 0
+        for group in groups.values():
+            leader = group[0]
             try:
                 # get_misa_payment_status tự bắt lỗi MISA và trả về 'error' thay vì raise, nên
-                # phải đọc kết quả mới biết bản ghi này thật sự tra được hay không.
-                if not record.get_misa_payment_status(record.id).get('error'):
-                    checked += 1
+                # phải đọc kết quả mới biết phiếu này thật sự tra được hay không.
+                report = leader.get_misa_payment_status(leader.id)
             except Exception:
                 _logger.exception(
-                    "❌ [LOYALTY MISA PAID CRON] Lỗi tra giao dịch điểm %s", record.id,
+                    "❌ [LOYALTY MISA PAID CRON] Lỗi tra giao dịch điểm %s (phiếu %s)",
+                    leader.id, leader.picking_id.display_name,
                 )
+                continue
+            for sibling in group - leader:
+                sibling._misa_payment_store(report)
+            if not report.get('error'):
+                checked += len(group)
+
+        # Đếm lại bằng chính domain quét (sau khi đã ghi kết quả) thay vì trừ nhẩm: bản ghi vừa
+        # tra xong nhưng CHƯA thu tiền vẫn còn nằm trong hàng đợi, trừ đi là báo thiếu việc.
         _logger.info(
-            "✅ [LOYALTY MISA PAID CRON] Đã tra %s/%s giao dịch điểm cần kiểm tra thu tiền.",
-            checked, len(records),
+            "✅ [LOYALTY MISA PAID CRON] Đã tra %s/%s giao dịch điểm (%s phiếu kho), "
+            "còn %s bản ghi trong hàng đợi.",
+            checked, len(records), len(groups), self.search_count(domain),
         )
 
     def _misa_payment_report(self, history, picking, force_refresh):
