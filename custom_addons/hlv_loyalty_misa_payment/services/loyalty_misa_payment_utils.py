@@ -11,6 +11,19 @@ effect — nhờ vậy phần logic khớp mã hàng/số hóa đơn kiểm ch�
 PAID_TYPE_PAID = 1
 PAID_TYPE_UNPAID = 0
 
+# Bộ mã trạng thái thu tiền dùng CHUNG cho cả kết luận tính tại chỗ (summarize_line_states)
+# lẫn field lưu trên hlv.loyalty.history — khai 1 chỗ để 2 nơi không bao giờ lệch bộ mã. Nhãn
+# ở đây là nhãn NGẮN cho list view; câu giải thích dài nằm trong summarize_line_states.
+PAID_STATE_SELECTION = [
+    ('paid', 'Đã thu tiền'),
+    ('partial', 'Thu tiền một phần'),
+    ('unpaid', 'Chưa thu tiền'),
+    ('not_found', 'Không khớp được hóa đơn'),
+    ('no_invoice', 'Chưa có hóa đơn MISA'),
+    ('no_line', 'Không có dòng hàng'),
+    ('unknown', 'Không rõ'),
+]
+
 # Sai số cho phép khi so số lượng đã ghi trên hóa đơn với số lượng đã tích điểm (MISA và Odoo
 # đều lưu số thực, cùng 1 con số vẫn lệch ở chữ số cuối sau vài phép nhân/chia).
 QTY_TOLERANCE = 0.001

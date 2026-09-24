@@ -160,7 +160,7 @@ export class LoyaltyMisaPaymentPanel extends Component {
             this.data.invoice_source === "picking"
                 ? "số hóa đơn lấy từ phiếu kho (đã đối soát trước đó)"
                 : "số hóa đơn tra sống từ MISA";
-        return `Tra lúc ${this.state.fetchedAt} — ${source}. Số liệu chỉ để xem, không lưu vào Odoo.`;
+        return `Tra lúc ${this.state.fetchedAt} — ${source}. Kết quả đã được lưu lại vào bản ghi điểm.`;
     }
 
     /** Class tông màu cho 1 trạng thái, dùng chung cho card (o_lmp) và pill (o_lmp__pill). */

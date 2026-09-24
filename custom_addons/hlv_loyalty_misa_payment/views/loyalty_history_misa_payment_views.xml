@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Chèn bảng "Thu tiền MISA" vào form Lịch sử điểm. Widget tự gọi MISA ngay khi form mở,
-         không qua field nào của bản ghi (số liệu chỉ để xem, không lưu). -->
+         không qua field nào của bản ghi (kết quả được lưu lại sau đó, xem _misa_payment_store). -->
     <record id="view_loyalty_history_form_misa_payment" model="ir.ui.view">
         <field name="name">hlv.loyalty.history.form.misa.payment</field>
         <field name="model">hlv.loyalty.history</field>
@@ -11,6 +11,52 @@
                  theo @string: Odoo 18 chặn dùng 'string' làm selector khi inherit view. -->
             <xpath expr="//group[field[@name='point_formula_html']]" position="before">
                 <widget name="hlv_loyalty_misa_payment"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 2 cột kết quả lần tra gần nhất trên list Lịch sử điểm, để nhìn cả trang biết đơn nào
+         đã thu tiền mà không phải mở từng bản ghi. -->
+    <record id="view_loyalty_history_list_misa_payment" model="ir.ui.view">
+        <field name="name">hlv.loyalty.history.list.misa.payment</field>
+        <field name="model">hlv.loyalty.history</field>
+        <field name="inherit_id" ref="hlv_loyalty.view_loyalty_history_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='picking_id']" position="before">
+                <field name="misa_invoice_no" optional="show"/>
+                <field name="misa_paid_state" widget="badge" optional="show"
+                       decoration-success="misa_paid_state == 'paid'"
+                       decoration-warning="misa_paid_state == 'partial'"
+                       decoration-danger="misa_paid_state == 'unpaid'"
+                       decoration-muted="misa_paid_state in ('no_invoice', 'no_line', 'not_found')"
+                       decoration-info="misa_paid_state == 'unknown'"/>
+                <field name="misa_paid_checked_at" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Lọc nhanh theo tình trạng thu tiền: đây là việc làm hằng ngày (soát xem đơn nào đã thu
+         tiền để xác nhận điểm), không thể bắt người dùng tự dựng filter tùy biến mỗi lần. -->
+    <record id="view_loyalty_history_search_misa_payment" model="ir.ui.view">
+        <field name="name">hlv.loyalty.history.search.misa.payment</field>
+        <field name="model">hlv.loyalty.history</field>
+        <field name="inherit_id" ref="hlv_loyalty.view_loyalty_history_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='description']" position="after">
+                <field name="misa_invoice_no"/>
+            </xpath>
+            <xpath expr="//filter[@name='filter_manual']" position="after">
+                <separator/>
+                <filter string="MISA: đã thu tiền" name="filter_misa_paid"
+                        domain="[('misa_paid_state', '=', 'paid')]"/>
+                <filter string="MISA: chưa thu tiền" name="filter_misa_unpaid"
+                        domain="[('misa_paid_state', 'in', ['unpaid', 'partial'])]"/>
+                <filter string="MISA: chưa có hóa đơn" name="filter_misa_no_invoice"
+                        domain="[('misa_invoice_no', '=', False)]"/>
+            </xpath>
+            <xpath expr="//filter[@name='group_date']" position="after">
+                <filter string="Thu tiền MISA" name="group_misa_paid_state"
+                        context="{'group_by': 'misa_paid_state'}"/>
             </xpath>
         </field>
     </record>
