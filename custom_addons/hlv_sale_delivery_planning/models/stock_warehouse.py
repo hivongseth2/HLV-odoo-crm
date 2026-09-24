@@ -55,7 +55,7 @@ class StockWarehouse(models.Model):
              'đã đủ số này. Để 0 = không giới hạn.',
     )
 
-    # --- Watchdog: heartbeat do script chạy TRÊN MÁY CHỦ KHO gửi về (bin/iot_watchdog_windows.ps1) ---
+    # --- Watchdog: heartbeat do script chạy TRÊN MÁY CHỦ KHO gửi về (custom_addons/hlv_sale_delivery_planning/agent/iot_watchdog_windows.ps1) ---
     # Lý do cần: iot.device.connected có thể giữ True mãi khi hộp IoT chết đột ngột, còn
     # write_date của device KHÔNG phải heartbeat liên tục (xem models/iot_print_queue.py,
     # IOT_DEVICE_STALE_SECONDS) — nên Odoo KHÔNG có cách tự biết máy chủ kho còn sống hay không.
