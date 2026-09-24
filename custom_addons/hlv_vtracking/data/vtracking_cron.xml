@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Vị trí hiện tại. 10 phút: một request cho cả đội nên tốn rất ít, nhưng ngắn
+             hơn cũng không làm dữ liệu tươi hơn vì thiết bị gửi thưa khi xe đỗ. -->
+        <record id="cron_vtracking_sync_vehicles" model="ir.cron">
+            <field name="name">V-Tracking: cập nhật vị trí đội xe</field>
+            <field name="model_id" ref="fleet.model_fleet_vehicle"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_vtracking_sync_vehicles()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <!-- Hành trình ngày hôm trước. Chạy sau nửa đêm để ngày đã khép lại: lấy hành
+             trình của ngày đang chạy thì lần nào cũng thiếu phần cuối ngày. -->
+        <record id="cron_vtracking_fetch_journeys" model="ir.cron">
+            <field name="name">V-Tracking: kéo hành trình ngày hôm trước</field>
+            <field name="model_id" ref="fleet.model_fleet_vehicle"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_vtracking_fetch_journeys()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <!-- Tra toạ độ địa điểm mới khai. Bật sẵn vì nó gọi base.geocoder (Nominatim
+             miễn phí theo mặc định), không đụng tài khoản vTracking. Đổi sang Google thì
+             cân nhắc lại: Google tính tiền theo lượt. -->
+        <record id="cron_vtracking_geocode_places" model="ir.cron">
+            <field name="name">V-Tracking: tra toạ độ địa điểm mới</field>
+            <field name="model_id" ref="model_hlv_vtracking_place"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_geocode_pending()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- Đối chiếu kế hoạch với thực tế. Mỗi giờ chứ không phải mỗi ngày: người
+             điều phối cần thấy chuyến sáng đã đi tới đâu ngay trong buổi chiều, chứ
+             không phải tới hôm sau. Chỉ đọc lại 2 ngày gần nhất nên rất nhẹ. -->
+        <record id="cron_vtracking_fill_actuals" model="ir.cron">
+            <field name="name">V-Tracking: đọc số thực tế của kế hoạch</field>
+            <field name="model_id" ref="model_hlv_vtracking_plan"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_fill_actuals()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- Học lại định mức cụm từ chuyến đã chạy. Hằng ngày, chạy sau giờ hành chính
+             để số thực tế của cả ngày đã được cron trên đọc xong. Chỉ ghi ĐỀ XUẤT — người
+             điều phối bấm "Áp dụng" trên cụm tuyến. -->
+        <record id="cron_vtracking_calibrate_norms" model="ir.cron">
+            <field name="name">V-Tracking: đề xuất định mức cụm từ thực tế</field>
+            <field name="model_id" ref="model_hlv_vtracking_zone"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_calibrate_norms()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="nextcall" eval="(DateTime.now().replace(hour=13, minute=0, second=0)).strftime('%Y-%m-%d %H:%M:%S')"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- Dự phòng cho tin bus gửi trượt (worker tắt đúng lúc phiếu được tạo, mất
+             mạng...). Chỉ bắn lại tin cho phiếu còn chờ; phiếu đã có người nhận thì
+             ``claim`` từ chối nên gọi lại vô hại. -->
+        <record id="cron_vtracking_ping_ai_requests" model="ir.cron">
+            <field name="name">V-Tracking: gọi lại AI cho yêu cầu còn chờ</field>
+            <field name="model_id" ref="model_hlv_vtracking_ai_request"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_retry_stale()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- Lộ trình đường thật cho chuyến còn thiếu. Bật sẵn nhưng vô hại khi chưa cấu
+             hình: chính hàm này thoát ngay nếu công ty chưa bật
+             vtracking_road_route_enabled, nên không gọi Google lần nào.
+             10 phút thay vì ngắn hơn: kế hoạch được soạn dần trong ngày, và mỗi lượt gọi
+             là tiền — không cần đường vẽ có trong vòng một phút. -->
+        <record id="cron_vtracking_fetch_road_routes" model="ir.cron">
+            <field name="name">V-Tracking: lấy lộ trình đường thật (Google Routes)</field>
+            <field name="model_id" ref="model_hlv_vtracking_plan"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_fetch_road_routes()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="cron_vtracking_gc_positions" model="ir.cron">
+            <field name="name">V-Tracking: dọn bản tin vị trí quá hạn</field>
+            <field name="model_id" ref="model_hlv_vtracking_position"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_gc_positions()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

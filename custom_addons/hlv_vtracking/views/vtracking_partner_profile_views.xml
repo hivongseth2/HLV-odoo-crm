@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_partner_profile_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.partner.profile.list</field>
+        <field name="model">hlv.vtracking.partner.profile</field>
+        <field name="arch" type="xml">
+            <list editable="bottom"
+                  decoration-danger="procedure_required not in ('none', False)"
+                  decoration-muted="not needs_truck">
+                <field name="place_id" readonly="1"/>
+                <field name="partner_ref" optional="show"/>
+                <field name="zone_id" optional="show" readonly="1"/>
+                <field name="procedure_required"/>
+                <field name="delivery_method"/>
+                <field name="needs_truck" optional="hide"/>
+                <field name="default_vehicle_id" optional="hide" options="{'no_create': True}"/>
+                <field name="extra_service_minutes" optional="hide"/>
+                <field name="receiving_from" widget="float_time" optional="hide"/>
+                <field name="receiving_to" widget="float_time" optional="hide"/>
+                <field name="payment_method" optional="hide"/>
+                <field name="free_note" optional="show"/>
+                <field name="company_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_partner_profile_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.partner.profile.form</field>
+        <field name="model">hlv.vtracking.partner.profile</field>
+        <field name="arch" type="xml">
+            <form string="Thói quen giao hàng">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="place_id" options="{'no_create': True}"
+                                   placeholder="Chọn điểm giao"/>
+                        </h1>
+                    </div>
+                    <div class="alert alert-danger" role="alert"
+                         invisible="procedure_required in ('none', False)">
+                        Điểm này <strong>phải xong thủ tục trước khi xe tới</strong>. Kế hoạch
+                        chứa điểm này sẽ không xác nhận được cho tới khi dòng đó được tích
+                        "Thủ tục đã xong".
+                    </div>
+                    <group>
+                        <group string="Thủ tục và kênh giao">
+                            <field name="procedure_required"/>
+                            <field name="delivery_method"/>
+                            <field name="needs_truck"/>
+                            <field name="default_vehicle_id" options="{'no_create': True}"/>
+                        </group>
+                        <group string="Tại điểm">
+                            <field name="must_be_last"/>
+                            <field name="extra_service_minutes"/>
+                            <field name="receiving_from" widget="float_time"/>
+                            <field name="receiving_to" widget="float_time"/>
+                            <field name="payment_method"/>
+                        </group>
+                        <group string="Đối chiếu">
+                            <field name="partner_id" readonly="1"/>
+                            <field name="partner_ref"/>
+                            <field name="zone_id" readonly="1"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+                    <group string="Ghi chú cho tài xế">
+                        <field name="free_note" nolabel="1"
+                               placeholder="Cổng vào, số điện thoại người nhận, đường khó…"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vtracking_partner_profile_search" model="ir.ui.view">
+        <field name="name">hlv.vtracking.partner.profile.search</field>
+        <field name="model">hlv.vtracking.partner.profile</field>
+        <field name="arch" type="xml">
+            <search string="Thói quen khách">
+                <field name="place_id"/>
+                <field name="partner_id"/>
+                <field name="partner_ref"/>
+                <filter name="has_procedure" string="Cần thủ tục"
+                        domain="[('procedure_required', 'not in', ('none', False))]"/>
+                <filter name="customs" string="Khai hải quan"
+                        domain="[('procedure_required', 'in', ('customs', 'both'))]"/>
+                <filter name="no_truck" string="Không cần xe công ty"
+                        domain="[('needs_truck', '=', False)]"/>
+                <separator/>
+                <filter name="no_zone" string="Chưa có cụm tuyến"
+                        domain="[('zone_id', '=', False)]"/>
+                <group expand="0" string="Gom nhóm">
+                    <filter name="group_procedure" string="Thủ tục"
+                            context="{'group_by': 'procedure_required'}"/>
+                    <filter name="group_method" string="Kênh giao"
+                            context="{'group_by': 'delivery_method'}"/>
+                    <filter name="group_zone" string="Cụm tuyến"
+                            context="{'group_by': 'zone_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_partner_profile" model="ir.actions.act_window">
+        <field name="name">Thói quen khách</field>
+        <field name="res_model">hlv.vtracking.partner.profile</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa khai thói quen khách nào</p>
+            <p>
+                Đây là chỗ giữ những điều người điều phối biết mà Odoo không biết: khách nào
+                phải khai hải quan trước, khách nào tự ghé lấy, khách nào chỉ nhận hàng buổi
+                sáng. Không khai thì mỗi lần người điều phối nghỉ là kế hoạch sai lại từ đầu.
+            </p>
+            <p>
+                Dùng <strong>Mồi thói quen đã biết</strong> ở menu Cấu hình để nạp sẵn 15 khách
+                đã rút ra được khi chạy tay.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_vtracking_seed_habits" model="ir.actions.server">
+        <field name="name">Mồi thói quen đã biết</field>
+        <field name="model_id" ref="model_hlv_vtracking_partner_profile"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_seed_known()</field>
+    </record>
+
+</odoo>

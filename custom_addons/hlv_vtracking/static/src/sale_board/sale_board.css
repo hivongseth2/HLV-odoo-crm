@@ -1,0 +1,386 @@
+/* Trang /giao-hang.
+
+   Bảng màu giữ ở mức tối thiểu: nền trắng, chữ xám đậm, MỘT màu nhấn cho "của tôi". Người
+   bán hàng mở trang này cả ngày; cái gì cũng nổi bật thì chẳng còn gì nổi bật. */
+
+:root {
+    /* Nền kem + mực gần đen: dịu mắt hơn trắng/đen thuần khi nhìn cả ngày. Một màu nhấn
+       (xanh mòng két) cho "của tôi" và "đang chọn"; cam đất cho cảnh báo; xanh lá cho việc
+       đã xong. Không có màu thứ tư. */
+    --vt-bg: #F7F6F3;
+    --vt-line: #E2E0DA;
+    --vt-line-soft: #F1EFEA;
+    --vt-ink: #1C2024;
+    --vt-muted: #5B6168;
+    --vt-mine: #175B72;
+    --vt-mine-dark: #0F4256;
+    --vt-mine-soft: #E8F0F3;
+    --vt-mine-line: #C6DCE4;
+    --vt-warn: #B4532A;
+    --vt-warn-ink: #8F3F1F;
+    --vt-warn-soft: #FBEDE6;
+    --vt-done: #3F6B4F;
+    --vt-radius: 12px;
+    --vt-font: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --vt-font-title: 'Lora', Georgia, serif;
+}
+
+body {
+    background: var(--vt-bg);
+    color: var(--vt-ink);
+    font-family: var(--vt-font);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Mọi con số dùng tabular-nums để cột giờ, cột ngày và mã chứng từ thẳng hàng. */
+.vt-num,
+.vt-eta,
+.vt-seq,
+.vt-kpi-num,
+.vt-strip-eta {
+    font-variant-numeric: tabular-nums;
+}
+
+.vt-nowrap {
+    white-space: nowrap;
+}
+
+.vt-right {
+    text-align: right;
+}
+
+.vt-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Nhãn chỉ dành cho trình đọc màn hình: ô tìm kiếm và ô ngày vẫn phải có <label>. */
+.vt-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.vt-navbar {
+    background: var(--vt-ink);
+}
+
+.vt-navbar .navbar-brand {
+    font-family: var(--vt-font-title);
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.vt-h2,
+.vt-h3 {
+    font-family: var(--vt-font-title);
+    font-weight: 600;
+    margin: 0;
+}
+
+.vt-h2 {
+    font-size: 16px;
+}
+
+.vt-h3 {
+    font-size: 15px;
+}
+
+/* ------------------------------------------------------------ thanh công cụ */
+
+.vt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    background: #fff;
+    border: 1px solid var(--vt-line);
+    border-radius: var(--vt-radius);
+    padding: .5rem .75rem;
+    margin-bottom: .75rem;
+    position: sticky;
+    top: 0;
+    z-index: 900;
+}
+
+.vt-push {
+    margin-left: auto;
+}
+
+.vt-muted {
+    color: var(--vt-muted);
+    font-size: .8125rem;
+}
+
+/* ------------------------------------------------------------ dải số của ngày */
+
+.vt-kpis {
+    display: grid;
+    /* Tự xuống dòng trên màn hẹp, không cần media query riêng. */
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: .6rem;
+    margin: .75rem 0;
+}
+
+.vt-kpi {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    background: #fff;
+    border: 1px solid var(--vt-line);
+    border-radius: var(--vt-radius);
+    padding: .7rem .9rem;
+}
+
+.vt-kpi-mark {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--vt-mine-soft);
+    color: var(--vt-mine);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vt-kpi.is-warn .vt-kpi-mark {
+    background: var(--vt-warn-soft);
+    color: var(--vt-warn);
+}
+
+.vt-kpi-num {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.vt-kpi-text {
+    display: flex;
+    flex-direction: column;
+    font-size: .875rem;
+}
+
+.vt-kpi-text small {
+    color: var(--vt-muted);
+    font-size: .75rem;
+}
+
+.vt-h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 .5rem;
+}
+
+/* ------------------------------------------------------------ nhãn, nút */
+
+.vt-chip,
+.vt-tag {
+    display: inline-block;
+    border-radius: 999px;
+    font-size: .75rem;
+    line-height: 1.5;
+    padding: 0 .5rem;
+    white-space: nowrap;
+}
+
+.vt-chip {
+    background: #eef0f3;
+    color: #41505f;
+}
+
+/* Buổi và cụm tuyến là hai thứ người bán hàng quét mắt tìm đầu tiên, nên cho chúng màu
+   riêng thay vì chìm trong đám chữ xám. */
+.vt-session {
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .05rem .55rem;
+    background: #eef0f3;
+    color: #41505f;
+}
+
+.vt-session-morning {
+    background: var(--vt-mine-soft);
+    color: var(--vt-mine-dark);
+}
+
+.vt-session-afternoon {
+    background: var(--vt-warn-soft);
+    color: var(--vt-warn-ink);
+}
+
+.vt-session-full_day {
+    background: #E6EFE8;
+    color: #2C5B3D;
+}
+
+.vt-zone {
+    font-size: .75rem;
+    font-weight: 600;
+    color: #41505f;
+    border: 1px dashed #c6ccd4;
+    border-radius: 999px;
+    padding: 0 .5rem;
+}
+
+/* Mã chứng từ trên từng điểm: bấm được, nhìn như đường dẫn chứ không như nút. */
+.vt-docs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-top: .15rem;
+}
+
+.vt-doc {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--vt-mine);
+    font-size: .8125rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.vt-doc:hover {
+    text-decoration: underline;
+}
+
+/* Hộp xem chứng từ */
+
+.vt-table {
+    width: 100%;
+    font-size: .875rem;
+    border-collapse: collapse;
+}
+
+.vt-table th,
+.vt-table td {
+    border-bottom: 1px solid #f2f4f6;
+    padding: .3rem .4rem;
+    vertical-align: top;
+}
+
+.vt-table th {
+    color: var(--vt-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vt-chip-soft {
+    background: transparent;
+    border: 1px solid var(--vt-line);
+    color: var(--vt-muted);
+}
+
+.vt-chip-mine,
+.vt-tag-mine {
+    background: var(--vt-mine);
+    color: #fff;
+}
+
+.vt-tag-warn {
+    background: #fff4d6;
+    color: #8a5a00;
+}
+
+.vt-tag-danger {
+    background: #fde8e8;
+    color: #a4262c;
+}
+
+.vt-tag-ok {
+    background: #e3f6ea;
+    color: #0c6b38;
+}
+
+.vt-tag-soft {
+    background: #eef0f3;
+    color: #41505f;
+}
+
+.vt-btn {
+    border: 1px solid var(--vt-line);
+    background: #fff;
+    color: var(--vt-ink);
+    border-radius: 6px;
+    font-size: .8125rem;
+    padding: .2rem .6rem;
+    cursor: pointer;
+}
+
+.vt-btn:hover {
+    border-color: #c6ccd4;
+    background: #f7f8fa;
+}
+
+.vt-btn-mini {
+    font-size: .75rem;
+    padding: .1rem .45rem;
+}
+
+.vt-btn-primary {
+    background: var(--vt-mine);
+    border-color: var(--vt-mine);
+    color: #fff;
+}
+
+.vt-btn-primary:hover {
+    background: var(--vt-mine-dark);
+    border-color: var(--vt-mine-dark);
+}
+
+/* Nút phụ trong bảng: đủ rõ để bấm, không tranh chỗ với nút chính. */
+.vt-btn-soft {
+    background: var(--vt-mine-soft);
+    border-color: var(--vt-mine-line);
+    color: var(--vt-mine-dark);
+    font-weight: 500;
+}
+
+.vt-btn-soft:hover {
+    background: #DCE9EE;
+    border-color: var(--vt-mine);
+}
+
+.vt-btn-ghost {
+    border-color: transparent;
+    color: var(--vt-mine);
+}
+
+.vt-btn.is-active {
+    background: var(--vt-mine);
+    border-color: var(--vt-mine);
+    color: #fff;
+}
+
+/* Chấm trạng thái xe, dùng chung màu với ghim trên bản đồ. */
+.vt-status {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    background: #adb5bd;
+}
+
+.vt-status-run {
+    background: var(--vt-done);
+    /* Vòng sáng quanh chấm: xe ĐANG CHẠY là thứ duy nhất trên trang cần nhìn ra từ xa. */
+    box-shadow: 0 0 0 3px rgba(63, 107, 79, .16);
+}
+
+.vt-status-stop { background: #C2772F; }
+.vt-status-park { background: #8A9099; }
+.vt-status-badgps { background: var(--vt-warn); }
+
+/* Tin GPS quá cũ: chấm rỗng ruột — nhìn là biết không còn đáng tin. */
+.vt-status.is-stale {
+    background: #FFFFFF;
+    border: 2px solid var(--vt-warn);
+    box-shadow: none;
+}

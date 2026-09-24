@@ -1,0 +1,460 @@
+/* Bản đồ đội xe — danh sách bên trái, bản đồ chiếm phần còn lại.
+   Chiều cao lấy 100% của khung action nên bản đồ luôn vừa màn hình, không sinh thanh cuộn
+   lồng nhau (bản đồ có thanh cuộn riêng thì cuộn chuột sẽ zoom nhầm). */
+
+.o_vt_screen {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    background: #ffffff;
+}
+
+.o_vt_side {
+    width: 320px;
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #dee2e6;
+    min-height: 0;
+}
+
+.o_vt_side_head {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.o_vt_side_meta {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.o_vt_list {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.o_vt_empty {
+    padding: 16px;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.o_vt_item {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-bottom: 1px solid #f1f3f5;
+    cursor: pointer;
+}
+
+.o_vt_item:hover {
+    background: #f8f9fa;
+}
+
+.o_vt_item_active {
+    background: #e7f1ff;
+}
+
+.o_vt_item_body {
+    min-width: 0;
+}
+
+.o_vt_item_name {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.o_vt_item_sub {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.o_vt_muted {
+    color: #6c757d;
+}
+
+.o_vt_alarm {
+    display: inline-block;
+    margin-left: 6px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 50%;
+    background: #dc3545;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Chấm trạng thái phải trùng màu với ghim trên bản đồ — đổi một chỗ thì đổi cả hai,
+   nếu không danh sách và bản đồ sẽ nói hai điều khác nhau về cùng một xe.
+   Nguồn màu: static/src/map/vtracking_map_utils.js */
+.o_vt_dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex: 0 0 10px;
+    background: #6b7280;
+}
+
+.o_vt_dot_run { background: #0d9488; }
+.o_vt_dot_stop { background: #f59e0b; }
+.o_vt_dot_park { background: #2563eb; }
+.o_vt_dot_offline { background: #9ca3af; }
+.o_vt_dot_badgps { background: #a855f7; }
+.o_vt_dot_stale { background: #9ca3af; }
+
+.o_vt_main {
+    flex: 1 1 auto;
+    position: relative;
+    min-width: 0;
+}
+
+.o_vt_map {
+    position: absolute;
+    inset: 0;
+}
+
+.o_vt_maperror {
+    position: absolute;
+    z-index: 500;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    padding: 10px 12px;
+    background: #fff3cd;
+    border: 1px solid #ffe69c;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.o_vt_popup_title {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+/* Khối kế hoạch trong popup xe. Gạch ngăn phía trên để tách rõ với phần trạng thái xe:
+   trên là xe đang ở đâu, dưới là xe phải giao những gì — hai chuyện khác nhau. */
+.o_vt_plan {
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid #dee2e6;
+}
+
+.o_vt_plan_head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    margin-bottom: 2px;
+}
+
+/* Nút mở bảng kế hoạch. Nhạt và nhỏ: nó là lối đi phụ, danh sách ngay bên dưới mới là
+   thứ người xem cần đọc trước. */
+.o_vt_plan_table_btn {
+    flex: 0 0 auto;
+    border: 1px solid #ced4da;
+    background: #fff;
+    color: #0d6efd;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: none;
+    cursor: pointer;
+}
+
+.o_vt_plan_table_btn:hover {
+    background: #e7f1ff;
+}
+
+.o_vt_plan_empty,
+.o_vt_plan_pending {
+    margin-top: 5px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.o_vt_plan_warn {
+    color: #b45309;
+}
+
+/* Danh sách điểm giao trong popup. Bỏ bullet và thụt lề mặc định của <ul> vì popup hẹp,
+   mỗi ký tự ngang đều đáng giá. */
+.o_vt_plan_lines {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    border-top: 1px dotted #dee2e6;
+}
+
+/* Mỗi điểm đúng MỘT dòng: nowrap + ellipsis. Cho xuống dòng thì bốn điểm chiếm hết
+   popup và người xem phải cuộn trong một khung bé xíu. */
+.o_vt_plan_lines li {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 5px;
+    padding: 3px 0;
+    border-bottom: 1px dotted #f1f3f5;
+    white-space: nowrap;
+}
+
+.o_vt_line_more {
+    color: #6c757d;
+    font-style: italic;
+    border-bottom: none !important;
+}
+
+.o_vt_line_no {
+    color: #6c757d;
+    flex: 0 0 auto;
+}
+
+.o_vt_line_main {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_vt_line_amount {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.o_vt_line_flags {
+    flex: 0 0 auto;
+    font-size: 11px;
+}
+
+/* Chip lọc kiêm chú giải màu, nằm trong cột trái. */
+.o_vt_chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.o_vt_chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border: 1px solid #dee2e6;
+    border-radius: 11px;
+    font-size: 11px;
+    line-height: 17px;
+    cursor: pointer;
+    user-select: none;
+    background: #fff;
+}
+
+.o_vt_chip:hover {
+    border-color: #adb5bd;
+}
+
+/* Loại đang tắt vẫn phải đọc được tên — mờ đi chứ không ẩn, nếu không người xem
+   không biết còn loại nào để bật lại. */
+.o_vt_chip_off {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.o_vt_chip_dot {
+    border-radius: 50%;
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+}
+
+/* Cùng tỉ lệ với bán kính ghim trong vtracking_map_places.js — đổi một bên thì đổi cả
+   hai, nếu không chip sẽ mô tả sai thứ đang hiện trên bản đồ. */
+.o_vt_chip_dot_small { width: 6px; height: 6px; }
+.o_vt_chip_dot_normal { width: 8px; height: 8px; }
+.o_vt_chip_dot_large { width: 11px; height: 11px; }
+
+/* Xe không có một màu cố định (màu đổi theo trạng thái) nên chip xe dùng màu trung tính
+   viền đậm, để không hứa hẹn một màu mà bản đồ không dùng. */
+.o_vt_chip_dot_vehicle {
+    background: #fff;
+    border: 2px solid #0d9488;
+    width: 9px;
+    height: 9px;
+}
+
+.o_vt_chip_num {
+    color: #6c757d;
+}
+
+.o_vt_group {
+    padding: 6px 10px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    background: #f8f9fa;
+    border-bottom: 1px solid #f1f3f5;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.o_vt_warn {
+    color: #b45309;
+}
+
+/* Nhãn luôn hiện của loại "nổi bật" (kho).
+   Phải ghi đè `.leaflet-tooltip` của Leaflet, mà CSS Leaflet được nạp động vào <head>
+   SAU asset của Odoo — cùng độ đặc hiệu thì Leaflet thắng và nhãn giữ nguyên nền trắng
+   + viền, trông như một cái hộp to che mất bản đồ. Ghép hai class để thắng chắc chắn. */
+.leaflet-tooltip.o_vt_place_label {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0 3px;
+    font-weight: 600;
+    font-size: 10px;
+    line-height: 13px;
+    /* Mờ vừa đủ đọc: nhãn là lớp phụ trợ, đường và địa danh của bản đồ mới là thứ chính. */
+    color: rgba(33, 37, 41, 0.72);
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+    white-space: nowrap;
+}
+
+.leaflet-tooltip.o_vt_place_label::before {
+    display: none;
+}
+
+/* --- Bảng kế hoạch trong hộp thoại ------------------------------------- */
+
+.o_vt_table_head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+    color: #495057;
+}
+
+.o_vt_table_warn {
+    color: #b45309;
+}
+
+.o_vt_table_ok {
+    color: #0f766e;
+}
+
+/* Số thứ tự và tiền canh phải, chữ số đều bề ngang: cột tiền phải cộng nhẩm được. */
+.o_vt_table .o_vt_table_num,
+.o_vt_table .o_vt_table_money {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.o_vt_table .o_vt_table_addr {
+    max-width: 320px;
+    overflow-wrap: anywhere;
+}
+
+.o_vt_table tfoot td {
+    font-weight: 700;
+    border-top: 2px solid #dee2e6;
+}
+
+/* Điểm đã giao mờ đi thay vì gạch ngang: vẫn phải đọc được số tiền trên dòng đó. */
+.o_vt_table_done {
+    color: #6c757d;
+}
+
+.o_vt_table_flag {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 0 5px;
+    border-radius: 8px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.o_vt_table_flag.o_vt_table_warn {
+    background: #fff3cd;
+    color: #b45309;
+}
+
+.o_vt_table_flag.o_vt_table_ok {
+    background: #d1f0e8;
+    color: #0f766e;
+}
+
+/* ---- Lộ trình dự kiến ---- */
+
+/* Ghim số thứ tự ghé. divIcon của Leaflet mặc định có nền trắng và viền — bỏ đi rồi tự
+   dựng, nếu không mỗi số nằm trong một cái hộp vuông thừa. */
+.o_vt_route_pin {
+    background: transparent;
+    border: none;
+}
+
+.o_vt_route_pin span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #6d28d9;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* Thanh thông tin lộ trình, đè trên bản đồ. z-index 500: trên tile (400), dưới popup (700). */
+.o_vt_routebar {
+    position: absolute;
+    z-index: 500;
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Mẫu nét đứt đúng như đường vẽ trên bản đồ, để thanh này cũng là chú giải. */
+.o_vt_routebar_dash {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 0;
+    border-top: 3px dashed #6d28d9;
+}
+
+.o_vt_routebar_close {
+    margin-left: auto;
+    padding: 0 4px;
+}
+
+.o_vt_plan_btns {
+    display: inline-flex;
+    gap: 4px;
+}

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_ai_request_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.ai.request.list</field>
+        <field name="model">hlv.vtracking.ai.request</field>
+        <field name="arch" type="xml">
+            <list string="Yêu cầu gửi AI"
+                  decoration-warning="is_stale"
+                  decoration-muted="state in ('rejected', 'cancelled')"
+                  decoration-danger="state == 'failed'"
+                  decoration-bf="state == 'answered'">
+                <field name="create_date" string="Gửi lúc"/>
+                <field name="requester_id"/>
+                <field name="request_type"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="plan_label" string="Kế hoạch" optional="show"/>
+                <field name="desired_date" optional="show"/>
+                <field name="verdict"/>
+                <field name="state"/>
+                <field name="waiting_minutes" string="Chờ (phút)" optional="hide"/>
+                <field name="is_stale" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_ai_request_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.ai.request.form</field>
+        <field name="model">hlv.vtracking.ai.request</field>
+        <field name="arch" type="xml">
+            <form string="Yêu cầu gửi AI">
+                <header>
+                    <button name="action_approve" type="object" string="Duyệt đề xuất"
+                            class="btn-primary" invisible="state != 'answered'"
+                            groups="hlv_vtracking.group_vtracking_user"
+                            help="Đồng ý cho AI áp đề xuất. Kế hoạch đã chốt sẽ được đưa về nháp."/>
+                    <button name="action_reject" type="object" string="Từ chối"
+                            invisible="state != 'answered'"
+                            groups="hlv_vtracking.group_vtracking_user"/>
+                    <button name="action_retry" type="object" string="Gửi lại cho AI"
+                            invisible="state not in ('failed', 'answered', 'cancelled')"/>
+                    <button name="action_cancel" type="object" string="Huỷ"
+                            invisible="state not in ('pending', 'processing', 'answered')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,processing,answered,done"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-warning" role="alert" invisible="not is_stale">
+                        AI chưa nhận việc sau <field name="waiting_minutes" class="oe_inline"/>
+                        phút. Máy chạy worker có thể đang tắt — xử lý tay hoặc báo điều phối.
+                    </div>
+                    <div class="alert alert-danger" role="alert" invisible="state != 'failed'">
+                        AI không xử lý được: <field name="error" class="oe_inline" readonly="1"/>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Yêu cầu">
+                            <field name="request_type" readonly="state != 'pending'"/>
+                            <field name="sale_order_id" readonly="state != 'pending'"
+                                   options="{'no_create': True}"/>
+                            <field name="picking_id" readonly="state != 'pending'"
+                                   options="{'no_create': True}" optional="hide"/>
+                            <field name="plan_id" readonly="state != 'pending'"
+                                   options="{'no_create': True}"
+                                   groups="hlv_vtracking.group_vtracking_user"/>
+                            <field name="desired_date" readonly="state != 'pending'"/>
+                            <field name="desired_session" readonly="state != 'pending'"/>
+                        </group>
+                        <group string="Xử lý">
+                            <field name="requester_id"/>
+                            <field name="worker" invisible="not worker"/>
+                            <field name="claimed_at" invisible="not claimed_at"/>
+                            <field name="answered_at" invisible="not answered_at"/>
+                            <field name="verdict" invisible="not verdict"/>
+                            <field name="applied" invisible="not answered_at"/>
+                            <field name="approved" invisible="not approved"/>
+                            <field name="attempt_count" invisible="attempt_count &lt; 2"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="is_stale" invisible="1"/>
+                        </group>
+                    </group>
+                    <group string="Nội dung">
+                        <field name="message" nolabel="1" readonly="state != 'pending'"
+                               placeholder="Ví dụ: khách xin nhận sáng mai trước 10h, hàng đã đóng gói xong."/>
+                    </group>
+                    <group string="AI trả lời" invisible="not answer">
+                        <field name="answer" nolabel="1" readonly="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vtracking_ai_request_search" model="ir.ui.view">
+        <field name="name">hlv.vtracking.ai.request.search</field>
+        <field name="model">hlv.vtracking.ai.request</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="sale_order_id"/>
+                <field name="requester_id"/>
+                <filter name="open" string="Đang mở"
+                        domain="[('state', 'in', ['pending', 'processing', 'answered'])]"/>
+                <filter name="answered" string="Chờ duyệt" domain="[('state', '=', 'answered')]"/>
+                <filter name="stale" string="AI chưa nhận" domain="[('is_stale', '=', True)]"/>
+                <filter name="mine" string="Của tôi" domain="[('requester_id', '=', uid)]"/>
+                <separator/>
+                <filter name="create_date" string="Ngày gửi" date="create_date"/>
+                <group>
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                    <filter name="group_type" string="Loại" context="{'group_by': 'request_type'}"/>
+                    <filter name="group_requester" string="Người gửi"
+                            context="{'group_by': 'requester_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_ai_request" model="ir.actions.act_window">
+        <field name="name">Yêu cầu gửi AI</field>
+        <field name="res_model">hlv.vtracking.ai.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vtracking_ai_request_search"/>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có yêu cầu nào</p>
+            <p>Nhân viên bán hàng mở đơn bán, chọn <b>Thao tác > Nhờ AI xếp lịch</b> để xin
+               giao sớm, dời ngày hay xếp vào chuyến. AI xem hàng, thủ tục và chỗ trống trên
+               xe rồi trả lời ngay tại đây. Kế hoạch đã chốt thì AI chỉ đề xuất, điều phối
+               bấm <b>Duyệt</b> mới áp.</p>
+        </field>
+    </record>
+
+    <!-- Gắn vào menu Thao tác của đơn bán thay vì chèn nút vào form đơn: không đụng view
+         của module sale, và người không có quyền vẫn không thấy mục này. -->
+    <record id="action_vtracking_ai_request_from_order" model="ir.actions.act_window">
+        <field name="name">Nhờ AI xếp lịch</field>
+        <field name="res_model">hlv.vtracking.ai.request</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_vtracking_ai_request_form"/>
+        <field name="target">new</field>
+        <field name="context">{'default_sale_order_id': active_id}</field>
+        <field name="binding_model_id" ref="sale.model_sale_order"/>
+        <field name="binding_view_types">form,list</field>
+        <field name="groups_id" eval="[(4, ref('sales_team.group_sale_salesman')),
+                                       (4, ref('hlv_vtracking.group_vtracking_user'))]"/>
+    </record>
+
+    <record id="action_vtracking_ai_request_from_plan" model="ir.actions.act_window">
+        <field name="name">Nhờ AI xem xét</field>
+        <field name="res_model">hlv.vtracking.ai.request</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_vtracking_ai_request_form"/>
+        <field name="target">new</field>
+        <field name="context">{'default_plan_id': active_id, 'default_request_type': 'reschedule'}</field>
+        <field name="binding_model_id" ref="hlv_vtracking.model_hlv_vtracking_plan"/>
+        <field name="binding_view_types">form,list</field>
+        <field name="groups_id" eval="[(4, ref('hlv_vtracking.group_vtracking_user'))]"/>
+    </record>
+
+</odoo>

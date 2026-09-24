@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         Nhật ký hiệu chỉnh: định mức đổi thế nào theo thời gian
+         ============================================================ -->
+    <record id="view_vtracking_calibration_log_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.calibration.log.list</field>
+        <field name="model">hlv.vtracking.calibration.log</field>
+        <field name="arch" type="xml">
+            <list string="Nhật ký hiệu chỉnh" create="0" edit="0" delete="0"
+                  decoration-success="event == 'applied'"
+                  decoration-info="event == 'computed' and suggest_minutes">
+                <field name="date"/>
+                <field name="zone_id"/>
+                <field name="kind"/>
+                <field name="event"/>
+                <field name="norm_minutes"/>
+                <field name="measured_minutes"/>
+                <field name="suggest_minutes"/>
+                <field name="sample_count"/>
+                <field name="plan_count" optional="hide"/>
+                <field name="user_id" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_calibration_log_graph" model="ir.ui.view">
+        <field name="name">hlv.vtracking.calibration.log.graph</field>
+        <field name="model">hlv.vtracking.calibration.log</field>
+        <field name="arch" type="xml">
+            <graph string="Định mức theo thời gian" type="line">
+                <field name="date" interval="week"/>
+                <field name="zone_id"/>
+                <field name="measured_minutes" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_vtracking_calibration_log_pivot" model="ir.ui.view">
+        <field name="name">hlv.vtracking.calibration.log.pivot</field>
+        <field name="model">hlv.vtracking.calibration.log</field>
+        <field name="arch" type="xml">
+            <pivot string="Nhật ký hiệu chỉnh">
+                <field name="zone_id" type="row"/>
+                <field name="kind" type="row"/>
+                <field name="date" interval="week" type="col"/>
+                <field name="measured_minutes" type="measure"/>
+                <field name="norm_minutes" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_vtracking_calibration_log_search" model="ir.ui.view">
+        <field name="name">hlv.vtracking.calibration.log.search</field>
+        <field name="model">hlv.vtracking.calibration.log</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="zone_id"/>
+                <filter name="applied" string="Lần áp dụng" domain="[('event', '=', 'applied')]"/>
+                <filter name="with_suggestion" string="Có đề xuất"
+                        domain="[('event', '=', 'computed'), ('suggest_minutes', '!=', 0)]"/>
+                <separator/>
+                <filter name="kind_hub" string="Kho → điểm đầu" domain="[('kind', '=', 'hub')]"/>
+                <filter name="kind_leg" string="Điểm → điểm" domain="[('kind', '=', 'leg')]"/>
+                <filter name="kind_return" string="Về kho" domain="[('kind', '=', 'return')]"/>
+                <separator/>
+                <filter name="date" string="Ngày" date="date"/>
+                <group>
+                    <filter name="group_zone" string="Cụm tuyến" context="{'group_by': 'zone_id'}"/>
+                    <filter name="group_kind" string="Định mức" context="{'group_by': 'kind'}"/>
+                    <filter name="group_week" string="Tuần" context="{'group_by': 'date:week'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_calibration_log" model="ir.actions.act_window">
+        <field name="name">Nhật ký hiệu chỉnh</field>
+        <field name="res_model">hlv.vtracking.calibration.log</field>
+        <field name="view_mode">list,graph,pivot</field>
+        <field name="search_view_id" ref="view_vtracking_calibration_log_search"/>
+        <field name="context">{'search_default_kind_leg': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có lần đo nào</p>
+            <p>Mỗi tối cron đo lại định mức từ các chuyến đã chạy (cần kế hoạch đã chốt và
+               shipper quét phiếu). Mỗi lần đo và mỗi lần bấm "Áp dụng" ở Cụm tuyến ghi một
+               dòng ở đây. Xem dạng biểu đồ để thấy định mức từng cụm đổi theo tuần.</p>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         Độ chính xác dự báo: kế hoạch nói mấy giờ tới, thực tế tới mấy giờ
+         ============================================================ -->
+    <record id="view_vtracking_accuracy_pivot" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.line.accuracy.pivot</field>
+        <field name="model">hlv.vtracking.plan.line</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <pivot string="Độ chính xác dự báo">
+                <field name="zone_id" type="row"/>
+                <field name="plan_date" interval="week" type="col"/>
+                <field name="on_time_rate" type="measure"/>
+                <field name="abs_variance_minutes" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_vtracking_accuracy_graph" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.line.accuracy.graph</field>
+        <field name="model">hlv.vtracking.plan.line</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <graph string="Độ chính xác dự báo" type="line">
+                <field name="plan_date" interval="week"/>
+                <field name="zone_id"/>
+                <field name="on_time_rate" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_vtracking_accuracy_list" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.line.accuracy.list</field>
+        <field name="model">hlv.vtracking.plan.line</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="Độ chính xác dự báo" create="0" edit="0" delete="0"
+                  decoration-danger="on_time_rate == 0">
+                <field name="plan_date"/>
+                <field name="plan_id"/>
+                <field name="vehicle_id"/>
+                <field name="zone_id"/>
+                <field name="partner_id"/>
+                <field name="delivered_at"/>
+                <field name="variance_minutes" string="Lệch (phút)"/>
+                <field name="abs_variance_minutes" optional="hide"/>
+                <field name="on_time_rate" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vtracking_accuracy_search" model="ir.ui.view">
+        <field name="name">hlv.vtracking.plan.line.accuracy.search</field>
+        <field name="model">hlv.vtracking.plan.line</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="zone_id"/>
+                <field name="vehicle_id"/>
+                <field name="partner_id"/>
+                <filter name="late" string="Tới trễ" domain="[('on_time_rate', '=', 0), ('variance_minutes', '>', 0)]"/>
+                <filter name="early" string="Tới sớm" domain="[('on_time_rate', '=', 0), ('variance_minutes', '&lt;', 0)]"/>
+                <separator/>
+                <filter name="plan_date" string="Ngày giao" date="plan_date"/>
+                <group>
+                    <filter name="group_zone" string="Cụm tuyến" context="{'group_by': 'zone_id'}"/>
+                    <filter name="group_vehicle" string="Xe" context="{'group_by': 'vehicle_id'}"/>
+                    <filter name="group_week" string="Tuần" context="{'group_by': 'plan_date:week'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_accuracy" model="ir.actions.act_window">
+        <field name="name">Độ chính xác dự báo</field>
+        <field name="res_model">hlv.vtracking.plan.line</field>
+        <field name="view_mode">pivot,graph,list</field>
+        <!-- Chỉ điểm đã ĐO được lệch: điểm chưa giao / thiếu toạ độ mang lệch 0, để lọt vào
+             là tỉ lệ đúng hẹn bị thổi phồng. -->
+        <field name="domain">[('variance_measured', '=', True)]</field>
+        <field name="search_view_id" ref="view_vtracking_accuracy_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('view_vtracking_accuracy_pivot')}),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('view_vtracking_accuracy_graph')}),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_vtracking_accuracy_list')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có điểm nào đo được</p>
+            <p>Một điểm vào đây khi kế hoạch đã chốt, shipper đã quét nhận hàng và giao xong,
+               và điểm đó có toạ độ. "Đúng hẹn (%)" là phần trăm điểm tới lệch không quá
+               15 phút so với giờ dự kiến; "Lệch tuyệt đối" là trung bình số phút lệch.</p>
+        </field>
+    </record>
+
+</odoo>

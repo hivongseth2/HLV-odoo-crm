@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_vtracking_place_import_form" model="ir.ui.view">
+        <field name="name">hlv.vtracking.place.import.form</field>
+        <field name="model">hlv.vtracking.place.import</field>
+        <field name="arch" type="xml">
+            <form string="Nhập điểm giao từ bản đồ">
+                <group>
+                    <group>
+                        <field name="file_data" filename="file_name"/>
+                        <field name="file_name" invisible="1"/>
+                        <field name="type_id" options="{'no_create': True}"/>
+                        <field name="match_partner"/>
+                    </group>
+                    <group>
+                        <button name="action_load" type="object" string="Đọc file"
+                                class="btn-primary" icon="fa-upload"/>
+                    </group>
+                </group>
+
+                <div class="alert alert-info" role="alert" invisible="line_ids">
+                    Chọn file ghim xuất từ Google My Maps (dạng JSON, ví dụ
+                    <code>map2.json</code>) rồi bấm <strong>Đọc file</strong>.
+                    <br/>
+                    Điểm giao là mắt xích để đơn hàng biết mình thuộc cụm tuyến nào — chưa
+                    có chúng thì kế hoạch không tính được định mức theo cụm.
+                </div>
+
+                <group invisible="not summary">
+                    <field name="summary" nolabel="1" readonly="1"/>
+                </group>
+
+                <div class="mb-2" invisible="not line_ids">
+                    <button name="action_select_with_zone" type="object"
+                            string="Chỉ chọn ghim đã ghép cụm" class="btn-link"/>
+                    <button name="action_select_all" type="object"
+                            string="Chọn tất cả ghim mới" class="btn-link"/>
+                </div>
+
+                <group invisible="not line_ids">
+                    <field name="to_create_count"/>
+                    <field name="existing_count"/>
+                    <field name="no_zone_count"/>
+                    <field name="no_partner_count"/>
+                </group>
+
+                <div class="alert alert-warning" role="alert"
+                     invisible="no_zone_count == 0">
+                    Có ghim <strong>chưa ghép được cụm tuyến</strong>. Bản đồ có lớp không
+                    phải cụm thật (lớp chỉ đường, lớp ghi quy tắc CPN) — những ghim đó nên
+                    bỏ tick, hoặc chọn cụm tay ở cột <em>Cụm tuyến</em>.
+                </div>
+                <div class="alert alert-warning" role="alert"
+                     invisible="no_partner_count == 0">
+                    Có ghim <strong>chưa ghép được đối tác</strong> trong Odoo. Vẫn tạo được,
+                    nhưng đơn hàng của khách đó sẽ <strong>không tự tìm thấy điểm giao</strong>
+                    — phải chọn đối tác tay ở cột bên, hoặc gán sau trên từng điểm.
+                </div>
+
+                <field name="line_ids" nolabel="1">
+                    <list editable="bottom" create="0" delete="0"
+                          decoration-muted="existing_place_id"
+                          decoration-warning="not zone_id and not existing_place_id">
+                        <field name="to_create" readonly="existing_place_id != False"/>
+                        <field name="name" readonly="1"/>
+                        <field name="layer" readonly="1" optional="show"/>
+                        <field name="zone_id" options="{'no_create': True}"/>
+                        <field name="partner_id" options="{'no_create': True}"
+                               domain="[('is_company', '=', True)]"/>
+                        <field name="partner_ref" readonly="1" string="Mã KH"/>
+                        <field name="address" readonly="1" optional="show"/>
+                        <field name="has_coords" string="Toạ độ" readonly="1"/>
+                        <field name="coords_error" readonly="1" optional="hide"/>
+                        <field name="note" readonly="1" optional="hide"/>
+                        <field name="existing_place_id" readonly="1" string="Đã có"/>
+                        <field name="latitude" readonly="1" optional="hide"/>
+                        <field name="longitude" readonly="1" optional="hide"/>
+                    </list>
+                </field>
+
+                <footer>
+                    <button name="action_create_places" type="object"
+                            string="Tạo điểm giao" class="btn-primary"
+                            invisible="to_create_count == 0"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_vtracking_place_import" model="ir.actions.act_window">
+        <field name="name">Nhập điểm giao từ bản đồ</field>
+        <field name="res_model">hlv.vtracking.place.import</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

@@ -1,0 +1,68 @@
+from odoo import api, fields, models
+
+from ..tools.vtracking_channel import channel_hint, delivery_channel
+
+# Địa chỉ giao MISA đẩy sang. Đọc qua ``_fields`` vì module này không phụ thuộc module
+# đồng bộ MISA — thiếu nó thì lùi về địa chỉ liên hệ, không được gãy.
+MISA_SHIPPING_ADDRESS_FIELD = 'misa_shipping_address'
+
+# Ô "hình thức giao hàng" sale gõ tay. Một nơi khai duy nhất — phiếu giao cũng đọc hằng số
+# này chứ không gõ lại tên field.
+STUDIO_CHANNEL_FIELD = 'x_studio_htgh'
+
+
+class SaleOrder(models.Model):
+    """Đơn bán có thể được xếp vào kế hoạch giao từ trước khi kho soạn hàng."""
+
+    _inherit = 'sale.order'
+
+    vtracking_plan_line_ids = fields.One2many(
+        'hlv.vtracking.plan.line', 'sale_order_id', string='Dòng kế hoạch giao',
+    )
+    vtracking_plan_id = fields.Many2one(
+        'hlv.vtracking.plan', string='Kế hoạch giao', compute='_compute_vtracking_plan_id',
+        store=True,
+        help='Kế hoạch đang chứa đơn này khi chưa có phiếu xuất. Khi phiếu ra đời, dòng kế '
+             'hoạch chuyển sang trỏ vào phiếu.',
+    )
+
+    @api.depends('vtracking_plan_line_ids', 'vtracking_plan_line_ids.plan_id')
+    def _compute_vtracking_plan_id(self):
+        for order in self:
+            order.vtracking_plan_id = order.vtracking_plan_line_ids[:1].plan_id
+
+    def _vtracking_delivery_address(self):
+        """Địa chỉ giao của đơn, dùng khi CHƯA có phiếu xuất.
+
+        Ưu tiên địa chỉ giao MISA đẩy sang: đó là nơi hàng thật sự tới, còn địa chỉ liên
+        hệ của khách thường là trụ sở. Xếp đơn vào kế hoạch từ sáng (lúc kho chưa soạn
+        hàng) mà lấy nhầm trụ sở thì toạ độ sai, cụm sai, và định mức thời gian sai theo.
+
+        Khi phiếu xuất ra đời, dòng kế hoạch chuyển sang đọc địa chỉ trên phiếu.
+        """
+        self.ensure_one()
+        if MISA_SHIPPING_ADDRESS_FIELD in self._fields:
+            value = (self[MISA_SHIPPING_ADDRESS_FIELD] or '').strip()
+            if value:
+                return value
+        shipping = self.partner_shipping_id or self.partner_id
+        return (shipping.contact_address or '').replace('\n', ', ').strip(' ,')
+
+    def _vtracking_delivery_channel(self):
+        """Kênh giao của đơn: xe công ty, khách tự lấy, CPN hay Grab.
+
+        Đọc ô sale gõ tay rồi suy ra mã. Ô đó TRỐNG thì đọc thêm ô "Nguồn" (``origin``):
+        đo 22/09/2026 trên 4000 đơn gần nhất, ô hình thức giao hàng trống ở phần lớn đơn,
+        trong khi ``origin`` có 40 đơn ghi "KHÁCH GHÉ LẤY", 38 đơn "CPN", 7 đơn "BOOK GRAB"
+        — bỏ qua chỗ đó là xếp lên xe những đơn xe không phải chạy.
+
+        Chỉ đọc ``origin`` khi ô hình thức giao hàng trống, và chỉ nhận dấu hiệu RÕ (xem
+        ``channel_hint``): ``origin`` phần lớn là tên khách và tên người đặt, đọc rộng tay
+        ở đó thì mọi đơn đều thành "Khác — đọc ghi chú".
+
+        Trả ``''`` khi không đọc được gì — bên gọi tự lùi về thói quen của điểm giao, vì
+        không biết nghĩa là "như mọi khi", không phải "xe công ty".
+        """
+        self.ensure_one()
+        typed = self[STUDIO_CHANNEL_FIELD] if STUDIO_CHANNEL_FIELD in self._fields else ''
+        return delivery_channel(typed) or channel_hint(self.origin) or ''

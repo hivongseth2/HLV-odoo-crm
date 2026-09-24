@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Form RIÊNG cho res.company, chỉ có phần vTracking. Không inherit form công ty
+         gốc: form đó là của module base, chèn thêm vào đấy sẽ hiện cấu hình vTracking
+         cho mọi người mở thông tin công ty, kể cả người không liên quan đội xe. -->
+    <record id="view_res_company_vtracking_form" model="ir.ui.view">
+        <field name="name">res.company.vtracking.form</field>
+        <field name="model">res.company</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <form string="Kết nối vTracking" create="0" delete="0">
+                <header>
+                    <button name="action_vtracking_test_connection" type="object"
+                            string="Kiểm tra kết nối" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Kết nối vTracking">
+                            <field name="vtracking_base_url" placeholder="https://171.229.16.202:8443"/>
+                            <field name="vtracking_api_key" password="True"/>
+                            <field name="vtracking_verify_ssl"/>
+                            <field name="vtracking_expand_children"/>
+                            <field name="vtracking_timeout"/>
+                        </group>
+                        <group string="Lưu trữ và bản đồ">
+                            <field name="vtracking_retention_days"/>
+                            <field name="vtracking_map_tile_url"/>
+                            <field name="vtracking_map_attribution"/>
+                        </group>
+                    </group>
+                    <group string="Định mức tính kế hoạch giao hàng">
+                        <div class="text-muted mb-2" colspan="2">
+                            Quãng đường tính theo đường chim bay nhân hệ số, KHÔNG gọi
+                            Google Directions — con số này để so các phương án xếp xe với
+                            nhau, không dùng để hứa giờ với khách. Khi có km GPS thực tế
+                            thì chỉnh hệ số cho khớp địa bàn.
+                        </div>
+                        <field name="vtracking_avg_speed_kmh"/>
+                        <field name="vtracking_minutes_per_stop"/>
+                        <field name="vtracking_road_factor"/>
+                        <field name="vtracking_zone_match_km"/>
+                    </group>
+                    <group string="Tra toạ độ địa điểm">
+                        <div class="text-muted mb-2" colspan="2">
+                            Hai ô này là tham số <strong>toàn hệ thống</strong> của module
+                            base_geolocalize, không riêng công ty đang mở. Đổi ở đây là đổi
+                            cho mọi chỗ khác đang tra toạ độ.
+                        </div>
+                        <field name="geocode_provider"/>
+                        <field name="geocode_google_key" password="True"
+                               invisible="geocode_provider != 'googlemap'"/>
+                    </group>
+                    <group string="Lộ trình đường thật">
+                        <div class="text-muted mb-2" colspan="2">
+                            Bật thì mỗi chuyến được lấy đường đi thật từ <strong>Google
+                            Routes</strong>: bản đồ vẽ nét liền theo đúng đường xe chạy,
+                            và có thêm ô km đường thật cạnh ô km chim bay. Dùng CHUNG khoá
+                            với phần tra toạ độ ở trên, nhưng khoá đó phải được bật thêm
+                            <strong>Routes API</strong> trong Google Cloud Console — bật ở
+                            đây mà chưa bật trong Console thì mỗi chuyến chỉ ghi lại một
+                            dòng lỗi. Mỗi chuyến chỉ gọi một lượt rồi lưu lại; đổi thứ tự
+                            ghé mới cần lấy lại.
+                        </div>
+                        <field name="vtracking_road_route_enabled"/>
+                    </group>
+                    <group string="Worker AI xử lý yêu cầu của nhân viên">
+                        <div class="text-muted mb-2" colspan="2">
+                            Yêu cầu nhân viên gửi được đẩy ngay tới tài khoản này qua kênh
+                            thông báo của Odoo; máy chạy worker đăng nhập bằng chính tài
+                            khoản đó và nằm chờ. Để trống thì phiếu vẫn tạo được nhưng
+                            không ai được gọi — nằm chờ tới khi có người bấm
+                            <em>Gửi lại cho AI</em>. Dùng một tài khoản RIÊNG, đừng dùng
+                            tài khoản của người: mật khẩu của nó nằm trên máy chạy worker.
+                        </div>
+                        <field name="ai_worker_user_id"
+                               options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Chỉ xe bật <strong>"Theo dõi vTracking"</strong> mới được đồng bộ, mới
+                        hiện trên bản đồ và mới trả ra API. Bật cờ đó ở
+                        <em>V-Tracking &gt; Xe theo dõi</em>.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Server action vì res_id phải là công ty ĐANG đăng nhập, không cố định được
+         trong XML. -->
+    <record id="action_vtracking_settings" model="ir.actions.server">
+        <field name="name">Kết nối vTracking</field>
+        <field name="model_id" ref="base.model_res_company"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_vtracking_settings()</field>
+    </record>
+
+</odoo>

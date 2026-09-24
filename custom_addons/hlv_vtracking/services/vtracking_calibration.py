@@ -1,0 +1,124 @@
+"""Đọc các chuyến đã chạy -> mẫu đo -> ghi ĐỀ XUẤT định mức lên từng cụm.
+
+Phép tính nằm ở ``tools/vtracking_calibration`` (thuần, có test). File này chỉ lo đọc dữ
+liệu từ Odoo và ghi kết quả — không quyết định con số nào.
+
+Chạy hằng ngày bằng cron. Không bao giờ tự sửa định mức: chỉ ghi đề xuất, người điều phối
+bấm áp dụng.
+"""
+
+import logging
+from datetime import timedelta
+
+from odoo import fields
+from odoo.addons.hlv_geo_utils.tools.geo_distance import haversine_km
+
+from ..tools.vtracking_calibration import suggestions, trip_samples
+from .vtracking_history_norms import history_samples
+
+_logger = logging.getLogger(__name__)
+
+# Cửa sổ lấy mẫu. Đủ dài để cụm ít chuyến vẫn gom được mẫu, đủ ngắn để phản ánh đường sá
+# và đội xe hiện tại chứ không phải của mùa trước.
+LOOKBACK_DAYS = 60
+
+# Xe về trong bán kính này quanh điểm xuất phát là coi như đã về kho.
+BACK_AT_HUB_KM = 0.5
+# Sau điểm cuối bao lâu thì thôi tìm xe về: quá khung này thường là xe đi việc khác.
+BACK_SEARCH = timedelta(hours=5)
+
+
+def calibrate_company(env, company, today=None):
+    """Tính lại đề xuất cho mọi cụm của công ty. Trả về số cụm có đề xuất."""
+    today = today or fields.Date.context_today(env['hlv.vtracking.zone'])
+    zones = env['hlv.vtracking.zone'].sudo().search([('company_id', '=', company.id)])
+    if not zones:
+        return 0
+    samples, plan_count = collect_samples(env, company, today)
+    # Hai nguồn mẫu, cùng một cách đo: chuyến đã có kế hoạch trong Odoo, và chuyến dựng lại
+    # từ nhật ký quét mã vạch. Nguồn thứ hai là thứ duy nhất có số ngay hôm nay — kế hoạch
+    # trong Odoo mới bắt đầu tích luỹ.
+    history, history_trips = history_samples(env, company, today)
+    samples += history
+    plan_count += history_trips
+    current = {
+        zone.id: {
+            'hub': zone.hub_to_first_minutes,
+            'leg': zone.median_leg_minutes,
+            'return': zone.return_minutes,
+        } for zone in zones
+    }
+    result = suggestions(samples, current)
+    now = fields.Datetime.now()
+    Log = env['hlv.vtracking.calibration.log']
+    for zone in zones:
+        by_kind = result.get(zone.id, {})
+        zone.write(zone._calibration_values(by_kind, plan_count, now))
+        Log._log_computed(zone, by_kind, plan_count)
+    with_suggestion = len(zones.filtered('calib_has_suggestion'))
+    _logger.info(
+        'V-Tracking hiệu chỉnh %s: %s chuyến (%s dựng từ nhật ký quét), %s mẫu, '
+        '%s cụm có đề xuất',
+        company.name, plan_count, history_trips, len(samples), with_suggestion,
+    )
+    return with_suggestion
+
+
+def collect_samples(env, company, today, days=LOOKBACK_DAYS):
+    """Mẫu đo từ mọi chuyến có số thực tế trong ``days`` ngày gần nhất.
+
+    Trả về ``(samples, plan_count)``. Hai loại điểm bị loại:
+
+    * **chở về** (giao hụt) — xe có tới nhưng thời gian ở đó không phải thời gian GIAO;
+    * **giờ giao không phải do shipper quét** (``delivered_source != 'scan'``) — đó là lúc
+      kho bấm trong Odoo, thường là bấm gộp một loạt sau khi xe về. Đo trên kho này 23%
+      phiếu xuất rơi vào dạng đó; lấy làm mẫu thì trung vị tụt xuống gần 0.
+    """
+    plans = env['hlv.vtracking.plan'].sudo().search([
+        ('company_id', '=', company.id),
+        ('state', '!=', 'cancelled'),
+        ('date', '>=', today - timedelta(days=days)),
+        ('date', '<=', today),
+        ('actual_line_count', '>', 0),
+    ])
+    samples = []
+    for plan in plans:
+        stops = [
+            {
+                'delivered_at': line.delivered_at,
+                'zone_id': line.zone_id.id or None,
+                'point': (line.latitude, line.longitude) if line.latitude and line.longitude else None,
+                'key': line.address_id.id or None,
+            }
+            for line in plan.line_ids
+            if line.delivered and line.delivered_at and not line.returned
+            and line.delivered_source == 'scan'
+        ]
+        samples += trip_samples(
+            plan.actual_start_at, plan.actual_start_source == 'received', stops,
+            back_at_hub(plan),
+        )
+    return samples, len(plans)
+
+
+def back_at_hub(plan):
+    """Lúc xe quay lại gần điểm xuất phát sau điểm giao cuối, đọc từ GPS. None nếu không
+    biết — thiếu điểm xuất phát, thiếu GPS (lịch sử bị dọn sau hạn lưu trữ), hoặc xe
+    không về trong khung ``BACK_SEARCH``."""
+    place = plan.start_place_id
+    if not (place.has_coords and plan.actual_end_at and plan.vehicle_id):
+        return None
+    hub = (place.latitude, place.longitude)
+    end_at = fields.Datetime.to_datetime(plan.actual_end_at)
+    positions = plan.env['hlv.vtracking.position'].sudo().search([
+        ('vehicle_id', '=', plan.vehicle_id.id),
+        ('ts', '>', end_at),
+        ('ts', '<=', end_at + BACK_SEARCH),
+    ], order='ts')
+    for position in positions:
+        if not (position.latitude and position.longitude):
+            continue
+        distance = haversine_km((position.latitude, position.longitude), hub)
+        if distance is not None and distance <= BACK_AT_HUB_KM:
+            return position.ts
+    return None

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- View riêng, KHÔNG inherit view của module fleet: xmlid view core đổi giữa các bản
+         Odoo là module không cài được. Người quản đội xe vẫn dùng màn hình gốc của Đội xe
+         như cũ; màn hình này chỉ phục vụ phần định vị. -->
+
+    <record id="view_fleet_vehicle_vtracking_list" model="ir.ui.view">
+        <field name="name">fleet.vehicle.vtracking.list</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="arch" type="xml">
+            <list string="Xe theo dõi" create="0" decoration-muted="vtracking_is_stale"
+                  decoration-danger="vtracking_alarm_text != False">
+                <field name="license_plate"/>
+                <field name="model_id"/>
+                <field name="driver_id"/>
+                <field name="dispatch_driver_name" string="Tài xế (shipper)" optional="show"/>
+                <field name="dispatch_role" optional="show"/>
+                <field name="dispatch_payload_kg" optional="show"/>
+                <field name="dispatch_max_pieces" optional="hide"/>
+                <field name="vtracking_enabled" widget="boolean_toggle"/>
+                <field name="vtracking_status"/>
+                <field name="vtracking_speed" optional="show"/>
+                <field name="vtracking_geocoding" optional="show"/>
+                <field name="vtracking_position_at"/>
+                <field name="vtracking_alarm_text" optional="show"/>
+                <field name="vtracking_is_stale" string="Mất liên lạc" optional="hide"/>
+                <field name="vtracking_id" optional="hide"/>
+                <field name="plate_key" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_fleet_vehicle_vtracking_form" model="ir.ui.view">
+        <field name="name">fleet.vehicle.vtracking.form</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="arch" type="xml">
+            <form string="Định vị xe" create="0">
+                <header>
+                    <button name="action_vtracking_sync_now" type="object" string="Đồng bộ ngay"
+                            class="btn-primary"
+                            groups="hlv_vtracking.group_vtracking_manager"/>
+                    <button name="action_open_vtracking_map" type="object" string="Xem trên bản đồ"
+                            invisible="not vtracking_latitude"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="license_plate" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Theo dõi">
+                            <field name="vtracking_enabled"/>
+                            <field name="vtracking_id" readonly="1"/>
+                            <field name="plate_key" readonly="1"/>
+                            <field name="vtracking_synced_at" readonly="1"/>
+                        </group>
+                        <group string="Vị trí gần nhất">
+                            <field name="vtracking_status" readonly="1"/>
+                            <field name="vtracking_status_since" readonly="1"/>
+                            <field name="vtracking_position_at" readonly="1"/>
+                            <field name="vtracking_is_stale" readonly="1"/>
+                            <field name="vtracking_geocoding" readonly="1"/>
+                            <field name="vtracking_latitude" readonly="1"/>
+                            <field name="vtracking_longitude" readonly="1"/>
+                        </group>
+                        <group string="Vận hành">
+                            <field name="vtracking_speed" readonly="1"/>
+                            <field name="vtracking_direction" readonly="1"/>
+                            <field name="vtracking_odometer" readonly="1"/>
+                        </group>
+                        <group string="Cảm biến và cảnh báo">
+                            <field name="vtracking_acc" readonly="1"/>
+                            <field name="vtracking_door" readonly="1"/>
+                            <field name="vtracking_driver_name" readonly="1"/>
+                            <field name="vtracking_alarm_text" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Phân công">
+                        <group>
+                            <field name="dispatch_driver_user_id"
+                                   options="{'no_create': True}"/>
+                            <field name="dispatch_driver_name"/>
+                        </group>
+                        <group>
+                            <field name="dispatch_start_place_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+                    <!-- Phần người khai, không đồng bộ từ vTracking. AI đọc khối này để chọn xe. -->
+                    <group string="Chuyên chở — AI đọc phần này khi chọn xe">
+                        <group>
+                            <field name="dispatch_role"/>
+                            <field name="dispatch_payload_kg"/>
+                            <field name="dispatch_max_pieces"/>
+                            <field name="dispatch_max_item_length_m"/>
+                        </group>
+                        <group string="Kích thước thùng (m)">
+                            <field name="dispatch_cargo_length_m" string="Dài"/>
+                            <field name="dispatch_cargo_width_m" string="Rộng"/>
+                            <field name="dispatch_cargo_height_m" string="Cao"/>
+                        </group>
+                    </group>
+                    <field name="dispatch_note" nolabel="1"
+                           placeholder="VD: Kim Long. Chạy tuyến Nhơn Trạch hằng ngày. Hàng dài quá 4 m thì KHÔNG dùng xe này — đổi sang xe tải 3,5 tấn."/>
+                    <notebook>
+                        <page string="Lịch sử vị trí">
+                            <field name="position_ids" readonly="1">
+                                <list>
+                                    <field name="ts"/>
+                                    <field name="status"/>
+                                    <field name="speed"/>
+                                    <field name="geocoding"/>
+                                    <field name="latitude" optional="hide"/>
+                                    <field name="longitude" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_fleet_vehicle_vtracking_search" model="ir.ui.view">
+        <field name="name">fleet.vehicle.vtracking.search</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="arch" type="xml">
+            <search string="Xe theo dõi">
+                <field name="license_plate"/>
+                <field name="driver_id"/>
+                <filter name="tracked" string="Đang theo dõi"
+                        domain="[('vtracking_enabled', '=', True)]"/>
+                <filter name="not_tracked" string="Chưa bật theo dõi"
+                        domain="[('vtracking_enabled', '=', False)]"/>
+                <separator/>
+                <filter name="running" string="Đang chạy"
+                        domain="[('vtracking_status', '=', 'run')]"/>
+                <filter name="no_coords" string="Chưa có toạ độ"
+                        domain="[('vtracking_latitude', '=', 0)]"/>
+                <filter name="no_uuid" string="Chưa ghép được mã vTracking"
+                        domain="[('vtracking_enabled', '=', True), ('vtracking_id', '=', False)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_status" string="Trạng thái"
+                            context="{'group_by': 'vtracking_status'}"/>
+                    <filter name="group_driver" string="Tài xế"
+                            context="{'group_by': 'driver_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vtracking_vehicles" model="ir.actions.act_window">
+        <field name="name">Xe theo dõi</field>
+        <field name="res_model">fleet.vehicle</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_fleet_vehicle_vtracking_search"/>
+        <field name="context">{'search_default_tracked': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có xe nào bật theo dõi</p>
+            <p>
+                Bỏ bộ lọc "Đang theo dõi" để thấy toàn bộ đội xe, rồi bật cột
+                "Theo dõi vTracking" cho những xe cần giám sát. Chỉ xe bật cờ này mới được
+                đồng bộ vị trí, hiện trên bản đồ và trả ra API.
+            </p>
+            <p>
+                Chưa khai xe nào trong Đội xe? Dùng
+                <em>V-Tracking &gt; Nhập xe từ vTracking</em> để tạo xe thẳng từ danh sách
+                trên tài khoản vTracking.
+            </p>
+        </field>
+    </record>
+
+    <!-- Ép action mở đúng hai view của module này thay vì view mặc định của fleet. -->
+    <record id="action_vtracking_vehicles_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_fleet_vehicle_vtracking_list"/>
+        <field name="act_window_id" ref="action_vtracking_vehicles"/>
+    </record>
+
+    <record id="action_vtracking_vehicles_form" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_fleet_vehicle_vtracking_form"/>
+        <field name="act_window_id" ref="action_vtracking_vehicles"/>
+    </record>
+
+</odoo>

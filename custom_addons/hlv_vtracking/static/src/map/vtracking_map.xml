@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hlv_vtracking.Map">
+        <div class="o_vt_screen">
+            <aside class="o_vt_side">
+                <div class="o_vt_side_head">
+                    <input type="search" class="form-control form-control-sm"
+                           placeholder="Tìm xe, tài xế, kho, đối tác, địa chỉ…"
+                           t-on-input="onSearchInput"/>
+
+                    <!-- Chip lọc kiêm chú giải màu: một chỗ điều khiển duy nhất cho cả
+                         danh sách bên dưới lẫn ghim trên bản đồ. Tách làm hai nơi thì
+                         người dùng tắt ở chỗ này lại thấy còn hiện ở chỗ kia. -->
+                    <div class="o_vt_chips">
+                        <span class="o_vt_chip" t-att-class="{ 'o_vt_chip_off': !state.showVehicles }"
+                              t-on-click="() => this.toggleVehicles()">
+                            <span class="o_vt_chip_dot o_vt_chip_dot_vehicle"/>
+                            <span>Xe</span>
+                            <span class="o_vt_chip_num" t-esc="state.vehicles.length"/>
+                        </span>
+                        <span t-foreach="state.placeTypes" t-as="ptype" t-key="ptype.id"
+                              class="o_vt_chip"
+                              t-att-class="{ 'o_vt_chip_off': !isTypeVisible(ptype.id) }"
+                              t-on-click="() => this.togglePlaceType(ptype.id)">
+                            <span class="o_vt_chip_dot"
+                                  t-att-class="'o_vt_chip_dot_' + ptype.size"
+                                  t-attf-style="background: #{ptype.color}"/>
+                            <span t-esc="ptype.name"/>
+                            <span class="o_vt_chip_num" t-esc="placeCountOfType(ptype.id)"/>
+                        </span>
+                    </div>
+
+                    <div class="o_vt_side_meta">
+                        <span t-esc="locatedCount"/> / <span t-esc="state.vehicles.length"/> xe có toạ độ
+                        <span t-if="state.lastRefresh" class="o_vt_muted">
+                            · cập nhật <t t-esc="state.lastRefresh.toLocaleTimeString()"/>
+                        </span>
+                    </div>
+                </div>
+
+                <div t-if="state.loading" class="o_vt_empty">Đang tải…</div>
+
+                <div t-else="" class="o_vt_list">
+                    <div t-if="!hasResults" class="o_vt_empty">
+                        Không có kết quả. Xoá bớt chữ trong ô tìm, hoặc bật lại loại đã tắt
+                        ở hàng nhãn phía trên.
+                    </div>
+
+                    <!-- Xe -->
+                    <t t-if="visibleVehicles.length">
+                        <div class="o_vt_group">Xe (<t t-esc="visibleVehicles.length"/>)</div>
+                        <div t-foreach="visibleVehicles" t-as="vehicle" t-key="vehicle.id"
+                             class="o_vt_item"
+                             t-att-class="{ 'o_vt_item_active': vehicle.id === state.selectedId }"
+                             t-on-click="() => this.selectVehicle(vehicle.id)">
+                            <span t-att-class="statusClass(vehicle)"/>
+                            <div class="o_vt_item_body">
+                                <div class="o_vt_item_name">
+                                    <t t-esc="vehicle.name"/>
+                                    <span t-if="vehicle.alarm_text" class="o_vt_alarm"
+                                          t-att-title="vehicle.alarm_text">!</span>
+                                </div>
+                                <div class="o_vt_item_sub">
+                                    <t t-esc="vehicle.status_label"/>
+                                    <t t-if="vehicle.status === 'run'">
+                                        · <t t-esc="formatSpeed(vehicle.speed)"/>
+                                    </t>
+                                </div>
+                                <div class="o_vt_item_sub o_vt_muted" t-esc="vehicle.geocoding"/>
+                                <div class="o_vt_item_sub o_vt_muted">
+                                    <t t-esc="formatAgo(vehicle.position_at)"/>
+                                    <t t-if="!vehicle.latitude"> · chưa có toạ độ</t>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Địa điểm -->
+                    <t t-if="visiblePlaces.length">
+                        <div class="o_vt_group">Địa điểm (<t t-esc="visiblePlaces.length"/>)</div>
+                        <div t-foreach="visiblePlaces" t-as="place" t-key="place.id"
+                             class="o_vt_item"
+                             t-att-class="{ 'o_vt_item_active': place.id === state.selectedPlaceId }"
+                             t-on-click="() => this.selectPlace(place.id)">
+                            <span class="o_vt_dot" t-attf-style="background: #{place.color}"/>
+                            <div class="o_vt_item_body">
+                                <div class="o_vt_item_name" t-esc="place.name"/>
+                                <div class="o_vt_item_sub o_vt_muted">
+                                    <t t-esc="place.type_name"/>
+                                    <t t-if="place.geo_state === 'pending_review'">
+                                        · <span class="o_vt_warn">toạ độ chưa duyệt</span>
+                                    </t>
+                                </div>
+                                <div class="o_vt_item_sub o_vt_muted" t-esc="place.address"/>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </aside>
+
+            <section class="o_vt_main">
+                <div t-if="state.mapError" class="o_vt_maperror" t-esc="state.mapError"/>
+
+                <!-- Thanh lộ trình: nút tắt nằm ngoài popup vì popup thường đã đóng lúc
+                     người dùng muốn bỏ lộ trình đi. -->
+                <div t-if="routeInfo" class="o_vt_routebar">
+                    <span class="o_vt_routebar_dash"/>
+                    <span>
+                        Lộ trình dự kiến — <b t-esc="routeInfo.vehicleName"/>
+                        · <t t-esc="routeInfo.sessionLabel"/>
+                        · <t t-esc="routeInfo.distance"/> km
+                        · <t t-esc="routeInfo.duration"/>
+                    </span>
+                    <span t-if="routeInfo.drawn &lt; routeInfo.total" class="o_vt_warn">
+                        (vẽ <t t-esc="routeInfo.drawn"/>/<t t-esc="routeInfo.total"/> điểm —
+                        số còn lại chưa có toạ độ)
+                    </span>
+                    <button class="btn btn-sm btn-link o_vt_routebar_close" type="button"
+                            t-on-click="() => this.hideRoute()">Ẩn</button>
+                </div>
+
+                <div class="o_vt_map" t-ref="map"/>
+            </section>
+        </div>
+    </t>
+
+</templates>
