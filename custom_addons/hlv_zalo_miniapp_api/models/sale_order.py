@@ -16,6 +16,22 @@ class SaleOrder(models.Model):
         string="Đơn hàng Zalo Mini App",
         related="partner_id.x_is_zalo_account",
         store=True,
+        help="CẢNH BÁO: đây là trường ăn theo khách hàng, KHÔNG phải dấu của "
+             "từng đơn. Khách đăng nhập Zalo một lần là mọi đơn cũ của họ "
+             "cũng thành True. Muốn biết đơn có phải đặt qua Mini App hay "
+             "không, dùng x_zalo_portal_account_id.",
+    )
+
+    x_zalo_portal_account_id = fields.Many2one(
+        "hlv.loyalty.portal.account",
+        string="Tài khoản Zalo đặt đơn",
+        index=True,
+        ondelete="set null",
+        copy=False,
+        help="Tài khoản Portal đã đặt đơn này qua Zalo Mini App. Chỉ đơn đặt "
+             "từ Mini App mới có giá trị, nên đây cũng là dấu hiệu duy nhất "
+             "phân biệt đơn Mini App với đơn nhập tay trên Odoo. Một công ty "
+             "có nhiều người thu mua, mỗi người chỉ được xem đơn của mình.",
     )
 
     # ===== Zalo Checkout SDK Transaction Fields =====

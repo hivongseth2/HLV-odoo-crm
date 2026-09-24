@@ -12,9 +12,17 @@ _logger = logging.getLogger(__name__)
 class ZaloCartAPI(ZaloBaseAPI, http.Controller):
     """API Giỏ hàng cho Zalo Mini App — lưu thông tin vào zalo.miniapp.cart.line (Không tạo sale.order draft)"""
 
-    def _cart_to_dict(self, contact_id):
+    def _cart_to_dict(self, contact_id, account_id):
+        """Gio hang cua DUNG mot tai khoan Portal.
+
+        `partner_id` la phap nhan cong ty, dung chung cho nhieu nguoi thu mua
+        - chi loc theo no thi hai nguoi cung cong ty thay chung mot gio.
+        """
         CartLine = request.env["zalo.miniapp.cart.line"].sudo()
-        cart_lines = CartLine.search([("partner_id", "=", contact_id)], order="id desc")
+        cart_lines = CartLine.search(
+            [("partner_id", "=", contact_id), ("account_id", "=", account_id)],
+            order="id desc",
+        )
 
         lines = []
         for line in cart_lines:
@@ -56,7 +64,18 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            return self._response_success(self._cart_to_dict(contact_id))
+            # Gio hang rieng theo tung nguoi thu mua. Token cu chua mang
+            # account_id -> coi nhu khong co gio, tuyet doi khong lui ve pham vi
+            # ca cong ty keo hai nguoi dung chung mot gio.
+            account_id = self._auth_account_id()
+            if not account_id:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    401,
+                )
+
+            return self._response_success(self._cart_to_dict(contact_id, account_id))
         except Exception as e:
             _logger.exception("cart_get error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -83,6 +102,17 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
+            # Gio hang rieng theo tung nguoi thu mua. Token cu chua mang
+            # account_id -> coi nhu khong co gio, tuyet doi khong lui ve pham vi
+            # ca cong ty keo hai nguoi dung chung mot gio.
+            account_id = self._auth_account_id()
+            if not account_id:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    401,
+                )
+
             Product = request.env["product.product"].sudo()
             product = Product.browse(product_id)
             if not product.exists() or not product.active or not product.x_active_zalo:
@@ -94,6 +124,7 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             CartLine = request.env["zalo.miniapp.cart.line"].sudo()
             existing_line = CartLine.search([
                 ("partner_id", "=", contact_id),
+                ("account_id", "=", account_id),
                 ("product_id", "=", product_id),
             ], limit=1)
 
@@ -102,11 +133,12 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             else:
                 CartLine.create({
                     "partner_id": contact_id,
+                    "account_id": account_id,
                     "product_id": product_id,
                     "quantity": quantity,
                 })
 
-            return self._response_success(self._cart_to_dict(contact_id))
+            return self._response_success(self._cart_to_dict(contact_id, account_id))
         except Exception as e:
             _logger.exception("cart_add error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -131,9 +163,20 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
+            # Gio hang rieng theo tung nguoi thu mua. Token cu chua mang
+            # account_id -> coi nhu khong co gio, tuyet doi khong lui ve pham vi
+            # ca cong ty keo hai nguoi dung chung mot gio.
+            account_id = self._auth_account_id()
+            if not account_id:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    401,
+                )
+
             CartLine = request.env["zalo.miniapp.cart.line"].sudo()
             line = CartLine.browse(line_id)
-            if not line.exists() or line.partner_id.id != contact_id:
+            if not line.exists() or line.account_id.id != account_id:
                 return self._response_error("NOT_FOUND", "Dòng sản phẩm không tồn tại", 404)
 
             if quantity <= 0:
@@ -141,7 +184,7 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             else:
                 line.write({"quantity": quantity})
 
-            return self._response_success(self._cart_to_dict(contact_id))
+            return self._response_success(self._cart_to_dict(contact_id, account_id))
         except Exception as e:
             _logger.exception("cart_update error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -165,12 +208,23 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
+            # Gio hang rieng theo tung nguoi thu mua. Token cu chua mang
+            # account_id -> coi nhu khong co gio, tuyet doi khong lui ve pham vi
+            # ca cong ty keo hai nguoi dung chung mot gio.
+            account_id = self._auth_account_id()
+            if not account_id:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    401,
+                )
+
             CartLine = request.env["zalo.miniapp.cart.line"].sudo()
             line = CartLine.browse(line_id)
-            if line.exists() and line.partner_id.id == contact_id:
+            if line.exists() and line.account_id.id == account_id:
                 line.unlink()
 
-            return self._response_success(self._cart_to_dict(contact_id))
+            return self._response_success(self._cart_to_dict(contact_id, account_id))
         except Exception as e:
             _logger.exception("cart_remove error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -192,8 +246,21 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
+            # Gio hang rieng theo tung nguoi thu mua. Token cu chua mang
+            # account_id -> coi nhu khong co gio, tuyet doi khong lui ve pham vi
+            # ca cong ty keo hai nguoi dung chung mot gio.
+            account_id = self._auth_account_id()
+            if not account_id:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    401,
+                )
+
             CartLine = request.env["zalo.miniapp.cart.line"].sudo()
-            cart_lines = CartLine.search([("partner_id", "=", contact_id)])
+            cart_lines = CartLine.search(
+                [("partner_id", "=", contact_id), ("account_id", "=", account_id)]
+            )
             cart_lines.unlink()
 
             return self._response_success({"message": "Đã xóa giỏ hàng"})

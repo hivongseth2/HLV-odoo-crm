@@ -485,7 +485,10 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             # 6. Dọn dẹp giỏ hàng tạm (zalo.miniapp.cart.line) của khách sau khi tạo đơn thành công
             try:
                 CartLine = request.env["zalo.miniapp.cart.line"].sudo()
-                cart_lines = CartLine.search([("partner_id", "=", partner.id)])
+                cart_lines = CartLine.search([
+                    ("partner_id", "=", partner.id),
+                    ("account_id", "=", self._auth_account_id()),
+                ])
                 if cart_lines:
                     cart_lines.unlink()
             except Exception as cle:

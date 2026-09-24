@@ -14,6 +14,16 @@ class ZaloMiniAppCartLine(models.Model):
         ondelete="cascade",
         index=True,
     )
+    account_id = fields.Many2one(
+        "hlv.loyalty.portal.account",
+        string="Tài khoản Zalo",
+        index=True,
+        ondelete="cascade",
+        help="Tài khoản Portal sở hữu dòng giỏ hàng này. `partner_id` là pháp "
+             "nhân công ty, dùng chung cho nhiều người thu mua — chỉ lọc theo "
+             "nó thì hai người cùng công ty sẽ thấy chung một giỏ, người này "
+             "thêm hàng người kia thấy.",
+    )
     product_id = fields.Many2one(
         "product.product",
         string="Sản phẩm",
