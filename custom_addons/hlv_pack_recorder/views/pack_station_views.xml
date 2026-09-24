@@ -22,6 +22,8 @@
     <field name="arch" type="xml">
       <form>
         <header>
+          <button name="action_generate_enroll_code" type="object" string="Tạo mã cài đặt"
+                  class="btn-primary"/>
           <button name="action_reset_token" type="object" string="Sinh token mới"
                   confirm="Agent đang chạy sẽ bị từ chối cho tới khi anh cập nhật token mới vào file cấu hình của nó. Tiếp tục?"/>
         </header>
@@ -41,9 +43,18 @@
               <field name="agent_version"/>
             </group>
           </group>
-          <div class="alert alert-info" role="alert">
-            Trên máy đóng gói, mở một lần đường dẫn
-            <code>/pack_recorder/set_station</code> rồi bấm chọn đúng bàn này.
+          <div class="alert alert-success" role="alert" invisible="not enroll_code">
+            <b>Cài máy đóng gói:</b> mở PowerShell trên máy đó và chạy một lệnh duy nhất:
+            <br/>
+            <field name="setup_command" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
+            <br/>
+            Khi script hỏi, gõ mã cài đặt: <b><field name="enroll_code" readonly="1" nolabel="1" class="oe_inline"/></b>
+            (hết hạn lúc <field name="enroll_code_expiry" readonly="1" nolabel="1" class="oe_inline"/>)
+          </div>
+          <div class="alert alert-info" role="alert" invisible="enroll_code">
+            Bấm <b>Tạo mã cài đặt</b> ở trên để lấy lệnh cài cho máy đóng gói.
+            Hoặc nếu agent đã cài rồi, chỉ cần mở <code>/pack_recorder/set_station</code>
+            trên máy đó và chọn bàn này.
           </div>
           <notebook>
             <page string="Camera">

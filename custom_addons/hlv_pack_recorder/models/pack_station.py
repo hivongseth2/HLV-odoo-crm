@@ -9,6 +9,18 @@ from odoo import api, fields, models
 # không chạy — để rộng gấp nhiều lần chu kỳ poll vì mạng chớp là chuyện thường.
 AGENT_ALIVE_WINDOW_SECONDS = 120
 
+# Mã cài đặt chỉ sống đủ lâu để người ta đi từ máy tính văn phòng ra bàn đóng gói.
+ENROLL_CODE_TTL_MINUTES = 30
+
+# Bỏ 0/O/1/I: người đọc mã qua điện thoại hoặc chép tay hay nhầm mấy ký tự này.
+ENROLL_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+
+def _random_enroll_code():
+    """Sinh mã 8 ký tự dạng XXXX-XXXX cho dễ đọc."""
+    raw = ''.join(secrets.choice(ENROLL_ALPHABET) for _ in range(8))
+    return '%s-%s' % (raw[:4], raw[4:])
+
 
 class HlvPackStation(models.Model):
     _name = 'hlv.pack.station'
@@ -41,6 +53,27 @@ class HlvPackStation(models.Model):
     )
     agent_version = fields.Char(readonly=True)
 
+    enroll_code = fields.Char(
+        "Mã cài đặt", copy=False, readonly=True,
+        help="Mã dùng một lần để máy đóng gói tự lấy cấu hình. Hết hạn sau %d phút."
+             % ENROLL_CODE_TTL_MINUTES,
+    )
+    enroll_code_expiry = fields.Datetime(readonly=True, copy=False)
+    setup_command = fields.Char(compute='_compute_setup_command')
+
+    @api.depends('station_key')
+    def _compute_setup_command(self):
+        """Lệnh PowerShell dán một phát trên máy đóng gói.
+
+        Gán biến môi trường trước rồi mới tải script, để script khỏi phải hỏi
+        địa chỉ Odoo — dán một dòng là xong, người cài chỉ còn gõ mã cài đặt.
+        """
+        base = (self.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').rstrip('/')
+        for station in self:
+            station.setup_command = (
+                "$env:HLV_ODOO_URL='%s'; irm %s/pack_agent/download/setup | iex" % (base, base)
+            )
+
     _sql_constraints = [
         ('station_key_uniq', 'unique(station_key)', "Mã máy phải là duy nhất."),
     ]
@@ -53,6 +86,42 @@ class HlvPackStation(models.Model):
     def _compute_camera_count(self):
         for station in self:
             station.camera_count = len(station.camera_ids)
+
+    def action_generate_enroll_code(self):
+        """Sinh mã cài đặt dùng một lần cho máy đóng gói.
+
+        Người cài chỉ cần gõ mã ngắn này thay vì chép tay station_key và token.
+        Mã hết hạn sau ENROLL_CODE_TTL_MINUTES và dùng xong là huỷ ngay, nên lộ
+        ra ngoài cũng không thành cửa sau lâu dài.
+        """
+        self.ensure_one()
+        self.write({
+            'enroll_code': _random_enroll_code(),
+            'enroll_code_expiry': fields.Datetime.now() + timedelta(
+                minutes=ENROLL_CODE_TTL_MINUTES),
+        })
+
+    @api.model
+    def consume_enroll_code(self, code):
+        """Đổi mã cài đặt lấy thông tin bàn, và huỷ mã ngay sau đó.
+
+        code: chuỗi người cài gõ vào, không phân biệt hoa thường và dấu gạch.
+        Trả về: recordset một bàn nếu mã đúng và còn hạn, rỗng nếu sai/hết hạn.
+        """
+        normalised = (code or '').strip().upper().replace('-', '')
+        if len(normalised) < 8:
+            return self.browse()
+        station = self.sudo().search([
+            ('enroll_code', '!=', False),
+            ('enroll_code_expiry', '>', fields.Datetime.now()),
+        ]).filtered(lambda s: secrets.compare_digest(
+            (s.enroll_code or '').replace('-', ''), normalised))
+        if not station:
+            return self.browse()
+        station = station[0]
+        # Dùng một lần: huỷ ngay để mã bị chụp màn hình cũng vô dụng.
+        station.write({'enroll_code': False, 'enroll_code_expiry': False})
+        return station
 
     def is_agent_alive(self):
         """Agent của bàn này có đang chạy không.
