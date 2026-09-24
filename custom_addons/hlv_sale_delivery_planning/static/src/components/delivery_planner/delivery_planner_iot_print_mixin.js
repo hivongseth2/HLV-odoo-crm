@@ -4,6 +4,10 @@
 // action để thực sự in ra máy IoT của kho, không cần ai bấm tay. Lỗi (thiếu máy in/report/phiếu)
 // được báo ngay bằng notification thay vì im lặng.
 
+// Công tắc đường in qua trình duyệt. false = tab dashboard KHÔNG tự giành phiếu và không tự
+// in nữa. Xem lý do đầy đủ ở processIotPrintQueue().
+const AUTO_DISPATCH_O_TRINH_DUYET = false;
+
 export class DeliveryPlannerIotPrintMixin {
     /**
      * Cảnh báo do cron soát watchdog gửi qua bus (stock_warehouse.cron_check_iot_watchdog):
@@ -26,6 +30,23 @@ export class DeliveryPlannerIotPrintMixin {
     }
 
     async processIotPrintQueue() {
+        // TẠM DỪNG đường in qua trình duyệt (24/09/2026). Đường này claim phiếu của MỌI kho,
+        // trong MỌI tab dashboard đang mở, cứ 20 giây một lượt — không lọc theo kho, theo máy
+        // hay theo người (xem iot_print_queue.auto_claim_and_print). Hậu quả thật: máy quản lý
+        // mở trang là giành phiếu của kho Bến Cam rồi bật hộp thoại in / tải PDF ngay trên máy
+        // họ, còn kho không có giấy. Đang dùng đường in trực tiếp tại máy kho thay thế
+        // (watchdog -LocalDispatch, xem bin/iot_watchdog_windows.ps1) nên đường này không cần
+        // nữa.
+        //
+        // VẪN GIỮ hàm + màn hàng chờ: kho/dispatcher còn xem danh sách, còn bấm "In ngay",
+        // "Đưa lại vào hàng chờ" ở backend. Chỉ bỏ phần TỰ ĐỘNG dispatch.
+        //
+        // Muốn bật lại thì đừng chỉ đổi cờ này: phải cho auto_claim_and_print nhận danh sách
+        // kho và chỉ claim đúng kho của máy đang mở, nếu không lỗi trên lặp lại y nguyên.
+        if (!AUTO_DISPATCH_O_TRINH_DUYET) {
+            this.loadIotPrintQueueDrawer();
+            return;
+        }
         if (this._iotPrintProcessing) {
             return; // tránh chạy chồng nếu bus event dồn dập trong lúc đang xử lý
         }
