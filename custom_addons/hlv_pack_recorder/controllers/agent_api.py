@@ -13,7 +13,7 @@ import logging
 import os
 import threading
 
-from odoo import fields, http
+from odoo import SUPERUSER_ID, api, fields, http, registry as odoo_registry
 from odoo.http import request
 from werkzeug.wrappers import Response
 
@@ -42,18 +42,41 @@ def _agent_upload_path(recording_id):
     return _file_path('agentrec_%d' % int(recording_id))
 
 
-def _make_link_saver(recording_id):
-    """Trả về callback ghi link Drive ngược vào bản ghi ghi hình.
+def _write_recording(dbname, recording_id, vals):
+    """Ghi vào bản ghi ghi hình bằng một cursor RIÊNG.
 
-    Chạy trong luồng nền của _bg_upload_to_drive, với env và cursor riêng của
-    luồng đó — nên phải browse lại bằng env được truyền vào, không dùng lại
-    recordset của request đã đóng cursor.
+    Cố ý không dùng env của luồng upload: nếu một câu SQL trong transaction đó đã
+    lỗi thì PostgreSQL bỏ cả transaction, mọi thao tác sau đều hỏng theo — trạng
+    thái sẽ không bao giờ được chốt và 20 phút sau cron đánh hỏng oan. Cursor
+    riêng đứng độc lập với việc ghi chatter.
+
+    Nuốt mọi lỗi: đây là bước chốt trạng thái, hỏng thì ghi log, không được ném
+    ngược vào luồng upload.
     """
-    def _save(env, _picking, link, _title):
-        recording = env['hlv.pack.recording'].sudo().browse(recording_id).exists()
-        if recording and link:
-            recording.write({'drive_link': link})
+    try:
+        with odoo_registry(dbname).cursor() as cr:
+            env = api.Environment(cr, SUPERUSER_ID, {})
+            recording = env['hlv.pack.recording'].sudo().browse(recording_id).exists()
+            if recording:
+                recording.write(vals)
+    except Exception:
+        _logger.exception("PACK_REC không chốt được trạng thái bản ghi %s", recording_id)
+
+
+def _make_link_saver(dbname, recording_id):
+    """Callback đánh dấu XONG và lưu link Drive."""
+    def _save(_env, _picking, link, _title):
+        _write_recording(dbname, recording_id,
+                         {'state': 'done', 'drive_link': link or False})
     return _save
+
+
+def _make_failure_marker(dbname, recording_id):
+    """Callback đánh dấu HỎNG khi Drive không nhận được file."""
+    def _mark(_env, _picking, reason):
+        _write_recording(dbname, recording_id,
+                         {'state': 'failed', 'error_note': reason})
+    return _mark
 
 
 class PackAgentApi(http.Controller):
@@ -208,11 +231,14 @@ class PackAgentApi(http.Controller):
             kwargs={
                 'name_suffix': recording.camera_id.code or '',
                 'note_label': '%s (agent)' % (recording.camera_id.name or 'camera'),
-                'on_uploaded': _make_link_saver(recording.id),
+                'on_uploaded': _make_link_saver(request.db, recording.id),
+                'on_failed': _make_failure_marker(request.db, recording.id),
             },
             daemon=True,
         ).start()
-        recording.write({'state': 'done'})
+        # CỐ Ý để nguyên 'uploading': Drive có thể hỏng sau khi luồng nền đã chạy.
+        # Đánh 'Xong' ngay ở đây là nói dối — bản ghi báo Xong mà chatter báo THẤT
+        # BẠI, đúng mâu thuẫn đã gặp thật. Hai callback bên trên mới chốt trạng thái.
         _logger.info("PACK_REC xong %s/%s %.1fMB",
                      recording.picking_id.name, recording.camera_id.code, size_mb)
         return {'ok': True}

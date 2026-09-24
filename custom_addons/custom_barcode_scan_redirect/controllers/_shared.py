@@ -238,8 +238,23 @@ def _feed_issue_note(feed_issue):
     ).format(label=label, when=when, tail=tail)
 
 
+def _run_failed_cb(on_failed, env, picking, reason):
+    """Gọi callback báo hỏng, nuốt mọi lỗi của chính callback.
+
+    Một callback hỏng không được phép che mất lý do hỏng gốc — thứ duy nhất
+    người đọc chatter có để biết phải sửa gì.
+    """
+    if not on_failed:
+        return
+    try:
+        on_failed(env, picking, reason)
+    except Exception:
+        _logger.exception("BG_UPLOAD callback on_failed lỗi")
+
+
 def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
-                        name_suffix='', note_label='', on_uploaded=None):
+                        name_suffix='', note_label='', on_uploaded=None,
+                        on_failed=None):
     from odoo import registry as odoo_registry
     set_path = None
     success = False
@@ -256,12 +271,14 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
             if not os.path.exists(filepath):
                 _logger.warning("BG_UPLOAD skipped missing temp file: %s", filepath)
                 _notify_bg_upload_failed(picking, filepath, "không tìm thấy file tạm trên server")
+                _run_failed_cb(on_failed, env, picking, "không tìm thấy file tạm trên server")
                 return
 
             creds_json = ICP.get_param('gdrive.user_credentials_json') or ''
             if not creds_json:
                 _logger.error("BG_UPLOAD missing token")
                 _notify_bg_upload_failed(picking, filepath, "chưa kết nối Google Drive (thiếu token)")
+                _run_failed_cb(on_failed, env, picking, "chưa kết nối Google Drive (thiếu token)")
                 return
 
             cid   = ICP.get_param('gdrive.oauth_client_id') or ''
@@ -328,6 +345,7 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
             except Exception:
                 _logger.exception("BG_UPLOAD refresh/authorize failed")
                 _notify_bg_upload_failed(picking, filepath, "lỗi xác thực Google Drive (token hết hạn/bị thu hồi)")
+                _run_failed_cb(on_failed, env, picking, "lỗi xác thực Google Drive (token hết hạn/bị thu hồi)")
                 return
 
             drive = GoogleDrive(gauth)
@@ -353,17 +371,22 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
             gfile.SetContentFile(filepath)
             gfile.Upload()
 
+            # TỪ ĐÂY FILE ĐÃ NẰM TRÊN DRIVE. Chốt success NGAY, đừng đợi tới cuối.
+            # Mọi việc sau đây đều là phụ — chia sẻ link, ghi chatter, gọi callback,
+            # commit transaction. Trước đây success chỉ đặt ở dòng cuối cùng, nên một
+            # khâu phụ hỏng là cả hàm nhảy vào except rồi báo "upload THẤT BẠI" trong
+            # khi video đã nằm trên Drive. Đã gặp thật, và làm người ta đi tìm lại thứ
+            # đang có sẵn.
             fid = gfile['id']
             link = gfile.get('alternateLink') or f"https://drive.google.com/file/d/{fid}/view"
+            success = True
+            _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
 
             if anyone_link:
                 try:
                     gfile.InsertPermission({'type': 'anyone', 'value': 'me', 'role': 'reader'})
                 except Exception:
                     _logger.warning("BG_UPLOAD set public link failed", exc_info=True)
-
-            fid = gfile['id']
-            link = gfile.get('alternateLink') or f"https://drive.google.com/file/d/{fid}/view"
 
             if picking.exists():
                 # note_label cho biết video đến từ camera nào và do đường nào quay.
@@ -377,11 +400,16 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
                          title=escape(safe_title or 'Video'))
                 body = body + _feed_issue_note(feed_issue)
 
-                picking.message_post(
-                    body=body,
-                    message_type='comment',
-                    subtype_xmlid='mail.mt_note',
-                )
+                try:
+                    picking.message_post(
+                        body=body,
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
+                except Exception:
+                    _logger.exception(
+                        "BG_UPLOAD khong ghi duoc ghi chu len chatter - video VAN o tren Drive: %s",
+                        link)
 
             # Điểm móc cho module khác lưu lại link mà không phải chép lại cả hàm
             # upload này. Lỗi trong callback không được làm hỏng việc đã xong.
@@ -391,16 +419,30 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
                 except Exception:
                     _logger.exception("BG_UPLOAD callback on_uploaded lỗi")
 
-            _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
-            success = True
+    except Exception as exc:
+        if success:
+            # Hỏng ở khâu phụ SAU khi file đã lên Drive (ghi chatter, commit...).
+            # Ghi log để còn truy, nhưng tuyệt đối KHÔNG báo thất bại.
+            _logger.exception(
+                "BG_UPLOAD lỗi sau khi upload xong — video vẫn ở trên Drive")
+            return
 
-    except Exception:
         _logger.exception("BG_UPLOAD fatal")
+        # Kèm đúng lỗi Google trả về. Ghi "lỗi không xác định" thì người đọc chatter
+        # không biết là hết dung lượng Drive, token hỏng hay mạng đứt — mỗi cái sửa
+        # một kiểu, mà lỗi thật thì chỉ nằm trong log server không ai mở.
+        reason = 'lỗi khi upload lên Google Drive: %s: %s' % (
+            type(exc).__name__, str(exc)[:300])
         try:
             with odoo_registry(dbname).cursor() as cr2:
                 env2 = api.Environment(cr2, SUPERUSER_ID, {})
                 picking2 = env2['stock.picking'].sudo().browse(picking_id)
-                _notify_bg_upload_failed(picking2, filepath, "lỗi không xác định khi upload lên Google Drive")
+                _notify_bg_upload_failed(picking2, filepath, reason)
+                if on_failed:
+                    try:
+                        on_failed(env2, picking2, reason)
+                    except Exception:
+                        _logger.exception("BG_UPLOAD callback on_failed lỗi")
         except Exception:
             _logger.exception("BG_UPLOAD could not post fatal-failure note to chatter")
     finally:
