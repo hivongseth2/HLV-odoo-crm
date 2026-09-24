@@ -55,6 +55,7 @@
                   t-att-data-move-id="line.id"
                   t-att-data-default-code="line.product_id.default_code or ''"
                   t-att-data-packed-qty="sum(line.move_line_ids.filtered(lambda x: x.result_package_id).mapped('qty_done'))"
+                  t-att-data-uom="line.product_uom.name or ''"
                   t-att-data-max-qty="line.product_uom_qty"> 
                   <div style="flex: 1; max-width: 70%;">
                     <strong><t t-esc="line.product_id.display_name"/></strong>
@@ -111,6 +112,7 @@
                             
                             <span style="padding: 0 4px; color: #adb5bd;">/</span>
                             <span style="font-weight: 600; color: #6c757d;"><t t-esc="line.product_uom_qty"/></span>
+                            <span t-if="line.product_uom" style="color:#adb5bd; font-weight:400; padding-left:4px;"><t t-esc="line.product_uom.name"/></span>
                         </div>
 
                         <!-- Increment Buttons (Right) -->
