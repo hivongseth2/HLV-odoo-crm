@@ -341,40 +341,56 @@ class ZaloBaseAPI:
     def _token_signature(secret, payload):
         return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
-    def _verify_token(self, token):
-        """Verify HMAC token với secret key.
+    def _parse_token(self, token):
+        """Giải mã token, trả `(partner_id, account_id)` hoặc None nếu không hợp lệ.
 
-        PHẢI khớp từng chữ với `ZaloContactAPI._verify_token` (bản override
-        dùng cho nhóm endpoint contact). Đây là bản mà `ZaloLoyaltyProxyAPI`
-        dùng — nó kế thừa thẳng ZaloBaseAPI, không đi qua ZaloContactAPI. Sửa
-        một bản mà quên bản kia thì token phát ra sẽ qua được nhóm endpoint
-        này nhưng bị chặn ở nhóm kia, khách đang dùng thì bị đá ra giữa chừng.
+        ĐÂY LÀ BẢN DUY NHẤT. Trước kia `ZaloContactAPI` có một bản override y
+        hệt, và việc sửa một bản mà quên bản kia đã khiến token qua được nhóm
+        endpoint này nhưng bị chặn ở nhóm kia — khách đang dùng thì bị đá ra
+        giữa chừng. Đừng tạo lại bản sao.
 
-        Payload CỐ TÌNH không chứa số điện thoại: token được ký bằng SĐT lấy
-        từ Zalo, trong khi chỗ kiểm lại lấy `res.partner.phone`. Khách doanh
-        nghiệp đăng nhập bằng SĐT người thu mua (lưu ở `portal_phone`) nên hai
-        số này khác nhau -> chữ ký luôn lệch -> 401.
+        Ba định dạng được chấp nhận:
+          partner_id.account_id.timestamp.chữ_ký  — bản hiện tại
+          partner_id.timestamp.chữ_ký             — bản trước, chưa mang account
+          (cùng 3 phần, chữ ký tính kèm SĐT)      — bản cũ nhất
+
+        `account_id` cho biết khách đăng nhập vào TÀI KHOẢN PORTAL nào. Một
+        công ty có nhiều người thu mua, mỗi người một tài khoản điểm và một
+        lịch sử đơn riêng; không có thông tin này thì server buộc phải đoán
+        theo số điện thoại do client gửi lên — vừa sai vừa không tin được.
+
+        Payload CỐ TÌNH không chứa số điện thoại: token ký bằng SĐT lấy từ
+        Zalo, còn chỗ kiểm lại lấy `res.partner.phone` — hai số này khác nhau
+        với khách doanh nghiệp nên chữ ký luôn lệch.
         """
         try:
             parts = token.split(".")
-            if len(parts) != 3:
-                return None
-            partner_id = int(parts[0])
-            timestamp = int(parts[1])
-            signature = parts[2]
-
             secret = self._get_secret_key()
+
+            if len(parts) == 4:
+                partner_id = int(parts[0])
+                account_id = int(parts[1]) or None
+                timestamp = int(parts[2])
+                signature = parts[3]
+                payload = f"{partner_id}:{parts[1]}:{timestamp}"
+            elif len(parts) == 3:
+                partner_id = int(parts[0])
+                account_id = None
+                timestamp = int(parts[1])
+                signature = parts[2]
+                payload = f"{partner_id}:{timestamp}"
+            else:
+                return None
 
             partner = request.env["res.partner"].sudo().browse(partner_id)
             if not partner.exists():
                 return None
 
-            expected_sig = self._token_signature(secret, f"{partner_id}:{timestamp}")
-
-            if not hmac.compare_digest(signature, expected_sig):
-                # Token phát trước bản này còn nhét SĐT vào payload. Vẫn chấp
-                # nhận để người đang đăng nhập không bị văng ra khi nâng cấp;
-                # sau 30 ngày mọi token cũ tự hết hạn.
+            if not hmac.compare_digest(signature, self._token_signature(secret, payload)):
+                # Token cũ nhất còn nhét SĐT vào payload. Vẫn chấp nhận để
+                # người đang đăng nhập không bị văng ra; sau 30 ngày tự hết hạn.
+                if len(parts) != 3:
+                    return None
                 legacy_phone = self._normalize_vn_phone(
                     partner.phone or partner.mobile or ""
                 )
@@ -388,9 +404,27 @@ class ZaloBaseAPI:
             if time.time() - timestamp > 30 * 24 * 3600:
                 return None
 
-            return partner_id
+            return partner_id, account_id
         except (ValueError, IndexError, Exception):
             return None
+
+    def _verify_token(self, token):
+        """Chỉ trả partner_id — giữ nguyên chữ ký hàm cho các nơi đang gọi."""
+        parsed = self._parse_token(token)
+        return parsed[0] if parsed else None
+
+    def _auth_account_id(self):
+        """Tài khoản Portal gắn với token đang gửi lên.
+
+        Trả None với token cũ (chưa mang account_id). Nơi gọi phải tự quyết
+        định: với dữ liệu riêng theo từng người thu mua thì coi như không có
+        quyền xem, đừng lùi về phạm vi cả công ty.
+        """
+        auth_header = request.httprequest.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return None
+        parsed = self._parse_token(auth_header[7:].strip())
+        return parsed[1] if parsed else None
 
     # =========================================================================
     # Logging helper

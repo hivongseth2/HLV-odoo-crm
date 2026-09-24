@@ -177,7 +177,25 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not partner.exists():
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
-            domain = [("partner_id", "=", contact_id), ("state", "!=", "draft")]
+            # Chỉ trả đơn do CHÍNH tài khoản Portal này đặt qua Mini App.
+            #
+            # Lọc theo partner_id là sai hai lần: partner là pháp nhân công ty
+            # nên gom cả đơn của những người thu mua khác, và gom luôn đơn nhập
+            # tay trên Odoo vốn không liên quan gì tới Mini App.
+            #
+            # Token cũ chưa mang account_id -> không xác định được người thu
+            # mua -> trả rỗng. Cố tình KHÔNG lùi về phạm vi cả công ty: thà
+            # không thấy đơn nào còn hơn thấy đơn của người khác.
+            account_id = self._auth_account_id()
+            if not account_id:
+                return self._response_success({
+                    "orders": [], "total": 0, "limit": limit, "offset": offset,
+                })
+
+            domain = [
+                ("x_zalo_portal_account_id", "=", account_id),
+                ("state", "!=", "draft"),
+            ]
             if state_filter:
                 if "," in state_filter:
                     states = [s.strip() for s in state_filter.split(",") if s.strip()]
@@ -221,6 +239,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             auth_result = self._auth_and_verify_owner(contact_id)
             if isinstance(auth_result, Response):
                 return auth_result
+
+            # Kiem tra them theo tai khoan Portal: `_auth_and_verify_owner` chi
+            # xac nhan don thuoc dung PHAP NHAN trong token, ma phap nhan la
+            # cong ty dung chung cho nhieu nguoi thu mua. Khong chan o day thi
+            # chi can biet order_id la doc duoc don cua dong nghiep, hoac don
+            # nhap tay tren Odoo von khong lien quan Mini App.
+            account_id = self._auth_account_id()
+            if not account_id or order.x_zalo_portal_account_id.id != account_id:
+                return self._response_error("FORBIDDEN", "Don hang khong thuoc ve ban", 403)
 
             return self._response_success(self._order_to_dict(order))
         except Exception as e:
@@ -309,6 +336,12 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 "state": "draft",
                 "order_line": order_line_vals,
             }
+            # Dau duy nhat phan biet don Mini App voi don nhap tay tren Odoo,
+            # dong thoi ghi ro nguoi thu mua nao dat - de sau nay chi ho xem
+            # duoc don cua minh.
+            order_account_id = self._auth_account_id()
+            if order_account_id:
+                order_vals["x_zalo_portal_account_id"] = order_account_id
             if pricelist_id:
                 order_vals["pricelist_id"] = pricelist_id
             if note:
@@ -407,7 +440,10 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             # Tự động dọn dẹp giỏ hàng tạm (zalo.miniapp.cart.line) của khách sau khi tạo đơn thành công
             try:
                 CartLine = request.env["zalo.miniapp.cart.line"].sudo()
-                cart_lines = CartLine.search([("partner_id", "=", contact_id)])
+                cart_lines = CartLine.search([
+                    ("partner_id", "=", contact_id),
+                    ("account_id", "=", order_account_id),
+                ])
                 if cart_lines:
                     cart_lines.unlink()
             except Exception as cle:

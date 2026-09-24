@@ -87,65 +87,29 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         return key
 
     @staticmethod
-    def _token_signature(secret, payload):
-        return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    def _generate_token(partner_id, account_id=None):
+        """Token = partner_id.account_id.timestamp.chữ_ký
 
-    @staticmethod
-    def _generate_token(partner_id):
-        """Token = partner_id.timestamp.chữ_ký
+        `account_id` cho biết khách đăng nhập vào tài khoản Portal nào. Một
+        công ty có nhiều người thu mua, mỗi người một lịch sử đơn và pool điểm
+        riêng — không mang thông tin này thì server phải đoán theo số điện
+        thoại client gửi lên, vừa sai vừa không tin được.
 
-        Payload CỐ TÌNH không chứa số điện thoại. Bản cũ ký bằng SĐT lấy từ
-        Zalo nhưng lúc kiểm lại lấy `res.partner.phone` — hai số này chỉ trùng
-        khi khách đăng nhập đúng bằng số ghi trên hồ sơ. Khách doanh nghiệp
-        đăng nhập bằng SĐT người thu mua (lưu ở `portal_phone`) trong khi
-        `res.partner.phone` là số công ty, nên chữ ký luôn lệch -> 401.
+        Payload CỐ TÌNH không chứa số điện thoại: bản cũ ký bằng SĐT lấy từ
+        Zalo nhưng lúc kiểm lại lấy `res.partner.phone` — với khách doanh
+        nghiệp hai số này khác nhau nên chữ ký luôn lệch -> 401.
 
-        Bỏ SĐT khỏi payload không làm yếu bảo mật: không có secret thì không
-        ký được, quyền sở hữu vẫn được kiểm riêng bằng `_auth_and_verify_owner`.
+        Việc giải mã và kiểm tra nằm ở `ZaloBaseAPI._parse_token`, CỐ TÌNH chỉ
+        có một bản duy nhất.
         """
         secret = ZaloContactAPI._get_secret_key()
         timestamp = int(time.time())
-        signature = ZaloContactAPI._token_signature(secret, f"{partner_id}:{timestamp}")
-        return f"{partner_id}.{timestamp}.{signature}"
+        account_part = str(account_id or 0)
+        signature = ZaloContactAPI._token_signature(
+            secret, f"{partner_id}:{account_part}:{timestamp}"
+        )
+        return f"{partner_id}.{account_part}.{timestamp}.{signature}"
 
-    def _verify_token(self, token):
-        """Override từ ZaloBaseAPI — verify HMAC token với secret key."""
-        try:
-            parts = token.split(".")
-            if len(parts) != 3:
-                return None
-            partner_id = int(parts[0])
-            timestamp = int(parts[1])
-            signature = parts[2]
-
-            secret = ZaloContactAPI._get_secret_key()
-
-            partner = request.env["res.partner"].sudo().browse(partner_id)
-            if not partner.exists():
-                return None
-
-            expected_sig = ZaloContactAPI._token_signature(secret, f"{partner_id}:{timestamp}")
-
-            if not hmac.compare_digest(signature, expected_sig):
-                # Token phát trước bản này còn nhét SĐT vào payload. Vẫn chấp
-                # nhận để người đang đăng nhập không bị văng ra khi nâng cấp;
-                # sau 30 ngày mọi token cũ tự hết hạn và nhánh này thành vô dụng.
-                legacy_phone = ZaloContactAPI._normalize_vn_phone(
-                    partner.phone or partner.mobile or ""
-                )
-                legacy_sig = ZaloContactAPI._token_signature(
-                    secret, f"{partner_id}:{legacy_phone}:{timestamp}"
-                )
-                if not hmac.compare_digest(signature, legacy_sig):
-                    return None
-
-            # Kiểm tra hết hạn: 30 ngày
-            if time.time() - timestamp > 30 * 24 * 3600:
-                return None
-
-            return partner_id
-        except (ValueError, IndexError, Exception):
-            return None
 
     # =========================================================================
     # Debug: Verify Token (GUARDED by config)
@@ -283,7 +247,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "portal_phone": normalized,
             })
 
-        token = self._generate_token(partner.id)
+        # Gan tai khoan Portal vao token: moi request sau do biet dung nguoi
+        # thu mua nao dang dang nhap ma khong phai hoi lai client.
+        token = self._generate_token(
+            partner.id, portal_account.id if portal_account else None
+        )
 
         return self._response_success({
             "contact_id": partner.id,
