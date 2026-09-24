@@ -53,11 +53,35 @@ nằm trong file quay ra. Thấy 704x576 hay 640x480 là đang dính luồng ph�
    Tạo một bàn, khai các camera của bàn đó. **Mã camera** ở đây phải trùng khoá
    trong `agent.yaml` bên dưới.
 
-## Cài
+## Cài nhanh — một lệnh (nên dùng)
+
+1. Trong Odoo mở **Tồn kho → Cấu hình → Video đóng gói → Bàn đóng gói**, chọn
+   đúng bàn, khai camera của nó, rồi bấm **Tạo mã cài đặt**.
+2. Trên máy đóng gói, mở **PowerShell** và dán lệnh hiện trên form (có nút copy).
+3. Khi script hỏi, gõ mã cài đặt dạng `XXXX-XXXX`, rồi dán URL RTSP cho từng
+   camera — hoặc gõ `usb` nếu là webcam, script sẽ liệt kê webcam cho chọn.
+
+Script tự làm hết: cài Python nếu thiếu, tải agent và ffmpeg, ghi `agent.yaml`,
+đăng ký chạy cùng Windows, khởi động agent. Không cần quyền admin.
+
+Mã cài đặt **dùng một lần và hết hạn sau 30 phút**. URL với mật khẩu camera chỉ
+được hỏi tại chỗ rồi ghi xuống máy đó — Odoo không bao giờ thấy.
+
+Cài xong còn một bước trên trình duyệt của máy đó: mở
+`/pack_recorder/set_station` và chọn bàn. Script sẽ hỏi có mở luôn không.
+
+### Cài lại / cập nhật agent
+
+Chạy lại đúng lệnh đó. Script tải bản agent mới nhất từ Odoo, giữ nguyên ffmpeg
+đã tải, và ghi đè cấu hình — nên phải tạo mã cài đặt mới mỗi lần.
+
+## Cài thủ công
+
+Dùng khi máy không ra được internet, hoặc muốn kiểm từng bước.
 
 ```
-copy hlv_pack_agent.py       D:\hlv_agent\
-copy agent.example.yaml      D:\hlv_agent\agent.yaml
+copy hlv_pack_agent.py       C:\hlv_agent\
+copy agent.example.yaml      C:\hlv_agent\agent.yaml
 ```
 
 Sửa `agent.yaml`: điền `station_key` và `token` lấy từ màn hình bàn đóng gói,
