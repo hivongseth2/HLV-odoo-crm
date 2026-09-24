@@ -237,37 +237,91 @@ if ($camLines.Count -eq 0 -and (Test-Path $yamlPath)) {
 }
 
 # --- 8. Chay cung Windows --------------------------------------------------
-# Scheduled Task chu khong phai Windows Service: khong can quyen admin. Dung
-# cmdlet ScheduledTasks thay vi schtasks.exe de khoi dinh chuyen stderr cua exe.
-Write-Step "Dang ky chay cung Windows"
-$taskArgs = "`"$AgentDir\hlv_pack_agent.py`" --config `"$AgentDir\agent.yaml`""
-try {
-    $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    if ($existing) { Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false }
+Write-Step "Dang ky chay ngam cung Windows"
 
-    $action  = New-ScheduledTaskAction -Execute $python -Argument $taskArgs -WorkingDirectory $AgentDir
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    # RestartCount/Interval la phan lam watchdog: agent chet thi Windows bat lai.
-    # ExecutionTimeLimit = 0 nghia la khong gioi han, vi agent chay ca ngay.
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
-                    -DontStopIfGoingOnBatteries -StartWhenAvailable `
-                    -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
-                    -ExecutionTimeLimit ([TimeSpan]::Zero)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
-                           -Settings $settings -Force | Out-Null
-    Write-Ok "Tac vu '$TaskName' se tu chay moi lan dang nhap Windows"
+# pythonw.exe thay vi python.exe: khong bung cua so console nao. Log di ra
+# C:\hlv_agent\agent.log vi khong con console de doc.
+$pythonw = Join-Path (Split-Path $python) 'pythonw.exe'
+if (-not (Test-Path $pythonw)) {
+    $pythonw = $python
+    Write-Warn2 "Khong thay pythonw.exe - agent se chay kem mot cua so console."
+}
+
+$isAdmin = ([Security.Principal.WindowsPrincipal] `
+            [Security.Principal.WindowsIdentity]::GetCurrent()
+           ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+# Webcam USB khong mo duoc tu tai khoan SYSTEM (session 0 bi cach ly khoi thiet
+# bi cua nguoi dung). Co webcam thi buoc phai chay duoi tai khoan dang nhap,
+# doi lai nguoi dung van tat duoc tac vu.
+$hasUsbCam = ($camLines -join "`n") -match 'type:\s*usb'
+if (-not $hasUsbCam -and (Test-Path $yamlPath)) {
+    $hasUsbCam = (Get-Content $yamlPath -Raw) -match 'type:\s*usb'
+}
+
+$taskArgs = "`"$AgentDir\hlv_pack_agent.py`" --config `"$AgentDir\agent.yaml`""
+$action = New-ScheduledTaskAction -Execute $pythonw -Argument $taskArgs -WorkingDirectory $AgentDir
+
+# MultipleInstances=IgnoreNew bien trigger lap thanh canh gac: cu 5 phut Windows
+# thu chay lai, agent con song thi lan chay moi bi bo qua, chet thi duoc bat len.
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
+                -DontStopIfGoingOnBatteries -StartWhenAvailable `
+                -MultipleInstances IgnoreNew `
+                -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+                -ExecutionTimeLimit ([TimeSpan]::Zero)
+$tWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
+                 -RepetitionInterval (New-TimeSpan -Minutes 5)
+
+$protected = $false
+try {
+    if ($isAdmin -and -not $hasUsbCam) {
+        # Chay duoi SYSTEM: bat tu luc khoi dong may (khong can ai dang nhap),
+        # va nguoi dung thuong khong tat duoc neu khong co quyen admin.
+        $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' `
+                         -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName $TaskName -Action $action `
+            -Trigger @((New-ScheduledTaskTrigger -AtStartup), $tWatchdog) `
+            -Settings $settings -Principal $principal -Force | Out-Null
+        $protected = $true
+        Write-Ok "Chay duoi tai khoan SYSTEM - can quyen admin moi dung duoc"
+    } else {
+        # PHAI khai ro -User va -RunLevel Limited: thieu chung thi
+        # Register-ScheduledTask doi quyen admin va bao Access denied.
+        $me = "$env:USERDOMAIN\$env:USERNAME"
+        Register-ScheduledTask -TaskName $TaskName -Action $action `
+            -Trigger @((New-ScheduledTaskTrigger -AtLogOn -User $me), $tWatchdog) `
+            -Settings $settings -User $me -RunLevel Limited -Force | Out-Null
+        Write-Ok "Chay khi dang nhap Windows"
+        if ($hasUsbCam) {
+            Write-Warn2 "Ban nay co webcam USB nen khong chay duoi SYSTEM duoc."
+        } elseif (-not $isAdmin) {
+            Write-Warn2 "Chay lai bang PowerShell (Admin) de nguoi dung khong tat duoc agent."
+        }
+    }
+    Write-Ok "Tu bat lai trong vong 5 phut neu bi tat"
 } catch {
-    Write-Warn2 "Khong dang ky duoc tac vu tu dong: $($_.Exception.Message)"
+    Write-Bad "Khong dang ky duoc tac vu: $($_.Exception.Message)"
     Write-Warn2 "Agent van chay duoc bang tay, xem lenh o cuoi."
 }
 
 Write-Step "Khoi dong agent"
 try {
-    Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop | Start-ScheduledTask
-    Start-Sleep -Seconds 5
-    Write-Ok "Da chay"
+    Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    Start-Sleep -Seconds 6
+    $logFile = "$AgentDir\agent.log"
+    if (Test-Path $logFile) {
+        $tail = Get-Content $logFile -Tail 3
+        if ($tail -match 'Odoo t') {
+            Write-Bad "Odoo tu choi agent - kiem lai station_key/token"
+            $tail | ForEach-Object { Write-Host "     $_" }
+        } else {
+            Write-Ok "Agent dang chay ngam (khong co cua so)"
+        }
+    } else {
+        Write-Warn2 "Chua thay agent.log - xem lai bang lenh chay tay o cuoi."
+    }
 } catch {
-    Write-Warn2 "Chua chay duoc tu dong, khoi dong bang tay theo lenh o cuoi."
+    Write-Warn2 "Chua chay duoc tu dong: $($_.Exception.Message)"
 }
 
 # --- 9. Xong ---------------------------------------------------------------
@@ -282,11 +336,18 @@ Con MOT buoc cuoi, lam tren trinh duyet cua may nay:
 
   Bam chon dung ban dong goi. Chi lam mot lan cho moi may.
 
-Kiem tra:
-  - Odoo > Ban dong goi > o "Agent goi lan cuoi" phai co gio, cap nhat lien tuc
-  - Chay tay de xem log truc tiep:
-      cd $AgentDir
-      & "$python" hlv_pack_agent.py --config agent.yaml --verbose
+Agent chay NGAM, khong co cua so. Kiem tra:
+
+  - Odoo > Ban dong goi > cot "Tinh trang agent" phai la "Dang chay"
+  - Log:  $AgentDir\agent.log
+      Get-Content $AgentDir\agent.log -Tail 20 -Wait
+
+  - Chay tay de xem log truc tiep tren man hinh:
+      & "$python" "$AgentDir\hlv_pack_agent.py" --config "$AgentDir\agent.yaml" --verbose
+
+Dung agent (can quyen admin neu tac vu chay duoi SYSTEM):
+      Stop-ScheduledTask  -TaskName "$TaskName"
+      Disable-ScheduledTask -TaskName "$TaskName"
 
 "@ -ForegroundColor White
 

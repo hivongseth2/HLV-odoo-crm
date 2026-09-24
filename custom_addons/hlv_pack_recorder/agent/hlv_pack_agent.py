@@ -15,6 +15,7 @@ Phụ thuộc:  requests, PyYAML, và ffmpeg có trong PATH.
 """
 import argparse
 import logging
+import logging.handlers
 import os
 import re
 import signal
@@ -26,7 +27,11 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '1.0.0'
+AGENT_VERSION = '1.1.0'
+
+# Chay bang pythonw.exe thi agent khong co console, nhung moi tien trinh ffmpeg
+# con van tu bung mot cua so den neu khong chan. Nhan vien thay cua so la tat.
+NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
 POLL_SECONDS = 2
 CHUNK_BYTES = 4 * 1024 * 1024
 UPLOAD_RETRIES = 3
@@ -117,7 +122,7 @@ class Recorder:
         log.info("ffmpeg start rec=%s cam=%s -> %s", recording_id, camera_code, out_path)
         self.proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.PIPE, creationflags=NO_WINDOW,
         )
 
     def is_running(self):
@@ -342,7 +347,7 @@ def _run_ffmpeg_text(ffmpeg_bin, args):
     """
     proc = subprocess.run(
         [ffmpeg_bin, '-hide_banner'] + args,
-        capture_output=True, text=True, errors='replace',
+        capture_output=True, text=True, errors='replace', creationflags=NO_WINDOW,
     )
     return proc.stderr or ''
 
@@ -387,6 +392,43 @@ def parse_video_modes(listing):
 
     return [(size, sorted(fps_set))
             for size, fps_set in sorted(modes.items(), key=lambda kv: -pixels(kv[0]))]
+
+
+def _setup_logging(args):
+    """Ghi log ra file, và ra console nếu có console.
+
+    Chay bang pythonw.exe (khong cua so) thi sys.stdout/stderr deu la None, nen
+    log chi con duong ra file. File la cai duy nhat con lai de chan doan khi
+    agent chay ngam, vi vay no luon duoc bat.
+    """
+    log_path = os.path.join(
+        os.path.dirname(os.path.abspath(args.config)) or '.', 'agent.log')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+
+    # Xoay vong 5MB x 3: du de lan nguoc vai ngay ma khong an het o dia.
+    handlers = [logging.handlers.RotatingFileHandler(
+        log_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8')]
+
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None:
+            continue
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, OSError):
+            pass
+    if sys.stderr is not None:
+        handlers.append(logging.StreamHandler())
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG if args.verbose else logging.INFO)
+    for handler in handlers:
+        handler.setFormatter(formatter)
+        root.addHandler(handler)
+
+    # urllib3 ghi mot dong DEBUG cho moi lan poll (2 giay/lan) — day file log day
+    # rac trong vai gio ma khong noi them duoc gi.
+    logging.getLogger('urllib3').setLevel(logging.INFO)
+    return log_path
 
 
 def _list_dshow_devices(ffmpeg_bin):
@@ -482,18 +524,7 @@ def main():
                         help="Liệt kê tên thiết bị webcam USB để điền vào 'device'")
     args = parser.parse_args()
 
-    # Console Windows mặc định cp1252 nên log tiếng Việt ra một đống ký tự escape.
-    # Ép UTF-8 để người trực kho đọc được log mà không phải đoán.
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding='utf-8', errors='replace')
-        except (AttributeError, OSError):
-            pass
-
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s',
-    )
+    _setup_logging(args)
 
     if not os.path.exists(args.config):
         log.error("không thấy file cấu hình: %s", args.config)
@@ -509,6 +540,8 @@ def main():
         log.error("file cấu hình thiếu: %s", ', '.join(missing))
         return 2
 
+    log.info("ghi log vao %s", os.path.join(
+        os.path.dirname(os.path.abspath(args.config)) or '.', 'agent.log'))
     agent = Agent(cfg)
     signal.signal(signal.SIGINT, agent.request_stop)
     signal.signal(signal.SIGTERM, agent.request_stop)
