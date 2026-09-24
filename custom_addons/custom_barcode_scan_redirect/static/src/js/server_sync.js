@@ -75,7 +75,7 @@ function updateUnpackedLabel(el) {
       container.appendChild(newInfo);
       unpackedEl = newInfo;
     }
-    unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+    unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}${uomSuffix(el)}`;
   } else {
     if (unpackedEl) unpackedEl.remove();
   }

@@ -506,7 +506,7 @@ async function savePackageChanges() {
             const infoContainer = mainListEl.querySelector('div') || mainListEl;
             infoContainer.appendChild(unpackedEl);
           }
-          unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+          unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}${uomSuffix(mainListEl)}`;
         } else if (unpackedEl) {
           unpackedEl.remove();
         }

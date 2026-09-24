@@ -1,4 +1,15 @@
 /**
+ * Đơn vị tính của một dòng sản phẩm, lấy từ data-uom do template gắn sẵn.
+ * Trả về chuỗi có sẵn dấu cách đầu (" Cái") để ghép thẳng vào nhãn, hoặc chuỗi
+ * rỗng khi dòng không có đơn vị — ghép vào không bị thừa dấu cách.
+ */
+function uomSuffix(el) {
+  const item = el && el.closest ? el.closest('.product-item') : null;
+  const uom = item && item.dataset ? (item.dataset.uom || '') : '';
+  return uom ? ` ${uom}` : '';
+}
+
+/**
  * ui_utils.js — UI Utilities
  * Generic modal creation and package UI optimization.
  * No external dependencies.
