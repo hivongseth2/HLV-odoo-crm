@@ -242,24 +242,47 @@ class HlvPackRecording(models.Model):
     def _cron_fail_stale(self):
         """Bản ghi kẹt quá lâu thì đánh hỏng, đừng để tưởng nhầm là có video.
 
-        Agent chết giữa chừng, máy mất điện, mạng đứt — mọi trường hợp đều dẫn
-        tới một bản ghi nằm mãi ở 'recording'. Cron đối soát bên
-        custom_barcode_scan_redirect chỉ nhìn chatter, nên chỗ này phải tự dọn.
+        Lưới cuối cùng, sau reconcile_abandoned (bám nhịp poll của agent, 2 giây).
+        Chỗ này lo những ca cả agent lẫn trình duyệt đều biến mất cùng lúc.
+
+        Mốc đo khác nhau theo trạng thái, và đó là điểm mấu chốt:
+          - đang ghi  -> đo từ nhịp báo cuối của màn hình đóng gói. Quay lâu mà
+            màn hình vẫn báo đều thì KHÔNG phải kẹt. Đo từ requested_at như trước
+            là sai: ngưỡng 20 phút nhỏ hơn trần quay 30 phút, nên phiên đóng gói
+            25 phút bị đánh hỏng ở phút 20 trong khi ffmpeg vẫn chạy bình thường.
+          - đang dừng/tải lên -> đo từ lúc ra lệnh dừng. File to tải lâu là bình
+            thường, không liên quan tới việc đã quay bao lâu trước đó.
         """
         deadline = fields.Datetime.now() - timedelta(minutes=STALE_AFTER_MINUTES)
-        stuck = self.search([
-            ('state', 'in', ('pending', 'recording', 'stopping', 'uploading')),
+
+        running = self.search([
+            ('state', 'in', ('pending', 'recording')),
             ('requested_at', '<', deadline),
+            '|', ('last_heartbeat', '=', False), ('last_heartbeat', '<', deadline),
         ])
-        if not stuck:
-            return
-        stuck.mark_failed("agent không phản hồi trong %d phút" % STALE_AFTER_MINUTES)
+        finishing = self.search([
+            ('state', 'in', ('stopping', 'uploading')),
+            '|', ('stopped_at', '<', deadline),
+            '&', ('stopped_at', '=', False), ('requested_at', '<', deadline),
+        ])
+
+        if running:
+            running.mark_failed(
+                "cả agent lẫn màn hình đóng gói đều im lặng quá %d phút"
+                % STALE_AFTER_MINUTES)
+        if finishing:
+            finishing.mark_failed(
+                "đã ra lệnh dừng nhưng quá %d phút vẫn chưa nhận được video — "
+                "agent chết giữa chừng, hoặc upload lên Odoo/Drive không xong"
+                % STALE_AFTER_MINUTES)
+
+        stuck = running | finishing
         for rec in stuck:
             rec.picking_id.message_post(
                 body=Markup(
-                    "⚠️ Không nhận được video camera <b>{cam}</b> (bàn {station}): "
-                    "agent không phản hồi."
-                ).format(cam=rec.camera_id.name or '', station=rec.station_id.name or ''),
+                    "⚠️ Không nhận được video camera <b>{cam}</b> (bàn {station}): {ly_do}"
+                ).format(cam=rec.camera_id.name or '', station=rec.station_id.name or '',
+                         ly_do=rec.error_note or 'agent không phản hồi.'),
                 message_type='comment',
                 subtype_xmlid='mail.mt_note',
             )
