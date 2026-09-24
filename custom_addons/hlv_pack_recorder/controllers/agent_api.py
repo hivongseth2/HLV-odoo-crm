@@ -42,6 +42,20 @@ def _agent_upload_path(recording_id):
     return _file_path('agentrec_%d' % int(recording_id))
 
 
+def _make_link_saver(recording_id):
+    """Trả về callback ghi link Drive ngược vào bản ghi ghi hình.
+
+    Chạy trong luồng nền của _bg_upload_to_drive, với env và cursor riêng của
+    luồng đó — nên phải browse lại bằng env được truyền vào, không dùng lại
+    recordset của request đã đóng cursor.
+    """
+    def _save(env, _picking, link, _title):
+        recording = env['hlv.pack.recording'].sudo().browse(recording_id).exists()
+        if recording and link:
+            recording.write({'drive_link': link})
+    return _save
+
+
 class PackAgentApi(http.Controller):
 
     @http.route('/pack_agent/poll', type='json', auth='public', csrf=False, methods=['POST'])
@@ -191,7 +205,11 @@ class PackAgentApi(http.Controller):
         threading.Thread(
             target=_bg_upload_to_drive,
             args=(request.db, recording.picking_id.id, final_path, mimetype),
-            kwargs={'name_suffix': recording.camera_id.code or ''},
+            kwargs={
+                'name_suffix': recording.camera_id.code or '',
+                'note_label': '%s (agent)' % (recording.camera_id.name or 'camera'),
+                'on_uploaded': _make_link_saver(recording.id),
+            },
             daemon=True,
         ).start()
         recording.write({'state': 'done'})

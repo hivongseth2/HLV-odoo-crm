@@ -54,7 +54,7 @@
         console.info('[PACK_REC] agent đang quay tại %s: %s', r.station, (r.cameras || []).join(', '));
       } else {
         window.hlvAgentRecording = false;
-        console.warn('[PACK_REC] không bật được agent:', r && r.error);
+        console.warn('[PACK_REC] không quay được:', r && r.error, '| tình trạng agent:', r && r.agent_status);
       }
     } catch (e) {
       window.hlvAgentRecording = false;
