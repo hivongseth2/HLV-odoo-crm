@@ -272,8 +272,18 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
 $tWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
                  -RepetitionInterval (New-TimeSpan -Minutes 5)
 
+$existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$registered = $false
 $protected = $false
 try {
+    if ($existing) {
+        # -Force KHONG du de ghi de mot tac vu do phien co quyen cao hon tao ra:
+        # Windows kiem ACL cua chinh tac vu, khong phai quyen tao tac vu moi. Phai
+        # xoa truoc; xoa khong duoc thi bao ro chu dung nuot (da gap that: tac vu cu
+        # van chay python.exe nen van bung cua so console, ma script bao cai xong).
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+    }
+
     if ($isAdmin -and -not $hasUsbCam) {
         # Chay duoi SYSTEM: bat tu luc khoi dong may (khong can ai dang nhap),
         # va nguoi dung thuong khong tat duoc neu khong co quyen admin.
@@ -281,7 +291,7 @@ try {
                          -LogonType ServiceAccount -RunLevel Highest
         Register-ScheduledTask -TaskName $TaskName -Action $action `
             -Trigger @((New-ScheduledTaskTrigger -AtStartup), $tWatchdog) `
-            -Settings $settings -Principal $principal -Force | Out-Null
+            -Settings $settings -Principal $principal | Out-Null
         $protected = $true
         Write-Ok "Chay duoi tai khoan SYSTEM - can quyen admin moi dung duoc"
     } else {
@@ -290,7 +300,7 @@ try {
         $me = "$env:USERDOMAIN\$env:USERNAME"
         Register-ScheduledTask -TaskName $TaskName -Action $action `
             -Trigger @((New-ScheduledTaskTrigger -AtLogOn -User $me), $tWatchdog) `
-            -Settings $settings -User $me -RunLevel Limited -Force | Out-Null
+            -Settings $settings -User $me -RunLevel Limited | Out-Null
         Write-Ok "Chay khi dang nhap Windows"
         if ($hasUsbCam) {
             Write-Warn2 "Ban nay co webcam USB nen khong chay duoi SYSTEM duoc."
@@ -298,14 +308,34 @@ try {
             Write-Warn2 "Chay lai bang PowerShell (Admin) de nguoi dung khong tat duoc agent."
         }
     }
-    Write-Ok "Tu bat lai trong vong 5 phut neu bi tat"
+    $registered = $true
+    Write-Ok "Chay ngam bang pythonw, tu bat lai trong vong 5 phut neu bi tat"
 } catch {
-    Write-Bad "Khong dang ky duoc tac vu: $($_.Exception.Message)"
-    Write-Warn2 "Agent van chay duoc bang tay, xem lenh o cuoi."
+    Write-Bad "KHONG thay duoc tac vu '$TaskName': $($_.Exception.Message)"
+    if ($existing) {
+        $oldExe = $existing.Actions[0].Execute
+        Write-Bad "Tac vu CU van con nguyen va van dang chay: $oldExe"
+        if ($oldExe -notlike '*pythonw.exe') {
+            Write-Bad "=> DAY LA LY DO VAN THAY CUA SO CONSOLE HIEN LEN."
+        }
+        Write-Host ''
+        Write-Host '   Tac vu cu duoc tao boi mot phien co quyen cao hon nen phien nay khong' -ForegroundColor Yellow
+        Write-Host '   sua duoc no. Cach sua:' -ForegroundColor Yellow
+        Write-Host '     1. Dong cua so nay' -ForegroundColor White
+        Write-Host '     2. Mo PowerShell bang chuot phai > "Run as administrator"' -ForegroundColor White
+        Write-Host '     3. Dan lai dung lenh cai nay' -ForegroundColor White
+        Write-Host ''
+    } else {
+        Write-Warn2 "Agent van chay duoc bang tay, xem lenh o cuoi."
+    }
 }
 
 Write-Step "Khoi dong agent"
+if (-not $registered) {
+    Write-Warn2 "Bo qua buoc khoi dong: tac vu moi chua dang ky duoc (xem huong dan ben tren)."
+}
 try {
+    if (-not $registered) { throw 'tac vu moi chua dang ky duoc' }
     Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
     Start-Sleep -Seconds 6
     $logFile = "$AgentDir\agent.log"
