@@ -5,6 +5,11 @@ from datetime import timedelta
 
 from odoo import api, fields, models
 
+from ..services import ENROLL_CODE_LENGTH, normalize_enroll_code, random_enroll_code
+
+# Mã cài đặt chỉ sống đủ lâu để người ta đi từ form Odoo tới máy cài agent.
+ENROLL_CODE_TTL_MINUTES = 30
+
 # Agent poll vài giây một lần. Im lâu hơn ngưỡng này thì coi như máy tắt — để rộng
 # gấp nhiều lần chu kỳ poll vì mạng chớp là chuyện thường.
 AGENT_ALIVE_WINDOW_SECONDS = 60
@@ -24,6 +29,13 @@ class HlvProductAgent(models.Model):
     )
     last_seen = fields.Datetime("Gọi lần cuối", readonly=True)
     version = fields.Char("Phiên bản agent", readonly=True)
+    enroll_code = fields.Char(
+        "Mã cài đặt", copy=False, readonly=True, groups='base.group_system',
+        help="Mã dùng một lần để script cài đặt tự lấy token. Hết hạn sau %d phút."
+             % ENROLL_CODE_TTL_MINUTES,
+    )
+    enroll_code_expiry = fields.Datetime(readonly=True, copy=False, groups='base.group_system')
+    setup_command = fields.Char(compute='_compute_setup_command')
     agent_status = fields.Selection(
         [('never', "Chưa bao giờ gọi"), ('alive', "Đang chạy"), ('dead', "Đã ngừng")],
         string="Tình trạng", compute='_compute_agent_status',
@@ -38,6 +50,53 @@ class HlvProductAgent(models.Model):
                 agent.agent_status = 'never'
             else:
                 agent.agent_status = 'alive' if agent.last_seen >= threshold else 'dead'
+
+    # Không phụ thuộc field nào của bản ghi: chỉ phụ thuộc web.base.url, đọc lại mỗi lần.
+    @api.depends()
+    def _compute_setup_command(self):
+        """Lệnh dán một phát vào PowerShell trên máy chạy Claude.
+
+        Truyền sẵn địa chỉ Odoo để script khỏi phải hỏi — người cài chỉ còn gõ mã.
+        """
+        base = (self.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').rstrip('/')
+        for agent in self:
+            agent.setup_command = (
+                "$env:HLV_ODOO_URL='%s'; irm %s/product_agent/download/setup | iex" % (base, base)
+            )
+
+    def action_generate_enroll_code(self):
+        """Sinh mã cài đặt: người cài gõ mã ngắn này thay vì chép tay token.
+
+        Dùng xong là huỷ, và hết hạn sau ENROLL_CODE_TTL_MINUTES, nên lộ ra ngoài cũng
+        không thành cửa sau lâu dài.
+        """
+        self.ensure_one()
+        self.sudo().write({
+            'enroll_code': random_enroll_code(),
+            'enroll_code_expiry': fields.Datetime.now() + timedelta(minutes=ENROLL_CODE_TTL_MINUTES),
+        })
+
+    @api.model
+    def consume_enroll_code(self, code):
+        """Đổi mã cài đặt lấy agent, và huỷ mã ngay.
+
+        Nhận: chuỗi người cài gõ, không phân biệt hoa thường và dấu gạch.
+        Trả: recordset một agent nếu mã đúng và còn hạn, rỗng nếu sai / hết hạn.
+        """
+        normalized = normalize_enroll_code(code)
+        if len(normalized) != ENROLL_CODE_LENGTH:
+            return self.browse()
+        candidates = self.sudo().search([
+            ('active', '=', True),
+            ('enroll_code', '!=', False),
+            ('enroll_code_expiry', '>', fields.Datetime.now()),
+        ])
+        agent = candidates.filtered(lambda a: secrets.compare_digest(
+            normalize_enroll_code(a.enroll_code), normalized))[:1]
+        if agent:
+            # Dùng một lần: huỷ ngay để mã bị chụp màn hình cũng vô dụng.
+            agent.write({'enroll_code': False, 'enroll_code_expiry': False})
+        return agent
 
     @api.model
     def _authenticate(self, token):

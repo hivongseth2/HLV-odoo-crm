@@ -21,6 +21,8 @@
         <field name="arch" type="xml">
             <form>
                 <header>
+                    <button name="action_generate_enroll_code" type="object" string="Tạo mã cài đặt"
+                            class="btn-primary"/>
                     <button name="action_regenerate_token" type="object" string="Sinh lại token"
                             confirm="Agent đang chạy sẽ mất quyền ngay, phải dán token mới vào agent.yaml. Tiếp tục?"/>
                 </header>
@@ -38,13 +40,22 @@
                             <field name="version"/>
                         </group>
                     </group>
+                    <div class="alert alert-success" role="alert" invisible="not enroll_code">
+                        <b>Cài agent</b> — trên máy chạy Claude, mở <b>PowerShell</b> (không cần
+                        quyền admin) và dán lệnh:
+                        <field name="setup_command" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
+                        Khi script hỏi, gõ mã cài đặt:
+                        <b><field name="enroll_code" readonly="1" nolabel="1" class="oe_inline"/></b>
+                        (hết hạn lúc <field name="enroll_code_expiry" readonly="1" nolabel="1" class="oe_inline"/>)
+                    </div>
+                    <div class="alert alert-info" role="alert" invisible="enroll_code">
+                        Bấm <b>Tạo mã cài đặt</b> ở trên để lấy lệnh cài cho máy chạy Claude.
+                        Máy đã cài rồi mà muốn lên bản agent / tài liệu quy tắc mới: chạy lại
+                        đúng lệnh cài, script dùng lại token cũ, không cần mã.
+                    </div>
                     <group string="Kết nối">
                         <field name="token" widget="CopyClipboardChar"/>
                     </group>
-                    <div class="text-muted">
-                        Dán token vào <code>agent.yaml</code> trên máy chạy Claude
-                        (xem <code>hlv_product_agent/agent/README.md</code>).
-                    </div>
                 </sheet>
             </form>
         </field>
