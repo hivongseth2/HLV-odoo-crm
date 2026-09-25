@@ -28,6 +28,12 @@ function Invoke-Native {
         $out  = & $Exe @Arguments 2>&1 | Out-String
         $code = $LASTEXITCODE
         return @{ code = $code; out = $out }
+    } catch {
+        # Khong tim thay chuong trinh la loi o tang TIM LENH, ErrorActionPreference
+        # khong chan duoc. Chay bang "irm ... | iex" thi mot loi nem ra la chet ca
+        # script - da gap that: may khong co 'py', script tat ngay o buoc kiem
+        # Python, chua kip toi nhanh Python nhung.
+        return @{ code = 9009; out = $_.Exception.Message }
     } finally { $ErrorActionPreference = $prev }
 }
 
@@ -83,12 +89,33 @@ function Initialize-EmbeddedPython {
     return $exe
 }
 
-Write-Step "Kiem tra Python"
-$python = $null
-foreach ($cmd in @('python', 'py')) {
-    $r = Invoke-Native $cmd @('--version')
-    if ($r.code -eq 0) { $python = (Get-Command $cmd).Source; Write-Ok $r.out.Trim(); break }
+# Tra ve duong dan python.exe DUNG DUOC, hoac $null. Khong dung docstring kieu
+# Python: trong PowerShell mot chuoi tran trong than ham se bi day ra luong ra,
+# ham tra ve 2 phan tu va bien nhan ket qua thanh mang.
+function Resolve-SystemPython {
+    foreach ($cmd in @('python', 'python3', 'py')) {
+        $found = Get-Command $cmd -CommandType Application -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+        if (-not $found) { continue }
+
+        # Bo qua bi danh cua Microsoft Store: file 0 byte trong WindowsApps, goi
+        # vao chi mo Store chu khong chay Python, nhung Get-Command van thay.
+        if ($found.Source -like '*\WindowsApps\*') {
+            Write-Warn2 "Bo qua $($found.Source) (bi danh Microsoft Store)"
+            continue
+        }
+
+        $r = Invoke-Native $found.Source @('--version')
+        if ($r.code -eq 0 -and $r.out -match 'Python\s+3\.') {
+            Write-Ok $r.out.Trim()
+            return $found.Source
+        }
+    }
+    return $null
 }
+
+Write-Step "Kiem tra Python"
+$python = Resolve-SystemPython
 
 if ($python) {
     # Co Python chua chac dung duoc: thieu pythonw.exe (ban Store), pip bi chan boi
