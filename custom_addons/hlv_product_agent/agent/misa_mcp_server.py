@@ -88,8 +88,11 @@ class ToolRunner:
                            "dùng kết quả trước đó để trả lời người dùng.",
             }
         result = self._call(name, arguments)
-        # Không cache lỗi: lỗi mạng chớp nhoáng thì lần gọi lại phải được đi thật.
-        if result.get("status") != "error":
+        # Tool đọc: nhớ mọi kết quả trừ lỗi (lỗi mạng chớp nhoáng thì lần sau phải đi thật).
+        # Tool ghi: chỉ nhớ khi ĐÃ ghi thật; bị chặn (need_confirmation, duplicate) mà
+        # báo "đã chạy rồi" là nói dối Claude.
+        succeeded = result.get("status") == "success"
+        if (name in READ_ONLY_TOOLS and result.get("status") != "error") or succeeded:
             self._cache[key] = result
         return result
 

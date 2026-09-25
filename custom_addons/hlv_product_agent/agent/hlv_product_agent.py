@@ -9,8 +9,8 @@ Chỉ gọi RA Odoo, không mở cổng nào. Tool MISA Claude gọi đi qua mis
 lên Odoo: tài khoản MISA không bao giờ nằm trên máy này.
 
 Claude chạy ở chế độ khoá chặt: không shell, không sửa file, chỉ đọc được file trong
-thư mục của đúng cuộc hội thoại (ảnh sale gửi), chỉ dùng tool MISA + WebSearch. Sale gõ
-gì vào khung chat cũng không đụng được tới máy này.
+thư mục của đúng cuộc hội thoại (ảnh sale gửi), chỉ dùng tool MISA + tìm / đọc web. Sale
+gõ gì vào khung chat cũng không đụng được tới máy này.
 
 Chạy:  python hlv_product_agent.py --config agent.yaml
 Phụ thuộc:  requests, PyYAML, Claude Code đã đăng nhập.
@@ -32,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 import yaml
 
-AGENT_VERSION = '1.1.0'
+AGENT_VERSION = '1.2.0'
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MCP_SERVER = os.path.join(AGENT_DIR, 'misa_mcp_server.py')
 
@@ -48,7 +48,10 @@ MISA_TOOL_NAMES = [
 ]
 # Built-in tool Claude được có. Không có Bash/Edit/Write: tin của sale là dữ liệu
 # người ngoài gõ, không được biến thành lệnh chạy trên máy này.
-BUILTIN_TOOLS = ['Read', 'WebSearch']
+# WebFetch để đọc trang sản phẩm sale dán link. Trang lạ có cài chữ dắt Claude tạo hàng
+# thì cũng không tạo được: Odoo chỉ cho tạo đúng thứ đã đề xuất cho sale duyệt. Ngữ cảnh
+# của Claude không chứa bí mật nào (token Odoo đi qua biến môi trường của MCP server).
+BUILTIN_TOOLS = ['Read', 'WebSearch', 'WebFetch']
 
 DEFAULTS = {
     'model': 'sonnet',
