@@ -17,7 +17,11 @@ import sys
 
 import requests
 
-from misa_tools import READ_ONLY_TOOLS, TOOL_NAMES, TOOLS
+# Python nhúng (setup.ps1 tải về khi máy không có Python) có file ._pth nên KHÔNG tự
+# thêm thư mục của script vào sys.path: thiếu dòng này là không import nổi misa_tools.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from misa_tools import READ_ONLY_TOOLS, TOOL_NAMES, TOOLS  # noqa: E402
 
 SERVER_INFO = {"name": "hlv-misa", "version": "1.0.0"}
 DEFAULT_PROTOCOL = "2025-06-18"
