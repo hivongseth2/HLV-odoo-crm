@@ -27,7 +27,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '1.1.0'
+AGENT_VERSION = '1.3.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -47,8 +47,24 @@ USB_INPUT_FORMAT = 'dshow' if IS_WINDOWS else 'v4l2'
 DEFAULT_FONT = (r'C\\:/Windows/Fonts/arial.ttf' if IS_WINDOWS
                 else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
 POLL_SECONDS = 2
-CHUNK_BYTES = 4 * 1024 * 1024
-UPLOAD_RETRIES = 3
+
+# Khuc 2MB chu khong phai 4MB: duong len cua kho hep, khuc to de cham tran thoi
+# gian ghi socket ("The write operation timed out" - da gap that voi file 70MB).
+# Khuc nho thi moi lan gui ngan hon, hong thi lam lai it hon.
+CHUNK_BYTES = 2 * 1024 * 1024
+UPLOAD_RETRIES = 5
+
+# Quet lai file chua gui duoc moi chung nay giay. Khong quet moi vong poll (2
+# giay): mang dang hong ma dong lien tuc chi to lam nghen them.
+RETRY_SCAN_SECONDS = 120
+
+# File vua sinh ra co the ffmpeg con dang ghi do. Chi dung toi file da nam yen.
+RETRY_MIN_AGE_SECONDS = 60
+
+# Poll thanh cong khong ghi log gi ca — dung, vi 1800 dong moi gio thi khong ai
+# doc noi. Nhung luc truy su co, log trong mot khoang lai khong phan biet duoc
+# "chay binh thuong" voi "agent khong chay" — dung cau hoi can tra loi nhat.
+PULSE_SECONDS = 300
 
 log = logging.getLogger('hlv_pack_agent')
 
@@ -273,8 +289,55 @@ class Agent:
         if self.upload(recording_id, recorder.out_path):
             _remove(recorder.out_path)
         else:
-            # Giữ file lại để lấy tay, đừng xoá mất bằng chứng vì mạng chập chờn.
-            log.error("giữ lại file chưa gửi được: %s", recorder.out_path)
+            # Giữ file lại và TỰ GỬI LẠI ở lần quét sau, đừng xoá mất bằng chứng
+            # chỉ vì mạng chập chờn một lúc.
+            log.error("giữ lại file chưa gửi được, sẽ tự thử lại sau %d giây: %s",
+                      RETRY_SCAN_SECONDS, recorder.out_path)
+
+    def retry_pending_uploads(self):
+        """Gui lai nhung file quay xong ma lan truoc gui khong duoc.
+
+        Truoc day file chi duoc GIU LAI kem mot dong ERROR roi nam do vinh vien:
+        video co that tren dia nhung khong bao gio toi Odoo — dung kieu mat bang
+        chung im lang ma he thong nay sinh ra de tranh.
+
+        Ma ban ghi nam trong ten file (..._<id>.mp4) nen doc lai duoc ca sau khi
+        agent khoi dong lai. Bo qua file cua ban ghi DANG quay va file vua sinh
+        ra, tranh dung vao file ffmpeg con dang ghi do.
+        """
+        try:
+            names = sorted(os.listdir(self.work_dir))
+        except OSError:
+            return
+
+        now = time.time()
+        for name in names:
+            if not name.lower().endswith(('.mp4', '.mkv')):
+                continue
+            match = re.search(r'_(\d+)\.(?:mp4|mkv)$', name)
+            if not match:
+                continue
+            recording_id = int(match.group(1))
+            if recording_id in self.active:
+                continue  # dang quay, chua toi luc gui
+
+            path = os.path.join(self.work_dir, name)
+            try:
+                if now - os.path.getmtime(path) < RETRY_MIN_AGE_SECONDS:
+                    continue
+                size_mb = os.path.getsize(path) / 1024 / 1024
+            except OSError:
+                continue
+
+            log.info("gui lai file ton dong rec=%s (%.1fMB)", recording_id, size_mb)
+            if self.upload(recording_id, path):
+                _remove(path)
+            else:
+                # Van hong thi de nguyen, lan quet sau thu tiep. KHONG xoa.
+                # Dung luon o day: mang dang hong, dong them file khac vo ich.
+                log.warning("rec=%s van chua gui duoc, se thu lai sau %d giay",
+                            recording_id, RETRY_SCAN_SECONDS)
+                return
 
     def sweep_finished(self):
         """ffmpeg chạm trần -t hoặc chết giữa chừng thì tự dọn, không chờ lệnh stop."""
@@ -333,17 +396,42 @@ class Agent:
     def run(self):
         log.info("agent %s khởi động, bàn=%s, %d camera đã khai",
                  AGENT_VERSION, self.station_key, len(self.cameras))
+        ok_count = 0
+        fail_count = 0
+        last_pulse = time.time()
+        # Quet ngay tu dau: agent vua khoi dong lai sau su co thi file ton dong
+        # phai duoc gui di luon, khong cho them 2 phut.
+        last_retry_scan = 0.0
+
         while self.running:
             try:
                 self.sweep_finished()
+                if time.time() - last_retry_scan >= RETRY_SCAN_SECONDS:
+                    last_retry_scan = time.time()
+                    self.retry_pending_uploads()
+
                 result = self.poll()
                 if result and result.get('ok'):
+                    ok_count += 1
                     for command in result.get('commands') or []:
                         self.handle(command)
                 elif result is not None:
+                    fail_count += 1
                     log.error("Odoo từ chối: %s — kiểm lại station_key và token", result.get('error'))
+                else:
+                    fail_count += 1  # goi hong, poll() da ghi ly do
             except Exception:
+                fail_count += 1
                 log.exception("lỗi không lường trước trong vòng lặp")
+
+            now = time.time()
+            if now - last_pulse >= PULSE_SECONDS:
+                log.info("còn sống: %d lần gọi Odoo OK, %d lần hỏng, %d camera đang ghi",
+                         ok_count, fail_count, len(self.active))
+                ok_count = 0
+                fail_count = 0
+                last_pulse = now
+
             time.sleep(POLL_SECONDS)
 
         log.info("đang dừng, đóng nốt các file đang ghi")

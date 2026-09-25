@@ -95,6 +95,17 @@ class HlvPackRecording(models.Model):
                 station.name)
             return self.browse()
 
+        # Phiếu đã xong thì không quay nữa, dù màn hình có được mở lại.
+        # Sau khi bấm Hoàn tất, bản ghi chuyển sang 'stopping'/'uploading' — hai
+        # trạng thái này KHÔNG nằm trong danh sách "đang chạy" bên dưới, nên nếu
+        # nhân viên bấm Back hoặc tải lại trang lúc đó, đoạn dưới sẽ đẻ ra một bộ
+        # bản ghi mới: ffmpeg quay tiếp cho một phiếu đã đóng xong, chạy tới hết
+        # trần 30 phút rồi sinh ra một file vô dụng và một dòng Hỏng.
+        if picking.state == 'done':
+            _logger.info("PACK_REC %s đã xong, bỏ qua yêu cầu ghi hình mới",
+                         picking.name)
+            return self.browse()
+
         now = fields.Datetime.now()
 
         # Một bàn chỉ đóng một phiếu tại một thời điểm. Nhân viên bỏ phiếu cũ
