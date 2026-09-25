@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Treo dưới Tồn kho > Cấu hình: xmlid menu gốc của stock ổn định qua các bản Odoo. -->
+    <menuitem id="menu_hlv_product_agent_root"
+              name="Trợ lý tạo mã hàng"
+              parent="stock.menu_stock_config_settings"
+              groups="group_product_agent_manager,base.group_system"
+              sequence="85"/>
+
+    <menuitem id="menu_hlv_product_chat_session"
+              name="Hội thoại"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_chat_session"
+              groups="group_product_agent_manager"
+              sequence="10"/>
+
+    <menuitem id="menu_hlv_product_agent"
+              name="Máy chạy Claude"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_agent"
+              groups="base.group_system"
+              sequence="20"/>
+</odoo>

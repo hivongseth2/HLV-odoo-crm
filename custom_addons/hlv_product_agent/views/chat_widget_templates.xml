@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="product_chat_widget" name="Khung chat tạo mã hàng">
+        <div class="hlv-pa-chat" data-open="0">
+            <button type="button" class="hlv-pa-toggle" title="Trợ lý tạo mã hàng">
+                <i class="fa fa-plus-square"/> <span>Tạo mã hàng</span>
+            </button>
+            <div class="hlv-pa-panel">
+                <div class="hlv-pa-header">
+                    <div class="hlv-pa-title">
+                        <span class="hlv-pa-dot"/> Trợ lý tạo mã hàng
+                    </div>
+                    <div class="hlv-pa-actions">
+                        <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc mới">
+                            <i class="fa fa-refresh"/>
+                        </button>
+                        <button type="button" class="hlv-pa-close" title="Đóng">
+                            <i class="fa fa-times"/>
+                        </button>
+                    </div>
+                </div>
+                <div class="hlv-pa-status"/>
+                <div class="hlv-pa-messages"/>
+                <div class="hlv-pa-previews"/>
+                <div class="hlv-pa-input">
+                    <label class="hlv-pa-attach" title="Đính kèm ảnh (hoặc dán ảnh vào ô chat)">
+                        <i class="fa fa-camera"/>
+                        <input type="file" accept="image/*" multiple="multiple" class="d-none"/>
+                    </label>
+                    <textarea rows="2" maxlength="4000"
+                              placeholder="Tên hàng, mã model, thông số... (Enter để gửi, Shift+Enter xuống dòng)"/>
+                    <button type="button" class="hlv-pa-send" title="Gửi">
+                        <i class="fa fa-paper-plane"/>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Khai view riêng kế thừa trang tra tồn của module HLV (xmlid ổn định do ta tự đặt).
+         Chỉ nhân viên nội bộ thấy: tài khoản portal không được dùng tool MISA. -->
+    <template id="inventory_page_product_chat" inherit_id="website_public_inventory_18.inventory_page">
+        <xpath expr="//main[@id='wrap']" position="inside">
+            <t t-if="not request.env.user.share">
+                <t t-call="hlv_product_agent.product_chat_widget"/>
+            </t>
+        </xpath>
+    </template>
+</odoo>

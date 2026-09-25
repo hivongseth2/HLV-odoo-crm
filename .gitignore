@@ -13,3 +13,5 @@ __pycache__/
 .clinerules/
 CLAUDE.md
 plan/
+# Cấu hình agent trên máy (chứa token Odoo) — chỉ commit bản .example.yaml.
+custom_addons/*/agent/agent.yaml

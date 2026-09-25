@@ -125,9 +125,13 @@ class ZaloSheetWebhook(http.Controller):
             
             _logger.info("Zalo OA Event: %s | User: %s | MsgID: %s", event_name, user_id, msg_id)
 
+            # Chat AI qua Zalo chỉ còn khi module hlv_chatgpt còn cài. Gỡ module đó thì
+            # model biến mất; tra thẳng env[...] sẽ KeyError và làm hỏng cả webhook.
+            chatgpt_installed = 'hlv.chatgpt.session' in request.env
+
             # === 4. CHỐNG TRÙNG LẶP (DEDUPLICATION) ===
             # Nếu Zalo gửi lại (Retry), msg_id sẽ giống hệt nhau.
-            if msg_id:
+            if msg_id and chatgpt_installed:
                 # Tìm xem message này đã được lưu trong lịch sử chưa
                 is_duplicate = request.env['hlv.chatgpt.message'].sudo().search_count([
                     ('zalo_msg_id', '=', msg_id)
@@ -219,7 +223,7 @@ class ZaloSheetWebhook(http.Controller):
             
             # --- CASE B: CHAT VỚI CHATGPT ---
             # Điều kiện: Có config, và (Có nội dung HOẶC Có ảnh)
-            elif config and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and (message_content or image_url):
+            elif config and chatgpt_installed and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and (message_content or image_url):
                 
                 _logger.info("🔄 Đã nhận tin/ảnh từ %s. Đang chuyển vào luồng xử lý ngầm...", user_id)
 
