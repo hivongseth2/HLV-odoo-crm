@@ -149,13 +149,12 @@ thì đó là dấu hiệu thông tin quá nghèo nàn — xem mục 5.
 
 Sai: `ONPVC-60*3-BM`, `PVC D60X3X4M`, `Ống PVC 60x3`
 
-### 3.4 Ngoại lệ KARCHER
+### 3.4 Ngoại lệ theo dòng hàng
 
-Hàng KARCHER dùng **nguyên mã part number của hãng, giữ cả dấu chấm, và KHÔNG nối
-hậu tố hãng** — vì mã Karcher đã là định danh duy nhất.
-
-- `Khớp nối đực KARCHER` → mã `2.115-001.0`
-- `Vòi phun KARCHER` → mã `4.767-012.0`
+Một số dòng hàng có quy tắc tên / mã riêng (ví dụ KARCHER, MILWAUKEE không nối hậu tố
+hãng vào mã). Các ngoại lệ đó KHÔNG nằm ở tài liệu này mà ở phần "QUY TẮC RIÊNG THEO
+DÒNG HÀNG" ngay bên dưới — quản lý cấu hình trên Odoo. Hàng thuộc dòng có quy tắc riêng
+thì theo quy tắc riêng ở điểm nó nói tới.
 
 ---
 
@@ -244,17 +243,7 @@ Người dùng: *"ống pvc bình minh 60x3 cây 4m"*
 
 Lưu ý: chiều dài 4m là quy cách phụ nên chỉ nằm ở description, không vào tên.
 
-### Ví dụ C — hàng KARCHER
-
-Người dùng: *"khớp nối đực karcher 2.115-001.0"*
-
-| Trường | Giá trị |
-|---|---|
-| Tên hàng | `Khớp nối đực 2.115-001.0 KARCHER` |
-| Mã hàng | `2.115-001.0` |
-| Description | `{"model":"2.115-001.0","hang":"KARCHER"}` |
-
-### Ví dụ D — thông tin quá nghèo, từ chối
+### Ví dụ C — thông tin quá nghèo, từ chối
 
 Người dùng: *"tạo giúp cái ống nhựa"*
 

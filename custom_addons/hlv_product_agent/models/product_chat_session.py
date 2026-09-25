@@ -14,7 +14,7 @@ from datetime import timedelta
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
-from ..services import build_turn_prompt
+from ..services import build_turn_prompt, parse_sale_identities
 
 _logger = logging.getLogger(__name__)
 
@@ -36,9 +36,15 @@ class HlvProductChatSession(models.Model):
 
     name = fields.Char("Chủ đề", default="Hội thoại mới", required=True)
     user_id = fields.Many2one(
-        'res.users', string="Nhân viên", required=True, index=True,
+        'res.users', string="Tài khoản", required=True, index=True,
         default=lambda self: self.env.user,
     )
+    # Nhiều sale dùng chung một tài khoản Odoo: cuộc chat phải tách theo NGƯỜI, không
+    # thì tin của hai người lẫn vào một phiên Claude — người này "OK" là tạo hàng của
+    # người kia. Tài khoản một người thì sale_key rỗng.
+    sale_key = fields.Char("Mã người chat", index=True, readonly=True)
+    sale_name = fields.Char("Nhân viên", readonly=True)
+    sale_code = fields.Char("Mã sale MISA", readonly=True)
     closed = fields.Boolean(
         "Đã kết thúc", default=False,
         help="Sale bấm 'Cuộc mới' thì cuộc cũ kết thúc; Claude bắt đầu phiên mới không nhớ cuộc cũ.",
@@ -60,19 +66,45 @@ class HlvProductChatSession(models.Model):
     # PHÍA SALE (khung chat)
     # =========================================================================
     @api.model
-    def current_for_user(self):
-        """Cuộc hội thoại đang mở của người dùng hiện tại. Rỗng nếu chưa có."""
+    def sale_identities(self, user):
+        """Danh sách sale dùng tài khoản này, xem services.sale_identity.
+
+        Hai field do module khác khai (misa_invoice_status_report,
+        hlv_sale_delivery_planning); tài khoản không khai gì -> [].
+        """
+        user = user.sudo()
+        return parse_sale_identities(user.x_misa_saler_codes, user.x_sale_plan_mention_names)
+
+    @api.model
+    def current_for_user(self, identity=None):
+        """Cuộc đang mở của tài khoản hiện tại, đúng người đang chat. Rỗng nếu chưa có."""
         return self.search([
-            ('user_id', '=', self.env.uid), ('closed', '=', False),
+            ('user_id', '=', self.env.uid),
+            ('sale_key', '=', self._key_of(identity)),
+            ('closed', '=', False),
         ], limit=1)
 
     @api.model
-    def start_new_for_user(self):
-        """Kết thúc cuộc đang mở (nếu có) và mở cuộc mới."""
-        current = self.current_for_user()
+    def create_for_user(self, identity=None):
+        return self.create({
+            'user_id': self.env.uid,
+            'sale_key': self._key_of(identity),
+            'sale_name': identity['name'] if identity else self.env.user.name,
+            'sale_code': identity['code'] if identity else False,
+        })
+
+    @api.model
+    def start_new_for_user(self, identity=None):
+        """Kết thúc cuộc đang mở của đúng người này (nếu có) và mở cuộc mới."""
+        current = self.current_for_user(identity)
         if current:
             current.sudo().closed = True
-        return self.create({'user_id': self.env.uid})
+        return self.create_for_user(identity)
+
+    @staticmethod
+    def _key_of(identity):
+        # Tài khoản 1 người: key rỗng, khớp cả các cuộc tạo trước khi có tách người.
+        return (identity or {}).get('key') or False
 
     def post_user_message(self, text, images=None):
         """Ghi tin sale gửi vào hàng chờ.
@@ -134,11 +166,32 @@ class HlvProductChatSession(models.Model):
         """Trạng thái cho khung chat: tin mới hơn after_id, đang bận hay không."""
         self.ensure_one()
         messages = self.message_ids.filtered(lambda m: m.id > (after_id or 0))
+        waiting = self.state == 'idle' and any(self.message_ids.mapped('to_send'))
         return {
             'session_id': self.id,
-            'busy': self.state == 'processing' or any(self.message_ids.mapped('to_send')),
+            'busy': self.state == 'processing' or waiting,
+            'processing': self.state == 'processing',
+            # Số cuộc đang chờ trước mình; None khi mình không chờ. Agent chạy song
+            # song vài cuộc nên số này là "tối đa phải chờ", không phải thứ tự chính xác.
+            'queue_ahead': self._queue_ahead() if waiting else None,
             'messages': [msg.to_client_dict() for msg in messages],
         }
+
+    def _queue_ahead(self):
+        """Số cuộc có tin chờ gửi TRƯỚC cuộc này (cùng quy tắc xếp hàng với claim_jobs)."""
+        self.ensure_one()
+        self.env.cr.execute("""
+            WITH waiting AS (
+                SELECT s.id, MIN(m.id) AS first_pending
+                  FROM hlv_product_chat_session s
+                  JOIN hlv_product_chat_message m ON m.session_id = s.id AND m.to_send
+                 WHERE s.state = 'idle'
+                 GROUP BY s.id
+            )
+            SELECT COUNT(*) FROM waiting
+             WHERE first_pending < (SELECT first_pending FROM waiting WHERE id = %s)
+        """, [self.id])
+        return self.env.cr.fetchone()[0] or 0
 
     # =========================================================================
     # PHÍA AGENT
@@ -149,13 +202,17 @@ class HlvProductChatSession(models.Model):
 
         SKIP LOCKED để hai agent (hoặc hai lần poll chồng nhau) không bao giờ cầm
         trùng một cuộc — cầm trùng là Claude chạy hai lần, có thể tạo mã hai lần.
+
+        Xếp theo tin chờ CŨ NHẤT của mỗi cuộc (ai gửi trước được làm trước), không theo
+        last_activity: người gửi liền nhiều tin sẽ bị đẩy lùi mãi nếu xếp theo lần cuối.
         """
         self.env.cr.execute("""
             SELECT s.id FROM hlv_product_chat_session s
              WHERE s.state = 'idle'
                AND EXISTS (SELECT 1 FROM hlv_product_chat_message m
                             WHERE m.session_id = s.id AND m.to_send)
-             ORDER BY s.last_activity
+             ORDER BY (SELECT MIN(m.id) FROM hlv_product_chat_message m
+                        WHERE m.session_id = s.id AND m.to_send)
              LIMIT %s
              FOR UPDATE OF s SKIP LOCKED
         """, [max(int(limit or 1), 1)])

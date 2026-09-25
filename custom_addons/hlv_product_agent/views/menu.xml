@@ -14,6 +14,27 @@
               groups="group_product_agent_manager"
               sequence="10"/>
 
+    <menuitem id="menu_hlv_product_agent_log"
+              name="Hàng đã tạo / sửa"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_agent_log"
+              groups="group_product_agent_manager"
+              sequence="15"/>
+
+    <menuitem id="menu_hlv_product_naming_rule"
+              name="Quy tắc riêng theo dòng hàng"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_naming_rule"
+              groups="group_product_agent_manager"
+              sequence="17"/>
+
+    <menuitem id="menu_hlv_product_agent_prompt"
+              name="Prompt trợ lý"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_agent_prompt"
+              groups="group_product_agent_manager"
+              sequence="18"/>
+
     <menuitem id="menu_hlv_product_agent"
               name="Máy chạy Claude"
               parent="menu_hlv_product_agent_root"

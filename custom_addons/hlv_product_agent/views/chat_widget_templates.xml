@@ -19,7 +19,17 @@
                         </button>
                     </div>
                 </div>
+                <!-- Tài khoản dùng chung nhiều sale: hiện người đang chat + nút đổi. -->
+                <div class="hlv-pa-who">
+                    Đang chat: <b class="hlv-pa-who-name"/>
+                    <button type="button" class="hlv-pa-switch">Đổi người</button>
+                </div>
                 <div class="hlv-pa-status"/>
+                <div class="hlv-pa-picker">
+                    <div class="hlv-pa-picker-title">Tài khoản này dùng chung. Anh/chị là ai?</div>
+                    <div class="hlv-pa-picker-hint">Chọn một lần trên máy này; mỗi người một cuộc chat riêng.</div>
+                    <div class="hlv-pa-picker-list"/>
+                </div>
                 <div class="hlv-pa-messages"/>
                 <div class="hlv-pa-previews"/>
                 <div class="hlv-pa-input">

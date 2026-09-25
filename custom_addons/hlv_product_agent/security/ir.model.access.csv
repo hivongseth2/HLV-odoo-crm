@@ -4,3 +4,10 @@ access_hlv_product_chat_session_user,hlv.product.chat.session user,model_hlv_pro
 access_hlv_product_chat_session_manager,hlv.product.chat.session manager,model_hlv_product_chat_session,group_product_agent_manager,1,1,1,1
 access_hlv_product_chat_message_user,hlv.product.chat.message user,model_hlv_product_chat_message,base.group_user,1,0,0,0
 access_hlv_product_chat_message_manager,hlv.product.chat.message manager,model_hlv_product_chat_message,group_product_agent_manager,1,1,1,1
+access_hlv_product_agent_log_manager,hlv.product.agent.log manager,model_hlv_product_agent_log,group_product_agent_manager,1,0,0,0
+access_hlv_product_agent_log_system,hlv.product.agent.log system,model_hlv_product_agent_log,base.group_system,1,1,1,1
+access_hlv_product_agent_prompt_manager,hlv.product.agent.prompt manager,model_hlv_product_agent_prompt,group_product_agent_manager,1,1,0,0
+access_hlv_product_agent_prompt_system,hlv.product.agent.prompt system,model_hlv_product_agent_prompt,base.group_system,1,1,1,1
+access_hlv_product_agent_prompt_revision_manager,hlv.product.agent.prompt.revision manager,model_hlv_product_agent_prompt_revision,group_product_agent_manager,1,0,1,0
+access_hlv_product_agent_prompt_revision_system,hlv.product.agent.prompt.revision system,model_hlv_product_agent_prompt_revision,base.group_system,1,1,1,1
+access_hlv_product_naming_rule_manager,hlv.product.naming.rule manager,model_hlv_product_naming_rule,group_product_agent_manager,1,1,1,1

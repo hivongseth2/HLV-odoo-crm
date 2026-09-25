@@ -2,11 +2,12 @@
 """Cài agent bằng một lệnh.
 
 Máy chạy Claude chỉ cần dán một dòng PowerShell, gõ mã cài đặt lấy từ Odoo, xong.
-Script tự tải agent từ đây, tự lấy token, tự đăng ký chạy cùng Windows.
+Script tự tải agent từ đây, tự lấy token, tự đăng ký chạy cùng Windows. Prompt KHÔNG
+tải ở đây: agent tự lấy qua /product_agent/agent/prompt mỗi khi nó đổi trên Odoo.
 
 auth='public' vì lúc cài máy chưa có gì để xác thực. Thứ bảo vệ là mã cài đặt dùng
-một lần, hết hạn sau 30 phút; các file tải về chỉ là mã nguồn agent và quy tắc đặt
-tên — không có bí mật nào.
+một lần, hết hạn sau 30 phút; các file tải về chỉ là mã nguồn agent — không có bí
+mật nào.
 """
 import logging
 
@@ -26,9 +27,6 @@ DOWNLOADABLE = {
     'agent': ('hlv_product_agent/agent/hlv_product_agent.py', 'hlv_product_agent.py'),
     'mcp_server': ('hlv_product_agent/agent/misa_mcp_server.py', 'misa_mcp_server.py'),
     'tools': ('hlv_product_agent/agent/misa_tools.py', 'misa_tools.py'),
-    'prompt_system': ('hlv_product_agent/agent/prompt/system_prompt.md', 'prompt/system_prompt.md'),
-    'prompt_naming': ('hlv_product_agent/agent/prompt/product_naming_rules.md', 'prompt/product_naming_rules.md'),
-    'prompt_category': ('hlv_product_agent/agent/prompt/product_category_rules.md', 'prompt/product_category_rules.md'),
 }
 
 

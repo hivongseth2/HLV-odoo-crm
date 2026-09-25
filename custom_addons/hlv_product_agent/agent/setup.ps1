@@ -5,7 +5,8 @@
 #
 # Script tu lam: kiem Claude Code (cai + dang nhap), kiem Python, tai agent tu Odoo,
 # hoi ma cai dat, ghi agent.yaml, dang ky chay cung Windows, khoi dong agent.
-# Khong can quyen admin. Chay lai dung lenh nay = cap nhat agent + tai lieu quy tac.
+# Khong can quyen admin. Chay lai dung lenh nay = cap nhat agent. Prompt va quy tac dat
+# ten sua tren Odoo, agent tu tai ve - khong can chay lai script.
 
 $ErrorActionPreference = 'Stop'
 $BaseDir   = 'C:\hlv_product_agent'
@@ -202,7 +203,9 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 }
 
 Write-Step "Tai agent tu Odoo"
-New-Item -ItemType Directory -Force -Path $BaseDir, $AgentDir, "$AgentDir\prompt" | Out-Null
+New-Item -ItemType Directory -Force -Path $BaseDir, $AgentDir | Out-Null
+# Ban cu tai prompt ve may; gio prompt sua tren Odoo, agent tu tai. Xoa cho khoi nham.
+Remove-Item -Recurse -Force "$AgentDir\prompt" -ErrorAction SilentlyContinue
 $manifest = (Invoke-WebRequest -Uri "$OdooUrl/product_agent/download/manifest" -UseBasicParsing).Content
 foreach ($line in ($manifest -split "`n" | Where-Object { $_.Trim() })) {
     $key, $target = $line.Trim() -split '\s+', 2
@@ -264,10 +267,10 @@ Write-Ok "$YamlPath (model: $model)"
 # --- 7. Kiem thu truoc khi dang ky -----------------------------------------
 Write-Step "Kiem agent"
 $r = Invoke-Native $python @("$AgentDir\hlv_product_agent.py", '--config', $YamlPath, '--check')
-if ($r.code -ne 0 -or $r.out -notmatch 'Odoo: OK') {
+if ($r.code -ne 0 -or $r.out -notmatch 'Odoo: OK' -or $r.out -match 'Prompt: LOI') {
     Write-Bad "Agent kiem khong qua:"; Write-Host $r.out; exit 1
 }
-Write-Ok "Agent doc duoc cau hinh, tim thay Claude, Odoo nhan token"
+Write-Ok "Agent doc duoc cau hinh, tim thay Claude, Odoo nhan token, tai duoc prompt"
 
 Write-Step "Thu mot cau hoi voi Claude (khoang 10 giay)"
 $pingDir = "$BaseDir\sessions\_setup_check"

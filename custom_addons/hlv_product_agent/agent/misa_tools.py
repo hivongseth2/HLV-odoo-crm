@@ -41,7 +41,8 @@ TOOLS = [
         "name": "create_product_misa",
         "description": (
             "Tạo hàng hóa mới trong MISA. CHỈ GỌI KHI NGƯỜI DÙNG ĐÃ XÁC NHẬN 'OK' / 'ĐỒNG Ý' "
-            "cho đúng bộ dữ liệu đang gửi."
+            "cho đúng bộ dữ liệu đang gửi. Hệ thống kiểm trùng lần cuối trước khi tạo; trả "
+            "status 'duplicate' nghĩa là đã có hàng trùng, không được tạo."
         ),
         "inputSchema": {
             "type": "object",

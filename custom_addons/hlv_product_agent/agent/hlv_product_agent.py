@@ -32,9 +32,8 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 import yaml
 
-AGENT_VERSION = '1.0.0'
+AGENT_VERSION = '1.1.0'
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROMPT_DIR = os.path.join(AGENT_DIR, 'prompt')
 MCP_SERVER = os.path.join(AGENT_DIR, 'misa_mcp_server.py')
 
 # Chạy bằng pythonw.exe thì agent không có console, nhưng tiến trình claude con vẫn
@@ -66,29 +65,6 @@ log = logging.getLogger('hlv_product_agent')
 # =============================================================================
 # Hàm thuần: dựng tham số, đọc kết quả
 # =============================================================================
-def build_system_prompt(prompt_dir):
-    """Ghép system prompt với hai tài liệu quy tắc thành một khối.
-
-    Trả: chuỗi đầy đủ. Biên: thiếu file nào -> FileNotFoundError (thà không chạy còn
-    hơn chạy thiếu quy tắc rồi tạo mã sai).
-    """
-    def read(name):
-        with open(os.path.join(prompt_dir, name), encoding='utf-8') as handle:
-            return handle.read().strip()
-
-    return '\n\n'.join([
-        read('system_prompt.md'),
-        '==================================================\n'
-        'TÀI LIỆU A — QUY TẮC ĐẶT TÊN VÀ MÃ HÀNG HLV\n'
-        '==================================================',
-        read('product_naming_rules.md'),
-        '==================================================\n'
-        'TÀI LIỆU B — QUY TẮC PHÂN NHÓM HÀNG HÓA HLV\n'
-        '==================================================',
-        read('product_category_rules.md'),
-    ]) + '\n'
-
-
 def build_mcp_config(python_bin, server_path):
     """Chuỗi JSON cho --mcp-config. Không chứa token: token đi qua biến môi trường."""
     return json.dumps({'mcpServers': {'misa': {'command': python_bin, 'args': [server_path]}}})
@@ -224,18 +200,37 @@ class Agent:
         self.running = 0
         self.lock = threading.Lock()
         self.stopping = False
+        # Vân tay prompt đang nằm trong system_prompt_file. None = chưa có prompt dùng
+        # được thì KHÔNG nhận việc: chạy Claude thiếu quy tắc là tạo mã sai.
+        self.prompt_version = None
 
-    def refresh_system_prompt(self):
-        """Ghép lại prompt từ thư mục prompt/: sửa tài liệu xong chỉ cần khởi động lại agent.
+    def refresh_system_prompt(self, wanted_version=None):
+        """Tải prompt từ Odoo nếu Odoo báo phiên bản khác bản đang có.
 
-        Phiên Claude đang dở vẫn giữ prompt cũ (Claude ghi lại prompt lúc mở phiên);
-        sale bấm "Cuộc mới" là nhận quy tắc mới.
+        Prompt sửa trên Odoo (Trợ lý tạo mã hàng > Prompt trợ lý / Quy tắc riêng theo dòng
+        hàng). Phiên Claude đang dở vẫn giữ prompt cũ vì Claude ghi lại prompt lúc mở phiên.
+        Trả: True nếu đang có prompt dùng được (mới tải hoặc bản cũ còn đó).
         """
-        with open(self.system_prompt_file, 'w', encoding='utf-8') as handle:
-            handle.write(build_system_prompt(PROMPT_DIR))
+        if self.prompt_version and wanted_version == self.prompt_version:
+            return True
+        try:
+            result = self.odoo.call('/product_agent/agent/prompt')
+            if not result.get('ok') or not result.get('content'):
+                raise RuntimeError(result.get('error') or 'prompt rỗng')
+            # Ghi ra file tạm rồi thay: lượt Claude đang khởi động không bao giờ đọc phải
+            # file ghi dở. Thay không được (file đang bị đọc) thì giữ bản cũ, poll sau thử lại.
+            tmp_path = self.system_prompt_file + '.tmp'
+            with open(tmp_path, 'w', encoding='utf-8') as handle:
+                handle.write(result['content'])
+            os.replace(tmp_path, self.system_prompt_file)
+        except Exception as error:
+            log.warning('Chưa tải được prompt từ Odoo: %s', error)
+            return bool(self.prompt_version)
+        log.info('Đã nạp prompt %s (trước đó %s)', result.get('version'), self.prompt_version)
+        self.prompt_version = result.get('version')
+        return True
 
     def run_forever(self):
-        self.refresh_system_prompt()
         log.info('Agent %s chạy, Odoo %s, model %s', AGENT_VERSION, self.odoo.url, self.config['model'])
         while not self.stopping:
             try:
@@ -247,11 +242,16 @@ class Agent:
     def poll_once(self):
         with self.lock:
             free = int(self.config['max_parallel']) - self.running
+        if not self.prompt_version:
+            free = 0
         # Vẫn poll khi đang bận hết: Odoo dựa vào nhịp poll để biết máy còn sống.
         result = self.odoo.call('/product_agent/agent/poll', agent_version=AGENT_VERSION, max_jobs=max(free, 0))
         if not result.get('ok'):
             log.error('Odoo từ chối agent: %s', result.get('error'))
             return
+        # Nạp prompt TRƯỚC khi chạy job của chính lần poll này, để tin mới nhận luôn
+        # dùng bản prompt Odoo vừa báo.
+        self.refresh_system_prompt(result.get('prompt_version'))
         for job in result.get('jobs') or []:
             with self.lock:
                 self.running += 1
@@ -401,11 +401,13 @@ def main():
     agent = Agent(config)
 
     if options.check:
-        agent.refresh_system_prompt()
         print('Claude:', find_claude(config.get('claude_path')))
-        print('Prompt:', agent.system_prompt_file)
         result = agent.odoo.call('/product_agent/agent/poll', agent_version=AGENT_VERSION, max_jobs=0)
         print('Odoo:', 'OK' if result.get('ok') else 'TỪ CHỐI (%s)' % result.get('error'))
+        if result.get('ok'):
+            loaded = agent.refresh_system_prompt(result.get('prompt_version'))
+            print('Prompt:', ('%s (%s)' % (agent.system_prompt_file, agent.prompt_version))
+                  if loaded else 'LOI - khong tai duoc prompt tu Odoo')
         return
 
     try:
