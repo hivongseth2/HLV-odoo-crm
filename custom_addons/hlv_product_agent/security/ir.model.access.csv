@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_product_agent_system,hlv.product.agent system,model_hlv_product_agent,base.group_system,1,1,1,1
+access_hlv_product_chat_session_user,hlv.product.chat.session user,model_hlv_product_chat_session,base.group_user,1,0,1,0
+access_hlv_product_chat_session_manager,hlv.product.chat.session manager,model_hlv_product_chat_session,group_product_agent_manager,1,1,1,1
+access_hlv_product_chat_message_user,hlv.product.chat.message user,model_hlv_product_chat_message,base.group_user,1,0,0,0
+access_hlv_product_chat_message_manager,hlv.product.chat.message manager,model_hlv_product_chat_message,group_product_agent_manager,1,1,1,1

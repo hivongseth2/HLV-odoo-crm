@@ -1,0 +1,27 @@
+# Cấu hình agent trợ lý tạo mã hàng — chép thành agent.yaml cạnh file này.
+#
+# File này chứa token Odoo: ai có token + một mã lượt đang mở là gọi được tool MISA.
+# Đừng để trong thư mục dùng chung. agent.yaml đã nằm trong .gitignore.
+
+# Thử ở staging trước khi đụng tới production.
+odoo_url: "https://hoanglongvu-staging-v2-37103185.dev.odoo.com"
+
+# Lấy ở Tồn kho > Cấu hình > Trợ lý tạo mã hàng > Máy chạy Claude
+token: "dán token vào đây"
+
+# Model Claude: sonnet (nhanh, mặc định), opus (kỹ hơn, chậm hơn), hoặc tên đầy đủ.
+model: "sonnet"
+
+# Thư mục làm việc: log, prompt đã ghép, và một thư mục con cho mỗi cuộc hội thoại.
+# ĐỪNG đặt bên trong repo HLV-odoo-crm: Claude tự đọc CLAUDE.md ở các thư mục cha,
+# quy ước code của repo sẽ lọt vào ngữ cảnh của trợ lý.
+work_dir: "C:/hlv_product_agent"
+
+# Số cuộc hội thoại xử lý song song. Mỗi lượt là một tiến trình claude riêng.
+max_parallel: 2
+
+# Để trống thì agent tự tìm: PATH -> ~/.local/bin -> bản đi kèm extension VS Code.
+claude_path: ""
+
+# Một lượt (kiểm trùng 4 lần + tra nhóm + trả lời) thường mất 30-90 giây.
+turn_timeout_seconds: 300

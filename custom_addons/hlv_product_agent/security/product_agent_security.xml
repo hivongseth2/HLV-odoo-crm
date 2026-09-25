@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Người trong nhóm này được Claude coi là QUẢN LÝ: tạo theo đúng ý họ kể cả khi
+        checklist chưa đủ. Cố ý không tự gán cho admin hệ thống — quyền này bỏ qua chốt
+        chặn dữ liệu nên phải được cấp có chủ đích.
+    -->
+    <record id="group_product_agent_manager" model="res.groups">
+        <field name="name">Trợ lý tạo mã hàng: Quản lý</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Xem mọi hội thoại tạo mã hàng; Claude chấp nhận tạo theo ý người này kể cả khi thiếu thông tin.</field>
+    </record>
+
+    <record id="rule_product_chat_session_own" model="ir.rule">
+        <field name="name">Trợ lý tạo mã: chỉ hội thoại của mình</field>
+        <field name="model_id" ref="model_hlv_product_chat_session"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="rule_product_chat_session_manager" model="ir.rule">
+        <field name="name">Trợ lý tạo mã: quản lý xem tất cả</field>
+        <field name="model_id" ref="model_hlv_product_chat_session"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_product_agent_manager'))]"/>
+    </record>
+
+    <record id="rule_product_chat_message_own" model="ir.rule">
+        <field name="name">Tin trợ lý tạo mã: theo hội thoại của mình</field>
+        <field name="model_id" ref="model_hlv_product_chat_message"/>
+        <field name="domain_force">[('session_id.user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="rule_product_chat_message_manager" model="ir.rule">
+        <field name="name">Tin trợ lý tạo mã: quản lý xem tất cả</field>
+        <field name="model_id" ref="model_hlv_product_chat_message"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_product_agent_manager'))]"/>
+    </record>
+</odoo>

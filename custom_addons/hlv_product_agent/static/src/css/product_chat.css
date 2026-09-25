@@ -1,0 +1,292 @@
+/* Khung chat "Tạo mã hàng" — neo góc TRÁI dưới để không đè lên chatbot tra tồn
+   (website_public_inventory_18) đang neo góc phải. */
+.hlv-pa-chat {
+  --pa-accent: #0f6e5a;
+  --pa-accent-soft: #e6f2ef;
+  --pa-bg: #ffffff;
+  --pa-border: #d9dee3;
+  --pa-text: #1f2933;
+  --pa-muted: #6b7785;
+  --pa-warn-bg: #fff4d6;
+  --pa-warn-text: #7a5a00;
+  --pa-error-bg: #fde8e8;
+  --pa-error-text: #9b1c1c;
+
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 2147482000;
+  font-size: 14px;
+  color: var(--pa-text);
+}
+
+.hlv-pa-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pa-accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.hlv-pa-panel {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  left: 0;
+  bottom: 56px;
+  width: 400px;
+  height: min(620px, calc(100vh - 110px));
+  background: var(--pa-bg);
+  border: 1px solid var(--pa-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.hlv-pa-chat[data-open="1"] .hlv-pa-panel {
+  display: flex;
+}
+
+.hlv-pa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--pa-accent);
+  color: #fff;
+}
+
+.hlv-pa-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.hlv-pa-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7ee2a8;
+}
+
+.hlv-pa-chat[data-agent-offline="1"] .hlv-pa-dot {
+  background: #f5b041;
+}
+
+.hlv-pa-actions button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.hlv-pa-status:empty {
+  display: none;
+}
+
+.hlv-pa-status {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.hlv-pa-status[data-level="warning"] {
+  background: var(--pa-warn-bg);
+  color: var(--pa-warn-text);
+}
+
+.hlv-pa-status[data-level="error"] {
+  background: var(--pa-error-bg);
+  color: var(--pa-error-text);
+}
+
+.hlv-pa-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f7f9fa;
+}
+
+.hlv-pa-welcome {
+  color: var(--pa-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.hlv-pa-msg {
+  max-width: 88%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hlv-pa-text {
+  /* Claude trả chữ thuần có xuống dòng; giữ nguyên xuống dòng thay vì dựng HTML. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 8px 11px;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+
+.hlv-pa-msg-user {
+  align-self: flex-end;
+}
+
+.hlv-pa-msg-user .hlv-pa-text {
+  background: var(--pa-accent);
+  color: #fff;
+}
+
+.hlv-pa-msg-assistant {
+  align-self: flex-start;
+}
+
+.hlv-pa-msg-assistant .hlv-pa-text {
+  background: var(--pa-bg);
+  border: 1px solid var(--pa-border);
+}
+
+.hlv-pa-msg-event {
+  align-self: center;
+  max-width: 96%;
+}
+
+.hlv-pa-msg-event .hlv-pa-text {
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.hlv-pa-msg img {
+  max-width: 160px;
+  max-height: 160px;
+  border-radius: 8px;
+  border: 1px solid var(--pa-border);
+}
+
+.hlv-pa-msg-user a {
+  align-self: flex-end;
+}
+
+.hlv-pa-time {
+  font-size: 11px;
+  color: var(--pa-muted);
+}
+
+.hlv-pa-msg-user .hlv-pa-time {
+  text-align: right;
+}
+
+.hlv-pa-typing {
+  align-self: flex-start;
+  color: var(--pa-muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.hlv-pa-previews:empty {
+  display: none;
+}
+
+.hlv-pa-previews {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 0;
+  border-top: 1px solid var(--pa-border);
+}
+
+.hlv-pa-preview {
+  position: relative;
+}
+
+.hlv-pa-preview img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--pa-border);
+}
+
+.hlv-pa-preview-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: #333;
+  color: #fff;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hlv-pa-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--pa-border);
+}
+
+.hlv-pa-input textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--pa-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 14px;
+  max-height: 120px;
+}
+
+.hlv-pa-attach,
+.hlv-pa-send {
+  border: 0;
+  background: transparent;
+  color: var(--pa-accent);
+  font-size: 18px;
+  padding: 6px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.hlv-pa-send:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+@media (max-width: 480px) {
+  .hlv-pa-chat {
+    left: 12px;
+    bottom: 12px;
+  }
+
+  .hlv-pa-toggle span {
+    display: none;
+  }
+
+  .hlv-pa-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 85vh;
+    border-radius: 12px 12px 0 0;
+  }
+}
