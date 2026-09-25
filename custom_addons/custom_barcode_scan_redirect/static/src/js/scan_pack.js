@@ -583,7 +583,15 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    await stopRecording();
+    // Chờ tối đa 5 giây thôi. stopRecording() đợi MediaRecorder đóng file RỒI
+    // đẩy nốt chunk lên server — với video vài chục MB trên đường truyền kho,
+    // việc đó mất hàng phút và nhân viên đứng nhìn màn hình đơ. Phần chưa kịp
+    // gửi vẫn được chốt bằng sendBeacon lúc rời trang, và cron dọn phiên bỏ dở
+    // vẫn đẩy nốt lên Drive — nên không mất gì khi thôi chờ.
+    await Promise.race([
+      stopRecording(),
+      new Promise(resolve => setTimeout(resolve, 5000)),
+    ]);
 
     toast.success("Phiếu đã hoàn tất! Đang chuyển trang...", { ms: 1200 });
     setTimeout(() => { window.location.href = "/custom_barcode_scan/ui"; }, 600);
