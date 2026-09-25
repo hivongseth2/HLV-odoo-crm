@@ -2,11 +2,16 @@
 # Cai dat agent ghi hinh dong goi - chay tren may dong goi Linux (Ubuntu/Debian)
 #
 # Chay (lay lenh o form Ban dong goi trong Odoo):
-#   curl -fsSL https://<odoo>/pack_agent/download/setup_sh -o /tmp/hlv_setup.sh \
-#     && sudo bash /tmp/hlv_setup.sh https://<odoo>
+#   cd ~ && (curl -fsSL https://<odoo>/pack_agent/download/setup_sh -o hlv_setup.sh \
+#            || wget -qO hlv_setup.sh https://<odoo>/pack_agent/download/setup_sh) \
+#     && sudo bash hlv_setup.sh https://<odoo>
 #
 # CO Y khong dung "curl ... | bash": script co hoi ma cai dat va URL camera, ma
 # duong ong da chiem mat stdin nen moi cau hoi se nhan chuoi rong roi chay tiep.
+#
+# CO Y tai ve THU MUC NHA chu khong phai /tmp: ban curl cai qua snap chay trong
+# sandbox co /tmp rieng, file ghi ra khong nam o /tmp that nen bash sau do bao
+# "khong co tap tin". Da gap that tren may Ubuntu o kho.
 
 set -uo pipefail
 
@@ -60,8 +65,21 @@ fi
 ok "moi truong ao + requests, pyyaml"
 
 step "Tai agent tu Odoo"
-curl -fsSL "$ODOO_URL/pack_agent/download/agent" -o "$AGENT_DIR/hlv_pack_agent.py"
-ok "hlv_pack_agent.py"
+# Dung "> file" chu KHONG dung "curl -o file": ban curl cai qua snap chay trong
+# sandbox, khong ghi duoc vao /opt. Chuyen huong bang shell thi chinh bash (dang
+# chay quyen root) tao file, curl chi viec in ra stdout - sandbox het lien quan.
+if ! curl -fsSL "$ODOO_URL/pack_agent/download/agent" > "$AGENT_DIR/hlv_pack_agent.py"; then
+    bad "Khong tai duoc agent tu $ODOO_URL"
+    exit 1
+fi
+# Tai hut giua chung hoac nhan ve trang loi HTML thi file van ton tai nhung vo
+# dung - kiem noi dung truoc khi di tiep, dung de phat hien luc service chet.
+if ! head -3 "$AGENT_DIR/hlv_pack_agent.py" | grep -q 'hlv_pack_agent\|python'; then
+    bad "File tai ve khong phai agent Python. Kiem lai dia chi Odoo: $ODOO_URL"
+    head -3 "$AGENT_DIR/hlv_pack_agent.py"
+    exit 1
+fi
+ok "hlv_pack_agent.py ($(wc -l < "$AGENT_DIR/hlv_pack_agent.py") dong)"
 
 # --- 4. Ma cai dat --------------------------------------------------------
 # Doc JSON bang python co san, khong bat cai them jq.

@@ -96,9 +96,11 @@ class PackAgentApi(http.Controller):
         if not station:
             return {'ok': False, 'error': 'auth'}
 
+        codes = kw.get('camera_codes') or []
         station.write({
             'agent_last_seen': fields.Datetime.now(),
             'agent_version': (kw.get('agent_version') or '')[:64],
+            'agent_camera_codes': ','.join(str(c) for c in codes)[:512] or False,
         })
 
         Recording = request.env['hlv.pack.recording'].sudo()

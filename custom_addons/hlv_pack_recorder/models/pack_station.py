@@ -52,6 +52,29 @@ class HlvPackStation(models.Model):
         help="Agent im quá lâu nghĩa là máy tắt hoặc service chết — phiếu đóng gói ở bàn này sẽ không có video.",
     )
     agent_version = fields.Char(readonly=True)
+    agent_camera_codes = fields.Char(
+        "Camera agent đang khai", readonly=True,
+        help="Mã camera có trong file cấu hình của agent, do chính agent báo lên.",
+    )
+    camera_sync_warning = fields.Char(compute='_compute_camera_sync_warning')
+
+    @api.depends('camera_ids.code', 'camera_ids.active', 'agent_camera_codes')
+    def _compute_camera_sync_warning(self):
+        """Camera khai trong Odoo mà agent chưa có URL.
+
+        Thêm camera trong Odoo không tự đẩy URL xuống máy đóng gói — Odoo cố ý
+        không giữ URL camera. Phải chạy lại script cài trên máy đó. Không đối
+        chiếu thì sai sót này chỉ lộ ra lúc một phiếu đóng gói thiếu video.
+        """
+        for station in self:
+            if not station.agent_camera_codes:
+                station.camera_sync_warning = False
+                continue
+            known = {c.strip() for c in station.agent_camera_codes.split(',') if c.strip()}
+            missing = [cam.name or cam.code
+                       for cam in station.camera_ids.filtered('active')
+                       if (cam.code or '') not in known]
+            station.camera_sync_warning = ', '.join(missing) if missing else False
 
     enroll_code = fields.Char(
         "Mã cài đặt", copy=False, readonly=True,
@@ -98,9 +121,14 @@ class HlvPackStation(models.Model):
             station.setup_command = (
                 "$env:HLV_ODOO_URL='%s'; irm %s/pack_agent/download/setup | iex" % (base, base)
             )
+            # Tai ve THU MUC NHA, khong phai /tmp: ban curl cai qua snap chay
+            # trong sandbox co /tmp rieng, file ghi ra khong nam o /tmp that nen
+            # bash sau do bao "khong co tap tin". Da gap that tren may Ubuntu.
+            # Kem duong lui wget cho may khong co curl.
+            url = '%s/pack_agent/download/setup_sh' % base
             station.setup_command_linux = (
-                'curl -fsSL %s/pack_agent/download/setup_sh -o /tmp/hlv_setup.sh '
-                '&& sudo bash /tmp/hlv_setup.sh %s' % (base, base)
+                'cd ~ && (curl -fsSL %s -o hlv_setup.sh || wget -qO hlv_setup.sh %s) '
+                '&& sudo bash hlv_setup.sh %s' % (url, url, base)
             )
 
     _sql_constraints = [

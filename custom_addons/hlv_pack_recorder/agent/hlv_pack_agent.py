@@ -207,6 +207,10 @@ class Agent:
         return self._call_json('/pack_agent/poll', {
             'active_ids': [rid for rid, r in self.active.items() if r.is_running()],
             'agent_version': AGENT_VERSION,
+            # Bao len de Odoo doi chieu voi danh sach camera khai trong he thong.
+            # Khai them camera trong Odoo ma quen chay lai script cai thi agent
+            # khong biet URL cua no — truoc day chi lo ra khi mot phieu hong.
+            'camera_codes': sorted(self.cameras.keys()),
         })
 
     def report_failure(self, recording_id, reason):

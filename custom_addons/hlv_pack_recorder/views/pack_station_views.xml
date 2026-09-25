@@ -13,6 +13,7 @@
         <field name="agent_status" widget="badge"
                decoration-success="agent_status == 'alive'"
                decoration-danger="agent_status != 'alive'"/>
+        <field name="camera_sync_warning" string="Camera agent chưa có URL" optional="show"/>
         <field name="agent_last_seen"/>
         <field name="agent_version"/>
       </list>
@@ -47,21 +48,53 @@
               <field name="agent_version"/>
             </group>
           </group>
-          <div class="alert alert-success" role="alert" invisible="not enroll_code">
-            <b>Cài máy đóng gói</b> — chạy một lệnh duy nhất trên máy đó:
-            <br/>
-            <b>Windows</b> (PowerShell):
-            <field name="setup_command" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
-            <b>Linux</b> (Terminal):
-            <field name="setup_command_linux" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
-            <br/>
-            Khi script hỏi, gõ mã cài đặt: <b><field name="enroll_code" readonly="1" nolabel="1" class="oe_inline"/></b>
-            (hết hạn lúc <field name="enroll_code_expiry" readonly="1" nolabel="1" class="oe_inline"/>)
+          <div invisible="not enroll_code">
+            <div class="alert alert-success" role="alert">
+              <b>Mã cài đặt:</b>
+              <field name="enroll_code" readonly="1" nolabel="1" class="oe_inline"/>
+              — hết hạn lúc
+              <field name="enroll_code_expiry" readonly="1" nolabel="1" class="oe_inline"/>.
+              Gõ mã này khi script hỏi.
+            </div>
+
+            <div class="alert alert-secondary" role="alert">
+              <h5 class="mb-1">🪟 Máy đóng gói chạy Windows</h5>
+              <div class="text-muted mb-2">
+                Mở <b>PowerShell</b> (chuột phải &#8594; Run as administrator nếu muốn
+                nhân viên không tắt được agent) rồi dán:
+              </div>
+              <field name="setup_command" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
+            </div>
+
+            <div class="alert alert-secondary" role="alert">
+              <h5 class="mb-1">🐧 Máy đóng gói chạy Linux</h5>
+              <div class="text-muted mb-2">
+                Mở <b>Terminal</b> rồi dán:
+              </div>
+              <field name="setup_command_linux" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
+            </div>
+
+            <div class="alert alert-warning" role="alert">
+              Hai lệnh trên <b>không thay thế nhau được</b>. Dán lệnh Linux vào
+              PowerShell sẽ báo <code>The token '&amp;&amp;' is not a valid statement
+              separator</code>; dán lệnh Windows vào Terminal sẽ báo
+              <code>$env: command not found</code>. Lấy đúng khối theo hệ điều hành
+              của máy đóng gói.
+            </div>
           </div>
           <div class="alert alert-info" role="alert" invisible="enroll_code">
             Bấm <b>Tạo mã cài đặt</b> ở trên để lấy lệnh cài cho máy đóng gói.
             Hoặc nếu agent đã cài rồi, chỉ cần mở <code>/pack_recorder/set_station</code>
             trên máy đó và chọn bàn này.
+          </div>
+          <div class="alert alert-danger" role="alert" invisible="not camera_sync_warning">
+            <b>Agent chưa biết URL của camera:</b>
+            <field name="camera_sync_warning" readonly="1" nolabel="1" class="oe_inline"/>
+            <br/>
+            Camera này đã khai trong Odoo nhưng chưa có trong file cấu hình của agent,
+            nên phiếu đóng gói ở bàn này sẽ <b>thiếu video của camera đó</b>.
+            Bấm <b>Tạo mã cài đặt</b> rồi chạy lại lệnh cài trên máy đóng gói — Odoo
+            cố ý không giữ URL camera nên không tự đẩy xuống được.
           </div>
           <notebook>
             <page string="Camera">
