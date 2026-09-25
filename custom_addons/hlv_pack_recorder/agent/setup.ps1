@@ -9,6 +9,7 @@
 $ErrorActionPreference = 'Stop'
 $AgentDir  = 'C:\hlv_agent'
 $FfmpegUrl = 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip'
+$PythonEmbedUrl = 'https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip'
 $TaskName  = 'HLV Pack Agent'
 
 function Write-Step($msg) { Write-Host "`n>> $msg" -ForegroundColor Cyan }
@@ -40,32 +41,76 @@ if (-not $OdooUrl) { $OdooUrl = Read-Host "`nDia chi Odoo (vi du https://hoanglo
 $OdooUrl = $OdooUrl.TrimEnd('/')
 
 # --- 2. Python -------------------------------------------------------------
+# Truoc day goi winget de cai Python. Khong dung duoc o kho: may Win10 cu hoac ban
+# LTSC khong co winget, cai xong thi PATH cua phien hien tai chua cap nhat, va buoc
+# do doi quyen admin. Gio: uu tien Python san co, khong xai duoc thi tai ban NHUNG
+# ve thang thu muc agent — khong cai gi vao may, khong can admin, khong dung PATH.
+
+function Initialize-EmbeddedPython {
+    $dir = "$AgentDir\python"
+    $exe = "$dir\python.exe"
+
+    if (Test-Path $exe) {
+        $chk = Invoke-Native $exe @('-c', 'import requests, yaml')
+        if ($chk.code -eq 0) { Write-Ok "Dung lai Python nhung da co san"; return $exe }
+    }
+
+    Write-Step "Tai Python nhung (~11MB, khong cai gi vao may)"
+    $zip = "$env:TEMP\hlv_python_embed.zip"
+    Invoke-WebRequest -Uri $PythonEmbedUrl -OutFile $zip
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    Expand-Archive -Path $zip -DestinationPath $dir -Force
+    Remove-Item -Force $zip -ErrorAction SilentlyContinue
+
+    # Ban nhung chan site-packages bang file pythonNNN._pth. Khong bo comment dong
+    # 'import site' thi pip cai xong nhung import van bao khong tim thay goi nao.
+    Get-ChildItem -Path $dir -Filter 'python*._pth' | ForEach-Object {
+        (Get-Content $_.FullName) -replace '^#\s*import site', 'import site' |
+            Set-Content $_.FullName -Encoding ascii
+    }
+
+    Write-Step "Cai pip cho Python nhung"
+    $getPip = "$env:TEMP\get-pip.py"
+    Invoke-WebRequest -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile $getPip
+    $r = Invoke-Native $exe @($getPip, '--quiet', '--no-warn-script-location')
+    Remove-Item -Force $getPip -ErrorAction SilentlyContinue
+    if ($r.code -ne 0) { Write-Bad "Khong cai duoc pip:"; Write-Host $r.out; exit 1 }
+
+    $r = Invoke-Native $exe @('-m','pip','install','--quiet','--no-warn-script-location',
+                              'requests','pyyaml')
+    if ($r.code -ne 0) { Write-Bad "Khong cai duoc thu vien:"; Write-Host $r.out; exit 1 }
+    Write-Ok "Python nhung san sang (khong dung toi Python cua may)"
+    return $exe
+}
+
 Write-Step "Kiem tra Python"
 $python = $null
 foreach ($cmd in @('python', 'py')) {
     $r = Invoke-Native $cmd @('--version')
     if ($r.code -eq 0) { $python = (Get-Command $cmd).Source; Write-Ok $r.out.Trim(); break }
 }
-if (-not $python) {
-    Write-Warn2 "Chua co Python. Dang cai bang winget..."
-    $r = Invoke-Native 'winget' @('install','-e','--id','Python.Python.3.12','--silent',
-                                  '--accept-package-agreements','--accept-source-agreements')
-    $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
-                [Environment]::GetEnvironmentVariable('Path','User')
-    $python = (Get-Command python -ErrorAction SilentlyContinue).Source
-    if (-not $python) {
-        Write-Bad "Khong tu cai duoc Python."
-        Write-Host "   Tai tai https://www.python.org/downloads/ - nho tick" -ForegroundColor Red
-        Write-Host "   'Add python.exe to PATH', roi chay lai lenh cai nay." -ForegroundColor Red
-        exit 1
+
+if ($python) {
+    # Co Python chua chac dung duoc: thieu pythonw.exe (ban Store), pip bi chan boi
+    # proxy cong ty, hoac ban qua cu. Thu cai thu vien ngay — that bai thi chuyen
+    # sang ban nhung thay vi bo cuoc giua chung.
+    $pyw = Join-Path (Split-Path $python) 'pythonw.exe'
+    $r = Invoke-Native $python @('-m','pip','install','--quiet','--no-warn-script-location',
+                                 'requests','pyyaml')
+    if ($r.code -ne 0) {
+        Write-Warn2 "Python cua may khong cai duoc thu vien - chuyen sang Python nhung."
+        $python = $null
+    } elseif (-not (Test-Path $pyw)) {
+        Write-Warn2 "Python cua may khong co pythonw.exe - chuyen sang Python nhung."
+        $python = $null
+    } else {
+        Write-Ok "requests, pyyaml"
     }
-    Write-Ok "Da cai Python"
+} else {
+    Write-Warn2 "May chua co Python - se dung ban nhung, khong cai gi vao may."
 }
 
-Write-Step "Cai thu vien Python"
-$r = Invoke-Native $python @('-m','pip','install','--quiet','--upgrade','requests','pyyaml')
-if ($r.code -ne 0) { Write-Bad "pip loi:"; Write-Host $r.out; exit 1 }
-Write-Ok "requests, pyyaml"
+if (-not $python) { $python = Initialize-EmbeddedPython }
 
 # --- 3. Thu muc + agent ----------------------------------------------------
 Write-Step "Chuan bi $AgentDir"

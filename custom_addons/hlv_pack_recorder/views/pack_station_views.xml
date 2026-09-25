@@ -48,9 +48,12 @@
             </group>
           </group>
           <div class="alert alert-success" role="alert" invisible="not enroll_code">
-            <b>Cài máy đóng gói:</b> mở PowerShell trên máy đó và chạy một lệnh duy nhất:
+            <b>Cài máy đóng gói</b> — chạy một lệnh duy nhất trên máy đó:
             <br/>
+            <b>Windows</b> (PowerShell):
             <field name="setup_command" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
+            <b>Linux</b> (Terminal):
+            <field name="setup_command_linux" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
             <br/>
             Khi script hỏi, gõ mã cài đặt: <b><field name="enroll_code" readonly="1" nolabel="1" class="oe_inline"/></b>
             (hết hạn lúc <field name="enroll_code_expiry" readonly="1" nolabel="1" class="oe_inline"/>)

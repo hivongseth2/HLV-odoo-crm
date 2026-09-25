@@ -21,6 +21,7 @@ _logger = logging.getLogger(__name__)
 DOWNLOADABLE = {
     'agent': ('hlv_pack_recorder/agent/hlv_pack_agent.py', 'text/plain; charset=utf-8'),
     'setup': ('hlv_pack_recorder/agent/setup.ps1', 'text/plain; charset=utf-8'),
+    'setup_sh': ('hlv_pack_recorder/agent/setup.sh', 'text/plain; charset=utf-8'),
 }
 
 

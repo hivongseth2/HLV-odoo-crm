@@ -50,7 +50,7 @@ cameras:
   #
   # "0003":
   #   type: usb
-  #   device: "HD Pro Webcam C920"
+  #   device: "HD Pro Webcam C920"   # Windows: ten thiet bi | Linux: "/dev/video0"
   #   size: "1920x1080"     # webcam không hỗ trợ thì ffmpeg báo lỗi, hạ xuống 1280x720
   #   fps: 24
   #   bitrate: "4M"         # 1080p24 nên để 4M; 720p thì 2.5M là đủ

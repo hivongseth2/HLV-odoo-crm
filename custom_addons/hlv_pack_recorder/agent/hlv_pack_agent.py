@@ -29,9 +29,23 @@ import yaml
 
 AGENT_VERSION = '1.1.0'
 
+IS_WINDOWS = os.name == 'nt'
+
 # Chay bang pythonw.exe thi agent khong co console, nhung moi tien trinh ffmpeg
 # con van tu bung mot cua so den neu khong chan. Nhan vien thay cua so la tat.
-NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
+NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if IS_WINDOWS else 0
+
+# Camera cam day: Windows doc qua DirectShow theo TEN thiet bi, Linux doc qua
+# Video4Linux2 theo DUONG DAN (/dev/videoN). Hai thu khac han nhau nen phai tach.
+USB_INPUT_FORMAT = 'dshow' if IS_WINDOWS else 'v4l2'
+
+# Font de dong dau gio len hinh webcam.
+# Windows: dau hai cham sau ten o dia phai escape BANG HAI BACKSLASH — bo phan
+# tich filter cua ffmpeg boc hai tang, mot backslash bi an mat o tang dau va
+# ffmpeg cat chuoi ngay dau hai cham -> "No option name near ...".
+# Linux: duong dan khong co dau hai cham nen khong phai escape gi.
+DEFAULT_FONT = (r'C\\:/Windows/Fonts/arial.ttf' if IS_WINDOWS
+                else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
 POLL_SECONDS = 2
 CHUNK_BYTES = 4 * 1024 * 1024
 UPLOAD_RETRIES = 3
@@ -47,12 +61,6 @@ TIME_OVERLAY = (
     ":fontcolor=white:fontsize=28:box=1:boxcolor=black@0.5:boxborderw=8"
     ":x=16:y=h-th-16"
 )
-# Dấu hai chấm sau tên ổ đĩa phải escape BẰNG HAI BACKSLASH: bộ phân tích
-# filter của ffmpeg bóc hai tầng, một backslash bị ăn mất ở tầng đầu và
-# ffmpeg cắt chuỗi ngay dấu hai chấm -> "No option name near ...".
-DEFAULT_FONT = r'C\\:/Windows/Fonts/arial.ttf'
-
-
 def build_ffmpeg_args(camera, out_path, max_seconds, ffmpeg_bin='ffmpeg'):
     """Dựng dòng lệnh ffmpeg cho một camera.
 
@@ -86,16 +94,19 @@ def build_ffmpeg_args(camera, out_path, max_seconds, ffmpeg_bin='ffmpeg'):
     elif kind == 'usb':
         device = camera.get('device')
         if not device:
-            raise ValueError("camera usb thiếu 'device' (tên thiết bị DirectShow)")
+            raise ValueError(
+                "camera usb thiếu 'device' (%s)"
+                % ('tên thiết bị DirectShow' if IS_WINDOWS else 'đường dẫn /dev/videoN'))
         size = camera.get('size') or '1280x720'
         fps = str(camera.get('fps') or 24)
         bitrate = camera.get('bitrate') or '4M'
         # -rtbufsize: webcam đẩy frame chưa nén rất nặng, buffer nhỏ là rớt khung.
-        args += [
-            '-f', 'dshow', '-rtbufsize', '256M',
-            '-video_size', size, '-framerate', fps,
-            '-i', 'video=%s' % device,
-        ]
+        # Chỉ Windows mới cần tiền tố "video=" và mới hiểu -rtbufsize kiểu này.
+        args += ['-f', USB_INPUT_FORMAT]
+        if IS_WINDOWS:
+            args += ['-rtbufsize', '256M']
+        args += ['-video_size', size, '-framerate', fps]
+        args += ['-i', ('video=%s' % device) if IS_WINDOWS else device]
         if camera.get('overlay_time', True):
             font = camera.get('font') or DEFAULT_FONT
             args += ['-vf', TIME_OVERLAY.format(font=font)]
@@ -431,6 +442,48 @@ def _setup_logging(args):
     return log_path
 
 
+def _list_v4l2_devices():
+    """In webcam Linux đang thấy, kèm mẫu YAML điền sẵn.
+
+    Đọc thẳng /sys/class/video4linux thay vì parse output ffmpeg: tên thiết bị
+    nằm sẵn ở đó, khỏi phụ thuộc định dạng log của ffmpeg đổi theo phiên bản.
+    Biên: không có /dev/video* nào -> in hướng dẫn rồi trả 1.
+    """
+    import glob as _glob
+
+    devices = sorted(_glob.glob('/dev/video*'))
+    if not devices:
+        print("Không thấy webcam nào (/dev/video*).")
+        print("Camera IP thì không dùng lệnh này — khai thẳng URL RTSP vào agent.yaml.")
+        return 1
+
+    for dev in devices:
+        name = ''
+        sys_name = '/sys/class/video4linux/%s/name' % os.path.basename(dev)
+        try:
+            with open(sys_name, encoding='utf-8') as fh:
+                name = fh.read().strip()
+        except OSError:
+            pass
+        print()
+        print('=' * 68)
+        print('Webcam: %s%s' % (dev, (' — %s' % name) if name else ''))
+        print()
+        print('  Chép khối này vào mục cameras: trong agent.yaml,')
+        print('  đổi "MA_CAMERA" thành đúng Mã camera khai trong Odoo:')
+        print()
+        print('    "MA_CAMERA":')
+        print('      type: usb')
+        print('      device: "%s"' % dev)
+        print('      size: "1280x720"')
+        print('      fps: 15')
+        print('      bitrate: "3M"')
+        print('      overlay_time: true')
+    print()
+    print("Xem chế độ thiết bị hỗ trợ:  v4l2-ctl --device %s --list-formats-ext" % devices[0])
+    return 0
+
+
 def _list_dshow_devices(ffmpeg_bin):
     """In webcam Windows đang thấy kèm chế độ hỗ trợ và mẫu YAML điền sẵn."""
     listing = _run_ffmpeg_text(
@@ -533,7 +586,9 @@ def main():
         cfg = yaml.safe_load(fh) or {}
 
     if args.list_cameras:
-        return _list_dshow_devices(cfg.get('ffmpeg_path') or 'ffmpeg')
+        if IS_WINDOWS:
+            return _list_dshow_devices(cfg.get('ffmpeg_path') or 'ffmpeg')
+        return _list_v4l2_devices()
 
     missing = [k for k in ('odoo_url', 'station_key', 'token') if not cfg.get(k)]
     if missing:
