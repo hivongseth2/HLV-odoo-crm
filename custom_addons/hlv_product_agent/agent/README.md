@@ -13,8 +13,12 @@ trình duyệt sale ──> Odoo (hàng chờ) <── agent trên máy này ─
 - Agent **chỉ gọi ra** Odoo. Máy này không mở cổng nào.
 - Tài khoản MISA vẫn nằm trên Odoo. Claude gọi tool qua Odoo, không cầm token MISA.
 - Claude chạy khoá chặt: không shell, không sửa file, chỉ đọc được ảnh trong thư mục
-  của đúng cuộc hội thoại, chỉ có tool MISA + WebSearch. Máy tắt thì sale vẫn gửi được
-  tin, khung chat báo "máy trợ lý đang tắt" và tin được trả lời khi máy bật lại.
+  của đúng cuộc hội thoại, chỉ có tool MISA + tìm web (WebSearch) + đọc trang sale dán
+  link (WebFetch). Máy tắt thì sale vẫn gửi được tin, khung chat báo "máy trợ lý đang
+  tắt" và tin được trả lời khi máy bật lại.
+- Không tạo / sửa được gì khi chưa đề xuất cho sale duyệt: Odoo chỉ chạy lệnh ghi khi mã
+  và tên (hoặc giá trị mới) có nguyên văn trong câu trả lời trước của trợ lý. Chặn ở
+  Odoo, không phụ thuộc prompt — kể cả quyền quản lý hay một trang web cài chữ dắt Claude.
 
 ## File trong thư mục này
 

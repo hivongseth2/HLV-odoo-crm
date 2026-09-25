@@ -290,6 +290,20 @@ class HlvProductChatSession(models.Model):
             session.deliver_reply('', error=_("quá thời gian chờ"))
         return stale
 
+    def previous_reply(self):
+        """Câu trả lời gần nhất của trợ lý TRƯỚC lượt đang xử lý — thứ sale đã thấy.
+
+        Tính từ tin đầu tiên của lượt hiện tại (claim_token), không phải từ cuối cuộc:
+        câu trả lời của chính lượt này chưa được lưu, và nếu có lưu thì sale cũng chưa
+        kịp đọc. Trả chuỗi rỗng nếu chưa có câu trả lời nào.
+        """
+        self.ensure_one()
+        claimed = self.message_ids.filtered(
+            lambda m: self.claim_token and m.claim_token == self.claim_token)
+        before = claimed[:1].id or float('inf')
+        replies = self.message_ids.filtered(lambda m: m.role == 'assistant' and m.id < before)
+        return replies[-1:].content or ''
+
     def post_event(self, text):
         """Ghi chú hệ thống (đã tạo/sửa MISA...) — sale thấy, Claude không nhận."""
         self.ensure_one()

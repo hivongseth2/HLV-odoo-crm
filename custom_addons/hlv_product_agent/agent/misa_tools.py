@@ -41,8 +41,9 @@ TOOLS = [
         "name": "create_product_misa",
         "description": (
             "Tạo hàng hóa mới trong MISA. CHỈ GỌI KHI NGƯỜI DÙNG ĐÃ XÁC NHẬN 'OK' / 'ĐỒNG Ý' "
-            "cho đúng bộ dữ liệu đang gửi. Hệ thống kiểm trùng lần cuối trước khi tạo; trả "
-            "status 'duplicate' nghĩa là đã có hàng trùng, không được tạo."
+            "cho đúng bộ dữ liệu đang gửi. Mã và tên phải có nguyên văn trong đề xuất ở câu "
+            "trả lời trước, không thì trả 'need_confirmation'. Hệ thống kiểm trùng lần cuối "
+            "trước khi tạo; 'duplicate' nghĩa là đã có hàng trùng, không được tạo."
         ),
         "inputSchema": {
             "type": "object",
@@ -79,7 +80,8 @@ TOOLS = [
         "name": "update_product_misa",
         "description": (
             "Sửa một trường (tên/mã/mô tả) của hàng ĐÃ CÓ trên MISA. Cần người dùng xác nhận "
-            "như tạo mới. misa_id và old_value phải lấy từ kết quả search_product_misa."
+            "như tạo mới: new_value phải có nguyên văn trong đề xuất ở câu trả lời trước, không "
+            "thì trả 'need_confirmation'. misa_id và old_value lấy từ kết quả search_product_misa."
         ),
         "inputSchema": {
             "type": "object",

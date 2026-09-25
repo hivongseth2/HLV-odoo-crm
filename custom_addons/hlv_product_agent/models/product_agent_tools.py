@@ -9,6 +9,8 @@ import logging
 
 from odoo import fields, models
 
+from ..services import missing_from_proposal
+
 _logger = logging.getLogger(__name__)
 
 # Nhóm mặc định khi không tra được nhóm nào khớp (DANH MỤC KHÁC trên MISA).
@@ -130,6 +132,9 @@ class HlvProductAgentTools(models.AbstractModel):
         name = (args.get('name') or '').strip()
         if not code or not name:
             return {'status': 'error', 'message': "Thiếu mã hoặc tên hàng."}
+        unconfirmed = self._require_proposed(session, [code, name])
+        if unconfirmed:
+            return unconfirmed
 
         # Nhiều sale chạy song song: hai lượt cùng quét trùng, cùng thấy "không trùng",
         # rồi cùng tạo. Khoá chung cho MỌI lệnh tạo (không khoá theo mã, vì hai lượt có
@@ -174,6 +179,25 @@ class HlvProductAgentTools(models.AbstractModel):
             'code': code,
         }
 
+    def _require_proposed(self, session, values):
+        """Chặn lệnh ghi khi giá trị chưa từng được đưa cho sale xem.
+
+        Trả None nếu mọi giá trị đều có nguyên văn trong câu trả lời trước của trợ lý;
+        không thì dict 'need_confirmation' để trả thẳng cho Claude. Chặn ở đây chứ không
+        chỉ dặn trong prompt: đã gặp thật — quyền quản lý đọc thành "im lặng làm" và
+        tạo luôn khi sale mới hỏi "tạo ko em".
+        """
+        missing = missing_from_proposal(session.previous_reply(), values)
+        if not missing:
+            return None
+        _logger.info("PRODUCT_AGENT chặn lệnh ghi chưa đề xuất (phiên %s): %s", session.id, missing)
+        return {
+            'status': 'need_confirmation',
+            'message': "Chưa ghi gì lên MISA. Câu trả lời trước chưa có nguyên văn: %s. "
+                       "Gửi đề xuất đầy đủ (mẫu C, hoặc cũ -> mới khi sửa) rồi chờ người dùng "
+                       "xác nhận ở tin sau." % ", ".join(missing),
+        }
+
     def _find_duplicate(self, code, name):
         """Kiểm lại ngay trước khi tạo: mã hoặc tên đã có chưa.
 
@@ -216,6 +240,9 @@ class HlvProductAgentTools(models.AbstractModel):
         misa_id = args.get('misa_id')
         new_value = args.get('new_value')
         old_value = args.get('old_value')
+        unconfirmed = self._require_proposed(session, [new_value])
+        if unconfirmed:
+            return unconfirmed
         try:
             updated = self._misa_utils().update_product_field_misa(misa_id, field, new_value, old_value)
         except Exception as error:

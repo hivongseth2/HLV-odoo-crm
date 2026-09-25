@@ -69,8 +69,10 @@ class HlvProductAgentPrompt(models.Model):
     # =========================================================================
     @api.model
     def _default_content(self, code):
-        with file_open(DEFAULT_FILES[code], 'r', encoding='utf-8') as handle:
-            return handle.read().strip() + "\n"
+        # file_open của Odoo không nhận encoding: đọc byte rồi tự giải mã UTF-8, không
+        # phó mặc cho bảng mã mặc định của server (tài liệu toàn tiếng Việt có dấu).
+        with file_open(DEFAULT_FILES[code], 'rb') as handle:
+            return handle.read().decode('utf-8').strip() + "\n"
 
     @api.model
     def _ensure_defaults(self):
