@@ -41,48 +41,81 @@ Dòng `Stream #0:0: Video: h264 ... 1920x1080, 25 fps, 4096 kb/s` chính là th�
 nằm trong file quay ra. Thấy 704x576 hay 640x480 là đang dính luồng phụ — đổi
 `subtype=1` thành `subtype=0`.
 
-## Trước khi cài
-
-1. Cài **ffmpeg**. Hai cách:
-   - Tải bản static rồi để `ffmpeg.exe` ngay cạnh agent, khai `ffmpeg_path`
-     trong `agent.yaml` — khỏi đụng vào PATH. Bản đã kiểm:
-     https://github.com/BtbN/FFmpeg-Builds/releases (file `win64-gpl`).
-   - Hoặc thêm thư mục `bin` của ffmpeg vào PATH rồi bỏ trống `ffmpeg_path`.
-2. Cài **Python 3.10+**, rồi `pip install requests pyyaml`.
-3. Trong Odoo: **Tồn kho → Cấu hình → Video đóng gói → Bàn đóng gói & camera**.
-   Tạo một bàn, khai các camera của bàn đó. **Mã camera** ở đây phải trùng khoá
-   trong `agent.yaml` bên dưới.
-
 ## Cài nhanh — một lệnh (nên dùng)
+
+Chạy được trên cả **Windows** và **Linux** (Ubuntu/Debian).
 
 1. Trong Odoo mở **Tồn kho → Cấu hình → Video đóng gói → Bàn đóng gói**, chọn
    đúng bàn, khai camera của nó, rồi bấm **Tạo mã cài đặt**.
-2. Trên máy đóng gói, mở **PowerShell** và dán lệnh hiện trên form (có nút copy).
+2. Trên máy đóng gói, dán lệnh hiện trên form — form có sẵn cả hai bản, mỗi bản
+   một nút copy.
 3. Khi script hỏi, gõ mã cài đặt dạng `XXXX-XXXX`, rồi dán URL RTSP cho từng
    camera — hoặc gõ `usb` nếu là webcam, script sẽ liệt kê webcam cho chọn.
-
-Script tự làm hết: cài Python nếu thiếu, tải agent và ffmpeg, ghi `agent.yaml`,
-đăng ký chạy cùng Windows, khởi động agent. Không cần quyền admin.
 
 Mã cài đặt **dùng một lần và hết hạn sau 30 phút**. URL với mật khẩu camera chỉ
 được hỏi tại chỗ rồi ghi xuống máy đó — Odoo không bao giờ thấy.
 
 Cài xong còn một bước trên trình duyệt của máy đó: mở
-`/pack_recorder/set_station` và chọn bàn. Script sẽ hỏi có mở luôn không.
+`/pack_recorder/set_station` và chọn bàn.
+
+### Khác nhau giữa hai hệ
+
+| | Windows | Linux |
+|---|---|---|
+| Chạy trong | PowerShell | Terminal, cần `sudo` |
+| Python | dùng bản có sẵn, thiếu thì tải **bản nhúng** vào thư mục agent | `python3-venv` từ apt |
+| ffmpeg | tải bản static về thư mục agent | `apt install ffmpeg` |
+| Chạy nền | Scheduled Task + `pythonw.exe` (không cửa sổ) | systemd service |
+| Tự bật lại | trigger lặp 5 phút + `IgnoreNew` | `Restart=always` |
+| Thư mục | `C:\hlv_agent` | `/opt/hlv_agent` |
+
+Bản Windows **không cần quyền admin** (chạy admin thì được thêm: service chạy
+dưới `SYSTEM`, nhân viên không tắt được). Bản Linux **bắt buộc `sudo`** để cài
+gói và đăng ký systemd.
+
+Windows không có Python cũng không sao: script tải bản nhúng (~11MB) về thẳng
+`C:\hlv_agent\python`, không cài gì vào máy, không đụng PATH, không cần admin.
 
 ### Cài lại / cập nhật agent
 
 Chạy lại đúng lệnh đó. Script tải bản agent mới nhất từ Odoo, giữ nguyên ffmpeg
-đã tải, và ghi đè cấu hình — nên phải tạo mã cài đặt mới mỗi lần.
+đã tải, và hỏi có dùng lại cấu hình cũ không — chọn `y` thì khỏi xin mã mới.
+
+### Theo dõi khi đang chạy
+
+| | Windows | Linux |
+|---|---|---|
+| Log | `C:\hlv_agent\agent.log` | `journalctl -u hlv-pack-agent -f` |
+| Trạng thái | Task Scheduler, tác vụ `HLV Pack Agent` | `systemctl status hlv-pack-agent` |
+| Dừng hẳn | `Disable-ScheduledTask -TaskName "HLV Pack Agent"` | `sudo systemctl disable --now hlv-pack-agent` |
+
+Cách nhanh nhất để biết một bàn còn sống: cột **Tình trạng agent** trong danh
+sách bàn đóng gói trên Odoo.
 
 ## Cài thủ công
 
 Dùng khi máy không ra được internet, hoặc muốn kiểm từng bước.
 
+**Windows** — cần Python 3.10+ và ffmpeg:
+
 ```
 copy hlv_pack_agent.py       C:\hlv_agent\
 copy agent.example.yaml      C:\hlv_agent\agent.yaml
 ```
+
+**Linux**:
+
+```
+sudo apt install python3-venv ffmpeg
+sudo mkdir -p /opt/hlv_agent/rec && cd /opt/hlv_agent
+sudo python3 -m venv venv && sudo venv/bin/pip install requests pyyaml
+sudo cp hlv_pack_agent.py agent.yaml /opt/hlv_agent/
+sudo chmod 600 /opt/hlv_agent/agent.yaml
+venv/bin/python hlv_pack_agent.py --config agent.yaml --verbose
+```
+
+Trên Linux khai webcam bằng **đường dẫn** `/dev/video0` thay vì tên thiết bị, và
+`ffmpeg_path` để `"ffmpeg"` là đủ vì nó nằm trong PATH.
 
 Sửa `agent.yaml`: điền `station_key` và `token` lấy từ màn hình bàn đóng gói,
 rồi điền URL RTSP từng camera.

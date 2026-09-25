@@ -59,7 +59,8 @@ class HlvPackStation(models.Model):
              % ENROLL_CODE_TTL_MINUTES,
     )
     enroll_code_expiry = fields.Datetime(readonly=True, copy=False)
-    setup_command = fields.Char(compute='_compute_setup_command')
+    setup_command = fields.Char("Lệnh cài (Windows)", compute='_compute_setup_command')
+    setup_command_linux = fields.Char("Lệnh cài (Linux)", compute='_compute_setup_command')
     agent_status = fields.Selection(
         [
             ('never', "Chưa bao giờ gọi"),
@@ -83,15 +84,23 @@ class HlvPackStation(models.Model):
 
     @api.depends('station_key')
     def _compute_setup_command(self):
-        """Lệnh PowerShell dán một phát trên máy đóng gói.
+        """Lệnh dán một phát trên máy đóng gói, cho cả Windows lẫn Linux.
 
-        Gán biến môi trường trước rồi mới tải script, để script khỏi phải hỏi
-        địa chỉ Odoo — dán một dòng là xong, người cài chỉ còn gõ mã cài đặt.
+        Cả hai đều truyền sẵn địa chỉ Odoo để script khỏi phải hỏi — người cài
+        chỉ còn gõ mã cài đặt và URL camera.
+
+        Bản Linux CỐ Ý tải file về rồi mới chạy, không dùng "curl | bash": script
+        có hỏi mã cài đặt và URL camera, mà đường ống đã chiếm mất stdin nên mọi
+        câu hỏi sẽ nhận chuỗi rỗng rồi chạy tiếp.
         """
         base = (self.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').rstrip('/')
         for station in self:
             station.setup_command = (
                 "$env:HLV_ODOO_URL='%s'; irm %s/pack_agent/download/setup | iex" % (base, base)
+            )
+            station.setup_command_linux = (
+                'curl -fsSL %s/pack_agent/download/setup_sh -o /tmp/hlv_setup.sh '
+                '&& sudo bash /tmp/hlv_setup.sh %s' % (base, base)
             )
 
     _sql_constraints = [
