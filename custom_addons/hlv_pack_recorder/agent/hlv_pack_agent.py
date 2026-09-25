@@ -18,8 +18,10 @@ import logging
 import logging.handlers
 import os
 import re
+import queue
 import signal
 import subprocess
+import threading
 import sys
 import tempfile
 import time
@@ -27,7 +29,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '1.3.0'
+AGENT_VERSION = '1.4.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -199,6 +201,17 @@ class Agent:
         self.active = {}  # recording_id -> Recorder
         self.running = True
 
+        # Gui file o LUONG RIENG. Truoc day upload chay thang trong vong lap
+        # poll, nen suot ca chuc phut gui mot file lon, agent khong goi Odoo lan
+        # nao — Odoo thay im lang lien ket luan "agent da ngung goi" va danh hong
+        # moi phieu mo trong khoang do. Agent chua he chet, no tu bit mieng minh.
+        self.upload_queue = queue.Queue()
+        self.uploading = set()          # recording_id dang cho / dang gui
+        self.upload_lock = threading.Lock()
+        # Mot luong duy nhat: gui song song nhieu file chi lam nghen them duong
+        # len von da hep cua kho.
+        self.uploader = threading.Thread(target=self._upload_worker, daemon=True)
+
     # ---------------- giao tiếp Odoo ----------------
     def _call_json(self, path, payload, timeout=20):
         """Gọi route type='json' của Odoo (bọc trong jsonrpc envelope).
@@ -286,13 +299,41 @@ class Agent:
                 else ("ffmpeg không ghi được gì: %s" % stderr))
             _remove(recorder.out_path)
             return
-        if self.upload(recording_id, recorder.out_path):
-            _remove(recorder.out_path)
-        else:
-            # Giữ file lại và TỰ GỬI LẠI ở lần quét sau, đừng xoá mất bằng chứng
-            # chỉ vì mạng chập chờn một lúc.
-            log.error("giữ lại file chưa gửi được, sẽ tự thử lại sau %d giây: %s",
-                      RETRY_SCAN_SECONDS, recorder.out_path)
+        # Xep vao hang doi chu KHONG gui ngay tai day: day dang la vong lap poll.
+        self.enqueue_upload(recording_id, recorder.out_path)
+
+    def enqueue_upload(self, recording_id, path):
+        """Xep mot file vao hang doi gui. Bo qua neu no da nam trong hang doi."""
+        with self.upload_lock:
+            if recording_id in self.uploading:
+                return False
+            self.uploading.add(recording_id)
+        self.upload_queue.put((recording_id, path))
+        return True
+
+    def _upload_worker(self):
+        """Luong gui file, chay song song voi vong lap poll.
+
+        Gui xong thi xoa file; gui hong thi GIU LAI de lan quet sau thu tiep.
+        Nuot moi loi: luong nay chet la khong con ai gui file nua.
+        """
+        while True:
+            item = self.upload_queue.get()
+            if item is None:
+                return
+            recording_id, path = item
+            try:
+                if self.upload(recording_id, path):
+                    _remove(path)
+                else:
+                    log.error("giữ lại file chưa gửi được, sẽ tự thử lại sau %d giây: %s",
+                              RETRY_SCAN_SECONDS, path)
+            except Exception:
+                log.exception("lỗi khi gửi rec=%s", recording_id)
+            finally:
+                with self.upload_lock:
+                    self.uploading.discard(recording_id)
+                self.upload_queue.task_done()
 
     def retry_pending_uploads(self):
         """Gui lai nhung file quay xong ma lan truoc gui khong duoc.
@@ -329,15 +370,9 @@ class Agent:
             except OSError:
                 continue
 
-            log.info("gui lai file ton dong rec=%s (%.1fMB)", recording_id, size_mb)
-            if self.upload(recording_id, path):
-                _remove(path)
-            else:
-                # Van hong thi de nguyen, lan quet sau thu tiep. KHONG xoa.
-                # Dung luon o day: mang dang hong, dong them file khac vo ich.
-                log.warning("rec=%s van chua gui duoc, se thu lai sau %d giay",
-                            recording_id, RETRY_SCAN_SECONDS)
-                return
+            if self.enqueue_upload(recording_id, path):
+                log.info("xếp lại vào hàng đợi gửi: rec=%s (%.1fMB)",
+                         recording_id, size_mb)
 
     def sweep_finished(self):
         """ffmpeg chạm trần -t hoặc chết giữa chừng thì tự dọn, không chờ lệnh stop."""
@@ -396,6 +431,7 @@ class Agent:
     def run(self):
         log.info("agent %s khởi động, bàn=%s, %d camera đã khai",
                  AGENT_VERSION, self.station_key, len(self.cameras))
+        self.uploader.start()
         ok_count = 0
         fail_count = 0
         last_pulse = time.time()
@@ -426,8 +462,11 @@ class Agent:
 
             now = time.time()
             if now - last_pulse >= PULSE_SECONDS:
-                log.info("còn sống: %d lần gọi Odoo OK, %d lần hỏng, %d camera đang ghi",
-                         ok_count, fail_count, len(self.active))
+                with self.upload_lock:
+                    pending = len(self.uploading)
+                log.info("còn sống: %d lần gọi Odoo OK, %d lần hỏng, "
+                         "%d camera đang ghi, %d file đang chờ gửi",
+                         ok_count, fail_count, len(self.active), pending)
                 ok_count = 0
                 fail_count = 0
                 last_pulse = now
@@ -437,6 +476,13 @@ class Agent:
         log.info("đang dừng, đóng nốt các file đang ghi")
         for recording_id in list(self.active):
             self.stop_recording(recording_id)
+        # Cho gui not nhung gi dang trong hang doi, nhung co tran thoi gian: bi
+        # tat may ma doi mai thi Windows/systemd se giet cung. File chua gui kip
+        # van nam tren dia va se duoc gui o lan khoi dong sau.
+        log.info("chờ gửi nốt %d file", self.upload_queue.qsize())
+        deadline = time.time() + 60
+        while not self.upload_queue.empty() and time.time() < deadline:
+            time.sleep(1)
 
     def request_stop(self, *_args):
         self.running = False
