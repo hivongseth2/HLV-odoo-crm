@@ -29,7 +29,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '1.4.0'
+AGENT_VERSION = '1.5.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -285,9 +285,35 @@ class Agent:
         except OSError as exc:
             self.report_failure(recording_id, "không chạy được ffmpeg: %s" % exc)
 
+    def _find_leftover_file(self, recording_id):
+        """Tìm file quay còn nằm lại của một bản ghi. None nếu không có."""
+        pattern = re.compile(r'_%d\.(?:mp4|mkv)$' % recording_id)
+        try:
+            for name in sorted(os.listdir(self.work_dir)):
+                if pattern.search(name):
+                    return os.path.join(self.work_dir, name)
+        except OSError:
+            pass
+        return None
+
     def stop_recording(self, recording_id):
         recorder = self.active.pop(recording_id, None)
         if not recorder:
+            # Agent khởi động lại giữa chừng thì self.active mất sạch, nhưng Odoo
+            # vẫn gửi lệnh dừng mỗi 2 giây. Trước đây hàm này return im lặng nên
+            # bản ghi kẹt ở "Chờ agent dừng" VĨNH VIỄN và Odoo gửi lại lệnh mãi.
+            # Phải trả lời: còn file thì gửi, không còn thì báo hỏng — bằng cách
+            # nào cũng được, miễn là trạng thái được chốt.
+            path = self._find_leftover_file(recording_id)
+            if path:
+                log.info("rec=%s: agent đã khởi động lại, gửi nốt file còn lại",
+                         recording_id)
+                self.enqueue_upload(recording_id, path)
+            else:
+                self.report_failure(
+                    recording_id,
+                    "agent khởi động lại giữa chừng: không còn tiến trình ghi "
+                    "và không tìm thấy file quay nào cho bản ghi này")
             return
         recorder.stop()
         if not os.path.exists(recorder.out_path) or os.path.getsize(recorder.out_path) < 51200:
