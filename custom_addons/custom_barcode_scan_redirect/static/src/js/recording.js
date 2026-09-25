@@ -469,20 +469,23 @@ async function startRecording() {
     countdownTimer = null;
     _stopFeedWatchdog();
 
-    statusText.textContent = 'Đang hoàn tất upload...';
-    try { await chunkBusy; } catch { }
-    await finishServerUploadSession();
-
-    statusText.textContent = 'Đã gửi video lên server để xử lý.';
+    statusText.textContent = 'Đang gửi video lên server...';
     statusDot && statusDot.classList.remove('on');
 
     clearInterval(drawTimer);
     drawTimer = null; overlayCtx = null; overlayCanvas = null;
-
     if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
 
-    // Báo hiệu cho stopRecording() Promise rằng onstop đã hoàn tất
+    // Báo cho stopRecording() NGAY khi máy ghi đã dừng, KHÔNG đợi gửi xong.
+    // Trước đây dòng này nằm cuối, sau cả chunkBusy lẫn finishServerUploadSession
+    // — tức là nhân viên bấm Hoàn tất rồi đứng nhìn màn hình cho tới khi cả
+    // video vài chục MB lên hết server. Phần gửi dở vẫn được chốt bằng
+    // sendBeacon lúc rời trang và cron dọn phiên bỏ dở, nên không mất trắng.
     if (_stopResolve) { _stopResolve(); _stopResolve = null; }
+
+    try { await chunkBusy; } catch { }
+    await finishServerUploadSession();
+    statusText.textContent = 'Đã gửi video lên server để xử lý.';
   };
 
   try {
