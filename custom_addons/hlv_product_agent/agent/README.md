@@ -23,15 +23,28 @@ trình duyệt sale ──> Odoo (hàng chờ) <── agent trên máy này ─
 | `hlv_product_agent.py` | vòng lặp poll Odoo, chạy Claude, gửi trả lời |
 | `misa_mcp_server.py` | MCP server Claude khởi động mỗi lượt; chuyển lệnh gọi tool lên Odoo |
 | `misa_tools.py` | schema các tool MISA |
-| `prompt/system_prompt.md` | luật lõi của trợ lý |
-| `prompt/product_naming_rules.md` | TÀI LIỆU A — quy tắc đặt tên và mã |
-| `prompt/product_category_rules.md` | TÀI LIỆU B — quy tắc phân nhóm, bảng ID nhóm |
 | `setup.ps1` | script cài một lệnh |
 
 Các file này **Odoo phục vụ cho máy tải về** (`/product_agent/download/...`). Sửa agent
-hay tài liệu quy tắc thì sửa trong repo, deploy Odoo, rồi chạy lại lệnh cài trên máy —
-không chép tay. Cuộc hội thoại đang dở vẫn dùng quy tắc cũ (Claude ghi prompt lại lúc
-mở phiên); sale bấm nút "Cuộc mới" là nhận bản mới.
+thì sửa trong repo, deploy Odoo, rồi chạy lại lệnh cài trên máy — không chép tay.
+
+## Sửa prompt và quy tắc đặt tên — trên Odoo
+
+Không nằm trên máy agent nữa. Trong **Tồn kho → Cấu hình → Trợ lý tạo mã hàng**:
+
+- **Prompt trợ lý** — ba phần: Luật lõi, Tài liệu A (đặt tên và mã), Tài liệu B (phân
+  nhóm). Mỗi lần lưu, bản cũ vào tab **Lịch sử** (có nút khôi phục); nút **Khôi phục
+  mặc định** đưa về bản đi kèm module (`data/prompt_defaults/*.md`). Tab **Prompt hoàn
+  chỉnh** cho xem đúng thứ Claude nhận.
+- **Quy tắc riêng theo dòng hàng** — ngoại lệ đặt tên / mã cho từng dòng (KARCHER giữ
+  nguyên part number, MILWAUKEE không nối hậu tố hãng...). Mỗi dòng: áp dụng khi nào,
+  quy tắc tên, quy tắc mã, ví dụ đúng. Được ghép ngay sau tài liệu A và thắng tài liệu A
+  ở điểm nó nói tới; bật / tắt từng dòng được. Thêm ngoại lệ ở đây, đừng sửa tài liệu A.
+
+Agent so vân tay prompt mỗi lần poll, đổi thì tự tải trong vài giây — không cần chạy lại
+lệnh cài. Bản mới vào **cuộc chat mới**; cuộc đang dở vẫn dùng bản cũ (Claude ghi prompt
+lại lúc mở phiên) cho tới khi sale bấm "Cuộc mới", hoặc quản lý bấm **Áp dụng ngay cho
+cuộc chat đang mở** trên form prompt (Claude mở phiên mới và đọc lại các tin gần nhất).
 
 ## Cài — một lệnh
 
@@ -49,7 +62,7 @@ Script tự làm hết, không cần quyền admin:
 - kiểm Claude **đã đăng nhập** (`claude auth status`), chưa thì mở trang đăng nhập;
 - dùng Python 3.10+ có sẵn, không dùng được thì tải Python nhúng vào
   `C:\hlv_product_agent\python` — không cài gì vào máy;
-- tải agent + tài liệu quy tắc từ Odoo vào `C:\hlv_product_agent\agent`;
+- tải agent từ Odoo vào `C:\hlv_product_agent\agent` (prompt thì agent tự tải lúc chạy);
 - đổi mã cài đặt lấy token, ghi `C:\hlv_product_agent\agent.yaml`;
 - chạy `--check` và hỏi thử Claude một câu, hỏng ở đâu báo ở đó;
 - đăng ký tác vụ **HLV Product Agent** chạy khi đăng nhập Windows, không bung cửa sổ,
@@ -93,9 +106,35 @@ Log: `agent.log` trong `work_dir` (mặc định `C:\hlv_product_agent\agent.log
 - Nhóm **Trợ lý tạo mã hàng: Quản lý**: xem mọi hội thoại, và Claude coi là QUẢN LÝ —
   tạo theo ý họ kể cả khi thiếu thông tin. Nhóm này không tự gán cho admin; cấp có chủ
   đích.
-- Mỗi lần Claude tạo/sửa trên MISA, Odoo tự ghi một dòng "Đã tạo trên MISA: ..." vào
-  hội thoại — không phụ thuộc lời Claude kể. Lọc "Có tạo/sửa MISA" trong danh sách hội
-  thoại để rà.
+- Mỗi lần Claude tạo/sửa trên MISA, Odoo tự ghi (không phụ thuộc lời Claude kể):
+  - một dòng "Đã tạo trên MISA: ..." trong hội thoại;
+  - một dòng trong **Trợ lý tạo mã hàng → Hàng đã tạo / sửa**: ai (tên + mã sale MISA),
+    lúc nào, mã, tên, nhóm, MISA ID. Lọc theo ngày / "Chưa về Odoo", nhóm theo nhân
+    viên, xuất Excel bằng nút xuất của danh sách.
+
+## Tài khoản dùng chung nhiều sale
+
+Tài khoản khai nhiều người trong hai field sẵn có (đọc theo cùng thứ tự):
+
+- **Mã sale MISA** (`x_misa_saler_codes`): `MAIVANNAM1,HUYNHTHIMYPHUONG,LUUTHICONG1`
+- **Sale Plan mention aliases** (`x_sale_plan_mention_names`): `Nam ĐN,Phương ĐN,Công ĐN`
+
+thì khung chat hỏi "Anh/chị là ai?" một lần trên mỗi máy (trình duyệt nhớ), có nút
+**Đổi người**. Mỗi người một cuộc chat riêng: không thấy tin của nhau, "Cuộc mới" chỉ
+đóng cuộc của mình, chạy song song được, và nhật ký ghi đúng người tạo. Thêm / bớt sale
+chỉ cần sửa hai field đó — giữ **đúng thứ tự**, lệch vị trí là gán nhầm tên.
+
+Chọn tên là dựa vào lòng tin (dùng chung mật khẩu thì không cách nào xác minh được ai
+đang ngồi máy).
+
+## Nhiều người gửi cùng lúc
+
+- Agent chạy song song `max_parallel` cuộc (mặc định 2), còn lại xếp hàng theo thứ tự
+  gửi; khung chat báo "trước anh/chị còn N cuộc". Tăng trong `agent.yaml` nếu máy đủ
+  RAM và hạn mức Claude cho phép.
+- Chống tạo trùng: mọi lệnh tạo đi qua một khoá chung trên Odoo, và ngay trước khi tạo
+  Odoo kiểm lại (hàng vừa tạo trong 30 phút qua theo nhật ký + khớp đúng mã / tên trên
+  MISA). Trùng thì trả `duplicate`, Claude báo sale chứ không tạo.
 
 ## Sự cố
 

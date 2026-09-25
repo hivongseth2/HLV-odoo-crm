@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tạo phần prompt nào còn thiếu từ data/prompt_defaults/*.md. Phần đã có (có thể
+         đã được sửa trên Odoo) giữ nguyên, nên chạy lại mỗi lần nâng cấp là an toàn. -->
+    <function model="hlv.product.agent.prompt" name="_ensure_defaults"/>
+
+    <!-- noupdate: quản lý sửa nội dung trên Odoo thì nâng cấp module không ghi đè. -->
+    <data noupdate="1">
+        <record id="naming_rule_karcher" model="hlv.product.naming.rule">
+            <field name="sequence">10</field>
+            <field name="name">KARCHER</field>
+            <field name="match">Hàng hãng KARCHER (sale hay gõ Karcher, Kacher).</field>
+            <field name="code_rule">Dùng NGUYÊN mã part number của hãng, giữ cả dấu chấm và gạch, KHÔNG nối hậu tố hãng — mã Karcher đã là định danh duy nhất.</field>
+            <field name="example_input">khớp nối đực karcher 2.115-001.0</field>
+            <field name="example_name">Khớp nối đực 2.115-001.0 KARCHER</field>
+            <field name="example_code">2.115-001.0</field>
+            <field name="note">Thêm ví dụ: Vòi phun KARCHER 4.767-012.0 → mã 4.767-012.0</field>
+        </record>
+
+        <record id="naming_rule_milwaukee" model="hlv.product.naming.rule">
+            <field name="sequence">20</field>
+            <field name="name">MILWAUKEE</field>
+            <field name="match">Hàng hãng MILWAUKEE (sale hay gõ MIL, Milwaukee).</field>
+            <field name="code_rule">Mã nội bộ KHÔNG nối hậu tố hãng: chỉ dùng MÃ_ĐỊNH_DANH theo mục 3.2 tài liệu A (ưu tiên mã model / part number của Milwaukee). Không thêm -MILWAUKEE, -MIL.</field>
+        </record>
+    </data>
+</odoo>

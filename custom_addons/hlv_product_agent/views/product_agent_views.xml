@@ -50,8 +50,9 @@
                     </div>
                     <div class="alert alert-info" role="alert" invisible="enroll_code">
                         Bấm <b>Tạo mã cài đặt</b> ở trên để lấy lệnh cài cho máy chạy Claude.
-                        Máy đã cài rồi mà muốn lên bản agent / tài liệu quy tắc mới: chạy lại
-                        đúng lệnh cài, script dùng lại token cũ, không cần mã.
+                        Máy đã cài rồi mà muốn lên bản agent mới: chạy lại đúng lệnh cài, script
+                        dùng lại token cũ, không cần mã. Prompt và quy tắc đặt tên sửa ở menu
+                        Prompt trợ lý / Quy tắc riêng theo dòng hàng — agent tự tải, không cần cài lại.
                     </div>
                     <group string="Kết nối">
                         <field name="token" widget="CopyClipboardChar"/>

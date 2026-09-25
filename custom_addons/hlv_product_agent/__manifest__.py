@@ -16,12 +16,20 @@ Thay cho luồng tạo mã bằng ChatGPT của hlv_chatgpt.
     "category": "Inventory",
     # website_public_inventory_18: trang /search_stock để gắn khung chat.
     # misa_fetch_po_button: misa.api.utils — mọi tool MISA đều cần.
-    "depends": ["website_public_inventory_18", "misa_fetch_po_button"],
+    # misa_invoice_status_report + hlv_sale_delivery_planning: hai field khai danh sách
+    # sale dùng chung một tài khoản (x_misa_saler_codes, x_sale_plan_mention_names).
+    "depends": [
+        "website_public_inventory_18", "misa_fetch_po_button",
+        "misa_invoice_status_report", "hlv_sale_delivery_planning",
+    ],
     "data": [
         "security/product_agent_security.xml",
         "security/ir.model.access.csv",
+        "data/product_agent_prompt_data.xml",
         "views/product_agent_views.xml",
         "views/product_chat_views.xml",
+        "views/product_agent_log_views.xml",
+        "views/product_agent_prompt_views.xml",
         "views/menu.xml",
         "views/chat_widget_templates.xml",
     ],

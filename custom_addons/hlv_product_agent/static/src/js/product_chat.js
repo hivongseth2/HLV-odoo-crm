@@ -22,6 +22,47 @@ const WELCOME_TEXT =
 const OFFLINE_TEXT =
     "Máy trợ lý đang tắt. Tin vẫn được giữ lại, máy bật lên sẽ trả lời.";
 
+// Người đang chat trên tài khoản dùng chung. Nhớ theo trình duyệt vì mỗi sale ngồi một
+// máy; storage có thể bị chặn (chế độ ẩn danh) -> không nhớ được thì hỏi lại, không lỗi.
+const SALE_KEY_STORAGE = "hlv_pa_sale_key";
+
+function loadSaleKey() {
+    try {
+        return window.localStorage.getItem(SALE_KEY_STORAGE) || "";
+    } catch {
+        return "";
+    }
+}
+
+function saveSaleKey(key) {
+    try {
+        if (key) {
+            window.localStorage.setItem(SALE_KEY_STORAGE, key);
+        } else {
+            window.localStorage.removeItem(SALE_KEY_STORAGE);
+        }
+    } catch {
+        // Không lưu được: lần sau mở trang hỏi lại, chấp nhận được.
+    }
+}
+
+/**
+ * Dòng báo trạng thái chờ dưới tin cuối.
+ * Nhận: state từ server. Trả: chuỗi, hoặc "" khi không chờ gì.
+ */
+function waitingText(state) {
+    if (state.processing) {
+        return "Trợ lý đang kiểm tra...";
+    }
+    if (!state.busy) {
+        return "";
+    }
+    if (state.queue_ahead) {
+        return `Đang xếp hàng: trước anh/chị còn ${state.queue_ahead} cuộc chat.`;
+    }
+    return "Đang chờ trợ lý nhận tin...";
+}
+
 function readFileAsBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -51,6 +92,8 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         "keydown textarea": "_onKeydown",
         "paste textarea": "_onPaste",
         "change input[type=file]": "_onPickFiles",
+        "click .hlv-pa-switch": "_onSwitchPerson",
+        "click .hlv-pa-pick": "_onPickPerson",
     },
 
     start() {
@@ -60,6 +103,8 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this.busy = false;
         this.sending = false;
         this.pendingImages = [];
+        this.saleKey = loadSaleKey();
+        this.waiting = "";
         this.messagesEl = this.el.querySelector(".hlv-pa-messages");
         this.statusEl = this.el.querySelector(".hlv-pa-status");
         this.previewsEl = this.el.querySelector(".hlv-pa-previews");
@@ -79,7 +124,10 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     async _refresh() {
         clearTimeout(this.pollTimer);
         try {
-            this._applyState(await rpc("/product_agent/chat/state", { after_id: this.lastId }));
+            this._applyState(await rpc("/product_agent/chat/state", {
+                after_id: this.lastId,
+                sale_key: this.saleKey,
+            }));
         } catch {
             this._renderStatus("Mất kết nối tới Odoo, đang thử lại...", "error");
         }
@@ -94,6 +142,16 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     },
 
     _applyState(state) {
+        this._renderIdentity(state);
+        if (state.identity_required) {
+            // Chưa biết ai đang chat: không hiện cuộc nào, bắt chọn người trước.
+            this.sessionId = false;
+            this.lastId = 0;
+            this.busy = false;
+            this.messagesEl.replaceChildren();
+            this._renderStatus(state.agent_online ? "" : OFFLINE_TEXT, state.agent_online ? "" : "warning");
+            return;
+        }
         if (state.session_id !== this.sessionId) {
             // Cuộc hội thoại đã đổi (bấm "Cuộc mới", hoặc ở tab khác): vẽ lại từ đầu.
             const hadOld = this.sessionId !== false && this.lastId > 0;
@@ -112,6 +170,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
             }
         }
         this.busy = Boolean(state.busy);
+        this.waiting = waitingText(state);
         this._renderWelcome();
         this._renderTyping();
         if (state.error) {
@@ -174,13 +233,38 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         if (existing) {
             existing.remove();
         }
-        if (this.busy) {
+        if (this.waiting) {
             const typing = document.createElement("div");
             typing.className = "hlv-pa-typing";
-            typing.textContent = "Trợ lý đang kiểm tra...";
+            typing.textContent = this.waiting;
             // Luôn nằm cuối danh sách, dưới tin mới nhất.
             this.messagesEl.appendChild(typing);
             this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+        }
+    },
+
+    _renderIdentity(state) {
+        const choices = state.identity_choices || [];
+        const picking = Boolean(state.identity_required);
+        this.el.dataset.picking = picking ? "1" : "0";
+        this.el.dataset.shared = choices.length > 1 ? "1" : "0";
+        this.el.querySelector(".hlv-pa-who-name").textContent = state.identity ? state.identity.name : "";
+
+        const list = this.el.querySelector(".hlv-pa-picker-list");
+        list.replaceChildren();
+        if (!picking) {
+            return;
+        }
+        // Key cũ không còn trong danh sách (tài khoản đổi người): bỏ để khỏi gửi mãi.
+        saveSaleKey("");
+        this.saleKey = "";
+        for (const choice of choices) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "hlv-pa-pick";
+            button.dataset.key = choice.key;
+            button.textContent = choice.name;
+            list.appendChild(button);
         }
     },
 
@@ -267,6 +351,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
                 text,
                 images: this.pendingImages.map(({ name, mimetype, data }) => ({ name, mimetype, data })),
                 after_id: this.lastId,
+                sale_key: this.saleKey,
             });
             if (!state.error) {
                 // Chỉ xoá ô nhập khi server đã nhận: gửi hỏng thì sale không mất chữ.
@@ -288,10 +373,26 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
             return;
         }
         try {
-            this._applyState(await rpc("/product_agent/chat/new", {}));
+            this._applyState(await rpc("/product_agent/chat/new", { sale_key: this.saleKey }));
         } catch {
             this._renderStatus("Chưa mở được cuộc mới, anh/chị thử lại.", "error");
         }
+    },
+
+    _onPickPerson(ev) {
+        this.saleKey = ev.currentTarget.dataset.key || "";
+        saveSaleKey(this.saleKey);
+        this.sessionId = false;
+        this.lastId = 0;
+        this.messagesEl.replaceChildren();
+        this._refresh();
+    },
+
+    _onSwitchPerson() {
+        // Chỉ bỏ lựa chọn trên máy này; cuộc chat của người cũ vẫn giữ nguyên trên Odoo.
+        this.saleKey = "";
+        saveSaleKey("");
+        this._refresh();
     },
 
     _onKeydown(ev) {

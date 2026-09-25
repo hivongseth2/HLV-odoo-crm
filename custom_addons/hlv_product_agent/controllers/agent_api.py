@@ -30,7 +30,8 @@ class ProductAgentApi(http.Controller):
         """Agent hỏi có tin nào cần trả lời không.
 
         Nhận: token, agent_version, max_jobs (số lượt agent còn chạy thêm được).
-        Trả: ``{'ok': True, 'jobs': [...]}`` — xem hlv.product.chat.session._claim.
+        Trả: ``{'ok': True, 'jobs': [...], 'prompt_version': ...}`` — job xem
+        hlv.product.chat.session._claim; prompt_version đổi thì agent gọi /prompt.
         """
         agent = _agent_from(kw)
         if not agent:
@@ -46,7 +47,16 @@ class ProductAgentApi(http.Controller):
         except (TypeError, ValueError):
             max_jobs = 1
         jobs = Session.claim_jobs(max_jobs) if max_jobs > 0 else []
-        return {'ok': True, 'jobs': jobs}
+        _text, version = request.env['hlv.product.agent.prompt'].sudo().build_prompt()
+        return {'ok': True, 'jobs': jobs, 'prompt_version': version}
+
+    @http.route('/product_agent/agent/prompt', type='json', auth='public', csrf=False, methods=['POST'])
+    def prompt(self, **kw):
+        """System prompt hoàn chỉnh (sửa trên Odoo: Trợ lý tạo mã hàng > Prompt trợ lý)."""
+        if not _agent_from(kw):
+            return {'ok': False, 'error': 'auth'}
+        text, version = request.env['hlv.product.agent.prompt'].sudo().build_prompt()
+        return {'ok': True, 'content': text, 'version': version}
 
     @http.route('/product_agent/agent/tool', type='json', auth='public', csrf=False, methods=['POST'])
     def tool(self, **kw):

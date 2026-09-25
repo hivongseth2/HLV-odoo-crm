@@ -88,6 +88,84 @@
   cursor: pointer;
 }
 
+/* Người đang chat — chỉ hiện với tài khoản dùng chung nhiều sale. */
+.hlv-pa-who {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent);
+}
+
+.hlv-pa-chat[data-shared="1"]:not([data-picking="1"]) .hlv-pa-who {
+  display: flex;
+}
+
+.hlv-pa-switch {
+  margin-left: auto;
+  border: 1px solid var(--pa-accent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pa-accent);
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+/* Chọn người: che hẳn phần chat để không ai gõ nhầm vào cuộc của người khác. */
+.hlv-pa-picker {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+
+.hlv-pa-chat[data-picking="1"] .hlv-pa-picker {
+  display: flex;
+}
+
+.hlv-pa-chat[data-picking="1"] .hlv-pa-messages,
+.hlv-pa-chat[data-picking="1"] .hlv-pa-previews,
+.hlv-pa-chat[data-picking="1"] .hlv-pa-input,
+.hlv-pa-chat[data-picking="1"] .hlv-pa-new {
+  display: none;
+}
+
+.hlv-pa-picker-title {
+  font-weight: 600;
+}
+
+.hlv-pa-picker-hint {
+  font-size: 12.5px;
+  color: var(--pa-muted);
+}
+
+.hlv-pa-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hlv-pa-pick {
+  padding: 10px 12px;
+  border: 1px solid var(--pa-border);
+  border-radius: 8px;
+  background: var(--pa-bg);
+  color: var(--pa-text);
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.hlv-pa-pick:hover {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+}
+
 .hlv-pa-status:empty {
   display: none;
 }
