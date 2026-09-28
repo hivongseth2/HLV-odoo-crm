@@ -437,6 +437,8 @@ class StockPicking(models.Model):
         gộp lại và quy đổi về số lượng combo thực giao theo tỷ lệ BOM (xem
         `_get_loyalty_kit_qty_delivered`), rồi chỉ tính price_unit x qty
         combo đúng 1 lần cho cả dòng.
+
+        Số lượng mỗi move đã TRỪ phần khách trả lại (`_get_loyalty_net_move_qty`).
         """
         self.ensure_one()
         done_moves = self.move_ids.filtered(lambda m: m.state == 'done')
@@ -464,7 +466,7 @@ class StockPicking(models.Model):
             if product.product_tmpl_id.id in kit_tmpl_ids and not has_own_product_move:
                 qty = self._get_loyalty_kit_qty_delivered(product, moves)
             else:
-                qty = sum(m.quantity or 0.0 for m in moves)
+                qty = sum(self._get_loyalty_net_move_qty(m) for m in moves)
             result.append({
                 'sale_line': sale_line,
                 'product': product,
@@ -476,10 +478,29 @@ class StockPicking(models.Model):
             result.append({
                 'sale_line': False,
                 'product': move.product_id,
-                'qty': move.quantity or 0.0,
+                'qty': self._get_loyalty_net_move_qty(move),
                 'price_unit': move.product_id.lst_price,
             })
         return result
+
+    def _get_loyalty_net_move_qty(self, move):
+        """Số lượng của 1 move giao hàng mà khách THỰC GIỮ = đã giao − đã trả lại.
+
+        Trả hàng trong Odoo không giảm `quantity` trên phiếu giao gốc mà tạo move
+        trả riêng trỏ ngược về (`origin_returned_move_id`), nên phiếu trả 100%
+        vẫn mang nguyên số lượng giao. Phiếu chưa được tích điểm lúc trả hàng
+        (vd khách chưa có tài khoản Loyalty) thì `_loyalty_return_points` không
+        có gì để thu hồi — nếu không trừ ở đây, bấm "Tính lại điểm" / "Tạo bù
+        điểm" sau đó sẽ cộng đủ điểm cho hàng đã trả. Phiếu đã có điểm trước
+        khi trả thì không bị ảnh hưởng: chống trùng ở `_get_loyalty_earn_plan`
+        giữ nguyên bản ghi cũ (phần trả đã được trừ bằng bản ghi hoàn hàng).
+
+        Nhận: 1 `stock.move`. Trả: số lượng >= 0; chỉ trừ move trả đã `done`.
+        """
+        returned_qty = sum(
+            m.quantity or 0.0 for m in move.returned_move_ids if m.state == 'done'
+        )
+        return max((move.quantity or 0.0) - returned_qty, 0.0)
 
     def _get_loyalty_kit_qty_delivered(self, kit_product, moves):
         """Suy ra số lượng combo/kit thực giao từ các move thành phần, theo
@@ -494,7 +515,7 @@ class StockPicking(models.Model):
             ('type', '=', 'phantom'),
         ], limit=1)
         if not bom or not bom.bom_line_ids:
-            return sum(m.quantity or 0.0 for m in moves)
+            return sum(self._get_loyalty_net_move_qty(m) for m in moves)
 
         bom_qty = bom.product_qty or 1.0
         qty_per_kit_by_product = defaultdict(float)
@@ -503,11 +524,11 @@ class StockPicking(models.Model):
                 qty_per_kit_by_product[bom_line.product_id.id] += bom_line.product_qty / bom_qty
 
         if not qty_per_kit_by_product:
-            return sum(m.quantity or 0.0 for m in moves)
+            return sum(self._get_loyalty_net_move_qty(m) for m in moves)
 
         delivered_by_product = defaultdict(float)
         for move in moves:
-            delivered_by_product[move.product_id.id] += move.quantity or 0.0
+            delivered_by_product[move.product_id.id] += self._get_loyalty_net_move_qty(move)
 
         ratios = [
             delivered_by_product.get(product_id, 0.0) / qty_per_kit
