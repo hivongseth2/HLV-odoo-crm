@@ -29,7 +29,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '1.5.0'
+AGENT_VERSION = '1.6.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -107,7 +107,23 @@ def build_ffmpeg_args(camera, out_path, max_seconds, ffmpeg_bin='ffmpeg'):
             raise ValueError("camera rtsp thiếu 'url'")
         # -rtsp_transport tcp: UDP mất gói là vỡ hình, mà bằng chứng thì không
         # được phép vỡ.
-        args += ['-rtsp_transport', 'tcp', '-i', url, '-c', 'copy']
+        args += ['-rtsp_transport', 'tcp', '-i', url]
+
+        # Hình LUÔN chép nguyên, không nén lại — đó là lý do CPU gần bằng 0.
+        args += ['-c:v', 'copy']
+
+        # Tiếng thì khác. Nhiều camera IP phát tiếng dạng G.711 (pcm_mulaw /
+        # pcm_alaw) mà container MP4 KHÔNG chứa được, ffmpeg từ chối ghi file
+        # ngay từ header: "Could not find tag for codec pcm_mulaw". Đã gặp thật:
+        # một bàn hai camera, cái có tiếng chết, cái không tiếng chạy ngon.
+        #
+        # Mặc định BỎ TIẾNG: bằng chứng đóng gói là hình, mà đường truyền của
+        # kho vốn đã chật. Muốn giữ tiếng thì khai audio: true, lúc đó chuyển
+        # sang AAC cho MP4 nuốt được (nén tiếng 8kHz gần như không tốn CPU).
+        if camera.get('audio'):
+            args += ['-c:a', 'aac', '-b:a', '64k']
+        else:
+            args += ['-an']
 
     elif kind == 'usb':
         device = camera.get('device')
