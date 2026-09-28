@@ -252,6 +252,116 @@ def _run_failed_cb(on_failed, env, picking, reason):
         _logger.exception("BG_UPLOAD callback on_failed lỗi")
 
 
+def _san_name(text):
+    """Bỏ ký tự làm hỏng tên file trên Drive."""
+    return (text or '').replace('/', '_').replace('\\', '_').replace(' ', '_')
+
+
+def drive_file_title(env, picking, ext, name_suffix=''):
+    """Tên file video trên Drive: <đơn hàng>_<phiếu pick>_<phiếu pack>[_<camera>]_<giờ><đuôi>.
+
+    name_suffix là mã camera, để nhiều file của cùng một phiếu phân biệt được.
+    Rỗng khi quay bằng trình duyệt (chỉ có một file).
+    """
+    order_name = ''
+    try:
+        order_name = picking.sale_id.name or ''
+    except Exception:
+        pass
+    if not order_name:
+        order_name = (picking.origin or picking.group_id.name or '')
+
+    origin_pick = env['stock.picking'].sudo().search([
+        ('group_id', '=', picking.group_id.id),
+        ('picking_type_id.sequence_code', 'like', 'PICK'),
+        ('id', '!=', picking.id),
+    ], limit=1)
+
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    suffix = '_%s' % _san_name(name_suffix) if name_suffix else ''
+    return '%s_%s_%s%s_%s%s' % (
+        _san_name(order_name), _san_name(origin_pick.name or ''),
+        _san_name(picking.name), suffix, ts, ext,
+    )
+
+
+def drive_root_folder_name(env, picking):
+    """Tên thư mục gốc trên Drive theo kho của phiếu."""
+    ICP = env['ir.config_parameter'].sudo()
+    warehouse_code = picking.location_id.warehouse_id.code or 'DEFAULT'
+    mapping_str = ICP.get_param('gdrive.warehouse_folder_mapping') \
+        or 'TSN:KHO_HCM,KBC:KHO_BENCAM,TSNSR:TSN_SHOWROOM'
+    mapping = {}
+    for item in mapping_str.split(','):
+        if ':' in item:
+            code, folder = item.strip().split(':', 1)
+            mapping[code.strip()] = folder.strip()
+    return mapping.get(warehouse_code, 'KHO_%s' % warehouse_code)
+
+
+def prepare_drive_upload(env, picking, ext, name_suffix=''):
+    """Chuẩn bị mọi thứ để đẩy một file lên Drive.
+
+    Dùng chung cho HAI đường: Odoo tự đẩy (luồng quay bằng trình duyệt), và agent
+    đẩy thẳng lên Drive. Một chỗ định nghĩa luật đặt tên và cây thư mục, để hai
+    đường không bao giờ đặt tên khác nhau.
+
+    Trả về dict: drive, access_token, folder_id, title, anyone_link, settings_path.
+    Bên gọi PHẢI xoá settings_path khi xong (nó chứa client secret).
+    Ném ValueError nếu chưa kết nối Drive, hoặc Exception nếu xác thực hỏng.
+    """
+    ICP = env['ir.config_parameter'].sudo()
+    creds_json = ICP.get_param('gdrive.user_credentials_json') or ''
+    if not creds_json:
+        raise ValueError('chưa kết nối Google Drive (thiếu token)')
+
+    settings_path = os.path.join(STREAM_DIR, 'settings_%s.yaml' % uuid.uuid4().hex)
+    _write_settings_file(
+        settings_path,
+        ICP.get_param('gdrive.oauth_client_id') or '',
+        ICP.get_param('gdrive.oauth_client_secret') or '',
+        ICP.get_param('gdrive.oauth_redirect_uri') or '',
+        ICP.get_param('gdrive.oauth_scopes')
+        or 'https://www.googleapis.com/auth/drive.file',
+    )
+
+    gauth = GoogleAuth(settings_path)
+    gauth.credentials = OAuth2Credentials.from_json(creds_json)
+    if gauth.access_token_expired:
+        _logger.info("DRIVE token expired -> refresh")
+        gauth.Refresh()
+    gauth.Authorize()
+    drive = GoogleDrive(gauth)
+
+    def _get_or_create_folder(name, parent_id=None):
+        query = ("mimeType='application/vnd.google-apps.folder' and trashed=false "
+                 "and title='%s'" % name.replace("'", "\\'"))
+        if parent_id:
+            query += " and '%s' in parents" % parent_id
+        found = drive.ListFile({'q': query}).GetList()
+        if found:
+            return found[0]['id']
+        meta = {'title': name, 'mimeType': 'application/vnd.google-apps.folder'}
+        if parent_id:
+            meta['parents'] = [{'id': parent_id}]
+        folder = drive.CreateFile(meta)
+        folder.Upload()
+        return folder['id']
+
+    root_id = _get_or_create_folder(drive_root_folder_name(env, picking))
+    day_id = _get_or_create_folder(datetime.now().strftime('%d_%m_%Y'), root_id)
+    clip_id = _get_or_create_folder('clip', day_id)
+
+    return {
+        'drive': drive,
+        'access_token': gauth.credentials.access_token,
+        'folder_id': clip_id,
+        'title': drive_file_title(env, picking, ext, name_suffix),
+        'anyone_link': (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true',
+        'settings_path': settings_path,
+    }
+
+
 def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
                         name_suffix='', note_label='', on_uploaded=None,
                         on_failed=None):
@@ -261,7 +371,6 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
     try:
         with odoo_registry(dbname).cursor() as cr:
             env = api.Environment(cr, SUPERUSER_ID, {})
-            ICP = env['ir.config_parameter'].sudo()
             picking = env['stock.picking'].sudo().browse(picking_id)
 
             _logger.info("BG_UPLOAD start db=%s pick=%s file=%s size=%s",
@@ -274,99 +383,34 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype, feed_issue=None,
                 _run_failed_cb(on_failed, env, picking, "không tìm thấy file tạm trên server")
                 return
 
-            creds_json = ICP.get_param('gdrive.user_credentials_json') or ''
-            if not creds_json:
-                _logger.error("BG_UPLOAD missing token")
-                _notify_bg_upload_failed(picking, filepath, "chưa kết nối Google Drive (thiếu token)")
-                _run_failed_cb(on_failed, env, picking, "chưa kết nối Google Drive (thiếu token)")
-                return
-
-            cid   = ICP.get_param('gdrive.oauth_client_id') or ''
-            csec  = ICP.get_param('gdrive.oauth_client_secret') or ''
-            redir = ICP.get_param('gdrive.oauth_redirect_uri') or ''
-            scopes_line = ICP.get_param('gdrive.oauth_scopes') or 'https://www.googleapis.com/auth/drive.file'
-
-            # Lấy warehouse code từ picking
-            warehouse_code = picking.location_id.warehouse_id.code or 'DEFAULT'
-
-            # Mapping warehouse code -> folder name
-            mapping_str = ICP.get_param('gdrive.warehouse_folder_mapping') or 'TSN:KHO_HCM,KBC:KHO_BENCAM,TSNSR:TSN_SHOWROOM'
-            warehouse_mapping = {}
-            for item in mapping_str.split(','):
-                if ':' in item:
-                    code, folder = item.strip().split(':', 1)
-                    warehouse_mapping[code.strip()] = folder.strip()
-
-            root_name = warehouse_mapping.get(warehouse_code, f'KHO_{warehouse_code}')
-
-            anyone_link = (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true'
-            # order
-            order_name = ''
-            try:
-                order_name = picking.sale_id.name or ''
-            except Exception:
-                pass
-            if not order_name:
-                order_name = (picking.origin or picking.group_id.name or '')
-            # pick
-            origin_pick = env['stock.picking'].sudo().search([
-                ('group_id', '=', picking.group_id.id),
-                ('picking_type_id.sequence_code', 'like', 'PICK'),
-                ('id', '!=', picking.id),
-            ], limit=1)
-            origin_name = (origin_pick.name or '').replace('/', '_').replace('\\', '_')
-
-            def _san(s): return (s or '').replace('/', '_').replace('\\', '_').replace(' ', '_')
-
-            # ext theo mimetype
             if mimetype == 'video/webm':   ext = '.webm'
             elif mimetype == 'video/mp4':  ext = '.mp4'
             elif mimetype == 'video/ogg':  ext = '.ogg'
             else:                          ext = os.path.splitext(filepath)[1] or '.webm'
 
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            # name_suffix: mã camera, để nhiều file cùng một phiếu phân biệt được
-            # nhau trên Drive. Rỗng khi quay bằng trình duyệt (chỉ có một file).
-            suffix = f"_{_san(name_suffix)}" if name_suffix else ""
-            safe_title = f"{_san(order_name)}_{_san(origin_name)}_{_san(picking.name)}{suffix}_{ts}{ext}"
-
-            # settings tạm
-            set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')
-            _write_settings_file(set_path, cid, csec, redir, scopes_line)
-
-            # auth
-            gauth = GoogleAuth(set_path)
-            gauth.credentials = OAuth2Credentials.from_json(creds_json)
             try:
-                if gauth.access_token_expired:
-                    _logger.info("BG_UPLOAD token expired -> refresh")
-                    gauth.Refresh()
-                gauth.Authorize()
+                ctx = prepare_drive_upload(env, picking, ext, name_suffix)
+            except ValueError as exc:
+                _logger.error("BG_UPLOAD %s", exc)
+                _notify_bg_upload_failed(picking, filepath, str(exc))
+                _run_failed_cb(on_failed, env, picking, str(exc))
+                return
             except Exception:
                 _logger.exception("BG_UPLOAD refresh/authorize failed")
-                _notify_bg_upload_failed(picking, filepath, "lỗi xác thực Google Drive (token hết hạn/bị thu hồi)")
-                _run_failed_cb(on_failed, env, picking, "lỗi xác thực Google Drive (token hết hạn/bị thu hồi)")
+                reason = "lỗi xác thực Google Drive (token hết hạn/bị thu hồi)"
+                _notify_bg_upload_failed(picking, filepath, reason)
+                _run_failed_cb(on_failed, env, picking, reason)
                 return
 
-            drive = GoogleDrive(gauth)
+            set_path = ctx['settings_path']
+            drive = ctx['drive']
+            safe_title = ctx['title']
+            anyone_link = ctx['anyone_link']
 
-            # folders
-            def _list(q): return drive.ListFile({'q': q}).GetList()
-            def _get_or_create_folder(name, parent_id=None):
-                q = "mimeType='application/vnd.google-apps.folder' and trashed=false and title='%s'" % name.replace("'", "\\'")
-                if parent_id: q += f" and '{parent_id}' in parents"
-                found = _list(q)
-                if found: return found[0]['id']
-                meta = {'title': name, 'mimeType': 'application/vnd.google-apps.folder'}
-                if parent_id: meta['parents'] = [{'id': parent_id}]
-                f = drive.CreateFile(meta); f.Upload(); return f['id']
-
-            root_id = _get_or_create_folder(root_name, None)
-            day_id  = _get_or_create_folder(datetime.now().strftime("%d_%m_%Y"), root_id)
-            clip_id = _get_or_create_folder("clip", day_id)
-
-            _logger.info("BG_UPLOAD uploading title=%s -> folder=%s", safe_title, clip_id)
-            gfile = drive.CreateFile({'title': safe_title, 'parents': [{'id': clip_id}]})
+            _logger.info("BG_UPLOAD uploading title=%s -> folder=%s",
+                         safe_title, ctx['folder_id'])
+            gfile = drive.CreateFile({'title': safe_title,
+                                      'parents': [{'id': ctx['folder_id']}]})
             if mimetype: gfile['mimeType'] = mimetype
             gfile.SetContentFile(filepath)
             gfile.Upload()

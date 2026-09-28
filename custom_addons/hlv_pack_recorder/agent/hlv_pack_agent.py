@@ -29,7 +29,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '1.6.0'
+AGENT_VERSION = '2.0.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -62,6 +62,17 @@ RETRY_SCAN_SECONDS = 120
 
 # File vua sinh ra co the ffmpeg con dang ghi do. Chi dung toi file da nam yen.
 RETRY_MIN_AGE_SECONDS = 60
+
+# --- Day thang len Google Drive ---
+# Google doi moi khuc (tru khuc cuoi) la BOI SO CUA 256KB. 2MB = 8 x 256KB:
+# du nho de mot lan gui khong qua lau tren duong truyen hep cua kho, du to de
+# khong ton qua nhieu lan bat tay.
+DRIVE_CHUNK_BYTES = 2 * 1024 * 1024
+DRIVE_UPLOAD_URL = ('https://www.googleapis.com/upload/drive/v3/files'
+                    '?uploadType=resumable&fields=id,webViewLink,size')
+# Phien resumable cua Google song ~1 tuan. Luu URL phien canh file de agent khoi
+# dong lai van gui TIEP tu cho dut, thay vi lam lai tu dau.
+RESUME_SUFFIX = '.resume'
 
 # Poll thanh cong khong ghi log gi ca — dung, vi 1800 dong moi gio thi khong ai
 # doc noi. Nhung luc truy su co, log trong mot khoang lai khong phan biet duoc
@@ -361,7 +372,7 @@ class Agent:
                 return
             recording_id, path = item
             try:
-                if self.upload(recording_id, path):
+                if self.upload_to_drive(recording_id, path):
                     _remove(path)
                 else:
                     log.error("giữ lại file chưa gửi được, sẽ tự thử lại sau %d giây: %s",
@@ -391,6 +402,8 @@ class Agent:
 
         now = time.time()
         for name in names:
+            if name.endswith(RESUME_SUFFIX):
+                continue  # file ghi chu phien, khong phai video
             if not name.lower().endswith(('.mp4', '.mkv')):
                 continue
             match = re.search(r'_(\d+)\.(?:mp4|mkv)$', name)
@@ -422,6 +435,178 @@ class Agent:
             self.stop_recording(recording_id)
 
     # ---------------- gửi file ----------------
+    # ---------------- day thang len Google Drive ----------------
+    def _resume_path(self, path):
+        return path + RESUME_SUFFIX
+
+    def _load_session(self, path):
+        """Doc URL phien resumable da luu. None neu chua co."""
+        try:
+            with open(self._resume_path(path), encoding='utf-8') as fh:
+                url = fh.read().strip()
+            return url or None
+        except OSError:
+            return None
+
+    def _save_session(self, path, session_url):
+        try:
+            with open(self._resume_path(path), 'w', encoding='utf-8') as fh:
+                fh.write(session_url)
+        except OSError:
+            pass  # khong luu duoc thi chi mat kha nang noi lai, khong chet
+
+    def _clear_session(self, path):
+        _remove(self._resume_path(path))
+
+    def _drive_start_session(self, ticket, size):
+        """Mo mot phien resumable, tra ve URL phien (hoac None neu hong)."""
+        meta = {'name': ticket['title'], 'parents': [ticket['folder_id']]}
+        try:
+            resp = self.session.post(
+                DRIVE_UPLOAD_URL,
+                headers={
+                    'Authorization': 'Bearer %s' % ticket['access_token'],
+                    'Content-Type': 'application/json; charset=UTF-8',
+                    'X-Upload-Content-Type': ticket['mimetype'],
+                    'X-Upload-Content-Length': str(size),
+                },
+                json=meta, timeout=60)
+        except requests.RequestException as exc:
+            log.warning("mở phiên Drive hỏng: %s", exc)
+            return None
+        if resp.status_code not in (200, 201):
+            log.error("Drive từ chối mở phiên: HTTP %s %s",
+                      resp.status_code, resp.text[:200])
+            return None
+        return resp.headers.get('Location')
+
+    def _drive_offset(self, session_url, size):
+        """Hoi Google da nhan toi byte nao roi.
+
+        Tra ve so byte da nhan, hoac -1 neu phien khong con dung (phai mo lai),
+        hoac dict ket qua neu file DA len xong tu lan truoc.
+        """
+        try:
+            resp = self.session.put(
+                session_url,
+                headers={'Content-Range': 'bytes */%d' % size,
+                         'Content-Length': '0'},
+                timeout=60)
+        except requests.RequestException as exc:
+            log.warning("hỏi vị trí phiên Drive hỏng: %s", exc)
+            return -1
+        if resp.status_code in (200, 201):
+            return resp.json()          # lan truoc da gui xong roi
+        if resp.status_code != 308:
+            return -1                    # phien het han / bi huy
+        rng = resp.headers.get('Range')
+        if not rng:
+            return 0                     # chua nhan byte nao
+        try:
+            return int(rng.split('-')[-1]) + 1
+        except (ValueError, IndexError):
+            return 0
+
+    def upload_to_drive(self, recording_id, path):
+        """Day file len Drive, KHONG di qua Odoo.
+
+        Odoo chi cap ve (token ngan han + thu muc + ten file) va nhan lai cai
+        link. Moi byte video di thang toi Google — day la ly do 2 worker cua
+        Odoo khong con bi chiem hang chuc phut moi lan gui video.
+
+        Tra ve True neu xong. Dut giua chung thi GIU nguyen file va URL phien de
+        lan sau gui tiep tu dung cho do.
+        """
+        size = os.path.getsize(path)
+        ticket = self._call_json('/pack_agent/drive_ticket', {
+            'recording_id': recording_id, 'ext': os.path.splitext(path)[1].lower(),
+        }, timeout=120)
+
+        if ticket is None:
+            # Goi khong duoc: Odoo chua co route nay (agent moi hon Odoo), hoac
+            # mang dut. Lui ve duong cu (gui qua Odoo) de khong phu thuoc thu tu
+            # trien khai — cap nhat agent truoc khi build Odoo van chay duoc.
+            log.warning("rec=%s không gọi được /pack_agent/drive_ticket, "
+                        "lùi về đường gửi qua Odoo", recording_id)
+            return self.upload(recording_id, path)
+
+        if not ticket.get('ok'):
+            # Odoo tra loi ro rang la tu choi (thieu token Drive, ban ghi la...).
+            # Lui ve duong cu cung hong, nen bao that bai luon.
+            log.error("rec=%s không lấy được vé Drive: %s",
+                      recording_id, ticket.get('error'))
+            return False
+
+        session_url = self._load_session(path)
+        offset = 0
+        if session_url:
+            got = self._drive_offset(session_url, size)
+            if isinstance(got, dict):
+                log.info("rec=%s lần trước đã lên xong Drive rồi", recording_id)
+                return self._drive_report(recording_id, ticket, got, size, path)
+            if got < 0:
+                session_url = None       # phien hong, mo lai tu dau
+            else:
+                offset = got
+                log.info("rec=%s nối tiếp từ %.1fMB/%.1fMB",
+                         recording_id, offset / 1024 / 1024, size / 1024 / 1024)
+
+        if not session_url:
+            session_url = self._drive_start_session(ticket, size)
+            if not session_url:
+                return False
+            self._save_session(path, session_url)
+            offset = 0
+
+        log.info("gửi rec=%s %.1fMB thẳng lên Drive", recording_id, size / 1024 / 1024)
+        with open(path, 'rb') as fh:
+            while offset < size:
+                fh.seek(offset)
+                chunk = fh.read(DRIVE_CHUNK_BYTES)
+                end = offset + len(chunk) - 1
+                try:
+                    resp = self.session.put(
+                        session_url,
+                        headers={'Content-Range': 'bytes %d-%d/%d' % (offset, end, size)},
+                        data=chunk, timeout=600)
+                except requests.RequestException as exc:
+                    log.warning("rec=%s đứt ở %.1fMB: %s — lần sau gửi tiếp từ đây",
+                                recording_id, offset / 1024 / 1024, exc)
+                    return False
+
+                if resp.status_code == 308:
+                    rng = resp.headers.get('Range')
+                    offset = (int(rng.split('-')[-1]) + 1) if rng else end + 1
+                    continue
+                if resp.status_code in (200, 201):
+                    return self._drive_report(recording_id, ticket, resp.json(),
+                                              size, path)
+                log.error("rec=%s Drive trả HTTP %s: %s", recording_id,
+                          resp.status_code, resp.text[:200])
+                return False
+        return False
+
+    def _drive_report(self, recording_id, ticket, drive_file, size, path):
+        """Bao link ve Odoo. Bao duoc moi coi la xong."""
+        link = drive_file.get('webViewLink') or (
+            'https://drive.google.com/file/d/%s/view' % drive_file.get('id'))
+        result = self._call_json('/pack_agent/drive_done', {
+            'recording_id': recording_id,
+            'link': link,
+            'title': ticket['title'],
+            'size_mb': round(size / 1024 / 1024, 1),
+        }, timeout=60)
+        if not result or not result.get('ok'):
+            # File DA nam tren Drive roi. Khong bao duoc thi giu file lai de lan
+            # sau bao — luc do _drive_offset se thay "da xong" va bao lai ngay,
+            # khong gui lai byte nao.
+            log.error("rec=%s đã lên Drive nhưng chưa báo được về Odoo: %s",
+                      recording_id, result)
+            return False
+        self._clear_session(path)
+        log.info("rec=%s gửi xong lên Drive", recording_id)
+        return True
+
     def upload(self, recording_id, path):
         size = os.path.getsize(path)
         log.info("gửi rec=%s %.1fMB", recording_id, size / 1024 / 1024)
