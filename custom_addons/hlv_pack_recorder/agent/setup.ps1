@@ -8,9 +8,22 @@
 
 $ErrorActionPreference = 'Stop'
 $AgentDir  = 'C:\hlv_agent'
-$FfmpegUrl = 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip'
+# Hai nguon, KHAC nha cung cap: CDN cua GitHub hay bi bop o duong truyen kho
+# (da gap that: "The decryption operation failed" giua chung goi 196MB). Ban
+# gyan.dev nho hon gan mot nua va di duong hoan toan khac.
+$FfmpegUrls = @(
+    'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
+    'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip'
+)
 $PythonEmbedUrl = 'https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip'
 $TaskName  = 'HLV Pack Agent'
+
+# May Win10 cu mac dinh con chao bang TLS 1.0 o tang .NET, ma phan lon trang
+# tai ve da tat han giao thuc do.
+try {
+    [Net.ServicePointManager]::SecurityProtocol =
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch { }
 
 function Write-Step($msg) { Write-Host "`n>> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "   [OK] $msg" -ForegroundColor Green }
@@ -35,6 +48,102 @@ function Invoke-Native {
         # Python, chua kip toi nhanh Python nhung.
         return @{ code = 9009; out = $_.Exception.Message }
     } finally { $ErrorActionPreference = $prev }
+}
+
+# Tai mot file lon qua duong truyen kho. Invoke-WebRequest mot minh khong du:
+# dut mang giua chung la mat sach phan da tai, khong tai tiep duoc, va loi TLS
+# cua tang .NET ("The decryption operation failed") thi no chi biet nem ra.
+# Nen thu lan luot ba cach, moi cach di mot tang mang khac nhau.
+function Get-RemoteFile {
+    param([string]$Url, [string]$OutFile)
+
+    # 1. curl.exe (co san tu Win10 1803): tu thu lai, va -C - la TAI TIEP tu cho
+    #    da dut chu khong bat dau lai tu dau.
+    $curl = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    if ($curl) {
+        Write-Host "   curl: dut mang se tu tai tiep, dung tat cua so."
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $code = 9009
+        try {
+            & $curl.Source '-fL' '--retry' '5' '--retry-delay' '3' '-C' '-' `
+                           '--progress-bar' '-o' $OutFile $Url
+            $code = $LASTEXITCODE
+        } catch { $code = 9009 } finally { $ErrorActionPreference = $prev }
+        if ($code -eq 0) { return $true }
+        Write-Warn2 "curl ket thuc voi ma $code"
+    }
+
+    # 2. BITS di qua WinHTTP - KHAC han tang TLS cua .NET, nen thuong qua duoc
+    #    dung cho Invoke-WebRequest chet. Cung tu tai tiep khi dut.
+    try {
+        Start-BitsTransfer -Source $Url -Destination $OutFile -ErrorAction Stop
+        return $true
+    } catch { Write-Warn2 "BITS: $($_.Exception.Message)" }
+
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -ErrorAction Stop
+        return $true
+    } catch { Write-Warn2 "Invoke-WebRequest: $($_.Exception.Message)" }
+
+    return $false
+}
+
+# Tai hut thi file VAN TON TAI, chi thieu duoi. Khong kiem thi Expand-Archive
+# bao mot loi kho hieu, hoac te hon la giai nen ra mot phan roi chay tiep.
+function Test-ZipFile {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return $false }
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+        $count = $zip.Entries.Count
+        $zip.Dispose()
+        return ($count -gt 0)
+    } catch { return $false }
+}
+
+# Tra ve $true neu cuoi cung co ca ffmpeg.exe lan ffprobe.exe trong $AgentDir.
+function Install-Ffmpeg {
+    $zip = "$env:TEMP\ffmpeg_hlv.zip"
+    $tmp = "$env:TEMP\ffmpeg_hlv"
+
+    foreach ($url in $FfmpegUrls) {
+        $src = ([uri]$url).Host
+        if (-not (Test-ZipFile $zip)) {
+            Write-Step "Tai ffmpeg tu $src (hon 100MB, hoi lau)"
+            Get-RemoteFile $url $zip | Out-Null
+        }
+        if (-not (Test-ZipFile $zip)) {
+            # Phai xoa han: de lai file rac thi lan sau curl se "tai tiep" tu mot
+            # cai duoi khong khop va khong bao gio day du.
+            Remove-Item -Force $zip -ErrorAction SilentlyContinue
+            Write-Warn2 "Tai tu $src khong xong, thu nguon khac"
+            continue
+        }
+
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        try {
+            Expand-Archive -Path $zip -DestinationPath $tmp -Force
+        } catch {
+            Remove-Item -Force $zip -ErrorAction SilentlyContinue
+            Write-Warn2 "Khong giai nen duoc: $($_.Exception.Message)"
+            continue
+        }
+        foreach ($exe in @('ffmpeg.exe', 'ffprobe.exe')) {
+            Get-ChildItem -Path $tmp -Recurse -Filter $exe | Select-Object -First 1 |
+                ForEach-Object { Copy-Item $_.FullName "$AgentDir\$exe" -Force }
+        }
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        Remove-Item -Force $zip -ErrorAction SilentlyContinue
+
+        if ((Test-Path "$AgentDir\ffmpeg.exe") -and (Test-Path "$AgentDir\ffprobe.exe")) {
+            return $true
+        }
+        Write-Warn2 "Goi tai tu $src khong chua ffmpeg.exe/ffprobe.exe"
+    }
+    return $false
 }
 
 Write-Host "=================================================================="
@@ -149,17 +258,16 @@ Write-Ok "hlv_pack_agent.py"
 if ((Test-Path "$AgentDir\ffmpeg.exe") -and (Test-Path "$AgentDir\ffprobe.exe")) {
     Write-Step "ffmpeg da co, bo qua"
 } else {
-    Write-Step "Tai ffmpeg (~190MB, hoi lau)"
-    $zip = "$env:TEMP\ffmpeg_hlv.zip"
-    $tmp = "$env:TEMP\ffmpeg_hlv"
-    Invoke-WebRequest -Uri $FfmpegUrl -OutFile $zip
-    Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-    Expand-Archive -Path $zip -DestinationPath $tmp -Force
-    foreach ($exe in @('ffmpeg.exe','ffprobe.exe')) {
-        Get-ChildItem -Path $tmp -Recurse -Filter $exe | Select-Object -First 1 |
-            ForEach-Object { Copy-Item $_.FullName "$AgentDir\$exe" -Force }
+    if (-not (Install-Ffmpeg)) {
+        Write-Bad "Khong tai duoc ffmpeg sau khi thu tat ca cac nguon."
+        Write-Host ""
+        Write-Host "   Duong vong nhanh nhat: tren MOT may da cai duoc, chep 2 file"
+        Write-Host "       C:\hlv_agent\ffmpeg.exe"
+        Write-Host "       C:\hlv_agent\ffprobe.exe"
+        Write-Host "   vao $AgentDir tren may nay (USB hoac thu muc chia se), roi chay"
+        Write-Host "   lai lenh cai. Script se thay ffmpeg co san va bo qua buoc tai."
+        exit 1
     }
-    Remove-Item -Recurse -Force $tmp, $zip -ErrorAction SilentlyContinue
     Write-Ok "ffmpeg.exe + ffprobe.exe"
 }
 $ffmpeg  = "$AgentDir\ffmpeg.exe"
