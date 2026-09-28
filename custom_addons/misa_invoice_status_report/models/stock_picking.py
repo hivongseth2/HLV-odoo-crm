@@ -1445,6 +1445,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 _logger.exception("❌ [MISA CHAIN REPAIR] Lỗi sửa phiếu %s", picking.name)
         return {'checked': len(candidates), 'flattened': total_flattened}
 
+    def _misa_invoice_request_covers_fully(self):
+        """Đề nghị xuất HĐ mà phiếu này đang khớp có phủ ĐỦ giá trị thực xuất của nó hay không.
+
+        Dùng cùng một luật với _misa_invoice_discover_grouped_orders (so tiền đã khớp theo từng
+        dòng hàng với tiền thực xuất ròng, trong sai số MISA_INVOICE_AMOUNT_TOLERANCE) để 2 chỗ
+        quyết định "ăn theo hay không" không bao giờ lệch nhau.
+
+        Trả True khi CHƯA có dữ liệu khớp dòng hàng nào (misa_invoice_grouped_matched_amount = 0):
+        lúc đó không có căn cứ nào kết luận là thiếu, mà đây đúng là tình huống hàm gộp dự phòng
+        được viết ra để xử lý (MISA không báo tên phiếu đại diện, không đọc được dòng hàng) — cứ
+        coi là phủ đủ như hành vi cũ, không tự ý đổi kết quả của những ca đó.
+        """
+        self.ensure_one()
+        matched = self.misa_invoice_grouped_matched_amount or 0.0
+        if matched <= 0.01:
+            return True
+        target = self.misa_invoice_net_actual_amount or 0.0
+        return target <= 0 or matched >= target - MISA_INVOICE_AMOUNT_TOLERANCE
+
     def _misa_invoice_dedupe_request_refid_groups(self, request_refids=None):
         """Lưới an toàn dự phòng cho việc gộp hóa đơn: cơ chế gộp chính (master_refno, xem
         action_check_misa_invoice_status ở trên) dựa vào MISA tự báo đúng TÊN phiếu đại diện —
@@ -1501,28 +1520,67 @@ class StockPickingMisaInvoiceStatus(models.Model):
             covered = group - master
             if not covered:
                 continue  # đã đúng, không có gì lệch tầng để sửa
-            covered.write({
-                'misa_invoice_master_picking_id': master.id,
-                'misa_invoice_amount': 0.0,
-                'misa_invoice_no': master.misa_invoice_no,
-                'misa_invoice_date': master.misa_invoice_date,
-                'misa_invoice_request_refid': refid,
-                'misa_invoice_request_refno': master.misa_invoice_request_refno,
-            })
-            note = Markup(
-                "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện các phiếu này cùng khớp 1 hóa đơn MISA "
-                "(request_refid trùng nhau) nhưng MISA không báo đúng tên phiếu đại diện lúc kiểm tra, "
-                "khiến mỗi phiếu tự ghi đủ 100%% tiền hóa đơn — đã tự gộp lại về phiếu %s để không tính "
-                "trùng tiền hóa đơn (trỏ THẲNG về đại diện, không qua trung gian)."
-            ) % master.name
-            for c in covered:
-                c.message_post(body=note)
-            master.message_post(
-                body=Markup(
-                    "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện %s phiếu khác cùng khớp hóa đơn này "
-                    "(MISA không báo đúng tên phiếu đại diện) — đã tự gộp về phiếu này: %s."
-                ) % (len(covered), ', '.join(covered.mapped('name')))
-            )
+
+            # Chia 2 nhóm theo ĐỘ PHỦ THẬT trước khi ghi — xem _misa_invoice_request_covers_fully.
+            # Gán "ăn theo" cho phiếu chỉ được phủ 1 PHẦN là khai báo sai rằng nó đã xuất HĐ đủ,
+            # và phần còn thiếu biến mất khỏi mọi tổng đối soát (case thật KBC/OUT/12702: đề nghị
+            # KBC/OUT/12907 chỉ phủ 880.200/1.441.800 đ mà phiếu vẫn bị gán ăn theo, khiến đơn
+            # DH125524949235992 báo "đã xuất HĐ đủ, còn thiếu 0 đ" trong khi thật ra thiếu 561.600 đ).
+            fully = self.browse()
+            partially = self.browse()
+            for picking in covered:
+                if picking._misa_invoice_request_covers_fully():
+                    fully |= picking
+                else:
+                    partially |= picking
+
+            if fully:
+                fully.write({
+                    'misa_invoice_master_picking_id': master.id,
+                    'misa_invoice_amount': 0.0,
+                    'misa_invoice_no': master.misa_invoice_no,
+                    'misa_invoice_date': master.misa_invoice_date,
+                    'misa_invoice_request_refid': refid,
+                    'misa_invoice_request_refno': master.misa_invoice_request_refno,
+                })
+                note = Markup(
+                    "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện các phiếu này cùng khớp 1 hóa đơn MISA "
+                    "(request_refid trùng nhau) nhưng MISA không báo đúng tên phiếu đại diện lúc kiểm tra, "
+                    "khiến mỗi phiếu tự ghi đủ 100%% tiền hóa đơn — đã tự gộp lại về phiếu %s để không tính "
+                    "trùng tiền hóa đơn (trỏ THẲNG về đại diện, không qua trung gian)."
+                ) % master.name
+                for c in fully:
+                    c.message_post(body=note)
+                master.message_post(
+                    body=Markup(
+                        "<b>🔗 Tự động gộp hóa đơn trùng:</b> phát hiện %s phiếu khác cùng khớp hóa đơn này "
+                        "(MISA không báo đúng tên phiếu đại diện) — đã tự gộp về phiếu này: %s."
+                    ) % (len(fully), ', '.join(fully.mapped('name')))
+                )
+
+            if partially:
+                # Vẫn phải zero tiền hóa đơn (đúng mục đích gốc của hàm này: không để N phiếu
+                # cùng ghi đủ 100% tiền của 1 hóa đơn) nhưng KHÔNG gán master, và GỠ master nếu
+                # lần chạy trước đã gán sai — nhờ vậy dữ liệu cũ tự lành ở lượt kiểm tra sau.
+                # Phần thật sự được phủ đã nằm ở misa_invoice_grouped_matched_amount, nơi
+                # _misa_invoice_order_row đọc để ra đúng số tiền còn thiếu.
+                partially.write({
+                    'misa_invoice_master_picking_id': False,
+                    'misa_invoice_amount': 0.0,
+                    'misa_invoice_request_refid': refid,
+                    'misa_invoice_request_refno': master.misa_invoice_request_refno,
+                })
+                for c in partially:
+                    c.message_post(body=Markup(
+                        "<b>⚠️ Xuất HĐ MỘT PHẦN qua đề nghị chung:</b> phiếu này cùng khớp hóa đơn của "
+                        "phiếu %s nhưng đề nghị đó CHỈ phủ %s/%s đ giá trị thực xuất — KHÔNG gán 'ăn theo' "
+                        "(gán vào là báo nhầm đã xuất HĐ đủ). Phần đã phủ được trừ vào số còn thiếu, phần "
+                        "còn lại vẫn cần đề nghị/hóa đơn riêng."
+                    ) % (
+                        master.name,
+                        c.misa_invoice_grouped_matched_amount,
+                        c.misa_invoice_net_actual_amount,
+                    ))
 
     def _misa_invoice_scan_domain(self, date_from=False, date_to=False, include_invoiced=False):
         domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
@@ -2881,34 +2939,34 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # được gọi tràn lan cho mọi dòng trong 1 danh sách (có thể hàng trăm-nghìn dòng/trang).
         # Chốt lại: chỉ CHẶN TRẦN ở amount_total để số hiển thị không vô lý (đã xuất > tổng
         # đơn) — số chính xác tuyệt đối xem trong drawer chi tiết phiếu (mở riêng từng phiếu).
-        #
-        # exact=True: order.misa_invoice_exact_* đã từng được tính (qua
-        # _misa_invoice_reconcile_order_coverage, chạy MỌI LẦN action_check_misa_invoice_status
-        # xử lý 1 phiếu của đơn này — xem stock_picking.py) — dùng THẲNG số đã quy đúng theo
-        # order_code qua API sống (không đếm trùng cross-order), rẻ vì chỉ đọc field đã lưu,
-        # không gọi lại API lúc render/export. LƯU Ý mẫu số đổi từ amount_total (tổng đơn, kể cả
-        # phần CHƯA giao) sang misa_invoice_exact_shipped_amount (đã giao thực tế) — khớp đúng
-        # cách "Đối chiếu tổng" đang tính, không còn thổi phồng outstanding cho đơn giao dở dang.
-        # Đơn CHƯA từng được tính (exact=False) vẫn dùng công thức xấp xỉ cũ làm fallback.
-        exact = bool(order.misa_invoice_exact_checked_at)
-        if exact:
-            invoiced_amount = min(order.misa_invoice_exact_invoiced_amount, order.misa_invoice_exact_shipped_amount)
-            value_partial_coverage = 0 < invoiced_amount < (
-                order.misa_invoice_exact_shipped_amount - MISA_INVOICE_AMOUNT_TOLERANCE
-            )
-        else:
-            invoiced_amount = min(
-                sum(rep.misa_invoice_effective_amount or 0.0 for rep in representatives.values()),
-                order.amount_total,
-            )
-            # QUAN TRỌNG: KHÁC với overall_state ở trên (chỉ nhìn TRẠNG THÁI thô của từng phiếu,
-            # 'partial' = có phiếu invoiced + có phiếu chưa) — cần bắt thêm cả case 1 đơn có TẤT
-            # CẢ phiếu đều đã 'invoiced' (nên overall_state ra 'invoiced' bình thường, đúng theo
-            # trạng thái từng phiếu) nhưng TỔNG tiền hóa đơn (invoiced_amount, đã tính ở trên)
-            # vẫn KHÔNG phủ đủ amount_total — case thật KBC/OUT/11611+11645+11695 (đơn
-            # DH...234620): cả 3 phiếu cùng "ăn theo" 1 đề nghị chỉ phủ 7,8tr/28,9tr, mỗi phiếu
-            # tự nó vẫn "invoiced" nên trước đây không có gì báo hiệu còn thiếu.
-            value_partial_coverage = 0 < invoiced_amount < (order.amount_total - MISA_INVOICE_AMOUNT_TOLERANCE)
+        # Phần được phủ MỘT PHẦN qua đề nghị của phiếu KHÁC không đi qua representatives: phiếu
+        # đó không "ăn theo" ai (nên chính nó là đại diện của nó) mà tiền hóa đơn riêng lại = 0,
+        # nên vòng sum ở trên tính ra 0 và phần đã THẬT SỰ được xuất HĐ biến mất khỏi tổng của
+        # đơn — case thật KBC/OUT/12702: 880.200/1.441.800 đ đã được phủ qua đề nghị KBC/OUT/12907.
+        # Điều kiện "không có master VÀ không có tiền hóa đơn riêng" đảm bảo không cộng trùng với
+        # misa_invoice_effective_amount ở trên.
+        partial_grouped_amount = sum(
+            p.misa_invoice_grouped_matched_amount or 0.0
+            for p in order_pickings
+            if not p.misa_invoice_master_picking_id and not (p.misa_invoice_effective_amount or 0.0)
+        )
+        invoiced_amount = min(
+            sum(rep.misa_invoice_effective_amount or 0.0 for rep in representatives.values())
+            + partial_grouped_amount,
+            order.amount_total,
+        )
+        # QUAN TRỌNG: KHÁC với overall_state ở trên (chỉ nhìn TRẠNG THÁI thô của từng phiếu,
+        # 'partial' = có phiếu invoiced + có phiếu chưa) — cần bắt thêm cả case 1 đơn có TẤT CẢ
+        # phiếu đều đã 'invoiced' (nên overall_state ra 'invoiced' bình thường, đúng theo trạng
+        # thái từng phiếu) nhưng TỔNG tiền hóa đơn (invoiced_amount, đã tính ở trên) vẫn KHÔNG
+        # phủ đủ amount_total — case thật KBC/OUT/11611+11645+11695 (đơn DH...234620): cả 3
+        # phiếu cùng "ăn theo" 1 đề nghị chỉ phủ 7,8tr/28,9tr, mỗi phiếu tự nó vẫn "invoiced"
+        # nên trước đây không có gì báo hiệu còn thiếu. So trực tiếp 2 số tiền đã có sẵn ở đây
+        # (invoiced_amount vs amount_total) đáng tin cậy hơn misa_invoice_order_coverage — field
+        # đó chỉ được tính REACTIVE khi bước refno nhanh báo 'missing'/mismatch (xem
+        # _misa_invoice_reconcile_order_coverage), nên có thể vẫn là False (chưa từng tính) dù
+        # thực tế đang thiếu tiền như case này — OR thêm cả 2 tín hiệu để không bỏ sót.
+        value_partial_coverage = 0 < invoiced_amount < (order.amount_total - MISA_INVOICE_AMOUNT_TOLERANCE)
         partial_coverage = value_partial_coverage or 'partial' in order_pickings.mapped('misa_invoice_order_coverage')
         return {
             'id': order.id,

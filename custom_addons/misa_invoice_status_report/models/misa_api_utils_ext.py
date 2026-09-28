@@ -27,6 +27,20 @@ def _empty_invoice_status():
     }
 
 
+def _normalize_inv_no(value):
+    """Chuẩn hóa SỐ HÓA ĐƠN để so khớp: bỏ khoảng trắng 2 đầu và số 0 đứng đầu.
+
+    MISA ghi inv_no đủ 8 chữ số ("00007446") ở chỗ này nhưng chỗ khác (người dùng gõ tìm, dữ
+    liệu nhập tay) lại là "7446" — bỏ 0 đứng đầu để 2 dạng đó là MỘT.
+
+    Nhận str/None/False. Trả str; '' nếu rỗng; '0' nếu chuỗi toàn số 0.
+    """
+    raw = (value or '').strip()
+    if not raw:
+        return ''
+    return raw.lstrip('0') or '0'
+
+
 def _misa_json_or_raise(resp, context):
     """MISA có thể trả HTTP 200 kèm {"Success": false, ...} khi phiên/cookie hết hạn (không
     chỉ 401) — nếu chỉ kiểm tra status_code thì các API bên dưới sẽ ÂM THẦM đọc ra PageData
@@ -98,26 +112,83 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             return _misa_json_or_raise(resp, context)
 
     def _misa_invoice_result_from_request(self, req_info):
-        """Bước 2+3 của luồng tra cứu: từ 1 "Đề nghị xuất hóa đơn" (req_info), tìm xem đã
-        có hóa đơn thật phát sinh từ đó chưa (sa_invoice_get, lọc theo sa_invoice_request_refid)."""
+        """Bước 2 của luồng tra cứu: từ 1 "Đề nghị xuất hóa đơn" (req_info), xác định đã có
+        hóa đơn thật phát sinh từ đó chưa.
+
+        Đề nghị TỰ MANG SẴN số hóa đơn: dòng sa_invoice_request (view 65) trả về cả inv_no,
+        inv_date, inv_series, inv_refid, invoice_status, publish_status — đúng mấy cột mà trang
+        MISA hiển thị ngay trong danh sách "Đề nghị xuất hóa đơn". Nên chỉ cần đọc inv_no ở đây
+        là biết đề nghị đã ra hóa đơn hay chưa, rồi tra chứng từ theo SỐ HÓA ĐƠN để lấy số tiền
+        chính thức.
+
+        TRƯỚC ĐÂY làm khác và SAI: gọi sa_invoice_get tìm hóa đơn theo TÊN KHÁCH của đề nghị
+        rồi lọc client-side theo sa_invoice_request_refid. Hỏng vì tên khách trên hóa đơn có thể
+        KHÁC tên khách trên đề nghị — case thật TSN/OUT/13874 (đơn DH125524949236062): đề nghị
+        ghi khách 'KHÁCH WEB, ZALO TT COD J&T' còn hóa đơn 00007446 ghi 'J&T Express', nên hóa
+        đơn không bao giờ nằm trong tập trả về và phiếu đứng mãi ở 'Đã đề nghị, chờ HĐ' dù hóa
+        đơn đã phát hành và vẫn trỏ ĐÚNG refid của đề nghị. Đường cũ còn 2 điểm yếu nữa: chỉ đọc
+        TRANG 1 (pageSize=200, không phân trang) nên khách nhiều hóa đơn là bị cắt, và tốn 1 lệnh
+        gọi tải về tới 200 hóa đơn chỉ để lấy đúng 1 dòng.
+
+        Số lệnh gọi MISA KHÔNG tăng so với cách cũ: vẫn đúng 1 lệnh, chỉ đổi khóa tra từ "tên
+        khách" (không đáng tin) sang "số hóa đơn" (khóa thật).
+
+        Đường cũ VẪN GIỮ làm dự phòng (_misa_invoice_result_from_request_by_customer) và chỉ
+        dùng khi req_info KHÔNG có key 'inv_no' — tức MISA đổi view/bớt cột trả về. Không có dự
+        phòng này thì một ngày MISA bỏ cột inv_no là MỌI phiếu bị hạ về 'requested' và bị XÓA
+        mất số hóa đơn đúng đã lưu (guard chống mất dữ liệu trong action_check_misa_invoice_status
+        không đỡ được ca này, vì đề nghị vẫn tìm ra nên request_refid vẫn có)."""
         result = _empty_invoice_status()
-        target_req_id = req_info.get("refid")
-        target_customer = req_info.get("account_object_name")
-        result['request_refid'] = target_req_id
-        result['account_object_name'] = target_customer
+        result['request_refid'] = req_info.get("refid")
+        result['account_object_name'] = req_info.get("account_object_name")
         result['master_refno'] = (req_info.get("refno") or "").strip() or None
         result['state'] = 'requested'
 
+        if 'inv_no' not in req_info:
+            return self._misa_invoice_result_from_request_by_customer(req_info, result)
+
+        inv_no = (req_info.get("inv_no") or "").strip()
+        if not inv_no:
+            # Đề nghị chưa phát hành hóa đơn — đúng nghĩa "đã đề nghị, chờ HĐ".
+            return result
+
+        voucher = self._misa_invoice_voucher_for_inv_no(inv_no)
+        if not voucher:
+            # Đề nghị có ghi số hóa đơn nhưng không tra ra chứng từ (hóa đơn bị hủy/thay thế,
+            # hoặc ngoài khoảng ngày tìm kiếm) — GIỮ 'requested' thay vì tự nhận đã xuất HĐ với
+            # số tiền không kiểm chứng được.
+            return result
+
+        result['state'] = 'invoiced'
+        result['invoice_no'] = voucher.get('inv_no') or inv_no
+        result['invoice_date'] = voucher.get('inv_date') or req_info.get('inv_date')
+        result['invoice_amount'] = voucher.get('total_amount')
+        return result
+
+    def _misa_invoice_result_from_request_by_customer(self, req_info, result):
+        """Đường DỰ PHÒNG của _misa_invoice_result_from_request: tìm hóa đơn bằng cách tải danh
+        sách hóa đơn theo TÊN KHÁCH của đề nghị rồi lọc theo sa_invoice_request_refid.
+
+        Đây là cách làm CŨ, đã biết là không đáng tin (tên khách trên hóa đơn có thể khác tên
+        trên đề nghị, và chỉ đọc trang 1 với pageSize=200) — chỉ chạy khi MISA không trả cột
+        inv_no trên dòng đề nghị nữa. Có kết quả vẫn tốt hơn là hạ sạch mọi phiếu về 'requested'.
+        """
+        target_req_id = req_info.get("refid")
+        target_customer = req_info.get("account_object_name")
         if not target_req_id or not target_customer:
             return result
 
+        _logger.warning(
+            "⚠️ [MISA INVOICE STATUS] Dòng đề nghị %s không có cột 'inv_no' — quay lại cách tra "
+            "cũ theo tên khách (kém tin cậy). Kiểm tra lại view/payload sa_invoice_request.",
+            req_info.get("refno"),
+        )
         url_inv = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
         payload_inv = self.env['misa.config'].get_invoice_full_search_payload(target_customer)
         data_inv = self._fetch_misa_json_with_session_retry(url_inv, payload_inv, "sa_invoice_get")
 
-        page_data_inv = data_inv.get("Data", {}).get("PageData", []) or []
         matched_invs = [
-            inv for inv in page_data_inv
+            inv for inv in (data_inv.get("Data", {}).get("PageData", []) or [])
             if inv.get("sa_invoice_request_refid") == target_req_id
         ]
         if not matched_invs:
@@ -264,6 +335,24 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         payload = self.env['misa.config'].get_voucher_search_payload(inv_no)
         data = self._fetch_misa_json_with_session_retry(url, payload, "sa_voucher_get")
         return data.get("Data", {}).get("PageData", []) or []
+
+    def _misa_invoice_voucher_for_inv_no(self, inv_no):
+        """Chứng từ bán hàng khớp CHÍNH XÁC số hóa đơn này, hoặc None.
+
+        get_voucher_search_payload tìm theo kiểu CHỨA trên 4 property cùng lúc nên 1 lần gọi có
+        thể trả nhiều chứng từ mang số hóa đơn khác (gõ "005309" ra cả "1005309"). Lấy page
+        đầu tiên mà không lọc là có ngày gán tiền của hóa đơn NGƯỜI KHÁC lên phiếu — nên phải
+        lọc đúng số rồi mới dùng.
+
+        Trả None khi không có dòng nào khớp chính xác (kể cả khi MISA vẫn trả về dòng gần giống).
+        """
+        target = _normalize_inv_no(inv_no)
+        if not target:
+            return None
+        for row in self.get_vouchers_by_inv_no(inv_no):
+            if _normalize_inv_no(row.get('inv_no')) == target:
+                return row
+        return None
 
     def get_voucher_by_inv_no(self, inv_no):
         """Tra 1 CHỨNG TỪ BÁN HÀNG (sa_voucher_get — hóa đơn thật đã lập trên MISA) theo SỐ
