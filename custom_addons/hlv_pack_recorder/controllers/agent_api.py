@@ -13,12 +13,14 @@ import logging
 import os
 import threading
 
+from markupsafe import Markup
+
 from odoo import SUPERUSER_ID, api, fields, http, registry as odoo_registry
 from odoo.http import request
 from werkzeug.wrappers import Response
 
 from odoo.addons.custom_barcode_scan_redirect.controllers._shared import (
-    _bg_upload_to_drive, _file_path,
+    _bg_upload_to_drive, _feed_issue_note, _file_path, prepare_drive_upload,
 )
 
 _logger = logging.getLogger(__name__)
@@ -145,6 +147,112 @@ class PackAgentApi(http.Controller):
             'server_time': fields.Datetime.to_string(fields.Datetime.now()),
             'commands': commands,
         }
+
+    @http.route('/pack_agent/drive_ticket', type='json', auth='public',
+                csrf=False, methods=['POST'])
+    def drive_ticket(self, **kw):
+        """Cấp cho agent một "vé" để tự đẩy file thẳng lên Google Drive.
+
+        Vì sao cần: trước đây mọi byte video đều chui qua Odoo, mà production chỉ
+        có 2 worker — một file 37MB trên đường truyền kho chiếm worker hàng chục
+        phút, hai bàn cùng gửi là cả Odoo đứng hình. Cho agent nói thẳng với
+        Google thì Odoo chỉ còn nhận vài trăm byte JSON.
+
+        Vé gồm access_token SỐNG ~1 GIỜ, phạm vi drive.file (chỉ đụng được file do
+        chính ứng dụng tạo). Máy đóng gói không bao giờ giữ refresh token.
+        """
+        station = _station_from_request(kw)
+        if not station:
+            return {'ok': False, 'error': 'auth'}
+
+        try:
+            recording_id = int(kw.get('recording_id') or 0)
+        except (TypeError, ValueError):
+            return {'ok': False, 'error': 'bad recording_id'}
+
+        recording = request.env['hlv.pack.recording'].sudo().browse(recording_id).exists()
+        if not recording or recording.station_id != station:
+            return {'ok': False, 'error': 'unknown recording'}
+
+        ext = (kw.get('ext') or '.mp4').lower()
+        if ext not in ALLOWED_EXT:
+            return {'ok': False, 'error': 'ext not allowed'}
+
+        try:
+            ctx = prepare_drive_upload(
+                request.env, recording.picking_id, ext,
+                name_suffix=recording.camera_id.code or '')
+        except ValueError as exc:
+            recording.mark_failed(str(exc))
+            return {'ok': False, 'error': str(exc)}
+        except Exception as exc:
+            _logger.exception("PACK_REC không cấp được vé Drive")
+            reason = 'lỗi xác thực Google Drive: %s' % str(exc)[:200]
+            recording.mark_failed(reason)
+            return {'ok': False, 'error': reason}
+        finally:
+            # File cấu hình tạm chứa client secret — xoá ngay, agent không cần.
+            try:
+                os.remove(ctx['settings_path'])
+            except (OSError, NameError, UnboundLocalError, KeyError):
+                pass
+
+        recording.write({'state': 'uploading'})
+        return {
+            'ok': True,
+            'access_token': ctx['access_token'],
+            'folder_id': ctx['folder_id'],
+            'title': ctx['title'],
+            'mimetype': 'video/mp4' if ext == '.mp4' else 'video/x-matroska',
+        }
+
+    @http.route('/pack_agent/drive_done', type='json', auth='public',
+                csrf=False, methods=['POST'])
+    def drive_done(self, **kw):
+        """Agent báo đã đẩy xong lên Drive: ghi link, chốt trạng thái, ghi chatter."""
+        station = _station_from_request(kw)
+        if not station:
+            return {'ok': False, 'error': 'auth'}
+
+        try:
+            recording_id = int(kw.get('recording_id') or 0)
+        except (TypeError, ValueError):
+            return {'ok': False, 'error': 'bad recording_id'}
+
+        recording = request.env['hlv.pack.recording'].sudo().browse(recording_id).exists()
+        if not recording or recording.station_id != station:
+            return {'ok': False, 'error': 'unknown recording'}
+
+        link = (kw.get('link') or '').strip()
+        if not link.startswith('https://'):
+            return {'ok': False, 'error': 'bad link'}
+
+        try:
+            size_mb = float(kw.get('size_mb') or 0)
+        except (TypeError, ValueError):
+            size_mb = 0.0
+
+        recording.write({'state': 'done', 'drive_link': link, 'size_mb': size_mb})
+
+        # Ghi chú chatter giống hệt đường Odoo tự đẩy, để người xem khiếu nại
+        # không phải phân biệt video đến từ đường nào.
+        picking = recording.picking_id
+        if picking.exists():
+            body = Markup(
+                '📹 Video đóng gói — {label}: '
+                '<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
+            ).format(label='%s (agent)' % (recording.camera_id.name or 'camera'),
+                     url=link, title=kw.get('title') or 'Video')
+            body = body + _feed_issue_note(kw.get('feed_issue'))
+            try:
+                picking.message_post(body=body, message_type='comment',
+                                     subtype_xmlid='mail.mt_note')
+            except Exception:
+                _logger.exception("PACK_REC không ghi được ghi chú chatter")
+
+        _logger.info("PACK_REC xong (Drive trực tiếp) %s/%s %.1fMB",
+                     picking.name, recording.camera_id.code, size_mb)
+        return {'ok': True}
 
     @http.route('/pack_agent/upload_chunk', type='http', auth='public', csrf=False, methods=['POST'])
     def upload_chunk(self, **kw):
