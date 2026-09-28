@@ -1558,29 +1558,35 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     ) % (len(fully), ', '.join(fully.mapped('name')))
                 )
 
-            if partially:
-                # Vẫn phải zero tiền hóa đơn (đúng mục đích gốc của hàm này: không để N phiếu
-                # cùng ghi đủ 100% tiền của 1 hóa đơn) nhưng KHÔNG gán master, và GỠ master nếu
-                # lần chạy trước đã gán sai — nhờ vậy dữ liệu cũ tự lành ở lượt kiểm tra sau.
-                # Phần thật sự được phủ đã nằm ở misa_invoice_grouped_matched_amount, nơi
-                # _misa_invoice_order_row đọc để ra đúng số tiền còn thiếu.
-                partially.write({
+            # Vẫn phải zero tiền hóa đơn (đúng mục đích gốc của hàm này: không để N phiếu cùng
+            # ghi đủ 100% tiền của 1 hóa đơn) nhưng KHÔNG gán master, và GỠ master nếu lần chạy
+            # trước đã gán sai — nhờ vậy dữ liệu cũ tự lành ở lượt kiểm tra sau. Phần thật sự
+            # được phủ đã nằm ở misa_invoice_grouped_matched_amount, nơi _misa_invoice_order_row
+            # đọc để ra đúng số tiền còn thiếu.
+            #
+            # CHỈ ghi + đăng thông báo cho phiếu THẬT SỰ ĐỔI: hàm này chạy lại ở CUỐI MỖI lần
+            # kiểm tra MISA, mà phiếu phủ 1 phần thì lần nào cũng rơi vào nhánh này — ghi vô điều
+            # kiện là mỗi 30 phút lại đăng 1 thông báo y hệt vào chatter cho tới khi kế toán xuất
+            # nốt hóa đơn.
+            for picking in partially:
+                if not picking.misa_invoice_master_picking_id and not picking.misa_invoice_amount:
+                    continue
+                picking.write({
                     'misa_invoice_master_picking_id': False,
                     'misa_invoice_amount': 0.0,
                     'misa_invoice_request_refid': refid,
                     'misa_invoice_request_refno': master.misa_invoice_request_refno,
                 })
-                for c in partially:
-                    c.message_post(body=Markup(
-                        "<b>⚠️ Xuất HĐ MỘT PHẦN qua đề nghị chung:</b> phiếu này cùng khớp hóa đơn của "
-                        "phiếu %s nhưng đề nghị đó CHỈ phủ %s/%s đ giá trị thực xuất — KHÔNG gán 'ăn theo' "
-                        "(gán vào là báo nhầm đã xuất HĐ đủ). Phần đã phủ được trừ vào số còn thiếu, phần "
-                        "còn lại vẫn cần đề nghị/hóa đơn riêng."
-                    ) % (
-                        master.name,
-                        c.misa_invoice_grouped_matched_amount,
-                        c.misa_invoice_net_actual_amount,
-                    ))
+                picking.message_post(body=Markup(
+                    "<b>⚠️ Xuất HĐ MỘT PHẦN qua đề nghị chung:</b> phiếu này cùng khớp hóa đơn của "
+                    "phiếu %s nhưng đề nghị đó CHỈ phủ %s/%s đ giá trị thực xuất — KHÔNG gán 'ăn theo' "
+                    "(gán vào là báo nhầm đã xuất HĐ đủ). Phần đã phủ được trừ vào số còn thiếu, phần "
+                    "còn lại vẫn cần đề nghị/hóa đơn riêng."
+                ) % (
+                    master.name,
+                    picking.misa_invoice_grouped_matched_amount,
+                    picking.misa_invoice_net_actual_amount,
+                ))
 
     def _misa_invoice_scan_domain(self, date_from=False, date_to=False, include_invoiced=False):
         domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
