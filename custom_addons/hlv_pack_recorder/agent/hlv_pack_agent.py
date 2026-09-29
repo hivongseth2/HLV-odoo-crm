@@ -31,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.2.0'
+AGENT_VERSION = '2.3.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -69,6 +69,15 @@ UPDATE_RETRY_SECONDS = 600
 # Ban agent phai lon hon nguong nay moi duoc coi la tai du. Ban that ~40KB;
 # mot trang loi HTML hay mot lan tai hut deu nho hon nhieu.
 MIN_AGENT_BYTES = 10 * 1024
+
+# So lan cho phep chay lai ffmpeg trong MOT ban ghi khi luong RTSP bi dut.
+# Co tran vi mot camera hong han se dut lien tuc; chay lai vo han thi chi tao ra
+# hang tram doan rac roi van khong co hinh.
+MAX_SEGMENT_RESTARTS = 20
+
+# Doan ngan hon chung nay coi nhu khong co gi - bo di truoc khi noi, de mot doan
+# 0 byte khong lam hong ca file cuoi.
+MIN_SEGMENT_BYTES = 64 * 1024
 
 # Quet lai file chua gui duoc moi chung nay giay. Khong quet moi vong poll (2
 # giay): mang dang hong ma dong lien tuc chi to lam nghen them.
@@ -187,13 +196,75 @@ class Recorder:
     def __init__(self, recording_id, camera_code, camera_cfg, out_path, max_seconds, ffmpeg_bin='ffmpeg'):
         self.recording_id = recording_id
         self.camera_code = camera_code
-        self.out_path = out_path
-        cmd = build_ffmpeg_args(camera_cfg, out_path, max_seconds, ffmpeg_bin)
-        log.info("ffmpeg start rec=%s cam=%s -> %s", recording_id, camera_code, out_path)
+        self.camera_cfg = camera_cfg
+        self.out_path = out_path          # file CUỐI CÙNG, sau khi nối các đoạn
+        self.max_seconds = max_seconds
+        self.ffmpeg_bin = ffmpeg_bin
+        self.started_at = time.time()
+        self.segments = []
+        self.restarts = 0
+        self.proc = None
+        # Giữ chung cho cả bản ghi, không reset mỗi đoạn: lý do đứt ở đoạn trước
+        # mới là thứ cần đọc khi cuối cùng phải báo hỏng.
+        self._err_lines = collections.deque(maxlen=STDERR_KEEP_LINES)
+        self._spawn()
+
+    def elapsed(self):
+        return time.time() - self.started_at
+
+    def _next_segment_path(self):
+        """Đường dẫn đoạn kế tiếp: <ten>_<id>.segNN.mp4.
+
+        CỐ Ý không trùng dạng tên file cuối: hàm quét file tồn đọng tìm đuôi
+        _<id>.mp4, nên đoạn dở dang không bị nhặt lên gửi nhầm.
+        """
+        base, ext = os.path.splitext(self.out_path)
+        return '%s.seg%02d%s' % (base, len(self.segments), ext)
+
+    def _spawn(self):
+        """Chạy một tiến trình ffmpeg cho đoạn kế tiếp."""
+        path = self._next_segment_path()
+        # Trần thời gian tính theo phần CÒN LẠI của bản ghi, không phải trần đầy
+        # đủ: chạy lại 20 lần mà lần nào cũng cho 30 phút thì một phiếu bỏ quên
+        # có thể ghi hàng giờ.
+        remaining = max(5, int(self.max_seconds - self.elapsed()))
+        cmd = build_ffmpeg_args(self.camera_cfg, path, remaining, self.ffmpeg_bin)
+        log.info("ffmpeg start rec=%s cam=%s -> %s", self.recording_id,
+                 self.camera_code, path)
         self.proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE, creationflags=NO_WINDOW,
         )
+        self.segments.append(path)
+        threading.Thread(target=self._drain_stderr, args=(self.proc,),
+                         daemon=True).start()
+
+    def try_restart(self):
+        """ffmpeg chết giữa chừng mà chưa có lệnh dừng — ghi tiếp thành đoạn mới.
+
+        Trả: True nếu đã chạy lại. False khi không nên chạy nữa (đã tới trần thời
+            gian của bản ghi, hoặc đã chạy lại quá nhiều lần). Bên gọi khi đó
+            chốt sổ bản ghi như bình thường.
+        """
+        if self.elapsed() >= self.max_seconds:
+            return False
+        if self.restarts >= MAX_SEGMENT_RESTARTS:
+            log.warning("rec=%s đã chạy lại %d lần, thôi không chạy nữa",
+                        self.recording_id, self.restarts)
+            return False
+        self.restarts += 1
+        log.warning("rec=%s cam=%s luồng bị đứt, ghi tiếp đoạn %d",
+                    self.recording_id, self.camera_code, len(self.segments))
+        try:
+            self._spawn()
+        except OSError as exc:
+            log.error("rec=%s không chạy lại được ffmpeg: %s", self.recording_id, exc)
+            return False
+        return True
+
+    def finalize(self):
+        """Nối các đoạn thành file cuối. Trả đường dẫn file cuối, hoặc None."""
+        return concat_segments(self.segments, self.out_path, self.ffmpeg_bin)
 
         # PHẢI đọc stderr liên tục. ffmpeg kêu ra stderr suốt lúc chạy — camera
         # IP mất gói, DTS nhảy — và ống dẫn của tiến trình con chỉ có một bộ đệm
@@ -206,10 +277,14 @@ class Recorder:
         self._err_thread = threading.Thread(target=self._drain_stderr, daemon=True)
         self._err_thread.start()
 
-    def _drain_stderr(self):
-        """Đọc cạn stderr suốt đời tiến trình, chỉ giữ lại phần cuối để báo lỗi."""
+    def _drain_stderr(self, proc):
+        """Đọc cạn stderr suốt đời MỘT tiến trình, giữ phần cuối để báo lỗi.
+
+        Nhận tiến trình làm tham số chứ không đọc self.proc: sau khi chạy lại,
+        self.proc đã trỏ sang tiến trình mới, luồng cũ phải đọc nốt ống cũ.
+        """
         try:
-            for line in iter(self.proc.stderr.readline, b''):
+            for line in iter(proc.stderr.readline, b''):
                 self._err_lines.append(line.decode('utf-8', 'replace').rstrip())
         except (OSError, ValueError):
             pass  # ống đóng khi tiến trình chết — bình thường
@@ -239,8 +314,9 @@ class Recorder:
 
     def stderr_tail(self, limit=400):
         """Phần cuối những gì ffmpeg đã kêu. Rỗng nếu nó im lặng suốt."""
-        # Đợi luồng đọc gom nốt phần còn trong ống sau khi tiến trình thoát.
-        self._err_thread.join(timeout=2)
+        # Luồng đọc là daemon và ống đã đóng khi tiến trình thoát, nên chỉ cần
+        # nhường một nhịp cho nó gom nốt phần cuối.
+        time.sleep(0.2)
         return '\n'.join(self._err_lines)[-limit:]
 
 
@@ -347,15 +423,29 @@ class Agent:
             self.report_failure(recording_id, "không chạy được ffmpeg: %s" % exc)
 
     def _find_leftover_file(self, recording_id):
-        """Tìm file quay còn nằm lại của một bản ghi. None nếu không có."""
-        pattern = re.compile(r'_%d\.(?:mp4|mkv)$' % recording_id)
+        """Tìm file quay còn nằm lại của một bản ghi. None nếu không có.
+
+        Agent chết giữa chừng có thể để lại các đoạn .segNN chưa kịp nối — gom
+        luôn, nếu không thì phiếu đó mất video dù bằng chứng vẫn nằm trên đĩa.
+        """
+        final_re = re.compile(r'_%d\.(?:mp4|mkv)$' % recording_id)
+        seg_re = re.compile(r'_%d\.seg\d+\.(?:mp4|mkv)$' % recording_id)
+        segments = []
         try:
             for name in sorted(os.listdir(self.work_dir)):
-                if pattern.search(name):
-                    return os.path.join(self.work_dir, name)
+                path = os.path.join(self.work_dir, name)
+                if final_re.search(name):
+                    return path
+                if seg_re.search(name):
+                    segments.append(path)
         except OSError:
-            pass
-        return None
+            return None
+        if not segments:
+            return None
+        base = re.sub(r'\.seg\d+(\.(?:mp4|mkv))$', r'\1', segments[0])
+        log.info("rec=%s còn %d đoạn chưa nối, ghép lại rồi gửi",
+                 recording_id, len(segments))
+        return concat_segments(segments, base, self.ffmpeg_bin)
 
     def stop_recording(self, recording_id):
         recorder = self.active.pop(recording_id, None)
@@ -377,17 +467,23 @@ class Agent:
                     "và không tìm thấy file quay nào cho bản ghi này")
             return
         recorder.stop()
-        if not os.path.exists(recorder.out_path) or os.path.getsize(recorder.out_path) < 51200:
+        final = recorder.finalize()
+        if recorder.restarts:
+            log.info("rec=%s ghép từ %d đoạn (luồng đứt %d lần)", recording_id,
+                     len(recorder.segments), recorder.restarts)
+        if not final or not os.path.exists(final) or os.path.getsize(final) < 51200:
             stderr = recorder.stderr_tail()
             hint = explain_ffmpeg_error(stderr)
             self.report_failure(
                 recording_id,
                 ("ffmpeg không ghi được gì — %s\n\n%s" % (hint, stderr)) if hint
                 else ("ffmpeg không ghi được gì: %s" % stderr))
+            for path in recorder.segments:
+                _remove(path)
             _remove(recorder.out_path)
             return
         # Xep vao hang doi chu KHONG gui ngay tai day: day dang la vong lap poll.
-        self.enqueue_upload(recording_id, recorder.out_path)
+        self.enqueue_upload(recording_id, final)
 
     def enqueue_upload(self, recording_id, path):
         """Xep mot file vao hang doi gui. Bo qua neu no da nam trong hang doi."""
@@ -483,6 +579,11 @@ class Agent:
                      recorder.proc.returncode, size_mb)
             if tail:
                 log.warning("rec=%s ffmpeg kêu trước khi dừng: %s", recording_id, tail)
+
+            # Phiếu CHƯA đóng mà luồng đã đứt: ghi tiếp, đừng chốt sổ. Một lần
+            # chớp mạng chỉ được phép mất vài giây, không được mất cả phiếu.
+            if recorder.try_restart():
+                continue
             self.stop_recording(recording_id)
 
     # ---------------- tu cap nhat ----------------
@@ -1078,6 +1179,65 @@ def explain_ffmpeg_error(stderr):
         if needle in (stderr or ''):
             return hint
     return ''
+
+
+def concat_segments(segments, out_path, ffmpeg_bin):
+    """Nối các đoạn quay thành một file, KHÔNG nén lại.
+
+    segments: danh sách đường dẫn theo đúng thứ tự ghi.
+    out_path: file đích.
+    Trả: out_path nếu tạo được, None nếu không còn đoạn nào dùng được.
+        Biên: chỉ còn một đoạn -> đổi tên, không gọi ffmpeg (nhanh và không
+        có cơ hội hỏng). Đoạn rỗng/quá nhỏ bị bỏ trước khi nối.
+    """
+    usable = []
+    for path in segments:
+        try:
+            if os.path.getsize(path) >= MIN_SEGMENT_BYTES:
+                usable.append(path)
+            else:
+                _remove(path)
+        except OSError:
+            pass
+    if not usable:
+        return None
+    if len(usable) == 1:
+        try:
+            os.replace(usable[0], out_path)
+            return out_path
+        except OSError as exc:
+            log.error("không đổi tên được đoạn duy nhất: %s", exc)
+            return usable[0]
+
+    list_path = out_path + '.txt'
+    try:
+        with open(list_path, 'w', encoding='utf-8') as handle:
+            for path in usable:
+                # Bộ đọc danh sách của ffmpeg dùng nháy đơn; nháy đơn trong tên
+                # phải thoát theo đúng kiểu của nó.
+                safe = os.path.abspath(path).replace('\\', '/').replace("'", "'\\''")
+                handle.write("file '%s'\n" % safe)
+        cmd = [ffmpeg_bin, '-hide_banner', '-loglevel', 'warning',
+               '-f', 'concat', '-safe', '0', '-i', list_path,
+               '-c', 'copy', '-movflags', '+faststart', '-y', out_path]
+        proc = subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.PIPE, timeout=600,
+                              creationflags=NO_WINDOW)
+        if proc.returncode != 0 or not os.path.exists(out_path):
+            err = (proc.stderr or b'').decode('utf-8', 'replace')[-300:]
+            log.error("nối đoạn thất bại (mã %s): %s", proc.returncode, err)
+            # Tha ve doan DAI NHAT con hon tra ve khong co gi: van la bang chung.
+            return max(usable, key=lambda p: os.path.getsize(p))
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.error("nối đoạn lỗi: %s", exc)
+        return max(usable, key=lambda p: os.path.getsize(p))
+    finally:
+        _remove(list_path)
+
+    for path in usable:
+        _remove(path)
+    log.info("đã nối %d đoạn thành %s", len(usable), os.path.basename(out_path))
+    return out_path
 
 
 def _safe(text):
