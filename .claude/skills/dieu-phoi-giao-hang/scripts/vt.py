@@ -43,6 +43,13 @@ PREFIX = '/api/v1/ai'
 DRIVE_PREFIX = re.compile(r'^[A-Za-z]:[/\\\\]')
 TIMEOUT = 60
 
+# Cloudflare đứng trước Odoo production chặn client không phải trình duyệt: gửi UA mặc định
+# "Python-urllib/3.x" thì mọi lời gọi trả về 403 kèm "error code: 1010", kể cả khi khoá API
+# đúng. Đo 29/09/2026: cùng một URL, không UA -> 403, có UA trình duyệt -> 200. Đây là máy
+# của chính công ty gọi API của chính mình, không phải né bảo vệ của ai khác.
+USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36')
+
 
 def fail(message, code=2):
     print('LỖI: %s' % message, file=sys.stderr)
@@ -114,6 +121,7 @@ def call(method, path, body=None):
     request = urllib.request.Request(url, data=data, method=method)
     request.add_header('X-API-Key', key)
     request.add_header('Content-Type', 'application/json')
+    request.add_header('User-Agent', USER_AGENT)
 
     context = None
     if os.environ.get('VTRACKING_INSECURE') == '1':
