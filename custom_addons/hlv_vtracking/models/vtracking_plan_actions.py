@@ -105,7 +105,7 @@ class HlvVtrackingPlanActions(models.Model):
         return True
 
     def action_autoload_documents(self):
-        """Xếp sẵn phiếu của một cụm vào kế hoạch rỗng, sắp thứ tự ghé, rồi nhờ AI soát.
+        """Dọn và xếp lại kế hoạch theo dữ liệu mới nhất, sắp thứ tự ghé, rồi nhờ AI soát.
 
         Ba bước, mỗi bước một vai: máy áp LUẬT (phiếu nào xếp được, cụm nào, trần điểm),
         AI đọc những gì luật không nói được (đơn trễ hẹn, toạ độ trông sai, điểm lẻ nên
@@ -116,8 +116,11 @@ class HlvVtrackingPlanActions(models.Model):
         """
         self.ensure_one()
         if self.state != 'draft':
-            raise UserError('Chỉ kế hoạch NHÁP mới xếp tự động được. "%s" đang ở trạng '
-                            'thái khác — thêm tay bằng nút "Thêm phiếu / đơn".' % self.name)
+            raise UserError(
+                'Kế hoạch "%s" đã chốt nên máy không tự gỡ hay thêm nữa — tài xế đang cầm '
+                'tờ đó đi. Thủ kho sửa tay bằng nút "Thêm phiếu / đơn", hoặc bấm "Về nháp" '
+                'rồi lập lại.' % self.name
+            )
         if not self.start_place_id.warehouse_id:
             raise UserError(
                 'Điểm xuất phát "%s" chưa gắn kho trong Odoo, nên máy không biết lấy phiếu '
@@ -141,11 +144,15 @@ class HlvVtrackingPlanActions(models.Model):
     @staticmethod
     def _autoload_message(summary):
         """Câu tóm tắt cho người bấm nút: xếp được gì, còn dư gì, bỏ gì và VÌ SAO bỏ."""
+        dong = []
+        if summary.get('removed'):
+            dong.append('Gỡ %s dòng không còn gì để giao (phiếu đã xuất xong hoặc đã huỷ).'
+                        % summary['removed'])
         if not summary['zone']:
-            dong = ['Không có phiếu nào xếp được vào chuyến này.']
+            dong.append('Không còn phiếu nào chưa xếp thuộc cụm của chuyến này.')
         else:
-            dong = ['Cụm %s: xếp %s phiếu vào %s điểm dừng.'
-                    % (summary['zone'].name, summary['added'], summary['stops'])]
+            dong.append('Cụm %s: xếp thêm %s phiếu vào %s điểm dừng.'
+                        % (summary['zone'].name, summary['added'], summary['stops']))
         if summary['left_out']:
             dong.append('Vượt trần điểm của cụm nên để lại cho chuyến khác: %s.'
                         % ', '.join(summary['left_out'][:5]))
@@ -159,26 +166,6 @@ class HlvVtrackingPlanActions(models.Model):
             dong.append('CHƯA gửi AI soát: công ty chưa khai "Tài khoản worker AI" ở '
                         'Cấu hình, nên phiếu yêu cầu sẽ không ai nhận.')
         return '\n'.join(dong)
-
-    def action_drop_finished_lines(self):
-        """Gỡ các dòng có phiếu đã xuất xong hoặc đã huỷ khỏi kế hoạch NHÁP."""
-        self.ensure_one()
-        if self.state != 'draft':
-            raise UserError('Chỉ gỡ được trên kế hoạch NHÁP. "%s" đã chốt — muốn sửa thì '
-                            'bấm "Về nháp" trước.' % self.name)
-        bo = self.line_ids.filtered(
-            lambda line: line.picking_id.state in ('done', 'cancel')
-        )
-        if not bo:
-            raise UserError('Không có dòng nào để gỡ: mọi phiếu trong kế hoạch này vẫn '
-                            'còn phải giao.')
-        nhan = ', '.join(bo.mapped('display_reference'))
-        self.message_post(
-            body='Đã gỡ %s dòng vì phiếu đã xuất xong hoặc đã huỷ: %s.' % (len(bo), nhan),
-            message_type='notification',
-        )
-        bo.unlink()
-        return True
 
     def action_open_lines(self):
         self.ensure_one()
