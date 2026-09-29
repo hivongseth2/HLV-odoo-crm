@@ -35,6 +35,9 @@ UNRESERVE_ACTION_LABELS = {
     "quantity_reduced": "rút bớt số lượng đang giữ (có thể để nhường cho đơn khác)",
 }
 
+# Khoá trong cr.precommit.data: {hold_request_id: có tái phân bổ hàng vừa nhả hay không}.
+DEAD_HOLD_PICKINGS_PRECOMMIT_KEY = "website_public_inventory_18.dead_hold_pickings"
+
 
 def _dispatch_unreserve_notifications(pickings, reason):
     """Điểm tổng hợp DUY NHẤT cho cả 3 con đường mất reservation (xem UNRESERVE_ACTION_LABELS):
@@ -134,20 +137,10 @@ class StockPicking(models.Model):
             return
         holds.write({"state": "cancelled"})
 
-        # Tự động tìm đơn bán đang chờ để giữ lại ngay phần tồn kho vừa được nhả — TRỪ trường
-        # hợp reason="quantity_reduced" (wizard "rút hàng" của hlv_priority_stock_reservation):
-        # wizard đó đã tự gọi action_assign() cho ĐÚNG 1 đơn nhận cụ thể mà kho vừa chọn ngay
-        # sau khi rút — nếu mình tự động tái phân bổ ở đây, có thể cướp mất tồn kho trước khi
-        # wizard kịp gán cho đúng đơn kho vừa chọn, phản tác dụng ngay chính thao tác họ vừa làm.
-        if reason != "quantity_reduced":
-            for hold in holds:
-                try:
-                    hold._reassign_freed_stock_to_waiting_orders()
-                except Exception:
-                    _logger.exception(
-                        "Lỗi tự động giữ lại hàng vừa nhả cho đơn đang chờ (yêu cầu %s, "
-                        "reason=%s).", hold.name, reason,
-                    )
+        # Không tái phân bổ khi reason="quantity_reduced" (wizard "rút hàng" của
+        # hlv_priority_stock_reservation): wizard đó tự action_assign() cho ĐÚNG đơn kho vừa
+        # chọn — tái phân bổ thêm có thể cướp mất tồn kho của đơn đó.
+        self._schedule_dead_hold_pickings_cancel(holds, reassign=reason != "quantity_reduced")
 
         action_label = UNRESERVE_ACTION_LABELS.get(reason, reason)
         actor = self.env.user.name
@@ -214,6 +207,45 @@ class StockPicking(models.Model):
                     "Không log được chatter cho phiếu giữ hàng %s sau khi %s.",
                     picking.name, action_label,
                 )
+
+    def _schedule_dead_hold_pickings_cancel(self, holds, reassign):
+        """Yêu cầu giữ hàng đã "Đã hủy" thì phiếu giữ của nó cũng phải hủy theo. Nếu để phiếu
+        sống: (1) phần move line còn lại (vd wizard chỉ rút 48/56) vẫn khóa hàng, và (2) phiếu
+        nằm ở trạng thái 'confirmed' nên cron scheduler của Odoo sẽ tự action_assign() lại —
+        hàng bị khóa ngầm trong khi yêu cầu báo đã hủy và trang /search_stock không thấy.
+
+        Hoãn tới precommit chứ không hủy ngay: hàm này chạy từ bên trong stock.move.line.write()/
+        unlink() — hủy phiếu ngay sẽ xóa các move line mà vòng lặp của người gọi (wizard rút
+        hàng, form lưu one2many) còn đang duyệt tới."""
+        pending = self.env.cr.precommit.data.get(DEAD_HOLD_PICKINGS_PRECOMMIT_KEY)
+        if pending is None:
+            pending = self.env.cr.precommit.data[DEAD_HOLD_PICKINGS_PRECOMMIT_KEY] = {}
+            self.env.cr.precommit.add(self.sudo()._cancel_dead_hold_pickings)
+        for hold in holds:
+            pending[hold.id] = pending.get(hold.id, False) or reassign
+
+    def _cancel_dead_hold_pickings(self):
+        """Callback precommit của _schedule_dead_hold_pickings_cancel. Mỗi phiếu một savepoint
+        để một phiếu lỗi không chặn commit của cả giao dịch."""
+        pending = self.env.cr.precommit.data.pop(DEAD_HOLD_PICKINGS_PRECOMMIT_KEY, {})
+        holds = self.env["stock.hold.request"].sudo().browse(list(pending)).exists()
+        for hold in holds:
+            picking = hold.hold_picking_id
+            if hold.state == "approved" or not picking or picking.state in ("done", "cancel"):
+                continue
+            try:
+                with self.env.cr.savepoint():
+                    picking.with_context(
+                        _skip_hold_unreserve_notify=True, skip_cancel_activity=True,
+                    ).action_cancel()
+            except Exception:
+                _logger.exception(
+                    "Không hủy được phiếu giữ hàng %s của yêu cầu %s (đã hủy).",
+                    picking.name, hold.name,
+                )
+                continue
+            if pending[hold.id]:
+                hold._reassign_freed_stock_to_waiting_orders()
 
     def _notify_sale_pick_unreserved(self, reason="unreserve"):
         """self: các phiếu Lấy hàng (PICK) của đơn bán thật vừa mất reservation — do "Hủy dự
