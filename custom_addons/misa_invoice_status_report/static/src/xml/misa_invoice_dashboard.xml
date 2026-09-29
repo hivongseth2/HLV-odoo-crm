@@ -2021,7 +2021,11 @@
                                 </div>
                             </div>
                             <t t-if="state.discrepancy.months.length">
-                                <div class="miv-drawer-section-title">Theo tháng xuất kho</div>
+                                <div class="miv-drawer-section-title">
+                                    Theo tháng xuất kho —
+                                    <t t-if="discrepancyCategoryLabel">nhóm "<t t-esc="discrepancyCategoryLabel"/>"</t>
+                                    <t t-else="">các phiếu cần xử lý</t>
+                                </div>
                                 <div class="miv-gap-months">
                                     <button t-foreach="state.discrepancy.months" t-as="m" t-key="m.key"
                                             t-attf-class="miv-gap-month {{ state.discrepancyFilter.month === m.key ? 'miv-gap-active' : '' }}"
@@ -2033,8 +2037,10 @@
                                 </div>
                             </t>
                             <div class="miv-drawer-section-title">
+                                Phiếu đang lệch
+                                <t t-if="discrepancyCategoryLabel"> — nhóm "<t t-esc="discrepancyCategoryLabel"/>"</t>
+                                <t t-if="state.discrepancyFilter.month">, tháng <t t-esc="state.discrepancyFilter.month.slice(5, 7) + '/' + state.discrepancyFilter.month.slice(0, 4)"/></t>:
                                 <t t-esc="state.discrepancy.row_total"/> phiếu
-                                <t t-if="state.discrepancyFilter.category or state.discrepancyFilter.month">(đang lọc)</t>
                                 <t t-if="state.discrepancy.rows.length &lt; state.discrepancy.row_total">
                                     — hiện <t t-esc="state.discrepancy.rows.length"/> phiếu lệch nhiều nhất
                                 </t>

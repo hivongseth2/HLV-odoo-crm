@@ -22,7 +22,9 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
         category=False, month=False, limit=300,
     ):
         """Trả {outstanding_amount, categories, months, rows, row_total}. category/month
-        ('YYYY-MM') chỉ lọc danh sách rows — categories/months luôn tính trên toàn bộ phạm vi."""
+        ('YYYY-MM') lọc danh sách rows; categories luôn tính trên toàn bộ phạm vi (là phép tách
+        của số tổng), còn months tính trong nhóm đang chọn — để số phiếu trên chip tháng khớp
+        đúng danh sách hiện ra khi bấm vào nó."""
         Picking = self.sudo()
         misa_domain, shopee_domain = Picking._misa_invoice_scoped_domains(
             date_from, date_to, saler_code, invoice_date_from, invoice_date_to,
@@ -48,13 +50,18 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
         if abs(rounding) >= MISA_INVOICE_AMOUNT_TOLERANCE:
             totals['rounding'] = {'amount': rounding, 'count': 0}
 
-        listed = [e for e in entries if e['category'] is not None]
-        rows_matching = [
-            e for e in listed
-            if (not category or e['category'] == category) and (not month or e['month'] == month)
+        # Chip tháng và danh sách dùng CÙNG 1 tập phiếu, nếu không số phiếu trên chip khác số
+        # dòng hiện ra khi bấm vào. Chưa chọn nhóm = chỉ phiếu cần xử lý; phiếu đã xác minh xong
+        # chỉ hiện khi bấm đúng nhóm của nó.
+        in_category = [
+            e for e in entries
+            if e['category'] is not None and (
+                e['category'] == category if category else GAP_CATEGORY_BY_KEY[e['category']]['counted']
+            )
         ]
+        rows_matching = [e for e in in_category if not month or e['month'] == month]
         # Cần xử lý lên trước, đã xác minh xong xuống cuối; trong mỗi phần lệch lớn lên trước.
-        rows_matching.sort(key=lambda e: (e['category'] == 'resolved', -abs(e['gap'])))
+        rows_matching.sort(key=lambda e: -abs(e['gap']))
         today = fields.Date.context_today(self)
 
         return {
@@ -63,7 +70,7 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
                 dict(cat, amount=totals[cat['key']]['amount'], count=totals[cat['key']]['count'])
                 for cat in GAP_CATEGORIES if cat['key'] in totals
             ],
-            'months': self._misa_invoice_gap_months(listed),
+            'months': self._misa_invoice_gap_months(in_category),
             'rows': [Picking._misa_invoice_gap_row(e, today) for e in rows_matching[:limit]],
             'row_total': len(rows_matching),
         }
@@ -96,12 +103,10 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
         return entries
 
     def _misa_invoice_gap_months(self, entries):
-        """Tổng lệch cần xử lý theo tháng xuất kho (bỏ nhóm đã xác minh), tháng cũ lên trước.
-        HĐ hải quan không có ở đây vì đi theo ngày hóa đơn, không theo ngày xuất kho."""
+        """Tổng lệch theo tháng xuất kho của các entry truyền vào, tháng cũ lên trước. HĐ hải
+        quan không có ở đây vì đi theo ngày hóa đơn, không theo ngày xuất kho."""
         months = defaultdict(lambda: {'amount': 0.0, 'count': 0})
         for entry in entries:
-            if not GAP_CATEGORY_BY_KEY[entry['category']]['counted']:
-                continue
             months[entry['month']]['amount'] += entry['gap']
             months[entry['month']]['count'] += 1
         return [

@@ -33,9 +33,21 @@
         }).join('') + '</div>';
     }
 
+    function categoryLabel() {
+        var cat = data.categories.find(function (c) { return c.key === filter.category; });
+        return cat ? cat.label : '';
+    }
+
+    function monthLabel() {
+        var m = data.months.find(function (x) { return x.key === filter.month; });
+        // Tháng đang chọn có thể không còn chip khi đổi sang nhóm không có phiếu nào trong tháng đó.
+        return m ? m.label : filter.month.slice(5, 7) + '/' + filter.month.slice(0, 4);
+    }
+
     function renderMonths() {
         if (!data.months.length) { return ''; }
-        return '<div class="msu-gap-section-title">Theo tháng xuất kho</div><div class="msu-gap-months">' +
+        var scope = filter.category ? ' — nhóm "' + deps.esc(categoryLabel()) + '"' : ' — các phiếu cần xử lý';
+        return '<div class="msu-gap-section-title">Theo tháng xuất kho' + scope + '</div><div class="msu-gap-months">' +
             data.months.map(function (m) {
                 var active = filter.month === m.key ? ' msu-gap-active' : '';
                 return '<button class="msu-gap-month' + active + '" data-month="' + deps.esc(m.key) + '">' +
@@ -58,8 +70,11 @@
     }
 
     function renderRows() {
-        var title = 'Phiếu đang lệch' + (filter.category || filter.month ? ' (đang lọc)' : '') +
-            ' — ' + data.row_total + ' phiếu' + (data.rows.length < data.row_total ? ', hiện ' + data.rows.length + ' phiếu lệch nhiều nhất' : '');
+        var parts = [];
+        if (filter.category) { parts.push('nhóm "' + deps.esc(categoryLabel()) + '"'); }
+        if (filter.month) { parts.push('tháng ' + deps.esc(monthLabel())); }
+        var title = 'Phiếu đang lệch' + (parts.length ? ' — ' + parts.join(', ') : '') +
+            ': ' + data.row_total + ' phiếu' + (data.rows.length < data.row_total ? ', hiện ' + data.rows.length + ' phiếu lệch nhiều nhất' : '');
         var clear = filter.category || filter.month ? ' <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-gap-clear">Bỏ lọc</button>' : '';
         if (!data.rows.length) {
             return '<div class="msu-gap-section-title">' + title + clear + '</div><div class="msu-muted">Không có phiếu nào.</div>';
