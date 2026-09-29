@@ -147,7 +147,7 @@
     }
 
     /* Soát từng lô 10 đơn cho tới hết — mỗi lô là 1 request ngắn, trang không bị treo và
-     * thấy được tiến độ. Dừng khi 1 lô không soát được đơn nào (MISA đang lỗi). */
+     * thấy được tiến độ. Đơn MISA lỗi không bị chọn lại trong lượt này nên luôn tiến tới. */
     function refreshOrders() {
         var btn = el('msu-gap-refresh');
         var status = el('msu-gap-refresh-status');
@@ -163,8 +163,8 @@
             }).then(function (res) {
                 var d = res.data;
                 total += d.done;
-                failed = d.failed;
-                if (d.remaining > 0 && d.done > 0) { return step(d.started_at); }
+                failed += d.failed;
+                if (d.remaining > 0 && d.done + d.failed > 0) { return step(d.started_at); }
                 status.textContent = 'Đã soát ' + total + ' đơn với MISA' +
                     (failed ? ', ' + failed + ' đơn MISA chưa trả lời được — thử lại sau' : '') + '.';
             });

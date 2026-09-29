@@ -309,8 +309,8 @@ export class MisaInvoiceDashboard extends Component {
     }
 
     /** Nút "Hỏi lại MISA theo đơn": soát từng lô 10 đơn đang lệch trong phạm vi ngày đang xem
-     * cho tới hết (mỗi lô 1 request ngắn, thấy được tiến độ), dừng khi 1 lô không soát được đơn
-     * nào (MISA đang lỗi), rồi tải lại số liệu. */
+     * cho tới hết (mỗi lô 1 request ngắn, thấy được tiến độ; đơn MISA lỗi không bị chọn lại
+     * trong lượt này nên luôn tiến tới), rồi tải lại số liệu. */
     async refreshDiscrepancyOrders() {
         this.state.discrepancyRefreshing = true;
         let total = 0;
@@ -325,9 +325,9 @@ export class MisaInvoiceDashboard extends Component {
                     started_at: startedAt,
                 });
                 total += res.done;
-                failed = res.failed;
+                failed += res.failed;
                 startedAt = res.started_at;
-                if (!res.remaining || !res.done) {
+                if (!res.remaining || !(res.done + res.failed)) {
                     break;
                 }
             }
