@@ -92,15 +92,27 @@ function Get-RemoteFile {
 
 # Tai hut thi file VAN TON TAI, chi thieu duoi. Khong kiem thi Expand-Archive
 # bao mot loi kho hieu, hoac te hon la giai nen ra mot phan roi chay tiep.
+#
+# CO Y mo thu TUNG MUC chu khong chi dem so muc. File bi noi nham - curl "tai
+# tiep" mot file do dang cua nguon KHAC - van co muc luc nguyen ven o cuoi nen
+# dem muc thay du, chi toi luc giai nen that moi bao "local file header is
+# corrupt". Da gap that o may kho. Doc mot byte cua moi muc bat buoc zip phai
+# doc phan dau cua dung muc do, la cho bi pha.
 function Test-ZipFile {
     param([string]$Path)
     if (-not (Test-Path $Path)) { return $false }
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
         $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
-        $count = $zip.Entries.Count
-        $zip.Dispose()
-        return ($count -gt 0)
+        try {
+            if ($zip.Entries.Count -eq 0) { return $false }
+            foreach ($entry in $zip.Entries) {
+                if ($entry.Length -eq 0) { continue }
+                $stream = $entry.Open()
+                try { [void]$stream.ReadByte() } finally { $stream.Dispose() }
+            }
+        } finally { $zip.Dispose() }
+        return $true
     } catch { return $false }
 }
 
@@ -111,6 +123,14 @@ function Install-Ffmpeg {
 
     foreach ($url in $FfmpegUrls) {
         $src = ([uri]$url).Host
+        # Con file cu KHONG hop le thi phai xoa TRUOC khi tai. Khong xoa thi
+        # curl "-C -" se tai tiep tu cai duoi do dang - thuong la cua lan cai
+        # hong truoc, tu mot nguon khac han - va cho ra mot file lai bao 100%
+        # nhung giai nen khong duoc. Day dung la loi da xay ra o may kho.
+        if ((Test-Path $zip) -and (-not (Test-ZipFile $zip))) {
+            Write-Warn2 "Bo file tai do dang con sot lai, tai lai tu dau"
+            Remove-Item -Force $zip -ErrorAction SilentlyContinue
+        }
         if (-not (Test-ZipFile $zip)) {
             Write-Step "Tai ffmpeg tu $src (hon 100MB, hoi lau)"
             Get-RemoteFile $url $zip | Out-Null
