@@ -84,6 +84,18 @@ def nearest_zone(coords, samples, near_km=DEFAULT_ZONE_MATCH_KM):
     return best_key, round(best_distance, 2), best_distance <= near_km
 
 
+def _distance_or_far(current, coords):
+    """Khoảng cách tới ``coords``, hoặc vô cực khi không đo được.
+
+    Viết ``haversine_km(...) or float('inf')`` là sai: khoảng cách **0** — hai chứng từ
+    giao cùng một chỗ — là giá trị falsy nên bị đổi thành vô cực, và điểm xe đang đứng bị
+    đẩy xuống cuối hàng đợi thay vì được ghé tiếp. Đo 29/09/2026 trên kế hoạch thật: một
+    chuyến 15 phiếu của 7 khách bị xé thành 15 điểm dừng, 106 km thay vì khoảng 40.
+    """
+    km = haversine_km(current, coords)
+    return float('inf') if km is None else km
+
+
 def nearest_first_order(start, points):
     """Thứ tự ghé theo kiểu "đi tới điểm gần nhất chưa ghé".
 
@@ -111,10 +123,7 @@ def nearest_first_order(start, points):
         ordered.append(key)
 
     while remaining:
-        key, coords = min(
-            remaining,
-            key=lambda item: haversine_km(current, item[1]) or float('inf'),
-        )
+        key, coords = min(remaining, key=lambda item: _distance_or_far(current, item[1]))
         ordered.append(key)
         current = coords
         remaining = [item for item in remaining if item[0] != key]

@@ -229,3 +229,31 @@ class TestLuatKhach(unittest.TestCase):
 
     def test_chuyen_binh_thuong_khong_co_canh_bao_nao(self):
         self.assertEqual(self.planning.rule_warnings([self.diem('NOX ASEAN')]), [])
+
+
+class TestThuTuGheGanNhat(unittest.TestCase):
+    """``nearest_first_order`` — hai chứng từ cùng một chỗ phải nằm CẠNH nhau."""
+
+    KHO = (10.7491, 106.9243)
+    TOPBAND = (10.79207, 106.99051)
+    CHOSUN = (10.81503, 106.91209)
+
+    def test_cung_mot_cho_thi_ghe_lien_nhau(self):
+        # Lỗi cũ: khoảng cách 0 là falsy nên bị đổi thành vô cực, điểm đang đứng bị đẩy
+        # xuống cuối — một khách 3 phiếu thành 3 lần ghé rải rác khắp tuyến.
+        thu_tu = planning.nearest_first_order(self.KHO, [
+            ('topband-1', self.TOPBAND),
+            ('chosun', self.CHOSUN),
+            ('topband-2', self.TOPBAND),
+            ('topband-3', self.TOPBAND),
+        ])
+        vi_tri = [thu_tu.index(key) for key in ('topband-1', 'topband-2', 'topband-3')]
+        self.assertEqual(max(vi_tri) - min(vi_tri), 2,
+                         'ba phiếu cùng một chỗ phải liền nhau: %s' % thu_tu)
+
+    def test_diem_thieu_toa_do_van_dồn_xuong_cuoi(self):
+        thu_tu = planning.nearest_first_order(self.KHO, [
+            ('chua-biet', None),
+            ('chosun', self.CHOSUN),
+        ])
+        self.assertEqual(thu_tu[-1], 'chua-biet')
