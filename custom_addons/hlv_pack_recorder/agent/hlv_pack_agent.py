@@ -14,6 +14,7 @@ Chạy:  python hlv_pack_agent.py --config agent.yaml
 Phụ thuộc:  requests, PyYAML, và ffmpeg có trong PATH.
 """
 import argparse
+import collections
 import logging
 import logging.handlers
 import os
@@ -29,7 +30,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.0.0'
+AGENT_VERSION = '2.1.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -55,6 +56,10 @@ POLL_SECONDS = 2
 # Khuc nho thi moi lan gui ngan hon, hong thi lam lai it hon.
 CHUNK_BYTES = 2 * 1024 * 1024
 UPLOAD_RETRIES = 5
+
+# So dong stderr cuoi cung giu lai cho moi tien trinh ffmpeg. Chi de bao loi nen
+# khong can nhieu; giu nguyen ca phien thi mot camera nhieu se ngon het bo nho.
+STDERR_KEEP_LINES = 80
 
 # Quet lai file chua gui duoc moi chung nay giay. Khong quet moi vong poll (2
 # giay): mang dang hong ma dong lien tuc chi to lam nghen them.
@@ -181,6 +186,25 @@ class Recorder:
             stderr=subprocess.PIPE, creationflags=NO_WINDOW,
         )
 
+        # PHẢI đọc stderr liên tục. ffmpeg kêu ra stderr suốt lúc chạy — camera
+        # IP mất gói, DTS nhảy — và ống dẫn của tiến trình con chỉ có một bộ đệm
+        # nhỏ (64KB trên Windows). Không ai đọc thì bộ đệm đầy, ffmpeg BỊ CHẶN
+        # ngay tại lệnh ghi stderr và ngừng hẳn việc ghi hình, trong khi tiến
+        # trình vẫn còn sống nên không chỗ nào báo hỏng. Kết quả: file đứng lại ở
+        # vài MB. Đã đo: 42KB so với 7118KB trong cùng một khoảng thời gian.
+        # Bàn hai camera dính nặng hơn vì luồng nào nhiễu hơn thì đầy trước.
+        self._err_lines = collections.deque(maxlen=STDERR_KEEP_LINES)
+        self._err_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._err_thread.start()
+
+    def _drain_stderr(self):
+        """Đọc cạn stderr suốt đời tiến trình, chỉ giữ lại phần cuối để báo lỗi."""
+        try:
+            for line in iter(self.proc.stderr.readline, b''):
+                self._err_lines.append(line.decode('utf-8', 'replace').rstrip())
+        except (OSError, ValueError):
+            pass  # ống đóng khi tiến trình chết — bình thường
+
     def is_running(self):
         return self.proc.poll() is None
 
@@ -205,11 +229,10 @@ class Recorder:
             self.proc.wait(timeout=5)
 
     def stderr_tail(self, limit=400):
-        try:
-            data = self.proc.stderr.read() or b''
-        except (OSError, ValueError):
-            return ''
-        return data.decode('utf-8', 'replace')[-limit:]
+        """Phần cuối những gì ffmpeg đã kêu. Rỗng nếu nó im lặng suốt."""
+        # Đợi luồng đọc gom nốt phần còn trong ống sau khi tiến trình thoát.
+        self._err_thread.join(timeout=2)
+        return '\n'.join(self._err_lines)[-limit:]
 
 
 class Agent:
@@ -431,7 +454,20 @@ class Agent:
             recorder = self.active[recording_id]
             if recorder.is_running():
                 continue
-            log.info("rec=%s ffmpeg tự kết thúc", recording_id)
+            # ffmpeg dừng trước cả lệnh dừng: hoặc chạm trần -t (bình thường),
+            # hoặc camera đứt giữa chừng (KHÔNG bình thường). Hai cái đó cho ra
+            # video dài ngắn khác hẳn nhau. Trước đây chỉ ghi "tự kết thúc" rồi
+            # gửi file đi, nên video vài giây không để lại dấu vết nào để truy.
+            try:
+                size_mb = os.path.getsize(recorder.out_path) / 1024 / 1024
+            except OSError:
+                size_mb = 0.0
+            tail = recorder.stderr_tail()
+            log.info("rec=%s cam=%s ffmpeg tự kết thúc (mã %s, %.1fMB)",
+                     recording_id, recorder.camera_code,
+                     recorder.proc.returncode, size_mb)
+            if tail:
+                log.warning("rec=%s ffmpeg kêu trước khi dừng: %s", recording_id, tail)
             self.stop_recording(recording_id)
 
     # ---------------- gửi file ----------------
