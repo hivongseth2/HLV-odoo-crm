@@ -154,7 +154,7 @@ def odoo_session_cookie(base_url):
     }).encode('utf-8')
     request = urllib.request.Request(
         base_url + '/web/session/authenticate', data=payload, method='POST',
-        headers={'Content-Type': 'application/json'},
+        headers={'Content-Type': 'application/json', 'User-Agent': vt.USER_AGENT},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         body = json.loads(response.read().decode('utf-8'))
@@ -240,7 +240,9 @@ async def listen(claude_bin, worker_name):
         try:
             cookie = odoo_session_cookie(base)
             async with websockets.connect(
-                url, additional_headers={'Cookie': cookie, 'Origin': base},
+                url,
+                additional_headers={'Cookie': cookie, 'Origin': base,
+                                    'User-Agent': vt.USER_AGENT},
                 ping_interval=None, max_size=2 ** 20,
             ) as socket_:
                 async def subscribe():
