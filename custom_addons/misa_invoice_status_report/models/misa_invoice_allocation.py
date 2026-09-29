@@ -90,6 +90,24 @@ class StockPickingMisaInvoiceAllocation(models.Model):
         )
         return sum(covered.mapped('misa_invoice_net_actual_amount')) + partial
 
+    def _misa_invoice_customs_matched_amount(self):
+        """Tiền HĐ hải quan (có VAT) đã khớp vào chính phiếu này, từ mọi dòng hải quan — kể cả
+        dòng ghi mã đơn khác mà người dùng đã khớp tay vào phiếu."""
+        self.ensure_one()
+        return sum(self.env['misa.invoice.customs.match'].sudo().search(
+            [('picking_id', '=', self.id)]
+        ).mapped('amount'))
+
+    def _misa_invoice_request_capacity_for_order(self, order):
+        """Phần tiền xuất kho của phiếu (thuộc 1 đơn) còn chờ đề nghị xuất HĐ phủ: phần của đơn
+        trừ đi HĐ hải quan đã khớp vào phiếu (chia cho các đơn theo cùng tỉ lệ). Không âm."""
+        self.ensure_one()
+        net = self.misa_invoice_net_actual_amount or 0.0
+        if net <= 0:
+            return 0.0
+        uncovered_ratio = max(net - self._misa_invoice_customs_matched_amount(), 0.0) / net
+        return self._misa_invoice_shipped_for_order(order) * uncovered_ratio
+
     def _misa_invoice_shipped_for_order(self, order):
         """Phần tiền thực xuất của phiếu này thuộc về 1 đơn. Phiếu 1 đơn = cả tiền thực xuất;
         phiếu gộp nhiều đơn chia theo giá trị sau thuế của các dòng hàng (move) mỗi đơn — dòng

@@ -125,7 +125,6 @@ class MisaInvoiceCustomsLine(models.Model):
                     match.amount = unit * match.quantity
             for picking in lines.mapped('match_ids.picking_id'):
                 Picking._misa_invoice_customs_apply_to_picking(picking)
-            lines.mapped('sale_order_id').filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
             report.append({
                 'invoice_no': inv_no, 'lines': len(lines), 'before': before,
                 'after': sum(lines.mapped('amount')), 'unpaired': len(lines) - len(paired), 'error': False,

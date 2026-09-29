@@ -1948,7 +1948,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for line in created:
             if self._misa_invoice_customs_try_match(line):
                 matched_count += 1
-        created.mapped('sale_order_id').filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
         return {'count': len(created), 'matched_count': matched_count, 'invoice_no': preview['invoice_no']}
 
     def _misa_invoice_reconcile_line_match(self, line, match_model_name, apply_to_picking=None, exclude_picking_ids=None):
@@ -2121,6 +2120,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         vào cùng 1 phiếu qua nhiều lượt, trước đây chỉ lượt đầu được ghi (lượt sau gặp phiếu đã
         'invoiced' thì bỏ qua) — case thật KBC/OUT/12416: xuất kho 50.015.000 đ, chỉ ghi được
         890.000 đ của dòng hàng đầu tiên."""
+        # Số theo đơn hàng lấy HĐ hải quan thẳng từ lượt khớp của phiếu — chia lại ngay, kể cả
+        # phiếu đã có đề nghị riêng (nhánh return bên dưới).
+        picking.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
         if picking.misa_invoice_request_refid:
             return  # đã có HĐ qua đề nghị thông thường — tiền HĐ do luồng đó quản, không ghi đè
         matches = self.env['misa.invoice.customs.match'].sudo().search(
@@ -2251,6 +2253,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         remaining_matches = self.env['misa.invoice.customs.match'].sudo().search_count(
             [('picking_id', '=', picking.id)],
         )
+        if not remaining_matches:
+            picking.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
         if not remaining_matches and picking.misa_invoice_state == 'invoiced':
             picking.write({
                 'misa_invoice_state': 'not_checked',

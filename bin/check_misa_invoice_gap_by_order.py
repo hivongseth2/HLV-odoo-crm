@@ -158,21 +158,21 @@ for order in orders:
         })
 
     # Hóa đơn hải quan xuất thẳng, không qua đề nghị — tìm đề nghị theo mã đơn không bao giờ ra,
-    # phải cộng từ các dòng đã ghi nhận ở tab Đơn hải quan.
-    customs_lines = env['misa.invoice.customs.line'].sudo().search([('sale_order_id', '=', order.id)])
-    customs_amount = sum(customs_lines.mapped('amount'))
-    issued += customs_amount
+    # phải cộng từ các lượt khớp vào phiếu của đơn (không theo mã đơn trên dòng hải quan: phiếu
+    # có thể được khớp tay với dòng ghi nhầm mã đơn khác — cùng cách module chia tiền).
+    customs_matches = env['misa.invoice.customs.match'].sudo().search([('picking_id', 'in', order_pickings.ids)])
+    issued += sum(customs_matches.mapped('amount'))
     customs_info = []
-    for inv_no in sorted(set(customs_lines.mapped('invoice_no'))):
-        inv_lines = customs_lines.filtered(lambda l, inv_no=inv_no: l.invoice_no == inv_no)
+    for inv_no in sorted(set(customs_matches.mapped('line_id.invoice_no'))):
+        inv_matches = customs_matches.filtered(lambda m, inv_no=inv_no: m.line_id.invoice_no == inv_no)
         customs_info.append({
             'invoice_no': inv_no,
-            'amount': sum(inv_lines.mapped('amount')),
+            'amount': sum(inv_matches.mapped('amount')),
             # Bản module cũ chưa có field này = mọi dòng đều đang lưu tiền chưa VAT.
-            'vat': all(getattr(line, 'amount_includes_vat', False) for line in inv_lines),
+            'vat': all(getattr(m.line_id, 'amount_includes_vat', False) for m in inv_matches),
         })
 
-    if not reqs and not customs_lines:
+    if not reqs and not customs_matches:
         verdict = 'D'
     elif abs(issued - shipped) <= TOLERANCE:
         verdict = 'E' if abs(odoo_alloc - shipped) <= TOLERANCE else 'A'
