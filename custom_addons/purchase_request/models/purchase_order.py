@@ -72,16 +72,9 @@ class PurchaseOrder(models.Model):
                 message = po._purchase_request_confirm_message_content(
                     request, requests_dict[request_id]
                 )
-                request.sudo().with_context(
-                    mail_post_autofollow=False,
-                    mail_create_nosubscribe=True,
-                ).message_post(
-                    body=Markup(message),
-                    subtype_id=self.env.ref(
-                        "purchase_request.mt_request_po_confirmed"
-                    ).id,
-                    partner_ids=[],
-                )
+                # Chỉ ghi vào chatter, không báo inbox: người theo dõi YCMH bị
+                # dội thông báo mỗi lần xác nhận PO mà không ai cần.
+                request.sudo()._message_log(body=Markup(message))
             return True
 
     def _purchase_request_line_check(self):

@@ -31,18 +31,4 @@
         <field name="internal" eval="True" />
         <field name="description">YCMH đã hoàn tất</field>
     </record>
-    <record id="mt_request_po_confirmed" model="mail.message.subtype">
-        <field name="name">Đơn mua hàng (PO) đã xác nhận</field>
-        <field name="res_model">purchase.request</field>
-        <field name="default" eval="True" />
-        <field name="internal" eval="True" />
-        <field name="description">Đơn mua hàng (PO) đã xác nhận</field>
-    </record>
-    <record id="mt_request_picking_done" model="mail.message.subtype">
-        <field name="name">Xác nhận nhập kho</field>
-        <field name="res_model">purchase.request</field>
-        <field name="default" eval="True" />
-        <field name="internal" eval="True" />
-        <field name="description">Đã nhập kho</field>
-    </record>
 </odoo>
