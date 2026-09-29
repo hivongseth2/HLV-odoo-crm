@@ -70,6 +70,25 @@
                 .msu-recon-customs{color:#2a6f97}
                 .msu-recon-outstanding{color:#d03b3b}
                 @media(max-width:768px){.msu-recon-grid{grid-template-columns:repeat(2,1fr)}}
+                .msu-gap-link{background:none;border:none;padding:0;color:#2563eb;font-size:.78rem;font-weight:700;cursor:pointer;text-align:left}
+                .msu-gap-link:hover{text-decoration:underline}
+                .msu-gap-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:16px}
+                .msu-gap-cat{border:1px solid #eceae4;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:4px}
+                .msu-gap-clickable{cursor:pointer}
+                .msu-gap-clickable:hover{border-color:#93b4f5;background:#f7faff}
+                .msu-gap-active{border-color:#2563eb;background:#eef4ff}
+                .msu-gap-muted{opacity:.7}
+                .msu-gap-cat-head{display:flex;justify-content:space-between;gap:8px;font-size:.84rem}
+                .msu-gap-cat-amount{font-size:1.1rem;font-weight:800;font-variant-numeric:tabular-nums}
+                .msu-gap-cat-hint,.msu-gap-cat-action,.msu-gap-note{font-size:.74rem;color:#6b6d74}
+                .msu-gap-cat-action{color:#374151}
+                .msu-gap-pos{color:#d03b3b}
+                .msu-gap-neg{color:#92600a}
+                .msu-gap-section-title{font-weight:800;font-size:.86rem;margin:6px 0 8px;display:flex;align-items:center;gap:8px}
+                .msu-gap-months{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+                .msu-gap-month{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid #eceae4;border-radius:8px;padding:6px 10px;background:#fff;cursor:pointer;font-size:.78rem}
+                .msu-gap-month b{font-variant-numeric:tabular-nums}
+                .msu-gap-row{cursor:pointer}
 
                 /* ---- Tabs ---- */
                 .msu-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid #e5e4dd}
@@ -345,7 +364,7 @@
                                 <span class="msu-meta-label">Còn lại chưa xuất HĐ</span>
                                 <span class="msu-recon-value msu-recon-outstanding" id="msu-recon-outstanding">0 đ</span>
                                 <span class="msu-muted" id="msu-recon-outstanding-hint" style="font-size:.72rem;display:none"></span>
-                                <a href="#" id="msu-recon-gap-explain-link" style="font-size:.72rem;display:none">Xem chi tiết vì sao lệch</a>
+                                <button type="button" class="msu-gap-link" id="msu-gap-open">Vì sao còn lệch? Xem theo lý do, tháng, phiếu →</button>
                             </div>
                         </div>
                     </div>
@@ -714,23 +733,25 @@
                 </div>
             </div>
 
-            <div class="msu-modal-overlay" id="msu-gap-explain-modal" style="display:none">
+            <div class="msu-modal-overlay" id="msu-gap-modal" style="display:none">
                 <div class="msu-modal msu-modal-wide">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-                        <h5>Vì sao "Còn lại chưa xuất HĐ" khác tổng cộng dồn theo phiếu/đơn?</h5>
-                        <button class="msu-drawer-close" id="msu-gap-explain-close-x"><i class="fa fa-times"></i></button>
+                        <div>
+                            <h5>Vì sao còn lệch: <span id="msu-gap-total" class="msu-recon-outstanding">0 đ</span></h5>
+                            <p class="msu-muted" style="font-size:.78rem">Cộng các nhóm dưới đây ra đúng số "Còn lại chưa xuất HĐ", theo mã sale và khoảng ngày xuất kho đang chọn. Bấm vào một nhóm hoặc một tháng để lọc danh sách, bấm vào một phiếu để mở chi tiết.</p>
+                        </div>
+                        <button class="msu-drawer-close" id="msu-gap-close-x"><i class="fa fa-times"></i></button>
                     </div>
-                    <div id="msu-gap-explain-body" class="msu-modal-wide-body">
-                        <span class="msu-muted">Đang tải...</span>
-                    </div>
+                    <div id="msu-gap-body" class="msu-modal-wide-body"/>
                     <div class="msu-modal-actions">
-                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-gap-explain-close">Đóng</button>
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-gap-close">Đóng</button>
                     </div>
                 </div>
             </div>
 
             <div class="msu-toast-stack" id="msu-toast-stack"/>
 
+            <script type="text/javascript" src="/misa_invoice_status_report/static/src/public/misa_gap_panel.js"></script>
             <script type="text/javascript"><![CDATA[
                 (function() {
                     var STORAGE_KEY = 'misa_sale_status_code';
@@ -1150,7 +1171,10 @@
                             var hintEl2 = document.getElementById('msu-recon-outstanding-hint');
                             if (d.gap_resolved_amount) {
                                 hintEl2.style.display = '';
-                                hintEl2.textContent = '(đã trừ ' + fmtMoney(d.gap_resolved_amount) + ' đã xác minh xong)';
+                                // Âm = nhóm đã xác minh có HĐ DƯ — phần dư được bỏ ra nên số còn lại TĂNG.
+                                hintEl2.textContent = d.gap_resolved_amount > 0
+                                    ? '(đã trừ ' + fmtMoney(d.gap_resolved_amount) + ' của nhóm đã xác minh xong)'
+                                    : '(đã cộng lại ' + fmtMoney(-d.gap_resolved_amount) + ' HĐ dư của nhóm đã xác minh xong)';
                             } else {
                                 hintEl2.style.display = 'none';
                             }
@@ -2928,6 +2952,19 @@
 
                     window.addEventListener('resize', function() {
                         if (state.salerCode) { loadDailyChart(); }
+                    });
+
+                    window.MsuGapPanel.init({
+                        rpc: rpc, esc: esc, fmtMoney: fmtMoney, fmtDate: fmtDate,
+                        getScope: function() {
+                            return {saler_code: state.salerCode, date_from: state.dateFrom, date_to: state.dateTo};
+                        },
+                        openPicking: openSiblingDrawer,
+                        openShopeeTab: function(pickingName) {
+                            document.getElementById('msu-shopee-search').value = pickingName;
+                            document.getElementById('msu-tab-btn-shopee').click();
+                            document.getElementById('msu-shopee-search-btn').click();
+                        },
                     });
 
                     loadSalerCodes();

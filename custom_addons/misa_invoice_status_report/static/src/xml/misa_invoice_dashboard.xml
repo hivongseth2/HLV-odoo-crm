@@ -1990,12 +1990,10 @@
                     <div class="miv-drawer-header">
                         <div>
                             <div class="miv-drawer-eyebrow">Đối chiếu tổng</div>
-                            <div class="miv-drawer-title">Chênh lệch xuất kho vs xuất HĐ</div>
+                            <div class="miv-drawer-title">Vì sao còn lệch</div>
                             <div class="miv-drawer-subtitle" t-if="state.discrepancy">
-                                <t t-esc="state.discrepancy.total_count"/> phiếu đang lệch — tổng lệch <t t-esc="formatCurrency(state.discrepancy.total_diff)"/>
-                                <t t-if="state.discrepancy.resolved_count">
-                                    (chưa tính <t t-esc="state.discrepancy.resolved_count"/> phiếu đã xác minh xong — không cần xử lý, xem cuối bảng)
-                                </t>
+                                Cần xử lý <b><t t-esc="formatCurrency(state.discrepancy.outstanding_amount)"/></b> — cộng các nhóm
+                                dưới đây ra đúng số này (đã bỏ phần đã xác minh xong). Bấm 1 nhóm hoặc 1 tháng để lọc.
                             </div>
                         </div>
                         <i class="fa fa-times miv-drawer-close" t-on-click="closeDiscrepancyDrawer"/>
@@ -2005,10 +2003,41 @@
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
                         </div>
                         <t t-if="!state.discrepancyLoading and state.discrepancy">
-                            <div class="miv-drawer-linking" t-if="state.discrepancy.customs_pending_amount">
-                                <i class="fa fa-ship"/> Ngoài ra còn <b><t t-esc="state.discrepancy.customs_pending_count"/></b> dòng hóa đơn hải
-                                quan (<t t-esc="formatCurrency(state.discrepancy.customs_pending_amount)"/>) đã xuất HĐ nhưng CHƯA khớp phiếu xuất
-                                kho nào — xem ở tab "Đơn hải quan".
+                            <div class="miv-gap-cats">
+                                <div t-foreach="state.discrepancy.categories" t-as="cat" t-key="cat.key"
+                                     t-attf-class="miv-gap-cat {{ cat.key !== 'customs' and cat.key !== 'rounding' ? 'miv-gap-clickable' : '' }} {{ state.discrepancyFilter.category === cat.key ? 'miv-gap-active' : '' }} {{ cat.counted ? '' : 'miv-gap-muted' }}"
+                                     t-on-click="() => this.onDiscrepancyCategoryClick(cat)">
+                                    <div class="miv-gap-cat-head">
+                                        <b t-esc="cat.label"/>
+                                        <span class="miv-subtable-hint" t-if="cat.count">
+                                            <t t-esc="cat.count"/> <t t-esc="cat.key === 'customs' ? 'dòng' : 'phiếu'"/>
+                                        </span>
+                                    </div>
+                                    <div t-attf-class="miv-gap-cat-amount {{ !cat.counted ? '' : (cat.amount > 0 ? 'miv-cell-critical' : 'miv-cell-warning') }}">
+                                        <t t-if="!cat.counted">(không tính) </t><t t-esc="formatCurrency(cat.amount)"/>
+                                    </div>
+                                    <div class="miv-gap-cat-hint" t-esc="cat.hint"/>
+                                    <div class="miv-gap-cat-action"><i class="fa fa-hand-o-right"/> <t t-esc="cat.action"/></div>
+                                </div>
+                            </div>
+                            <t t-if="state.discrepancy.months.length">
+                                <div class="miv-drawer-section-title">Theo tháng xuất kho</div>
+                                <div class="miv-gap-months">
+                                    <button t-foreach="state.discrepancy.months" t-as="m" t-key="m.key"
+                                            t-attf-class="miv-gap-month {{ state.discrepancyFilter.month === m.key ? 'miv-gap-active' : '' }}"
+                                            t-on-click="() => this.toggleDiscrepancyFilter('month', m.key)">
+                                        <span t-esc="m.label"/>
+                                        <b t-attf-class="{{ m.amount > 0 ? 'miv-cell-critical' : 'miv-cell-warning' }}" t-esc="formatCurrency(m.amount)"/>
+                                        <span class="miv-subtable-hint"><t t-esc="m.count"/> phiếu</span>
+                                    </button>
+                                </div>
+                            </t>
+                            <div class="miv-drawer-section-title">
+                                <t t-esc="state.discrepancy.row_total"/> phiếu
+                                <t t-if="state.discrepancyFilter.category or state.discrepancyFilter.month">(đang lọc)</t>
+                                <t t-if="state.discrepancy.rows.length &lt; state.discrepancy.row_total">
+                                    — hiện <t t-esc="state.discrepancy.rows.length"/> phiếu lệch nhiều nhất
+                                </t>
                             </div>
                             <div class="miv-drawer-linking" t-if="state.discrepancyGapExplain and state.discrepancyGapExplain.cut_groups.length">
                                 <i class="fa fa-exclamation-triangle"/> Đang lọc theo ngày xuất kho (<t t-esc="state.shipFrom || '…'"/> → <t t-esc="state.shipTo || '…'"/>)
@@ -2037,10 +2066,10 @@
                                 <thead>
                                     <tr>
                                         <th>Phiếu</th>
+                                        <th>Lý do</th>
                                         <th class="miv-col-num">Tiền xuất kho</th>
-                                        <th class="miv-col-num">Tiền xuất HĐ</th>
+                                        <th class="miv-col-num">Tiền HĐ của phiếu</th>
                                         <th class="miv-col-num">Lệch</th>
-                                        <th>Nguồn</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2049,37 +2078,28 @@
                                         t-on-click="() => this.openDiscrepancyRow(row)">
                                         <td>
                                             <b><t t-esc="row.name"/></b>
-                                            <span class="miv-badge miv-badge-state-not_checked" t-if="row.group_picking_names and row.group_picking_names.length > 1"
-                                                  t-attf-title="Đây là 1 đề nghị xuất HĐ gộp chung — tổng tiền xuất kho tính đủ cả {{row.group_picking_names.length}} phiếu: {{row.group_picking_names.join(', ')}}">
-                                                +<t t-esc="row.group_picking_names.length - 1"/> phiếu gộp chung
-                                            </span>
-                                            <span class="miv-badge miv-badge-state-invoiced" t-if="row.gap_resolved"
-                                                  title="Số lệch vẫn đúng như hiển thị (tiền thuộc về 1 hóa đơn KHÁC), nhưng đã xác minh đủ qua MISA — không cần ai xử lý tay.">
-                                                <i class="fa fa-check"/> Đã xác minh
-                                            </span>
-                                            <div class="miv-subtable-hint"><t t-esc="row.partner_name"/></div>
+                                            <span class="miv-badge miv-badge-shopee" t-if="row.source === 'shopee'">Shopee</span>
+                                            <div class="miv-subtable-hint"><t t-esc="row.partner_name"/> · <t t-esc="row.date_done"/></div>
+                                            <div class="miv-subtable-hint" t-if="row.group_picking_names and row.group_picking_names.length > 1">
+                                                Đề nghị gộp <t t-esc="row.group_picking_names.length"/> phiếu (<t t-esc="row.group_picking_names.join(', ')"/>)
+                                                — HĐ của đề nghị <t t-esc="formatCurrency(row.request_invoice_amount)"/>,
+                                                đã chia <t t-esc="formatCurrency(row.passed_to_others_amount)"/> cho các phiếu đi kèm.
+                                            </div>
                                             <div class="miv-subtable-hint miv-gap-summary" t-attf-class="{{ row.gap_resolved ? 'miv-cell-good' : '' }}" t-if="row.gap_summary">
                                                 <i t-attf-class="fa {{ row.gap_resolved ? 'fa-check-circle' : 'fa-info-circle' }}"/> <t t-esc="row.gap_summary"/>
                                             </div>
-                                            <div class="miv-subtable-hint miv-cell-muted" t-elif="row.source === 'misa'">
-                                                <i class="fa fa-question-circle"/> Chưa rõ lý do — bấm "Cập nhật lý do lệch" trên dashboard.
-                                            </div>
                                         </td>
+                                        <td><t t-esc="row.category_label"/></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
-                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.allocated_amount)"/></td>
                                         <td t-attf-class="miv-col-num {{ row.gap_resolved ? 'miv-cell-good' : (row.diff > 0 ? 'miv-cell-critical' : 'miv-cell-warning') }}">
                                             <b><t t-esc="formatCurrency(row.diff)"/></b>
-                                        </td>
-                                        <td>
-                                            <span t-attf-class="miv-badge {{ row.source === 'shopee' ? 'miv-badge-shopee' : 'miv-badge-state-not_checked' }}">
-                                                <t t-esc="row.source === 'shopee' ? 'Shopee' : 'MISA'"/>
-                                            </span>
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
 </div>
-                            <div class="miv-empty" t-if="!state.discrepancy.rows.length">Không có phiếu nào đang lệch tiền — mọi thứ đã khớp.</div>
+                            <div class="miv-empty" t-if="!state.discrepancy.rows.length">Không có phiếu nào đang lệch tiền.</div>
                         </t>
                     </div>
                 </div>

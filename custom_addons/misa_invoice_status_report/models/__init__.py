@@ -7,6 +7,7 @@ from . import misa_invoice_customs_line
 from . import misa_invoice_customs_match
 from . import misa_invoice_grouped_line
 from . import misa_invoice_grouped_match
+from . import misa_invoice_allocation
 from . import misa_invoice_export
 from . import misa_invoice_reminder
 from . import misa_invoice_config
@@ -14,6 +15,7 @@ from . import misa_invoice_shopee
 from . import misa_invoice_returns
 from . import misa_invoice_exception
 from . import misa_invoice_dashboard_data
+from . import misa_invoice_gap_analysis
 from . import misa_invoice_picking_list
 from . import misa_invoice_public_api
 from . import misa_invoice_goods_detail

@@ -1,0 +1,141 @@
+from collections import defaultdict
+
+from odoo import api, fields, models
+
+from .misa_invoice_gap_utils import GAP_CATEGORIES, GAP_CATEGORY_BY_KEY, classify_misa_picking_gap, month_key
+from .stock_picking import MISA_INVOICE_AMOUNT_TOLERANCE
+
+
+class StockPickingMisaInvoiceGapAnalysis(models.Model):
+    """Phân tích "Còn lại chưa xuất HĐ": lệch vì lý do gì, ở tháng nào, phiếu nào.
+
+    Tính trên tiền HĐ đã quy về từng phiếu (misa_invoice_allocated_amount) — cùng cách với ô
+    tổng, nên tổng các nhóm luôn bằng đúng số "Còn lại" đang hiện. Nhờ vậy phiếu ăn theo đề nghị
+    của phiếu khác (kể cả phiếu gốc nằm ngoài khoảng ngày/khác sale) tự ra lệch 0, không cần xử
+    lý riêng — phần lệch của cả nhóm dồn về phiếu gốc, hiện 1 dòng duy nhất.
+    """
+    _inherit = 'stock.picking'
+
+    @api.model
+    def get_misa_invoice_gap_analysis(
+        self, date_from=False, date_to=False, saler_code=False, invoice_date_from=False, invoice_date_to=False,
+        category=False, month=False, limit=300,
+    ):
+        """Trả {outstanding_amount, categories, months, rows, row_total}. category/month
+        ('YYYY-MM') chỉ lọc danh sách rows — categories/months luôn tính trên toàn bộ phạm vi."""
+        Picking = self.sudo()
+        misa_domain, shopee_domain = Picking._misa_invoice_scoped_domains(
+            date_from, date_to, saler_code, invoice_date_from, invoice_date_to,
+        )
+        entries = Picking._misa_invoice_gap_entries(misa_domain, shopee_domain)
+        customs = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
+
+        totals = defaultdict(lambda: {'amount': 0.0, 'count': 0})
+        rounding = 0.0
+        for entry in entries:
+            if entry['category'] is None:
+                rounding += entry['gap']
+                continue
+            totals[entry['category']]['amount'] += entry['gap']
+            totals[entry['category']]['count'] += 1
+        if customs['pending_amount']:
+            totals['customs'] = {'amount': -customs['pending_amount'], 'count': customs['pending_count']}
+        # Sai số luôn cộng vào tổng (để tổng khớp tới từng đồng với ô "Còn lại"), nhưng chỉ
+        # hiện thành 1 nhóm riêng khi đủ lớn để người xem thắc mắc.
+        outstanding = rounding + sum(
+            value['amount'] for key, value in totals.items() if GAP_CATEGORY_BY_KEY[key]['counted']
+        )
+        if abs(rounding) >= MISA_INVOICE_AMOUNT_TOLERANCE:
+            totals['rounding'] = {'amount': rounding, 'count': 0}
+
+        listed = [e for e in entries if e['category'] is not None]
+        rows_matching = [
+            e for e in listed
+            if (not category or e['category'] == category) and (not month or e['month'] == month)
+        ]
+        # Cần xử lý lên trước, đã xác minh xong xuống cuối; trong mỗi phần lệch lớn lên trước.
+        rows_matching.sort(key=lambda e: (e['category'] == 'resolved', -abs(e['gap'])))
+        today = fields.Date.context_today(self)
+
+        return {
+            'outstanding_amount': outstanding,
+            'categories': [
+                dict(cat, amount=totals[cat['key']]['amount'], count=totals[cat['key']]['count'])
+                for cat in GAP_CATEGORIES if cat['key'] in totals
+            ],
+            'months': self._misa_invoice_gap_months(listed),
+            'rows': [Picking._misa_invoice_gap_row(e, today) for e in rows_matching[:limit]],
+            'row_total': len(rows_matching),
+        }
+
+    def _misa_invoice_gap_entries(self, misa_domain, shopee_domain):
+        """Mỗi phiếu trong phạm vi 1 entry {picking, source, gap, category, month}. category
+        None = lệch trong dung sai (chỉ cộng vào sai số làm tròn, không liệt kê)."""
+        entries = []
+        for picking in self.search(misa_domain):
+            allocated = picking.misa_invoice_allocated_amount or 0.0
+            gap = (picking.misa_invoice_net_actual_amount or 0.0) - allocated
+            entries.append({
+                'picking': picking, 'source': 'misa', 'gap': gap,
+                'category': classify_misa_picking_gap(
+                    picking.misa_invoice_state == 'invoiced', picking.misa_invoice_gap_resolved,
+                    gap, allocated, MISA_INVOICE_AMOUNT_TOLERANCE,
+                ),
+                'month': month_key(picking.date_done and picking.date_done.date()),
+            })
+        today = fields.Date.context_today(self)
+        for picking in self.search(shopee_domain):
+            # Cùng hàm dựng dòng với ô tổng Shopee (_misa_invoice_shopee_summary) để 2 số khớp.
+            shopee_row = self._misa_invoice_shopee_picking_to_row(picking, today)
+            gap = shopee_row['actual_amount'] - shopee_row['invoice_amount']
+            entries.append({
+                'picking': picking, 'source': 'shopee', 'gap': gap, 'shopee_row': shopee_row,
+                'category': 'shopee' if abs(gap) > MISA_INVOICE_AMOUNT_TOLERANCE else None,
+                'month': month_key(picking.date_done and picking.date_done.date()),
+            })
+        return entries
+
+    def _misa_invoice_gap_months(self, entries):
+        """Tổng lệch cần xử lý theo tháng xuất kho (bỏ nhóm đã xác minh), tháng cũ lên trước.
+        HĐ hải quan không có ở đây vì đi theo ngày hóa đơn, không theo ngày xuất kho."""
+        months = defaultdict(lambda: {'amount': 0.0, 'count': 0})
+        for entry in entries:
+            if not GAP_CATEGORY_BY_KEY[entry['category']]['counted']:
+                continue
+            months[entry['month']]['amount'] += entry['gap']
+            months[entry['month']]['count'] += 1
+        return [
+            {'key': key, 'label': '%s/%s' % (key[5:7], key[:4]) if key else 'Không rõ ngày', **value}
+            for key, value in sorted(months.items())
+        ]
+
+    def _misa_invoice_gap_row(self, entry, today):
+        """Dòng hiển thị: dựng từ đúng hàm dòng của tab tương ứng (để bấm vào mở được drawer
+        chi tiết sẵn có), thêm các cột của phần phân tích."""
+        picking = entry['picking']
+        meta = GAP_CATEGORY_BY_KEY[entry['category']]
+        if entry['source'] == 'shopee':
+            row = dict(entry['shopee_row'], allocated_amount=entry['shopee_row']['invoice_amount'])
+            row['group_picking_names'] = [picking.name]
+        else:
+            row = self._misa_invoice_picking_to_row(picking, today)
+            row['allocated_amount'] = picking.misa_invoice_allocated_amount or 0.0
+            covered = picking.misa_invoice_covered_picking_ids
+            row['group_picking_names'] = (picking | covered).mapped('name')
+            # Phiếu gốc của đề nghị gộp: tiền HĐ của cả đề nghị và phần đã chia cho các phiếu đi
+            # kèm, để hiểu vì sao tiền HĐ quy về phiếu này nhỏ (hoặc âm).
+            row['request_invoice_amount'] = picking.misa_invoice_effective_amount or 0.0
+            row['passed_to_others_amount'] = (
+                (picking.misa_invoice_effective_amount or 0.0) - row['allocated_amount']
+                if picking.misa_invoice_state == 'invoiced' and not picking.misa_invoice_master_picking_id else 0.0
+            )
+            row['gap_summary'] = picking.misa_invoice_gap_summary or ''
+        row.update({
+            'source': entry['source'],
+            'diff': entry['gap'],
+            'category': entry['category'],
+            'category_label': meta['label'],
+            'month': entry['month'],
+            'gap_resolved': entry['category'] == 'resolved',
+        })
+        return row

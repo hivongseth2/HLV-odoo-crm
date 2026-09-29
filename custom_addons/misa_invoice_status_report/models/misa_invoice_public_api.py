@@ -210,12 +210,12 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         )
 
     @api.model
-    def get_misa_invoice_public_reconciliation_gap_explain(self, saler_code, date_from=False, date_to=False):
-        """Như get_misa_invoice_reconciliation_gap_explain nhưng scope theo đúng 1 mã sale cho
-        trang public — xem misa_invoice_dashboard_data.py."""
+    def get_misa_invoice_public_gap_analysis(self, saler_code, date_from=False, date_to=False, category=False, month=False):
+        """Phân tích phần "Còn lại chưa xuất HĐ" (xem get_misa_invoice_gap_analysis) scope theo
+        đúng 1 mã sale — cùng bộ lọc với ô tổng để 2 số luôn khớp."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
-        return self.sudo().get_misa_invoice_reconciliation_gap_explain(
-            date_from=date_from, date_to=date_to, saler_code=code,
+        return self.sudo().get_misa_invoice_gap_analysis(
+            date_from=date_from, date_to=date_to, saler_code=code, category=category, month=month,
         )
 
     @api.model

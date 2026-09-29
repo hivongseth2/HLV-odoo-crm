@@ -65,6 +65,7 @@
                             <field name="misa_invoice_covered_picking_ids" readonly="1" widget="many2many_tags"
                                    invisible="not misa_invoice_covered_picking_ids"
                                    string="Đề nghị HĐ này gộp chung cho các phiếu"/>
+                            <field name="misa_invoice_allocated_amount" readonly="1"/>
                         </group>
                         <group string="Ngoại lệ" invisible="not misa_invoice_exception">
                             <field name="misa_invoice_exception_reason" readonly="1" nolabel="1"/>

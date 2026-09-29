@@ -189,17 +189,18 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_reconciliation_totals error')
             return _json_error(str(e))
 
-    @http.route('/misa_sale_status/api/reconciliation_gap_explain', type='json', auth='user', methods=['POST'])
-    def api_reconciliation_gap_explain(self, saler_code='', date_from='', date_to='', **kwargs):
+    @http.route('/misa_sale_status/api/gap_analysis', type='json', auth='user', methods=['POST'])
+    def api_gap_analysis(self, saler_code='', date_from='', date_to='', category='', month='', **kwargs):
         try:
-            data = request.env['stock.picking'].sudo().get_misa_invoice_public_reconciliation_gap_explain(
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_gap_analysis(
                 saler_code=saler_code, date_from=date_from or False, date_to=date_to or False,
+                category=category or False, month=month or False,
             )
             return {'status': 'success', 'data': data}
         except UserError as e:
             return _json_error(str(e))
         except Exception as e:
-            _logger.exception('misa_sale_status api_reconciliation_gap_explain error')
+            _logger.exception('misa_sale_status api_gap_analysis error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/picking_row', type='json', auth='user', methods=['POST'])

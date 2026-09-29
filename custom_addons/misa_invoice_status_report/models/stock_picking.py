@@ -1765,6 +1765,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'pending_amount': total_amount - matched_amount,
         }
 
+    def _misa_invoice_scoped_domains(
+        self, date_from=False, date_to=False, saler_code=False, invoice_date_from=False, invoice_date_to=False,
+    ):
+        """(domain phiếu MISA, domain phiếu Shopee) theo ngày xuất kho + 1 mã sale — dùng chung
+        cho ô tổng đối chiếu và phần phân tích lệch, để 2 nơi luôn cùng 1 tập phiếu. Lọc ngày
+        hóa đơn chỉ áp cho phiếu MISA (dashboard nội bộ), Shopee không có ngày HĐ trên phiếu."""
+        misa_domain = self._misa_invoice_dashboard_base_domain(date_from, date_to, invoice_date_from, invoice_date_to)
+        shopee_domain = self._misa_invoice_shopee_domain(date_from, date_to)
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
+            shopee_domain = shopee_domain + [('misa_invoice_saler_code', '=', value)]
+        return misa_domain, shopee_domain
+
     @api.model
     def _misa_invoice_date_cut_auto_credit(self, date_from, date_to, saler_code):
         """Tự động cộng tín dụng hóa đơn cho các nhóm bị "cắt bởi bộ lọc ngày" THUẦN TÚY (đại
@@ -1905,46 +1919,34 @@ class StockPickingMisaInvoiceStatus(models.Model):
         đã khớp phiếu xuất kho thì tiền đó đã nằm sẵn trong misa_invoiced_amount rồi (qua
         picking.misa_invoice_amount), cộng thêm sẽ bị đếm trùng 2 lần."""
         Picking = self.sudo()
-        misa_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to)
-        shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
-        if saler_code:
-            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
-            misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
-            shopee_domain = shopee_domain + [('misa_invoice_saler_code', '=', value)]
+        misa_domain, shopee_domain = Picking._misa_invoice_scoped_domains(date_from, date_to, saler_code)
 
-        # ĐÃ THỬ (rồi revert): tính misa_invoiced_total theo TỪNG ĐƠN HÀNG qua
-        # misa_invoice_exact_invoiced_amount khi có saler_code, để tránh việc 1 đề nghị gộp
-        # chung nhiều mã sale bị gán TRỌN tiền hóa đơn cho saler của phiếu đại diện. KHÔNG DÙNG
-        # ĐƯỢC: misa_invoice_exact_shipped/invoiced_amount tính trên TOÀN BỘ lịch sử phiếu của
-        # đơn (_misa_invoice_compute_order_coverage_detail không có mốc cắt), trong khi
-        # misa_actual_total ở trên LUÔN bị giới hạn bởi mốc cắt của
-        # _misa_invoice_dashboard_base_domain (_get_misa_invoice_cutoff_date) — 2 vế KHÔNG BAO
-        # GIỜ cùng phạm vi, kể cả khi date_from/date_to đều rỗng. Đã kiểm chứng thực tế: outstanding
-        # lệch tới 652 triệu (tệ hơn nhiều so với phần cross-saler ~vài triệu của cách cũ) — giữ
-        # nguyên cách tính cũ (đã biết còn lệch nhỏ khi có nhóm dùng chung nhiều mã sale, chấp
-        # nhận được so với việc tự làm sai chỗ khác lớn hơn — phần này giờ đã ĐO ĐƯỢC chính xác
-        # qua get_misa_invoice_reconciliation_gap_explain/_misa_invoice_group_gap_contribution,
-        # hiện số cụ thể cho người dùng tự đối chiếu thay vì để "mất tích" trong tổng).
-        misa_actual_total, misa_invoiced_total = Picking._misa_invoice_misa_only_totals(
-            misa_domain, date_from, date_to, saler_code,
+        # Tiền HĐ cộng theo misa_invoice_allocated_amount (quy về từng phiếu), không theo
+        # effective_amount của phiếu đại diện — đề nghị gộp trộn phiếu của nhiều sale, dồn tiền
+        # về phiếu đại diện thì tổng theo sale bị lệch (xem misa_invoice_allocation.py).
+        misa_sums = Picking.read_group(
+            misa_domain, ['misa_invoice_net_actual_amount:sum', 'misa_invoice_allocated_amount:sum'], [],
         )
+        misa_actual_total = (misa_sums[0]['misa_invoice_net_actual_amount'] or 0.0) if misa_sums else 0.0
+        misa_invoiced_total = (misa_sums[0]['misa_invoice_allocated_amount'] or 0.0) if misa_sums else 0.0
 
         shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
         customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
 
         # Nhóm ĐÃ XÁC MINH XONG (misa_invoice_gap_resolved) — tiền của nhóm này thực chất ĐÃ có
         # hóa đơn, chỉ là gắn nhầm sang 1 đề nghị khác (case thật KBC/OUT/10826/11218) — phải
-        # cộng phần "chênh lệch" của các nhóm này (misa_invoice_amount_diff) vào tiền đã xuất
-        # HĐ, nếu không "Chênh lệch (xuất kho – xuất HĐ)" ở đây sẽ KHÔNG khớp với tổng lệch
-        # "còn cần xử lý" ở bảng "Đối chiếu tổng" (get_misa_invoice_discrepancy đã loại các
-        # nhóm này khỏi total_diff) — 2 nơi cùng nói về "còn lệch bao nhiêu" nhưng ra 2 số khác
-        # nhau sẽ không ai tin được số nào.
-        gap_resolved_group = Picking.read_group(
-            misa_domain + [('misa_invoice_gap_resolved', '=', True)], ['misa_invoice_amount_diff:sum'], [],
+        # cộng phần còn thiếu của các phiếu này vào tiền đã xuất HĐ, nếu không "còn lại chưa
+        # xuất HĐ" vẫn đếm cả case đã hiểu rõ, không cần ai xử lý. Phần thiếu tính theo tiền
+        # đã quy về phiếu (không theo misa_invoice_amount_diff của cả nhóm), cho cùng cách
+        # tính với tiền HĐ ở trên — phiếu ăn theo luôn ra 0, phần lệch nằm ở phiếu đại diện.
+        gap_resolved_sums = Picking.read_group(
+            misa_domain + [('misa_invoice_gap_resolved', '=', True), ('misa_invoice_state', '=', 'invoiced')],
+            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_allocated_amount:sum'], [],
         )
         gap_resolved_amount = (
-            (gap_resolved_group[0]['misa_invoice_amount_diff'] or 0.0) if gap_resolved_group else 0.0
-        )
+            (gap_resolved_sums[0]['misa_invoice_net_actual_amount'] or 0.0)
+            - (gap_resolved_sums[0]['misa_invoice_allocated_amount'] or 0.0)
+        ) if gap_resolved_sums else 0.0
 
         total_actual_amount = misa_actual_total + shopee_summary['total_actual_amount']
         total_invoiced_amount = (
@@ -1966,88 +1968,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'customs_matched_count': customs_summary['matched_count'],
             'customs_pending_count': customs_summary['pending_count'],
             'outstanding_amount': total_actual_amount - total_invoiced_amount,
-        }
-
-    @api.model
-    def get_misa_invoice_discrepancy(
-        self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
-        saler_code=False, limit=200,
-    ):
-        """Chi tiết CÁC PHIẾU đang góp phần vào 'chênh lệch' (tổng tiền xuất kho - tổng đã xuất
-        HĐ) — để trả lời "lệch phiếu nào" thay vì chỉ biết mỗi tổng số. Gồm 2 loại lệch, áp dụng
-        cho cả 2 luồng MISA (thường) và Shopee:
-        - Phiếu CHƯA xuất HĐ → lệch = toàn bộ tiền thực xuất (outstanding_amount).
-        - Phiếu ĐÃ xuất HĐ nhưng tiền hóa đơn khác tiền thực xuất quá dung sai
-          (misa_invoice_amount_mismatch/tương đương bên Shopee) → lệch = actual - invoice.
-        Sắp xếp theo |lệch| giảm dần để thấy ngay phiếu lệch nhiều nhất.
-
-        Hóa đơn hải quan CHƯA khớp phiếu xuất kho nào không có trong danh sách (không có "phiếu"
-        nào để liệt kê) — chỉ trả kèm customs_pending_amount/count để biết còn khoản này nữa.
-
-        Phiếu "ăn theo" 1 đề nghị gộp chung (misa_invoice_master_picking_id) KHÔNG hiện riêng —
-        cả nhóm chỉ hiện 1 dòng DUY NHẤT (ở phiếu GỐC), vì mọi phiếu trong nhóm đều lấy chung 1
-        con số lệch từ phiếu gốc (misa_invoice_amount_diff) — hiện riêng từng phiếu sẽ tưởng
-        nhầm là N vấn đề khác nhau trong khi thực ra chỉ là 1 vấn đề của cả nhóm lặp lại N lần.
-        actual_amount của dòng nhóm = TỔNG tiền thực xuất của CẢ NHÓM (không phải riêng phiếu
-        gốc) để so cho đúng nghĩa với tiền hóa đơn (cũng là tổng của cả nhóm)."""
-        Picking = self.sudo()
-        today = fields.Date.context_today(self)
-        misa_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to, invoice_date_from, invoice_date_to)
-        shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
-        if saler_code:
-            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
-            misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
-            shopee_domain = shopee_domain + [('misa_invoice_saler_code', '=', value)]
-
-        rows = []
-        for picking in Picking.search(misa_domain):
-            if picking.misa_invoice_master_picking_id:
-                continue  # đã gộp vào phiếu gốc — hiện qua đúng 1 dòng của phiếu gốc đó
-            row = Picking._misa_invoice_picking_to_row(picking, today)
-            # Đọc field ĐÃ LƯU SẴN (misa_invoice_gap_summary, cập nhật qua
-            # _misa_invoice_discover_grouped_orders / nút "Cập nhật lý do lệch") — KHÔNG gọi
-            # API MISA ở đây, vì danh sách này có thể liệt kê hàng trăm dòng cùng lúc.
-            row['gap_summary'] = picking.misa_invoice_gap_summary or ''
-            row['gap_checked_at'] = fields.Datetime.to_string(picking.misa_invoice_gap_checked_at) or ''
-            row['gap_resolved'] = picking.misa_invoice_gap_resolved
-            if picking.misa_invoice_covered_picking_ids:
-                group = picking | picking.misa_invoice_covered_picking_ids
-                row['actual_amount'] = sum(group.mapped('misa_invoice_net_actual_amount'))
-                row['group_picking_names'] = group.mapped('name')
-            else:
-                row['group_picking_names'] = [picking.name]
-            diff = row['amount_diff'] if row['state'] == 'invoiced' else row['outstanding_amount']
-            if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
-                continue
-            row['diff'] = diff
-            row['source'] = 'misa'
-            rows.append(row)
-        for picking in Picking.search(shopee_domain):
-            row = Picking._misa_invoice_shopee_picking_to_row(picking, today)
-            row['group_picking_names'] = [picking.name]  # Shopee không có cơ chế gộp nhóm
-            row['gap_summary'] = ''  # Shopee chưa có cơ chế phân tích lý do lệch theo dòng hàng
-            row['gap_checked_at'] = ''
-            row['gap_resolved'] = False
-            diff = row['actual_amount'] - row['invoice_amount']
-            if abs(diff) <= MISA_INVOICE_AMOUNT_TOLERANCE:
-                continue
-            row['diff'] = diff
-            row['source'] = 'shopee'
-            rows.append(row)
-
-        # Đơn CÒN CẦN XỬ LÝ THẬT lên trước (chưa xác minh xong), đơn đã xác minh xong
-        # (gap_resolved) đẩy xuống cuối — không ẩn đi (vẫn cần minh bạch), chỉ không để nó chen
-        # vào giữa những đơn cần "hối" sale thật, gây tưởng nhầm là còn nhiều vấn đề.
-        rows.sort(key=lambda r: (r.get('gap_resolved', False), -abs(r['diff'])))
-        customs_summary = Picking._misa_invoice_customs_summary(invoice_date_from, invoice_date_to, saler_code)
-        actionable_rows = [r for r in rows if not r.get('gap_resolved')]
-        return {
-            'rows': rows[:limit],
-            'total_count': len(actionable_rows),
-            'total_diff': sum(r['diff'] for r in actionable_rows),
-            'resolved_count': len(rows) - len(actionable_rows),
-            'customs_pending_amount': customs_summary['pending_amount'],
-            'customs_pending_count': customs_summary['pending_count'],
         }
 
     # ==================== Đơn hải quan (hóa đơn xuất TRƯỚC khi xuất kho Odoo) ====================
@@ -2926,41 +2846,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
         order_pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.id in picking_id_set)
         states = order_pickings.mapped('misa_invoice_state')
         overall_state = self._misa_invoice_order_state(states)
-        # Phiếu "ăn theo" 1 đề nghị gộp chung lưu misa_invoice_amount = 0 (tránh cộng
-        # trùng) — muốn ra đúng tổng tiền HĐ của đơn phải quy về phiếu ĐẠI DIỆN của từng
-        # đề nghị rồi khử trùng theo id đại diện đó (2 phiếu ăn theo cùng 1 đề nghị chỉ
-        # tính 1 lần; 2 đề nghị khác nhau vẫn cộng đủ cả 2).
         invoiced_pickings = order_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced')
         representatives = {
             (p.misa_invoice_master_picking_id or p).id: (p.misa_invoice_master_picking_id or p)
             for p in invoiced_pickings
         }
-        # QUAN TRỌNG: rep.misa_invoice_effective_amount là tiền HÓA ĐƠN CỦA CẢ NHÓM đại diện
-        # đó (có thể gộp NHIỀU đơn bán khác nhau vào 1 đề nghị) — cộng thẳng vào invoiced_amount
-        # của đơn NÀY có thể ra SỐ THỪA (case thật: 2 đơn khác nhau của cùng khách hàng cùng
-        # "ăn theo" 1 đề nghị gộp chung, mỗi đơn lại bị gán ĐỦ cả tiền hóa đơn của group, cộng
-        # dồn ra invoiced_amount > amount_total của chính đơn đó — vô lý). Muốn tính ĐÚNG phần
-        # tiền hóa đơn CHỈ RIÊNG đơn này cần tra order_code ở dòng hàng (như
-        # _misa_invoice_compute_order_coverage_detail đang làm) — nhưng đó là API SỐNG, KHÔNG
-        # được gọi tràn lan cho mọi dòng trong 1 danh sách (có thể hàng trăm-nghìn dòng/trang).
-        # Chốt lại: chỉ CHẶN TRẦN ở amount_total để số hiển thị không vô lý (đã xuất > tổng
-        # đơn) — số chính xác tuyệt đối xem trong drawer chi tiết phiếu (mở riêng từng phiếu).
-        # Phần được phủ MỘT PHẦN qua đề nghị của phiếu KHÁC không đi qua representatives: phiếu
-        # đó không "ăn theo" ai (nên chính nó là đại diện của nó) mà tiền hóa đơn riêng lại = 0,
-        # nên vòng sum ở trên tính ra 0 và phần đã THẬT SỰ được xuất HĐ biến mất khỏi tổng của
-        # đơn — case thật KBC/OUT/12702: 880.200/1.441.800 đ đã được phủ qua đề nghị KBC/OUT/12907.
-        # Điều kiện "không có master VÀ không có tiền hóa đơn riêng" đảm bảo không cộng trùng với
-        # misa_invoice_effective_amount ở trên.
-        partial_grouped_amount = sum(
-            p.misa_invoice_grouped_matched_amount or 0.0
-            for p in order_pickings
-            if not p.misa_invoice_master_picking_id and not (p.misa_invoice_effective_amount or 0.0)
-        )
-        invoiced_amount = min(
-            sum(rep.misa_invoice_effective_amount or 0.0 for rep in representatives.values())
-            + partial_grouped_amount,
-            order.amount_total,
-        )
+        # Cộng tiền HĐ đã quy về TỪNG PHIẾU của đơn (misa_invoice_allocated_amount), không cộng
+        # tiền HĐ của phiếu đại diện: 1 đề nghị có thể gộp nhiều đơn bán khác nhau, lấy tiền cả
+        # đề nghị gán cho đơn này sẽ ra số thừa. Vẫn chặn trần ở amount_total vì phiếu đại diện
+        # bị xuất HĐ dư thì phần dư nằm cả ở phiếu đó; chặn sàn 0 vì phiếu đại diện có thể âm
+        # khi đề nghị không đủ tiền phủ các phiếu đã gán vào nó.
+        invoiced_amount = max(min(
+            sum(order_pickings.mapped('misa_invoice_allocated_amount')), order.amount_total,
+        ), 0.0)
         # QUAN TRỌNG: KHÁC với overall_state ở trên (chỉ nhìn TRẠNG THÁI thô của từng phiếu,
         # 'partial' = có phiếu invoiced + có phiếu chưa) — cần bắt thêm cả case 1 đơn có TẤT CẢ
         # phiếu đều đã 'invoiced' (nên overall_state ra 'invoiced' bình thường, đúng theo trạng
@@ -4052,7 +3950,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         summary trực tiếp, không qua domain này).
 
         date_from/date_to/invoice_date_from/invoice_date_to: PHẢI truyền đúng bộ lọc đang chọn
-        trên dashboard (giống hệt get_misa_invoice_discrepancy) — nếu không, số "còn cần cập
+        trên dashboard (giống hệt get_misa_invoice_gap_analysis) — nếu không, số "còn cần cập
         nhật lý do" sẽ tính trên TOÀN BỘ lịch sử thay vì đúng phạm vi đang xem, khiến người
         dùng thấy 2 con số (VD "287 phiếu đang lệch" trong tháng đang lọc vs "143 phiếu cần
         cập nhật lý do" tính trên toàn bộ lịch sử) không khớp nhau mà không hiểu vì sao."""

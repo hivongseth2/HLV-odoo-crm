@@ -196,7 +196,7 @@ export class MisaInvoiceDashboard extends Component {
             discrepancyOpen: false,
             discrepancyLoading: false,
             discrepancy: null,
-            discrepancyGapExplain: null,
+            discrepancyFilter: { category: "", month: "" },
             returnDrawerOpen: false,
             returnDrawerRow: null,
             // Các section lớn ở trang tổng quan (trên tab nav) có thể thu gọn cho đỡ dài trang —
@@ -295,12 +295,31 @@ export class MisaInvoiceDashboard extends Component {
      * vào số chênh lệch (chưa xuất HĐ, hoặc đã xuất HĐ nhưng lệch tiền), sort theo |lệch| giảm
      * dần, thay vì chỉ nhảy qua tab phiếu không lọc gì như trước. */
     async openDiscrepancyDrawer() {
+        this.state.discrepancyFilter = { category: "", month: "" };
+        await this.loadDiscrepancy();
+    }
+
+    /** Nhóm hải quan / sai số làm tròn không có phiếu nào để liệt kê — bấm vào thì bỏ qua. */
+    onDiscrepancyCategoryClick(cat) {
+        if (cat.key !== "customs" && cat.key !== "rounding") {
+            this.toggleDiscrepancyFilter("category", cat.key);
+        }
+    }
+
+    /** Bấm 1 nhóm lý do / 1 tháng trong drawer — bấm lại lần nữa thì bỏ lọc. */
+    toggleDiscrepancyFilter(field, value) {
+        const current = this.state.discrepancyFilter[field];
+        this.state.discrepancyFilter[field] = current === value ? "" : value;
+        this.loadDiscrepancy();
+    }
+
+    async loadDiscrepancy() {
         this.state.discrepancyOpen = true;
         this.state.discrepancyLoading = true;
         try {
             this.state.discrepancy = await this.orm.call(
-                "stock.picking", "get_misa_invoice_discrepancy", [],
-                { ...this.filterParams, limit: 200 }
+                "stock.picking", "get_misa_invoice_gap_analysis", [],
+                { ...this.filterParams, ...this.state.discrepancyFilter, limit: 300 }
             );
             // Giải thích CỤ THỂ (phiếu nào, ngày nào, bao nhiêu tiền) khi 1 nhóm gộp chung bị
             // "cắt ngang" bởi khoảng ngày đang lọc — xem get_misa_invoice_reconciliation_gap_explain.
