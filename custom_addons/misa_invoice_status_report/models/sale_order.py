@@ -1,4 +1,10 @@
+import logging
+
 from odoo import fields, models
+
+from .misa_invoice_amount_utils import allocate_fifo
+
+_logger = logging.getLogger(__name__)
 
 
 class SaleOrderMisaInvoiceStatus(models.Model):
@@ -17,3 +23,96 @@ class SaleOrderMisaInvoiceStatus(models.Model):
     # còn giữ lịch sử "đã từng nhắc lúc nào, ai nhắc" — xem action_send_misa_invoice_reminder.
     misa_invoice_reminder_at = fields.Datetime(string='Lần nhắc xuất HĐ gần nhất', copy=False)
     misa_invoice_reminder_by_id = fields.Many2one('res.users', string='Người nhắc xuất HĐ', copy=False)
+
+    # Đối soát THEO ĐƠN HÀNG: tiền đã xuất HĐ = mọi dòng hàng ghi đúng mã đơn này trong MỌI đề
+    # nghị ĐÃ phát hành HĐ trên MISA, ai lập, tên đề nghị là gì cũng được. Cách gắn 1 đề nghị
+    # cho mỗi phiếu (misa_invoice_request_refid) bỏ sót đơn xuất HĐ qua nhiều đề nghị — case
+    # thật KBC/OUT/09332 (đề nghị chính + KBC/OUT/09359), KBC/OUT/10278 (10278 + 10278_1).
+    # HĐ hải quan KHÔNG lưu ở đây — cộng từ misa.invoice.customs.line lúc chia về phiếu, để
+    # đọc lại tiền VAT của dòng hải quan không phải hỏi lại MISA cho đơn.
+    misa_invoice_order_checked_at = fields.Datetime(string='Lần soát đơn với MISA gần nhất', copy=False)
+    misa_invoice_order_invoiced_amount = fields.Float(
+        string='Đã xuất HĐ theo MISA (mọi đề nghị)', copy=False,
+    )
+    misa_invoice_order_pending_amount = fields.Float(
+        string='Đề nghị chưa phát hành HĐ (MISA)', copy=False,
+    )
+    misa_invoice_order_sources = fields.Text(string='Đề nghị xuất HĐ của đơn (MISA)', copy=False)
+
+    def _misa_invoice_refresh_order_truth(self):
+        """Hỏi MISA mọi đề nghị nhắc tới từng đơn, lưu tiền đã phát hành / chưa phát hành, rồi
+        chia lại về phiếu. Đơn gọi MISA lỗi, hoặc MISA không trả cột số HĐ (không phân biệt
+        được đã/chưa phát hành) thì giữ nguyên, không đánh dấu đã soát. Trả số đơn soát xong."""
+        misa = self.env['misa.api.utils']
+        Picking = self.env['stock.picking'].sudo()
+        lines_cache = {}
+        done = self.browse()
+        for order in self:
+            try:
+                requests = misa.get_invoice_requests_for_order(order.name)
+                if any(req['inv_no'] is None for req in requests):
+                    _logger.warning("⚠️ [MISA ORDER] MISA không trả cột inv_no cho đề nghị của đơn %s", order.name)
+                    continue
+                issued = pending = 0.0
+                sources = []
+                for req in requests:
+                    if req['refid'] not in lines_cache:
+                        lines_cache[req['refid']] = misa.get_invoice_request_lines(req['refid'])
+                    own = [
+                        line for line in lines_cache[req['refid']]
+                        if (line.get('order_code') or '').strip() == order.name
+                    ]
+                    amount = Picking._misa_invoice_request_line_amount(own)
+                    if not amount:
+                        continue
+                    if req['inv_no']:
+                        issued += amount
+                    else:
+                        pending += amount
+                    sources.append("%s — %s: %s đ" % (
+                        req['refno'], "HĐ %s" % req['inv_no'] if req['inv_no'] else "chưa phát hành",
+                        f"{amount:,.0f}".replace(",", "."),
+                    ))
+            except Exception:
+                _logger.exception("❌ [MISA ORDER] Lỗi soát đơn %s với MISA", order.name)
+                continue
+            order.write({
+                'misa_invoice_order_checked_at': fields.Datetime.now(),
+                'misa_invoice_order_invoiced_amount': issued,
+                'misa_invoice_order_pending_amount': pending,
+                'misa_invoice_order_sources': "\n".join(sources),
+            })
+            done |= order
+        done._misa_invoice_apply_order_allocation()
+        return len(done)
+
+    def _misa_invoice_apply_order_allocation(self):
+        """Chia tiền HĐ theo đơn (đề nghị đã phát hành + HĐ hải quan của đơn) về các phiếu đã
+        xuất kho, phiếu xuất trước nhận trước (allocate_fifo). Thuần DB — gọi lại được bất cứ
+        lúc nào dữ liệu phiếu đổi (hàng trả, phiếu mới xuất, dòng hải quan đọc lại VAT).
+
+        Phiếu gộp nhiều đơn chỉ dùng số theo đơn khi MỌI đơn của nó đã soát — thiếu 1 đơn là
+        thiếu 1 phần tiền, thà để phiếu đó tính theo cách cũ còn hơn báo thiếu sai."""
+        CustomsLine = self.env['misa.invoice.customs.line'].sudo()
+        pickings = self.mapped('misa_invoice_picking_ids').filtered(
+            lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing'
+        )
+        per_order = {}
+        for order in pickings.mapped('misa_invoice_sale_order_ids').filtered('misa_invoice_order_checked_at'):
+            order_pickings = order.misa_invoice_picking_ids.filtered(
+                lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing'
+            ).sorted(lambda p: (p.date_done or p.create_date, p.id))
+            customs = sum(CustomsLine.search([('sale_order_id', '=', order.id)]).mapped('amount'))
+            per_order[order.id] = allocate_fifo(
+                order.misa_invoice_order_invoiced_amount + customs,
+                [(p.id, p._misa_invoice_shipped_for_order(order)) for p in order_pickings],
+            )
+        for picking in pickings:
+            orders = picking.misa_invoice_sale_order_ids
+            ready = bool(orders) and all(order.id in per_order for order in orders)
+            picking.write({
+                'misa_invoice_order_allocation_ok': ready,
+                'misa_invoice_order_allocated_amount': (
+                    sum(per_order[order.id].get(picking.id, 0.0) for order in orders) if ready else 0.0
+                ),
+            })

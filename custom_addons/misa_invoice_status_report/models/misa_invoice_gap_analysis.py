@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import timedelta
 
 from odoo import api, fields, models
 
@@ -75,6 +76,51 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
             'row_total': len(rows_matching),
         }
 
+    def _misa_invoice_gap_order_ids(self, domain, checked_before):
+        """Id các đơn bán có ÍT NHẤT 1 phiếu đang lệch trong domain và chưa soát theo đơn với
+        MISA kể từ checked_before — đơn chưa soát bao giờ lên trước. Chỉ soát đơn đang lệch:
+        đơn đã khớp thì hỏi lại MISA không đổi được gì."""
+        picking_ids = self.search(domain).ids
+        if not picking_ids:
+            return []
+        self.env.cr.execute("""
+            SELECT so.id
+            FROM stock_picking p
+            JOIN misa_invoice_picking_sale_order_rel rel ON rel.picking_id = p.id
+            JOIN sale_order so ON so.id = rel.order_id
+            WHERE p.id = ANY(%s)
+              AND ABS(COALESCE(p.misa_invoice_net_actual_amount, 0) - COALESCE(p.misa_invoice_allocated_amount, 0)) > %s
+              AND (so.misa_invoice_order_checked_at IS NULL OR so.misa_invoice_order_checked_at < %s)
+            GROUP BY so.id, so.misa_invoice_order_checked_at
+            ORDER BY so.misa_invoice_order_checked_at NULLS FIRST, so.id
+        """, (picking_ids, MISA_INVOICE_AMOUNT_TOLERANCE, checked_before))
+        return [row[0] for row in self.env.cr.fetchall()]
+
+    def _cron_refresh_misa_invoice_orders(self, limit=20):
+        """Cron: soát theo đơn với MISA các đơn đang lệch, mỗi đơn tối đa 1 lần/ngày — đơn vừa
+        được kế toán xuất HĐ thêm sẽ tự hết lệch trong vòng 1 ngày."""
+        order_ids = self._misa_invoice_gap_order_ids(
+            self._misa_invoice_dashboard_base_domain(), fields.Datetime.now() - timedelta(days=1),
+        )
+        self.env['sale.order'].sudo().browse(order_ids[:limit])._misa_invoice_refresh_order_truth()
+
+    @api.model
+    def refresh_misa_invoice_gap_orders(self, date_from=False, date_to=False, saler_code=False, started_at=False, limit=10):
+        """Nút "Hỏi lại MISA theo đơn" trên khung "Vì sao còn lệch": soát 1 lô đơn đang lệch
+        trong đúng phạm vi đang xem. Giao diện gọi lặp tới khi remaining = 0 (hoặc 1 lô không
+        soát được đơn nào — MISA đang lỗi). started_at: lượt đầu bỏ trống, server lấy giờ của
+        mình rồi trả về để các lô sau gửi lại — đơn vừa soát trong lượt này không bị chọn lại,
+        và không phụ thuộc đồng hồ máy người bấm."""
+        misa_domain, _shopee_domain = self.sudo()._misa_invoice_scoped_domains(date_from, date_to, saler_code)
+        checked_before = fields.Datetime.to_datetime(started_at) if started_at else fields.Datetime.now()
+        order_ids = self.sudo()._misa_invoice_gap_order_ids(misa_domain, checked_before)
+        batch = self.env['sale.order'].sudo().browse(order_ids[:limit])
+        done = batch._misa_invoice_refresh_order_truth()
+        return {
+            'done': done, 'failed': len(batch) - done, 'remaining': max(len(order_ids) - len(batch), 0),
+            'started_at': fields.Datetime.to_string(checked_before),
+        }
+
     def _misa_invoice_gap_entries(self, misa_domain, shopee_domain):
         """Mỗi phiếu trong phạm vi 1 entry {picking, source, gap, category, month}. category
         None = lệch trong dung sai (chỉ cộng vào sai số làm tròn, không liệt kê)."""
@@ -135,6 +181,22 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
                 if picking.misa_invoice_state == 'invoiced' and not picking.misa_invoice_master_picking_id else 0.0
             )
             row['gap_summary'] = picking.misa_invoice_gap_summary or ''
+            # Đã có số theo đơn hàng: tiền HĐ lấy từ MISA theo mã đơn, ghi chú "đề nghị gộp" ở
+            # trên không còn là lý do nữa — hiện nguồn theo đơn thay vào.
+            row['order_based'] = picking.misa_invoice_order_allocation_ok
+            row['order_notes'] = [
+                {
+                    'order': order.name,
+                    'invoiced': order.misa_invoice_order_invoiced_amount,
+                    'customs': sum(self.env['misa.invoice.customs.line'].sudo().search(
+                        [('sale_order_id', '=', order.id)]
+                    ).mapped('amount')),
+                    'pending': order.misa_invoice_order_pending_amount,
+                    'sources': order.misa_invoice_order_sources or '',
+                    'checked_at': fields.Datetime.to_string(order.misa_invoice_order_checked_at),
+                }
+                for order in picking.misa_invoice_sale_order_ids if order.misa_invoice_order_checked_at
+            ]
         row.update({
             'source': entry['source'],
             'diff': entry['gap'],

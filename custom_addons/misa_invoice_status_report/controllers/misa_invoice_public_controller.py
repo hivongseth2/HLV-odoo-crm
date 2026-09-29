@@ -203,6 +203,20 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_gap_analysis error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/gap_refresh_orders', type='json', auth='user', methods=['POST'])
+    def api_gap_refresh_orders(self, saler_code='', date_from='', date_to='', started_at='', **kwargs):
+        try:
+            data = request.env['stock.picking'].sudo().refresh_misa_invoice_public_gap_orders(
+                saler_code=saler_code, date_from=date_from or False, date_to=date_to or False,
+                started_at=started_at or False,
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_gap_refresh_orders error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/picking_row', type='json', auth='user', methods=['POST'])
     def api_picking_row(self, picking_id=None, saler_code='', **kwargs):
         try:

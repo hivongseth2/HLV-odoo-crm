@@ -59,7 +59,13 @@
 
     function renderRowNote(row) {
         var notes = [];
-        if (row.group_picking_names && row.group_picking_names.length > 1) {
+        (row.order_notes || []).forEach(function (o) {
+            notes.push('Theo MISA, đơn ' + deps.esc(o.order) + ' đã xuất HĐ ' + deps.fmtMoney(o.invoiced) + ' qua đề nghị' +
+                (o.customs ? ' + ' + deps.fmtMoney(o.customs) + ' HĐ hải quan' : '') +
+                (o.pending ? ' (còn ' + deps.fmtMoney(o.pending) + ' đề nghị chưa phát hành)' : '') +
+                (o.sources ? ': ' + deps.esc(o.sources.split('\n').join('; ')) : ''));
+        });
+        if (!row.order_based && row.group_picking_names && row.group_picking_names.length > 1) {
             notes.push('Đề nghị gộp ' + row.group_picking_names.length + ' phiếu (' + deps.esc(row.group_picking_names.join(', ')) +
                 ') — HĐ của đề nghị ' + deps.fmtMoney(row.request_invoice_amount) + ', đã chia ' +
                 deps.fmtMoney(row.passed_to_others_amount) + ' cho các phiếu đi kèm.');
@@ -140,8 +146,41 @@
         });
     }
 
+    /* Soát từng lô 10 đơn cho tới hết — mỗi lô là 1 request ngắn, trang không bị treo và
+     * thấy được tiến độ. Dừng khi 1 lô không soát được đơn nào (MISA đang lỗi). */
+    function refreshOrders() {
+        var btn = el('msu-gap-refresh');
+        var status = el('msu-gap-refresh-status');
+        var scope = deps.getScope();
+        var total = 0;
+        var failed = 0;
+        btn.disabled = true;
+        function step(startedAt) {
+            status.textContent = 'Đang hỏi MISA... đã soát ' + total + ' đơn';
+            return deps.rpc('/misa_sale_status/api/gap_refresh_orders', {
+                saler_code: scope.saler_code, date_from: scope.date_from, date_to: scope.date_to,
+                started_at: startedAt || '',
+            }).then(function (res) {
+                var d = res.data;
+                total += d.done;
+                failed = d.failed;
+                if (d.remaining > 0 && d.done > 0) { return step(d.started_at); }
+                status.textContent = 'Đã soát ' + total + ' đơn với MISA' +
+                    (failed ? ', ' + failed + ' đơn MISA chưa trả lời được — thử lại sau' : '') + '.';
+            });
+        }
+        step('').catch(function (e) {
+            status.textContent = 'Lỗi: ' + e.message;
+        }).finally(function () {
+            btn.disabled = false;
+            load();
+            deps.onDataChanged();
+        });
+    }
+
     function open() {
         filter = {category: '', month: ''};
+        el('msu-gap-refresh-status').textContent = '';
         el('msu-gap-modal').style.display = 'flex';
         load();
     }
@@ -150,12 +189,13 @@
 
     window.MsuGapPanel = {
         /* deps: {rpc, esc, fmtMoney, fmtDate, getScope() -> {saler_code, date_from, date_to},
-         *        openPicking(id), openShopeeTab(pickingName)} */
+         *        openPicking(id), openShopeeTab(pickingName), onDataChanged()} */
         init: function (d) {
             deps = d;
             el('msu-gap-open').addEventListener('click', open);
             el('msu-gap-close').addEventListener('click', close);
             el('msu-gap-close-x').addEventListener('click', close);
+            el('msu-gap-refresh').addEventListener('click', refreshOrders);
             el('msu-gap-modal').addEventListener('click', function (ev) {
                 if (ev.target === el('msu-gap-modal')) { close(); }
             });

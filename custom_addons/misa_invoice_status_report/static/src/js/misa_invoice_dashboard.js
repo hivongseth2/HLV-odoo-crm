@@ -194,6 +194,8 @@ export class MisaInvoiceDashboard extends Component {
             discrepancyLoading: false,
             discrepancy: null,
             discrepancyFilter: { category: "", month: "" },
+            discrepancyRefreshing: false,
+            discrepancyRefreshStatus: "",
             returnDrawerOpen: false,
             returnDrawerRow: null,
             // Các section lớn ở trang tổng quan (trên tab nav) có thể thu gọn cho đỡ dài trang —
@@ -293,6 +295,7 @@ export class MisaInvoiceDashboard extends Component {
      * dần, thay vì chỉ nhảy qua tab phiếu không lọc gì như trước. */
     async openDiscrepancyDrawer() {
         this.state.discrepancyFilter = { category: "", month: "" };
+        this.state.discrepancyRefreshStatus = "";
         await this.loadDiscrepancy();
     }
 
@@ -300,6 +303,39 @@ export class MisaInvoiceDashboard extends Component {
         const key = this.state.discrepancyFilter.category;
         const cat = key && this.state.discrepancy && this.state.discrepancy.categories.find((c) => c.key === key);
         return cat ? cat.label : "";
+    }
+
+    /** Nút "Hỏi lại MISA theo đơn": soát từng lô 10 đơn đang lệch trong phạm vi ngày đang xem
+     * cho tới hết (mỗi lô 1 request ngắn, thấy được tiến độ), dừng khi 1 lô không soát được đơn
+     * nào (MISA đang lỗi), rồi tải lại số liệu. */
+    async refreshDiscrepancyOrders() {
+        this.state.discrepancyRefreshing = true;
+        let total = 0;
+        let failed = 0;
+        let startedAt = false;
+        try {
+            for (;;) {
+                this.state.discrepancyRefreshStatus = `Đang hỏi MISA... đã soát ${total} đơn`;
+                const res = await this.orm.call("stock.picking", "refresh_misa_invoice_gap_orders", [], {
+                    date_from: this.filterParams.date_from,
+                    date_to: this.filterParams.date_to,
+                    started_at: startedAt,
+                });
+                total += res.done;
+                failed = res.failed;
+                startedAt = res.started_at;
+                if (!res.remaining || !res.done) {
+                    break;
+                }
+            }
+            this.state.discrepancyRefreshStatus = `Đã soát ${total} đơn với MISA` +
+                (failed ? `, ${failed} đơn MISA chưa trả lời được — thử lại sau` : "") + ".";
+            await this._reload();
+            await this.loadDiscrepancy();
+        } catch (e) {
+            this.state.discrepancyRefreshStatus = "Lỗi: " + (e.message || e);
+        }
+        this.state.discrepancyRefreshing = false;
     }
 
     /** Nhóm hải quan / sai số làm tròn không có phiếu nào để liệt kê — bấm vào thì bỏ qua. */

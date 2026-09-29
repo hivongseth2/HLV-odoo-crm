@@ -1598,6 +1598,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         except Exception:
             _logger.exception("❌ [MISA INVOICE STATUS CRON] Lỗi kiểm lại phiếu gắn đề nghị '_N'")
 
+        try:
+            self._cron_refresh_misa_invoice_orders()
+        except Exception:
+            _logger.exception("❌ [MISA INVOICE STATUS CRON] Lỗi soát theo đơn hàng")
+
     def _misa_invoice_recheck_suffixed_requests(self, limit=20):
         """Kiểm lại với MISA các phiếu 'Đã xuất HĐ' đang gắn vào đề nghị "<tên phiếu>_N" — bản
         cũ tra đề nghị theo kiểu CHỨA rồi lấy dòng mới nhất, nên gắn nhầm đề nghị bổ sung thay
@@ -1605,7 +1610,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         không quét lại phiếu đã xuất HĐ nên phải có bước riêng này.
 
         Phiếu thật sự chỉ có đề nghị "_N" (không có đề nghị trùng tên) vẫn khớp điều kiện sau
-        khi kiểm — chặn bằng misa_invoice_last_checked, mỗi phiếu kiểm lại tối đa 1 lần/tuần.
+        khi kiểm — chặn bằng misa_invoice_last_checked, mỗi phiếu kiểm lại tối đa 1 lần/ngày.
+        Không để dài hơn: phiếu vừa được luồng khác kiểm (ghi last_checked) sẽ bị hoãn đúng
+        chừng đó, trong khi đang gắn sai đề nghị (case KBC/OUT/10278 vẫn '_1' sau deploy).
         Bỏ qua phiếu gắn đề nghị tay (người dùng đã chọn)."""
         self.env.cr.execute(r"""
             SELECT id FROM stock_picking
@@ -1615,7 +1622,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
               AND (misa_invoice_last_checked IS NULL OR misa_invoice_last_checked < %s)
             ORDER BY misa_invoice_last_checked NULLS FIRST
             LIMIT %s
-        """, (fields.Datetime.now() - timedelta(days=7), limit))
+        """, (fields.Datetime.now() - timedelta(days=1), limit))
         pickings = self.browse([row[0] for row in self.env.cr.fetchall()])
         if pickings:
             pickings.action_check_misa_invoice_status()
@@ -1941,6 +1948,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for line in created:
             if self._misa_invoice_customs_try_match(line):
                 matched_count += 1
+        created.mapped('sale_order_id').filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
         return {'count': len(created), 'matched_count': matched_count, 'invoice_no': preview['invoice_no']}
 
     def _misa_invoice_reconcile_line_match(self, line, match_model_name, apply_to_picking=None, exclude_picking_ids=None):
@@ -2372,6 +2380,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'misa_invoice_returned_amount': returned_amount,
             'misa_invoice_net_actual_amount': max(gross - returned_amount, 0.0),
         })
+        # Tiền xuất kho đổi (phiếu mới xuất, hàng trả) thì chia lại tiền HĐ của đơn đã soát —
+        # thuần DB, không hỏi lại MISA.
+        self.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
 
     def _misa_invoice_customs_try_match_for_picking(self):
         """Thử khớp NGAY các dòng hải quan đang pending/partial của ĐÚNG (các) đơn bán trên

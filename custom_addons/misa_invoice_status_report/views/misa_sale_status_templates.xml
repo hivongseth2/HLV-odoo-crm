@@ -743,6 +743,11 @@
                     </div>
                     <div id="msu-gap-body" class="msu-modal-wide-body"/>
                     <div class="msu-modal-actions">
+                        <span class="msu-muted" id="msu-gap-refresh-status" style="font-size:.78rem;margin-right:auto"></span>
+                        <button class="msu-btn msu-btn-outline-primary msu-btn-sm" id="msu-gap-refresh"
+                                title="Hỏi MISA mọi đề nghị xuất HĐ có ghi mã từng đơn đang lệch (ai lập cũng được) rồi tính lại — dùng khi kế toán báo đã xuất HĐ mà ở đây vẫn báo thiếu.">
+                            <i class="fa fa-refresh"></i> Hỏi lại MISA theo đơn
+                        </button>
                         <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-gap-close">Đóng</button>
                     </div>
                 </div>
@@ -2872,6 +2877,7 @@
                             return {saler_code: state.salerCode, date_from: state.dateFrom, date_to: state.dateTo};
                         },
                         openPicking: openSiblingDrawer,
+                        onDataChanged: loadReconciliationTotals,
                         openShopeeTab: function(pickingName) {
                             document.getElementById('msu-shopee-search').value = pickingName;
                             document.getElementById('msu-tab-btn-shopee').click();

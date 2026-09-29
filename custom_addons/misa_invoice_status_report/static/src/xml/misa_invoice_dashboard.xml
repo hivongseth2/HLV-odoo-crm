@@ -1981,6 +1981,14 @@
                                 Cần xử lý <b><t t-esc="formatCurrency(state.discrepancy.outstanding_amount)"/></b> — cộng các nhóm
                                 dưới đây ra đúng số này (đã bỏ phần đã xác minh xong). Bấm 1 nhóm hoặc 1 tháng để lọc.
                             </div>
+                            <div class="miv-drawer-actions" style="margin: 8px 0 0">
+                                <button class="btn btn-sm btn-outline-primary" t-att-disabled="state.discrepancyRefreshing"
+                                        t-on-click="refreshDiscrepancyOrders"
+                                        title="Hỏi MISA mọi đề nghị xuất HĐ có ghi mã từng đơn đang lệch (ai lập cũng được) rồi tính lại — dùng khi kế toán báo đã xuất HĐ mà ở đây vẫn báo thiếu.">
+                                    <i t-attf-class="fa fa-refresh {{ state.discrepancyRefreshing ? 'fa-spin' : '' }}"/> Hỏi lại MISA theo đơn
+                                </button>
+                                <span class="miv-subtable-hint" t-if="state.discrepancyRefreshStatus" t-esc="state.discrepancyRefreshStatus"/>
+                            </div>
                         </div>
                         <i class="fa fa-times miv-drawer-close" t-on-click="closeDiscrepancyDrawer"/>
                     </div>
@@ -2050,7 +2058,13 @@
                                             <b><t t-esc="row.name"/></b>
                                             <span class="miv-badge miv-badge-shopee" t-if="row.source === 'shopee'">Shopee</span>
                                             <div class="miv-subtable-hint"><t t-esc="row.partner_name"/> · <t t-esc="row.date_done"/></div>
-                                            <div class="miv-subtable-hint" t-if="row.group_picking_names and row.group_picking_names.length > 1">
+                                            <div class="miv-subtable-hint" t-foreach="row.order_notes or []" t-as="note" t-key="note.order">
+                                                Theo MISA, đơn <t t-esc="note.order"/> đã xuất HĐ <t t-esc="formatCurrency(note.invoiced)"/> qua đề nghị
+                                                <t t-if="note.customs"> + <t t-esc="formatCurrency(note.customs)"/> HĐ hải quan</t>
+                                                <t t-if="note.pending">(còn <t t-esc="formatCurrency(note.pending)"/> đề nghị chưa phát hành)</t>
+                                                <t t-if="note.sources">: <t t-esc="note.sources.split('\n').join('; ')"/></t>
+                                            </div>
+                                            <div class="miv-subtable-hint" t-if="!row.order_based and row.group_picking_names and row.group_picking_names.length > 1">
                                                 Đề nghị gộp <t t-esc="row.group_picking_names.length"/> phiếu (<t t-esc="row.group_picking_names.join(', ')"/>)
                                                 — HĐ của đề nghị <t t-esc="formatCurrency(row.request_invoice_amount)"/>,
                                                 đã chia <t t-esc="formatCurrency(row.passed_to_others_amount)"/> cho các phiếu đi kèm.

@@ -39,6 +39,42 @@ def pair_invoice_lines(stored_lines, fresh_lines):
     return paired
 
 
+def split_by_weights(total, weights):
+    """Chia total theo tỉ lệ weights.
+
+    Nhận: total — số tiền cần chia; weights — list số >= 0.
+    Trả: list cùng độ dài weights, tổng đúng bằng total. Mọi weight bằng 0 thì chia đều;
+    weights rỗng trả [].
+    """
+    if not weights:
+        return []
+    base = sum(weights)
+    if base <= 0:
+        return [total / len(weights)] * len(weights)
+    return [total * weight / base for weight in weights]
+
+
+def allocate_fifo(invoiced_total, parts):
+    """Rót tiền hóa đơn của 1 đơn hàng vào các phiếu xuất kho, phiếu xuất trước nhận trước.
+
+    Nhận: invoiced_total — tổng tiền đã xuất HĐ của đơn; parts — list (key, tiền xuất kho)
+    đã xếp theo thứ tự ngày xuất kho.
+    Trả: {key: tiền HĐ quy về}. Mỗi phiếu nhận tối đa bằng tiền xuất kho của nó; phần HĐ còn
+    dư sau khi rót đủ mọi phiếu cộng vào phiếu CUỐI — tổng phân bổ luôn bằng tổng HĐ, phần dư
+    hiện ra ở phiếu đó thành "HĐ nhiều hơn xuất kho" thay vì biến mất. invoiced_total <= 0 thì
+    mọi phiếu 0; parts rỗng trả {}.
+    """
+    remaining = max(invoiced_total or 0.0, 0.0)
+    result = {}
+    for key, shipped in parts:
+        take = min(remaining, max(shipped or 0.0, 0.0))
+        result[key] = take
+        remaining -= take
+    if parts and remaining > 0:
+        result[parts[-1][0]] += remaining
+    return result
+
+
 def voucher_line_amount_with_vat(line, fallback_ratio):
     """Tiền CÓ VAT của 1 dòng hàng chứng từ bán hàng MISA.
 
