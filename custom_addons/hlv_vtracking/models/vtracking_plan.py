@@ -124,6 +124,11 @@ class HlvVtrackingPlan(models.Model):
     actual_end_at = fields.Datetime(string='Về thực tế', readonly=True, copy=False)
     has_actual_data = fields.Boolean(compute='_compute_has_actual_data')
     zone_warning = fields.Char(compute='_compute_zone_warning', string='Cảnh báo cụm')
+    stale_document_warning = fields.Text(
+        compute='_compute_stale_document_warning', string='Chứng từ không còn để giao',
+        help='Phiếu đã xuất xong hoặc đã huỷ mà vẫn nằm trong kế hoạch. Hàng đã đi rồi thì '
+             'không còn gì để xếp lên xe nữa.',
+    )
     rule_warning = fields.Text(
         compute='_compute_rule_warning', string='Cảnh báo luật khách',
         help='Những luật Odoo không tự biết: khách phải là điểm cuối, một công ty không '
@@ -298,6 +303,32 @@ class HlvVtrackingPlan(models.Model):
                 plan.zone_id = plan.zone_id or False
                 continue
             plan.zone_id = max(set(zones), key=zones.count)
+
+    @api.depends('line_ids.picking_id.state')
+    def _compute_stale_document_warning(self):
+        """Phiếu trong kế hoạch mà kho đã xuất xong hoặc đã huỷ.
+
+        Vì sao cần: lúc xếp, phiếu còn Sẵn sàng; kho xuất xong sau đó mà kế hoạch không
+        biết. Đo 29/09/2026 trên production: 3 phiếu đã giao xong lúc sáng vẫn nằm trong
+        kế hoạch chiều — tài xế cầm tờ kế hoạch đó là chạy lại một chuyến đã xong.
+
+        Chỉ CẢNH BÁO, không tự gỡ: có trường hợp chính chuyến này vừa giao xong và kho
+        bấm xác nhận ngay, lúc đó dòng phải ở lại để đối chiếu kế hoạch với thực tế.
+        """
+        for plan in self:
+            xong = plan.line_ids.filtered(lambda line: line.picking_id.state == 'done')
+            huy = plan.line_ids.filtered(lambda line: line.picking_id.state == 'cancel')
+            cau = []
+            if xong:
+                cau.append('%s phiếu đã xuất xong: %s.'
+                           % (len(xong), ', '.join(xong.mapped('display_reference'))))
+            if huy:
+                cau.append('%s phiếu đã huỷ: %s.'
+                           % (len(huy), ', '.join(huy.mapped('display_reference'))))
+            if cau and plan.state == 'draft':
+                cau.append('Kế hoạch còn nháp nên đây là hàng KHÔNG còn để giao — '
+                           'bấm "Gỡ chứng từ đã xong" nếu không phải chuyến này vừa giao.')
+            plan.stale_document_warning = ' '.join(cau) or False
 
     @api.depends('zone_id', 'stop_count', 'line_ids.zone_id')
     def _compute_zone_warning(self):

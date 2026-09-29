@@ -160,6 +160,26 @@ class HlvVtrackingPlanActions(models.Model):
                         'Cấu hình, nên phiếu yêu cầu sẽ không ai nhận.')
         return '\n'.join(dong)
 
+    def action_drop_finished_lines(self):
+        """Gỡ các dòng có phiếu đã xuất xong hoặc đã huỷ khỏi kế hoạch NHÁP."""
+        self.ensure_one()
+        if self.state != 'draft':
+            raise UserError('Chỉ gỡ được trên kế hoạch NHÁP. "%s" đã chốt — muốn sửa thì '
+                            'bấm "Về nháp" trước.' % self.name)
+        bo = self.line_ids.filtered(
+            lambda line: line.picking_id.state in ('done', 'cancel')
+        )
+        if not bo:
+            raise UserError('Không có dòng nào để gỡ: mọi phiếu trong kế hoạch này vẫn '
+                            'còn phải giao.')
+        nhan = ', '.join(bo.mapped('display_reference'))
+        self.message_post(
+            body='Đã gỡ %s dòng vì phiếu đã xuất xong hoặc đã huỷ: %s.' % (len(bo), nhan),
+            message_type='notification',
+        )
+        bo.unlink()
+        return True
+
     def action_open_lines(self):
         self.ensure_one()
         return {
