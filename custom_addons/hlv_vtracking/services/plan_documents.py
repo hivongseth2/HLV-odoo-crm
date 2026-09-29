@@ -105,9 +105,16 @@ def classify_documents(documents):
 def add_documents(plan, pickings=None, orders=None):
     """Xếp phiếu giao và/hoặc đơn bán vào kế hoạch, nối vào cuối thứ tự ghé.
 
-    Trả về dict ``{'added_line_ids': [...], 'rejected': [...]}``. Không ném lỗi vì chứng
-    từ bị loại — bên gọi tự quyết định đó có phải lỗi không (hộp thoại coi đơn đã đóng là
-    lỗi để người dùng biết; API trả danh sách để AI tự điều chỉnh).
+    Trả về dict ``{'added_line_ids', 'attached_line_ids', 'rejected'}``. Không ném lỗi vì
+    chứng từ bị loại — bên gọi tự quyết định đó có phải lỗi không (hộp thoại coi đơn đã
+    đóng là lỗi để người dùng biết; API trả danh sách để AI tự điều chỉnh).
+
+    **Một lần giao chỉ được một dòng.** Xếp đơn bán trước rồi xếp phiếu của chính đơn đó
+    sau là chuyện thường gặp (chốt chuyến từ sáng, kho soạn xong lúc trưa). Hai dòng mang
+    hai mã khác nhau nên ràng buộc unique không bắt được, mà tiền hàng thì bị cộng hai
+    lần: đo 29/09/2026 trên kế hoạch thật, 57,4 triệu bị đếm đúp trong một chuyến. Nên
+    phiếu được GẮN vào dòng đang chờ phiếu của đơn đó (``attached_line_ids``), và đơn bán
+    có phiếu đã nằm trong kế hoạch thì bị loại.
 
     Ném ``UserError`` khi vượt trần số lượng hoặc kế hoạch không còn sửa được.
     """
@@ -129,16 +136,44 @@ def add_documents(plan, pickings=None, orders=None):
     addable_pickings, rejected_pickings = classify_documents(pickings)
     addable_orders, rejected_orders = classify_documents(orders)
 
+    cho_phieu = {line.sale_order_id.id: line for line in plan.line_ids
+                 if line.sale_order_id and not line.picking_id}
+    da_co_phieu = {line.picking_id.sale_id.id for line in plan.line_ids if line.picking_id}
+
+    attached = plan.line_ids.browse()
+    tao_moi = plan.env['stock.picking']
+    for picking in addable_pickings:
+        line = cho_phieu.pop(picking.sale_id.id, None) if picking.sale_id else None
+        if line:
+            line.picking_id = picking.id
+            attached |= line
+        else:
+            tao_moi |= picking
+
+    con_lai_orders = plan.env['sale.order']
+    for order in addable_orders:
+        if order.id in da_co_phieu:
+            rejected_orders.append({
+                'id': order.id, 'name': order.name, 'reason': REASON_ALREADY_PLANNED,
+                'detail': 'Phiếu xuất của đơn này đã nằm trong chính kế hoạch "%s".'
+                          % plan.name,
+            })
+        else:
+            con_lai_orders |= order
+
     sequence = max(plan.line_ids.mapped('sequence') or [0])
     values = []
-    for field_name, documents in (('picking_id', addable_pickings), ('sale_order_id', addable_orders)):
+    for field_name, documents in (('picking_id', tao_moi), ('sale_order_id', con_lai_orders)):
         for document in documents:
             sequence += 10
             values.append({'plan_id': plan.id, field_name: document.id, 'sequence': sequence})
 
     lines = plan.env['hlv.vtracking.plan.line'].create(values) if values else plan.line_ids.browse()
+    if attached:
+        attached._sync_from_source()
     return {
         'added_line_ids': lines.ids,
+        'attached_line_ids': attached.ids,
         'rejected': rejected_pickings + rejected_orders,
     }
 
