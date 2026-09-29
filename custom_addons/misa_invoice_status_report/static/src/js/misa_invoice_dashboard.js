@@ -296,6 +296,12 @@ export class MisaInvoiceDashboard extends Component {
         await this.loadDiscrepancy();
     }
 
+    get discrepancyCategoryLabel() {
+        const key = this.state.discrepancyFilter.category;
+        const cat = key && this.state.discrepancy && this.state.discrepancy.categories.find((c) => c.key === key);
+        return cat ? cat.label : "";
+    }
+
     /** Nhóm hải quan / sai số làm tròn không có phiếu nào để liệt kê — bấm vào thì bỏ qua. */
     onDiscrepancyCategoryClick(cat) {
         if (cat.key !== "customs" && cat.key !== "rounding") {
