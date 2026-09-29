@@ -152,18 +152,39 @@ def review_request(plan, summary):
 
     Rỗng khi công ty chưa khai tài khoản worker AI: lúc đó không ai nhận phiếu, tạo ra chỉ
     để nằm đọng. Bên gọi phải nói rõ điều đó cho người bấm nút.
+
+    Gọi cả khi máy không xếp thêm được gì: người bấm nút muốn một cặp mắt nữa nhìn lại
+    chuyến, không chỉ muốn thêm phiếu. Lúc đó ``summary['zone']`` rỗng, nên câu mô tả phải
+    dựng từ những việc THẬT SỰ đã làm chứ không nhắc tới cụm.
+
+    Hai chỗ trả rỗng, vì tạo phiếu ở đó chỉ tốn một lượt gọi Claude mà không ai cần:
+
+    * kế hoạch chưa có dòng nào — không có gì để soát;
+    * đã có phiếu của chính kế hoạch này đang chờ hoặc đang xử lý — bấm nút hai lần không
+      được trả lời hai lần.
     """
     Request = plan.env['hlv.vtracking.ai.request']
-    if not plan.company_id.sudo().ai_worker_user_id:
+    if not plan.company_id.sudo().ai_worker_user_id or not plan.line_ids:
+        return Request.browse()
+    dang_cho = Request.sudo().search_count([
+        ('plan_id', '=', plan.id), ('state', 'in', ('pending', 'processing')),
+    ])
+    if dang_cho:
         return Request.browse()
 
     bo_qua = '; '.join('%s: %s phiếu' % (ly_do, len(phieu))
                        for ly_do, phieu in summary['skipped'].items())
+    da_lam = []
+    if summary.get('removed'):
+        da_lam.append('gỡ %s dòng không còn gì để giao' % summary['removed'])
+    if summary['added']:
+        da_lam.append('xếp %s phiếu vào %s điểm dừng của cụm %s'
+                      % (summary['added'], summary['stops'], summary['zone'].name))
     message = (
-        'Máy vừa tự xếp %s phiếu vào %s điểm dừng của cụm %s. Nhờ soát lại: thứ tự ghé có '
-        'hợp lý không, có điểm nào giờ tới vô lý vì toạ độ sai không, đơn nào trễ hẹn mà '
-        'bị bỏ lại không, và có nên gom thêm điểm lẻ của cụm bên cạnh không.'
-        % (summary['added'], summary['stops'], summary['zone'].name)
+        'Máy vừa %s. Nhờ soát lại: thứ tự ghé có hợp lý không, có điểm nào giờ tới vô lý '
+        'vì toạ độ sai không, đơn nào trễ hẹn mà bị bỏ lại không, và có nên gom thêm điểm '
+        'lẻ của cụm bên cạnh không.'
+        % (' và '.join(da_lam) or 'xem lại kế hoạch, không đổi gì')
     )
     if summary['left_out']:
         message += ' Dư trần điểm nên để lại: %s.' % ', '.join(summary['left_out'])
