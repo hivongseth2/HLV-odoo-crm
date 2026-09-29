@@ -37,18 +37,25 @@ FLAG_LABELS = {
 }
 
 
-def blocking_flags(procedure_required=None, delivery_channel=None):
+def blocking_flags(procedure_required=None, delivery_channel=None, procedure_ready=False):
     """Các cờ chặn của một điểm giao, đã chuẩn hoá.
 
     :param procedure_required: ``none`` | ``customs`` | ``register`` | ``both`` | None
     :param delivery_channel: mã kênh giao (xem ``vtracking_channel``), có thể None
+    :param procedure_ready: True khi người bán đã báo LÀM XONG thủ tục cho chứng từ này
     :returns: list dict ``{'code', 'label', 'hard'}``, rỗng nếu không vướng gì.
 
     Thứ tự: cờ CỨNG trước, để bên nào chỉ đọc phần tử đầu vẫn thấy thứ nguy hiểm nhất.
+
+    ``procedure_ready`` bỏ HẲN cờ thủ tục chứ không hạ xuống mức mềm: cờ mềm mang nghĩa
+    "xe công ty không phải chạy" (xem ``has_hard_block`` và ``needs_truck`` ở
+    ``services/ai/dispatch_service``), để lại một cờ mềm ở đây là đơn biến mất khỏi mọi
+    chuyến. Việc khách CÓ cần thủ tục hay không vẫn đọc được ở ``procedure_required``.
     """
     flags = [
         {'code': code, 'label': FLAG_LABELS[code], 'hard': True}
-        for code in PROCEDURE_FLAGS.get(procedure_required or 'none', ())
+        for code in (() if procedure_ready
+                     else PROCEDURE_FLAGS.get(procedure_required or 'none', ()))
     ]
     if delivery_channel in CHANNELS_WITHOUT_TRUCK:
         flags.append({

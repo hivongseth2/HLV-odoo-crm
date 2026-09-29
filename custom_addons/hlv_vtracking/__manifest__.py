@@ -65,6 +65,7 @@ kế hoạch, nên phụ thuộc thêm sale_stock, purchase_stock và hlv_barcod
         'views/vtracking_zone_views.xml',
         'views/vtracking_place_views.xml',
         'views/vtracking_partner_profile_views.xml',
+        'views/vtracking_procedure_views.xml',
         'views/vtracking_place_import_views.xml',
         'views/vtracking_rule_import_views.xml',
         'views/vtracking_plan_views.xml',

@@ -83,6 +83,11 @@ class HlvVtrackingPlanLineProfile(models.Model):
         values['delivery_channel'] = (
             channel or self.place_id.profile_id.delivery_method or False
         )
+        # Người bán đã báo xong thủ tục trên chứng từ thì dòng sinh ra không bắt người
+        # điều phối tích lại. Chiều ngược lại KHÔNG gỡ: điều phối đã tích tay là họ biết
+        # rõ hơn chứng từ.
+        if document and document.vtracking_procedure_ready:
+            values['procedure_ready'] = True
         return values
 
     def action_mark_procedure_ready(self):

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Gắn vào menu Thao tác của đơn bán và phiếu giao thay vì chèn ô vào form của module
+         core: module này không inherit view core nào, và người không có quyền thì cũng
+         không thấy mục này. Chọn nhiều dòng ở danh sách rồi bấm một lần cũng được. -->
+
+    <record id="action_sale_order_procedure_done" model="ir.actions.server">
+        <field name="name">Đã xong thủ tục giao hàng</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="binding_model_id" ref="sale.model_sale_order"/>
+        <field name="binding_view_types">form,list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_vtracking_procedure_done()</field>
+        <field name="groups_id" eval="[(4, ref('sales_team.group_sale_salesman')),
+                                       (4, ref('hlv_vtracking.group_vtracking_user'))]"/>
+    </record>
+
+    <record id="action_stock_picking_procedure_done" model="ir.actions.server">
+        <field name="name">Đã xong thủ tục giao hàng</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">form,list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_vtracking_procedure_done()</field>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_user')),
+                                       (4, ref('hlv_vtracking.group_vtracking_user'))]"/>
+    </record>
+
+</odoo>

@@ -44,11 +44,17 @@ def dispatch_block(order, place, coords, samples, near_km=DEFAULT_ZONE_MATCH_KM)
     channel = order._vtracking_delivery_channel() or (
         profile.delivery_method if profile else None
     )
-    flags = blocking_flags(profile.procedure_required if profile else None, channel)
+    procedure_required = profile.procedure_required if profile else None
+    ready = order.vtracking_procedure_ready
+    flags = blocking_flags(procedure_required, channel, procedure_ready=ready)
     soft = [flag for flag in flags if not flag['hard']]
     return {
         'blocking': flags,
         'blocked': has_hard_block(flags),
+        # Vẫn trả cả hai ô dù đã hết chặn: AI cần biết đây là khách CÓ thủ tục và ai đó đã
+        # làm xong, khác hẳn khách không cần thủ tục gì.
+        'procedure_required': procedure_required or None,
+        'procedure_ready': ready,
         'delivery_channel': channel or None,
         # Cờ mềm nào cũng có nghĩa "không cần xe công ty" — xem vtracking_blocking.
         'needs_truck': not soft,

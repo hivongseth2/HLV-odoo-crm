@@ -105,10 +105,14 @@ class HlvVtrackingPlanActions(models.Model):
         return True
 
     def action_autoload_documents(self):
-        """Xếp sẵn phiếu của một cụm vào kế hoạch rỗng, rồi sắp thứ tự ghé.
+        """Xếp sẵn phiếu của một cụm vào kế hoạch rỗng, sắp thứ tự ghé, rồi nhờ AI soát.
 
-        Chỉ là ĐỀ XUẤT: kế hoạch vẫn ở trạng thái nháp, người điều phối thêm bớt rồi mới
-        chốt. Việc chọn nằm ở ``services/vtracking_autoload``.
+        Ba bước, mỗi bước một vai: máy áp LUẬT (phiếu nào xếp được, cụm nào, trần điểm),
+        AI đọc những gì luật không nói được (đơn trễ hẹn, toạ độ trông sai, điểm lẻ nên
+        gom), người điều phối QUYẾT.
+
+        Chỉ là ĐỀ XUẤT: kế hoạch vẫn ở trạng thái nháp sau cả ba bước. Việc chọn nằm ở
+        ``services/vtracking_autoload``.
         """
         self.ensure_one()
         if self.state != 'draft':
@@ -121,6 +125,8 @@ class HlvVtrackingPlanActions(models.Model):
                 % (self.start_place_id.name or 'chưa chọn')
             )
         summary = vtracking_autoload.autoload(self)
+        summary['request'] = (vtracking_autoload.review_request(self, summary)
+                              if summary['added'] else None)
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -145,6 +151,13 @@ class HlvVtrackingPlanActions(models.Model):
                         % ', '.join(summary['left_out'][:5]))
         for ly_do, phieu in summary['skipped'].items():
             dong.append('Bỏ %s phiếu — %s.' % (len(phieu), ly_do))
+        request = summary.get('request')
+        if request:
+            dong.append('Đã gửi AI soát lại (%s). Kế hoạch vẫn là bản nháp cho tới khi '
+                        'bạn bấm Chốt.' % request.name)
+        elif summary.get('added'):
+            dong.append('CHƯA gửi AI soát: công ty chưa khai "Tài khoản worker AI" ở '
+                        'Cấu hình, nên phiếu yêu cầu sẽ không ai nhận.')
         return '\n'.join(dong)
 
     def action_open_lines(self):
