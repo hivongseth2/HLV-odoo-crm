@@ -20,6 +20,7 @@ import logging.handlers
 import os
 import re
 import queue
+import shutil
 import signal
 import subprocess
 import threading
@@ -30,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.1.0'
+AGENT_VERSION = '2.2.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -60,6 +61,14 @@ UPLOAD_RETRIES = 5
 # So dong stderr cuoi cung giu lai cho moi tien trinh ffmpeg. Chi de bao loi nen
 # khong can nhieu; giu nguyen ca phien thi mot camera nhieu se ngon het bo nho.
 STDERR_KEEP_LINES = 80
+
+# Cap nhat hong thi cho chung nay giay moi thu lai. Khong co no, mot ban moi
+# loi se lam agent tai di tai lai moi 2 giay cho toi khi co nguoi phat hien.
+UPDATE_RETRY_SECONDS = 600
+
+# Ban agent phai lon hon nguong nay moi duoc coi la tai du. Ban that ~40KB;
+# mot trang loi HTML hay mot lan tai hut deu nho hon nhieu.
+MIN_AGENT_BYTES = 10 * 1024
 
 # Quet lai file chua gui duoc moi chung nay giay. Khong quet moi vong poll (2
 # giay): mang dang hong ma dong lien tuc chi to lam nghen them.
@@ -250,6 +259,8 @@ class Agent:
         self.session = requests.Session()
         self.active = {}  # recording_id -> Recorder
         self.running = True
+        self.last_update_try = 0.0
+        self.exit_for_update = False
 
         # Gui file o LUONG RIENG. Truoc day upload chay thang trong vong lap
         # poll, nen suot ca chuc phut gui mot file lon, agent khong goi Odoo lan
@@ -469,6 +480,112 @@ class Agent:
             if tail:
                 log.warning("rec=%s ffmpeg kêu trước khi dừng: %s", recording_id, tail)
             self.stop_recording(recording_id)
+
+    # ---------------- tu cap nhat ----------------
+    def is_idle(self):
+        """Bàn này có đang rảnh không: không camera nào ghi, không file chờ gửi.
+
+        Trả: True khi rảnh. Đây là điều kiện BẮT BUỘC trước khi tự cập nhật —
+            khởi động lại giữa lúc đang quay là mất bằng chứng của phiếu đó, mà
+            đó đúng là thứ cả hệ thống này sinh ra để chống.
+        """
+        if self.active:
+            return False
+        with self.upload_lock:
+            return not self.uploading
+
+    def _verify_agent_file(self, path):
+        """Chạy thử file agent vừa tải. Trả (ok, mô tả).
+
+        Đây là khâu chặn quan trọng nhất của việc tự cập nhật: mọi bàn cùng tải
+        một file từ một nguồn, nên một file hỏng là chết đồng loạt. Gọi thẳng
+        "python <file> --version" bắt được cả lỗi cú pháp lẫn lỗi thiếu thư
+        viện, những thứ mà chỉ đọc dung lượng không thấy được.
+        """
+        try:
+            size = os.path.getsize(path)
+        except OSError as exc:
+            return False, 'không đọc được file vừa tải: %s' % exc
+        if size < MIN_AGENT_BYTES:
+            return False, 'file chỉ %d byte, quá nhỏ để là agent thật' % size
+
+        try:
+            proc = subprocess.run(
+                [sys.executable, path, '--version'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                timeout=60, creationflags=NO_WINDOW,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, 'không chạy thử được: %s' % exc
+
+        out = (proc.stdout or b'').decode('utf-8', 'replace').strip()
+        if proc.returncode != 0:
+            return False, 'chạy thử thất bại (mã %s): %s' % (proc.returncode, out[-300:])
+        if not out:
+            return False, 'chạy thử không in ra phiên bản nào'
+        return True, out
+
+    def self_update(self):
+        """Tải bản agent mới từ Odoo, kiểm rồi thay file và thoát.
+
+        Thoát là xong việc: Windows có cửa canh Scheduled Task, Linux có systemd
+        Restart=always — cả hai đều bật lại agent, lúc đó nó chạy file mới.
+
+        Không bao giờ ghi đè file đang chạy trước khi bản mới chạy thử được. Bản
+        cũ được giữ lại ở đuôi .bak để còn quay về bằng tay.
+        """
+        now = time.time()
+        if now - self.last_update_try < UPDATE_RETRY_SECONDS:
+            return False
+        self.last_update_try = now
+
+        current = os.path.abspath(__file__)
+        new_path = current + '.new'
+        log.info("Odoo báo có bản agent mới, đang tải về")
+        try:
+            resp = self.session.get(
+                '%s/pack_agent/download/agent' % self.base_url, timeout=120)
+            resp.raise_for_status()
+            with open(new_path, 'wb') as handle:
+                handle.write(resp.content)
+        except (requests.RequestException, OSError) as exc:
+            log.error("không tải được bản agent mới: %s", exc)
+            _remove(new_path)
+            return False
+
+        ok, detail = self._verify_agent_file(new_path)
+        if not ok:
+            # Giu nguyen ban dang chay. Mot ban hong khong duoc phep lam chet ban
+            # dang chay ngon lanh - do la khac biet giua "khong cap nhat duoc" va
+            # "ban dong goi ngung hoat dong".
+            log.error("bản agent mới KHÔNG dùng được, giữ nguyên bản cũ: %s", detail)
+            _remove(new_path)
+            return False
+
+        # Kiem lai lan cuoi ngay truoc khi thay: tai + chay thu mat vai giay, du
+        # de mot phieu moi bat dau quay.
+        if not self.is_idle():
+            log.info("vừa có việc trong lúc tải, hoãn cập nhật tới lần rảnh sau")
+            _remove(new_path)
+            return False
+
+        backup = current + '.bak'
+        try:
+            _remove(backup)
+            shutil.copy2(current, backup)
+            os.replace(new_path, current)
+        except OSError as exc:
+            log.error("không thay được file agent: %s", exc)
+            _remove(new_path)
+            return False
+
+        log.info("đã cập nhật agent (%s), thoát để chạy bản mới", detail)
+        # Thoat khac 0: tren Windows, Scheduled Task chi khoi dong lai sau 1 phut
+        # khi tien trinh BAO LOI; thoat 0 thi phai doi cua canh 5 phut. systemd
+        # Restart=always thi kieu nao cung bat lai sau 10 giay.
+        self.running = False
+        self.exit_for_update = True
+        return True
 
     # ---------------- gửi file ----------------
     # ---------------- day thang len Google Drive ----------------
@@ -710,6 +827,10 @@ class Agent:
                     ok_count += 1
                     for command in result.get('commands') or []:
                         self.handle(command)
+                    # Sau khi xu ly lenh: mot lenh start vua toi thi ban khong con
+                    # ranh nua, va is_idle() se thay dieu do.
+                    if result.get('update_agent') and self.is_idle():
+                        self.self_update()
                 elif result is not None:
                     fail_count += 1
                     log.error("Odoo từ chối: %s — kiểm lại station_key và token", result.get('error'))
@@ -972,7 +1093,15 @@ def main():
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--list-cameras', action='store_true',
                         help="Liệt kê tên thiết bị webcam USB để điền vào 'device'")
+    # Dung cho khau kiem truoc khi tu cap nhat: chay duoc lenh nay nghia la file
+    # khong loi cu phap va nap du thu vien.
+    parser.add_argument('--version', action='store_true',
+                        help="In phiên bản agent rồi thoát")
     args = parser.parse_args()
+
+    if args.version:
+        print(AGENT_VERSION)
+        return 0
 
     _setup_logging(args)
 
@@ -998,7 +1127,10 @@ def main():
     signal.signal(signal.SIGINT, agent.request_stop)
     signal.signal(signal.SIGTERM, agent.request_stop)
     agent.run()
-    return 0
+    # Thoat KHAC 0 sau khi tu cap nhat. Tren Windows, Scheduled Task chi khoi
+    # dong lai sau 1 phut khi tien trinh bao loi; thoat 0 thi phai doi cua canh
+    # 5 phut moi co agent tro lai - du lau de mot phieu bat dau ma khong ai ghi.
+    return 3 if agent.exit_for_update else 0
 
 
 if __name__ == '__main__':

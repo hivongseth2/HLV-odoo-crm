@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
 """Bàn đóng gói: một máy tính, một bộ camera, một agent ghi hình."""
+import logging
 import secrets
 from datetime import timedelta
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
+from odoo.tools import file_open
+
+from .pack_agent_utils import needs_agent_update, parse_agent_version
+
+_logger = logging.getLogger(__name__)
+
+# Odoo phuc vu dung file nay o /pack_agent/download/agent, nen phien ban khai
+# trong no CHINH LA ban moi nhat ma cac may dong goi se nhan duoc.
+AGENT_SOURCE = 'hlv_pack_recorder/agent/hlv_pack_agent.py'
 
 # Agent poll 2 giây một lần. Quá ngưỡng này không thấy tin tức thì coi như nó
 # không chạy — để rộng gấp nhiều lần chu kỳ poll vì mạng chớp là chuyện thường.
@@ -52,6 +63,93 @@ class HlvPackStation(models.Model):
         help="Agent im quá lâu nghĩa là máy tắt hoặc service chết — phiếu đóng gói ở bàn này sẽ không có video.",
     )
     agent_version = fields.Char(readonly=True)
+    agent_camera_codes = fields.Char(
+        "Camera agent đang khai", readonly=True,
+        help="Mã camera có trong file cấu hình của agent, do chính agent báo lên.",
+    )
+    camera_sync_warning = fields.Char(compute='_compute_camera_sync_warning')
+
+    agent_update_requested = fields.Boolean(
+        "Đang chờ cập nhật agent", readonly=True, copy=False,
+        help="Đã bấm 'Cập nhật agent'. Agent thấy cờ này ở lần gọi sau và chỉ "
+             "thực sự tải bản mới khi bàn đang rảnh — không camera nào đang ghi "
+             "và không còn video chờ gửi. Tự tắt khi bàn báo đã lên đúng bản.",
+    )
+    agent_latest_version = fields.Char(
+        "Bản agent mới nhất", compute='_compute_agent_update_available')
+    agent_update_available = fields.Boolean(
+        "Có bản agent mới", compute='_compute_agent_update_available')
+
+    @api.model
+    def _latest_agent_version(self):
+        """Phiên bản agent mà Odoo đang phục vụ.
+
+        Trả: chuỗi phiên bản. Biên: không đọc được file (bản build lỗi, thiếu
+            file) -> trả '' và ghi log. Chỗ gọi phải hiểu '' là KHÔNG BIẾT chứ
+            không phải "không có bản mới".
+        """
+        try:
+            with file_open(AGENT_SOURCE, 'r') as handle:
+                return parse_agent_version(handle.read())
+        except (OSError, ValueError):
+            _logger.warning("PACK_REC không đọc được %s để lấy phiên bản agent",
+                            AGENT_SOURCE)
+            return ''
+
+    @api.depends('agent_version')
+    def _compute_agent_update_available(self):
+        # Đọc file một lần cho cả recordset, không phải mỗi bản ghi một lần.
+        latest = self._latest_agent_version()
+        for station in self:
+            station.agent_latest_version = latest
+            station.agent_update_available = needs_agent_update(
+                station.agent_version, latest)
+
+    def action_request_agent_update(self):
+        """Đánh dấu các bàn được chọn cần lấy bản agent mới.
+
+        Không tự cập nhật hàng loạt: người dùng chọn bàn nào thì bàn đó đi, để
+        còn thử một máy trước rồi mới nhân ra. Bàn chưa từng có agent thì không
+        đánh dấu — chưa cài thì không có gì để cập nhật.
+        """
+        deployed = self.filtered(lambda s: s.is_agent_deployed())
+        if not deployed:
+            raise UserError(_(
+                "Không bàn nào trong số đã chọn từng có agent gọi vào. "
+                "Bàn chưa cài thì phải chạy lệnh cài đặt, không cập nhật được."))
+        deployed.write({'agent_update_requested': True})
+        _logger.info("PACK_REC yêu cầu cập nhật agent cho: %s",
+                     ', '.join(deployed.mapped('name')))
+
+        skipped = self - deployed
+        message = _("Đã yêu cầu %s bàn cập nhật. Agent sẽ tải bản mới ở lần gọi "
+                    "sau, khi bàn đang rảnh.") % len(deployed)
+        if skipped:
+            message += _(" Bỏ qua (chưa cài agent): %s") % ', '.join(skipped.mapped('name'))
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {'title': _("Cập nhật agent"), 'message': message,
+                       'type': 'success', 'sticky': False},
+        }
+
+    @api.depends('camera_ids.code', 'camera_ids.active', 'agent_camera_codes')
+    def _compute_camera_sync_warning(self):
+        """Camera khai trong Odoo mà agent chưa có URL.
+
+        Thêm camera trong Odoo không tự đẩy URL xuống máy đóng gói — Odoo cố ý
+        không giữ URL camera. Phải chạy lại script cài trên máy đó. Không đối
+        chiếu thì sai sót này chỉ lộ ra lúc một phiếu đóng gói thiếu video.
+        """
+        for station in self:
+            if not station.agent_camera_codes:
+                station.camera_sync_warning = False
+                continue
+            known = {c.strip() for c in station.agent_camera_codes.split(',') if c.strip()}
+            missing = [cam.name or cam.code
+                       for cam in station.camera_ids.filtered('active')
+                       if (cam.code or '') not in known]
+            station.camera_sync_warning = ', '.join(missing) if missing else False
 
     enroll_code = fields.Char(
         "Mã cài đặt", copy=False, readonly=True,

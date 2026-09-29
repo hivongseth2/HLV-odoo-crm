@@ -15,6 +15,12 @@
                decoration-danger="agent_status != 'alive'"/>
         <field name="agent_last_seen"/>
         <field name="agent_version"/>
+        <field name="agent_latest_version" string="Bản mới nhất" optional="show"/>
+        <field name="agent_update_available" column_invisible="1"/>
+        <field name="agent_update_requested" string="Chờ cập nhật" optional="show"/>
+        <button name="action_request_agent_update" type="object"
+                string="Cập nhật agent" icon="fa-download"
+                invisible="not agent_update_available or agent_update_requested"/>
       </list>
     </field>
   </record>
@@ -27,6 +33,9 @@
         <header>
           <button name="action_generate_enroll_code" type="object" string="Tạo mã cài đặt"
                   class="btn-primary"/>
+          <button name="action_request_agent_update" type="object"
+                  string="Cập nhật agent" class="btn-primary"
+                  invisible="not agent_update_available or agent_update_requested"/>
           <button name="action_reset_token" type="object" string="Sinh token mới"
                   confirm="Agent đang chạy sẽ bị từ chối cho tới khi anh cập nhật token mới vào file cấu hình của nó. Tiếp tục?"/>
         </header>
@@ -45,6 +54,9 @@
               <field name="agent_status"/>
               <field name="agent_last_seen"/>
               <field name="agent_version"/>
+              <field name="agent_latest_version"/>
+              <field name="agent_update_available" invisible="1"/>
+              <field name="agent_update_requested"/>
             </group>
           </group>
           <div class="alert alert-success" role="alert" invisible="not enroll_code">
@@ -62,6 +74,22 @@
             Bấm <b>Tạo mã cài đặt</b> ở trên để lấy lệnh cài cho máy đóng gói.
             Hoặc nếu agent đã cài rồi, chỉ cần mở <code>/pack_recorder/set_station</code>
             trên máy đó và chọn bàn này.
+          </div>
+          <div class="alert alert-info" role="alert"
+               invisible="not agent_update_requested">
+            Đã yêu cầu cập nhật agent. Máy đóng gói sẽ tải bản mới ở lần gọi kế
+            tiếp, <b>nhưng chỉ khi bàn đang rảnh</b> — không camera nào đang ghi
+            và không còn video chờ gửi. Đang đóng gói thì nó đợi xong mới cập
+            nhật, để không mất video của phiếu đang làm. Xong sẽ tự tắt dòng này.
+          </div>
+          <div class="alert alert-danger" role="alert" invisible="not camera_sync_warning">
+            <b>Agent chưa biết URL của camera:</b>
+            <field name="camera_sync_warning" readonly="1" nolabel="1" class="oe_inline"/>
+            <br/>
+            Camera này đã khai trong Odoo nhưng chưa có trong file cấu hình của agent,
+            nên phiếu đóng gói ở bàn này sẽ <b>thiếu video của camera đó</b>.
+            Bấm <b>Tạo mã cài đặt</b> rồi chạy lại lệnh cài trên máy đóng gói — Odoo
+            cố ý không giữ URL camera nên không tự đẩy xuống được.
           </div>
           <notebook>
             <page string="Camera">
