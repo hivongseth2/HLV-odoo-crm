@@ -8,6 +8,8 @@ from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
+from .misa_invoice_amount_utils import invoice_vat_ratio, voucher_line_amount_with_vat
+
 _logger = logging.getLogger(__name__)
 
 MISA_INVOICE_STATE_LABELS = {
@@ -1658,6 +1660,33 @@ class StockPickingMisaInvoiceStatus(models.Model):
         except Exception:
             _logger.exception("❌ [MISA GROUP DISCOVER CRON] Lỗi quét bù đơn xuất kèm")
 
+        try:
+            self._misa_invoice_recheck_suffixed_requests()
+        except Exception:
+            _logger.exception("❌ [MISA INVOICE STATUS CRON] Lỗi kiểm lại phiếu gắn đề nghị '_N'")
+
+    def _misa_invoice_recheck_suffixed_requests(self, limit=20):
+        """Kiểm lại với MISA các phiếu 'Đã xuất HĐ' đang gắn vào đề nghị "<tên phiếu>_N" — bản
+        cũ tra đề nghị theo kiểu CHỨA rồi lấy dòng mới nhất, nên gắn nhầm đề nghị bổ sung thay
+        vì đề nghị trùng tên (case KBC/OUT/10278 → KBC/OUT/10278_1). Cron trạng thái thường
+        không quét lại phiếu đã xuất HĐ nên phải có bước riêng này.
+
+        Phiếu thật sự chỉ có đề nghị "_N" (không có đề nghị trùng tên) vẫn khớp điều kiện sau
+        khi kiểm — chặn bằng misa_invoice_last_checked, mỗi phiếu kiểm lại tối đa 1 lần/tuần.
+        Bỏ qua phiếu gắn đề nghị tay (người dùng đã chọn)."""
+        self.env.cr.execute(r"""
+            SELECT id FROM stock_picking
+            WHERE misa_invoice_state = 'invoiced'
+              AND misa_invoice_request_refno LIKE name || '\_%%'
+              AND COALESCE(misa_invoice_manual_refno, '') = ''
+              AND (misa_invoice_last_checked IS NULL OR misa_invoice_last_checked < %s)
+            ORDER BY misa_invoice_last_checked NULLS FIRST
+            LIMIT %s
+        """, (fields.Datetime.now() - timedelta(days=7), limit))
+        pickings = self.browse([row[0] for row in self.env.cr.fetchall()])
+        if pickings:
+            pickings.action_check_misa_invoice_status()
+
     @api.model
     def get_misa_invoice_scan_candidates(
         self, limit=MISA_INVOICE_SCAN_BATCH_SIZE, date_from=False, date_to=False, include_invoiced=False,
@@ -1986,7 +2015,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if not inv_no:
             raise UserError("Vui lòng nhập số hóa đơn.")
         misa_utils = self.env['misa.api.utils']
-        voucher = misa_utils.get_voucher_by_inv_no(inv_no)
+        # Khớp ĐÚNG số hóa đơn — MISA tìm kiểu CHỨA, lấy dòng đầu có thể ra hóa đơn khác
+        # ("005309" ra cả "1005309").
+        voucher = misa_utils._misa_invoice_voucher_for_inv_no(inv_no)
         if not voucher:
             raise UserError("Không tìm thấy hóa đơn số \"%s\" trên MISA." % inv_no)
         refid = voucher.get('refid')
@@ -1996,6 +2027,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         orders = self.env['sale.order'].sudo().search([('name', 'in', order_codes)]) if order_codes else self.env['sale.order']
         orders_by_name = {order.name: order for order in orders}
 
+        # Tiền có VAT từng dòng lấy thẳng từ cột VAT của dòng; tỉ lệ tổng hóa đơn chỉ dùng khi
+        # MISA không trả cột đó.
+        fallback_ratio = invoice_vat_ratio(voucher.get('total_amount'), [line.get('amount_oc') or 0.0 for line in lines])
         preview_lines = []
         for line in lines:
             order_code = (line.get('order_code') or '').strip()
@@ -2009,6 +2043,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'quantity': line.get('quantity') or 0.0,
                 'unit_price': line.get('unit_price') or 0.0,
                 'amount': line.get('amount_oc') or 0.0,
+                'amount_with_vat': voucher_line_amount_with_vat(line, fallback_ratio),
             })
 
         conflict = self._misa_invoice_customs_conflicting_picking(voucher.get('inv_no') or inv_no)
@@ -2091,7 +2126,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'description': line['description'],
                 'quantity': line['quantity'],
                 'unit_price': line['unit_price'],
-                'amount': line['amount'],
+                'amount': line['amount_with_vat'],
+                'amount_before_vat': line['amount'],
+                'amount_includes_vat': True,
                 'fetched_by_id': self.env.user.id,
                 'fetched_at': fields.Datetime.now(),
             })
@@ -2265,13 +2302,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
         """Khi 1 phiếu xuất kho có >=1 lượt khớp hải quan (match_ids) — ghi nhận phiếu đó 'đã
         xuất HĐ' (nếu chưa từng ghi nhận qua luồng nào khác), lấy số HĐ/ngày HĐ từ lượt khớp
         ĐẦU TIÊN, tiền = tổng amount đã quy cho phiếu này qua các lượt khớp (không phải tổng cả
-        hóa đơn hay tổng cả dòng hải quan, vì 1 dòng có thể bị chia xuất kho nhiều đợt/phiếu)."""
-        if picking.misa_invoice_state == 'invoiced':
-            return
+        hóa đơn hay tổng cả dòng hải quan, vì 1 dòng có thể bị chia xuất kho nhiều đợt/phiếu).
+
+        Gọi lại sau MỖI lượt khớp/xóa khớp để cộng lại tiền: 1 hóa đơn nhiều dòng hàng khớp
+        vào cùng 1 phiếu qua nhiều lượt, trước đây chỉ lượt đầu được ghi (lượt sau gặp phiếu đã
+        'invoiced' thì bỏ qua) — case thật KBC/OUT/12416: xuất kho 50.015.000 đ, chỉ ghi được
+        890.000 đ của dòng hàng đầu tiên."""
+        if picking.misa_invoice_request_refid:
+            return  # đã có HĐ qua đề nghị thông thường — tiền HĐ do luồng đó quản, không ghi đè
         matches = self.env['misa.invoice.customs.match'].sudo().search(
             [('picking_id', '=', picking.id)], order='matched_at',
         )
         if not matches:
+            return
+        if picking.misa_invoice_state == 'invoiced':
+            amount = sum(matches.mapped('amount'))
+            if abs((picking.misa_invoice_amount or 0.0) - amount) > MISA_INVOICE_AMOUNT_TOLERANCE:
+                picking.misa_invoice_amount = amount
             return
         first_line = matches[0].line_id
         old_state = picking.misa_invoice_state
@@ -2399,6 +2446,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'misa_invoice_amount': 0.0,
             })
             picking.message_post(body="Đã xóa lượt khớp hải quan sai — trả phiếu về 'Chưa kiểm tra' để đối soát lại.")
+        elif remaining_matches:
+            self._misa_invoice_customs_apply_to_picking(picking)
         new_remaining = line.remaining_qty()
         if new_remaining <= 0.01:
             line.write({'match_state': 'matched', 'match_note': False})
@@ -2416,7 +2465,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         tương ứng, phiếu chưa hoàn tất, hoặc mới chỉ khớp được 1 phần số lượng) — tự thử khớp
         lại, không cần thao tác thủ công khi phiếu xuất kho được tạo/hoàn tất sau đó. LƯU Ý:
         trước đây chỉ quét đúng 'pending' — bỏ sót 'partial' khiến các dòng đã khớp 1 phần
-        (VD hóa đơn ghi 2 nhưng mới xuất kho 1) không bao giờ được cron tự thử lại nữa."""
+        (VD hóa đơn ghi 2 nhưng mới xuất kho 1) không bao giờ được cron tự thử lại nữa.
+
+        Kèm theo: đọc lại từ MISA các hóa đơn ghi nhận từ trước khi lưu tiền có VAT (tối đa 30
+        hóa đơn/lượt để 1 lượt cron không kéo dài) — tự hết việc khi đã đọc lại xong hết."""
+        try:
+            self.env['misa.invoice.customs.line'].resync_amounts_from_misa(limit=30)
+        except Exception:
+            _logger.exception("❌ [MISA CUSTOMS SCAN] Lỗi đọc lại tiền có VAT của hóa đơn hải quan")
         pending = self.env['misa.invoice.customs.line'].sudo().search(
             [('match_state', 'in', ('pending', 'partial'))], limit=200,
         )
@@ -3106,7 +3162,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         invoice_no = effective.misa_invoice_no
         if invoice_no:
             try:
-                voucher = misa_utils.get_voucher_by_inv_no(invoice_no)
+                voucher = misa_utils._misa_invoice_voucher_for_inv_no(invoice_no)
             except Exception:
                 _logger.exception("Lỗi tải hóa đơn MISA (inv_no=%s)", invoice_no)
                 voucher = None

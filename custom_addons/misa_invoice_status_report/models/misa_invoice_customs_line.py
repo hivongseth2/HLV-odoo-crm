@@ -1,5 +1,7 @@
 from odoo import api, fields, models
 
+from .misa_invoice_amount_utils import invoice_vat_ratio, pair_invoice_lines
+
 
 class MisaInvoiceCustomsLine(models.Model):
     _name = 'misa.invoice.customs.line'
@@ -31,7 +33,15 @@ class MisaInvoiceCustomsLine(models.Model):
     description = fields.Char(string='Tên hàng')
     quantity = fields.Float(string='Số lượng')
     unit_price = fields.Float(string='Đơn giá')
-    amount = fields.Float(string='Thành tiền (chưa VAT)')
+    # amount phải CÓ VAT: đem so với misa_invoice_net_actual_amount của phiếu (cũng có VAT).
+    # Dòng ghi nhận trước bản sửa này lưu nhầm số chưa VAT (amount_includes_vat=False) — cron
+    # hải quan tự đọc lại hóa đơn từ MISA và sửa, xem resync_amounts_from_misa().
+    amount = fields.Float(string='Thành tiền (có VAT)')
+    amount_before_vat = fields.Float(string='Thành tiền (chưa VAT)')
+    amount_includes_vat = fields.Boolean(string='Tiền đã gồm VAT', default=False)
+    # Lỗi lần đọc lại gần nhất — hóa đơn lỗi xếp sau hóa đơn chưa thử, để 1 hóa đơn MISA không
+    # còn tra được không chiếm mãi suất đọc lại của các hóa đơn khác mỗi lượt cron.
+    amount_resync_error = fields.Char(string='Lỗi đọc lại tiền từ MISA')
 
     # Khi lưu, hệ thống thử tìm NGAY phiếu xuất kho (đã done) khớp đơn bán + mã hàng — nếu
     # phiếu chưa tồn tại hoặc chưa hoàn tất, dòng này ở lại 'pending' và cron định kỳ
@@ -68,3 +78,55 @@ class MisaInvoiceCustomsLine(models.Model):
     def remaining_qty(self):
         self.ensure_one()
         return max(self.quantity - self.matched_qty, 0.0)
+
+    @api.model
+    def resync_amounts_from_misa(self, limit=None):
+        """Đọc lại từ MISA các hóa đơn có dòng còn lưu tiền chưa VAT và ghi đúng tiền có VAT
+        của TỪNG DÒNG (cùng cách tính với lúc ghi nhận mới, qua fetch_misa_customs_invoice).
+        Sửa TẠI CHỖ: ghi nhận lại hóa đơn (save_misa_customs_invoice) xóa dòng cũ, mất hết lượt
+        khớp tay. Lượt khớp đổi tiền theo đơn giá mới, rồi cộng lại tiền HĐ của phiếu.
+
+        Dòng đã lưu không còn trên hóa đơn MISA (hóa đơn bị sửa sau khi ghi nhận) quy đổi theo
+        tỉ lệ tổng hóa đơn MISA. Gọi MISA lỗi thì giữ nguyên, ghi lỗi vào amount_resync_error
+        để lượt sau thử lại (xếp sau hóa đơn chưa thử).
+
+        limit: số hóa đơn tối đa mỗi lượt (None = tất cả). Trả list {invoice_no, lines, before,
+        after, error} từng hóa đơn đã thử.
+        """
+        Picking = self.env['stock.picking'].sudo()
+        todo = self.sudo().search([('amount_includes_vat', '=', False)])
+        failed_before = set(todo.filtered('amount_resync_error').mapped('invoice_no'))
+        inv_nos = sorted(set(todo.mapped('invoice_no')), key=lambda inv: (inv in failed_before, inv))
+        report = []
+        for inv_no in inv_nos[:limit] if limit else inv_nos:
+            lines = todo.filtered(lambda l, inv_no=inv_no: l.invoice_no == inv_no)
+            before = sum(lines.mapped('amount'))
+            try:
+                preview = Picking.fetch_misa_customs_invoice(inv_no)
+            except Exception as e:
+                lines.write({'amount_resync_error': str(e)[:250]})
+                report.append({'invoice_no': inv_no, 'lines': len(lines), 'before': before, 'error': str(e)})
+                continue
+            fallback_ratio = invoice_vat_ratio(preview['total_amount'], [l['amount'] for l in preview['lines']])
+            paired = pair_invoice_lines(
+                [(l.id, l.order_code, l.inventory_item_code, l.quantity) for l in lines], preview['lines'],
+            )
+            for line in lines:
+                fresh = paired.get(line.id)
+                new_amount = fresh['amount_with_vat'] if fresh else line.amount * fallback_ratio
+                unit = new_amount / line.quantity if line.quantity else 0.0
+                line.write({
+                    'amount_before_vat': fresh['amount'] if fresh else line.amount,
+                    'amount': new_amount,
+                    'amount_includes_vat': True,
+                    'amount_resync_error': False,
+                })
+                for match in line.match_ids:
+                    match.amount = unit * match.quantity
+            for picking in lines.mapped('match_ids.picking_id'):
+                Picking._misa_invoice_customs_apply_to_picking(picking)
+            report.append({
+                'invoice_no': inv_no, 'lines': len(lines), 'before': before,
+                'after': sum(lines.mapped('amount')), 'unpaired': len(lines) - len(paired), 'error': False,
+            })
+        return report

@@ -41,6 +41,30 @@ def _normalize_inv_no(value):
     return raw.lstrip('0') or '0'
 
 
+def _pick_request_for_refno(rows, refno):
+    """Chọn đúng dòng "Đề nghị xuất HĐ" cho 1 refno trong kết quả tìm kiếm của MISA.
+
+    MISA tìm theo kiểu CHỨA trên nhiều cột cùng lúc và xếp mới nhất lên đầu, nên tìm
+    "KBC/OUT/10278" ra cả "KBC/OUT/10278_1" (đề nghị bổ sung lập sau) đứng TRƯỚC đề nghị chính
+    — lấy dòng đầu là gắn phiếu vào đề nghị 2,1tr thay vì đề nghị 57,4tr (case thật).
+
+    Nhận: rows — PageData của sa_invoice_request; refno — tên phiếu/mã cần tra.
+    Trả: dòng có refno trùng CHÍNH XÁC; không có thì dòng có journal_memo liệt kê đúng refno
+    (phiếu ăn theo đề nghị gộp); không có nữa thì dòng đầu (tìm theo mã đơn hàng, vốn không
+    bao giờ trùng refno). rows rỗng trả None.
+    """
+    if not rows:
+        return None
+    target = (refno or '').strip()
+    for row in rows:
+        if (row.get('refno') or '').strip() == target:
+            return row
+    for row in rows:
+        if target in [line.strip() for line in (row.get('journal_memo') or '').splitlines()]:
+            return row
+    return rows[0]
+
+
 def _misa_json_or_raise(resp, context):
     """MISA có thể trả HTTP 200 kèm {"Success": false, ...} khi phiên/cookie hết hạn (không
     chỉ 401) — nếu chỉ kiểm tra status_code thì các API bên dưới sẽ ÂM THẦM đọc ra PageData
@@ -212,7 +236,7 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         page_data_req = data_req.get("Data", {}).get("PageData", []) or []
         if not page_data_req:
             return _empty_invoice_status()
-        return self._misa_invoice_result_from_request(page_data_req[0])
+        return self._misa_invoice_result_from_request(_pick_request_for_refno(page_data_req, refno))
 
     def get_invoice_requests_for_order(self, order_code):
         """Tìm TẤT CẢ 'Đề nghị xuất hóa đơn' có nhắc tới order_code này (không chỉ lấy đề nghị
@@ -329,8 +353,8 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         get_voucher_search_payload() tìm theo kiểu CHỨA (operator 1) trên 4 property cùng lúc,
         nên 1 số hóa đơn có thể ra NHIỀU dòng: số hóa đơn khác cùng chứa chuỗi này (gõ "005309"
         ra cả "1005309"), hoặc chính hóa đơn đó tồn tại nhiều bản (thay thế/điều chỉnh). Hàm
-        này trả nguyên list để nơi gọi tự lọc/hiển thị hết; get_voucher_by_inv_no() bên dưới
-        giữ hành vi cũ (lấy dòng đầu) cho các luồng chỉ cần 1 chứng từ."""
+        này trả nguyên list để nơi gọi tự lọc/hiển thị hết; cần đúng 1 chứng từ thì dùng
+        _misa_invoice_voucher_for_inv_no() bên dưới (lọc khớp chính xác số hóa đơn)."""
         url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/paging_filter_v2"
         payload = self.env['misa.config'].get_voucher_search_payload(inv_no)
         data = self._fetch_misa_json_with_session_retry(url, payload, "sa_voucher_get")
@@ -353,14 +377,6 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             if _normalize_inv_no(row.get('inv_no')) == target:
                 return row
         return None
-
-    def get_voucher_by_inv_no(self, inv_no):
-        """Tra 1 CHỨNG TỪ BÁN HÀNG (sa_voucher_get — hóa đơn thật đã lập trên MISA) theo SỐ
-        HÓA ĐƠN — dùng cho case "hải quan": hóa đơn được xuất TRƯỚC khi có phiếu xuất kho
-        Odoo, nên không có refno picking nào để tra theo luồng sa_invoice_request thông
-        thường; đây là cách duy nhất tìm ra chứng từ chỉ bằng số hóa đơn."""
-        page_data = self.get_vouchers_by_inv_no(inv_no)
-        return page_data[0] if page_data else None
 
     def get_voucher_lines(self, refid):
         """Chi tiết TỪNG DÒNG HÀNG (mã đơn hàng gốc order_code, mã hàng, số lượng, tiền) của
