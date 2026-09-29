@@ -1914,7 +1914,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 "không thể ghi nhận trùng, sẽ bị tính hóa đơn này 2 lần." % (preview['invoice_no'], conflict.name)
             )
         CustomsLine = self.env['misa.invoice.customs.line'].sudo()
-        CustomsLine.search([('invoice_no', '=', preview['invoice_no'])]).unlink()
+        old_lines = CustomsLine.search([('invoice_no', '=', preview['invoice_no'])])
+        # Xóa dòng cũ kéo theo xóa lượt khớp (cascade) — nhớ phiếu bị ảnh hưởng để cập nhật lại
+        # sau khi khớp xong bản mới, không để phiếu kẹt "Đã xuất HĐ" với HĐ không còn phủ nó.
+        old_pickings = old_lines.mapped('match_ids.picking_id')
+        old_lines.unlink()
 
         invoice_date = False
         if preview['invoice_date']:
@@ -1948,6 +1952,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for line in created:
             if self._misa_invoice_customs_try_match(line):
                 matched_count += 1
+        for picking in old_pickings.exists():
+            self._misa_invoice_customs_refresh_picking(
+                picking,
+                Markup("Hóa đơn hải quan %s được ghi nhận lại và không còn dòng nào khớp phiếu này — trả "
+                       "phiếu về 'Chưa kiểm tra' để đối soát lại.") % preview['invoice_no'],
+            )
         return {'count': len(created), 'matched_count': matched_count, 'invoice_no': preview['invoice_no']}
 
     def _misa_invoice_reconcile_line_match(self, line, match_model_name, apply_to_picking=None, exclude_picking_ids=None):
@@ -2238,6 +2248,26 @@ class StockPickingMisaInvoiceStatus(models.Model):
             })
         return {'matched': line.match_state == 'matched', 'remaining_qty': new_remaining, 'picking_name': picking.name}
 
+    def _misa_invoice_customs_refresh_picking(self, picking, released_note):
+        """Cập nhật phiếu sau khi lượt khớp hải quan của nó đổi (xóa tay, hoặc ghi nhận lại hóa
+        đơn làm xóa dòng cũ): còn lượt khớp thì cộng lại tiền; hết lượt khớp mà HĐ của phiếu chỉ
+        đến từ hải quan (không có đề nghị) thì trả về 'Chưa kiểm tra' để đối soát thường đánh giá
+        lại — không thì phiếu kẹt ở "Đã xuất HĐ" với số HĐ không còn phủ nó nữa (case thật
+        KBC/OUT/11284/11670/11098 kẹt HĐ 00005319 sau khi hóa đơn được ghi nhận lại). Phiếu có
+        đề nghị thường thì giữ nguyên — HĐ đó không phụ thuộc lượt khớp hải quan."""
+        if self.env['misa.invoice.customs.match'].sudo().search_count([('picking_id', '=', picking.id)]):
+            self._misa_invoice_customs_apply_to_picking(picking)
+            return
+        picking.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
+        if picking.misa_invoice_state == 'invoiced' and not picking.misa_invoice_request_refid:
+            picking.write({
+                'misa_invoice_state': 'not_checked',
+                'misa_invoice_no': False,
+                'misa_invoice_date': False,
+                'misa_invoice_amount': 0.0,
+            })
+            picking.message_post(body=released_note)
+
     @api.model
     def remove_customs_match(self, match_id):
         """Xóa 1 lượt khớp SAI (thủ công hoặc tự động) — khôi phục lại đúng trạng thái còn
@@ -2250,21 +2280,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         line = match.line_id
         picking = match.picking_id
         match.unlink()
-        remaining_matches = self.env['misa.invoice.customs.match'].sudo().search_count(
-            [('picking_id', '=', picking.id)],
+        self._misa_invoice_customs_refresh_picking(
+            picking, "Đã xóa lượt khớp hải quan sai — trả phiếu về 'Chưa kiểm tra' để đối soát lại.",
         )
-        if not remaining_matches:
-            picking.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
-        if not remaining_matches and picking.misa_invoice_state == 'invoiced':
-            picking.write({
-                'misa_invoice_state': 'not_checked',
-                'misa_invoice_no': False,
-                'misa_invoice_date': False,
-                'misa_invoice_amount': 0.0,
-            })
-            picking.message_post(body="Đã xóa lượt khớp hải quan sai — trả phiếu về 'Chưa kiểm tra' để đối soát lại.")
-        elif remaining_matches:
-            self._misa_invoice_customs_apply_to_picking(picking)
         new_remaining = line.remaining_qty()
         if new_remaining <= 0.01:
             line.write({'match_state': 'matched', 'match_note': False})
