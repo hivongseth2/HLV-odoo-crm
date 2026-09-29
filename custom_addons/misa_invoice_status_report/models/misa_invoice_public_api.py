@@ -219,6 +219,14 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         )
 
     @api.model
+    def refresh_misa_invoice_public_gap_orders(self, saler_code, date_from=False, date_to=False, started_at=False):
+        """Nút "Hỏi lại MISA theo đơn" trên trang public — scope đúng 1 mã sale."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().refresh_misa_invoice_gap_orders(
+            date_from=date_from, date_to=date_to, saler_code=code, started_at=started_at,
+        )
+
+    @api.model
     def action_public_check(self, picking_ids, saler_code):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         pickings = self.sudo().browse(picking_ids or []).exists().filtered(

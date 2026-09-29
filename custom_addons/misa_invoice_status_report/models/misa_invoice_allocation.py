@@ -1,5 +1,7 @@
 from odoo import api, fields, models
 
+from .misa_invoice_amount_utils import split_by_weights
+
 
 class StockPickingMisaInvoiceAllocation(models.Model):
     """Tiền hóa đơn QUY VỀ TỪNG PHIẾU, không phụ thuộc ai đứng tên đề nghị xuất HĐ.
@@ -26,8 +28,14 @@ class StockPickingMisaInvoiceAllocation(models.Model):
              'dòng hàng; phiếu đại diện = tiền HĐ của đề nghị trừ đi phần đã quy cho các phiếu '
              'kia. Có thể âm nếu đề nghị không đủ tiền phủ các phiếu đã gán vào nó.',
     )
+    # Số theo ĐƠN HÀNG (sale.order._misa_invoice_apply_order_allocation ghi vào) — khi có thì
+    # thay hẳn cách tính theo đề nghị ở trên: đơn xuất HĐ qua nhiều đề nghị chỉ đếm đủ được khi
+    # cộng theo mã đơn trên MISA, không theo đề nghị nào đang gắn vào phiếu.
+    misa_invoice_order_allocated_amount = fields.Float(string='Tiền HĐ quy về (theo đơn hàng)', copy=False)
+    misa_invoice_order_allocation_ok = fields.Boolean(string='Đã có số theo đơn hàng', copy=False)
 
     @api.depends(
+        'misa_invoice_order_allocation_ok', 'misa_invoice_order_allocated_amount',
         'misa_invoice_state', 'misa_invoice_amount', 'misa_invoice_effective_amount',
         'misa_invoice_net_actual_amount', 'misa_invoice_grouped_matched_amount',
         'misa_invoice_master_picking_id.misa_invoice_state',
@@ -39,7 +47,9 @@ class StockPickingMisaInvoiceAllocation(models.Model):
     def _compute_misa_invoice_allocated_amount(self):
         for picking in self:
             master = picking.misa_invoice_master_picking_id
-            if master:
+            if picking.misa_invoice_order_allocation_ok:
+                picking.misa_invoice_allocated_amount = picking.misa_invoice_order_allocated_amount
+            elif master:
                 # Chỉ gán ăn theo khi dòng hàng đã phủ ĐỦ phiếu này (xem
                 # _misa_invoice_discover_grouped_orders), nên nhận đủ tiền thực xuất — miễn là
                 # đề nghị của phiếu đại diện vẫn còn hiệu lực.
@@ -79,3 +89,22 @@ class StockPickingMisaInvoiceAllocation(models.Model):
             and not match.picking_id.misa_invoice_amount
         )
         return sum(covered.mapped('misa_invoice_net_actual_amount')) + partial
+
+    def _misa_invoice_shipped_for_order(self, order):
+        """Phần tiền thực xuất của phiếu này thuộc về 1 đơn. Phiếu 1 đơn = cả tiền thực xuất;
+        phiếu gộp nhiều đơn chia theo giá trị sau thuế của các dòng hàng (move) mỗi đơn — dòng
+        không gắn dòng đơn bán không có trọng số, cả phiếu không có dòng nào gắn thì chia đều."""
+        self.ensure_one()
+        orders = self.misa_invoice_sale_order_ids
+        net = self.misa_invoice_net_actual_amount or 0.0
+        if len(orders) <= 1:
+            return net
+        weights = []
+        for o in orders:
+            weight = 0.0
+            for move in self.move_ids_without_package.filtered(lambda m, o=o: m.sale_line_id.order_id == o):
+                line = move.sale_line_id
+                if line.product_uom_qty:
+                    weight += line.price_total / line.product_uom_qty * move.quantity
+            weights.append(weight)
+        return dict(zip(orders.ids, split_by_weights(net, weights)))[order.id]
