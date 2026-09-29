@@ -28,8 +28,9 @@ class SaleOrderMisaInvoiceStatus(models.Model):
     # nghị ĐÃ phát hành HĐ trên MISA, ai lập, tên đề nghị là gì cũng được. Cách gắn 1 đề nghị
     # cho mỗi phiếu (misa_invoice_request_refid) bỏ sót đơn xuất HĐ qua nhiều đề nghị — case
     # thật KBC/OUT/09332 (đề nghị chính + KBC/OUT/09359), KBC/OUT/10278 (10278 + 10278_1).
-    # HĐ hải quan KHÔNG lưu ở đây — cộng từ misa.invoice.customs.line lúc chia về phiếu, để
-    # đọc lại tiền VAT của dòng hải quan không phải hỏi lại MISA cho đơn.
+    # HĐ hải quan KHÔNG lưu ở đây — lấy theo lượt khớp vào TỪNG PHIẾU lúc chia (không theo mã
+    # đơn trên dòng hải quan: phiếu có thể được khớp tay với dòng ghi nhầm mã đơn khác, case
+    # KBC/OUT/11284), và đọc lại tiền VAT của dòng hải quan không phải hỏi lại MISA cho đơn.
     misa_invoice_order_checked_at = fields.Datetime(string='Lần soát đơn với MISA gần nhất', copy=False)
     misa_invoice_order_invoiced_amount = fields.Float(
         string='Đã xuất HĐ theo MISA (mọi đề nghị)', copy=False,
@@ -87,13 +88,13 @@ class SaleOrderMisaInvoiceStatus(models.Model):
         return len(done)
 
     def _misa_invoice_apply_order_allocation(self):
-        """Chia tiền HĐ theo đơn (đề nghị đã phát hành + HĐ hải quan của đơn) về các phiếu đã
-        xuất kho, phiếu xuất trước nhận trước (allocate_fifo). Thuần DB — gọi lại được bất cứ
-        lúc nào dữ liệu phiếu đổi (hàng trả, phiếu mới xuất, dòng hải quan đọc lại VAT).
+        """Tiền HĐ của phiếu = HĐ hải quan đã khớp vào chính phiếu + phần tiền đề nghị đã phát
+        hành của đơn, rót vào phần còn lại của các phiếu, phiếu xuất trước nhận trước
+        (allocate_fifo). Thuần DB — gọi lại được bất cứ lúc nào dữ liệu phiếu đổi (hàng trả,
+        phiếu mới xuất, dòng hải quan đọc lại VAT).
 
         Phiếu gộp nhiều đơn chỉ dùng số theo đơn khi MỌI đơn của nó đã soát — thiếu 1 đơn là
         thiếu 1 phần tiền, thà để phiếu đó tính theo cách cũ còn hơn báo thiếu sai."""
-        CustomsLine = self.env['misa.invoice.customs.line'].sudo()
         pickings = self.mapped('misa_invoice_picking_ids').filtered(
             lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing'
         )
@@ -102,10 +103,10 @@ class SaleOrderMisaInvoiceStatus(models.Model):
             order_pickings = order.misa_invoice_picking_ids.filtered(
                 lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing'
             ).sorted(lambda p: (p.date_done or p.create_date, p.id))
-            customs = sum(CustomsLine.search([('sale_order_id', '=', order.id)]).mapped('amount'))
+            # HĐ hải quan đã nằm sẵn trên phiếu qua lượt khớp — đề nghị chỉ rót vào phần CÒN LẠI.
             per_order[order.id] = allocate_fifo(
-                order.misa_invoice_order_invoiced_amount + customs,
-                [(p.id, p._misa_invoice_shipped_for_order(order)) for p in order_pickings],
+                order.misa_invoice_order_invoiced_amount,
+                [(p.id, p._misa_invoice_request_capacity_for_order(order)) for p in order_pickings],
             )
         for picking in pickings:
             orders = picking.misa_invoice_sale_order_ids
@@ -113,6 +114,7 @@ class SaleOrderMisaInvoiceStatus(models.Model):
             picking.write({
                 'misa_invoice_order_allocation_ok': ready,
                 'misa_invoice_order_allocated_amount': (
-                    sum(per_order[order.id].get(picking.id, 0.0) for order in orders) if ready else 0.0
-                ),
+                    picking._misa_invoice_customs_matched_amount()
+                    + sum(per_order[order.id].get(picking.id, 0.0) for order in orders)
+                ) if ready else 0.0,
             })

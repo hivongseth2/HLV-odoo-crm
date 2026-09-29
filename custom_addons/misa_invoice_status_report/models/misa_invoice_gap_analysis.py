@@ -188,8 +188,9 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
                 {
                     'order': order.name,
                     'invoiced': order.misa_invoice_order_invoiced_amount,
-                    'customs': sum(self.env['misa.invoice.customs.line'].sudo().search(
-                        [('sale_order_id', '=', order.id)]
+                    # Cùng nguồn với phần chia tiền: lượt khớp vào các phiếu của đơn.
+                    'customs': sum(self.env['misa.invoice.customs.match'].sudo().search(
+                        [('picking_id', 'in', order.misa_invoice_picking_ids.ids)]
                     ).mapped('amount')),
                     'pending': order.misa_invoice_order_pending_amount,
                     'sources': order.misa_invoice_order_sources or '',
