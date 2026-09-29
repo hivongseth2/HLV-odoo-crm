@@ -84,17 +84,41 @@ def choose_zone(by_zone, plan):
     return max(by_zone, key=lambda zone: (len(by_zone[zone]), zone.id))
 
 
+def drop_stale_lines(plan):
+    """Gỡ các dòng không còn gì để giao: phiếu đã xuất xong hoặc đã huỷ. Trả về số dòng gỡ.
+
+    Chỉ chạy trên bản NHÁP. Kế hoạch đã chốt thì tài xế đang cầm tờ đó đi, và dòng đã giao
+    xong còn để đối chiếu kế hoạch với thực tế — sửa sau lưng họ là xoá mất dấu vết.
+    """
+    bo = plan.line_ids.filtered(lambda line: line.picking_id.state in ('done', 'cancel'))
+    if not bo:
+        return 0
+    nhan = ', '.join(bo.mapped('display_reference'))
+    plan.message_post(
+        body='Đã gỡ %s dòng vì phiếu đã xuất xong hoặc đã huỷ: %s.' % (len(bo), nhan),
+        message_type='notification',
+    )
+    count = len(bo)
+    bo.unlink()
+    return count
+
+
 def autoload(plan):
-    """Xếp phiếu vào ``plan`` rồi sắp thứ tự ghé. Trả dict tóm tắt để hiện cho người dùng.
+    """Dọn rồi xếp lại ``plan`` theo dữ liệu MỚI NHẤT, rồi sắp thứ tự ghé.
+
+    Một lần bấm làm trọn việc: gỡ những dòng không còn gì để giao, thêm phiếu mới kho vừa
+    soạn xong, sắp lại thứ tự. Người điều phối không phải nhớ bấm mấy nút theo thứ tự nào.
 
     Dư trần thì xếp các điểm **tới hẹn sớm nhất** trước — phần còn lại nằm trong
     ``left_out`` để người điều phối mở chuyến khác.
     """
     plan.ensure_one()
+    removed = drop_stale_lines(plan)
     by_zone, skipped = candidates(plan.env, plan)
     zone = choose_zone(by_zone, plan)
     if not zone:
-        return {'zone': None, 'added': 0, 'stops': 0, 'left_out': [], 'skipped': dict(skipped)}
+        return {'zone': None, 'added': 0, 'removed': removed, 'stops': 0,
+                'left_out': [], 'skipped': dict(skipped)}
 
     stops = sorted(
         by_zone[zone].items(),
@@ -116,6 +140,7 @@ def autoload(plan):
     return {
         'zone': zone,
         'added': added,
+        'removed': removed,
         'stops': len(chon),
         'left_out': [place.name for place, _group in du],
         'skipped': dict(skipped),

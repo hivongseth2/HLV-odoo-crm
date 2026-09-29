@@ -327,7 +327,7 @@ class HlvVtrackingPlan(models.Model):
                            % (len(huy), ', '.join(huy.mapped('display_reference'))))
             if cau and plan.state == 'draft':
                 cau.append('Kế hoạch còn nháp nên đây là hàng KHÔNG còn để giao — '
-                           'bấm "Gỡ chứng từ đã xong" nếu không phải chuyến này vừa giao.')
+                           'bấm "Lên kế hoạch giao hàng" để máy dọn và xếp lại.')
             plan.stale_document_warning = ' '.join(cau) or False
 
     @api.depends('zone_id', 'stop_count', 'line_ids.zone_id')

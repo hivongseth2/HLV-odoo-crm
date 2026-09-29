@@ -90,7 +90,7 @@
                     <button name="action_autoload_documents" type="object"
                             string="Lên kế hoạch giao hàng" class="btn-primary"
                             invisible="state != 'draft'"
-                            help="Máy chọn phiếu đã đóng gói xong của một cụm, bỏ phiếu vướng thủ tục và phiếu khách tự lấy, rồi sắp thứ tự ghé. Kết quả vẫn là bản nháp."/>
+                            help="Dọn và xếp lại theo dữ liệu mới nhất: gỡ dòng có phiếu đã xuất xong hoặc đã huỷ, thêm phiếu kho vừa soạn xong của cụm này, sắp lại thứ tự ghé, rồi nhờ AI soát. Chỉ chạy trên bản nháp — kế hoạch đã chốt thì thủ kho tự sửa."/>
                     <button name="action_resequence_by_distance" type="object"
                             string="Sắp thứ tự theo điểm gần nhất"
                             invisible="state not in ('draft', 'confirmed')"/>
@@ -173,9 +173,6 @@
                     <div class="alert alert-danger" role="alert"
                          invisible="not stale_document_warning">
                         <field name="stale_document_warning" readonly="1" nolabel="1"/>
-                        <button name="action_drop_finished_lines" type="object"
-                                string="Gỡ chứng từ đã xong" class="btn-link"
-                                invisible="state != 'draft'"/>
                     </div>
 
                     <div class="alert alert-warning" role="alert"
