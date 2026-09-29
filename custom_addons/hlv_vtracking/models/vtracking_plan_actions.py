@@ -128,8 +128,10 @@ class HlvVtrackingPlanActions(models.Model):
                 % (self.start_place_id.name or 'chưa chọn')
             )
         summary = vtracking_autoload.autoload(self)
-        summary['request'] = (vtracking_autoload.review_request(self, summary)
-                              if summary['added'] else None)
+        # Bấm nút là nhờ AI soát, đổi hay không cũng soát: người bấm muốn một cặp mắt nữa
+        # nhìn lại chuyến, không chỉ muốn thêm phiếu.
+        summary['request'] = vtracking_autoload.review_request(self, summary)
+        summary['unchanged'] = not (summary['added'] or summary.get('removed'))
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -141,9 +143,13 @@ class HlvVtrackingPlanActions(models.Model):
             },
         }
 
-    @staticmethod
-    def _autoload_message(summary):
-        """Câu tóm tắt cho người bấm nút: xếp được gì, còn dư gì, bỏ gì và VÌ SAO bỏ."""
+    def _autoload_message(self, summary):
+        """Câu tóm tắt cho người bấm nút: xếp được gì, còn dư gì, bỏ gì và VÌ SAO bỏ.
+
+        Không gửi được AI thì phải nói RÕ vì sao — im lặng thì người bấm không phân biệt
+        được "không cần gửi" với "gửi hỏng".
+        """
+        self.ensure_one()
         dong = []
         if summary.get('removed'):
             dong.append('Gỡ %s dòng không còn gì để giao (phiếu đã xuất xong hoặc đã huỷ).'
@@ -162,7 +168,12 @@ class HlvVtrackingPlanActions(models.Model):
         if request:
             dong.append('Đã gửi AI soát lại (%s). Kế hoạch vẫn là bản nháp cho tới khi '
                         'bạn bấm Chốt.' % request.name)
-        elif summary.get('added'):
+        elif not self.line_ids:
+            dong.append('Kế hoạch đang rỗng nên chưa có gì để AI soát.')
+        elif self.env['hlv.vtracking.ai.request'].sudo().search_count([
+                ('plan_id', '=', self.id), ('state', 'in', ('pending', 'processing'))]):
+            dong.append('Đã có một phiếu của chuyến này đang chờ AI, không gửi thêm.')
+        else:
             dong.append('CHƯA gửi AI soát: công ty chưa khai "Tài khoản worker AI" ở '
                         'Cấu hình, nên phiếu yêu cầu sẽ không ai nhận.')
         return '\n'.join(dong)
