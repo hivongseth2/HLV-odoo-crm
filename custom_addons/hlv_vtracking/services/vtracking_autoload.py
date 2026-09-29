@@ -174,4 +174,5 @@ def review_request(plan, summary):
         'plan_id': plan.id,
         'message': message,
         'company_id': plan.company_id.id,
+        'review_round': 1,
     })
