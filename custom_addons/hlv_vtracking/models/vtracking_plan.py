@@ -304,6 +304,37 @@ class HlvVtrackingPlan(models.Model):
                 continue
             plan.zone_id = max(set(zones), key=zones.count)
 
+    def _open_warnings(self):
+        """Các cảnh báo MÁY tự đọc được mà kế hoạch này còn dính. List câu, rỗng là sạch.
+
+        Một chỗ khai duy nhất cho mọi bên hỏi "kế hoạch còn gì chưa ổn": vòng soát của AI
+        và người đọc màn hình phải thấy cùng một danh sách.
+        """
+        self.ensure_one()
+        cau = []
+        if self.stale_document_warning:
+            cau.append(self.stale_document_warning)
+        # Đếm từ dòng chứ không đọc ô đếm: hai con số này chỉ tồn tại trong payload gửi
+        # cho AI, không phải field trên kế hoạch.
+        vuong_thu_tuc = self.line_ids.filtered('procedure_blocked')
+        if vuong_thu_tuc:
+            cau.append('%s dòng còn vướng thủ tục nên kế hoạch không chốt được: %s.'
+                       % (len(vuong_thu_tuc),
+                          ', '.join(vuong_thu_tuc.mapped('display_reference'))))
+        if self.missing_coords_count:
+            cau.append('%s điểm chưa có toạ độ nên km và giờ tới là cận dưới.'
+                       % self.missing_coords_count)
+        khong_can_xe = self.line_ids.filtered(lambda line: not line.needs_truck)
+        if khong_can_xe:
+            cau.append('%s dòng thuộc kênh xe công ty không phải chạy: %s.'
+                       % (len(khong_can_xe),
+                          ', '.join(khong_can_xe.mapped('display_reference'))))
+        if self.zone_warning:
+            cau.append(self.zone_warning)
+        if self.rule_warning:
+            cau.append(self.rule_warning)
+        return cau
+
     @api.depends('line_ids.picking_id.state')
     def _compute_stale_document_warning(self):
         """Phiếu trong kế hoạch mà kho đã xuất xong hoặc đã huỷ.

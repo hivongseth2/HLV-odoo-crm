@@ -24,6 +24,11 @@ STALE_AFTER_MINUTES = 10
 
 BUS_MESSAGE_TYPE = 'hlv_vtracking/ai_request'
 
+# Trần số vòng "AI sửa -> máy kiểm lại -> AI sửa tiếp". Hai vòng là đủ: vòng một sửa thứ
+# tự ghé và chèn đơn sót, vòng hai xử lý phần vòng một vừa làm phát sinh. Cao hơn thì mỗi
+# lần bấm nút tốn thêm một lượt gọi Claude mà hiếm khi còn gì để sửa.
+MAX_REVIEW_ROUNDS = 2
+
 
 class HlvVtrackingAiRequest(models.Model):
     _name = 'hlv.vtracking.ai.request'
@@ -96,6 +101,11 @@ class HlvVtrackingAiRequest(models.Model):
         help='AI đã đổi kế hoạch NHÁP theo yêu cầu. Kế hoạch đã chốt thì AI chỉ đề xuất.',
     )
     error = fields.Text(string='Lỗi', readonly=True, copy=False)
+    review_round = fields.Integer(
+        string='Vòng soát', readonly=True, copy=False, default=0,
+        help='0 = phiếu do người gửi. 1 trở lên = vòng máy tự nhờ AI soát kế hoạch sau khi '
+             'lên kế hoạch. Có trần để AI sửa rồi soát lại không chạy vòng vô tận.',
+    )
 
     worker = fields.Char(string='Máy xử lý', readonly=True, copy=False)
     claimed_at = fields.Datetime(string='Nhận việc lúc', readonly=True, copy=False)
@@ -222,6 +232,46 @@ class HlvVtrackingAiRequest(models.Model):
             body=answer, message_type='notification',
             partner_ids=self.requester_id.partner_id.ids,
         )
+        self._chain_next_review()
+        return True
+
+    def _chain_next_review(self):
+        """AI vừa SỬA kế hoạch thì kiểm lại; còn cảnh báo thì nhờ soát tiếp một vòng.
+
+        Ba điều kiện cùng đúng mới chạy tiếp, để vòng lặp luôn dừng:
+
+        * phiếu này là vòng soát tự động (``review_round >= 1``), không phải người gửi;
+        * AI có **sửa** kế hoạch (``applied``) — không sửa gì mà soát lại là hỏi đúng câu
+          cũ, nhận đúng câu trả lời cũ;
+        * còn cảnh báo máy tự đọc được, và chưa chạm trần ``MAX_REVIEW_ROUNDS``.
+
+        Chỉ dựa vào cảnh báo MÁY đọc được (thủ tục, toạ độ, trần điểm, luật khách, chứng
+        từ đã xong) chứ không hỏi lại AI "còn gì bất hợp lý không": câu đó không bao giờ
+        hết đáp án, và mỗi vòng là một lượt gọi Claude.
+        """
+        self.ensure_one()
+        plan = self.plan_id
+        if not plan or not self.applied or not (1 <= self.review_round < MAX_REVIEW_ROUNDS):
+            return False
+        if plan.state != 'draft':
+            return False
+        con_lai = plan._open_warnings()
+        if not con_lai:
+            plan.message_post(
+                body='AI đã soát xong sau %s vòng: không còn cảnh báo nào máy đọc được.'
+                     % self.review_round,
+                message_type='notification',
+            )
+            return False
+        self.create({
+            'request_type': 'question',
+            'plan_id': plan.id,
+            'company_id': plan.company_id.id,
+            'review_round': self.review_round + 1,
+            'message': 'Vòng soát %s. Sau khi bạn sửa, kế hoạch vẫn còn những chỗ này — '
+                       'xem sửa được không, sửa không được thì nói rõ vì sao: %s'
+                       % (self.review_round + 1, ' '.join(con_lai)),
+        })
         return True
 
     def write_failure(self, error):
