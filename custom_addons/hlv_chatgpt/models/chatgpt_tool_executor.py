@@ -17,8 +17,40 @@ _logger = logging.getLogger(__name__)
 FALLBACK_CATEGORY_ID = 2
 
 
+# Các cột AI thật sự cần để kết luận trùng. Mọi cột khác (giá, GUID đơn vị, GUID thuế,
+# cờ combo) chỉ tốn token: kết quả tool nằm lại trong chuỗi previous_response_id và bị
+# tính tiền lại ở MỌI lượt sau, nên mỗi cột thừa là một khoản trả góp vô thời hạn.
+_PRODUCT_FIELDS_FOR_MATCHING = (
+    'misa_id', 'code', 'name', 'unit', 'category', 'category_id', 'active',
+)
+# Description chứa JSON thông số, cần để so khớp, nhưng có bản ghi dài lê thê.
+MAX_DESCRIPTION_CHARS = 400
+
+
 def _json(payload):
     return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+def _compact_product(product):
+    """Rút một bản ghi sản phẩm MISA xuống các cột cần cho việc đối chiếu trùng.
+
+    Nhận: dict bản ghi do ``search_product_by_name`` trả về.
+    Trả: dict chỉ còn các cột định danh, description bị cắt nếu quá dài.
+    Biên: thiếu cột nào thì bỏ hẳn cột đó thay vì để giá trị rỗng.
+    """
+    compact = {
+        key: product[key]
+        for key in _PRODUCT_FIELDS_FOR_MATCHING
+        if product.get(key) not in (None, '')
+    }
+    description = product.get('description') or ''
+    if description:
+        compact['description'] = (
+            description[:MAX_DESCRIPTION_CHARS] + '...'
+            if len(description) > MAX_DESCRIPTION_CHARS
+            else description
+        )
+    return compact
 
 
 class HlvChatgptToolExecutor(models.AbstractModel):
@@ -63,7 +95,18 @@ class HlvChatgptToolExecutor(models.AbstractModel):
                 'message': "Function %s chưa được hỗ trợ." % name,
             }))
 
-        result = handler(args)
+        try:
+            result = handler(args)
+        except Exception as error:
+            # Lưới cuối. Không có nó, một lỗi ngoài dự kiến trong tool sẽ bay lên tận
+            # webhook, bị nuốt ở except trần, và người dùng không nhận được gì cả.
+            _logger.exception("Tool %s lỗi ngoài dự kiến", name)
+            return self._output(tool_call, _json({
+                'status': 'error',
+                'message': "Tool %s gặp lỗi: %s" % (name, error),
+            }))
+
+        # Chỉ cache kết quả thật; cache cả lỗi thì lượt sau không thử lại được.
         if cache is not None:
             cache[cache_key] = result
         return self._output(tool_call, result)
@@ -128,7 +171,7 @@ class HlvChatgptToolExecutor(models.AbstractModel):
         return _json({
             'status': 'found',
             'count': len(products),
-            'data': products,
+            'data': [_compact_product(product) for product in products],
             'instruction': "So sánh kỹ Tên và Mã. Trùng khớp thì báo đã có. Khác thì đề xuất tạo mới.",
         })
 

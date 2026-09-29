@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
+from datetime import timedelta
 
 from psycopg2 import IntegrityError
 
@@ -17,11 +19,38 @@ except ImportError:
     OpenAI = None
 
 # Số vòng gọi API tối đa cho một lượt (mỗi vòng = 1 lần gọi model + 1 lượt chạy tool).
-# Prompt quy định lộ trình 4 bước search, cộng tra nhóm, tạo sản phẩm và vòng chốt lời
-# là đã 7-8 vòng; để 8 thì lượt tạo sản phẩm dễ bị cắt ngang ngay trước câu trả lời.
-MAX_TOOL_STEPS = 12
-# Chỉ dùng khi session chưa có last_response_id (session cũ trước khi nâng cấp).
+# Lộ trình 4 bước search + tra nhóm + tạo + vòng chốt lời vừa đúng 8. Mỗi vòng thừa là
+# một lần tính tiền lại TOÀN BỘ chuỗi, nên đừng nới nếu không có bằng chứng bị cắt ngang.
+MAX_TOOL_STEPS = 8
+# Số tin cũ gửi kèm khi phải dựng lại ngữ cảnh từ DB.
 COLD_START_HISTORY_LIMIT = 10
+
+# Cắt chuỗi previous_response_id khi người dùng im lâu hoặc chuỗi đã dài.
+#
+# Mỗi lần gọi, OpenAI tính tiền TOÀN BỘ chuỗi như input: mọi tin nhắn, mọi kết quả tool
+# MISA, mọi đoạn trích file_search của các lượt trước. Session Zalo tìm theo zalo_user_id
+# nên dùng lại vĩnh viễn — không cắt thì tin sau luôn đắt hơn tin trước, chi phí một
+# session tăng theo bình phương số lượt.
+#
+# Cắt xong, lượt kế tiếp dựng lại ngữ cảnh từ DB: chỉ COLD_START_HISTORY_LIMIT tin chữ,
+# không mang theo kết quả tool cũ.
+CHAIN_IDLE_HOURS = 3
+CHAIN_MAX_TURNS = 20
+
+
+def _is_successful_create(tool_call, output_item):
+    """Lượt gọi tool này có vừa tạo thành công một sản phẩm MISA không.
+
+    Nhận: dict tool_call của OpenAI và dict kết quả do executor dựng.
+    Trả: True/False.
+    Biên: output không phải JSON hợp lệ -> False (không dám coi là đã tạo).
+    """
+    if tool_call.get('name') != 'create_product_misa':
+        return False
+    try:
+        return json.loads(output_item.get('output') or '{}').get('status') == 'success'
+    except (TypeError, ValueError):
+        return False
 
 
 class HlvChatgptSession(models.Model):
@@ -42,6 +71,13 @@ class HlvChatgptSession(models.Model):
         copy=False,
         help="ID phản hồi cuối cùng của OpenAI. Nhờ nó mà lượt sau chỉ cần gửi tin mới, "
              "còn toàn bộ ngữ cảnh (kể cả tool call và ảnh) do OpenAI giữ.",
+    )
+
+    chain_turns = fields.Integer(
+        string="Số lượt trong chuỗi OpenAI",
+        readonly=True,
+        copy=False,
+        help="Số lượt đã nối vào last_response_id hiện tại. Chạm CHAIN_MAX_TURNS thì cắt chuỗi.",
     )
 
     message_ids = fields.One2many('hlv.chatgpt.message', 'session_id')
@@ -67,7 +103,36 @@ class HlvChatgptSession(models.Model):
             return _("Lỗi: Cấu hình ChatGPT còn thiếu API Key hoặc Prompt ID.")
 
         client = OpenAI(api_key=config.api_key)
-        return self._run_prompt_workflow(client, config)
+        self._restart_chain_if_stale()
+        try:
+            return self._run_prompt_workflow(client, config)
+        except Exception:
+            # Người dùng Zalo không bao giờ được nhận im lặng: webhook chạy trong luồng
+            # nền với except trần, lỗi lọt tới đó là mất cả câu trả lời lẫn tin đã gửi.
+            _logger.exception("Chat workflow lỗi ngoài dự kiến, session %s", self.id)
+            return _("Em đang gặp lỗi hệ thống nên chưa xử lý được. "
+                     "Anh/chị thử lại sau ít phút giúp em.")
+
+    def _restart_chain_if_stale(self):
+        """Bỏ last_response_id khi chuỗi đã cũ hoặc đã dài, để lượt này dựng ngữ cảnh mới.
+
+        Phải gọi TRƯỚC khi lượt này ghi last_activity: căn cứ "im bao lâu" là lần hoạt
+        động của lượt trước, không phải lượt hiện tại.
+        """
+        self.ensure_one()
+        if not self.last_response_id:
+            return
+
+        idle_since = fields.Datetime.now() - timedelta(hours=CHAIN_IDLE_HOURS)
+        is_idle = bool(self.last_activity) and self.last_activity < idle_since
+        if not (is_idle or self.chain_turns >= CHAIN_MAX_TURNS):
+            return
+
+        _logger.info(
+            "Cắt chuỗi OpenAI của session %s (%s)", self.id,
+            "im quá %sh" % CHAIN_IDLE_HOURS if is_idle else "đã %s lượt" % self.chain_turns,
+        )
+        self.sudo().write({'last_response_id': False, 'chain_turns': 0})
 
     def _run_prompt_workflow(self, client, config):
         """Gọi Responses API và chạy vòng lặp tool cho tới khi model trả lời xong."""
@@ -98,6 +163,9 @@ class HlvChatgptSession(models.Model):
         interim_text = ""
         final_text = ""
         error_text = None
+        # Tạo xong sản phẩm là hết việc của cuộc hội thoại đó: cắt chuỗi ngay tại ranh
+        # giới nghiệp vụ, thay vì đợi chạm ngưỡng cứng rồi cắt ngang giữa một luồng.
+        product_created = False
 
         for _step in range(MAX_TOOL_STEPS):
             params = {
@@ -140,25 +208,34 @@ class HlvChatgptSession(models.Model):
             # Model vừa nói vừa gọi tool: giữ lại câu nói để dùng nếu bước cuối im lặng.
             if parsed['text']:
                 interim_text = parsed['text']
-            next_input = [
-                executor.run_tool_call(tool_call, tool_cache)
-                for tool_call in parsed['tool_calls']
-            ]
+            next_input = []
+            for tool_call in parsed['tool_calls']:
+                output_item = executor.run_tool_call(tool_call, tool_cache)
+                if _is_successful_create(tool_call, output_item):
+                    product_created = True
+                next_input.append(output_item)
         else:
             final_text = interim_text or _(
                 "Yêu cầu cần quá nhiều bước xử lý. Bạn mô tả cụ thể hơn giúp mình nhé."
             )
 
         if last_ok_response_id:
-            self._close_turn(last_ok_response_id, pending)
+            self._close_turn(last_ok_response_id, pending, reset_chain=product_created)
         if error_text:
             return error_text
         return strip_file_citations(final_text) or "..."
 
-    def _close_turn(self, response_id, sent_messages):
-        """Chốt một lượt: nhớ response id và tắt cờ chờ gửi của các tin đã vào ngữ cảnh."""
+    def _close_turn(self, response_id, sent_messages, reset_chain=False):
+        """Chốt một lượt: nhớ response id và tắt cờ chờ gửi của các tin đã vào ngữ cảnh.
+
+        reset_chain=True thì quên luôn chuỗi: lượt sau dựng ngữ cảnh mới từ DB.
+        """
         self.ensure_one()
-        vals = {'last_activity': fields.Datetime.now(), 'last_response_id': response_id}
+        vals = {
+            'last_activity': fields.Datetime.now(),
+            'last_response_id': False if reset_chain else response_id,
+            'chain_turns': 0 if reset_chain else self.chain_turns + 1,
+        }
         if self.state == 'new':
             vals['state'] = 'active'
         self.sudo().write(vals)
