@@ -19,6 +19,7 @@ from odoo import SUPERUSER_ID, api, fields, http, registry as odoo_registry
 from odoo.http import request
 from werkzeug.wrappers import Response
 
+from odoo.addons.hlv_pack_recorder.models.pack_agent_utils import needs_agent_update
 from odoo.addons.custom_barcode_scan_redirect.controllers._shared import (
     _bg_upload_to_drive, _feed_issue_note, _file_path, prepare_drive_upload,
 )
@@ -99,11 +100,22 @@ class PackAgentApi(http.Controller):
             return {'ok': False, 'error': 'auth'}
 
         codes = kw.get('camera_codes') or []
-        station.write({
+        reported = (kw.get('agent_version') or '')[:64]
+        latest = station._latest_agent_version()
+        vals = {
             'agent_last_seen': fields.Datetime.now(),
-            'agent_version': (kw.get('agent_version') or '')[:64],
+            'agent_version': reported,
             'agent_camera_codes': ','.join(str(c) for c in codes)[:512] or False,
-        })
+        }
+        # Bàn đã lên đúng bản thì tự tắt cờ. Không tắt lúc GỬI lệnh mà tắt lúc
+        # THẤY KẾT QUẢ: cập nhật hỏng giữa chừng thì cờ còn đó, agent thử lại ở
+        # lần rảnh sau và người xem vẫn thấy bàn đang chờ.
+        want_update = station.agent_update_requested
+        if want_update and reported and latest and reported == latest:
+            vals['agent_update_requested'] = False
+            want_update = False
+            _logger.info("PACK_REC bàn %s đã lên agent %s", station.name, latest)
+        station.write(vals)
 
         Recording = request.env['hlv.pack.recording'].sudo()
         active_ids = set(int(i) for i in (kw.get('active_ids') or []) if str(i).isdigit())
@@ -146,6 +158,9 @@ class PackAgentApi(http.Controller):
             'ok': True,
             'server_time': fields.Datetime.to_string(fields.Datetime.now()),
             'commands': commands,
+            # Agent tự quyết định lúc nào ra tay: nó mới biết đang ghi hay rảnh.
+            'update_agent': bool(want_update and needs_agent_update(reported, latest)),
+            'latest_version': latest,
         }
 
     @http.route('/pack_agent/drive_ticket', type='json', auth='public',

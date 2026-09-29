@@ -76,10 +76,29 @@ gói và đăng ký systemd.
 Windows không có Python cũng không sao: script tải bản nhúng (~11MB) về thẳng
 `C:\hlv_agent\python`, không cài gì vào máy, không đụng PATH, không cần admin.
 
-### Cài lại / cập nhật agent
+### Cập nhật agent (từ Odoo, không cần ra kho)
 
-Chạy lại đúng lệnh đó. Script tải bản agent mới nhất từ Odoo, giữ nguyên ffmpeg
+Từ agent **2.2.0** trở đi: mở **Bàn đóng gói** trên Odoo, bấm **Cập nhật agent**.
+Cột *Bản mới nhất* cho biết Odoo đang phục vụ bản nào, nút chỉ hiện ở bàn đang
+chạy bản cũ. Chọn nhiều bàn bấm một lượt cũng được.
+
+Máy đóng gói tải bản mới ở lần gọi kế tiếp (2 giây), nhưng **chỉ khi bàn đang
+rảnh** — không camera nào đang ghi và không còn video chờ gửi. Đang đóng gói thì
+nó đợi xong mới cập nhật, nên không bao giờ mất video của phiếu đang làm.
+
+Trước khi thay file, agent **chạy thử bản mới** (`python <file> --version`). Không
+chạy được thì giữ nguyên bản cũ và ghi lý do vào log — một lần build hỏng không
+làm chết đồng loạt các bàn. Bản cũ luôn được giữ ở `hlv_pack_agent.py.bak`.
+
+Cập nhật xong agent thoát, Windows/systemd bật lại (10 giây tới 1 phút), và cờ
+*Đang chờ cập nhật* trên Odoo tự tắt khi bàn báo đã lên đúng bản.
+
+### Cài lại agent bằng tay
+
+Chạy lại đúng lệnh cài. Script tải bản agent mới nhất từ Odoo, giữ nguyên ffmpeg
 đã tải, và hỏi có dùng lại cấu hình cũ không — chọn `y` thì khỏi xin mã mới.
+Chỉ cần tới cách này khi máy đang chạy bản **cũ hơn 2.2.0**, hoặc khi thêm camera
+mới (Odoo cố ý không giữ URL camera nên không đẩy xuống được).
 
 ### Theo dõi khi đang chạy
 
