@@ -32,6 +32,9 @@ class SaleOrderMisaInvoiceStatus(models.Model):
     # đơn trên dòng hải quan: phiếu có thể được khớp tay với dòng ghi nhầm mã đơn khác, case
     # KBC/OUT/11284), và đọc lại tiền VAT của dòng hải quan không phải hỏi lại MISA cho đơn.
     misa_invoice_order_checked_at = fields.Datetime(string='Lần soát đơn với MISA gần nhất', copy=False)
+    # Lần THỬ gần nhất, kể cả lỗi — cron chọn đơn theo field này, để đơn MISA đang lỗi không
+    # đứng mãi đầu hàng chiếm suất của các đơn khác mỗi lượt.
+    misa_invoice_order_attempted_at = fields.Datetime(string='Lần thử soát đơn với MISA gần nhất', copy=False)
     misa_invoice_order_invoiced_amount = fields.Float(
         string='Đã xuất HĐ theo MISA (mọi đề nghị)', copy=False,
     )
@@ -42,18 +45,16 @@ class SaleOrderMisaInvoiceStatus(models.Model):
 
     def _misa_invoice_refresh_order_truth(self):
         """Hỏi MISA mọi đề nghị nhắc tới từng đơn, lưu tiền đã phát hành / chưa phát hành, rồi
-        chia lại về phiếu. Đơn gọi MISA lỗi, hoặc MISA không trả cột số HĐ (không phân biệt
-        được đã/chưa phát hành) thì giữ nguyên, không đánh dấu đã soát. Trả số đơn soát xong."""
+        chia lại về phiếu. Đơn gọi MISA lỗi thì giữ nguyên, không đánh dấu đã soát (lượt sau thử
+        lại). Trả số đơn soát xong."""
         misa = self.env['misa.api.utils']
         Picking = self.env['stock.picking'].sudo()
         lines_cache = {}
         done = self.browse()
         for order in self:
+            order.misa_invoice_order_attempted_at = fields.Datetime.now()
             try:
                 requests = misa.get_invoice_requests_for_order(order.name)
-                if any(req['inv_no'] is None for req in requests):
-                    _logger.warning("⚠️ [MISA ORDER] MISA không trả cột inv_no cho đề nghị của đơn %s", order.name)
-                    continue
                 issued = pending = 0.0
                 sources = []
                 for req in requests:

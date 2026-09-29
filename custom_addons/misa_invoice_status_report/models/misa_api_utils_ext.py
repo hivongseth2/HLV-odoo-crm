@@ -250,8 +250,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         024dc159...) — 2 refid HOÀN TOÀN khác nhau, không phải cùng 1 voucher bị trùng tên.
 
         Trả về list [{refno, refid, inv_no}, ...] — refid để gọi tiếp get_invoice_request_lines;
-        inv_no là số HĐ đã phát hành ('' nếu chưa), None nếu MISA không trả cột này (nơi dùng
-        inv_no phải coi là "không biết", không phải "chưa phát hành")."""
+        inv_no là số HĐ đã phát hành, '' nếu chưa. MISA BỎ HẲN khóa inv_no ở đề nghị chưa phát
+        hành (thấy thật ở DN0012745/DN0012746, DN0016842, KBC/OUT/12358 — toàn đề nghị chưa có
+        HĐ), nên thiếu khóa cũng là ''."""
         url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
         payload_req = self.env['misa.config'].get_invoice_request_payload(order_code)
         data_req = self._fetch_misa_json_with_session_retry(
@@ -261,7 +262,7 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         return [
             {
                 'refno': (item.get('refno') or '').strip(), 'refid': item.get('refid'),
-                'inv_no': (item.get('inv_no') or '').strip() if 'inv_no' in item else None,
+                'inv_no': (item.get('inv_no') or '').strip(),
             }
             for item in page_data_req if item.get('refid')
         ]

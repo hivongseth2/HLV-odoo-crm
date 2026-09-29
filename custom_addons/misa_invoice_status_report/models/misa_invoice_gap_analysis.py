@@ -77,8 +77,8 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
         }
 
     def _misa_invoice_gap_order_ids(self, domain, checked_before):
-        """Id các đơn bán có ÍT NHẤT 1 phiếu đang lệch trong domain và chưa soát theo đơn với
-        MISA kể từ checked_before — đơn chưa soát bao giờ lên trước. Chỉ soát đơn đang lệch:
+        """Id các đơn bán có ÍT NHẤT 1 phiếu đang lệch trong domain và chưa THỬ soát theo đơn
+        với MISA kể từ checked_before — đơn chưa thử bao giờ lên trước. Chỉ soát đơn đang lệch:
         đơn đã khớp thì hỏi lại MISA không đổi được gì."""
         picking_ids = self.search(domain).ids
         if not picking_ids:
@@ -90,9 +90,9 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
             JOIN sale_order so ON so.id = rel.order_id
             WHERE p.id = ANY(%s)
               AND ABS(COALESCE(p.misa_invoice_net_actual_amount, 0) - COALESCE(p.misa_invoice_allocated_amount, 0)) > %s
-              AND (so.misa_invoice_order_checked_at IS NULL OR so.misa_invoice_order_checked_at < %s)
-            GROUP BY so.id, so.misa_invoice_order_checked_at
-            ORDER BY so.misa_invoice_order_checked_at NULLS FIRST, so.id
+              AND (so.misa_invoice_order_attempted_at IS NULL OR so.misa_invoice_order_attempted_at < %s)
+            GROUP BY so.id, so.misa_invoice_order_attempted_at
+            ORDER BY so.misa_invoice_order_attempted_at NULLS FIRST, so.id
         """, (picking_ids, MISA_INVOICE_AMOUNT_TOLERANCE, checked_before))
         return [row[0] for row in self.env.cr.fetchall()]
 
@@ -107,10 +107,9 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
     @api.model
     def refresh_misa_invoice_gap_orders(self, date_from=False, date_to=False, saler_code=False, started_at=False, limit=10):
         """Nút "Hỏi lại MISA theo đơn" trên khung "Vì sao còn lệch": soát 1 lô đơn đang lệch
-        trong đúng phạm vi đang xem. Giao diện gọi lặp tới khi remaining = 0 (hoặc 1 lô không
-        soát được đơn nào — MISA đang lỗi). started_at: lượt đầu bỏ trống, server lấy giờ của
-        mình rồi trả về để các lô sau gửi lại — đơn vừa soát trong lượt này không bị chọn lại,
-        và không phụ thuộc đồng hồ máy người bấm."""
+        trong đúng phạm vi đang xem. Giao diện gọi lặp tới khi remaining = 0. started_at: lượt
+        đầu bỏ trống, server lấy giờ của mình rồi trả về để các lô sau gửi lại — đơn vừa thử
+        trong lượt này (kể cả lỗi) không bị chọn lại, và không phụ thuộc đồng hồ máy người bấm."""
         misa_domain, _shopee_domain = self.sudo()._misa_invoice_scoped_domains(date_from, date_to, saler_code)
         checked_before = fields.Datetime.to_datetime(started_at) if started_at else fields.Datetime.now()
         order_ids = self.sudo()._misa_invoice_gap_order_ids(misa_domain, checked_before)
