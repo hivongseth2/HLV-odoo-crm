@@ -204,11 +204,15 @@ def _run_claude(claude_bin, prompt):
     # Máy này có "python" là bản giả của Microsoft Store; đẩy thư mục Python thật lên đầu
     # PATH để lệnh trong skill chạy được dù viết "python" hay "py".
     environment['PATH'] = str(Path(sys.executable).parent) + os.pathsep + environment.get('PATH', '')
+    # Worker chạy bằng pythonw nên bản thân nó không có console. Claude là ứng dụng
+    # console, và Windows cấp cho tiến trình con một cửa sổ MỚI — người dùng đang làm việc
+    # thì thấy một cửa sổ đen tự bật lên giữa màn hình. Cờ này bảo Windows đừng cấp.
+    khong_hien_cua_so = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     try:
         completed = subprocess.run(
             claude_command(claude_bin, prompt), cwd=str(REPO_ROOT), env=environment,
             capture_output=True, text=True, encoding='utf-8', errors='replace',
-            timeout=CLAUDE_TIMEOUT, check=False,
+            timeout=CLAUDE_TIMEOUT, check=False, creationflags=khong_hien_cua_so,
         )
     except subprocess.TimeoutExpired:
         return 'Claude chạy quá %s giây, đã dừng.' % CLAUDE_TIMEOUT
