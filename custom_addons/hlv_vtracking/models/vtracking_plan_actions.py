@@ -11,6 +11,8 @@ from odoo.exceptions import UserError
 from odoo.addons.hlv_vtracking.tools.vtracking_planning import nearest_first_order
 from odoo.addons.hlv_vtracking.tools.vtracking_blocking import PROCEDURE_LABELS
 
+from ..services import vtracking_autoload
+
 
 class HlvVtrackingPlanActions(models.Model):
     _inherit = 'hlv.vtracking.plan'
@@ -101,6 +103,49 @@ class HlvVtrackingPlanActions(models.Model):
             for position, line_id in enumerate(order, start=1):
                 by_id[line_id].sequence = position * 10
         return True
+
+    def action_autoload_documents(self):
+        """Xếp sẵn phiếu của một cụm vào kế hoạch rỗng, rồi sắp thứ tự ghé.
+
+        Chỉ là ĐỀ XUẤT: kế hoạch vẫn ở trạng thái nháp, người điều phối thêm bớt rồi mới
+        chốt. Việc chọn nằm ở ``services/vtracking_autoload``.
+        """
+        self.ensure_one()
+        if self.state != 'draft':
+            raise UserError('Chỉ kế hoạch NHÁP mới xếp tự động được. "%s" đang ở trạng '
+                            'thái khác — thêm tay bằng nút "Thêm phiếu / đơn".' % self.name)
+        if not self.start_place_id.warehouse_id:
+            raise UserError(
+                'Điểm xuất phát "%s" chưa gắn kho trong Odoo, nên máy không biết lấy phiếu '
+                'của kho nào. Khai ô "Kho trong Odoo" ở địa điểm đó rồi bấm lại.'
+                % (self.start_place_id.name or 'chưa chọn')
+            )
+        summary = vtracking_autoload.autoload(self)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Lên kế hoạch giao hàng',
+                'message': self._autoload_message(summary),
+                'type': 'success' if summary['added'] else 'warning',
+                'sticky': True,
+            },
+        }
+
+    @staticmethod
+    def _autoload_message(summary):
+        """Câu tóm tắt cho người bấm nút: xếp được gì, còn dư gì, bỏ gì và VÌ SAO bỏ."""
+        if not summary['zone']:
+            dong = ['Không có phiếu nào xếp được vào chuyến này.']
+        else:
+            dong = ['Cụm %s: xếp %s phiếu vào %s điểm dừng.'
+                    % (summary['zone'].name, summary['added'], summary['stops'])]
+        if summary['left_out']:
+            dong.append('Vượt trần điểm của cụm nên để lại cho chuyến khác: %s.'
+                        % ', '.join(summary['left_out'][:5]))
+        for ly_do, phieu in summary['skipped'].items():
+            dong.append('Bỏ %s phiếu — %s.' % (len(phieu), ly_do))
+        return '\n'.join(dong)
 
     def action_open_lines(self):
         self.ensure_one()

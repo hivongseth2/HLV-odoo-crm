@@ -1,0 +1,116 @@
+"""Tự chọn phiếu xuất cho một kế hoạch — phần việc sau nút "Lên kế hoạch giao hàng".
+
+Vì sao cần: người điều phối mở kế hoạch rỗng rồi phải tự lọc trong hàng trăm phiếu xem
+phiếu nào đã đóng gói xong, phiếu nào vướng hải quan, phiếu nào khách tự lấy, phiếu nào
+cùng cụm với nhau. Máy làm được đúng việc đó bằng những quy tắc ĐÃ có trong module.
+
+Ba điều file này KHÔNG làm, có chủ đích:
+
+* **không chốt kế hoạch** — chỉ xếp vào bản nháp, người bấm Chốt;
+* **không đoán cụm** — cụm lấy từ điểm giao của khách. Khách chưa có điểm thì báo ra để
+  người khai, chứ không gán bừa vào cụm gần nhất;
+* **không vượt trần điểm của cụm** — phần dư được liệt kê để xếp sang chuyến khác.
+
+Đơn vị đếm là ĐIỂM DỪNG, không phải phiếu: năm phiếu cùng một nhà máy là một lần xe dừng.
+"""
+
+import logging
+from collections import defaultdict
+
+from ..tools.vtracking_blocking import blocking_flags
+from ..tools.vtracking_channel import needs_company_truck
+from . import plan_documents
+from .vtracking_place_lookup import places_by_root_partner
+
+_logger = logging.getLogger(__name__)
+
+
+def candidates(env, plan):
+    """Phiếu xếp được, gom theo cụm rồi theo điểm dừng.
+
+    Trả ``(by_zone, skipped)``:
+
+    * ``by_zone`` — ``{zone: {điểm giao: recordset phiếu}}``
+    * ``skipped`` — ``{lý do: [tên phiếu]}`` để báo lại cho người bấm nút
+
+    Đọc kho của chính kế hoạch (qua điểm xuất phát): phiếu của kho khác thì xe này không
+    lấy được. Điểm xuất phát chưa gắn kho thì lấy phiếu của mọi kho — bên gọi phải chặn
+    trước, xem ``action_autoload_documents``.
+    """
+    warehouse = plan.start_place_id.warehouse_id
+    pickings = env['stock.picking'].search(
+        plan_documents.loadable_picking_domain(warehouse)
+    )
+    places = places_by_root_partner(env, plan.company_id or env.company)
+
+    by_zone = defaultdict(lambda: defaultdict(lambda: env['stock.picking']))
+    skipped = defaultdict(list)
+    for picking in pickings:
+        order = picking.sale_id
+        channel = order._vtracking_delivery_channel() if order else ''
+        place = places.get(picking.partner_id.commercial_partner_id.id)
+        flags = blocking_flags(place.profile_id.procedure_required if place else None,
+                               channel or None)
+        hard = [flag for flag in flags if flag['hard']]
+        if hard:
+            skipped[hard[0]['label']].append(picking.name)
+        elif not needs_company_truck(channel or None):
+            skipped['Khách tự lấy / chuyển phát / Grab — xe công ty không phải chạy'].append(
+                picking.name)
+        elif not place or not place.zone_id:
+            skipped['Khách chưa có điểm giao nên chưa biết thuộc cụm nào'].append(picking.name)
+        else:
+            by_zone[place.zone_id][place] |= picking
+    return by_zone, skipped
+
+
+def choose_zone(by_zone, plan):
+    """Cụm sẽ xếp cho chuyến này.
+
+    Kế hoạch đã có cụm (do người đặt, hoặc do các điểm đang có) thì giữ nguyên cụm đó —
+    máy không được kéo chuyến sang vùng khác sau lưng người điều phối. Chưa có gì thì chọn
+    cụm nhiều điểm nhất: chuyến đầy là chuyến đáng chạy.
+    """
+    if plan.zone_id:
+        return plan.zone_id if plan.zone_id in by_zone else None
+    if not by_zone:
+        return None
+    return max(by_zone, key=lambda zone: (len(by_zone[zone]), zone.id))
+
+
+def autoload(plan):
+    """Xếp phiếu vào ``plan`` rồi sắp thứ tự ghé. Trả dict tóm tắt để hiện cho người dùng.
+
+    Dư trần thì xếp các điểm **tới hẹn sớm nhất** trước — phần còn lại nằm trong
+    ``left_out`` để người điều phối mở chuyến khác.
+    """
+    plan.ensure_one()
+    by_zone, skipped = candidates(plan.env, plan)
+    zone = choose_zone(by_zone, plan)
+    if not zone:
+        return {'zone': None, 'added': 0, 'stops': 0, 'left_out': [], 'skipped': dict(skipped)}
+
+    stops = sorted(
+        by_zone[zone].items(),
+        key=lambda item: min(item[1].mapped('scheduled_date') or [False]) or False,
+    )
+    con_trong = max((zone.max_stops or 0) - plan.stop_count, 0) if zone.max_stops else len(stops)
+    chon, du = stops[:con_trong], stops[con_trong:]
+
+    pickings = plan.env['stock.picking']
+    for _place, group in chon:
+        pickings |= group
+    added = 0
+    if pickings:
+        added = len(plan_documents.add_documents(plan, pickings=pickings)['added_line_ids'])
+        plan.action_resequence_by_distance()
+
+    _logger.info('V-Tracking: nút lên kế hoạch xếp %s phiếu (%s điểm) cụm %s vào %s.',
+                 added, len(chon), zone.name, plan.name)
+    return {
+        'zone': zone,
+        'added': added,
+        'stops': len(chon),
+        'left_out': [place.name for place, _group in du],
+        'skipped': dict(skipped),
+    }
