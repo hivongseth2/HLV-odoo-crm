@@ -4,6 +4,8 @@ from . import fleet_vehicle_capacity
 from . import fleet_vehicle_assignment
 from . import stock_picking
 from . import sale_order
+# Sau sale_order và stock_picking: cùng mở rộng hai model đó.
+from . import vtracking_procedure
 from . import vtracking_position
 from . import vtracking_api_key
 from . import vtracking_import_wizard

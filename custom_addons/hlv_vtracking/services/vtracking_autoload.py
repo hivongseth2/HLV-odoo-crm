@@ -4,6 +4,11 @@ Vì sao cần: người điều phối mở kế hoạch rỗng rồi phải t�
 phiếu nào đã đóng gói xong, phiếu nào vướng hải quan, phiếu nào khách tự lấy, phiếu nào
 cùng cụm với nhau. Máy làm được đúng việc đó bằng những quy tắc ĐÃ có trong module.
 
+Xếp xong thì gửi một phiếu yêu cầu để AI soát lại (``review_request``): máy áp luật,
+còn những thứ luật không nói được — đơn trễ hẹn nên ưu tiên, khách có hai nhà máy, con số
+km vô lý vì toạ độ sai — cần có người hoặc AI đọc. AI sửa trên bản NHÁP, người điều phối
+xem bản cuối rồi mới chốt.
+
 Ba điều file này KHÔNG làm, có chủ đích:
 
 * **không chốt kế hoạch** — chỉ xếp vào bản nháp, người bấm Chốt;
@@ -50,7 +55,8 @@ def candidates(env, plan):
         channel = order._vtracking_delivery_channel() if order else ''
         place = places.get(picking.partner_id.commercial_partner_id.id)
         flags = blocking_flags(place.profile_id.procedure_required if place else None,
-                               channel or None)
+                               channel or None,
+                               procedure_ready=picking.vtracking_procedure_ready)
         hard = [flag for flag in flags if flag['hard']]
         if hard:
             skipped[hard[0]['label']].append(picking.name)
@@ -114,3 +120,33 @@ def autoload(plan):
         'left_out': [place.name for place, _group in du],
         'skipped': dict(skipped),
     }
+
+
+def review_request(plan, summary):
+    """Tạo phiếu yêu cầu để AI soát lại kế hoạch vừa xếp. Trả phiếu, hoặc recordset rỗng.
+
+    Rỗng khi công ty chưa khai tài khoản worker AI: lúc đó không ai nhận phiếu, tạo ra chỉ
+    để nằm đọng. Bên gọi phải nói rõ điều đó cho người bấm nút.
+    """
+    Request = plan.env['hlv.vtracking.ai.request']
+    if not plan.company_id.sudo().ai_worker_user_id:
+        return Request.browse()
+
+    bo_qua = '; '.join('%s: %s phiếu' % (ly_do, len(phieu))
+                       for ly_do, phieu in summary['skipped'].items())
+    message = (
+        'Máy vừa tự xếp %s phiếu vào %s điểm dừng của cụm %s. Nhờ soát lại: thứ tự ghé có '
+        'hợp lý không, có điểm nào giờ tới vô lý vì toạ độ sai không, đơn nào trễ hẹn mà '
+        'bị bỏ lại không, và có nên gom thêm điểm lẻ của cụm bên cạnh không.'
+        % (summary['added'], summary['stops'], summary['zone'].name)
+    )
+    if summary['left_out']:
+        message += ' Dư trần điểm nên để lại: %s.' % ', '.join(summary['left_out'])
+    if bo_qua:
+        message += ' Đã bỏ — %s.' % bo_qua
+    return Request.create({
+        'request_type': 'question',
+        'plan_id': plan.id,
+        'message': message,
+        'company_id': plan.company_id.id,
+    })

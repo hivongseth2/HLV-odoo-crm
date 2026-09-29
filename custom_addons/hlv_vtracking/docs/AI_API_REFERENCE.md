@@ -144,6 +144,8 @@ Mỗi phần tử `orders[]`:
   "dispatch": {
     "blocking": [{"code": "customs", "label": "Phải khai hải quan trước khi xe vào", "hard": true}],
     "blocked": true,
+    "procedure_required": "customs",
+    "procedure_ready": false,
     "delivery_channel": "company",
     "needs_truck": true,
     "zone": {"id": 2, "name": "Long Thành", "source": "coords",
@@ -169,6 +171,8 @@ Mỗi phần tử `orders[]`:
 |---|---|
 | `blocking[]` | Cờ chặn đã chuẩn hoá: `customs` · `register` (**cứng**) · `pickup` · `express` · `grab` (mềm) |
 | `blocked` | Có cờ **cứng**. Xếp vào kế hoạch thì `confirm-plan` sẽ **báo lỗi** |
+| `procedure_required` | Thủ tục khách này đòi: `customs` · `register` · `both` · `null` |
+| `procedure_ready` | Người bán đã báo LÀM XONG thủ tục cho chính chứng từ này. `true` thì `blocking` hết cờ cứng và `blocked` về `false` — khách vẫn là khách cần thủ tục, chỉ là lô hàng này đã xong. Người bán bấm ở menu Thao tác của đơn bán / phiếu giao: **"Đã xong thủ tục giao hàng"** |
 | `needs_truck` | `false` = khách tự lấy / gửi ngoài, **đừng chiếm một chỗ trên xe** |
 | `zone.source` | `coords` (suy từ toạ độ — tin được) · `place` (đoán theo khách) |
 | `zone.uncertain` | `true` = máy phải đoán. Định mức thời gian dựa vào cụm, đoán sai cụm là sai cả giờ giấc |
