@@ -28,12 +28,12 @@ class StockPickingMisaInvoiceAllocation(models.Model):
     )
 
     @api.depends(
-        'misa_invoice_state', 'misa_invoice_effective_amount', 'misa_invoice_net_actual_amount',
-        'misa_invoice_grouped_matched_amount',
+        'misa_invoice_state', 'misa_invoice_amount', 'misa_invoice_effective_amount',
+        'misa_invoice_net_actual_amount', 'misa_invoice_grouped_matched_amount',
         'misa_invoice_master_picking_id.misa_invoice_state',
         'misa_invoice_covered_picking_ids.misa_invoice_net_actual_amount',
         'misa_invoice_grouped_line_ids.match_ids.amount',
-        'misa_invoice_grouped_line_ids.match_ids.picking_id.misa_invoice_state',
+        'misa_invoice_grouped_line_ids.match_ids.picking_id.misa_invoice_amount',
         'misa_invoice_grouped_line_ids.match_ids.picking_id.misa_invoice_master_picking_id',
     )
     def _compute_misa_invoice_allocated_amount(self):
@@ -46,21 +46,28 @@ class StockPickingMisaInvoiceAllocation(models.Model):
                 picking.misa_invoice_allocated_amount = (
                     picking.misa_invoice_net_actual_amount if master.misa_invoice_state == 'invoiced' else 0.0
                 )
-            elif picking.misa_invoice_state == 'invoiced':
+            elif picking.misa_invoice_state == 'invoiced' and picking.misa_invoice_amount:
                 picking.misa_invoice_allocated_amount = (
                     picking.misa_invoice_effective_amount - picking._misa_invoice_amount_passed_to_others()
                 )
-            elif picking.misa_invoice_grouped_matched_amount > 0:
-                # effective_amount ở nhánh này đã là phần khớp dòng hàng (kẹp ở tiền thực xuất).
-                picking.misa_invoice_allocated_amount = picking.misa_invoice_effective_amount
+            elif not picking.misa_invoice_amount and picking.misa_invoice_grouped_matched_amount > 0:
+                # Không tự có tiền HĐ riêng nhưng được phủ 1 phần qua đề nghị của phiếu khác. Gồm cả
+                # phiếu 'invoiced' mà tiền = 0: _misa_invoice_dedupe_request_refid_groups để phiếu
+                # cùng đề nghị nhưng chỉ được phủ 1 phần ở trạng thái đó (case KBC/OUT/12579 cùng
+                # đề nghị với KBC/OUT/12907).
+                picking.misa_invoice_allocated_amount = min(
+                    picking.misa_invoice_grouped_matched_amount, picking.misa_invoice_net_actual_amount,
+                )
             else:
                 picking.misa_invoice_allocated_amount = 0.0
 
     def _misa_invoice_amount_passed_to_others(self):
         """Tổng tiền hóa đơn trong đề nghị của phiếu đại diện này đã quy cho phiếu KHÁC: đủ
         tiền thực xuất của từng phiếu ăn theo, cộng phần khớp dòng hàng của các phiếu chỉ được
-        phủ 1 phần. Phiếu đã ăn theo đề nghị khác hoặc tự có hóa đơn riêng thì phần khớp ở đây
-        không tính — tiền của chúng đã lấy từ chỗ khác, trừ thêm sẽ làm hụt tổng."""
+        phủ 1 phần. Phiếu đã ăn theo đề nghị khác hoặc tự có tiền hóa đơn riêng thì phần khớp ở
+        đây không tính — tiền của chúng đã lấy từ chỗ khác, trừ thêm sẽ làm hụt tổng. Cùng điều
+        kiện với nhánh "phủ 1 phần" của _compute_misa_invoice_allocated_amount, để phần nhường
+        đi ở đây đúng bằng phần phiếu kia nhận."""
         self.ensure_one()
         covered = self.misa_invoice_covered_picking_ids
         partial = sum(
@@ -69,6 +76,6 @@ class StockPickingMisaInvoiceAllocation(models.Model):
             if match.picking_id != self
             and match.picking_id not in covered
             and not match.picking_id.misa_invoice_master_picking_id
-            and match.picking_id.misa_invoice_state != 'invoiced'
+            and not match.picking_id.misa_invoice_amount
         )
         return sum(covered.mapped('misa_invoice_net_actual_amount')) + partial

@@ -258,7 +258,7 @@ def dump_voucher(expect_inv_no):
         return
     print(f"\n  [sa_voucher_get] tra thẳng theo SỐ HÓA ĐƠN = {expect_inv_no!r}")
     try:
-        voucher = misa.get_voucher_by_inv_no(expect_inv_no)
+        voucher = misa._misa_invoice_voucher_for_inv_no(expect_inv_no)
     except Exception as e:
         print(f"      ❌ LỖI GỌI MISA: {e}")
         return
