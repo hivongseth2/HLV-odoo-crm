@@ -170,6 +170,14 @@
                         <field name="zone_warning" readonly="1" nolabel="1"/>
                     </div>
 
+                    <div class="alert alert-danger" role="alert"
+                         invisible="not stale_document_warning">
+                        <field name="stale_document_warning" readonly="1" nolabel="1"/>
+                        <button name="action_drop_finished_lines" type="object"
+                                string="Gỡ chứng từ đã xong" class="btn-link"
+                                invisible="state != 'draft'"/>
+                    </div>
+
                     <div class="alert alert-warning" role="alert"
                          invisible="not rule_warning">
                         <field name="rule_warning" readonly="1" nolabel="1"/>
