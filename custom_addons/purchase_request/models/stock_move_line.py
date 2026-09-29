@@ -190,16 +190,8 @@ class StockMoveLine(models.Model):
                 messages_data
             )
             if message:
-                request.sudo().with_context(
-                    mail_post_autofollow=False,
-                    mail_create_nosubscribe=True,
-                ).message_post(
-                    body=Markup(message),
-                    subtype_id=self.env.ref(
-                        "purchase_request.mt_request_picking_done"
-                    ).id,
-                    partner_ids=[],
-                )
+                # Chỉ ghi vào chatter, không báo inbox (như xác nhận PO).
+                request.sudo()._message_log(body=Markup(message))
 
             picking_message = self._picking_confirm_done_messages_content(
                 messages_data
