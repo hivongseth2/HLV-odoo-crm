@@ -1,6 +1,6 @@
 {
     'name': 'MISA Invoice Status Report',
-    'version': '1.7',
+    'version': '1.8',
     'category': 'Inventory',
     'summary': 'Đối soát phiếu xuất kho chưa có hóa đơn MISA',
     'description': """
@@ -34,6 +34,7 @@
     'assets': {
         'web.assets_backend': [
             'misa_invoice_status_report/static/src/scss/misa_invoice_dashboard.scss',
+            'misa_invoice_status_report/static/src/scss/misa_invoice_gap.scss',
             'misa_invoice_status_report/static/src/xml/misa_invoice_dashboard.xml',
             'misa_invoice_status_report/static/src/js/misa_invoice_dashboard.js',
             'misa_invoice_status_report/static/src/xml/misa_order_list_page.xml',

@@ -32,7 +32,7 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         not_invoiced = pickings - invoiced
         return {
             'actual_amount_total': sum(pickings.mapped('misa_invoice_net_actual_amount')),
-            'invoice_amount_total': sum(invoiced.mapped('misa_invoice_effective_amount')),
+            'invoice_amount_total': sum(pickings.mapped('misa_invoice_allocated_amount')),
             'outstanding_amount_total': sum(not_invoiced.mapped('misa_invoice_net_actual_amount')),
         }
 
@@ -54,7 +54,7 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         })
         rows = Picking.read_group(
             domain,
-            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_effective_amount:sum'],
+            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_allocated_amount:sum'],
             [groupby_field, 'misa_invoice_state', 'misa_invoice_exception'],
             lazy=False,
         )
@@ -65,14 +65,15 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
             state = row['misa_invoice_state']
             exception = row['misa_invoice_exception']
             actual_sum = row['misa_invoice_net_actual_amount'] or 0.0
-            invoice_sum = row['misa_invoice_effective_amount'] or 0.0
 
             bucket = groups[key]
             bucket['total'] += count
             bucket['actual_amount_total'] += actual_sum
+            # Cộng ở mọi trạng thái: phiếu chưa có HĐ riêng vẫn có thể đã được phủ 1 phần qua
+            # đề nghị của phiếu khác (xem misa_invoice_allocation.py).
+            bucket['invoice_amount_total'] += row['misa_invoice_allocated_amount'] or 0.0
             if state == 'invoiced':
                 bucket['invoiced'] += count
-                bucket['invoice_amount_total'] += invoice_sum
             else:
                 bucket['outstanding_amount_total'] += actual_sum
                 if not exception:
@@ -116,10 +117,8 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
         )
         total = sum(counts.values()) + exception_count
 
-        invoiced_sum = Picking.read_group(
-            base_domain + [('misa_invoice_state', '=', 'invoiced')], ['misa_invoice_effective_amount:sum'], [],
-        )
-        invoiced_amount = (invoiced_sum[0]['misa_invoice_effective_amount'] or 0.0) if invoiced_sum else 0.0
+        invoiced_sum = Picking.read_group(base_domain, ['misa_invoice_allocated_amount:sum'], [])
+        invoiced_amount = (invoiced_sum[0]['misa_invoice_allocated_amount'] or 0.0) if invoiced_sum else 0.0
 
         by_warehouse = []
         warehouses = self.env['stock.warehouse'].sudo().search([])
@@ -230,7 +229,7 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
 
         grouped = Picking.read_group(
             domain,
-            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_effective_amount:sum'],
+            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_allocated_amount:sum'],
             ['misa_invoice_state', 'misa_invoice_exception'],
             lazy=False,
         )
@@ -239,23 +238,22 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
             state = grp['misa_invoice_state']
             exception = grp['misa_invoice_exception']
             actual_sum = grp['misa_invoice_net_actual_amount'] or 0.0
-            invoice_sum = grp['misa_invoice_effective_amount'] or 0.0
+            # Phiếu chưa có HĐ riêng vẫn có thể đã được phủ 1 phần qua đề nghị của phiếu khác —
+            # phần đó hiện ở đúng dòng trạng thái của phiếu (xem misa_invoice_allocation.py).
+            invoice_sum = grp['misa_invoice_allocated_amount'] or 0.0
 
             rows['total']['count'] += count
             rows['total']['actual_amount'] += actual_sum
-            if state == 'invoiced':
-                rows['total']['invoice_amount'] += invoice_sum
+            rows['total']['invoice_amount'] += invoice_sum
 
             if exception:
                 rows['exception']['count'] += count
                 rows['exception']['actual_amount'] += actual_sum
-                if state == 'invoiced':
-                    rows['exception']['invoice_amount'] += invoice_sum
+                rows['exception']['invoice_amount'] += invoice_sum
             elif state in rows:
                 rows[state]['count'] += count
                 rows[state]['actual_amount'] += actual_sum
-                if state == 'invoiced':
-                    rows[state]['invoice_amount'] += invoice_sum
+                rows[state]['invoice_amount'] += invoice_sum
 
         shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
         shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
@@ -327,7 +325,6 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
                 'date_from': bucket_date_from, 'date_to': bucket_date_to,
             })
             bucket['actual_amount'] += picking.misa_invoice_net_actual_amount or 0.0
-            if picking.misa_invoice_state == 'invoiced':
-                bucket['invoice_amount'] += picking.misa_invoice_effective_amount or 0.0
+            bucket['invoice_amount'] += picking.misa_invoice_allocated_amount or 0.0
 
         return [buckets[key] for key in sorted(buckets.keys())]
