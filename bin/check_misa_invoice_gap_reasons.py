@@ -2,16 +2,11 @@
 """
 check_misa_invoice_gap_reasons.py
 =================================
-Mọi phiếu đang lệch trong khung "Vì sao còn lệch" (lọc được theo sale / tháng xuất kho) — gom
-theo ĐƠN, mỗi đơn in gọn LÝ DO và NÊN LÀM GÌ, không phải soát tay từng phiếu. Muốn xem chi tiết
-đủ A–E của 1 phiếu thì dùng bin/check_misa_invoice_gap_pickings.py.
+Mọi đơn đang lệch trong khung "Vì sao còn lệch" (lọc được theo sale / tháng xuất kho) — mỗi đơn
+in gọn LÝ DO và NÊN LÀM GÌ. Logic nằm trong module (misa.invoice.gap.review — cùng chỗ báo cáo AI
+hằng ngày dùng), file này chỉ in ra. Muốn xem chi tiết đủ A–E của 1 phiếu thì dùng
+bin/check_misa_invoice_gap_pickings.py.
 
-Mỗi đơn:
-  - tiền HĐ theo đơn ĐANG LƯU vs tính lại NGAY từ MISA (dùng đúng cách module tính, có chuyển dòng
-    ghi nhầm / bỏ trống mã đơn — sale.order._misa_invoice_line_moves / _owned_request_amounts);
-  - so từng mã hàng: Odoo đã giao (dòng đơn bán) vs đã phát hành HĐ (đề nghị + HĐ hải quan);
-  - kết luận: chưa xuất HĐ / đề nghị chưa phát hành / HĐ thiếu mã / HĐ thừa mã / sai % thuế /
-    có dòng ghi nhầm mã đơn / số theo đơn đang lưu đã cũ.
 Cuối cùng in danh sách đơn mà SOÁT LẠI THEO ĐƠN là tự hết lệch — dán vào ORDERS của
 bin/fix_misa_invoice_reassign_orders.py rồi chạy.
 
@@ -23,205 +18,82 @@ Chạy trên máy có Odoo (Odoo.sh shell hoặc server):
 
 from collections import defaultdict
 
-from odoo.addons.misa_invoice_status_report.models.misa_invoice_reassign_utils import item_key, owned_qty
-
 SALER_CODE = False          # False = mọi sale; hoặc 'TRANTHIMYDUYEN'
-MONTH = '2026-09'               # False = mọi tháng; hoặc '2026-08' (tháng xuất kho của phiếu lệch)
+MONTH = '2026-09'           # False = mọi tháng; hoặc '2026-08' (tháng xuất kho của phiếu lệch)
 ONLY_ORDERS = []            # để trống = tự lấy theo 2 lọc trên; hoặc ['DH125524949235869', ...]
-TOLERANCE = 1000.0          # đ
 MAX_ORDERS = 300            # đơn lệch nhiều nhất trước
 SEP = "=" * 100
 
-Picking = env['stock.picking'].sudo()
-SaleOrder = env['sale.order'].sudo()
-CustomsLine = env['misa.invoice.customs.line'].sudo()
-if not hasattr(SaleOrder, '_misa_invoice_owned_request_amounts'):
-    raise SystemExit("❌ Server chưa có bản chuyển dòng ghi nhầm mã đơn (models/misa_invoice_line_reassign.py).")
+REASON_LABELS = {
+    'no_invoice': 'CHƯA XUẤT HĐ',
+    'pending_request': 'ĐỀ NGHỊ CHƯA PHÁT HÀNH',
+    'missing_items': 'HĐ THIẾU MÃ',
+    'extra_items': 'HĐ THỪA MÃ',
+    'tax_diff': 'SAI % THUẾ trên đơn bán',
+    'price_diff': 'KHÁC ĐƠN GIÁ',
+    'duplicate_request': 'ĐỀ NGHỊ TRÙNG → xóa bớt, KHÔNG phát hành thêm',
+    'customs_unmatched': 'HĐ HẢI QUAN CHƯA KHỚP PHIẾU → khớp tay ở tab Đơn hải quan',
+    'mislabeled': 'DÒNG GHI NHẦM / BỎ TRỐNG MÃ ĐƠN → soát lại theo đơn sẽ tự chuyển',
+    'stale': 'SỐ THEO ĐƠN ĐANG LƯU CŨ → soát lại theo đơn',
+    'not_checked': 'ĐƠN CHƯA SOÁT THEO ĐƠN → soát lại theo đơn',
+}
+DETAIL_KEYS = {'missing_items': 'missing', 'extra_items': 'extra', 'tax_diff': 'tax_diff', 'price_diff': 'price_diff'}
+
+Review = env['misa.invoice.gap.review'].sudo()
+if not hasattr(Review, 'review_orders'):
+    raise SystemExit("❌ Server chưa có models/misa_invoice_gap_review.py — deploy trước.")
 
 
 def money(v):
     return f"{(v or 0.0):,.0f}".replace(",", ".")
 
 
-def picking_gap(picking):
-    return (picking.misa_invoice_net_actual_amount or 0.0) - (picking.misa_invoice_allocated_amount or 0.0)
-
-
-def tax_rate(before, after):
-    return round((after / before - 1) * 100, 1) if before else 0.0
-
-
-def gap_orders():
-    """[(đơn, [phiếu lệch])] — đơn lệch nhiều nhất trước."""
-    if ONLY_ORDERS:
-        orders = SaleOrder.search([('name', 'in', ONLY_ORDERS)])
-        return [(o, o._misa_invoice_done_out_pickings().filtered(lambda p: abs(picking_gap(p)) > TOLERANCE)) for o in orders]
-    domain = Picking._misa_invoice_dashboard_base_domain()
-    if SALER_CODE:
-        domain += [('misa_invoice_saler_code', '=', SALER_CODE)]
-    by_order = defaultdict(lambda: Picking.browse())
-    for picking in Picking.search(domain):
-        if abs(picking_gap(picking)) <= TOLERANCE:
-            continue
-        if MONTH and (not picking.date_done or picking.date_done.strftime('%Y-%m') != MONTH):
-            continue
-        for order in picking.misa_invoice_sale_order_ids:
-            by_order[order.id] |= picking
-    rows = [(SaleOrder.browse(oid), pickings) for oid, pickings in by_order.items()]
-    rows.sort(key=lambda r: -abs(sum(picking_gap(p) for p in r[0]._misa_invoice_done_out_pickings())))
-    return rows[:MAX_ORDERS]
-
-
-def shipped_by_item(order):
-    """{mã hàng: {qty, amount trước thuế, rates}} — theo dòng đơn bán (qty_delivered, đã trừ trả)."""
-    result = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0, 'rates': set()})
-    for line in order.order_line.filtered(lambda l: not l.display_type and l.qty_delivered):
-        item = result[item_key(line.product_id.default_code)]
-        unit = line.price_subtotal / line.product_uom_qty if line.product_uom_qty else 0.0
-        item['qty'] += line.qty_delivered
-        item['amount'] += unit * line.qty_delivered
-        item['rates'].add(tax_rate(line.price_subtotal, line.price_total))
-    return result
-
-
-def invoiced_by_item(order, moves, lines):
-    """{mã hàng: {qty, amount trước thuế, rates}} đã phát hành HĐ, sau khi chuyển dòng ghi nhầm."""
-    result = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0, 'rates': set()})
-    for key, (req, raw) in lines.items():
-        if not req['inv_no']:
-            continue
-        line_qty = raw.get('quantity') or 0.0
-        qty = owned_qty(order.name, (raw.get('order_code') or '').strip(), line_qty, moves.get(key, []))
-        if qty <= 0:
-            continue
-        item = result[item_key(raw.get('inventory_item_code'))]
-        before = raw.get('amount_oc') or 0.0
-        item['qty'] += qty
-        item['amount'] += before * qty / line_qty if line_qty else before
-        item['rates'].add(tax_rate(before, before + (raw.get('vat_amount_oc') or 0.0)))
-    customs = CustomsLine.search([
-        '|', '|', ('order_code', '=', order.name), ('sale_order_id', '=', order.id),
-        ('match_ids.picking_id', 'in', order._misa_invoice_done_out_pickings().ids),
-    ])
-    for line in customs:
-        item = result[item_key(line.inventory_item_code)]
-        item['qty'] += line.quantity or 0.0
-        item['amount'] += line.amount_before_vat or 0.0
-        item['rates'].add(tax_rate(line.amount_before_vat or 0.0, line.amount or 0.0))
-    return result, customs
-
-
-rows = gap_orders()
-print(f"\n{SEP}\n  VÌ SAO CÒN LỆCH — {len(rows)} đơn"
+scope = Review.gap_orders(month=MONTH, saler_code=SALER_CODE, limit=MAX_ORDERS)
+rows = scope['orders']
+if ONLY_ORDERS:
+    rows = [r for r in rows if r['name'] in ONLY_ORDERS]
+print(f"\n{SEP}\n  VÌ SAO CÒN LỆCH — {len(rows)}/{scope['order_count']} đơn, tổng lệch {money(scope['total_gap'])}"
       f"{' | sale ' + SALER_CODE if SALER_CODE else ''}{' | tháng ' + MONTH if MONTH else ''}\n{SEP}")
 
-requests_cache, lines_cache = {}, {}
+reviews = {}
+for start in range(0, len(rows), 20):
+    for review in Review.review_orders([r['id'] for r in rows[start:start + 20]]):
+        reviews[review['id']] = review
+
 refresh_fixes = []
 reason_count = defaultdict(int)
-gaps_by_partner = defaultdict(list)
-for order, gap_pickings in rows:
-    order_gap = sum(picking_gap(p) for p in order._misa_invoice_done_out_pickings())
-    print(f"\n  {order.name} — {order.partner_id.commercial_partner_id.name} | lệch cả đơn {money(order_gap)}"
-          f" | phiếu lệch: {', '.join(f'{p.name} ({money(picking_gap(p))})' for p in gap_pickings)}")
-    try:
-        moves, lines = order._misa_invoice_line_moves(requests_cache, lines_cache)
-        owned = order._misa_invoice_owned_request_amounts(moves, lines)
-    except Exception as e:
-        print(f"      ❌ lỗi gọi MISA: {e}")
+for row in rows:
+    review = reviews.get(row['id'], {})
+    print(f"\n  {row['name']} — {row['partner']} | lệch cả đơn {money(row['gap'])} | {row['age_days']} ngày"
+          f" | phiếu lệch: {', '.join('%s (%s)' % (p['name'], money(p['gap'])) for p in row['gap_pickings'])}")
+    if review.get('error'):
+        print(f"      ❌ lỗi gọi MISA: {review['error']}")
         continue
-    issued_now = sum(amount for req, amount, _n in owned if req['inv_no'])
-    pending = [(req['refno'], amount) for req, amount, _n in owned if not req['inv_no']]
-    shipped = shipped_by_item(order)
-    invoiced, customs = invoiced_by_item(order, moves, lines)
-
-    reasons = []
-    for req, amount, notes in owned:
+    for req in review['requests']:
         state = f"HĐ {req['inv_no']}" if req['inv_no'] else 'chưa phát hành'
-        print(f"      đề nghị {req['refno']} {state}: {money(amount)}" + (f" — {'; '.join(notes)}" if notes else ''))
-    for line in customs:
-        print(f"      HĐ hải quan {line.invoice_no} [{line.inventory_item_code}] SL {line.quantity:g} {money(line.amount)} ({line.match_state})")
-    if not owned and not customs:
+        print(f"      đề nghị {req['refno']} {state}: {money(req['amount'])}"
+              + (f" — {'; '.join(req['notes'])}" if req['notes'] else ''))
+    for line in review['customs']:
+        print(f"      HĐ hải quan {line['invoice_no']} [{line['item']}] SL {line['qty']:g} {money(line['amount'])} ({line['state']})")
+    if not review['requests'] and not review['customs']:
         print("      MISA không có đề nghị / HĐ hải quan nào cho đơn này")
+    for reason in review['reasons'] or ['unexplained']:
+        detail = ', '.join(review.get(DETAIL_KEYS.get(reason, ''), []) or [])
+        if reason == 'duplicate_request':
+            detail = '; '.join(', '.join(refno for refno, _inv in d['requests']) + f" cùng {money(d['amount'])}"
+                               for d in review['duplicates'])
+        label = REASON_LABELS.get(reason, 'Mặt hàng khớp — lệch do chia tiền giữa các phiếu / đơn gộp')
+        print(f"      ⇒ {label}" + (f": {detail}" if detail else ''))
+        reason_count[label] += 1
+    if review['refresh_fixes']:
+        refresh_fixes.append(row['name'])
 
-    missing, extra, tax_diff, price_diff = [], [], [], []
-    for item in sorted(set(shipped) | set(invoiced)):
-        s, i = shipped.get(item), invoiced.get(item)
-        s_qty, i_qty = (s['qty'] if s else 0.0), (i['qty'] if i else 0.0)
-        if i_qty < s_qty - 0.001:
-            missing.append(f"[{item}] {s_qty - i_qty:g}")
-        elif i_qty > s_qty + 0.001:
-            extra.append(f"[{item}] {i_qty - s_qty:g}")
-        elif s and i and abs(i['amount'] - s['amount']) > TOLERANCE:
-            price_diff.append(f"[{item}] {money(i['amount'] - s['amount'])}")
-        if s and i and s['rates'] != i['rates']:
-            tax_diff.append(f"[{item}] Odoo {sorted(s['rates'])}% / HĐ {sorted(i['rates'])}%")
-
-    stale = bool(order.misa_invoice_order_checked_at) and abs(order.misa_invoice_order_invoiced_amount - issued_now) > TOLERANCE
-    has_moves = any(order.name in {(lines[k][1].get('order_code') or '').strip()} | {t for t, _p, _q in v}
-                    for k, v in moves.items())
-    if not issued_now and not customs:
-        reasons.append('CHƯA XUẤT HĐ' + (f" — đề nghị chưa phát hành: {', '.join(f'{r} ({money(a)})' for r, a in pending)}" if pending else ''))
-    if missing and (issued_now or customs):
-        reasons.append(f"HĐ THIẾU MÃ: {', '.join(missing)}")
-    if extra:
-        reasons.append(f"HĐ THỪA MÃ: {', '.join(extra)} (xuất HĐ trùng, hàng trả chưa điều chỉnh HĐ, hoặc dòng ghi nhầm mã đơn chưa đủ điều kiện chuyển)")
-    if tax_diff:
-        reasons.append(f"SAI % THUẾ: {', '.join(tax_diff)} → sửa thuế trên đơn bán")
-    if price_diff:
-        reasons.append(f"KHÁC ĐƠN GIÁ: {', '.join(price_diff)}")
-    # Số theo đơn đang lưu đã khớp MISA tính lại → dòng ghi nhầm đã được chuyển ở lần soát trước,
-    # chỉ còn là thông tin, không phải việc cần làm.
-    applied = bool(order.misa_invoice_order_checked_at) and not stale
-    if has_moves:
-        reasons.append('ĐÃ CHUYỂN dòng ghi nhầm / bỏ trống mã đơn (đã tính vào số theo đơn)' if applied
-                       else 'CÓ DÒNG GHI NHẦM / BỎ TRỐNG MÃ ĐƠN → soát lại theo đơn sẽ tự chuyển')
-    if stale:
-        reasons.append(f"SỐ THEO ĐƠN ĐANG LƯU CŨ: {money(order.misa_invoice_order_invoiced_amount)} → MISA hiện {money(issued_now)}"
-                       " → soát lại theo đơn")
-    if not order.misa_invoice_order_checked_at and (has_moves or issued_now):
-        reasons.append('ĐƠN CHƯA SOÁT THEO ĐƠN (đang tính theo phiếu) → soát lại theo đơn')
-    # Đề nghị trùng: >= 2 đề nghị cùng tính cho đơn này đúng 1 số tiền — sale lập lại đề nghị thay
-    # vì sửa cái cũ (DH…237065: TSN/OUT/14643 đã phát hành + TSN/OUT/14619 chưa phát hành, cùng
-    # 5.248.800 đ). Phát hành nốt cái chưa phát hành là xuất HĐ 2 lần.
-    by_amount = defaultdict(list)
-    for req, amount, _notes in owned:
-        by_amount[round(amount)].append(req)
-    for amount, reqs in by_amount.items():
-        if len(reqs) > 1:
-            names = ', '.join(f"{r['refno']} ({'HĐ ' + r['inv_no'] if r['inv_no'] else 'chưa phát hành'})" for r in reqs)
-            reasons.append(f"ĐỀ NGHỊ TRÙNG: {names} cùng {money(amount)} → xóa bớt trên MISA, KHÔNG phát hành thêm")
-    unmatched_customs = customs.filtered(lambda l: l.match_state != 'matched')
-    if unmatched_customs:
-        reasons.append("HĐ HẢI QUAN CHƯA KHỚP PHIẾU: " + ', '.join(
-            f"[{l.inventory_item_code}] {l.remaining_qty():g} ({l.invoice_no})" for l in unmatched_customs
-        ) + " → khớp tay ở tab Đơn hải quan (thường do mã hàng trên HĐ khác mã Odoo)")
-    if not reasons:
-        reasons.append('Mặt hàng khớp, số theo đơn mới — lệch do chia tiền giữa các phiếu / đơn gộp, xem bằng check_misa_invoice_gap_pickings.py')
-    for reason in reasons:
-        print(f"      ⇒ {reason}")
-        reason_count[reason.split(':')[0].split(' →')[0].split(' —')[0]] += 1
-    if not applied and (has_moves or stale or issued_now):
-        refresh_fixes.append(order.name)
-    gaps_by_partner[order.partner_id.commercial_partner_id.id].append((order, order_gap))
-
-# Cặp đơn cùng khách lệch ngược dấu đúng 1 số tiền = hàng của đơn thiếu nằm trên HĐ của đơn thừa,
-# mà phiếu của đơn thiếu không gắn vào đề nghị đó nên không tự chuyển được (DH…237106 +3.824.928 /
-# DH…237121 −3.824.928). Gắn tay đề nghị của đơn thừa cho phiếu của đơn thiếu là quy tắc chuyển
-# dòng tự xử lý ở lần soát sau.
 print(f"\n{SEP}\n  CẶP ĐƠN CÙNG KHÁCH LỆCH NGƯỢC DẤU (hàng đơn thiếu nằm trên HĐ đơn thừa)")
-pairs = 0
-for entries in gaps_by_partner.values():
-    for short_order, short_gap in (e for e in entries if e[1] > TOLERANCE):
-        for over_order, over_gap in (e for e in entries if e[1] < -TOLERANCE):
-            if abs(short_gap + over_gap) <= TOLERANCE:
-                pairs += 1
-                over_pickings = ', '.join(over_order._misa_invoice_done_out_pickings().mapped('misa_invoice_request_refno') or ['-'])
-                print(f"    {short_order.name} thiếu {money(short_gap)} ⇄ {over_order.name} thừa {money(over_gap)}"
-                      f" (đề nghị {over_pickings}) → soát lại theo đơn cả 2 (đã thêm vào ORDERS). Soát xong vẫn lệch"
-                      f" = đề nghị không gắn / không đặt tên theo phiếu của {short_order.name}: xem HĐ, đúng hàng của"
-                      f" nó thì gắn tay đề nghị cho phiếu (nút 'Gắn mã đề nghị') rồi soát lại")
-                refresh_fixes.extend(o.name for o in (short_order, over_order) if o.name not in refresh_fixes)
-if not pairs:
+for short, over, amount in scope['pairs'] or []:
+    print(f"    {short} thiếu ⇄ {over} thừa {money(amount)} → soát lại theo đơn cả 2 (đã thêm vào ORDERS); vẫn lệch"
+          " thì xem HĐ, đúng hàng đơn thiếu thì gắn tay đề nghị cho phiếu của nó")
+    refresh_fixes += [name for name in (short, over) if name not in refresh_fixes]
+if not scope['pairs']:
     print("    (không có)")
 
 print(f"\n{SEP}\n  TỔNG HỢP LÝ DO")

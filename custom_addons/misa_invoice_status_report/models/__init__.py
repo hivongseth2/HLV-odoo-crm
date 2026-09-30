@@ -20,3 +20,5 @@ from . import misa_invoice_gap_analysis
 from . import misa_invoice_picking_list
 from . import misa_invoice_public_api
 from . import misa_invoice_goods_detail
+from . import misa_invoice_gap_review
+from . import misa_invoice_ai_report

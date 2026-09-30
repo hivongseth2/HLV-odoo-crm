@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_invoice_ai_report_list" model="ir.ui.view">
+        <field name="name">misa.invoice.ai.report.list</field>
+        <field name="model">misa.invoice.ai.report</field>
+        <field name="arch" type="xml">
+            <list create="false">
+                <field name="report_date"/>
+                <field name="order_count"/>
+                <field name="total_gap"/>
+                <field name="suggestion_pending_count" decoration-warning="suggestion_pending_count &gt; 0"/>
+                <field name="worker" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_misa_invoice_ai_report_form" model="ir.ui.view">
+        <field name="name">misa.invoice.ai.report.form</field>
+        <field name="model">misa.invoice.ai.report</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="report_date"/>
+                            <field name="order_count"/>
+                        </group>
+                        <group>
+                            <field name="total_gap"/>
+                            <field name="worker"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Báo cáo" name="body">
+                            <field name="body" nolabel="1"/>
+                        </page>
+                        <page string="Đề xuất gắn mã đề nghị" name="suggestions">
+                            <p class="text-muted">
+                                AI chỉ đề xuất. Bấm "Gắn" thì Odoo gắn mã đề nghị cho phiếu, kiểm tra lại MISA
+                                và soát lại theo đơn ngay — xem kỹ lý do trước khi gắn.
+                            </p>
+                            <field name="suggestion_ids" nolabel="1">
+                                <list create="false" delete="false" edit="false"
+                                      decoration-muted="state != 'proposed'" decoration-success="state == 'applied'">
+                                    <field name="picking_id"/>
+                                    <field name="order_names"/>
+                                    <field name="refno"/>
+                                    <field name="amount"/>
+                                    <field name="reason"/>
+                                    <field name="state"/>
+                                    <field name="result" optional="show"/>
+                                    <button name="action_apply" type="object" string="Gắn" icon="fa-link"
+                                            class="btn-primary" invisible="state != 'proposed'"
+                                            confirm="Gắn mã đề nghị này cho phiếu xuất kho?"/>
+                                    <button name="action_reject" type="object" string="Bỏ qua" icon="fa-times"
+                                            invisible="state != 'proposed'"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Đã soát lại theo đơn" name="refreshed">
+                            <field name="refreshed_log" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_misa_invoice_ai_report" model="ir.actions.act_window">
+        <field name="name">Báo cáo đối soát (AI)</field>
+        <field name="res_model">misa.invoice.ai.report</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p>Chưa có báo cáo. Máy worker chạy skill doi-soat-misa lúc 19h mỗi ngày sẽ gửi báo cáo về đây.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_misa_invoice_ai_report"
+              name="Báo cáo đối soát (AI)"
+              parent="menu_misa_invoice_root"
+              action="action_misa_invoice_ai_report"
+              groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
+              sequence="30"/>
+</odoo>

@@ -1,6 +1,6 @@
 {
     'name': 'MISA Invoice Status Report',
-    'version': '1.14',
+    'version': '1.15',
     'category': 'Inventory',
     'summary': 'Đối soát phiếu xuất kho chưa có hóa đơn MISA',
     'description': """
@@ -29,6 +29,7 @@
         'views/misa_invoice_customs_line_views.xml',
         'views/res_users_misa_invoice_views.xml',
         'views/misa_sale_status_templates.xml',
+        'views/misa_invoice_ai_report_views.xml',
         'data/misa_invoice_status_cron.xml',
     ],
     'assets': {
