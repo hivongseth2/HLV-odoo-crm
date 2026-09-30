@@ -29,9 +29,11 @@ from collections import defaultdict
 
 from odoo import fields
 
-# Đơn DH125524949235696 (phiếu 12546, 12874, 13576): có phiếu báo "Đã xuất HĐ" mà tiền HĐ của cả
-# đơn = 0 — mục A in từng phiếu của đơn đang ăn theo đề nghị nào, tiền đề nghị dồn cho phiếu nào.
-PICKING_NAMES = ['KBC/OUT/12546']
+# Phiếu báo "Đã xuất HĐ" mà tiền HĐ theo đơn = 0 — mục A in từng phiếu của đơn đang ăn theo đề
+# nghị nào; mục B in dòng của đề nghị (kể cả dòng bỏ trống mã đơn).
+#   KBC/OUT/12546: đơn DH125524949235696 (cùng đơn với 12874, 13576)
+#   KBC/OUT/13489: đơn DH125524949235029 — số HĐ trống, đề nghị KBC/OUT/13489
+PICKING_NAMES = ['KBC/OUT/13489', 'KBC/OUT/12546']
 TOLERANCE = 1000.0          # đ — lệch tiền dưới mức này coi như khớp (làm tròn)
 CANDIDATE_MONTHS = 6        # dò phiếu đơn khác trong bao nhiêu tháng gần đây
 
