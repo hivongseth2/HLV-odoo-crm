@@ -4,6 +4,8 @@ from odoo import http
 from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
+from ..models.misa_invoice_public_api import MISA_INVOICE_PUBLIC_ALL_SALERS
+
 _logger = logging.getLogger(__name__)
 
 # Trang này TRƯỚC ĐÂY dùng 1 mật khẩu chung (như /search_invoice, /sale_plan...) cho MỌI sale —
@@ -36,7 +38,11 @@ class MisaInvoicePublicController(http.Controller):
         # đăng ký (không chỉ của riêng họ), JS dùng cờ này để hiện thêm nút "Copy link" cho
         # từng mã (gửi link trực tiếp cho từng sale) thay vì hiểu nhầm là họ tự có nhiều mã.
         is_admin = request.env.user.has_group('misa_invoice_status_report.group_misa_invoice_reconciliation')
-        return {'status': 'success', 'codes': codes, 'is_admin': is_admin}
+        return {
+            'status': 'success', 'codes': codes, 'is_admin': is_admin,
+            # Giá trị option "Tất cả" (chỉ gửi cho quản lý) — JS không tự đặt, tránh 2 nơi lệch nhau.
+            'all_code': MISA_INVOICE_PUBLIC_ALL_SALERS if is_admin else False,
+        }
 
     @http.route('/misa_sale_status/api/list', type='json', auth='user', methods=['POST'])
     def api_list(
@@ -90,11 +96,11 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/daily_stats', type='json', auth='user', methods=['POST'])
-    def api_daily_stats(self, saler_code='', date_from='', date_to='', weekly=False, **kwargs):
+    def api_daily_stats(self, saler_code='', date_from='', date_to='', weekly=False, monthly=False, **kwargs):
         try:
             buckets = request.env['stock.picking'].sudo().get_misa_invoice_public_daily_stats(
                 saler_code=saler_code, date_from=date_from or False, date_to=date_to or False,
-                weekly=bool(weekly),
+                weekly=bool(weekly), monthly=bool(monthly),
             )
             return {'status': 'success', 'buckets': buckets}
         except UserError as e:

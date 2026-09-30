@@ -1,5 +1,7 @@
 """Hàm thuần phân loại phần "còn lại chưa xuất HĐ" của từng phiếu — không đụng env/ORM."""
 
+from datetime import timedelta
+
 # Thứ tự ở đây là thứ tự hiện trên màn hình. 'counted' = có cộng vào "Còn lại chưa xuất HĐ".
 GAP_CATEGORIES = [
     {
@@ -78,3 +80,10 @@ def classify_misa_picking_gap(invoiced, gap_resolved, gap, allocated, tolerance)
 def month_key(day):
     """'YYYY-MM' của 1 date; None/False trả ''."""
     return day.strftime('%Y-%m') if day else ''
+
+
+def month_range(day):
+    """(ngày đầu tháng, ngày cuối tháng) chứa date day — cả tháng 12 và tháng 2 năm nhuận."""
+    first = day.replace(day=1)
+    next_first = first.replace(year=first.year + 1, month=1) if first.month == 12 else first.replace(month=first.month + 1)
+    return first, next_first - timedelta(days=1)

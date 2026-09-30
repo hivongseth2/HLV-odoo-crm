@@ -3180,7 +3180,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         quét hàng loạt."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         picking = self.sudo().browse(picking_id).exists()
-        if not picking or picking.misa_invoice_saler_code != code:
+        if not picking or not picking._misa_invoice_public_code_matches(code):
             raise UserError("Bạn không có quyền xem phiếu này.")
         return picking._misa_invoice_fetch_full_detail()
 

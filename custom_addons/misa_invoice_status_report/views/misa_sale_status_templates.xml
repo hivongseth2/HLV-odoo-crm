@@ -89,6 +89,20 @@
                 .msu-gap-month{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid #eceae4;border-radius:8px;padding:6px 10px;background:#fff;cursor:pointer;font-size:.78rem}
                 .msu-gap-month b{font-variant-numeric:tabular-nums}
                 .msu-gap-row{cursor:pointer}
+                .msu-month-card{margin-bottom:16px}
+                .msu-month-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+                .msu-month-col{flex:0 0 200px;display:flex;flex-direction:column;gap:4px;text-align:left;border:1px solid #eceae4;border-radius:10px;padding:10px 12px;background:#fff;cursor:pointer;font-size:.78rem;color:#374151}
+                .msu-month-col:hover{border-color:#93b4f5;background:#f7faff}
+                .msu-month-active{border-color:#2563eb;background:#eef4ff;box-shadow:0 0 0 1px #2563eb inset}
+                .msu-month-name{font-weight:800;font-size:.86rem;color:#111827}
+                .msu-month-line{display:flex;justify-content:space-between;gap:8px}
+                .msu-month-line b{font-variant-numeric:tabular-nums;color:#111827}
+                .msu-month-line b.msu-month-good{color:#0ca30c}
+                .msu-month-line b.msu-month-gap{color:#d03b3b}
+                .msu-month-bar{height:5px;border-radius:3px;background:#f1d4d4;overflow:hidden;margin:2px 0}
+                .msu-month-bar i{display:block;height:100%;background:#0ca30c}
+                .msu-month-pending{font-size:.74rem;color:#d03b3b}
+                .msu-month-done{color:#0ca30c}
 
                 /* ---- Tabs ---- */
                 .msu-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid #e5e4dd}
@@ -367,6 +381,12 @@
                                 <button type="button" class="msu-gap-link" id="msu-gap-open">Vì sao còn lệch? Xem theo lý do, tháng, phiếu →</button>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="msu-card msu-month-card">
+                        <p class="msu-card-title">Theo tháng xuất kho</p>
+                        <p class="msu-card-subtitle">Bấm vào 1 tháng để xem số liệu của riêng tháng đó (lọc cả trang) — bấm lại để bỏ lọc.</p>
+                        <div id="msu-month-strip" class="msu-month-strip"/>
                     </div>
 
                     <div class="msu-tabs">
@@ -757,6 +777,7 @@
             <div class="msu-toast-stack" id="msu-toast-stack"/>
 
             <script type="text/javascript" src="/misa_invoice_status_report/static/src/public/misa_gap_panel.js"></script>
+            <script type="text/javascript" src="/misa_invoice_status_report/static/src/public/misa_month_strip.js"></script>
             <script type="text/javascript"><![CDATA[
                 (function() {
                     var STORAGE_KEY = 'misa_sale_status_code';
@@ -779,6 +800,7 @@
                     var state = {
                         salerCode: urlSalerCode || localStorage.getItem(STORAGE_KEY) || '',
                         isAdmin: false,
+                        allCode: '', // giá trị option "Tất cả" — server chỉ gửi cho quản lý
                         codeTokenMap: {},
                         search: '', stateFilters: [], dateFrom: '', dateTo: '',
                         multiOrderGroup: false, multiRequest: false,
@@ -909,6 +931,7 @@
                             var entries = res.codes || []; // [{code, token}, ...]
                             var codes = entries.map(function(e) { return e.code; });
                             state.isAdmin = !!res.is_admin;
+                            state.allCode = res.all_code || '';
                             state.codeTokenMap = {};
                             entries.forEach(function(e) { state.codeTokenMap[e.code] = e.token; });
 
@@ -948,27 +971,34 @@
                                 var matchedAdmin = entries.find(function(e) { return e.token === urlSalerToken; });
                                 if (matchedAdmin) { state.salerCode = matchedAdmin.code; }
                             }
-                            if (!codes.length) {
+                            if (!codes.length && !state.allCode) {
                                 hintEl.textContent = 'Chưa có mã sale nào được đăng ký. Liên hệ admin để cấu hình.';
                                 return;
                             }
-                            codes.forEach(function(code) {
+                            // "Tất cả" (quản lý xem gộp mọi sale, kể cả phiếu chưa gắn mã) đứng
+                            // đầu danh sách — server tự kiểm lại quyền mỗi lần gọi.
+                            var options = (state.allCode ? [{value: state.allCode, label: 'Tất cả (mọi mã sale)'}] : [])
+                                .concat(codes.map(function(code) { return {value: code, label: code}; }));
+                            options.forEach(function(o) {
                                 var opt = document.createElement('option');
-                                opt.value = code;
-                                opt.textContent = code;
+                                opt.value = o.value;
+                                opt.textContent = o.label;
                                 selectEl.appendChild(opt);
                             });
-                            if (state.salerCode && codes.indexOf(state.salerCode) !== -1) {
+                            var known = options.map(function(o) { return o.value; });
+                            if (state.salerCode && known.indexOf(state.salerCode) !== -1) {
                                 selectEl.value = state.salerCode;
                                 syncUrlSalerCode(state.salerCode);
                                 onSalerChosen();
-                            } else if (codes.length === 1) {
-                                // Chỉ có đúng 1 mã — tự chọn luôn, khỏi bắt người dùng bấm thêm
-                                // 1 bước thừa (đã biết chắc chắn họ là ai qua session Odoo rồi).
-                                state.salerCode = codes[0];
-                                selectEl.value = codes[0];
-                                localStorage.setItem(STORAGE_KEY, codes[0]);
-                                syncUrlSalerCode(codes[0]);
+                            } else if (state.allCode || codes.length === 1) {
+                                // Quản lý mặc định xem "Tất cả"; chỉ có đúng 1 mã thì tự chọn
+                                // luôn, khỏi bắt người dùng bấm thêm 1 bước thừa (đã biết chắc
+                                // chắn họ là ai qua session Odoo rồi).
+                                var auto = state.allCode || codes[0];
+                                state.salerCode = auto;
+                                selectEl.value = auto;
+                                localStorage.setItem(STORAGE_KEY, auto);
+                                syncUrlSalerCode(auto);
                                 onSalerChosen();
                             } else if (state.salerCode) {
                                 hintEl.textContent = 'Bạn không có quyền xem mã "' + state.salerCode + '" (hoặc mã/link đã cũ), vui lòng chọn lại.';
@@ -984,7 +1014,8 @@
                     // trực tiếp cho từng sale, họ mở lên vào thẳng đúng mã, khỏi phải tự chọn.
                     function updateSalerLinkBtn() {
                         var btn = document.getElementById('msu-saler-link-btn');
-                        btn.style.display = (state.isAdmin && state.salerCode) ? '' : 'none';
+                        var isAll = state.allCode && state.salerCode === state.allCode;
+                        btn.style.display = (state.isAdmin && state.salerCode && !isAll) ? '' : 'none';
                     }
                     document.getElementById('msu-saler-link-btn').addEventListener('click', function() {
                         if (!state.salerCode) { return; }
@@ -1005,6 +1036,7 @@
                             loadList(1);
                             loadDailyChart();
                             loadReconciliationTotals();
+                            window.MsuMonthStrip.load();
                             loadReminders();
                             if (state.activeTab === 'shopee') { loadShopeeList(1); }
                         }
@@ -2062,32 +2094,38 @@
                     // Ngày xuất kho là filter DÙNG CHUNG cho cả 2 tab + đối chiếu tổng — đổi 1
                     // nơi phải nạp lại cả 3 để số liệu không bị lệch phạm vi với nhau.
                     function reloadForDateScopeChange() {
+                        document.getElementById('msu-date-clear').style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
+                        window.MsuMonthStrip.render(); // chỉ đổi cột đang chọn, số liệu tháng không đổi
                         loadList(1);
                         loadDailyChart();
                         loadReconciliationTotals();
                         if (state.shopee.loaded) { loadShopeeList(1); }
+                        // Cột tháng bấm được cả khi đang ở tab Đơn hàng (ô ngày chỉ nằm ở tab phiếu).
+                        if (state.orders.loaded) { loadOrdersList(1); }
+                    }
+                    // Đặt khoảng ngày từ nơi khác ô ngày (bấm 1 cột tháng) — giữ ô ngày hiện đúng.
+                    function setDateScope(dateFrom, dateTo) {
+                        state.dateFrom = dateFrom; state.dateTo = dateTo;
+                        document.getElementById('msu-date-from').value = dateFrom;
+                        document.getElementById('msu-date-to').value = dateTo;
+                        reloadForDateScopeChange();
                     }
                     document.getElementById('msu-date-from').addEventListener('change', function() {
                         state.dateFrom = this.value;
-                        document.getElementById('msu-date-clear').style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
                         reloadForDateScopeChange();
                     });
                     document.getElementById('msu-date-to').addEventListener('change', function() {
                         state.dateTo = this.value;
-                        document.getElementById('msu-date-clear').style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
                         reloadForDateScopeChange();
                     });
                     document.getElementById('msu-date-clear').addEventListener('click', function() {
-                        state.dateFrom = ''; state.dateTo = '';
-                        document.getElementById('msu-date-from').value = '';
-                        document.getElementById('msu-date-to').value = '';
-                        this.style.display = 'none';
-                        reloadForDateScopeChange();
+                        setDateScope('', '');
                     });
                     document.getElementById('msu-refresh-btn').addEventListener('click', function() {
                         loadList(state.page);
                         loadDailyChart();
                         loadReconciliationTotals();
+                        window.MsuMonthStrip.load();
                     });
                     document.getElementById('msu-prev').addEventListener('click', function() { if (state.page > 1) { loadList(state.page - 1); } });
                     document.getElementById('msu-next').addEventListener('click', function() {
@@ -2974,6 +3012,13 @@
                             document.getElementById('msu-tab-btn-shopee').click();
                             document.getElementById('msu-shopee-search-btn').click();
                         },
+                    });
+
+                    window.MsuMonthStrip.init({
+                        rpc: rpc, esc: esc, fmtMoney: fmtMoney,
+                        getSalerCode: function() { return state.salerCode; },
+                        getRange: function() { return {date_from: state.dateFrom, date_to: state.dateTo}; },
+                        setRange: setDateScope,
                     });
 
                     loadSalerCodes();

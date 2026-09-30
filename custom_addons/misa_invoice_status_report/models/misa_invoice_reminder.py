@@ -122,6 +122,10 @@ class StockPickingMisaInvoiceReminder(models.Model):
         /misa_sale_status. total_unread luôn tính lại riêng (không phụ thuộc limit) để hiện
         đúng số trên badge chuông kể cả khi danh sách bị cắt bớt."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
+        if not code:
+            # "Tất cả": chuông là nhắc gửi riêng từng sale — quản lý xem gộp không nhận, và
+            # không được đánh dấu "đã đọc" hộ sale.
+            return {'total_unread': 0, 'bus_channel': False, 'reminders': []}
         Reminder = self.env['misa.invoice.reminder'].sudo()
         domain = [('saler_code', '=', code)]
         total_unread = Reminder.search_count(domain + [('is_read', '=', False)])
@@ -146,6 +150,8 @@ class StockPickingMisaInvoiceReminder(models.Model):
     @api.model
     def mark_misa_invoice_reminder_read(self, saler_code, reminder_ids=None):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
+        if not code:
+            return {'marked': 0}
         Reminder = self.env['misa.invoice.reminder'].sudo()
         domain = [('saler_code', '=', code), ('is_read', '=', False)]
         if reminder_ids:

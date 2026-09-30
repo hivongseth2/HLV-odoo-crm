@@ -3,10 +3,8 @@ from datetime import date, timedelta
 
 from odoo import api, fields, models
 
-from .stock_picking import (
-    MISA_INVOICE_AMOUNT_TOLERANCE, MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABELS,
-    MISA_INVOICE_UNASSIGNED_SALER,
-)
+from .misa_invoice_gap_utils import month_key, month_range
+from .stock_picking import MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABELS, MISA_INVOICE_UNASSIGNED_SALER
 
 # Số liệu tổng hợp cho dashboard OWL nội bộ (KPI tiles, bảng theo kho/sale/khách hàng, bảng
 # "Tình trạng xuất hóa đơn", biểu đồ theo ngày) — tách khỏi stock_picking.py (đã quá lớn).
@@ -292,12 +290,16 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
     @api.model
     def get_misa_invoice_daily_stats(
         self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
-        saler_code=False, weekly=False,
+        saler_code=False, weekly=False, monthly=False,
     ):
         """Bảng 'Theo ngày': tổng tiền xuất kho vs tổng tiền đã xuất HĐ, theo từng ngày (hoặc
-        từng tuần nếu weekly=True) trong phạm vi lọc, lọc thêm được theo 1 nhân viên sale.
-        Gộp bằng Python (không dùng read_group theo granularity ngày/tuần) để tránh phụ
-        thuộc định dạng nhãn ngày theo locale của Odoo, đảm bảo sort/hiển thị ổn định."""
+        từng tuần nếu weekly=True, từng tháng nếu monthly=True) trong phạm vi lọc, lọc thêm được
+        theo 1 nhân viên sale. Gộp bằng Python (không dùng read_group theo granularity ngày/tuần)
+        để tránh phụ thuộc định dạng nhãn ngày theo locale của Odoo, đảm bảo sort/hiển thị ổn định.
+
+        Mỗi bucket kèm pending_count / pending_order_count: số phiếu / số đơn bán còn chưa xuất
+        HĐ — đúng định nghĩa bộ lọc mặc định "Chưa xử lý" của danh sách (chưa invoiced, không
+        ngoại lệ), để bấm vào 1 tháng thì danh sách hiện đúng chừng đó phiếu."""
         Picking = self.sudo()
         domain = self._misa_invoice_dashboard_base_domain(
             date_from, date_to, invoice_date_from, invoice_date_to
@@ -312,7 +314,13 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
             if not picking.date_done:
                 continue
             day = picking.date_done.date()
-            if weekly:
+            if monthly:
+                key = month_key(day)
+                label = "Tháng %s/%s" % (day.month, day.year)
+                first, last = month_range(day)
+                bucket_date_from = fields.Date.to_string(first)
+                bucket_date_to = fields.Date.to_string(last)
+            elif weekly:
                 iso_year, iso_week, _iso_weekday = day.isocalendar()
                 key = (iso_year, iso_week)
                 label = "Tuần %s/%s" % (iso_week, iso_year)
@@ -326,133 +334,17 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
             bucket = buckets.setdefault(key, {
                 'label': label, 'actual_amount': 0.0, 'invoice_amount': 0.0,
                 'date_from': bucket_date_from, 'date_to': bucket_date_to,
+                'pending_count': 0, 'pending_order_ids': set(),
             })
             bucket['actual_amount'] += picking.misa_invoice_net_actual_amount or 0.0
             bucket['invoice_amount'] += picking.misa_invoice_allocated_amount or 0.0
+            if picking.misa_invoice_state != 'invoiced' and not picking.misa_invoice_exception:
+                bucket['pending_count'] += 1
+                bucket['pending_order_ids'].update(picking.misa_invoice_sale_order_ids.ids)
 
-        return [buckets[key] for key in sorted(buckets.keys())]
-
-    @api.model
-    def get_misa_invoice_reconciliation_gap_explain(self, date_from=False, date_to=False, saler_code=False):
-        """Giải thích CỤ THỂ (phiếu nào, bao nhiêu tiền) vì sao "Còn lại chưa xuất HĐ"
-        (get_misa_invoice_reconciliation_totals, tính ở mức phiếu) có thể khác tổng
-        outstanding_amount cộng dồn qua từng phiếu/đơn hiển thị trên list/Excel — thay vì 1 câu
-        cảnh báo chung chung. 2 nguồn lệch đã biết:
-
-        1. "Đơn hải quan chưa khớp PXK" — hóa đơn KHÔNG gắn với phiếu xuất kho nào, nên không
-           thể hiện ở bất kỳ dòng phiếu/đơn nào (đã có count/amount sẵn, chỉ liệt kê lại).
-        2. "Phiếu thuộc nhóm bị cắt bởi bộ lọc ngày" — 1 đề nghị gộp chung (đại diện + phiếu ăn
-           theo) có đại diện KHÔNG THỎA bộ lọc ngày đang xem (nằm ngoài date_from/date_to). Mục
-           này giờ ĐÃ ĐƯỢC TỰ ĐỘNG SỬA thẳng trong get_misa_invoice_reconciliation_totals (xem
-           _misa_invoice_date_cut_auto_credit) — thẻ tự cộng tín dụng cho trường hợp này ngay khi
-           tính "Đối chiếu tổng", nên KHÔNG còn gì để liệt kê ở đây nữa — cut_groups LUÔN RỖNG
-           (key `cut_groups`/`cut_groups_total_amount` vẫn giữ lại trong kết quả trả về để không
-           phá vỡ những nơi đang đọc 2 field này — modal/Excel — chỉ là luôn không có dòng nào).
-        3. "Dùng chung mã sale khác" (cross_saler_notes) — 1 đề nghị gộp chung cho khách hàng
-           của NHIỀU nhân viên bán khác nhau — get_misa_invoice_reconciliation_totals tính riêng
-           theo từng saler (read_group ở MỨC PHIẾU) nên actual của saler khác không được cộng
-           nhưng invoice của đại diện vẫn tính đủ (hoặc ngược lại), gây lệch. KHÔNG tự động sửa
-           (khác mục 2) — hóa đơn dùng chung nhiều saler không có cách chia rạch ròi đáng tin
-           (đã thử 3 công thức, ra 3 kết quả mâu thuẫn nhau), chỉ liệt kê để tự tra tay trên MISA.
-
-        gap_amount cho CẢ 2 mục 2 và 3: ĐÃ THỬ NHIỀU CÁCH tự suy diễn công thức theo từng nhóm
-        (dựa vào group_actual/group_invoice, hoặc dữ liệu exact theo đơn hàng) — luôn có nguy cơ
-        sai khi nhóm phiếu lồng nhau qua nhiều cấp master/covered mà code tự viết dễ bỏ sót (case
-        thật KBC/OUT/12139+12052+12192+12299: tưởng là 2 nhóm riêng, thực ra là 1 nhóm 4 phiếu
-        cân bằng hoàn hảo, tính tách ra sẽ ra 2 con số "ma" cộng lại bằng 0 nhưng riêng lẻ trông
-        như 2 lỗi thật ~10 triệu mỗi bên). Cách ĐÁNG TIN, đang dùng: KHÔNG suy diễn công thức nào
-        cả — gọi LẠI đúng get_misa_invoice_reconciliation_totals (qua
-        _misa_invoice_group_gap_contribution) với domain LOẠI TRỪ các phiếu của nhóm, đo mức
-        TĂNG/GIẢM thật, nên không thể sai theo kiểu trên nữa (chỉ dùng read_group/hàm gốc, không
-        tự viết lại logic nhóm).
-
-        Một nhóm có thể vừa "dùng chung mã sale khác" vừa có phiếu bị "cắt bởi bộ lọc ngày" cùng
-        lúc (case thật KBC/OUT/11810) — không tách gap_amount riêng cho từng lý do được (chỉ 1 đề
-        nghị xuất HĐ dùng chung), nên xếp CẢ NHÓM vào mục "dùng chung mã sale khác" (ưu tiên hơn),
-        KHÔNG lặp lại ở mục "cắt bởi bộ lọc ngày" — tránh đếm gap_amount 2 lần cho cùng 1 nhóm."""
-        Picking = self.sudo()
-        today = fields.Date.context_today(self)
-        parsed_from = fields.Date.from_string(date_from) if date_from else None
-        parsed_to = fields.Date.from_string(date_to) if date_to else None
-        saler_value = False
-        if saler_code:
-            saler_value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
-
-        def in_date_range(picking):
-            if not (parsed_from or parsed_to):
-                return True
-            d = picking.date_done.date() if picking.date_done else None
-            if not d:
-                return False
-            if parsed_from and d < parsed_from:
-                return False
-            if parsed_to and d > parsed_to:
-                return False
-            return True
-
-        def matches_saler(picking):
-            return (not saler_code) or picking.misa_invoice_saler_code == saler_value
-
-        def qualifies(picking):
-            return in_date_range(picking) and matches_saler(picking)
-
-        # Tìm CÁC PHIẾU ĐANG HIỂN THỊ (thỏa filter) thuộc 1 nhóm gộp chung có phiếu KHÁC mã sale
-        # không thỏa filter — đây là nhóm "dùng chung mã sale khác" (cross_saler_notes), nguồn
-        # lệch DUY NHẤT còn lại cần tra tay. Nhóm chỉ bị "cắt bởi bộ lọc NGÀY" (không dính khác
-        # mã sale) KHÔNG còn xuất hiện ở đây nữa — get_misa_invoice_reconciliation_totals đã tự
-        # phát hiện và cộng bù tín dụng cho đúng trường hợp đó rồi (xem
-        # _misa_invoice_date_cut_auto_credit), nên thẻ và Excel/list đã tự khớp nhau từ nguồn,
-        # không có gì để liệt kê/tra soát nữa.
-        rep_domain = [
-            ('picking_type_id.code', '=', 'outgoing'),
-            ('misa_invoice_master_picking_id', '=', False),
-            ('misa_invoice_covered_picking_ids', '!=', False),
-            ('misa_invoice_state', '=', 'invoiced'),
-        ]
-        # ĐÃ THỬ 3 CÁCH tự suy diễn công thức cho gap_amount (không tính, ~20,5tr, rồi 0đ) — 3
-        # kết quả MÂU THUẪN nhau, không đủ tin. Cách ĐÁNG TIN cuối cùng (đang dùng): KHÔNG suy
-        # diễn công thức nữa, đo THẲNG mức tăng/giảm của CHÍNH get_misa_invoice_reconciliation_totals
-        # khi loại các phiếu của nhóm này ra khỏi domain thật, so với outstanding_amount đang
-        # hiển thị của các phiếu đó — xem _misa_invoice_group_gap_contribution.
-        cross_saler_notes = []
-        for rep in Picking.search(rep_domain):
-            group = rep | rep.misa_invoice_covered_picking_ids
-            qualifying = group.filtered(qualifies)
-            if not qualifying:
-                continue
-            other_saler_members_any = group.filtered(lambda m: not matches_saler(m))
-            if not other_saler_members_any:
-                continue
-            excel_contribution = sum(
-                self._misa_invoice_picking_to_row(m, today)['outstanding_amount'] for m in qualifying
-            )
-            gap_amount = self._misa_invoice_group_gap_contribution(
-                date_from, date_to, saler_code, qualifying.ids, excel_contribution,
-            )
-            cross_saler_notes.append({
-                'picking_names': qualifying.mapped('name'),
-                'order_names': sorted(set(qualifying.mapped('misa_invoice_sale_order_ids').mapped('name'))),
-                'representative_name': rep.name,
-                'other_saler_picking_names': other_saler_members_any.mapped('name'),
-                # Kèm tên đơn hàng của TỪNG phiếu mã sale khác (VD "KBC/OUT/11667
-                # (DH125524949234807)") — người quản lý cần biết ngay đơn nào để tự tra MISA,
-                # không phải tự đi tìm lại đơn hàng theo tên phiếu.
-                'other_saler_picking_labels': [
-                    '%s (%s)' % (m.name, ', '.join(m.misa_invoice_sale_order_ids.mapped('name')) or '?')
-                    for m in other_saler_members_any
-                ],
-                'other_saler_codes': sorted(set(other_saler_members_any.mapped('misa_invoice_saler_code'))),
-                # Dương: nhóm này làm Excel/list CAO hơn thẻ "Đối chiếu tổng". Âm: ngược lại.
-                'gap_amount': gap_amount,
-            })
-        cut_rows = []
-
-        customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
-        return {
-            'cut_groups': cut_rows,
-            'cut_groups_total_amount': sum(g['gap_amount'] for g in cut_rows),
-            'cross_saler_notes': cross_saler_notes,
-            'cross_saler_notes_total_amount': sum(n['gap_amount'] for n in cross_saler_notes),
-            'customs_pending_amount': customs_summary['pending_amount'],
-            'customs_pending_count': customs_summary['pending_count'],
-        }
+        result = []
+        for key in sorted(buckets.keys()):
+            bucket = buckets[key]
+            bucket['pending_order_count'] = len(bucket.pop('pending_order_ids'))
+            result.append(bucket)
+        return result
