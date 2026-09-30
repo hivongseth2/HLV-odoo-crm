@@ -29,10 +29,9 @@ from collections import defaultdict
 
 from odoo import fields
 
-# Phiếu "đơn khác" mà mục D của KBC/OUT/09356 và 11810 chỉ ra — hàng thừa trên HĐ của 2 phiếu
-# đó trùng đúng mã + SL của 2 phiếu này, mà 2 phiếu này cũng đã đủ HĐ: xem HĐ của chúng đến từ
-# đâu để biết khách bị xuất HĐ 2 lần hay chỉ là 1 dòng HĐ bị tính cho 2 đơn.
-PICKING_NAMES = ['KBC/OUT/12296', 'KBC/OUT/11375']
+# Đơn DH125524949235696 (phiếu 12546, 12874, 13576): có phiếu báo "Đã xuất HĐ" mà tiền HĐ của cả
+# đơn = 0 — mục A in từng phiếu của đơn đang ăn theo đề nghị nào, tiền đề nghị dồn cho phiếu nào.
+PICKING_NAMES = ['KBC/OUT/12546']
 TOLERANCE = 1000.0          # đ — lệch tiền dưới mức này coi như khớp (làm tròn)
 CANDIDATE_MONTHS = 6        # dò phiếu đơn khác trong bao nhiêu tháng gần đây
 
@@ -172,8 +171,13 @@ for name in PICKING_NAMES:
                   f" | giá trước thuế {money(unit)} | thuế {tax_rate(line)}% | sau thuế {money(line.price_total)}")
         for p in order_pickings(order):
             mark = '  ⬅ phiếu đang soát' if p == picking else ''
+            master = p.misa_invoice_master_picking_id
             print(f"    phiếu {p.name} {str(p.date_done)[:10]} XK {money(p.misa_invoice_net_actual_amount)}"
-                  f" HĐ quy về {money(p.misa_invoice_allocated_amount)}{mark}")
+                  f" HĐ quy về {money(p.misa_invoice_allocated_amount)} | {p.misa_invoice_state}"
+                  f" đề nghị {(master or p).misa_invoice_request_refno or '-'} HĐ {(master or p).misa_invoice_no or '-'}"
+                  + (f" | ăn theo {master.name} (đơn {', '.join(master.misa_invoice_sale_order_ids.mapped('name'))},"
+                     f" HĐ quy về {money(master.misa_invoice_allocated_amount)})" if master else '')
+                  + mark)
 
         print(f"{SUB}\n  B. MISA — đề nghị nhắc tới {order.name} / {name}, HĐ hải quan\n{SUB}")
         try:

@@ -442,7 +442,7 @@
                             <input type="checkbox" id="msu-multi-request"/> Đơn xuất nhiều lần (nhiều đề nghị / 1 đơn)
                         </label>
                         <label class="msu-check-label" title="Đơn giao nhiều phiếu, đã có phiếu xuất HĐ nhưng còn phiếu chưa có HĐ — để nguyên lọc trạng thái mặc định là ra đúng các phiếu còn thiếu HĐ.">
-                            <input type="checkbox" id="msu-partially-invoiced"/> Đơn đã xuất HĐ 1 phần (giao nhiều lần, còn phiếu chưa có HĐ)
+                            <input type="checkbox" id="msu-partially-invoiced"/> Giao nhiều lần, còn phiếu chưa có HĐ
                         </label>
                     </div>
 
@@ -510,8 +510,9 @@
                     <div id="msu-tab-orders" style="display:none">
                         <p class="msu-card-subtitle">
                             Xem theo ĐƠN HÀNG thay vì theo phiếu xuất kho — 1 đơn có thể gộp nhiều phiếu/nhiều đề nghị xuất HĐ.
-                            "Xuất 1 phần" tính theo GIÁ TRỊ thật (đã xuất HĐ so với đã xuất kho qua mọi đề nghị tìm được theo mã
-                            đơn hàng) — bắt được cả trường hợp phiếu đã "Đã xuất HĐ" nhưng số tiền chưa phủ đủ.
+                            Nhãn chính theo PHIẾU ("Còn phiếu chưa có HĐ" = có phiếu có HĐ, có phiếu chưa); nhãn "Thiếu tiền HĐ"
+                            theo TIỀN (tổng HĐ chưa phủ đủ tổng đơn) — bắt được cả trường hợp mọi phiếu đã "Đã xuất HĐ" nhưng số
+                            tiền chưa đủ.
                         </p>
                         <div class="msu-filters">
                             <input type="text" id="msu-orders-search" class="msu-input msu-search-input" placeholder="Tìm theo mã đơn hàng hoặc tên khách hàng..."/>
@@ -524,9 +525,9 @@
                                 <div id="msu-orders-filter-panel" class="msu-multiselect-panel" style="display:none">
                                     <label class="msu-multiselect-item"><input type="checkbox" value="missing"/> Chưa xuất</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất đủ</label>
-                                    <label class="msu-multiselect-item"><input type="checkbox" value="partial"/> Xuất 1 phần</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="partial"/> HĐ phủ 1 phần đơn (theo MISA)</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="partially_invoiced"/> Giao nhiều lần, còn phiếu chưa có HĐ</label>
-                                    <label class="msu-multiselect-item"><input type="checkbox" value="value_gap"/> Còn nợ tiền HĐ (giá trị)</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="value_gap"/> Thiếu tiền HĐ</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="mismatch"/> Lệch tiền</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
                                 </div>
@@ -1329,7 +1330,7 @@
                             tr.className = 'msu-row-clickable' + (row.reminded ? ' msu-row-reminded' : '');
                             tr.dataset.id = row.id;
                             var partialBadge = row.partial_coverage
-                                ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
+                                ? ' <span class="msu-badge-state msu-badge-state-requested" title="Tổng tiền hóa đơn chưa phủ đủ tổng tiền đơn">Thiếu tiền HĐ</span>'
                                 : '';
                             var remindedBadge = row.reminded
                                 ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
@@ -1444,8 +1445,8 @@
                     // ===== Filter trạng thái tab "Đơn hàng" — multi-select (chọn nhiều trạng
                     // thái cùng lúc, OR với nhau ở backend) thay vì 1 select đơn lẻ như trước =====
                     var ORDERS_FILTER_LABELS = {
-                        missing: 'Chưa xuất', invoiced: 'Đã xuất đủ', partial: 'Xuất 1 phần',
-                        value_gap: 'Còn nợ tiền HĐ (giá trị)', partially_invoiced: 'Giao nhiều lần, còn phiếu chưa có HĐ',
+                        missing: 'Chưa xuất', invoiced: 'Đã xuất đủ', partial: 'HĐ phủ 1 phần đơn (theo MISA)',
+                        value_gap: 'Thiếu tiền HĐ', partially_invoiced: 'Giao nhiều lần, còn phiếu chưa có HĐ',
                         mismatch: 'Lệch tiền', not_checked: 'Chưa kiểm tra',
                     };
                     function updateOrdersFilterLabel() {
@@ -2275,7 +2276,7 @@
                         }).join('');
 
                         var orderPartialBadge = row.partial_coverage
-                            ? ' <span class="msu-badge-state msu-badge-state-requested" title="Đã có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho">1 phần</span>'
+                            ? ' <span class="msu-badge-state msu-badge-state-requested" title="Tổng tiền hóa đơn chưa phủ đủ tổng tiền đơn">Thiếu tiền HĐ</span>'
                             : '';
 
                         drawerEl.innerHTML =

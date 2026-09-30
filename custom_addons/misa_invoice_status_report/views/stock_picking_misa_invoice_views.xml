@@ -148,7 +148,7 @@
                 <separator/>
                 <filter string="Lệch tiền với MISA" name="filter_mismatch"
                         domain="[('misa_invoice_amount_mismatch', '=', True)]"/>
-                <filter string="Xuất HĐ 1 phần (theo đơn)" name="filter_partial_coverage"
+                <filter string="HĐ phủ 1 phần đơn (theo MISA)" name="filter_partial_coverage"
                         domain="[('misa_invoice_order_coverage', '=', 'partial')]"/>
                 <filter string="Đã đánh dấu ngoại lệ" name="filter_exception"
                         domain="[('misa_invoice_exception', '=', True)]"/>
