@@ -1176,6 +1176,11 @@
                                 Có <t t-esc="customsUnmatchedCount"/> dòng không tìm thấy đơn hàng tương ứng trong Odoo
                                 (vẫn ghi nhận được, nhưng cần kiểm tra lại mã đơn).
                             </div>
+                            <div class="miv-drawer-linking" t-if="state.customsTab.preview.voucher_count > 1">
+                                <i class="fa fa-info-circle"/> Hóa đơn này gộp <b><t t-esc="state.customsTab.preview.voucher_count"/></b> chứng từ
+                                bán hàng trên MISA — ghi nhận sẽ lưu đủ dòng của tất cả (bảng dưới gồm dòng của cả
+                                <t t-esc="state.customsTab.preview.voucher_count"/> chứng từ).
+                            </div>
                             <div class="miv-empty miv-cell-critical" t-if="state.customsTab.preview.conflict_picking_name">
                                 <i class="fa fa-warning"/> Hóa đơn này đã được gắn với phiếu xuất kho
                                 <b><t t-esc="state.customsTab.preview.conflict_picking_name"/></b> qua luồng khác (không phải hải quan) —

@@ -365,23 +365,26 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         data = self._fetch_misa_json_with_session_retry(url, payload, "sa_voucher_get")
         return data.get("Data", {}).get("PageData", []) or []
 
-    def _misa_invoice_voucher_for_inv_no(self, inv_no):
-        """Chứng từ bán hàng khớp CHÍNH XÁC số hóa đơn này, hoặc None.
+    def _misa_invoice_vouchers_for_inv_no(self, inv_no):
+        """MỌI chứng từ bán hàng khớp CHÍNH XÁC số hóa đơn này (list, có thể rỗng).
 
         get_voucher_search_payload tìm theo kiểu CHỨA trên 4 property cùng lúc nên 1 lần gọi có
-        thể trả nhiều chứng từ mang số hóa đơn khác (gõ "005309" ra cả "1005309"). Lấy page
-        đầu tiên mà không lọc là có ngày gán tiền của hóa đơn NGƯỜI KHÁC lên phiếu — nên phải
-        lọc đúng số rồi mới dùng.
-
-        Trả None khi không có dòng nào khớp chính xác (kể cả khi MISA vẫn trả về dòng gần giống).
-        """
+        thể trả nhiều chứng từ mang số hóa đơn khác (gõ "005309" ra cả "1005309") — phải lọc
+        đúng số. Lọc xong vẫn có thể còn NHIỀU chứng từ: 1 hóa đơn trên MISA có thể lập gộp cho
+        nhiều CHỨNG TỪ BÁN HÀNG, mỗi chứng từ 1 refid và chỉ mang dòng hàng của riêng nó (case
+        thật HĐ 00005319 của Coherent, 27 dòng = chứng từ BHMIL31082209SP 22 dòng 134.995.000 đ
+        + chứng từ BHMIL31082621SP 5 dòng 16.540.000 đ)."""
         target = _normalize_inv_no(inv_no)
         if not target:
-            return None
-        for row in self.get_vouchers_by_inv_no(inv_no):
-            if _normalize_inv_no(row.get('inv_no')) == target:
-                return row
-        return None
+            return []
+        return [row for row in self.get_vouchers_by_inv_no(inv_no) if _normalize_inv_no(row.get('inv_no')) == target]
+
+    def _misa_invoice_voucher_for_inv_no(self, inv_no):
+        """Chứng từ bán hàng ĐẦU TIÊN khớp chính xác số hóa đơn này, hoặc None — chỉ dùng ở chỗ
+        cần 1 chứng từ để hiển thị/lấy tiền của đề nghị. Ghi nhận hóa đơn hải quan phải dùng
+        _misa_invoice_vouchers_for_inv_no (lấy hết), không thì mất dòng của các chứng từ còn lại."""
+        vouchers = self._misa_invoice_vouchers_for_inv_no(inv_no)
+        return vouchers[0] if vouchers else None
 
     def get_voucher_lines(self, refid):
         """Chi tiết TỪNG DÒNG HÀNG (mã đơn hàng gốc order_code, mã hàng, số lượng, tiền) của
