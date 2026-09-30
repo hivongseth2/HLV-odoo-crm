@@ -1642,6 +1642,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if not pickings:
             return {'results': [], 'count': 0}
         results = self._misa_invoice_check_batch(pickings)
+        # Soát luôn theo đơn: tiền HĐ của phiếu đã soát theo đơn lấy từ số theo đơn, chỉ kiểm tra
+        # lại phiếu thì số cũ vẫn đứng (case thật DH125524949235696: HĐ 00005877 đã phát hành
+        # nhưng đơn vẫn báo 0 đ vì lần soát theo đơn trước đó HĐ chưa có).
+        order._misa_invoice_refresh_order_truth()
         return {'results': results, 'count': len(pickings)}
 
     def _cron_scan_misa_invoice_status(self):

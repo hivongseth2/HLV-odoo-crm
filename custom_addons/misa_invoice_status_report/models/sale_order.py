@@ -44,41 +44,40 @@ class SaleOrderMisaInvoiceStatus(models.Model):
     )
     misa_invoice_order_sources = fields.Text(string='Đề nghị xuất HĐ của đơn (MISA)', copy=False)
 
-    def _misa_invoice_refresh_order_truth(self, with_related=True, lines_cache=None):
+    def _misa_invoice_refresh_order_truth(self, with_related=True, lines_cache=None, requests_cache=None):
         """Hỏi MISA mọi đề nghị nhắc tới từng đơn, lưu tiền đã phát hành / chưa phát hành, rồi
         chia lại về phiếu. Đơn gọi MISA lỗi thì giữ nguyên, không đánh dấu đã soát (lượt sau thử
         lại). Trả số đơn soát xong (chỉ tính các đơn trong self).
 
-        with_related: soát luôn các đơn KHÁC có mặt trong cùng đề nghị (1 tầng, dùng lại dòng đã
-        đọc) — xem _misa_invoice_related_orders."""
-        misa = self.env['misa.api.utils']
-        Picking = self.env['stock.picking'].sudo()
+        Tiền của đơn = dòng ghi mã đơn này, sau khi chuyển dòng ghi nhầm / bỏ trống mã đơn về
+        đúng đơn có phiếu gắn vào đề nghị (_misa_invoice_line_moves) — không thì 1 dòng bị đếm cho
+        cả đơn ghi trên dòng lẫn đơn thật.
+
+        with_related: soát luôn các đơn KHÁC có mặt trong cùng đề nghị và các đơn vừa được chuyển
+        dòng qua lại (1 tầng, dùng lại dòng đã đọc) — xem _misa_invoice_related_orders."""
         lines_cache = {} if lines_cache is None else lines_cache
+        requests_cache = {} if requests_cache is None else requests_cache
         done = self.browse()
+        moved_names = set()
         for order in self:
             order.misa_invoice_order_attempted_at = fields.Datetime.now()
             try:
-                requests = misa.get_invoice_requests_for_order(order.name)
+                moves, lines = order._misa_invoice_line_moves(requests_cache, lines_cache)
                 issued = pending = 0.0
                 sources = []
-                for req in requests:
-                    if req['refid'] not in lines_cache:
-                        lines_cache[req['refid']] = misa.get_invoice_request_lines(req['refid'])
-                    own = [
-                        line for line in lines_cache[req['refid']]
-                        if (line.get('order_code') or '').strip() == order.name
-                    ]
-                    amount = Picking._misa_invoice_request_line_amount(own)
-                    if not amount:
-                        continue
+                for req, amount, notes in order._misa_invoice_owned_request_amounts(moves, lines):
                     if req['inv_no']:
                         issued += amount
                     else:
                         pending += amount
-                    sources.append("%s — %s: %s đ" % (
+                    sources.append("%s — %s: %s đ%s" % (
                         req['refno'], "HĐ %s" % req['inv_no'] if req['inv_no'] else "chưa phát hành",
-                        f"{amount:,.0f}".replace(",", "."),
+                        f"{amount:,.0f}".replace(",", "."), " (%s)" % "; ".join(notes) if notes else "",
                     ))
+                for key, targets in moves.items():
+                    line_order = (lines[key][1].get('order_code') or '').strip()
+                    if order.name in {line_order} | {target for target, _p, _q in targets}:
+                        moved_names |= {line_order} | {target for target, _p, _q in targets}
             except Exception:
                 _logger.exception("❌ [MISA ORDER] Lỗi soát đơn %s với MISA", order.name)
                 continue
@@ -91,13 +90,15 @@ class SaleOrderMisaInvoiceStatus(models.Model):
             done |= order
         done._misa_invoice_apply_order_allocation()
         if with_related:
-            self._misa_invoice_related_orders(lines_cache)._misa_invoice_refresh_order_truth(
-                with_related=False, lines_cache=lines_cache,
+            self._misa_invoice_related_orders(lines_cache, moved_names)._misa_invoice_refresh_order_truth(
+                with_related=False, lines_cache=lines_cache, requests_cache=requests_cache,
             )
         return len(done)
 
-    def _misa_invoice_related_orders(self, lines_cache, limit=50):
-        """Đơn KHÁC có dòng hàng trong các đề nghị vừa đọc, chưa thử soát trong 1 ngày qua.
+    def _misa_invoice_related_orders(self, lines_cache, moved_names=(), limit=50):
+        """Đơn KHÁC có dòng hàng trong các đề nghị vừa đọc, chưa thử soát trong 1 ngày qua — cộng
+        các đơn vừa được chuyển dòng qua lại (moved_names), soát lại bất kể lần thử gần nhất: đơn
+        nhận dòng mà không soát lại thì vẫn giữ số cũ thiếu đúng khoản vừa chuyển sang.
 
         Vì sao cần: chỉ đơn ĐANG LỆCH mới được chọn soát theo đơn, đơn không lệch vẫn tính tiền
         theo đề nghị gắn vào phiếu. Khi sale ghi nhầm mã đơn, 1 dòng hàng bị đếm 2 lần: đơn ghi
@@ -109,13 +110,17 @@ class SaleOrderMisaInvoiceStatus(models.Model):
             (line.get('order_code') or '').strip()
             for lines in lines_cache.values() for line in lines
         } - {''} - set(self.mapped('name'))
-        if not codes:
-            return self.browse()
-        return self.sudo().search([
-            ('name', 'in', list(codes)),
-            '|', ('misa_invoice_order_attempted_at', '=', False),
-            ('misa_invoice_order_attempted_at', '<', fields.Datetime.now() - timedelta(days=1)),
-        ], limit=limit)
+        forced = set(moved_names) - {''} - set(self.mapped('name'))
+        related = self.browse()
+        if forced:
+            related = self.sudo().search([('name', 'in', list(forced))])
+        if codes - forced:
+            related |= self.sudo().search([
+                ('name', 'in', list(codes - forced)),
+                '|', ('misa_invoice_order_attempted_at', '=', False),
+                ('misa_invoice_order_attempted_at', '<', fields.Datetime.now() - timedelta(days=1)),
+            ], limit=limit)
+        return related
 
     def _misa_invoice_apply_order_allocation(self):
         """Tiền HĐ của phiếu = HĐ hải quan đã khớp vào chính phiếu + phần tiền đề nghị đã phát

@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from odoo import models
 
-from .misa_invoice_reassign_utils import find_mislabeled_lines, item_key
+from .misa_invoice_reassign_utils import find_mislabeled_lines, item_key, owned_qty
 
 
 class SaleOrderMisaInvoiceLineReassign(models.Model):
@@ -135,3 +135,30 @@ class SaleOrderMisaInvoiceLineReassign(models.Model):
             return {}, lines
         delivered = {order.name: order._misa_invoice_delivered_by_item() for order in self | involved}
         return find_mislabeled_lines(flat, delivered, linked), lines
+
+    def _misa_invoice_owned_request_amounts(self, moves, lines):
+        """Tiền CÓ VAT từng đề nghị tính cho đơn này, sau khi chuyển dòng ghi nhầm / bỏ trống mã đơn
+        (kết quả _misa_invoice_line_moves). Trả [(đề nghị, tiền, [ghi chú chuyển dòng])], chỉ đề
+        nghị có tiền; dòng tách 1 phần chia tiền theo SL."""
+        self.ensure_one()
+        Picking = self.env['stock.picking']
+        per_request = {}
+        for key, (req, raw) in lines.items():
+            line_order = (raw.get('order_code') or '').strip()
+            line_qty = raw.get('quantity') or 0.0
+            line_moves = moves.get(key, [])
+            qty = owned_qty(self.name, line_order, line_qty, line_moves)
+            if qty <= 0:
+                continue
+            amount = Picking._misa_invoice_request_line_amount([raw])
+            share = amount * qty / line_qty if line_qty else amount
+            entry = per_request.setdefault(req['refid'], [req, 0.0, []])
+            entry[1] += share
+            code = raw.get('inventory_item_code')
+            for target, picking, moved_qty in line_moves:
+                if target == self.name:
+                    entry[2].append("nhận %g [%s] ghi mã %s — hàng của phiếu %s" % (
+                        moved_qty, code, line_order or '(trống)', picking))
+                elif line_order == self.name:
+                    entry[2].append("chuyển %g [%s] sang %s — hàng của phiếu %s" % (moved_qty, code, target, picking))
+        return [tuple(entry) for entry in per_request.values() if entry[1]]

@@ -211,14 +211,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         payload_inv = self.env['misa.config'].get_invoice_full_search_payload(target_customer)
         data_inv = self._fetch_misa_json_with_session_retry(url_inv, payload_inv, "sa_invoice_get")
 
-        # Hóa đơn chưa có số = hóa đơn nháp, chưa phát hành — KHÔNG phải đã xuất HĐ. MISA bỏ
-        # hẳn cột inv_no ở đề nghị chưa phát hành, nên mọi đề nghị chưa phát hành đều rơi vào
-        # đường dự phòng này; thiếu điều kiện này thì đề nghị có hóa đơn nháp bị ghi "Đã xuất
-        # HĐ" với số HĐ trống (case thật KBC/OUT/13489: đề nghị chưa phát hành, phiếu báo đã
-        # xuất HĐ 8.726.400 đ, soát theo đơn ra 0).
         matched_invs = [
             inv for inv in (data_inv.get("Data", {}).get("PageData", []) or [])
-            if inv.get("sa_invoice_request_refid") == target_req_id and (inv.get("inv_no") or "").strip()
+            if inv.get("sa_invoice_request_refid") == target_req_id
         ]
         if not matched_invs:
             return result
