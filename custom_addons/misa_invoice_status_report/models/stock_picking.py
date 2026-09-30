@@ -1827,46 +1827,60 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if not inv_no:
             raise UserError("Vui lòng nhập số hóa đơn.")
         misa_utils = self.env['misa.api.utils']
-        # Khớp ĐÚNG số hóa đơn — MISA tìm kiểu CHỨA, lấy dòng đầu có thể ra hóa đơn khác
-        # ("005309" ra cả "1005309").
-        voucher = misa_utils._misa_invoice_voucher_for_inv_no(inv_no)
-        if not voucher:
+        # MỌI chứng từ bán hàng mang ĐÚNG số hóa đơn này — 1 hóa đơn có thể gộp nhiều chứng từ
+        # (case 00005319: 2 chứng từ, 27 dòng): lấy 1 chứng từ là khi lưu (xóa mọi dòng mang số
+        # này rồi tạo lại) mất sạch dòng của chứng từ còn lại.
+        vouchers = misa_utils._misa_invoice_vouchers_for_inv_no(inv_no)
+        if not vouchers:
             raise UserError("Không tìm thấy hóa đơn số \"%s\" trên MISA." % inv_no)
-        refid = voucher.get('refid')
-        lines = misa_utils.get_voucher_lines(refid) if refid else []
+        lines_by_voucher = [
+            (voucher, misa_utils.get_voucher_lines(voucher['refid']) if voucher.get('refid') else [])
+            for voucher in vouchers
+        ]
 
-        order_codes = sorted({(line.get('order_code') or '').strip() for line in lines if line.get('order_code')})
+        order_codes = sorted({
+            (line.get('order_code') or '').strip()
+            for _voucher, lines in lines_by_voucher for line in lines if line.get('order_code')
+        })
         orders = self.env['sale.order'].sudo().search([('name', 'in', order_codes)]) if order_codes else self.env['sale.order']
         orders_by_name = {order.name: order for order in orders}
 
-        # Tiền có VAT từng dòng lấy thẳng từ cột VAT của dòng; tỉ lệ tổng hóa đơn chỉ dùng khi
-        # MISA không trả cột đó.
-        fallback_ratio = invoice_vat_ratio(voucher.get('total_amount'), [line.get('amount_oc') or 0.0 for line in lines])
         preview_lines = []
-        for line in lines:
-            order_code = (line.get('order_code') or '').strip()
-            order = orders_by_name.get(order_code)
-            preview_lines.append({
-                'order_code': order_code,
-                'sale_order_id': order.id if order else False,
-                'sale_order_found': bool(order),
-                'inventory_item_code': line.get('inventory_item_code') or '',
-                'description': line.get('description') or '',
-                'quantity': line.get('quantity') or 0.0,
-                'unit_price': line.get('unit_price') or 0.0,
-                'amount': line.get('amount_oc') or 0.0,
-                'amount_with_vat': voucher_line_amount_with_vat(line, fallback_ratio),
-            })
+        for voucher, lines in lines_by_voucher:
+            # Tiền có VAT từng dòng lấy thẳng từ cột VAT của dòng; tỉ lệ tổng hóa đơn (của ĐÚNG
+            # hóa đơn chứa dòng) chỉ dùng khi MISA không trả cột đó.
+            fallback_ratio = invoice_vat_ratio(voucher.get('total_amount'), [line.get('amount_oc') or 0.0 for line in lines])
+            for line in lines:
+                order_code = (line.get('order_code') or '').strip()
+                order = orders_by_name.get(order_code)
+                preview_lines.append({
+                    'invoice_refid': voucher.get('refid'),
+                    'refno_finance': voucher.get('refno_finance') or '',
+                    'invoice_date': voucher.get('inv_date'),
+                    'employee_code': voucher.get('employee_code') or '',
+                    'order_code': order_code,
+                    'sale_order_id': order.id if order else False,
+                    'sale_order_found': bool(order),
+                    'inventory_item_code': line.get('inventory_item_code') or '',
+                    'description': line.get('description') or '',
+                    'quantity': line.get('quantity') or 0.0,
+                    'unit_price': line.get('unit_price') or 0.0,
+                    'amount': line.get('amount_oc') or 0.0,
+                    'amount_with_vat': voucher_line_amount_with_vat(line, fallback_ratio),
+                })
 
-        conflict = self._misa_invoice_customs_conflicting_picking(voucher.get('inv_no') or inv_no)
+        first = vouchers[0]
+        conflict = self._misa_invoice_customs_conflicting_picking(first.get('inv_no') or inv_no)
         return {
-            'invoice_no': voucher.get('inv_no') or inv_no,
-            'invoice_refid': refid,
-            'refno_finance': voucher.get('refno_finance') or '',
-            'invoice_date': voucher.get('inv_date'),
-            'partner_name': voucher.get('account_object_name') or '',
-            'employee_code': voucher.get('employee_code') or '',
-            'total_amount': voucher.get('total_amount') or 0.0,
+            'invoice_no': first.get('inv_no') or inv_no,
+            'invoice_refid': first.get('refid'),
+            'refno_finance': ', '.join(v.get('refno_finance') or '' for v in vouchers),
+            'invoice_date': first.get('inv_date'),
+            'partner_name': ', '.join(sorted({v.get('account_object_name') or '' for v in vouchers})),
+            'employee_code': first.get('employee_code') or '',
+            'total_amount': sum(v.get('total_amount') or 0.0 for v in vouchers),
+            # > 1: hóa đơn gộp nhiều chứng từ bán hàng — ghi nhận lưu hết, mỗi dòng giữ refid chứng từ.
+            'voucher_count': len(vouchers),
             'lines': preview_lines,
             'conflict_picking_name': conflict.name if conflict else False,
         }
@@ -1920,22 +1934,21 @@ class StockPickingMisaInvoiceStatus(models.Model):
         old_pickings = old_lines.mapped('match_ids.picking_id')
         old_lines.unlink()
 
-        invoice_date = False
-        if preview['invoice_date']:
-            try:
-                invoice_date = fields.Date.to_date(preview['invoice_date'])
-            except Exception:
-                invoice_date = False
-
         created = CustomsLine.browse()
         for line in preview['lines']:
+            try:
+                invoice_date = fields.Date.to_date(line['invoice_date']) if line['invoice_date'] else False
+            except Exception:
+                invoice_date = False
+            # Ngày/refid/số chứng từ/mã NV lấy theo ĐÚNG hóa đơn chứa dòng — 1 số hóa đơn có thể
+            # gộp nhiều chứng từ bán hàng MISA (xem fetch_misa_customs_invoice).
             created |= CustomsLine.create({
                 'invoice_no': preview['invoice_no'],
-                'invoice_refid': preview['invoice_refid'],
-                'refno_finance': preview.get('refno_finance') or '',
+                'invoice_refid': line['invoice_refid'],
+                'refno_finance': line['refno_finance'],
                 'invoice_date': invoice_date,
                 'partner_name': preview['partner_name'],
-                'employee_code': preview.get('employee_code') or '',
+                'employee_code': line['employee_code'],
                 'sale_order_id': line['sale_order_id'] or False,
                 'order_code': line['order_code'],
                 'inventory_item_code': line['inventory_item_code'],

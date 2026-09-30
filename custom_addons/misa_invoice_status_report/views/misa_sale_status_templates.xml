@@ -1458,9 +1458,12 @@
                             warningEl.textContent = 'Hóa đơn này đã được gắn với phiếu xuất kho ' + preview.conflict_picking_name +
                                 ' qua luồng khác (không phải hải quan) — không thể ghi nhận, sẽ bị tính trùng 2 lần.';
                             saveBtn.disabled = true;
-                        } else if (unmatched.length) {
+                        } else if (unmatched.length || preview.voucher_count > 1) {
                             warningEl.style.display = '';
-                            warningEl.textContent = 'Có ' + unmatched.length + ' dòng không tìm thấy đơn hàng tương ứng trong Odoo (vẫn ghi nhận được, nhưng cần kiểm tra lại mã đơn).';
+                            warningEl.textContent = [
+                                preview.voucher_count > 1 ? 'Hóa đơn này gộp ' + preview.voucher_count + ' chứng từ bán hàng trên MISA — ghi nhận sẽ lưu đủ dòng của tất cả.' : '',
+                                unmatched.length ? 'Có ' + unmatched.length + ' dòng không tìm thấy đơn hàng tương ứng trong Odoo (vẫn ghi nhận được, nhưng cần kiểm tra lại mã đơn).' : '',
+                            ].filter(Boolean).join(' ');
                             saveBtn.disabled = false;
                         } else {
                             warningEl.style.display = 'none';
