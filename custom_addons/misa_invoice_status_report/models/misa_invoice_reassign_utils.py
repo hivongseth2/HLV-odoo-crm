@@ -38,8 +38,11 @@ def find_mislabeled_lines(lines, delivered, linked_pickings):
         ĐÚNG 1 đơn đang gắn vào đề nghị refid.
 
     Chuyển SL q = SL mã i của phiếu P, từ dòng L (đề nghị R, mã i) sang đơn Y khi:
-      1. P thuộc đơn Y, gắn vào R. Dòng ghi mã X ≠ Y thì thêm: R không có dòng nào ghi mã Y —
-         sale đã ghi mã Y ở dòng khác trên R thì dòng ghi X nhiều khả năng đúng là của X.
+      1. P thuộc đơn Y, gắn vào R. Dòng ghi mã X ≠ Y thì thêm: R không có dòng nào ghi mã Y CÙNG
+         mã hàng i — sale đã ghi đúng mã Y cho mã hàng đó thì dòng ghi X nhiều khả năng đúng là
+         của X. Chỉ xét cùng mã hàng: 1 đề nghị hay ghi đúng mã đơn cho vài món và ghi nhầm vài
+         món khác (case thật đề nghị KBC/OUT/12907: EP118, DUNGMOI ghi đúng DH…235871, còn 2F4
+         45m 2li ×50, CLAN10 ×5, CQ100 ×5 của KBC/OUT/12579 lại ghi DH…235869).
       2. Dòng còn đủ SL: SL dòng (trừ phần đã chuyển) ≥ q. Được tách 1 phần dòng.
       3. Dòng ghi mã X: X đang thừa HĐ mã i ít nhất q (SL đã phát hành HĐ ghi X − SL X đã giao ≥ q),
          bỏ phần này đi X không bị thiếu. Dòng bỏ trống mã đơn: không cần điều kiện này.
@@ -49,9 +52,9 @@ def find_mislabeled_lines(lines, delivered, linked_pickings):
     Trả {key dòng: [(mã đơn Y, tên phiếu P, SL chuyển), ...]}; không có gì → {}.
     """
     invoiced = defaultdict(float)
-    orders_on_request = defaultdict(set)
+    coded_on_request = defaultdict(set)     # refid -> {(mã đơn, mã hàng)} ghi trên đề nghị
     for line in lines:
-        orders_on_request[line['refid']].add(line['order'])
+        coded_on_request[line['refid']].add((line['order'], line['item']))
         if line['issued'] and line['order']:
             invoiced[(line['order'], line['item'])] += line['qty']
 
@@ -67,7 +70,7 @@ def find_mislabeled_lines(lines, delivered, linked_pickings):
             qty = picking['items'].get(item, 0.0)
             if target == source or target not in delivered or qty <= 0 or (picking['picking'], item) in used:
                 continue
-            if source and target in orders_on_request[line['refid']]:
+            if source and (target, item) in coded_on_request[line['refid']]:
                 continue
             if remaining < qty - QTY_EPS:
                 continue
