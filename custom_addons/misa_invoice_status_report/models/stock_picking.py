@@ -8,7 +8,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
-from .misa_invoice_amount_utils import invoice_vat_ratio, voucher_line_amount_with_vat
+from .misa_invoice_amount_utils import invoice_vat_ratio, split_by_weights, voucher_line_amount_with_vat
 
 _logger = logging.getLogger(__name__)
 
@@ -2358,7 +2358,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     _logger.exception(
                         "❌ [MISA CUSTOMS] Lỗi thử khớp hải quan ngay khi xuất kho phiếu %s", picking.name,
                     )
-            elif picking.picking_type_id.code == 'incoming':
+            # Phiếu trả hàng không nhất thiết là loại 'incoming': kho dùng cả "Lệnh chuyển hàng nội
+            # bộ" (Partners/Customers → Tồn kho) để nhận hàng trả — case thật trả toàn bộ
+            # KBC/OUT/09504 (12.536.640 đ) bằng phiếu nội bộ, phiếu gốc vẫn ghi đủ tiền xuất kho.
+            # Nhận diện theo move có origin_returned_move_id, không theo loại phiếu.
+            if picking.move_ids.filtered('origin_returned_move_id'):
                 try:
                     picking._misa_invoice_recompute_return_impact()
                 except Exception:
@@ -2368,49 +2372,29 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return res
 
     def _misa_invoice_recompute_return_impact(self):
-        """Khi phiếu incoming này là phiếu TRẢ HÀNG (reverse 1 hay nhiều move xuất kho gốc, tạo
-        qua wizard stock.return.picking chuẩn của Odoo — mỗi move trả có origin_returned_move_id
-        trỏ về move gốc) — tìm đúng (các) phiếu xuất kho gốc bị ảnh hưởng và tính lại
-        misa_invoice_net_actual_amount cho phiếu đó, để tổng đối soát không bị đếm dư phần khách
-        đã trả lại. Không làm gì nếu đây không phải phiếu trả hàng (phiếu incoming bình thường
-        không có move nào set origin_returned_move_id)."""
+        """Khi phiếu này là phiếu TRẢ HÀNG (reverse 1 hay nhiều move xuất kho gốc, tạo qua wizard
+        stock.return.picking chuẩn của Odoo — mỗi move trả có origin_returned_move_id trỏ về move
+        gốc; loại phiếu có thể là nhập kho hoặc chuyển nội bộ) — tìm đúng (các) phiếu XUẤT KHO gốc
+        bị ảnh hưởng và tính lại misa_invoice_net_actual_amount cho phiếu đó, để tổng đối soát
+        không bị đếm dư phần khách đã trả lại. Không làm gì nếu đây không phải phiếu trả hàng."""
         self.ensure_one()
         returned_moves = self.move_ids.filtered(lambda m: m.origin_returned_move_id and m.state == 'done')
         if not returned_moves:
             return
-        original_pickings = returned_moves.mapped('origin_returned_move_id.picking_id')
+        original_pickings = returned_moves.mapped('origin_returned_move_id.picking_id').filtered(
+            lambda p: p.picking_type_id.code == 'outgoing'
+        )
         for picking in original_pickings:
             picking._misa_invoice_recompute_net_amount()
 
     def _misa_invoice_recompute_net_amount(self):
-        """Tính lại misa_invoice_returned_amount (tiền hàng đã trả, quy đổi theo đơn giá SAU
-        THUẾ của đúng sale.order.line gắn với từng move — line.price_total / line.product_uom_qty
-        × số lượng đã trả) và misa_invoice_net_actual_amount (= gộp − đã trả) cho 1 phiếu xuất
-        kho. Gọi lại mỗi khi: (1) phiếu này tự validate xong (chưa có trả, net = gộp), hoặc (2)
-        có phiếu trả hàng liên quan tới phiếu này được validate sau đó (xem
-        _misa_invoice_recompute_return_impact)."""
+        """Tính lại misa_invoice_returned_amount (tiền hàng đã trả) và misa_invoice_net_actual_amount
+        (= gộp − đã trả) cho 1 phiếu xuất kho. Gọi lại mỗi khi: (1) phiếu này tự validate xong
+        (chưa có trả, net = gộp), hoặc (2) có phiếu trả hàng liên quan tới phiếu này được validate
+        sau đó (xem _misa_invoice_recompute_return_impact)."""
         self.ensure_one()
-        returned_amount = 0.0
-        original_moves = self.move_ids.filtered(lambda m: m.state == 'done' and m.sale_line_id)
-        if original_moves:
-            returned_moves = self.env['stock.move'].sudo().search([
-                ('origin_returned_move_id', 'in', original_moves.ids), ('state', '=', 'done'),
-            ])
-            returned_qty_by_move = {}
-            for rm in returned_moves:
-                returned_qty_by_move[rm.origin_returned_move_id.id] = (
-                    returned_qty_by_move.get(rm.origin_returned_move_id.id, 0.0) + rm.quantity
-                )
-            for move in original_moves:
-                returned_qty = returned_qty_by_move.get(move.id, 0.0)
-                if not returned_qty:
-                    continue
-                line = move.sale_line_id
-                if not line.product_uom_qty:
-                    continue
-                unit_price_after_tax = line.price_total / line.product_uom_qty
-                returned_amount += unit_price_after_tax * returned_qty
         gross = self.x_studio_tng_tin_sau_thu or 0.0
+        returned_amount = self._misa_invoice_returned_amount_for(gross)
         self.write({
             'misa_invoice_returned_amount': returned_amount,
             'misa_invoice_net_actual_amount': max(gross - returned_amount, 0.0),
@@ -2418,6 +2402,41 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # Tiền xuất kho đổi (phiếu mới xuất, hàng trả) thì chia lại tiền HĐ của đơn đã soát —
         # thuần DB, không hỏi lại MISA.
         self.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')._misa_invoice_apply_order_allocation()
+
+    def _misa_invoice_returned_amount_for(self, gross):
+        """Tiền hàng đã trả của phiếu nếu tiền gộp là gross — không ghi gì (bin/ dùng để chạy thử
+        tiền gộp khác). = phần của gross ứng với SL đã trả: chia gross cho từng move theo giá trị
+        (SL × đơn giá sau thuế của dòng đơn; mọi dòng giá 0 thì theo SL), rồi lấy tỉ lệ SL trả /
+        SL xuất của từng move. Trước đây nhân thẳng đơn giá dòng đơn hiện tại × SL trả — lệch khỏi
+        tiền gộp khi dòng đơn bị đổi giá sau khi xuất (case thật đơn của KBC/OUT/09504 trả toàn bộ
+        nhưng dòng đơn đã về giá 0, trừ ra 0 đ, phiếu vẫn còn đủ tiền). Chưa trả gì → 0."""
+        self.ensure_one()
+        original_moves = self.move_ids.filtered(lambda m: m.state == 'done' and m.quantity)
+        if not original_moves:
+            return 0.0
+        returned_moves = self.env['stock.move'].sudo().search([
+            ('origin_returned_move_id', 'in', original_moves.ids), ('state', '=', 'done'),
+        ])
+        returned_qty_by_move = {}
+        for rm in returned_moves:
+            returned_qty_by_move[rm.origin_returned_move_id.id] = (
+                returned_qty_by_move.get(rm.origin_returned_move_id.id, 0.0) + rm.quantity
+            )
+        if not returned_qty_by_move:
+            return 0.0
+        units = [
+            (m.sale_line_id.price_total / m.sale_line_id.product_uom_qty)
+            if m.sale_line_id and m.sale_line_id.product_uom_qty else 0.0
+            for m in original_moves
+        ]
+        weights = [m.quantity * unit for m, unit in zip(original_moves, units)]
+        if not any(weights):
+            weights = original_moves.mapped('quantity')
+        returned_amount = 0.0
+        for move, share in zip(original_moves, split_by_weights(gross, weights)):
+            returned_qty = min(returned_qty_by_move.get(move.id, 0.0), move.quantity)
+            returned_amount += share * returned_qty / move.quantity
+        return returned_amount
 
     def _misa_invoice_customs_try_match_for_picking(self):
         """Thử khớp NGAY các dòng hải quan đang pending/partial của ĐÚNG (các) đơn bán trên

@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from odoo import fields, models
 
@@ -43,13 +44,16 @@ class SaleOrderMisaInvoiceStatus(models.Model):
     )
     misa_invoice_order_sources = fields.Text(string='Đề nghị xuất HĐ của đơn (MISA)', copy=False)
 
-    def _misa_invoice_refresh_order_truth(self):
+    def _misa_invoice_refresh_order_truth(self, with_related=True, lines_cache=None):
         """Hỏi MISA mọi đề nghị nhắc tới từng đơn, lưu tiền đã phát hành / chưa phát hành, rồi
         chia lại về phiếu. Đơn gọi MISA lỗi thì giữ nguyên, không đánh dấu đã soát (lượt sau thử
-        lại). Trả số đơn soát xong."""
+        lại). Trả số đơn soát xong (chỉ tính các đơn trong self).
+
+        with_related: soát luôn các đơn KHÁC có mặt trong cùng đề nghị (1 tầng, dùng lại dòng đã
+        đọc) — xem _misa_invoice_related_orders."""
         misa = self.env['misa.api.utils']
         Picking = self.env['stock.picking'].sudo()
-        lines_cache = {}
+        lines_cache = {} if lines_cache is None else lines_cache
         done = self.browse()
         for order in self:
             order.misa_invoice_order_attempted_at = fields.Datetime.now()
@@ -86,7 +90,32 @@ class SaleOrderMisaInvoiceStatus(models.Model):
             })
             done |= order
         done._misa_invoice_apply_order_allocation()
+        if with_related:
+            self._misa_invoice_related_orders(lines_cache)._misa_invoice_refresh_order_truth(
+                with_related=False, lines_cache=lines_cache,
+            )
         return len(done)
+
+    def _misa_invoice_related_orders(self, lines_cache, limit=50):
+        """Đơn KHÁC có dòng hàng trong các đề nghị vừa đọc, chưa thử soát trong 1 ngày qua.
+
+        Vì sao cần: chỉ đơn ĐANG LỆCH mới được chọn soát theo đơn, đơn không lệch vẫn tính tiền
+        theo đề nghị gắn vào phiếu. Khi sale ghi nhầm mã đơn, 1 dòng hàng bị đếm 2 lần: đơn ghi
+        trên dòng (soát theo đơn) và đơn thật (theo đề nghị gắn vào phiếu) — case thật đề nghị
+        KBC/OUT/09323 ghi 4.984.200 đ hàng của DH…235474 (phiếu KBC/OUT/12296) vào DH…232207.
+        Soát luôn các đơn cùng đề nghị thì đơn thật cũng chuyển sang tính theo mã đơn, dòng đó
+        chỉ còn nằm ở 1 đơn và cặp thừa/thiếu hiện ra thay vì bị cộng trùng."""
+        codes = {
+            (line.get('order_code') or '').strip()
+            for lines in lines_cache.values() for line in lines
+        } - {''} - set(self.mapped('name'))
+        if not codes:
+            return self.browse()
+        return self.sudo().search([
+            ('name', 'in', list(codes)),
+            '|', ('misa_invoice_order_attempted_at', '=', False),
+            ('misa_invoice_order_attempted_at', '<', fields.Datetime.now() - timedelta(days=1)),
+        ], limit=limit)
 
     def _misa_invoice_apply_order_allocation(self):
         """Tiền HĐ của phiếu = HĐ hải quan đã khớp vào chính phiếu + phần tiền đề nghị đã phát
