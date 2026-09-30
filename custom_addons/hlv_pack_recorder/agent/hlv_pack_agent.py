@@ -31,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.3.0'
+AGENT_VERSION = '2.3.1'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -73,7 +73,10 @@ MIN_AGENT_BYTES = 10 * 1024
 # So lan cho phep chay lai ffmpeg trong MOT ban ghi khi luong RTSP bi dut.
 # Co tran vi mot camera hong han se dut lien tuc; chay lai vo han thi chi tao ra
 # hang tram doan rac roi van khong co hinh.
-MAX_SEGMENT_RESTARTS = 20
+# 60 chu khong phai 20: mot phien dong goi dai muoi phut ma mang chop moi ~20
+# giay la da can hon 20 lan noi lai. Chay lai vo ich thi ton vai giay moi lan va
+# co dong log rieng, con thieu mot lan la mat phan con lai cua phieu.
+MAX_SEGMENT_RESTARTS = 60
 
 # Doan ngan hon chung nay coi nhu khong co gi - bo di truoc khi noi, de mot doan
 # 0 byte khong lam hong ca file cuoi.
@@ -371,7 +374,12 @@ class Agent:
 
     def poll(self):
         return self._call_json('/pack_agent/poll', {
-            'active_ids': [rid for rid, r in self.active.items() if r.is_running()],
+            # BAO CA nhung ban ghi co ffmpeg vua chet va dang cho chay lai.
+            # Loc theo is_running() la sai: trong khe ho giua luc luong dut va luc
+            # noi lai duoc, Odoo se thay ban ghi "khong con ai chay", danh hong no
+            # roi gui lenh dung - giet dung luc agent dang cuu phieu do. Con nam
+            # trong self.active nghia la agent VAN NHAN, chua buong.
+            'active_ids': list(self.active),
             'agent_version': AGENT_VERSION,
         })
 
