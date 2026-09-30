@@ -2,21 +2,22 @@
 """
 check_misa_invoice_line_reassign.py
 ===================================
-Chạy THỬ quy tắc "dòng đề nghị ghi nhầm mã đơn" (find_mislabeled_lines trong
-models/misa_invoice_reassign_utils.py) trên dữ liệu thật — KHÔNG ghi gì — để xem trước mọi dòng
-sẽ được chuyển sang đơn khác trước khi đưa vào cách tính HĐ theo đơn của module.
+Chạy THỬ quy tắc "dòng đề nghị ghi nhầm / bỏ trống mã đơn" trên dữ liệu thật — KHÔNG ghi gì —
+để xem trước mọi phần dòng sẽ được tính sang đơn khác trước khi đưa vào cách tính HĐ theo đơn.
+Dùng ĐÚNG method của module (sale.order._misa_invoice_line_moves → find_mislabeled_lines trong
+models/misa_invoice_reassign_utils.py), nên chạy thử ra gì thì chạy thật ra đúng như vậy.
 
-Vì sao: sale ghi nhầm mã đơn trên dòng đề nghị thì 1 dòng HĐ bị tính 2 lần — cho đơn ghi trên
-dòng (soát theo mã đơn) và cho đơn thật (phiếu của nó đang gắn vào đề nghị đó). Case thật:
-KBC/OUT/09356 thừa 4.984.200 đ (hàng của KBC/OUT/12296), KBC/OUT/11810 thừa 1.134.000 đ (hàng
-của KBC/OUT/11375).
+Vì sao: soát HĐ theo đơn chỉ cộng dòng ghi đúng mã đơn, còn phiếu chưa soát theo đơn tính HĐ
+qua đề nghị gắn vào nó. Case thật:
+  - ghi nhầm mã đơn → đếm 2 lần: KBC/OUT/09356 thừa 4.984.200 đ (hàng của KBC/OUT/12296);
+    KBC/OUT/11810 thừa 1.134.000 đ (1 dòng UT6581 SL 2, 1 cái là của KBC/OUT/11375);
+  - dòng bỏ trống mã đơn → soát theo đơn ra 0: DH…235029 (KBC/OUT/13489 đã có HĐ 8.726.400 đ).
 
-Cách soát: lấy các đơn X đang có phiếu HĐ NHIỀU HƠN xuất kho → mọi đề nghị ghi mã X trên MISA
-→ phiếu của đơn KHÁC đang gắn vào các đề nghị đó (đơn Y) → mọi đề nghị ghi mã Y → chạy
-find_mislabeled_lines. In từng dòng sẽ chuyển, và đơn X nào đang thừa mà không tìm ra lý do.
+Soát 2 chiều: đơn có phiếu HĐ NHIỀU HƠN xuất kho (đơn X, dòng bị ghi vào), và đơn có phiếu đã
+báo "Đã xuất HĐ" mà tiền HĐ quy về vẫn THIẾU (đơn Y, dòng đáng ra là của nó).
 
-Cần file models/misa_invoice_reassign_utils.py đã có trên server (git pull là đủ — file thuần,
-chưa nơi nào trong module dùng, không cần nâng cấp module).
+Cần module có models/misa_invoice_line_reassign.py trên server (git pull + khởi động lại Odoo —
+chỉ thêm method, chưa nơi nào gọi, không đổi cách tính gì).
 
 CHỈ ĐỌC — không write/create/unlink gì. Có gọi API MISA (đọc).
 
@@ -24,146 +25,85 @@ Chạy trên máy có Odoo (Odoo.sh shell hoặc server):
     python odoo-bin shell -d <TEN_DATABASE> < bin/check_misa_invoice_line_reassign.py
 """
 
-from collections import defaultdict
-
-try:
-    from odoo.addons.misa_invoice_status_report.models.misa_invoice_reassign_utils import (
-        find_mislabeled_lines, item_key,
-    )
-except ImportError:
-    raise SystemExit("❌ Chưa có models/misa_invoice_reassign_utils.py trên server — git pull trước.")
-
-ONLY_ORDERS = []            # để trống = mọi đơn đang thừa HĐ; hoặc ['DH125524949232207', ...]
+ONLY_ORDERS = []            # để trống = tự tìm theo 2 chiều ở trên; hoặc ['DH125524949235029', ...]
 TOLERANCE = 1000.0          # đ
+UNEXPLAINED_TOP = 10        # in bấy nhiêu đơn lệch lớn nhất không do dòng ghi nhầm
 SEP = "=" * 100
 
 Picking = env['stock.picking'].sudo()
 SaleOrder = env['sale.order'].sudo()
-misa = env['misa.api.utils'].sudo()
-requests_cache = {}         # mã đơn -> [{refno, refid, inv_no}]
-lines_cache = {}            # refid -> dòng đề nghị
+if not hasattr(SaleOrder, '_misa_invoice_line_moves'):
+    raise SystemExit("❌ Server chưa có models/misa_invoice_line_reassign.py — git pull + khởi động lại Odoo trước.")
 
 
 def money(v):
     return f"{(v or 0.0):,.0f}".replace(",", ".")
 
 
-def requests_of(order_name):
-    if order_name not in requests_cache:
-        requests_cache[order_name] = misa.get_invoice_requests_for_order(order_name)
-    return requests_cache[order_name]
-
-
-def lines_of(refid):
-    if refid not in lines_cache:
-        lines_cache[refid] = misa.get_invoice_request_lines(refid)
-    return lines_cache[refid]
-
-
 def line_amount(line):
     return (line.get('amount_oc') or 0.0) + (line.get('vat_amount_oc') or 0.0) - (line.get('discount_amount_oc') or 0.0)
 
 
-def done_outgoing(pickings):
-    return pickings.filtered(lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing')
+def picking_gap(picking):
+    return (picking.misa_invoice_net_actual_amount or 0.0) - (picking.misa_invoice_allocated_amount or 0.0)
 
 
-def delivered_by_item(order):
-    result = defaultdict(float)
-    for line in order.order_line.filtered(lambda l: not l.display_type):
-        result[item_key(line.product_id.default_code)] += line.qty_delivered
-    return dict(result)
+def order_gap(order):
+    return sum(picking_gap(p) for p in order._misa_invoice_done_out_pickings())
 
 
-def picking_items(picking):
-    result = defaultdict(float)
-    for move in picking.move_ids.filtered(lambda m: m.state == 'done'):
-        result[item_key(move.product_id.default_code)] += move.quantity
-    return dict(result)
-
-
-def linked_pickings_for(refids):
-    """{refid: [{picking, order, items}]} — phiếu 1 đơn gắn vào đề nghị (chính nó hoặc phiếu nó ăn theo)."""
-    result = defaultdict(list)
-    pickings = done_outgoing(Picking.search([
-        '|', ('misa_invoice_request_refid', 'in', list(refids)),
-        ('misa_invoice_master_picking_id.misa_invoice_request_refid', 'in', list(refids)),
-    ]))
-    for picking in pickings:
-        if len(picking.misa_invoice_sale_order_ids) != 1:
-            continue
-        refid = picking.misa_invoice_request_refid or picking.misa_invoice_master_picking_id.misa_invoice_request_refid
-        result[refid].append({
-            'picking': picking.name, 'order': picking.misa_invoice_sale_order_ids.name, 'items': picking_items(picking),
-        })
-    return result
-
-
-def over_invoiced_orders():
-    domain = Picking._misa_invoice_dashboard_base_domain()
+def seed_orders():
     if ONLY_ORDERS:
-        domain += [('misa_invoice_sale_order_ids.name', 'in', ONLY_ORDERS)]
+        return SaleOrder.search([('name', 'in', ONLY_ORDERS)])
     orders = SaleOrder.browse()
-    for picking in Picking.search(domain):
-        gap = (picking.misa_invoice_net_actual_amount or 0.0) - (picking.misa_invoice_allocated_amount or 0.0)
-        if gap < -TOLERANCE:
+    for picking in Picking.search(Picking._misa_invoice_dashboard_base_domain()):
+        gap = picking_gap(picking)
+        if gap < -TOLERANCE or (gap > TOLERANCE and picking.misa_invoice_state == 'invoiced'):
             orders |= picking.misa_invoice_sale_order_ids
     return orders
 
 
-def order_gap(order):
-    pickings = done_outgoing(order.misa_invoice_picking_ids)
-    return sum((p.misa_invoice_net_actual_amount or 0.0) - (p.misa_invoice_allocated_amount or 0.0) for p in pickings)
+seeds = seed_orders()
+print(f"\n{SEP}\n  DÒNG ĐỀ NGHỊ GHI NHẦM / BỎ TRỐNG MÃ ĐƠN — CHẠY THỬ trên {len(seeds)} đơn\n{SEP}")
 
-
-candidates = over_invoiced_orders()
-print(f"\n{SEP}\n  DÒNG ĐỀ NGHỊ GHI NHẦM MÃ ĐƠN — CHẠY THỬ trên {len(candidates)} đơn đang thừa HĐ\n{SEP}")
-
+requests_cache, lines_cache = {}, {}
+seen = set()
 total_moved = 0.0
 unexplained = []
-for order in candidates:
+for order in seeds:
     try:
-        own_requests = [r for r in requests_of(order.name) if r['inv_no']]
-        linked = linked_pickings_for({r['refid'] for r in own_requests})
-        targets = {p['order'] for plist in linked.values() for p in plist} - {order.name}
-        target_orders = SaleOrder.search([('name', 'in', list(targets))])
-        all_requests = {r['refid']: r for r in own_requests}
-        for target in target_orders:
-            for req in requests_of(target.name):
-                all_requests.setdefault(req['refid'], req)
-        lines, by_key = [], {}
-        for refid, req in all_requests.items():
-            for idx, raw in enumerate(lines_of(refid)):
-                line = {
-                    'key': (refid, idx), 'refid': refid, 'order': (raw.get('order_code') or '').strip(),
-                    'item': item_key(raw.get('inventory_item_code')), 'qty': raw.get('quantity') or 0.0,
-                    'issued': bool(req['inv_no']),
-                }
-                lines.append(line)
-                by_key[line['key']] = (req, raw)
+        moves, lines = order._misa_invoice_line_moves(requests_cache, lines_cache)
     except Exception as e:
         print(f"\n  ❌ {order.name}: lỗi gọi MISA — {e}")
         continue
-    delivered = {o.name: delivered_by_item(o) for o in order | target_orders}
-    moved = find_mislabeled_lines(lines, delivered, linked)
-    moved_from_here = {k: v for k, v in moved.items() if (by_key[k][1].get('order_code') or '').strip() == order.name}
-
-    gap = order_gap(order)
-    moved_amount = sum(line_amount(by_key[k][1]) for k in moved_from_here)
-    total_moved += moved_amount
-    print(f"\n  {order.name} — {order.partner_id.commercial_partner_id.name}"
-          f" | đang lệch {money(gap)} (âm = HĐ thừa) | chuyển đi {money(moved_amount)} → còn lệch {money(gap + moved_amount)}")
-    if not moved_from_here:
-        unexplained.append((order, gap))
-        print("      (không có dòng nào đủ điều kiện chuyển — thừa vì lý do khác)")
-    for key, (target, picking_name) in sorted(moved_from_here.items(), key=lambda kv: str(kv[0])):
-        req, raw = by_key[key]
-        target_order = target_orders.filtered(lambda o, t=target: o.name == t)
-        print(f"      đề nghị {req['refno']} HĐ {req['inv_no']}: [{raw.get('inventory_item_code')}] SL {raw.get('quantity'):g}"
-              f" {money(line_amount(raw))} đ → {target} (phiếu {picking_name}; đơn đó đang lệch {money(order_gap(target_order))})")
+    rows = []
+    for key, targets in moves.items():
+        req, raw = lines[key]
+        source = (raw.get('order_code') or '').strip()
+        for target, picking_name, qty in targets:
+            if order.name not in (source, target) or (key, target, picking_name) in seen:
+                continue
+            seen.add((key, target, picking_name))
+            line_qty = raw.get('quantity') or 0.0
+            amount = line_amount(raw) * qty / line_qty if line_qty else 0.0
+            rows.append((req, raw, source, target, picking_name, qty, amount))
+    if not rows:
+        unexplained.append((order, order_gap(order)))
+        continue
+    print(f"\n  {order.name} — {order.partner_id.commercial_partner_id.name} | đang lệch {money(order_gap(order))}")
+    for req, raw, source, target, picking_name, qty, amount in rows:
+        total_moved += amount
+        target_order = SaleOrder.search([('name', '=', target)], limit=1)
+        print(f"      đề nghị {req['refno']} HĐ {req['inv_no']}: [{raw.get('inventory_item_code')}]"
+              f" SL {qty:g}/{(raw.get('quantity') or 0):g} = {money(amount)} đ"
+              f" | ghi mã {source or '(trống)'} → {target} (phiếu {picking_name}, đơn đó đang lệch {money(order_gap(target_order))})")
 
 print(f"\n{SEP}")
-print(f"  Tổng tiền HĐ sẽ chuyển sang đúng đơn: {money(total_moved)} đ. {len(unexplained)} đơn thừa HĐ không do ghi nhầm mã đơn.")
-print("  Đơn nhận ('đơn đó đang lệch'): 0 = đang được tính HĐ qua đề nghị gắn vào phiếu → hết đếm 2 lần;\n"
-      "  > 0 = đang báo thiếu đúng khoản này → sau khi chuyển sẽ hết thiếu.")
+print(f"  {len(seen)} phần dòng sẽ tính sang đúng đơn, tổng {money(total_moved)} đ.")
+print("  Đọc: đơn ghi mã đang lệch âm (thừa) → hết thừa; đơn nhận đang lệch 0 = đang được tính qua đề nghị\n"
+      "  gắn vào phiếu (hết đếm 2 lần), > 0 = đang thiếu đúng khoản này (hết thiếu).")
+unexplained.sort(key=lambda it: -abs(it[1]))
+print(f"\n  {len(unexplained)} đơn lệch KHÔNG do dòng ghi nhầm / bỏ trống mã đơn — {UNEXPLAINED_TOP} đơn lệch lớn nhất:")
+for order, gap in unexplained[:UNEXPLAINED_TOP]:
+    print(f"      {order.name:<20} lệch {money(gap):>14}  {order.partner_id.commercial_partner_id.name}")
 print(SEP)
