@@ -9,6 +9,7 @@ from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
 from .misa_invoice_amount_utils import invoice_vat_ratio, split_by_weights, voucher_line_amount_with_vat
+from .misa_invoice_reassign_utils import name_key
 
 _logger = logging.getLogger(__name__)
 
@@ -2187,6 +2188,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
             )
         return {'count': len(created), 'matched_count': matched_count, 'invoice_no': preview['invoice_no']}
 
+    def _misa_invoice_line_products(self, line, item_code):
+        """Sản phẩm Odoo ứng với 1 dòng HĐ (hải quan / xuất chung): mọi sản phẩm mang mã hàng này,
+        KỂ CẢ đã lưu trữ, cộng sản phẩm trên dòng đơn bán của CHÍNH đơn đó có tên trùng tên hàng
+        trên HĐ. Vì sao cần tên: lưu trữ sản phẩm, xóa mã để tạo sản phẩm mới cùng mã thì dòng đơn
+        cũ vẫn trỏ sản phẩm cũ không mã — tìm theo mã chỉ ra sản phẩm mới, không có phiếu nào của
+        đơn (case thật HĐ hải quan 00003512, NHAMXOP1MAT-7979-SIA của DH…231524, DH…232401 đứng
+        mãi "Chờ xuất kho"). Chỉ xét dòng của đúng đơn trên HĐ nên không khớp nhầm sang đơn khác."""
+        products = self.env['product.product'].sudo().with_context(active_test=False).search(
+            [('default_code', '=ilike', item_code)],
+        )
+        description = name_key(line.description)
+        if description and line.sale_order_id:
+            products |= line.sale_order_id.order_line.mapped('product_id').filtered(
+                lambda p: name_key(p.name) == description
+            )
+        return products
+
     def _misa_invoice_reconcile_line_match(self, line, match_model_name, apply_to_picking=None, exclude_picking_ids=None):
         """Thuật toán khớp DÙNG CHUNG cho mọi model dạng "dòng hàng cần đối soát với phiếu xuất
         kho" (misa.invoice.customs.line — hàng hải quan; misa.invoice.grouped.line — hàng xuất
@@ -2222,17 +2240,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return False
         # '=ilike' so khớp CHÍNH XÁC nhưng không phân biệt hoa/thường — mã hàng giữa MISA và
         # Odoo đôi khi lệch cách viết hoa dù cùng 1 sản phẩm, strip() để bỏ khoảng trắng thừa.
-        product = self.env['product.product'].sudo().search(
-            [('default_code', '=ilike', item_code)], limit=1,
-        )
-        if not product:
+        products = self._misa_invoice_line_products(line, item_code)
+        if not products:
             line.match_note = "Không tìm thấy sản phẩm Odoo có mã hàng (default_code) = \"%s\"." % item_code
             return False
         remaining = line.remaining_qty()
         already_picking_ids = line.match_ids.mapped('picking_id').ids
         domain = [
             ('sale_line_id.order_id', '=', line.sale_order_id.id),
-            ('product_id', '=', product.id),
+            ('product_id', 'in', products.ids),
             ('picking_id.picking_type_id.code', '=', 'outgoing'),
             ('picking_id.state', '=', 'done'),
         ]

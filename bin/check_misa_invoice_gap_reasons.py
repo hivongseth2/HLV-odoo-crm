@@ -26,10 +26,10 @@ from collections import defaultdict
 from odoo.addons.misa_invoice_status_report.models.misa_invoice_reassign_utils import item_key, owned_qty
 
 SALER_CODE = False          # False = mọi sale; hoặc 'TRANTHIMYDUYEN'
-MONTH = False               # False = mọi tháng; hoặc '2026-08' (tháng xuất kho của phiếu lệch)
+MONTH = '2026-09'               # False = mọi tháng; hoặc '2026-08' (tháng xuất kho của phiếu lệch)
 ONLY_ORDERS = []            # để trống = tự lấy theo 2 lọc trên; hoặc ['DH125524949235869', ...]
 TOLERANCE = 1000.0          # đ
-MAX_ORDERS = 100            # đơn lệch nhiều nhất trước
+MAX_ORDERS = 300            # đơn lệch nhiều nhất trước
 SEP = "=" * 100
 
 Picking = env['stock.picking'].sudo()
@@ -118,6 +118,7 @@ print(f"\n{SEP}\n  VÌ SAO CÒN LỆCH — {len(rows)} đơn"
 requests_cache, lines_cache = {}, {}
 refresh_fixes = []
 reason_count = defaultdict(int)
+gaps_by_partner = defaultdict(list)
 for order, gap_pickings in rows:
     order_gap = sum(picking_gap(p) for p in order._misa_invoice_done_out_pickings())
     print(f"\n  {order.name} — {order.partner_id.commercial_partner_id.name} | lệch cả đơn {money(order_gap)}"
@@ -168,20 +169,60 @@ for order, gap_pickings in rows:
         reasons.append(f"SAI % THUẾ: {', '.join(tax_diff)} → sửa thuế trên đơn bán")
     if price_diff:
         reasons.append(f"KHÁC ĐƠN GIÁ: {', '.join(price_diff)}")
+    # Số theo đơn đang lưu đã khớp MISA tính lại → dòng ghi nhầm đã được chuyển ở lần soát trước,
+    # chỉ còn là thông tin, không phải việc cần làm.
+    applied = bool(order.misa_invoice_order_checked_at) and not stale
     if has_moves:
-        reasons.append('CÓ DÒNG GHI NHẦM / BỎ TRỐNG MÃ ĐƠN → soát lại theo đơn sẽ tự chuyển')
+        reasons.append('ĐÃ CHUYỂN dòng ghi nhầm / bỏ trống mã đơn (đã tính vào số theo đơn)' if applied
+                       else 'CÓ DÒNG GHI NHẦM / BỎ TRỐNG MÃ ĐƠN → soát lại theo đơn sẽ tự chuyển')
     if stale:
         reasons.append(f"SỐ THEO ĐƠN ĐANG LƯU CŨ: {money(order.misa_invoice_order_invoiced_amount)} → MISA hiện {money(issued_now)}"
                        " → soát lại theo đơn")
     if not order.misa_invoice_order_checked_at and (has_moves or issued_now):
         reasons.append('ĐƠN CHƯA SOÁT THEO ĐƠN (đang tính theo phiếu) → soát lại theo đơn')
+    # Đề nghị trùng: >= 2 đề nghị cùng tính cho đơn này đúng 1 số tiền — sale lập lại đề nghị thay
+    # vì sửa cái cũ (DH…237065: TSN/OUT/14643 đã phát hành + TSN/OUT/14619 chưa phát hành, cùng
+    # 5.248.800 đ). Phát hành nốt cái chưa phát hành là xuất HĐ 2 lần.
+    by_amount = defaultdict(list)
+    for req, amount, _notes in owned:
+        by_amount[round(amount)].append(req)
+    for amount, reqs in by_amount.items():
+        if len(reqs) > 1:
+            names = ', '.join(f"{r['refno']} ({'HĐ ' + r['inv_no'] if r['inv_no'] else 'chưa phát hành'})" for r in reqs)
+            reasons.append(f"ĐỀ NGHỊ TRÙNG: {names} cùng {money(amount)} → xóa bớt trên MISA, KHÔNG phát hành thêm")
+    unmatched_customs = customs.filtered(lambda l: l.match_state != 'matched')
+    if unmatched_customs:
+        reasons.append("HĐ HẢI QUAN CHƯA KHỚP PHIẾU: " + ', '.join(
+            f"[{l.inventory_item_code}] {l.remaining_qty():g} ({l.invoice_no})" for l in unmatched_customs
+        ) + " → khớp tay ở tab Đơn hải quan (thường do mã hàng trên HĐ khác mã Odoo)")
     if not reasons:
         reasons.append('Mặt hàng khớp, số theo đơn mới — lệch do chia tiền giữa các phiếu / đơn gộp, xem bằng check_misa_invoice_gap_pickings.py')
     for reason in reasons:
         print(f"      ⇒ {reason}")
         reason_count[reason.split(':')[0].split(' →')[0].split(' —')[0]] += 1
-    if has_moves or stale or (not order.misa_invoice_order_checked_at and issued_now):
+    if not applied and (has_moves or stale or issued_now):
         refresh_fixes.append(order.name)
+    gaps_by_partner[order.partner_id.commercial_partner_id.id].append((order, order_gap))
+
+# Cặp đơn cùng khách lệch ngược dấu đúng 1 số tiền = hàng của đơn thiếu nằm trên HĐ của đơn thừa,
+# mà phiếu của đơn thiếu không gắn vào đề nghị đó nên không tự chuyển được (DH…237106 +3.824.928 /
+# DH…237121 −3.824.928). Gắn tay đề nghị của đơn thừa cho phiếu của đơn thiếu là quy tắc chuyển
+# dòng tự xử lý ở lần soát sau.
+print(f"\n{SEP}\n  CẶP ĐƠN CÙNG KHÁCH LỆCH NGƯỢC DẤU (hàng đơn thiếu nằm trên HĐ đơn thừa)")
+pairs = 0
+for entries in gaps_by_partner.values():
+    for short_order, short_gap in (e for e in entries if e[1] > TOLERANCE):
+        for over_order, over_gap in (e for e in entries if e[1] < -TOLERANCE):
+            if abs(short_gap + over_gap) <= TOLERANCE:
+                pairs += 1
+                over_pickings = ', '.join(over_order._misa_invoice_done_out_pickings().mapped('misa_invoice_request_refno') or ['-'])
+                print(f"    {short_order.name} thiếu {money(short_gap)} ⇄ {over_order.name} thừa {money(over_gap)}"
+                      f" (đề nghị {over_pickings}) → soát lại theo đơn cả 2 (đã thêm vào ORDERS). Soát xong vẫn lệch"
+                      f" = đề nghị không gắn / không đặt tên theo phiếu của {short_order.name}: xem HĐ, đúng hàng của"
+                      f" nó thì gắn tay đề nghị cho phiếu (nút 'Gắn mã đề nghị') rồi soát lại")
+                refresh_fixes.extend(o.name for o in (short_order, over_order) if o.name not in refresh_fixes)
+if not pairs:
+    print("    (không có)")
 
 print(f"\n{SEP}\n  TỔNG HỢP LÝ DO")
 for reason, count in sorted(reason_count.items(), key=lambda kv: -kv[1]):

@@ -24,6 +24,12 @@ Chạy trên máy có Odoo (Odoo.sh shell hoặc server):
 
 SAMPLE = 8
 ALWAYS = ['KBC/OUT/13489', 'KBC/OUT/12537', 'KBC/OUT/13249']
+# Soát ĐÚNG các phiếu này, bất kể đang ở trạng thái nào (VD TSN/OUT/14018: MISA ghi đề nghị "Đã xuất
+# hóa đơn" mà Odoo về "chờ HĐ") — để trống thì soát mẫu các phiếu 'Đã xuất HĐ' không số như trên.
+ONLY_PICKINGS = ['TSN/OUT/14018']
+# Tìm thêm hóa đơn theo tên khách này khi tên trên đề nghị ('KHÁCH WEB, ZALO…') khác tên trên hóa
+# đơn (tên người mua thật) — điền tên người mua nếu biết, để trống thì bỏ qua.
+EXTRA_CUSTOMER_NAMES = []
 SEP = "=" * 100
 INVOICE_URL = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
 INTERESTING = ('inv', 'publish', 'status', 'refno', 'total_amount', 'einvoice', 'sign')
@@ -41,11 +47,18 @@ pickings = Picking.search([
     ('misa_invoice_state', '=', 'invoiced'), ('misa_invoice_master_picking_id', '=', False),
     ('misa_invoice_request_refid', '!=', False), '|', ('misa_invoice_no', '=', False), ('misa_invoice_no', '=', ''),
 ], order='date_done desc')
-sample = pickings.filtered(lambda p: p.name in ALWAYS) | pickings.filtered(lambda p: p.name not in ALWAYS)[:SAMPLE]
-print(f"\n{SEP}\n  {len(pickings)} phiếu 'Đã xuất HĐ' không số HĐ — soát {len(sample)} phiếu mẫu\n{SEP}")
+if ONLY_PICKINGS:
+    sample = Picking.search([('name', 'in', ONLY_PICKINGS)])
+else:
+    sample = pickings.filtered(lambda p: p.name in ALWAYS) | pickings.filtered(lambda p: p.name not in ALWAYS)[:SAMPLE]
+print(f"\n{SEP}\n  {len(pickings)} phiếu 'Đã xuất HĐ' không số HĐ — soát {len(sample)} phiếu\n{SEP}")
 
 printed_keys = False
 for picking in sample:
+    if ONLY_PICKINGS:
+        printed_keys = False    # phiếu chỉ định: in đủ cột hóa đơn của từng phiếu
+        print(f"\n  {picking.name}: trạng thái Odoo = {picking.misa_invoice_state} | số HĐ = {picking.misa_invoice_no or '-'}"
+              f" | kiểm lúc {picking.misa_invoice_last_checked}")
     refno, refid = picking.misa_invoice_request_refno, picking.misa_invoice_request_refid
     print(f"\n  {picking.name} ({', '.join(picking.misa_invoice_sale_order_ids.mapped('name'))})"
           f" XK {money(picking.misa_invoice_net_actual_amount)} | tiền HĐ đang ghi {money(picking.misa_invoice_amount)}"
@@ -65,10 +78,13 @@ for picking in sample:
         req = raw_req[0]
         print(f"      đề nghị: có cột inv_no = {'inv_no' in req}"
               f" | inv_no = {req.get('inv_no')!r} | khách {req.get('account_object_name')!r}")
-        customer = req.get('account_object_name')
-        invoices = misa._fetch_misa_json_with_session_retry(
-            INVOICE_URL, config.get_invoice_full_search_payload(customer), "sa_invoice_get (soát)",
-        ).get("Data", {}).get("PageData", []) or []
+        if ONLY_PICKINGS:
+            print(f"      cột trạng thái của đề nghị: {({k: v for k, v in req.items() if any(t in k.lower() for t in INTERESTING)})}")
+        invoices = []
+        for customer in [req.get('account_object_name')] + EXTRA_CUSTOMER_NAMES:
+            invoices += misa._fetch_misa_json_with_session_retry(
+                INVOICE_URL, config.get_invoice_full_search_payload(customer), "sa_invoice_get (soát)",
+            ).get("Data", {}).get("PageData", []) or []
         matched = [inv for inv in invoices if inv.get('sa_invoice_request_refid') == refid]
         print(f"      hóa đơn của khách tải được: {len(invoices)} | trỏ về đề nghị này: {len(matched)}")
         for inv in matched:

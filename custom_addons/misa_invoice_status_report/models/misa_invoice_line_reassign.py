@@ -29,14 +29,20 @@ class SaleOrderMisaInvoiceLineReassign(models.Model):
         return requests_cache[self.name]
 
     def _misa_invoice_linked_requests(self, requests_cache, known_refids):
-        """{refid: đề nghị} đang gắn vào phiếu của đơn (chính phiếu hoặc phiếu nó ăn theo) mà KHÔNG
-        có trong known_refids. Tra lại MISA theo SỐ đề nghị để biết đã phát hành HĐ chưa — chỉ
-        cho đề nghị lạ, đề nghị đã tìm ra theo mã đơn thì khỏi gọi thêm."""
+        """{refid: đề nghị} thuộc phiếu của đơn mà KHÔNG có trong known_refids: đề nghị đang gắn vào
+        phiếu (chính phiếu hoặc phiếu nó ăn theo), và đề nghị ĐẶT TÊN THEO phiếu mà lại đang gắn vào
+        phiếu khác (case thật đề nghị KBC/OUT/13410 gắn vào KBC/OUT/13412 của DH…236901, trong khi
+        KBC/OUT/13410 là phiếu của DH…234115). Tra lại MISA theo SỐ đề nghị để biết đã phát hành HĐ
+        chưa — chỉ cho đề nghị lạ, đề nghị đã tìm ra theo mã đơn thì khỏi gọi thêm."""
         self.ensure_one()
         misa = self.env['misa.api.utils']
+        pickings = self._misa_invoice_done_out_pickings()
+        holders = [picking.misa_invoice_master_picking_id or picking for picking in pickings]
+        holders += list(self.env['stock.picking'].sudo().search([
+            ('misa_invoice_request_refno', 'in', pickings.mapped('name')), ('misa_invoice_request_refid', '!=', False),
+        ]))
         result = {}
-        for picking in self._misa_invoice_done_out_pickings():
-            holder = picking.misa_invoice_master_picking_id or picking
+        for holder in holders:
             refid, refno = holder.misa_invoice_request_refid, holder.misa_invoice_request_refno
             if not refid or not refno or refid in known_refids or refid in result:
                 continue
@@ -47,13 +53,18 @@ class SaleOrderMisaInvoiceLineReassign(models.Model):
                 result[refid] = match
         return result
 
-    def _misa_invoice_pickings_on_requests(self, refids):
-        """{refid: [{picking, order, items}]} — phiếu xuất kho đã xong, thuộc ĐÚNG 1 đơn, gắn vào
-        đề nghị refid (chính nó hoặc phiếu nó ăn theo); items = {mã hàng: SL đã xuất}."""
-        Picking = self.env['stock.picking'].sudo()
-        pickings = Picking.search([
-            '|', ('misa_invoice_request_refid', 'in', list(refids)),
-            ('misa_invoice_master_picking_id.misa_invoice_request_refid', 'in', list(refids)),
+    def _misa_invoice_pickings_on_requests(self, requests):
+        """{refid: [{picking, order, items}]} — phiếu xuất kho đã xong, thuộc ĐÚNG 1 đơn, thuộc đề
+        nghị refid: đang gắn vào nó (chính phiếu hoặc phiếu nó ăn theo), HOẶC đề nghị đặt đúng tên
+        phiếu — sale đặt tên đề nghị theo phiếu là bằng chứng mạnh nhất đề nghị đó của phiếu nào, kể
+        cả khi đề nghị bị gắn nhầm sang phiếu khác. requests = {refid: đề nghị}; items = {mã hàng:
+        SL đã xuất}."""
+        refids = list(requests)
+        refid_by_name = {(req['refno'] or '').strip(): refid for refid, req in requests.items() if req.get('refno')}
+        pickings = self.env['stock.picking'].sudo().search([
+            '|', '|', ('misa_invoice_request_refid', 'in', refids),
+            ('misa_invoice_master_picking_id.misa_invoice_request_refid', 'in', refids),
+            ('name', 'in', list(refid_by_name)),
         ]).filtered(lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing'
                     and len(p.misa_invoice_sale_order_ids) == 1)
         result = defaultdict(list)
@@ -61,10 +72,13 @@ class SaleOrderMisaInvoiceLineReassign(models.Model):
             items = defaultdict(float)
             for move in picking.move_ids.filtered(lambda m: m.state == 'done'):
                 items[item_key(move.product_id.default_code)] += move.quantity
-            refid = picking.misa_invoice_request_refid or picking.misa_invoice_master_picking_id.misa_invoice_request_refid
-            result[refid].append({
-                'picking': picking.name, 'order': picking.misa_invoice_sale_order_ids.name, 'items': dict(items),
-            })
+            entry = {'picking': picking.name, 'order': picking.misa_invoice_sale_order_ids.name, 'items': dict(items)}
+            own_refids = {
+                picking.misa_invoice_request_refid, picking.misa_invoice_master_picking_id.misa_invoice_request_refid,
+                refid_by_name.get(picking.name),
+            }
+            for refid in own_refids & set(refids):
+                result[refid].append(entry)
         return dict(result)
 
     def _misa_invoice_delivered_by_item(self):
@@ -97,7 +111,7 @@ class SaleOrderMisaInvoiceLineReassign(models.Model):
         linked_requests = self._misa_invoice_linked_requests(requests_cache, set(own))
         requests = {**own, **linked_requests}
         load_lines(requests)
-        linked = self._misa_invoice_pickings_on_requests(set(requests))
+        linked = self._misa_invoice_pickings_on_requests(requests)
 
         # Đề nghị có phiếu của CHÍNH đơn này gắn vào — kể cả đề nghị đã tìm ra theo mã đơn (MISA
         # tìm theo nhiều trường, đề nghị trùng tên phiếu vẫn ra dù dòng bỏ trống mã đơn).

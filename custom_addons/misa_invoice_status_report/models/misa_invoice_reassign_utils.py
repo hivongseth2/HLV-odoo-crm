@@ -10,6 +10,12 @@ def item_key(code):
     return (code or '').strip().upper()
 
 
+def name_key(name):
+    """Tên hàng chuẩn hóa để so tên trên HĐ MISA với tên sản phẩm Odoo: gộp khoảng trắng, không
+    phân biệt hoa/thường. None/False → ''."""
+    return ' '.join((name or '').split()).casefold()
+
+
 def owned_qty(order_name, line_order, line_qty, moves):
     """SL của 1 dòng đề nghị tính cho đơn order_name sau khi chuyển dòng ghi nhầm.
 
