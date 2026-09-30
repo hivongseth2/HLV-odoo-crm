@@ -10,6 +10,18 @@ def item_key(code):
     return (code or '').strip().upper()
 
 
+def owned_qty(order_name, line_order, line_qty, moves):
+    """SL của 1 dòng đề nghị tính cho đơn order_name sau khi chuyển dòng ghi nhầm.
+
+    Nhận: line_order = mã đơn ghi trên dòng ('' nếu bỏ trống), line_qty = SL dòng, moves = phần đã
+    chuyển của dòng này [(mã đơn nhận, phiếu, SL)] (kết quả find_mislabeled_lines, [] nếu không).
+    Trả: dòng ghi order_name giữ SL trừ phần đã chuyển đi; cộng phần chuyển đến order_name.
+    Dòng không liên quan → 0.
+    """
+    own = line_qty - sum(qty for _target, _picking, qty in moves) if line_order == order_name else 0.0
+    return own + sum(qty for target, _picking, qty in moves if target == order_name)
+
+
 def find_mislabeled_lines(lines, delivered, linked_pickings):
     """Phần dòng đề nghị ĐÃ phát hành HĐ thật ra là hàng của phiếu P thuộc đơn Y, dù dòng ghi mã
     đơn X khác hoặc bỏ trống mã đơn. Case thật: đề nghị KBC/OUT/09323 ghi QHTIG308 ×5 + TEFLON
