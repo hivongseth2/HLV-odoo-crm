@@ -376,7 +376,7 @@
                             <div class="miv-tile-icon"><i class="fa fa-pie-chart"/></div>
                             <div class="miv-tile-body">
                                 <div class="miv-tile-value"><t t-esc="state.data.partial_coverage_count"/></div>
-                                <div class="miv-tile-label">Xuất HĐ 1 phần (theo đơn)</div>
+                                <div class="miv-tile-label">HĐ phủ 1 phần đơn (theo MISA)</div>
                             </div>
                         </div>
                     </div>
@@ -945,7 +945,7 @@
                             </label>
                             <label class="miv-daily-week-toggle" title="Đơn đã có hóa đơn nhưng CHƯA phủ đủ 100% giá trị đã xuất kho — tính theo mã đơn hàng qua mọi đề nghị tìm được, bắt được cả case chỉ 1 phiếu đã 'Đã xuất HĐ' nhưng tiền không đủ.">
                                 <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.ordersTab.partialCoverageOnly" t-on-change="onOrdersPartialCoverageToggle"/>
-                                Chỉ đơn xuất HĐ 1 phần
+                                Chỉ đơn HĐ phủ 1 phần (theo MISA)
                             </label>
                             <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportOrdersExcel">
                                 <i class="fa fa-file-excel-o"/> Xuất Excel
@@ -988,8 +988,8 @@
                                                 <t t-esc="row.state_label"/>
                                             </span>
                                             <span class="miv-badge miv-badge-state-requested" t-if="row.partial_coverage"
-                                                  title="Đã có hóa đơn nhưng CHƯA phủ đủ 100% giá trị đã xuất kho — xem chi tiết trong drawer.">
-                                                1 phần
+                                                  title="Tổng tiền hóa đơn chưa phủ đủ tổng tiền đơn — xem chi tiết trong drawer.">
+                                                Thiếu tiền HĐ
                                             </span>
                                         </td>
                                         <td>

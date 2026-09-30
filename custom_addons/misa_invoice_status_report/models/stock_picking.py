@@ -59,7 +59,7 @@ MISA_ORDER_STATE_LABELS = {
     'not_checked': 'Chưa kiểm tra',
     'missing': 'Chưa có đề nghị xuất HĐ',
     'requested': 'Đã đề nghị, chờ HĐ',
-    'partial': 'Một phần đã xuất HĐ',
+    'partial': 'Còn phiếu chưa có HĐ',
     'invoiced': 'Đã xuất hóa đơn',
 }
 
@@ -2723,7 +2723,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # đó chỉ được tính REACTIVE khi bước refno nhanh báo 'missing'/mismatch (xem
         # _misa_invoice_reconcile_order_coverage), nên có thể vẫn là False (chưa từng tính) dù
         # thực tế đang thiếu tiền như case này — OR thêm cả 2 tín hiệu để không bỏ sót.
-        value_partial_coverage = 0 < invoiced_amount < (order.amount_total - MISA_INVOICE_AMOUNT_TOLERANCE)
+        # Tiền HĐ = 0 vẫn tính là thiếu khi đã có phiếu báo 'invoiced' (case thật DH...235696:
+        # phiếu ăn theo đề nghị mà tiền đề nghị đã dồn hết cho phiếu khác) — chỉ bỏ qua đơn
+        # chưa có phiếu nào có HĐ, nhãn chính đã nói rõ là chưa xuất.
+        value_partial_coverage = invoiced_amount < (order.amount_total - MISA_INVOICE_AMOUNT_TOLERANCE) and (
+            invoiced_amount > 0 or overall_state in ('partial', 'invoiced')
+        )
         partial_coverage = value_partial_coverage or 'partial' in order_pickings.mapped('misa_invoice_order_coverage')
         return {
             'id': order.id,
@@ -2803,7 +2808,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         state/saler_code lọc theo PHIẾU (không phải theo trạng thái tổng hợp của đơn) — VD
         lọc "Đã xuất HĐ" sẽ ra các đơn có ít nhất 1 phiếu đã xuất HĐ trong phạm vi đang lọc
-        (đơn "Một phần đã xuất HĐ" vẫn xuất hiện), đủ dùng để thu hẹp danh sách mà không cần
+        (đơn "Còn phiếu chưa có HĐ" vẫn xuất hiện), đủ dùng để thu hẹp danh sách mà không cần
         tính lại state tổng hợp cho toàn bộ đơn trước khi phân trang.
 
         states: list nhiều lựa chọn cùng lúc (VD ['missing', 'partial']) — OR với nhau, dùng
@@ -2820,7 +2825,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # 2 domain tách riêng: base_picking_ids quyết định "phiếu nào thuộc phạm vi đang lọc
         # ngày/tháng" (dùng để tính state/tiền hiển thị của TOÀN BỘ đơn, không bị ảnh hưởng
         # bởi filter trạng thái/sale) — filter_picking_ids thêm state/saler_code CHỈ để chọn
-        # đơn nào lọt vào danh sách (đơn "Một phần đã xuất HĐ" vẫn hiện đủ thông tin, không
+        # đơn nào lọt vào danh sách (đơn "Còn phiếu chưa có HĐ" vẫn hiện đủ thông tin, không
         # bị cắt bớt phiếu chỉ vì lọc "Đã xuất HĐ").
         base_picking_domain = self._misa_invoice_dashboard_base_domain(
             date_from, date_to, invoice_date_from, invoice_date_to
@@ -2852,7 +2857,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         sub_domains.append(common_domain + [('misa_invoice_state', '=', key)])
                 picking_filter_ids.update(Picking.search(expression.OR(sub_domains)).ids)
             if value_gap:
-                # "Còn nợ tiền HĐ (giá trị)" — bắt case TỪNG PHIẾU của đơn đều tự báo 'invoiced'
+                # "Thiếu tiền HĐ" — bắt case TỪNG PHIẾU của đơn đều tự báo 'invoiced'
                 # (không missing/mismatch ở mức phiếu) nhưng invoiced_amount (đã quy về đại diện,
                 # khử trùng) vẫn KHÔNG đủ amount_total (xem value_partial_coverage trong
                 # _misa_invoice_order_row). misa_invoice_order_coverage (dùng bởi key 'partial'
