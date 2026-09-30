@@ -10,9 +10,16 @@ phòng tìm hóa đơn theo tên khách — và hóa đơn NHÁP (chưa có số
 xuất HĐ. Case thật KBC/OUT/13489 (DH125524949235029): đề nghị KBC/OUT/13489 chưa phát hành, phiếu
 báo đã xuất HĐ 8.726.400 đ với số HĐ trống.
 
+Soát mẫu 30/09/2026 (bin/check_misa_invoice_unnumbered_invoiced.py) trên 461 phiếu thấy 2 nhóm:
+  - Đề nghị ĐÃ phát hành từ sau (KBC/OUT/13249, 12537...): lần kiểm tra đầu hóa đơn còn nháp nên
+    ghi "Đã xuất HĐ" không số, cron không kiểm lại phiếu đã xuất HĐ nên số trống mãi. Kiểm tra lại
+    → đi đường chính, ĐIỀN số HĐ, vẫn "Đã xuất HĐ".
+  - Đề nghị VẪN chưa phát hành, hóa đơn nháp (KBC/OUT/13489, 13577, TSN/OUT/14807...): kiểm tra lại
+    → về "Đã đề nghị, chờ HĐ", hết tính tiền HĐ chưa có.
+
 Chỉ lấy phiếu TỰ có đề nghị (không ăn theo phiếu khác) và không có lượt khớp HĐ hải quan — phiếu
 hải quan luôn mang số HĐ của dòng hải quan. Chạy thật = action_check_misa_invoice_status từng
-phiếu (hỏi lại MISA), phiếu đề nghị chưa phát hành về "Đã đề nghị, chờ HĐ".
+phiếu (hỏi lại MISA).
 
 DRY_RUN = True (mặc định): chỉ liệt kê. Đặt False để kiểm tra lại thật (gọi MISA, tự commit).
 
