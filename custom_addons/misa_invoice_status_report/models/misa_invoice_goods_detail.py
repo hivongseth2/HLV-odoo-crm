@@ -102,7 +102,7 @@ class StockPickingMisaInvoiceGoodsDetail(models.Model):
         không gọi MISA), scope theo đúng mã sale đang xem."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         picking = self.sudo().browse(picking_id).exists()
-        if not picking or picking.misa_invoice_saler_code != code:
+        if not picking or not picking._misa_invoice_public_code_matches(code):
             raise UserError("Bạn không có quyền xem phiếu này.")
         return self.sudo()._misa_invoice_goods_line_rows(picking)
 
@@ -114,7 +114,7 @@ class StockPickingMisaInvoiceGoodsDetail(models.Model):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         order = self.env['sale.order'].sudo().browse(order_id).exists()
         if not order or not order.misa_invoice_picking_ids.filtered(
-            lambda p: p.misa_invoice_saler_code == code
+            lambda p: p._misa_invoice_public_code_matches(code)
         ):
             raise UserError("Bạn không có quyền xem đơn hàng này.")
         return self.sudo()._misa_invoice_order_goods_rows(order)

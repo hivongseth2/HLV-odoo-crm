@@ -19,6 +19,11 @@ from .stock_picking import MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABE
 # KHÔNG còn dùng chung 1 mật khẩu cho mọi sale như trước (đã bỏ, vì lộ hết mã sale của người
 # khác cho bất kỳ ai biết mật khẩu).
 
+# Giá trị ô "Mã sale" = xem gộp MỌI mã (cả phiếu chưa gắn mã) — chỉ nhóm "Đối soát XHD" (người
+# quản lý), xem _misa_invoice_validate_public_saler_code. Không trùng được mã thật nào vì mã
+# sale MISA không có dấu "_" ở đầu.
+MISA_INVOICE_PUBLIC_ALL_SALERS = '__all__'
+
 
 class StockPickingMisaInvoicePublicApi(models.Model):
     _inherit = 'stock.picking'
@@ -77,13 +82,31 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         ]
 
     def _misa_invoice_validate_public_saler_code(self, saler_code):
+        """Mã sale đã xác thực quyền của user đang đăng nhập. "Tất cả"
+        (MISA_INVOICE_PUBLIC_ALL_SALERS, chỉ nhóm Đối soát XHD) trả False — các hàm nội bộ vốn
+        hiểu saler_code rỗng là không lọc theo sale; so từng phiếu thì dùng
+        _misa_invoice_public_code_matches."""
         code = (saler_code or '').strip()
         if not code:
             raise UserError("Vui lòng chọn mã sale của bạn.")
+        if code == MISA_INVOICE_PUBLIC_ALL_SALERS:
+            if not self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+                raise UserError("Chỉ quản lý (nhóm Đối soát XHD) được xem tất cả mã sale.")
+            return False
         registry = {c.upper() for c in self.get_misa_invoice_saler_code_registry()}
         if code.upper() not in registry:
             raise UserError("Mã sale không hợp lệ, vui lòng chọn lại.")
         return code
+
+    def _misa_invoice_public_code_matches(self, code):
+        """Phiếu này nằm trong phạm vi mã đã xác thực (kết quả _misa_invoice_validate_public_saler_code)
+        — code False ("Tất cả") = mọi phiếu."""
+        self.ensure_one()
+        return not code or self.misa_invoice_saler_code == code
+
+    @staticmethod
+    def _misa_invoice_public_source_note(code):
+        return 'trang public — %s' % ('mã sale %s' % code if code else 'tất cả mã sale')
 
     def _misa_invoice_public_multi_request_order_ids(self, base_domain):
         """Tìm các đơn bán 'xuất HĐ nhiều đợt' (>= 2 đề nghị/phiếu đại diện KHÁC NHAU cùng
@@ -150,9 +173,9 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         số liệu tổng quan luôn nhất quán dù đang xem tab nào."""
         Picking = self.sudo()
         code = self._misa_invoice_validate_public_saler_code(saler_code)
-        base_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to) + [
-            ('misa_invoice_saler_code', '=', code),
-        ]
+        base_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to)
+        if code:
+            base_domain += [('misa_invoice_saler_code', '=', code)]
         domain = list(base_domain) + Picking._misa_invoice_public_list_state_domain(state, states)
         if search:
             domain += [
@@ -185,13 +208,15 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         }
 
     @api.model
-    def get_misa_invoice_public_daily_stats(self, saler_code, date_from=False, date_to=False, weekly=False):
-        """Số liệu 'theo ngày' (tiền xuất kho vs tiền đã xuất HĐ) cho trang public, scope theo
-        đúng 1 mã sale — tái dùng thẳng get_misa_invoice_daily_stats (dashboard nội bộ) sau khi
-        xác thực mã sale, tránh viết lại logic gộp theo ngày/tuần."""
+    def get_misa_invoice_public_daily_stats(
+        self, saler_code, date_from=False, date_to=False, weekly=False, monthly=False,
+    ):
+        """Số liệu theo ngày/tuần/tháng (tiền xuất kho vs tiền đã xuất HĐ) cho trang public, scope
+        theo đúng 1 mã sale — tái dùng thẳng get_misa_invoice_daily_stats (dashboard nội bộ) sau
+        khi xác thực mã sale, tránh viết lại logic gộp."""
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         return self.sudo().get_misa_invoice_daily_stats(
-            date_from=date_from, date_to=date_to, saler_code=code, weekly=weekly,
+            date_from=date_from, date_to=date_to, saler_code=code, weekly=weekly, monthly=monthly,
         )
 
     @api.model
@@ -224,7 +249,7 @@ class StockPickingMisaInvoicePublicApi(models.Model):
     def action_public_check(self, picking_ids, saler_code):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         pickings = self.sudo().browse(picking_ids or []).exists().filtered(
-            lambda p: p.misa_invoice_saler_code == code
+            lambda p: p._misa_invoice_public_code_matches(code)
         )
         if not pickings:
             return []
@@ -237,18 +262,18 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         if not reason:
             raise UserError("Vui lòng nhập lý do.")
         pickings = self.sudo().browse(picking_ids or []).exists().filtered(
-            lambda p: p.misa_invoice_saler_code == code
+            lambda p: p._misa_invoice_public_code_matches(code)
         )
         if not pickings:
             raise UserError("Không tìm thấy phiếu phù hợp với mã sale của bạn.")
-        pickings._misa_invoice_apply_exception(reason, source_note='trang public — mã sale %s' % code)
+        pickings._misa_invoice_apply_exception(reason, source_note=self._misa_invoice_public_source_note(code))
         return {'count': len(pickings)}
 
     @api.model
     def action_public_unmark_exception(self, picking_ids, saler_code):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         pickings = self.sudo().browse(picking_ids or []).exists().filtered(
-            lambda p: p.misa_invoice_saler_code == code
+            lambda p: p._misa_invoice_public_code_matches(code)
         )
         if pickings:
             pickings.action_unmark_misa_invoice_exception()
@@ -258,9 +283,9 @@ class StockPickingMisaInvoicePublicApi(models.Model):
     def action_public_manual_link(self, picking_id, saler_code, refno):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         picking = self.sudo().browse(picking_id).exists()
-        if not picking or picking.misa_invoice_saler_code != code:
+        if not picking or not picking._misa_invoice_public_code_matches(code):
             raise UserError("Không tìm thấy phiếu phù hợp với mã sale của bạn.")
-        return picking.action_apply_manual_invoice_link(refno, source_note='trang public — mã sale %s' % code)
+        return picking.action_apply_manual_invoice_link(refno, source_note=self._misa_invoice_public_source_note(code))
 
     @api.model
     def action_public_check_order(self, order_id, saler_code):
@@ -272,7 +297,7 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         order = self.env['sale.order'].sudo().browse(order_id).exists()
         if not order:
             raise UserError("Không tìm thấy đơn hàng.")
-        if not order.misa_invoice_picking_ids.filtered(lambda p: p.misa_invoice_saler_code == code):
+        if not order.misa_invoice_picking_ids.filtered(lambda p: p._misa_invoice_public_code_matches(code)):
             raise UserError("Không tìm thấy đơn hàng phù hợp với mã sale của bạn.")
         return self.sudo().action_check_misa_invoice_order(order.id)
 
@@ -335,7 +360,7 @@ class StockPickingMisaInvoicePublicApi(models.Model):
     def get_misa_invoice_public_picking_row(self, picking_id, saler_code):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         picking = self.sudo().browse(picking_id).exists()
-        if not picking or picking.misa_invoice_saler_code != code:
+        if not picking or not picking._misa_invoice_public_code_matches(code):
             return False
         today = fields.Date.context_today(self)
         return self._misa_invoice_picking_to_row(picking, today)
@@ -344,6 +369,6 @@ class StockPickingMisaInvoicePublicApi(models.Model):
     def get_misa_invoice_public_picking_siblings(self, picking_id, saler_code):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         picking = self.sudo().browse(picking_id).exists()
-        if not picking or picking.misa_invoice_saler_code != code:
+        if not picking or not picking._misa_invoice_public_code_matches(code):
             return []
         return self._misa_invoice_picking_siblings(picking)

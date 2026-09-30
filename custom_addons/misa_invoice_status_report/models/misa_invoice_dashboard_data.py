@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from odoo import api, fields, models
 
+from .misa_invoice_gap_utils import month_key, month_range
 from .stock_picking import MISA_INVOICE_RECONCILE_GROUP, MISA_INVOICE_STATE_LABELS, MISA_INVOICE_UNASSIGNED_SALER
 
 # Số liệu tổng hợp cho dashboard OWL nội bộ (KPI tiles, bảng theo kho/sale/khách hàng, bảng
@@ -289,12 +290,16 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
     @api.model
     def get_misa_invoice_daily_stats(
         self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
-        saler_code=False, weekly=False,
+        saler_code=False, weekly=False, monthly=False,
     ):
         """Bảng 'Theo ngày': tổng tiền xuất kho vs tổng tiền đã xuất HĐ, theo từng ngày (hoặc
-        từng tuần nếu weekly=True) trong phạm vi lọc, lọc thêm được theo 1 nhân viên sale.
-        Gộp bằng Python (không dùng read_group theo granularity ngày/tuần) để tránh phụ
-        thuộc định dạng nhãn ngày theo locale của Odoo, đảm bảo sort/hiển thị ổn định."""
+        từng tuần nếu weekly=True, từng tháng nếu monthly=True) trong phạm vi lọc, lọc thêm được
+        theo 1 nhân viên sale. Gộp bằng Python (không dùng read_group theo granularity ngày/tuần)
+        để tránh phụ thuộc định dạng nhãn ngày theo locale của Odoo, đảm bảo sort/hiển thị ổn định.
+
+        Mỗi bucket kèm pending_count / pending_order_count: số phiếu / số đơn bán còn chưa xuất
+        HĐ — đúng định nghĩa bộ lọc mặc định "Chưa xử lý" của danh sách (chưa invoiced, không
+        ngoại lệ), để bấm vào 1 tháng thì danh sách hiện đúng chừng đó phiếu."""
         Picking = self.sudo()
         domain = self._misa_invoice_dashboard_base_domain(
             date_from, date_to, invoice_date_from, invoice_date_to
@@ -309,7 +314,13 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
             if not picking.date_done:
                 continue
             day = picking.date_done.date()
-            if weekly:
+            if monthly:
+                key = month_key(day)
+                label = "Tháng %s/%s" % (day.month, day.year)
+                first, last = month_range(day)
+                bucket_date_from = fields.Date.to_string(first)
+                bucket_date_to = fields.Date.to_string(last)
+            elif weekly:
                 iso_year, iso_week, _iso_weekday = day.isocalendar()
                 key = (iso_year, iso_week)
                 label = "Tuần %s/%s" % (iso_week, iso_year)
@@ -323,8 +334,17 @@ class StockPickingMisaInvoiceDashboardData(models.Model):
             bucket = buckets.setdefault(key, {
                 'label': label, 'actual_amount': 0.0, 'invoice_amount': 0.0,
                 'date_from': bucket_date_from, 'date_to': bucket_date_to,
+                'pending_count': 0, 'pending_order_ids': set(),
             })
             bucket['actual_amount'] += picking.misa_invoice_net_actual_amount or 0.0
             bucket['invoice_amount'] += picking.misa_invoice_allocated_amount or 0.0
+            if picking.misa_invoice_state != 'invoiced' and not picking.misa_invoice_exception:
+                bucket['pending_count'] += 1
+                bucket['pending_order_ids'].update(picking.misa_invoice_sale_order_ids.ids)
 
-        return [buckets[key] for key in sorted(buckets.keys())]
+        result = []
+        for key in sorted(buckets.keys()):
+            bucket = buckets[key]
+            bucket['pending_order_count'] = len(bucket.pop('pending_order_ids'))
+            result.append(bucket)
+        return result
