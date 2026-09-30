@@ -436,6 +436,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # trong đợt kiểm tra này, chỉ cho phiếu ĐẦU TIÊN nhận đề nghị tìm được qua mã đơn đó,
         # tránh mỗi phiếu tưởng nhầm mình đã xuất HĐ full tiền của cùng 1 đề nghị (double-count).
         claimed_order_refnos = {}
+        # Đơn đã soát theo đơn có phiếu vừa đổi trạng thái / số HĐ — soát lại theo đơn ngay cuối
+        # hàm: tiền HĐ của phiếu lấy từ số theo đơn, không soát lại thì HĐ vừa phát hành vẫn bị
+        # tính 0 đ tới khi cron (20 đơn/lượt, 1 lần/ngày) lượt tới (30/09/2026: 9 đơn tháng 08 như
+        # vậy, VD DH125524949235547 — HĐ 00005877 đã có, đơn vẫn báo 0 đ).
+        stale_orders = self.env['sale.order']
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
@@ -616,7 +621,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     _logger.warning("Không parse được ngày hóa đơn MISA: %s", invoice_date)
 
             old_state = picking.misa_invoice_state
+            old_invoice_no = picking.misa_invoice_no or ''
             picking.write(vals)
+            if old_state != status['state'] or old_invoice_no != (vals['misa_invoice_no'] or ''):
+                stale_orders |= picking.misa_invoice_sale_order_ids.filtered('misa_invoice_order_checked_at')
 
             if old_state != status['state']:
                 picking.message_post(
@@ -661,6 +669,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if extra_masters_to_check:
             results += extra_masters_to_check.action_check_misa_invoice_status(request_map=request_map)
         (self | extra_masters_to_check)._misa_invoice_dedupe_request_refid_groups()
+        if stale_orders:
+            # Lỗi soát theo đơn không được làm hỏng kết quả kiểm tra phiếu vừa ghi — đơn nào lỗi
+            # thì cron soát lại sau (_misa_invoice_refresh_order_truth tự bỏ qua đơn lỗi).
+            try:
+                stale_orders._misa_invoice_refresh_order_truth()
+            except Exception:
+                _logger.exception("❌ [MISA ORDER] Lỗi soát lại theo đơn sau khi kiểm tra phiếu %s", self.mapped('name'))
         return results
 
     def _misa_invoice_request_line_amount(self, lines):
