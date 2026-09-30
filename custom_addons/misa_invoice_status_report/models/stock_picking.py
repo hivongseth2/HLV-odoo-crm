@@ -2838,7 +2838,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             value_gap = 'value_gap' in states
             normal_states = [s for s in states if s != 'value_gap']
             partially_invoiced_ids = (
-                self._misa_invoice_partially_invoiced_order_ids() if 'partially_invoiced' in normal_states else []
+                self._misa_invoice_partially_invoiced_scope()[0] if 'partially_invoiced' in normal_states else []
             )
             picking_filter_ids = set()
             if normal_states:

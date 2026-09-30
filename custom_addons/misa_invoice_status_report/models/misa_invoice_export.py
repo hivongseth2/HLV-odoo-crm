@@ -114,7 +114,7 @@ class StockPickingMisaInvoiceExport(models.Model):
     @api.model
     def export_misa_invoice_public_list_excel(
         self, saler_code, search=False, state=False, states=None, date_from=False, date_to=False,
-        multi_order_group=False, multi_request=False, partially_invoiced=False,
+        multi_order_group=False, multi_request=False,
     ):
         """Xuất Excel TOÀN BỘ phiếu khớp filter hiện tại của tab 'Phiếu xuất kho' trên
         /misa_sale_status — tái dùng NGUYÊN get_misa_invoice_public_list (kể cả multi-select
@@ -122,7 +122,7 @@ class StockPickingMisaInvoiceExport(models.Model):
         result = self.get_misa_invoice_public_list(
             saler_code=saler_code, search=search, state=state, states=states,
             date_from=date_from, date_to=date_to, multi_order_group=multi_order_group,
-            multi_request=multi_request, partially_invoiced=partially_invoiced, limit=10000, offset=0,
+            multi_request=multi_request, limit=10000, offset=0,
         )
         rows = [
             [
@@ -340,7 +340,7 @@ class StockPickingMisaInvoiceExport(models.Model):
     @api.model
     def export_misa_invoice_public_picking_detail_lines_excel(
         self, saler_code, search=False, state=False, states=None, date_from=False, date_to=False,
-        multi_order_group=False, multi_request=False, partially_invoiced=False,
+        multi_order_group=False, multi_request=False,
     ):
         """Xuất Excel CHI TIẾT TỪNG DÒNG HÀNG cho tab 'Phiếu xuất kho' trên /misa_sale_status —
         đúng cặp với export_misa_invoice_public_list_excel (danh sách phiếu), giống hệt cách
@@ -349,7 +349,7 @@ class StockPickingMisaInvoiceExport(models.Model):
         result = self.get_misa_invoice_public_list(
             saler_code=saler_code, search=search, state=state, states=states,
             date_from=date_from, date_to=date_to, multi_order_group=multi_order_group,
-            multi_request=multi_request, partially_invoiced=partially_invoiced, limit=10000, offset=0,
+            multi_request=multi_request, limit=10000, offset=0,
         )
         Picking = self.sudo()
         detail_rows = []

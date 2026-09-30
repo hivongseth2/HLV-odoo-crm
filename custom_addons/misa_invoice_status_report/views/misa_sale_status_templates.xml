@@ -416,6 +416,7 @@
                                 <label class="msu-multiselect-item"><input type="checkbox" value="requested"/> Đã đề nghị, chờ HĐ</label>
                                 <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
                                 <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất HĐ</label>
+                                <label class="msu-multiselect-item" title="Đơn đã có HĐ nhưng tổng HĐ chưa đủ tiền xuất kho (giao 1 lần xuất HĐ nhiều đợt, hoặc giao nhiều lần) — hiện các phiếu còn thiếu tiền HĐ."><input type="checkbox" value="partially_invoiced"/> Đơn đã xuất HĐ 1 phần</label>
                                 <label class="msu-multiselect-item"><input type="checkbox" value="exception"/> Ngoại lệ</label>
                             </div>
                         </span>
@@ -439,9 +440,6 @@
                         </label>
                         <label class="msu-check-label">
                             <input type="checkbox" id="msu-multi-request"/> Đơn xuất nhiều lần (nhiều đề nghị / 1 đơn)
-                        </label>
-                        <label class="msu-check-label" title="Đơn giao nhiều phiếu, đã có phiếu xuất HĐ nhưng còn phiếu chưa có HĐ — để nguyên lọc trạng thái mặc định là ra đúng các phiếu còn thiếu HĐ.">
-                            <input type="checkbox" id="msu-partially-invoiced"/> Giao nhiều lần, còn phiếu chưa có HĐ
                         </label>
                     </div>
 
@@ -525,7 +523,7 @@
                                     <label class="msu-multiselect-item"><input type="checkbox" value="missing"/> Chưa xuất</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="invoiced"/> Đã xuất đủ</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="partial"/> HĐ phủ 1 phần đơn (theo MISA)</label>
-                                    <label class="msu-multiselect-item"><input type="checkbox" value="partially_invoiced"/> Giao nhiều lần, còn phiếu chưa có HĐ</label>
+                                    <label class="msu-multiselect-item"><input type="checkbox" value="partially_invoiced"/> Đã xuất HĐ 1 phần (hàng đã giao còn thiếu HĐ)</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="value_gap"/> Thiếu tiền HĐ</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="mismatch"/> Lệch tiền</label>
                                     <label class="msu-multiselect-item"><input type="checkbox" value="not_checked"/> Chưa kiểm tra</label>
@@ -807,7 +805,7 @@
                         allCode: '', // giá trị option "Tất cả" — server chỉ gửi cho quản lý
                         codeTokenMap: {},
                         search: '', stateFilters: [], dateFrom: '', dateTo: '',
-                        multiOrderGroup: false, multiRequest: false, partiallyInvoiced: false,
+                        multiOrderGroup: false, multiRequest: false,
                         page: 1, total: 0, rows: [], selected: {},
                         activeTab: 'pickings',
                         orders: {search: '', filters: [], page: 1, total: 0, rows: [], loaded: false},
@@ -1364,7 +1362,7 @@
                     // thái cùng lúc, OR với nhau ở backend) thay vì 1 select đơn lẻ như trước =====
                     var ORDERS_FILTER_LABELS = {
                         missing: 'Chưa xuất', invoiced: 'Đã xuất đủ', partial: 'HĐ phủ 1 phần đơn (theo MISA)',
-                        value_gap: 'Thiếu tiền HĐ', partially_invoiced: 'Giao nhiều lần, còn phiếu chưa có HĐ',
+                        value_gap: 'Thiếu tiền HĐ', partially_invoiced: 'Đã xuất HĐ 1 phần',
                         mismatch: 'Lệch tiền', not_checked: 'Chưa kiểm tra',
                     };
                     function updateOrdersFilterLabel() {
@@ -1922,7 +1920,6 @@
                             saler_code: state.salerCode, search: state.search, states: state.stateFilters,
                             date_from: state.dateFrom, date_to: state.dateTo,
                             multi_order_group: state.multiOrderGroup, multi_request: state.multiRequest,
-                            partially_invoiced: state.partiallyInvoiced,
                             limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
                         }).then(function(res) {
                             var data = res.data || {};
@@ -1957,7 +1954,7 @@
                     // chưa invoiced + chưa ngoại lệ) — xem _misa_invoice_public_list_state_domain. =====
                     var PICKING_STATE_FILTER_LABELS = {
                         missing: 'Chưa có đề nghị', requested: 'Đã đề nghị, chờ HĐ', not_checked: 'Chưa kiểm tra',
-                        invoiced: 'Đã xuất HĐ', exception: 'Ngoại lệ',
+                        invoiced: 'Đã xuất HĐ', partially_invoiced: 'Đơn đã xuất HĐ 1 phần', exception: 'Ngoại lệ',
                     };
                     function updateStateFilterLabel() {
                         var sel = state.stateFilters || [];
@@ -1991,7 +1988,6 @@
                             saler_code: state.salerCode, search: state.search, states: state.stateFilters,
                             date_from: state.dateFrom, date_to: state.dateTo,
                             multi_order_group: state.multiOrderGroup, multi_request: state.multiRequest,
-                            partially_invoiced: state.partiallyInvoiced,
                         }).then(function(res) {
                             if (res.attachment_id) {
                                 window.location.href = '/web/content/' + res.attachment_id + '?download=true';
@@ -2012,10 +2008,6 @@
                     });
                     document.getElementById('msu-multi-request').addEventListener('change', function() {
                         state.multiRequest = this.checked;
-                        loadList(1);
-                    });
-                    document.getElementById('msu-partially-invoiced').addEventListener('change', function() {
-                        state.partiallyInvoiced = this.checked;
                         loadList(1);
                     });
                     // Ngày xuất kho là filter DÙNG CHUNG cho cả 2 tab + đối chiếu tổng — đổi 1
