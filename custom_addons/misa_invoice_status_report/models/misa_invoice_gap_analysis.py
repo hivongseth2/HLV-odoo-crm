@@ -96,12 +96,47 @@ class StockPickingMisaInvoiceGapAnalysis(models.Model):
         """, (picking_ids, MISA_INVOICE_AMOUNT_TOLERANCE, checked_before))
         return [row[0] for row in self.env.cr.fetchall()]
 
+    def _misa_invoice_stale_order_ids(self, domain, limit):
+        """Id các đơn đã soát theo đơn mà số đang lưu CŨ hơn thông tin phiếu: có phiếu (trong
+        domain, tự có đề nghị — không phải HĐ hải quan) được kiểm với MISA SAU lần thử soát đơn gần
+        nhất và đang mang 1 số HĐ chưa có trong nguồn của đơn (misa_invoice_order_sources).
+
+        Vì sao cần riêng: tiền HĐ của phiếu đã soát theo đơn lấy từ số theo đơn, nên HĐ phát hành
+        sau lần soát bị tính 0 đ tới khi đơn được soát lại — mà lượt soát đơn đang lệch chỉ 1
+        lần/ngày, và soát lan sang đơn cùng đề nghị cũng bỏ qua đơn đã thử trong ngày (30/09/2026:
+        6 đơn Dongjin cùng đề nghị KBC/OUT/13409 báo 0 đ dù HĐ 00005894 đã có). Soát xong thì lần
+        thử mới hơn lần kiểm phiếu → tự hết khớp điều kiện, không soát lặp."""
+        picking_ids = self.search(domain).ids
+        if not picking_ids:
+            return []
+        self.env.cr.execute("""
+            SELECT so.id
+            FROM stock_picking p
+            JOIN misa_invoice_picking_sale_order_rel rel ON rel.picking_id = p.id
+            JOIN sale_order so ON so.id = rel.order_id
+            WHERE p.id = ANY(%s)
+              AND so.misa_invoice_order_checked_at IS NOT NULL
+              AND p.misa_invoice_state = 'invoiced'
+              AND p.misa_invoice_request_refid IS NOT NULL
+              AND COALESCE(p.misa_invoice_no, '') <> ''
+              AND p.misa_invoice_last_checked > COALESCE(so.misa_invoice_order_attempted_at, so.misa_invoice_order_checked_at)
+              AND POSITION(('HĐ ' || p.misa_invoice_no) IN COALESCE(so.misa_invoice_order_sources, '')) = 0
+            GROUP BY so.id
+            ORDER BY so.id
+            LIMIT %s
+        """, (picking_ids, limit))
+        return [row[0] for row in self.env.cr.fetchall()]
+
     def _cron_refresh_misa_invoice_orders(self, limit=20):
-        """Cron: soát theo đơn với MISA các đơn đang lệch, mỗi đơn tối đa 1 lần/ngày — đơn vừa
-        được kế toán xuất HĐ thêm sẽ tự hết lệch trong vòng 1 ngày."""
-        order_ids = self._misa_invoice_gap_order_ids(
-            self._misa_invoice_dashboard_base_domain(), fields.Datetime.now() - timedelta(days=1),
-        )
+        """Cron: soát theo đơn với MISA — trước hết các đơn có số theo đơn cũ hơn phiếu (HĐ vừa
+        phát hành, xem _misa_invoice_stale_order_ids, không giới hạn 1 lần/ngày), rồi các đơn đang
+        lệch, mỗi đơn tối đa 1 lần/ngày — đơn vừa được kế toán xuất HĐ thêm sẽ tự hết lệch."""
+        domain = self._misa_invoice_dashboard_base_domain()
+        order_ids = self._misa_invoice_stale_order_ids(domain, limit)
+        order_ids += [
+            oid for oid in self._misa_invoice_gap_order_ids(domain, fields.Datetime.now() - timedelta(days=1))
+            if oid not in order_ids
+        ]
         self.env['sale.order'].sudo().browse(order_ids[:limit])._misa_invoice_refresh_order_truth()
 
     @api.model
