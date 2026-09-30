@@ -128,6 +128,25 @@ class StockPickingMisaInvoicePublicApi(models.Model):
                 multi_ids.append(order_id)
         return multi_ids
 
+    def _misa_invoice_partially_invoiced_order_ids(self):
+        """Id các đơn bán giao NHIỀU phiếu mà mới xuất HĐ một phần: có ít nhất 1 phiếu đã xuất HĐ
+        và ít nhất 1 phiếu chưa (phiếu ngoại lệ không tính là "chưa"). Xét mọi phiếu của đơn
+        trong phạm vi đối soát, KHÔNG theo ô ngày / mã sale đang lọc — phiếu đã có HĐ thường
+        nằm ở tháng trước, và 1 đơn có thể có phiếu của nhiều sale. Không có đơn nào → []."""
+        picking_ids = self.sudo().search(self._misa_invoice_dashboard_base_domain()).ids
+        if not picking_ids:
+            return []
+        self.env.cr.execute("""
+            SELECT rel.order_id
+            FROM misa_invoice_picking_sale_order_rel rel
+            JOIN stock_picking p ON p.id = rel.picking_id
+            WHERE p.id = ANY(%s)
+            GROUP BY rel.order_id
+            HAVING bool_or(p.misa_invoice_state = 'invoiced')
+               AND bool_or(p.misa_invoice_state IS DISTINCT FROM 'invoiced' AND NOT COALESCE(p.misa_invoice_exception, FALSE))
+        """, (picking_ids,))
+        return [row[0] for row in self.env.cr.fetchall()]
+
     def _misa_invoice_public_list_state_domain(self, state=False, states=None):
         """Domain phần trạng thái/ngoại lệ cho get_misa_invoice_public_list — tách riêng để
         export (export_misa_invoice_public_list_excel) tái dùng được ĐÚNG cùng 1 logic, không
@@ -160,7 +179,7 @@ class StockPickingMisaInvoicePublicApi(models.Model):
     @api.model
     def get_misa_invoice_public_list(
         self, saler_code, search=False, state=False, states=None, date_from=False, date_to=False,
-        multi_order_group=False, multi_request=False, limit=50, offset=0,
+        multi_order_group=False, multi_request=False, partially_invoiced=False, limit=50, offset=0,
     ):
         """Danh sách phiếu xuất kho của ĐÚNG 1 mã sale cho trang public, lọc thêm được theo
         khoảng NGÀY XUẤT KHO (date_from/date_to) và theo trạng thái cụ thể — xem
@@ -168,6 +187,9 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         multi_order_group=True: chỉ phiếu thuộc nhóm gộp chung nhiều đơn bán (1 đề nghị HĐ
         cho >=2 đơn). multi_request=True: chỉ phiếu của đơn bán đã xuất HĐ qua >=2 đề nghị
         khác nhau (giao/xuất nhiều đợt) — 2 case khác nhau, xem field misa_invoice_multi_order_group.
+        partially_invoiced=True: chỉ phiếu của đơn giao nhiều lần mới xuất HĐ một phần (xem
+        _misa_invoice_partially_invoiced_order_ids) — cùng bộ lọc trạng thái mặc định "Chưa xử
+        lý" là ra đúng các phiếu còn chưa có HĐ của những đơn đó.
         search theo cả tên phiếu LẪN tên đơn bán liên quan. counts (cho donut/badge) luôn tính
         trên TOÀN BỘ phạm vi ngày đang lọc, không bị ảnh hưởng bởi state/search hiện tại — để
         số liệu tổng quan luôn nhất quán dù đang xem tab nào."""
@@ -187,6 +209,8 @@ class StockPickingMisaInvoicePublicApi(models.Model):
         if multi_request:
             multi_request_order_ids = Picking._misa_invoice_public_multi_request_order_ids(base_domain)
             domain.append(('misa_invoice_sale_order_ids', 'in', multi_request_order_ids))
+        if partially_invoiced:
+            domain.append(('misa_invoice_sale_order_ids', 'in', Picking._misa_invoice_partially_invoiced_order_ids()))
 
         total = Picking.search_count(domain)
         pickings = Picking.search(domain, order='date_done desc', limit=limit, offset=offset)

@@ -2832,6 +2832,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if states:
             value_gap = 'value_gap' in states
             normal_states = [s for s in states if s != 'value_gap']
+            partially_invoiced_ids = (
+                self._misa_invoice_partially_invoiced_order_ids() if 'partially_invoiced' in normal_states else []
+            )
             picking_filter_ids = set()
             if normal_states:
                 common_domain = self._misa_invoice_picking_list_domain(
@@ -2843,6 +2846,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         sub_domains.append(common_domain + [('misa_invoice_order_coverage', '=', 'partial')])
                     elif key == 'mismatch':
                         sub_domains.append(common_domain + [('misa_invoice_amount_mismatch', '=', True)])
+                    elif key == 'partially_invoiced':
+                        sub_domains.append(common_domain + [('misa_invoice_sale_order_ids', 'in', partially_invoiced_ids)])
                     else:
                         sub_domains.append(common_domain + [('misa_invoice_state', '=', key)])
                 picking_filter_ids.update(Picking.search(expression.OR(sub_domains)).ids)
