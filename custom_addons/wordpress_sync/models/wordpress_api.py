@@ -7,6 +7,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 import logging
 import time
+from urllib.parse import quote
 
 _logger = logging.getLogger(__name__)
 
@@ -54,8 +55,9 @@ class WooCommerceAPI:
             dict: Product data nếu tìm thấy, None nếu không
         """
         try:
-            url = f"{self.base_url}/products?sku={sku}&per_page=100"
-            response = self._get(url)
+            # SKU phải mã hoá: ghép thẳng vào URL thì '+' bị server đọc thành dấu cách
+            # (combo 'A+B+C' thành 'A B C') → không tìm thấy sản phẩm.
+            response = self._get(f"{self.base_url}/products", params={'sku': sku, 'per_page': 100})
 
             if response and len(response) > 0:
                 return response[0]
@@ -146,7 +148,7 @@ class WooCommerceAPI:
             return
 
         try:
-            url = f"{self.domain}{cache_url}{sku}"
+            url = f"{self.domain}{cache_url}{quote(sku, safe='')}"
             requests.get(url, timeout=5)
             _logger.info(f"Cache purged for SKU: {sku}")
         except Exception as e:
@@ -155,19 +157,20 @@ class WooCommerceAPI:
     # ===========================================
     # HTTP METHODS
     # ===========================================
-    def _get(self, url, timeout=DEFAULT_TIMEOUT):
+    def _get(self, url, params=None, timeout=DEFAULT_TIMEOUT):
         """
         GET request
 
         Args:
             url: Full URL to request
+            params: Dict query string, requests tự mã hoá giá trị
             timeout: Request timeout in seconds
 
         Returns:
             dict/list: Response JSON data, None nếu lỗi
         """
         try:
-            response = requests.get(url, auth=self.auth, timeout=timeout)
+            response = requests.get(url, params=params, auth=self.auth, timeout=timeout)
 
             if response.status_code == 200:
                 return response.json()
