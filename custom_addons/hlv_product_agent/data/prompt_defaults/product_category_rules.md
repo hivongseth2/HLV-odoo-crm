@@ -5,17 +5,26 @@ sản phẩm nào.
 
 ---
 
-## 0. HAI ĐIỀU QUAN TRỌNG NHẤT
+## 0. BA ĐIỀU QUAN TRỌNG NHẤT
 
 **1. HÃNG THẮNG CHỨC NĂNG.** Nếu hàng thuộc một hãng có nhóm riêng, luôn xếp vào nhóm
 của hãng đó, kể cả khi có một nhóm chức năng nghe hợp lý hơn.
 
-> Ví dụ chuẩn: **Mũi khoan Bosch** xếp vào `PKBOSCH` (Phụ kiện BOSCH), **không** xếp vào
+> Ví dụ chuẩn: **Mũi khoan Bosch** xếp vào `PKBOSCH` (Phụ kiện Bosch), **không** xếp vào
 > `MUIKHOANTARO`. Lý do: báo cáo doanh số theo hãng là nhu cầu chính của kho.
 
 `MUIKHOANTARO` chỉ dành cho mũi khoan của hãng **không có nhóm riêng**.
 
-**2. ID trong tài liệu này là để tham khảo, không phải nguồn sự thật.**
+**2. Tên nhóm dưới đây phải KHỚP ĐÚNG tên đang lưu trên MISA.**
+Đây là khoá tra cứu, không phải văn xuôi. Thấy một tên viết IN HOA lạ mắt, thiếu dấu
+phẩy, hay sai chính tả thì ĐỪNG sửa riêng ở đây — sửa một mình tài liệu là
+`search_category_misa` tra không ra, trợ lý kết luận "không có nhóm này" rồi bỏ dở việc
+tạo mã. Đã xảy ra một lần đúng vì lý do đó ("Bulong máy" vs "Bu lông máy").
+
+Thứ tự đúng khi muốn đổi tên nhóm: sửa bên MISA trước → chạy
+`bin/check_chatgpt_category_names.py` → lấy cột "MISA" trong kết quả cập nhật vào bảng.
+
+**3. ID trong tài liệu này là để tham khảo, không phải nguồn sự thật.**
 Trước khi gọi `create_product_misa`, **bắt buộc** gọi `search_category_misa` với tên
 nhóm đã chọn để lấy ID thật từ MISA. Danh sách dưới đây có thể đã cũ nếu kho vừa thêm
 hoặc đổi nhóm. Nếu ID từ tool khác ID trong tài liệu, **lấy ID từ tool**.
@@ -70,24 +79,24 @@ Hàng thuộc các hãng dưới đây **luôn** xếp vào nhóm của hãng, k
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Máy MILWAUKEE | `MAYMIL` | 166 |
-| Công cụ, dụng cụ MILWAUKEE | `CCDCMIL` | 165 |
-| Phụ kiện MILWAUKEE | `PKMIL` | 238 |
-| Phụ tùng MILWAUKEE | `PTMIL` | 167 |
-| Packout MILWAUKEE | `PACKOUTMIL` | 226 |
-| Quà tặng MILWAUKEE | `QTMIL` | 227 |
+| Máy Milwaukee | `MAYMIL` | 166 |
+| Công cụ, dụng cụ Milwaukee | `CCDCMIL` | 165 |
+| Phụ kiện Milwaukee | `PKMIL` | 238 |
+| Phụ tùng Milwaukee | `PTMIL` | 167 |
+| Packout Milwaukee | `PACKOUTMIL` | 226 |
+| Quà tặng Milwaukee | `QTMIL` | 227 |
 
 ### BOSCH
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Máy điện BOSCH | `MAYDIENBOSCH` | 222 |
-| Máy pin BOSCH | `MAYPINBOSCH` | 221 |
-| Máy đo BOSCH | `MAYDOBOSCH` | 223 |
-| Công cụ, dụng cụ BOSCH | `CCDCBOSCH` | 268 |
-| Phụ kiện BOSCH | `PKBOSCH` | 224 |
-| Phụ tùng BOSCH | `PTBOSCH` | 231 |
-| Quà tặng BOSCH | `QTBOSCH` | 228 |
+| Máy điện Bosch | `MAYDIENBOSCH` | 222 |
+| Máy pin Bosch | `MAYPINBOSCH` | 221 |
+| Máy đo Bosch | `MAYDOBOSCH` | 223 |
+| Công cụ dụng cụ BOSCH | `CCDCBOSCH` | 268 |
+| Phụ kiện Bosch | `PKBOSCH` | 224 |
+| Phụ tùng Bosch | `PTBOSCH` | 231 |
+| Quà tặng Bosch | `QTBOSCH` | 228 |
 
 ### MAKITA
 
@@ -113,21 +122,21 @@ Hàng thuộc các hãng dưới đây **luôn** xếp vào nhóm của hãng, k
 |---|---|---|
 | Công nghiệp KARCHER | `KARCHER-CN` | 246 |
 | Dân dụng KARCHER | `KARCHER-DANDUNG` | 245 |
-| Hóa chất vệ sinh KARCHER | `KARCHER-HC` | 259 |
+| Hoá chất vệ sinh KARCHER | `KARCHER-HC` | 259 |
 
 ### Các hãng chuyên ngành
 
 | Nhóm | Mã | ID |
 |---|---|---|
 | Vòng bi, gối đỡ và phụ kiện SKF | `VONGBIVAGOIDOSKF` | 184 |
-| Mỡ SKF | `MOSKF` | 237 |
-| Vòng bi, gối đỡ các hãng Nhật (KOYO, ASAHI, NTN, NSK) | `KOYO, ASAHI, NTN, NSK` | 6 |
+| MỠ SKF | `MOSKF` | 237 |
+| Vòng bi, gối đỡ và phụ kiện các hãng Nhật | `KOYO, ASAHI, NTN, NSK` | 6 |
 | Dây curoa MITSUBOSHI | `MITSUBOSHI` | 17 |
 | Dây curoa BANDO | `BANDO` | 43 |
-| Vật tư khí nén SMC | `KHINENSMC` | 141 |
-| Dụng cụ đo MITUTOYO | `MITUTOYO` | 107 |
-| Dụng cụ đo INSIZE | `DUNGCUDOINSIZE` | 134 |
-| Tủ đồ nghề CSPS | `CSPS` | 118 |
+| VẬT TƯ KHÍ NÉN SMC | `KHINENSMC` | 141 |
+| DỤNG CỤ ĐO MITUTOYO | `MITUTOYO` | 107 |
+| DỤNG CỤ ĐO INSIZE | `DUNGCUDOINSIZE` | 134 |
+| TỦ ĐỒ NGHỀ CSPS | `CSPS` | 118 |
 | Dầu mỡ MOBIL, SHELL | `MOBIL, SHELL` | 202 |
 
 ---
@@ -153,7 +162,7 @@ Dùng khi hãng không có nhóm riêng, hoặc hàng không có hãng.
 |---|---|---|
 | Dây curoa, băng tải khác | `DAYCUROAKHAC` | 12 |
 | Puly, nhông, xích, khớp nối | `PULY,BANHRANG,KHOPNOI` | 16 |
-| Sin, phốt | `SINPHOT` | 266 |
+| Sin, Phốt | `SINPHOT` | 266 |
 | Vòng bi và gối đỡ khác | `VONGBIKHAC` | 188 |
 
 ### Dụng cụ cầm tay
@@ -172,7 +181,7 @@ Phân theo phân khúc chất lượng:
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Dụng cụ đo khác | `DUNGCUDOKHAC` | 101 |
+| DỤNG CỤ ĐO KHÁC | `DUNGCUDOKHAC` | 101 |
 
 ### Cắt, mài, khoan
 
@@ -188,13 +197,13 @@ Phân theo phân khúc chất lượng:
 |---|---|---|
 | Thiết bị đường ống kim loại | `DUONGONGKIMLOAI` | 208 |
 | Thiết bị đường ống nhựa | `DUONGONGNHUA` | 209 |
-| Thiết bị đường ống thủy lực | `DUONGONGTHUYLUC` | 253 |
+| Thiết bị đường ống thuỷ lực | `DUONGONGTHUYLUC` | 253 |
 
 ### Khí nén
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Vật tư khí nén khác | `VATTUKHINENKHAC` | 53 |
+| VẬT TƯ KHÍ NÉN KHÁC | `VATTUKHINENKHAC` | 53 |
 
 ### Bulong, đinh vít
 
@@ -202,41 +211,41 @@ Phân theo phân khúc chất lượng:
 |---|---|---|
 | Bu lông máy | `BULONGMAY` | 257 |
 | Bulong xây dựng | `BULONGXD` | 258 |
-| Đinh vít các loại | `DINHVIT` | 192 |
+| ĐINH VÍT CÁC LOẠI | `DINHVIT` | 192 |
 
 ### Nâng hạ
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Xe nâng và phụ kiện xe nâng các hãng | `XENANG` | 205 |
+| XE NÂNG VÀ PHỤ KIỆN XE NÂNG CÁC HÃNG | `XENANG` | 205 |
 | Thiết bị nâng hạ khác | `THIETBINANGKHAC` | 206 |
 
 ### Dầu mỡ, hóa chất
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Dầu mỡ khác | `MOKHAC` | 204 |
-| Keo dán, silicone | `KEODAN` | 264 |
+| DẦU MỠ KHÁC | `MOKHAC` | 204 |
+| Keo dán, Silicone | `KEODAN` | 264 |
 | Sơn và phụ kiện | `SON` | 220 |
 
 ### Vật tư khác
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Bảo hộ lao động | `BAOHOLAODONG` | 54 |
+| BẢO HỘ LAO ĐỘNG | `BAOHOLAODONG` | 54 |
 | Vật tư vệ sinh làm sạch | `VATTUVESINH` | 207 |
 | Vật tư đóng gói | `VATTUDONGGOI` | 265 |
 | Bánh xe đẩy công nghiệp | `BANHXEDAY` | 261 |
 | Bình ắc quy, pin | `ACCQUY` | 262 |
 | Nguyên liệu gia công | `NGUYENLIEUGIACONG` | 263 |
 | Máy cầm tay Trung Quốc | `MAYCAMTAYTQ` | 247 |
-| Máy hàn và phụ kiện hàn khác | `MAYHANKHAC` | 183 |
+| Máy hàn và phụ kiện hàn Khác | `MAYHANKHAC` | 183 |
 
 ### Cuối cùng
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Danh mục khác | `DANHMUCKHAC` | 2 |
+| DANH MỤC KHÁC | `DANHMUCKHAC` | 2 |
 
 Chỉ dùng khi đã chạy hết bước 1 đến bước 3 mà không xếp được.
 
