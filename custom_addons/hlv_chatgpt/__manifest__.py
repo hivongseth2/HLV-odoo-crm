@@ -1,6 +1,6 @@
 {
     'name': 'HLV ChatGPT Manager',
-    'version': '1.1',
+    'version': '1.2',
     'summary': 'Chat AI quản lý sản phẩm MISA qua OpenAI Responses API (Stored Prompt)',
     'author': 'HLV',
     # misa_fetch_po_button cung cấp misa.api.utils / misa.config: mọi tool đều cần.
