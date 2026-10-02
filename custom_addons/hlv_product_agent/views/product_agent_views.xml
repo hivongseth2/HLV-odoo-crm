@@ -41,9 +41,12 @@
                         </group>
                     </group>
                     <div class="alert alert-success" role="alert" invisible="not enroll_code">
-                        <b>Cài agent</b> — trên máy chạy Claude, mở <b>PowerShell</b> (không cần
-                        quyền admin) và dán lệnh:
+                        <b>Cài agent</b> — trên máy chạy Claude, dán lệnh (không cần quyền admin):
+                        <br/>
+                        <b>Windows</b> (PowerShell thường):
                         <field name="setup_command" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
+                        <b>Mac</b> (Terminal, KHÔNG sudo):
+                        <field name="setup_command_mac" readonly="1" nolabel="1" widget="CopyClipboardChar"/>
                         Khi script hỏi, gõ mã cài đặt:
                         <b><field name="enroll_code" readonly="1" nolabel="1" class="oe_inline"/></b>
                         (hết hạn lúc <field name="enroll_code_expiry" readonly="1" nolabel="1" class="oe_inline"/>)

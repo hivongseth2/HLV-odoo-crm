@@ -55,7 +55,8 @@ BUILTIN_TOOLS = ['Read', 'WebSearch', 'WebFetch']
 
 DEFAULTS = {
     'model': 'sonnet',
-    'work_dir': 'C:/hlv_product_agent',
+    # Windows: ổ C như bản cài PowerShell; Mac/Linux: thư mục nhà (setup_mac.sh).
+    'work_dir': 'C:/hlv_product_agent' if os.name == 'nt' else '~/hlv_product_agent',
     'max_parallel': 2,
     'poll_seconds': 3,
     'turn_timeout_seconds': 300,
@@ -127,17 +128,31 @@ def is_missing_session_error(stderr):
 # Tìm Claude
 # =============================================================================
 def find_claude(configured=''):
-    """Đường dẫn claude.exe. Tìm lại mỗi lượt vì extension VS Code tự cập nhật sẽ đổi
-    thư mục, bản cũ bị xoá."""
+    """Đường dẫn Claude Code. Tìm lại mỗi lượt vì extension VS Code tự cập nhật sẽ đổi
+    thư mục, bản cũ bị xoá.
+
+    Thứ tự: claude_path trong agent.yaml -> PATH -> chỗ trình cài chính thức / Homebrew
+    hay đặt -> bản đi kèm extension VS Code. Trên Mac, agent chạy dưới launchd gần như
+    không có PATH, nên các chỗ cài quen thuộc phải dò thẳng.
+    """
     if configured:
-        return configured
+        return os.path.expanduser(configured)
     found = shutil.which('claude')
     if found:
         return found
     home = os.path.expanduser('~')
-    native = os.path.join(home, '.local', 'bin', 'claude.exe' if os.name == 'nt' else 'claude')
-    if os.path.exists(native):
-        return native
+    if os.name == 'nt':
+        candidates = [os.path.join(home, '.local', 'bin', 'claude.exe')]
+    else:
+        candidates = [
+            os.path.join(home, '.local', 'bin', 'claude'),
+            os.path.join(home, '.claude', 'local', 'claude'),
+            '/opt/homebrew/bin/claude',
+            '/usr/local/bin/claude',
+        ]
+    for native in candidates:
+        if os.path.exists(native):
+            return native
     bundled = glob.glob(os.path.join(
         home, '.vscode', 'extensions', 'anthropic.claude-code-*', 'resources', 'native-binary', 'claude*'))
     if bundled:
@@ -195,7 +210,7 @@ class Agent:
     def __init__(self, config):
         self.config = config
         self.odoo = OdooClient(config['odoo_url'], config['token'])
-        self.work_dir = os.path.abspath(config['work_dir'])
+        self.work_dir = os.path.abspath(os.path.expanduser(config['work_dir']))
         os.makedirs(os.path.join(self.work_dir, 'sessions'), exist_ok=True)
         self.system_prompt_file = os.path.join(self.work_dir, 'system_prompt.built.md')
         self.mcp_config = build_mcp_config(console_python(), MCP_SERVER)
@@ -400,10 +415,14 @@ def main():
     options = parser.parse_args()
 
     config = load_config(options.config)
-    setup_logging(config['work_dir'])
+    setup_logging(os.path.abspath(os.path.expanduser(config['work_dir'])))
     agent = Agent(config)
 
     if options.check:
+        # --check in tiếng Việt cho người cài đọc; console Windows (cp1252) hay terminal
+        # thiếu LANG sẽ chết ở câu in nếu không ép UTF-8.
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         print('Claude:', find_claude(config.get('claude_path')))
         result = agent.odoo.call('/product_agent/agent/poll', agent_version=AGENT_VERSION, max_jobs=0)
         print('Odoo:', 'OK' if result.get('ok') else 'TỪ CHỐI (%s)' % result.get('error'))

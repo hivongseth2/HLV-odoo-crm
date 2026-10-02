@@ -89,6 +89,53 @@ chạy dở lúc cập nhật sẽ bị ngắt; Odoo tự báo sale gửi lại.
 Sửa dòng `model:` trong `C:\hlv_product_agent\agent.yaml` (`sonnet` nhanh, `opus` kỹ hơn),
 rồi `Stop-ScheduledTask -TaskName "HLV Product Agent"; Start-ScheduledTask -TaskName "HLV Product Agent"`.
 
+## Cài trên Mac
+
+Trên form "Máy chạy Claude", sau khi bấm **Tạo mã cài đặt**, có thêm dòng **Lệnh cài
+(Mac)**. Mở **Terminal thường** (KHÔNG `sudo`), dán lệnh, gõ mã khi được hỏi:
+
+```
+cd ~ && curl -fsSL https://<odoo>/product_agent/download/setup_mac -o hlv_setup_mac.sh && bash hlv_setup_mac.sh https://<odoo>
+```
+
+`setup_mac.sh` làm đúng các bước như bản Windows, khác ở chỗ:
+
+| | Windows | Mac |
+|---|---|---|
+| Thư mục | `C:\hlv_product_agent` | `~/hlv_product_agent` |
+| Python | có sẵn, hoặc tải Python nhúng | môi trường ảo `~/hlv_product_agent/venv` (Homebrew chặn `pip` vào hệ thống) |
+| Chạy ngầm | Task Scheduler `HLV Product Agent` | launchd `com.hoanglongvu.product-agent` (`~/Library/LaunchAgents/`) |
+| Tự bật lại | tác vụ canh gác 5 phút | launchd `KeepAlive` |
+| Chống ngủ | — | bọc trong `caffeinate -is` |
+
+Lưu ý riêng Mac:
+
+- **Không chạy bằng `sudo`**: đăng nhập Claude trên Mac nằm trong **Keychain** của chính
+  tài khoản người dùng. Agent cũng chạy dưới tài khoản đó (LaunchAgent), nên Mac phải
+  **bật và có người đăng nhập** (khoá màn hình vẫn được). Khởi động lại mà chưa ai đăng
+  nhập thì agent chưa chạy — muốn tự chạy sau khi mất điện thì bật đăng nhập tự động.
+- Laptop **gập nắp** vẫn ngủ dù có `caffeinate` (trừ khi cắm sạc + màn hình ngoài).
+- launchd gần như không có PATH, nên script ghi **đường dẫn tuyệt đối của `claude`**
+  vào `agent.yaml`. Cài lại Claude ở chỗ khác thì chạy lại lệnh cài.
+- Log: `tail -f ~/hlv_product_agent/agent.log`. Dừng / bật lại:
+  `launchctl bootout gui/$(id -u)/com.hoanglongvu.product-agent` /
+  `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.hoanglongvu.product-agent.plist`.
+
+## Chuyển máy chạy Claude (vd Windows → Mac)
+
+1. **Dừng máy cũ trước.** Trên Windows, PowerShell:
+   `Stop-ScheduledTask -TaskName "HLV Product Agent"; Unregister-ScheduledTask -TaskName "HLV Product Agent" -Confirm:$false`.
+   Hai máy cùng chạy thì vẫn không cầm trùng tin (Odoo khoá từng cuộc), nhưng cuộc chat
+   sẽ nhảy qua lại giữa hai máy và mỗi lần nhảy Claude phải dựng lại ngữ cảnh.
+2. Trên Odoo, mở đúng dòng **Máy chạy Claude** cũ, bấm **Tạo mã cài đặt**, chạy lệnh
+   Mac trên máy mới. Mã cài đặt trả về token của dòng đó.
+3. Muốn chắc máy cũ không bao giờ chạy lại được: bấm **Sinh lại token** TRƯỚC bước 2.
+4. Cuộc chat đang dở: phiên Claude nằm trên máy cũ, máy mới không resume được — agent tự
+   nhận ra ("No conversation found") và mở phiên mới kèm các tin gần nhất. Sale không phải
+   làm gì; lượt đầu tiên trên máy mới có thể hỏi lại một câu.
+5. Đăng nhập Claude trên Mac bằng **cùng tài khoản** (hoặc tài khoản khác, nếu muốn
+   tách hạn mức với các việc khác trên máy Windows).
+
 ## Cài thủ công
 
 Dùng khi muốn chạy agent ngay trong repo để sửa code.
