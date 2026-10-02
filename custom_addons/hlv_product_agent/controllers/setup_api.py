@@ -24,6 +24,7 @@ TEXT = 'text/plain; charset=utf-8'
 # Khoá là tên script cài đặt dùng để tải; giá trị là (đường dẫn trong addons, tên lưu).
 DOWNLOADABLE = {
     'setup': ('hlv_product_agent/agent/setup.ps1', 'setup.ps1'),
+    'setup_mac': ('hlv_product_agent/agent/setup_mac.sh', 'setup_mac.sh'),
     'agent': ('hlv_product_agent/agent/hlv_product_agent.py', 'hlv_product_agent.py'),
     'mcp_server': ('hlv_product_agent/agent/misa_mcp_server.py', 'misa_mcp_server.py'),
     'tools': ('hlv_product_agent/agent/misa_tools.py', 'misa_tools.py'),
@@ -48,7 +49,9 @@ class ProductAgentSetupApi(http.Controller):
         Script cài đọc danh sách từ đây thay vì tự liệt kê, để thêm file vào agent chỉ
         phải sửa một chỗ (DOWNLOADABLE).
         """
-        lines = ['%s %s' % (key, target) for key, (_path, target) in DOWNLOADABLE.items() if key != 'setup']
+        # Bỏ chính các script cài: máy đang chạy script rồi, không cần tải lại vào thư mục agent.
+        lines = ['%s %s' % (key, target) for key, (_path, target) in DOWNLOADABLE.items()
+                 if not key.startswith('setup')]
         return Response('\n'.join(lines) + '\n', status=200, content_type=TEXT)
 
     @http.route('/product_agent/download/<string:what>', type='http', auth='public', methods=['GET'])

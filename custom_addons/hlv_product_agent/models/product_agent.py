@@ -35,7 +35,8 @@ class HlvProductAgent(models.Model):
              % ENROLL_CODE_TTL_MINUTES,
     )
     enroll_code_expiry = fields.Datetime(readonly=True, copy=False, groups='base.group_system')
-    setup_command = fields.Char(compute='_compute_setup_command')
+    setup_command = fields.Char("Lệnh cài (Windows)", compute='_compute_setup_command')
+    setup_command_mac = fields.Char("Lệnh cài (Mac)", compute='_compute_setup_command')
     agent_status = fields.Selection(
         [('never', "Chưa bao giờ gọi"), ('alive', "Đang chạy"), ('dead', "Đã ngừng")],
         string="Tình trạng", compute='_compute_agent_status',
@@ -54,14 +55,20 @@ class HlvProductAgent(models.Model):
     # Không phụ thuộc field nào của bản ghi: chỉ phụ thuộc web.base.url, đọc lại mỗi lần.
     @api.depends()
     def _compute_setup_command(self):
-        """Lệnh dán một phát vào PowerShell trên máy chạy Claude.
+        """Lệnh dán một phát trên máy chạy Claude: PowerShell (Windows) hoặc Terminal (Mac).
 
         Truyền sẵn địa chỉ Odoo để script khỏi phải hỏi — người cài chỉ còn gõ mã.
+        Bản Mac CỐ Ý tải file về rồi mới chạy, không "curl | bash": script hỏi mã cài
+        đặt, mà đường ống chiếm mất stdin nên câu hỏi nhận chuỗi rỗng.
         """
         base = (self.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').rstrip('/')
         for agent in self:
             agent.setup_command = (
                 "$env:HLV_ODOO_URL='%s'; irm %s/product_agent/download/setup | iex" % (base, base)
+            )
+            agent.setup_command_mac = (
+                "cd ~ && curl -fsSL %s/product_agent/download/setup_mac -o hlv_setup_mac.sh "
+                "&& bash hlv_setup_mac.sh %s" % (base, base)
             )
 
     def action_generate_enroll_code(self):
