@@ -200,7 +200,7 @@ Phân theo phân khúc chất lượng:
 
 | Nhóm | Mã | ID |
 |---|---|---|
-| Bulong máy | `BULONGMAY` | 257 |
+| Bu lông máy | `BULONGMAY` | 257 |
 | Bulong xây dựng | `BULONGXD` | 258 |
 | Đinh vít các loại | `DINHVIT` | 192 |
 
