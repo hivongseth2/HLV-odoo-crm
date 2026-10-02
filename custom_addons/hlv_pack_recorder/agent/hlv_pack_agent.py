@@ -31,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.3.1'
+AGENT_VERSION = '2.4.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -77,6 +77,16 @@ MIN_AGENT_BYTES = 10 * 1024
 # giay la da can hon 20 lan noi lai. Chay lai vo ich thi ton vai giay moi lan va
 # co dong log rieng, con thieu mot lan la mat phan con lai cua phieu.
 MAX_SEGMENT_RESTARTS = 60
+
+# Doan vua roi CO ghi duoc hinh -> camera van song, chi la duong truyen chop mot
+# cai. Noi lai gan nhu ngay.
+RESTART_DELAY_AFTER_DATA = 1
+
+# Con khi KHONG mo noi camera thi phai gian dan. Camera IP co gioi han so phien
+# dong thoi, va nhieu dong con tu khoa IP khi bi goi don dap. Goi lai moi 2 giay
+# 60 lan la tu bien mot lan chop mang thanh mat han camera - dung cai sap xay ra
+# truoc khi va cho nay.
+RESTART_BACKOFF_SECONDS = (3, 5, 10, 20, 30)
 
 # Doan ngan hon chung nay coi nhu khong co gi - bo di truoc khi noi, de mot doan
 # 0 byte khong lam hong ca file cuoi.
@@ -207,6 +217,10 @@ class Recorder:
         self.segments = []
         self.restarts = 0
         self.proc = None
+        self.retry_at = 0.0       # chua toi moc nay thi chua noi lai
+        self.fail_streak = 0      # so lan lien tiep khong mo noi camera
+        self._waited = False      # da cho xong gian cach cho lan noi lai nay
+        self._death_pending = False
         # Giữ chung cho cả bản ghi, không reset mỗi đoạn: lý do đứt ở đoạn trước
         # mới là thứ cần đọc khi cuối cùng phải báo hỏng.
         self._err_lines = collections.deque(maxlen=STDERR_KEEP_LINES)
@@ -239,24 +253,73 @@ class Recorder:
             stderr=subprocess.PIPE, creationflags=NO_WINDOW,
         )
         self.segments.append(path)
+        self._waited = False
+        self._death_pending = True
         threading.Thread(target=self._drain_stderr, args=(self.proc,),
                          daemon=True).start()
+
+    def take_death_report(self):
+        """Mô tả lần ffmpeg vừa chết, trả về ĐÚNG MỘT LẦN cho mỗi lần chết.
+
+        Trả: dict(returncode, size_mb, stderr) lần đầu sau mỗi lần chết, None ở
+            những lần hỏi tiếp theo. Có nó thì vòng quét gọi mỗi 2 giây mới không
+            ghi lặp cùng một dòng log suốt lúc đang chờ nối lại.
+        """
+        if not self._death_pending:
+            return None
+        self._death_pending = False
+        return {
+            'returncode': self.proc.returncode,
+            'size_mb': self._segment_size() / 1024 / 1024,
+            'stderr': self.stderr_tail(),
+        }
+
+    def _segment_size(self):
+        try:
+            return os.path.getsize(self.segments[-1]) if self.segments else 0
+        except OSError:
+            return 0
 
     def try_restart(self):
         """ffmpeg chết giữa chừng mà chưa có lệnh dừng — ghi tiếp thành đoạn mới.
 
-        Trả: True nếu đã chạy lại. False khi không nên chạy nữa (đã tới trần thời
-            gian của bản ghi, hoặc đã chạy lại quá nhiều lần). Bên gọi khi đó
-            chốt sổ bản ghi như bình thường.
+        Giãn cách trước khi gọi lại: đoạn vừa rồi có hình thì nối lại gần như
+        ngay, còn không mở nổi camera thì chờ lâu dần. Gọi dồn vào một camera
+        đang từ chối chỉ làm nó khoá luôn.
+
+        Trả: True nếu còn đang nhận bản ghi này — đã chạy lại, HOẶC đang chờ tới
+            lượt thử lại. False khi buông hẳn (hết trần thời gian, hoặc thử quá
+            nhiều lần); bên gọi khi đó chốt sổ bản ghi.
         """
+        now = time.time()
+        if now < self.retry_at:
+            return True  # đang chờ, vẫn là bản ghi của agent
+
         if self.elapsed() >= self.max_seconds:
             return False
         if self.restarts >= MAX_SEGMENT_RESTARTS:
-            log.warning("rec=%s đã chạy lại %d lần, thôi không chạy nữa",
+            log.warning("rec=%s đã nối lại %d lần, thôi không nối nữa",
                         self.recording_id, self.restarts)
             return False
+
+        if not self._waited:
+            # Vừa phát hiện chết: đặt lịch, CHƯA gọi lại ngay.
+            self._waited = True
+            if self._segment_size() >= MIN_SEGMENT_BYTES:
+                self.fail_streak = 0
+                delay = RESTART_DELAY_AFTER_DATA
+            else:
+                self.fail_streak += 1
+                delay = RESTART_BACKOFF_SECONDS[
+                    min(self.fail_streak - 1, len(RESTART_BACKOFF_SECONDS) - 1)]
+                log.warning("rec=%s cam=%s không mở được camera (lần %d), "
+                            "chờ %ds rồi thử lại", self.recording_id,
+                            self.camera_code, self.fail_streak, delay)
+            self.retry_at = now + delay
+            return True
+
         self.restarts += 1
-        log.warning("rec=%s cam=%s luồng bị đứt, ghi tiếp đoạn %d",
+        log.warning("rec=%s cam=%s nối lại, ghi tiếp đoạn %d",
                     self.recording_id, self.camera_code, len(self.segments))
         try:
             self._spawn()
@@ -577,16 +640,14 @@ class Agent:
             # hoặc camera đứt giữa chừng (KHÔNG bình thường). Hai cái đó cho ra
             # video dài ngắn khác hẳn nhau. Trước đây chỉ ghi "tự kết thúc" rồi
             # gửi file đi, nên video vài giây không để lại dấu vết nào để truy.
-            try:
-                size_mb = os.path.getsize(recorder.out_path) / 1024 / 1024
-            except OSError:
-                size_mb = 0.0
-            tail = recorder.stderr_tail()
-            log.info("rec=%s cam=%s ffmpeg tự kết thúc (mã %s, %.1fMB)",
-                     recording_id, recorder.camera_code,
-                     recorder.proc.returncode, size_mb)
-            if tail:
-                log.warning("rec=%s ffmpeg kêu trước khi dừng: %s", recording_id, tail)
+            report = recorder.take_death_report()
+            if report:
+                log.info("rec=%s cam=%s ffmpeg tự kết thúc (mã %s, %.1fMB)",
+                         recording_id, recorder.camera_code,
+                         report['returncode'], report['size_mb'])
+                if report['stderr']:
+                    log.warning("rec=%s ffmpeg kêu trước khi dừng: %s",
+                                recording_id, report['stderr'])
 
             # Phiếu CHƯA đóng mà luồng đã đứt: ghi tiếp, đừng chốt sổ. Một lần
             # chớp mạng chỉ được phép mất vài giây, không được mất cả phiếu.
