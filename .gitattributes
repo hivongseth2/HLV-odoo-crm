@@ -1,0 +1,3 @@
+# Script shell chạy trên Mac/Linux: CRLF là bash báo "$'\r': command not found".
+# Ép LF bất kể core.autocrlf của máy người commit.
+*.sh text eol=lf
