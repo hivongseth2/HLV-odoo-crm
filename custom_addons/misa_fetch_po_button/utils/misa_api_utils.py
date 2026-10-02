@@ -8,6 +8,8 @@ from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
 
+from .text_match import same_name
+
 _logger = logging.getLogger(__name__)
 import json
 
@@ -1531,17 +1533,22 @@ class MisaApiUtils(models.AbstractModel):
                 nodes = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
                 
                 if isinstance(nodes, list):
-                    def recursive_search(n_list):
+                    def recursive_search(n_list, matches):
                         for node in n_list:
-                            if str(node.get("ProductCategoryName") or "").strip().lower() == clean_name:
+                            if matches(str(node.get("ProductCategoryName") or "")):
                                 return node.get("ID")
                             childs = node.get("Children")
                             if childs and isinstance(childs, list):
-                                found = recursive_search(childs)
+                                found = recursive_search(childs, matches)
                                 if found: return found
                         return None
-                    
-                    found_id = recursive_search(nodes)
+
+                    found_id = recursive_search(nodes, lambda n: n.strip().lower() == clean_name)
+                    if not found_id:
+                        # Tên đi tìm do người gõ tay hoặc do AI đọc từ tài liệu, lệch dấu
+                        # cách / dấu tiếng Việt so với tên lưu trên MISA là chuyện thường
+                        # ("Bulong máy" vs "Bu lông máy"). Thử lại sau khi bỏ dấu.
+                        found_id = recursive_search(nodes, lambda n: same_name(n, name))
                     if found_id:
                         return found_id
         except Exception as e:
@@ -1551,7 +1558,9 @@ class MisaApiUtils(models.AbstractModel):
         url_grid = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
         page = 1
         page_size = 200
-        max_loop = 50 
+        max_loop = 50
+        # Khớp sau khi bỏ dấu chỉ dùng khi quét hết mọi trang vẫn không có khớp tuyệt đối.
+        loose_match_id = None
 
         while page <= max_loop:
             payload = {
@@ -1576,14 +1585,16 @@ class MisaApiUtils(models.AbstractModel):
                     if c_name == clean_name:
                          cat_id = item.get("ProductCategoryID")
                          return cat_id or item.get("ID")
-                
+                    if loose_match_id is None and same_name(c_name, name):
+                        loose_match_id = item.get("ProductCategoryID") or item.get("ID")
+
                 if len(items) < page_size:
                     break
                 page += 1
             except:
                 break
-        
-        return None
+
+        return loose_match_id
 
     def _get_retry_session(self):
         """Tạo session có cơ chế thử lại khi lỗi mạng"""
