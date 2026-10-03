@@ -444,6 +444,10 @@ class Agent:
             # trong self.active nghia la agent VAN NHAN, chua buong.
             'active_ids': list(self.active),
             'agent_version': AGENT_VERSION,
+            # Bao len de Odoo doi chieu voi danh sach camera khai trong he thong.
+            # Khai them camera trong Odoo ma quen chay lai script cai thi agent
+            # khong biet URL cua no — truoc day chi lo ra khi mot phieu hong.
+            'camera_codes': sorted(self.cameras.keys()),
         })
 
     def report_failure(self, recording_id, reason):

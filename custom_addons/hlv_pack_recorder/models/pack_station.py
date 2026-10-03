@@ -196,9 +196,14 @@ class HlvPackStation(models.Model):
             station.setup_command = (
                 "$env:HLV_ODOO_URL='%s'; irm %s/pack_agent/download/setup | iex" % (base, base)
             )
+            # Tai ve THU MUC NHA, khong phai /tmp: ban curl cai qua snap chay
+            # trong sandbox co /tmp rieng, file ghi ra khong nam o /tmp that nen
+            # bash sau do bao "khong co tap tin". Da gap that tren may Ubuntu.
+            # Kem duong lui wget cho may khong co curl.
+            url = '%s/pack_agent/download/setup_sh' % base
             station.setup_command_linux = (
-                'curl -fsSL %s/pack_agent/download/setup_sh -o /tmp/hlv_setup.sh '
-                '&& sudo bash /tmp/hlv_setup.sh %s' % (base, base)
+                'cd ~ && (curl -fsSL %s -o hlv_setup.sh || wget -qO hlv_setup.sh %s) '
+                '&& sudo bash hlv_setup.sh %s' % (url, url, base)
             )
 
     _sql_constraints = [
