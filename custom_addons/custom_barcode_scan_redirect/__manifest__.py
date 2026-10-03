@@ -1,6 +1,6 @@
 {
     "name": "Custom Barcode Pack Scan",
-    "version": "1.1",
+    "version": "1.2",
     "depends": ["stock", "stock_barcode", "hlv_pack_sequence"],
     "author": "Anh Yêu",
     "category": "Warehouse",
@@ -11,6 +11,7 @@
         "views/pack_scan_template.xml",
         "views/menu.xml",
         "views/scan_ui_template.xml",
+        "views/res_config_settings_views.xml",
     ],
     "installable": True,
     "application": False,

@@ -34,6 +34,9 @@ class PackScanController(http.Controller):
                 picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
             except Exception as e:
                 return {"error": str(e)}
+            # Gọi cả ở đây chứ không chỉ lúc mở trang: trang mở từ trước khi bật cài đặt
+            # vẫn phải được khoá ngay lần quét kế tiếp.
+            picking.lock_pack_against_merge()
         # Tìm move dựa trên barcode
         moves = picking.move_ids.filtered(lambda m: m.product_id.barcode == barcode)
 
