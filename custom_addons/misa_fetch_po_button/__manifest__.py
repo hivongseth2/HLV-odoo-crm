@@ -10,7 +10,6 @@
     'description': 'Fetch PO from MISA and create in Odoo',
     'data': [
         'security/ir.model.access.csv',
-        'data/misa_crm_contact_sync_cron.xml',
         'views/misa_transfer_button_view.xml',
         'views/misa_po_button_view.xml',
         'views/misa_po_sync_view.xml',

@@ -61,21 +61,6 @@ class MisaCrmContactSyncRun(models.Model):
                 })
         return True
 
-    def action_disable_cron(self):
-        cron = self.env.ref("misa_fetch_po_button.ir_cron_misa_crm_contact_sync", raise_if_not_found=False)
-        if cron:
-            cron.sudo().write({"active": False})
-        return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": _("CRM sync queue stopped"),
-                "message": _("The scheduled CRM contact sync cron has been disabled."),
-                "type": "warning",
-                "sticky": False,
-            },
-        }
-
     def action_run_now(self):
         run = self.sudo().cron_sync_contacts_from_crm(force=True)
         view = self.env.ref(

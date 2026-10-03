@@ -29,7 +29,6 @@
                 <header>
                     <button name="action_run_now" type="object" string="Chạy ngay" class="btn-primary"/>
                     <button name="action_stop" type="object" string="Dung lan chay" class="btn-secondary" invisible="state != 'running'"/>
-                    <button name="action_disable_cron" type="object" string="Tat cron" class="btn-secondary"/>
                     <field name="state" widget="statusbar" statusbar_visible="running,done,stopped,failed"/>
                 </header>
                 <sheet>
