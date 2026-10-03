@@ -4,9 +4,14 @@ from odoo import http
 from odoo.http import request
 import logging
 
-from ._shared import get_ml_demand
+from ._shared import get_ml_demand, pack_changes_since
 
 _logger = logging.getLogger(__name__)
+
+STALE_PACK_MSG = (
+    "⚠️ Phiếu vừa thay đổi (thường do vừa lấy thêm hàng về). "
+    "Tải lại trang để thấy số mới rồi làm tiếp."
+)
 
 
 class PackScanController(http.Controller):
@@ -20,6 +25,11 @@ class PackScanController(http.Controller):
         move_id = kwargs.get("move_id")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if picking.exists():
+            # Màn hình đang giữ số yêu cầu cũ thì cả việc chặn quét lố lẫn số hiện ra đều
+            # sai — dừng hẳn cho tới khi tải lại, thay vì quét tiếp trên số cũ.
+            changes = pack_changes_since(picking, kwargs.get("snapshot"))
+            if changes:
+                return {"error": STALE_PACK_MSG, "changes": changes}
             try:
                 picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
             except Exception as e:
@@ -412,6 +422,14 @@ class PackScanController(http.Controller):
             _logger.error(f"Lỗi khi kiểm tra tồn kho: {e}")
         return None
 
+    @http.route('/pack_scan/check_changes', type='json', auth='user')
+    def check_pack_changes(self, picking_id=None, snapshot=None, **kwargs):
+        """Màn hình đóng gói hỏi định kỳ: phiếu đã đổi gì so với lúc mở chưa."""
+        picking = request.env['stock.picking'].sudo().browse(int(picking_id or 0))
+        if not picking.exists():
+            return {"changes": []}
+        return {"changes": pack_changes_since(picking, snapshot)}
+
     # ===================== COMPLETE & PRINT =====================
 
     @http.route('/pack_scan/complete_picking', type='json', auth='user')
@@ -425,6 +443,9 @@ class PackScanController(http.Controller):
             picking.with_user(request.env.user)._check_pack_assignment_access(user=request.env.user)
         except Exception as e:
             return {"error": str(e)}
+        changes = pack_changes_since(picking, kwargs.get("snapshot"))
+        if changes:
+            return {"error": STALE_PACK_MSG, "changes": changes}
         if picking.state not in ['assigned', 'confirmed', 'in_progress']:
             return {"error": f"Phiếu không ở trạng thái cho phép xác nhận (hiện tại: {picking.state})."}
         for move in picking.move_ids_without_package:

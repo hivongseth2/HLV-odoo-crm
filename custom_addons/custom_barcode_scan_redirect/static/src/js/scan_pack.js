@@ -184,6 +184,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function playError() {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
+  window.playPackError = playError;
 
   // [NEW] Helper to flush manual input before critical actions
   async function flushActiveInput() {
@@ -370,7 +371,8 @@ document.addEventListener("DOMContentLoaded", function () {
             barcode,
             delta,
             line_id: lineId,
-            move_id: moveId
+            move_id: moveId,
+            snapshot: window.packChangeWatch?.snapshot()
           }
         })
       });
@@ -378,6 +380,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const result = response.result;
 
       if (result?.error) {
+        window.packChangeWatch?.handle(result);
         toast.error(result.error);
         playError();
         setFocus();
@@ -552,6 +555,9 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // Kiểm trước khi in nhãn: phiếu đã đổi mà vẫn in thì ra nhãn cho số cũ.
+    if (await window.packChangeWatch?.checkNow()) return;
+
     try {
       const checkRes = await fetch("/pack_scan/check_and_print_label", {
         method: "POST",
@@ -573,10 +579,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const res = await fetch("/pack_scan/complete_picking", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-      body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { picking_id: pickingId } })
+      body: JSON.stringify({
+        jsonrpc: "2.0", method: "call",
+        params: { picking_id: pickingId, snapshot: window.packChangeWatch?.snapshot() }
+      })
     });
     const response = await res.json();
     if (response.error || response.result?.error) {
+      window.packChangeWatch?.handle(response.result);
       const msg = response.error?.message || response.result?.error || "Có lỗi xảy ra!";
       toast.error(msg, { ms: 1800 })
 

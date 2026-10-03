@@ -2,9 +2,10 @@
 """Pack view page route (/custom_barcode_scan/pack_view/<id>)."""
 from odoo import http
 from odoo.http import request
+import json
 import logging
 
-from ._shared import get_ml_demand, move_package_quants_to_loose
+from ._shared import get_pack_lines, get_pack_snapshot, move_package_quants_to_loose
 
 _logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ class PackViewController(http.Controller):
             if self._auto_clean_source_packages(picking):
                 return request.redirect(f'/custom_barcode_scan/pack_view/{picking_id}')
 
-        lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
+        lines = get_pack_lines(picking)
 
         # Tìm PICK gốc để hiển thị
         origin_pick = request.env['stock.picking'].sudo().search([
@@ -222,6 +223,7 @@ class PackViewController(http.Controller):
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,
             'is_repack': is_repack,
+            'pack_snapshot_json': json.dumps(get_pack_snapshot(picking)),
         })
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         response.headers['Pragma'] = 'no-cache'

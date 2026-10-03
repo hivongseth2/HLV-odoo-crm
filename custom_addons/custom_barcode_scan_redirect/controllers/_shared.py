@@ -15,6 +15,8 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from oauth2client.client import OAuth2Credentials
 
+from ..services.pack_snapshot import pack_snapshot, diff_pack_snapshot
+
 _logger = logging.getLogger(__name__)
 
 # ====== Upload config ======
@@ -107,6 +109,29 @@ def get_ml_demand(ml):
         return move_demand / n_mls
 
     return 0
+
+
+def get_pack_lines(picking):
+    """Các stock.move hiển thị thành dòng trên màn hình đóng gói."""
+    return picking.move_ids_without_package.filtered(lambda m: m.product_id)
+
+
+def get_pack_snapshot(picking):
+    """Bản chụp số yêu cầu từng dòng của phiếu, để trang đóng gói giữ và gửi lại so sau."""
+    return pack_snapshot(
+        (m.id, m.product_id.display_name, m.product_uom_qty) for m in get_pack_lines(picking)
+    )
+
+
+def pack_changes_since(picking, client_snapshot):
+    """Các dòng của phiếu đã đổi so với bản chụp trình duyệt đang giữ (xem diff_pack_snapshot).
+
+    Không có bản chụp (trình duyệt còn chạy JS cũ trước khi nâng cấp) → [] để không chặn
+    nhầm người đang đóng dở.
+    """
+    if not client_snapshot:
+        return []
+    return diff_pack_snapshot(client_snapshot, get_pack_snapshot(picking))
 
 
 def move_package_quants_to_loose(env, package, location=None, logger=None):
