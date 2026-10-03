@@ -15,6 +15,10 @@ _logger = logging.getLogger(__name__)
 import json
 
 
+class MisaAuthExpired(Exception):
+    """CRM trả 401/403: token đã lưu hết hiệu lực, cần đăng nhập lại."""
+
+
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
@@ -540,6 +544,22 @@ class MisaApiUtils(models.AbstractModel):
         _logger.info("[MISA INVOICE PREVIEW] Retrying gateway g1")
         return self._fetch_with_retry(g1_url, headers, payload)
 
+    def _misa_login_request(self, session, method, url, **kwargs):
+        """Một bước đăng nhập MISA, có timeout; bị cắt kết nối / quá giờ thì thử lại MỘT lần.
+
+        Trước đây không có timeout (treo được mãi) và hỏng là hỏng luôn: MISA hay đóng
+        kết nối ngang ở bước đăng nhập ("Remote end closed connection without response").
+        Đăng nhập gọi lại bao nhiêu lần cũng vô hại nên thử lại được.
+        """
+        for attempt in (1, 2):
+            try:
+                return session.request(method, url, timeout=30, **kwargs)
+            except (requests.ConnectionError, requests.Timeout) as error:
+                if attempt == 2:
+                    raise
+                _logger.warning("Đăng nhập MISA lỗi kết nối (%s), thử lại sau 3 giây", error)
+                time.sleep(3)
+
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
         # Sử dụng session để duy trì cookie, bao gồm cả HttpOnly
@@ -560,7 +580,7 @@ class MisaApiUtils(models.AbstractModel):
         }
 
         # Step 1: Gửi request login
-        response = session.post(login_url, headers=headers, json=payload)
+        response = self._misa_login_request(session, "POST", login_url, headers=headers, json=payload)
 
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
@@ -587,7 +607,7 @@ class MisaApiUtils(models.AbstractModel):
             "Cookie": cookie_header,
             "User-Agent": "PostmanRuntime/7.44.1",
         }
-        crm_response = session.get(crm_url, headers=crm_headers)
+        crm_response = self._misa_login_request(session, "GET", crm_url, headers=crm_headers)
 
         if crm_response.status_code != 200:
             raise Exception(f"CRM page fetch failed: {crm_response.status_code}")
@@ -626,6 +646,31 @@ class MisaApiUtils(models.AbstractModel):
         ICP.set_param("misa.crm.cached_token", token)
         ICP.set_param("misa.crm.cached_token_exp", str(exp))
         return token
+
+    def _crm_product_headers(self, force_refresh=False):
+        """Header CRM cho các lệnh Product, dùng token ĐÃ LƯU.
+
+        Trước đây mỗi lần tìm / tạo / sửa hàng là một lần đăng nhập MISA: một lượt chat
+        của trợ lý đăng nhập 6-7 lần trong một phút và bị MISA cắt kết nối ngang.
+        """
+        token = self._fetch_login_crm_token_cached(force_refresh=force_refresh)
+        headers = self.env['misa.config'].get_crm_header(token)
+        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+        return headers
+
+    def _with_crm_reauth(self, func, *args, **kwargs):
+        """Chạy ``func(headers, ...)`` bằng token đã lưu; token hết hiệu lực thì đăng nhập
+        lại ĐÚNG MỘT LẦN và chạy lại TỪ ĐẦU.
+
+        Chạy lại từ đầu chứ không chỉ gửi lại request cuối: các bước tra cứu trước đó
+        (nhóm, ĐVT, thuế...) chạy bằng token hỏng đã lặng lẽ trả rỗng, gửi lại mỗi
+        request cuối là tạo hàng với dữ liệu thiếu.
+        """
+        try:
+            return func(self._crm_product_headers(), *args, **kwargs)
+        except MisaAuthExpired:
+            _logger.info("Token CRM đã lưu hết hiệu lực, đăng nhập lại một lần")
+            return func(self._crm_product_headers(force_refresh=True), *args, **kwargs)
 
     def _get_cached_crm_headers(self, force_refresh=False):
         token = self._fetch_login_crm_token_cached(force_refresh=force_refresh)
@@ -2061,14 +2106,11 @@ class MisaApiUtils(models.AbstractModel):
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
-    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods", cat_id=None, category_id=None, price_pu=0, description=""):
-        misa_config = self.env['misa.config']
-        token = self._fetch_login_crm_token()
-        if not token:
-            raise Exception("Lỗi Token MISA")
+    def create_product_misa_raw(self, *args, **kwargs):
+        """Tạo hàng thường trên CRM (và Odoo). Token đã lưu, xem _with_crm_reauth."""
+        return self._with_crm_reauth(self._create_product_misa_raw, *args, **kwargs)
 
-        headers = misa_config.get_crm_header(token)
-        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+    def _create_product_misa_raw(self, headers, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods", cat_id=None, category_id=None, price_pu=0, description=""):
 
         # --- 1. XỬ LÝ ID ---
         cat_id = category_id or cat_id
@@ -2157,6 +2199,8 @@ class MisaApiUtils(models.AbstractModel):
 
         session = self._get_retry_session()
         res = session.post(url, headers=headers, json=payload, timeout=30)
+        if res.status_code in (401, 403):
+            raise MisaAuthExpired(f"CRM từ chối phiên đăng nhập (HTTP {res.status_code})")
         
         _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code} | Body: {res.text}")
 
@@ -2298,21 +2342,19 @@ class MisaApiUtils(models.AbstractModel):
         """
         Cập nhật từng trường (name hoặc code) lên MISA CRM
         field_type: 'name' hoặc 'code'
+        Token đã lưu, xem _with_crm_reauth. Trả True/False như cũ.
         """
         if not misa_id:
             return False
-
-        misa_config = self.env['misa.config']
-        token = self._fetch_login_crm_token()
-        if not token:
-            _logger.error("Lỗi Token MISA khi cập nhật sản phẩm")
+        try:
+            return self._with_crm_reauth(
+                self._update_product_field_misa, misa_id, field_type, new_value, old_value)
+        except Exception as e:
+            _logger.error("❌ Lỗi token / đăng nhập MISA khi cập nhật %s: %s", field_type, e)
             return False
 
-        headers = misa_config.get_crm_header(token)
-        headers.update({
-            "LayoutCode": "product", 
-            "X-Misa-Language": "vi-VN"
-        })
+    def _update_product_field_misa(self, headers, misa_id, field_type, new_value, old_value):
+        misa_config = self.env['misa.config']
 
         if field_type == 'name':
             payload = misa_config.get_misa_update_product_name_payload(misa_id, new_value, old_value)
@@ -2328,6 +2370,8 @@ class MisaApiUtils(models.AbstractModel):
         session = self._get_retry_session()
         try:
             res = session.put(url, headers=headers, json=payload, timeout=20)
+            if res.status_code in (401, 403):
+                raise MisaAuthExpired(f"CRM từ chối phiên đăng nhập (HTTP {res.status_code})")
             res_json = res.json()
             if res.ok and res_json.get("Success"):
                 _logger.info("✅ Đã cập nhật %s cho MISA ID %s", field_type, misa_id)
@@ -2338,6 +2382,8 @@ class MisaApiUtils(models.AbstractModel):
             else:
                 _logger.warning("⚠️ Lỗi MISA khi cập nhật %s: %s", field_type, res.text)
                 return False
+        except MisaAuthExpired:
+            raise
         except Exception as e:
             _logger.error("❌ Exception MISA update %s: %s", field_type, e)
             return False
@@ -2346,18 +2392,13 @@ class MisaApiUtils(models.AbstractModel):
     # API SEARCH PRODUCT BY NAME
     # =========================================================================
     def search_product_by_name(self, name=None, code=None, limit=20):
-        import uuid
-        
+        """Tìm hàng trên CRM theo tên / mã (kiểu "chứa"). Token đã lưu, xem _with_crm_reauth."""
         if not name and not code:
             raise Exception("Cần truyền ít nhất 'name' hoặc 'code' để tìm kiếm")
-        
-        misa_config = self.env['misa.config']
-        token = self._fetch_login_crm_token()
-        if not token:
-            raise Exception("Lỗi Token MISA")
+        return self._with_crm_reauth(self._search_product_by_name, name, code, limit)
 
-        headers = misa_config.get_crm_header(token)
-        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+    def _search_product_by_name(self, headers, name=None, code=None, limit=20):
+        import uuid
 
         # Sử dụng API g1 thay vì g2
         url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
@@ -2465,6 +2506,8 @@ class MisaApiUtils(models.AbstractModel):
         session = self._get_retry_session()
         try:
             res = session.post(url, headers=headers, json=payload, timeout=30)
+            if res.status_code in (401, 403):
+                raise MisaAuthExpired(f"CRM từ chối phiên đăng nhập (HTTP {res.status_code})")
             
             _logger.info(f"📥 [MISA RESPONSE] Staus: {res.status_code} | Body: {res.text}")
 
