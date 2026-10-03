@@ -13,6 +13,10 @@
                              help="Sửa tên / mã sản phẩm trên Odoo thì tự cập nhật hàng tương ứng trên MISA CRM. Kết quả ghi ở chatter sản phẩm.">
                         <field name="misa_crm_auto_sync_product"/>
                     </setting>
+                    <setting id="misa_amis_sync_product_name"
+                             help="MISA đổi tên hàng thì sản phẩm Odoo đổi tên theo (qua AMIS callback). Chỉ khi MISA ĐỔI tên; chỉ tên, không đổi mã.">
+                        <field name="misa_amis_sync_product_name"/>
+                    </setting>
                 </block>
             </xpath>
         </field>

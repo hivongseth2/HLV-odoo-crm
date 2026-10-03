@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
 
 from odoo import api, fields, models
+
+_logger = logging.getLogger(__name__)
+
+# Công tắc nằm ở Cài đặt > Tồn kho > MISA CRM (misa_fetch_po_button): đọc tham số hệ
+# thống thay vì thêm field cấu hình ở đây, để bật tính năng không phải nâng cấp
+# amis_callback (nâng cấp là ghi lại các cron trong data/ir_cron.xml).
+NAME_SYNC_PARAM = 'misa.amis.sync_product_name'
 
 
 class AmisMisaInventoryCache(models.Model):
@@ -142,9 +150,43 @@ class AmisMisaInventoryCache(models.Model):
             ('inventory_item_id', '=', item_id),
         ], limit=1)
         if rec:
+            old_misa_name = rec.inventory_item_name
             rec.write(vals)
+            rec._follow_misa_rename(old_misa_name)
             return rec
         return self.sudo().create(vals)
+
+    def _follow_misa_rename(self, old_misa_name):
+        """MISA vừa đổi tên hàng -> đổi tên sản phẩm Odoo theo (nếu bật).
+
+        Bật / tắt: Cài đặt > Tồn kho > MISA CRM (System Parameter misa.amis.sync_product_name).
+
+        Chỉ khi CHÍNH MISA đổi tên (tên cũ trong cache khác tên mới), không phải mỗi khi
+        tên Odoo khác tên MISA: lượt mirror "full" đọc lại cả danh mục, so kiểu kia là đổi
+        tên hàng loạt mọi sản phẩm đang cố ý đặt tên khác MISA. Bản ghi cache mới tạo lần
+        đầu cũng không đổi gì, vì chưa có "tên cũ" để biết MISA có đổi hay không.
+        """
+        self.ensure_one()
+        new_name = (self.inventory_item_name or '').strip()
+        old_misa_name = (old_misa_name or '').strip()
+        if not new_name or not old_misa_name or new_name == old_misa_name or not self.product_id:
+            return
+        if not self.env['ir.config_parameter'].sudo().get_param(NAME_SYNC_PARAM):
+            return
+        template = self.product_id.product_tmpl_id.sudo()
+        old_odoo_name = template.name or ''
+        if old_odoo_name == new_name:
+            # Thường gặp khi chính Odoo vừa đổi tên rồi đẩy lên MISA: webhook quay về, đã khớp.
+            return
+        # sudo + misa_skip_crm_sync: không đẩy ngược tên này lên MISA lần nữa.
+        template.with_context(misa_skip_crm_sync=True).write({'name': new_name})
+        template.message_post(
+            body="Đổi tên theo MISA: «%s» → «%s» (MISA sửa lúc %s)." % (
+                old_odoo_name, new_name, self.misa_modified_date or '?'),
+            message_type='comment', subtype_xmlid='mail.mt_note',
+        )
+        _logger.info("AMIS_NAME_SYNC %s: '%s' -> '%s' (MISA item %s)",
+                     template.default_code, old_odoo_name, new_name, self.inventory_item_id)
 
     @api.model
     def _deleted_payload(self, item):
