@@ -31,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.4.0'
+AGENT_VERSION = '2.5.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -87,6 +87,13 @@ RESTART_DELAY_AFTER_DATA = 1
 # 60 lan la tu bien mot lan chop mang thanh mat han camera - dung cai sap xay ra
 # truoc khi va cho nay.
 RESTART_BACKOFF_SECONDS = (3, 5, 10, 20, 30)
+
+# Tien trinh con song ma file khong lon len nua = luong da chet nhung ffmpeg
+# khong biet, no cu ngoi doi du lieu khong bao gio toi. Phan noi lai chi phan ung
+# khi ffmpeg CHET nen mu hoan toan truoc kieu hong nay.
+# 20 giay: du rong de khong giet nham luc dang bat tay RTSP (thuong duoi 5 giay),
+# va voi luong 2.6 Mbps thi 20 giay khong lon them mot byte nao la chac chan chet.
+STALL_SECONDS = 20
 
 # Doan ngan hon chung nay coi nhu khong co gi - bo di truoc khi noi, de mot doan
 # 0 byte khong lam hong ca file cuoi.
@@ -217,6 +224,9 @@ class Recorder:
         self.segments = []
         self.restarts = 0
         self.proc = None
+        self._last_size = 0
+        self._last_growth_at = 0.0
+        self.stalls = 0           # so lan phai giet vi treo
         self.retry_at = 0.0       # chua toi moc nay thi chua noi lai
         self.fail_streak = 0      # so lan lien tiep khong mo noi camera
         self._waited = False      # da cho xong gian cach cho lan noi lai nay
@@ -255,6 +265,8 @@ class Recorder:
         self.segments.append(path)
         self._waited = False
         self._death_pending = True
+        self._last_size = 0
+        self._last_growth_at = time.time()
         threading.Thread(target=self._drain_stderr, args=(self.proc,),
                          daemon=True).start()
 
@@ -279,6 +291,34 @@ class Recorder:
             return os.path.getsize(self.segments[-1]) if self.segments else 0
         except OSError:
             return 0
+
+    def is_stalled(self):
+        """ffmpeg còn sống nhưng đã STALL_SECONDS giây không ghi thêm được gì.
+
+        Trả: True khi file của đoạn hiện tại đứng yên quá lâu. Biên: vừa chạy
+            xong thì mốc tăng trưởng đặt ở lúc chạy, nên vẫn có đủ thời gian bắt
+            tay RTSP trước khi bị coi là treo.
+        """
+        size = self._segment_size()
+        now = time.time()
+        if size > self._last_size:
+            self._last_size = size
+            self._last_growth_at = now
+            return False
+        return (now - self._last_growth_at) >= STALL_SECONDS
+
+    def kill_stalled(self):
+        """Giết tiến trình đang treo để vòng quét sau nối lại như một lần đứt.
+
+        Giết thẳng, không gửi 'q': tiến trình đang kẹt chờ dữ liệu mạng thì
+        không đọc stdin nên 'q' chỉ làm mất thêm 15 giây chờ vô ích.
+        """
+        self.stalls += 1
+        try:
+            self.proc.kill()
+            self.proc.wait(timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            pass
 
     def try_restart(self):
         """ffmpeg chết giữa chừng mà chưa có lệnh dừng — ghi tiếp thành đoạn mới.
@@ -528,9 +568,12 @@ class Agent:
             # nào cũng được, miễn là trạng thái được chốt.
             path = self._find_leftover_file(recording_id)
             if path:
-                log.info("rec=%s: agent đã khởi động lại, gửi nốt file còn lại",
-                         recording_id)
-                self.enqueue_upload(recording_id, path)
+                # CHI ghi log khi that su xep duoc vao hang doi. Odoo gui lai lenh
+                # dung moi 2 giay cho toi khi upload xong, nen ghi vo dieu kien se
+                # do ra hang chuc dong giong het nhau - da thay trong log that.
+                if self.enqueue_upload(recording_id, path):
+                    log.info("rec=%s: còn file chưa gửi, xếp vào hàng đợi",
+                             recording_id)
             else:
                 self.report_failure(
                     recording_id,
@@ -635,6 +678,15 @@ class Agent:
         for recording_id in list(self.active):
             recorder = self.active[recording_id]
             if recorder.is_running():
+                # Còn sống KHÔNG có nghĩa là còn ghi được. Luồng RTSP chết mà
+                # ffmpeg không nhận ra thì nó ngồi đợi mãi, và trước đây không
+                # chỗ nào phát hiện — phiếu mất gần hết video dù tiến trình vẫn
+                # xanh.
+                if recorder.is_stalled():
+                    log.warning("rec=%s cam=%s ffmpeg còn sống nhưng %ds không "
+                                "ghi thêm được gì — giết để nối lại",
+                                recording_id, recorder.camera_code, STALL_SECONDS)
+                    recorder.kill_stalled()
                 continue
             # ffmpeg dừng trước cả lệnh dừng: hoặc chạm trần -t (bình thường),
             # hoặc camera đứt giữa chừng (KHÔNG bình thường). Hai cái đó cho ra
@@ -1250,6 +1302,29 @@ def explain_ffmpeg_error(stderr):
     return ''
 
 
+def _looks_playable(path, window=2 * 1024 * 1024):
+    """File MP4 này có mục lục để mở được không.
+
+    MP4 phải có hộp 'moov'. ffmpeg bị giết ngang chưa kịp ghi hộp đó, nên file
+    tuy to vẫn vô dụng. Chỉ dò hai đầu file thay vì đọc hết: với -movflags
+    +faststart thì moov nằm đầu, không có thì nằm cuối.
+
+    Trả: True nếu tìm thấy. Biên: không đọc được file -> False.
+    """
+    try:
+        size = os.path.getsize(path)
+        with open(path, 'rb') as handle:
+            if b'moov' in handle.read(window):
+                return True
+            if size > window:
+                handle.seek(max(0, size - window))
+                if b'moov' in handle.read():
+                    return True
+    except OSError:
+        return False
+    return False
+
+
 def concat_segments(segments, out_path, ffmpeg_bin):
     """Nối các đoạn quay thành một file, KHÔNG nén lại.
 
@@ -1262,10 +1337,17 @@ def concat_segments(segments, out_path, ffmpeg_bin):
     usable = []
     for path in segments:
         try:
-            if os.path.getsize(path) >= MIN_SEGMENT_BYTES:
-                usable.append(path)
-            else:
+            if os.path.getsize(path) < MIN_SEGMENT_BYTES:
                 _remove(path)
+                continue
+            if not _looks_playable(path):
+                # Doan bi giet ngang (treo, hoac may tat dot ngot) thi thieu muc
+                # luc 'moov' va khong mo duoc. De no lot vao danh sach noi thi
+                # ffmpeg bao loi va HONG CA file cuoi - mat luon nhung doan tot.
+                log.warning("bỏ đoạn hỏng không mở được: %s", os.path.basename(path))
+                _remove(path)
+                continue
+            usable.append(path)
         except OSError:
             pass
     if not usable:
