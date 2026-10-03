@@ -21,3 +21,15 @@ def combo_change_summary(changes, header):
     parts += ["%s %g→%g" % (code, old, new) for code, old, new in changes.get('changed') or []]
     parts += ["%s → %s" % (_HEADER_LABELS.get(key, key), value) for key, value in (header or {}).items()]
     return "; ".join(parts) or "không đổi"
+
+
+def odoo_combo_text(result):
+    """Câu báo combo / BOM kit phía Odoo đã khớp MISA chưa.
+
+    Nhận: kết quả create_combo_product_misa_raw / update_combo_product_misa
+        (khoá ``odoo_synced``, ``odoo_note``).
+    Trả: một câu cho sale đọc. Biên: thiếu cả hai khoá -> "chưa cập nhật".
+    """
+    if result.get('odoo_synced'):
+        return "Odoo: đã cập nhật sản phẩm combo + BOM kit."
+    return result.get('odoo_note') or "Odoo: chưa cập nhật combo/BOM."

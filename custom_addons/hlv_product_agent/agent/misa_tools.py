@@ -180,7 +180,11 @@ TOOLS = [
         "description": (
             "Sửa một trường (tên/mã/mô tả) của hàng ĐÃ CÓ trên MISA. Cần người dùng xác nhận "
             "như tạo mới: new_value phải có nguyên văn trong đề xuất ở câu trả lời trước, không "
-            "thì trả 'need_confirmation'. misa_id và old_value lấy từ kết quả search_product_misa."
+            "thì trả 'need_confirmation'. misa_id và old_value lấy từ kết quả search_product_misa. "
+            "Đổi MÃ (field=code): hệ thống đổi CẢ MISA lẫn sản phẩm Odoo cùng mã và ghi lịch sử "
+            "đổi mã; đề xuất phải ghi rõ 'Mã: <mã cũ> → <mã mới>' (cả hai mã nguyên văn). Trả "
+            "'duplicate' = mã mới đã thuộc hàng khác, không đổi gì; kết quả có odoo_updated=false "
+            "thì báo người dùng mã Odoo chưa đổi."
         ),
         "inputSchema": {
             "type": "object",

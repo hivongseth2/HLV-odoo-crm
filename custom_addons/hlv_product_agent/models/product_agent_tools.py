@@ -8,8 +8,9 @@ error — coi lỗi là "không tìm thấy" là đường tạo trùng.
 import logging
 
 from odoo import fields, models
+from odoo.addons.misa_fetch_po_button.utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
-from ..services import combo_change_summary, missing_from_proposal
+from ..services import combo_change_summary, missing_from_proposal, odoo_combo_text
 
 _logger = logging.getLogger(__name__)
 
@@ -257,10 +258,36 @@ class HlvProductAgentTools(models.AbstractModel):
             description="Combo: %s%s" % (
                 summary, ("\n" + args['description']) if args.get('description') else ''),
         )
-        session.post_event("Đã tạo combo trên MISA: %s — %s (%s thành phần: %s; MISA ID %s)" % (
-            code, name, len(components), summary, misa_id))
-        return {'status': 'success', 'message': "Tạo combo thành công: %s" % name,
+        odoo_text = odoo_combo_text(result)
+        session.post_event("Đã tạo combo trên MISA: %s — %s (%s thành phần: %s; MISA ID %s). %s" % (
+            code, name, len(components), summary, misa_id, odoo_text))
+        return {'status': 'success', 'message': "Tạo combo thành công: %s. %s" % (name, odoo_text),
                 'misa_id': misa_id, 'code': code}
+
+    def _change_code(self, session, misa_id, old_code, new_code):
+        """Đổi mã ở cả MISA lẫn Odoo + Lịch sử đổi mã hàng (misa.api.utils.change_product_code)."""
+        try:
+            result = self._misa_utils().change_product_code(
+                old_code, new_code, 'agent', actor=session.sale_name, expected_misa_id=misa_id)
+        except ProductCodeTaken as error:
+            return {'status': 'duplicate', 'message': "%s KHÔNG đổi gì; báo người dùng." % error}
+        except ProductCodeNotFound as error:
+            return {'status': 'error', 'message': "%s Chưa đổi gì." % error}
+        except Exception as error:
+            _logger.exception("PRODUCT_AGENT đổi mã lỗi")
+            return {'status': 'error', 'message': "Lỗi đổi mã: %s. Chưa đổi gì." % error}
+
+        where = "MISA và Odoo" if result['odoo_updated'] else "MISA (Odoo CHƯA đổi: %s)" % result['note']
+        _logger.info("PRODUCT_AGENT %s (%s) đổi mã %s -> %s trên %s",
+                     session.sale_name, session.user_id.login, old_code, new_code, where)
+        self.env['hlv.product.agent.log'].record(
+            session, 'update', misa_id=result['misa_id'], updated_field='code',
+            old_value=old_code, new_value=new_code, product_code=new_code,
+            description=None if result['odoo_updated'] else result['note'],
+        )
+        session.post_event("Đã đổi mã %s → %s trên %s (MISA ID %s)." % (old_code, new_code, where, result['misa_id']))
+        return {'status': 'success', 'message': "Đã đổi mã %s → %s trên %s." % (old_code, new_code, where),
+                'odoo_updated': result['odoo_updated']}
 
     def _get_combo(self, session, args):
         code = (args.get('code') or '').strip()
@@ -294,7 +321,8 @@ class HlvProductAgentTools(models.AbstractModel):
             _logger.exception("PRODUCT_AGENT MISA combo update error")
             return {'status': 'error', 'message': "Lỗi sửa combo MISA: %s" % error}
         if not result.get('changed'):
-            return {'status': 'no_change', 'message': "Combo đã đúng như vậy, không gửi gì lên MISA."}
+            return {'status': 'no_change', 'message': "Combo trên MISA đã đúng như vậy, không gửi gì lên MISA. %s"
+                    % odoo_combo_text(result)}
 
         summary = combo_change_summary(result.get('changes') or {}, result.get('header') or {})
         _logger.info("PRODUCT_AGENT %s (%s) sửa combo MISA %s (id %s): %s",
@@ -304,8 +332,10 @@ class HlvProductAgentTools(models.AbstractModel):
             misa_id=str(result.get('id') or ''), product_code=code, product_name=name or False,
             updated_field='combo', new_value=summary[:250], description=summary,
         )
-        session.post_event("Đã sửa combo trên MISA: %s — %s (MISA ID %s)" % (code, summary, result.get('id')))
-        return {'status': 'success', 'message': "Đã sửa combo %s: %s" % (code, summary),
+        odoo_text = odoo_combo_text(result)
+        session.post_event("Đã sửa combo trên MISA: %s — %s (MISA ID %s). %s" % (
+            code, summary, result.get('id'), odoo_text))
+        return {'status': 'success', 'message': "Đã sửa combo %s: %s. %s" % (code, summary, odoo_text),
                 'misa_id': result.get('id'), 'changes': result.get('changes')}
 
     @staticmethod
@@ -370,9 +400,12 @@ class HlvProductAgentTools(models.AbstractModel):
         misa_id = args.get('misa_id')
         new_value = args.get('new_value')
         old_value = args.get('old_value')
-        unconfirmed = self._require_proposed(session, [new_value])
+        # Đổi mã: sale phải thấy CẢ mã cũ lẫn mã mới — đổi nhầm hàng là hỏng khoá nối Odoo-MISA.
+        unconfirmed = self._require_proposed(session, [old_value, new_value] if field == 'code' else [new_value])
         if unconfirmed:
             return unconfirmed
+        if field == 'code':
+            return self._change_code(session, misa_id, old_value, new_value)
         try:
             updated = self._misa_utils().update_product_field_misa(misa_id, field, new_value, old_value)
         except Exception as error:
