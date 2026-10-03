@@ -1,100 +1,132 @@
-from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+# -*- coding: utf-8 -*-
+"""Sửa sản phẩm trên Odoo -> tự cập nhật hàng tương ứng trên MISA CRM.
+
+Bật / tắt ở Cài đặt > Tồn kho > MISA CRM (System Parameter misa.crm.auto_sync_product).
+
+Cố ý:
+- Chỉ đẩy khi NGƯỜI DÙNG sửa (env không phải sudo). Các luồng tự động MISA -> Odoo ghi
+  sản phẩm bằng sudo; đẩy ngược lên là vòng lặp, và làm chậm cả lô import.
+- Gọi MISA SAU KHI Odoo commit (postcommit): Odoo lưu lỗi thì MISA không bị đụng.
+- Kết quả (được / hỏng) ghi lên chatter sản phẩm: lỗi xảy ra sau khi form đã lưu xong,
+  không còn cách nào bật thông báo cho người bấm Lưu.
+"""
+import logging
+
+from odoo import SUPERUSER_ID, api, fields, models
+
+_logger = logging.getLogger(__name__)
+
+SYNC_PARAM = 'misa.crm.auto_sync_product'
+# Trường Odoo -> tên trường của misa.api.utils.update_product_field_misa.
+SYNCED_FIELDS = {'name': 'name', 'default_code': 'code'}
+FIELD_LABELS = {'name': 'tên', 'default_code': 'mã'}
+
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
-    misa_product_id = fields.Char(string="MISA ID", copy=False, readonly=True)
-    misa_synced_date = fields.Datetime(string="Ngày đồng bộ", readonly=True)
-
-    def action_sync_to_misa(self):
-        self.ensure_one()
-        
-        # Gọi hàm mới trong Utils
-        try:
-            # Truyền self.id vào hàm mới
-            misa_id = self.env['misa.api.utils'].create_product_misa(self.id)
-            
-            if misa_id:
-                self.write({
-                    'misa_product_id': str(misa_id),
-                    'misa_synced_date': fields.Datetime.now()
-                })
-                
-                # Hiển thị thông báo Toast thành công
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': _("Thành công"),
-                        'message': _("Đã tạo sản phẩm trên MISA"),
-                        'type': 'success',
-                        'sticky': False,
-                    }
-                }
-        except Exception as e:
-            # Hiện popup lỗi nếu có sự cố
-            raise UserError(_("Lỗi đồng bộ MISA:\n%s") % str(e))
+    misa_product_id = fields.Char(
+        string="MISA ID", copy=False, readonly=True,
+        help="ID hàng tương ứng trên MISA CRM, nhớ lại sau lần đồng bộ đầu để khỏi tra theo mã.",
+    )
 
     def write(self, vals):
-        import logging
-        _logger = logging.getLogger(__name__)
-
-        # Lưu các giá trị cũ của trường chuẩn bị thay đổi trước khi ghi
-        old_misa_values = {}
-        if 'name' in vals or 'default_code' in vals:
-            for rec in self:
-                old_misa_values[rec.id] = {
-                    'name': rec.name or '',
-                    'default_code': rec.default_code or '',
-                }
-
-        res = super(ProductTemplate, self).write(vals)
-
-        # Cập nhật thay đổi sang MISA
-        if old_misa_values:
-            misa_utils = self.env['misa.api.utils']
-            for rec in self:
-                old_vals = old_misa_values.get(rec.id)
-                if not old_vals:
-                    continue
-                
-                old_code = old_vals['default_code']
-                if not old_code:
-                    continue
-                
-                try:
-                    # Dùng mã tham chiếu cũ (default_code) search trên MISA để lấy ID sản phẩm
-                    _logger.info("🔍 Đang search MISA với old_code: %s", old_code)
-                    search_res = misa_utils.search_product_by_name(code=old_code)
-                    misa_id = None
-                    if search_res:
-                        for p in search_res:
-                            _logger.info("🔎 Thấy product trên MISA: Code=%s | Name=%s | ID=%s", p.get('code'), p.get('name'), p.get('misa_id'))
-                            # So sánh chính xác ProductCode trên MISA với old_code
-                            if p.get('code') == old_code:
-                                misa_id = str(p.get('misa_id'))
-                                _logger.info("✅ Đã chốt MISA ID: %s", misa_id)
-                                break
-                    else:
-                        _logger.warning("⚠️ Không tìm thấy sản phẩm nào trên MISA!")
-                    
-                    if misa_id:
-                        if 'name' in vals:
-                            new_name = rec.name or ''
-                            _logger.info("📝 Cần update Name? New=%s | Old=%s", new_name, old_vals['name'])
-                            if new_name != old_vals['name']:
-                                res_name = misa_utils.update_product_field_misa(misa_id, 'name', new_name, old_vals['name'])
-                                _logger.info("👉 Kết quả update Name: %s", res_name)
-                        
-                        if 'default_code' in vals:
-                            new_code = rec.default_code or ''
-                            _logger.info("📝 Cần update Code? New=%s | Old=%s", new_code, old_code)
-                            if new_code != old_code:
-                                res_code = misa_utils.update_product_field_misa(misa_id, 'code', new_code, old_code)
-                                _logger.info("👉 Kết quả update Code: %s", res_code)
-                except Exception as e:
-                    # Log lỗi nhưng không chặn luồng update trong Odoo
-                    _logger.error("❌ Lỗi đồng bộ cập nhật sản phẩm MISA: %s", str(e))
-                        
+        changes = self._misa_changes_to_push(vals)
+        res = super().write(vals)
+        if changes:
+            self._schedule_misa_push(changes)
         return res
+
+    def _misa_changes_to_push(self, vals):
+        """Chụp giá trị cũ TRƯỚC khi ghi, cho các trường MISA quan tâm.
+
+        Trả: list ``(id, mã cũ, misa_id, {trường: giá trị cũ})``; rỗng khi tắt đồng bộ,
+        khi ghi bằng sudo, hoặc vals không đụng tên / mã.
+        """
+        touched = [field for field in SYNCED_FIELDS if field in vals]
+        if not touched or self.env.su or self.env.context.get('misa_skip_crm_sync'):
+            return []
+        if not self.env['ir.config_parameter'].sudo().get_param(SYNC_PARAM):
+            return []
+        return [
+            (rec.id, (rec.default_code or '').strip(), rec.misa_product_id,
+             {field: rec[field] or '' for field in touched})
+            for rec in self
+        ]
+
+    def _schedule_misa_push(self, changes):
+        """Đẩy lên MISA sau khi transaction này commit, bằng cursor riêng.
+
+        Một lần bấm Lưu có thể ghi sản phẩm nhiều lần (onchange, module khác ghi thêm).
+        Gộp theo sản phẩm, giữ giá trị cũ ĐẦU TIÊN của mỗi trường — đó mới là thứ MISA
+        đang có — và chỉ đăng ký một callback cho cả transaction.
+        """
+        postcommit = self.env.cr.postcommit
+        pending = postcommit.data.get(SYNC_PARAM)
+        if pending is None:
+            pending = postcommit.data[SYNC_PARAM] = {}
+            registry, uid = self.env.registry, self.env.uid
+
+            def _push():
+                with registry.cursor() as cr:
+                    env = api.Environment(cr, SUPERUSER_ID, {'misa_skip_crm_sync': True})
+                    env['product.template'].browse([])._push_changes_to_misa(
+                        [(tid, *rest) for tid, rest in pending.items()], uid)
+
+            postcommit.add(_push)
+
+        for template_id, old_code, misa_id, old_values in changes:
+            first = pending.setdefault(template_id, [old_code, misa_id, {}])
+            for field, value in old_values.items():
+                first[2].setdefault(field, value)
+
+    def _push_changes_to_misa(self, changes, author_uid):
+        """Đẩy từng sản phẩm, ghi kết quả lên chatter. Không bao giờ raise (đã sau commit)."""
+        misa = self.env['misa.api.utils']
+        author = self.env['res.users'].browse(author_uid).partner_id
+        for template_id, old_code, misa_id, old_values in changes:
+            product = self.browse(template_id).exists()
+            if not product:
+                continue
+            new_values = {field: product[field] or '' for field in old_values}
+            diff = {field: (old_values[field], new_values[field])
+                    for field in old_values if old_values[field] != new_values[field]}
+            if not diff:
+                continue
+            try:
+                note = product._push_one_to_misa(misa, old_code, misa_id, diff)
+            except Exception as error:
+                _logger.exception("MISA_PRODUCT_SYNC lỗi khi đẩy sản phẩm %s", template_id)
+                note = "Chưa cập nhật được MISA: %s" % error
+            product.message_post(body=note, author_id=author.id or None,
+                                 message_type='comment', subtype_xmlid='mail.mt_note')
+
+    def _push_one_to_misa(self, misa, old_code, misa_id, diff):
+        """Đẩy thay đổi của MỘT sản phẩm. Trả câu ghi chú cho chatter."""
+        self.ensure_one()
+        if not misa_id:
+            found = misa._find_exact_crm_product_by_code(old_code) if old_code else None
+            if not found:
+                return "Chưa cập nhật MISA: không thấy mã %s trên MISA CRM." % (old_code or '(trống)')
+            misa_id = str(found.get('misa_id'))
+            self.write({'misa_product_id': misa_id})
+
+        if 'default_code' in diff:
+            new_code = diff['default_code'][1].strip()
+            taken = misa._find_exact_crm_product_by_code(new_code) if new_code else None
+            if not new_code or (taken and str(taken.get('misa_id')) != misa_id):
+                # Bỏ cả lượt: đổi tên mà giữ mã cũ cũng là lệch, thà báo để người sửa quyết.
+                return ("Chưa cập nhật MISA: mã mới %s %s." %
+                        (new_code or '(trống)', "đã thuộc hàng khác trên MISA" if new_code else "bị bỏ trống"))
+
+        done, failed = [], []
+        for field, (old, new) in diff.items():
+            ok = misa.update_product_field_misa(misa_id, SYNCED_FIELDS[field], new.strip(), old)
+            (done if ok else failed).append("%s «%s» → «%s»" % (FIELD_LABELS[field], old, new))
+        _logger.info("MISA_PRODUCT_SYNC MISA ID %s: được %s, hỏng %s", misa_id, done, failed)
+        parts = []
+        if done:
+            parts.append("Đã cập nhật MISA (ID %s): %s." % (misa_id, "; ".join(done)))
+        if failed:
+            parts.append("MISA KHÔNG nhận: %s — sửa tay trên MISA." % "; ".join(failed))
+        return " ".join(parts)
