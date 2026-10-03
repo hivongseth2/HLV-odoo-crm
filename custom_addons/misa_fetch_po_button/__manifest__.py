@@ -1,6 +1,6 @@
 {
     'name': 'MISA PO Fetch Button',
-    'version': '1.3',
+    'version': '1.4',
     'depends': [
         'base', 'contacts', 'stock', 'purchase', 'sale', 'sale_stock',
         'sales_team', 'point_of_sale', 'hlv_zalo_zns', 'hlv_loyalty',
@@ -26,6 +26,7 @@
         'views/misa_invoice_search_view.xml',
         'views/misa_crm_contact_sync_views.xml',
         'views/res_config_settings_views.xml',
+        'views/misa_product_code_history_views.xml',
     ],
     'installable': True,
     'auto_install': False,

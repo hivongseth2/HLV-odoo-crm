@@ -11,3 +11,4 @@ from . import stock_picking_crm_delivery
 from . import misa_crm_contact_sync
 from . import product_misa_sync
 from . import res_config_settings
+from . import misa_product_code_history

@@ -13,3 +13,5 @@ access_misa_crm_contact_sync_run,misa.crm.contact.sync.run,model_misa_crm_contac
 access_misa_crm_contact_sync_line,misa.crm.contact.sync.line,model_misa_crm_contact_sync_line,base.group_user,1,1,1,0
 access_misa_sale_sync_snapshot_user,misa.sale.sync.snapshot,model_misa_sale_sync_snapshot,base.group_user,1,0,0,0
 access_misa_sale_sync_snapshot_line_user,misa.sale.sync.snapshot.line,model_misa_sale_sync_snapshot_line,base.group_user,1,0,0,0
+access_misa_product_code_history_user,misa.product.code.history user,model_misa_product_code_history,stock.group_stock_user,1,0,0,0
+access_misa_product_code_history_system,misa.product.code.history system,model_misa_product_code_history,base.group_system,1,1,1,1

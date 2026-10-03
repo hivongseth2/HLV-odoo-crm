@@ -70,6 +70,36 @@ class MisaCrmCombo(models.AbstractModel):
         table = next((t for t in data if isinstance(t, dict) and t.get("TableName") == "set_product"), {})
         return table.get("DataFieldSubForm") or []
 
+    def _sync_combo_to_odoo(self, code, name, unit_name, components):
+        """Tạo / cập nhật sản phẩm combo + BOM kit trên Odoo cho khớp thành phần MISA.
+
+        Dùng lại get_or_create_combo_product của luồng import đơn (không có cách dựng BOM
+        thứ hai): nó tạo combo nếu chưa có, chuyển thành hàng lưu kho, rồi XOÁ dòng BOM
+        cũ và ghi lại theo danh sách con. Mã con chưa có trên Odoo được nó tạo luôn.
+        Gọi với số lượng combo = 1 nên số lượng con là số lượng trong 1 combo.
+
+        Trả: ``{'odoo_synced': bool, 'odoo_note': str | None}``. Không bao giờ raise:
+        MISA đã ghi xong, lỗi phía Odoo chỉ được báo lại, không được làm mất kết quả MISA.
+        """
+        combo_data = {'ProductIDText': code, 'Description': name or code,
+                      'UnitIDText': unit_name or 'Bộ', 'Amount': 1.0}
+        children = [{
+            'ProductIDText': (item.get('code') or '').strip(),
+            'Description': item.get('name') or item.get('code'),
+            'UnitIDText': item.get('unit_name') or 'Cái',
+            'Amount': float(item.get('quantity') or 0.0),
+            'Price': 0.0,
+        } for item in components]
+        try:
+            with self.env.cr.savepoint():
+                product = self.get_or_create_combo_product(combo_data, children)
+        except Exception as error:
+            _logger.exception("Đồng bộ combo %s xuống Odoo lỗi", code)
+            return {'odoo_synced': False, 'odoo_note': f"Odoo chưa cập nhật combo/BOM: {error}"}
+        if not product:
+            return {'odoo_synced': False, 'odoo_note': "Odoo chưa cập nhật combo/BOM (không tạo được sản phẩm)."}
+        return {'odoo_synced': True, 'odoo_note': None}
+
     def get_combo_misa(self, code):
         """Thành phần hiện tại của combo theo mã.
 
@@ -107,9 +137,11 @@ class MisaCrmCombo(models.AbstractModel):
             components: danh sách thành phần MỚI ĐẦY ĐỦ ``[{'code', 'quantity'}]`` — hàng nào
                 không có trong danh sách là bị xoá khỏi combo. None = không đổi thành phần.
             name / price / price_pu: None = giữ nguyên.
-        Trả: ``{'id', 'changed', 'changes', 'header'}``; changes = thêm / xoá / đổi số
-            lượng (xem diff_combo_rows), header = các trường phần đầu đã đổi.
-        Biên: không có gì khác bản hiện tại -> không gửi lên CRM, ``changed`` False.
+        Trả: ``{'id', 'changed', 'changes', 'header', 'odoo_synced', 'odoo_note'}``;
+            changes = thêm / xoá / đổi số lượng (xem diff_combo_rows), header = các trường
+            phần đầu đã đổi; odoo_* = kết quả ghi lại combo + BOM kit trên Odoo.
+        Biên: không có gì khác bản hiện tại -> không gửi lên CRM, ``changed`` False, nhưng
+            BOM Odoo vẫn được ghi lại theo MISA.
         Raise khi: mã không có / không phải combo; danh sách mới rỗng; mã con không có trên
             CRM; CRM từ chối (vd có người vừa sửa combo này — MISA kiểm ModifiedDate/Version).
         """
@@ -145,9 +177,14 @@ class MisaCrmCombo(models.AbstractModel):
             header["PurchasedPrice"] = float(price_pu)
 
         if not header and not any(changes.values()):
-            return {"id": str(misa_id), "changed": False, "changes": changes, "header": header}
-
-        payload = build_combo_update_payload(current, data_rows, old_data, amount_summary, header)
-        saved_id = self._save_crm_product(payload, code, headers)
-        _logger.info("Sửa combo CRM %s (ID=%s): %s %s", code, saved_id, changes, header)
-        return {"id": saved_id, "changed": True, "changes": changes, "header": header}
+            saved_id, changed = str(misa_id), False
+        else:
+            payload = build_combo_update_payload(current, data_rows, old_data, amount_summary, header)
+            saved_id, changed = self._save_crm_product(payload, code, headers), True
+            _logger.info("Sửa combo CRM %s (ID=%s): %s %s", code, saved_id, changes, header)
+        # Ghi lại BOM Odoo theo đúng danh sách MISA kể cả khi MISA không đổi gì: lần đó
+        # chính là lúc sửa được một BOM Odoo đã lệch từ trước.
+        odoo = self._sync_combo_to_odoo(
+            code, header.get("ProductName") or current.get("ProductName"),
+            current.get("UsageUnitIDText"), resolved)
+        return dict(odoo, id=saved_id, changed=changed, changes=changes, header=header)
