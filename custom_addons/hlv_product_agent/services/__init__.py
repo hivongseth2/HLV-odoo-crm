@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from .combo_summary import combo_change_summary
+from .combo_summary import combo_change_summary, odoo_combo_text
 from .confirmation import missing_from_proposal
 from .enroll_code import ENROLL_CODE_LENGTH, normalize_enroll_code, random_enroll_code
 from .permission_marker import apply_permission_marker, strip_permission_markers
@@ -10,6 +10,7 @@ from .turn_prompt import attachment_filename, build_turn_prompt
 
 __all__ = [
     "combo_change_summary",
+    "odoo_combo_text",
     "missing_from_proposal",
     "ENROLL_CODE_LENGTH",
     "normalize_enroll_code",

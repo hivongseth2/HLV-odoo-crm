@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from misa_tools import TOOL_NAMES as MISA_TOOL_NAMES  # noqa: E402  — một nguồn duy nhất với MCP server
 
-AGENT_VERSION = '1.4.0'
+AGENT_VERSION = '1.5.0'
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MCP_SERVER = os.path.join(AGENT_DIR, 'misa_mcp_server.py')
 
