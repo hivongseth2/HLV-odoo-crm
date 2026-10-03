@@ -239,6 +239,9 @@
           const packVideoBitrate = <t t-esc="pack_video_bitrate"/>;
           const packBrowserRecording = <t t-esc="1 if pack_browser_recording else 0"/>;
         </script>
+        <div id="pack_snapshot" style="display: none;"
+             t-att-data-picking-id="picking.id"
+             t-att-data-snapshot="pack_snapshot_json"></div>
         <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 
         <script src="/custom_barcode_scan_redirect/static/src/js/toast.js"></script>
@@ -246,6 +249,7 @@
         <script src="/custom_barcode_scan_redirect/static/src/js/server_sync.js"></script>
         <script src="/custom_barcode_scan_redirect/static/src/js/camera_health.js"></script>
         <script src="/custom_barcode_scan_redirect/static/src/js/recording.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/pack_change_watch.js"></script>
         <script src="/custom_barcode_scan_redirect/static/src/js/side_panel.js"></script>
         <script src="/custom_barcode_scan_redirect/static/src/js/package_edit.js"></script>
         <script src="/custom_barcode_scan_redirect/static/src/js/transfer_modal.js"></script>

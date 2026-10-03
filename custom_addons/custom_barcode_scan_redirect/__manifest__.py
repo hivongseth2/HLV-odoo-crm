@@ -1,6 +1,6 @@
 {
     "name": "Custom Barcode Pack Scan",
-    "version": "1.0",
+    "version": "1.1",
     "depends": ["stock", "stock_barcode", "hlv_pack_sequence"],
     "author": "Anh Yêu",
     "category": "Warehouse",
@@ -22,6 +22,7 @@
             "custom_barcode_scan_redirect/static/src/js/server_sync.js",
             "custom_barcode_scan_redirect/static/src/js/camera_health.js",
             "custom_barcode_scan_redirect/static/src/js/recording.js",
+            "custom_barcode_scan_redirect/static/src/js/pack_change_watch.js",
             "custom_barcode_scan_redirect/static/src/js/side_panel.js",
             "custom_barcode_scan_redirect/static/src/js/package_edit.js",
             "custom_barcode_scan_redirect/static/src/js/transfer_modal.js",
