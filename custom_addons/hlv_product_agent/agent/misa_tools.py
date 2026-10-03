@@ -9,6 +9,7 @@ lệnh gọi từ Claude rồi chuyển nguyên tên + tham số lên Odoo.
 # Tool ghi không nằm ở đây vì gọi lại là tạo/sửa trùng dữ liệu trên MISA.
 READ_ONLY_TOOLS = frozenset({
     "search_product_misa",
+    "get_combo_misa",
     "search_category_misa",
     "get_category_info",
 })
@@ -73,6 +74,104 @@ TOOLS = [
                 "code", "name", "price", "price_pu", "tax",
                 "unit", "category", "category_id", "type", "description",
             ],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "create_combo_misa",
+        "description": (
+            "Tạo COMBO (bộ gồm nhiều hàng con) trên MISA. Luật riêng của combo: "
+            "(1) MỌI mã con phải đã có trên MISA — tra từng mã bằng search_product_misa, lấy "
+            "đúng mã MISA trả về; mã con chưa có thì phải tạo hàng thường trước (luồng bình "
+            "thường), không được bịa mã con. "
+            "(2) Quét trùng combo như hàng thường (mã + tên combo). "
+            "(3) Đề xuất phải liệt kê ĐỦ: tên combo, mã combo, nhóm, ĐVT, giá, và từng dòng "
+            "'mã con — tên con — số lượng'. Mã combo, tên combo và MỌI mã con phải có nguyên "
+            "văn trong đề xuất, không thì trả 'need_confirmation'. "
+            "(4) CHỈ GỌI sau khi người dùng xác nhận OK cho đúng đề xuất đó. "
+            "Trả 'duplicate' nghĩa là mã/tên đã có, không được tạo."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Mã combo (viết liền, in hoa, không dấu)"},
+                "name": {"type": "string", "description": "Tên combo chuẩn hóa đầy đủ"},
+                "components": {
+                    "type": "array",
+                    "description": "Hàng con trong combo, mỗi mã một dòng",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string", "description": "Mã con ĐÚNG như MISA trả về khi search"},
+                            "quantity": {"type": "number", "description": "Số lượng con trong 1 combo (> 0)"},
+                        },
+                        "required": ["code", "quantity"],
+                        "additionalProperties": False,
+                    },
+                    "minItems": 1,
+                },
+                "price": {"type": "number", "description": "Giá bán lẻ combo (VNĐ). Không có thì 0."},
+                "price_pu": {"type": "number", "description": "Giá nhập combo (VNĐ). Không có thì 0."},
+                "tax": {"type": "number", "description": "Thuế GTGT (%). Không có thì 8."},
+                "unit": {"type": "string", "description": "ĐVT combo, thường là 'Bộ'"},
+                "category_id": {
+                    "type": "integer",
+                    "description": "ID nhóm hàng. Phải lấy từ search_category_misa, không tự bịa.",
+                },
+                "description": {"type": "string", "description": "Mô tả / ghi chú thêm, có thể rỗng"},
+            },
+            "required": ["code", "name", "components", "price", "price_pu", "tax", "unit",
+                         "category_id", "description"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_combo_misa",
+        "description": (
+            "Xem THÀNH PHẦN hiện tại của một combo trên MISA (mã con, tên, số lượng). Bắt "
+            "buộc gọi trước khi đề xuất sửa combo — search_product_misa không trả thành phần."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"code": {"type": "string", "description": "Mã combo"}},
+            "required": ["code"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "update_combo_misa",
+        "description": (
+            "Sửa combo ĐÃ CÓ trên MISA: thêm / bỏ / đổi số lượng mã con, đổi tên, đổi giá. "
+            "components là danh sách thành phần MỚI ĐẦY ĐỦ — mã nào không có trong danh sách "
+            "là bị XOÁ khỏi combo; không đổi thành phần thì truyền lại nguyên danh sách hiện "
+            "tại. Trước đó: gọi get_combo_misa, rồi đề xuất theo mẫu C3 (thành phần sau khi "
+            "sửa + nêu rõ thêm/bỏ/đổi gì). Mã combo, mọi mã con và tên mới (nếu đổi) phải có "
+            "nguyên văn trong đề xuất, không thì trả 'need_confirmation'. CHỈ GỌI sau khi "
+            "người dùng OK. Trả 'no_change' nghĩa là combo đã đúng như vậy."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Mã combo cần sửa"},
+                "components": {
+                    "type": "array",
+                    "description": "Thành phần MỚI ĐẦY ĐỦ sau khi sửa",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string", "description": "Mã con đúng như MISA"},
+                            "quantity": {"type": "number", "description": "Số lượng (> 0)"},
+                        },
+                        "required": ["code", "quantity"],
+                        "additionalProperties": False,
+                    },
+                    "minItems": 1,
+                },
+                "name": {"type": "string", "description": "Tên combo mới; bỏ trống nếu giữ nguyên"},
+                "price": {"type": "number", "description": "Giá bán mới; không truyền nếu giữ nguyên"},
+                "price_pu": {"type": "number", "description": "Giá nhập mới; không truyền nếu giữ nguyên"},
+            },
+            "required": ["code", "components"],
             "additionalProperties": False,
         },
     },

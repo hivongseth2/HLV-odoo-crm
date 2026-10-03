@@ -32,7 +32,12 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 import yaml
 
-AGENT_VERSION = '1.2.0'
+# Python nhúng (setup.ps1) có file ._pth nên không tự thêm thư mục script vào sys.path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from misa_tools import TOOL_NAMES as MISA_TOOL_NAMES  # noqa: E402  — một nguồn duy nhất với MCP server
+
+AGENT_VERSION = '1.4.0'
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MCP_SERVER = os.path.join(AGENT_DIR, 'misa_mcp_server.py')
 
@@ -42,10 +47,6 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
 HTTP_TIMEOUT = 30
 REPLY_RETRIES = 3
 
-MISA_TOOL_NAMES = [
-    'search_product_misa', 'create_product_misa', 'update_product_misa',
-    'get_category_info', 'search_category_misa',
-]
 # Built-in tool Claude được có. Không có Bash/Edit/Write: tin của sale là dữ liệu
 # người ngoài gõ, không được biến thành lệnh chạy trên máy này.
 # WebFetch để đọc trang sản phẩm sale dán link. Trang lạ có cài chữ dắt Claude tạo hàng
@@ -77,7 +78,7 @@ def build_mcp_config(python_bin, server_path):
 def build_claude_args(claude_bin, system_prompt_file, mcp_config, model,
                       resume_id=None, new_session_id=None):
     """Dòng lệnh `claude -p` cho một lượt. Đúng một trong resume_id / new_session_id."""
-    allowed = ['mcp__misa__%s' % name for name in MISA_TOOL_NAMES] + BUILTIN_TOOLS
+    allowed = ['mcp__misa__%s' % name for name in sorted(MISA_TOOL_NAMES)] + BUILTIN_TOOLS
     args = [
         claude_bin, '-p',
         '--output-format', 'json',

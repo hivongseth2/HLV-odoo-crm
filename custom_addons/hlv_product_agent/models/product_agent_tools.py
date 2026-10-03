@@ -9,7 +9,7 @@ import logging
 
 from odoo import fields, models
 
-from ..services import missing_from_proposal
+from ..services import combo_change_summary, missing_from_proposal
 
 _logger = logging.getLogger(__name__)
 
@@ -17,7 +17,8 @@ _logger = logging.getLogger(__name__)
 FALLBACK_CATEGORY_ID = 2
 # Hàng vừa tạo trong khoảng này được coi là "vừa có" dù MISA chưa trả trong tìm kiếm.
 RECENT_CREATION_MINUTES = 30
-CREATE_LOCK_KEY = 'hlv_product_agent.create_product'
+# Chặn combo phình bất thường (Claude lặp dòng, dán nhầm cả bảng giá).
+MAX_COMBO_COMPONENTS = 50
 
 
 class HlvProductAgentTools(models.AbstractModel):
@@ -33,6 +34,9 @@ class HlvProductAgentTools(models.AbstractModel):
         handler = {
             'search_product_misa': self._search_product,
             'create_product_misa': self._create_product,
+            'create_combo_misa': self._create_combo,
+            'get_combo_misa': self._get_combo,
+            'update_combo_misa': self._update_combo,
             'update_product_misa': self._update_product,
             'get_category_info': self._get_category_info,
             'search_category_misa': self._search_category,
@@ -140,7 +144,7 @@ class HlvProductAgentTools(models.AbstractModel):
         # rồi cùng tạo. Khoá chung cho MỌI lệnh tạo (không khoá theo mã, vì hai lượt có
         # thể đặt hai mã khác nhau cho cùng một món) — lệnh sau đợi lệnh trước commit
         # xong mới kiểm lại. Khoá tự nhả khi request này kết thúc transaction.
-        self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [CREATE_LOCK_KEY])
+        self._misa_utils().lock_product_creation()
         duplicate = self._find_duplicate(code, name)
         if duplicate:
             return duplicate
@@ -197,6 +201,132 @@ class HlvProductAgentTools(models.AbstractModel):
                        "Gửi đề xuất đầy đủ (mẫu C, hoặc cũ -> mới khi sửa) rồi chờ người dùng "
                        "xác nhận ở tin sau." % ", ".join(missing),
         }
+
+    def _create_combo(self, session, args):
+        code = (args.get('code') or '').strip()
+        name = (args.get('name') or '').strip()
+        if not code or not name:
+            return {'status': 'error', 'message': "Thiếu mã hoặc tên combo."}
+        components = self._clean_components(args.get('components'))
+        if isinstance(components, dict):
+            return components
+        # Sale phải thấy đủ thành phần trước khi OK: đổi một mã con sau khi chốt là
+        # tạo ra combo khác với thứ đã duyệt.
+        unconfirmed = self._require_proposed(session, [code, name] + [c['code'] for c in components])
+        if unconfirmed:
+            return unconfirmed
+
+        # Cùng khoá và cùng bước kiểm trùng với hàng thường: combo cũng là một mã hàng.
+        self._misa_utils().lock_product_creation()
+        duplicate = self._find_duplicate(code, name)
+        if duplicate:
+            return duplicate
+
+        tax = args.get('tax')
+        try:
+            result = self._misa_utils().create_combo_product_misa_raw(
+                code=code,
+                name=name,
+                components=components,
+                category_id=args.get('category_id') or None,
+                unit_name=args.get('unit') or 'Bộ',
+                tax_percent=8 if tax is None else tax,
+                price=args.get('price') or 0,
+                price_pu=args.get('price_pu') or 0,
+                description=args.get('description') or None,
+            )
+        except Exception as error:
+            _logger.exception("PRODUCT_AGENT MISA combo create error")
+            return {'status': 'error', 'message': "Lỗi tạo combo MISA: %s" % error}
+
+        misa_id = result.get('id')
+        if not result.get('created'):
+            return {
+                'status': 'duplicate',
+                'message': "MISA đã có combo mã này. KHÔNG tạo; báo người dùng.",
+                'existing': {'code': code, 'misa_id': misa_id},
+            }
+
+        summary = ", ".join("%s x%g" % (c['code'], c['quantity']) for c in components)
+        _logger.info("PRODUCT_AGENT %s (%s) tạo combo MISA %s - %s (id %s): %s",
+                     session.sale_name, session.user_id.login, code, name, misa_id, summary)
+        self.env['hlv.product.agent.log'].record(
+            session, 'create',
+            misa_id=str(misa_id or ''), product_code=code, product_name=name,
+            category_id=args.get('category_id') or 0, unit=args.get('unit') or 'Bộ',
+            description="Combo: %s%s" % (
+                summary, ("\n" + args['description']) if args.get('description') else ''),
+        )
+        session.post_event("Đã tạo combo trên MISA: %s — %s (%s thành phần: %s; MISA ID %s)" % (
+            code, name, len(components), summary, misa_id))
+        return {'status': 'success', 'message': "Tạo combo thành công: %s" % name,
+                'misa_id': misa_id, 'code': code}
+
+    def _get_combo(self, session, args):
+        code = (args.get('code') or '').strip()
+        if not code:
+            return {'status': 'error', 'message': "Thiếu mã combo."}
+        try:
+            combo = self._misa_utils().get_combo_misa(code)
+        except Exception as error:
+            _logger.exception("PRODUCT_AGENT MISA combo read error")
+            return {'status': 'error', 'message': str(error)}
+        return dict(combo, status='found')
+
+    def _update_combo(self, session, args):
+        code = (args.get('code') or '').strip()
+        if not code:
+            return {'status': 'error', 'message': "Thiếu mã combo."}
+        components = self._clean_components(args.get('components'))
+        if isinstance(components, dict):
+            return components
+        name = (args.get('name') or '').strip() or None
+        # Như tạo combo: sale phải thấy đủ danh sách sau khi sửa (và tên mới nếu đổi) trước khi OK.
+        unconfirmed = self._require_proposed(session, [code, name] + [c['code'] for c in components])
+        if unconfirmed:
+            return unconfirmed
+        try:
+            result = self._misa_utils().update_combo_product_misa(
+                code, components=components, name=name,
+                price=args.get('price'), price_pu=args.get('price_pu'),
+            )
+        except Exception as error:
+            _logger.exception("PRODUCT_AGENT MISA combo update error")
+            return {'status': 'error', 'message': "Lỗi sửa combo MISA: %s" % error}
+        if not result.get('changed'):
+            return {'status': 'no_change', 'message': "Combo đã đúng như vậy, không gửi gì lên MISA."}
+
+        summary = combo_change_summary(result.get('changes') or {}, result.get('header') or {})
+        _logger.info("PRODUCT_AGENT %s (%s) sửa combo MISA %s (id %s): %s",
+                     session.sale_name, session.user_id.login, code, result.get('id'), summary)
+        self.env['hlv.product.agent.log'].record(
+            session, 'update',
+            misa_id=str(result.get('id') or ''), product_code=code, product_name=name or False,
+            updated_field='combo', new_value=summary[:250], description=summary,
+        )
+        session.post_event("Đã sửa combo trên MISA: %s — %s (MISA ID %s)" % (code, summary, result.get('id')))
+        return {'status': 'success', 'message': "Đã sửa combo %s: %s" % (code, summary),
+                'misa_id': result.get('id'), 'changes': result.get('changes')}
+
+    @staticmethod
+    def _clean_components(raw):
+        """Kiểm danh sách hàng con Claude gửi. Trả list ``{'code', 'quantity'}`` hoặc dict lỗi."""
+        if not isinstance(raw, list) or not raw:
+            return {'status': 'error', 'message': "Combo phải có ít nhất một hàng con."}
+        if len(raw) > MAX_COMBO_COMPONENTS:
+            return {'status': 'error', 'message': "Combo quá %s dòng con." % MAX_COMBO_COMPONENTS}
+        components = []
+        for item in raw:
+            code = (item.get('code') or '').strip() if isinstance(item, dict) else ''
+            try:
+                quantity = float(item.get('quantity')) if isinstance(item, dict) else 0.0
+            except (TypeError, ValueError):
+                quantity = 0.0
+            if not code or quantity <= 0:
+                return {'status': 'error',
+                        'message': "Mỗi hàng con cần mã và số lượng > 0 (dòng lỗi: %r)." % (item,)}
+            components.append({'code': code, 'quantity': quantity})
+        return components
 
     def _find_duplicate(self, code, name):
         """Kiểm lại ngay trước khi tạo: mã hoặc tên đã có chưa.
