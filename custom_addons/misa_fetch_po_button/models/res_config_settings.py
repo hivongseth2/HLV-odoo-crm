@@ -13,3 +13,11 @@ class ResConfigSettings(models.TransientModel):
              "được cập nhật theo. Kết quả ghi ở chatter của sản phẩm. Chỉ áp dụng khi người "
              "dùng sửa; các luồng đồng bộ tự động từ MISA về không bị đẩy ngược lên.",
     )
+    # Người dùng là amis_callback (amis.misa.inventory.cache._follow_misa_rename).
+    misa_amis_sync_product_name = fields.Boolean(
+        string="Đổi tên sản phẩm Odoo theo MISA",
+        config_parameter='misa.amis.sync_product_name',
+        help="Khi MISA đổi tên một hàng (nhận qua AMIS callback), sản phẩm Odoo gắn với hàng "
+             "đó đổi tên theo. Chỉ áp dụng khi MISA ĐỔI tên, không ghi đè các sản phẩm đang "
+             "cố ý đặt tên khác MISA. Chỉ đổi tên, không đổi mã.",
+    )
