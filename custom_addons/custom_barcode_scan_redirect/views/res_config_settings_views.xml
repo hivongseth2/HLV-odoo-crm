@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_pack_scan" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.pack_scan</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='stock']" position="inside">
+                <block title="Màn hình đóng gói" name="pack_scan_setting_container">
+                    <setting string="Không gộp hàng về sau vào phiếu đang đóng"
+                             help="Phiếu PACK đã có người mở thì hàng của PICK lấy bổ sung sau đó sang phiếu PACK mới, thay vì đổi số ngay trên phiếu đang đóng.">
+                        <field name="pack_scan_lock_started_pack"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

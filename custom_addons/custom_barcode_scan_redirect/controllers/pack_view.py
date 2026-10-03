@@ -119,6 +119,8 @@ class PackViewController(http.Controller):
             _logger.warning(f"[PACK_VIEW] Blocked: picking {picking.name} is {picking.state}")
             return request.redirect('/custom_barcode_scan/ui')
 
+        picking.lock_pack_against_merge()
+
         # Auto-assign: Nếu phiếu PACK chưa được assign, tự động gọi action_assign
         if picking.state in ['confirmed', 'waiting']:
             try:
