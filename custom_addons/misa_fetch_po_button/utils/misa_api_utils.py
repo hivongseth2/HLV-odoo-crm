@@ -1767,7 +1767,9 @@ class MisaApiUtils(models.AbstractModel):
         Dùng cho trợ lý tạo mã hàng (hlv_product_agent): sale mô tả combo trong chat.
         ``components``: list ``{'code', 'quantity'}``; mã con PHẢI có sẵn trên CRM, được
         tra lại theo mã chính xác (ID, ĐVT lấy từ CRM, không tin dữ liệu truyền vào).
-        Trả ``{'id', 'created'}``: mã đã là combo trên CRM -> ``created`` False, không tạo lại.
+        Trả ``{'id', 'created', 'odoo_synced', 'odoo_note'}``: mã đã là combo trên CRM ->
+        ``created`` False, không tạo lại. Tạo xong thì tạo luôn combo + BOM kit trên Odoo
+        (xem _sync_combo_to_odoo); lỗi phía Odoo không làm hỏng kết quả MISA.
         Raise khi: thiếu mã/tên/thành phần; mã đã có nhưng KHÔNG phải combo; mã con không
         có trên CRM; nhóm hoặc ĐVT không có trên CRM; CRM từ chối.
         """
@@ -1817,7 +1819,9 @@ class MisaApiUtils(models.AbstractModel):
             "form_layout_name": ICP.get_param("misa.crm.combo_form_layout_name", "Combo hàng hóa"),
         }
         misa_id = self._post_crm_combo(combo_data, resolved_components, headers)
-        return {"id": misa_id, "created": True}
+        # Odoo có combo + BOM kit ngay, không phải đợi tới khi có đơn chứa combo kéo về.
+        odoo = self._sync_combo_to_odoo(code, name, crm_unit_name, resolved_components)
+        return dict(odoo, id=misa_id, created=True)
 
     def _existing_crm_combo(self, code, headers):
         """Combo đã có trên CRM theo mã chính xác: ``{'id', 'created': False}``, chưa có: None.

@@ -93,21 +93,34 @@ class ProductTemplate(models.Model):
                     for field in old_values if old_values[field] != new_values[field]}
             if not diff:
                 continue
+            code_on_misa, pushed_misa_id = False, misa_id
             try:
-                note = product._push_one_to_misa(misa, old_code, misa_id, diff)
+                note, code_on_misa, pushed_misa_id = product._push_one_to_misa(misa, old_code, misa_id, diff)
             except Exception as error:
                 _logger.exception("MISA_PRODUCT_SYNC lỗi khi đẩy sản phẩm %s", template_id)
                 note = "Chưa cập nhật được MISA: %s" % error
             product.message_post(body=note, author_id=author.id or None,
                                  message_type='comment', subtype_xmlid='mail.mt_note')
+            if 'default_code' in diff:
+                # Mã đã đổi trên Odoo rồi; MISA nhận hay không cũng phải để lại dấu vết.
+                self.env['misa.product.code.history'].record(
+                    diff['default_code'][0], diff['default_code'][1], 'odoo',
+                    actor=author.name, product_tmpl=product, misa_id=pushed_misa_id,
+                    misa_updated=code_on_misa, odoo_updated=True,
+                    note=None if code_on_misa else note,
+                )
 
     def _push_one_to_misa(self, misa, old_code, misa_id, diff):
-        """Đẩy thay đổi của MỘT sản phẩm. Trả câu ghi chú cho chatter."""
+        """Đẩy thay đổi của MỘT sản phẩm.
+
+        Trả ``(ghi chú chatter, mã đã đổi trên MISA hay chưa, MISA ID)``.
+        """
         self.ensure_one()
         if not misa_id:
             found = misa._find_exact_crm_product_by_code(old_code) if old_code else None
             if not found:
-                return "Chưa cập nhật MISA: không thấy mã %s trên MISA CRM." % (old_code or '(trống)')
+                return ("Chưa cập nhật MISA: không thấy mã %s trên MISA CRM." % (old_code or '(trống)'),
+                        False, None)
             misa_id = str(found.get('misa_id'))
             self.write({'misa_product_id': misa_id})
 
@@ -117,16 +130,18 @@ class ProductTemplate(models.Model):
             if not new_code or (taken and str(taken.get('misa_id')) != misa_id):
                 # Bỏ cả lượt: đổi tên mà giữ mã cũ cũng là lệch, thà báo để người sửa quyết.
                 return ("Chưa cập nhật MISA: mã mới %s %s." %
-                        (new_code or '(trống)', "đã thuộc hàng khác trên MISA" if new_code else "bị bỏ trống"))
+                        (new_code or '(trống)', "đã thuộc hàng khác trên MISA" if new_code else "bị bỏ trống"),
+                        False, misa_id)
 
-        done, failed = [], []
+        done, failed, code_on_misa = [], [], False
         for field, (old, new) in diff.items():
             ok = misa.update_product_field_misa(misa_id, SYNCED_FIELDS[field], new.strip(), old)
             (done if ok else failed).append("%s «%s» → «%s»" % (FIELD_LABELS[field], old, new))
+            code_on_misa = code_on_misa or (ok and field == 'default_code')
         _logger.info("MISA_PRODUCT_SYNC MISA ID %s: được %s, hỏng %s", misa_id, done, failed)
         parts = []
         if done:
             parts.append("Đã cập nhật MISA (ID %s): %s." % (misa_id, "; ".join(done)))
         if failed:
             parts.append("MISA KHÔNG nhận: %s — sửa tay trên MISA." % "; ".join(failed))
-        return " ".join(parts)
+        return " ".join(parts), code_on_misa, misa_id

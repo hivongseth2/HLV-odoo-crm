@@ -24,6 +24,7 @@ from odoo import http
 from odoo.http import request
 
 from ..utils.api_key import api_key_matches
+from ..utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
 _logger = logging.getLogger(__name__)
 
@@ -124,6 +125,8 @@ class MisaProductApi(http.Controller):
         Body: ``field`` (name | code | description), ``new_value``, và cách chỉ hàng:
         ``code`` (Odoo tự tra MISA ID và giá trị cũ) HOẶC ``misa_id`` + ``old_value``.
         Trả: ``{"ok": true, "misa_id": "...", "field": "..."}``.
+        Đổi MÃ thì đổi cả MISA lẫn sản phẩm Odoo cùng mã và ghi Lịch sử đổi mã hàng; kết
+        quả có thêm ``odoo_updated`` (false = chỉ đổi được MISA, xem ``note``).
         """
         return _handle('update_product', _update_product)
 
@@ -207,18 +210,30 @@ def _update_product(data, misa):
         raise ApiError(400, 'missing_field', "Cần 'code', hoặc 'misa_id' kèm 'old_value'.")
 
     if field == 'code':
-        # Đổi sang mã đã có là MISA có hai hàng cùng mã — chặn trước, cùng khoá với lệnh tạo.
-        misa.lock_product_creation()
-        taken = misa._find_exact_crm_product_by_code(new_value)
-        if taken and str(taken.get('misa_id')) != misa_id:
-            raise ApiError(409, 'duplicate', "Mã %s đã thuộc hàng khác trên MISA." % new_value,
-                           misa_id=str(taken.get('misa_id') or ''))
+        return _change_code(misa, code or old_value, new_value, None if code else misa_id)
 
     if not misa.update_product_field_misa(misa_id, UPDATABLE_FIELDS[field], new_value, old_value or ''):
         raise ApiError(502, 'misa_error', "MISA không nhận cập nhật %s cho MISA ID %s." % (field, misa_id))
     _logger.info("MISA_PRODUCT_API sửa MISA ID %s: %s '%s' -> '%s' từ %s",
                  misa_id, field, old_value, new_value, request.httprequest.remote_addr)
     return {'misa_id': misa_id, 'field': field}
+
+
+def _change_code(misa, old_code, new_code, expected_misa_id):
+    """Đổi mã ở CẢ MISA lẫn Odoo, có lịch sử (misa.api.utils.change_product_code)."""
+    try:
+        result = misa.change_product_code(
+            old_code, new_code, 'api', actor=request.httprequest.remote_addr,
+            expected_misa_id=expected_misa_id,
+        )
+    except ProductCodeNotFound as error:
+        raise ApiError(404, 'not_found', str(error))
+    except ProductCodeTaken as error:
+        raise ApiError(409, 'duplicate', str(error))
+    return {
+        'misa_id': result['misa_id'], 'field': 'code',
+        'odoo_updated': result['odoo_updated'], 'note': result['note'],
+    }
 
 
 def _components(data):

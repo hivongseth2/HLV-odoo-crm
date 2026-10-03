@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_product_code_history_list" model="ir.ui.view">
+        <field name="name">misa.product.code.history.list</field>
+        <field name="model">misa.product.code.history</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0"
+                  decoration-danger="not misa_updated or not odoo_updated">
+                <field name="create_date" string="Lúc"/>
+                <field name="old_code"/>
+                <field name="new_code"/>
+                <field name="product_tmpl_id"/>
+                <field name="source" widget="badge"/>
+                <field name="actor"/>
+                <field name="user_id" optional="hide"/>
+                <field name="misa_id" optional="show"/>
+                <field name="misa_updated" widget="boolean"/>
+                <field name="odoo_updated" widget="boolean"/>
+                <field name="note" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_misa_product_code_history_form" model="ir.ui.view">
+        <field name="name">misa.product.code.history.form</field>
+        <field name="model">misa.product.code.history</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="old_code"/>
+                            <field name="new_code"/>
+                            <field name="product_tmpl_id"/>
+                            <field name="misa_id"/>
+                        </group>
+                        <group>
+                            <field name="create_date" string="Lúc"/>
+                            <field name="source"/>
+                            <field name="actor"/>
+                            <field name="user_id"/>
+                            <field name="misa_updated"/>
+                            <field name="odoo_updated"/>
+                        </group>
+                    </group>
+                    <field name="note" nolabel="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_misa_product_code_history_search" model="ir.ui.view">
+        <field name="name">misa.product.code.history.search</field>
+        <field name="model">misa.product.code.history</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="old_code"/>
+                <field name="new_code"/>
+                <field name="product_tmpl_id"/>
+                <field name="actor"/>
+                <filter name="lech" string="Chỉ đổi được một bên"
+                        domain="['|', ('misa_updated', '=', False), ('odoo_updated', '=', False)]"/>
+                <separator/>
+                <filter name="create_date" string="Ngày" date="create_date"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_source" string="Đổi qua" context="{'group_by': 'source'}"/>
+                    <filter name="group_actor" string="Người đổi" context="{'group_by': 'actor'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_misa_product_code_history" model="ir.actions.act_window">
+        <field name="name">Lịch sử đổi mã hàng</field>
+        <field name="res_model">misa.product.code.history</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Tồn kho > Sản phẩm: xmlid menu gốc của stock, ổn định qua các bản Odoo. -->
+    <menuitem id="menu_misa_product_code_history"
+              name="Lịch sử đổi mã hàng"
+              parent="stock.menu_stock_inventory_control"
+              action="action_misa_product_code_history"
+              groups="stock.group_stock_user"
+              sequence="90"/>
+</odoo>
