@@ -18,10 +18,7 @@ from odoo import api, fields, models
 class StockPickingMisaInvoiceExport(models.Model):
     _inherit = 'stock.picking'
 
-    def _misa_invoice_export_workbook(
-        self, sheet_name, headers, rows, money_cols=None, percent_cols=None, merge_col=None, note_col=None,
-        summary_lines=None,
-    ):
+    def _misa_invoice_export_workbook(self, sheet_name, headers, rows, money_cols=None, percent_cols=None, merge_col=None):
         """Dựng file .xlsx trong bộ nhớ (xlsxwriter) — dùng chung cho mọi nút "Xuất Excel"
         trên dashboard. money_cols: tập chỉ số cột (0-based) cần định dạng số tiền.
         percent_cols: tập chỉ số cột cần định dạng "%" (VD cột VAT — giá trị lưu ở dạng SỐ
@@ -29,15 +26,7 @@ class StockPickingMisaInvoiceExport(models.Model):
         merge_col: cột (0-based) cần MERGE các ô LIÊN TIẾP có cùng giá trị (VD gộp ô "Khách
         hàng" khi xuất chi tiết dòng hàng nhiều dòng cùng 1 khách đứng liền nhau) — rows PHẢI
         đã được sắp xếp theo đúng cột này trước khi gọi, nếu không sẽ chỉ gộp được các đoạn
-        liên tiếp tình cờ trùng giá trị. note_col: cột (0-based) chứa ghi chú giải thích lệch
-        (xem _misa_invoice_reconciliation_notes_by_picking) — CHỈ những Ô CÓ giá trị trong cột
-        này được tô đỏ để dễ nhận ra, các ô rỗng vẫn viền/canh lề bình thường.
-
-        summary_lines: list [{'text': str, 'bold': bool}] ghi THÊM ở CUỐI sheet (sau 1 dòng
-        trống), MERGE ngang hết bề rộng bảng, tô ĐỎ toàn bộ — dùng cho phần giải thích "vì sao
-        Còn lại chưa xuất HĐ khác tổng cộng dồn" (xem
-        _misa_invoice_gap_explain_summary_lines), để người xuất Excel hiểu ngay lý do lệch mà
-        không cần mở modal trên dashboard."""
+        liên tiếp tình cờ trùng giá trị."""
         money_cols = money_cols or set()
         percent_cols = percent_cols or set()
         output = io.BytesIO()
@@ -53,29 +42,15 @@ class StockPickingMisaInvoiceExport(models.Model):
         fmt_percent = workbook.add_format({
             'border': 1, 'valign': 'vcenter', 'num_format': '0.##"%"', 'align': 'right',
         })
-        fmt_note = workbook.add_format({
-            'border': 1, 'valign': 'vcenter', 'bg_color': '#fde2e2', 'font_color': '#a3241f',
-        })
-        fmt_summary_title = workbook.add_format({
-            'bold': True, 'font_color': '#ffffff', 'bg_color': '#a3241f', 'font_size': 12, 'valign': 'vcenter',
-        })
-        fmt_summary_line = workbook.add_format({
-            'font_color': '#a3241f', 'text_wrap': True, 'valign': 'top',
-        })
 
         worksheet.set_row(0, 22)
         for col, header in enumerate(headers):
             worksheet.write(0, col, header, fmt_header)
             worksheet.set_column(col, col, max(14, len(header) + 4))
-        if note_col is not None:
-            worksheet.set_column(note_col, note_col, 60)
 
         for row_idx, row in enumerate(rows, start=1):
             for col, value in enumerate(row):
-                if col == note_col and value:
-                    fmt = fmt_note
-                else:
-                    fmt = fmt_money if col in money_cols else (fmt_percent if col in percent_cols else fmt_cell)
+                fmt = fmt_money if col in money_cols else (fmt_percent if col in percent_cols else fmt_cell)
                 worksheet.write(row_idx, col, value, fmt)
 
         if merge_col is not None and rows:
@@ -90,18 +65,6 @@ class StockPickingMisaInvoiceExport(models.Model):
                             rows[group_start][merge_col], fmt_cell,
                         )
                     group_start = i
-
-        if summary_lines:
-            last_col = max(len(headers) - 1, 0)
-            row_idx = len(rows) + 2
-            for line in summary_lines:
-                fmt = fmt_summary_title if line.get('bold') else fmt_summary_line
-                if last_col > 0:
-                    worksheet.merge_range(row_idx, 0, row_idx, last_col, line['text'], fmt)
-                else:
-                    worksheet.write(row_idx, 0, line['text'], fmt)
-                worksheet.set_row(row_idx, 20 if line.get('bold') else 34)
-                row_idx += 1
 
         workbook.close()
         output.seek(0)
@@ -118,80 +81,6 @@ class StockPickingMisaInvoiceExport(models.Model):
         })
         return attachment.id
 
-    def _misa_invoice_reconciliation_notes_by_picking(self, explain):
-        """Map {tên phiếu: ghi chú} cho các phiếu bị ảnh hưởng bởi phần lệch đã biết giữa tổng
-        cộng dồn theo phiếu và thẻ "Đối chiếu tổng" (nhóm bị cắt bởi bộ lọc ngày/mã sale — xem
-        get_misa_invoice_reconciliation_gap_explain) — gắn thẳng vào cột "Ghi chú" NGAY TRÊN
-        dòng phiếu đó khi xuất Excel, thay vì tạo dòng tổng hợp riêng (dễ hiểu lầm là 1 phiếu
-        thật, số âm khó hiểu). Hóa đơn hải quan chưa khớp PXK không gắn được vào phiếu nào nên
-        không có trong map này. `explain` = kết quả get_misa_invoice_reconciliation_gap_explain
-        đã tính SẴN ở nơi gọi (dùng chung với _misa_invoice_gap_explain_summary_lines, tránh gọi
-        2 lần cho cùng 1 lần xuất Excel)."""
-        notes = {}
-        for g in explain['cut_groups']:
-            text = 'Dùng chung đề nghị xuất HĐ với %s (ngày %s, NGOÀI khoảng đang lọc) — số đúng theo đơn hàng: %s%s — chênh lệch góp vào "Đối chiếu tổng": %s' % (
-                ', '.join(g['out_of_date_picking_names']), ', '.join(g['out_of_date_dates']),
-                '{:,.0f}'.format(g['exact_outstanding']),
-                ' (ƯỚC LƯỢNG — đơn giao nhiều đợt)' if g['is_estimated'] else '',
-                '{:,.0f}'.format(g['gap_amount']),
-            )
-            for name in g['picking_names']:
-                notes[name] = (notes[name] + '; ' + text) if name in notes else text
-        for n in explain.get('cross_saler_notes', []):
-            text = 'Dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — chênh lệch góp vào "Đối chiếu tổng": %s' % (
-                n['representative_name'],
-                ', '.join(n.get('other_saler_picking_labels') or n['other_saler_picking_names']),
-                ', '.join(n['other_saler_codes']),
-                '{:,.0f}'.format(n['gap_amount']),
-            )
-            for name in n['picking_names']:
-                notes[name] = (notes[name] + '; ' + text) if name in notes else text
-        return notes
-
-    def _misa_invoice_gap_explain_summary_lines(self, explain):
-        """Dựng khối giải thích "vì sao Còn lại chưa xuất HĐ khác tổng cộng dồn theo phiếu/đơn"
-        (tô đỏ) để ghi thẳng vào CUỐI file Excel xuất ra — cùng nội dung với modal "Xem chi tiết
-        vì sao lệch" trên dashboard, để người xuất Excel hiểu ngay lý do lệch mà không cần mở
-        dashboard. `explain` = kết quả get_misa_invoice_reconciliation_gap_explain đã tính SẴN ở
-        nơi gọi. Trả về [] nếu không có nguyên nhân nào (khớp đủ, không cần ghi gì thêm)."""
-        total = (
-            (explain.get('customs_pending_amount') or 0.0)
-            + (explain.get('cut_groups_total_amount') or 0.0)
-            + (explain.get('cross_saler_notes_total_amount') or 0.0)
-        )
-        if abs(total) <= 1.0 and not explain.get('cut_groups') and not explain.get('cross_saler_notes'):
-            return []
-        fmt = lambda v: '{:,.0f}'.format(v).replace(',', '.')
-        lines = [{
-            'text': 'VÌ SAO "CÒN LẠI CHƯA XUẤT HĐ" (Đối chiếu tổng) KHÁC TỔNG "TIỀN CHƯA XUẤT HĐ" CỘNG DỒN Ở TRÊN — TỔNG CHÊNH LỆCH: %s đ' % fmt(total),
-            'bold': True,
-        }]
-        if explain.get('customs_pending_amount'):
-            lines.append({'text': (
-                'Hóa đơn hải quan chưa khớp phiếu xuất kho: %s hóa đơn, tổng %s đ — không gắn với phiếu nào nên '
-                'không xuất hiện ở dòng nào phía trên, nhưng vẫn được trừ vào "Còn lại chưa xuất HĐ" trên Đối chiếu tổng.'
-            ) % (explain['customs_pending_count'], fmt(explain['customs_pending_amount']))})
-        for g in explain.get('cut_groups', []):
-            lines.append({'text': (
-                'Phiếu %s dùng chung đề nghị xuất HĐ với %s (ngày %s, NGOÀI khoảng đang lọc) — số đúng theo đơn hàng: %s đ%s '
-                '— chênh lệch góp vào Đối chiếu tổng: %s đ.'
-            ) % (
-                ', '.join(g['picking_names']), ', '.join(g['out_of_date_picking_names']),
-                ', '.join(g['out_of_date_dates']), fmt(g['exact_outstanding']),
-                ' (ước lượng — đơn giao nhiều đợt)' if g['is_estimated'] else '',
-                fmt(g['gap_amount']),
-            )})
-        for n in explain.get('cross_saler_notes', []):
-            lines.append({'text': (
-                'Phiếu %s dùng chung đề nghị xuất HĐ (%s) với phiếu %s thuộc mã sale %s — chênh lệch góp vào '
-                'Đối chiếu tổng: %s đ.'
-            ) % (
-                ', '.join(n['picking_names']), n['representative_name'],
-                ', '.join(n.get('other_saler_picking_labels') or n['other_saler_picking_names']),
-                ', '.join(n['other_saler_codes']), fmt(n['gap_amount']),
-            )})
-        return lines
-
     @api.model
     def export_misa_invoice_picking_list_excel(
         self, search=False, state=False, saler_code=False,
@@ -206,26 +95,18 @@ class StockPickingMisaInvoiceExport(models.Model):
         )
         pickings = Picking.search(domain, order='date_done desc')
         today = fields.Date.context_today(self)
-        explain = self.get_misa_invoice_reconciliation_gap_explain(
-            date_from=date_from, date_to=date_to, saler_code=saler_code,
-        )
-        notes = self._misa_invoice_reconciliation_notes_by_picking(explain)
         rows = [
             [
                 row['name'], row['partner_name'], row['sale_order_name'], row['date_done'],
                 row['actual_amount'], row['invoice_amount'], row['outstanding_amount'], row['state_label'],
-                notes.get(row['name'], ''),
             ]
             for row in (self._misa_invoice_picking_to_row(picking, today) for picking in pickings)
         ]
         headers = [
             'Phiếu', 'Khách hàng', 'Đơn bán', 'Ngày xuất kho',
-            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái', 'Ghi chú',
+            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái',
         ]
-        content = self._misa_invoice_export_workbook(
-            'Phiếu xuất kho', headers, rows, money_cols={4, 5, 6}, note_col=8,
-            summary_lines=self._misa_invoice_gap_explain_summary_lines(explain),
-        )
+        content = self._misa_invoice_export_workbook('Phiếu xuất kho', headers, rows, money_cols={4, 5, 6})
         return self._misa_invoice_create_export_attachment(
             'phieu_xuat_kho_%s.xlsx' % fields.Date.to_string(today), content
         )
@@ -243,26 +124,18 @@ class StockPickingMisaInvoiceExport(models.Model):
             date_from=date_from, date_to=date_to, multi_order_group=multi_order_group,
             multi_request=multi_request, limit=10000, offset=0,
         )
-        explain = self.get_misa_invoice_reconciliation_gap_explain(
-            date_from=date_from, date_to=date_to, saler_code=saler_code,
-        )
-        notes = self._misa_invoice_reconciliation_notes_by_picking(explain)
         rows = [
             [
                 row['name'], row['partner_name'], row['sale_order_name'], row['date_done'],
                 row['actual_amount'], row['invoice_amount'], row['outstanding_amount'], row['state_label'],
-                notes.get(row['name'], ''),
             ]
             for row in result['rows']
         ]
         headers = [
             'Phiếu', 'Khách hàng', 'Đơn bán', 'Ngày xuất kho',
-            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái', 'Ghi chú',
+            'Tiền thực xuất', 'Tiền đã xuất HĐ', 'Tiền chưa xuất HĐ', 'Trạng thái',
         ]
-        content = self._misa_invoice_export_workbook(
-            'Phiếu xuất kho', headers, rows, money_cols={4, 5, 6}, note_col=8,
-            summary_lines=self._misa_invoice_gap_explain_summary_lines(explain),
-        )
+        content = self._misa_invoice_export_workbook('Phiếu xuất kho', headers, rows, money_cols={4, 5, 6})
         return self._misa_invoice_create_export_attachment(
             'phieu_xuat_kho_%s.xlsx' % fields.Date.to_string(fields.Date.context_today(self)), content
         )
@@ -327,15 +200,9 @@ class StockPickingMisaInvoiceExport(models.Model):
         Giới hạn đã biết: chỉ khử trùng được phần chia sẻ giữa các đơn CÙNG có mặt trong `rows`
         — nếu đại diện còn được đơn NGOÀI phạm vi export hiện tại (VD saler_code khác) dùng
         chung, phần đó không có dữ liệu để chia nên không tính vào, tổng có thể vẫn còn lệch
-        (nhỏ) so với "Đối chiếu tổng" toàn hệ thống.
-
-        Đơn đã có `row['exact']=True` (invoice_amount/outstanding_amount đã CHÍNH XÁC tuyệt đối
-        — xem misa_invoice_exact_* trên sale.order, _misa_invoice_order_row) bị LOẠI HOÀN TOÀN
-        khỏi hàm này — không tham gia phát hiện đại diện dùng chung, không bị tính lại — để
-        không lấy số ước lượng đè lên số đã đúng sẵn."""
-        approx_rows = [row for row in rows if not row.get('exact')]
+        (nhỏ) so với "Đối chiếu tổng" toàn hệ thống."""
         rep_orders = {}
-        for row in approx_rows:
+        for row in rows:
             seen = set()
             for p in row['pickings']:
                 if p['state'] != 'invoiced':
@@ -351,7 +218,7 @@ class StockPickingMisaInvoiceExport(models.Model):
         if not shared_reps:
             return rows
 
-        amount_total_by_order = {row['id']: row['amount_total'] for row in approx_rows}
+        amount_total_by_order = {row['id']: row['amount_total'] for row in rows}
         alloc = {}
         for rep_id, data in shared_reps.items():
             total_amount_total = sum(amount_total_by_order.get(oid, 0.0) for oid in data['order_ids'])
@@ -362,7 +229,7 @@ class StockPickingMisaInvoiceExport(models.Model):
                 )
                 alloc[(oid, rep_id)] = data['amount'] * share
 
-        for row in approx_rows:
+        for row in rows:
             seen = set()
             raw_sum = 0.0
             for p in row['pickings']:

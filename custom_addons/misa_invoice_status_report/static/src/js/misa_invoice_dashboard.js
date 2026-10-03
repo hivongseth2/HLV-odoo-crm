@@ -27,9 +27,6 @@ const PICKING_STATE_FILTER_OPTIONS = [
     { value: "missing", label: "Chưa có đề nghị xuất HĐ" },
     { value: "requested", label: "Đã đề nghị, chờ HĐ" },
     { value: "invoiced", label: "Đã xuất hóa đơn" },
-    // "Đã xuất hóa đơn" chỉ có nghĩa "CÓ hóa đơn", không có nghĩa tiền đã đủ 100% (case gộp
-    // chung nhiều phiếu/đơn, 1 đề nghị chỉ phủ 1 phần) — lựa chọn riêng để lọc đúng case này.
-    { value: "partial_invoice", label: "Đã xuất HĐ, chưa đủ tiền" },
 ];
 // Trạng thái riêng của hóa đơn điện tử Shopee (meInvoice) — khác hẳn tập trạng thái MISA ở
 // trên vì đây là model meinvoice.invoice.state, không phải misa_invoice_state.
@@ -363,17 +360,6 @@ export class MisaInvoiceDashboard extends Component {
                 "stock.picking", "get_misa_invoice_gap_analysis", [],
                 { ...this.filterParams, ...this.state.discrepancyFilter, limit: 300 }
             );
-            // Giải thích CỤ THỂ (phiếu nào, ngày nào, bao nhiêu tiền) khi 1 nhóm gộp chung bị
-            // "cắt ngang" bởi khoảng ngày đang lọc — xem get_misa_invoice_reconciliation_gap_explain.
-            // Chỉ có ý nghĩa khi ĐANG lọc ngày (date_from/date_to), nên bỏ qua khi không lọc.
-            if (this.state.shipFrom || this.state.shipTo) {
-                this.state.discrepancyGapExplain = await this.orm.call(
-                    "stock.picking", "get_misa_invoice_reconciliation_gap_explain", [],
-                    { date_from: this.state.shipFrom || false, date_to: this.state.shipTo || false }
-                );
-            } else {
-                this.state.discrepancyGapExplain = null;
-            }
         } catch (e) {
             this.notification.add("Lỗi tải danh sách chênh lệch: " + (e.message || e), { type: "danger" });
             this.state.discrepancyOpen = false;

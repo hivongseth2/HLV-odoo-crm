@@ -1217,89 +1217,8 @@
                             } else {
                                 hintEl2.style.display = 'none';
                             }
-                            var explainLink = document.getElementById('msu-recon-gap-explain-link');
-                            explainLink.style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
                         }).catch(function(e) { toast('Lỗi tải số liệu đối chiếu: ' + e.message, 'error'); });
                     }
-
-                    // ===== Giải thích CỤ THỂ vì sao "Còn lại chưa xuất HĐ" khác tổng cộng dồn
-                    // theo phiếu/đơn khi đang lọc ngày — liệt kê đúng phiếu nào, bao nhiêu tiền,
-                    // thay vì 1 câu cảnh báo chung chung. =====
-                    document.getElementById('msu-recon-gap-explain-link').addEventListener('click', function(ev) {
-                        ev.preventDefault();
-                        var modal = document.getElementById('msu-gap-explain-modal');
-                        var body = document.getElementById('msu-gap-explain-body');
-                        modal.style.display = '';
-                        body.innerHTML = '<span class="msu-muted">Đang tải...</span>';
-                        rpc('/misa_sale_status/api/reconciliation_gap_explain', {
-                            saler_code: state.salerCode, date_from: state.dateFrom, date_to: state.dateTo,
-                        }).then(function(res) {
-                            var d = res.data || {};
-                            var parts = [];
-                            var tongCong = (d.customs_pending_amount || 0) + (d.cut_groups_total_amount || 0) + (d.cross_saler_notes_total_amount || 0);
-                            parts.push(
-                                '<div class="msu-drawer-section" style="background:#f5f7fa;border-radius:8px;padding:10px 14px">' +
-                                '<p><b>Tổng cả 3 mục bên dưới: ' + fmtMoney(tongCong) + '</b> — số này khớp với khoản chênh lệch giữa Excel/list và ' +
-                                '"Đối chiếu tổng" (đo trực tiếp bằng cách loại từng nhóm khỏi phép tính thật, không suy diễn công thức).</p></div>'
-                            );
-                            if (d.customs_pending_amount) {
-                                parts.push(
-                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Hóa đơn hải quan chưa khớp phiếu xuất kho</p>' +
-                                    '<p>' + d.customs_pending_count + ' hóa đơn, tổng <b>' + fmtMoney(d.customs_pending_amount) + '</b> — ' +
-                                    'không gắn với phiếu xuất kho nào nên không thể hiện ở bất kỳ dòng phiếu/đơn nào, ' +
-                                    'nhưng vẫn được trừ vào "Còn lại chưa xuất HĐ".</p></div>'
-                                );
-                            }
-                            if (d.cut_groups && d.cut_groups.length) {
-                                var rows = d.cut_groups.map(function(g) {
-                                    return '<tr>' +
-                                        '<td>' + esc(g.picking_names.join(', ')) + '</td>' +
-                                        '<td>' + esc(g.out_of_date_picking_names.join(', ')) + ' (ngày ' + esc(g.out_of_date_dates.join(', ')) + ')</td>' +
-                                        '<td class="msu-col-num">' + fmtMoney(g.exact_outstanding) + (g.is_estimated ? ' (ước lượng)' : '') + '</td>' +
-                                        '<td class="msu-col-num">' + fmtMoney(g.gap_amount) + '</td>' +
-                                        '</tr>';
-                                }).join('');
-                                parts.push(
-                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị bị cắt bởi bộ lọc ngày</p>' +
-                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu KHÁC không thỏa bộ lọc ngày đang xem — ' +
-                                    'cột "Số đúng theo đơn" đọc/tính từ dữ liệu chính xác theo order_code (chỉ ghi "(ước lượng)" khi đơn đó giao ' +
-                                    'nhiều đợt). Cột "Chênh lệch góp vào Đối chiếu tổng" đo TRỰC TIẾP (không suy diễn công thức) bằng cách loại các ' +
-                                    'phiếu này khỏi phép tính thật rồi xem "Đối chiếu tổng" tăng/giảm bao nhiêu — dương = Excel/list cao hơn thẻ; ' +
-                                    'âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cut_groups_total_amount) + '</b>.</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu</th><th>Phiếu bị cắt (cùng nhóm, ngoài bộ lọc)</th><th>Số đúng theo đơn</th><th>Chênh lệch góp vào Đối chiếu tổng</th></tr></thead>' +
-                                    '<tbody>' + rows + '</tbody></table></div>'
-                                );
-                            }
-                            if (d.cross_saler_notes && d.cross_saler_notes.length) {
-                                var csRows = d.cross_saler_notes.map(function(n) {
-                                    return '<tr>' +
-                                        '<td>' + esc(n.picking_names.join(', ')) + '</td>' +
-                                        '<td>' + esc(n.order_names.join(', ')) + '</td>' +
-                                        '<td>' + esc(n.representative_name) + '</td>' +
-                                        '<td>' + esc((n.other_saler_picking_labels || n.other_saler_picking_names).join(', ')) + '</td>' +
-                                        '<td>' + esc(n.other_saler_codes.join(', ')) + '</td>' +
-                                        '<td class="msu-col-num">' + fmtMoney(n.gap_amount) + '</td>' +
-                                        '</tr>';
-                                }).join('');
-                                parts.push(
-                                    '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Phiếu dùng chung đề nghị với mã sale khác</p>' +
-                                    '<p>Các phiếu dưới đây dùng CHUNG 1 đề nghị xuất HĐ với phiếu thuộc mã sale KHÁC — "Đối chiếu tổng" tính riêng ' +
-                                    'theo từng mã sale nên bị lệch. Cột "Chênh lệch góp vào Đối chiếu tổng" đo TRỰC TIẾP (không suy diễn công thức) ' +
-                                    'bằng cách loại các phiếu này khỏi phép tính thật rồi xem "Đối chiếu tổng" tăng/giảm bao nhiêu — dương = Excel/list ' +
-                                    'cao hơn thẻ; âm = ngược lại. Tổng cả bảng: <b>' + fmtMoney(d.cross_saler_notes_total_amount) + '</b> (' +
-                                    d.cross_saler_notes.length + ' nhóm).</p>' +
-                                    '<table class="msu-table"><thead><tr><th>Phiếu của bạn</th><th>Đơn hàng</th><th>Đề nghị (phiếu đại diện)</th><th>Phiếu mã sale khác (cùng đề nghị)</th><th>Mã sale khác</th><th>Chênh lệch góp vào Đối chiếu tổng</th></tr></thead>' +
-                                    '<tbody>' + csRows + '</tbody></table></div>'
-                                );
-                            }
-                            body.innerHTML = parts.length ? parts.join('') : '<span class="msu-muted">Không tìm thấy nguyên nhân cụ thể nào trong phạm vi đang lọc.</span>';
-                        }).catch(function(e) {
-                            body.innerHTML = '<span class="msu-muted">Lỗi tải dữ liệu: ' + esc(e.message) + '</span>';
-                        });
-                    });
-                    function closeGapExplainModal() { document.getElementById('msu-gap-explain-modal').style.display = 'none'; }
-                    document.getElementById('msu-gap-explain-close').addEventListener('click', closeGapExplainModal);
-                    document.getElementById('msu-gap-explain-close-x').addEventListener('click', closeGapExplainModal);
 
                     // ===== Tab: Phiếu xuất kho (MISA) / Đơn Shopee / Đơn hải quan =====
                     document.querySelectorAll('.msu-tab').forEach(function(btn) {
@@ -1800,9 +1719,6 @@
                                 : '<span class="msu-muted">—</span>';
                             var exceptionHtml = row.exception
                                 ? '<span class="msu-badge-exception" title="' + esc(row.exception_reason || '') + '"><i class="fa fa-ban"></i> Ngoại lệ</span>' : '';
-                            var partialInvoiceBadge = row.partial_invoice
-                                ? ' <span class="msu-badge-state msu-badge-state-requested" title="Có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho (đề nghị gộp chung nhiều phiếu/đơn)">Chưa đủ tiền</span>'
-                                : '';
                             var remindedIcon = row.reminded
                                 ? ' <i class="fa fa-bell msu-reminded-icon" title="' + esc(row.reminder_note || 'Đã nhắc xuất hóa đơn') + '"></i>'
                                 : '';
@@ -1812,7 +1728,7 @@
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.date_done) + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.actual_amount) + '</td>' +
-                                '<td><div class="msu-status-cell"><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + partialInvoiceBadge + exceptionHtml + '</div></td>' +
+                                '<td><div class="msu-status-cell"><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + exceptionHtml + '</div></td>' +
                                 '<td>' + manualHtml + '</td>' +
                                 '<td>' + actionButtonsHtml(row) + '</td>';
                             tbody.appendChild(tr);
@@ -2840,9 +2756,6 @@
                                 '</div>' +
                             '</div>';
                         var diffClass = row.amount_mismatch ? ' msu-col-diff-bad' : '';
-                        var drawerPartialInvoiceBadge = row.partial_invoice
-                            ? ' <span class="msu-badge-state msu-badge-state-requested" title="Có hóa đơn nhưng CHƯA phủ đủ giá trị đã xuất kho (đề nghị gộp chung nhiều phiếu/đơn)">Chưa đủ tiền</span>'
-                            : '';
 
                         drawerEl.innerHTML =
                             '<div class="msu-drawer-header">' +
@@ -2854,7 +2767,7 @@
                                     '<div class="msu-drawer-meta">' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn hàng</span><span class="msu-meta-value">' + (row.sale_order_name ? esc(row.sale_order_name) : '—') + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ngày xuất kho</span><span class="msu-meta-value">' + esc(row.date_done) + '</span></div>' +
-                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + drawerPartialInvoiceBadge + '</div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền thực xuất</span><span class="msu-meta-value">' + fmtMoney(row.actual_amount) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số hóa đơn</span><span class="msu-meta-value">' + (row.invoice_no ? esc(row.invoice_no) : '—') + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền hóa đơn</span><span class="msu-meta-value">' + (row.state === 'invoiced' ? fmtMoney(row.invoice_amount) : '—') + '</span></div>' +
