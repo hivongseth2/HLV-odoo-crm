@@ -6,11 +6,28 @@ import uuid
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .amis_callback_utils import (
+    misa_error_means_request_missing, misa_error_means_voucher_created,
+)
 from .amis_sync_exceptions import MisaCatalogPending
 
 _logger = logging.getLogger(__name__)
 
 ZERO_UUID = '00000000-0000-0000-0000-000000000000'
+
+# MISA đã lập chứng từ thật: API delete không xóa được, phải chờ kế toán xóa.
+MISA_PURCHASE_VOUCHER_STATES = ('created', 'changed_on_misa', 'posted', 'unposted')
+# MISA đang giữ đề nghị/chứng từ của PO. Sửa ở Odoo lúc này thì hai bên lệch nhau,
+# nên khóa cho tới khi callback xóa về (state 'deleted').
+MISA_PURCHASE_LOCKED_STATES = (
+    'request_accepted', 'delete_pending', 'manual_delete_required',
+) + MISA_PURCHASE_VOUCHER_STATES
+# Chưa có chứng từ thật nên Odoo còn tự gọi API xóa đề nghị được.
+MISA_PURCHASE_REVOCABLE_STATES = ('queued', 'request_accepted', 'error')
+MISA_PURCHASE_LINE_TRACKED_FIELDS = {
+    'product_id', 'name', 'product_qty', 'product_uom', 'price_unit',
+    'discount', 'taxes_id', 'date_planned',
+}
 
 
 class PurchaseOrderAmisSync(models.Model):
@@ -59,6 +76,12 @@ class PurchaseOrderAmisSync(models.Model):
     misa_purchase_order_previous_org_refids = fields.Text(
         string='org_refid MISA đã thu hồi', copy=False,
     )
+    misa_purchase_order_locked = fields.Boolean(
+        string='Khóa sửa do MISA', compute='_compute_misa_purchase_order_lock',
+    )
+    misa_purchase_order_can_revoke = fields.Boolean(
+        string='Thu hồi được đề nghị MISA', compute='_compute_misa_purchase_order_lock',
+    )
 
     _MISA_PURCHASE_HEADER_FIELDS = {
         'partner_id', 'partner_ref', 'currency_id', 'date_order', 'date_planned',
@@ -67,8 +90,56 @@ class PurchaseOrderAmisSync(models.Model):
         'x_studio_ddgh', 'x_studio_misa_purchase_stock_code',
     }
 
+    @api.depends(
+        'misa_purchase_order_org_refid', 'misa_purchase_order_state', 'misa_purchase_order_synced',
+    )
+    def _compute_misa_purchase_order_lock(self):
+        for order in self:
+            sent = bool(order.misa_purchase_order_org_refid)
+            has_voucher = order._misa_purchase_order_has_voucher()
+            order.misa_purchase_order_locked = sent and (
+                has_voucher or order.misa_purchase_order_state in MISA_PURCHASE_LOCKED_STATES
+            )
+            order.misa_purchase_order_can_revoke = sent and not has_voucher and (
+                order.misa_purchase_order_state in MISA_PURCHASE_REVOCABLE_STATES
+            )
+
+    def _misa_purchase_order_has_voucher(self):
+        self.ensure_one()
+        return self.misa_purchase_order_synced or (
+            self.misa_purchase_order_state in MISA_PURCHASE_VOUCHER_STATES
+        )
+
+    def _misa_check_purchase_order_editable(self):
+        """Chặn sửa PO khi MISA còn giữ đề nghị/chứng từ của nó."""
+        if self.env.context.get('skip_misa_purchase_order_lifecycle'):
+            return
+        for order in self.filtered('misa_purchase_order_locked'):
+            raise UserError(order._misa_purchase_order_lock_message())
+
+    def _misa_purchase_order_lock_message(self):
+        self.ensure_one()
+        state_label = dict(
+            self._fields['misa_purchase_order_state']._description_selection(self.env)
+        ).get(self.misa_purchase_order_state, self.misa_purchase_order_state)
+        if self.misa_purchase_order_state == 'delete_pending':
+            hint = 'Odoo đang chờ MISA xác nhận thu hồi đề nghị; có báo xóa về thì sửa được.'
+        elif self.misa_purchase_order_can_revoke:
+            hint = (
+                'Bấm "Thu hồi đề nghị PO MISA" hoặc nhờ kế toán xóa đề nghị trên MISA; '
+                'MISA báo xóa về Odoo thì mới sửa được.'
+            )
+        else:
+            hint = (
+                'MISA đã lập chứng từ. Nhờ kế toán xóa chứng từ trên MISA; '
+                'MISA báo xóa về Odoo thì mới sửa được.'
+            )
+        return 'Đơn mua "%s" đang khóa sửa vì MISA: %s.\n%s' % (self.name, state_label, hint)
+
     def write(self, vals):
         tracked_change = bool(self._MISA_PURCHASE_HEADER_FIELDS.intersection(vals))
+        if tracked_change:
+            self._misa_check_purchase_order_editable()
         orders_to_replace = self.filtered(
             lambda order: tracked_change
             and bool(order.misa_purchase_order_org_refid)
@@ -123,9 +194,31 @@ class PurchaseOrderAmisSync(models.Model):
             })
         return True
 
-    def action_revoke_and_resync_misa_purchase_order(self):
+    def action_revoke_misa_purchase_order(self):
+        """Gọi MISA xóa đề nghị; xóa xong PO mở khóa nhưng chưa gửi lại."""
         for order in self:
-            order._mark_misa_purchase_order_for_replacement(force=True)
+            if not order.misa_purchase_order_can_revoke:
+                raise UserError(
+                    'Đơn mua "%s" không thu hồi được từ Odoo: MISA đã lập chứng từ hoặc '
+                    'đề nghị không còn ở trạng thái thu hồi được. Nhờ kế toán xóa trên MISA.'
+                    % order.name
+                )
+            order._misa_skip_pending_purchase_order_jobs(
+                'Bỏ qua job gửi Đơn mua vì người dùng thu hồi đề nghị trên MISA.'
+            )
+            order._misa_enqueue_purchase_order_revoke()
+        return True
+
+    def action_resend_misa_purchase_order(self):
+        """Gửi PO đã sửa lên MISA dưới identity mới, sau khi bản cũ đã bị xóa."""
+        for order in self:
+            if order.misa_purchase_order_state != 'deleted':
+                raise UserError(
+                    'Đơn mua "%s" chỉ gửi lại được khi MISA đã báo xóa đề nghị/chứng từ cũ.'
+                    % order.name
+                )
+            order._misa_prepare_new_purchase_order_identity()
+            order._enqueue_misa_purchase_order(raise_on_skip=True, force=True)
         return True
 
     def _mark_misa_purchase_order_for_replacement(self, force=False):
@@ -133,6 +226,10 @@ class PurchaseOrderAmisSync(models.Model):
         if not self.misa_purchase_order_org_refid:
             if force:
                 self._enqueue_misa_purchase_order(raise_on_skip=True, force=True)
+            return
+        # Bản cũ đã xóa trên MISA: để người dùng sửa xong rồi tự bấm gửi lại. Tự đẩy
+        # ở lần lưu đầu thì MISA nhận đề nghị mới và các lần lưu sau bị khóa giữa chừng.
+        if self.misa_purchase_order_state == 'deleted' and not force:
             return
         if self.misa_purchase_order_replacement_pending and not force:
             return
@@ -150,15 +247,16 @@ class PurchaseOrderAmisSync(models.Model):
             })
             self._enqueue_misa_purchase_order(force=True)
             return
-        actual_voucher_exists = self.misa_purchase_order_synced or self.misa_purchase_order_state in (
-            'created', 'changed_on_misa', 'posted', 'unposted',
-        )
-        if actual_voucher_exists:
+        if self._misa_purchase_order_has_voucher():
             self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
                 'misa_purchase_order_state': 'manual_delete_required',
                 'misa_purchase_order_state_updated_at': fields.Datetime.now(),
             })
             return
+        self._misa_enqueue_purchase_order_revoke()
+
+    def _misa_enqueue_purchase_order_revoke(self):
+        self.ensure_one()
         existing = self.env['amis.sync.job'].sudo().search([
             ('purchase_order_id', '=', self.id),
             ('direction', '=', 'purchase_order_revoke'),
@@ -178,17 +276,25 @@ class PurchaseOrderAmisSync(models.Model):
             self._misa_prepare_new_purchase_order_identity()
             self._enqueue_misa_purchase_order(force=True)
             return
-        actual_voucher_exists = self.misa_purchase_order_synced or self.misa_purchase_order_state in (
-            'created', 'changed_on_misa', 'posted', 'unposted',
-        )
-        if actual_voucher_exists:
+        if self._misa_purchase_order_has_voucher():
             self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
                 'misa_purchase_order_state': 'manual_delete_required',
                 'misa_purchase_order_state_updated_at': fields.Datetime.now(),
             })
             return
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        config.delete_purchase_order_request(org_refid)
+        try:
+            config.delete_purchase_order_request(org_refid)
+        except UserError as error:
+            if misa_error_means_request_missing(str(error)):
+                self._misa_complete_purchase_order_deletion()
+                return
+            if misa_error_means_voucher_created(str(error)):
+                self._misa_mark_purchase_order_voucher_exists(
+                    state='manual_delete_required', message=str(error),
+                )
+                return
+            raise
         self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
             'misa_purchase_order_state': 'delete_pending',
             'misa_purchase_order_state_updated_at': fields.Datetime.now(),
@@ -252,6 +358,58 @@ class PurchaseOrderAmisSync(models.Model):
                 'misa_purchase_order_replacement_pending': False,
             })
             self._enqueue_misa_purchase_order(force=True)
+
+    def _misa_mark_purchase_order_voucher_exists(self, state=None, message=False, session_id=False):
+        """MISA báo đã sinh chứng từ thật cho org_refid hiện tại (IsCreatedVoucher).
+
+        Ghi nhận chứng từ để PO khóa sửa và không gửi lại đề nghị cũ — gửi lại chỉ
+        nhận thêm IsCreatedVoucher và xóa mất trạng thái đúng.
+        """
+        self.ensure_one()
+        if not state:
+            current = self.misa_purchase_order_state
+            state = current if current in MISA_PURCHASE_VOUCHER_STATES else 'created'
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_synced': True,
+            'misa_purchase_order_state': state,
+            'misa_purchase_order_last_error': message or False,
+            'misa_purchase_order_session_id': session_id or self.misa_purchase_order_session_id,
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
+        self._misa_skip_pending_purchase_order_jobs(
+            'Bỏ qua vì MISA đã sinh chứng từ cho Đơn mua này.'
+        )
+
+    def _misa_accept_purchase_order_edited_on_misa(self):
+        """Kế toán sửa chứng từ trên MISA thay vì xóa: coi như hai bên đã khớp.
+
+        Dùng khi PO đang chờ xóa chứng từ để gửi bản sửa của Odoo. Kế toán chọn tự
+        sửa tay trên MISA nên Odoo bỏ việc gửi lại, tránh MISA có hai Đơn mua.
+        """
+        self.ensure_one()
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_replacement_pending': False,
+            'misa_purchase_order_synced': True,
+            'misa_purchase_order_state': 'changed_on_misa',
+            'misa_purchase_order_last_error': False,
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
+        self._misa_skip_pending_purchase_order_jobs(
+            'Bỏ qua vì kế toán đã tự sửa chứng từ trên MISA.'
+        )
+        self.message_post(body=(
+            'MISA báo kế toán đã sửa chứng từ Đơn mua trên MISA (không xóa). '
+            'Odoo coi như hai bên đã khớp và không gửi lại bản sửa.'
+        ))
+
+    def _misa_purchase_order_push_skip_reason(self):
+        """Lý do không được gửi đề nghị Đơn mua lúc này; '' nếu gửi được."""
+        self.ensure_one()
+        if self.misa_purchase_order_replacement_pending:
+            return 'Bỏ qua vì Đơn mua đang được thu hồi để tạo lại trên MISA.'
+        if self._misa_purchase_order_has_voucher():
+            return 'Bỏ qua vì MISA đã có chứng từ của Đơn mua này; gửi lại sẽ bị IsCreatedVoucher.'
+        return ''
 
     def _maybe_enqueue_misa_purchase_order(self):
         self.ensure_one()
@@ -1306,6 +1464,9 @@ class PurchaseOrderLineAmisSync(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        self.env['purchase.order'].browse(
+            {vals['order_id'] for vals in vals_list if vals.get('order_id')}
+        )._misa_check_purchase_order_editable()
         lines = super().create(vals_list)
         if not self.env.context.get('skip_misa_purchase_order_lifecycle'):
             for order in lines.order_id.filtered(lambda po: po.misa_purchase_order_org_refid):
@@ -1313,10 +1474,9 @@ class PurchaseOrderLineAmisSync(models.Model):
         return lines
 
     def write(self, vals):
-        tracked = bool({
-            'product_id', 'name', 'product_qty', 'product_uom', 'price_unit',
-            'discount', 'taxes_id', 'date_planned',
-        }.intersection(vals))
+        tracked = bool(MISA_PURCHASE_LINE_TRACKED_FIELDS.intersection(vals))
+        if tracked:
+            self.order_id._misa_check_purchase_order_editable()
         orders = self.mapped('order_id').filtered(
             lambda po: tracked and po.misa_purchase_order_org_refid
         )
@@ -1327,6 +1487,7 @@ class PurchaseOrderLineAmisSync(models.Model):
         return result
 
     def unlink(self):
+        self.order_id._misa_check_purchase_order_editable()
         orders = self.mapped('order_id').filtered(lambda po: po.misa_purchase_order_org_refid)
         result = super().unlink()
         if not self.env.context.get('skip_misa_purchase_order_lifecycle'):

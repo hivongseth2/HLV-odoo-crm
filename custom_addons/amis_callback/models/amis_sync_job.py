@@ -2,6 +2,7 @@
 import logging
 from odoo import api, fields, models
 
+from .amis_callback_utils import misa_error_means_voucher_created
 from .amis_sync_exceptions import MisaCatalogPending
 
 _logger = logging.getLogger(__name__)
@@ -90,10 +91,11 @@ class AmisSyncJob(models.Model):
         try:
             if self.direction == 'purchase_order':
                 if po:
-                    if po.misa_purchase_order_replacement_pending:
+                    skip_reason = po._misa_purchase_order_push_skip_reason()
+                    if skip_reason:
                         self.write({
                             'status': 'skipped',
-                            'error_msg': 'Bỏ qua vì Đơn mua đang được thu hồi để tạo lại trên MISA.',
+                            'error_msg': skip_reason,
                             'processed_at': fields.Datetime.now(),
                         })
                         return
@@ -145,22 +147,18 @@ class AmisSyncJob(models.Model):
             _logger.info('AMIS sync job %d remains pending: %s', self.id, message)
         except Exception as e:
             if self.direction in ('purchase_order', 'purchase_order_revoke') and po:
-                error_text = str(e)[:2000]
-                po_state = 'error'
-                if self.direction == 'purchase_order_revoke' and (
-                    'IsCreatedVoucher' in error_text or 'Đã sinh chứng từ' in error_text
-                ):
-                    po_state = 'manual_delete_required'
+                # IsCreatedVoucher/VoucherNotFound của lệnh thu hồi đã được xử lý
+                # ngay trong _revoke_misa_purchase_order_for_replacement.
                 po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
-                    'misa_purchase_order_state': po_state,
-                    'misa_purchase_order_last_error': error_text,
+                    'misa_purchase_order_state': 'error',
+                    'misa_purchase_order_last_error': str(e)[:2000],
                     'misa_purchase_order_state_updated_at': fields.Datetime.now(),
                 })
             if self.direction in ('payment_request', 'payment_request_revoke') and payment_request:
                 error_text = str(e)[:2000]
                 payment_state = 'error'
                 if self.direction == 'payment_request_revoke' and (
-                    'IsCreatedVoucher' in error_text or 'Đã sinh chứng từ' in error_text
+                    misa_error_means_voucher_created(error_text)
                 ):
                     payment_state = 'manual_delete_required'
                 payment_request.sudo().write({

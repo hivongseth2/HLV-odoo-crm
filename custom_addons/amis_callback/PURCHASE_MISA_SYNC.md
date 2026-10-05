@@ -145,18 +145,46 @@ phản hồi xác nhận chứng từ kế toán thật đã được tạo.
 - `data_type = 22`: dữ liệu chứng từ MISA đẩy ngược về Odoo. Đọc
   `custom_param.ModelState`: `1=Thêm`, `2=Sửa`, `3=Xóa`, `7=Ghi sổ`, `8=Bỏ ghi sổ`.
 
-Khi PO Odoo đã gửi MISA bị sửa:
+Khóa sửa PO khi MISA đang giữ bản của nó:
 
-1. Nếu MISA mới nhận đề nghị, Odoo gọi `DELETE /apir/sync/actopen/delete` với
-   `voucher_type=21` và `org_refid` cũ.
-2. Sau callback xóa thành công, Odoo tăng revision, sinh bộ `org_refid` và
-   `ref_detail_id` mới rồi enqueue PO mới.
-3. Nếu MISA đã lập chứng từ thật (`data_type=18`), API công khai không cam kết xóa
-   chứng từ thật. Odoo chuyển trạng thái sang `Chờ xóa chứng từ trên MISA`.
-   Trường hợp callback xóa `data_type=2` trả `error_code=IsCreatedVoucher` cũng được
-   chuyển sang trạng thái này và không retry xóa đề nghị.
-4. Khi người dùng xóa trên MISA và callback `data_type=22`, `ModelState=3` về Odoo,
-   hệ thống tự sinh identity mới và enqueue PO thay thế.
+- Trạng thái `request_accepted`, `delete_pending`, `manual_delete_required`, `created`,
+  `changed_on_misa`, `posted`, `unposted` (hoặc `misa_purchase_order_synced=True`):
+  Odoo **không cho sửa** header/dòng PO (UserError), form hiện banner cảnh báo.
+- Muốn sửa phải xóa bản trên MISA trước:
+  1. MISA mới nhận đề nghị (chưa lập chứng từ): bấm **Thu hồi đề nghị PO MISA**
+     (Odoo gọi `DELETE /apir/sync/actopen/delete`, `voucher_type=21`, `org_refid` cũ),
+     hoặc kế toán tự xóa đề nghị trên MISA. Nút chỉ hiện ở `queued`,
+     `request_accepted`, `error`.
+  2. MISA đã lập chứng từ thật: nút thu hồi ẩn. Kế toán xóa chứng từ trên MISA.
+     Callback xóa `data_type=2` trả `error_code=IsCreatedVoucher` chuyển sang
+     `Chờ xóa chứng từ trên MISA`, không retry xóa đề nghị.
+- Callback xóa về (`data_type=2` thành công, hoặc `data_type=22` `ModelState=3`) đưa PO
+  sang `deleted` và mở khóa. Odoo **không tự đẩy lại** khi người dùng lưu, để nhiều lần
+  lưu không bị khóa giữa chừng. Sửa xong bấm **Gửi lại PO MISA**: Odoo tăng revision,
+  sinh bộ `org_refid`/`ref_detail_id` mới rồi enqueue PO.
+- Ở `queued`/`error` (MISA có thể chưa giữ đề nghị) sửa vẫn được như cũ: Odoo tự thu
+  hồi đề nghị cũ (`replacement_pending`) rồi tự gửi lại sau callback xóa.
+
+Mã lỗi MISA (quan sát từ log thật, 10/2026):
+
+- `IsCreatedVoucher` ("Đã sinh chứng từ kế toán"): org_refid đã có chứng từ thật.
+  - Khi **gửi lại** đề nghị: không phải lỗi — Odoo ghi `synced=True`, giữ/đặt `created`,
+    không retry (trước đây retry 5 lần và ghi đè thành `error`, làm PO mất khóa).
+  - Khi **thu hồi**: chuyển `manual_delete_required`.
+- `VoucherNotFound` ("Không tìm thấy đề nghị sinh chứng từ") khi **thu hồi**: MISA không
+  còn gì mang org_refid đó (gửi lại đúng mã cũ thì MISA nhận như đề nghị mới). Thường là
+  kế toán đã xóa đề nghị trên giao diện — lúc đó MISA **không** gửi callback. Odoo coi
+  như xóa xong (`deleted`). Vì vậy khi kế toán báo đã xóa đề nghị mà PO vẫn khóa, bấm
+  "Thu hồi đề nghị PO MISA" là mở khóa được.
+- Job gửi đề nghị gặp PO đã có chứng từ (`synced` hoặc trạng thái chứng từ) thì bị bỏ qua.
+
+PO đang chờ xóa chứng từ để gửi bản sửa (`manual_delete_required` +
+`replacement_pending`) hỗ trợ hai cách kế toán xử lý:
+
+- (a) Xóa chứng từ trên MISA → callback `data_type=22`, `ModelState=3` → Odoo tự gửi bản
+  sửa với identity mới.
+- (b) Sửa tay chứng từ trên MISA → callback `ModelState=2` → Odoo coi như đã khớp: bỏ
+  `replacement_pending`, chuyển `changed_on_misa`, ghi chatter, **không** gửi lại.
 
 Không tái sử dụng `org_refid/ref_detail_id` cũ cho PO thay thế để callback cũ không
 lẫn với chứng từ mới.

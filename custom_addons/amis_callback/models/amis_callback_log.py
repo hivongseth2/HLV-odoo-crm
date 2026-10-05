@@ -7,6 +7,9 @@ from ast import literal_eval
 
 from odoo import api, fields, models
 
+from .amis_callback_utils import (
+    misa_error_means_request_missing, misa_error_means_voucher_created,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -265,17 +268,19 @@ class AmisCallbackLogLine(models.Model):
                 session_id = (line.session_id or '').strip()
                 error_message = line.error_message or line.error_call_back_message or ''
                 if data_type == 2:
-                    if success:
+                    # VoucherNotFound: MISA không còn đề nghị mang mã này (kế toán đã
+                    # xóa trên giao diện, MISA không báo lúc đó) — kết quả như xóa xong.
+                    if success or misa_error_means_request_missing(line.error_code, error_message):
                         po._misa_complete_purchase_order_deletion()
-                    else:
-                        is_created_voucher = (
-                            (line.error_code or '').strip() == 'IsCreatedVoucher'
-                            or 'Đã sinh chứng từ' in error_message
+                    elif misa_error_means_voucher_created(line.error_code, error_message):
+                        po._misa_mark_purchase_order_voucher_exists(
+                            state='manual_delete_required',
+                            message=error_message,
+                            session_id=session_id,
                         )
+                    else:
                         po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
-                            'misa_purchase_order_state': (
-                                'manual_delete_required' if is_created_voucher else 'error'
-                            ),
+                            'misa_purchase_order_state': 'error',
                             'misa_purchase_order_last_error': error_message,
                             'misa_purchase_order_session_id': session_id or False,
                             'misa_purchase_order_state_updated_at': fields.Datetime.now(),
@@ -289,6 +294,17 @@ class AmisCallbackLogLine(models.Model):
                         model_state = 0
                     if model_state == 3:
                         po._misa_complete_purchase_order_deletion()
+                        continue
+                    if (
+                        model_state == 2
+                        and po.misa_purchase_order_replacement_pending
+                        and po.misa_purchase_order_state == 'manual_delete_required'
+                    ):
+                        # Đang chờ kế toán xóa chứng từ để gửi bản sửa, nhưng kế toán
+                        # chọn sửa tay trên MISA: chấp nhận, không gửi lại.
+                        po._misa_accept_purchase_order_edited_on_misa()
+                        if success:
+                            line._apply_purchase_order_detail_ids(po, voucher_data)
                         continue
                     if po.misa_purchase_order_replacement_pending:
                         _logger.info(
@@ -320,6 +336,17 @@ class AmisCallbackLogLine(models.Model):
                         'Bo qua callback save cua phien ban Don mua cu %s (%s) dang duoc thu hoi.',
                         po.name,
                         org_refid,
+                    )
+                    continue
+
+                if (
+                    is_request_callback and not success
+                    and misa_error_means_voucher_created(line.error_code, error_message)
+                ):
+                    # Gửi lại đề nghị cho mã đã sinh chứng từ: chứng từ đang tồn tại,
+                    # không phải lỗi cần gửi lại.
+                    po._misa_mark_purchase_order_voucher_exists(
+                        message=error_message, session_id=session_id,
                     )
                     continue
 
@@ -395,9 +422,8 @@ class AmisCallbackLogLine(models.Model):
                     error_message = line.error_message or line.error_call_back_message or ''
                     session_id = (line.session_id or '').strip()
                     if data_type == 2:
-                        is_created_voucher = (
-                            (line.error_code or '').strip() == 'IsCreatedVoucher'
-                            or 'Đã sinh chứng từ' in error_message
+                        is_created_voucher = misa_error_means_voucher_created(
+                            line.error_code, error_message,
                         )
                         payment_request.write({
                             'state': (

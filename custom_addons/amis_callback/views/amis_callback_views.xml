@@ -364,15 +364,36 @@
                             <span class="o_stat_text">PO MISA</span>
                         </div>
                     </button>
-                    <button name="action_revoke_and_resync_misa_purchase_order" type="object"
-                            class="oe_stat_button" icon="fa-refresh"
-                            invisible="not misa_purchase_order_org_refid or misa_purchase_order_replacement_pending"
-                            confirm="Odoo sẽ thu hồi đề nghị cũ nếu MISA chưa lập chứng từ. Nếu đã lập, cần xóa chứng từ trên MISA trước khi Odoo tự tạo lại. Tiếp tục?">
+                    <button name="action_revoke_misa_purchase_order" type="object"
+                            class="oe_stat_button" icon="fa-undo"
+                            invisible="not misa_purchase_order_can_revoke"
+                            confirm="Odoo sẽ gọi MISA xóa đề nghị Đơn mua này. MISA báo xóa xong thì đơn mở khóa để sửa; sửa xong bấm 'Gửi lại PO MISA'. Tiếp tục?">
                         <div class="o_field_widget o_stat_info">
-                            <span class="o_stat_text">Thu hồi &amp; tạo lại</span>
+                            <span class="o_stat_text">Thu hồi đề nghị</span>
                             <span class="o_stat_text">PO MISA</span>
                         </div>
                     </button>
+                    <button name="action_resend_misa_purchase_order" type="object"
+                            class="oe_stat_button" icon="fa-cloud-upload"
+                            invisible="state not in ('purchase','done') or misa_purchase_order_state != 'deleted'"
+                            confirm="Gửi bản Đơn mua hiện tại lên MISA thành đề nghị mới. Sau khi MISA nhận, đơn sẽ khóa sửa lại. Tiếp tục?">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Gửi lại</span>
+                            <span class="o_stat_text">PO MISA</span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="/form/sheet" position="before">
+                    <div class="alert alert-warning mb-0" role="alert"
+                         invisible="not misa_purchase_order_locked">
+                        Đơn mua đang khóa sửa vì MISA đã có đề nghị/chứng từ.
+                        Muốn sửa: bấm "Thu hồi đề nghị PO MISA" (khi MISA chưa lập chứng từ)
+                        hoặc nhờ kế toán xóa trên MISA — MISA báo xóa về Odoo thì đơn tự mở khóa.
+                    </div>
+                    <div class="alert alert-info mb-0" role="alert"
+                         invisible="state not in ('purchase','done') or misa_purchase_order_state != 'deleted'">
+                        MISA đã xóa bản Đơn mua cũ. Sửa xong bấm "Gửi lại PO MISA" để đẩy bản mới.
+                    </div>
                 </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="MISA" name="misa_purchase_info"
@@ -383,6 +404,8 @@
                             <field name="misa_purchase_order_org_refid" readonly="1"/>
                             <field name="misa_purchase_order_refid" readonly="1"/>
                             <field name="misa_purchase_order_replacement_pending" readonly="1"/>
+                            <field name="misa_purchase_order_locked" invisible="1"/>
+                            <field name="misa_purchase_order_can_revoke" invisible="1"/>
                             <field name="misa_purchase_order_session_id" readonly="1"/>
                             <field name="misa_purchase_order_state_updated_at" readonly="1"/>
                             <field name="misa_purchase_order_revision" readonly="1"/>
