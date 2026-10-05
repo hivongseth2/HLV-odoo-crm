@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Đơn POS lưu xong sẽ _trigger() cron này ngay; chu kỳ 5 phút chỉ để vớt
+         lượt thử lại sau lỗi mạng/API. -->
+    <record id="ir_cron_meinvoice_pos_publish" model="ir.cron">
+        <field name="name">meInvoice: Phát hành HĐĐT đơn POS</field>
+        <field name="model_id" ref="amis_callback.model_meinvoice_invoice"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_publish_pos_invoices()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

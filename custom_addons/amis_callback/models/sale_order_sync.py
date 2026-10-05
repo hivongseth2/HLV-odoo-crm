@@ -8,6 +8,12 @@ from datetime import datetime
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .meinvoice_utils import (
+    amount_in_words_vi,
+    seller_fields,
+    vat_rate_name as meinvoice_vat_rate_name,
+)
+
 _logger = logging.getLogger(__name__)
 
 INVOICE_INFO_CHANGE_TAG_NAMES = {
@@ -920,19 +926,7 @@ class SaleOrderAmisSync(models.Model):
             total_discount_oc += discount_oc
             total_vat_oc += vat_oc
 
-            # Xác định VATRateName theo spec meInvoice
-            if vat_rate == 0.0:
-                vat_rate_name = '0%'
-            elif vat_rate == 5.0:
-                vat_rate_name = '5%'
-            elif vat_rate == 8.0:
-                vat_rate_name = '8%'
-            elif vat_rate == 10.0:
-                vat_rate_name = '10%'
-            elif vat_rate < 0:
-                vat_rate_name = 'KKKNT'
-            else:
-                vat_rate_name = 'KHAC:%.1f%%' % vat_rate
+            vat_rate_name = meinvoice_vat_rate_name(vat_rate)
 
             # Nhóm thuế cho TaxRateInfo
             tg = tax_groups.setdefault(vat_rate_name, {'AmountWithoutVATOC': 0.0, 'VATAmountOC': 0.0})
@@ -988,11 +982,7 @@ class SaleOrderAmisSync(models.Model):
             'PaymentMethodName': 'TM/CK',
             'IsInvoiceSummary': False,
             'IsInvoiceCalculatingMachine': is_mtt,
-            'SellerLegalName': company.name or '',
-            'SellerTaxCode': company.vat or '',
-            'SellerAddress': company_partner.contact_address_complete or company.street or '',
-            'SellerPhoneNumber': company.phone or '',
-            'SellerEmail': company.email or '',
+            **seller_fields(company),
             'BuyerLegalName': buyer_name,
             'BuyerTaxCode': partner.vat or '',
             'BuyerAddress': partner.contact_address_complete or '',
@@ -1009,7 +999,7 @@ class SaleOrderAmisSync(models.Model):
             'TotalVATAmount': total_vat_oc,
             'TotalAmountOC': total_amount_oc,
             'TotalAmount': total_amount_oc,
-            'TotalAmountInWords': self._amount_in_words_vi(total_amount_oc),
+            'TotalAmountInWords': amount_in_words_vi(total_amount_oc),
             'OriginalInvoiceDetail': detail,
             'TaxRateInfo': tax_rate_info,
         }
@@ -1022,60 +1012,3 @@ class SaleOrderAmisSync(models.Model):
             invoice_data['StockInAddress'] = stock_in_address
             invoice_data['Transport'] = (config.meinvoice_transport_means or '').strip()
         return invoice_data
-
-    @staticmethod
-    def _amount_in_words_vi(amount):
-        """Chuyển số tiền (VND) thành chữ tiếng Việt."""
-        n = int(round(float(amount or 0)))
-        if n == 0:
-            return 'Không đồng'
-
-        _ones = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín']
-
-        def _read_group(g, is_first=False):
-            if g == 0:
-                return ''
-            h, r = divmod(g, 100)
-            t, u = divmod(r, 10)
-            parts = []
-            if h:
-                parts.append(_ones[h] + ' trăm')
-            elif not is_first:
-                parts.append('không trăm')
-            if t == 1:
-                s = 'mười'
-                if u == 5:
-                    s += ' lăm'
-                elif u:
-                    s += ' ' + _ones[u]
-                parts.append(s)
-            elif t > 1:
-                s = _ones[t] + ' mươi'
-                if u == 1:
-                    s += ' mốt'
-                elif u == 5:
-                    s += ' lăm'
-                elif u:
-                    s += ' ' + _ones[u]
-                parts.append(s)
-            else:
-                if u:
-                    if h or not is_first:
-                        parts.append('lẻ ' + _ones[u])
-                    else:
-                        parts.append(_ones[u])
-            return ' '.join(parts)
-
-        units = [(10 ** 9, 'tỷ'), (10 ** 6, 'triệu'), (10 ** 3, 'nghìn'), (1, '')]
-        parts = []
-        remaining = n
-        for div, unit_name in units:
-            g = remaining // div
-            remaining %= div
-            if g == 0:
-                continue
-            text = _read_group(g, is_first=not parts)
-            parts.append((text + ' ' + unit_name).strip() if unit_name else text)
-
-        result = ' '.join(parts)
-        return result[:1].upper() + result[1:] + ' đồng'

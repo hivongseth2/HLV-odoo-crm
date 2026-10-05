@@ -9,6 +9,7 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 from .amis_sync_exceptions import MeInvoiceDuplicateRefError
+from .meinvoice_utils import amount_in_words_vi
 
 _logger = logging.getLogger(__name__)
 
@@ -39,11 +40,14 @@ class MeinvoiceInvoice(models.Model):
             else:
                 rec.name = 'Nháp #%d' % (rec.id or 0)
 
+    # Không bắt buộc: hóa đơn có thể xuất từ kênh khác đơn bán (module cầu nối
+    # như amis_callback_pos gắn chứng từ nguồn riêng và mở rộng _compute_partner_id).
     sale_order_id = fields.Many2one(
-        'sale.order', string='Đơn hàng', ondelete='restrict', required=True, readonly=True, index=True,
+        'sale.order', string='Đơn hàng', ondelete='restrict', readonly=True, index=True,
     )
     partner_id = fields.Many2one(
-        related='sale_order_id.partner_id', string='Khách hàng', store=True, readonly=True,
+        'res.partner', string='Khách hàng', compute='_compute_partner_id',
+        store=True, readonly=True,
     )
     state = fields.Selection(
         [
@@ -122,13 +126,19 @@ class MeinvoiceInvoice(models.Model):
 
     # ─────────────────────────────────────────────────────────────────────────
 
+    @api.depends('sale_order_id.partner_id')
+    def _compute_partner_id(self):
+        for rec in self:
+            rec.partner_id = rec.sale_order_id.partner_id
+
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
         try:
             config = self.env['amis.callback.config'].sudo().search([], limit=1)
             if (config and config.meinvoice_mail_enabled
-                    and config.meinvoice_mail_auto_send_draft):
+                    and config.meinvoice_mail_auto_send_draft
+                    and not self.env.context.get('meinvoice_skip_draft_mail')):
                 for rec in records:
                     if rec.state == 'draft' and (rec.buyer_email or '').strip():
                         rec.with_context(meinvoice_auto_mail=True)._send_meinvoice_mail(
@@ -223,10 +233,7 @@ class MeinvoiceInvoice(models.Model):
                 'OriginalInvoiceDetail': detail,
                 'TaxRateInfo': tax_rate_info,
             })
-            try:
-                invoice_data['TotalAmountInWords'] = rec.sale_order_id._amount_in_words_vi(total_amount_oc)
-            except Exception:
-                pass
+            invoice_data['TotalAmountInWords'] = amount_in_words_vi(total_amount_oc)
 
             rec.write({
                 'total_sale_oc': total_sale_oc,
@@ -315,8 +322,8 @@ class MeinvoiceInvoice(models.Model):
                     or ''
                 )
                 _logger.error(
-                    'meInvoice duplicate RefID stopped for SO %s: RefID=%s result=%s',
-                    self.sale_order_id.name,
+                    'meInvoice duplicate RefID stopped for %s: RefID=%s result=%s',
+                    self.sale_order_id.name or self.name,
                     ref_id,
                     first_check,
                 )
@@ -369,20 +376,21 @@ class MeinvoiceInvoice(models.Model):
 
         # Cập nhật SO để backward compat với các field kết quả trên đơn hàng
         order = self.sale_order_id
-        order.sudo().write({
-            'misa_meinvoice_synced': True,
-            'misa_meinvoice_transaction_id': transaction_id,
-            'misa_meinvoice_inv_no': inv_no,
-            'misa_meinvoice_inv_code': inv_code,
-            'misa_meinvoice_inv_series': inv_series_result or new_series,
-            'misa_meinvoice_inv_date': inv_date_result or (
-                inv_date.strftime('%Y-%m-%d') if inv_date else False
-            ),
-        })
+        if order:
+            order.sudo().write({
+                'misa_meinvoice_synced': True,
+                'misa_meinvoice_transaction_id': transaction_id,
+                'misa_meinvoice_inv_no': inv_no,
+                'misa_meinvoice_inv_code': inv_code,
+                'misa_meinvoice_inv_series': inv_series_result or new_series,
+                'misa_meinvoice_inv_date': inv_date_result or (
+                    inv_date.strftime('%Y-%m-%d') if inv_date else False
+                ),
+            })
 
         _logger.info(
-            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s InvCode=%s state=%s',
-            order.name, transaction_id, inv_no, inv_code, new_state,
+            'meInvoice submitted for %s: TransactionID=%s InvNo=%s InvCode=%s state=%s',
+            order.name or self.name, transaction_id, inv_no, inv_code, new_state,
         )
 
         if new_state == 'accepted':

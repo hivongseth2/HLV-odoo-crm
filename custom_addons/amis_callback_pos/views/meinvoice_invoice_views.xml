@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_meinvoice_invoice_form_pos" model="ir.ui.view">
+        <field name="name">meinvoice.invoice.form.pos</field>
+        <field name="model">meinvoice.invoice</field>
+        <field name="inherit_id" ref="amis_callback.view_meinvoice_invoice_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_publish']" position="after">
+                <button name="action_retry_pos_publish" type="object"
+                        string="Thử lại tự phát hành"
+                        invisible="not pos_order_id or state != 'draft' or not pos_publish_error"
+                        groups="amis_callback.group_meinvoice_accountant"
+                        confirm="Đưa hóa đơn này về hàng chờ tự gửi Cơ quan Thuế?"/>
+            </xpath>
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning mb-0" role="alert"
+                     invisible="not pos_publish_error or state != 'draft'">
+                    <strong>Chưa tự phát hành được: </strong>
+                    <field name="pos_publish_error" readonly="1"/>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='sale_order_id']" position="attributes">
+                <attribute name="invisible">pos_order_id</attribute>
+            </xpath>
+            <xpath expr="//field[@name='sale_order_id']" position="after">
+                <field name="pos_order_id" readonly="1" invisible="not pos_order_id"/>
+                <field name="pos_auto_publish" readonly="1" invisible="not pos_order_id"/>
+                <field name="pos_publish_attempts" readonly="1" invisible="not pos_order_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_meinvoice_invoice_list_pos" model="ir.ui.view">
+        <field name="name">meinvoice.invoice.list.pos</field>
+        <field name="model">meinvoice.invoice</field>
+        <field name="inherit_id" ref="amis_callback.view_meinvoice_invoice_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='sale_order_id']" position="after">
+                <field name="pos_order_id" string="Đơn POS" optional="show"/>
+                <field name="pos_publish_error" string="Lỗi tự phát hành" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_meinvoice_invoice_search_pos" model="ir.ui.view">
+        <field name="name">meinvoice.invoice.search.pos</field>
+        <field name="model">meinvoice.invoice</field>
+        <field name="inherit_id" ref="amis_callback.view_meinvoice_invoice_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='sale_order_id']" position="after">
+                <field name="pos_order_id" string="Đơn POS"/>
+            </xpath>
+            <xpath expr="//filter[@name='filter_in_queue']" position="after">
+                <separator/>
+                <filter name="filter_pos" string="Đơn POS" domain="[('pos_order_id', '!=', False)]"/>
+                <filter name="filter_pos_error" string="POS chưa tự phát hành được"
+                        domain="[('pos_order_id', '!=', False), ('state', '=', 'draft'), ('pos_publish_error', '!=', False)]"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

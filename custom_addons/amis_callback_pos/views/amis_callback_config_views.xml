@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_amis_callback_config_form_pos" model="ir.ui.view">
+        <field name="name">amis.callback.config.form.pos</field>
+        <field name="model">amis.callback.config</field>
+        <field name="inherit_id" ref="amis_callback.view_amis_callback_config_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='webhook_auto_publish_enabled']/../.." position="after">
+                <group string="POS → HĐĐT (máy tính tiền)">
+                    <group>
+                        <field name="meinvoice_pos_enabled"/>
+                        <field name="meinvoice_pos_auto_publish" invisible="not meinvoice_pos_enabled"/>
+                        <field name="meinvoice_pos_buyer_mode" invisible="not meinvoice_pos_enabled"/>
+                    </group>
+                    <group invisible="not meinvoice_pos_enabled">
+                        <field name="meinvoice_pos_consumer_name"/>
+                        <field name="meinvoice_pos_consumer_partner_ids" widget="many2many_tags"
+                               invisible="meinvoice_pos_buyer_mode != 'partner_vat'"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
