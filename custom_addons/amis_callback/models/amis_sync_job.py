@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-from odoo import api, fields, models
+from odoo import SUPERUSER_ID, api, fields, models
 
 from .amis_sync_exceptions import MisaCatalogPending
 
@@ -68,18 +68,43 @@ class AmisSyncJob(models.Model):
         ]).ids
         _logger.info('AMIS sync queue: xử lý %d jobs', len(job_ids))
         for job_id in job_ids:
-            # Mỗi job dùng cursor riêng để tránh 1 HTTP timeout làm block cả batch OK 1
-            try:
-                import odoo
-                with odoo.registry(self.env.cr.dbname).cursor() as cr:
-                    env = odoo.api.Environment(cr, self.env.uid, {})
-                    job = env['amis.sync.job'].browse(job_id)
-                    if job.status != 'pending':
-                        continue
-                    job._execute()
-                    cr.commit()
-            except Exception:
-                _logger.exception('AMIS sync job %d: unhandled error in cursor', job_id)
+            self._run_pending_job_in_new_cursor(self.env.cr.dbname, self.env.uid, job_id)
+
+    @api.model
+    def _run_pending_job_in_new_cursor(self, dbname, uid, job_id):
+        # Mỗi job dùng cursor riêng để tránh 1 HTTP timeout làm block cả batch.
+        import odoo
+        try:
+            with odoo.registry(dbname).cursor() as cr:
+                # Cron và lệnh chạy-ngay có thể cùng nhặt một job: khóa dòng để chỉ
+                # một bên gọi MISA, bên kia bỏ qua.
+                cr.execute(
+                    "SELECT id FROM amis_sync_job WHERE id = %s AND status = 'pending' "
+                    "FOR UPDATE SKIP LOCKED",
+                    [job_id],
+                )
+                if not cr.fetchone():
+                    return
+                env = odoo.api.Environment(cr, uid, {})
+                env['amis.sync.job'].browse(job_id)._execute()
+                cr.commit()
+        except Exception:
+            _logger.exception('AMIS sync job %d: unhandled error in cursor', job_id)
+
+    def _run_after_commit(self):
+        """Chạy các job này ngay khi transaction hiện tại commit, khỏi chờ cron.
+
+        Worker cron làm lần lượt từng cron nên job có thể chờ tới cả phút. Chạy
+        lỗi ở đây thì job vẫn 'pending' và cron làm lại như cũ. Chạy bằng quyền hệ
+        thống như cron: người bấm nút (nhân viên mua hàng) không có quyền ghi job.
+        """
+        dbname, uid, job_ids = self.env.cr.dbname, SUPERUSER_ID, self.ids
+
+        def run():
+            for job_id in job_ids:
+                self._run_pending_job_in_new_cursor(dbname, uid, job_id)
+
+        self.env.cr.postcommit.add(run)
 
     def _execute(self):
         self.ensure_one()

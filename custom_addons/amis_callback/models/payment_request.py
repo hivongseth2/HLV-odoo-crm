@@ -165,8 +165,10 @@ class AmisPaymentRequest(models.Model):
         return True
 
     def action_revoke_misa_payment_request(self):
+        jobs = self.env['amis.sync.job']
         for request in self:
-            request._enqueue_revoke_job()
+            jobs |= request._enqueue_revoke_job()
+        jobs._run_after_commit()
         return True
 
     def action_open_purchase_order(self):
@@ -240,6 +242,9 @@ class AmisPaymentRequest(models.Model):
     def _revoke_misa_payment_request(self):
         self.ensure_one()
         voucher_type = 3 if self.payment_method == 'bank' else 4
+        # 'delete_pending' đã ghi lúc xếp job (_enqueue_revoke_job). Không ghi lại sau
+        # DELETE: callback xóa về gần như cùng giây, hai transaction đụng cùng dòng.
+        legacy_job = self.state != 'delete_pending'
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         try:
             config.delete_payment_request(self.org_refid, voucher_type)
@@ -257,11 +262,12 @@ class AmisPaymentRequest(models.Model):
                 'state_updated_at': fields.Datetime.now(),
             })
             return
-        self.sudo().write({
-            'state': 'delete_pending',
-            'error_msg': False,
-            'state_updated_at': fields.Datetime.now(),
-        })
+        if legacy_job:
+            self.sudo().write({
+                'state': 'delete_pending',
+                'error_msg': False,
+                'state_updated_at': fields.Datetime.now(),
+            })
 
     def _misa_handle_voucher_deleted(self):
         """Kế toán xóa phiếu chi trên MISA (callback data_type=22, ModelState=3).

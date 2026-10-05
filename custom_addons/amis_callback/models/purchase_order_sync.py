@@ -239,6 +239,7 @@ class PurchaseOrderAmisSync(models.Model):
 
     def action_revoke_misa_purchase_order(self):
         """Gọi MISA xóa đề nghị; xóa xong PO mở khóa nhưng chưa gửi lại."""
+        jobs = self.env['amis.sync.job']
         for order in self:
             if not order.misa_purchase_order_can_revoke:
                 raise UserError(
@@ -249,7 +250,8 @@ class PurchaseOrderAmisSync(models.Model):
             order._misa_skip_pending_purchase_order_jobs(
                 'Bỏ qua job gửi Đơn mua vì người dùng thu hồi đề nghị trên MISA.'
             )
-            order._misa_enqueue_revoke_and_lock()
+            jobs |= order._misa_enqueue_revoke_and_lock()
+        jobs._run_after_commit()
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -306,7 +308,7 @@ class PurchaseOrderAmisSync(models.Model):
                 'misa_purchase_order_state_updated_at': fields.Datetime.now(),
             })
             return
-        self._misa_enqueue_purchase_order_revoke()
+        self._misa_enqueue_revoke_and_lock(at_commit=True)
 
     def _misa_enqueue_purchase_order_revoke(self):
         self.ensure_one()
@@ -315,12 +317,11 @@ class PurchaseOrderAmisSync(models.Model):
             ('direction', '=', 'purchase_order_revoke'),
             ('status', '=', 'pending'),
         ], limit=1)
-        if not existing:
-            self.env['amis.sync.job'].sudo().create({
-                'purchase_order_id': self.id,
-                'direction': 'purchase_order_revoke',
-                'status': 'pending',
-            })
+        return existing or self.env['amis.sync.job'].sudo().create({
+            'purchase_order_id': self.id,
+            'direction': 'purchase_order_revoke',
+            'status': 'pending',
+        })
 
     def _revoke_misa_purchase_order_for_replacement(self):
         self.ensure_one()
@@ -335,6 +336,11 @@ class PurchaseOrderAmisSync(models.Model):
                 'misa_purchase_order_state_updated_at': fields.Datetime.now(),
             })
             return
+        # 'delete_pending' đã được ghi (và commit) lúc xếp job. Không ghi PO sau DELETE:
+        # callback xóa của MISA về gần như cùng giây, hai transaction cùng sửa một dòng
+        # PO thì Postgres hủy một bên — job chạy lại xóa nhầm đề nghị mới, hoặc mất
+        # callback. Job xếp từ bản cũ (trước khi có quy tắc này) thì vẫn phải ghi.
+        legacy_job = self.misa_purchase_order_state != 'delete_pending'
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         try:
             config.delete_purchase_order_request(org_refid)
@@ -348,10 +354,8 @@ class PurchaseOrderAmisSync(models.Model):
                 )
                 return
             raise
-        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
-            'misa_purchase_order_state': 'delete_pending',
-            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
-        })
+        if legacy_job:
+            self._misa_mark_purchase_order_delete_pending()
 
     def _misa_prepare_new_purchase_order_identity(self):
         self.ensure_one()
@@ -430,19 +434,26 @@ class PurchaseOrderAmisSync(models.Model):
         )
         self._misa_enqueue_revoke_and_lock()
 
-    def _misa_enqueue_revoke_and_lock(self):
-        """Xếp job thu hồi và chuyển 'delete_pending' ngay, không đợi job chạy.
+    def _misa_enqueue_revoke_and_lock(self, at_commit=False):
+        """Xếp job thu hồi; trả job. Chuyển 'delete_pending' trong cùng transaction.
 
-        Để PO khóa và nút thu hồi ẩn liền — trước đây bấm xong thấy y nguyên nên
-        người dùng bấm lại. Không dùng trong luồng sửa PO (_mark...): ở đó đổi trạng
-        thái giữa một lần lưu sẽ khóa các dòng còn lại của chính lần lưu đó.
+        Ghi trạng thái ở đây (không để job ghi sau DELETE) để PO khóa, nút thu hồi ẩn
+        liền, và tránh đụng dòng PO với callback xóa — xem _revoke_misa_purchase_order_
+        for_replacement. at_commit=True khi đang giữa một lần lưu PO: khóa ngay sẽ chặn
+        các dòng còn lại của chính lần lưu đó, nên dời tới lúc transaction sắp commit.
         """
         self.ensure_one()
+        if at_commit:
+            self.env.cr.precommit.add(self._misa_mark_purchase_order_delete_pending)
+        else:
+            self._misa_mark_purchase_order_delete_pending()
+        return self._misa_enqueue_purchase_order_revoke()
+
+    def _misa_mark_purchase_order_delete_pending(self):
         self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
             'misa_purchase_order_state': 'delete_pending',
             'misa_purchase_order_state_updated_at': fields.Datetime.now(),
         })
-        self._misa_enqueue_purchase_order_revoke()
 
     def _misa_mark_purchase_order_voucher_exists(self, state=None, message=False, session_id=False):
         """MISA báo đã sinh chứng từ thật cho org_refid hiện tại (IsCreatedVoucher).
