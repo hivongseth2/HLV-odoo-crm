@@ -24,6 +24,7 @@ MISA_PURCHASE_LOCKED_STATES = (
 ) + MISA_PURCHASE_VOUCHER_STATES
 # Chưa có chứng từ thật nên Odoo còn tự gọi API xóa đề nghị được.
 MISA_PURCHASE_REVOCABLE_STATES = ('queued', 'request_accepted', 'error')
+MISA_PURCHASE_LOCK_SYNC_FIELDS = {'misa_purchase_order_state', 'misa_purchase_order_synced'}
 MISA_PURCHASE_LINE_TRACKED_FIELDS = {
     'product_id', 'name', 'product_qty', 'product_uom', 'price_unit',
     'discount', 'taxes_id', 'date_planned',
@@ -153,7 +154,36 @@ class PurchaseOrderAmisSync(models.Model):
         if not self.env.context.get('skip_misa_purchase_order_lifecycle'):
             for order in orders_to_replace:
                 order._mark_misa_purchase_order_for_replacement()
+        # Callback MISA ghi trạng thái qua write (kèm skip_..._lifecycle), nên đồng bộ
+        # khóa ở đây là bắt được mọi đường, không cần gọi ở từng chỗ xử lý callback.
+        if MISA_PURCHASE_LOCK_SYNC_FIELDS.intersection(vals):
+            self._misa_sync_odoo_lock()
         return result
+
+    def _misa_sync_odoo_lock(self):
+        """Khóa/mở PO bằng trạng thái 'Đã khoá' (done) của Odoo theo chứng từ MISA.
+
+        MISA đã lập chứng từ → Đã khoá (dòng hàng chỉ-đọc, vẫn nhập kho và tạo hóa
+        đơn được). Chứng từ + đề nghị đã xóa bên MISA ('deleted') → về Đơn mua hàng
+        để sửa rồi gửi lại.
+        """
+        for order in self:
+            if order.state == 'purchase' and order._misa_purchase_order_has_voucher():
+                order.button_done()
+            elif order.state == 'done' and order.misa_purchase_order_state == 'deleted':
+                super(PurchaseOrderAmisSync, order).button_unlock()
+
+    def button_unlock(self):
+        for order in self:
+            # Mở khóa tay lúc MISA còn chứng từ thì sửa xong cũng không gửi được,
+            # chỉ làm hai bên lệch nhau.
+            if order._misa_purchase_order_has_voucher():
+                raise UserError(
+                    'Đơn mua "%s" đã có chứng từ trên MISA (%s). Nhờ kế toán xóa chứng từ '
+                    'trên MISA; MISA báo xóa về thì Odoo tự mở khóa.'
+                    % (order.name, order._misa_purchase_order_state_label())
+                )
+        return super().button_unlock()
 
     def button_confirm(self):
         res = super().button_confirm()

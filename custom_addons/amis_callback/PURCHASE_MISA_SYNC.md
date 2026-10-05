@@ -147,6 +147,15 @@ phản hồi xác nhận chứng từ kế toán thật đã được tạo.
 
 Khóa sửa PO khi MISA đang giữ bản của nó:
 
+- MISA đã lập chứng từ (`created`/`changed_on_misa`/`posted`/`unposted` hoặc `synced`)
+  → Odoo tự chuyển PO sang **Đã khoá** (`state='done'`, nút Khoá có sẵn của Odoo): dòng
+  hàng chỉ-đọc, vẫn nhập kho và tạo hóa đơn được. Nút "Mở khoá" bị chặn khi MISA còn
+  chứng từ. MISA xóa chứng từ + Odoo thu hồi xong đề nghị (`deleted`) → Odoo tự mở về
+  **Đơn mua hàng** để sửa rồi bấm "Gửi lại PO MISA". Đồng bộ ở `write()` của PO, khi
+  `misa_purchase_order_state`/`misa_purchase_order_synced` đổi.
+- MISA mới nhận đề nghị (chưa lập chứng từ): PO vẫn là Đơn mua hàng, có nút "Thu hồi
+  đề nghị PO MISA"; lưu thay đổi bị chặn ở server (popup lỗi).
+
 - Trạng thái `request_accepted`, `delete_pending`, `manual_delete_required`, `created`,
   `changed_on_misa`, `posted`, `unposted` (hoặc `misa_purchase_order_synced=True`):
   Odoo **không cho sửa** header/dòng PO (UserError), form hiện banner cảnh báo.
