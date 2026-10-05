@@ -7,12 +7,11 @@
 # odoo-bin shell (Odoo.sh) và Enter. Phần chạy được bọc trong exec(...) để dán
 # vào REPL không bị vỡ bởi dòng trống trong vòng lặp/hàm.
 
-# Lượt B: MISA có báo xóa chứng từ (ModelState=3) không
-LIMIT = 100
-DATA_TYPE = 22
-PO_NAME = ""
-SHOW_RAW = False
-QUIET = True
+LIMIT = 50          # số callback đọc
+DATA_TYPE = None    # None = mọi loại; hoặc 2, 22, 1, 18 ...
+PO_NAME = "DMH23526"  # chỉ lấy callback dính tới PO này (kể cả org_refid cũ); "" = mọi PO
+SHOW_RAW = False    # True = in thêm data_payload (cắt 1500 ký tự)
+QUIET = False       # True = bỏ chi tiết từng callback, chỉ in tổng hợp (khi LIMIT lớn)
 
 
 exec(r'''
@@ -196,6 +195,35 @@ for log in logs.sorted(lambda r: (r.received_at, r.id)):
         if len(raw) > RAW_MAX:
             raw = raw[:RAW_MAX] + " …(cắt)"
         detail("  data_payload: %s" % raw)
+
+# ── Chẩn đoán khóa sửa của PO ──────────────────────────────────
+if target_po:
+    section("KHÓA SỬA CỦA %s" % target_po.name)
+    module = env["ir.module.module"].sudo().search([("name", "=", "amis_callback")], limit=1)
+    print("  amis_callback cài bản: %s" % module.latest_version)
+    print("  state=%s synced=%s locked=%s can_revoke=%s replace_pending=%s rev=%s" % (
+        target_po.misa_purchase_order_state, target_po.misa_purchase_order_synced,
+        target_po.misa_purchase_order_locked, target_po.misa_purchase_order_can_revoke,
+        target_po.misa_purchase_order_replacement_pending, target_po.misa_purchase_order_revision,
+    ))
+    print("  cập nhật trạng thái MISA lúc: %s" % target_po.misa_purchase_order_state_updated_at)
+    for model_name in ("purchase.order", "purchase.order.line"):
+        chain = [
+            cls.__module__ for cls in type(env[model_name]).__mro__
+            if "write" in vars(cls) and cls.__module__.startswith("odoo.addons.")
+        ]
+        print("  %s.write đi qua: %s" % (model_name, " > ".join(chain)))
+    print("  Lịch sử thay đổi (chatter):")
+    messages = env["mail.message"].sudo().search([
+        ("model", "=", "purchase.order"), ("res_id", "=", target_po.id),
+    ], order="id")
+    for message in messages:
+        for tracking in message.tracking_value_ids:
+            print("    %s %s | %s: %s → %s" % (
+                message.date, message.author_id.name, tracking.field_id.field_description,
+                tracking.old_value_char or tracking.old_value_float or tracking.old_value_integer,
+                tracking.new_value_char or tracking.new_value_float or tracking.new_value_integer,
+            ))
 
 # ── Job hàng đợi của PO: ai/khi nào đẩy hoặc thu hồi ───────────
 if target_po:

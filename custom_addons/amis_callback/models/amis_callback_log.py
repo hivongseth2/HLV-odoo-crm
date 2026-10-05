@@ -422,16 +422,19 @@ class AmisCallbackLogLine(models.Model):
                     error_message = line.error_message or line.error_call_back_message or ''
                     session_id = (line.session_id or '').strip()
                     if data_type == 2:
+                        deleted = success or misa_error_means_request_missing(
+                            line.error_code, error_message,
+                        )
                         is_created_voucher = misa_error_means_voucher_created(
                             line.error_code, error_message,
                         )
                         payment_request.write({
                             'state': (
-                                'deleted' if success
+                                'deleted' if deleted
                                 else 'manual_delete_required' if is_created_voucher
                                 else 'error'
                             ),
-                            'error_msg': False if success else error_message,
+                            'error_msg': False if deleted else error_message,
                             'callback_session_id': session_id or False,
                             'callback_data_type': data_type,
                             'state_updated_at': fields.Datetime.now(),
@@ -443,12 +446,8 @@ class AmisCallbackLogLine(models.Model):
                         except (TypeError, ValueError):
                             model_state = 0
                         if model_state == 3:
-                            payment_request.write({
-                                'state': 'deleted',
-                                'error_msg': False,
-                                'callback_data_type': data_type,
-                                'state_updated_at': fields.Datetime.now(),
-                            })
+                            payment_request.write({'callback_data_type': data_type})
+                            payment_request._misa_handle_voucher_deleted()
                             continue
                     vals = {
                         'state': (

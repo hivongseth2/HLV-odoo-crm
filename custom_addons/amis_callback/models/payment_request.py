@@ -5,6 +5,10 @@ import uuid
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 
+from .amis_callback_utils import (
+    misa_error_means_request_missing, misa_error_means_voucher_created,
+)
+
 _logger = logging.getLogger(__name__)
 
 
@@ -237,12 +241,39 @@ class AmisPaymentRequest(models.Model):
         self.ensure_one()
         voucher_type = 3 if self.payment_method == 'bank' else 4
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        config.delete_payment_request(self.org_refid, voucher_type)
+        try:
+            config.delete_payment_request(self.org_refid, voucher_type)
+        except UserError as error:
+            # VoucherNotFound: MISA không còn đề nghị mang mã này — như đã xóa xong.
+            if misa_error_means_request_missing(str(error)):
+                state = 'deleted'
+            elif misa_error_means_voucher_created(str(error)):
+                state = 'manual_delete_required'
+            else:
+                raise
+            self.sudo().write({
+                'state': state,
+                'error_msg': False if state == 'deleted' else str(error),
+                'state_updated_at': fields.Datetime.now(),
+            })
+            return
         self.sudo().write({
             'state': 'delete_pending',
             'error_msg': False,
             'state_updated_at': fields.Datetime.now(),
         })
+
+    def _misa_handle_voucher_deleted(self):
+        """Kế toán xóa phiếu chi trên MISA (callback data_type=22, ModelState=3).
+
+        Xóa phiếu chi KHÔNG xóa đề nghị chi: đề nghị quay lại danh sách "Lập CT kế
+        toán" trên MISA và kế toán có thể lập phiếu chi lần nữa — chi trùng tiền.
+        Thu hồi đề nghị trước; callback xóa (hoặc VoucherNotFound) về mới 'deleted'.
+        """
+        self.ensure_one()
+        if self.state == 'deleted' or not self.org_refid:
+            return
+        self._enqueue_revoke_job()
 
     def _sync_payment_request_to_misa(self):
         self.ensure_one()

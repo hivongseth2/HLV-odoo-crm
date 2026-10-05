@@ -2,7 +2,6 @@
 import logging
 from odoo import api, fields, models
 
-from .amis_callback_utils import misa_error_means_voucher_created
 from .amis_sync_exceptions import MisaCatalogPending
 
 _logger = logging.getLogger(__name__)
@@ -155,15 +154,11 @@ class AmisSyncJob(models.Model):
                     'misa_purchase_order_state_updated_at': fields.Datetime.now(),
                 })
             if self.direction in ('payment_request', 'payment_request_revoke') and payment_request:
-                error_text = str(e)[:2000]
-                payment_state = 'error'
-                if self.direction == 'payment_request_revoke' and (
-                    misa_error_means_voucher_created(error_text)
-                ):
-                    payment_state = 'manual_delete_required'
+                # IsCreatedVoucher/VoucherNotFound của lệnh thu hồi đã được xử lý
+                # ngay trong _revoke_misa_payment_request.
                 payment_request.sudo().write({
-                    'state': payment_state,
-                    'error_msg': error_text,
+                    'state': 'error',
+                    'error_msg': str(e)[:2000],
                     'state_updated_at': fields.Datetime.now(),
                 })
             self.write({

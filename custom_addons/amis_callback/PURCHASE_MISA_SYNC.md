@@ -190,6 +190,11 @@ PO đang chờ xóa chứng từ để gửi bản sửa (`manual_delete_require
 - (b) Sửa tay chứng từ trên MISA → callback `ModelState=2` → Odoo coi như đã khớp: bỏ
   `replacement_pending`, chuyển `changed_on_misa`, ghi chatter, **không** gửi lại.
 
+Đề nghị chi (`amis.payment.request`, voucher_type 3/4) theo cùng quy tắc: kế toán xóa
+phiếu chi (`ModelState=3`) thì Odoo tự thu hồi đề nghị chi (`delete_pending`) thay vì
+đánh dấu `deleted` ngay — nếu không, đề nghị còn trên MISA và có thể bị lập phiếu chi
+lần nữa (chi trùng). Thu hồi trả `VoucherNotFound` cũng tính là đã xóa.
+
 Không tái sử dụng `org_refid/ref_detail_id` cũ cho PO thay thế để callback cũ không
 lẫn với chứng từ mới.
 

@@ -219,8 +219,18 @@ class PurchaseOrderAmisSync(models.Model):
             order._misa_skip_pending_purchase_order_jobs(
                 'Bỏ qua job gửi Đơn mua vì người dùng thu hồi đề nghị trên MISA.'
             )
-            order._misa_enqueue_purchase_order_revoke()
-        return True
+            order._misa_enqueue_revoke_and_lock()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Đang thu hồi đề nghị MISA',
+                'message': 'MISA báo xóa xong thì Đơn mua mở khóa để sửa, sửa xong bấm "Gửi lại PO MISA".',
+                'type': 'info',
+                'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
+            },
+        }
 
     def action_resend_misa_purchase_order(self):
         """Gửi PO đã sửa lên MISA dưới identity mới, sau khi bản cũ đã bị xóa."""
@@ -383,13 +393,25 @@ class PurchaseOrderAmisSync(models.Model):
         self.ensure_one()
         self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
             'misa_purchase_order_synced': False,
-            'misa_purchase_order_state': 'delete_pending',
             'misa_purchase_order_last_error': False,
-            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
         })
         self._misa_skip_pending_purchase_order_jobs(
             'Bỏ qua vì đang thu hồi đề nghị cũ sau khi kế toán xóa chứng từ trên MISA.'
         )
+        self._misa_enqueue_revoke_and_lock()
+
+    def _misa_enqueue_revoke_and_lock(self):
+        """Xếp job thu hồi và chuyển 'delete_pending' ngay, không đợi job chạy.
+
+        Để PO khóa và nút thu hồi ẩn liền — trước đây bấm xong thấy y nguyên nên
+        người dùng bấm lại. Không dùng trong luồng sửa PO (_mark...): ở đó đổi trạng
+        thái giữa một lần lưu sẽ khóa các dòng còn lại của chính lần lưu đó.
+        """
+        self.ensure_one()
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_state': 'delete_pending',
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
         self._misa_enqueue_purchase_order_revoke()
 
     def _misa_mark_purchase_order_voucher_exists(self, state=None, message=False, session_id=False):
