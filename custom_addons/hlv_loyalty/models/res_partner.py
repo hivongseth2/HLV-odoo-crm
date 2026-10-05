@@ -71,9 +71,11 @@ class ResPartner(models.Model):
 
         Đây là số CHỈ ĐỂ XEM — nguồn sự thật thật sự nằm ở
         `hlv.loyalty.portal.account.loyalty_total_points` (mỗi tài khoản có
-        pool điểm xếp hạng riêng). Với partner không phải root (hiếm, dữ
-        liệu legacy), giữ hành vi cũ: chỉ tính lịch sử gắn trực tiếp vào
-        chính partner đó (partner không có tài khoản Loyalty riêng).
+        pool điểm xếp hạng riêng). Với partner không có tài khoản Loyalty
+        riêng (dữ liệu legacy), giữ hành vi cũ: chỉ tính lịch sử gắn trực
+        tiếp vào chính partner đó — nhưng bỏ dòng đã thuộc một tài khoản:
+        đơn qua người môi giới ghi `partner_id` là khách trên đơn còn điểm
+        thuộc tài khoản công ty khác, tính cả vào đây là đếm đôi.
         """
         History = self.env['hlv.loyalty.history']
         for partner in self:
@@ -84,6 +86,7 @@ class ResPartner(models.Model):
                 continue
             records = History.search([
                 ('partner_id', '=', partner.id),
+                ('account_id', '=', False),
                 ('point_type', 'in', ['ranking', False]),
                 ('state', 'in', ['confirmed', False]),
             ])

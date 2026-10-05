@@ -55,14 +55,6 @@ class StockPicking(models.Model):
         if not partner:
             return []
 
-        root_partner = partner._get_loyalty_root()
-        has_active_portal_account = self.env['hlv.loyalty.portal.account'].sudo().search_count([
-            ('partner_id', '=', root_partner.id),
-            ('active', '=', True),
-        ])
-        if not has_active_portal_account:
-            return []
-
         # Tìm chương trình loyalty đang active
         program = self.env['hlv.loyalty.program'].sudo().search([
             ('active', '=', True),
@@ -98,7 +90,10 @@ class StockPicking(models.Model):
         if order_total_amount > 0:
             delivery_ratio = min(delivered_subtotal / order_total_amount, 1.0)
 
-        # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
+        # Khách không cần có tài khoản Loyalty riêng: đơn qua người môi giới
+        # gán điểm cho tài khoản của công ty khác trên bảng phân bổ. Không có
+        # bảng mà công ty gốc cũng không có tài khoản thì allocations rỗng →
+        # không tích điểm, nên không cần chốt riêng theo công ty gốc.
         root_partner = partner._get_loyalty_root()
 
         allocations = self._get_loyalty_account_allocations(sale_order, root_partner)
