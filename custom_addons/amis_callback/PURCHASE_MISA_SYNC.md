@@ -158,7 +158,11 @@ Khóa sửa PO khi MISA đang giữ bản của nó:
   2. MISA đã lập chứng từ thật: nút thu hồi ẩn. Kế toán xóa chứng từ trên MISA.
      Callback xóa `data_type=2` trả `error_code=IsCreatedVoucher` chuyển sang
      `Chờ xóa chứng từ trên MISA`, không retry xóa đề nghị.
-- Callback xóa về (`data_type=2` thành công, hoặc `data_type=22` `ModelState=3`) đưa PO
+- Kế toán xóa **chứng từ** (`data_type=22`, `ModelState=3`) **không** xóa đề nghị sinh
+  chứng từ: đề nghị cũ quay lại danh sách "Lập CT kế toán". Gửi bản mới ngay thì MISA có
+  hai đề nghị cùng số PO (đã gặp ở DMH23526). Vì vậy Odoo chuyển PO sang `delete_pending`
+  (vẫn khóa) và tự gọi `DELETE` đề nghị cũ trước.
+- Callback xóa đề nghị về (`data_type=2` thành công hoặc `VoucherNotFound`) mới đưa PO
   sang `deleted` và mở khóa. Odoo **không tự đẩy lại** khi người dùng lưu, để nhiều lần
   lưu không bị khóa giữa chừng. Sửa xong bấm **Gửi lại PO MISA**: Odoo tăng revision,
   sinh bộ `org_refid`/`ref_detail_id` mới rồi enqueue PO.
@@ -181,8 +185,8 @@ Mã lỗi MISA (quan sát từ log thật, 10/2026):
 PO đang chờ xóa chứng từ để gửi bản sửa (`manual_delete_required` +
 `replacement_pending`) hỗ trợ hai cách kế toán xử lý:
 
-- (a) Xóa chứng từ trên MISA → callback `data_type=22`, `ModelState=3` → Odoo tự gửi bản
-  sửa với identity mới.
+- (a) Xóa chứng từ trên MISA → callback `data_type=22`, `ModelState=3` → Odoo thu hồi đề
+  nghị cũ → callback xóa đề nghị về → Odoo tự gửi bản sửa với identity mới.
 - (b) Sửa tay chứng từ trên MISA → callback `ModelState=2` → Odoo coi như đã khớp: bỏ
   `replacement_pending`, chuyển `changed_on_misa`, ghi chatter, **không** gửi lại.
 

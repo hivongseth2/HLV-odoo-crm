@@ -117,11 +117,15 @@ class PurchaseOrderAmisSync(models.Model):
         for order in self.filtered('misa_purchase_order_locked'):
             raise UserError(order._misa_purchase_order_lock_message())
 
-    def _misa_purchase_order_lock_message(self):
+    def _misa_purchase_order_state_label(self):
         self.ensure_one()
-        state_label = dict(
+        return dict(
             self._fields['misa_purchase_order_state']._description_selection(self.env)
         ).get(self.misa_purchase_order_state, self.misa_purchase_order_state)
+
+    def _misa_purchase_order_lock_message(self):
+        self.ensure_one()
+        state_label = self._misa_purchase_order_state_label()
         if self.misa_purchase_order_state == 'delete_pending':
             hint = 'Odoo đang chờ MISA xác nhận thu hồi đề nghị; có báo xóa về thì sửa được.'
         elif self.misa_purchase_order_can_revoke:
@@ -164,15 +168,24 @@ class PurchaseOrderAmisSync(models.Model):
 
     def action_sync_misa_purchase_order(self):
         for order in self:
+            # Nút chỉ dành cho PO chưa từng gửi; bấm lần hai khi job đã chạy xong
+            # sẽ đẩy thêm một đề nghị nữa lên MISA.
+            if order.misa_purchase_order_org_refid:
+                raise UserError(
+                    'Đơn mua "%s" đã gửi MISA rồi (trạng thái: %s).'
+                    % (order.name, order._misa_purchase_order_state_label())
+                )
             order._enqueue_misa_purchase_order(raise_on_skip=True, force=True)
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Da enqueue',
-                'message': 'Don mua hang se duoc dong bo len MISA trong vai giay.',
+                'title': 'Đã xếp hàng gửi MISA',
+                'message': 'Đơn mua sẽ được gửi lên MISA trong vài giây.',
                 'type': 'success',
                 'sticky': False,
+                # Nạp lại form để nút ẩn ngay, người dùng không bấm lần nữa.
+                'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
             },
         }
 
@@ -358,6 +371,26 @@ class PurchaseOrderAmisSync(models.Model):
                 'misa_purchase_order_replacement_pending': False,
             })
             self._enqueue_misa_purchase_order(force=True)
+
+    def _misa_handle_purchase_order_voucher_deleted(self):
+        """Kế toán xóa chứng từ trên MISA (callback data_type=22, ModelState=3).
+
+        Xóa chứng từ KHÔNG xóa đề nghị sinh chứng từ: đề nghị cũ quay lại danh sách
+        "Lập CT kế toán" trên MISA. Gửi bản mới ngay thì MISA có hai đề nghị cùng số
+        PO, nên thu hồi đề nghị cũ trước; callback xóa (hoặc VoucherNotFound) về mới
+        đưa PO sang 'deleted' — mở khóa, hoặc tự gửi bản sửa nếu đang chờ thay thế.
+        """
+        self.ensure_one()
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_synced': False,
+            'misa_purchase_order_state': 'delete_pending',
+            'misa_purchase_order_last_error': False,
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
+        self._misa_skip_pending_purchase_order_jobs(
+            'Bỏ qua vì đang thu hồi đề nghị cũ sau khi kế toán xóa chứng từ trên MISA.'
+        )
+        self._misa_enqueue_purchase_order_revoke()
 
     def _misa_mark_purchase_order_voucher_exists(self, state=None, message=False, session_id=False):
         """MISA báo đã sinh chứng từ thật cho org_refid hiện tại (IsCreatedVoucher).

@@ -293,7 +293,7 @@ class AmisCallbackLogLine(models.Model):
                     except (TypeError, ValueError):
                         model_state = 0
                     if model_state == 3:
-                        po._misa_complete_purchase_order_deletion()
+                        po._misa_handle_purchase_order_voucher_deleted()
                         continue
                     if (
                         model_state == 2

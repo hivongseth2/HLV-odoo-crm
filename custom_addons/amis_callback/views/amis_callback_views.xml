@@ -358,7 +358,7 @@
                 <xpath expr="//div[@name='button_box']" position="inside">
                     <button name="action_sync_misa_purchase_order" type="object"
                             class="oe_stat_button" icon="fa-cloud-upload"
-                            invisible="state not in ('purchase','done') or misa_purchase_order_org_refid">
+                            invisible="state not in ('purchase','done') or misa_purchase_order_org_refid or misa_purchase_order_state == 'queued'">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Sync</span>
                             <span class="o_stat_text">PO MISA</span>
