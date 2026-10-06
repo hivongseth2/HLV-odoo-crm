@@ -20,8 +20,7 @@ misa_purchase_request_sync/
 │   ├── __init__.py
 │   └── extension_api.py      ← Chứa các route: /check, /create, /revoke
 ├── data/                     ← Dữ liệu khởi tạo (System Parameters)
-│   ├── ir_config_parameter.xml ← Khởi tạo token xác thực
-│   └── ir_cron.xml           ← Cron xử lý hàng chờ đồng bộ (misa.sync.queue)
+│   └── ir_config_parameter.xml ← Khởi tạo token xác thực
 ├── models/                   ← Tầng Model (Kế thừa và mở rộng database)
 │   ├── __init__.py
 │   ├── purchase_request.py   ← Mở rộng model `purchase.request` của OCA
@@ -193,6 +192,3 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 - Override `_can_be_deleted`: Chỉ cho xóa ở state `draft`. Các state khác hướng dẫn archive.
 - Search view thêm filter "Đã lưu trữ" (`domain="[('active', '=', False)]"`).
 - **Files ảnh hưởng:** `models/purchase_request.py`, `views/purchase_request_view.xml`
-
-### 4.5. Đối chiếu PO dùng chung
-- **Logic đối chiếu duy nhất:** `MisaExtensionController._reconcile_po_only_data(env_admin, date_from, date_to)` trong `controllers/extension_api.py`. Endpoint `/api/extension/po/reconcile_only` (extension) và module `hlv_po_reconcile_report` (cron gửi mail 19h + lưu Drive) đều gọi hàm này — KHÔNG copy logic sang nơi khác. Đổi chữ ký hàm phải sửa cả `hlv_po_reconcile_report`.

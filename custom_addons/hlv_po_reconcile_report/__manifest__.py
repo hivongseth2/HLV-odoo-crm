@@ -7,8 +7,9 @@
     "category": "Purchase Management",
     "depends": [
         "mail",
-        # Logic đối chiếu: MisaExtensionController._reconcile_po_only_data
-        "misa_purchase_request_sync",
+        "purchase_stock",
+        # misa.api.utils / misa.config: đăng nhập và gọi API MISA
+        "misa_fetch_po_button",
     ],
     "external_dependencies": {"python": ["xlsxwriter"]},
     "data": [

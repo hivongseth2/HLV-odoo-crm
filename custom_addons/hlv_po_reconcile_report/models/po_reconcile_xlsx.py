@@ -74,7 +74,7 @@ def _product_rows(item):
 
 
 def build_reconcile_xlsx(res, date_from, date_to):
-    """res = dict trả về từ MisaExtensionController._reconcile_po_only_data. Trả về bytes .xlsx."""
+    """res = dict trả về từ po_reconcile_engine.reconcile_po. Trả về bytes .xlsx."""
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {"in_memory": True})
     cache = {}

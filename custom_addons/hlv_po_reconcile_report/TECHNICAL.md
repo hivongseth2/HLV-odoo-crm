@@ -10,6 +10,7 @@ hlv_po_reconcile_report/
 │   ├── ir_config_parameter.xml  ← Gọi _init_default_params: tạo System Parameters nếu chưa có
 │   └── ir_cron.xml              ← Cron ir_cron_po_reconcile_daily (active=False, noupdate)
 ├── models/
+│   ├── po_reconcile_engine.py   ← reconcile_po(env, date_from, date_to): logic đối chiếu Odoo - MISA
 │   ├── po_reconcile_report.py   ← AbstractModel hlv.po.reconcile.report: cron, upload Drive, gửi mail
 │   └── po_reconcile_xlsx.py     ← build_reconcile_xlsx(): port của excel_export.js (extension), không import odoo
 ├── __manifest__.py
@@ -17,14 +18,15 @@ hlv_po_reconcile_report/
 ```
 
 ## Quy tắc kiến trúc
-- **Logic đối chiếu KHÔNG nằm ở đây**: gọi `MisaExtensionController._reconcile_po_only_data(env_admin, date_from, date_to)` của `misa_purchase_request_sync` (dùng chung với endpoint `/api/extension/po/reconcile_only` của extension). Sửa logic đối chiếu → sửa ở module đó.
+- **Logic đối chiếu độc lập**: `po_reconcile_engine.py`, ban đầu chép từ endpoint `/api/extension/po/reconcile_only` của `misa_purchase_request_sync` nhưng KHÔNG còn dùng chung. Sửa cách đối chiếu cho báo cáo → chỉ sửa ở đây; extension giữ logic riêng của nó. Gọi trực tiếp trong cron (không qua HTTP) nên không bị timeout khi nhiều đơn.
+- Không phụ thuộc `misa_purchase_request_sync`; chỉ cần `misa_fetch_po_button` (`misa.api.utils`, `misa.config`) để gọi API MISA.
 - Excel: chỉ ở `po_reconcile_xlsx.py`. Giữ cùng layout với `excel_export.js` của extension (sheet "Tổng hợp" + "Chi tiết").
 - Google Drive: dùng tài khoản đã kết nối ở `custom_barcode_scan_redirect` qua System Parameters `gdrive.*`, nhưng KHÔNG import code module đó (`_gdrive_connect` tự dựng kết nối). Đổi cách xác thực Drive bên đó → kiểm tra lại `_gdrive_connect`.
 
 ## Luồng xử lý (`cron_send_daily_reconcile`)
 1. Đọc người nhận `misa_po_reconcile_emails` (phân cách `,` hoặc `;`, chỉ lấy giá trị có `@`). Không có email hợp lệ → log warning, dừng.
 2. Đọc `misa_po_reconcile_days` (mặc định 1): khoảng ngày = hôm nay (giờ VN) và N-1 ngày trước.
-3. Gọi `_reconcile_po_only_data` → `build_reconcile_xlsx` → tạo `ir.attachment`.
+3. Gọi `reconcile_po` → `build_reconcile_xlsx` → tạo `ir.attachment`.
 4. `_upload_to_drive`: đẩy file vào thư mục `DOI_CHIEU_DON_MUA_HANG` ở gốc My Drive (tự tạo). Lỗi → log, trả None, vẫn gửi mail.
 5. Tạo `mail.mail` (kèm file, link Drive nếu có, `auto_delete=False`) và `send()` ngay, không chờ cron hàng đợi mail.
 

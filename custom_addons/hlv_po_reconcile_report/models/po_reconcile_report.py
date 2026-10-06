@@ -8,8 +8,8 @@ from datetime import timedelta
 from markupsafe import Markup, escape
 
 from odoo import api, fields, models
-from odoo.addons.misa_purchase_request_sync.controllers.extension_api import MisaExtensionController
 
+from .po_reconcile_engine import reconcile_po
 from .po_reconcile_xlsx import STATUS_LABELS, build_reconcile_xlsx
 
 _logger = logging.getLogger(__name__)
@@ -130,7 +130,7 @@ class HlvPoReconcileReport(models.AbstractModel):
         period = date_to if days == 1 else "%s đến %s" % (date_from, date_to)
 
         # su=True: cron cần đọc toàn bộ PO/picking như endpoint của extension
-        res = MisaExtensionController()._reconcile_po_only_data(self.env(su=True), date_from, date_to)
+        res = reconcile_po(self.env(su=True), date_from, date_to)
 
         content = build_reconcile_xlsx(res, date_from, date_to)
         filename = "Doi_Chieu_Don_Hang_%s.xlsx" % (date_to if days == 1 else "%s_toi_%s" % (date_from, date_to))
