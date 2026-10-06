@@ -11,8 +11,8 @@ PAID_STATE_SELECTION = [
 class MisaSalePaymentLine(models.Model):
     """1 phần của 1 dòng chứng từ bán hàng MISA đã gắn vào 1 dòng đơn bán Odoo.
 
-    Ảnh chụp lần tra MISA gần nhất, không phải nguồn sự thật: mỗi lần tra lại 1 hóa đơn là xóa
-    hết dòng của hóa đơn đó rồi tạo lại (xem stock.picking._misa_payment_scan_invoice). 1 dòng
+    Ảnh chụp lần tra MISA gần nhất, không phải nguồn sự thật: mỗi lần tra lại 1 hóa đơn thì cập
+    nhật tại chỗ theo kết quả mới (xem stock.picking._misa_payment_store). 1 dòng
     chứng từ có thể tách thành nhiều bản ghi khi đơn có nhiều dòng cùng mã hàng."""
     _name = 'misa.sale.payment.line'
     _description = 'Dòng chứng từ bán hàng MISA theo dòng đơn bán'
@@ -21,7 +21,7 @@ class MisaSalePaymentLine(models.Model):
     sale_line_id = fields.Many2one('sale.order.line', string='Dòng đơn bán', required=True, ondelete='cascade', index=True)
     order_id = fields.Many2one(related='sale_line_id.order_id', store=True, index=True, string='Đơn bán')
     product_id = fields.Many2one(related='sale_line_id.product_id', string='Sản phẩm')
-    # Khóa tra lại = đúng chuỗi số hóa đơn lưu trên phiếu xuất kho (misa_invoice_no) — xóa/tạo lại
+    # Khóa tra lại = đúng chuỗi số hóa đơn lưu trên phiếu xuất kho (misa_invoice_no) — tra lại
     # theo khóa này nên không chuẩn hóa thêm.
     invoice_no = fields.Char(string='Số hóa đơn', required=True, index=True)
     invoice_date = fields.Date(string='Ngày hóa đơn')
@@ -50,4 +50,3 @@ class MisaSalePaymentLine(models.Model):
         ('component', 'Mã sản phẩm con của combo — số lượng là của mã con'),
     ], string='Khớp bằng')
     paid_state = fields.Selection(PAID_STATE_SELECTION, string='Tình trạng thu', index=True)
-    checked_at = fields.Datetime(string='Tra MISA lúc')

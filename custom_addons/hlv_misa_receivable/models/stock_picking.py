@@ -3,7 +3,7 @@ import logging
 
 from odoo import api, fields, models
 
-from .misa_receivable_utils import allocate_entries, voucher_payment_entries
+from .misa_receivable_utils import allocate_entries, plan_upsert, voucher_payment_entries
 
 _logger = logging.getLogger(__name__)
 
@@ -13,6 +13,10 @@ _logger = logging.getLogger(__name__)
 MISA_PAYMENT_SCAN_BATCH = 100
 
 LAST_SCAN_PARAM = 'hlv_misa_receivable.last_scan_at'
+
+# Danh tính 1 dòng đã lưu khi tra lại: cùng chứng từ, cùng dòng đơn bán, cùng mã hàng MISA là
+# cùng 1 dòng — để cập nhật tại chỗ thay vì xóa hết tạo lại mỗi lượt tra.
+PAYMENT_LINE_KEY_FIELDS = ('voucher_refid', 'sale_line_id', 'item_code')
 
 
 class StockPickingMisaPayment(models.Model):
@@ -70,7 +74,7 @@ class StockPickingMisaPayment(models.Model):
                 '[MISA thu tiền] HĐ %s: %s dòng chứng từ không gắn được dòng đơn bán nào (%s)', invoice_no,
                 len(unmatched), ', '.join('%s/%s' % (e['order_code'] or '?', e['item_code']) for e in unmatched[:10]),
             )
-        self._misa_payment_store(invoice_no, allocations, now)
+        self._misa_payment_store(invoice_no, allocations)
 
         done = bool(entries) and all(entry['paid_state'] == 'paid' for entry in entries)
         pickings.write({'misa_payment_checked_at': now, 'misa_payment_done': done})
@@ -99,10 +103,26 @@ class StockPickingMisaPayment(models.Model):
         sale_lines = group.move_ids.sale_line_id.filtered(lambda l: l.product_id and not l.display_type)
         return [line._misa_payment_candidate() for line in sale_lines]
 
-    def _misa_payment_store(self, invoice_no, allocations, checked_at):
-        """Thay toàn bộ dòng đã lưu của hóa đơn này bằng kết quả tra mới."""
+    def _misa_payment_store(self, invoice_no, allocations):
+        """Ghi kết quả tra mới của 1 hóa đơn: dòng không đổi thì để nguyên, dòng đổi thì chỉ sửa
+        field đổi, chỉ tạo dòng mới phát sinh và chỉ xóa dòng không còn trên MISA. Hóa đơn chưa
+        thu được tra lại mỗi lượt cron — xóa hết tạo lại thì mỗi lượt lại tính lại mọi dòng đơn
+        bán liên quan dù MISA không đổi gì."""
         PaymentLine = self.env['misa.sale.payment.line'].sudo()
-        PaymentLine.search([('invoice_no', '=', invoice_no)]).unlink()
+        fresh = self._misa_payment_values(invoice_no, allocations)
+        stored = PaymentLine.search([('invoice_no', '=', invoice_no)])
+        fields_read = list(fresh[0]) if fresh else ['id']
+        existing = [(row.pop('id'), row) for row in stored.read(fields_read, load=False)] if stored else []
+        updates, creates, delete_ids = plan_upsert(existing, fresh, PAYMENT_LINE_KEY_FIELDS)
+        for rec_id, changed in updates.items():
+            PaymentLine.browse(rec_id).write(changed)
+        if delete_ids:
+            PaymentLine.browse(delete_ids).unlink()
+        if creates:
+            PaymentLine.create(creates)
+
+    def _misa_payment_values(self, invoice_no, allocations):
+        """Giá trị cần lưu cho từng phần dòng chứng từ đã gắn vào dòng đơn bán."""
         SaleLine = self.env['sale.order.line'].sudo()
         vals_list = []
         for alloc in allocations:
@@ -128,9 +148,8 @@ class StockPickingMisaPayment(models.Model):
                 'match_scope': alloc['match_scope'],
                 'match_by': alloc['match_by'],
                 'paid_state': alloc['paid_state'],
-                'checked_at': checked_at,
             })
-        PaymentLine.create(vals_list)
+        return vals_list
 
     @staticmethod
     def _misa_payment_due_date(order, invoice_date):

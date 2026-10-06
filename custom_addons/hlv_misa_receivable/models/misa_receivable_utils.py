@@ -160,6 +160,44 @@ def allocate_entries(entries, candidates_by_order, invoice_candidates):
     return allocations, unmatched
 
 
+def _same_value(old, new):
+    """So 1 giá trị đang lưu với giá trị mới tra: rỗng (False/None/'') coi là như nhau, số thực
+    lệch dưới 0.005 coi là như nhau (tiền chia theo tỉ lệ lệch ở chữ số cuối mỗi lần tính)."""
+    if isinstance(old, float) or isinstance(new, float):
+        return abs((old or 0.0) - (new or 0.0)) < 0.005
+    return (old or False) == (new or False)
+
+
+def plan_upsert(existing, fresh, key_fields):
+    """Đối chiếu dòng đang lưu với kết quả tra mới để chỉ sửa cái đổi, thay vì xóa hết tạo lại.
+
+    Nhận: existing — list (id, dict giá trị đang lưu); fresh — list dict giá trị mới (cùng bộ
+    key); key_fields — các field tạo nên danh tính 1 dòng. Nhiều dòng trùng danh tính thì ghép
+    lần lượt theo thứ tự.
+    Trả (updates, creates, delete_ids): updates = {id: {field: giá trị mới}} chỉ gồm field có
+    đổi (dòng không đổi gì thì không có mặt); creates = list dict cần tạo; delete_ids = id
+    các dòng đang lưu không còn trong kết quả mới.
+    """
+    def key_of(values):
+        return tuple(values.get(field) for field in key_fields)
+
+    pool = {}
+    for rec_id, values in existing:
+        pool.setdefault(key_of(values), []).append((rec_id, values))
+    updates, creates = {}, []
+    for values in fresh:
+        candidates = pool.get(key_of(values))
+        if not candidates:
+            creates.append(values)
+            continue
+        rec_id, current = candidates.pop(0)
+        changed = {field: value for field, value in values.items() if not _same_value(current.get(field), value)}
+        if changed:
+            updates[rec_id] = changed
+    delete_ids = [rec_id for left in pool.values() for rec_id, _values in left]
+    return updates, creates, delete_ids
+
+
 def line_payment_state(entries, tolerance):
     """Tình trạng thu tiền của 1 dòng đơn bán từ các phần chứng từ MISA đã gắn vào nó.
 
