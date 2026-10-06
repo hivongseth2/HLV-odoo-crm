@@ -12,6 +12,7 @@ from odoo.addons.misa_invoice_status_report.models.misa_invoice_amount_utils imp
     split_by_weights,
     voucher_line_amount_with_vat,
 )
+from odoo.addons.misa_invoice_status_report.models.misa_invoice_reassign_utils import item_key, name_key
 from odoo.addons.misa_invoice_status_report.models.misa_voucher_utils import paid_state_of
 
 # Nhóm tuổi nợ theo số ngày quá hạn (min, max đều tính cả 2 đầu; None = không chặn). Thứ tự ở
@@ -24,11 +25,6 @@ AGING_BUCKETS = [
     ('61_90', 'Quá hạn 61–90 ngày', 61, 90),
     ('over_90', 'Quá hạn trên 90 ngày', 91, None),
 ]
-
-
-def normalize_code(value):
-    """Mã hàng / mã đơn để so khớp: bỏ khoảng trắng 2 đầu, viết HOA. Nhận str/None, trả str."""
-    return (value or '').strip().upper()
 
 
 def parse_misa_date(value):
@@ -71,7 +67,7 @@ def voucher_payment_entries(voucher, lines):
         dict(
             head,
             order_code=(line.get('order_code') or '').strip(),
-            item_code=normalize_code(line.get('inventory_item_code')),
+            item_code=item_key(line.get('inventory_item_code')),
             description=line.get('description') or '',
             quantity=line.get('quantity') or 0.0,
             unit_name=line.get('unit_name') or '',
@@ -101,44 +97,66 @@ def _fill_by_capacity(quantity, candidates, remaining):
     return [tuple(part) for part in parts]
 
 
-def allocate_entries(entries, candidates_by_order):
+def _match_in(entry, cands):
+    """Các dòng đơn trong `cands` ứng với 1 dòng chứng từ, theo thứ tự ưu tiên: đúng mã hàng →
+    đúng tên hàng (mã đã đổi: sản phẩm cũ bị lưu trữ/xóa mã, dòng đơn cũ vẫn trỏ sản phẩm cũ) →
+    dòng combo chứa mã con này. Trả (list dòng, 'code'|'name'|'component'), không có trả ([], None)."""
+    direct = [cand for cand in cands if cand['code'] and cand['code'] == entry['item_code']]
+    if direct:
+        return direct, 'code'
+    name = name_key(entry['description'])
+    by_name = [cand for cand in cands if name and cand['name'] == name]
+    if by_name:
+        return by_name, 'name'
+    kit = [cand for cand in cands if entry['item_code'] and entry['item_code'] in cand['component_codes']]
+    return (kit[:1], 'component') if kit else ([], None)
+
+
+def allocate_entries(entries, candidates_by_order, invoice_candidates):
     """Chia các dòng chứng từ MISA về đúng dòng đơn bán Odoo.
 
-    candidates_by_order: {mã đơn: [{'sale_line_id', 'code', 'component_codes', 'capacity'}]}
-    — code là mã hàng của dòng đơn, component_codes là mã các sản phẩm con khi dòng đó là
+    Mỗi candidate: {'sale_line_id', 'code', 'name', 'component_codes', 'capacity'} — code/name là
+    mã/tên hàng của dòng đơn (đã chuẩn hóa), component_codes là mã sản phẩm con khi dòng đó là
     combo/kit (MISA rã combo ra từng mã con khi lập hóa đơn), capacity là số lượng đã giao.
+      - candidates_by_order: {mã đơn: [candidate]} — các đơn được ghi trên dòng chứng từ.
+      - invoice_candidates: [candidate] — các dòng đơn đã xuất qua những phiếu mang số hóa đơn
+        này. Dùng khi dòng chứng từ KHÔNG ghi mã đơn (kế toán lập chứng từ thường bỏ trống cột
+        này) hoặc ghi mã đơn mà đơn đó không có dòng hàng khớp (ghi nhầm mã đơn).
 
-    Khớp theo (mã đơn, mã hàng). 1 đơn có nhiều dòng cùng mã: rót theo sức chứa, tiền chia theo
-    số lượng. Không có dòng cùng mã thì tìm dòng combo chứa mã đó (is_component=True, giữ
-    nguyên số lượng mã con — không quy đổi được về số combo). Không khớp được thì trả riêng.
+    1 đơn có nhiều dòng cùng hàng: rót theo sức chứa, tiền chia theo số lượng. Khớp qua mã con
+    combo thì gắn nguyên dòng vào dòng combo, giữ số lượng mã con (không quy đổi được về số combo).
 
-    Trả (allocations, unmatched): allocations là entry kèm 'sale_line_id', 'is_component';
-    unmatched là các entry không gắn được dòng đơn nào (thiếu mã đơn, đơn không có trong Odoo,
-    mã hàng không có trên đơn).
+    Trả (allocations, unmatched): allocations là entry kèm 'sale_line_id', 'match_scope'
+    ('order' | 'invoice'), 'match_by' ('code' | 'name' | 'component'); unmatched là các entry
+    không gắn được dòng đơn nào.
     """
-    remaining = {
-        cand['sale_line_id']: max(cand['capacity'] or 0.0, 0.0)
-        for cands in candidates_by_order.values() for cand in cands
-    }
+    remaining = {}
+    for cand in [c for cands in candidates_by_order.values() for c in cands] + list(invoice_candidates):
+        remaining[cand['sale_line_id']] = max(cand['capacity'] or 0.0, 0.0)
     allocations, unmatched = [], []
     for entry in entries:
-        cands = candidates_by_order.get(entry['order_code']) or []
-        direct = [cand for cand in cands if cand['code'] and cand['code'] == entry['item_code']]
-        if direct:
-            # Số lượng 0/âm (dòng điều chỉnh) không rót theo sức chứa được — gắn cả vào dòng đầu.
-            parts = (
-                _fill_by_capacity(entry['quantity'], direct, remaining) if entry['quantity'] > 0
-                else [(direct[0], entry['quantity'])]
-            )
-            amounts = split_by_weights(entry['amount'], [qty for _cand, qty in parts])
-            for (cand, qty), amount in zip(parts, amounts):
-                allocations.append(dict(entry, sale_line_id=cand['sale_line_id'], quantity=qty, amount=amount, is_component=False))
-            continue
-        kit = next((cand for cand in cands if entry['item_code'] in cand['component_codes']), None)
-        if kit:
-            allocations.append(dict(entry, sale_line_id=kit['sale_line_id'], is_component=True))
-        else:
+        scope = 'order'
+        matched, match_by = _match_in(entry, candidates_by_order.get(entry['order_code']) or [])
+        if not matched:
+            scope = 'invoice'
+            matched, match_by = _match_in(entry, invoice_candidates)
+        if not matched:
             unmatched.append(entry)
+            continue
+        if match_by == 'component':
+            allocations.append(dict(entry, sale_line_id=matched[0]['sale_line_id'], match_scope=scope, match_by=match_by))
+            continue
+        # Số lượng 0/âm (dòng điều chỉnh) không rót theo sức chứa được — gắn cả vào dòng đầu.
+        parts = (
+            _fill_by_capacity(entry['quantity'], matched, remaining) if entry['quantity'] > 0
+            else [(matched[0], entry['quantity'])]
+        )
+        amounts = split_by_weights(entry['amount'], [qty for _cand, qty in parts])
+        for (cand, qty), amount in zip(parts, amounts):
+            allocations.append(dict(
+                entry, sale_line_id=cand['sale_line_id'], quantity=qty, amount=amount,
+                match_scope=scope, match_by=match_by,
+            ))
     return allocations, unmatched
 
 

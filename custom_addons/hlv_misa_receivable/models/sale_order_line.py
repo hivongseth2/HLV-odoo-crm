@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models
 
+from odoo.addons.misa_invoice_status_report.models.misa_invoice_reassign_utils import item_key, name_key
 from odoo.addons.misa_invoice_status_report.models.stock_picking import MISA_INVOICE_AMOUNT_TOLERANCE
 
-from .misa_receivable_utils import line_payment_state, normalize_code
+from .misa_receivable_utils import line_payment_state
 
 
 class SaleOrderLineMisaPayment(models.Model):
@@ -38,14 +39,15 @@ class SaleOrderLineMisaPayment(models.Model):
             line.misa_payment_state = line_payment_state(entries, MISA_INVOICE_AMOUNT_TOLERANCE)
 
     def _misa_payment_candidate(self):
-        """Mô tả dòng đơn này cho allocate_entries: mã hàng, mã các sản phẩm con nếu là combo/kit
+        """Mô tả dòng đơn này cho allocate_entries: mã hàng, tên hàng, mã các sản phẩm con nếu là combo/kit
         (lấy từ chính các move Odoo đã nổ ra khi giao — đúng thứ MISA ghi trên hóa đơn), sức chứa
         là số lượng đã giao (chưa giao gì thì lấy số đặt)."""
         self.ensure_one()
         components = self.move_ids.product_id - self.product_id
         return {
             'sale_line_id': self.id,
-            'code': normalize_code(self.product_id.default_code),
-            'component_codes': {normalize_code(p.default_code) for p in components if p.default_code},
+            'code': item_key(self.product_id.default_code),
+            'name': name_key(self.product_id.name),
+            'component_codes': {item_key(p.default_code) for p in components if p.default_code},
             'capacity': self.qty_delivered or self.product_uom_qty,
         }

@@ -122,6 +122,8 @@ class MisaSalePaymentLinePublicApi(models.Model):
     def get_public_receivable_lines(self, saler_code, invoice_no):
         """Chi tiết theo dòng đơn bán của 1 hóa đơn: hàng gì, đơn nào, bao nhiêu tiền, đã thu chưa."""
         paid_labels = dict(self._fields['paid_state'].selection)
+        scope_labels = dict(self._fields['match_scope'].selection)
+        by_labels = dict(self._fields['match_by'].selection)
         return [{
             'order': line.order_id.name,
             'product': line.product_id.display_name,
@@ -130,7 +132,10 @@ class MisaSalePaymentLinePublicApi(models.Model):
             'quantity': line.quantity,
             'unit_name': line.unit_name or '',
             'amount': line.amount,
-            'is_component': line.is_component,
+            'match_by': line.match_by or '',
+            'match_note': '' if (line.match_scope, line.match_by) == ('order', 'code') else '%s — %s' % (
+                scope_labels.get(line.match_scope, ''), by_labels.get(line.match_by, ''),
+            ),
             'voucher_refno': line.voucher_refno or '',
             'paid_state': line.paid_state,
             'paid_label': paid_labels.get(line.paid_state, ''),

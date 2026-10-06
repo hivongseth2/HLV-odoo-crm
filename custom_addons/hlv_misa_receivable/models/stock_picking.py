@@ -62,7 +62,9 @@ class StockPickingMisaPayment(models.Model):
             pickings.write({'misa_payment_checked_at': now})
             return {'invoice_no': invoice_no, 'error': str(e)}
 
-        allocations, unmatched = allocate_entries(entries, self._misa_payment_candidates(entries))
+        allocations, unmatched = allocate_entries(
+            entries, self._misa_payment_candidates(entries), self._misa_payment_invoice_candidates(pickings),
+        )
         if unmatched:
             _logger.info(
                 '[MISA thu tiền] HĐ %s: %s dòng chứng từ không gắn được dòng đơn bán nào (%s)', invoice_no,
@@ -88,6 +90,14 @@ class StockPickingMisaPayment(models.Model):
             ]
             for order in orders
         }
+
+    def _misa_payment_invoice_candidates(self, pickings):
+        """Các dòng đơn bán đã xuất qua những phiếu mang số hóa đơn này (kể cả phiếu ăn theo
+        đề nghị gộp của chúng) — Odoo đã biết chắc phiếu nào thuộc hóa đơn nào, nên đây là chỗ gắn
+        cho dòng chứng từ MISA bỏ trống hoặc ghi sai mã đơn."""
+        group = pickings | pickings.misa_invoice_covered_picking_ids
+        sale_lines = group.move_ids.sale_line_id.filtered(lambda l: l.product_id and not l.display_type)
+        return [line._misa_payment_candidate() for line in sale_lines]
 
     def _misa_payment_store(self, invoice_no, allocations, checked_at):
         """Thay toàn bộ dòng đã lưu của hóa đơn này bằng kết quả tra mới."""
@@ -115,7 +125,8 @@ class StockPickingMisaPayment(models.Model):
                 'quantity': alloc['quantity'],
                 'unit_name': alloc['unit_name'],
                 'amount': alloc['amount'],
-                'is_component': alloc['is_component'],
+                'match_scope': alloc['match_scope'],
+                'match_by': alloc['match_by'],
                 'paid_state': alloc['paid_state'],
                 'checked_at': checked_at,
             })

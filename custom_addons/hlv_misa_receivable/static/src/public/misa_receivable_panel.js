@@ -54,7 +54,8 @@
             lines.map(function (l) {
                 var cls = l.paid_state === 'paid' ? 'msr-badge-ok' : (l.paid_state === 'unknown' ? 'msr-badge-muted' : 'msr-badge-overdue');
                 return '<tr><td>' + msu.esc(l.order) + '</td>' +
-                    '<td>' + msu.esc(l.product) + (l.is_component ? ' <span class="msu-muted" title="Hóa đơn ghi mã sản phẩm con của combo này">(mã con)</span>' : '') + '</td>' +
+                    '<td>' + msu.esc(l.product) + (l.match_by === 'component' ? ' <span class="msu-muted">(mã con)</span>' : '') +
+                    (l.match_note ? ' <i class="fa fa-info-circle msr-match-note" title="' + msu.esc(l.match_note) + '"></i>' : '') + '</td>' +
                     '<td>' + msu.esc(l.item_code) + '</td>' +
                     '<td class="msu-col-num">' + l.quantity + ' ' + msu.esc(l.unit_name) + '</td>' +
                     '<td class="msu-col-num">' + msu.fmtMoney(l.amount) + '</td>' +

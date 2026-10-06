@@ -33,3 +33,4 @@
 .msr-actions .msu-btn + .msu-btn{margin-left:4px}
 .msu-table tbody tr.msr-detail-row,.msu-table tbody tr.msr-detail-row:hover{background:#f7f9fc}
 .msr-detail-row > td{padding:8px 14px 14px 48px}
+.msr-match-note{color:#c98500;cursor:help}

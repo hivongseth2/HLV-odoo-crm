@@ -40,9 +40,14 @@ class MisaSalePaymentLine(models.Model):
     quantity = fields.Float(string='Số lượng (MISA)')
     unit_name = fields.Char(string='ĐVT (MISA)')
     amount = fields.Float(string='Tiền có VAT')
-    is_component = fields.Boolean(
-        string='Mã con của combo',
-        help='Dòng chứng từ ghi mã sản phẩm con, gắn vào dòng combo của đơn — số lượng là của mã con.',
-    )
+    match_scope = fields.Selection([
+        ('order', 'Theo mã đơn ghi trên chứng từ'),
+        ('invoice', 'Theo hàng trên phiếu của hóa đơn (chứng từ không ghi / ghi sai mã đơn)'),
+    ], string='Khớp trong phạm vi')
+    match_by = fields.Selection([
+        ('code', 'Đúng mã hàng'),
+        ('name', 'Đúng tên hàng (mã hàng đã đổi)'),
+        ('component', 'Mã sản phẩm con của combo — số lượng là của mã con'),
+    ], string='Khớp bằng')
     paid_state = fields.Selection(PAID_STATE_SELECTION, string='Tình trạng thu', index=True)
     checked_at = fields.Datetime(string='Tra MISA lúc')
