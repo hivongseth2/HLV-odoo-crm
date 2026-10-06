@@ -20,6 +20,7 @@ window.HlvQuote = window.HlvQuote || {};
       include_id: S.vendorId,
     }).then(function (res) {
       S.vendors = res.vendors || [];
+      S.vendorsLimited = !!res.limited;
       renderVendors();
       renderVendorCard();
     });
@@ -36,7 +37,9 @@ window.HlvQuote = window.HlvQuote || {};
         '" data-vendor="' + v.id + '">' +
         '<span class="hq-vendor-name">' + esc(v.name) + "</span>" +
         '<span class="hq-vendor-counts">' + counters + "</span></button>";
-    }).join("") : '<div class="hq-empty">Chưa có NCC nào</div>';
+    }).join("") + (S.vendorsLimited ? '<div class="hq-side-note">Đang hiện ' + S.vendors.length +
+      " NCC đầu — gõ tên, mã hoặc MST để tìm thêm.</div>" : "")
+      : '<div class="hq-empty">Không tìm thấy nhà cung cấp</div>';
   }
 
   function renderVendorCard() {
@@ -47,11 +50,13 @@ window.HlvQuote = window.HlvQuote || {};
     if (!vendor) {
       return;
     }
-    card.innerHTML =
-      '<span class="hq-muted">Link NCC</span><code class="hq-code hq-ellipsis">' + esc(vendor.portal_url) + "</code>" +
-      '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(vendor.portal_url) + '">Copy link</button>' +
-      '<span class="hq-muted">Mật khẩu</span><code class="hq-code">' + esc(vendor.password) + "</code>" +
-      '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(vendor.password) + '">Copy</button>' +
+    card.innerHTML = (vendor.portal_url
+      ? '<span class="hq-muted">Link NCC</span><code class="hq-code hq-ellipsis">' + esc(vendor.portal_url) + "</code>" +
+        '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(vendor.portal_url) + '">Copy link</button>' +
+        '<span class="hq-muted">Mật khẩu</span><code class="hq-code">' + esc(vendor.password) + "</code>" +
+        '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(vendor.password) + '">Copy</button>'
+      : '<span class="hq-muted">Chưa gửi yêu cầu báo giá nào cho NCC này — link và mật khẩu ' +
+        "được tạo khi gửi yêu cầu đầu tiên.</span>") +
       '<button type="button" class="hq-btn hq-btn-soft hq-push" id="hq-new-for-vendor">Hỏi giá NCC này</button>';
   }
 

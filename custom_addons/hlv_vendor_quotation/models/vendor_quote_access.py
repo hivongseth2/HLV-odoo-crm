@@ -70,12 +70,22 @@ class VendorQuoteAccess(models.Model):
         ("token_uniq", "unique(access_token)", "Mã link bị trùng, hãy tạo lại link."),
     ]
 
-    @api.depends("access_token")
+    @api.model
+    def _vendor_partner_domain(self):
+        """Ai được coi là NCC: liên hệ gốc (không có cha) có xếp hạng NCC hoặc gắn phân loại
+        "Nhà cung cấp" (hlv_contact_refine, code "vendor"). Nhiều NCC cũ chưa từng có đơn
+        mua trong Odoo nên supplier_rank = 0 — chỉ có phân loại mới bắt được họ."""
+        return [
+            ("parent_id", "=", False),
+            "|", ("supplier_rank", ">", 0), ("hlv_filter_tag_ids.code", "=", "vendor"),
+        ]
+
+    @api.depends("access_token", "partner_id")
     def _compute_urls(self):
         for rec in self:
             base = rec.get_base_url()
             rec.portal_url = f"{base}{PORTAL_ROUTE}/{rec.access_token}"
-            rec.manage_url = f"{base}{SALE_PAGE_ROUTE}?ncc={rec.id}" if rec.id else False
+            rec.manage_url = f"{base}{SALE_PAGE_ROUTE}?ncc={rec.partner_id.id}" if rec.partner_id else False
 
     @api.depends("quote_ids.state")
     def _compute_quote_counts(self):

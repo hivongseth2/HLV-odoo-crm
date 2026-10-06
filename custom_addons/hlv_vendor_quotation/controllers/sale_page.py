@@ -9,6 +9,7 @@ from collections import defaultdict
 
 from odoo import fields, http
 from odoo.exceptions import AccessError, UserError
+from odoo.osv import expression
 from odoo.http import request
 
 from ..models.vendor_quote_access import SALE_PAGE_ROUTE as PAGE_ROUTE
@@ -24,6 +25,8 @@ PAGE_GROUPS = (
 )
 PER_PAGE = 30
 SEARCH_LIMIT = 20
+# Cột NCC không tải hết danh bạ NCC: hiện chừng này, còn lại sale gõ tên để tìm.
+VENDOR_LIMIT = 40
 # Tab lọc: (mã, nhãn). waiting/quoted/expired dùng domain trạng thái của model.
 STATUS_TABS = [
     ("all", "Tất cả"),
@@ -67,23 +70,48 @@ class VendorQuoteSalePage(http.Controller):
 
     @http.route(f"{API}/vendors", type="json", auth="user", methods=["POST"])
     def api_vendors(self, search="", mine=True, include_id=None, **kw):
+        """NCC ở cột trái, theo công ty NCC (res.partner gốc).
+
+        Không gõ tìm: NCC đang có báo giá (trong phạm vi đang xem) lên đầu, rồi NCC hay mua
+        nhất, tối đa VENDOR_LIMIT. Có gõ: tìm trong toàn bộ NCC theo tên / mã / MST.
+        """
         self._check()
-        Quote = request.env["hlv.vendor.quote"]
+        env = request.env
+        Access = env["hlv.vendor.quote.access"]
         counts = defaultdict(dict)
-        for access, state, count in Quote._read_group(
+        for access, state, count in env["hlv.vendor.quote"]._read_group(
             self._scope_domain(mine), ["access_id", "state"], ["__count"]
         ):
             if access:
-                counts[access.id][state] = count
-        accesses = request.env["hlv.vendor.quote.access"].browse(list(counts))
-        include = request.env["hlv.vendor.quote.access"].browse(_to_int(include_id)).exists()
-        accesses = (accesses | include).exists()
-        search = (search or "").strip().lower()
+                counts[access.partner_id.id][state] = count
+
+        # NCC đã từng nhận yêu cầu báo giá cũng tính là NCC, dù chưa gắn phân loại.
+        vendor_domain = expression.OR([
+            Access._vendor_partner_domain(),
+            [("id", "in", Access.with_context(active_test=False).search([]).partner_id.ids)],
+        ])
+        search = (search or "").strip()
+        Partner = env["res.partner"]
         if search:
-            accesses = accesses.filtered(lambda a: search in (a.partner_id.display_name or "").lower())
-        vendors = [payload.vendor_summary(a, counts.get(a.id, {})) for a in accesses]
-        vendors.sort(key=lambda v: (-v["quoted"], -v["waiting"], v["name"].lower()))
-        return {"vendors": vendors}
+            partners = Partner.search(expression.AND([vendor_domain, [
+                "|", "|", ("name", "ilike", search), ("ref", "ilike", search), ("vat", "ilike", search),
+            ]]), order="supplier_rank desc, name", limit=VENDOR_LIMIT)
+        else:
+            quoted = Partner.browse(list(counts)).exists()
+            partners = quoted | Partner.search(
+                expression.AND([vendor_domain, [("id", "not in", quoted.ids)]]),
+                order="supplier_rank desc, name", limit=max(VENDOR_LIMIT - len(quoted), 0),
+            )
+        include = Partner.browse(_to_int(include_id)).exists()
+        partners = include | partners
+
+        accesses = {a.partner_id.id: a for a in Access.search([("partner_id", "in", partners.ids)])}
+        vendors = [
+            payload.vendor_summary(p, accesses.get(p.id, Access), counts.get(p.id, {}))
+            for p in partners
+        ]
+        vendors.sort(key=lambda v: (v["id"] != include.id, -v["quoted"], -v["waiting"], -v["total"]))
+        return {"vendors": vendors, "limited": len(partners) >= VENDOR_LIMIT}
 
     @http.route(f"{API}/quotes", type="json", auth="user", methods=["POST"])
     def api_quotes(self, vendor_id=None, status="all", search="", mine=True, page=1, **kw):
@@ -91,7 +119,7 @@ class VendorQuoteSalePage(http.Controller):
         Quote = request.env["hlv.vendor.quote"]
         base = self._scope_domain(mine) + self._search_domain(search)
         if _to_int(vendor_id):
-            base.append(("access_id", "=", _to_int(vendor_id)))
+            base.append(("access_id.partner_id", "=", _to_int(vendor_id)))
         counts = {key: Quote.search_count(base + self._status_domain(key)) for key, _label in STATUS_TABS}
         status = status if status in counts else "all"
         pager = paginate(counts[status], page, PER_PAGE)

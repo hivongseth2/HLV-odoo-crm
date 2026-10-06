@@ -8,7 +8,8 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.S = {
     config: {},
     vendors: [],
-    vendorId: null,     // id hlv.vendor.quote.access đang lọc; null = tất cả
+    vendorId: null,     // id res.partner (công ty NCC) đang lọc; null = tất cả
+    vendorsLimited: false,
     status: "all",
     search: "",
     mine: true,

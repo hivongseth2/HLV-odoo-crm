@@ -115,17 +115,17 @@ def share_message(quotes):
     )
 
 
-def vendor_summary(access, counts):
-    """counts: {state: số báo giá} của NCC này, đã lọc theo phạm vi sale đang xem."""
+def vendor_summary(partner, access, counts):
+    """Một NCC ở cột trái. access rỗng = chưa từng gửi yêu cầu (link tạo khi gửi lần đầu).
+    counts: {state: số báo giá} của NCC này, đã lọc theo phạm vi sale đang xem."""
     return {
-        "id": access.id,
-        "partner_id": access.partner_id.id,
-        "name": access.partner_id.display_name,
+        "id": partner.id,
+        "name": partner.display_name,
         "waiting": counts.get("sent", 0),
         "quoted": counts.get("quoted", 0),
         "total": sum(counts.values()),
-        "portal_url": access.portal_url,
-        "password": access.password,
+        "portal_url": access.portal_url or "",
+        "password": access.password or "",
     }
 
 

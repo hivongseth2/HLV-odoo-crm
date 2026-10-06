@@ -208,6 +208,7 @@ body {
 .hq-vendor-all { font-weight: 600; }
 .hq-vendor-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hq-vendor-counts { display: flex; gap: .25rem; flex: none; }
+.hq-side-note { padding: .5rem .6rem; color: var(--hq-muted); font-size: .75rem; border-top: 1px solid var(--hq-line-soft); margin-top: .25rem; }
 
 /* Dải link + mật khẩu của NCC đang chọn, ngay trên bảng. */
 .hq-vendor-card {

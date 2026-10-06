@@ -9,13 +9,16 @@ window.HlvQuote = window.HlvQuote || {};
   var C = S.create;
   var esc = HQ.esc;
   var DEFAULT_DEADLINE_DAYS = 2;
+  // Gợi ý chỉ để tham khảo: hiện vài NCC đầu, phần còn lại mở khi cần.
+  var SUGGEST_VISIBLE = 5;
 
   HQ.openCreate = function (vendor) {
     C.request = null;
     C.lines = [];
-    C.chosen = vendor ? [{ id: vendor.partner_id, name: vendor.name }] : [];
+    C.chosen = vendor ? [{ id: vendor.id, name: vendor.name }] : [];
     C.suggestions = [];
     C.quotedVendorIds = [];
+    C.showAllSuggestions = false;
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
     HQ.$("hq-modal-title").textContent = "Hỏi giá nhà cung cấp";
@@ -75,7 +78,7 @@ window.HlvQuote = window.HlvQuote || {};
             '<td><button type="button" class="hq-icon-btn" data-remove-line="' + index +
             '" title="Bỏ dòng">×</button></td></tr>';
         }).join("") + "</tbody></table>"
-      : '<div class="hq-empty-small">Chưa có mặt hàng. Chọn một YCMH hoặc tìm sản phẩm để thêm.</div>';
+      : '<div class="hq-muted">Chưa có mặt hàng. Chọn một YCMH hoặc tìm sản phẩm để thêm.</div>';
   }
 
   /* ---------------- Nhà cung cấp ---------------- */
@@ -129,24 +132,24 @@ window.HlvQuote = window.HlvQuote || {};
       return;
     }
     if (!C.suggestions.length) {
-      box.innerHTML = '<div class="hq-empty-small">Chưa có lịch sử mua các mặt hàng này — tìm NCC ở ô phía trên.</div>';
+      box.innerHTML = '<div class="hq-muted">Chưa có lịch sử mua các mặt hàng này — tìm NCC ở ô phía trên.</div>';
       return;
     }
-    box.innerHTML = C.suggestions.map(function (s) {
+    var visible = C.showAllSuggestions ? C.suggestions : C.suggestions.slice(0, SUGGEST_VISIBLE);
+    var hidden = C.suggestions.length - visible.length;
+    box.innerHTML = visible.map(function (s) {
       var on = isChosen(s.partner_id);
-      var ratio = Math.round(100 * s.matched / Math.max(s.total, 1));
+      var stats = s.matched + "/" + s.total + " mặt hàng · " + s.order_count + " đơn" +
+        (s.last_date ? " · " + s.last_date : "") + (s.from_pricelist ? " · có bảng giá" : "");
+      // Tên các mặt hàng NCC từng bán để trong tooltip, cho mỗi gợi ý gọn một dòng.
       return '<button type="button" class="hq-suggest' + (on ? " hq-suggest-on" : "") +
-        '" data-suggest="' + s.partner_id + '">' +
+        '" data-suggest="' + s.partner_id + '" title="Từng bán: ' + esc(s.matched_products) + '">' +
         '<span class="hq-check-box">' + (on ? "✓" : "") + "</span>" +
-        '<span class="hq-suggest-main"><span class="hq-strong">' + esc(s.name) + "</span>" +
-        '<span class="hq-muted hq-small">' + esc(s.matched_products) + "</span></span>" +
-        '<span class="hq-suggest-stats">' +
-        '<span class="hq-meter"><span style="width:' + ratio + '%"></span></span>' +
-        '<span class="hq-small">' + s.matched + "/" + s.total + " mặt hàng</span>" +
-        '<span class="hq-muted hq-small">' + s.order_count + " đơn" +
-        (s.last_date ? " · gần nhất " + esc(s.last_date) : "") +
-        (s.from_pricelist ? " · có bảng giá" : "") + "</span></span></button>";
-    }).join("");
+        '<span class="hq-suggest-name">' + esc(s.name) + "</span>" +
+        '<span class="hq-suggest-stats">' + esc(stats) + "</span></button>";
+    }).join("") + (hidden > 0
+      ? '<button type="button" class="hq-link" data-more-suggest="1">Xem thêm ' + hidden + " gợi ý</button>"
+      : "");
   }
 
   function renderSummary() {
@@ -258,6 +261,10 @@ window.HlvQuote = window.HlvQuote || {};
       var id = +el.dataset.suggest;
       var item = C.suggestions.find(function (s) { return s.partner_id === id; });
       toggleVendor({ id: id, name: item ? item.name : "" });
+    });
+    HQ.on(modal, "click", "[data-more-suggest]", function () {
+      C.showAllSuggestions = true;
+      renderSuggestions();
     });
     HQ.on(modal, "click", "[data-unchoose]", function (el) {
       toggleVendor({ id: +el.dataset.unchoose });
