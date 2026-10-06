@@ -129,6 +129,53 @@ Date: 03/12/2025 10:30:00
 
 ---
 
+## Liên Kết Sản Phẩm Với Từng Web
+
+Mỗi web (một **Cấu hình WooCommerce**) có một bảng **Sản phẩm trên web**. Mỗi dòng là một sản phẩm
+hoặc biến thể đang có trên web đó, kèm sản phẩm Odoo khớp mã. Xem ở **Tồn kho → Cấu hình →
+WordPress Sync → Sản phẩm trên web**, hoặc tab **Web** trên form sản phẩm.
+
+| Trạng thái | Nghĩa | Việc cần làm |
+|---|---|---|
+| Đã khớp | SKU web trùng từng ký tự với mã Odoo | — |
+| Lệch hoa/thường, khoảng trắng | Khớp được nhưng khác hoa/thường hoặc thừa dấu cách | Sửa mã cho giống hệt; giá vẫn đẩy được |
+| Trùng mã | Nhiều sản phẩm web, hoặc nhiều sản phẩm Odoo, cùng một mã | Xoá/sửa bản trùng |
+| Odoo không có mã này | Web có, Odoo không có (hoặc sản phẩm Odoo đã lưu trữ) | Sửa SKU trên web hoặc mã trong Odoo |
+| Web chưa nhập mã | Sản phẩm web để trống SKU | Nhập SKU trên web |
+
+Sau lượt quét đầu tiên của một web, Odoo **chỉ đẩy giá/kho lên web đang có sản phẩm đó**. Web
+chưa quét lần nào thì vẫn tìm theo SKU như cũ.
+
+### Quét danh mục
+
+- Tự chạy mỗi ngày (cron **WordPress: Quét liên kết sản phẩm web**).
+- Muốn quét ngay: mở cấu hình web → **Quét sản phẩm web**. Odoo kéo danh mục từ web về, gồm cả
+  biến thể, thường mất vài phút.
+
+### Webhook (cập nhật ngay khi web đổi)
+
+1. Mở cấu hình web trong Odoo, copy **Delivery URL**, tự đặt một chuỗi **Webhook Secret**
+   (chỉ chữ và số) rồi lưu.
+2. Trên WordPress: **WooCommerce → Cài đặt → Nâng cao → Webhooks → Thêm webhook**, tạo
+   **4 webhook** giống nhau, chỉ khác Topic:
+   - Topic: `Product created`, `Product updated`, `Product deleted`, `Product restored`
+   - Status: Active
+   - Delivery URL: URL vừa copy
+   - Secret: đúng chuỗi đã nhập trong Odoo
+   - API version: WP REST API Integration v3
+3. Lưu xong, WooCommerce gửi ping thử. Odoo trả 200 thì webhook được lưu.
+
+WooCommerce gửi webhook qua WP-Cron, mà WP-Cron chỉ chạy khi có người vào web, nên web ít
+khách thì webhook có thể đến trễ. Cách khắc phục trên AZDIGI (cPanel/DirectAdmin → Cron Jobs):
+
+```
+*/1 * * * * wget -q -O /dev/null "https://<domain>/wp-cron.php?doing_wp_cron" >/dev/null 2>&1
+```
+
+Nếu webhook lỗi, lượt quét hằng ngày vẫn sửa lại bảng liên kết.
+
+---
+
 ## Lỗi Thường Gặp
 
 | Lỗi | Nguyên nhân | Giải pháp |

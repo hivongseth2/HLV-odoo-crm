@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
+
+from .wordpress_sync_service import PriceSyncService, StockSyncService
 
 _logger = logging.getLogger(__name__)
 
@@ -11,6 +13,8 @@ class WordPressSyncQueue(models.Model):
     _order = 'priority desc, create_date asc'
 
     product_id = fields.Many2one('product.template', string='Sản phẩm', required=True, ondelete='cascade')
+    # Job tạo trước khi có nhiều web thì để trống, khi chạy dùng web mặc định.
+    config_id = fields.Many2one('wordpress.config', string='Web', ondelete='cascade', index=True)
     product_name = fields.Char(related='product_id.name', string='Tên sản phẩm', readonly=True)
     sku = fields.Char(related='product_id.default_code', string='Mã SKU', readonly=True)
     
@@ -88,13 +92,10 @@ class WordPressSyncQueue(models.Model):
             try:
                 # Identify config and service
                 product = job.product_id
-                config = product._get_wordpress_config()
-                
+                config = job.config_id or product._get_wordpress_config()
+
                 if not config:
                     raise Exception("No WordPress Config found")
-
-                # Import services inside method to avoid circular deps at module level if any
-                from .wordpress_api import PriceSyncService, StockSyncService
 
                 result = {'success': False, 'message': 'Unknown error'}
                 
@@ -115,7 +116,6 @@ class WordPressSyncQueue(models.Model):
                     raise Exception(result['message'])
 
             except Exception as e:
-                import traceback
                 error_msg = str(e)
                 _logger.error(f"Queue Job Failed {job.id}: {error_msg}")
 
@@ -147,13 +147,33 @@ class WordPressSyncQueue(models.Model):
             self.env.cr.commit()
 
     @api.model
-    def create_job(self, product, sync_type='price', priority=10, initial_log=None, old_value=None, new_value=None):
+    def create_job(self, product, sync_type='price', priority=10, initial_log=None, old_value=None,
+                   new_value=None, configs=None):
         """
-        Helper to create or update existing pending job
+        Tạo (hoặc làm mới job đang chờ) cho từng web cần đẩy.
+
+        Args:
+            configs: các web cần đẩy; None = mọi web sản phẩm đang có mặt
+                     (product._wordpress_target_configs).
+
+        Returns:
+            recordset job, một job mỗi web; rỗng nếu sản phẩm không có trên web nào.
         """
-        # Check if pending job exists for this product
+        if configs is None:
+            configs = product._wordpress_target_configs()
+
+        jobs = self.browse()
+        for config in configs:
+            jobs |= self._create_job_for_config(
+                product, config, sync_type, priority, initial_log, old_value, new_value
+            )
+        return jobs
+
+    def _create_job_for_config(self, product, config, sync_type, priority, initial_log, old_value, new_value):
+        """Gộp vào job đang chờ cùng sản phẩm, cùng web, cùng loại nếu có; không thì tạo mới."""
         existing = self.search([
             ('product_id', '=', product.id),
+            ('config_id', '=', config.id),
             ('status', 'in', ['pending', 'failed']),
             ('sync_type', '=', sync_type)
         ], limit=1)
@@ -178,6 +198,7 @@ class WordPressSyncQueue(models.Model):
         else:
             vals.update({
                 'product_id': product.id,
+                'config_id': config.id,
                 'sync_type': sync_type,
                 'priority': priority,
                 'old_value': old_value,

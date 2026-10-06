@@ -1,6 +1,6 @@
 {
     'name': 'WordPress Price & Stock Synchronization',
-    'version': '18.0.2.0.0',
+    'version': '18.0.2.1.0',
     'summary': 'Đồng bộ giá và tình trạng kho sản phẩm từ Odoo lên WordPress/WooCommerce',
     'description': '''
         Module đồng bộ giá và stock status sản phẩm từ Odoo lên WordPress/WooCommerce:
@@ -10,6 +10,7 @@
         - Tính giá bán combo tự động từ BOM (2 phương pháp)
         - Tự động cập nhật tình trạng combo khi sản phẩm con hết hàng
         - Lưu log chi tiết từng lần đồng bộ
+        - Bảng liên kết sản phẩm Odoo ↔ sản phẩm từng web (quét hằng đêm + webhook WooCommerce)
         - Cài đặt trong Inventory Settings
     ''',
     'author': 'HLV',
@@ -19,6 +20,8 @@
     'data': [
         'security/ir.model.access.csv',
         'views/wordpress_config_view.xml',
+        'views/wordpress_product_link_view.xml',
+        'data/wordpress_link_cron.xml',
         'wizard/wordpress_update_stock_wizard_view.xml',
         'views/product_template_view.xml',
         'views/wordpress_price_sync_view.xml',

@@ -1,0 +1,118 @@
+:root {
+    --vq-bg: #f4f5f7;
+    --vq-card: #ffffff;
+    --vq-text: #1f2328;
+    --vq-muted: #5f6b7a;
+    --vq-border: #d8dde3;
+    --vq-primary: #714b67;
+    --vq-ok-bg: #e6f4ea;
+    --vq-ok-text: #1e6b34;
+    --vq-err-bg: #fdecea;
+    --vq-err-text: #a3261c;
+    --vq-warn-bg: #fff4e0;
+    --vq-warn-text: #8a5300;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--vq-bg);
+    color: var(--vq-text);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+h1 { font-size: 1.35rem; margin: 0 0 8px; }
+
+.vq-wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+.vq-main { padding-top: 20px; padding-bottom: 40px; }
+
+.vq-header { background: var(--vq-card); border-bottom: 1px solid var(--vq-border); }
+.vq-header-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
+.vq-company { font-weight: 600; }
+.vq-sub, .vq-muted { color: var(--vq-muted); font-size: 0.9rem; }
+.vq-header-link, .vq-back { color: var(--vq-primary); text-decoration: none; font-size: 0.9rem; }
+.vq-back { display: inline-block; margin-bottom: 12px; }
+
+.vq-card {
+    display: block;
+    background: var(--vq-card);
+    border: 1px solid var(--vq-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    color: inherit;
+}
+.vq-login { max-width: 420px; margin: 40px auto; }
+.vq-note { white-space: pre-line; }
+.vq-block { display: block; }
+
+.vq-list a.vq-card { text-decoration: none; }
+.vq-list a.vq-card:hover { border-color: var(--vq-primary); }
+.vq-quote-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.vq-badge { font-size: 0.8rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.vq-badge-waiting { background: var(--vq-warn-bg); color: var(--vq-warn-text); }
+.vq-badge-quoted { background: var(--vq-ok-bg); color: var(--vq-ok-text); }
+.vq-badge-closed { background: #eceff3; color: var(--vq-muted); }
+
+.vq-alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: var(--vq-warn-bg); color: var(--vq-warn-text); }
+.vq-alert-ok { background: var(--vq-ok-bg); color: var(--vq-ok-text); }
+.vq-alert-error { background: var(--vq-err-bg); color: var(--vq-err-text); }
+
+.vq-input {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 9px 10px;
+    font: inherit;
+    border: 1px solid var(--vq-border);
+    border-radius: 6px;
+    background: #fff;
+}
+.vq-input:focus { outline: 2px solid var(--vq-primary); outline-offset: -1px; }
+.vq-input:disabled { background: #f0f2f4; color: var(--vq-muted); }
+.vq-input-sm { display: inline-block; width: auto; margin-left: 6px; }
+.vq-login .vq-input { margin: 12px 0; }
+
+.vq-btn { border: 0; border-radius: 6px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+.vq-btn-primary { background: var(--vq-primary); color: #fff; }
+.vq-btn-block { width: 100%; }
+
+.vq-vat-all { display: block; margin-bottom: 12px; }
+
+.vq-line-head { display: flex; gap: 10px; margin-bottom: 10px; }
+.vq-line-no {
+    flex: none;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: #eceff3;
+    text-align: center;
+    font-size: 0.85rem;
+    line-height: 26px;
+}
+.vq-line-name { font-weight: 600; }
+.vq-line-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; font-size: 0.9rem; }
+.vq-line-grid .vq-wide { grid-column: 1 / -1; }
+.vq-line-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.vq-check { display: flex; align-items: center; gap: 6px; }
+.vq-line-na { opacity: 0.6; }
+
+.vq-submit-bar {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--vq-card);
+    border: 1px solid var(--vq-border);
+    border-radius: 8px;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+@media (max-width: 560px) {
+    .vq-line-grid { grid-template-columns: 1fr 1fr; }
+    .vq-line-grid label:first-child { grid-column: 1 / -1; }
+}

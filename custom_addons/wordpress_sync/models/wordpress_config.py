@@ -3,6 +3,8 @@ from odoo import models, fields, api
 from odoo.exceptions import ValidationError
 import logging
 
+from .wordpress_api import WooCommerceAPI
+
 _logger = logging.getLogger(__name__)
 
 
@@ -146,6 +148,31 @@ class WordPressConfig(models.Model):
         readonly=True
     )
 
+    # ===========================================
+    # LIÊN KẾT SẢN PHẨM
+    # ===========================================
+    link_scan_date = fields.Datetime(
+        string='Quét liên kết lần cuối',
+        readonly=True,
+        help='Trống = chưa quét lần nào: đồng bộ vẫn tìm sản phẩm theo SKU như cách cũ'
+    )
+
+    link_count = fields.Integer(string='Sản phẩm trên web', compute='_compute_link_counts')
+    link_issue_count = fields.Integer(string='Chưa khớp mã', compute='_compute_link_counts')
+
+    webhook_url = fields.Char(
+        string='Delivery URL',
+        compute='_compute_webhook_url',
+        help='Dán vào WooCommerce → Cài đặt → Nâng cao → Webhooks'
+    )
+
+    webhook_secret = fields.Char(
+        string='Webhook Secret',
+        compute='_compute_credentials',
+        inverse='_inverse_webhook_secret',
+        help='Chuỗi bí mật khai ở webhook WooCommerce, dùng để kiểm chữ ký'
+    )
+
     active = fields.Boolean(
         string='Hoạt động',
         default=True
@@ -162,9 +189,26 @@ class WordPressConfig(models.Model):
             if record.id:
                 record.wc_key = ICP.get_param(f'wordpress_sync.config_{record.id}.wc_key', '')
                 record.wc_secret = ICP.get_param(f'wordpress_sync.config_{record.id}.wc_secret', '')
+                record.webhook_secret = ICP.get_param(f'wordpress_sync.config_{record.id}.webhook_secret', '')
             else:
                 record.wc_key = ''
                 record.wc_secret = ''
+                record.webhook_secret = ''
+
+    def _compute_link_counts(self):
+        Link = self.env['wordpress.product.link']
+        totals = dict(Link._read_group([('config_id', 'in', self.ids)], ['config_id'], ['__count']))
+        issues = dict(Link._read_group(
+            [('config_id', 'in', self.ids), ('state', '!=', 'linked')], ['config_id'], ['__count']
+        ))
+        for record in self:
+            record.link_count = totals.get(record, 0)
+            record.link_issue_count = issues.get(record, 0)
+
+    def _compute_webhook_url(self):
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url', '')
+        for record in self:
+            record.webhook_url = f'{base_url}/api/wordpress_sync/webhook/{record.id}' if record.id else ''
 
     def _inverse_wc_key(self):
         """Lưu wc_key vào System Parameters"""
@@ -179,6 +223,13 @@ class WordPressConfig(models.Model):
         for record in self:
             if record.id and record.wc_secret:
                 ICP.set_param(f'wordpress_sync.config_{record.id}.wc_secret', record.wc_secret)
+
+    def _inverse_webhook_secret(self):
+        """Lưu webhook_secret vào System Parameters"""
+        ICP = self.env['ir.config_parameter'].sudo()
+        for record in self:
+            if record.id and record.webhook_secret:
+                ICP.set_param(f'wordpress_sync.config_{record.id}.webhook_secret', record.webhook_secret)
 
     def _inverse_combo_cron_interval(self):
         """Cập nhật thời gian chạy cron khi thay đổi"""
@@ -215,6 +266,41 @@ class WordPressConfig(models.Model):
         wc_key = ICP.get_param(f'wordpress_sync.config_{self.id}.wc_key', '')
         wc_secret = ICP.get_param(f'wordpress_sync.config_{self.id}.wc_secret', '')
         return wc_key, wc_secret
+
+    def get_webhook_secret(self):
+        """Secret kiểm chữ ký webhook; '' nếu chưa khai (webhook sẽ bị từ chối)."""
+        self.ensure_one()
+        return self.env['ir.config_parameter'].sudo().get_param(
+            f'wordpress_sync.config_{self.id}.webhook_secret', ''
+        )
+
+    def _api_client(self):
+        """WooCommerceAPI của web này."""
+        self.ensure_one()
+        wc_key, wc_secret = self.get_credentials()
+        return WooCommerceAPI(self.wc_domain, wc_key, wc_secret)
+
+    def action_scan_links(self):
+        """
+        Đưa lượt quét liên kết vào cron chạy ngay.
+
+        Không quét trong request: web có nhiều sản phẩm variable thì mỗi cái tốn thêm một
+        lượt gọi API, dễ vượt giới hạn thời gian của request web.
+        """
+        self.env.ref('wordpress_sync.ir_cron_wordpress_scan_links').sudo()._trigger()
+        return self._notify(
+            'Đang quét liên kết',
+            'Odoo đang kéo danh mục từ web, thường mất vài phút. Tải lại trang để xem kết quả.',
+            'info'
+        )
+
+    def action_open_links(self):
+        """Mở danh sách sản phẩm web của cấu hình này."""
+        self.ensure_one()
+        action = self.env['ir.actions.act_window']._for_xml_id('wordpress_sync.action_wordpress_product_link')
+        action['domain'] = [('config_id', '=', self.id)]
+        action['context'] = {'search_default_needs_attention': 1}
+        return action
 
     def test_connection(self):
         """Test kết nối WordPress API"""

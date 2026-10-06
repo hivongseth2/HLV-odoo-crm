@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Lưới an toàn cho webhook: quét lại cả danh mục mỗi ngày. Nút "Quét sản phẩm web"
+         trên cấu hình cũng chỉ kích hoạt cron này chạy ngay. -->
+    <record id="ir_cron_wordpress_scan_links" model="ir.cron">
+        <field name="name">WordPress: Quét liên kết sản phẩm web</field>
+        <field name="model_id" ref="wordpress_sync.model_wordpress_product_link"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_scan_all()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+    </record>
+</odoo>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_vendor_quote_root"
+              name="Báo giá NCC"
+              parent="purchase_request.parent_menu_purchase_request"
+              sequence="30"/>
+    <menuitem id="menu_vendor_quote"
+              name="Yêu cầu báo giá"
+              parent="menu_vendor_quote_root"
+              action="action_vendor_quote"
+              sequence="10"/>
+    <menuitem id="menu_vendor_quote_compare"
+              name="So sánh giá"
+              parent="menu_vendor_quote_root"
+              action="action_vendor_quote_compare"
+              sequence="20"/>
+    <menuitem id="menu_vendor_quote_access"
+              name="Link NCC"
+              parent="menu_vendor_quote_root"
+              action="action_vendor_quote_access"
+              sequence="30"/>
+</odoo>

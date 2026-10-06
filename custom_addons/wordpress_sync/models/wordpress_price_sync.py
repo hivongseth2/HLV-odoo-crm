@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-from .wordpress_api import PriceSyncService
+from .wordpress_sync_service import PriceSyncService
 import logging
 import time
 import math
@@ -138,25 +138,29 @@ class WordPressPriceSyncWizard(models.TransientModel):
 
     def _sync_all(self, products=None):
         """
-        Đồng bộ tất cả hoặc một danh sách sản phẩm theo batch
-        """
-        if not products:
-            products = self.env['product.template'].search([
-                ('active', '=', True),
-                ('default_code', '!=', False),
-                ('default_code', '!=', '')
-            ])
-        
-        if not products:
-            return self._notify('Không có sản phẩm', 'Không tìm thấy sản phẩm nào có SKU', 'warning')
+        Đồng bộ theo batch mọi sản phẩm có trên web này, hoặc chỉ những sản phẩm truyền vào.
 
+        Chỉ đi qua sản phẩm đã có liên kết: Odoo có ~20k sản phẩm nhưng web chỉ ~1k.
+        """
         config = self.wordpress_config_id
+        if not config.link_scan_date:
+            return self._notify(
+                'Chưa quét liên kết',
+                'Vào Cấu hình WooCommerce, bấm "Quét sản phẩm web" rồi đồng bộ lại.',
+                'warning'
+            )
+
+        linked = self.env['wordpress.product.link'].search([
+            ('config_id', '=', config.id),
+            ('product_id', '!=', False),
+        ]).product_id
+        products = products & linked if products else linked
+
+        if not products:
+            return self._notify('Không có sản phẩm', 'Không có sản phẩm nào đang liên kết với web này', 'warning')
+
         service = PriceSyncService(self.env, config)
-        
-        # 1. Fetch map first (optimized)
-        _logger.info("Fetching SKU map for batch sync...")
-        product_map = service.api.get_all_products_map()
-        
+
         total_products = len(products)
         batch_size = config.batch_size or 50
         if batch_size > 100: batch_size = 100 # API limit
@@ -179,12 +183,11 @@ class WordPressPriceSyncWizard(models.TransientModel):
             _logger.info(f"Processing batch {i+1}/{batches}")
             
             # Process batch
-            batch_results = service.sync_products_batch(product_batch, product_map)
-            
+            batch_results = service.sync_products_batch(product_batch)
+
             # Analyze results
-            for result in batch_results.values():
-                p_id_temp = next((pid for pid, res in batch_results.items() if res == result), None)
-                product_obj = self.env['product.template'].browse(p_id_temp) if p_id_temp else None
+            for product_id, result in batch_results.items():
+                product_obj = self.env['product.template'].browse(product_id)
 
                 if result['success']:
                     success_count += 1

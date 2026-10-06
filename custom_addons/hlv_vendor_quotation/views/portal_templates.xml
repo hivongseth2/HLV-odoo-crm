@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang đứng riêng, không dùng layout website: NCC mở từ Zalo trên điện thoại,
+         cần nhẹ và không lộ menu / giỏ hàng của web bán lẻ. -->
+    <template id="portal_layout" name="Báo giá NCC - khung trang">
+        <t t-out="doctype"/>
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <meta name="robots" content="noindex, nofollow"/>
+                <title><t t-esc="page_title or 'Báo giá'"/> · <t t-esc="company.name"/></title>
+                <link rel="stylesheet" href="/hlv_vendor_quotation/static/src/css/vendor_portal.css"/>
+            </head>
+            <body>
+                <header class="vq-header">
+                    <div class="vq-wrap vq-header-row">
+                        <div>
+                            <div class="vq-company" t-esc="company.name"/>
+                            <div class="vq-sub" t-if="vendor">Cổng báo giá cho <b t-esc="vendor.name"/></div>
+                        </div>
+                        <a t-if="logged_in" t-att-href="'%s/logout' % portal_base" class="vq-header-link">Đăng xuất</a>
+                    </div>
+                </header>
+                <main class="vq-wrap vq-main">
+                    <t t-out="0"/>
+                </main>
+                <script src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js"></script>
+            </body>
+        </html>
+    </template>
+
+    <template id="portal_not_found" name="Báo giá NCC - không tìm thấy">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Không tìm thấy'"/>
+            <section class="vq-card">
+                <h1>Link không còn hiệu lực</h1>
+                <p class="vq-muted">Link báo giá này không tồn tại hoặc đã được thay bằng link mới.
+                    Vui lòng liên hệ người phụ trách mua hàng để nhận link mới.</p>
+            </section>
+        </t>
+    </template>
+
+    <template id="portal_login" name="Báo giá NCC - đăng nhập">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Đăng nhập'"/>
+            <section class="vq-card vq-login">
+                <h1>Nhập mật khẩu</h1>
+                <p class="vq-muted">Mật khẩu được gửi kèm link này. Nếu chưa có, vui lòng liên hệ
+                    người phụ trách mua hàng.</p>
+                <div t-if="error" class="vq-alert vq-alert-error" t-esc="error"/>
+                <form method="post" t-att-action="'%s/login' % portal_base">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="password" name="password" class="vq-input" required="required"
+                           autofocus="autofocus" autocomplete="current-password" autocapitalize="characters"
+                           placeholder="Mật khẩu"/>
+                    <button type="submit" class="vq-btn vq-btn-primary vq-btn-block">Vào xem yêu cầu báo giá</button>
+                </form>
+            </section>
+        </t>
+    </template>
+
+    <template id="portal_quote_list" name="Báo giá NCC - danh sách">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Yêu cầu báo giá'"/>
+            <t t-set="logged_in" t-value="True"/>
+            <h1>Yêu cầu báo giá</h1>
+            <p t-if="not quotes" class="vq-card vq-muted">Hiện chưa có yêu cầu báo giá nào.</p>
+            <div class="vq-list">
+                <a t-foreach="quotes" t-as="quote" class="vq-card vq-quote-item"
+                   t-att-href="'%s/%s' % (portal_base, quote.id)">
+                    <t t-set="status" t-value="statuses[quote.id]"/>
+                    <div class="vq-quote-head">
+                        <b t-esc="quote.name"/>
+                        <span t-attf-class="vq-badge vq-badge-#{status[1]}" t-esc="status[0]"/>
+                    </div>
+                    <div class="vq-muted">
+                        <t t-esc="len(quote.line_ids)"/> mặt hàng
+                        · gửi ngày <t t-esc="quote.create_date.strftime('%d/%m/%Y')"/>
+                        <t t-if="quote.date_deadline"> · hạn <t t-esc="quote.date_deadline.strftime('%d/%m/%Y')"/></t>
+                    </div>
+                </a>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_quote_form" name="Báo giá NCC - nhập giá">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="quote.name"/>
+            <t t-set="logged_in" t-value="True"/>
+            <t t-set="editable" t-value="status[2]"/>
+            <a t-att-href="portal_base" class="vq-back">← Tất cả yêu cầu báo giá</a>
+            <div class="vq-quote-head">
+                <h1 t-esc="quote.name"/>
+                <span t-attf-class="vq-badge vq-badge-#{status[1]}" t-esc="status[0]"/>
+            </div>
+            <p class="vq-muted">
+                <t t-if="quote.date_deadline">Hạn báo giá: <b t-esc="quote.date_deadline.strftime('%d/%m/%Y')"/>. </t>
+                <t t-if="quote.submit_date">Đã gửi giá lần cuối: <t t-esc="quote.submit_date.strftime('%d/%m/%Y')"/>.</t>
+            </p>
+            <div t-if="quote.note" class="vq-card vq-note" t-esc="quote.note"/>
+            <div t-if="saved" class="vq-alert vq-alert-ok">Đã gửi báo giá. Cảm ơn quý công ty!
+                Có thể sửa lại và gửi lại trước khi hết hạn.</div>
+            <div t-if="errors" class="vq-alert vq-alert-error">
+                <div t-foreach="errors" t-as="error" t-esc="error"/>
+            </div>
+            <div t-if="not editable and quote.state != 'done'" class="vq-alert">Đã quá hạn báo giá,
+                không sửa được nữa. Cần sửa giá vui lòng liên hệ người phụ trách mua hàng.</div>
+
+            <form method="post" class="vq-quote-form" t-att-action="'%s/%s' % (portal_base, quote.id)">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <p class="vq-muted">Đơn giá là giá <b>chưa VAT</b> cho 1 đơn vị tính.
+                    Mặt hàng không cung cấp được, vui lòng tích "Không có hàng".</p>
+                <label t-if="editable" class="vq-vat-all">VAT cho tất cả dòng:
+                    <select class="vq-input vq-input-sm" data-vq-vat-all="1">
+                        <option value="">—</option>
+                        <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]" t-esc="opt[1]"/>
+                    </select>
+                </label>
+
+                <div t-foreach="quote.line_ids" t-as="line" class="vq-card vq-line" data-vq-line="1"
+                     t-att-data-qty="line.product_qty">
+                    <t t-set="lid" t-value="line.id"/>
+                    <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
+                    <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else line.vat"/>
+                    <div class="vq-line-head">
+                        <span class="vq-line-no" t-esc="line_index + 1"/>
+                        <div>
+                            <div class="vq-line-name" t-esc="line.name or line.product_id.display_name"/>
+                            <div class="vq-muted">Số lượng: <b t-esc="fmt(line.product_qty)"/>
+                                <t t-esc="line.product_uom_id.name"/></div>
+                        </div>
+                    </div>
+                    <div class="vq-line-grid">
+                        <label>Đơn giá chưa VAT
+                            <input type="text" inputmode="decimal" class="vq-input" data-vq-price="1"
+                                   t-att-name="'price_%s' % lid" t-att-disabled="not editable"
+                                   t-att-value="post.get('price_%s' % lid) if post else (fmt(line.price_unit) if line.price_unit else '')"/>
+                        </label>
+                        <label>VAT
+                            <select class="vq-input" data-vq-vat="1" t-att-name="'vat_%s' % lid" t-att-disabled="not editable">
+                                <option value="">—</option>
+                                <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]"
+                                        t-att-selected="opt[0] == vat_value" t-esc="opt[1]"/>
+                            </select>
+                        </label>
+                        <label>Giao sau (ngày)
+                            <input type="text" inputmode="numeric" class="vq-input" t-att-name="'days_%s' % lid"
+                                   t-att-disabled="not editable"
+                                   t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or '')"/>
+                        </label>
+                        <label class="vq-wide">Ghi chú
+                            <input type="text" class="vq-input" maxlength="255" t-att-name="'note_%s' % lid"
+                                   t-att-disabled="not editable"
+                                   t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or '')"/>
+                        </label>
+                    </div>
+                    <div class="vq-line-foot">
+                        <label class="vq-check">
+                            <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
+                                   t-att-checked="na_checked" t-att-disabled="not editable"/>
+                            Không có hàng
+                        </label>
+                        <span class="vq-line-total">Thành tiền: <b data-vq-subtotal="1">—</b></span>
+                    </div>
+                </div>
+
+                <label class="vq-card vq-block">Ghi chú chung (điều kiện thanh toán, giao hàng, hiệu lực báo giá…)
+                    <textarea name="vendor_note" rows="3" class="vq-input" maxlength="2000" t-att-disabled="not editable"
+                              t-esc="post.get('vendor_note') if post else (quote.vendor_note or '')"/>
+                </label>
+
+                <div class="vq-submit-bar">
+                    <div>
+                        <div class="vq-muted">Tổng chưa VAT: <b data-vq-total-untaxed="1">—</b></div>
+                        <div class="vq-muted">Tổng sau VAT: <b data-vq-total="1">—</b></div>
+                    </div>
+                    <button t-if="editable" type="submit" class="vq-btn vq-btn-primary">
+                        <t t-esc="'Gửi lại báo giá' if quote.state == 'quoted' else 'Gửi báo giá'"/>
+                    </button>
+                </div>
+            </form>
+        </t>
+    </template>
+</odoo>

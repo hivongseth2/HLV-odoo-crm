@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
-from .wordpress_api import StockSyncService
+from .wordpress_sync_service import StockSyncService
 import logging
 
 _logger = logging.getLogger(__name__)

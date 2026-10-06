@@ -68,7 +68,7 @@ class ProductTemplate(models.Model):
         """Sync WordPress stock status khi field thay đổi"""
         # Import here to avoid circular import
         try:
-            from odoo.addons.wordpress_sync.models.wordpress_api import StockSyncService, WooCommerceAPI
+            from odoo.addons.wordpress_sync.models.wordpress_api import WooCommerceAPI
         except ImportError:
             _logger.warning("wordpress_sync module not installed, skipping sync")
             return
