@@ -119,10 +119,14 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
             ('picking_id', 'in', all_picking_ids),
             ('result_package_id', '!=', False),
             ('state', '!=', 'cancel'),
-        ], ['picking_id', 'result_package_id', 'product_id', 'quantity', 'location_dest_id'])
+        ], ['picking_id', 'result_package_id', 'product_id', 'quantity', 'location_dest_id', 'move_id'])
 
         if not move_lines:
             return {}
+
+        kit_tmpl_by_move = self._kit_tmpl_by_move(list({
+            ml['move_id'][0] for ml in move_lines if ml.get('move_id')
+        }))
 
         # --- Metadata kiện: search_read thay vì browse ---
         package_ids = list(set(
@@ -248,6 +252,7 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                     'total': pack_info.get('pack_total') or 0,
                     'product_map': {},
                     'product_id_map': {},
+                    'kit_component_map': {},
                 }
 
             p_content = so_picking_packs[so_id][pick_id]['packages_dict'][pname]
@@ -258,9 +263,18 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                 p_content['product_map'].get(prod_name, 0.0) + qty
             )
             if prod_id:
-                p_content['product_id_map'][prod_id] = (
-                    p_content['product_id_map'].get(prod_id, 0.0) + qty
-                )
+                # Linh kiện của combo (move tách từ BOM phantom) phải đếm riêng theo combo:
+                # nếu đơn vừa bán lẻ sản phẩm X vừa bán combo chứa X, gộp chung theo
+                # product_id sẽ làm dòng lẻ hiện cả phần X nằm trong combo (VD bán lẻ 2
+                # sạc + 2 combo có sạc → dòng sạc hiện "đóng gói 4").
+                kit_tmpl_id = kit_tmpl_by_move.get(ml['move_id'][0]) if ml.get('move_id') else None
+                if kit_tmpl_id:
+                    kit_map = p_content['kit_component_map'].setdefault(kit_tmpl_id, {})
+                    kit_map[prod_id] = kit_map.get(prod_id, 0.0) + qty
+                else:
+                    p_content['product_id_map'][prod_id] = (
+                        p_content['product_id_map'].get(prod_id, 0.0) + qty
+                    )
 
         # --- Sắp xếp theo thứ tự phiếu kho trong SO và format kết quả ---
         final_so_packages = {}
@@ -290,3 +304,35 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
             final_so_packages[so_id] = sorted_groups
 
         return final_so_packages
+
+    def _kit_tmpl_by_move(self, move_ids):
+        """
+        Trả về {move_id: product_tmpl_id của combo} cho các move là linh kiện tách từ
+        combo (BOM phantom). Move không thuộc combo không có trong dict.
+
+        bom_line_id được mrp truyền qua mọi bước pick → pack → out (stock.rule
+        _get_custom_move_fields + stock.move _prepare_procurement_values), nên move ở
+        phiếu đóng gói vẫn biết mình thuộc combo nào. Khoá theo template combo chứ không
+        theo bom_id: BOM combo bị thay bằng BOM mới thì move cũ vẫn khớp với dòng đơn.
+        Module không depends mrp nên kiểm field trước khi đọc.
+        """
+        if not move_ids or 'bom_line_id' not in self.env['stock.move']._fields:
+            return {}
+        moves = self.env['stock.move'].sudo().search_read(
+            [('id', 'in', move_ids), ('bom_line_id', '!=', False)], ['bom_line_id'],
+        )
+        if not moves:
+            return {}
+        tmpl_by_line = {
+            r['id']: r['parent_product_tmpl_id'][0]
+            for r in self.env['mrp.bom.line'].sudo().search_read(
+                [('id', 'in', list({m['bom_line_id'][0] for m in moves}))],
+                ['parent_product_tmpl_id'],
+            )
+            if r.get('parent_product_tmpl_id')
+        }
+        return {
+            m['id']: tmpl_by_line[m['bom_line_id'][0]]
+            for m in moves
+            if m['bom_line_id'][0] in tmpl_by_line
+        }
