@@ -1,20 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Bảng so sánh: mỗi nhóm là một dòng YCMH, mỗi hàng là giá của một NCC.
-         Xanh = rẻ nhất (chưa VAT), đậm = đã chọn. -->
+         Màu theo lựa chọn: nền xanh = NCC đã chọn, xám = NCC khác đã được chọn,
+         bình thường = mặt hàng chưa chốt. Đơn giá rẻ nhất tô xanh dương riêng ở ô giá,
+         để "rẻ nhất" không bị nhầm với "đã chọn". Nền hàng lấy từ static/src/scss. -->
     <record id="view_vendor_quote_line_compare_list" model="ir.ui.view">
         <field name="name">hlv.vendor.quote.line.compare.list</field>
         <field name="model">hlv.vendor.quote.line</field>
         <field name="arch" type="xml">
-            <list string="So sánh báo giá NCC" create="0" edit="0" delete="0"
-                  decoration-success="is_best_price" decoration-bf="selected" decoration-muted="unavailable">
+            <list string="So sánh báo giá NCC" create="0" edit="0" delete="0" class="o_hlv_vq_compare"
+                  decoration-success="selection_state == 'selected'"
+                  decoration-bf="selection_state == 'selected'"
+                  decoration-muted="selection_state == 'other' or unavailable">
+                <field name="selection_state" widget="badge"
+                       decoration-success="selection_state == 'selected'"
+                       decoration-muted="selection_state == 'other'"
+                       decoration-warning="selection_state == 'pending'"/>
+                <field name="image_128" widget="image" options="{'size': [40, 40]}" optional="show"/>
                 <field name="request_id" optional="hide"/>
                 <field name="product_id"/>
                 <field name="partner_id"/>
                 <field name="quote_id" optional="show"/>
                 <field name="product_qty"/>
                 <field name="product_uom_id" groups="uom.group_uom"/>
-                <field name="price_unit"/>
+                <field name="price_unit" decoration-info="is_best_price" decoration-bf="is_best_price"/>
                 <field name="vat"/>
                 <field name="price_subtotal"/>
                 <field name="price_total" optional="hide"/>
@@ -24,10 +33,13 @@
                 <field name="currency_id" column_invisible="1"/>
                 <field name="is_best_price" column_invisible="1"/>
                 <field name="selected" column_invisible="1"/>
+                <field name="request_line_id" column_invisible="1"/>
                 <button name="action_select" type="object" string="Chọn" icon="fa-check"
-                        class="btn-link" invisible="selected or unavailable"/>
+                        class="btn-sm btn-outline-success" groups="purchase.group_purchase_user"
+                        invisible="selected or unavailable or not request_line_id"/>
                 <button name="action_unselect" type="object" string="Bỏ chọn" icon="fa-times"
-                        class="btn-link text-danger" invisible="not selected"/>
+                        class="btn-link text-danger" groups="purchase.group_purchase_user"
+                        invisible="not selected"/>
             </list>
         </field>
     </record>
@@ -41,7 +53,9 @@
                 <field name="partner_id"/>
                 <field name="request_id"/>
                 <filter name="filter_selected" string="Đã chọn" domain="[('selected', '=', True)]"/>
+                <filter name="filter_not_selected" string="Chưa chọn" domain="[('selected', '=', False)]"/>
                 <filter name="filter_available" string="Có hàng" domain="[('unavailable', '=', False)]"/>
+                <filter name="filter_no_request" string="Chưa gắn YCMH" domain="[('request_line_id', '=', False)]"/>
                 <group expand="0" string="Nhóm theo">
                     <filter name="group_request_line" string="Mặt hàng" context="{'group_by': 'request_line_id'}"/>
                     <filter name="group_partner" string="Nhà cung cấp" context="{'group_by': 'partner_id'}"/>

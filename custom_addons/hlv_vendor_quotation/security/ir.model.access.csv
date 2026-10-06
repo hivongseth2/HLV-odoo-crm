@@ -7,3 +7,9 @@ access_vendor_quote_access_pr_user,hlv.vendor.quote.access pr user,model_hlv_ven
 access_vendor_quote_access_purchase_user,hlv.vendor.quote.access purchase user,model_hlv_vendor_quote_access,purchase.group_purchase_user,1,1,1,0
 access_vendor_quote_wizard_pr_user,hlv.vendor.quote.wizard pr user,model_hlv_vendor_quote_wizard,purchase_request.group_purchase_request_user,1,1,1,1
 access_vendor_quote_wizard_purchase_user,hlv.vendor.quote.wizard purchase user,model_hlv_vendor_quote_wizard,purchase.group_purchase_user,1,1,1,1
+access_vendor_quote_salesman,hlv.vendor.quote salesman,model_hlv_vendor_quote,sales_team.group_sale_salesman,1,1,1,0
+access_vendor_quote_line_salesman,hlv.vendor.quote.line salesman,model_hlv_vendor_quote_line,sales_team.group_sale_salesman,1,1,1,1
+access_vendor_quote_access_salesman,hlv.vendor.quote.access salesman,model_hlv_vendor_quote_access,sales_team.group_sale_salesman,1,1,1,0
+access_vendor_quote_wizard_salesman,hlv.vendor.quote.wizard salesman,model_hlv_vendor_quote_wizard,sales_team.group_sale_salesman,1,1,1,1
+access_purchase_request_salesman_read,purchase.request salesman read,purchase_request.model_purchase_request,sales_team.group_sale_salesman,1,0,0,0
+access_purchase_request_line_salesman_read,purchase.request.line salesman read,purchase_request.model_purchase_request_line,sales_team.group_sale_salesman,1,0,0,0

@@ -112,6 +112,45 @@ h1 { font-size: 1.35rem; margin: 0 0 8px; }
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
+.vq-tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; }
+.vq-tab {
+    flex: none;
+    padding: 6px 12px;
+    border: 1px solid var(--vq-border);
+    border-radius: 999px;
+    background: var(--vq-card);
+    color: var(--vq-text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+.vq-tab-active { background: var(--vq-primary); border-color: var(--vq-primary); color: #fff; }
+.vq-tab-count { opacity: 0.75; margin-left: 2px; }
+
+.vq-search { display: flex; gap: 8px; margin-bottom: 16px; }
+.vq-search .vq-input { margin-top: 0; }
+
+.vq-quote-products {
+    margin: 4px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vq-pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px; }
+.vq-pager .vq-btn { background: var(--vq-card); border: 1px solid var(--vq-border); color: var(--vq-primary); text-decoration: none; }
+
+.vq-line-img { flex: none; }
+.vq-line-img img {
+    display: block;
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    border: 1px solid var(--vq-border);
+    border-radius: 6px;
+    background: #fff;
+}
+
 @media (max-width: 560px) {
     .vq-line-grid { grid-template-columns: 1fr 1fr; }
     .vq-line-grid label:first-child { grid-column: 1 / -1; }

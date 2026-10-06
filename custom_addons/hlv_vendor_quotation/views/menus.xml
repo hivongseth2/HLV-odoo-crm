@@ -1,22 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- App riêng (không nằm trong app Yêu cầu mua hàng): sale tạo yêu cầu báo giá theo NCC,
+         thu mua so sánh và chọn — hai nhóm đều phải thấy. -->
     <menuitem id="menu_vendor_quote_root"
               name="Báo giá NCC"
-              parent="purchase_request.parent_menu_purchase_request"
-              sequence="30"/>
+              web_icon="hlv_vendor_quotation,static/description/icon.png"
+              sequence="23"
+              groups="sales_team.group_sale_salesman,purchase.group_purchase_user,purchase_request.group_purchase_request_user"/>
+    <menuitem id="menu_vendor_quote_access"
+              name="Theo nhà cung cấp"
+              parent="menu_vendor_quote_root"
+              action="action_vendor_quote_access"
+              sequence="10"/>
     <menuitem id="menu_vendor_quote"
               name="Yêu cầu báo giá"
               parent="menu_vendor_quote_root"
               action="action_vendor_quote"
-              sequence="10"/>
+              sequence="20"/>
     <menuitem id="menu_vendor_quote_compare"
               name="So sánh giá"
               parent="menu_vendor_quote_root"
               action="action_vendor_quote_compare"
-              sequence="20"/>
-    <menuitem id="menu_vendor_quote_access"
-              name="Link NCC"
-              parent="menu_vendor_quote_root"
-              action="action_vendor_quote_access"
               sequence="30"/>
 </odoo>

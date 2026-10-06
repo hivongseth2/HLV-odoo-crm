@@ -52,6 +52,7 @@
                 <div t-if="error" class="vq-alert vq-alert-error" t-esc="error"/>
                 <form method="post" t-att-action="'%s/login' % portal_base">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="hidden" name="next_url" t-att-value="next_url"/>
                     <input type="password" name="password" class="vq-input" required="required"
                            autofocus="autofocus" autocomplete="current-password" autocapitalize="characters"
                            placeholder="Mật khẩu"/>
@@ -66,15 +67,33 @@
             <t t-set="page_title" t-value="'Yêu cầu báo giá'"/>
             <t t-set="logged_in" t-value="True"/>
             <h1>Yêu cầu báo giá</h1>
-            <p t-if="not quotes" class="vq-card vq-muted">Hiện chưa có yêu cầu báo giá nào.</p>
+
+            <nav class="vq-tabs">
+                <a t-foreach="tabs" t-as="tab" t-att-href="tab[3]"
+                   t-attf-class="vq-tab #{'vq-tab-active' if tab[0] == status else ''}">
+                    <t t-esc="tab[1]"/> <span class="vq-tab-count" t-esc="tab[2]"/>
+                </a>
+            </nav>
+            <form method="get" class="vq-search" t-att-action="portal_base">
+                <input t-if="status != 'all'" type="hidden" name="status" t-att-value="status"/>
+                <input type="search" name="q" class="vq-input" t-att-value="q"
+                       placeholder="Tìm theo số báo giá hoặc tên hàng"/>
+                <button type="submit" class="vq-btn vq-btn-primary">Tìm</button>
+            </form>
+
+            <p t-if="not quotes" class="vq-card vq-muted">
+                <t t-if="q or status != 'all'">Không có yêu cầu báo giá nào khớp bộ lọc.</t>
+                <t t-else="">Hiện chưa có yêu cầu báo giá nào.</t>
+            </p>
             <div class="vq-list">
                 <a t-foreach="quotes" t-as="quote" class="vq-card vq-quote-item"
                    t-att-href="'%s/%s' % (portal_base, quote.id)">
-                    <t t-set="status" t-value="statuses[quote.id]"/>
+                    <t t-set="quote_status" t-value="statuses[quote.id]"/>
                     <div class="vq-quote-head">
                         <b t-esc="quote.name"/>
-                        <span t-attf-class="vq-badge vq-badge-#{status[1]}" t-esc="status[0]"/>
+                        <span t-attf-class="vq-badge vq-badge-#{quote_status[1]}" t-esc="quote_status[0]"/>
                     </div>
+                    <div class="vq-quote-products" t-esc="', '.join(quote.line_ids[:3].mapped(lambda l: l.name or l.product_id.name)) + (' …' if len(quote.line_ids) &gt; 3 else '')"/>
                     <div class="vq-muted">
                         <t t-esc="len(quote.line_ids)"/> mặt hàng
                         · gửi ngày <t t-esc="quote.create_date.strftime('%d/%m/%Y')"/>
@@ -82,6 +101,12 @@
                     </div>
                 </a>
             </div>
+
+            <nav t-if="pager['page_count'] &gt; 1" class="vq-pager">
+                <a t-if="pager['page'] &gt; 1" t-att-href="prev_page_url" class="vq-btn">← Trước</a>
+                <span class="vq-muted">Trang <t t-esc="pager['page']"/> / <t t-esc="pager['page_count']"/></span>
+                <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="next_page_url" class="vq-btn">Sau →</a>
+            </nav>
         </t>
     </template>
 
@@ -89,7 +114,6 @@
         <t t-call="hlv_vendor_quotation.portal_layout">
             <t t-set="page_title" t-value="quote.name"/>
             <t t-set="logged_in" t-value="True"/>
-            <t t-set="editable" t-value="status[2]"/>
             <a t-att-href="portal_base" class="vq-back">← Tất cả yêu cầu báo giá</a>
             <div class="vq-quote-head">
                 <h1 t-esc="quote.name"/>
@@ -126,6 +150,11 @@
                     <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else line.vat"/>
                     <div class="vq-line-head">
                         <span class="vq-line-no" t-esc="line_index + 1"/>
+                        <a t-if="line.product_id.image_128" class="vq-line-img" target="_blank"
+                           t-att-href="'%s/img/%s/1024' % (portal_base, lid)" title="Xem ảnh lớn">
+                            <img t-att-src="'%s/img/%s/128' % (portal_base, lid)" loading="lazy"
+                                 t-att-alt="line.product_id.name"/>
+                        </a>
                         <div>
                             <div class="vq-line-name" t-esc="line.name or line.product_id.display_name"/>
                             <div class="vq-muted">Số lượng: <b t-esc="fmt(line.product_qty)"/>

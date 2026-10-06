@@ -120,3 +120,44 @@ def best_price_ids(offers):
         elif price == current[0]:
             current[1].add(offer_id)
     return {offer_id for _price, ids in best.values() for offer_id in ids}
+
+
+def paginate(total, page, per_page):
+    """Tính phân trang cho danh sách.
+
+    Nhận: tổng số bản ghi, số trang người dùng yêu cầu (int/chuỗi/None, đếm từ 1),
+    số bản ghi mỗi trang (> 0).
+    Trả: dict {"page", "page_count", "offset", "limit"}. Trang không hợp lệ hoặc
+    vượt quá thì kẹp về khoảng [1, page_count]; total = 0 vẫn trả page_count = 1.
+    """
+    page_count = max(1, -(-int(total) // per_page))
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = 1
+    page = min(max(page, 1), page_count)
+    return {
+        "page": page,
+        "page_count": page_count,
+        "offset": (page - 1) * per_page,
+        "limit": per_page,
+    }
+
+
+def match_by_product(items, candidates):
+    """Ghép một-một dòng báo giá với dòng YCMH theo sản phẩm, giữ thứ tự.
+
+    Nhận: items là iterable (item_id, product_id) cần ghép; candidates là iterable
+    (candidate_id, product_id) còn trống. Cả hai theo thứ tự hiển thị.
+    Trả: dict {item_id: candidate_id}. Item không còn candidate cùng sản phẩm thì
+    không có trong dict; mỗi candidate dùng tối đa một lần (YCMH có 2 dòng cùng mã
+    thì 2 dòng báo giá cùng mã ghép lần lượt vào từng dòng).
+    """
+    free = {}
+    for candidate_id, product_id in candidates:
+        free.setdefault(product_id, []).append(candidate_id)
+    matched = {}
+    for item_id, product_id in items:
+        if free.get(product_id):
+            matched[item_id] = free[product_id].pop(0)
+    return matched

@@ -6,9 +6,10 @@
         <field name="arch" type="xml">
             <list string="Yêu cầu báo giá NCC" decoration-muted="state in ('done', 'cancel')">
                 <field name="name"/>
-                <field name="request_id"/>
-                <field name="origin" optional="show"/>
                 <field name="partner_id"/>
+                <field name="request_id"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="origin" optional="hide"/>
                 <field name="date_deadline"/>
                 <field name="submit_date" optional="show"/>
                 <field name="amount_untaxed" sum="Tổng" optional="show"/>
@@ -23,7 +24,8 @@
         </field>
     </record>
 
-    <!-- Mở ra ngay sau khi wizard "Hỏi giá NCC" chạy: mỗi dòng một NCC, có sẵn link + mật khẩu để copy gửi Zalo. -->
+    <!-- Mở ra ngay sau khi wizard "Hỏi giá NCC" chạy: mỗi dòng một NCC, có sẵn link thẳng vào
+         báo giá + mật khẩu để copy gửi Zalo. -->
     <record id="view_vendor_quote_share_list" model="ir.ui.view">
         <field name="name">hlv.vendor.quote.share.list</field>
         <field name="model">hlv.vendor.quote</field>
@@ -32,8 +34,9 @@
             <list string="Gửi link cho NCC" create="0">
                 <field name="name"/>
                 <field name="partner_id"/>
-                <field name="portal_url" widget="CopyClipboardChar"/>
+                <field name="portal_quote_url" widget="CopyClipboardChar"/>
                 <field name="portal_password" widget="CopyClipboardChar"/>
+                <field name="portal_url" widget="CopyClipboardChar" optional="hide"/>
                 <field name="date_deadline"/>
                 <field name="state" widget="badge"/>
             </list>
@@ -64,22 +67,32 @@
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="request_id or state in ('draft', 'cancel')">
+                        Báo giá chưa gắn Yêu cầu mua hàng — thu mua chưa chọn được giá.
+                        Gắn YCMH ở ô bên dưới; mặt hàng sẽ tự ghép theo sản phẩm.
+                    </div>
                     <group>
                         <group>
-                            <field name="request_id" readonly="state != 'draft'"/>
-                            <field name="origin"/>
                             <field name="partner_id" readonly="state != 'draft'"
                                    context="{'res_partner_search_mode': 'supplier'}"/>
+                            <field name="sale_order_id" readonly="state in ('done', 'cancel')"/>
+                            <field name="request_id" readonly="state in ('done', 'cancel')"
+                                   placeholder="Chưa có YCMH thì để trống, gắn sau"
+                                   domain="[('sale_order_id', '=', sale_order_id)] if sale_order_id else []"/>
+                            <field name="origin" invisible="not request_id"/>
                             <field name="user_id" widget="many2one_avatar_user"/>
                         </group>
                         <group>
                             <field name="date_deadline" readonly="state in ('done', 'cancel')"/>
-                            <field name="portal_url" widget="CopyClipboardChar" invisible="not access_id"/>
+                            <field name="portal_quote_url" widget="CopyClipboardChar" invisible="not access_id"/>
                             <field name="portal_password" widget="CopyClipboardChar" invisible="not access_id"/>
+                            <field name="portal_url" string="Link mọi báo giá của NCC" widget="CopyClipboardChar"
+                                   invisible="not access_id"/>
                             <field name="access_id" invisible="1"/>
                             <field name="submit_date" invisible="not submit_date"/>
                             <field name="currency_id" invisible="1"/>
-                            <field name="company_id" invisible="1"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                     </group>
                     <notebook>
@@ -88,11 +101,14 @@
                                 <list editable="bottom" decoration-success="is_best_price"
                                       decoration-bf="selected" decoration-muted="unavailable">
                                     <field name="sequence" widget="handle"/>
-                                    <field name="request_line_id" column_invisible="1"/>
-                                    <field name="product_id"/>
+                                    <field name="image_128" widget="image" options="{'size': [40, 40]}" optional="show"/>
+                                    <field name="product_id" readonly="request_line_id or parent.state != 'draft'"/>
                                     <field name="name" optional="show"/>
-                                    <field name="product_qty"/>
-                                    <field name="product_uom_id" groups="uom.group_uom"/>
+                                    <field name="product_qty" readonly="parent.state != 'draft'"/>
+                                    <field name="product_uom_id" groups="uom.group_uom" readonly="parent.state != 'draft'"/>
+                                    <field name="request_line_id" optional="show" column_invisible="not parent.request_id"
+                                           domain="[('request_id', '=', parent.request_id)]"
+                                           options="{'no_create': True}"/>
                                     <field name="price_unit"/>
                                     <field name="vat"/>
                                     <field name="delivery_days" optional="show"/>
@@ -130,10 +146,12 @@
                 <field name="name"/>
                 <field name="request_id"/>
                 <field name="origin"/>
+                <field name="sale_order_id"/>
                 <field name="partner_id"/>
                 <filter name="filter_sent" string="Chờ NCC báo giá" domain="[('state', '=', 'sent')]"/>
                 <filter name="filter_quoted" string="NCC đã báo giá" domain="[('state', '=', 'quoted')]"/>
                 <filter name="filter_open" string="Đang mở" domain="[('state', 'in', ('draft', 'sent', 'quoted'))]"/>
+                <filter name="filter_no_request" string="Chưa gắn YCMH" domain="[('request_id', '=', False)]"/>
                 <separator/>
                 <filter name="filter_mine" string="Tôi phụ trách" domain="[('user_id', '=', uid)]"/>
                 <group expand="0" string="Nhóm theo">
@@ -153,8 +171,8 @@
         <field name="context">{'search_default_filter_open': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Chưa có yêu cầu báo giá nào</p>
-            <p>Mở một Yêu cầu mua hàng và bấm "Hỏi giá NCC" để gửi cùng lúc cho nhiều nhà cung cấp,
-                hoặc tạo mới ở đây cho từng nhà cung cấp.</p>
+            <p>Vào "Theo nhà cung cấp", chọn NCC rồi "Tạo yêu cầu báo giá" — hoặc trên Yêu cầu mua hàng
+                bấm "Hỏi giá NCC" để gửi cùng lúc cho nhiều NCC.</p>
         </field>
     </record>
 </odoo>

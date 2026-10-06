@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from markupsafe import Markup
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 from .vendor_quote_utils import best_price_ids
 
@@ -12,6 +12,13 @@ VAT_SELECTION = [
     ("10", "10%"),
     ("kct", "Không chịu thuế"),
 ]
+SELECTION_STATES = [
+    ("selected", "Đã chọn"),
+    ("other", "Đã chọn NCC khác"),
+    ("pending", "Chưa chọn"),
+]
+# Sale tạo yêu cầu báo giá, nhưng chốt NCC là việc của thu mua.
+SELECTOR_GROUP = "purchase.group_purchase_user"
 # Chỉ báo giá NCC đã gửi mới tham gia so sánh; dòng "đang chờ" giá 0 không phải giá rẻ nhất.
 COMPARED_STATES = ("quoted", "done")
 
@@ -26,31 +33,48 @@ class VendorQuoteLine(models.Model):
     )
     sequence = fields.Integer(string="STT", default=10)
     request_line_id = fields.Many2one(
-        "purchase.request.line", string="Dòng YCMH", ondelete="set null", index=True
+        "purchase.request.line",
+        string="Dòng YCMH",
+        ondelete="set null",
+        index=True,
     )
     request_id = fields.Many2one(related="quote_id.request_id", store=True, string="YCMH")
     partner_id = fields.Many2one(related="quote_id.partner_id", store=True, string="Nhà cung cấp")
     quote_state = fields.Selection(related="quote_id.state", store=True, string="Trạng thái báo giá")
     currency_id = fields.Many2one(related="quote_id.currency_id")
     product_id = fields.Many2one("product.product", string="Sản phẩm", required=True)
+    image_128 = fields.Image(related="product_id.image_128", string="Ảnh")
     name = fields.Char(string="Mô tả")
-    product_qty = fields.Float(string="Số lượng", digits="Product Unit of Measure")
+    # Dòng nhóm của bảng so sánh gom các NCC cùng một mặt hàng: cộng dồn số lượng / giá
+    # là vô nghĩa, nên lấy max số lượng và min giá, min ngày giao (= tốt nhất trong nhóm).
+    product_qty = fields.Float(string="Số lượng", digits="Product Unit of Measure", aggregator="max")
     product_uom_id = fields.Many2one("uom.uom", string="ĐVT")
 
-    price_unit = fields.Float(string="Đơn giá chưa VAT", digits="Product Price")
+    price_unit = fields.Float(string="Đơn giá chưa VAT", digits="Product Price", aggregator="min")
     vat = fields.Selection(VAT_SELECTION, string="VAT")
     tax_rate = fields.Float(string="% VAT", compute="_compute_tax_rate", store=True)
-    delivery_days = fields.Integer(string="Giao sau (ngày)")
+    delivery_days = fields.Integer(string="Giao sau (ngày)", aggregator="min")
     vendor_note = fields.Char(string="Ghi chú NCC")
     unavailable = fields.Boolean(string="Không có hàng")
     price_subtotal = fields.Monetary(
-        string="Thành tiền chưa VAT", compute="_compute_price", store=True, currency_field="currency_id"
+        string="Thành tiền chưa VAT",
+        compute="_compute_price",
+        store=True,
+        currency_field="currency_id",
+        aggregator="min",
     )
     price_total = fields.Monetary(
-        string="Thành tiền sau VAT", compute="_compute_price", store=True, currency_field="currency_id"
+        string="Thành tiền sau VAT",
+        compute="_compute_price",
+        store=True,
+        currency_field="currency_id",
+        aggregator="min",
     )
     is_best_price = fields.Boolean(string="Giá tốt nhất", compute="_compute_is_best_price")
     selected = fields.Boolean(string="Đã chọn", readonly=True, copy=False)
+    selection_state = fields.Selection(
+        SELECTION_STATES, string="Lựa chọn", compute="_compute_selection_state"
+    )
 
     @api.depends("vat")
     def _compute_tax_rate(self):
@@ -83,12 +107,43 @@ class VendorQuoteLine(models.Model):
         for line in self:
             line.is_best_price = line.id in best_ids
 
+    @api.depends("selected", "request_line_id")
+    def _compute_selection_state(self):
+        """Đã chọn / NCC khác đã được chọn cho cùng mặt hàng / mặt hàng chưa chốt NCC nào."""
+        request_lines = self.request_line_id
+        chosen_request_line_ids = set(self.search([
+            ("request_line_id", "in", request_lines.ids),
+            ("selected", "=", True),
+        ]).request_line_id.ids) if request_lines else set()
+        for line in self:
+            if line.selected:
+                line.selection_state = "selected"
+            elif line.request_line_id.id in chosen_request_line_ids:
+                line.selection_state = "other"
+            else:
+                line.selection_state = "pending"
+
+    @api.onchange("product_id")
+    def _onchange_product_id(self):
+        """Dòng sale nhập tay: lấy sẵn tên và ĐVT mua của sản phẩm."""
+        if self.product_id and not self.request_line_id:
+            self.name = self.product_id.display_name
+            self.product_uom_id = self.product_id.uom_po_id or self.product_id.uom_id
+
+    def _check_can_select(self):
+        if not self.env.user.has_group(SELECTOR_GROUP):
+            raise AccessError(_("Chỉ thu mua mới được chọn / bỏ chọn nhà cung cấp."))
+
     def action_select(self):
         """Chốt NCC cho dòng YCMH: ghi NCC + giá vào actual_* để wizard "Tạo RFQ" dùng luôn."""
         self.ensure_one()
+        self._check_can_select()
         request_line = self.request_line_id
         if not request_line:
-            raise UserError(_("Dòng báo giá này không còn gắn với dòng YCMH nào."))
+            raise UserError(_(
+                "Dòng báo giá này chưa gắn với dòng YCMH nào. Gắn YCMH cho báo giá "
+                "(hoặc chọn dòng YCMH ở cột \"Dòng YCMH\") rồi chọn lại."
+            ))
         if self.unavailable or not self.price_unit:
             raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
         if request_line.purchase_lines.filtered(lambda l: l.state != "cancel"):
@@ -119,6 +174,8 @@ class VendorQuoteLine(models.Model):
         return True
 
     def action_unselect(self):
+        if self.filtered("selected"):
+            self._check_can_select()
         for line in self.filtered("selected"):
             request_line = line.request_line_id
             line.selected = False

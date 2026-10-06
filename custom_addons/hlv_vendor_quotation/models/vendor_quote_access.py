@@ -12,10 +12,16 @@ PASSWORD_LENGTH = 6
 MAX_LOGIN_ATTEMPTS = 5
 LOCK_MINUTES = 15
 PORTAL_ROUTE = "/bao-gia"
+# Trùng `path` của action_vendor_quote_access → /odoo/bao-gia-ncc/<id> mở thẳng trang quản lý NCC.
+MANAGE_PATH = "bao-gia-ncc"
 
 
 class VendorQuoteAccess(models.Model):
-    """Một link báo giá cố định cho mỗi NCC; link hiện mọi yêu cầu báo giá gửi NCC đó."""
+    """Một NCC trong luồng báo giá.
+
+    Hai mặt: link công khai cố định cho NCC (hiện mọi yêu cầu báo giá gửi NCC đó), và
+    trang quản lý nội bộ cho sale — mở NCC, tạo yêu cầu báo giá, lấy link gửi NCC.
+    """
 
     _name = "hlv.vendor.quote.access"
     _description = "Link báo giá nhà cung cấp"
@@ -46,10 +52,14 @@ class VendorQuoteAccess(models.Model):
         default=lambda self: self._new_password(),
     )
     active = fields.Boolean(string="Hoạt động", default=True, tracking=True)
-    portal_url = fields.Char(string="Link báo giá", compute="_compute_portal_url")
+    portal_url = fields.Char(string="Link báo giá", compute="_compute_urls")
+    manage_url = fields.Char(string="Link quản lý (nội bộ)", compute="_compute_urls")
     quote_ids = fields.One2many("hlv.vendor.quote", "access_id", string="Yêu cầu báo giá")
     open_quote_count = fields.Integer(
-        string="Đang chờ báo giá", compute="_compute_open_quote_count"
+        string="Chờ NCC báo giá", compute="_compute_quote_counts"
+    )
+    quoted_quote_count = fields.Integer(
+        string="NCC đã báo giá", compute="_compute_quote_counts"
     )
     last_login_date = fields.Datetime(string="Đăng nhập gần nhất", readonly=True)
     failed_login_count = fields.Integer(string="Số lần sai mật khẩu", readonly=True)
@@ -61,14 +71,28 @@ class VendorQuoteAccess(models.Model):
     ]
 
     @api.depends("access_token")
-    def _compute_portal_url(self):
+    def _compute_urls(self):
         for rec in self:
-            rec.portal_url = f"{rec.get_base_url()}{PORTAL_ROUTE}/{rec.access_token}"
+            base = rec.get_base_url()
+            rec.portal_url = f"{base}{PORTAL_ROUTE}/{rec.access_token}"
+            rec.manage_url = f"{base}/odoo/{MANAGE_PATH}/{rec.id}" if rec.id else False
 
     @api.depends("quote_ids.state")
-    def _compute_open_quote_count(self):
+    def _compute_quote_counts(self):
         for rec in self:
-            rec.open_quote_count = len(rec.quote_ids.filtered(lambda q: q.state == "sent"))
+            states = rec.quote_ids.mapped("state")
+            rec.open_quote_count = states.count("sent")
+            rec.quoted_quote_count = states.count("quoted")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Link gắn với công ty NCC, không với từng liên hệ — sale chọn nhầm tên người liên
+        # hệ vẫn ra đúng một link cho cả công ty.
+        Partner = self.env["res.partner"]
+        for vals in vals_list:
+            if vals.get("partner_id"):
+                vals["partner_id"] = Partner.browse(vals["partner_id"]).commercial_partner_id.id
+        return super().create(vals_list)
 
     @api.model
     def _new_token(self):
@@ -101,6 +125,17 @@ class VendorQuoteAccess(models.Model):
 
     def action_unlock(self):
         self.write({"failed_login_count": 0, "last_failed_login_date": False})
+
+    def action_new_quote(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Yêu cầu báo giá mới"),
+            "res_model": "hlv.vendor.quote",
+            "view_mode": "form",
+            "target": "current",
+            "context": {"default_partner_id": self.partner_id.id},
+        }
 
     def action_view_quotes(self):
         self.ensure_one()
