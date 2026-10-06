@@ -29,6 +29,7 @@ hlv_po_reconcile_report/
 3. Gọi `reconcile_po` → `build_reconcile_xlsx` → tạo `ir.attachment`.
 4. `_upload_to_drive`: đẩy file vào thư mục `DOI_CHIEU_DON_MUA_HANG` ở gốc My Drive (tự tạo). Lỗi → log, trả None, vẫn gửi mail.
 5. Tạo `mail.mail` (kèm file, link Drive nếu có, `auto_delete=False`) và `send()` ngay, không chờ cron hàng đợi mail.
+6. Server Odoo ít dung lượng → file chỉ giữ trên Drive: nếu mail `sent` VÀ upload Drive thành công thì xoá `ir.attachment`. `mail.mail` luôn giữ lại làm nhật ký đã gửi (nội dung có link Drive). Hỏng một trong hai → giữ file trong Odoo (để gửi lại / không mất báo cáo).
 
 ## Cấu hình
 | System Parameter | Ý nghĩa |
