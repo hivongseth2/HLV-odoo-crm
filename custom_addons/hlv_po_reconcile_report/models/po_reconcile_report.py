@@ -166,5 +166,10 @@ class HlvPoReconcileReport(models.AbstractModel):
         # Gửi ngay, không chờ cron hàng đợi mail (1h/lần) vì phần gọi API MISA có thể làm trễ vài phút.
         # Lỗi SMTP không raise: mail chuyển sang "Giao thư đã lỗi", xem lý do và bấm gửi lại trong Settings > Technical > Emails.
         mail.send()
+        state = mail.state
         _logger.info("PO reconcile cron: %s, đã gửi mail tới %s (%s đơn Odoo), trạng thái %s, Drive: %s.",
-                     period, emails, summary.get("total_odoo"), mail.state, drive_link or "không lưu được")
+                     period, emails, summary.get("total_odoo"), state, drive_link or "không lưu được")
+        # Server Odoo ít dung lượng: file Excel chỉ giữ trên Drive, mail giữ lại làm nhật ký đã gửi.
+        # Chỉ xoá file khi CẢ gửi mail lẫn upload Drive đều thành công; hỏng một trong hai thì giữ để gửi lại / không mất báo cáo.
+        if state == "sent" and drive_link:
+            attachment.unlink()
