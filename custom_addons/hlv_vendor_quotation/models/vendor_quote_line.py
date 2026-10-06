@@ -50,12 +50,15 @@ class VendorQuoteLine(models.Model):
     product_qty = fields.Float(string="Số lượng", digits="Product Unit of Measure", aggregator="max")
     product_uom_id = fields.Many2one("uom.uom", string="ĐVT")
 
-    price_unit = fields.Float(string="Đơn giá chưa VAT", digits="Product Price", aggregator="min")
-    vat = fields.Selection(VAT_SELECTION, string="VAT")
+    # Phần NCC điền: copy=False để báo giá nhân bản cho NCC khác bắt đầu trống.
+    price_unit = fields.Float(
+        string="Đơn giá chưa VAT", digits="Product Price", aggregator="min", copy=False
+    )
+    vat = fields.Selection(VAT_SELECTION, string="VAT", copy=False)
     tax_rate = fields.Float(string="% VAT", compute="_compute_tax_rate", store=True)
-    delivery_days = fields.Integer(string="Giao sau (ngày)", aggregator="min")
-    vendor_note = fields.Char(string="Ghi chú NCC")
-    unavailable = fields.Boolean(string="Không có hàng")
+    delivery_days = fields.Integer(string="Giao sau (ngày)", aggregator="min", copy=False)
+    vendor_note = fields.Char(string="Ghi chú NCC", copy=False)
+    unavailable = fields.Boolean(string="Không có hàng", copy=False)
     price_subtotal = fields.Monetary(
         string="Thành tiền chưa VAT",
         compute="_compute_price",

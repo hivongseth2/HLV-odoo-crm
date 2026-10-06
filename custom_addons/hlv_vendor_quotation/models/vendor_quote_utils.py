@@ -161,3 +161,77 @@ def match_by_product(items, candidates):
         if free.get(product_id):
             matched[item_id] = free[product_id].pop(0)
     return matched
+
+
+def rank_vendor_suggestions(coverage, order_stats, limit):
+    """Xếp hạng NCC nên hỏi giá cho một nhóm sản phẩm.
+
+    Nhận:
+    - coverage: iterable (partner_id, product_id, source) — source "po" là NCC đã từng
+      bán sản phẩm đó cho mình, "pricelist" là NCC có trong bảng giá NCC của sản phẩm.
+    - order_stats: dict partner_id → (số đơn mua đã xác nhận, ngày mua gần nhất hoặc None).
+    - limit: số NCC tối đa trả về.
+    Trả: list dict {partner_id, product_ids (set), from_pricelist (bool), order_count,
+    last_date}, xếp: phủ nhiều mặt hàng hơn → mua nhiều đơn hơn → mua gần đây hơn.
+    Không có dữ liệu → [].
+    """
+    vendors = {}
+    for partner_id, product_id, source in coverage:
+        vendor = vendors.setdefault(partner_id, {
+            "partner_id": partner_id,
+            "product_ids": set(),
+            "from_pricelist": False,
+        })
+        vendor["product_ids"].add(product_id)
+        if source == "pricelist":
+            vendor["from_pricelist"] = True
+    for vendor in vendors.values():
+        vendor["order_count"], vendor["last_date"] = order_stats.get(vendor["partner_id"], (0, None))
+
+    def sort_key(vendor):
+        last = vendor["last_date"]
+        return (-len(vendor["product_ids"]), -vendor["order_count"], -(last.toordinal() if last else 0))
+
+    return sorted(vendors.values(), key=sort_key)[:limit]
+
+
+def build_share_message(company_name, vendor_name, quote_names, item_count, deadline_text, url, password):
+    """Tin nhắn sale dán vào Zalo gửi NCC.
+
+    Nhận: tên công ty mình, tên NCC, list số báo giá, tổng số mặt hàng, hạn báo giá đã
+    định dạng ("" nếu không có hạn), link, mật khẩu (chuỗi).
+    Trả: chuỗi nhiều dòng. Một số báo giá thì nêu số; nhiều số thì gộp "N yêu cầu báo giá".
+    """
+    if len(quote_names) == 1:
+        subject = f"yêu cầu báo giá {quote_names[0]}"
+    else:
+        subject = f"{len(quote_names)} yêu cầu báo giá ({', '.join(quote_names)})"
+    lines = [
+        f"Kính gửi {vendor_name},",
+        f"{company_name} gửi {subject} — {item_count} mặt hàng.",
+    ]
+    if deadline_text:
+        lines.append(f"Hạn báo giá: {deadline_text}.")
+    lines += [
+        f"Quý công ty vui lòng điền giá tại: {url}",
+        f"Mật khẩu: {password}",
+        "Trân trọng cảm ơn!",
+    ]
+    return "\n".join(lines)
+
+
+def deadline_hint(deadline, today, urgent_days=2):
+    """Nhắc hạn báo giá cho NCC.
+
+    Nhận: ngày hạn (date hoặc None), hôm nay (date), số ngày coi là gấp.
+    Trả: (chữ, mức) với mức "over" (đã quá hạn), "urgent" (hôm nay hoặc còn <= urgent_days
+    ngày), "ok" (còn xa). Không có hạn → ("", "").
+    """
+    if not deadline:
+        return "", ""
+    days = (deadline - today).days
+    if days < 0:
+        return "Đã quá hạn", "over"
+    if days == 0:
+        return "Hết hạn hôm nay", "urgent"
+    return f"Còn {days} ngày", "urgent" if days <= urgent_days else "ok"

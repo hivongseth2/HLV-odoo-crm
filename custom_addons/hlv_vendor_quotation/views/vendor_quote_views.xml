@@ -49,8 +49,10 @@
         <field name="arch" type="xml">
             <form string="Yêu cầu báo giá NCC">
                 <header>
-                    <button name="action_send" type="object" string="Mở cho NCC báo giá" class="oe_highlight"
-                            invisible="state != 'draft'"/>
+                    <button name="action_open_vendor_wizard" type="object" string="Gợi ý &amp; gửi NCC"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_send" type="object" string="Mở cho NCC báo giá"
+                            invisible="state != 'draft' or not partner_id"/>
                     <button name="action_open_compare" type="object" string="So sánh giá" class="oe_highlight"
                             invisible="state not in ('quoted', 'done')"/>
                     <button name="action_close" type="object" string="Đóng báo giá"
@@ -74,7 +76,8 @@
                     </div>
                     <group>
                         <group>
-                            <field name="partner_id" readonly="state != 'draft'"
+                            <field name="partner_id" readonly="state != 'draft'" required="state != 'draft'"
+                                   placeholder="Để trống rồi bấm &quot;Gợi ý &amp; gửi NCC&quot;"
                                    context="{'res_partner_search_mode': 'supplier'}"/>
                             <field name="sale_order_id" readonly="state in ('done', 'cancel')"/>
                             <field name="request_id" readonly="state in ('done', 'cancel')"

@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.1.2.0",
+    "version": "18.0.1.4.0",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
-App "Báo giá NCC":
-- Sale vào "Theo nhà cung cấp" (hoặc link /odoo/bao-gia-ncc/<id>), tạo yêu cầu báo giá cho NCC —
-  gắn YCMH ngay hoặc nhập hàng tự do rồi gắn YCMH sau (mặt hàng tự ghép theo sản phẩm).
+- Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
+  danh sách theo NCC, tạo yêu cầu báo giá — gắn YCMH ngay hoặc nhập hàng tự do rồi gắn YCMH
+  sau (mặt hàng tự ghép theo sản phẩm), copy tin nhắn Zalo có link + mật khẩu.
+- App backend "Báo giá NCC" dành cho thu mua: so sánh và chọn giá.
 - Từ YCMH cũng gửi được cho nhiều NCC một lần (nút "Hỏi giá NCC").
+- Gợi ý NCC theo lịch sử mua hàng + bảng giá NCC của sản phẩm (không hiện giá mua cho sale).
+- Lối tắt trong app Mua hàng → Đơn hàng: "Báo giá NCC", "So sánh báo giá NCC".
 - Mỗi NCC có một link công khai cố định + mật khẩu, hiện mọi yêu cầu báo giá gửi NCC đó.
 - NCC nhập đơn giá chưa VAT, VAT, thời gian giao, ghi chú hoặc báo "không có hàng".
 - Thu mua (nhóm Mua hàng) so sánh theo từng mặt hàng (giá rẻ nhất tô xanh), bấm "Chọn" để ghi NCC + giá
@@ -31,11 +34,21 @@ App "Báo giá NCC":
         "views/purchase_request_views.xml",
         "wizard/vendor_quote_wizard_views.xml",
         "views/portal_templates.xml",
+        "views/sale_page_templates.xml",
         "views/menus.xml",
     ],
     "assets": {
         "web.assets_backend": [
             "hlv_vendor_quotation/static/src/scss/vendor_quote_compare.scss",
+        ],
+        # Thứ tự quan trọng: utils → ui → feature → app (app gọi hàm của các file trước).
+        "hlv_vendor_quotation.assets_sale_page": [
+            "hlv_vendor_quotation/static/src/sale_page/sale_page.css",
+            "hlv_vendor_quotation/static/src/sale_page/sale_utils.js",
+            "hlv_vendor_quotation/static/src/sale_page/sale_ui.js",
+            "hlv_vendor_quotation/static/src/sale_page/sale_quotes.js",
+            "hlv_vendor_quotation/static/src/sale_page/sale_create.js",
+            "hlv_vendor_quotation/static/src/sale_page/sale_app.js",
         ],
     },
     "installable": True,

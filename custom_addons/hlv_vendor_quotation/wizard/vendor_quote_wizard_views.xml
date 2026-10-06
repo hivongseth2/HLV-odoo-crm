@@ -5,22 +5,41 @@
         <field name="model">hlv.vendor.quote.wizard</field>
         <field name="arch" type="xml">
             <form string="Hỏi giá nhà cung cấp">
+                <field name="source_quote_id" invisible="1"/>
                 <p class="text-muted">
                     Mỗi nhà cung cấp nhận một yêu cầu báo giá trên link riêng của họ (có mật khẩu).
-                    NCC đã có yêu cầu báo giá cho YCMH này sẽ được bỏ qua.
+                    NCC đã có yêu cầu báo giá cho YCMH này được bỏ qua.
                 </p>
                 <group>
                     <group>
-                        <field name="request_id" readonly="1"/>
+                        <field name="request_id" readonly="1" invisible="not request_id"/>
                         <field name="partner_ids" widget="many2many_tags"
-                               context="{'res_partner_search_mode': 'supplier'}"/>
+                               context="{'res_partner_search_mode': 'supplier'}"
+                               placeholder="NCC không có trong gợi ý"/>
                     </group>
                     <group>
                         <field name="date_deadline"/>
                     </group>
                 </group>
+
+                <separator string="Nhà cung cấp gợi ý (theo lịch sử mua hàng)"/>
+                <p class="text-muted small">Tích "Hỏi giá" để gửi cho NCC đó. Xếp theo số mặt hàng NCC
+                    từng bán cho mình, rồi số đơn, rồi lần mua gần nhất.</p>
+                <field name="suggestion_ids" nolabel="1">
+                    <list editable="bottom" create="0" delete="0" no_open="1"
+                          decoration-bf="selected" decoration-success="selected">
+                        <field name="selected" widget="boolean_toggle"/>
+                        <field name="partner_id" readonly="1" force_save="1"/>
+                        <field name="matched_label" readonly="1" force_save="1"/>
+                        <field name="matched_products" readonly="1" force_save="1" optional="show"/>
+                        <field name="order_count" readonly="1" force_save="1"/>
+                        <field name="last_date" readonly="1" force_save="1"/>
+                        <field name="from_pricelist" readonly="1" force_save="1" optional="show"/>
+                    </list>
+                </field>
+
                 <field name="note" placeholder="Lời nhắn hiện ở đầu trang báo giá của NCC (thời gian giao mong muốn, quy cách...)"/>
-                <field name="request_line_ids">
+                <field name="request_line_ids" invisible="source_quote_id">
                     <list>
                         <field name="product_id"/>
                         <field name="name"/>
@@ -29,7 +48,7 @@
                     </list>
                 </field>
                 <footer>
-                    <button name="action_create_quotes" type="object" string="Tạo &amp; lấy link gửi NCC"
+                    <button name="action_create_quotes" type="object" string="Gửi &amp; lấy link cho NCC"
                             class="btn-primary"/>
                     <button string="Huỷ" special="cancel" class="btn-secondary"/>
                 </footer>

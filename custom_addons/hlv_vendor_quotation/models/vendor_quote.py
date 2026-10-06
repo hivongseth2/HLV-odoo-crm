@@ -46,9 +46,8 @@ class VendorQuote(models.Model):
     sale_order_id = fields.Many2one(
         "sale.order", string="Đơn bán liên quan", index=True, tracking=True
     )
-    partner_id = fields.Many2one(
-        "res.partner", string="Nhà cung cấp", required=True, index=True, tracking=True
-    )
+    # Không bắt buộc lúc nháp: sale nhập mặt hàng trước rồi mới chọn NCC từ gợi ý.
+    partner_id = fields.Many2one("res.partner", string="Nhà cung cấp", index=True, tracking=True)
     access_id = fields.Many2one(
         "hlv.vendor.quote.access",
         string="Link NCC",
@@ -70,7 +69,7 @@ class VendorQuote(models.Model):
     currency_id = fields.Many2one(related="company_id.currency_id")
     date_deadline = fields.Date(string="Hạn báo giá", tracking=True)
     note = fields.Text(string="Lời nhắn gửi NCC")
-    vendor_note = fields.Text(string="Ghi chú của NCC")
+    vendor_note = fields.Text(string="Ghi chú của NCC", copy=False)
     submit_date = fields.Datetime(string="NCC gửi lúc", readonly=True, copy=False)
     state = fields.Selection(
         [
@@ -118,7 +117,7 @@ class VendorQuote(models.Model):
     @api.constrains("request_id", "partner_id", "state")
     def _check_one_open_quote_per_vendor(self):
         """Hai báo giá mở của cùng NCC cho cùng YCMH làm bảng so sánh đếm trùng NCC."""
-        for quote in self.filtered(lambda q: q.request_id and q.state != "cancel"):
+        for quote in self.filtered(lambda q: q.request_id and q.access_id and q.state != "cancel"):
             duplicate = self.search_count([
                 ("id", "!=", quote.id),
                 ("request_id", "=", quote.request_id.id),
@@ -132,6 +131,12 @@ class VendorQuote(models.Model):
                     vendor=quote.partner_id.commercial_partner_id.display_name,
                     request=quote.request_id.name,
                 ))
+
+    @api.constrains("partner_id", "state")
+    def _check_vendor_when_sent(self):
+        for quote in self:
+            if quote.state != "draft" and not quote.partner_id:
+                raise ValidationError(_("%s chưa chọn nhà cung cấp.", quote.name))
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -226,6 +231,39 @@ class VendorQuote(models.Model):
             for index, line in enumerate(request_lines.sudo(), start=1)
         ]
 
+    @api.model
+    def _vendors_with_open_quote(self, request):
+        """Công ty NCC đã có báo giá chưa huỷ cho YCMH này. Không có YCMH → rỗng."""
+        if not request:
+            return self.env["res.partner"]
+        return request.vendor_quote_ids.filtered(lambda q: q.state != "cancel").access_id.partner_id
+
+    @api.model
+    def _create_and_send(self, vendors, line_vals, request=None, date_deadline=False, note=False):
+        """Mỗi NCC một báo giá cùng danh sách mặt hàng, mở ngay cho NCC báo giá.
+
+        Dùng chung cho wizard backend và trang /hoi-gia-ncc của sale. NCC đã có báo giá mở
+        cho cùng YCMH bị bỏ qua (bảng so sánh sẽ đếm trùng NCC).
+        """
+        if not line_vals:
+            raise UserError(_("Chọn ít nhất một mặt hàng cần báo giá."))
+        vendors = vendors.commercial_partner_id - self._vendors_with_open_quote(request)
+        if not vendors:
+            raise UserError(_(
+                "Chưa chọn nhà cung cấp nào mới — NCC đã có yêu cầu báo giá cho YCMH này được bỏ qua."
+            ))
+        return self.create([
+            {
+                "request_id": request.id if request else False,
+                "partner_id": vendor.id,
+                "date_deadline": date_deadline,
+                "note": note,
+                "state": "sent",
+                "line_ids": [Command.create(vals) for vals in line_vals],
+            }
+            for vendor in vendors
+        ])
+
     # ------------------------------------------------------------------
     # Nút thao tác nội bộ
     # ------------------------------------------------------------------
@@ -233,7 +271,24 @@ class VendorQuote(models.Model):
         for quote in self:
             if not quote.line_ids:
                 raise UserError(_("%s chưa có mặt hàng nào.", quote.name))
+            if not quote.partner_id:
+                raise UserError(_(
+                    "%s chưa chọn nhà cung cấp — bấm \"Gợi ý & gửi NCC\" để chọn.", quote.name
+                ))
         self.write({"state": "sent"})
+
+    def action_open_vendor_wizard(self):
+        self.ensure_one()
+        if not self.line_ids:
+            raise UserError(_("Thêm mặt hàng trước để hệ thống gợi ý nhà cung cấp."))
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Gợi ý & gửi nhà cung cấp"),
+            "res_model": "hlv.vendor.quote.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_source_quote_id": self.id},
+        }
 
     def action_close(self):
         self.write({"state": "done"})

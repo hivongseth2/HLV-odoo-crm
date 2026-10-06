@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- App riêng (không nằm trong app Yêu cầu mua hàng): sale tạo yêu cầu báo giá theo NCC,
-         thu mua so sánh và chọn — hai nhóm đều phải thấy. -->
+    <!-- App backend cho thu mua (so sánh, chọn giá). Sale làm việc ở trang /hoi-gia-ncc,
+         không vào backend — nên app không mở cho nhóm Bán hàng. -->
     <menuitem id="menu_vendor_quote_root"
               name="Báo giá NCC"
               web_icon="hlv_vendor_quotation,static/description/icon.png"
               sequence="23"
-              groups="sales_team.group_sale_salesman,purchase.group_purchase_user,purchase_request.group_purchase_request_user"/>
+              groups="purchase.group_purchase_user,purchase_request.group_purchase_request_user"/>
     <menuitem id="menu_vendor_quote_access"
               name="Theo nhà cung cấp"
               parent="menu_vendor_quote_root"
@@ -22,4 +22,17 @@
               parent="menu_vendor_quote_root"
               action="action_vendor_quote_compare"
               sequence="30"/>
+
+    <!-- Lối tắt trong app Mua hàng → Đơn hàng, cạnh "Yêu cầu mua hàng" của purchase_request.
+         Menu cha lấy đúng xmlid mà purchase_request (OCA, trong repo) đang dùng. -->
+    <menuitem id="menu_purchase_vendor_quote"
+              name="Báo giá NCC"
+              parent="purchase.menu_procurement_management"
+              action="action_vendor_quote"
+              sequence="40"/>
+    <menuitem id="menu_purchase_vendor_quote_compare"
+              name="So sánh báo giá NCC"
+              parent="purchase.menu_procurement_management"
+              action="action_vendor_quote_compare"
+              sequence="41"/>
 </odoo>

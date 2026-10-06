@@ -12,15 +12,15 @@ PASSWORD_LENGTH = 6
 MAX_LOGIN_ATTEMPTS = 5
 LOCK_MINUTES = 15
 PORTAL_ROUTE = "/bao-gia"
-# Trùng `path` của action_vendor_quote_access → /odoo/bao-gia-ncc/<id> mở thẳng trang quản lý NCC.
-MANAGE_PATH = "bao-gia-ncc"
+# Trang quản lý của sale (controllers/sale_page.py); ?ncc=<id> mở sẵn NCC đó.
+SALE_PAGE_ROUTE = "/hoi-gia-ncc"
 
 
 class VendorQuoteAccess(models.Model):
     """Một NCC trong luồng báo giá.
 
     Hai mặt: link công khai cố định cho NCC (hiện mọi yêu cầu báo giá gửi NCC đó), và
-    trang quản lý nội bộ cho sale — mở NCC, tạo yêu cầu báo giá, lấy link gửi NCC.
+    link quản lý nội bộ cho sale — trang /hoi-gia-ncc mở sẵn NCC này.
     """
 
     _name = "hlv.vendor.quote.access"
@@ -75,7 +75,7 @@ class VendorQuoteAccess(models.Model):
         for rec in self:
             base = rec.get_base_url()
             rec.portal_url = f"{base}{PORTAL_ROUTE}/{rec.access_token}"
-            rec.manage_url = f"{base}/odoo/{MANAGE_PATH}/{rec.id}" if rec.id else False
+            rec.manage_url = f"{base}{SALE_PAGE_ROUTE}?ncc={rec.id}" if rec.id else False
 
     @api.depends("quote_ids.state")
     def _compute_quote_counts(self):

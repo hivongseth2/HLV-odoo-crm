@@ -12,7 +12,7 @@ from odoo.http import request
 from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import VAT_SELECTION
-from ..models.vendor_quote_utils import format_vn_number, paginate, parse_vn_number
+from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
 
 SESSION_KEY = "hlv_vendor_quote_logins"
 VENDOR_NOTE_MAX = 2000
@@ -54,6 +54,7 @@ class VendorQuotePortal(http.Controller):
         return self._render("hlv_vendor_quotation.portal_quote_list", access, {
             "quotes": quotes,
             "statuses": {quote.id: STATUS_DISPLAY[quote._vendor_status()] for quote in quotes},
+            "hints": {quote.id: deadline_hint(quote.date_deadline, Quote._vendor_today()) for quote in quotes},
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
                 for key in ("all",) + VENDOR_STATUSES
@@ -121,6 +122,9 @@ class VendorQuotePortal(http.Controller):
         values.update(
             status=STATUS_DISPLAY[quote._vendor_status()],
             editable=quote._is_open_for_vendor(),
+            hint=deadline_hint(quote.date_deadline, quote._vendor_today()),
+            contact=quote.user_id,
+            company=quote.company_id or request.env.company.sudo(),
         )
         return self._render("hlv_vendor_quotation.portal_quote_form", access, values)
 
