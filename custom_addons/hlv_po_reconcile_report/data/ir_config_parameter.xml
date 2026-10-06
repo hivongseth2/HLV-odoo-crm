@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tạo misa_po_reconcile_emails / misa_po_reconcile_days nếu chưa có.
+         Không dùng <record>: key unique, sẽ lỗi trên DB đã tạo tay param này. -->
+    <function model="hlv.po.reconcile.report" name="_init_default_params"/>
+</odoo>
