@@ -10,6 +10,7 @@
                     <field name="priority" widget="handle"/>
                     <field name="product_id"/>
                     <field name="sku"/>
+                    <field name="config_id" optional="show"/>
                     <field name="sync_type"/>
                     <field name="old_value" optional="show"/>
                     <field name="new_value" optional="show"/>
@@ -37,6 +38,7 @@
                             <group>
                                 <field name="product_id"/>
                                 <field name="sku"/>
+                                <field name="config_id"/>
                                 <field name="sync_type"/>
                                 <field name="old_value"/>
                                 <field name="new_value"/>
@@ -69,6 +71,7 @@
                     <filter string="Lỗi" name="failed" domain="[('status', '=', 'failed')]"/>
                     <group expand="0" string="Nhóm theo">
                         <filter string="Trạng thái" name="group_status" context="{'group_by': 'status'}"/>
+                        <filter string="Web" name="group_config" context="{'group_by': 'config_id'}"/>
                     </group>
                 </search>
             </field>

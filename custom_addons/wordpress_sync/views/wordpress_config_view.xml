@@ -13,6 +13,19 @@
                                 <span class="o_stat_text">Test kết nối</span>
                             </div>
                         </button>
+                        <button name="action_open_links" type="object" class="oe_stat_button" icon="fa-link">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_value"><field name="link_count"/></span>
+                                <span class="o_stat_text">Sản phẩm web</span>
+                            </div>
+                        </button>
+                        <button name="action_open_links" type="object" class="oe_stat_button" icon="fa-chain-broken"
+                                invisible="not link_issue_count">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_value"><field name="link_issue_count"/></span>
+                                <span class="o_stat_text">Chưa khớp mã</span>
+                            </div>
+                        </button>
                     </div>
 
                     <widget name="web_ribbon" title="Tắt" bg_color="text-bg-danger" invisible="active"/>
@@ -31,6 +44,20 @@
                         <group string="API Credentials">
                             <field name="wc_key" password="True"/>
                             <field name="wc_secret" password="True"/>
+                        </group>
+                    </group>
+
+                    <group string="Liên kết sản phẩm">
+                        <group>
+                            <field name="link_scan_date"/>
+                            <div colspan="2">
+                                <button name="action_scan_links" type="object" string="Quét sản phẩm web"
+                                        class="btn-secondary" icon="fa-refresh"/>
+                            </div>
+                        </group>
+                        <group string="Webhook WooCommerce">
+                            <field name="webhook_url" widget="CopyClipboardChar"/>
+                            <field name="webhook_secret" password="True"/>
                         </group>
                     </group>
 
@@ -92,6 +119,7 @@
                 <field name="wc_domain"/>
                 <field name="active"/>
                 <field name="last_sync_date"/>
+                <field name="link_scan_date"/>
             </list>
         </field>
     </record>

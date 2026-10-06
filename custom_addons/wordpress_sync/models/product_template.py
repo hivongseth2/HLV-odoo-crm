@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
-from .wordpress_api import PriceSyncService, StockSyncService
+from .wordpress_sync_service import StockSyncService
 from datetime import datetime
 import logging
 
@@ -35,6 +35,11 @@ class ProductTemplate(models.Model):
         string='Giá bán trong combo',
         default=0.0,
         help='Giá sử dụng khi tính giá combo (nếu = 0, sử dụng giá bán thường)'
+    )
+
+    x_wp_link_ids = fields.One2many(
+        'wordpress.product.link', 'product_id', string='Có trên web',
+        help='Các sản phẩm trên từng web đang khớp mã với sản phẩm này'
     )
 
     computed_combo_selling_price = fields.Float(
@@ -230,12 +235,8 @@ class ProductTemplate(models.Model):
 
         # 2. Auto-sync to WordPress if enabled
         if has_price_change and not self.env.context.get('skip_wordpress_sync'):
-            if self._is_auto_sync_enabled():
-                _logger.info(f"Auto-sync enabled. Queuing sync for {self.name}...")
-                self._auto_sync_to_wordpress(price_queue_values=price_queue_values)
-            else:
-                 _logger.info(f"Auto-sync disabled or config missing.")
-                
+            self._auto_sync_to_wordpress(price_queue_values=price_queue_values)
+
         # 3. Check for manual stock status change
         if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
              _logger.info(f"Manual Stock Status change detected for {self.name}. Queuing sync...")
@@ -430,12 +431,20 @@ class ProductTemplate(models.Model):
     # ===========================================
     # PRIVATE METHODS
     # ===========================================
-    def _is_auto_sync_enabled(self):
-        """Kiểm tra auto-sync có được bật không"""
-        config = self._get_wordpress_config()
-        if config:
-            return config.auto_sync_price
-        return False
+    def _wordpress_target_configs(self):
+        """
+        Các web cần đẩy giá/kho của sản phẩm này.
+
+        Web đã quét liên kết: chỉ web đang có sản phẩm này, nên ~19k sản phẩm không bán
+        online không đẻ job lỗi "không tìm thấy". Web chưa quét lần nào thì chưa biết,
+        vẫn đưa vào để sync tìm theo SKU như cách cũ.
+        """
+        self.ensure_one()
+        unscanned = self.env['wordpress.config'].search([
+            ('active', '=', True),
+            ('link_scan_date', '=', False),
+        ])
+        return (self.x_wp_link_ids.config_id | unscanned).filtered('active')
 
     def _get_wordpress_config(self):
         """Lấy config WordPress để đồng bộ"""
@@ -487,18 +496,15 @@ class ProductTemplate(models.Model):
             return str(value)
 
     def _auto_sync_to_wordpress(self, price_queue_values=None):
-        """Tự động đồng bộ giá lên WordPress: Create Queue Jobs"""
-        config = self._get_wordpress_config()
-        if not config:
-            _logger.warning("Auto-sync: No active WordPress configuration found")
-            return
-
-        # Create Queue Jobs for each product
+        """Tự động đồng bộ giá: tạo job cho từng web có sản phẩm này và đang bật tự động đồng bộ giá"""
         QueueModel = self.env['wordpress.sync.queue']
-        
+
         for product in self:
-            # Check SKU
             if not product.default_code:
+                continue
+
+            configs = product._wordpress_target_configs().filtered('auto_sync_price')
+            if not configs:
                 continue
 
             queue_values = (price_queue_values or {}).get(product.id, {})
@@ -508,11 +514,9 @@ class ProductTemplate(models.Model):
                 priority=10,
                 old_value=queue_values.get('old_value'),
                 new_value=queue_values.get('new_value'),
+                configs=configs,
             )
-            _logger.info(f"Queued sync for product {product.name} (SKU: {product.default_code})")
-            
-            # Post internal note about queued status? 
-            # Maybe too spammy. Let's just create job.
+            _logger.info(f"Queued sync for product {product.name} (SKU: {product.default_code}) to {configs.mapped('name')}")
 
     def _post_sync_note(self, product, result, success=True):
         """Tạo internal note trên product sau khi sync"""
