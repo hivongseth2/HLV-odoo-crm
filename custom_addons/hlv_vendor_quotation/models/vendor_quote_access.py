@@ -3,6 +3,7 @@ import hmac
 import secrets
 
 from odoo import _, api, fields, models
+from odoo.osv import expression
 
 from .vendor_quote_utils import is_login_locked, next_failed_count, session_fingerprint
 
@@ -72,13 +73,34 @@ class VendorQuoteAccess(models.Model):
 
     @api.model
     def _vendor_partner_domain(self):
-        """Ai được coi là NCC: liên hệ gốc (không có cha) có xếp hạng NCC hoặc gắn phân loại
-        "Nhà cung cấp" (hlv_contact_refine, code "vendor"). Nhiều NCC cũ chưa từng có đơn
-        mua trong Odoo nên supplier_rank = 0 — chỉ có phân loại mới bắt được họ."""
-        return [
-            ("parent_id", "=", False),
-            "|", ("supplier_rank", ">", 0), ("hlv_filter_tag_ids.code", "=", "vendor"),
-        ]
+        """Ai được coi là NCC trên trang hỏi giá — nơi DUY NHẤT định nghĩa điều này.
+
+        Công ty gốc (hlv_partner_type = root_company: không có cha, là công ty) có xếp hạng
+        NCC hoặc gắn phân loại "Nhà cung cấp" (hlv_contact_refine, code "vendor"). Nhiều NCC
+        cũ chưa từng có đơn mua trong Odoo nên supplier_rank = 0 — chỉ phân loại mới bắt
+        được họ. Liên hệ con / cá nhân bị loại vì sale chọn nhầm người liên hệ sẽ ra hai
+        link báo giá cho cùng một công ty.
+        Cộng thêm NCC đã từng nhận yêu cầu báo giá, để báo giá cũ không mất NCC khi phân loại
+        của họ bị đổi.
+        """
+        quoted_ids = self.with_context(active_test=False).search([]).partner_id.ids
+        return expression.OR([
+            [
+                ("hlv_partner_type", "=", "root_company"),
+                "|", ("supplier_rank", ">", 0), ("hlv_filter_tag_ids.code", "=", "vendor"),
+            ],
+            [("id", "in", quoted_ids)],
+        ])
+
+    @api.model
+    def _vendor_search_domain(self, term):
+        """NCC khớp chữ gõ theo tên, mã liên hệ hoặc MST. term rỗng → mọi NCC."""
+        domain = self._vendor_partner_domain()
+        if not term:
+            return domain
+        return expression.AND([domain, [
+            "|", "|", ("name", "ilike", term), ("ref", "ilike", term), ("vat", "ilike", term),
+        ]])
 
     @api.depends("access_token", "partner_id")
     def _compute_urls(self):

@@ -233,7 +233,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindPicker("hq-partner-search", "hq-partner-results", function (term) {
       return HQ.rpc("/api/hoi-gia-ncc/partners", { search: term }).then(function (r) { return r.partners; });
     }, function (p) {
-      return esc(p.name);
+      return esc(p.name) + (p.vat ? ' <span class="hq-muted">· MST ' + esc(p.vat) + "</span>" : "");
     }, function (partner) {
       if (!isChosen(partner.id)) {
         toggleVendor(partner);

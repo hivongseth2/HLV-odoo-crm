@@ -159,9 +159,13 @@ a { color: var(--vq-accent); }
 .vq-line-na td { background: #f9fafb; color: var(--vq-muted); }
 .vq-line-na .vq-line-name { text-decoration: line-through; }
 
-.vq-form-foot { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; margin-top: 24px; align-items: start; }
-.vq-general-note { display: block; }
-.vq-summary { margin: 0; background: var(--vq-surface); border: 1px solid var(--vq-line); padding: 6px 20px; }
+/* Hai cột cùng một hàng nhãn + một khối cao bằng nhau: ô ghi chú và bảng tổng tiền thẳng
+   mép trên lẫn mép dưới. */
+.vq-form-foot { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; margin-top: 24px; align-items: stretch; }
+.vq-general-note, .vq-summary-col { display: flex; flex-direction: column; }
+.vq-general-note textarea { flex: 1 1 auto; min-height: 110px; resize: vertical; }
+.vq-summary { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; margin: 0;
+    background: var(--vq-surface); border: 1px solid var(--vq-line-strong); border-radius: 6px; padding: 4px 20px; }
 .vq-summary div { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--vq-line); }
 .vq-summary div:last-child { border-bottom: 0; }
 .vq-summary dt { color: var(--vq-muted); }

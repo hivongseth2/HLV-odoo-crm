@@ -125,19 +125,20 @@ window.HlvQuote = window.HlvQuote || {};
   function renderQuotes(quotes) {
     var body = HQ.$("hq-quote-list");
     if (!quotes.length) {
-      body.innerHTML = '<tr><td colspan="7" class="hq-empty">Không có yêu cầu báo giá nào. ' +
+      body.innerHTML = '<tr><td colspan="8" class="hq-empty">Không có yêu cầu báo giá nào. ' +
         'Bấm "Hỏi giá NCC" để gửi yêu cầu.</td></tr>';
       return;
     }
     body.innerHTML = quotes.map(function (q) {
-      var refs = [q.request_name, q.sale_order || q.origin].filter(Boolean).map(esc).join(" · ");
       var items = q.state === "quoted" || q.state === "done"
         ? q.offered_count + "/" + q.line_count + " có giá"
         : q.line_count + " mặt hàng";
       return '<tr class="hq-row" data-quote="' + q.id + '">' +
         '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span></td>" +
         '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.vendor_name) + "</span></td>" +
-        '<td class="hq-muted">' + (refs || "—") + "</td>" +
+        '<td class="hq-nowrap hq-num">' + esc(q.request_name || "—") + "</td>" +
+        '<td class="hq-nowrap hq-num">' + esc(q.sale_order || q.origin || "—") +
+        (q.sale_code ? '<div class="hq-muted">' + esc(q.sale_code) + "</div>" : "") + "</td>" +
         '<td class="hq-nowrap">' + items +
         (q.selected_count ? '<div class="hq-muted">thu mua đã chọn ' + q.selected_count + "</div>" : "") + "</td>" +
         '<td class="hq-nowrap hq-num">' + esc(q.deadline || "—") + "</td>" +
@@ -213,7 +214,7 @@ window.HlvQuote = window.HlvQuote || {};
       esc(q.state_label) + "</span></h2></div>" +
       '<button type="button" class="btn-close" data-close="drawer" aria-label="Đóng"></button></div>' +
       '<div class="hq-facts">' +
-      fact("YCMH", q.request_name || "Chưa gắn") + fact("Đơn bán", q.sale_order || q.origin) +
+      fact("YCMH", q.request_name || "Chưa gắn") + fact("Đơn bán", q.sale_order || q.origin) + fact("Mã sale", q.sale_code) +
       fact("Hạn báo giá", q.deadline) + fact("NCC gửi lúc", q.submit_date) + fact("Người hỏi giá", q.user_name) +
       "</div>" +
       (q.share_message ? '<div class="hq-share"><div class="hq-share-head"><b>Tin nhắn gửi NCC</b>' +

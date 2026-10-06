@@ -85,21 +85,16 @@ class VendorQuoteSalePage(http.Controller):
             if access:
                 counts[access.partner_id.id][state] = count
 
-        # NCC đã từng nhận yêu cầu báo giá cũng tính là NCC, dù chưa gắn phân loại.
-        vendor_domain = expression.OR([
-            Access._vendor_partner_domain(),
-            [("id", "in", Access.with_context(active_test=False).search([]).partner_id.ids)],
-        ])
         search = (search or "").strip()
         Partner = env["res.partner"]
         if search:
-            partners = Partner.search(expression.AND([vendor_domain, [
-                "|", "|", ("name", "ilike", search), ("ref", "ilike", search), ("vat", "ilike", search),
-            ]]), order="supplier_rank desc, name", limit=VENDOR_LIMIT)
+            partners = Partner.search(
+                Access._vendor_search_domain(search), order="supplier_rank desc, name", limit=VENDOR_LIMIT,
+            )
         else:
             quoted = Partner.browse(list(counts)).exists()
             partners = quoted | Partner.search(
-                expression.AND([vendor_domain, [("id", "not in", quoted.ids)]]),
+                expression.AND([Access._vendor_partner_domain(), [("id", "not in", quoted.ids)]]),
                 order="supplier_rank desc, name", limit=max(VENDOR_LIMIT - len(quoted), 0),
             )
         include = Partner.browse(_to_int(include_id)).exists()
@@ -195,10 +190,11 @@ class VendorQuoteSalePage(http.Controller):
         if not search:
             return {"partners": []}
         partners = request.env["res.partner"].search(
-            [("parent_id", "=", False), ("name", "ilike", search)],
+            request.env["hlv.vendor.quote.access"]._vendor_search_domain(search),
             order="supplier_rank desc, name", limit=SEARCH_LIMIT,
         )
-        return {"partners": [{"id": p.id, "name": p.display_name} for p in partners]}
+        # Kèm MST: danh bạ có nhiều công ty trùng tên, chỉ nhìn tên thì không biết chọn ai.
+        return {"partners": [{"id": p.id, "name": p.display_name, "vat": p.vat or ""} for p in partners]}
 
     @http.route(f"{API}/suggest", type="json", auth="user", methods=["POST"])
     def api_suggest(self, product_ids=None, request_id=None, **kw):
@@ -260,15 +256,22 @@ class VendorQuoteSalePage(http.Controller):
         search = (search or "").strip()
         if not search:
             return []
-        return [
-            "|", "|", "|", "|", "|",
-            ("name", "ilike", search),
-            ("partner_id", "ilike", search),
-            ("request_id.name", "ilike", search),
-            ("origin", "ilike", search),
-            ("sale_order_id.name", "ilike", search),
-            ("line_ids.product_id", "ilike", search),
+        domains = [
+            [("name", "ilike", search)],
+            [("partner_id", "ilike", search)],
+            [("request_id.name", "ilike", search)],
+            [("origin", "ilike", search)],
+            [("sale_order_id.name", "ilike", search)],
+            [("line_ids.product_id", "ilike", search)],
+            # Người yêu cầu trên YCMH, dạng "TÊN (MÃ SALE)".
+            [("request_id.x_misa_requested_by", "ilike", search)],
         ]
+        if payload.SALE_CODE_FIELD in request.env["sale.order"]._fields:
+            domains += [
+                [(f"sale_order_id.{payload.SALE_CODE_FIELD}", "ilike", search)],
+                [(f"request_id.sale_order_id.{payload.SALE_CODE_FIELD}", "ilike", search)],
+            ]
+        return expression.OR(domains)
 
     def _status_domain(self, status):
         if status in ("waiting", "quoted", "expired"):

@@ -149,6 +149,7 @@ class VendorQuote(models.Model):
                 vals["access_id"] = Access._get_for_partner(Partner.browse(vals["partner_id"])).id
         quotes = super().create(vals_list)
         quotes.filtered("request_id")._link_request_lines()
+        quotes._fill_sale_order_from_request()
         return quotes
 
     def write(self, vals):
@@ -164,7 +165,15 @@ class VendorQuote(models.Model):
         result = super().write(vals)
         if "request_id" in vals or "line_ids" in vals:
             self._link_request_lines()
+        if "request_id" in vals:
+            self._fill_sale_order_from_request()
         return result
+
+    def _fill_sale_order_from_request(self):
+        """Đơn bán lấy theo YCMH khi báo giá chưa có. Trang sale tạo báo giá không qua
+        onchange, nên không làm ở đây thì báo giá không tìm được theo đơn bán / mã sale."""
+        for quote in self.filtered(lambda q: not q.sale_order_id and q.request_id.sale_order_id):
+            quote.sale_order_id = quote.request_id.sale_order_id
 
     @api.onchange("request_id")
     def _onchange_request_id(self):

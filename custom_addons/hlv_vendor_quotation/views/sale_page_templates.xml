@@ -41,7 +41,7 @@
                     <div class="hq-toolbar">
                         <label class="hq-sr-only" for="hq-search">Tìm yêu cầu báo giá</label>
                         <input type="search" id="hq-search" class="hq-input hq-input-wide"
-                               placeholder="Tìm số báo giá, NCC, YCMH, đơn bán, mặt hàng…"/>
+                               placeholder="Tìm số báo giá, NCC, YCMH, đơn bán, mã sale, mặt hàng…"/>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" id="hq-mine" checked="checked"/>
                             <label class="form-check-label hq-muted" for="hq-mine">Chỉ yêu cầu của tôi</label>
@@ -83,7 +83,8 @@
                                             <tr>
                                                 <th>Số báo giá</th>
                                                 <th>Nhà cung cấp</th>
-                                                <th>YCMH · Đơn bán</th>
+                                                <th>YCMH</th>
+                                                <th>Đơn bán</th>
                                                 <th>Mặt hàng</th>
                                                 <th>Hạn</th>
                                                 <th>Trạng thái</th>
@@ -91,7 +92,7 @@
                                             </tr>
                                         </thead>
                                         <tbody id="hq-quote-list">
-                                            <tr><td colspan="7" class="hq-empty">Đang tải…</td></tr>
+                                            <tr><td colspan="8" class="hq-empty">Đang tải…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>

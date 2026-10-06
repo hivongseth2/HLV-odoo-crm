@@ -310,10 +310,13 @@
                                       placeholder="Điều kiện thanh toán, giao hàng, hiệu lực báo giá"
                                       t-esc="post.get('vendor_note') if post else (quote.vendor_note or '')"/>
                         </label>
-                        <dl class="vq-summary">
-                            <div><dt>Tổng chưa VAT</dt><dd data-vq-total-untaxed="1">—</dd></div>
-                            <div class="vq-summary-total"><dt>Tổng sau VAT</dt><dd data-vq-total="1">—</dd></div>
-                        </dl>
+                        <div class="vq-summary-col">
+                            <span class="vq-label">Tổng tiền</span>
+                            <dl class="vq-summary">
+                                <div><dt>Tổng chưa VAT</dt><dd data-vq-total-untaxed="1">—</dd></div>
+                                <div class="vq-summary-total"><dt>Tổng sau VAT</dt><dd data-vq-total="1">—</dd></div>
+                            </dl>
+                        </div>
                     </div>
 
                     <div t-if="editable" class="vq-submit-bar">

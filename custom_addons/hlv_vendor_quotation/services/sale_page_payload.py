@@ -19,6 +19,8 @@ STATE_LABELS = {
 }
 VAT_LABELS = dict(VAT_SELECTION)
 DATE_FMT = "%d/%m/%Y"
+# Mã sale MISA trên đơn bán — cùng field /giao-hang và /sale_plan dùng để biết đơn của ai.
+SALE_CODE_FIELD = "x_studio_misa_saler_code"
 
 
 def _date_text(value):
@@ -31,6 +33,13 @@ def _datetime_text(record, value):
     return fields.Datetime.context_timestamp(record, value).strftime("%H:%M " + DATE_FMT)
 
 
+def sale_code(order):
+    """Mã sale MISA của đơn bán (field Studio, không phải bản cài nào cũng có). Không có → ""."""
+    if not order or SALE_CODE_FIELD not in order._fields:
+        return ""
+    return (order[SALE_CODE_FIELD] or "").strip()
+
+
 def quote_state(quote):
     """(mã, nhãn) trạng thái sale thấy; báo giá mở mà quá hạn thì báo "Quá hạn"."""
     if quote.state in ("sent", "quoted") and quote._vendor_status() == "expired":
@@ -41,6 +50,9 @@ def quote_state(quote):
 def quote_summary(quote):
     state, state_label = quote_state(quote)
     lines = quote.line_ids
+    # Đơn bán có thể là của sale khác — record rule "chỉ đơn của mình" sẽ chặn đọc. Ở đây
+    # chỉ hiện số đơn và mã sale, nên đọc bằng sudo.
+    order = (quote.sale_order_id or quote.request_id.sale_order_id).sudo()
     return {
         "id": quote.id,
         "name": quote.name,
@@ -48,7 +60,8 @@ def quote_summary(quote):
         "vendor_name": quote.partner_id.display_name or "",
         "request_name": quote.request_id.name or "",
         "origin": quote.origin or "",
-        "sale_order": quote.sale_order_id.name or "",
+        "sale_order": order.name or "",
+        "sale_code": sale_code(order),
         "user_name": quote.user_id.name or "",
         "deadline": _date_text(quote.date_deadline),
         "submit_date": _datetime_text(quote, quote.submit_date),
@@ -121,6 +134,7 @@ def vendor_summary(partner, access, counts):
     return {
         "id": partner.id,
         "name": partner.display_name,
+        "vat": partner.vat or "",
         "waiting": counts.get("sent", 0),
         "quoted": counts.get("quoted", 0),
         "total": sum(counts.values()),
@@ -134,7 +148,7 @@ def request_summary(request):
         "id": request.id,
         "name": request.name,
         "origin": request.origin or "",
-        "sale_order": request.sale_order_id.name or "",
+        "sale_order": request.sale_order_id.sudo().name or "",
         "requested_by": request.x_misa_requested_by or request.requested_by.name or "",
         "date": _date_text(request.date_start),
         "state": request.state,
