@@ -68,7 +68,7 @@ window.HlvQuote = window.HlvQuote || {};
             '<td><img class="hq-thumb" loading="lazy" src="/web/image/product.product/' + l.product_id +
             '/image_128" alt=""/></td>' +
             '<td><div class="hq-strong">' + esc(l.name || l.product) + "</div>" +
-            (l.request_line_id ? '<span class="hq-badge hq-badge-blue">Từ YCMH</span>' : "") + "</td>" +
+            (l.request_line_id ? '<span class="hq-tag hq-tag-mine">Từ YCMH</span>' : "") + "</td>" +
             '<td class="hq-num"><input type="number" min="0" step="any" class="hq-qty" data-line="' +
             index + '" value="' + l.qty + '"/></td>' +
             "<td>" + esc(l.uom) + "</td>" +
@@ -196,7 +196,7 @@ window.HlvQuote = window.HlvQuote || {};
       results.map(function (r, index) {
         return '<div class="hq-result"><div class="hq-share-head"><b>' + esc(r.vendor_name) + "</b>" +
           '<span class="hq-muted">' + esc(r.name) + "</span><span class=\"hq-spacer\"></span>" +
-          '<button type="button" class="hq-btn hq-btn-sm hq-btn-primary" data-copy-result="' + index +
+          '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-copy-result="' + index +
           '">Copy tin nhắn</button></div>' +
           '<pre class="hq-share-text" id="hq-result-' + index + '">' + esc(r.share_message) + "</pre></div>";
       }).join("") +

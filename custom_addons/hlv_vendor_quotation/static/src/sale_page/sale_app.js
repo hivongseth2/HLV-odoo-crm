@@ -12,7 +12,9 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.selectVendor(+el.dataset.vendor || null);
     });
     HQ.on(app, "click", "[data-status]", function (el) {
-      S.status = el.dataset.status;
+      // Bấm lại ô số đang chọn thì bỏ lọc.
+      var again = el.classList.contains("hq-kpi") && S.status === el.dataset.status;
+      S.status = again ? "all" : el.dataset.status;
       S.page = 1;
       HQ.loadQuotes();
     });
@@ -40,9 +42,6 @@ window.HlvQuote = window.HlvQuote || {};
     });
 
     HQ.$("hq-new").addEventListener("click", function () { HQ.openCreate(null); });
-    HQ.$("hq-toggle-side").addEventListener("click", function () {
-      document.body.classList.toggle("hq-side-open");
-    });
     HQ.$("hq-mine").addEventListener("change", function (event) {
       S.mine = event.target.checked;
       S.page = 1;
@@ -72,7 +71,6 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindCreateEvents();
     HQ.rpc("/api/hoi-gia-ncc/config", {}).then(function (config) {
       S.config = config;
-      HQ.$("hq-user").textContent = config.user_name || "";
       return Promise.all([HQ.loadVendors(), HQ.loadQuotes()]);
     }).catch(function (err) {
       HQ.showAlert("hq-alert", err.message);

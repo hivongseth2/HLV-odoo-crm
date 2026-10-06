@@ -49,6 +49,7 @@ class VendorQuoteSalePage(http.Controller):
     @http.route(PAGE_ROUTE, type="http", auth="user", methods=["GET"])
     def sale_page(self, ncc=None, **kw):
         return request.render("hlv_vendor_quotation.sale_page", {
+            "user_name": request.env.user.name,
             "allowed": self._allowed(),
             "initial_vendor_id": _to_int(ncc),
         })
@@ -58,7 +59,6 @@ class VendorQuoteSalePage(http.Controller):
         self._check()
         today = fields.Date.context_today(request.env.user)
         return {
-            "user_name": request.env.user.name,
             "can_select": request.env.user.has_group(SELECTOR_GROUP),
             "vat_options": VAT_SELECTION,
             "status_tabs": STATUS_TABS,

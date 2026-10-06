@@ -5,15 +5,23 @@ window.HlvQuote = window.HlvQuote || {};
 (function (HQ) {
   "use strict";
 
-  /* trạng thái báo giá -> class badge. Mã trạng thái do services/sale_page_payload.py trả. */
+  /* trạng thái báo giá -> class nhãn. Mã trạng thái do services/sale_page_payload.py trả.
+     Ba màu như /giao-hang: cam = đang chờ, xanh lá = xong việc, đỏ = trễ; còn lại xám. */
   HQ.STATE_CLASS = {
-    draft: "hq-badge-gray",
-    sent: "hq-badge-amber",
-    quoted: "hq-badge-green",
-    expired: "hq-badge-red",
-    done: "hq-badge-slate",
-    cancel: "hq-badge-gray",
+    draft: "hq-tag-soft",
+    sent: "hq-tag-warn",
+    quoted: "hq-tag-ok",
+    expired: "hq-tag-danger",
+    done: "hq-tag-soft",
+    cancel: "hq-tag-soft",
   };
+
+  /* Ô số đầu trang: [mã trạng thái, nhãn]. */
+  HQ.KPIS = [
+    ["waiting", "đang chờ NCC báo giá"],
+    ["quoted", "NCC đã báo giá, chờ thu mua chọn"],
+    ["expired", "quá hạn"],
+  ];
 
   var ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
@@ -49,16 +57,6 @@ window.HlvQuote = window.HlvQuote || {};
     var date = new Date(+parts[0], +parts[1] - 1, +parts[2] + days);
     return date.getFullYear() + "-" + ("0" + (date.getMonth() + 1)).slice(-2) +
       "-" + ("0" + date.getDate()).slice(-2);
-  };
-
-  /** "Tên A" -> "TA" để làm avatar chữ. Rỗng -> "?". */
-  HQ.initials = function (name) {
-    var words = String(name || "").trim().split(/\s+/).filter(Boolean);
-    if (!words.length) {
-      return "?";
-    }
-    var picked = words.length === 1 ? [words[0]] : [words[0], words[words.length - 1]];
-    return picked.map(function (w) { return w.charAt(0); }).join("").toUpperCase();
   };
 
   /**

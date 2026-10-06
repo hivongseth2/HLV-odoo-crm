@@ -1,140 +1,188 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Trang /hoi-gia-ncc của sale. Khung tĩnh ở đây, nội dung do static/src/sale_page/*.js vẽ. -->
+    <!-- Trang /hoi-gia-ncc của sale. Tự dựng HTML như /giao-hang (hlv_vtracking), KHÔNG dùng
+         web.layout + asset bundle: Odoo 18 bọc mọi file JS trong static/src thành
+         odoo.define(...), mà web.layout không nạp bộ nạp module — file đầu tiên lỗi và cả
+         trang đứng im. Nạp thẳng bằng <script src> thì file chạy nguyên văn. -->
     <template id="sale_page" name="Hỏi giá nhà cung cấp">
-        <t t-call="web.layout">
-            <t t-set="head">
-                <title>Hỏi giá NCC</title>
-                <meta name="viewport" content="width=device-width,initial-scale=1"/>
-                <t t-call-assets="hlv_vendor_quotation.assets_sale_page"/>
-            </t>
-            <div id="hq-app" t-att-data-initial-vendor="initial_vendor_id or ''">
-                <nav class="hq-nav">
-                    <a class="hq-brand" href="/hoi-gia-ncc">
-                        Hỏi giá nhà cung cấp
-                    </a>
-                    <div class="hq-nav-right">
-                        <a class="hq-nav-link" href="/sale_plan">Tình trạng đơn</a>
-                        <span class="hq-user" id="hq-user"></span>
+        &lt;!DOCTYPE html&gt;
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Hỏi giá nhà cung cấp</title>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin"/>
+                <link rel="stylesheet"
+                      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Lora:wght@600&amp;display=swap"/>
+                <link rel="stylesheet" href="/hlv_vendor_quotation/static/src/sale_page/sale_page.css"/>
+                <link rel="stylesheet" href="/hlv_vendor_quotation/static/src/sale_page/sale_page_dialogs.css"/>
+            </head>
+            <body>
+                <nav class="navbar navbar-dark hq-navbar py-2">
+                    <div class="container-fluid">
+                        <span class="navbar-brand mb-0">Hỏi giá nhà cung cấp</span>
+                        <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link text-white-50" href="/sale_plan">Tình trạng đơn</a>
+                            <a class="nav-link text-white-50 d-none d-md-inline" href="/giao-hang">Giao hàng</a>
+                            <a class="nav-link text-white-50 d-none d-md-inline" href="/search_stock">Tồn kho</a>
+                            <span class="text-white-50 small d-none d-sm-inline" t-esc="user_name"/>
+                        </div>
                     </div>
                 </nav>
 
-                <div t-if="not allowed" class="hq-forbidden">
-                    Tài khoản chưa được cấp quyền hỏi giá nhà cung cấp. Liên hệ quản trị để được thêm
-                    vào nhóm Bán hàng hoặc Mua hàng.
+                <div t-if="not allowed" class="container py-5">
+                    <div class="hq-panel hq-pad">Tài khoản chưa được cấp quyền hỏi giá nhà cung cấp. Liên hệ
+                        quản trị để được thêm vào nhóm Bán hàng hoặc Mua hàng.</div>
                 </div>
 
-                <div t-else="" class="hq-layout">
-                    <aside class="hq-side" id="hq-side">
-                        <div class="hq-side-head">
-                            <input type="search" id="hq-vendor-search" placeholder="Tìm nhà cung cấp…"/>
-                            <label class="hq-switch">
-                                <input type="checkbox" id="hq-mine" checked="checked"/>
-                                <span>Chỉ yêu cầu của tôi</span>
-                            </label>
+                <div t-else="" id="hq-app" class="container-fluid py-3"
+                     t-att-data-initial-vendor="initial_vendor_id or ''">
+                    <div class="hq-toolbar">
+                        <label class="hq-sr-only" for="hq-search">Tìm yêu cầu báo giá</label>
+                        <input type="search" id="hq-search" class="hq-input hq-input-wide"
+                               placeholder="Tìm số báo giá, NCC, YCMH, đơn bán, mặt hàng…"/>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="hq-mine" checked="checked"/>
+                            <label class="form-check-label hq-muted" for="hq-mine">Chỉ yêu cầu của tôi</label>
                         </div>
-                        <button type="button" class="hq-vendor hq-vendor-all hq-vendor-active" data-vendor="">
-                            <span class="hq-vendor-name">Tất cả nhà cung cấp</span>
-                        </button>
-                        <div id="hq-vendor-list" class="hq-vendor-list"></div>
-                    </aside>
+                        <button type="button" class="hq-btn hq-btn-primary hq-push" id="hq-new">Hỏi giá NCC</button>
+                    </div>
 
-                    <main class="hq-main">
-                        <div class="hq-toolbar">
-                            <button type="button" class="hq-btn hq-btn-ghost hq-only-mobile" id="hq-toggle-side">Nhà cung cấp</button>
-                            <div class="hq-title-wrap">
-                                <h1 id="hq-title">Tất cả nhà cung cấp</h1>
-                                <div id="hq-subtitle" class="hq-muted"></div>
-                            </div>
-                            <span class="hq-spacer"></span>
-                            <input type="search" id="hq-search" class="hq-search"
-                                   placeholder="Tìm số báo giá, YCMH, đơn bán, mặt hàng…"/>
-                            <button type="button" class="hq-btn hq-btn-primary" id="hq-new">+ Hỏi giá NCC</button>
-                        </div>
+                    <!-- Ba con số sale mở trang ra là muốn biết; bấm vào để lọc. -->
+                    <div class="hq-kpis" id="hq-kpis"></div>
 
-                        <div id="hq-vendor-card" class="hq-vendor-card hq-hidden"></div>
-                        <div id="hq-tabs" class="hq-tabs"></div>
-                        <div id="hq-alert" class="hq-alert hq-hidden"></div>
-                        <div id="hq-loading" class="hq-loading hq-hidden">Đang tải…</div>
-                        <div id="hq-quote-list" class="hq-quote-list"></div>
-                        <div id="hq-pager" class="hq-pager"></div>
-                    </main>
-                </div>
-
-                <!-- Chi tiết một yêu cầu báo giá -->
-                <div id="hq-drawer" class="hq-drawer hq-hidden">
-                    <div class="hq-drawer-backdrop" data-close="drawer"></div>
-                    <section class="hq-drawer-panel" id="hq-drawer-panel"></section>
-                </div>
-
-                <!-- Tạo yêu cầu báo giá -->
-                <div id="hq-modal" class="hq-modal hq-hidden">
-                    <div class="hq-modal-box">
-                        <div class="hq-modal-head">
-                            <strong id="hq-modal-title">Hỏi giá nhà cung cấp</strong>
-                            <button type="button" class="hq-icon-btn" data-close="modal" title="Đóng">×</button>
-                        </div>
-                        <div class="hq-modal-body" id="hq-modal-body">
-                            <section class="hq-step">
-                                <div class="hq-step-head"><span class="hq-step-no">1</span> Mặt hàng cần báo giá</div>
-                                <div class="hq-grid-2">
-                                    <div class="hq-field hq-picker">
-                                        <label for="hq-req-search">Lấy từ Yêu cầu mua hàng (không bắt buộc)</label>
-                                        <input type="search" id="hq-req-search" autocomplete="off"
-                                               placeholder="Số YCMH, đơn bán…"/>
-                                        <div id="hq-req-results" class="hq-dropdown hq-hidden"></div>
-                                    </div>
-                                    <div class="hq-field hq-picker">
-                                        <label for="hq-prod-search">Thêm sản phẩm</label>
-                                        <input type="search" id="hq-prod-search" autocomplete="off"
-                                               placeholder="Mã hoặc tên sản phẩm…"/>
-                                        <div id="hq-prod-results" class="hq-dropdown hq-hidden"></div>
-                                    </div>
+                    <div class="row g-3">
+                        <div class="col-lg-3">
+                            <aside class="hq-panel hq-side">
+                                <div class="hq-panel-head"><h2 class="hq-h3">Nhà cung cấp</h2></div>
+                                <div class="hq-side-search">
+                                    <label class="hq-sr-only" for="hq-vendor-search">Tìm nhà cung cấp</label>
+                                    <input type="search" id="hq-vendor-search" class="hq-input w-100"
+                                           placeholder="Tìm nhà cung cấp…"/>
                                 </div>
-                                <div id="hq-req-chip" class="hq-chip-row"></div>
-                                <div id="hq-lines" class="hq-lines"></div>
-                            </section>
-
-                            <section class="hq-step">
-                                <div class="hq-step-head"><span class="hq-step-no">2</span> Nhà cung cấp</div>
-                                <div class="hq-field hq-picker">
-                                    <input type="search" id="hq-partner-search" autocomplete="off"
-                                           placeholder="Thêm NCC không có trong gợi ý…"/>
-                                    <div id="hq-partner-results" class="hq-dropdown hq-hidden"></div>
+                                <div class="hq-vendor-scroll">
+                                    <button type="button" class="hq-vendor hq-vendor-all is-active" data-vendor="">
+                                        <span class="hq-vendor-name">Tất cả nhà cung cấp</span>
+                                    </button>
+                                    <div id="hq-vendor-list"></div>
                                 </div>
-                                <div id="hq-chosen" class="hq-chip-row"></div>
-                                <div class="hq-muted hq-small">Gợi ý theo lịch sử mua hàng: NCC từng bán nhiều mặt hàng
-                                    trong danh sách lên trước.</div>
-                                <div id="hq-suggestions" class="hq-suggestions"></div>
-                            </section>
-
-                            <section class="hq-step">
-                                <div class="hq-step-head"><span class="hq-step-no">3</span> Hạn &amp; lời nhắn</div>
-                                <div class="hq-grid-2">
-                                    <div class="hq-field">
-                                        <label for="hq-deadline">Hạn báo giá</label>
-                                        <input type="date" id="hq-deadline"/>
-                                    </div>
-                                    <div class="hq-field">
-                                        <label for="hq-note">Lời nhắn hiện đầu trang báo giá của NCC</label>
-                                        <textarea id="hq-note" rows="2"
-                                                  placeholder="Thời gian giao mong muốn, quy cách, xuất hoá đơn…"></textarea>
-                                    </div>
-                                </div>
-                            </section>
-                            <div id="hq-modal-alert" class="hq-alert hq-hidden"></div>
+                            </aside>
                         </div>
-                        <div class="hq-modal-foot" id="hq-modal-foot">
-                            <span id="hq-summary" class="hq-muted"></span>
-                            <span class="hq-spacer"></span>
-                            <button type="button" class="hq-btn" data-close="modal">Huỷ</button>
-                            <button type="button" class="hq-btn hq-btn-primary" id="hq-submit">Gửi yêu cầu báo giá</button>
+                        <div class="col-lg-9">
+                            <section class="hq-panel">
+                                <div class="hq-panel-head hq-panel-head-wrap">
+                                    <h2 class="hq-h2" id="hq-title">Tất cả nhà cung cấp</h2>
+                                    <div id="hq-tabs" class="hq-tabs hq-push"></div>
+                                </div>
+                                <div id="hq-vendor-card" class="hq-vendor-card hq-hidden"></div>
+                                <div id="hq-alert" class="hq-alert hq-hidden"></div>
+                                <div class="hq-table-wrap">
+                                    <table class="hq-quotes">
+                                        <thead>
+                                            <tr>
+                                                <th>Số báo giá</th>
+                                                <th>Nhà cung cấp</th>
+                                                <th>YCMH · Đơn bán</th>
+                                                <th>Mặt hàng</th>
+                                                <th>Hạn</th>
+                                                <th>Trạng thái</th>
+                                                <th class="hq-right">Tổng chưa VAT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="hq-quote-list">
+                                            <tr><td colspan="7" class="hq-empty">Đang tải…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="hq-pager" class="hq-pager"></div>
+                            </section>
                         </div>
                     </div>
+
+                    <!-- Chi tiết một yêu cầu báo giá -->
+                    <div id="hq-drawer" class="hq-drawer hq-hidden">
+                        <div class="hq-drawer-backdrop" data-close="drawer"></div>
+                        <section class="hq-drawer-panel" id="hq-drawer-panel"></section>
+                    </div>
+
+                    <!-- Hỏi giá NCC -->
+                    <div id="hq-modal" class="hq-modal hq-hidden">
+                        <div class="hq-modal-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-modal-title">Hỏi giá nhà cung cấp</h2>
+                                <button type="button" class="btn-close" data-close="modal" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body" id="hq-modal-body">
+                                <section class="hq-step">
+                                    <h3 class="hq-h3">1. Mặt hàng cần báo giá</h3>
+                                    <div class="row g-2">
+                                        <div class="col-md-6 hq-picker">
+                                            <label class="form-label small mb-1" for="hq-req-search">
+                                                Lấy từ Yêu cầu mua hàng (không bắt buộc)</label>
+                                            <input type="search" id="hq-req-search" class="hq-input w-100" autocomplete="off"
+                                                   placeholder="Số YCMH, đơn bán…"/>
+                                            <div id="hq-req-results" class="hq-dropdown hq-hidden"></div>
+                                        </div>
+                                        <div class="col-md-6 hq-picker">
+                                            <label class="form-label small mb-1" for="hq-prod-search">Thêm sản phẩm</label>
+                                            <input type="search" id="hq-prod-search" class="hq-input w-100" autocomplete="off"
+                                                   placeholder="Mã hoặc tên sản phẩm…"/>
+                                            <div id="hq-prod-results" class="hq-dropdown hq-hidden"></div>
+                                        </div>
+                                    </div>
+                                    <div id="hq-req-chip" class="hq-chip-row"></div>
+                                    <div id="hq-lines"></div>
+                                </section>
+
+                                <section class="hq-step">
+                                    <h3 class="hq-h3">2. Nhà cung cấp</h3>
+                                    <div class="hq-picker">
+                                        <label class="hq-sr-only" for="hq-partner-search">Thêm nhà cung cấp</label>
+                                        <input type="search" id="hq-partner-search" class="hq-input w-100" autocomplete="off"
+                                               placeholder="Thêm NCC không có trong gợi ý…"/>
+                                        <div id="hq-partner-results" class="hq-dropdown hq-hidden"></div>
+                                    </div>
+                                    <div id="hq-chosen" class="hq-chip-row"></div>
+                                    <div class="hq-muted">Gợi ý theo lịch sử mua hàng — NCC từng bán nhiều mặt hàng
+                                        trong danh sách lên trước.</div>
+                                    <div id="hq-suggestions" class="hq-suggestions"></div>
+                                </section>
+
+                                <section class="hq-step">
+                                    <h3 class="hq-h3">3. Hạn &amp; lời nhắn</h3>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small mb-1" for="hq-deadline">Hạn báo giá</label>
+                                            <input type="date" id="hq-deadline" class="hq-input w-100"/>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <label class="form-label small mb-1" for="hq-note">Lời nhắn hiện đầu trang báo giá của NCC</label>
+                                            <textarea id="hq-note" rows="2" class="hq-input hq-textarea w-100"
+                                                      placeholder="Thời gian giao mong muốn, quy cách, xuất hoá đơn…"></textarea>
+                                        </div>
+                                    </div>
+                                </section>
+                                <div id="hq-modal-alert" class="hq-alert hq-hidden"></div>
+                            </div>
+                            <div class="hq-modal-foot" id="hq-modal-foot">
+                                <span id="hq-summary" class="hq-muted"></span>
+                                <button type="button" class="hq-btn hq-push" data-close="modal">Huỷ</button>
+                                <button type="button" class="hq-btn hq-btn-primary" id="hq-submit">Gửi yêu cầu báo giá</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="hq-toast" class="hq-toast hq-hidden"></div>
                 </div>
 
-                <div id="hq-toast" class="hq-toast hq-hidden"></div>
-            </div>
-        </t>
+                <!-- Thứ tự quan trọng: utils → ui → feature → app. -->
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_utils.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_quotes.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js"></script>
+            </body>
+        </html>
     </template>
 </odoo>

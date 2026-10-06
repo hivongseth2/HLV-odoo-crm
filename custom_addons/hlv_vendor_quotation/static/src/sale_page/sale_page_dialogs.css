@@ -1,0 +1,219 @@
+/* Trang /hoi-gia-ncc — NGĂN CHI TIẾT một báo giá và HỘP "Hỏi giá NCC".
+   Biến màu khai ở :root của sale_page.css nên phải nạp file đó trước. */
+
+/* ------------------------------------------------------------ ngăn chi tiết */
+
+.hq-drawer { position: fixed; inset: 0; z-index: 1040; }
+.hq-drawer-backdrop { position: absolute; inset: 0; background: rgba(28, 32, 36, .35); }
+.hq-drawer-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(920px, 100%);
+    background: var(--hq-bg);
+    overflow-y: auto;
+    padding: 1rem 1.25rem 2rem;
+    border-left: 1px solid var(--hq-line);
+}
+.hq-drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; margin-bottom: .75rem; }
+.hq-drawer-head .hq-h2 { font-size: 20px; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .15rem; }
+
+.hq-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: .6rem 1rem;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    padding: .75rem 1rem;
+    margin-bottom: .75rem;
+    font-size: .875rem;
+}
+.hq-label { display: block; color: var(--hq-muted); font-size: .75rem; margin-bottom: .1rem; }
+
+.hq-share, .hq-result, .hq-note {
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    padding: .75rem 1rem;
+    margin-bottom: .75rem;
+}
+.hq-note { white-space: pre-line; font-size: .875rem; }
+.hq-share-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.hq-share-text {
+    white-space: pre-wrap;
+    margin: 0;
+    font: inherit;
+    font-size: .8125rem;
+    background: #FAF9F6;
+    border: 1px solid var(--hq-line-soft);
+    border-radius: 8px;
+    padding: .6rem .8rem;
+}
+
+.hq-drawer-panel .hq-table-wrap { background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); }
+.hq-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.hq-table th {
+    background: #FAF9F6;
+    color: var(--hq-muted);
+    font-weight: 500;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hq-line);
+    white-space: nowrap;
+}
+.hq-table td { padding: 9px 10px; border-bottom: 1px solid var(--hq-line-soft); vertical-align: middle; }
+.hq-table th.hq-num, .hq-table td.hq-num { text-align: right; white-space: nowrap; }
+.hq-table tbody tr:last-child td { border-bottom: 0; }
+.hq-table tfoot td { background: #FAF9F6; border-top: 1px solid var(--hq-line); border-bottom: 0; }
+.hq-table .hq-tag { margin: .15rem .25rem 0 0; }
+.hq-row-muted td { color: var(--hq-muted); }
+.hq-row-selected td { background: var(--hq-ok-soft); }
+.hq-thumb { display: block; width: 40px; height: 40px; object-fit: contain; border: 1px solid var(--hq-line); border-radius: 6px; background: #fff; }
+.hq-drawer-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
+
+/* ------------------------------------------------------------ hộp "Hỏi giá NCC" */
+
+.hq-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background: rgba(28, 32, 36, .45);
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+}
+.hq-modal-box {
+    width: min(920px, 100%);
+    max-height: calc(100vh - 2rem);
+    display: flex;
+    flex-direction: column;
+    background: var(--hq-bg);
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    overflow: hidden;
+}
+.hq-modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .75rem 1rem;
+    background: #fff;
+    border-bottom: 1px solid var(--hq-line);
+}
+.hq-modal-body { padding: 1rem; overflow-y: auto; display: grid; gap: .75rem; }
+.hq-modal-foot {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .65rem 1rem;
+    background: #fff;
+    border-top: 1px solid var(--hq-line);
+}
+.hq-step {
+    display: grid;
+    gap: .6rem;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    padding: .85rem 1rem;
+}
+
+.hq-picker { position: relative; }
+.hq-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 10;
+    margin-top: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(28, 32, 36, .12);
+}
+/* Ô tìm nằm trong cột Bootstrap: kéo thả xuống thẳng mép ô nhập, không tràn ra phần gutter. */
+.col-md-6.hq-picker .hq-dropdown { left: calc(var(--bs-gutter-x) * .5); right: calc(var(--bs-gutter-x) * .5); }
+.hq-dropdown-item {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: #fff;
+    text-align: left;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: .875rem;
+    cursor: pointer;
+}
+.hq-dropdown-item:hover { background: #FAF9F6; }
+.hq-dropdown-empty { padding: .6rem .75rem; color: var(--hq-muted); font-size: .875rem; }
+
+.hq-chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hq-chip-row:empty { display: none; }
+.hq-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    border-radius: 999px;
+    padding: .1rem .2rem .1rem .65rem;
+    font-size: .8125rem;
+    background: #eef0f3;
+    color: #41505f;
+}
+.hq-chip-blue, .hq-chip-green { background: var(--hq-accent-soft); color: var(--hq-accent-dark); }
+.hq-chip-warn { background: var(--hq-warn-soft); color: var(--hq-warn-ink); }
+.hq-chip-x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 .35rem; }
+.hq-icon-btn { border: 0; background: transparent; color: var(--hq-muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: .15rem .45rem; border-radius: 6px; }
+.hq-icon-btn:hover { background: #FAF9F6; color: var(--hq-danger); }
+.hq-table-edit { border: 1px solid var(--hq-line); border-radius: 8px; }
+.hq-qty { width: 100px; height: 30px; padding: 0 8px; border: 1px solid #D8D5CD; border-radius: 6px; text-align: right; font: inherit; }
+
+/* Gợi ý NCC: một hàng mỗi NCC, tích để chọn. Đã chọn = nền màu nhấn nhạt. */
+.hq-suggestions { display: grid; gap: .35rem; }
+.hq-suggest {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: 8px;
+    padding: .55rem .75rem;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.hq-suggest:hover { border-color: #c9d2dd; }
+.hq-suggest-on { border-color: var(--hq-accent); background: var(--hq-accent-soft); }
+.hq-check-box {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid #b9bec6;
+    border-radius: 4px;
+    display: grid;
+    place-items: center;
+    font-size: .7rem;
+    font-weight: 700;
+    color: #fff;
+}
+.hq-suggest-on .hq-check-box { background: var(--hq-accent); border-color: var(--hq-accent); }
+.hq-suggest-main { flex: 1 1 auto; min-width: 0; display: grid; }
+.hq-suggest-main .hq-muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hq-suggest-stats { flex: none; width: 13rem; display: grid; justify-items: end; gap: .15rem; font-size: .8125rem; }
+.hq-meter { width: 100%; height: 3px; background: #eef0f3; }
+.hq-meter span { display: block; height: 100%; background: var(--hq-ok); }
+
+@media (max-width: 767.98px) {
+    .hq-drawer-panel { padding: .75rem .75rem 1.5rem; }
+    .hq-modal { padding: 0; }
+    .hq-modal-box { max-height: 100vh; height: 100%; border-radius: 0; }
+    .hq-suggest { flex-wrap: wrap; }
+    .hq-suggest-stats { width: 100%; justify-items: start; }
+    .hq-modal-foot { flex-wrap: wrap; }
+    .hq-modal-foot #hq-summary { flex-basis: 100%; }
+}

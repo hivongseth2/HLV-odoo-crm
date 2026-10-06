@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.1.4.0",
+    "version": "18.0.1.5.0",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
 - Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
@@ -40,15 +40,6 @@
     "assets": {
         "web.assets_backend": [
             "hlv_vendor_quotation/static/src/scss/vendor_quote_compare.scss",
-        ],
-        # Thứ tự quan trọng: utils → ui → feature → app (app gọi hàm của các file trước).
-        "hlv_vendor_quotation.assets_sale_page": [
-            "hlv_vendor_quotation/static/src/sale_page/sale_page.css",
-            "hlv_vendor_quotation/static/src/sale_page/sale_utils.js",
-            "hlv_vendor_quotation/static/src/sale_page/sale_ui.js",
-            "hlv_vendor_quotation/static/src/sale_page/sale_quotes.js",
-            "hlv_vendor_quotation/static/src/sale_page/sale_create.js",
-            "hlv_vendor_quotation/static/src/sale_page/sale_app.js",
         ],
     },
     "installable": True,

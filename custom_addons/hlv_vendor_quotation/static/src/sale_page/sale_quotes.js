@@ -26,18 +26,17 @@ window.HlvQuote = window.HlvQuote || {};
   };
 
   function renderVendors() {
-    document.querySelector(".hq-vendor-all").classList.toggle("hq-vendor-active", !S.vendorId);
+    document.querySelector(".hq-vendor-all").classList.toggle("is-active", !S.vendorId);
     HQ.$("hq-vendor-list").innerHTML = S.vendors.length ? S.vendors.map(function (v) {
-      var counters = (v.quoted ? '<span class="hq-count hq-count-green" title="NCC đã báo giá">' +
-        v.quoted + "</span>" : "") +
-        (v.waiting ? '<span class="hq-count hq-count-amber" title="Chờ NCC báo giá">' +
-        v.waiting + "</span>" : "");
-      return '<button type="button" class="hq-vendor' + (v.id === S.vendorId ? " hq-vendor-active" : "") +
+      var counters = (v.quoted ? '<span class="hq-tag hq-tag-ok" title="NCC đã báo giá">' +
+        v.quoted + " đã báo</span>" : "") +
+        (v.waiting ? '<span class="hq-tag hq-tag-warn" title="Chờ NCC báo giá">' +
+        v.waiting + " chờ</span>" : "");
+      return '<button type="button" class="hq-vendor' + (v.id === S.vendorId ? " is-active" : "") +
         '" data-vendor="' + v.id + '">' +
-        '<span class="hq-avatar">' + esc(HQ.initials(v.name)) + "</span>" +
         '<span class="hq-vendor-name">' + esc(v.name) + "</span>" +
         '<span class="hq-vendor-counts">' + counters + "</span></button>";
-    }).join("") : '<div class="hq-empty-small">Chưa có NCC nào</div>';
+    }).join("") : '<div class="hq-empty">Chưa có NCC nào</div>';
   }
 
   function renderVendorCard() {
@@ -49,13 +48,11 @@ window.HlvQuote = window.HlvQuote || {};
       return;
     }
     card.innerHTML =
-      '<div class="hq-vendor-card-item"><span class="hq-label">Link báo giá của NCC</span>' +
-      '<code class="hq-code">' + esc(vendor.portal_url) + "</code>" +
-      '<button type="button" class="hq-btn hq-btn-sm" data-copy="' + esc(vendor.portal_url) + '">Copy</button></div>' +
-      '<div class="hq-vendor-card-item"><span class="hq-label">Mật khẩu</span>' +
-      '<code class="hq-code hq-code-strong">' + esc(vendor.password) + "</code>" +
-      '<button type="button" class="hq-btn hq-btn-sm" data-copy="' + esc(vendor.password) + '">Copy</button></div>' +
-      '<button type="button" class="hq-btn hq-btn-primary hq-btn-sm" id="hq-new-for-vendor">+ Hỏi giá NCC này</button>';
+      '<span class="hq-muted">Link NCC</span><code class="hq-code hq-ellipsis">' + esc(vendor.portal_url) + "</code>" +
+      '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(vendor.portal_url) + '">Copy link</button>' +
+      '<span class="hq-muted">Mật khẩu</span><code class="hq-code">' + esc(vendor.password) + "</code>" +
+      '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(vendor.password) + '">Copy</button>' +
+      '<button type="button" class="hq-btn hq-btn-soft hq-push" id="hq-new-for-vendor">Hỏi giá NCC này</button>';
   }
 
   HQ.selectVendor = function (vendorId) {
@@ -68,7 +65,6 @@ window.HlvQuote = window.HlvQuote || {};
       url.searchParams.delete("ncc");
     }
     window.history.replaceState(null, "", url);
-    document.body.classList.remove("hq-side-open");
     renderVendors();
     renderVendorCard();
     return HQ.loadQuotes();
@@ -77,7 +73,7 @@ window.HlvQuote = window.HlvQuote || {};
   /* ---------------- Danh sách báo giá ---------------- */
 
   HQ.loadQuotes = function () {
-    HQ.show("hq-loading", true);
+    HQ.$("hq-quote-list").classList.add("is-loading");
     return HQ.rpc("/api/hoi-gia-ncc/quotes", {
       vendor_id: S.vendorId,
       status: S.status,
@@ -89,13 +85,14 @@ window.HlvQuote = window.HlvQuote || {};
       S.pager = res.pager || {};
       S.status = res.status;
       renderTabs();
+      renderKpis();
       renderQuotes(res.quotes || []);
       renderPager();
       HQ.showAlert("hq-alert", "");
     }).catch(function (err) {
       HQ.showAlert("hq-alert", err.message);
     }).finally(function () {
-      HQ.show("hq-loading", false);
+      HQ.$("hq-quote-list").classList.remove("is-loading");
     });
   };
 
@@ -104,50 +101,55 @@ window.HlvQuote = window.HlvQuote || {};
       // Nháp / Đã huỷ chỉ hiện khi có, cho thanh tab gọn.
       return !(tab[0] === "draft" || tab[0] === "cancel") || S.counts[tab[0]] || S.status === tab[0];
     }).map(function (tab) {
-      return '<button type="button" class="hq-tab' + (tab[0] === S.status ? " hq-tab-active" : "") +
+      return '<button type="button" class="hq-btn hq-btn-mini' + (tab[0] === S.status ? " is-active" : "") +
         '" data-status="' + tab[0] + '">' + esc(tab[1]) +
-        '<span class="hq-tab-count">' + (S.counts[tab[0]] || 0) + "</span></button>";
+        ' <span class="hq-tab-count">' + (S.counts[tab[0]] || 0) + "</span></button>";
+    }).join("");
+  }
+
+  function renderKpis() {
+    HQ.$("hq-kpis").innerHTML = HQ.KPIS.map(function (kpi) {
+      var count = S.counts[kpi[0]] || 0;
+      return '<button type="button" class="hq-kpi' + (kpi[0] === "expired" && count ? " is-warn" : "") +
+        (S.status === kpi[0] ? " is-active" : "") + '" data-status="' + kpi[0] + '">' +
+        '<span class="hq-kpi-num">' + count + "</span>" +
+        '<span class="hq-kpi-label">' + esc(kpi[1]) + "</span></button>";
     }).join("");
   }
 
   function renderQuotes(quotes) {
-    var box = HQ.$("hq-quote-list");
+    var body = HQ.$("hq-quote-list");
     if (!quotes.length) {
-      box.innerHTML = '<div class="hq-empty">' +
-        "<div>Không có yêu cầu báo giá nào.</div>" +
-        '<div class="hq-muted">Bấm "+ Hỏi giá NCC" để gửi yêu cầu đầu tiên.</div></div>';
+      body.innerHTML = '<tr><td colspan="7" class="hq-empty">Không có yêu cầu báo giá nào. ' +
+        'Bấm "Hỏi giá NCC" để gửi yêu cầu.</td></tr>';
       return;
     }
-    box.innerHTML = quotes.map(function (q) {
+    body.innerHTML = quotes.map(function (q) {
       var refs = [q.request_name, q.sale_order || q.origin].filter(Boolean).map(esc).join(" · ");
-      var progress = q.state === "quoted" || q.state === "done"
-        ? q.offered_count + "/" + q.line_count + " mặt hàng có giá"
+      var items = q.state === "quoted" || q.state === "done"
+        ? q.offered_count + "/" + q.line_count + " có giá"
         : q.line_count + " mặt hàng";
-      return '<button type="button" class="hq-quote" data-quote="' + q.id + '">' +
-        '<div class="hq-quote-main">' +
-        '<div class="hq-quote-top"><b>' + esc(q.name) + "</b>" +
-        '<span class="hq-badge ' + (HQ.STATE_CLASS[q.state] || "") + '">' + esc(q.state_label) + "</span>" +
-        (q.selected_count ? '<span class="hq-badge hq-badge-blue">Thu mua đã chọn ' +
-          q.selected_count + "</span>" : "") + "</div>" +
-        '<div class="hq-quote-vendor">' + esc(q.vendor_name) + "</div>" +
-        '<div class="hq-muted hq-small">' + (refs ? refs + " · " : "") + progress +
-        (q.deadline ? " · hạn " + esc(q.deadline) : "") + "</div></div>" +
-        '<div class="hq-quote-side">' +
-        (q.amount_untaxed ? '<div class="hq-amount">' + HQ.money(q.amount_untaxed) + "</div>" +
-          '<div class="hq-muted hq-small">chưa VAT</div>' : "") +
-        (q.submit_date ? '<div class="hq-muted hq-small">NCC gửi ' + esc(q.submit_date) + "</div>" : "") +
-        "</div></button>";
+      return '<tr class="hq-row" data-quote="' + q.id + '">' +
+        '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span></td>" +
+        '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.vendor_name) + "</span></td>" +
+        '<td class="hq-muted">' + (refs || "—") + "</td>" +
+        '<td class="hq-nowrap">' + items +
+        (q.selected_count ? '<div class="hq-muted">thu mua đã chọn ' + q.selected_count + "</div>" : "") + "</td>" +
+        '<td class="hq-nowrap hq-num">' + esc(q.deadline || "—") + "</td>" +
+        '<td><span class="hq-tag ' + (HQ.STATE_CLASS[q.state] || "") + '">' + esc(q.state_label) + "</span>" +
+        (q.submit_date ? '<div class="hq-muted">gửi ' + esc(q.submit_date) + "</div>" : "") + "</td>" +
+        '<td class="hq-right hq-num">' + (q.amount_untaxed ? HQ.money(q.amount_untaxed) : "—") + "</td></tr>";
     }).join("");
   }
 
   function renderPager() {
     var p = S.pager;
     HQ.$("hq-pager").innerHTML = p.page_count > 1
-      ? '<button type="button" class="hq-btn hq-btn-sm" data-page="' + (p.page - 1) + '"' +
-        (p.page <= 1 ? " disabled" : "") + ">← Trước</button>" +
+      ? '<button type="button" class="hq-btn hq-btn-mini" data-page="' + (p.page - 1) + '"' +
+        (p.page <= 1 ? " disabled" : "") + ">‹ Trước</button>" +
         '<span class="hq-muted">Trang ' + p.page + " / " + p.page_count + "</span>" +
-        '<button type="button" class="hq-btn hq-btn-sm" data-page="' + (p.page + 1) + '"' +
-        (p.page >= p.page_count ? " disabled" : "") + ">Sau →</button>"
+        '<button type="button" class="hq-btn hq-btn-mini" data-page="' + (p.page + 1) + '"' +
+        (p.page >= p.page_count ? " disabled" : "") + ">Sau ›</button>"
       : "";
   }
 
@@ -177,9 +179,9 @@ window.HlvQuote = window.HlvQuote || {};
   function renderDrawer(q) {
     var lines = q.lines.map(function (l, index) {
       var priced = l.price_unit && !l.unavailable;
-      var tags = (l.selected ? '<span class="hq-badge hq-badge-green">Thu mua đã chọn</span>' : "") +
-        (l.is_best && !l.selected ? '<span class="hq-badge hq-badge-blue">Rẻ nhất</span>' : "") +
-        (!l.linked && q.request_name ? '<span class="hq-badge hq-badge-gray">Chưa ghép YCMH</span>' : "");
+      var tags = (l.selected ? '<span class="hq-tag hq-tag-ok">Thu mua đã chọn</span>' : "") +
+        (l.is_best && !l.selected ? '<span class="hq-tag hq-tag-mine">Rẻ nhất</span>' : "") +
+        (!l.linked && q.request_name ? '<span class="hq-tag hq-tag-soft">Chưa ghép YCMH</span>' : "");
       return '<tr class="' + (l.unavailable ? "hq-row-muted" : "") + (l.selected ? " hq-row-selected" : "") + '">' +
         "<td>" + (index + 1) + "</td>" +
         '<td><img class="hq-thumb" loading="lazy" src="/web/image/product.product/' + l.product_id +
@@ -198,20 +200,20 @@ window.HlvQuote = window.HlvQuote || {};
       (q.can_reopen ? '<button type="button" class="hq-btn" data-action="reopen">Mở lại cho NCC sửa</button>' : "") +
       (q.can_cancel ? '<button type="button" class="hq-btn hq-btn-danger" data-action="cancel">Huỷ</button>' : "") +
       (S.config.can_select ? '<a class="hq-btn" target="_blank" href="' + esc(q.backend_url) +
-        '">So sánh &amp; chọn trong Odoo ↗</a>' : "");
+        '">So sánh &amp; chọn trong Odoo</a>' : "");
 
     HQ.$("hq-drawer-panel").innerHTML =
       '<div class="hq-drawer-head"><div><div class="hq-muted hq-small">' + esc(q.vendor_name) + "</div>" +
-      "<h2>" + esc(q.name) + ' <span class="hq-badge ' + (HQ.STATE_CLASS[q.state] || "") + '">' +
+      '<h2 class="hq-h2">' + esc(q.name) + ' <span class="hq-tag ' + (HQ.STATE_CLASS[q.state] || "") + '">' +
       esc(q.state_label) + "</span></h2></div>" +
-      '<button type="button" class="hq-icon-btn" data-close="drawer" title="Đóng">×</button></div>' +
+      '<button type="button" class="btn-close" data-close="drawer" aria-label="Đóng"></button></div>' +
       '<div class="hq-facts">' +
       fact("YCMH", q.request_name || "Chưa gắn") + fact("Đơn bán", q.sale_order || q.origin) +
       fact("Hạn báo giá", q.deadline) + fact("NCC gửi lúc", q.submit_date) + fact("Người hỏi giá", q.user_name) +
       "</div>" +
       (q.share_message ? '<div class="hq-share"><div class="hq-share-head"><b>Tin nhắn gửi NCC</b>' +
-        '<button type="button" class="hq-btn hq-btn-sm hq-btn-primary" data-copy-share="1">Copy tin nhắn</button>' +
-        '<a class="hq-btn hq-btn-sm" target="_blank" href="' + esc(q.portal_url) + '">Mở trang NCC ↗</a></div>' +
+        '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-copy-share="1">Copy tin nhắn</button>' +
+        '<a class="hq-btn hq-btn-mini" target="_blank" href="' + esc(q.portal_url) + '">Mở trang NCC</a></div>' +
         '<pre class="hq-share-text" id="hq-share-text">' + esc(q.share_message) + "</pre></div>" : "") +
       (q.note ? '<div class="hq-note"><span class="hq-label">Lời nhắn gửi NCC</span>' + esc(q.note) + "</div>" : "") +
       (q.vendor_note ? '<div class="hq-note"><span class="hq-label">NCC ghi chú</span>' +
