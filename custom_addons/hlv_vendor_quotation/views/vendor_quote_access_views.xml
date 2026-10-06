@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_quote_access_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.list</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <list string="Link báo giá NCC">
+                <field name="partner_id"/>
+                <field name="portal_url" widget="CopyClipboardChar"/>
+                <field name="password" widget="CopyClipboardChar"/>
+                <field name="open_quote_count"/>
+                <field name="last_login_date" optional="show"/>
+                <field name="active" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_quote_access_form" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.form</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <form string="Link báo giá NCC">
+                <header>
+                    <button name="action_regenerate_password" type="object" string="Đổi mật khẩu"
+                            confirm="NCC sẽ phải nhập mật khẩu mới. Tiếp tục?"/>
+                    <button name="action_regenerate_token" type="object" string="Tạo link mới"
+                            confirm="Link cũ sẽ không dùng được nữa, cần gửi lại link mới cho NCC. Tiếp tục?"/>
+                    <button name="action_unlock" type="object" string="Mở khoá đăng nhập"
+                            invisible="failed_login_count == 0"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_quotes" type="object" class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="open_quote_count" widget="statinfo" string="Chờ báo giá"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Đã lưu trữ" bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <group>
+                            <field name="partner_id" readonly="id"/>
+                            <field name="portal_url" widget="CopyClipboardChar"/>
+                            <field name="password" widget="CopyClipboardChar"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="last_login_date"/>
+                            <field name="failed_login_count"/>
+                            <field name="last_failed_login_date" invisible="not last_failed_login_date"/>
+                        </group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vendor_quote_access_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.search</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <search string="Link báo giá NCC">
+                <field name="partner_id"/>
+                <filter name="filter_archived" string="Đã lưu trữ" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_quote_access" model="ir.actions.act_window">
+        <field name="name">Link báo giá NCC</field>
+        <field name="res_model">hlv.vendor.quote.access</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vendor_quote_access_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có link NCC nào</p>
+            <p>Link được tạo tự động khi gửi yêu cầu báo giá đầu tiên cho một nhà cung cấp.
+                Mỗi NCC có một link cố định, hiện mọi yêu cầu báo giá đã gửi cho NCC đó.</p>
+        </field>
+    </record>
+</odoo>

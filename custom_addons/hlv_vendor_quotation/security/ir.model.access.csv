@@ -1,0 +1,9 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_vendor_quote_pr_user,hlv.vendor.quote pr user,model_hlv_vendor_quote,purchase_request.group_purchase_request_user,1,1,1,1
+access_vendor_quote_purchase_user,hlv.vendor.quote purchase user,model_hlv_vendor_quote,purchase.group_purchase_user,1,1,1,1
+access_vendor_quote_line_pr_user,hlv.vendor.quote.line pr user,model_hlv_vendor_quote_line,purchase_request.group_purchase_request_user,1,1,1,1
+access_vendor_quote_line_purchase_user,hlv.vendor.quote.line purchase user,model_hlv_vendor_quote_line,purchase.group_purchase_user,1,1,1,1
+access_vendor_quote_access_pr_user,hlv.vendor.quote.access pr user,model_hlv_vendor_quote_access,purchase_request.group_purchase_request_user,1,1,1,0
+access_vendor_quote_access_purchase_user,hlv.vendor.quote.access purchase user,model_hlv_vendor_quote_access,purchase.group_purchase_user,1,1,1,0
+access_vendor_quote_wizard_pr_user,hlv.vendor.quote.wizard pr user,model_hlv_vendor_quote_wizard,purchase_request.group_purchase_request_user,1,1,1,1
+access_vendor_quote_wizard_purchase_user,hlv.vendor.quote.wizard purchase user,model_hlv_vendor_quote_wizard,purchase.group_purchase_user,1,1,1,1

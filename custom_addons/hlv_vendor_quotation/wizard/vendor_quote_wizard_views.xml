@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_quote_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.wizard.form</field>
+        <field name="model">hlv.vendor.quote.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Hỏi giá nhà cung cấp">
+                <p class="text-muted">
+                    Mỗi nhà cung cấp nhận một yêu cầu báo giá trên link riêng của họ (có mật khẩu).
+                    NCC đã có yêu cầu báo giá cho YCMH này sẽ được bỏ qua.
+                </p>
+                <group>
+                    <group>
+                        <field name="request_id" readonly="1"/>
+                        <field name="partner_ids" widget="many2many_tags"
+                               context="{'res_partner_search_mode': 'supplier'}"/>
+                    </group>
+                    <group>
+                        <field name="date_deadline"/>
+                    </group>
+                </group>
+                <field name="note" placeholder="Lời nhắn hiện ở đầu trang báo giá của NCC (thời gian giao mong muốn, quy cách...)"/>
+                <field name="request_line_ids">
+                    <list>
+                        <field name="product_id"/>
+                        <field name="name"/>
+                        <field name="product_qty"/>
+                        <field name="purchased_qty" optional="hide"/>
+                        <field name="product_uom_id" groups="uom.group_uom"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_create_quotes" type="object" string="Tạo &amp; lấy link gửi NCC"
+                            class="btn-primary"/>
+                    <button string="Huỷ" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

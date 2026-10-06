@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Bảng so sánh: mỗi nhóm là một dòng YCMH, mỗi hàng là giá của một NCC.
+         Xanh = rẻ nhất (chưa VAT), đậm = đã chọn. -->
+    <record id="view_vendor_quote_line_compare_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.line.compare.list</field>
+        <field name="model">hlv.vendor.quote.line</field>
+        <field name="arch" type="xml">
+            <list string="So sánh báo giá NCC" create="0" edit="0" delete="0"
+                  decoration-success="is_best_price" decoration-bf="selected" decoration-muted="unavailable">
+                <field name="request_id" optional="hide"/>
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <field name="quote_id" optional="show"/>
+                <field name="product_qty"/>
+                <field name="product_uom_id" groups="uom.group_uom"/>
+                <field name="price_unit"/>
+                <field name="vat"/>
+                <field name="price_subtotal"/>
+                <field name="price_total" optional="hide"/>
+                <field name="delivery_days" optional="show"/>
+                <field name="unavailable" optional="show"/>
+                <field name="vendor_note" optional="show"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="is_best_price" column_invisible="1"/>
+                <field name="selected" column_invisible="1"/>
+                <button name="action_select" type="object" string="Chọn" icon="fa-check"
+                        class="btn-link" invisible="selected or unavailable"/>
+                <button name="action_unselect" type="object" string="Bỏ chọn" icon="fa-times"
+                        class="btn-link text-danger" invisible="not selected"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_quote_line_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.line.search</field>
+        <field name="model">hlv.vendor.quote.line</field>
+        <field name="arch" type="xml">
+            <search string="So sánh báo giá NCC">
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <field name="request_id"/>
+                <filter name="filter_selected" string="Đã chọn" domain="[('selected', '=', True)]"/>
+                <filter name="filter_available" string="Có hàng" domain="[('unavailable', '=', False)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_request_line" string="Mặt hàng" context="{'group_by': 'request_line_id'}"/>
+                    <filter name="group_partner" string="Nhà cung cấp" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_request" string="Yêu cầu mua hàng" context="{'group_by': 'request_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_quote_compare" model="ir.actions.act_window">
+        <field name="name">So sánh báo giá NCC</field>
+        <field name="res_model">hlv.vendor.quote.line</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_vendor_quote_line_compare_list"/>
+        <field name="search_view_id" ref="view_vendor_quote_line_search"/>
+        <field name="domain">[('quote_state', 'in', ('quoted', 'done'))]</field>
+        <field name="context">{'search_default_group_request_line': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">Chưa có NCC nào gửi báo giá</p>
+            <p>Giá hiện ở đây khi NCC bấm "Gửi báo giá" trên link của họ.</p>
+        </field>
+    </record>
+</odoo>

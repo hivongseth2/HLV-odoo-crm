@@ -1,0 +1,145 @@
+# -*- coding: utf-8 -*-
+import hmac
+import secrets
+
+from odoo import _, api, fields, models
+
+from .vendor_quote_utils import is_login_locked, next_failed_count, session_fingerprint
+
+# Bỏ I, L, O, 0, 1: NCC hay gõ mật khẩu trên điện thoại và nhầm các ký tự này.
+PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+PASSWORD_LENGTH = 6
+MAX_LOGIN_ATTEMPTS = 5
+LOCK_MINUTES = 15
+PORTAL_ROUTE = "/bao-gia"
+
+
+class VendorQuoteAccess(models.Model):
+    """Một link báo giá cố định cho mỗi NCC; link hiện mọi yêu cầu báo giá gửi NCC đó."""
+
+    _name = "hlv.vendor.quote.access"
+    _description = "Link báo giá nhà cung cấp"
+    _inherit = ["mail.thread"]
+    _rec_name = "partner_id"
+    _order = "partner_id"
+
+    partner_id = fields.Many2one(
+        "res.partner",
+        string="Nhà cung cấp",
+        required=True,
+        ondelete="cascade",
+        index=True,
+        tracking=True,
+    )
+    access_token = fields.Char(
+        string="Mã link",
+        required=True,
+        readonly=True,
+        copy=False,
+        index=True,
+        default=lambda self: self._new_token(),
+    )
+    password = fields.Char(
+        string="Mật khẩu",
+        required=True,
+        copy=False,
+        default=lambda self: self._new_password(),
+    )
+    active = fields.Boolean(string="Hoạt động", default=True, tracking=True)
+    portal_url = fields.Char(string="Link báo giá", compute="_compute_portal_url")
+    quote_ids = fields.One2many("hlv.vendor.quote", "access_id", string="Yêu cầu báo giá")
+    open_quote_count = fields.Integer(
+        string="Đang chờ báo giá", compute="_compute_open_quote_count"
+    )
+    last_login_date = fields.Datetime(string="Đăng nhập gần nhất", readonly=True)
+    failed_login_count = fields.Integer(string="Số lần sai mật khẩu", readonly=True)
+    last_failed_login_date = fields.Datetime(string="Sai mật khẩu gần nhất", readonly=True)
+
+    _sql_constraints = [
+        ("partner_uniq", "unique(partner_id)", "Mỗi nhà cung cấp chỉ có một link báo giá."),
+        ("token_uniq", "unique(access_token)", "Mã link bị trùng, hãy tạo lại link."),
+    ]
+
+    @api.depends("access_token")
+    def _compute_portal_url(self):
+        for rec in self:
+            rec.portal_url = f"{rec.get_base_url()}{PORTAL_ROUTE}/{rec.access_token}"
+
+    @api.depends("quote_ids.state")
+    def _compute_open_quote_count(self):
+        for rec in self:
+            rec.open_quote_count = len(rec.quote_ids.filtered(lambda q: q.state == "sent"))
+
+    @api.model
+    def _new_token(self):
+        return secrets.token_urlsafe(24)
+
+    @api.model
+    def _new_password(self):
+        return "".join(secrets.choice(PASSWORD_ALPHABET) for _i in range(PASSWORD_LENGTH))
+
+    @api.model
+    def _get_for_partner(self, partner):
+        """Link của công ty NCC (commercial partner) — mọi liên hệ của cùng công ty dùng chung."""
+        vendor = partner.commercial_partner_id
+        access = self.with_context(active_test=False).search([("partner_id", "=", vendor.id)], limit=1)
+        if not access:
+            return self.create({"partner_id": vendor.id})
+        if not access.active:
+            access.active = True
+        return access
+
+    def action_regenerate_token(self):
+        for rec in self:
+            rec.access_token = self._new_token()
+            rec.message_post(body=_("Đã tạo link mới — link cũ không còn dùng được."))
+
+    def action_regenerate_password(self):
+        for rec in self:
+            rec.write({"password": self._new_password(), "failed_login_count": 0})
+            rec.message_post(body=_("Đã đổi mật khẩu — NCC phải đăng nhập lại."))
+
+    def action_unlock(self):
+        self.write({"failed_login_count": 0, "last_failed_login_date": False})
+
+    def action_view_quotes(self):
+        self.ensure_one()
+        action = self.env["ir.actions.act_window"]._for_xml_id(
+            "hlv_vendor_quotation.action_vendor_quote"
+        )
+        action["domain"] = [("access_id", "=", self.id)]
+        action["context"] = {"default_partner_id": self.partner_id.id}
+        return action
+
+    def _session_key(self):
+        self.ensure_one()
+        return session_fingerprint(self.access_token, self.password)
+
+    def _is_locked(self):
+        self.ensure_one()
+        return is_login_locked(
+            self.failed_login_count,
+            self.last_failed_login_date,
+            fields.Datetime.now(),
+            MAX_LOGIN_ATTEMPTS,
+            LOCK_MINUTES,
+        )
+
+    def _vendor_login(self, password):
+        """Kiểm mật khẩu NCC nhập ở link công khai. Trả "ok", "wrong" hoặc "locked"."""
+        self.ensure_one()
+        if self._is_locked():
+            return "locked"
+        # Mật khẩu chỉ gồm chữ in hoa + số; NCC gõ chữ thường trên điện thoại vẫn cho qua.
+        typed = (password or "").strip().upper().encode("utf-8")
+        if hmac.compare_digest(typed, (self.password or "").encode("utf-8")):
+            self.write({"failed_login_count": 0, "last_login_date": fields.Datetime.now()})
+            return "ok"
+        now = fields.Datetime.now()
+        self.write({
+            "failed_login_count": next_failed_count(
+                self.failed_login_count, self.last_failed_login_date, now, LOCK_MINUTES
+            ),
+            "last_failed_login_date": now,
+        })
+        return "locked" if self._is_locked() else "wrong"
