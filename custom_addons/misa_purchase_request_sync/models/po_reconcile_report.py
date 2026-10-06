@@ -51,7 +51,7 @@ class MisaPoReconcileReport(models.AbstractModel):
             "<p>Chi tiết xem file Excel đính kèm.</p>"
         ) % (escape(today), summary.get("total_odoo") or 0, summary.get("total_misa") or 0, status_rows)
 
-        self.env["mail.mail"].sudo().create({
+        mail = self.env["mail.mail"].sudo().create({
             "subject": "Đối chiếu Đơn mua hàng Odoo - MISA ngày %s" % today,
             "email_from": self.env.company.email_formatted or self.env.user.email_formatted,
             "email_to": emails,
@@ -59,4 +59,8 @@ class MisaPoReconcileReport(models.AbstractModel):
             "attachment_ids": [fields.Command.link(attachment.id)],
             "auto_delete": False,
         })
-        _logger.info("PO reconcile cron: đã tạo mail gửi %s (%s đơn Odoo).", emails, summary.get("total_odoo"))
+        # Gửi ngay, không chờ cron hàng đợi mail (1h/lần) vì phần gọi API MISA có thể làm trễ vài phút.
+        # Lỗi SMTP không raise: mail chuyển sang "Giao thư đã lỗi", xem lý do và bấm gửi lại trong Settings > Technical > Emails.
+        mail.send()
+        _logger.info("PO reconcile cron: đã gửi mail tới %s (%s đơn Odoo), trạng thái %s.",
+                     emails, summary.get("total_odoo"), mail.state)
