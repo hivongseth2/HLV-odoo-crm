@@ -2,12 +2,12 @@
 import logging
 
 from odoo import api, fields, models
+from odoo.addons.misa_invoice_status_report.models.misa_voucher_utils import paid_state_of
 
 from ..services.loyalty_misa_payment_utils import (
     PAID_STATE_SELECTION,
     index_voucher_lines,
     match_loyalty_line,
-    paid_state_of,
     qty_shortfall,
     split_vouchers_by_invoice_no,
     summarize_line_states,

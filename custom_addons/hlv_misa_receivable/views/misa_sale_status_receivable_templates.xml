@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa trang của misa_invoice_status_report (xmlid do repo này tự đặt, không phải core).
+         Panel đặt id msu-tab-receivable để cơ chế chuyển tab của trang gốc tự ẩn/hiện. -->
+    <template id="misa_sale_status_page_receivable" inherit_id="misa_invoice_status_report.misa_sale_status_page"
+              name="MISA Sale Status - Công nợ phải thu">
+        <xpath expr="//button[@id='msu-tab-btn-customs']" position="after">
+            <button class="msu-tab" id="msu-tab-btn-receivable" data-tab="receivable">Công nợ phải thu</button>
+        </xpath>
+
+        <xpath expr="//div[@id='msu-tab-customs']" position="after">
+            <div id="msu-tab-receivable" style="display:none">
+                <div class="msu-filters">
+                    <input type="text" id="msr-search" class="msu-input msu-search-input"
+                           placeholder="Tìm theo tên/mã khách, số hóa đơn, số chứng từ, mã đơn hoặc mã hàng..."/>
+                    <button id="msr-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                    <button id="msr-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
+                    <button id="msr-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                    <span class="msr-sync-info">
+                        <span id="msr-last-sync" class="msu-muted"/>
+                        <button id="msr-sync-btn" class="msu-btn msu-btn-outline-primary msu-btn-sm" style="display:none"
+                                data-loading-text="Đang xếp lịch..."
+                                title="Xếp lịch tra thu tiền MISA cho lượt hóa đơn kế tiếp ngay (mất vài phút, xong bấm Làm mới)">
+                            <i class="fa fa-cloud-download"/> Tra MISA ngay
+                        </button>
+                    </span>
+                </div>
+
+                <div class="msr-summary" id="msr-summary"/>
+
+                <div class="msu-table-card">
+                    <div class="msu-table-scroll">
+                        <table class="msu-table msr-table">
+                            <thead>
+                                <tr>
+                                    <th class="msu-col-num">STT</th>
+                                    <th>Khách hàng</th>
+                                    <th>Số HĐ / CT</th>
+                                    <th>Ngày HĐ</th>
+                                    <th>Hạn thu</th>
+                                    <th class="msu-col-num">Chưa thu</th>
+                                    <th>Trạng thái</th>
+                                    <th>Hẹn thu</th>
+                                    <th>Nhân viên</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="msr-tbody"/>
+                        </table>
+                    </div>
+                    <div id="msr-empty" class="msu-empty" style="display:none">Không có hóa đơn nào còn phải thu.</div>
+                    <div class="msu-pagination" id="msr-pagination" style="display:none">
+                        <button id="msr-prev" class="msu-btn msu-btn-outline-muted msu-btn-sm">&#8249; Trước</button>
+                        <span id="msr-page-label"/>
+                        <button id="msr-next" class="msu-btn msu-btn-outline-muted msu-btn-sm">Sau &#8250;</button>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+
+        <xpath expr="//div[@id='msu-toast-stack']" position="before">
+            <div class="msu-modal-overlay" id="msr-followup-modal" style="display:none">
+                <div class="msu-modal">
+                    <h5>Theo dõi thu nợ</h5>
+                    <p class="msu-card-subtitle" id="msr-followup-target"/>
+                    <label class="msr-field">Ngày hẹn thu
+                        <input type="date" id="msr-followup-date" class="msu-input"/>
+                    </label>
+                    <label class="msr-field">Xác suất thu (%)
+                        <input type="number" id="msr-followup-rate" class="msu-input" min="0" max="100" step="5"/>
+                    </label>
+                    <label class="msr-field">Ghi chú
+                        <textarea id="msr-followup-note" class="msu-input" rows="2" placeholder="VD: khách hẹn chuyển khoản cuối tuần"/>
+                    </label>
+                    <div id="msr-followup-error" class="msu-modal-error"/>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msr-followup-cancel">Hủy</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msr-followup-save" data-loading-text="Đang lưu...">Lưu</button>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+
+        <!-- Nạp SAU script chính của trang để window.MsuSaleStatus đã có sẵn. -->
+        <xpath expr="//t[@t-call='misa_invoice_status_report.misa_sale_status_layout']" position="inside">
+            <link rel="stylesheet" href="/hlv_misa_receivable/static/src/public/misa_receivable_panel.css"/>
+            <script type="text/javascript" src="/hlv_misa_receivable/static/src/public/misa_receivable_panel.js"></script>
+        </xpath>
+    </template>
+</odoo>

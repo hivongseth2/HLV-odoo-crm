@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_misa_sale_payment_line_user,misa.sale.payment.line user,model_misa_sale_payment_line,base.group_user,1,0,0,0
+access_misa_sale_payment_line_reconcile,misa.sale.payment.line reconcile,model_misa_sale_payment_line,misa_invoice_status_report.group_misa_invoice_reconciliation,1,1,1,1
+access_misa_receivable_followup_reconcile,misa.receivable.followup reconcile,model_misa_receivable_followup,misa_invoice_status_report.group_misa_invoice_reconciliation,1,1,1,1
