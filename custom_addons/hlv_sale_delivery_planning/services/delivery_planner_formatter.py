@@ -49,8 +49,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         # Chỉ đếm kiện còn trong kho (is_shipped=False).
         # Kiện đã giao (location.usage == 'customer') đã nằm trong qty_delivered rồi,
         # nếu trừ thêm sẽ double-count và làm "Thiếu" bị nhỏ hơn thực tế.
-        qty_packed_map = {}
+        # Hàng lẻ và linh kiện combo đếm riêng (xem _fetch_packages_for_sales): dòng lẻ chỉ
+        # nhận phần lẻ, dòng combo chỉ quy đổi từ linh kiện thuộc đúng combo của nó.
         qty_packed_by_product_id = {}
+        kit_packed_by_tmpl = {}  # {product_tmpl_id combo: {product_id linh kiện: qty}}
         total_packages_count = 0
         package_groups = so_packages_dict.get(so.id, [])
         for group in package_groups:
@@ -58,10 +60,12 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 total_packages_count += 1
                 if pack.get('is_shipped'):
                     continue  # Đã giao, items đã tính trong qty_delivered
-                for prod_name, qty in pack.get('product_map', {}).items():
-                    qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
                 for prod_id, qty in pack.get('product_id_map', {}).items():
                     qty_packed_by_product_id[prod_id] = qty_packed_by_product_id.get(prod_id, 0.0) + qty
+                for kit_tmpl_id, comp_map in pack.get('kit_component_map', {}).items():
+                    kit_packed = kit_packed_by_tmpl.setdefault(kit_tmpl_id, {})
+                    for prod_id, qty in comp_map.items():
+                        kit_packed[prod_id] = kit_packed.get(prod_id, 0.0) + qty
 
         # --- Nhận diện Kit (phantom BOM) ---
         # Dùng data batch từ caller (thay thế per-SO mrp.bom.search)
@@ -249,8 +253,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             qty_packed = 0.0
             if line.product_id:
                 qty_packed = qty_packed_by_product_id.get(line.product_id.id, 0.0)
-            if not qty_packed:
-                qty_packed = qty_packed_map.get(p_name, 0.0)
 
             # Phantom BOM kit: packages contain component products, not the kit
             # parent product. Convert packed component quantities back to
@@ -258,12 +260,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if is_kit and line.product_id:
                 _pack_bom = _kit_bom_for_product(line.product_id)
                 if _pack_bom:
+                    _kit_packed = kit_packed_by_tmpl.get(line.product_id.product_tmpl_id.id, {})
                     _packed_kits_ratio = kit_qty_from_components(
                         _pack_bom,
-                        lambda comp: (
-                            qty_packed_by_product_id.get(comp.id, 0.0)
-                            or qty_packed_map.get(comp.display_name, 0.0)
-                        ),
+                        lambda comp: _kit_packed.get(comp.id, 0.0),
                     )
                     if _packed_kits_ratio > 0:
                         qty_packed = min(_packed_kits_ratio, line.product_uom_qty)
