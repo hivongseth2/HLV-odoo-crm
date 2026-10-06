@@ -21,11 +21,9 @@ misa_purchase_request_sync/
 │   └── extension_api.py      ← Chứa các route: /check, /create, /revoke
 ├── data/                     ← Dữ liệu khởi tạo (System Parameters)
 │   ├── ir_config_parameter.xml ← Khởi tạo token xác thực
-│   └── ir_cron.xml           ← Cron sync queue + cron mail đối chiếu PO 19h
+│   └── ir_cron.xml           ← Cron xử lý hàng chờ đồng bộ (misa.sync.queue)
 ├── models/                   ← Tầng Model (Kế thừa và mở rộng database)
 │   ├── __init__.py
-│   ├── po_reconcile_report.py ← AbstractModel `misa.po.reconcile.report`: cron gửi mail đối chiếu PO
-│   ├── po_reconcile_xlsx.py  ← Dựng file Excel đối chiếu PO (port của excel_export.js), không import odoo
 │   ├── purchase_request.py   ← Mở rộng model `purchase.request` của OCA
 │   ├── purchase_request_line.py ← Mở rộng model `purchase.request.line` của OCA
 │   └── res_partner.py        ← Mở rộng model `res.partner` để liên kết và theo dõi nguồn
@@ -196,11 +194,5 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 - Search view thêm filter "Đã lưu trữ" (`domain="[('active', '=', False)]"`).
 - **Files ảnh hưởng:** `models/purchase_request.py`, `views/purchase_request_view.xml`
 
-### 4.5. Cron gửi mail đối chiếu Đơn mua hàng (19h GMT+7)
-- **Logic đối chiếu duy nhất:** `MisaExtensionController._reconcile_po_only_data(env_admin, date_from, date_to)` trong `controllers/extension_api.py`. Endpoint `/api/extension/po/reconcile_only` (extension) và cron đều gọi hàm này — KHÔNG copy logic sang nơi khác.
-- **Excel:** `models/po_reconcile_xlsx.py` → `build_reconcile_xlsx(res, date_from, date_to)`, cùng layout với `excel_export.js` của extension (sheet "Tổng hợp" + "Chi tiết"). Self-check: `python models/po_reconcile_xlsx.py`.
-- **Cron:** `ir_cron_misa_po_reconcile_daily` → `misa.po.reconcile.report.cron_send_daily_reconcile()`. Chạy mỗi ngày lúc 12:00 UTC (= 19:00 GMT+7), đối chiếu ngày hiện tại theo giờ VN, tạo `mail.mail` kèm file Excel.
-- **Người nhận:** System Parameter `misa_po_reconcile_emails` (email phân cách bằng dấu phẩy). Trống → cron bỏ qua và log warning.
-- **Số ngày:** System Parameter `misa_po_reconcile_days` (mặc định 1). N ngày = hôm nay + N-1 ngày trước.
-- **Google Drive:** file được đẩy vào thư mục `DOI_CHIEU_DON_MUA_HANG` ở gốc My Drive, dùng tài khoản Drive đã kết nối ở `custom_barcode_scan_redirect` (đọc chung System Parameters `gdrive.*`, KHÔNG import code module đó). Upload lỗi → log, mail vẫn gửi (không có link Drive).
-- **Kích hoạt:** cron mặc định `active=False` (quy tắc dự án) → bật trong Settings > Technical > Scheduled Actions.
+### 4.5. Đối chiếu PO dùng chung
+- **Logic đối chiếu duy nhất:** `MisaExtensionController._reconcile_po_only_data(env_admin, date_from, date_to)` trong `controllers/extension_api.py`. Endpoint `/api/extension/po/reconcile_only` (extension) và module `hlv_po_reconcile_report` (cron gửi mail 19h + lưu Drive) đều gọi hàm này — KHÔNG copy logic sang nơi khác. Đổi chữ ký hàm phải sửa cả `hlv_po_reconcile_report`.

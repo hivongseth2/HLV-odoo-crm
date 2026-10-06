@@ -8,6 +8,7 @@ from datetime import timedelta
 from markupsafe import Markup, escape
 
 from odoo import api, fields, models
+from odoo.addons.misa_purchase_request_sync.controllers.extension_api import MisaExtensionController
 
 from .po_reconcile_xlsx import STATUS_LABELS, build_reconcile_xlsx
 
@@ -15,14 +16,24 @@ _logger = logging.getLogger(__name__)
 
 RECIPIENTS_PARAM = "misa_po_reconcile_emails"
 DAYS_PARAM = "misa_po_reconcile_days"
+EMAILS_PLACEHOLDER = "chua_cau_hinh"
 # Thư mục riêng ở gốc My Drive, tách khỏi các thư mục kho chứa video đóng gói
 DRIVE_FOLDER = "DOI_CHIEU_DON_MUA_HANG"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-class MisaPoReconcileReport(models.AbstractModel):
-    _name = "misa.po.reconcile.report"
+class HlvPoReconcileReport(models.AbstractModel):
+    _name = "hlv.po.reconcile.report"
     _description = "Báo cáo đối chiếu PO Odoo - MISA gửi mail hằng ngày"
+
+    @api.model
+    def _init_default_params(self):
+        """Gọi từ data/ir_config_parameter.xml khi cài/upgrade: tạo param nếu chưa có, không ghi đè giá trị đã cấu hình.
+        ir.config_parameter bắt buộc có value nên email dùng giá trị tạm không có '@' (cron sẽ bỏ qua)."""
+        ICP = self.env["ir.config_parameter"].sudo()
+        for key, value in ((RECIPIENTS_PARAM, EMAILS_PLACEHOLDER), (DAYS_PARAM, "1")):
+            if not ICP.get_param(key):
+                ICP.set_param(key, value)
 
     @api.model
     def _gdrive_connect(self):
@@ -103,9 +114,9 @@ class MisaPoReconcileReport(models.AbstractModel):
         """Cron 19h (GMT+7): đối chiếu PO trong N ngày gần nhất, lưu Excel lên Drive và gửi mail."""
         ICP = self.env["ir.config_parameter"].sudo()
         raw = ICP.get_param(RECIPIENTS_PARAM) or ""
-        emails = ",".join(e.strip() for e in raw.replace(";", ",").split(",") if e.strip())
+        emails = ",".join(e.strip() for e in raw.replace(";", ",").split(",") if "@" in e)
         if not emails:
-            _logger.warning("PO reconcile cron: chưa cấu hình System Parameter '%s', bỏ qua.", RECIPIENTS_PARAM)
+            _logger.warning("PO reconcile cron: System Parameter '%s' chưa có email hợp lệ, bỏ qua.", RECIPIENTS_PARAM)
             return
 
         try:
@@ -118,8 +129,6 @@ class MisaPoReconcileReport(models.AbstractModel):
         date_from = (today - timedelta(days=days - 1)).isoformat()
         period = date_to if days == 1 else "%s đến %s" % (date_from, date_to)
 
-        # Import trễ để tránh vòng import models <-> controllers khi load module
-        from ..controllers.extension_api import MisaExtensionController
         # su=True: cron cần đọc toàn bộ PO/picking như endpoint của extension
         res = MisaExtensionController()._reconcile_po_only_data(self.env(su=True), date_from, date_to)
 
