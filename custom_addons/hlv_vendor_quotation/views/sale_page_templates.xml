@@ -11,7 +11,7 @@
             <div id="hq-app" t-att-data-initial-vendor="initial_vendor_id or ''">
                 <nav class="hq-nav">
                     <a class="hq-brand" href="/hoi-gia-ncc">
-                        <span class="hq-brand-mark">₫</span> Hỏi giá nhà cung cấp
+                        Hỏi giá nhà cung cấp
                     </a>
                     <div class="hq-nav-right">
                         <a class="hq-nav-link" href="/sale_plan">Tình trạng đơn</a>
@@ -41,7 +41,7 @@
 
                     <main class="hq-main">
                         <div class="hq-toolbar">
-                            <button type="button" class="hq-btn hq-btn-ghost hq-only-mobile" id="hq-toggle-side">☰ NCC</button>
+                            <button type="button" class="hq-btn hq-btn-ghost hq-only-mobile" id="hq-toggle-side">Nhà cung cấp</button>
                             <div class="hq-title-wrap">
                                 <h1 id="hq-title">Tất cả nhà cung cấp</h1>
                                 <div id="hq-subtitle" class="hq-muted"></div>

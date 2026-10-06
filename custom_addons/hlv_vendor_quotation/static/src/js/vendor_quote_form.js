@@ -59,11 +59,6 @@
         setText("[data-vq-total-untaxed]", formatVnNumber(Math.round(untaxed)));
         setText("[data-vq-total]", formatVnNumber(Math.round(total)));
         setText("[data-vq-progress]", `Đã điền ${done}/${lines.length} mặt hàng`);
-        const bar = form.querySelector("[data-vq-progress-bar]");
-        if (bar) {
-            bar.style.width = `${lines.length ? Math.round((100 * done) / lines.length) : 0}%`;
-            bar.classList.toggle("vq-progress-done", done === lines.length);
-        }
     }
 
     form.addEventListener("input", refresh);

@@ -113,7 +113,7 @@ window.HlvQuote = window.HlvQuote || {};
   function renderQuotes(quotes) {
     var box = HQ.$("hq-quote-list");
     if (!quotes.length) {
-      box.innerHTML = '<div class="hq-empty"><div class="hq-empty-icon">📭</div>' +
+      box.innerHTML = '<div class="hq-empty">' +
         "<div>Không có yêu cầu báo giá nào.</div>" +
         '<div class="hq-muted">Bấm "+ Hỏi giá NCC" để gửi yêu cầu đầu tiên.</div></div>';
       return;
@@ -123,7 +123,7 @@ window.HlvQuote = window.HlvQuote || {};
       var progress = q.state === "quoted" || q.state === "done"
         ? q.offered_count + "/" + q.line_count + " mặt hàng có giá"
         : q.line_count + " mặt hàng";
-      return '<button type="button" class="hq-quote hq-quote-' + q.state + '" data-quote="' + q.id + '">' +
+      return '<button type="button" class="hq-quote" data-quote="' + q.id + '">' +
         '<div class="hq-quote-main">' +
         '<div class="hq-quote-top"><b>' + esc(q.name) + "</b>" +
         '<span class="hq-badge ' + (HQ.STATE_CLASS[q.state] || "") + '">' + esc(q.state_label) + "</span>" +
@@ -214,7 +214,7 @@ window.HlvQuote = window.HlvQuote || {};
         '<a class="hq-btn hq-btn-sm" target="_blank" href="' + esc(q.portal_url) + '">Mở trang NCC ↗</a></div>' +
         '<pre class="hq-share-text" id="hq-share-text">' + esc(q.share_message) + "</pre></div>" : "") +
       (q.note ? '<div class="hq-note"><span class="hq-label">Lời nhắn gửi NCC</span>' + esc(q.note) + "</div>" : "") +
-      (q.vendor_note ? '<div class="hq-note hq-note-vendor"><span class="hq-label">NCC ghi chú</span>' +
+      (q.vendor_note ? '<div class="hq-note"><span class="hq-label">NCC ghi chú</span>' +
         esc(q.vendor_note) + "</div>" : "") +
       '<div class="hq-table-wrap"><table class="hq-table"><thead><tr><th>#</th><th></th><th>Mặt hàng</th>' +
       '<th class="hq-num">SL</th><th class="hq-num">Đơn giá chưa VAT</th><th>VAT</th>' +
