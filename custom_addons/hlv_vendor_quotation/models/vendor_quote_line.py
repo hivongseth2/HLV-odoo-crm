@@ -12,6 +12,8 @@ VAT_SELECTION = [
     ("10", "10%"),
     ("kct", "Không chịu thuế"),
 ]
+# VAT chọn sẵn trên form NCC cho dòng chưa có VAT — đa số hàng chịu 8%; NCC sửa nếu khác.
+DEFAULT_VENDOR_VAT = "8"
 SELECTION_STATES = [
     ("selected", "Đã chọn"),
     ("other", "Đã chọn NCC khác"),

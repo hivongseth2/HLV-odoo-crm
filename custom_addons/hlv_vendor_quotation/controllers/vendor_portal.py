@@ -11,7 +11,7 @@ from odoo.http import request
 
 from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
-from ..models.vendor_quote_line import VAT_SELECTION
+from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -342,6 +342,7 @@ class VendorQuotePortal(http.Controller):
             "portal_base": f"{PORTAL_ROUTE}/{access.access_token}",
             "fmt": format_vn_number,
             "vat_options": VAT_SELECTION,
+            "default_vat": DEFAULT_VENDOR_VAT,
             "post": {},
             "errors": [],
             # Số trên tab "Đơn mua hàng" ở mọi trang của NCC.

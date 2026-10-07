@@ -215,6 +215,17 @@
                         </div>
                     </div>
 
+                    <!-- Thông tin NCC + link / mật khẩu để copy — mở khi bấm tên NCC trong phiếu. -->
+                    <div id="hq-vendor" class="hq-modal hq-chat-modal hq-hidden">
+                        <div class="hq-modal-box hq-vendor-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-vendor-title">Nhà cung cấp</h2>
+                                <button type="button" class="btn-close" data-close-vendor="1" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body" id="hq-vendor-body"></div>
+                        </div>
+                    </div>
+
                     <div id="hq-toast" class="hq-toast hq-hidden"></div>
                 </div>
 
@@ -227,6 +238,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_vendor_info.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_paste.js?v=#{asset_version}"></script>

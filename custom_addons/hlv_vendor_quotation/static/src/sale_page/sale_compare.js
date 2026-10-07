@@ -111,8 +111,9 @@ window.HlvQuote = window.HlvQuote || {};
       return "";
     }
     var head = '<tr><th>Sản phẩm</th><th class="hq-num">SL</th>' + d.vendors.map(function (v) {
-      return '<th class="hq-vendor-col"><span class="hq-ellipsis" title="' + esc(v.name) + '">' + esc(v.name) +
-        '</span><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span></th>";
+      return '<th class="hq-vendor-col"><button type="button" class="hq-link-btn hq-ellipsis" data-vendor-info="' +
+        v.quote_id + '" title="Xem thông tin, link và mật khẩu của ' + esc(v.name) + '">' + esc(v.name) +
+        '</button><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span></th>";
     }).join("") + "</tr>";
     var rows = d.lines.map(function (line) {
       var tag = line.locked ? '<span class="hq-muted">đã lên đơn mua — khoá</span>'
@@ -197,10 +198,12 @@ window.HlvQuote = window.HlvQuote || {};
     if (!d.vendors.length) {
       return "";
     }
-    return '<h3 class="hq-h3 hq-section-title">Nhà cung cấp đã hỏi</h3>' +
+    return '<h3 class="hq-h3 hq-section-title">Nhà cung cấp đã hỏi ' +
+      '<span class="hq-muted hq-small">— bấm tên NCC để xem thông tin, link và mật khẩu</span></h3>' +
       '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
       d.vendors.map(function (v, index) {
-        return "<tr><td>" + esc(v.name) + "</td>" +
+        return '<tr><td><button type="button" class="hq-link-btn" data-vendor-info="' + v.quote_id +
+          '" title="Xem thông tin, link và mật khẩu">' + esc(v.name) + "</button></td>" +
           '<td><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span>" +
           (v.submit_date ? '<div class="hq-muted">gửi ' + esc(v.submit_date) + "</div>" : "") + "</td>" +
           '<td class="hq-num">' + (v.amount_untaxed ? HQ.money(v.amount_untaxed) : "") + "</td>" +

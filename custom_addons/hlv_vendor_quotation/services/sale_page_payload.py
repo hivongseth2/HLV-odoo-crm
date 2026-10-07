@@ -26,6 +26,7 @@ VENDOR_STATUS_LABELS = dict(VENDOR_STATUS)
 VAT_LABELS = dict(VAT_SELECTION)
 DATE_FMT = "%d/%m/%Y"
 PRODUCT_PREVIEW = 3
+CONTACT_LIMIT = 10
 
 
 def _date_text(value):
@@ -219,6 +220,38 @@ def vendor_summary(partner, access, counts):
         "total": sum(counts.values()),
         "portal_url": access.portal_url or "",
         "password": access.password or "",
+    }
+
+
+def vendor_info(quote):
+    """Thông tin NCC của một báo giá để sale liên hệ / gửi lại link: công ty, người liên hệ,
+    link chung của NCC + mật khẩu, tin nhắn Zalo soạn sẵn. Đọc bằng sudo — controller đã kiểm
+    báo giá thuộc phạm vi mã sale."""
+    quote = quote.sudo()
+    access = quote.access_id
+    partner = (access.partner_id or quote.partner_id).commercial_partner_id
+    address = partner._display_address(without_company=True) or ""
+    contacts = partner.child_ids.filtered(lambda c: c.type == "contact" and c.active)[:CONTACT_LIMIT]
+    return {
+        "name": partner.display_name,
+        "vat": partner.vat or "",
+        "phone": partner.phone or "",
+        "mobile": partner.mobile or "",
+        "email": partner.email or "",
+        "website": partner.website or "",
+        "address": ", ".join(part.strip() for part in address.splitlines() if part.strip()),
+        "contacts": [
+            {
+                "name": c.name or "",
+                "function": c.function or "",
+                "phone": c.mobile or c.phone or "",
+                "email": c.email or "",
+            }
+            for c in contacts
+        ],
+        "portal_url": access.portal_url or "",
+        "password": access.password or "",
+        "share_message": share_message(quote) if access else "",
     }
 
 

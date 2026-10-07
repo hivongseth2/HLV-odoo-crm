@@ -157,6 +157,11 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         order = self._chat_record("order", order_id, self._check(code))
         return payload.purchase_order_detail(order)
 
+    @http.route(f"{API}/vendor_info", type="json", auth="user", methods=["POST"])
+    def api_vendor_info(self, code="", quote_id=None, **kw):
+        """Thông tin + link / mật khẩu của NCC trên một báo giá trong phạm vi mã sale."""
+        return payload.vendor_info(self._chat_record("quote", quote_id, self._check(code)))
+
     @http.route(f"{API}/po_origin", type="json", auth="user", methods=["POST"])
     def api_po_origin(self, code="", order_ids=None, origin="", **kw):
         """Sale ghi mã đơn hàng của khách vào Tài liệu gốc của các đơn mua (một đơn trong hộp

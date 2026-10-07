@@ -384,7 +384,7 @@
                                 t-att-data-vat="line.vat or ''">
                                 <t t-set="lid" t-value="line.id"/>
                                 <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
-                                <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else line.vat"/>
+                                <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or default_vat)"/>
                                 <td class="vq-col-no" t-esc="line_index + 1"/>
                                 <td class="vq-col-product">
                                     <div class="vq-product">

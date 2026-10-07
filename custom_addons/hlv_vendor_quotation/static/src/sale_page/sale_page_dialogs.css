@@ -310,3 +310,13 @@
 .hq-link-btn { border: 0; background: transparent; padding: 0; font: inherit; font-weight: 700;
     color: var(--hq-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .hq-link-btn:hover { color: var(--hq-accent-dark); }
+
+/* ------------------------------------------------------------ thông tin NCC */
+
+.hq-vendor-box { width: min(760px, 100%); }
+.hq-vendor-col .hq-link-btn { display: block; max-width: 100%; text-align: left; }
+.hq-access { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem .75rem; align-items: center;
+    padding: .75rem 1rem; background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); }
+.hq-access .hq-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hq-access-pass { font-size: 1rem; letter-spacing: .08em; }
+.hq-section-title .hq-small { font-size: .75rem; font-weight: 400; }
