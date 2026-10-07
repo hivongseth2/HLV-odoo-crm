@@ -122,7 +122,8 @@ window.HlvQuote = window.HlvQuote || {};
     return '<h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
       '<div class="hq-table-wrap hq-compare-wrap"><table class="hq-table hq-compare"><thead>' + head +
       "</thead><tbody>" + rows + "</tbody><tfoot><tr><td colspan=\"" + (2 + d.vendors.length) +
-      '" class="hq-num">Tổng các giá đã chọn (chưa VAT): <b>' + HQ.money(d.chosen_total) + "</b></td></tr></tfoot>" +
+      '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total) + "</b> chưa VAT · <b>" +
+      HQ.money(d.chosen_total_incl) + "</b> sau VAT</td></tr></tfoot>" +
       "</table></div>" +
       '<div class="hq-muted hq-legend">Chữ xanh đậm = giá thấp nhất · nền xanh = giá đã chọn.</div>';
   }
@@ -141,7 +142,9 @@ window.HlvQuote = window.HlvQuote || {};
     var meta = [offer.vat ? "VAT " + offer.vat : "", offer.delivery_days ? offer.delivery_days + " ngày" : ""]
       .filter(Boolean).join(" · ");
     var body = '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' + HQ.money(offer.price_unit) +
-      "</span>" + (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
+      ' <span class="hq-offer-unit">chưa VAT</span></span>' +
+      (offer.vat ? '<span class="hq-offer-incl">' + HQ.money(offer.price_incl) + " sau VAT</span>" : "") +
+      (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
       (offer.vendor_note ? '<span class="hq-offer-meta" title="' + esc(offer.vendor_note) + '">' +
         esc(offer.vendor_note) + "</span>" : "");
     var cls = "hq-offer" + (offer.selected ? " is-selected" : "");

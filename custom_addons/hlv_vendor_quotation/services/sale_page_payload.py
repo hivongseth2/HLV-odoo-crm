@@ -100,6 +100,7 @@ def inquiry_detail(inquiry):
         "vendors": [_vendor_column(q) for q in quotes],
         "lines": [_compare_row(line, quotes) for line in inquiry.line_ids],
         "chosen_total": sum(inquiry.line_ids.chosen_line_id.mapped("price_subtotal")),
+        "chosen_total_incl": sum(inquiry.line_ids.chosen_line_id.mapped("price_total")),
     })
     return data
 
@@ -134,6 +135,9 @@ def _compare_row(line, quotes):
             "vendor_note": quote_line.vendor_note or "",
             "unavailable": quote_line.unavailable,
             "subtotal": quote_line.price_subtotal,
+            # Đơn giá + thành tiền sau VAT để sale đối chiếu với giá bán (đã gồm VAT).
+            "price_incl": quote_line.price_unit * (1 + quote_line.tax_rate / 100.0),
+            "total_incl": quote_line.price_total,
             "is_best": quote_line.is_best_price,
             "selected": quote_line.selected,
         }

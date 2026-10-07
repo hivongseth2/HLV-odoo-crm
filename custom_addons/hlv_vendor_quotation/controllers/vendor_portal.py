@@ -13,6 +13,7 @@ from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
+from ..services.asset_version import asset_version
 from ..services.vendor_chat import chat_messages, post_chat
 
 SESSION_KEY = "hlv_vendor_quote_logins"
@@ -262,6 +263,7 @@ class VendorQuotePortal(http.Controller):
         context = {
             # QWeb không tự in doctype; thiếu nó trình duyệt chạy quirks mode, vỡ layout mobile.
             "doctype": Markup("<!DOCTYPE html>"),
+            "asset_version": asset_version(),
             "access": access,
             "vendor": access.partner_id,
             "company": request.env.company.sudo(),
@@ -279,6 +281,10 @@ class VendorQuotePortal(http.Controller):
     def _not_found(self):
         return request.render(
             "hlv_vendor_quotation.portal_not_found",
-            {"doctype": Markup("<!DOCTYPE html>"), "company": request.env.company.sudo()},
+            {
+                "doctype": Markup("<!DOCTYPE html>"),
+                "asset_version": asset_version(),
+                "company": request.env.company.sudo(),
+            },
             status=404,
         )

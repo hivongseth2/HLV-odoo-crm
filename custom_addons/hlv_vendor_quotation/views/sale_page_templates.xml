@@ -12,8 +12,8 @@
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <title>Hỏi giá nhà cung cấp</title>
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
-                <link rel="stylesheet" href="/hlv_vendor_quotation/static/src/sale_page/sale_page.css"/>
-                <link rel="stylesheet" href="/hlv_vendor_quotation/static/src/sale_page/sale_page_dialogs.css"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/sale_page/sale_page.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/sale_page/sale_page_dialogs.css?v=#{asset_version}"/>
             </head>
             <body>
                 <nav class="navbar navbar-dark hq-navbar py-2">
@@ -199,13 +199,13 @@
                 </div>
 
                 <!-- Thứ tự quan trọng: utils → ui → feature → app. -->
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_utils.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_utils.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js?v=#{asset_version}"></script>
             </body>
         </html>
     </template>

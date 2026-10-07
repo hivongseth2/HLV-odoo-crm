@@ -10,7 +10,7 @@
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <meta name="robots" content="noindex, nofollow"/>
                 <title><t t-esc="page_title or 'Báo giá'"/> · <t t-esc="company.name"/></title>
-                <link rel="stylesheet" href="/hlv_vendor_quotation/static/src/css/vendor_portal.css"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
             </head>
             <body>
                 <header class="vq-header">
@@ -40,8 +40,8 @@
                         <span t-if="company.website" t-esc="company.website"/>
                     </div>
                 </footer>
-                <script src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js?v=#{asset_version}"></script>
             </body>
         </html>
     </template>

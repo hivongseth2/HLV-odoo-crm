@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- App backend cho thu mua (so sánh, chọn giá). Sale làm việc ở trang /hoi-gia-ncc,
-         không vào backend — nên app không mở cho nhóm Bán hàng. -->
+    <!-- Menu backend cho thu mua tra cứu. Không làm app riêng: gộp vào app "Yêu cầu mua hàng"
+         cho bớt app trên màn hình chính. Sale làm việc ở trang /hoi-gia-ncc, không vào đây. -->
     <menuitem id="menu_vendor_quote_root"
               name="Báo giá NCC"
-              web_icon="hlv_vendor_quotation,static/description/icon.png"
-              sequence="23"
+              parent="purchase_request.parent_menu_purchase_request"
+              sequence="30"
               groups="purchase.group_purchase_user,purchase_request.group_purchase_request_user"/>
     <menuitem id="menu_vendor_inquiry"
               name="Phiếu hỏi giá"

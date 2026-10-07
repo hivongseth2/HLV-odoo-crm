@@ -22,6 +22,7 @@ from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import paginate
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
+from ..services.asset_version import asset_version
 from ..services.vendor_chat import chat_messages, post_chat
 from .sale_page_common import API, SalePageMixin, to_int
 
@@ -35,6 +36,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     def sale_page(self, ncc=None, **kw):
         return request.render("hlv_vendor_quotation.sale_page", {
             "user_name": request.env.user.name,
+            "asset_version": asset_version(),
             "allowed": self._allowed(),
             "initial_vendor_id": to_int(ncc),
         })
