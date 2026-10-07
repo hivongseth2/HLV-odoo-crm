@@ -129,6 +129,12 @@ class VendorQuotePortal(http.Controller):
             contact=quote.user_id,
             company=quote.company_id or request.env.company.sudo(),
             orders=quote._vendor_purchase_orders(),
+            # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
+            # khác, "" = chưa chọn ai — để NCC biết dòng nào đã được đặt.
+            line_choice={
+                line.id: line.selection_state if line.selection_state != "pending" else ""
+                for line in quote.line_ids
+            },
         )
         return self._render("hlv_vendor_quotation.portal_quote_form", access, values)
 

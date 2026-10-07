@@ -195,27 +195,20 @@ def rank_vendor_suggestions(coverage, order_stats, limit):
     return sorted(vendors.values(), key=sort_key)[:limit]
 
 
-def build_share_message(company_name, vendor_name, quote_names, item_count, deadline_text, url, password):
-    """Tin nhắn sale dán vào Zalo gửi NCC.
+def build_share_message(company_name, vendor_name, quote_names, deadline_text, url, password):
+    """Tin nhắn sale dán vào Zalo gửi NCC — gọn: số báo giá, hạn, link chung của NCC, mật khẩu.
 
-    Nhận: tên công ty mình, tên NCC, list số báo giá, tổng số mặt hàng, hạn báo giá đã
-    định dạng ("" nếu không có hạn), link, mật khẩu (chuỗi).
-    Trả: chuỗi nhiều dòng. Một số báo giá thì nêu số; nhiều số thì gộp "N yêu cầu báo giá".
+    Nhận: tên công ty mình, tên NCC, list số báo giá, hạn báo giá đã định dạng ("" nếu
+    không có hạn), link chung của NCC, mật khẩu (chuỗi).
+    Trả: chuỗi nhiều dòng. Nhiều báo giá thì liệt kê các số, cách nhau dấu phẩy.
     """
-    if len(quote_names) == 1:
-        subject = f"yêu cầu báo giá {quote_names[0]}"
-    else:
-        subject = f"{len(quote_names)} yêu cầu báo giá ({', '.join(quote_names)})"
+    subject = f"yêu cầu báo giá {', '.join(quote_names)}"
+    first = f"{company_name} gửi {subject}"
     lines = [
         f"Kính gửi {vendor_name},",
-        f"{company_name} gửi {subject} — {item_count} mặt hàng.",
-    ]
-    if deadline_text:
-        lines.append(f"Hạn báo giá: {deadline_text}.")
-    lines += [
-        f"Quý công ty vui lòng điền giá tại: {url}",
+        first + (f", hạn {deadline_text}." if deadline_text else "."),
+        f"Link báo giá: {url}",
         f"Mật khẩu: {password}",
-        "Trân trọng cảm ơn!",
     ]
     return "\n".join(lines)
 

@@ -66,7 +66,7 @@ def inquiry_summary(inquiry):
         # Đơn bán / YCMH / đơn mua có thể thuộc sale khác hoặc sale chỉ có quyền đọc hạn
         # chế — ở đây chỉ hiện số chứng từ nên đọc bằng sudo.
         "sale_order": inquiry.sale_order_id.sudo().name or "",
-        "request_name": inquiry.request_id.sudo().name or "",
+        "request_name": ", ".join(inquiry.request_ids.sudo().mapped("name")),
         "purchase_orders": inquiry.purchase_order_ids.sudo().mapped("name"),
         "deadline": _date_text(inquiry.date_deadline),
         "sale_status": inquiry.sale_status,
@@ -77,19 +77,21 @@ def inquiry_summary(inquiry):
 def inquiry_detail(inquiry):
     """Phiếu đầy đủ cho ngăn so sánh: NCC (cột) × sản phẩm (dòng), kèm lựa chọn."""
     quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel").sorted("id")
-    request = inquiry.request_id.sudo()
+    pending = inquiry.line_ids.filtered(lambda l: l.chosen_line_id and not l.request_line_id)
     data = inquiry_summary(inquiry)
     data.update({
         "note": inquiry.note or "",
         "user_name": inquiry.user_id.name or "",
         "sale_order_id": inquiry.sale_order_id.id or False,
-        "request": {
-            "name": request.name,
-            "state": dict(request._fields["state"].selection).get(request.state, ""),
-        } if request else None,
+        "requests": [
+            {"name": r.name, "state": dict(r._fields["state"].selection).get(r.state, "")}
+            for r in inquiry.request_ids.sudo()
+        ],
         "purchase_orders": [purchase_order_payload(o) for o in inquiry.purchase_order_ids],
-        "can_choose": inquiry.state == "open",
-        "can_request": inquiry.state == "open" and inquiry.chosen_count > 0,
+        # Đã lên YCMH vẫn chọn lại được (VD NCC báo hết hàng sau đó) — trừ dòng đã lên đơn mua.
+        "can_choose": inquiry.state != "cancel",
+        "pending_count": len(pending),
+        "can_request": inquiry.state != "cancel" and bool(pending),
         "can_cancel": inquiry.state == "open",
         "vendors": [_vendor_column(q) for q in quotes],
         "lines": [_compare_row(line, quotes) for line in inquiry.line_ids],
@@ -130,6 +132,8 @@ def _compare_row(line, quotes):
     return {
         "id": line.id,
         "product_id": line.product_id.id,
+        "locked": line.locked,
+        "request_name": line.request_line_id.sudo().request_id.name or "",
         "name": line.name or line.product_id.display_name,
         "qty": line.product_qty,
         "uom": line.product_uom_id.name or "",
@@ -138,16 +142,16 @@ def _compare_row(line, quotes):
 
 
 def share_message(quotes):
-    """Tin nhắn Zalo cho các báo giá cùng một NCC. Một báo giá thì gửi link thẳng vào nó."""
+    """Tin nhắn Zalo cho các báo giá cùng một NCC: nêu số báo giá, gửi link chung của NCC
+    (một link cho mọi báo giá + đơn mua của họ — NCC chỉ cần lưu một link)."""
     first = quotes[:1]
     access = first.access_id
-    url = first.portal_quote_url if len(quotes) == 1 else access.portal_url
+    url = access.portal_url
     deadlines = [d for d in quotes.mapped("date_deadline") if d]
     return build_share_message(
         company_name=first.company_id.name or "",
         vendor_name=access.partner_id.name or "",
         quote_names=quotes.mapped("name"),
-        item_count=len(quotes.line_ids),
         deadline_text=_date_text(min(deadlines)) if deadlines else "",
         url=url,
         password=access.password or "",

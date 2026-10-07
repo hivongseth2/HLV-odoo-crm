@@ -232,3 +232,17 @@ a { color: var(--vq-accent); }
     .vq-status-actions .vq-btn { flex: 1 1 auto; }
     .vq-summary-inline { max-width: none; }
 }
+
+/* --- Kết quả chọn giá của sale trên từng dòng báo giá --- */
+.vq-choice-legend { margin: 6px 0 0; color: var(--vq-muted); }
+.vq-choice { font-size: .82rem; color: var(--vq-muted); margin-top: 2px; }
+.vq-choice-won { color: var(--vq-ok); font-weight: 600; }
+.vq-price-table tr.vq-line-chosen td { background: #ecfdf3; }
+.vq-price-table tr.vq-line-lost td { color: var(--vq-muted); }
+.vq-line-lost .vq-line-name, .vq-line-lost .vq-col-total, .vq-line-lost .vq-input-price,
+.vq-line-lost td[data-label="Đơn giá chưa VAT"] span { text-decoration: line-through; }
+.vq-line-lost .vq-input { color: var(--vq-muted); }
+@media (max-width: 760px) {
+    .vq-price-table tr.vq-line-chosen { background: #ecfdf3; border-color: #86efac; }
+    .vq-price-table tr.vq-line-chosen td { background: transparent; }
+}

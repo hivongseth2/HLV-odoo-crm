@@ -255,6 +255,8 @@
 .hq-offer.is-selected { box-shadow: inset 3px 0 0 var(--hq-ok); }
 .hq-offer-price { display: block; font-weight: 600; font-variant-numeric: tabular-nums; }
 .hq-offer-price.is-best { color: var(--hq-accent); }
+.hq-offer.hq-offer-alert { padding: 9px 10px !important; background: var(--hq-danger-soft); color: var(--hq-danger);
+    font-size: .8125rem; font-weight: 600; box-shadow: inset 3px 0 0 var(--hq-danger); }
 .hq-offer-meta { display: block; color: var(--hq-muted); font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 11rem; }
 .hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }
 

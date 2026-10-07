@@ -35,8 +35,12 @@ class VendorInquiry(models.Model):
     currency_id = fields.Many2one(related="company_id.currency_id")
     sale_order_id = fields.Many2one("sale.order", string="Đơn bán", index=True, tracking=True)
     request_id = fields.Many2one(
-        "purchase.request", string="Yêu cầu mua hàng", readonly=True, index=True,
+        "purchase.request", string="YCMH gần nhất", readonly=True, index=True,
         ondelete="set null", tracking=True,
+    )
+    # Một phiếu có thể lên nhiều YCMH (lên trước phần đã chọn, bổ sung phần chọn sau).
+    request_ids = fields.Many2many(
+        "purchase.request", string="Yêu cầu mua hàng", compute="_compute_request_ids"
     )
     date_deadline = fields.Date(string="Hạn báo giá")
     note = fields.Text(string="Lời nhắn gửi NCC")
@@ -70,6 +74,11 @@ class VendorInquiry(models.Model):
         for inquiry in self:
             inquiry.quoted_count = len(inquiry.quote_ids.filtered(lambda q: q.state in ("quoted", "done")))
             inquiry.chosen_count = len(inquiry.line_ids.filtered("chosen_line_id"))
+
+    @api.depends("line_ids.request_line_id")
+    def _compute_request_ids(self):
+        for inquiry in self:
+            inquiry.request_ids = inquiry.line_ids.request_line_id.request_id
 
     @api.depends("line_ids.request_line_id.purchase_lines.order_id")
     def _compute_purchase_order_ids(self):
@@ -137,26 +146,28 @@ class VendorInquiry(models.Model):
         ])
 
     def action_create_request(self, sale_order=None):
-        """Từ NCC đã chọn cho từng sản phẩm → YCMH, giá + NCC ghi sẵn vào dòng YCMH.
+        """Đưa các sản phẩm đã chọn NCC mà CHƯA nằm trong YCMH nào lên YCMH, kèm giá + NCC.
 
-        Có đơn bán: gộp vào YCMH chưa duyệt của đơn nếu có (purchase.request._add_request_lines).
-        Sản phẩm chưa chọn NCC không lên YCMH. Sau đó phiếu khoá lựa chọn.
+        Gọi được nhiều lần: lần đầu lên phần đã chọn; sản phẩm chọn sau thì bổ sung. Bổ sung
+        vào YCMH gần nhất của phiếu nếu nó còn chưa duyệt; không thì theo đơn bán (gộp vào YCMH
+        chưa duyệt của đơn nếu có) hoặc tạo YCMH mới. Sản phẩm chưa chọn NCC không lên.
         """
         self.ensure_one()
-        if self.state != "open":
-            raise UserError(_("Phiếu %s đã lên YCMH hoặc đã huỷ.", self.name))
-        chosen = self.line_ids.filtered("chosen_line_id")
-        if not chosen:
-            raise UserError(_("Chọn NCC cho ít nhất một sản phẩm trước khi lên YCMH."))
+        if self.state == "cancel":
+            raise UserError(_("Phiếu %s đã huỷ.", self.name))
+        pending = self.line_ids.filtered(lambda l: l.chosen_line_id and not l.request_line_id)
+        if not pending:
+            raise UserError(_("Không có sản phẩm nào đã chọn NCC mà chưa lên YCMH."))
         order = sale_order or self.sale_order_id
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
-            [line._request_line_vals() for line in chosen],
+            [line._request_line_vals() for line in pending],
             order=order or None,
             origin=self.name,
             requester_code=self.sale_code or "",
+            merge_into=self.request_id,
         )
         # _add_request_lines trả dòng YCMH theo đúng thứ tự dòng đã đưa vào.
-        for line, request_line in zip(chosen, request_lines, strict=True):
+        for line, request_line in zip(pending, request_lines, strict=True):
             line.request_line_id = request_line
             line.chosen_line_id.request_line_id = request_line
         self.write({
@@ -165,7 +176,7 @@ class VendorInquiry(models.Model):
             "sale_order_id": order.id if order else False,
         })
         self.message_post(body=Markup(_("%s YCMH <b>%s</b> từ %s sản phẩm đã chọn NCC.")) % (
-            _("Gộp vào") if merged else _("Đã tạo"), request.name, len(chosen),
+            _("Gộp vào") if merged else _("Đã tạo"), request.name, len(pending),
         ))
         return request, merged
 
@@ -195,6 +206,15 @@ class VendorInquiryLine(models.Model):
     request_line_id = fields.Many2one(
         "purchase.request.line", string="Dòng YCMH", readonly=True, ondelete="set null", index=True
     )
+    locked = fields.Boolean(
+        string="Đã lên đơn mua", compute="_compute_locked",
+        help="Dòng YCMH đã lên RFQ/đơn mua: đổi NCC ở phiếu không đổi được đơn đã tạo nữa.",
+    )
+
+    @api.depends("request_line_id.purchase_lines.state")
+    def _compute_locked(self):
+        for line in self:
+            line.locked = bool(line.request_line_id.sudo().purchase_lines.filtered(lambda l: l.state != "cancel"))
 
     @api.depends("quote_line_ids.selected")
     def _compute_chosen_line_id(self):

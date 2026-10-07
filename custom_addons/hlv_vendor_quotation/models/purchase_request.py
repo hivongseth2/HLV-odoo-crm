@@ -17,7 +17,9 @@ class PurchaseRequest(models.Model):
         string="Lập từ trang Hỏi giá NCC", readonly=True, copy=False,
         help="YCMH lập ở Odoo (không đi từ MISA). Chỉ YCMH loại này được gộp thêm hàng.",
     )
-    hlv_inquiry_ids = fields.One2many("hlv.vendor.inquiry", "request_id", string="Phiếu hỏi giá")
+    hlv_inquiry_ids = fields.Many2many(
+        "hlv.vendor.inquiry", string="Phiếu hỏi giá", compute="_compute_hlv_inquiry_ids"
+    )
     hlv_inquiry_count = fields.Integer(string="Số phiếu hỏi giá", compute="_compute_hlv_inquiry_count")
     vendor_quote_count = fields.Integer(
         string="Số báo giá NCC", compute="_compute_vendor_quote_count"
@@ -45,10 +47,11 @@ class PurchaseRequest(models.Model):
         ], order="id desc", limit=1).with_env(self.env)
 
     @api.model
-    def _add_request_lines(self, line_vals, order=None, origin=False, requester_code=""):
+    def _add_request_lines(self, line_vals, order=None, origin=False, requester_code="", merge_into=None):
         """Đưa hàng vào YCMH lập ở Odoo (YCMH không còn lập trên MISA).
 
-        Có đơn bán và đơn đã có YCMH chưa duyệt (xem _mergeable_for_sale_order) → gộp vào đó
+        merge_into (YCMH gần nhất của phiếu hỏi giá) còn chưa duyệt → gộp vào đó. Không thì có
+        đơn bán và đơn đã có YCMH chưa duyệt (xem _mergeable_for_sale_order) → gộp vào đó
         theo sản phẩm. Không thì tạo YCMH mới — một đơn được có nhiều YCMH (YCMH trước đã
         duyệt mà mua thiếu thì lên YCMH bổ sung).
         YCMH mới dựng giống YCMH đi từ MISA để thu mua xử lý như cũ: "Chờ phê duyệt", giao
@@ -61,7 +64,11 @@ class PurchaseRequest(models.Model):
         """
         if not line_vals:
             raise UserError(_("Chọn ít nhất một mặt hàng."))
-        target = self._mergeable_for_sale_order(order) if order else self.browse()
+        target = self.browse()
+        if merge_into and merge_into.sudo().state in MERGEABLE_STATES and merge_into.sudo().hlv_from_quote_page:
+            target = merge_into
+        elif order:
+            target = self._mergeable_for_sale_order(order)
         if target:
             lines = target.sudo()._merge_lines(line_vals)
             target.sudo().message_post(body=self._lines_message(
@@ -121,6 +128,14 @@ class PurchaseRequest(models.Model):
         )
         return Markup("<p>%s</p><ul>%s</ul>") % (title, items)
 
+    @api.depends("line_ids")
+    def _compute_hlv_inquiry_ids(self):
+        Inquiry = self.env["hlv.vendor.inquiry"]
+        for request in self:
+            request.hlv_inquiry_ids = Inquiry.search([
+                ("line_ids.request_line_id", "in", request.line_ids.ids),
+            ]) if request.line_ids else Inquiry
+
     @api.depends("hlv_inquiry_ids")
     def _compute_hlv_inquiry_count(self):
         for request in self:
@@ -131,7 +146,7 @@ class PurchaseRequest(models.Model):
         action = self.env["ir.actions.act_window"]._for_xml_id(
             "hlv_vendor_quotation.action_vendor_inquiry"
         )
-        action["domain"] = [("request_id", "=", self.id)]
+        action["domain"] = [("id", "in", self.hlv_inquiry_ids.ids)]
         return action
 
     def action_open_vendor_quote_wizard(self):

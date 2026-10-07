@@ -246,6 +246,9 @@
                     <div class="vq-section-head">
                         <div>
                             <h2>Mặt hàng cần báo giá</h2>
+                            <p t-if="any(line_choice.values())" class="vq-small vq-choice-legend">
+                                Dòng nền xanh: <t t-esc="company.name"/> đã chọn giá của quý công ty. Dòng gạch:
+                                đã chọn nhà cung cấp khác.</p>
                             <p t-if="editable" class="vq-muted vq-small">Đơn giá là giá chưa VAT cho một đơn vị
                                 tính. Mặt hàng không cung cấp được, vui lòng chọn "Không có hàng".</p>
                         </div>
@@ -272,7 +275,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="quote.line_ids" t-as="line" class="vq-line" data-vq-line="1"
+                            <tr t-foreach="quote.line_ids" t-as="line" data-vq-line="1"
+                                t-attf-class="vq-line #{'vq-line-chosen' if line_choice.get(line.id) == 'selected' else ''} #{'vq-line-lost' if line_choice.get(line.id) == 'other' else ''}"
                                 t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
                                 t-att-data-vat="line.vat or ''">
                                 <t t-set="lid" t-value="line.id"/>
@@ -288,6 +292,8 @@
                                         </a>
                                         <div>
                                             <div class="vq-line-name" t-esc="line.name or line.product_id.display_name"/>
+                                            <div t-if="line_choice.get(line.id) == 'selected'" class="vq-choice vq-choice-won">Được chọn</div>
+                                            <div t-if="line_choice.get(line.id) == 'other'" class="vq-choice">Đã chọn nhà cung cấp khác</div>
                                             <label class="vq-check">
                                                 <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
                                                        t-att-checked="na_checked" t-att-disabled="not editable"/>

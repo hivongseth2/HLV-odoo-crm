@@ -156,30 +156,56 @@ class VendorQuoteLine(models.Model):
             raise AccessError(_("Chỉ thu mua mới được chọn / bỏ chọn nhà cung cấp."))
 
     def action_choose(self):
-        """Sale chọn NCC cho một sản phẩm trong phiếu hỏi giá (chưa lên YCMH).
+        """Sale chọn NCC cho một sản phẩm trong phiếu hỏi giá.
 
-        Khác action_select (thu mua chọn trên dòng YCMH có sẵn): ở đây chưa có YCMH, chỉ đánh
-        dấu lựa chọn; giá + NCC được ghi vào YCMH khi phiếu lên YCMH.
+        Chưa lên YCMH: chỉ đánh dấu lựa chọn. Đã lên YCMH (VD NCC đã chọn báo hết hàng sau
+        đó): đổi luôn NCC + giá trên dòng YCMH — miễn dòng đó chưa lên RFQ/đơn mua.
+        Khác action_select (thu mua chọn trên dòng YCMH của luồng hỏi giá từ YCMH).
         """
         self.ensure_one()
         inquiry_line = self.inquiry_line_id
         if not inquiry_line:
             raise UserError(_("Dòng báo giá này không thuộc phiếu hỏi giá nào."))
-        if inquiry_line.inquiry_id.state != "open":
-            raise UserError(_("Phiếu %s đã lên YCMH — không đổi lựa chọn được nữa.", inquiry_line.inquiry_id.name))
+        if inquiry_line.inquiry_id.state == "cancel":
+            raise UserError(_("Phiếu %s đã huỷ.", inquiry_line.inquiry_id.name))
         if self.unavailable or not self.price_unit:
             raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
-        (inquiry_line.quote_line_ids - self).filtered("selected").write({"selected": False})
+        self._check_not_ordered(inquiry_line)
+        previous = (inquiry_line.quote_line_ids - self).filtered("selected")
+        previous.write({"selected": False, "request_line_id": False})
         self.selected = True
+        request_line = inquiry_line.request_line_id
+        if request_line:
+            self.request_line_id = request_line
+            # Sale chỉ có quyền đọc YCMH; ghi đúng các field NCC/giá đã chọn.
+            request_line.sudo().write(self._request_line_actual_vals())
+            request_line.request_id.sudo().message_post(body=Markup(_(
+                "Sale đổi NCC cho <i>%(product)s</i> sang <b>%(vendor)s</b>: %(price)s chưa VAT (%(inquiry)s)."
+            )) % {
+                "product": inquiry_line.name or inquiry_line.product_id.display_name,
+                "vendor": self.partner_id.commercial_partner_id.display_name,
+                "price": self.currency_id.format(self.price_unit),
+                "inquiry": inquiry_line.inquiry_id.name,
+            })
         return True
 
     def action_unchoose(self):
         for line in self.filtered("selected"):
-            if line.inquiry_line_id.inquiry_id.state != "open":
-                raise UserError(_("Phiếu %s đã lên YCMH — không đổi lựa chọn được nữa.",
-                                  line.inquiry_line_id.inquiry_id.name))
+            if line.inquiry_line_id.request_line_id:
+                raise UserError(_(
+                    "Sản phẩm này đã lên YCMH — bấm chọn NCC khác để đổi, không bỏ trống được."
+                ))
         self.write({"selected": False})
         return True
+
+    @api.model
+    def _check_not_ordered(self, inquiry_line):
+        if inquiry_line.locked:
+            raise UserError(_(
+                "%s đã lên RFQ/đơn mua — đổi NCC ở đây không đổi được đơn đã tạo. Báo thu mua "
+                "huỷ / sửa đơn mua.",
+                inquiry_line.name or inquiry_line.product_id.display_name,
+            ))
 
     def action_select(self):
         """Chốt NCC cho dòng YCMH: ghi NCC + giá vào actual_* để wizard "Tạo RFQ" dùng luôn."""

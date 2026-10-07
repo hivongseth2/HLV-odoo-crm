@@ -437,11 +437,15 @@ class VendorQuote(models.Model):
                 ", ".join(missing),
             ))
 
+        chosen_before = {
+            line.id: (line.price_unit, line.unavailable) for line in self.line_ids.filtered("selected")
+        }
         for line in self.line_ids:
             vals = dict(line_values[line.id])
             if vals.get("unavailable"):
                 vals.update(price_unit=0.0, vat=False)
             line.write(vals)
+        self._notify_chosen_lines_changed(chosen_before)
         resubmitted = self.state == "quoted"
         self.write({
             "vendor_note": vendor_note,
@@ -461,6 +465,31 @@ class VendorQuote(models.Model):
                 and o.partner_id.commercial_partner_id == v
             )
         return orders
+
+    def _notify_chosen_lines_changed(self, chosen_before):
+        """NCC sửa giá / báo hết hàng cho mặt hàng sale đã chọn (có khi đã lên YCMH) — báo lên
+        phiếu và YCMH để sale chọn lại. Không tự đổi giá trên YCMH: giá mua phải do người quyết."""
+        changes = []
+        for line in self.line_ids.filtered(lambda l: l.id in chosen_before):
+            old_price, old_unavailable = chosen_before[line.id]
+            if line.unavailable and not old_unavailable:
+                changes.append((line, _("báo HẾT HÀNG")))
+            elif line.price_unit != old_price:
+                changes.append((line, _("đổi giá %(old)s → %(new)s", old=self.currency_id.format(old_price),
+                                         new=self.currency_id.format(line.price_unit))))
+        if not changes:
+            return
+        items = Markup("").join(
+            Markup("<li>%s: %s</li>") % (line.name or line.product_id.display_name, text) for line, text in changes
+        )
+        body = Markup("<p>%s</p><ul>%s</ul>") % (
+            _("%s sửa báo giá cho mặt hàng đang được chọn — kiểm tra và chọn lại NCC nếu cần:",
+              self.partner_id.commercial_partner_id.display_name),
+            items,
+        )
+        requests = self.line_ids.filtered(lambda l: l.id in chosen_before).request_line_id.request_id
+        for record in list(self.inquiry_id) + list(requests):
+            record.message_post(body=body, message_type="comment", subtype_xmlid="mail.mt_comment")
 
     def _notify_vendor_submitted(self, resubmitted):
         offered = self.line_ids.filtered(lambda l: not l.unavailable)
