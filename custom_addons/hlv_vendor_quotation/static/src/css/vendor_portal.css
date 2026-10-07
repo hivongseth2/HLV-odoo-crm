@@ -297,6 +297,19 @@ a { color: var(--vq-accent); }
 .vq-msg-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .vq-msg-img img { display: block; width: 96px; height: 96px; object-fit: cover; border: 1px solid var(--vq-line);
     border-radius: 3px; background: #fff; }
-.vq-chat-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.vq-file-pick input { font-size: .8rem; max-width: 200px; }
+.vq-chat-actions { display: flex; align-items: center; gap: 8px; }
 .vq-chat-error { margin: 0 14px; white-space: pre-line; }
+
+/* --- Nút icon trong khung trao đổi + thông báo tin mới --- */
+.vq-icon { flex: none; display: block; }
+.vq-icon-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+    border: 1px solid var(--vq-line-strong); border-radius: 4px; background: #fff; color: #111827; cursor: pointer; }
+.vq-icon-btn:hover { background: #f3f4f6; }
+.vq-file-names { flex: 1; min-width: 0; font-size: .78rem; color: var(--vq-muted); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+.vq-send-btn { gap: 6px; }
+.vq-chat-flash { box-shadow: 0 0 0 2px var(--vq-accent); transition: box-shadow .3s; }
+.vq-toast { position: fixed; right: 20px; bottom: 20px; z-index: 50; max-width: 360px; padding: 12px 16px;
+    background: #111827; color: #fff; border-radius: 4px; text-decoration: none; font-size: .9rem;
+    box-shadow: 0 8px 24px rgba(17, 24, 39, .25); }
+.vq-toast:hover { color: #fff; background: #1f2937; }

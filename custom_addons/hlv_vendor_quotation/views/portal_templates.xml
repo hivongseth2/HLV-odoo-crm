@@ -12,7 +12,9 @@
                 <title><t t-esc="page_title or 'Báo giá'"/> · <t t-esc="company.name"/></title>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
             </head>
-            <body>
+            <body t-att-data-bus-channel="bus_channel if logged_in else None"
+                  t-att-data-bus-version="bus_version if logged_in else None"
+                  t-att-data-portal-base="portal_base if logged_in else None">
                 <header class="vq-header">
                     <div class="vq-wrap vq-header-row">
                         <a class="vq-brand" t-att-href="portal_base or '#'">
@@ -42,6 +44,8 @@
                 </footer>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_chat.js?v=#{asset_version}"></script>
             </body>
         </html>
     </template>
@@ -109,7 +113,7 @@
     <!-- Trao đổi với bên mua trên một báo giá / đơn mua. Chỉ tin thuộc kênh "Trao đổi với NCC"
          (services/vendor_chat.py) — tin hệ thống không hiện ở đây. Cần biến chat, chat_url. -->
     <template id="portal_chat" name="Báo giá NCC - trao đổi">
-        <details class="vq-chat" id="trao-doi" open="open">
+        <details class="vq-chat" id="trao-doi" open="open" t-att-data-chat-key="chat_key">
             <summary class="vq-chat-head" title="Thu gọn / mở rộng">
                 <span class="vq-chat-title">Trao đổi với <t t-esc="company.name"/></span>
                 <span t-if="chat" class="vq-count-badge" t-att-title="'%s tin nhắn' % len(chat)" t-esc="len(chat)"/>
@@ -123,7 +127,7 @@
                     giao… quý công ty nhắn tại đây.</p>
                 <div t-foreach="chat" t-as="msg" t-attf-class="vq-msg #{'vq-msg-mine' if msg['from_vendor'] else ''}">
                     <div class="vq-msg-head">
-                        <b t-esc="'Quý công ty' if msg['from_vendor'] else msg['author']"/>
+                        <b t-esc="'Bạn' if msg['from_vendor'] else msg['author']"/>
                         <span class="vq-muted" t-esc="msg['date']"/>
                     </div>
                     <div t-if="msg['body']" class="vq-msg-body" t-esc="msg['body']"/>
@@ -142,14 +146,17 @@
                 <label class="vq-sr-only" for="vq-chat-message">Tin nhắn</label>
                 <textarea id="vq-chat-message" name="message" rows="3" class="vq-input" maxlength="2000"
                           placeholder="Nhập tin nhắn…"/>
+                <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
                 <div class="vq-chat-actions">
-                    <label class="vq-file-pick">
-                        <input type="file" name="attachments" multiple="multiple"
+                    <label class="vq-icon-btn" title="Đính kèm ảnh, PDF, Excel, Word… (tối đa 5 tệp, mỗi tệp 10MB)">
+                        <svg class="vq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>
+                        <span class="vq-sr-only">Đính kèm tệp</span>
+                        <input type="file" name="attachments" multiple="multiple" class="vq-sr-only"
                                accept="image/*,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.zip"/>
                     </label>
-                    <button type="submit" class="vq-btn vq-btn-primary">Gửi</button>
+                    <span class="vq-file-names" data-file-names="1"></span>
+                    <button type="submit" class="vq-btn vq-btn-primary vq-send-btn"><svg class="vq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>Gửi</button>
                 </div>
-                <span class="vq-muted vq-small">Ảnh, PDF, Excel, Word… tối đa 5 tệp, mỗi tệp 10MB.</span>
             </form>
         </details>
     </template>
@@ -216,7 +223,7 @@
                             <td data-label="Đơn mua">
                                 <t t-set="po_list" t-value="quote_orders[quote.id]"/>
                                 <a t-foreach="po_list" t-as="po" class="vq-block-link"
-                                   t-att-href="'%s/don-mua/%s' % (portal_base, po.id)" t-esc="po.name"/>
+                                   t-att-href="'%s/don-mua/%s?from=%s' % (portal_base, po.id, quote.id)" t-esc="po.name"/>
                                 <t t-if="not po_list">—</t>
                             </td>
                             <td class="vq-cell-action">
@@ -275,7 +282,7 @@
                     <h2>Đơn mua từ báo giá này</h2>
                     <p class="vq-muted vq-small">Cảm ơn quý công ty — các mặt hàng được chọn đã lên đơn mua:</p>
                     <a t-foreach="orders" t-as="po" class="vq-block-link"
-                       t-att-href="'%s/don-mua/%s' % (portal_base, po.id)">
+                       t-att-href="'%s/don-mua/%s?from=%s' % (portal_base, po.id, quote.id)">
                         <t t-esc="po.name"/> · <t t-esc="fmt(po.amount_untaxed)"/> chưa VAT</a>
                 </section>
                 <section t-if="quote.note" class="vq-note">

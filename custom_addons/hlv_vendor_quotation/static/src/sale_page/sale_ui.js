@@ -64,12 +64,15 @@ window.HlvQuote = window.HlvQuote || {};
   };
 
   var toastTimer = null;
-  HQ.toast = function (message) {
+  /** onClick: thông báo bấm được (vd. mở tin NCC vừa nhắn) — để lâu hơn cho kịp bấm. */
+  HQ.toast = function (message, onClick) {
     var box = HQ.$("hq-toast");
     box.textContent = message;
     box.classList.remove("hq-hidden");
+    box.classList.toggle("hq-toast-link", !!onClick);
+    box.onclick = onClick ? function () { box.classList.add("hq-hidden"); onClick(); } : null;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { box.classList.add("hq-hidden"); }, 2500);
+    toastTimer = setTimeout(function () { box.classList.add("hq-hidden"); }, onClick ? 10000 : 2500);
   };
 
   /** Copy chữ vào clipboard; trình duyệt chặn Clipboard API (http) thì dùng textarea tạm. */

@@ -268,6 +268,7 @@ body {
     border-radius: var(--hq-radius);
     font-size: .8125rem;
 }
+.hq-toast-link { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ------------------------------------------------------------ màn hẹp */
 

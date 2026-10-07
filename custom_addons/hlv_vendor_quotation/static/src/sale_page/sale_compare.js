@@ -9,10 +9,13 @@ window.HlvQuote = window.HlvQuote || {};
   var esc = HQ.esc;
   var D = { detail: null, saleOrder: null };  // phiếu đang mở + đơn bán sẽ gắn khi lên YCMH
 
-  HQ.openInquiry = function (inquiryId) {
+  /** quiet: tải lại ngầm phiếu đang mở (có tin mới) — không nháy "Đang tải…". */
+  HQ.openInquiry = function (inquiryId, quiet) {
     S.openInquiryId = inquiryId;
     HQ.show("hq-drawer", true);
-    HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-loading">Đang tải…</div>';
+    if (!quiet) {
+      HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-loading">Đang tải…</div>';
+    }
     return HQ.api("inquiry", { inquiry_id: inquiryId }).then(function (detail) {
       D.saleOrder = detail.sale_order_id ? { id: detail.sale_order_id, name: detail.sale_order } : null;
       render(detail);

@@ -1,6 +1,6 @@
 /* Khởi động trang /hoi-gia-ncc. Phải nạp SAU các file feature vì gọi HQ.loadVendors,
    HQ.loadInquiries, HQ.openInquiry, HQ.openCreate, HQ.bindCreateEvents, HQ.bindCompareEvents,
-   HQ.bindChatEvents, HQ.bindOrderViewEvents.
+   HQ.bindChatEvents, HQ.bindOrderViewEvents, HQ.listenBus.
 
    Mã sale lấy từ link riêng ?t=<token> như /misa_sale_status: mỗi sale chỉ có mã của mình
    (khai ở tài khoản), thu mua / quản lý thêm "Tất cả". Trang chỉ chọn mã để hiển thị — server
@@ -102,6 +102,7 @@ window.HlvQuote = window.HlvQuote || {};
       S.code = event.target.value;
       S.page = 1;
       HQ.syncUrl();
+      HQ.listenBus();
       HQ.reloadAll();
     });
     HQ.$("hq-copy-code-link").addEventListener("click", function () {
@@ -145,6 +146,7 @@ window.HlvQuote = window.HlvQuote || {};
       S.code = code;
       renderCodeSelect();
       HQ.syncUrl();
+      HQ.listenBus();
       return HQ.reloadAll();
     }).catch(function (err) {
       HQ.showAlert("hq-alert", err.message);

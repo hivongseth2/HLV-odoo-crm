@@ -13,6 +13,7 @@ from odoo.exceptions import UserError
 from odoo.tools import html2plaintext, plaintext2html
 
 from ..models.vendor_quote_utils import IMAGE_EXTENSIONS, attachment_error, file_extension
+from .chat_bus import notify_chat
 from .notify import internal_followers
 
 CHAT_SUBTYPE = "hlv_vendor_quotation.mt_vendor_chat"
@@ -99,6 +100,7 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
         partner_ids=(internal_followers(record) | (notify_partners or record.env["res.partner"])).ids
         if from_vendor else [],
     )
+    notify_chat(record, author.name, from_vendor)
 
 
 def chat_attachment(env, attachment_id):

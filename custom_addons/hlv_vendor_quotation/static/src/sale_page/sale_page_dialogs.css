@@ -286,8 +286,11 @@
 .hq-chat-form .hq-textarea { flex: 1 1 auto; }
 
 .hq-chat-form { flex-wrap: wrap; }
-.hq-chat-side { display: flex; flex-direction: column; gap: .35rem; }
-.hq-file-btn { justify-content: center; cursor: pointer; }
+.hq-chat-side { display: flex; align-items: center; gap: .4rem; align-self: flex-end; }
+.hq-attach-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+    border: 1px solid var(--hq-line); border-radius: var(--hq-radius); background: #fff; color: var(--hq-ink); cursor: pointer; }
+.hq-attach-btn:hover { background: #FAF9F6; }
+.hq-send-btn { display: inline-flex; align-items: center; gap: .35rem; }
 .hq-chat-picked { flex-basis: 100%; color: var(--hq-muted); font-size: .75rem; }
 .hq-chat-picked:empty { display: none; }
 .hq-msg-files { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }

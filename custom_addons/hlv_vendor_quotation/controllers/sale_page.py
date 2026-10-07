@@ -26,6 +26,7 @@ from ..models.vendor_quote_utils import paginate
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
 from ..services.asset_version import asset_version
+from ..services.chat_bus import SALE_ALL_CHANNEL, bus_version, sale_channel
 from ..services.vendor_chat import FILE_MAX_BYTES, chat_attachment, chat_messages, post_chat
 from .sale_page_common import API, SalePageMixin, to_int
 
@@ -48,13 +49,20 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     def api_config(self, **kw):
         self._check()
         env = request.env
+        codes = sale_scope.sale_code_options(env)
         return {
-            "codes": sale_scope.sale_code_options(env),
+            "codes": codes,
             "can_see_all": sale_scope.can_see_all(env),
             "all_code": sale_scope.ALL_SALES,
             "vat_options": VAT_SELECTION,
             "status_tabs": STATUS_TABS,
             "today": fields.Date.to_string(fields.Date.context_today(env.user)),
+            # Kênh websocket báo tin trao đổi mới — tên kênh do server đặt, JS không tự ghép.
+            "bus": {
+                "version": bus_version(),
+                "all_channel": SALE_ALL_CHANNEL if sale_scope.can_see_all(env) else None,
+                "channels": {c["code"]: sale_channel(env, c["code"]) for c in codes},
+            },
         }
 
     @http.route(f"{API}/vendors", type="json", auth="user", methods=["POST"])

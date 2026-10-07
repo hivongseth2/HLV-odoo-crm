@@ -14,6 +14,7 @@ from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
 from ..services.asset_version import asset_version
+from ..services.chat_bus import bus_version, vendor_channel
 from ..services.vendor_chat import chat_attachment, chat_messages, post_chat
 
 SESSION_KEY = "hlv_vendor_quote_logins"
@@ -132,6 +133,7 @@ class VendorQuotePortal(http.Controller):
             company=quote.company_id or request.env.company.sudo(),
             orders=quote._vendor_purchase_orders(),
             chat=chat_messages(quote, self._file_url(token)),
+            chat_key=f"quote:{quote.id}",
             chat_url=f"{PORTAL_ROUTE}/{token}/{quote.id}/tin-nhan",
             chat_error=post.get("chat_error") if request.httprequest.method == "GET" else "",
             # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
@@ -210,14 +212,19 @@ class VendorQuotePortal(http.Controller):
             if upload.filename
         ]
 
-    def _post_vendor_chat(self, record, access, message, notify_partners, back_url):
-        """Đăng tin NCC gửi (kèm tệp nếu có) rồi quay lại trang. Tệp sai → báo lỗi trên trang."""
+    def _post_vendor_chat(self, record, access, message, notify_partners, back_url, back_params=None):
+        """Đăng tin NCC gửi (kèm tệp nếu có) rồi quay lại trang. Tệp sai → báo lỗi trên trang.
+
+        back_params: tham số giữ lại khi quay về (vd. from= của breadcrumb).
+        """
+        params = dict(back_params or {})
         try:
             post_chat(record, message, access.partner_id, from_vendor=True,
                       notify_partners=notify_partners, files=self._uploaded_files())
         except UserError as exc:
-            return request.redirect(f"{back_url}?{urlencode({'chat_error': exc.args[0]})}#trao-doi")
-        return request.redirect(f"{back_url}#trao-doi")
+            params["chat_error"] = exc.args[0]
+        query = f"?{urlencode(params)}" if params else ""
+        return request.redirect(f"{back_url}{query}#trao-doi")
 
     def _file_response(self, attachment):
         # Ảnh / PDF mở thẳng trên trình duyệt; tệp khác tải về.
@@ -310,6 +317,9 @@ class VendorQuotePortal(http.Controller):
             # QWeb không tự in doctype; thiếu nó trình duyệt chạy quirks mode, vỡ layout mobile.
             "doctype": Markup("<!DOCTYPE html>"),
             "asset_version": asset_version(),
+            # Kênh websocket của NCC: đặt theo mã link bí mật (xem services/chat_bus.py).
+            "bus_channel": vendor_channel(access),
+            "bus_version": bus_version(),
             "access": access,
             "vendor": access.partner_id,
             "company": request.env.company.sudo(),

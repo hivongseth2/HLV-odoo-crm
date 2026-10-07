@@ -36,6 +36,15 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.api("chat", { model: model, res_id: id }).then(render).catch(function (err) { HQ.toast(err.message); });
   };
 
+  /** Có tin mới trên model/id: đang mở đúng hộp đó thì tải lại, trả true; không thì false. */
+  HQ.reloadChat = function (model, id) {
+    if (!current || current.model !== model || current.id !== id) {
+      return false;
+    }
+    HQ.api("chat", { model: model, res_id: id }).then(render).catch(function () { /* lần tin sau tải lại */ });
+    return true;
+  };
+
   function clearFiles() {
     HQ.$("hq-chat-files").value = "";
     HQ.$("hq-chat-picked").textContent = "";

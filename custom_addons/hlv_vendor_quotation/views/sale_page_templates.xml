@@ -191,12 +191,13 @@
                                 <textarea id="hq-chat-input" rows="2" maxlength="2000" class="hq-input hq-textarea"
                                           placeholder="Nhắn cho NCC — NCC đọc trên trang báo giá của họ (Ctrl+Enter để gửi)"></textarea>
                                 <div class="hq-chat-side">
-                                    <label class="hq-btn hq-btn-mini hq-file-btn" title="Ảnh, PDF, Excel, Word… tối đa 5 tệp, mỗi tệp 10MB">
-                                        Đính kèm
+                                    <label class="hq-attach-btn" title="Đính kèm ảnh, PDF, Excel, Word… (tối đa 5 tệp, mỗi tệp 10MB)">
+                                        <svg class="hq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>
+                                        <span class="hq-sr-only">Đính kèm tệp</span>
                                         <input type="file" id="hq-chat-files" multiple="multiple" class="hq-sr-only"
                                                accept="image/*,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.zip"/>
                                     </label>
-                                    <button type="button" class="hq-btn hq-btn-primary" id="hq-chat-send">Gửi</button>
+                                    <button type="button" class="hq-btn hq-btn-primary hq-send-btn" id="hq-chat-send"><svg class="hq-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>Gửi</button>
                                 </div>
                                 <div id="hq-chat-picked" class="hq-chat-picked"></div>
                             </div>
@@ -225,6 +226,8 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js?v=#{asset_version}"></script>
             </body>
         </html>

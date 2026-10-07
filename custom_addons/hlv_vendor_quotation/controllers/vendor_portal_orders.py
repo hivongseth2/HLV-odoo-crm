@@ -50,9 +50,11 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         order = access._vendor_purchase_orders().filtered(lambda o: o.id == order_id)
         if not order:
             return self._not_found()
+        from_quote = self._from_quote(access, kw.get("from"))
         if request.httprequest.method == "POST" and status:
             order._vendor_set_status(status, access.partner_id)
-            return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}?saved=1")
+            back = f"&from={from_quote.id}" if from_quote else ""
+            return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}?saved=1{back}")
         return self._render("hlv_vendor_quotation.portal_order_form", access, {
             "order": order,
             "quotes": order.hlv_vendor_quote_ids,
@@ -62,9 +64,19 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "active_tab": "orders",
             "company": order.company_id,
             "chat": chat_messages(order, self._file_url(token)),
+            "chat_key": f"order:{order.id}",
+            "from_quote": from_quote,
             "chat_url": f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}/tin-nhan",
             "chat_error": kw.get("chat_error") or "",
         })
+
+    def _from_quote(self, access, quote_id):
+        """Báo giá nguồn khi NCC đi từ báo giá sang đơn mua (?from=) — để breadcrumb quay lại.
+        Chỉ nhận báo giá của chính NCC này; sai / thiếu → rỗng."""
+        try:
+            return self._get_quote(access, int(quote_id)) if quote_id else None
+        except (TypeError, ValueError):
+            return None
 
     @http.route(
         f"{PORTAL_ROUTE}/<string:token>/{ORDERS}/<int:order_id>/tin-nhan",
@@ -80,8 +92,10 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         order = access._vendor_purchase_orders().filtered(lambda o: o.id == order_id)
         if not order:
             return self._not_found()
+        from_quote = self._from_quote(access, kw.get("from"))
         return self._post_vendor_chat(
-            order, access, message, order._chat_contacts(), f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}"
+            order, access, message, order._chat_contacts(), f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}",
+            {"from": from_quote.id} if from_quote else None,
         )
 
     @http.route(
