@@ -119,7 +119,10 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
             ('picking_id', 'in', all_picking_ids),
             ('result_package_id', '!=', False),
             ('state', '!=', 'cancel'),
-        ], ['picking_id', 'result_package_id', 'product_id', 'quantity', 'location_dest_id', 'move_id'])
+        ], [
+            'picking_id', 'package_id', 'result_package_id', 'product_id', 'quantity',
+            'location_dest_id', 'move_id',
+        ])
 
         if not move_lines:
             return {}
@@ -201,6 +204,9 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
             return {'internal': 0, 'outgoing': 1, 'incoming': 2}.get(code, 9)
 
         sorted_move_lines = sorted(move_lines, key=picking_priority)
+        packed_qty_by_pack = self._packed_qty_by_pack(
+            move_lines, picking_to_so, picking_info_map, kit_tmpl_by_move,
+        )
 
         # --- Gom nhóm SO → Picking → Package, khử trùng kiện theo tên ---
         so_picking_packs = {}
@@ -251,30 +257,17 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                     'sequence': pack_info.get('pack_sequence') or 0,
                     'total': pack_info.get('pack_total') or 0,
                     'product_map': {},
-                    'product_id_map': {},
-                    'kit_component_map': {},
+                    **packed_qty_by_pack.get((so_id, pid), {
+                        'product_id_map': {}, 'kit_component_map': {},
+                    }),
                 }
 
             p_content = so_picking_packs[so_id][pick_id]['packages_dict'][pname]
-            prod_id = ml['product_id'][0] if ml['product_id'] else False
             prod_name = ml['product_id'][1] if ml['product_id'] else 'Unknown'
             qty = float(ml['quantity']) if ml.get('quantity') else 0.0
             p_content['product_map'][prod_name] = (
                 p_content['product_map'].get(prod_name, 0.0) + qty
             )
-            if prod_id:
-                # Linh kiện của combo (move tách từ BOM phantom) phải đếm riêng theo combo:
-                # nếu đơn vừa bán lẻ sản phẩm X vừa bán combo chứa X, gộp chung theo
-                # product_id sẽ làm dòng lẻ hiện cả phần X nằm trong combo (VD bán lẻ 2
-                # sạc + 2 combo có sạc → dòng sạc hiện "đóng gói 4").
-                kit_tmpl_id = kit_tmpl_by_move.get(ml['move_id'][0]) if ml.get('move_id') else None
-                if kit_tmpl_id:
-                    kit_map = p_content['kit_component_map'].setdefault(kit_tmpl_id, {})
-                    kit_map[prod_id] = kit_map.get(prod_id, 0.0) + qty
-                else:
-                    p_content['product_id_map'][prod_id] = (
-                        p_content['product_id_map'].get(prod_id, 0.0) + qty
-                    )
 
         # --- Sắp xếp theo thứ tự phiếu kho trong SO và format kết quả ---
         final_so_packages = {}
@@ -304,6 +297,56 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
             final_so_packages[so_id] = sorted_groups
 
         return final_so_packages
+
+    def _packed_qty_by_pack(self, move_lines, picking_to_so, picking_info_map, kit_tmpl_by_move):
+        """
+        Số lượng đã đóng gói cho đơn, theo kiện:
+        {(so_id, package_id): {'product_id_map': {product_id: qty},
+                               'kit_component_map': {kit_tmpl_id: {product_id: qty}}}}
+        Kiện không có hàng nào được tính thì không có trong dict.
+
+        Chỉ đếm move line thực sự BỎ hàng vào kiện (package_id khác result_package_id).
+        Bỏ qua:
+        - Dòng chở nguyên một kiện có sẵn (package_id == result_package_id): Odoo tự gán
+          result_package_id như vậy khi phiếu giữ trọn một kiện cũ
+          (stock.picking._check_entire_pack). VD hàng còn nằm trong kiện của phiếu trả
+          hàng/chuyển kho trước đó: phiếu PICK của đơn giữ nguyên kiện, nhưng đơn này chưa
+          đóng gói gì.
+        - Phiếu nhận (hàng trả về).
+        - Kiện đã đi ra ở một phiếu xuất done của đơn: còn nằm trong kho tức là bị trả lại,
+          không còn là hàng đã gói chờ giao.
+        """
+        shipped_once = {
+            (picking_to_so.get(ml['picking_id'][0]), ml['result_package_id'][0])
+            for ml in move_lines
+            if picking_info_map.get(ml['picking_id'][0], {}).get('code') == 'outgoing'
+            and picking_info_map.get(ml['picking_id'][0], {}).get('state') == 'done'
+        }
+        packed = {}
+        for ml in move_lines:
+            so_id = picking_to_so.get(ml['picking_id'][0])
+            pid = ml['result_package_id'][0]
+            src_pid = ml['package_id'][0] if ml.get('package_id') else None
+            if (
+                not so_id or not ml['product_id'] or src_pid == pid
+                or (so_id, pid) in shipped_once
+                or picking_info_map.get(ml['picking_id'][0], {}).get('code') == 'incoming'
+            ):
+                continue
+            prod_id = ml['product_id'][0]
+            qty = float(ml['quantity']) if ml.get('quantity') else 0.0
+            pack = packed.setdefault((so_id, pid), {'product_id_map': {}, 'kit_component_map': {}})
+            # Linh kiện của combo (move tách từ BOM phantom) phải đếm riêng theo combo:
+            # nếu đơn vừa bán lẻ sản phẩm X vừa bán combo chứa X, gộp chung theo
+            # product_id sẽ làm dòng lẻ hiện cả phần X nằm trong combo (VD bán lẻ 2
+            # sạc + 2 combo có sạc → dòng sạc hiện "đóng gói 4").
+            kit_tmpl_id = kit_tmpl_by_move.get(ml['move_id'][0]) if ml.get('move_id') else None
+            if kit_tmpl_id:
+                qty_map = pack['kit_component_map'].setdefault(kit_tmpl_id, {})
+            else:
+                qty_map = pack['product_id_map']
+            qty_map[prod_id] = qty_map.get(prod_id, 0.0) + qty
+        return packed
 
     def _kit_tmpl_by_move(self, move_ids):
         """
