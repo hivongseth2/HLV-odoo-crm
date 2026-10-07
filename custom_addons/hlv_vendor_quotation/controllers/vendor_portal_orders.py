@@ -69,6 +69,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "company": order.company_id,
             "chat": chat_messages(order, self._file_url(token)),
             "chat_key": f"order:{order.id}",
+            "chat_doc": order.name,
             "from_quote": from_quote,
             "chat_url": f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}/tin-nhan",
             "chat_error": kw.get("chat_error") or "",

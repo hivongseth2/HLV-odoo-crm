@@ -150,6 +150,7 @@ class VendorQuotePortal(http.Controller):
             orders=quote._vendor_purchase_orders(),
             chat=chat_messages(quote, self._file_url(token)),
             chat_key=f"quote:{quote.id}",
+            chat_doc=quote.name,
             chat_url=f"{PORTAL_ROUTE}/{token}/{quote.id}/tin-nhan",
             chat_error=post.get("chat_error") if request.httprequest.method == "GET" else "",
             # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
