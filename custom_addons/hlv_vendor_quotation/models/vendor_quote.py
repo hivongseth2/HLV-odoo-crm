@@ -5,6 +5,7 @@ from markupsafe import Markup
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from ..services.notify import post_internal
 from .vendor_quote_utils import match_by_product
 
 # NCC chỉ thấy báo giá đã gửi đi; nháp và đã huỷ là việc nội bộ.
@@ -489,7 +490,7 @@ class VendorQuote(models.Model):
         )
         requests = self.line_ids.filtered(lambda l: l.id in chosen_before).request_line_id.request_id
         for record in list(self.inquiry_id) + list(requests):
-            record.message_post(body=body, message_type="comment", subtype_xmlid="mail.mt_comment")
+            post_internal(record, body, self.partner_id)
 
     def _notify_vendor_submitted(self, resubmitted):
         offered = self.line_ids.filtered(lambda l: not l.unavailable)
@@ -502,21 +503,12 @@ class VendorQuote(models.Model):
                 amount=self.currency_id.format(self.amount_untaxed),
             ),
         )
-        # mt_comment để follower nhận thông báo: sale tạo báo giá theo dõi báo giá,
-        # thu mua theo dõi YCMH — cả hai cần biết NCC đã báo giá.
-        self.message_post(
-            body=body,
-            author_id=self.partner_id.id,
-            message_type="comment",
-            subtype_xmlid="mail.mt_comment",
+        # Ghi chú nội bộ gọi tên follower nội bộ (sale tạo phiếu, thu mua theo dõi YCMH) — không
+        # email cho NCC / đối tác bên ngoài (xem services/notify.py).
+        post_internal(self, body, self.partner_id)
+        headline = Markup("<p>%s</p>%s") % (
+            _("%(vendor)s đã báo giá %(quote)s.", vendor=self.partner_id.display_name, quote=self.name),
+            body,
         )
-        if self.request_id:
-            self.request_id.message_post(
-                body=Markup("<p>%s</p>%s") % (
-                    _("%(vendor)s đã báo giá %(quote)s.", vendor=self.partner_id.display_name, quote=self.name),
-                    body,
-                ),
-                author_id=self.partner_id.id,
-                message_type="comment",
-                subtype_xmlid="mail.mt_comment",
-            )
+        for record in list(self.inquiry_id) + list(self.request_id):
+            post_internal(record, headline, self.partner_id)

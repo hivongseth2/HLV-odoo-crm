@@ -3,6 +3,8 @@ from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from ..services.notify import post_internal
+
 # Trạng thái NCC tự báo trên trang báo giá của họ — thứ tự là thứ tự tiến trình.
 VENDOR_STATUS = [
     ("packed", "Đã đóng gói"),
@@ -48,10 +50,6 @@ class PurchaseOrder(models.Model):
         if VENDOR_STATUS_ORDER.index(status) <= current:
             return False
         self.write({"hlv_vendor_status": status, "hlv_vendor_status_date": fields.Datetime.now()})
-        self.message_post(
-            body=Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status],
-            author_id=vendor_partner.id,
-            message_type="comment",
-            subtype_xmlid="mail.mt_comment",
-        )
+        # Ghi chú nội bộ: NCC là follower của đơn mua của họ — đăng "comment" sẽ email ra ngoài.
+        post_internal(self, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status], vendor_partner)
         return True
