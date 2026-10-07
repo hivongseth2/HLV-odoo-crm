@@ -109,25 +109,30 @@
     <!-- Trao đổi với bên mua trên một báo giá / đơn mua. Chỉ tin thuộc kênh "Trao đổi với NCC"
          (services/vendor_chat.py) — tin hệ thống không hiện ở đây. Cần biến chat, chat_url. -->
     <template id="portal_chat" name="Báo giá NCC - trao đổi">
-        <section class="vq-chat" id="trao-doi">
-            <h2>Trao đổi với <t t-esc="company.name"/></h2>
-            <p t-if="not chat" class="vq-muted vq-small">Chưa có tin nhắn. Cần hỏi thêm về quy cách, số lượng,
-                thời gian giao… quý công ty nhắn tại đây.</p>
-            <div t-foreach="chat" t-as="msg" t-attf-class="vq-msg #{'vq-msg-mine' if msg['from_vendor'] else ''}">
-                <div class="vq-msg-head">
-                    <b t-esc="'Quý công ty' if msg['from_vendor'] else msg['author']"/>
-                    <span class="vq-muted" t-esc="msg['date']"/>
+        <details class="vq-chat" id="trao-doi" open="open">
+            <summary class="vq-chat-head">
+                <span>Trao đổi với <t t-esc="company.name"/></span>
+                <span class="vq-chat-count" t-esc="'%s tin' % len(chat) if chat else 'Chưa có tin'"/>
+            </summary>
+            <div class="vq-chat-list">
+                <p t-if="not chat" class="vq-muted vq-small">Cần hỏi thêm về quy cách, số lượng, thời gian
+                    giao… quý công ty nhắn tại đây.</p>
+                <div t-foreach="chat" t-as="msg" t-attf-class="vq-msg #{'vq-msg-mine' if msg['from_vendor'] else ''}">
+                    <div class="vq-msg-head">
+                        <b t-esc="'Quý công ty' if msg['from_vendor'] else msg['author']"/>
+                        <span class="vq-muted" t-esc="msg['date']"/>
+                    </div>
+                    <div class="vq-msg-body" t-esc="msg['body']"/>
                 </div>
-                <div class="vq-msg-body" t-esc="msg['body']"/>
             </div>
             <form method="post" class="vq-chat-form" t-att-action="chat_url">
                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                 <label class="vq-sr-only" for="vq-chat-message">Tin nhắn</label>
-                <textarea id="vq-chat-message" name="message" rows="2" class="vq-input" maxlength="2000"
+                <textarea id="vq-chat-message" name="message" rows="3" class="vq-input" maxlength="2000"
                           required="required" placeholder="Nhập tin nhắn…"/>
                 <button type="submit" class="vq-btn vq-btn-primary">Gửi</button>
             </form>
-        </section>
+        </details>
     </template>
 
     <template id="portal_quote_list" name="Báo giá NCC - danh sách">
@@ -219,6 +224,9 @@
             <t t-set="active_tab" t-value="'quotes'"/>
             <div class="vq-wrap">
                 <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <!-- Nội dung bên trái, trao đổi bên phải (màn hẹp: xuống dưới). -->
+                <div class="vq-with-chat">
+                <div class="vq-main-col">
                 <nav class="vq-breadcrumb">
                     <a t-att-href="portal_base">Yêu cầu báo giá</a> / <span t-esc="quote.name"/>
                 </nav>
@@ -240,7 +248,7 @@
                     <div t-if="contact"><dt>Người phụ trách</dt>
                         <dd><t t-esc="contact.name"/>
                             <t t-set="contact_phone" t-value="contact.partner_id.mobile or contact.partner_id.phone"/>
-                            <a t-if="contact_phone" class="vq-block-link" t-att-href="'tel:%s' % contact_phone"
+                            <a t-if="contact_phone" class="vq-phone" t-att-href="'tel:%s' % contact_phone"
                                t-esc="contact_phone"/></dd></div>
                 </dl>
 
@@ -386,7 +394,9 @@
                         </div>
                     </div>
                 </form>
-                <t t-call="hlv_vendor_quotation.portal_chat"/>
+                </div>
+                <aside class="vq-chat-col"><t t-call="hlv_vendor_quotation.portal_chat"/></aside>
+                </div>
             </div>
         </t>
     </template>

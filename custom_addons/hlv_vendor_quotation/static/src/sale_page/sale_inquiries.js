@@ -121,8 +121,12 @@ window.HlvQuote = window.HlvQuote || {};
     }
     body.innerHTML = inquiries.map(function (q) {
       var docs = [q.request_name].concat(q.purchase_orders).filter(Boolean);
-      return '<tr class="hq-row" data-inquiry="' + q.id + '">' +
-        '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" +
+      // Có NCC nhắn chưa trả lời: tô cả dòng + nhãn, nhìn bảng là biết phiếu nào cần vào xem.
+      var chat = q.chat_new
+        ? '<span class="hq-tag hq-tag-warn" title="Tin cuối là của NCC — chưa trả lời">NCC nhắn ' + q.chat_new + "</span>"
+        : q.chat_count ? '<span class="hq-muted" title="Đã có trao đổi với NCC">' + q.chat_count + " tin</span>" : "";
+      return '<tr class="hq-row' + (q.chat_new ? " hq-row-new" : "") + '" data-inquiry="' + q.id + '">' +
+        '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" + (chat ? " " + chat : "") +
         (q.sale_code ? '<div class="hq-muted">' + esc(q.sale_code) + "</div>" : "") + "</td>" +
         '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.products) + "</span>" +
         (q.sale_order ? '<div class="hq-muted">Đơn bán ' + esc(q.sale_order) + "</div>" : "") + "</td>" +

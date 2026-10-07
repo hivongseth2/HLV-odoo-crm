@@ -53,9 +53,17 @@ def purchase_order_payload(order):
     }
 
 
+def _inquiry_chat(inquiry, quotes):
+    """(tổng số tin trao đổi, số cuộc mà tin cuối là của NCC) trên các báo giá + đơn mua của
+    phiếu — để bảng phiếu báo ngay phiếu nào có NCC nhắn chưa trả lời."""
+    stats = [chat_stats(record) for record in list(quotes) + list(inquiry.purchase_order_ids.sudo())]
+    return sum(count for count, _new in stats), sum(1 for _count, new in stats if new)
+
+
 def inquiry_summary(inquiry):
     """Một dòng trong bảng phiếu hỏi giá."""
     quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel")
+    chat_count, chat_new = _inquiry_chat(inquiry, quotes)
     names = inquiry.line_ids[:PRODUCT_PREVIEW].mapped(lambda l: l.name or l.product_id.name)
     more = len(inquiry.line_ids) - PRODUCT_PREVIEW
     return {
@@ -75,6 +83,8 @@ def inquiry_summary(inquiry):
         "deadline": _date_text(inquiry.date_deadline),
         "sale_status": inquiry.sale_status,
         "sale_status_label": SALE_STATUS_LABELS.get(inquiry.sale_status, ""),
+        "chat_count": chat_count,
+        "chat_new": chat_new,
     }
 
 

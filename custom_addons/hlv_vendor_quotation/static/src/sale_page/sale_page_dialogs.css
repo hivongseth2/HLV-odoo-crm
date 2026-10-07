@@ -240,8 +240,9 @@
 .hq-compare td { vertical-align: top; }
 .hq-offer { padding: 0 !important; }
 .hq-offer.hq-muted { padding: 9px 10px !important; font-size: .8125rem; }
-.hq-offer > .hq-offer-price, .hq-offer > .hq-offer-meta { padding: 0 10px; }
-/* Cả ô là nút: sale bấm vào giá để chọn NCC cho sản phẩm. */
+/* Cả ô là nút: sale bấm vào giá để chọn NCC cho sản phẩm. Ô khoá (đã lên đơn mua) dùng
+   .hq-offer-static cùng khoảng đệm để hai loại ô thẳng hàng. */
+.hq-offer-static { padding: 9px 10px; }
 .hq-offer-btn {
     display: block;
     width: 100%;

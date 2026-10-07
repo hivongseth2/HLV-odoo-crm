@@ -149,7 +149,7 @@ window.HlvQuote = window.HlvQuote || {};
         esc(offer.vendor_note) + "</span>" : "");
     var cls = "hq-offer" + (offer.selected ? " is-selected" : "");
     if (!canChoose) {
-      return '<td class="' + cls + '">' + body + "</td>";
+      return '<td class="' + cls + '"><div class="hq-offer-static">' + body + "</div></td>";
     }
     return '<td class="' + cls + '"><button type="button" class="hq-offer-btn" data-' +
       (offer.selected ? "unchoose" : "choose") + '="' + offer.line_id + '" title="' +

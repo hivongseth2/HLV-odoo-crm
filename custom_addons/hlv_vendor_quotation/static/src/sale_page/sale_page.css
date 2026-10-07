@@ -241,6 +241,8 @@ body {
 .hq-quotes th.hq-right { text-align: right; }
 .hq-row { cursor: pointer; }
 .hq-row:hover { background: #FAF9F6; }
+.hq-row-new td { background: var(--hq-warn-soft); }
+.hq-row-new:hover td { background: #F8E3D8; }
 .hq-ref { font-weight: 600; color: var(--hq-accent); }
 .hq-cell-vendor { max-width: 16rem; }
 #hq-quote-list.is-loading { opacity: .55; transition: opacity .15s; }
