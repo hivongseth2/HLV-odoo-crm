@@ -32,7 +32,22 @@
 .msr-actions{white-space:nowrap}
 .msr-actions .msu-btn + .msu-btn{margin-left:4px}
 .msu-table tbody tr.msr-detail-row,.msu-table tbody tr.msr-detail-row:hover{background:#f7f9fc}
-.msr-detail-row > td{padding:8px 14px 14px 48px}
+.msr-detail-row > td{padding:6px 10px 12px}
 .msr-match-note{color:#c98500;cursor:help}
 .msr-card-paid{background:#eaf8ea;border-color:#bfe6bf}
 .msr-card-paid .msr-card-amount{color:#0ca30c}
+
+/* Bảng hóa đơn: gọn để vừa khung trang, không phải cuộn ngang mới thấy nút */
+.msr-table > thead > tr > th,.msr-table > tbody > tr > td{padding:9px 8px}
+.msr-table > tbody > tr > td{font-size:.8rem}
+.msr-nowrap{white-space:nowrap}
+.msr-col-partner{min-width:130px;max-width:200px}
+.msr-col-invoice{max-width:190px}
+.msr-col-salers{font-size:.72rem;color:#52514e;line-height:1.35}
+.msr-more{display:inline-block;padding:0 6px;border-radius:999px;background:#eef0f3;color:#52514e;font-size:.68rem;font-weight:700;cursor:help}
+.msr-own{color:#2a78d6;font-weight:700}
+.msr-detail-table{background:#fff;border:1px solid #eceae4;border-radius:8px}
+/* Bảng compact của trang gốc dồn bề rộng thừa cho CỘT ĐẦU (tên hàng); ở đây cột đầu là STT nên
+   đảo lại: STT co sát, cột sản phẩm nhận phần thừa và được xuống dòng. */
+.msr-detail-table th:first-child,.msr-detail-table td:first-child{width:1%;white-space:nowrap}
+.msr-detail-table th.msr-detail-product,.msr-detail-table td.msr-detail-product{width:auto;min-width:220px;white-space:normal}

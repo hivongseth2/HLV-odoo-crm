@@ -49,11 +49,9 @@
                                 <tr>
                                     <th class="msu-col-num">STT</th>
                                     <th>Khách hàng</th>
-                                    <th>Số HĐ / CT</th>
-                                    <th>Ngày HĐ</th>
-                                    <th>Hạn thu</th>
-                                    <th class="msu-col-num">Tiền HĐ</th>
-                                    <th class="msu-col-num">Chưa thu</th>
+                                    <th>Hóa đơn</th>
+                                    <th>Ngày HĐ / Hạn thu</th>
+                                    <th class="msu-col-num">Chưa thu / Tiền HĐ</th>
                                     <th>Trạng thái</th>
                                     <th>Hẹn thu</th>
                                     <th>Nhân viên</th>

@@ -6,7 +6,7 @@
     'use strict';
 
     var PAGE_SIZE = 50;
-    var COLS = 11;
+    var COLS = 9;
     var msu = window.MsuSaleStatus;
     var state = {search: '', paidFilter: 'unpaid', month: '', bucket: '', page: 1, total: 0, rows: [], loadedFor: null, editing: null, open: {}};
 
@@ -60,40 +60,55 @@
 
     function renderDetail(lines) {
         if (!lines) { return '<span class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải...</span>'; }
-        return '<table class="msu-table msu-table-compact"><thead><tr>' +
-            '<th class="msu-col-num">STT</th><th>Đơn</th><th>Sản phẩm</th><th>Mã hàng MISA</th><th class="msu-col-num">SL (MISA)</th>' +
+        return '<table class="msu-table msu-table-compact msr-detail-table"><thead><tr>' +
+            '<th class="msu-col-num">STT</th><th class="msr-detail-product">Sản phẩm</th><th>Đơn / Sale</th><th class="msu-col-num">SL (MISA)</th>' +
             '<th class="msu-col-num">Tiền có VAT</th><th>Chứng từ</th><th>Thu tiền</th></tr></thead><tbody>' +
             lines.map(function (l, i) {
                 var cls = l.paid_state === 'paid' ? 'msr-badge-ok' : (l.paid_state === 'unknown' ? 'msr-badge-muted' : 'msr-badge-overdue');
-                return '<tr><td class="msu-col-num">' + (i + 1) + '</td><td>' + msu.esc(l.order) + '</td>' +
-                    '<td>' + msu.esc(l.product) + (l.match_by === 'component' ? ' <span class="msu-muted">(mã con)</span>' : '') +
-                    (l.match_note ? ' <i class="fa fa-info-circle msr-match-note" title="' + msu.esc(l.match_note) + '"></i>' : '') + '</td>' +
-                    '<td>' + msu.esc(l.item_code) + '</td>' +
-                    '<td class="msu-col-num">' + l.quantity + ' ' + msu.esc(l.unit_name) + '</td>' +
-                    '<td class="msu-col-num">' + msu.fmtMoney(l.amount) + '</td>' +
-                    '<td>' + msu.esc(l.voucher_refno) + '</td>' +
+                return '<tr><td class="msu-col-num">' + (i + 1) + '</td>' +
+                    '<td class="msr-detail-product">' + msu.esc(l.product) +
+                        (l.match_by === 'component' ? ' <span class="msu-muted">(mã con)</span>' : '') +
+                        (l.match_note ? ' <i class="fa fa-info-circle msr-match-note" title="' + msu.esc(l.match_note) + '"></i>' : '') +
+                        '<div class="msu-muted msr-sub">MISA: ' + msu.esc(l.item_code) + '</div></td>' +
+                    '<td>' + msu.esc(l.order) + '<div class="msu-muted msr-sub">' + msu.esc(l.saler_code || '—') + '</div></td>' +
+                    '<td class="msu-col-num msr-nowrap">' + l.quantity + ' ' + msu.esc(l.unit_name) + '</td>' +
+                    '<td class="msu-col-num msr-nowrap">' + msu.fmtMoney(l.amount) + '</td>' +
+                    '<td class="msr-nowrap">' + msu.esc(l.voucher_refno) + '</td>' +
                     '<td><span class="msr-badge ' + cls + '">' + msu.esc(l.paid_label) + '</span></td></tr>';
             }).join('') + '</tbody></table>';
     }
 
+    // Danh sách dài (đơn, chứng từ) chỉ hiện vài mục đầu, phần còn lại gộp thành "+N" có tooltip.
+    function shortList(items, max) {
+        if (items.length <= max) { return msu.esc(items.join(', ')); }
+        return msu.esc(items.slice(0, max).join(', ')) +
+            ' <span class="msr-more" title="' + msu.esc(items.join(', ')) + '">+' + (items.length - max) + '</span>';
+    }
+
     function renderRow(row, index) {
-        var orders = row.orders.length ? '<div class="msu-muted msr-sub">' + msu.esc(row.orders.join(', ')) + '</div>' : '';
-        var vouchers = row.voucher_refnos.length ? '<div class="msr-sub">' + msu.esc(row.voucher_refnos.join(', ')) + '</div>' : '';
         var unknown = row.has_unknown
-            ? ' <span class="msr-badge msr-badge-muted" title="MISA trả tình trạng thu tiền lạ — kiểm lại trên MISA">Chưa rõ đã thu</span>'
+            ? '<div><span class="msr-badge msr-badge-muted" title="MISA trả tình trạng thu tiền lạ — kiểm lại trên MISA">Chưa rõ đã thu</span></div>'
+            : '';
+        // Hóa đơn chung nhiều sale: số to là cả hóa đơn, dòng nhỏ là phần của mã đang xem.
+        var own = row.amount_unpaid && row.own_amount_unpaid !== row.amount_unpaid
+            ? '<div class="msr-sub msr-own">Của mã này: ' + msu.fmtMoney(row.own_amount_unpaid) + '</div>'
             : '';
         var isOpen = state.open.hasOwnProperty(row.invoice_no);
         var html = '<tr class="' + (!row.is_paid && row.overdue_days > 0 ? 'msr-row-overdue' : '') + '">' +
             '<td class="msu-col-num">' + ((state.page - 1) * PAGE_SIZE + index + 1) + '</td>' +
-            '<td><b>' + msu.esc(row.partner_name) + '</b><div class="msu-muted msr-sub">' + msu.esc(row.partner_code) + '</div></td>' +
-            '<td><b>HĐ ' + msu.esc(row.invoice_no) + '</b>' + vouchers + orders + '</td>' +
-            '<td>' + msu.fmtDate(row.invoice_date) + '</td>' +
-            '<td title="' + msu.esc(row.due_source) + '">' + msu.fmtDate(row.due_date) + '</td>' +
-            '<td class="msu-col-num">' + msu.fmtMoney(row.amount_total) + '</td>' +
-            '<td class="msu-col-num"><b>' + (row.amount_unpaid ? msu.fmtMoney(row.amount_unpaid) : '—') + '</b></td>' +
+            '<td class="msr-col-partner"><b>' + msu.esc(row.partner_name) + '</b><div class="msu-muted msr-sub">' + msu.esc(row.partner_code) + '</div></td>' +
+            '<td class="msr-col-invoice"><b>HĐ ' + msu.esc(row.invoice_no) + '</b>' +
+                (row.voucher_refnos.length ? '<div class="msr-sub">' + shortList(row.voucher_refnos, 2) + '</div>' : '') +
+                (row.orders.length ? '<div class="msu-muted msr-sub">' + shortList(row.orders, 2) + '</div>' : '') + '</td>' +
+            '<td class="msr-nowrap">' + msu.fmtDate(row.invoice_date) +
+                '<div class="msr-sub" title="' + msu.esc(row.due_source) + '">Hạn ' + msu.fmtDate(row.due_date) + '</div></td>' +
+            '<td class="msu-col-num msr-nowrap"><b>' + (row.amount_unpaid ? msu.fmtMoney(row.amount_unpaid) : '—') + '</b>' +
+                '<div class="msu-muted msr-sub">/ ' + msu.fmtMoney(row.amount_total) + '</div>' + own + '</td>' +
             '<td><span class="msr-badge ' + badgeClass(row) + '">' + msu.esc(row.status_label) + '</span>' + unknown + '</td>' +
             '<td>' + renderFollowup(row) + '</td>' +
-            '<td>' + (row.saler_codes.length ? msu.esc(row.saler_codes.join(', ')) : '<span class="msu-muted">—</span>') + '</td>' +
+            '<td class="msr-col-salers">' + (row.saler_codes.length
+                ? row.saler_codes.map(function (c) { return '<div>' + msu.esc(c) + '</div>'; }).join('')
+                : '<span class="msu-muted">—</span>') + '</td>' +
             '<td class="msr-actions">' +
                 '<button type="button" class="msu-btn msu-btn-outline-muted msu-btn-xs msr-detail-btn" data-invoice="' + msu.esc(row.invoice_no) + '" title="Xem theo dòng đơn bán">' +
                     '<i class="fa fa-' + (isOpen ? 'chevron-up' : 'list') + '"></i></button>' +
