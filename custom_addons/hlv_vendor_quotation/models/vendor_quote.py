@@ -411,23 +411,33 @@ class VendorQuote(models.Model):
         return False
 
     def _is_open_for_vendor(self):
-        """NCC còn sửa được: đang chờ/đã báo giá và chưa qua hết ngày hạn (giờ VN)."""
+        """NCC còn sửa được: đang chờ/đã báo giá, chưa qua hết ngày hạn (giờ VN), và còn ít
+        nhất một mặt hàng chưa lên đơn mua."""
         self.ensure_one()
-        return self._vendor_status() in VENDOR_EDITABLE_STATUSES
+        return self._vendor_status() in VENDOR_EDITABLE_STATUSES and not self._fully_ordered()
+
+    def _fully_ordered(self):
+        """Mọi mặt hàng đều đã lên đơn mua — báo giá khoá hẳn với NCC."""
+        self.ensure_one()
+        return bool(self.line_ids) and all(self.line_ids.mapped("vendor_locked"))
 
     def _vendor_submit(self, line_values, vendor_note):
         """Ghi báo giá NCC gửi lên.
 
         line_values: {quote_line_id: {"price_unit", "vat", "delivery_days",
         "vendor_note", "invoice_name", "unavailable"}} — controller đã đọc số xong.
-        Mọi dòng phải có giá + VAT, trừ dòng NCC đánh dấu không cung cấp.
+        Mọi dòng phải có giá + VAT, trừ dòng NCC đánh dấu không cung cấp. Dòng đã lên đơn
+        mua (vendor_locked) giữ nguyên — giá trị gửi lên cho dòng đó bị bỏ qua.
         """
         self.ensure_one()
         if not self._is_open_for_vendor():
-            raise UserError(_("Báo giá này đã đóng hoặc đã quá hạn, không sửa được nữa."))
+            raise UserError(_("Báo giá này đã đóng, đã quá hạn hoặc đã lên đơn mua hết — không sửa được nữa."))
 
+        open_lines = self.line_ids.filtered(lambda l: not l.vendor_locked)
         missing = []
         for index, line in enumerate(self.line_ids, start=1):
+            if line.vendor_locked:
+                continue
             vals = line_values.get(line.id, {})
             if not vals.get("unavailable") and (not vals.get("price_unit") or not vals.get("vat")):
                 missing.append(str(index))
@@ -441,7 +451,7 @@ class VendorQuote(models.Model):
         chosen_before = {
             line.id: (line.price_unit, line.unavailable) for line in self.line_ids.filtered("selected")
         }
-        for line in self.line_ids:
+        for line in open_lines:
             vals = dict(line_values[line.id])
             if vals.get("unavailable"):
                 vals.update(price_unit=0.0, vat=False)

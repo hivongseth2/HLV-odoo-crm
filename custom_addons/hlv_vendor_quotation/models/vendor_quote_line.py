@@ -84,6 +84,11 @@ class VendorQuoteLine(models.Model):
     )
     is_best_price = fields.Boolean(string="Giá tốt nhất", compute="_compute_is_best_price")
     selected = fields.Boolean(string="Đã chọn", readonly=True, copy=False)
+    vendor_locked = fields.Boolean(
+        string="Đã lên đơn mua", compute="_compute_vendor_locked",
+        help="Mặt hàng đã lên đơn mua: NCC không sửa giá dòng này nữa (cả NCC không được chọn — "
+             "sale cũng không chọn lại được).",
+    )
     selection_state = fields.Selection(
         SELECTION_STATES, string="Lựa chọn", compute="_compute_selection_state"
     )
@@ -212,6 +217,16 @@ class VendorQuoteLine(models.Model):
                 "huỷ / sửa đơn mua.",
                 inquiry_line.name or inquiry_line.product_id.display_name,
             ))
+
+    @api.depends("inquiry_line_id.locked", "request_line_id.purchase_lines.state")
+    def _compute_vendor_locked(self):
+        for line in self:
+            if line.inquiry_line_id:
+                line.vendor_locked = line.inquiry_line_id.locked
+            else:
+                line.vendor_locked = bool(
+                    line.request_line_id.sudo().purchase_lines.filtered(lambda l: l.state != "cancel")
+                )
 
     def action_select(self):
         """Chốt NCC cho dòng YCMH: ghi NCC + giá vào actual_* để wizard "Tạo RFQ" dùng luôn."""
