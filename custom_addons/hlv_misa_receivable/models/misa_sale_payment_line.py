@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models
+from odoo import api, fields, models
+
+from .misa_receivable_utils import invoice_identity
 
 PAID_STATE_SELECTION = [
     ('unpaid', 'Chưa thu'),
@@ -26,8 +28,12 @@ class MisaSalePaymentLine(models.Model):
     invoice_no = fields.Char(string='Số hóa đơn', required=True, index=True)
     invoice_series = fields.Char(string='Ký hiệu hóa đơn')
     # Danh tính hóa đơn để gộp/lọc/hẹn thu — số hóa đơn có thể trùng giữa 2 ký hiệu (xem
-    # invoice_identity). invoice_no ở trên chỉ là khóa để tra lại MISA.
-    invoice_key = fields.Char(string='Mã nhận diện hóa đơn', index=True)
+    # invoice_identity). invoice_no ở trên chỉ là khóa để tra lại MISA. Tính từ chính các cột đã
+    # lưu để không bao giờ rỗng: bản 18.0.1.0.2 ghi tay field này lúc đọc chứng từ, dòng lưu trước
+    # đó để rỗng và bị gộp hết vào 1 hàng (hàng "HĐ 00002954" 2.338 chứng từ trên staging).
+    invoice_key = fields.Char(
+        string='Mã nhận diện hóa đơn', compute='_compute_invoice_key', store=True, index=True,
+    )
     invoice_date = fields.Date(string='Ngày hóa đơn')
     due_date = fields.Date(string='Hạn thu', index=True)
     due_source = fields.Selection([
@@ -57,3 +63,8 @@ class MisaSalePaymentLine(models.Model):
         ('component', 'Mã sản phẩm con của combo — số lượng là của mã con'),
     ], string='Khớp bằng')
     paid_state = fields.Selection(PAID_STATE_SELECTION, string='Tình trạng thu', index=True)
+
+    @api.depends('invoice_no', 'invoice_series', 'invoice_date')
+    def _compute_invoice_key(self):
+        for line in self:
+            line.invoice_key = invoice_identity(line.invoice_no, line.invoice_series, line.invoice_date)

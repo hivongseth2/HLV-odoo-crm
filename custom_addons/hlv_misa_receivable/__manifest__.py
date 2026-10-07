@@ -1,6 +1,6 @@
 {
     'name': 'MISA - Thu tiền theo dòng đơn bán & công nợ phải thu',
-    'version': '18.0.1.0.2',
+    'version': '18.0.1.0.3',
     'category': 'Sales',
     'summary': 'Tình trạng thu tiền MISA lưu trên từng dòng đơn bán + tab "Công nợ phải thu" trên /misa_sale_status',
     'description': """

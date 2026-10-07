@@ -75,7 +75,6 @@ def voucher_payment_entries(voucher, lines):
         'voucher_refno': voucher.get('refno_finance') or '',
         'invoice_date': invoice_date,
         'invoice_series': voucher.get('inv_series') or '',
-        'invoice_key': invoice_identity(voucher.get('inv_no'), voucher.get('inv_series'), invoice_date),
         'partner_code': voucher.get('account_object_code') or '',
         'partner_name': voucher.get('account_object_name') or '',
         'voucher_total': voucher.get('total_amount') or 0.0,
