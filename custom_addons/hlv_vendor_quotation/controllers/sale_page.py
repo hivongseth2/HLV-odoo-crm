@@ -40,7 +40,6 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     @http.route(SALE_PAGE_ROUTE, type="http", auth="user", methods=["GET"])
     def sale_page(self, ncc=None, **kw):
         return request.render("hlv_vendor_quotation.sale_page", {
-            "user_name": request.env.user.name,
             "asset_version": asset_version(),
             "allowed": self._allowed(),
             "initial_vendor_id": to_int(ncc),
@@ -184,9 +183,11 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     @http.route(f"{API}/chat_post", type="json", auth="user", methods=["POST"])
     def api_chat_post(self, code="", model="", res_id=None, body="", files=None, **kw):
         """files: [{name, data (base64)}] — trang gửi kèm trong JSON cho khỏi tách form upload."""
-        record = self._chat_record(model, res_id, self._check(code))
+        scope = self._check(code)
+        record = self._chat_record(model, res_id, scope)
+        # scope: mã sale đã kiểm (False ở chế độ "tất cả" — không gán cho sale nào).
         post_chat(record, body, request.env.user.partner_id, from_vendor=False,
-                  files=self._decode_files(files or []))
+                  files=self._decode_files(files or []), sale_code=scope or "")
         mark_seen([record], request.env.user)
         return {"title": record.name, "messages": chat_messages(record, self._file_url(code))}
 

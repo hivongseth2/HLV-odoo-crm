@@ -28,6 +28,15 @@ def _is_internal(partner):
     return bool(partner.user_ids.filtered(lambda user: not user.share))
 
 
+def author_label(record, author):
+    """Tên người nhắn để hiện trên trang NCC / trang sale: tên CÔNG TY, không phải tên tài
+    khoản — một tài khoản Odoo nhiều người dùng chung, hiện tên user (VD "Administrator") vừa
+    vô nghĩa vừa lộ tài khoản. Bên mình → tên công ty của chứng từ; NCC → tên công ty NCC."""
+    if _is_internal(author):
+        return (record.sudo().company_id or record.env.company).name or ""
+    return author.commercial_partner_id.name or ""
+
+
 def display_time(value):
     """Datetime UTC (naive, như Odoo lưu) → "HH:MM dd/mm/YYYY" giờ Việt Nam; rỗng → ""."""
     if not value:
@@ -48,7 +57,9 @@ def chat_messages(record, file_url=None):
     return [
         {
             "id": message.id,
-            "author": message.author_id.name or "",
+            "author": author_label(record, message.author_id),
+            # Mã sale đang chọn trên /hoi-gia-ncc khi gửi (rỗng: gửi ở chế độ "tất cả" / backend).
+            "sale_code": message.hlv_sale_code or "",
             "from_vendor": not _is_internal(message.author_id),
             "at": message.date,
             "date": display_time(message.date),
@@ -67,10 +78,11 @@ def chat_messages(record, file_url=None):
     ]
 
 
-def post_chat(record, text, author, from_vendor, notify_partners=None, files=None):
+def post_chat(record, text, author, from_vendor, notify_partners=None, files=None, sale_code=""):
     """Đăng một tin trao đổi, có thể kèm tệp. text: chữ thường NCC / sale gõ (được escape).
 
     files: list (tên tệp, nội dung bytes). Tệp sai loại / quá lớn → UserError, không đăng gì.
+    sale_code: mã sale đang chọn trên trang sale — ghi vào tin để biết sale nào nhắn.
     Tin của NCC gọi tên follower nội bộ + notify_partners (sale tạo phiếu, người phụ trách
     đơn mua) để họ nhận thông báo trong Odoo; tin của sale không gửi đi đâu — NCC đọc trên
     trang báo giá của họ.
@@ -92,7 +104,7 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
         {"name": name, "raw": data, "res_model": record._name, "res_id": record.id}
         for name, data in files
     ])
-    record.message_post(
+    message = record.message_post(
         body=plaintext2html(text[:MESSAGE_MAX]) if text else "",
         author_id=author.id,
         message_type="comment",
@@ -101,7 +113,9 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
         partner_ids=(internal_followers(record) | (notify_partners or record.env["res.partner"])).ids
         if from_vendor else [],
     )
-    notify_chat(record, author.name, from_vendor)
+    if sale_code:
+        message.hlv_sale_code = sale_code
+    notify_chat(record, author_label(record, author), from_vendor)
 
 
 def chat_attachment(env, attachment_id):

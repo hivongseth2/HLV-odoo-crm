@@ -17,7 +17,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.$("hq-po-body").innerHTML =
       '<div class="hq-facts">' +
       fact("Nhà cung cấp", o.vendor) + fact("Trạng thái", o.state) + fact("Ngày đặt", o.date) +
-      fact("Ngày nhận dự kiến", o.date_planned) + fact("NCC báo", o.vendor_status) + fact("Người mua", o.buyer) +
+      fact("Ngày nhận dự kiến", o.date_planned) + fact("NCC báo", o.vendor_status) +
       "</div>" +
       (o.can_set_origin ? HQ.originEditor("po", o.origin, [o.id], "Lưu", function () {
         HQ.openOrderView(o.id, true);

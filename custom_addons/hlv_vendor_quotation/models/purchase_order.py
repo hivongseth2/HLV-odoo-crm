@@ -60,8 +60,8 @@ class PurchaseOrder(models.Model):
             if old == origin:
                 continue
             order.origin = origin or False
-            post_internal(order, Markup(_("%s cập nhật Tài liệu gốc: <b>%s</b> → <b>%s</b>.")) % (
-                author.name, old or _("(trống)"), origin or _("(trống)"),
+            post_internal(order, Markup(_("Sale cập nhật Tài liệu gốc từ trang Hỏi giá NCC: <b>%s</b> → <b>%s</b>.")) % (
+                old or _("(trống)"), origin or _("(trống)"),
             ), author)
 
     def _vendor_set_status(self, status, vendor_partner):

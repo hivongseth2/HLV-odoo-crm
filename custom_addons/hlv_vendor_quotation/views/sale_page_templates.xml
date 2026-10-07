@@ -23,7 +23,6 @@
                             <a class="nav-link text-white-50" href="/sale_plan">Tình trạng đơn</a>
                             <a class="nav-link text-white-50 d-none d-md-inline" href="/giao-hang">Giao hàng</a>
                             <a class="nav-link text-white-50 d-none d-md-inline" href="/search_stock">Tồn kho</a>
-                            <span class="text-white-50 small d-none d-sm-inline" t-esc="user_name"/>
                         </div>
                     </div>
                 </nav>

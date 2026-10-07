@@ -73,7 +73,6 @@ def purchase_order_detail(order):
     return dict(purchase_order_payload(order), **{
         "state": state_labels.get(order.state, ""),
         "date_planned": _date_text(order.date_planned),
-        "buyer": order.user_id.name or "",
         "amount_tax": order.amount_tax,
         "amount_total": order.amount_total,
         "lines": [
@@ -125,7 +124,6 @@ def inquiry_detail(inquiry):
     data = inquiry_summary(inquiry)
     data.update({
         "note": inquiry.note or "",
-        "user_name": inquiry.user_id.name or "",
         "sale_order_id": inquiry.sale_order_id.id or False,
         "requests": [
             {"name": r.name, "state": dict(r._fields["state"].selection).get(r.state, "")}
