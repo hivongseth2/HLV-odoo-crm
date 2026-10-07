@@ -222,7 +222,8 @@ window.HlvQuote = window.HlvQuote || {};
     return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' +
       '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
       d.purchase_orders.map(function (o) {
-        return '<tr><td class="hq-strong">' + esc(o.name) + "</td><td>" + esc(o.vendor) + "</td>" +
+        return '<tr><td><button type="button" class="hq-link-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
+          esc(o.name) + "</button></td><td>" + esc(o.vendor) + "</td>" +
           "<td>" + (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
             : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +
           '<td class="hq-num">' + HQ.money(o.amount_untaxed) + "</td>" +

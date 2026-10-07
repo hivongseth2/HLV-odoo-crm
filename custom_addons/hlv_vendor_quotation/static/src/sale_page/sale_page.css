@@ -242,6 +242,12 @@ body {
 .hq-row { cursor: pointer; }
 .hq-row:hover { background: #FAF9F6; }
 .hq-row-new td { background: var(--hq-warn-soft); }
+/* Badge số tin trao đổi trên dòng phiếu: icon đen + số; NCC nhắn chưa trả lời thì nền cam đậm. */
+.hq-chat-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px;
+    border: 1px solid #c9cdd3; border-radius: 3px; background: #fff; color: #111827; font-size: .72rem;
+    font-weight: 700; vertical-align: middle; white-space: nowrap; }
+.hq-chat-badge.is-new { background: var(--hq-warn); border-color: var(--hq-warn); color: #fff; }
+.hq-icon { flex: none; display: block; }
 .hq-row-new:hover td { background: #F8E3D8; }
 .hq-ref { font-weight: 600; color: var(--hq-accent); }
 .hq-cell-vendor { max-width: 16rem; }

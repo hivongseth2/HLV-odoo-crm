@@ -60,6 +60,30 @@ def _inquiry_chat(inquiry, quotes):
     return sum(count for count, _new in stats), sum(1 for _count, new in stats if new)
 
 
+def purchase_order_detail(order):
+    """Đơn mua để sale XEM (chỉ đọc): đang mua gì, của ai, bao nhiêu, đã nhận tới đâu."""
+    order = order.sudo()
+    state_labels = dict(order._fields["state"].selection)
+    return dict(purchase_order_payload(order), **{
+        "state": state_labels.get(order.state, ""),
+        "date_planned": _date_text(order.date_planned),
+        "buyer": order.user_id.name or "",
+        "amount_tax": order.amount_tax,
+        "amount_total": order.amount_total,
+        "lines": [
+            {
+                "name": line.name,
+                "qty": line.product_qty,
+                "uom": line.product_uom.name or "",
+                "qty_received": line.qty_received,
+                "price_unit": line.price_unit,
+                "subtotal": line.price_subtotal,
+            }
+            for line in order.order_line.filtered(lambda l: not l.display_type)
+        ],
+    })
+
+
 def inquiry_summary(inquiry):
     """Một dòng trong bảng phiếu hỏi giá."""
     quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel")

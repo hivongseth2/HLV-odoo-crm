@@ -265,13 +265,16 @@ a { color: var(--vq-accent); }
 .vq-main-col { min-width: 0; }
 .vq-chat-col { position: sticky; top: 16px; }
 .vq-chat { background: #fff; border: 1px solid var(--vq-line); border-radius: 4px; }
-.vq-chat-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px;
-    font-weight: 700; cursor: pointer; list-style: none; border-bottom: 1px solid var(--vq-line); }
+.vq-chat-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-weight: 700;
+    cursor: pointer; list-style: none; border-bottom: 1px solid var(--vq-line); }
 .vq-chat-head::-webkit-details-marker { display: none; }
-.vq-chat-head::after { content: "Thu gọn"; font-size: .78rem; font-weight: 500; color: var(--vq-muted); }
+.vq-chat-title { flex: 1; min-width: 0; font-size: .95rem; line-height: 1.35; }
+/* Số tin: badge tròn đậm; thu gọn / mở rộng: mũi tên đen, xoay khi đóng — không tốn chữ. */
+.vq-count-badge { flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: #111827;
+    color: #fff; font-size: .75rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.vq-chevron { flex: none; color: #111827; transition: transform .15s; }
+.vq-chat:not([open]) .vq-chevron { transform: rotate(180deg); }
 .vq-chat:not([open]) .vq-chat-head { border-bottom: 0; }
-.vq-chat:not([open]) .vq-chat-head::after { content: "Mở"; }
-.vq-chat-count { margin-left: auto; font-size: .78rem; font-weight: 600; color: var(--vq-muted); }
 .vq-chat-list { max-height: calc(100vh - 260px); overflow-y: auto; padding: 12px 14px; display: grid; gap: 8px; }
 .vq-msg { background: #f8f9fb; border: 1px solid var(--vq-line); border-radius: 4px; padding: 8px 10px; max-width: 92%; }
 .vq-msg-mine { margin-left: auto; background: #eef3fa; border-color: #d8e2f0; }

@@ -142,6 +142,12 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         inquiry.action_cancel()
         return payload.inquiry_detail(inquiry)
 
+    @http.route(f"{API}/purchase_order", type="json", auth="user", methods=["POST"])
+    def api_purchase_order(self, code="", order_id=None, **kw):
+        """Xem đơn mua sinh ra từ phiếu (chỉ đọc). Cùng phạm vi kiểm như trao đổi trên đơn mua."""
+        order = self._chat_record("order", order_id, self._check(code))
+        return payload.purchase_order_detail(order)
+
     @http.route(f"{API}/chat", type="json", auth="user", methods=["POST"])
     def api_chat(self, code="", model="", res_id=None, **kw):
         """Tin trao đổi với NCC trên một báo giá (model="quote") hoặc đơn mua ("order")."""

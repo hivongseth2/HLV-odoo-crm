@@ -258,13 +258,15 @@
 .hq-offer-btn:hover { background: var(--hq-accent-soft); }
 .hq-offer.is-selected, .hq-offer.is-selected .hq-offer-btn:hover { background: var(--hq-ok-soft); }
 .hq-offer.is-selected { box-shadow: inset 3px 0 0 var(--hq-ok); }
-.hq-offer-price { display: block; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Một ô giá: giá chưa VAT đậm là chính; giá sau VAT và VAT · ngày giao nhỏ, xám, cách dòng rõ. */
+.hq-offer-static, .hq-offer-btn { display: grid; gap: 2px; line-height: 1.3; }
+.hq-offer-price { display: block; font-weight: 700; font-size: .9rem; font-variant-numeric: tabular-nums; }
 .hq-offer-price.is-best { color: var(--hq-accent); }
 .hq-offer.hq-offer-alert { padding: 9px 10px !important; background: var(--hq-danger-soft); color: var(--hq-danger);
     font-size: .8125rem; font-weight: 600; box-shadow: inset 3px 0 0 var(--hq-danger); }
 .hq-offer-meta { display: block; color: var(--hq-muted); font-size: .75rem; }
 .hq-offer-unit { font-weight: 400; font-size: .7rem; color: var(--hq-muted); }
-.hq-offer-incl { display: block; font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.hq-offer-incl { display: block; font-size: .75rem; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
 .hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }
 
 .hq-request-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .35rem 0; }
@@ -291,3 +293,10 @@
 .hq-msg-files { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
 .hq-msg-img img { display: block; width: 88px; height: 88px; object-fit: cover; border: 1px solid var(--hq-line);
     border-radius: 3px; background: #fff; }
+
+/* ------------------------------------------------------------ xem đơn mua (chỉ đọc) */
+
+.hq-po-box { width: min(860px, 100%); }
+.hq-link-btn { border: 0; background: transparent; padding: 0; font: inherit; font-weight: 700;
+    color: var(--hq-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.hq-link-btn:hover { color: var(--hq-accent-dark); }

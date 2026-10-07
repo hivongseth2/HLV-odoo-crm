@@ -30,6 +30,11 @@ window.HlvQuote = window.HlvQuote || {};
     ["requested", "phiếu đã lên YCMH"],
   ];
 
+  /* Icon tin nhắn (đen, vẽ bằng nét) cho badge số tin trao đổi. */
+  HQ.ICON_CHAT = '<svg class="hq-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg>';
+
   var ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
   /**

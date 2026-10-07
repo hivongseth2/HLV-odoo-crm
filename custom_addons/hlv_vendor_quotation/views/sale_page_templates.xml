@@ -203,6 +203,17 @@
                         </div>
                     </div>
 
+                    <!-- Xem đơn mua (chỉ đọc) — mở từ mục "Đơn mua" trong phiếu. -->
+                    <div id="hq-po" class="hq-modal hq-chat-modal hq-hidden">
+                        <div class="hq-modal-box hq-po-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-po-title">Đơn mua</h2>
+                                <button type="button" class="btn-close" data-close-po="1" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body" id="hq-po-body"></div>
+                        </div>
+                    </div>
+
                     <div id="hq-toast" class="hq-toast hq-hidden"></div>
                 </div>
 
@@ -213,6 +224,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js?v=#{asset_version}"></script>
             </body>
         </html>

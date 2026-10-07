@@ -123,8 +123,10 @@ window.HlvQuote = window.HlvQuote || {};
       var docs = [q.request_name].concat(q.purchase_orders).filter(Boolean);
       // Có NCC nhắn chưa trả lời: tô cả dòng + nhãn, nhìn bảng là biết phiếu nào cần vào xem.
       var chat = q.chat_new
-        ? '<span class="hq-tag hq-tag-warn" title="Tin cuối là của NCC — chưa trả lời">NCC nhắn ' + q.chat_new + "</span>"
-        : q.chat_count ? '<span class="hq-muted" title="Đã có trao đổi với NCC">' + q.chat_count + " tin</span>" : "";
+        ? '<span class="hq-chat-badge is-new" title="Tin cuối là của NCC — chưa trả lời">' + HQ.ICON_CHAT +
+          "NCC nhắn " + q.chat_new + "</span>"
+        : q.chat_count ? '<span class="hq-chat-badge" title="Đã có ' + q.chat_count + ' tin trao đổi với NCC">' +
+          HQ.ICON_CHAT + q.chat_count + "</span>" : "";
       return '<tr class="hq-row' + (q.chat_new ? " hq-row-new" : "") + '" data-inquiry="' + q.id + '">' +
         '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" + (chat ? " " + chat : "") +
         (q.sale_code ? '<div class="hq-muted">' + esc(q.sale_code) + "</div>" : "") + "</td>" +
