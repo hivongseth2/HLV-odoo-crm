@@ -267,3 +267,15 @@
 .hq-request-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .35rem 0; }
 .hq-request-so { flex: 1 1 16rem; max-width: 22rem; }
 .hq-code-select { width: auto; min-width: 9rem; }
+
+/* ------------------------------------------------------------ trao đổi với NCC */
+
+.hq-chat-modal { z-index: 1060; }
+.hq-chat-box { width: min(640px, 100%); height: min(640px, calc(100vh - 2rem)); }
+.hq-chat-list { flex: 1 1 auto; align-content: start; gap: .5rem; }
+.hq-msg { background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); padding: .5rem .75rem;
+    max-width: 85%; margin-left: auto; }
+.hq-msg-vendor { margin-left: 0; margin-right: auto; background: #FAF9F6; }
+.hq-msg-head { display: flex; gap: .4rem; align-items: baseline; font-size: .8125rem; margin-bottom: .15rem; }
+.hq-msg-body { white-space: pre-line; font-size: .875rem; }
+.hq-chat-form .hq-textarea { flex: 1 1 auto; }

@@ -178,6 +178,23 @@
                         </div>
                     </div>
 
+                    <!-- Trao đổi với NCC trên một báo giá / đơn mua (nổi trên ngăn chi tiết). -->
+                    <div id="hq-chat" class="hq-modal hq-chat-modal hq-hidden">
+                        <div class="hq-modal-box hq-chat-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-chat-title">Trao đổi với NCC</h2>
+                                <button type="button" class="btn-close" data-close-chat="1" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body hq-chat-list" id="hq-chat-list"></div>
+                            <div class="hq-modal-foot hq-chat-form">
+                                <label class="hq-sr-only" for="hq-chat-input">Tin nhắn</label>
+                                <textarea id="hq-chat-input" rows="2" maxlength="2000" class="hq-input hq-textarea"
+                                          placeholder="Nhắn cho NCC — NCC đọc trên trang báo giá của họ (Ctrl+Enter để gửi)"></textarea>
+                                <button type="button" class="hq-btn hq-btn-primary" id="hq-chat-send">Gửi</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="hq-toast" class="hq-toast hq-hidden"></div>
                 </div>
 
@@ -187,6 +204,7 @@
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js"></script>
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js"></script>
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js"></script>
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js"></script>
             </body>
         </html>

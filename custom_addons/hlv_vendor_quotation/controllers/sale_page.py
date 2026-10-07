@@ -22,6 +22,7 @@ from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import paginate
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
+from ..services.vendor_chat import chat_messages, post_chat
 from .sale_page_common import API, SalePageMixin, to_int
 
 PER_PAGE = 30
@@ -136,7 +137,34 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         inquiry.action_cancel()
         return payload.inquiry_detail(inquiry)
 
+    @http.route(f"{API}/chat", type="json", auth="user", methods=["POST"])
+    def api_chat(self, code="", model="", res_id=None, **kw):
+        """Tin trao đổi với NCC trên một báo giá (model="quote") hoặc đơn mua ("order")."""
+        record = self._chat_record(model, res_id, self._check(code))
+        return {"title": record.name, "messages": chat_messages(record)}
+
+    @http.route(f"{API}/chat_post", type="json", auth="user", methods=["POST"])
+    def api_chat_post(self, code="", model="", res_id=None, body="", **kw):
+        record = self._chat_record(model, res_id, self._check(code))
+        post_chat(record, body, request.env.user.partner_id, from_vendor=False)
+        return {"title": record.name, "messages": chat_messages(record)}
+
     # ------------------------------------------------------------------
+    def _chat_record(self, model, res_id, scope):
+        """Báo giá / đơn mua thuộc một phiếu trong phạm vi mã sale đã kiểm — không cho mở cuộc
+        trao đổi của sale khác bằng id. Đơn mua trả về bằng sudo (sale không có quyền đơn mua)."""
+        if model == "quote":
+            quote = request.env["hlv.vendor.quote"].browse(to_int(res_id)).exists()
+            if quote and quote.inquiry_id:
+                self._get_inquiry(quote.inquiry_id.id, scope)
+                return quote
+        elif model == "order":
+            order = request.env["purchase.order"].sudo().browse(to_int(res_id)).exists()
+            inquiries = order.hlv_inquiry_ids if order else request.env["hlv.vendor.inquiry"]
+            if inquiries.filtered(lambda i: not scope or (i.sale_code or "").upper() == scope.upper()):
+                return order
+        raise UserError("Không tìm thấy cuộc trao đổi.")
+
     def _search_domain(self, search):
         search = (search or "").strip()
         if not search:

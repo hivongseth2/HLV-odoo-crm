@@ -41,6 +41,11 @@ class PurchaseOrder(models.Model):
             order.hlv_vendor_quote_ids = chosen.quote_id
             order.hlv_inquiry_ids = chosen.inquiry_line_id.inquiry_id
 
+    def _chat_contacts(self):
+        """Người trong công ty cần biết khi NCC nhắn trên đơn mua: người mua + sale tạo phiếu."""
+        self.ensure_one()
+        return (self.user_id | self.hlv_inquiry_ids.user_id).partner_id
+
     def _vendor_set_status(self, status, vendor_partner):
         """NCC báo tiến độ từ trang công khai. Chỉ đi tới (đóng gói → đã giao), không lùi."""
         self.ensure_one()

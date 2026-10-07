@@ -13,6 +13,7 @@ from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
+from ..services.vendor_chat import chat_messages, post_chat
 
 SESSION_KEY = "hlv_vendor_quote_logins"
 VENDOR_NOTE_MAX = 2000
@@ -129,6 +130,8 @@ class VendorQuotePortal(http.Controller):
             contact=quote.user_id,
             company=quote.company_id or request.env.company.sudo(),
             orders=quote._vendor_purchase_orders(),
+            chat=chat_messages(quote),
+            chat_url=f"{PORTAL_ROUTE}/{token}/{quote.id}/tin-nhan",
             # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
             # khác, "" = chưa chọn ai — để NCC biết dòng nào đã được đặt.
             line_choice={
@@ -137,6 +140,24 @@ class VendorQuotePortal(http.Controller):
             },
         )
         return self._render("hlv_vendor_quotation.portal_quote_form", access, values)
+
+    @http.route(
+        f"{PORTAL_ROUTE}/<string:token>/<int:quote_id>/tin-nhan",
+        type="http",
+        auth="public",
+        methods=["POST"],
+    )
+    def portal_quote_chat(self, token, quote_id, message="", **kw):
+        """NCC nhắn cho bên mua trên một báo giá."""
+        access = self._get_access(token)
+        if not access or not self._is_logged_in(access):
+            return self._not_found()
+        quote = self._get_quote(access, quote_id)
+        if not quote:
+            return self._not_found()
+        if (message or "").strip():
+            post_chat(quote, message, access.partner_id, from_vendor=True, notify_partners=quote._chat_contacts())
+        return request.redirect(f"{PORTAL_ROUTE}/{token}/{quote.id}#trao-doi")
 
     @http.route(
         f"{PORTAL_ROUTE}/<string:token>/img/<int:line_id>/<int:size>",

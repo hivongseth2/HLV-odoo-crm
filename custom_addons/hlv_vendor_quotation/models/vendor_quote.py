@@ -467,6 +467,11 @@ class VendorQuote(models.Model):
             )
         return orders
 
+    def _chat_contacts(self):
+        """Người trong công ty cần biết khi NCC nhắn trên báo giá: người hỏi giá + sale tạo phiếu."""
+        self.ensure_one()
+        return (self.user_id | self.inquiry_id.user_id).partner_id
+
     def _notify_chosen_lines_changed(self, chosen_before):
         """NCC sửa giá / báo hết hàng cho mặt hàng sale đã chọn (có khi đã lên YCMH) — báo lên
         phiếu và YCMH để sale chọn lại. Không tự đổi giá trên YCMH: giá mua phải do người quyết."""

@@ -135,6 +135,7 @@
                     <div><dt>Thuế</dt><dd t-esc="fmt(order.amount_tax)"/></div>
                     <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
                 </dl>
+                <t t-call="hlv_vendor_quotation.portal_chat"/>
             </div>
         </t>
     </template>

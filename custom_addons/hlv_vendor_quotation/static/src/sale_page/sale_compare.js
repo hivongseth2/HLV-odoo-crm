@@ -73,6 +73,7 @@ window.HlvQuote = window.HlvQuote || {};
       renderFacts(d) +
       renderCompare(d) +
       renderRequestBox(d) +
+      renderOrders(d) +
       renderVendors(d) +
       (d.note ? '<div class="hq-note"><span class="hq-label">Lời nhắn gửi NCC</span>' + esc(d.note) + "</div>" : "") +
       (d.can_cancel ? '<div class="hq-drawer-actions"><button type="button" class="hq-btn hq-btn-danger" ' +
@@ -196,11 +197,33 @@ window.HlvQuote = window.HlvQuote || {};
           '<td><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span>" +
           (v.submit_date ? '<div class="hq-muted">gửi ' + esc(v.submit_date) + "</div>" : "") + "</td>" +
           '<td class="hq-num">' + (v.amount_untaxed ? HQ.money(v.amount_untaxed) : "") + "</td>" +
-          '<td class="hq-num hq-nowrap">' +
+          '<td class="hq-num hq-nowrap">' + chatButton("quote", v.quote_id, v.chat_count, v.chat_new) + " " +
           (v.share_message ? '<button type="button" class="hq-btn hq-btn-mini" data-copy-msg="' + index +
             '">Copy tin nhắn</button> ' : "") +
           (v.portal_url ? '<a class="hq-btn hq-btn-mini" target="_blank" href="' + esc(v.portal_url) +
             '">Mở trang NCC</a>' : "") + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  /** Nút mở trao đổi với NCC; tin cuối là của NCC (chưa trả lời) thì làm nổi lên. */
+  function chatButton(model, id, count, isNew) {
+    return '<button type="button" class="hq-btn hq-btn-mini' + (isNew ? " hq-btn-soft" : "") +
+      '" data-chat-model="' + model + '" data-chat-id="' + id + '">' +
+      (isNew ? "NCC vừa nhắn" : "Trao đổi") + (count ? " (" + count + ")" : "") + "</button>";
+  }
+
+  function renderOrders(d) {
+    if (!d.purchase_orders.length) {
+      return "";
+    }
+    return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' +
+      '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
+      d.purchase_orders.map(function (o) {
+        return '<tr><td class="hq-strong">' + esc(o.name) + "</td><td>" + esc(o.vendor) + "</td>" +
+          "<td>" + (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
+            : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +
+          '<td class="hq-num">' + HQ.money(o.amount_untaxed) + "</td>" +
+          '<td class="hq-num">' + chatButton("order", o.id, o.chat_count, o.chat_new) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
   }
 

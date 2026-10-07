@@ -246,3 +246,18 @@ a { color: var(--vq-accent); }
     .vq-price-table tr.vq-line-chosen { background: #ecfdf3; border-color: #86efac; }
     .vq-price-table tr.vq-line-chosen td { background: transparent; }
 }
+
+/* --- Trao đổi với bên mua --- */
+.vq-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.vq-chat { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--vq-line); }
+.vq-chat h2 { margin-bottom: 12px; }
+.vq-msg { max-width: 720px; background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 10px; }
+.vq-msg-mine { margin-left: auto; background: #eef2f7; }
+.vq-msg-head { display: flex; gap: 10px; align-items: baseline; font-size: .88rem; margin-bottom: 2px; }
+.vq-msg-body { white-space: pre-line; }
+.vq-chat-form { display: flex; gap: 10px; align-items: flex-end; max-width: 720px; margin-left: auto; }
+.vq-chat-form .vq-input { flex: 1; }
+@media (max-width: 760px) {
+    .vq-chat-form { flex-direction: column; align-items: stretch; }
+}

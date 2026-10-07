@@ -11,6 +11,7 @@ from odoo.http import request
 
 from ..models.purchase_order import VENDOR_STATUS
 from ..models.vendor_quote_access import PORTAL_ROUTE
+from ..services.vendor_chat import chat_messages, post_chat
 from .vendor_portal import VendorQuotePortal
 
 ORDERS = "don-mua"
@@ -60,4 +61,24 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "saved": bool(kw.get("saved")),
             "active_tab": "orders",
             "company": order.company_id,
+            "chat": chat_messages(order),
+            "chat_url": f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}/tin-nhan",
         })
+
+    @http.route(
+        f"{PORTAL_ROUTE}/<string:token>/{ORDERS}/<int:order_id>/tin-nhan",
+        type="http",
+        auth="public",
+        methods=["POST"],
+    )
+    def portal_order_chat(self, token, order_id, message="", **kw):
+        """NCC nhắn cho bên mua trên một đơn mua."""
+        access = self._get_access(token)
+        if not access or not self._is_logged_in(access):
+            return self._not_found()
+        order = access._vendor_purchase_orders().filtered(lambda o: o.id == order_id)
+        if not order:
+            return self._not_found()
+        if (message or "").strip():
+            post_chat(order, message, access.partner_id, from_vendor=True, notify_partners=order._chat_contacts())
+        return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}#trao-doi")

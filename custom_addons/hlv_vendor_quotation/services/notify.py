@@ -16,8 +16,12 @@ def internal_followers(record):
 
 
 def post_internal(record, body, author=None):
-    """Ghi chú nội bộ lên record, thông báo cho follower nội bộ. author: res.partner (VD NCC)."""
-    record.message_post(
+    """Ghi chú nội bộ lên record, thông báo cho follower nội bộ. author: res.partner (VD NCC).
+
+    mail_create_nosubscribe: Odoo mặc định cho tác giả theo dõi record khi đăng — NCC đăng từ
+    trang công khai sẽ thành follower YCMH / phiếu và về sau nhận email mọi bình luận.
+    """
+    record.with_context(mail_create_nosubscribe=True).message_post(
         body=body,
         author_id=author.id if author else None,
         message_type="comment",

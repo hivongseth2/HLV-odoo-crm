@@ -12,6 +12,7 @@ from ..models.vendor_inquiry import SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import build_share_message
 from .sale_code import sale_code
+from .vendor_chat import chat_stats
 
 QUOTE_STATE_LABELS = {
     "draft": "Nháp",
@@ -39,7 +40,10 @@ def _datetime_text(record, value):
 
 def purchase_order_payload(order):
     order = order.sudo()
+    chat_count, chat_new = chat_stats(order)
     return {
+        "chat_count": chat_count,
+        "chat_new": chat_new,
         "id": order.id,
         "name": order.name,
         "vendor": order.partner_id.commercial_partner_id.display_name,
@@ -101,7 +105,11 @@ def inquiry_detail(inquiry):
 
 
 def _vendor_column(quote):
+    chat_count, chat_new = chat_stats(quote)
     return {
+        # chat_new: tin cuối là của NCC — sale chưa trả lời.
+        "chat_count": chat_count,
+        "chat_new": chat_new,
         "quote_id": quote.id,
         "vendor_id": quote.access_id.partner_id.id,
         "name": quote.partner_id.commercial_partner_id.display_name,
