@@ -92,8 +92,9 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                     % line.request_id.name
                 )
 
-            if line.purchase_state == "done":
-                raise UserError(_("Việc mua hàng đã hoàn thành."))
+            # Không chặn theo purchase_state == "done": ở Odoo 18 đó là PO đã Khóa
+            # (công ty bật tự khoá PO khi xác nhận), không có nghĩa dòng đã mua đủ.
+            # Dòng hết số lượng cần mua đã được get_items lọc bỏ.
 
             line_company_id = line.company_id and line.company_id.id or False
             if company_id is not False and line_company_id != company_id:

@@ -28,19 +28,19 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 
     @api.model
     def get_items(self, request_line_ids):
-        request_line_obj = self.env["purchase.request.line"]
-        items = []
-        request_lines = request_line_obj.browse(request_line_ids)
-        self._check_valid_request_line(request_line_ids)
-        self.check_group(request_lines)
-        for line in request_lines:
-            # YC3: Bỏ qua các dòng có flag skip_processing
-            if line.skip_processing:
-                continue
-            remaining_qty = line.product_qty - line.purchased_qty
-            if remaining_qty > 0:
-                items.append([0, 0, self._prepare_item(line)])
-        return items
+        # Lọc dòng còn phải mua TRƯỚC khi kiểm tra: bấm Tạo RFQ từ phiếu sẽ kéo cả
+        # những dòng đã lên PO, chúng không được làm hỏng việc mua các dòng còn lại.
+        # YC3: bỏ qua các dòng có flag skip_processing.
+        request_lines = self.env["purchase.request.line"].browse(request_line_ids)
+        lines_to_buy = request_lines.filtered(
+            lambda line: not line.skip_processing
+            and line.product_qty - line.purchased_qty > 0
+        )
+        if not lines_to_buy:
+            raise UserError(_("Việc mua hàng đã hoàn thành."))
+        self._check_valid_request_line(lines_to_buy.ids)
+        self.check_group(lines_to_buy)
+        return [[0, 0, self._prepare_item(line)] for line in lines_to_buy]
 
     @api.model
     def _prepare_item(self, line):
