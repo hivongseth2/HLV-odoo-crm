@@ -32,6 +32,9 @@ class MisaSalePaymentLine(models.Model):
     ], string='Cách tính hạn thu')
     voucher_refid = fields.Char(string='MISA refid chứng từ')
     voucher_refno = fields.Char(string='Số chứng từ', index=True)
+    # Tổng tiền chứng từ lúc đọc dòng — tra lại mà tổng không đổi thì dùng lại dòng đã lưu,
+    # khỏi đọc lại chi tiết (xem reusable_voucher_states).
+    voucher_total = fields.Float(string='Tổng tiền chứng từ')
     partner_code = fields.Char(string='Mã KH (MISA)')
     partner_name = fields.Char(string='Tên khách hàng (MISA)')
     saler_code = fields.Char(string='Mã sale MISA', index=True)

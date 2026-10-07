@@ -7,9 +7,12 @@ from odoo.osv import expression
 
 from odoo.addons.misa_invoice_status_report.models.stock_picking import MISA_INVOICE_RECONCILE_GROUP
 
+from odoo.addons.misa_invoice_status_report.models.stock_picking import MISA_INVOICE_AMOUNT_TOLERANCE
+
 from .misa_receivable_utils import (
     aging_bucket_of,
     in_bucket,
+    month_options,
     overdue_days,
     status_label,
     summarize_receivables,
@@ -50,17 +53,21 @@ class MisaSalePaymentLinePublicApi(models.Model):
         ])
 
     def _public_invoice_rows(self, followups, today):
-        """Gộp các dòng chưa thu theo hóa đơn → 1 hàng công nợ/hóa đơn."""
+        """Gộp dòng theo hóa đơn → 1 hàng/hóa đơn, kèm tổng tiền, đã thu, chưa thu. Quá hạn tính
+        theo hạn sớm nhất của phần CHƯA thu; hóa đơn đã thu hết không có quá hạn."""
         due_labels = dict(self._fields['due_source'].selection)
         groups = {}
         for line in self:
-            groups.setdefault(line.invoice_no, self.browse())
-            groups[line.invoice_no] |= line
+            groups.setdefault(line.invoice_no, []).append(line)
         rows = []
-        for invoice_no, lines in groups.items():
-            # Hạn sớm nhất của hóa đơn quyết định quá hạn; dòng thiếu hạn xếp sau cùng.
-            first = lines.sorted(lambda l: (l.due_date or date.max, l.id))[0]
-            days = overdue_days(first.due_date, today)
+        for invoice_no, line_list in groups.items():
+            lines = self.browse([line.id for line in line_list])
+            unpaid = lines.filtered(lambda l: l.paid_state != 'paid')
+            amount_unpaid = sum(unpaid.mapped('amount'))
+            is_paid = amount_unpaid <= MISA_INVOICE_AMOUNT_TOLERANCE
+            # Hạn sớm nhất quyết định quá hạn; dòng thiếu hạn xếp sau cùng.
+            first = (unpaid or lines).sorted(lambda l: (l.due_date or date.max, l.id))[0]
+            days = 0 if is_paid else overdue_days(first.due_date, today)
             followup = followups.get(invoice_no)
             rows.append({
                 'invoice_no': invoice_no,
@@ -68,16 +75,20 @@ class MisaSalePaymentLinePublicApi(models.Model):
                 'partner_code': first.partner_code or '',
                 'partner_name': first.partner_name or '',
                 'invoice_date': fields.Date.to_string(first.invoice_date) or '',
+                'invoice_month': first.invoice_date.strftime('%Y-%m') if first.invoice_date else '',
                 'due_date': fields.Date.to_string(first.due_date) or '',
                 'due_source': due_labels.get(first.due_source, ''),
-                'amount': sum(lines.mapped('amount')),
+                'amount_total': sum(lines.mapped('amount')),
+                'amount_unpaid': amount_unpaid,
+                'amount_paid': sum(lines.mapped('amount')) - amount_unpaid,
+                'is_paid': is_paid,
                 'line_count': len(lines),
                 'orders': list(dict.fromkeys(lines.mapped('order_id.name'))),
                 'saler_codes': list(dict.fromkeys(c for c in lines.mapped('saler_code') if c)),
                 'has_unknown': any(state == 'unknown' for state in lines.mapped('paid_state')),
                 'overdue_days': days,
-                'status_label': status_label(days),
-                'bucket': aging_bucket_of(days),
+                'status_label': 'Đã thu' if is_paid else status_label(days),
+                'bucket': '' if is_paid else aging_bucket_of(days),
                 'promise_date': fields.Date.to_string(followup.promise_date) if followup else '',
                 'collect_rate': followup.collect_rate if followup else 0,
                 'followup_note': (followup.note or '') if followup else '',
@@ -91,30 +102,58 @@ class MisaSalePaymentLinePublicApi(models.Model):
         local = fields.Datetime.context_timestamp(self, fields.Datetime.from_string(value))
         return local.strftime('%H:%M %d/%m/%Y')
 
-    @api.model
-    def get_public_receivable_list(self, saler_code, search=False, bucket=False, limit=50, offset=0):
-        """Danh sách công nợ theo hóa đơn cho tab trên trang public.
+    @staticmethod
+    def _public_row_visible(row, paid_filter, month, bucket):
+        """Hàng hóa đơn có qua các bộ lọc không. paid_filter: 'unpaid' (mặc định) | 'paid' | 'all';
+        bucket chỉ áp cho hóa đơn còn phần chưa thu."""
+        if month and row['invoice_month'] != month:
+            return False
+        if paid_filter == 'paid' and not row['is_paid']:
+            return False
+        if paid_filter not in ('paid', 'all') and row['is_paid']:
+            return False
+        if bucket:
+            return not row['is_paid'] and in_bucket(row['overdue_days'], bucket)
+        return True
 
-        Ô số liệu (summary) tính trên phạm vi mã sale + ô tìm kiếm, KHÔNG theo nhóm tuổi nợ đang
-        chọn — để bấm qua lại giữa các nhóm mà vẫn thấy đủ số của mọi nhóm. Gộp/lọc nhóm tuổi nợ
-        làm bằng Python vì số ngày quá hạn đổi theo ngày, không lưu được.
+    @api.model
+    def get_public_receivable_list(
+        self, saler_code, search=False, paid_filter='unpaid', month=False, bucket=False, limit=50, offset=0,
+    ):
+        """Danh sách hóa đơn cho tab trên trang public.
+
+        Ô tìm kiếm chọn ra HÓA ĐƠN (khớp 1 dòng là lấy cả hóa đơn, để tổng tiền không bị cắt). Ô số
+        liệu và danh sách tháng tính trên phạm vi mã sale + tìm kiếm (+ tháng cho ô số liệu), KHÔNG
+        theo bộ lọc đã thu/nhóm tuổi nợ — để bấm qua lại vẫn thấy đủ số. Quá hạn đổi theo ngày nên
+        gộp/lọc làm bằng Python.
         """
         today = fields.Date.context_today(self)
-        domain = expression.AND([
-            [('paid_state', '!=', 'paid')], self._public_saler_domain(saler_code), self._public_search_domain(search),
-        ])
-        lines = self.sudo().search(domain)
+        saler_domain = self._public_saler_domain(saler_code)
+        Line = self.sudo()
+        domain = saler_domain
+        if search:
+            invoice_nos = list(set(Line.search(expression.AND([saler_domain, self._public_search_domain(search)])).mapped('invoice_no')))
+            domain = expression.AND([saler_domain, [('invoice_no', 'in', invoice_nos)]])
+        lines = Line.search(domain)
         Followup = self.env['misa.receivable.followup'].sudo()
         followups = {f.invoice_no: f for f in Followup.search([('invoice_no', 'in', list(set(lines.mapped('invoice_no'))))])}
         rows = lines._public_invoice_rows(followups, today)
-        filtered = sorted(
-            (row for row in rows if in_bucket(row['overdue_days'], bucket)),
-            key=lambda row: (-row['overdue_days'], row['invoice_no']),
-        )
+        in_month = [row for row in rows if not month or row['invoice_month'] == month]
+        visible = [row for row in rows if self._public_row_visible(row, paid_filter, month, bucket)]
+        # Còn nợ trước (quá hạn lâu nhất lên đầu), đã thu sau (hóa đơn mới nhất lên đầu).
+        owing = sorted((r for r in visible if not r['is_paid']), key=lambda r: (-r['overdue_days'], r['invoice_no']))
+        paid = sorted((r for r in visible if r['is_paid']), key=lambda r: (r['invoice_date'], r['invoice_no']), reverse=True)
+        visible = owing + paid
+        summary = summarize_receivables([
+            {'amount': row['amount_unpaid'], 'overdue_days': row['overdue_days']} for row in in_month if not row['is_paid']
+        ])
+        summary['paid_amount'] = sum(row['amount_paid'] for row in in_month)
+        summary['paid_count'] = sum(1 for row in in_month if row['is_paid'])
         return {
-            'rows': filtered[int(offset):int(offset) + int(limit)],
-            'total': len(filtered),
-            'summary': summarize_receivables(rows),
+            'rows': visible[int(offset):int(offset) + int(limit)],
+            'total': len(visible),
+            'summary': summary,
+            'months': month_options([fields.Date.from_string(row['invoice_date']) for row in rows if row['invoice_date']]),
             'last_scan_at': self._public_last_scan_label(),
         }
 

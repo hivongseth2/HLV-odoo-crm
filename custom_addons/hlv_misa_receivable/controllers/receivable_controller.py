@@ -25,10 +25,13 @@ class MisaReceivableController(http.Controller):
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/receivable/list', type='json', auth='user', methods=['POST'])
-    def api_receivable_list(self, saler_code='', search='', bucket='', limit=50, offset=0, **kwargs):
+    def api_receivable_list(
+        self, saler_code='', search='', paid_filter='unpaid', month='', bucket='', limit=50, offset=0, **kwargs
+    ):
         return self._call(
             'api_receivable_list', 'get_public_receivable_list', saler_code,
-            search=search or False, bucket=bucket or False, limit=int(limit), offset=int(offset),
+            search=search or False, paid_filter=paid_filter or 'unpaid', month=month or False,
+            bucket=bucket or False, limit=int(limit), offset=int(offset),
         )
 
     @http.route('/misa_sale_status/api/receivable/lines', type='json', auth='user', methods=['POST'])

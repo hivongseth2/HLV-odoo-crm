@@ -3,7 +3,9 @@ import logging
 
 from odoo import api, fields, models
 
-from .misa_receivable_utils import allocate_entries, plan_upsert, voucher_payment_entries
+from odoo.addons.misa_invoice_status_report.models.stock_picking import MISA_INVOICE_AMOUNT_TOLERANCE
+
+from .misa_receivable_utils import allocate_entries, plan_upsert, reusable_voucher_states, voucher_payment_entries
 
 _logger = logging.getLogger(__name__)
 
@@ -48,15 +50,23 @@ class StockPickingMisaPayment(models.Model):
     def _misa_payment_scan_invoice(self, invoice_no):
         """Tra MISA tình trạng thu tiền của 1 hóa đơn và ghi lại theo từng dòng đơn bán.
 
-        Lỗi gọi MISA thì giữ nguyên dữ liệu cũ (chỉ ghi giờ tra để lượt sau xếp hóa đơn này về
-        cuối hàng, không kẹt mãi ở đầu). Trả dict tóm tắt: {'invoice_no', 'vouchers', 'lines',
-        'unmatched', 'done', 'error'}.
+        Hóa đơn đã gắn dòng từ trước mà bộ chứng từ không đổi thì chỉ cập nhật đã thu / chưa thu
+        từ kết quả tìm chứng từ (1 lệnh gọi), không đọc lại chi tiết dòng — xem
+        reusable_voucher_states. Lỗi gọi MISA thì giữ nguyên dữ liệu cũ (chỉ ghi giờ tra để lượt
+        sau xếp hóa đơn này về cuối hàng, không kẹt mãi ở đầu). Trả dict tóm tắt: {'invoice_no',
+        'vouchers', 'lines', 'unmatched', 'done', 'reused', 'error'}.
         """
         now = fields.Datetime.now()
         pickings = self.sudo().search([('misa_invoice_no', '=', invoice_no)])
         misa_utils = self.env['misa.api.utils'].sudo()
         try:
             vouchers = misa_utils._misa_invoice_vouchers_for_inv_no(invoice_no)
+            stored = self.env['misa.sale.payment.line'].sudo().search([('invoice_no', '=', invoice_no)])
+            states = reusable_voucher_states(
+                vouchers, {line.voucher_refid: line.voucher_total for line in stored}, MISA_INVOICE_AMOUNT_TOLERANCE,
+            )
+            if states:
+                return self._misa_payment_update_states(invoice_no, pickings, stored, states, now)
             entries = []
             for voucher in vouchers:
                 lines = misa_utils.get_voucher_lines(voucher['refid']) if voucher.get('refid') else []
@@ -80,7 +90,18 @@ class StockPickingMisaPayment(models.Model):
         pickings.write({'misa_payment_checked_at': now, 'misa_payment_done': done})
         return {
             'invoice_no': invoice_no, 'vouchers': len(vouchers), 'lines': len(allocations),
-            'unmatched': len(unmatched), 'done': done, 'error': False,
+            'unmatched': len(unmatched), 'done': done, 'reused': False, 'error': False,
+        }
+
+    def _misa_payment_update_states(self, invoice_no, pickings, stored, states, checked_at):
+        """Đường tắt khi tra lại: chỉ ghi đã thu / chưa thu mới lên các dòng đã lưu, theo chứng từ."""
+        for refid, state in states.items():
+            stored.filtered(lambda line: line.voucher_refid == refid and line.paid_state != state).write({'paid_state': state})
+        done = all(state == 'paid' for state in states.values())
+        pickings.write({'misa_payment_checked_at': checked_at, 'misa_payment_done': done})
+        return {
+            'invoice_no': invoice_no, 'vouchers': len(states), 'lines': len(stored),
+            'unmatched': 0, 'done': done, 'reused': True, 'error': False,
         }
 
     def _misa_payment_candidates(self, entries):
@@ -136,6 +157,7 @@ class StockPickingMisaPayment(models.Model):
                 'due_source': due_source,
                 'voucher_refid': alloc['voucher_refid'],
                 'voucher_refno': alloc['voucher_refno'],
+                'voucher_total': alloc['voucher_total'],
                 'partner_code': alloc['partner_code'],
                 'partner_name': alloc['partner_name'] or sale_line.order_id.partner_id.commercial_partner_id.name,
                 # Field Studio (không khai trong code) — đọc bằng getattr như mọi module khác trong repo.

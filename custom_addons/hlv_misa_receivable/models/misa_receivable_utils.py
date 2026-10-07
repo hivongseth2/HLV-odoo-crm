@@ -61,6 +61,7 @@ def voucher_payment_entries(voucher, lines):
         'invoice_date': parse_misa_date(voucher.get('inv_date')),
         'partner_code': voucher.get('account_object_code') or '',
         'partner_name': voucher.get('account_object_name') or '',
+        'voucher_total': voucher.get('total_amount') or 0.0,
         'paid_state': paid_state,
     }
     return [
@@ -75,6 +76,33 @@ def voucher_payment_entries(voucher, lines):
         )
         for line in lines or []
     ]
+
+
+def reusable_voucher_states(vouchers, stored_totals, tolerance):
+    """Tra lại 1 hóa đơn đã gắn dòng từ trước: có dùng lại được các dòng đã lưu, chỉ cập nhật
+    đã thu / chưa thu, khỏi đọc lại chi tiết từng chứng từ không?
+
+    Dòng hàng của chứng từ không đổi giữa các lần tra — cái đổi là paid_type, mà paid_type đã có
+    sẵn trong kết quả tìm chứng từ theo số hóa đơn. Chỉ dùng lại được khi bộ chứng từ y hệt lần
+    trước (không thêm, không bớt) và tổng tiền từng chứng từ không đổi (kế toán sửa chứng từ là
+    tổng đổi → phải đọc lại dòng).
+
+    Nhận: vouchers — kết quả tìm chứng từ (dòng thô sa_voucher_get); stored_totals —
+    {refid chứng từ: tổng tiền đã lưu}; tolerance — sai số tiền. Trả {refid: paid_state} nếu
+    dùng lại được, None nếu phải đọc lại toàn bộ. vouchers hoặc stored_totals rỗng trả None.
+    """
+    if not vouchers or not stored_totals:
+        return None
+    refids = {voucher.get('refid') for voucher in vouchers}
+    if refids != set(stored_totals):
+        return None
+    states = {}
+    for voucher in vouchers:
+        refid = voucher.get('refid')
+        if abs((voucher.get('total_amount') or 0.0) - (stored_totals[refid] or 0.0)) > tolerance:
+            return None
+        states[refid] = paid_state_of(voucher.get('paid_type'))[0]
+    return states
 
 
 def _fill_by_capacity(quantity, candidates, remaining):
@@ -255,6 +283,23 @@ def in_bucket(days, bucket):
     if bucket == 'overdue':
         return days > 0
     return aging_bucket_of(days) == bucket
+
+
+def month_options(dates):
+    """Các tháng có hóa đơn để chọn lọc, mới nhất trước.
+
+    Nhận list date (None bỏ qua). Trả list {'key': 'YYYY-MM', 'label': 'MM/YYYY', 'count': số
+    hóa đơn}. Rỗng trả [].
+    """
+    counts = {}
+    for day in dates or []:
+        if day:
+            key = day.strftime('%Y-%m')
+            counts[key] = counts.get(key, 0) + 1
+    return [
+        {'key': key, 'label': '%s/%s' % (key[5:7], key[0:4]), 'count': counts[key]}
+        for key in sorted(counts, reverse=True)
+    ]
 
 
 def summarize_receivables(rows):

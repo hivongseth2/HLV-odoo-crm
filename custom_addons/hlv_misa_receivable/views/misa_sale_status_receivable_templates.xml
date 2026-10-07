@@ -14,6 +14,20 @@
                     <input type="text" id="msr-search" class="msu-input msu-search-input"
                            placeholder="Tìm theo tên/mã khách, số hóa đơn, số chứng từ, mã đơn hoặc mã hàng..."/>
                     <button id="msr-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                    <span class="msu-select-wrap">
+                        <select id="msr-paid-filter" class="msu-select" title="Lọc theo tình trạng thu tiền">
+                            <option value="unpaid">Chưa thu</option>
+                            <option value="paid">Đã thu</option>
+                            <option value="all">Tất cả</option>
+                        </select>
+                        <span class="msu-select-caret">&#9662;</span>
+                    </span>
+                    <span class="msu-select-wrap">
+                        <select id="msr-month-filter" class="msu-select" title="Lọc theo tháng hóa đơn">
+                            <option value="">Mọi tháng</option>
+                        </select>
+                        <span class="msu-select-caret">&#9662;</span>
+                    </span>
                     <button id="msr-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
                     <button id="msr-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
                     <span class="msr-sync-info">
@@ -38,6 +52,7 @@
                                     <th>Số HĐ / CT</th>
                                     <th>Ngày HĐ</th>
                                     <th>Hạn thu</th>
+                                    <th class="msu-col-num">Tiền HĐ</th>
                                     <th class="msu-col-num">Chưa thu</th>
                                     <th>Trạng thái</th>
                                     <th>Hẹn thu</th>
@@ -48,7 +63,7 @@
                             <tbody id="msr-tbody"/>
                         </table>
                     </div>
-                    <div id="msr-empty" class="msu-empty" style="display:none">Không có hóa đơn nào còn phải thu.</div>
+                    <div id="msr-empty" class="msu-empty" style="display:none">Không có hóa đơn nào khớp bộ lọc.</div>
                     <div class="msu-pagination" id="msr-pagination" style="display:none">
                         <button id="msr-prev" class="msu-btn msu-btn-outline-muted msu-btn-sm">&#8249; Trước</button>
                         <span id="msr-page-label"/>

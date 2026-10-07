@@ -6,34 +6,46 @@
     'use strict';
 
     var PAGE_SIZE = 50;
-    var COLS = 10;
+    var COLS = 11;
     var msu = window.MsuSaleStatus;
-    var state = {search: '', bucket: '', page: 1, total: 0, rows: [], loadedFor: null, editing: null, open: {}};
+    var state = {search: '', paidFilter: 'unpaid', month: '', bucket: '', page: 1, total: 0, rows: [], loadedFor: null, editing: null, open: {}};
 
     function el(id) { return document.getElementById(id); }
 
-    // Màu trạng thái: quá hạn đỏ, đến hạn hôm nay vàng, chưa đến hạn xanh.
+    // Màu trạng thái: quá hạn đỏ, đến hạn hôm nay vàng, chưa đến hạn / đã thu xanh.
     function badgeClass(row) {
+        if (row.is_paid) { return 'msr-badge-ok'; }
         if (row.overdue_days > 0) { return 'msr-badge-overdue'; }
         if (row.overdue_days === 0) { return 'msr-badge-due'; }
         return 'msr-badge-ok';
     }
 
+    // Ô "Còn phải thu"/nhóm tuổi nợ lọc trong các hóa đơn chưa thu; ô "Đã thu" chuyển sang hóa
+    // đơn đã thu — đồng bộ luôn với ô chọn tình trạng thu.
     function renderSummary(summary) {
         var cards = [
-            {key: '', label: 'Tổng còn phải thu', amount: summary.total_amount, count: summary.total_count, cls: 'msr-card-total'},
-            {key: 'overdue', label: 'Đã quá hạn', amount: summary.overdue_amount, count: summary.overdue_count, cls: 'msr-card-overdue'},
+            {paid: 'unpaid', bucket: '', label: 'Còn phải thu', amount: summary.total_amount, count: summary.total_count, cls: 'msr-card-total'},
+            {paid: 'paid', bucket: '', label: 'Đã thu', amount: summary.paid_amount, count: summary.paid_count, cls: 'msr-card-paid'},
+            {paid: 'unpaid', bucket: 'overdue', label: 'Đã quá hạn', amount: summary.overdue_amount, count: summary.overdue_count, cls: 'msr-card-overdue'},
         ].concat(summary.buckets.map(function (b) {
-            return {key: b.key, label: b.label, amount: b.amount, count: b.count, cls: 'msr-card-bucket'};
+            return {paid: 'unpaid', bucket: b.key, label: b.label, amount: b.amount, count: b.count, cls: 'msr-card-bucket'};
         }));
         el('msr-summary').innerHTML = cards.map(function (c) {
-            var active = state.bucket === c.key ? ' msr-card-active' : '';
-            return '<button type="button" class="msr-card ' + c.cls + active + '" data-bucket="' + msu.esc(c.key) + '">' +
+            var active = state.paidFilter === c.paid && state.bucket === c.bucket ? ' msr-card-active' : '';
+            return '<button type="button" class="msr-card ' + c.cls + active + '" data-paid="' + c.paid + '" data-bucket="' + msu.esc(c.bucket) + '">' +
                 '<span class="msr-card-label">' + msu.esc(c.label) + '</span>' +
                 '<span class="msr-card-amount">' + msu.fmtMoney(c.amount) + '</span>' +
                 '<span class="msr-card-count">' + c.count + ' hóa đơn</span>' +
                 '</button>';
         }).join('');
+    }
+
+    function renderMonths(months) {
+        var select = el('msr-month-filter');
+        select.innerHTML = '<option value="">Mọi tháng</option>' + months.map(function (m) {
+            return '<option value="' + msu.esc(m.key) + '">' + msu.esc(m.label) + ' (' + m.count + ')</option>';
+        }).join('');
+        select.value = state.month;
     }
 
     function renderFollowup(row) {
@@ -49,11 +61,11 @@
     function renderDetail(lines) {
         if (!lines) { return '<span class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải...</span>'; }
         return '<table class="msu-table msu-table-compact"><thead><tr>' +
-            '<th>Đơn</th><th>Sản phẩm</th><th>Mã hàng MISA</th><th class="msu-col-num">SL (MISA)</th>' +
+            '<th class="msu-col-num">STT</th><th>Đơn</th><th>Sản phẩm</th><th>Mã hàng MISA</th><th class="msu-col-num">SL (MISA)</th>' +
             '<th class="msu-col-num">Tiền có VAT</th><th>Chứng từ</th><th>Thu tiền</th></tr></thead><tbody>' +
-            lines.map(function (l) {
+            lines.map(function (l, i) {
                 var cls = l.paid_state === 'paid' ? 'msr-badge-ok' : (l.paid_state === 'unknown' ? 'msr-badge-muted' : 'msr-badge-overdue');
-                return '<tr><td>' + msu.esc(l.order) + '</td>' +
+                return '<tr><td class="msu-col-num">' + (i + 1) + '</td><td>' + msu.esc(l.order) + '</td>' +
                     '<td>' + msu.esc(l.product) + (l.match_by === 'component' ? ' <span class="msu-muted">(mã con)</span>' : '') +
                     (l.match_note ? ' <i class="fa fa-info-circle msr-match-note" title="' + msu.esc(l.match_note) + '"></i>' : '') + '</td>' +
                     '<td>' + msu.esc(l.item_code) + '</td>' +
@@ -71,13 +83,14 @@
             ? ' <span class="msr-badge msr-badge-muted" title="MISA trả tình trạng thu tiền lạ — kiểm lại trên MISA">Chưa rõ đã thu</span>'
             : '';
         var isOpen = state.open.hasOwnProperty(row.invoice_no);
-        var html = '<tr class="' + (row.overdue_days > 0 ? 'msr-row-overdue' : '') + '">' +
+        var html = '<tr class="' + (!row.is_paid && row.overdue_days > 0 ? 'msr-row-overdue' : '') + '">' +
             '<td class="msu-col-num">' + ((state.page - 1) * PAGE_SIZE + index + 1) + '</td>' +
             '<td><b>' + msu.esc(row.partner_name) + '</b><div class="msu-muted msr-sub">' + msu.esc(row.partner_code) + '</div></td>' +
             '<td><b>HĐ ' + msu.esc(row.invoice_no) + '</b>' + vouchers + orders + '</td>' +
             '<td>' + msu.fmtDate(row.invoice_date) + '</td>' +
             '<td title="' + msu.esc(row.due_source) + '">' + msu.fmtDate(row.due_date) + '</td>' +
-            '<td class="msu-col-num"><b>' + msu.fmtMoney(row.amount) + '</b></td>' +
+            '<td class="msu-col-num">' + msu.fmtMoney(row.amount_total) + '</td>' +
+            '<td class="msu-col-num"><b>' + (row.amount_unpaid ? msu.fmtMoney(row.amount_unpaid) : '—') + '</b></td>' +
             '<td><span class="msr-badge ' + badgeClass(row) + '">' + msu.esc(row.status_label) + '</span>' + unknown + '</td>' +
             '<td>' + renderFollowup(row) + '</td>' +
             '<td>' + (row.saler_codes.length ? msu.esc(row.saler_codes.join(', ')) : '<span class="msu-muted">—</span>') + '</td>' +
@@ -112,7 +125,8 @@
         el('msr-tbody').innerHTML = '<tr><td colspan="' + COLS + '" class="msu-muted"><i class="fa fa-spinner fa-spin"></i> Đang tải...</td></tr>';
         el('msr-sync-btn').style.display = msu.isAdmin() ? '' : 'none';
         msu.rpc('/misa_sale_status/api/receivable/list', {
-            saler_code: salerCode, search: state.search, bucket: state.bucket,
+            saler_code: salerCode, search: state.search, paid_filter: state.paidFilter,
+            month: state.month, bucket: state.bucket,
             limit: PAGE_SIZE, offset: (state.page - 1) * PAGE_SIZE,
         }).then(function (res) {
             var data = res.data;
@@ -122,6 +136,7 @@
                 ? 'Tra MISA lần cuối lúc ' + data.last_scan_at
                 : 'Chưa tra MISA lần nào';
             renderSummary(data.summary);
+            renderMonths(data.months);
             renderRows();
         }).catch(function (e) {
             el('msr-tbody').innerHTML = '';
@@ -155,6 +170,7 @@
         msu.rpc('/misa_sale_status/api/receivable/recheck', {saler_code: msu.getSalerCode(), invoice_no: invoiceNo}).then(function (res) {
             var r = res.data;
             msu.toast('HĐ ' + invoiceNo + ': ' + (r.done ? 'đã thu đủ.' : 'vẫn còn phần chưa thu.') +
+                (r.reused ? ' (chứng từ không đổi, chỉ cập nhật tình trạng thu)' : '') +
                 (r.unmatched ? ' ' + r.unmatched + ' dòng chứng từ không gắn được dòng đơn bán.' : ''), 'success');
             load(state.page);
         }).catch(function (e) {
@@ -174,7 +190,7 @@
         var row = state.rows.find(function (r) { return r.invoice_no === invoiceNo; });
         if (!row) { return; }
         state.editing = row;
-        el('msr-followup-target').textContent = 'HĐ ' + row.invoice_no + ' — ' + row.partner_name + ' — ' + msu.fmtMoney(row.amount);
+        el('msr-followup-target').textContent = 'HĐ ' + row.invoice_no + ' — ' + row.partner_name + ' — còn ' + msu.fmtMoney(row.amount_unpaid);
         el('msr-followup-date').value = row.promise_date;
         el('msr-followup-rate').value = row.collect_rate || '';
         el('msr-followup-note').value = row.followup_note;
@@ -215,7 +231,18 @@
         el('msr-summary').addEventListener('click', function (ev) {
             var card = ev.target.closest('.msr-card');
             if (!card) { return; }
+            state.paidFilter = card.dataset.paid;
             state.bucket = card.dataset.bucket;
+            el('msr-paid-filter').value = state.paidFilter;
+            load(1);
+        });
+        el('msr-paid-filter').addEventListener('change', function () {
+            state.paidFilter = this.value;
+            state.bucket = '';
+            load(1);
+        });
+        el('msr-month-filter').addEventListener('change', function () {
+            state.month = this.value;
             load(1);
         });
         el('msr-search-btn').addEventListener('click', function () { applySearch(el('msr-search').value); });
