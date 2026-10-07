@@ -152,13 +152,13 @@
 
     <!-- Trao đổi với bên mua trên một báo giá / đơn mua. Chỉ tin thuộc kênh "Trao đổi với NCC"
          (services/vendor_chat.py) — tin hệ thống không hiện ở đây. Cần biến chat, chat_url, chat_doc.
-         Đóng: "giọt nước" bám mép phải tờ chứng từ, ghi số chứng từ — để NCC hiểu đây là trao đổi
-         của RIÊNG báo giá / đơn mua này, không phải hộp chat chung. Mở: khung chat cạnh mép đó.
+         Đóng: tab nửa hình tròn dán vào mép phải tờ chứng từ, ghi số chứng từ — để NCC hiểu đây là
+         trao đổi của RIÊNG báo giá / đơn mua này, không phải hộp chat chung. Mở: khung chat cạnh mép đó.
          Đóng / mở do js/vendor_live.js (nhớ lựa chọn; link #trao-doi hoặc gửi lỗi thì tự mở). -->
     <template id="portal_chat" name="Báo giá NCC - trao đổi">
         <details class="vq-chat" id="trao-doi" t-att-data-chat-key="chat_key">
             <summary class="vq-chat-head" t-att-title="'Trao đổi về %s' % chat_doc" data-live="chat-head">
-                <svg class="vq-fab-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg>
+                <svg class="vq-fab-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg>
                 <span class="vq-chat-title">Trao đổi về <t t-esc="chat_doc"/>
                     <span class="vq-chat-sub">với <t t-esc="company.name"/></span></span>
                 <span class="vq-chat-tab-label" t-esc="chat_doc"/>
