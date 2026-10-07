@@ -38,14 +38,17 @@
 
                 <div t-else="" id="hq-app" class="container-fluid py-3"
                      t-att-data-initial-vendor="initial_vendor_id or ''">
+                    <!-- Tài khoản chưa khai mã sale MISA: không có phiếu nào để xem. -->
+                    <div id="hq-denied" class="hq-panel hq-pad hq-hidden"></div>
+
                     <div class="hq-toolbar">
-                        <label class="hq-sr-only" for="hq-search">Tìm yêu cầu báo giá</label>
+                        <label class="hq-muted" for="hq-code">Mã sale</label>
+                        <select id="hq-code" class="hq-input hq-code-select"></select>
+                        <button type="button" class="hq-btn hq-btn-mini hq-hidden" id="hq-copy-code-link"
+                                title="Link riêng của mã sale này — gửi cho đúng sale đó">Copy link mã này</button>
+                        <label class="hq-sr-only" for="hq-search">Tìm phiếu hỏi giá</label>
                         <input type="search" id="hq-search" class="hq-input hq-input-wide"
-                               placeholder="Tìm số báo giá, NCC, YCMH, đơn bán, mã sale, mặt hàng…"/>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="hq-mine" checked="checked"/>
-                            <label class="form-check-label hq-muted" for="hq-mine">Chỉ yêu cầu của tôi</label>
-                        </div>
+                               placeholder="Tìm số phiếu, sản phẩm, NCC, đơn bán, YCMH…"/>
                         <button type="button" class="hq-btn hq-btn-primary hq-push" id="hq-new">Hỏi giá NCC</button>
                     </div>
 
@@ -81,18 +84,17 @@
                                     <table class="hq-quotes">
                                         <thead>
                                             <tr>
-                                                <th>Số báo giá</th>
-                                                <th>Nhà cung cấp</th>
-                                                <th>YCMH</th>
-                                                <th>Đơn bán</th>
-                                                <th>Mặt hàng</th>
+                                                <th>Số phiếu</th>
+                                                <th>Sản phẩm</th>
+                                                <th>NCC đã báo</th>
+                                                <th>Đã chọn giá</th>
+                                                <th>YCMH · Đơn mua</th>
                                                 <th>Hạn</th>
-                                                <th>Trạng thái</th>
-                                                <th class="hq-right">Tổng chưa VAT</th>
+                                                <th>Tình trạng</th>
                                             </tr>
                                         </thead>
                                         <tbody id="hq-quote-list">
-                                            <tr><td colspan="8" class="hq-empty">Đang tải…</td></tr>
+                                            <tr><td colspan="7" class="hq-empty">Đang tải…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -101,7 +103,7 @@
                         </div>
                     </div>
 
-                    <!-- Chi tiết một yêu cầu báo giá -->
+                    <!-- Chi tiết một phiếu: so giá các NCC, chọn, lên YCMH -->
                     <div id="hq-drawer" class="hq-drawer hq-hidden">
                         <div class="hq-drawer-backdrop" data-close="drawer"></div>
                         <section class="hq-drawer-panel" id="hq-drawer-panel"></section>
@@ -116,29 +118,23 @@
                             </div>
                             <div class="hq-modal-body" id="hq-modal-body">
                                 <section class="hq-step">
-                                    <h3 class="hq-h3">1. Mặt hàng cần báo giá</h3>
+                                    <h3 class="hq-h3">1. Sản phẩm cần hỏi giá</h3>
                                     <div class="row g-2">
-                                        <div class="col-md-4 hq-picker">
-                                            <label class="form-label small mb-1" for="hq-so-search">Từ đơn bán</label>
-                                            <input type="search" id="hq-so-search" class="hq-input w-100" autocomplete="off"
-                                                   placeholder="Số đơn, khách, mã sale…"/>
-                                            <div id="hq-so-results" class="hq-dropdown hq-hidden"></div>
-                                        </div>
-                                        <div class="col-md-4 hq-picker">
-                                            <label class="form-label small mb-1" for="hq-req-search">Từ yêu cầu mua hàng</label>
-                                            <input type="search" id="hq-req-search" class="hq-input w-100" autocomplete="off"
-                                                   placeholder="Số YCMH, đơn bán…"/>
-                                            <div id="hq-req-results" class="hq-dropdown hq-hidden"></div>
-                                        </div>
-                                        <div class="col-md-4 hq-picker">
+                                        <div class="col-md-6 hq-picker">
                                             <label class="form-label small mb-1" for="hq-prod-search">Thêm sản phẩm</label>
                                             <input type="search" id="hq-prod-search" class="hq-input w-100" autocomplete="off"
                                                    placeholder="Mã hoặc tên sản phẩm…"/>
                                             <div id="hq-prod-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
+                                        <div class="col-md-6 hq-picker">
+                                            <label class="form-label small mb-1" for="hq-so-search">
+                                                Lấy hàng từ đơn bán (không bắt buộc)</label>
+                                            <input type="search" id="hq-so-search" class="hq-input w-100" autocomplete="off"
+                                                   placeholder="Số đơn, khách, mã sale…"/>
+                                            <div id="hq-so-results" class="hq-dropdown hq-hidden"></div>
+                                        </div>
                                     </div>
                                     <div id="hq-req-chip" class="hq-chip-row"></div>
-                                    <div id="hq-source-note" class="hq-source-note hq-hidden"></div>
                                     <div id="hq-lines"></div>
                                 </section>
 
@@ -159,6 +155,11 @@
                                 <section class="hq-step">
                                     <h3 class="hq-h3">3. Hạn &amp; lời nhắn</h3>
                                     <div class="row g-2">
+                                        <!-- Chỉ hiện khi đang xem "Tất cả": phiếu phải gắn một mã sale cụ thể. -->
+                                        <div class="col-md-4 hq-hidden" id="hq-create-code-wrap">
+                                            <label class="form-label small mb-1" for="hq-create-code">Mã sale của phiếu</label>
+                                            <select id="hq-create-code" class="hq-input w-100"></select>
+                                        </div>
                                         <div class="col-md-4">
                                             <label class="form-label small mb-1" for="hq-deadline">Hạn báo giá</label>
                                             <input type="date" id="hq-deadline" class="hq-input w-100"/>
@@ -175,7 +176,7 @@
                             <div class="hq-modal-foot" id="hq-modal-foot">
                                 <span id="hq-summary" class="hq-muted"></span>
                                 <button type="button" class="hq-btn hq-push" data-close="modal">Huỷ</button>
-                                <button type="button" class="hq-btn hq-btn-primary" id="hq-submit">Gửi yêu cầu báo giá</button>
+                                <button type="button" class="hq-btn hq-btn-primary" id="hq-submit">Gửi hỏi giá</button>
                             </div>
                         </div>
                     </div>
@@ -186,7 +187,8 @@
                 <!-- Thứ tự quan trọng: utils → ui → feature → app. -->
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_utils.js"></script>
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js"></script>
-                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_quotes.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js"></script>
+                <script src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js"></script>
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js"></script>
                 <script src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js"></script>
             </body>

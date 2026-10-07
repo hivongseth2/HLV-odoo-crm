@@ -7,6 +7,11 @@
               web_icon="hlv_vendor_quotation,static/description/icon.png"
               sequence="23"
               groups="purchase.group_purchase_user,purchase_request.group_purchase_request_user"/>
+    <menuitem id="menu_vendor_inquiry"
+              name="Phiếu hỏi giá"
+              parent="menu_vendor_quote_root"
+              action="action_vendor_inquiry"
+              sequence="5"/>
     <menuitem id="menu_vendor_quote_access"
               name="Theo nhà cung cấp"
               parent="menu_vendor_quote_root"

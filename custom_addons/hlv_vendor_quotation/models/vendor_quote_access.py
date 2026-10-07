@@ -178,6 +178,11 @@ class VendorQuoteAccess(models.Model):
         action["context"] = {"default_partner_id": self.partner_id.id}
         return action
 
+    def _vendor_purchase_orders(self):
+        """Đơn mua đã xác nhận sinh ra từ các báo giá của NCC này (xem hlv.vendor.quote)."""
+        self.ensure_one()
+        return self.quote_ids._vendor_purchase_orders()
+
     def _session_key(self):
         self.ensure_one()
         return session_fingerprint(self.access_token, self.password)

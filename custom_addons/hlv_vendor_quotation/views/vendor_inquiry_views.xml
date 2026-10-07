@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Phiếu hỏi giá do sale tạo ở /hoi-gia-ncc. Backend chỉ để thu mua tra cứu chuỗi
+         phiếu → báo giá → YCMH → đơn mua; sale làm việc trên trang của họ. -->
+    <record id="view_vendor_inquiry_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.inquiry.list</field>
+        <field name="model">hlv.vendor.inquiry</field>
+        <field name="arch" type="xml">
+            <list string="Phiếu hỏi giá" create="0" decoration-muted="sale_status == 'cancel'">
+                <field name="name"/>
+                <field name="sale_code"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="quoted_count" string="NCC đã báo"/>
+                <field name="chosen_count" string="SP đã chọn NCC"/>
+                <field name="request_id"/>
+                <field name="date_deadline" optional="show"/>
+                <field name="user_id" widget="many2one_avatar_user" optional="hide"/>
+                <field name="sale_status" widget="badge"
+                       decoration-warning="sale_status == 'waiting'"
+                       decoration-info="sale_status == 'quoted'"
+                       decoration-success="sale_status == 'requested'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_inquiry_form" model="ir.ui.view">
+        <field name="name">hlv.vendor.inquiry.form</field>
+        <field name="model">hlv.vendor.inquiry</field>
+        <field name="arch" type="xml">
+            <form string="Phiếu hỏi giá" create="0">
+                <header>
+                    <button name="action_cancel" type="object" string="Huỷ phiếu" invisible="state != 'open'"
+                            confirm="Huỷ phiếu và các báo giá NCC của phiếu?"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="sale_code"/>
+                            <field name="sale_order_id"/>
+                            <field name="request_id"/>
+                        </group>
+                        <group>
+                            <field name="date_deadline"/>
+                            <field name="user_id"/>
+                            <field name="purchase_order_ids" widget="many2many_tags"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Sản phẩm" name="lines">
+                            <field name="line_ids" readonly="1">
+                                <list>
+                                    <field name="product_id"/>
+                                    <field name="name" optional="hide"/>
+                                    <field name="product_qty"/>
+                                    <field name="product_uom_id" groups="uom.group_uom"/>
+                                    <field name="chosen_line_id" string="NCC / giá đã chọn"/>
+                                    <field name="request_line_id" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Báo giá NCC" name="quotes">
+                            <field name="quote_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="submit_date"/>
+                                    <field name="amount_untaxed"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Lời nhắn gửi NCC" name="note">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vendor_inquiry_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.inquiry.search</field>
+        <field name="model">hlv.vendor.inquiry</field>
+        <field name="arch" type="xml">
+            <search string="Phiếu hỏi giá">
+                <field name="name"/>
+                <field name="sale_code"/>
+                <field name="sale_order_id"/>
+                <field name="request_id"/>
+                <field name="line_ids" string="Sản phẩm" filter_domain="[('line_ids.product_id', 'ilike', self)]"/>
+                <filter name="filter_quoted" string="NCC đã báo giá" domain="[('sale_status', '=', 'quoted')]"/>
+                <filter name="filter_requested" string="Đã lên YCMH" domain="[('sale_status', '=', 'requested')]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_sale_code" string="Mã sale" context="{'group_by': 'sale_code'}"/>
+                    <filter name="group_status" string="Tình trạng" context="{'group_by': 'sale_status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_inquiry" model="ir.actions.act_window">
+        <field name="name">Phiếu hỏi giá</field>
+        <field name="res_model">hlv.vendor.inquiry</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vendor_inquiry_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">Chưa có phiếu hỏi giá nào</p>
+            <p>Sale tạo phiếu hỏi giá trên trang /hoi-gia-ncc.</p>
+        </field>
+    </record>
+</odoo>

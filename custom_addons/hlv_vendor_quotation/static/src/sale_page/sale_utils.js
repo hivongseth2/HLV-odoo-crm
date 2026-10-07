@@ -5,22 +5,29 @@ window.HlvQuote = window.HlvQuote || {};
 (function (HQ) {
   "use strict";
 
-  /* trạng thái báo giá -> class nhãn. Mã trạng thái do services/sale_page_payload.py trả.
-     Ba màu như /giao-hang: cam = đang chờ, xanh lá = xong việc, đỏ = trễ; còn lại xám. */
-  HQ.STATE_CLASS = {
+  /* Tình trạng phiếu hỏi giá -> class nhãn (mã do services/sale_page_payload.py trả).
+     Màu như /giao-hang: cam = đang chờ, màu nhấn = tới lượt sale làm, xanh lá = xong. */
+  HQ.SALE_STATUS_CLASS = {
+    waiting: "hq-tag-warn",
+    quoted: "hq-tag-mine",
+    requested: "hq-tag-ok",
+    cancel: "hq-tag-soft",
+  };
+
+  /* Trạng thái báo giá của từng NCC trong phiếu. */
+  HQ.QUOTE_STATE_CLASS = {
     draft: "hq-tag-soft",
     sent: "hq-tag-warn",
     quoted: "hq-tag-ok",
-    expired: "hq-tag-danger",
     done: "hq-tag-soft",
     cancel: "hq-tag-soft",
   };
 
-  /* Ô số đầu trang: [mã trạng thái, nhãn]. */
+  /* Ô số đầu trang: [tình trạng phiếu, nhãn]. */
   HQ.KPIS = [
-    ["waiting", "đang chờ NCC báo giá"],
-    ["quoted", "NCC đã báo giá, chờ thu mua chọn"],
-    ["expired", "quá hạn"],
+    ["waiting", "phiếu đang chờ NCC báo giá"],
+    ["quoted", "phiếu NCC đã báo giá — chờ bạn chọn"],
+    ["requested", "phiếu đã lên YCMH"],
   ];
 
   var ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };

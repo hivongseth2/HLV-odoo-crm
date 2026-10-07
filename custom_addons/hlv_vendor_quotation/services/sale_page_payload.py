@@ -7,19 +7,24 @@ chỉ việc gọi và trả về. Số tiền trả dạng số, trang tự đ�
 
 from odoo import fields
 
+from ..models.purchase_order import VENDOR_STATUS
+from ..models.vendor_inquiry import SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import build_share_message
 from .sale_code import sale_code
 
-STATE_LABELS = {
+QUOTE_STATE_LABELS = {
     "draft": "Nháp",
-    "sent": "Chờ NCC báo giá",
-    "quoted": "NCC đã báo giá",
+    "sent": "Chờ báo giá",
+    "quoted": "Đã báo giá",
     "done": "Đã đóng",
     "cancel": "Đã huỷ",
 }
+SALE_STATUS_LABELS = dict(SALE_STATUS)
+VENDOR_STATUS_LABELS = dict(VENDOR_STATUS)
 VAT_LABELS = dict(VAT_SELECTION)
 DATE_FMT = "%d/%m/%Y"
+PRODUCT_PREVIEW = 3
 
 
 def _date_text(value):
@@ -32,74 +37,103 @@ def _datetime_text(record, value):
     return fields.Datetime.context_timestamp(record, value).strftime("%H:%M " + DATE_FMT)
 
 
-def quote_state(quote):
-    """(mã, nhãn) trạng thái sale thấy; báo giá mở mà quá hạn thì báo "Quá hạn"."""
-    if quote.state in ("sent", "quoted") and quote._vendor_status() == "expired":
-        return "expired", "Quá hạn — NCC không sửa được nữa"
-    return quote.state, STATE_LABELS[quote.state]
-
-
-def quote_summary(quote):
-    state, state_label = quote_state(quote)
-    lines = quote.line_ids
-    # Đơn bán có thể là của sale khác — record rule "chỉ đơn của mình" sẽ chặn đọc. Ở đây
-    # chỉ hiện số đơn và mã sale, nên đọc bằng sudo.
-    order = (quote.sale_order_id or quote.request_id.sale_order_id).sudo()
+def purchase_order_payload(order):
+    order = order.sudo()
     return {
-        "id": quote.id,
-        "name": quote.name,
-        "vendor_id": quote.access_id.id,
-        "vendor_name": quote.partner_id.display_name or "",
-        "request_name": quote.request_id.name or "",
-        "origin": quote.origin or "",
-        "sale_order": order.name or "",
-        "sale_code": sale_code(order),
-        "user_name": quote.user_id.name or "",
-        "deadline": _date_text(quote.date_deadline),
-        "submit_date": _datetime_text(quote, quote.submit_date),
-        "state": state,
-        "state_label": state_label,
-        "line_count": len(lines),
-        "offered_count": len(lines.filtered(lambda l: l.price_unit and not l.unavailable)),
-        "selected_count": quote.selected_line_count,
-        "amount_untaxed": quote.amount_untaxed,
+        "id": order.id,
+        "name": order.name,
+        "vendor": order.partner_id.commercial_partner_id.display_name,
+        "date": _date_text(order.date_approve or order.date_order),
+        "amount_untaxed": order.amount_untaxed,
+        "vendor_status": VENDOR_STATUS_LABELS.get(order.hlv_vendor_status, ""),
     }
 
 
-def quote_detail(quote):
-    data = quote_summary(quote)
+def inquiry_summary(inquiry):
+    """Một dòng trong bảng phiếu hỏi giá."""
+    quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel")
+    names = inquiry.line_ids[:PRODUCT_PREVIEW].mapped(lambda l: l.name or l.product_id.name)
+    more = len(inquiry.line_ids) - PRODUCT_PREVIEW
+    return {
+        "id": inquiry.id,
+        "name": inquiry.name,
+        "sale_code": inquiry.sale_code or "",
+        "products": ", ".join(names) + (f" và {more} sản phẩm khác" if more > 0 else ""),
+        "line_count": len(inquiry.line_ids),
+        "vendor_count": len(quotes),
+        "quoted_count": inquiry.quoted_count,
+        "chosen_count": inquiry.chosen_count,
+        # Đơn bán / YCMH / đơn mua có thể thuộc sale khác hoặc sale chỉ có quyền đọc hạn
+        # chế — ở đây chỉ hiện số chứng từ nên đọc bằng sudo.
+        "sale_order": inquiry.sale_order_id.sudo().name or "",
+        "request_name": inquiry.request_id.sudo().name or "",
+        "purchase_orders": inquiry.purchase_order_ids.sudo().mapped("name"),
+        "deadline": _date_text(inquiry.date_deadline),
+        "sale_status": inquiry.sale_status,
+        "sale_status_label": SALE_STATUS_LABELS.get(inquiry.sale_status, ""),
+    }
+
+
+def inquiry_detail(inquiry):
+    """Phiếu đầy đủ cho ngăn so sánh: NCC (cột) × sản phẩm (dòng), kèm lựa chọn."""
+    quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel").sorted("id")
+    request = inquiry.request_id.sudo()
+    data = inquiry_summary(inquiry)
     data.update({
-        "note": quote.note or "",
-        "vendor_note": quote.vendor_note or "",
-        "portal_url": quote.portal_quote_url or "",
-        "password": quote.portal_password or "",
-        "share_message": share_message(quote) if quote.access_id else "",
-        "backend_url": f"/odoo/hlv.vendor.quote/{quote.id}",
-        "can_close": quote.state in ("sent", "quoted"),
-        "can_reopen": quote.state == "done",
-        "can_cancel": quote.state not in ("done", "cancel"),
-        "lines": [_line_payload(line) for line in quote.line_ids],
+        "note": inquiry.note or "",
+        "user_name": inquiry.user_id.name or "",
+        "sale_order_id": inquiry.sale_order_id.id or False,
+        "request": {
+            "name": request.name,
+            "state": dict(request._fields["state"].selection).get(request.state, ""),
+        } if request else None,
+        "purchase_orders": [purchase_order_payload(o) for o in inquiry.purchase_order_ids],
+        "can_choose": inquiry.state == "open",
+        "can_request": inquiry.state == "open" and inquiry.chosen_count > 0,
+        "can_cancel": inquiry.state == "open",
+        "vendors": [_vendor_column(q) for q in quotes],
+        "lines": [_compare_row(line, quotes) for line in inquiry.line_ids],
+        "chosen_total": sum(inquiry.line_ids.chosen_line_id.mapped("price_subtotal")),
     })
     return data
 
 
-def _line_payload(line):
+def _vendor_column(quote):
+    return {
+        "quote_id": quote.id,
+        "vendor_id": quote.access_id.partner_id.id,
+        "name": quote.partner_id.commercial_partner_id.display_name,
+        "state": quote.state,
+        "state_label": QUOTE_STATE_LABELS.get(quote.state, ""),
+        "submit_date": _datetime_text(quote, quote.submit_date),
+        "amount_untaxed": quote.amount_untaxed,
+        "vendor_note": quote.vendor_note or "",
+        "portal_url": quote.portal_quote_url or "",
+        "share_message": share_message(quote) if quote.access_id else "",
+    }
+
+
+def _compare_row(line, quotes):
+    offers = {}
+    for quote_line in line.quote_line_ids.filtered(lambda l: l.quote_id in quotes):
+        offers[quote_line.quote_id.id] = {
+            "line_id": quote_line.id,
+            "price_unit": quote_line.price_unit,
+            "vat": VAT_LABELS.get(quote_line.vat, ""),
+            "delivery_days": quote_line.delivery_days,
+            "vendor_note": quote_line.vendor_note or "",
+            "unavailable": quote_line.unavailable,
+            "subtotal": quote_line.price_subtotal,
+            "is_best": quote_line.is_best_price,
+            "selected": quote_line.selected,
+        }
     return {
         "id": line.id,
         "product_id": line.product_id.id,
-        "product": line.product_id.display_name,
-        "name": line.name or "",
+        "name": line.name or line.product_id.display_name,
         "qty": line.product_qty,
         "uom": line.product_uom_id.name or "",
-        "price_unit": line.price_unit,
-        "vat": VAT_LABELS.get(line.vat, ""),
-        "delivery_days": line.delivery_days,
-        "vendor_note": line.vendor_note or "",
-        "unavailable": line.unavailable,
-        "subtotal": line.price_subtotal,
-        "is_best": line.is_best_price,
-        "selected": line.selected,
-        "linked": bool(line.request_line_id),
+        "offers": offers,
     }
 
 
@@ -121,12 +155,10 @@ def share_message(quotes):
 
 
 def vendor_summary(partner, access, counts):
-    """Một NCC ở cột trái. access rỗng = chưa từng gửi yêu cầu (link tạo khi gửi lần đầu).
-    counts: {state: số báo giá} của NCC này, đã lọc theo phạm vi sale đang xem."""
+    """Một NCC ở cột trái. counts: {state báo giá: số lượng} trong phạm vi mã sale đang xem."""
     return {
         "id": partner.id,
         "name": partner.display_name,
-        "vat": partner.vat or "",
         "waiting": counts.get("sent", 0),
         "quoted": counts.get("quoted", 0),
         "total": sum(counts.values()),
@@ -135,39 +167,13 @@ def vendor_summary(partner, access, counts):
     }
 
 
-def request_summary(request):
-    return {
-        "id": request.id,
-        "name": request.name,
-        "origin": request.origin or "",
-        "sale_order": request.sale_order_id.sudo().name or "",
-        "requested_by": request.x_misa_requested_by or request.requested_by.name or "",
-        "date": _date_text(request.date_start),
-        "state": request.state,
-    }
-
-
-def request_line_payload(line, remaining_qty):
-    return {
-        "request_line_id": line.id,
-        "product_id": line.product_id.id,
-        "product": line.product_id.display_name,
-        "name": line.name or line.product_id.display_name,
-        "qty": remaining_qty,
-        "uom_id": line.product_uom_id.id,
-        "uom": line.product_uom_id.name or "",
-    }
-
-
-def sale_order_summary(order, requests=None):
-    """Đơn bán trong ô chọn; requests = các YCMH đang mở của đơn (để sale chọn nếu muốn)."""
+def sale_order_summary(order):
     return {
         "id": order.id,
         "name": order.name,
         "partner": order.partner_id.display_name or "",
         "date": _date_text(order.date_order),
         "sale_code": sale_code(order.sudo()),
-        "requests": [request_summary(r) for r in (requests or [])],
     }
 
 
@@ -175,7 +181,6 @@ def sale_line_payload(line):
     """Dòng đơn bán → dòng hàng trong hộp hỏi giá. Số lượng mặc định = số lượng bán."""
     product = line.product_id
     return {
-        "sale_line_id": line.id,
         "product_id": product.id,
         "product": product.display_name,
         "name": product.display_name,

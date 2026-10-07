@@ -214,3 +214,21 @@ a { color: var(--vq-accent); }
     .vq-submit-row { justify-content: space-between; }
     .vq-btn-lg { padding: 12px 20px; }
 }
+
+/* --- Tab mục (Yêu cầu báo giá / Đơn mua hàng) và tiến độ đơn mua --- */
+.vq-section-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--vq-line); margin-bottom: 24px; overflow-x: auto; }
+.vq-section-tab { padding: 10px 0; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--vq-muted);
+    text-decoration: none; font-weight: 600; white-space: nowrap; }
+.vq-section-tab:hover { color: var(--vq-text); }
+.vq-section-tab-active { color: var(--vq-text); border-bottom-color: var(--vq-accent); }
+.vq-section-title { margin: 24px 0 12px; }
+.vq-status-panel { background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px; padding: 16px 20px; margin-bottom: 8px; }
+.vq-status-panel p { margin-bottom: 12px; }
+.vq-status-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.vq-status-actions .vq-btn:disabled { opacity: .55; cursor: default; }
+.vq-summary-inline { max-width: 360px; margin: 20px 0 0 auto; }
+@media (max-width: 760px) {
+    .vq-section-tabs { gap: 20px; margin-bottom: 16px; }
+    .vq-status-actions .vq-btn { flex: 1 1 auto; }
+    .vq-summary-inline { max-width: none; }
+}

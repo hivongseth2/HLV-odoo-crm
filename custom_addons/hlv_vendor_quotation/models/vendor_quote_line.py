@@ -38,6 +38,9 @@ class VendorQuoteLine(models.Model):
         ondelete="set null",
         index=True,
     )
+    inquiry_line_id = fields.Many2one(
+        "hlv.vendor.inquiry.line", string="Sản phẩm trong phiếu hỏi giá", ondelete="set null", index=True
+    )
     request_id = fields.Many2one(related="quote_id.request_id", store=True, string="YCMH")
     partner_id = fields.Many2one(related="quote_id.partner_id", store=True, string="Nhà cung cấp")
     quote_state = fields.Selection(related="quote_id.state", store=True, string="Trạng thái báo giá")
@@ -91,37 +94,52 @@ class VendorQuoteLine(models.Model):
             line.price_subtotal = subtotal
             line.price_total = subtotal * (1 + line.tax_rate / 100.0)
 
-    @api.depends("price_unit", "unavailable", "quote_state", "request_line_id")
+    def _compare_key(self):
+        """Nhóm so giá của dòng: cùng sản phẩm trong một phiếu hỏi giá (luồng sale), hoặc cùng
+        dòng YCMH (luồng thu mua hỏi giá từ YCMH). Ưu tiên phiếu: sau khi phiếu lên YCMH, chỉ
+        dòng được chọn mới gắn dòng YCMH — nhóm theo YCMH sẽ tách nó khỏi các NCC còn lại."""
+        self.ensure_one()
+        if self.inquiry_line_id:
+            return ("inquiry", self.inquiry_line_id.id)
+        return ("request", self.request_line_id.id) if self.request_line_id else None
+
+    def _compare_siblings(self, extra_domain):
+        """Mọi dòng báo giá cùng nhóm so giá với self (gồm self), lọc thêm extra_domain."""
+        inquiry_lines = self.inquiry_line_id
+        request_lines = self.filtered(lambda l: not l.inquiry_line_id).request_line_id
+        if not inquiry_lines and not request_lines:
+            return self.browse()
+        return self.search([
+            "|",
+            ("inquiry_line_id", "in", inquiry_lines.ids),
+            "&", ("inquiry_line_id", "=", False), ("request_line_id", "in", request_lines.ids),
+        ] + extra_domain)
+
+    @api.depends("price_unit", "unavailable", "quote_state", "request_line_id", "inquiry_line_id")
     def _compute_is_best_price(self):
-        """So giữa các NCC cùng một dòng YCMH, theo đơn giá chưa VAT như core so RFQ.
+        """So giữa các NCC cùng nhóm (xem _compare_key), theo đơn giá chưa VAT như core so RFQ.
 
         Giá chưa VAT vì VAT đầu vào được khấu trừ — so sau VAT sẽ thiên vị hàng
         không chịu thuế.
         """
-        request_lines = self.request_line_id
-        siblings = self.search([
-            ("request_line_id", "in", request_lines.ids),
+        siblings = self._compare_siblings([
             ("quote_state", "in", COMPARED_STATES),
             ("unavailable", "=", False),
-        ]) if request_lines else self.browse()
+        ])
         best_ids = best_price_ids(
-            (line.id, line.request_line_id.id, line.price_unit) for line in siblings
+            (line.id, line._compare_key(), line.price_unit) for line in siblings
         )
         for line in self:
             line.is_best_price = line.id in best_ids
 
-    @api.depends("selected", "request_line_id")
+    @api.depends("selected", "request_line_id", "inquiry_line_id")
     def _compute_selection_state(self):
         """Đã chọn / NCC khác đã được chọn cho cùng mặt hàng / mặt hàng chưa chốt NCC nào."""
-        request_lines = self.request_line_id
-        chosen_request_line_ids = set(self.search([
-            ("request_line_id", "in", request_lines.ids),
-            ("selected", "=", True),
-        ]).request_line_id.ids) if request_lines else set()
+        chosen_keys = {line._compare_key() for line in self._compare_siblings([("selected", "=", True)])}
         for line in self:
             if line.selected:
                 line.selection_state = "selected"
-            elif line.request_line_id.id in chosen_request_line_ids:
+            elif line._compare_key() in chosen_keys:
                 line.selection_state = "other"
             else:
                 line.selection_state = "pending"
@@ -136,6 +154,32 @@ class VendorQuoteLine(models.Model):
     def _check_can_select(self):
         if not self.env.user.has_group(SELECTOR_GROUP):
             raise AccessError(_("Chỉ thu mua mới được chọn / bỏ chọn nhà cung cấp."))
+
+    def action_choose(self):
+        """Sale chọn NCC cho một sản phẩm trong phiếu hỏi giá (chưa lên YCMH).
+
+        Khác action_select (thu mua chọn trên dòng YCMH có sẵn): ở đây chưa có YCMH, chỉ đánh
+        dấu lựa chọn; giá + NCC được ghi vào YCMH khi phiếu lên YCMH.
+        """
+        self.ensure_one()
+        inquiry_line = self.inquiry_line_id
+        if not inquiry_line:
+            raise UserError(_("Dòng báo giá này không thuộc phiếu hỏi giá nào."))
+        if inquiry_line.inquiry_id.state != "open":
+            raise UserError(_("Phiếu %s đã lên YCMH — không đổi lựa chọn được nữa.", inquiry_line.inquiry_id.name))
+        if self.unavailable or not self.price_unit:
+            raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
+        (inquiry_line.quote_line_ids - self).filtered("selected").write({"selected": False})
+        self.selected = True
+        return True
+
+    def action_unchoose(self):
+        for line in self.filtered("selected"):
+            if line.inquiry_line_id.inquiry_id.state != "open":
+                raise UserError(_("Phiếu %s đã lên YCMH — không đổi lựa chọn được nữa.",
+                                  line.inquiry_line_id.inquiry_id.name))
+        self.write({"selected": False})
+        return True
 
     def action_select(self):
         """Chốt NCC cho dòng YCMH: ghi NCC + giá vào actual_* để wizard "Tạo RFQ" dùng luôn."""

@@ -226,3 +226,38 @@
     .hq-modal-foot { flex-wrap: wrap; }
     .hq-modal-foot #hq-summary { flex-basis: 100%; }
 }
+
+/* ------------------------------------------------------------ bảng so giá trong phiếu */
+
+.hq-section-title { margin: 1rem 0 .5rem; }
+.hq-compare-wrap { overflow-x: auto; }
+.hq-compare th.hq-vendor-col { min-width: 9.5rem; max-width: 12rem; vertical-align: top; }
+.hq-compare th.hq-vendor-col .hq-ellipsis { color: var(--hq-ink); font-weight: 600; margin-bottom: .2rem; }
+.hq-compare td { vertical-align: top; }
+.hq-offer { padding: 0 !important; }
+.hq-offer.hq-muted { padding: 9px 10px !important; font-size: .8125rem; }
+.hq-offer > .hq-offer-price, .hq-offer > .hq-offer-meta { padding: 0 10px; }
+/* Cả ô là nút: sale bấm vào giá để chọn NCC cho sản phẩm. */
+.hq-offer-btn {
+    display: block;
+    width: 100%;
+    min-height: 100%;
+    border: 0;
+    background: transparent;
+    padding: 9px 10px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.hq-offer-btn:hover { background: var(--hq-accent-soft); }
+.hq-offer.is-selected, .hq-offer.is-selected .hq-offer-btn:hover { background: var(--hq-ok-soft); }
+.hq-offer.is-selected { box-shadow: inset 3px 0 0 var(--hq-ok); }
+.hq-offer-price { display: block; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hq-offer-price.is-best { color: var(--hq-accent); }
+.hq-offer-meta { display: block; color: var(--hq-muted); font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 11rem; }
+.hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }
+
+.hq-request-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .35rem 0; }
+.hq-request-so { flex: 1 1 16rem; max-width: 22rem; }
+.hq-code-select { width: auto; min-width: 9rem; }

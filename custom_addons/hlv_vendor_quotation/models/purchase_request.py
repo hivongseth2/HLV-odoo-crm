@@ -17,6 +17,8 @@ class PurchaseRequest(models.Model):
         string="Lập từ trang Hỏi giá NCC", readonly=True, copy=False,
         help="YCMH lập ở Odoo (không đi từ MISA). Chỉ YCMH loại này được gộp thêm hàng.",
     )
+    hlv_inquiry_ids = fields.One2many("hlv.vendor.inquiry", "request_id", string="Phiếu hỏi giá")
+    hlv_inquiry_count = fields.Integer(string="Số phiếu hỏi giá", compute="_compute_hlv_inquiry_count")
     vendor_quote_count = fields.Integer(
         string="Số báo giá NCC", compute="_compute_vendor_quote_count"
     )
@@ -43,54 +45,57 @@ class PurchaseRequest(models.Model):
         ], order="id desc", limit=1).with_env(self.env)
 
     @api.model
-    def _add_sale_order_lines(self, order, line_vals):
-        """Đưa hàng của một đơn bán vào YCMH, ngay trên trang hỏi giá NCC.
+    def _add_request_lines(self, line_vals, order=None, origin=False, requester_code=""):
+        """Đưa hàng vào YCMH lập ở Odoo (YCMH không còn lập trên MISA).
 
-        Đơn đã có YCMH chưa duyệt (xem _mergeable_for_sale_order) → gộp vào đó theo sản phẩm.
-        Không có → tạo YCMH mới; một đơn được có nhiều YCMH (YCMH trước đã duyệt mà mua
-        thiếu thì lên YCMH bổ sung).
+        Có đơn bán và đơn đã có YCMH chưa duyệt (xem _mergeable_for_sale_order) → gộp vào đó
+        theo sản phẩm. Không thì tạo YCMH mới — một đơn được có nhiều YCMH (YCMH trước đã
+        duyệt mà mua thiếu thì lên YCMH bổ sung).
         YCMH mới dựng giống YCMH đi từ MISA để thu mua xử lý như cũ: "Chờ phê duyệt", giao
-        admin, nguồn = số đơn bán, "Người yêu cầu" = mã sale trên đơn (rỗng nếu bản cài
-        không có field hoặc đơn chưa có mã).
-        line_vals: [{product_id, name, product_qty, product_uom_id}].
-        Trả (YCMH, các dòng YCMH vừa thêm/cộng, True nếu là gộp).
+        admin, nguồn = số đơn bán (hoặc origin), "Người yêu cầu" = mã sale (requester_code,
+        không có thì lấy mã trên đơn bán; rỗng nếu đều thiếu).
+        line_vals: [{product_id, name, product_qty, product_uom_id, actual_*...}].
+        Trả (YCMH, list dòng YCMH ứng với từng phần tử line_vals theo thứ tự, True nếu là gộp).
 
         Ghi bằng sudo: sale chỉ có quyền ĐỌC YCMH; việc ghi đi qua đúng đường này.
         """
         if not line_vals:
-            raise UserError(_("Chọn ít nhất một mặt hàng của đơn bán."))
-        target = self._mergeable_for_sale_order(order)
+            raise UserError(_("Chọn ít nhất một mặt hàng."))
+        target = self._mergeable_for_sale_order(order) if order else self.browse()
         if target:
             lines = target.sudo()._merge_lines(line_vals)
             target.sudo().message_post(body=self._lines_message(
-                _("Bổ sung hàng từ trang Hỏi giá NCC (đơn %s):", order.name), line_vals
+                _("Bổ sung hàng từ trang Hỏi giá NCC (%s):", origin or order.name), line_vals
             ))
-            return target, lines.with_env(self.env), True
+            return target, [line.with_env(self.env) for line in lines], True
 
         admin = self.env.ref("base.user_admin", raise_if_not_found=False)
         request = self.sudo().create({
             "requested_by": self.env.uid,
             "assigned_to": admin.id if admin else False,
-            "origin": order.name,
-            "sale_order_id": order.id,
-            "company_id": order.company_id.id,
-            "x_misa_requested_by": sale_code(order.sudo()),
+            "origin": order.name if order else origin,
+            "sale_order_id": order.id if order else False,
+            "company_id": (order.company_id if order else self.env.company).id,
+            "x_misa_requested_by": requester_code or (sale_code(order.sudo()) if order else ""),
             "hlv_from_quote_page": True,
             "line_ids": [Command.create(vals) for vals in line_vals],
         })
         request.button_to_approve()
-        request.message_post(body=Markup(_(
-            "Tạo từ trang Hỏi giá NCC cho đơn bán <b>%s</b>."
-        )) % order.name)
-        return request.with_env(self.env), request.line_ids.with_env(self.env), False
+        request.message_post(body=Markup(_("Tạo từ trang Hỏi giá NCC (%s).")) % (origin or order.name))
+        # Dòng tạo theo đúng thứ tự line_vals nên id tăng dần; sắp theo id thay vì tin _order
+        # của purchase.request.line (OCA để "id desc", module MISA đổi thành "id").
+        lines = request.line_ids.sorted("id")
+        return request.with_env(self.env), [line.with_env(self.env) for line in lines], False
 
     def _merge_lines(self, line_vals):
         """Gộp hàng vào YCMH theo sản phẩm: cùng sản phẩm, cùng nhóm ĐVT (dòng chưa huỷ) thì
-        cộng số lượng — quy đổi về ĐVT của dòng đang có; không thì thêm dòng mới.
-        Trả các dòng YCMH bị đụng tới."""
+        cộng số lượng — quy đổi về ĐVT của dòng đang có — và ghi đè NCC/giá đã chọn (actual_*)
+        bằng lựa chọn mới nhất; không thì thêm dòng mới.
+        Trả list dòng YCMH ứng với từng phần tử line_vals (có thể lặp nếu hai phần tử cùng
+        gộp vào một dòng)."""
         self.ensure_one()
         Line = self.env["purchase.request.line"]
-        touched = Line
+        result = []
         for vals in line_vals:
             uom = self.env["uom.uom"].browse(vals["product_uom_id"])
             line = self.line_ids.filtered(
@@ -99,11 +104,15 @@ class PurchaseRequest(models.Model):
                 and l.product_uom_id.category_id == uom.category_id
             )[:1]
             if line:
-                line.product_qty += uom._compute_quantity(vals["product_qty"], line.product_uom_id)
+                extra = {k: v for k, v in vals.items() if k.startswith("actual_")}
+                line.write(dict(
+                    extra,
+                    product_qty=line.product_qty + uom._compute_quantity(vals["product_qty"], line.product_uom_id),
+                ))
             else:
                 line = Line.create(dict(vals, request_id=self.id))
-            touched |= line
-        return touched
+            result.append(line)
+        return result
 
     @api.model
     def _lines_message(self, title, line_vals):
@@ -111,6 +120,19 @@ class PurchaseRequest(models.Model):
             Markup("<li>%s: +%s</li>") % (vals["name"], vals["product_qty"]) for vals in line_vals
         )
         return Markup("<p>%s</p><ul>%s</ul>") % (title, items)
+
+    @api.depends("hlv_inquiry_ids")
+    def _compute_hlv_inquiry_count(self):
+        for request in self:
+            request.hlv_inquiry_count = len(request.hlv_inquiry_ids)
+
+    def action_view_inquiries(self):
+        self.ensure_one()
+        action = self.env["ir.actions.act_window"]._for_xml_id(
+            "hlv_vendor_quotation.action_vendor_inquiry"
+        )
+        action["domain"] = [("request_id", "=", self.id)]
+        return action
 
     def action_open_vendor_quote_wizard(self):
         self.ensure_one()

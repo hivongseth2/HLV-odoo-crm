@@ -95,11 +95,23 @@
         </t>
     </template>
 
+    <!-- Hai mục của NCC: yêu cầu báo giá và đơn mua sinh ra từ báo giá. -->
+    <template id="portal_tabs" name="Báo giá NCC - tab">
+        <nav class="vq-section-tabs">
+            <a t-att-href="portal_base"
+               t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'quotes' else ''}">Yêu cầu báo giá</a>
+            <a t-att-href="'%s/don-mua' % portal_base"
+               t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'orders' else ''}">
+                Đơn mua hàng <span class="vq-tab-count">(<t t-esc="order_count"/>)</span></a>
+        </nav>
+    </template>
+
     <template id="portal_quote_list" name="Báo giá NCC - danh sách">
         <t t-call="hlv_vendor_quotation.portal_layout">
             <t t-set="page_title" t-value="'Yêu cầu báo giá'"/>
             <t t-set="logged_in" t-value="True"/>
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
                 <div class="vq-page-head">
                     <h1>Yêu cầu báo giá</h1>
                     <form method="get" class="vq-search" t-att-action="portal_base">
@@ -129,6 +141,7 @@
                             <th>Ngày gửi</th>
                             <th>Hạn báo giá</th>
                             <th>Trạng thái</th>
+                            <th>Đơn mua</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -152,6 +165,12 @@
                             <td data-label="Trạng thái">
                                 <span t-attf-class="vq-status vq-status-#{quote_status[1]}" t-esc="quote_status[0]"/>
                             </td>
+                            <td data-label="Đơn mua">
+                                <t t-set="po_list" t-value="quote_orders[quote.id]"/>
+                                <a t-foreach="po_list" t-as="po" class="vq-block-link"
+                                   t-att-href="'%s/don-mua/%s' % (portal_base, po.id)" t-esc="po.name"/>
+                                <t t-if="not po_list">—</t>
+                            </td>
                             <td class="vq-cell-action">
                                 <a t-att-href="quote_url" t-attf-class="vq-btn #{'vq-btn-primary' if quote_status[1] == 'waiting' else 'vq-btn-secondary'}"
                                    t-esc="'Điền giá' if quote_status[1] == 'waiting' else 'Xem'"/>
@@ -173,7 +192,9 @@
         <t t-call="hlv_vendor_quotation.portal_layout">
             <t t-set="page_title" t-value="quote.name"/>
             <t t-set="logged_in" t-value="True"/>
+            <t t-set="active_tab" t-value="'quotes'"/>
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
                 <nav class="vq-breadcrumb">
                     <a t-att-href="portal_base">Yêu cầu báo giá</a> / <span t-esc="quote.name"/>
                 </nav>
@@ -199,6 +220,13 @@
                                t-esc="contact_phone"/></dd></div>
                 </dl>
 
+                <section t-if="orders" class="vq-note">
+                    <h2>Đơn mua từ báo giá này</h2>
+                    <p class="vq-muted vq-small">Cảm ơn quý công ty — các mặt hàng được chọn đã lên đơn mua:</p>
+                    <a t-foreach="orders" t-as="po" class="vq-block-link"
+                       t-att-href="'%s/don-mua/%s' % (portal_base, po.id)">
+                        <t t-esc="po.name"/> · <t t-esc="fmt(po.amount_untaxed)"/> chưa VAT</a>
+                </section>
                 <section t-if="quote.note" class="vq-note">
                     <h2>Lời nhắn từ <t t-esc="company.name"/></h2>
                     <p class="vq-pre" t-esc="quote.note"/>

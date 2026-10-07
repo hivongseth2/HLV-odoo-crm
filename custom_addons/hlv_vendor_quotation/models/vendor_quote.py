@@ -46,6 +46,9 @@ class VendorQuote(models.Model):
     sale_order_id = fields.Many2one(
         "sale.order", string="Đơn bán liên quan", index=True, tracking=True
     )
+    inquiry_id = fields.Many2one(
+        "hlv.vendor.inquiry", string="Phiếu hỏi giá", index=True, ondelete="cascade", readonly=True
+    )
     # Không bắt buộc lúc nháp: sale nhập mặt hàng trước rồi mới chọn NCC từ gợi ý.
     partner_id = fields.Many2one("res.partner", string="Nhà cung cấp", index=True, tracking=True)
     access_id = fields.Many2one(
@@ -446,6 +449,18 @@ class VendorQuote(models.Model):
             "submit_date": fields.Datetime.now(),
         })
         self._notify_vendor_submitted(resubmitted)
+
+    def _vendor_purchase_orders(self):
+        """Đơn mua (đã xác nhận) của chính NCC này sinh ra từ báo giá này: dòng NCC được chọn
+        → dòng YCMH → dòng đơn mua. Đọc bằng sudo — gọi được từ trang công khai của NCC."""
+        orders = self.env["purchase.order"]
+        for quote in self.sudo():
+            request_lines = quote.line_ids.filtered("selected").request_line_id
+            orders |= request_lines.purchase_lines.order_id.filtered(
+                lambda o, v=quote.access_id.partner_id: o.state in ("purchase", "done")
+                and o.partner_id.commercial_partner_id == v
+            )
+        return orders
 
     def _notify_vendor_submitted(self, resubmitted):
         offered = self.line_ids.filtered(lambda l: not l.unavailable)

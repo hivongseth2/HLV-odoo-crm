@@ -7,25 +7,28 @@ window.HlvQuote = window.HlvQuote || {};
 
   HQ.S = {
     config: {},
+    code: "",           // mã sale đang xem (hoặc config.all_code = tất cả); server kiểm lại
     vendors: [],
     vendorId: null,     // id res.partner (công ty NCC) đang lọc; null = tất cả
-    vendorsLimited: false,
     status: "all",
     search: "",
-    mine: true,
     page: 1,
     counts: {},
     pager: {},
-    openQuoteId: null,
+    openInquiryId: null,
 
     create: {
-      request: null,    // YCMH đã chọn (nếu có)
-      saleOrder: null,  // đơn bán đã chọn khi chưa có YCMH — gửi đi thì tạo YCMH mới
-      lines: [],        // [{product_id, product, name, qty, uom_id, uom, request_line_id}]
+      saleOrder: null,  // đơn bán đã lấy hàng — gắn sẵn vào phiếu, dùng lại khi lên YCMH
+      lines: [],        // [{product_id, product, name, qty, uom_id, uom}]
       chosen: [],       // [{id, name}] NCC sẽ gửi
       suggestions: [],
-      quotedVendorIds: [],
+      showAllSuggestions: false,
     },
+  };
+
+  /** Gọi API trong phạm vi mã sale đang xem — mọi API phiếu đều cần mã để server kiểm quyền. */
+  HQ.api = function (name, params) {
+    return HQ.rpc("/api/hoi-gia-ncc/" + name, Object.assign({ code: HQ.S.code }, params || {}));
   };
 
   HQ.$ = function (id) { return document.getElementById(id); };

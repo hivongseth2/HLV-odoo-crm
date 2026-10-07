@@ -11,7 +11,8 @@ vào /hoi-gia-ncc bằng URL.
 
 from odoo.http import request
 
-from .sale_page import PAGE_GROUPS, PAGE_ROUTE
+from ..models.vendor_quote_access import SALE_PAGE_ROUTE as PAGE_ROUTE
+from .sale_page_common import PAGE_GROUPS
 
 ANCHOR = "<!-- HLV_NAV_EXT -->"
 NAV_LINK = (
