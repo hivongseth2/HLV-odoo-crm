@@ -21,16 +21,19 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   function onChat(payload) {
-    var chatOpen = HQ.reloadChat(payload.model, payload.res_id);
-    if (payload.from_vendor && !chatOpen) {
+    var reload = HQ.reloadChat(payload.model, payload.res_id);
+    if (payload.from_vendor && !reload) {
       HQ.toast(payload.author + " (NCC) vừa nhắn trên " + payload.name + " — bấm để xem", function () {
         HQ.openChat(payload.model, payload.res_id);
       });
     }
-    if (isOpen("hq-drawer") && (payload.inquiry_ids || []).indexOf(S.openInquiryId) >= 0) {
-      HQ.openInquiry(S.openInquiryId, true);
-    }
-    HQ.loadInquiries();
+    // Hộp trao đổi đang mở thì đợi nó tải xong (đã ghi "đã xem") rồi mới đếm lại tin mới.
+    (reload || Promise.resolve()).then(function () {
+      if (isOpen("hq-drawer") && (payload.inquiry_ids || []).indexOf(S.openInquiryId) >= 0) {
+        HQ.openInquiry(S.openInquiryId, true);
+      }
+      HQ.loadInquiries();
+    });
   }
 
   /** Nghe kênh của mã sale đang xem; gọi lại mỗi lần đổi mã. */

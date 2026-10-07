@@ -203,7 +203,7 @@ window.HlvQuote = window.HlvQuote || {};
           '<td><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span>" +
           (v.submit_date ? '<div class="hq-muted">gửi ' + esc(v.submit_date) + "</div>" : "") + "</td>" +
           '<td class="hq-num">' + (v.amount_untaxed ? HQ.money(v.amount_untaxed) : "") + "</td>" +
-          '<td class="hq-num hq-nowrap">' + chatButton("quote", v.quote_id, v.chat_count, v.chat_new) + " " +
+          '<td class="hq-num hq-nowrap">' + chatButton("quote", v.quote_id, v.chat_count, v.chat_unread) + " " +
           (v.share_message ? '<button type="button" class="hq-btn hq-btn-mini" data-copy-msg="' + index +
             '">Copy tin nhắn</button> ' : "") +
           (v.portal_url ? '<a class="hq-btn hq-btn-mini" target="_blank" href="' + esc(v.portal_url) +
@@ -211,11 +211,11 @@ window.HlvQuote = window.HlvQuote || {};
       }).join("") + "</tbody></table></div>";
   }
 
-  /** Nút mở trao đổi với NCC; tin cuối là của NCC (chưa trả lời) thì làm nổi lên. */
-  function chatButton(model, id, count, isNew) {
-    return '<button type="button" class="hq-btn hq-btn-mini' + (isNew ? " hq-btn-soft" : "") +
+  /** Nút mở trao đổi với NCC; có tin NCC chưa xem thì làm nổi lên kèm số tin mới. */
+  function chatButton(model, id, count, unread) {
+    return '<button type="button" class="hq-btn hq-btn-mini' + (unread ? " hq-btn-soft" : "") +
       '" data-chat-model="' + model + '" data-chat-id="' + id + '">' +
-      (isNew ? "NCC vừa nhắn" : "Trao đổi") + (count ? " (" + count + ")" : "") + "</button>";
+      (unread ? unread + " tin mới" : "Trao đổi" + (count ? " (" + count + ")" : "")) + "</button>";
   }
 
   function renderOrders(d) {
@@ -230,7 +230,7 @@ window.HlvQuote = window.HlvQuote || {};
           "<td>" + (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
             : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +
           '<td class="hq-num">' + HQ.money(o.amount_untaxed) + "</td>" +
-          '<td class="hq-num">' + chatButton("order", o.id, o.chat_count, o.chat_new) + "</td></tr>";
+          '<td class="hq-num">' + chatButton("order", o.id, o.chat_count, o.chat_unread) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
   }
 

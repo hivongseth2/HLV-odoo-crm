@@ -6,3 +6,4 @@ from . import vendor_inquiry
 from . import purchase_request
 from . import purchase_order
 from . import vendor_suggestion
+from . import vendor_chat_read

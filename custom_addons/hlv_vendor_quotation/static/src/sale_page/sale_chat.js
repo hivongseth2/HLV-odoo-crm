@@ -36,13 +36,13 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.api("chat", { model: model, res_id: id }).then(render).catch(function (err) { HQ.toast(err.message); });
   };
 
-  /** Có tin mới trên model/id: đang mở đúng hộp đó thì tải lại, trả true; không thì false. */
+  /** Có tin mới trên model/id: đang mở đúng hộp đó thì tải lại (server ghi luôn "đã xem") và
+      trả Promise; không mở thì trả null. */
   HQ.reloadChat = function (model, id) {
     if (!current || current.model !== model || current.id !== id) {
-      return false;
+      return null;
     }
-    HQ.api("chat", { model: model, res_id: id }).then(render).catch(function () { /* lần tin sau tải lại */ });
-    return true;
+    return HQ.api("chat", { model: model, res_id: id }).then(render).catch(function () { /* lần tin sau tải lại */ });
   };
 
   function clearFiles() {
@@ -87,10 +87,11 @@ window.HlvQuote = window.HlvQuote || {};
   function close() {
     HQ.show("hq-chat", false);
     current = null;
-    // Cập nhật số tin trên ngăn chi tiết.
-    if (HQ.S.openInquiryId) {
-      HQ.openInquiry(HQ.S.openInquiryId);
+    // Vừa xem xong: bớt số "tin mới" trên ngăn chi tiết và bảng phiếu.
+    if (HQ.S.openInquiryId && !HQ.$("hq-drawer").classList.contains("hq-hidden")) {
+      HQ.openInquiry(HQ.S.openInquiryId, true);
     }
+    HQ.loadInquiries();
   }
 
   HQ.bindChatEvents = function () {

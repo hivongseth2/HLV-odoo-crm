@@ -11,7 +11,9 @@ from odoo.http import request
 
 from ..models.purchase_order import VENDOR_STATUS
 from ..models.vendor_quote_access import PORTAL_ROUTE
+from ..services.chat_read import mark_seen
 from ..services.vendor_chat import chat_messages
+from ..services.vendor_feed import row_marks
 from .vendor_portal import VendorQuotePortal
 
 ORDERS = "don-mua"
@@ -30,6 +32,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         return self._render("hlv_vendor_quotation.portal_order_list", access, {
             "orders": orders,
             "order_quotes": {order.id: order.hlv_vendor_quote_ids for order in orders},
+            "marks": row_marks(orders, access),
             "vendor_status_labels": dict(VENDOR_STATUS),
             "active_tab": "orders",
         })
@@ -51,6 +54,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         if not order:
             return self._not_found()
         from_quote = self._from_quote(access, kw.get("from"))
+        mark_seen([order], access)
         if request.httprequest.method == "POST" and status:
             order._vendor_set_status(status, access.partner_id)
             back = f"&from={from_quote.id}" if from_quote else ""

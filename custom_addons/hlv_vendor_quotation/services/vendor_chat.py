@@ -28,6 +28,13 @@ def _is_internal(partner):
     return bool(partner.user_ids.filtered(lambda user: not user.share))
 
 
+def display_time(value):
+    """Datetime UTC (naive, như Odoo lưu) → "HH:MM dd/mm/YYYY" giờ Việt Nam; rỗng → ""."""
+    if not value:
+        return ""
+    return pytz.utc.localize(value).astimezone(pytz.timezone(DISPLAY_TZ)).strftime("%H:%M %d/%m/%Y")
+
+
 def chat_messages(record, file_url=None):
     """Tin trao đổi của record, cũ trước mới sau. Bỏ mọi tin hệ thống / ghi chú nội bộ.
 
@@ -38,13 +45,13 @@ def chat_messages(record, file_url=None):
     messages = record.sudo().message_ids.filtered(
         lambda m: m.subtype_id == subtype and m.message_type == "comment"
     ).sorted("id")
-    tz = pytz.timezone(DISPLAY_TZ)
     return [
         {
             "id": message.id,
             "author": message.author_id.name or "",
             "from_vendor": not _is_internal(message.author_id),
-            "date": pytz.utc.localize(message.date).astimezone(tz).strftime("%H:%M %d/%m/%Y"),
+            "at": message.date,
+            "date": display_time(message.date),
             "body": html2plaintext(message.body or "").strip(),
             "attachments": [
                 {
@@ -58,12 +65,6 @@ def chat_messages(record, file_url=None):
         }
         for message in messages
     ]
-
-
-def chat_stats(record):
-    """(số tin, tin cuối có phải của NCC không) — để báo "NCC vừa nhắn" trên trang sale."""
-    messages = chat_messages(record)
-    return len(messages), bool(messages and messages[-1]["from_vendor"])
 
 
 def post_chat(record, text, author, from_vendor, notify_partners=None, files=None):

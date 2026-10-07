@@ -27,6 +27,7 @@ from ..services import sale_page_payload as payload
 from ..services import sale_scope
 from ..services.asset_version import asset_version
 from ..services.chat_bus import SALE_ALL_CHANNEL, bus_version, sale_channel
+from ..services.chat_read import mark_seen
 from ..services.vendor_chat import FILE_MAX_BYTES, chat_attachment, chat_messages, post_chat
 from .sale_page_common import API, SalePageMixin, to_int
 
@@ -160,6 +161,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     def api_chat(self, code="", model="", res_id=None, **kw):
         """Tin trao đổi với NCC trên một báo giá (model="quote") hoặc đơn mua ("order")."""
         record = self._chat_record(model, res_id, self._check(code))
+        mark_seen([record], request.env.user)
         return {"title": record.name, "messages": chat_messages(record, self._file_url(code))}
 
     @http.route(f"{API}/chat_post", type="json", auth="user", methods=["POST"])
@@ -168,6 +170,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         record = self._chat_record(model, res_id, self._check(code))
         post_chat(record, body, request.env.user.partner_id, from_vendor=False,
                   files=self._decode_files(files or []))
+        mark_seen([record], request.env.user)
         return {"title": record.name, "messages": chat_messages(record, self._file_url(code))}
 
     @http.route(f"{SALE_PAGE_ROUTE}/tep/<int:attachment_id>", type="http", auth="user", methods=["GET"])

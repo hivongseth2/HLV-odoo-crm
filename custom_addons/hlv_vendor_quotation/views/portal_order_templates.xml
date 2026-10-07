@@ -26,10 +26,15 @@
                             <th></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr t-foreach="orders" t-as="order">
+                    <tbody data-live="rows">
+                        <tr t-foreach="orders" t-as="order"
+                            t-att-class="'vq-row-new' if marks[order.id]['unread'] or marks[order.id]['new'] else None">
+                            <t t-set="mark" t-value="marks[order.id]"/>
                             <t t-set="order_url" t-value="'%s/don-mua/%s' % (portal_base, order.id)"/>
-                            <td class="vq-cell-ref"><a t-att-href="order_url" t-esc="order.name"/></td>
+                            <td class="vq-cell-ref"><a t-att-href="order_url" t-esc="order.name"/>
+                                <span t-if="mark['unread']" class="vq-chip-new" t-att-title="'%s tin nhắn chưa xem' % mark['unread']"><svg class="vq-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg><t t-esc="mark['unread']"/> tin mới</span>
+                                <span t-elif="mark['new']" class="vq-chip-fresh">Mới</span>
+                            </td>
                             <td data-label="Ngày đặt" t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/>
                             <td data-label="Ngày nhận dự kiến">
                                 <t t-if="order.date_planned" t-esc="order.date_planned.strftime('%d/%m/%Y')"/>

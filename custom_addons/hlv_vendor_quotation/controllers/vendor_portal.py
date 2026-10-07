@@ -15,6 +15,8 @@ from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
+from ..services.chat_read import mark_seen
+from ..services.vendor_feed import row_marks, vendor_feed
 from ..services.vendor_chat import chat_attachment, chat_messages, post_chat
 
 SESSION_KEY = "hlv_vendor_quote_logins"
@@ -60,6 +62,8 @@ class VendorQuotePortal(http.Controller):
             "hints": {quote.id: deadline_hint(quote.date_deadline, Quote._vendor_today()) for quote in quotes},
             # Đơn mua sinh ra từ từng báo giá — NCC thấy hỏi giá nào đã thành đơn.
             "quote_orders": {quote.id: quote._vendor_purchase_orders() for quote in quotes},
+            # Dòng có tin bên mua chưa xem / báo giá chưa mở lần nào.
+            "marks": row_marks(quotes, access),
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
@@ -88,6 +92,16 @@ class VendorQuotePortal(http.Controller):
         )
         return self._render_login(access, error=error, next_url=next_url)
 
+    @http.route(f"{PORTAL_ROUTE}/<string:token>/thong-bao/da-xem", type="http", auth="public", methods=["POST"])
+    def portal_mark_all_seen(self, token, next_url="", **kw):
+        """Nút "Đánh dấu đã xem hết" trong thông báo: mọi báo giá + đơn mua của NCC này."""
+        access = self._get_access(token)
+        if not access or not self._is_logged_in(access):
+            return self._not_found()
+        quotes = access.quote_ids.filtered(lambda q: q.state in VENDOR_VISIBLE_STATES)
+        mark_seen(list(quotes) + list(access._vendor_purchase_orders()), access)
+        return request.redirect(self._safe_next(access, next_url))
+
     @http.route(f"{PORTAL_ROUTE}/<string:token>/logout", type="http", auth="public", methods=["GET"])
     def portal_logout(self, token, **kw):
         logins = dict(request.session.get(SESSION_KEY) or {})
@@ -113,6 +127,8 @@ class VendorQuotePortal(http.Controller):
         quote = self._get_quote(access, quote_id)
         if not quote:
             return self._not_found()
+        # Mở trang là đã xem báo giá + mọi tin hiện có (trước _render để thông báo tính đúng).
+        mark_seen([quote], access)
 
         values = {"quote": quote, "saved": bool(post.get("saved"))}
         if request.httprequest.method == "POST":
@@ -331,6 +347,8 @@ class VendorQuotePortal(http.Controller):
             # Số trên tab "Đơn mua hàng" ở mọi trang của NCC.
             "order_count": len(access._vendor_purchase_orders()),
         }
+        if self._is_logged_in(access):
+            context["feed"] = vendor_feed(access, context["portal_base"])
         context.update(values or {})
         return request.render(template, context)
 

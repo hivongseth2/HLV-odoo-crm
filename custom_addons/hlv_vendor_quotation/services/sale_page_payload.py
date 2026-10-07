@@ -12,7 +12,7 @@ from ..models.vendor_inquiry import SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import build_share_message
 from .sale_code import sale_code
-from .vendor_chat import chat_stats
+from .chat_read import chat_stats, seen_markers
 
 QUOTE_STATE_LABELS = {
     "draft": "Nháp",
@@ -40,10 +40,10 @@ def _datetime_text(record, value):
 
 def purchase_order_payload(order):
     order = order.sudo()
-    chat_count, chat_new = chat_stats(order)
+    chat_count, chat_unread = chat_stats(order, order.env.user)
     return {
         "chat_count": chat_count,
-        "chat_new": chat_new,
+        "chat_unread": chat_unread,
         "id": order.id,
         "name": order.name,
         "vendor": order.partner_id.commercial_partner_id.display_name,
@@ -54,10 +54,13 @@ def purchase_order_payload(order):
 
 
 def _inquiry_chat(inquiry, quotes):
-    """(tổng số tin trao đổi, số cuộc mà tin cuối là của NCC) trên các báo giá + đơn mua của
-    phiếu — để bảng phiếu báo ngay phiếu nào có NCC nhắn chưa trả lời."""
-    stats = [chat_stats(record) for record in list(quotes) + list(inquiry.purchase_order_ids.sudo())]
-    return sum(count for count, _new in stats), sum(1 for _count, new in stats if new)
+    """(tổng số tin trao đổi, số tin NCC mà người đang xem chưa đọc) trên các báo giá + đơn
+    mua của phiếu — để bảng phiếu báo ngay phiếu nào có tin NCC mới, và mới bao nhiêu tin."""
+    records = list(quotes) + list(inquiry.purchase_order_ids.sudo())
+    user = inquiry.env.user
+    markers = seen_markers(records, user)
+    stats = [chat_stats(record, user, markers) for record in records]
+    return sum(count for count, _unread in stats), sum(unread for _count, unread in stats)
 
 
 def purchase_order_detail(order):
@@ -87,7 +90,7 @@ def purchase_order_detail(order):
 def inquiry_summary(inquiry):
     """Một dòng trong bảng phiếu hỏi giá."""
     quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel")
-    chat_count, chat_new = _inquiry_chat(inquiry, quotes)
+    chat_count, chat_unread = _inquiry_chat(inquiry, quotes)
     names = inquiry.line_ids[:PRODUCT_PREVIEW].mapped(lambda l: l.name or l.product_id.name)
     more = len(inquiry.line_ids) - PRODUCT_PREVIEW
     return {
@@ -108,7 +111,7 @@ def inquiry_summary(inquiry):
         "sale_status": inquiry.sale_status,
         "sale_status_label": SALE_STATUS_LABELS.get(inquiry.sale_status, ""),
         "chat_count": chat_count,
-        "chat_new": chat_new,
+        "chat_unread": chat_unread,
     }
 
 
@@ -140,11 +143,11 @@ def inquiry_detail(inquiry):
 
 
 def _vendor_column(quote):
-    chat_count, chat_new = chat_stats(quote)
+    chat_count, chat_unread = chat_stats(quote, quote.env.user)
     return {
-        # chat_new: tin cuối là của NCC — sale chưa trả lời.
+        # chat_unread: số tin NCC người đang xem chưa đọc (mốc riêng từng user).
         "chat_count": chat_count,
-        "chat_new": chat_new,
+        "chat_unread": chat_unread,
         "quote_id": quote.id,
         "vendor_id": quote.access_id.partner_id.id,
         "name": quote.partner_id.commercial_partner_id.display_name,

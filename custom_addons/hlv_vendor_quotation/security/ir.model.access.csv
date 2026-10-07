@@ -22,3 +22,4 @@ access_vendor_inquiry_salesman,hlv.vendor.inquiry salesman,model_hlv_vendor_inqu
 access_vendor_inquiry_line_pr_user,hlv.vendor.inquiry.line pr user,model_hlv_vendor_inquiry_line,purchase_request.group_purchase_request_user,1,1,1,1
 access_vendor_inquiry_line_purchase_user,hlv.vendor.inquiry.line purchase user,model_hlv_vendor_inquiry_line,purchase.group_purchase_user,1,1,1,1
 access_vendor_inquiry_line_salesman,hlv.vendor.inquiry.line salesman,model_hlv_vendor_inquiry_line,sales_team.group_sale_salesman,1,1,1,1
+access_vendor_chat_read_system,hlv.vendor.chat.read system,model_hlv_vendor_chat_read,base.group_system,1,1,1,1
