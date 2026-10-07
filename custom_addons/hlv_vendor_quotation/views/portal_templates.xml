@@ -334,8 +334,10 @@
                 <div t-if="errors" class="vq-alert vq-alert-error">
                     <div t-foreach="errors" t-as="error" t-esc="error"/>
                 </div>
-                <div t-if="not editable and quote.state != 'done'" class="vq-alert">Đã quá hạn báo giá, không sửa
-                    được nữa. Cần điều chỉnh giá, vui lòng liên hệ người phụ trách mua hàng.</div>
+                <div t-if="fully_ordered" class="vq-alert">Các mặt hàng đã lên đơn mua — báo giá không sửa được
+                    nữa. Cần điều chỉnh, vui lòng nhắn ở khung trao đổi.</div>
+                <div t-elif="not editable and quote.state != 'done'" class="vq-alert">Đã quá hạn báo giá, không sửa
+                    được nữa. Cần điều chỉnh giá, vui lòng nhắn ở khung trao đổi.</div>
                 <div t-if="quote.state == 'done'" class="vq-alert">Yêu cầu báo giá này đã đóng. Cảm ơn quý công ty
                     đã báo giá.</div>
 
@@ -349,6 +351,8 @@
                                 đã chọn nhà cung cấp khác.</p>
                             <p t-if="editable" class="vq-muted vq-small">Đơn giá là giá chưa VAT cho một đơn vị
                                 tính. Mặt hàng không cung cấp được, vui lòng chọn "Không có hàng".</p>
+                            <p t-if="editable and any(quote.line_ids.mapped('vendor_locked'))" class="vq-muted vq-small">
+                                Mặt hàng ghi "Đã lên đơn mua" không sửa được nữa.</p>
                         </div>
                         <label t-if="editable" class="vq-inline-field">
                             <span>VAT cho tất cả dòng</span>
@@ -368,17 +372,19 @@
                                 <th class="vq-col-price">Đơn giá chưa VAT</th>
                                 <th class="vq-col-vat">VAT</th>
                                 <th class="vq-col-days">Giao sau (ngày)</th>
-                                <th class="vq-col-invoice">Tên xuất hóa đơn</th>
-                                <th class="vq-col-note">Ghi chú</th>
                                 <th class="vq-num vq-col-total">Thành tiền</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="quote.line_ids" t-as="line" data-vq-line="1"
-                                t-attf-class="vq-line #{'vq-line-chosen' if line_choice.get(line.id) == 'selected' else ''} #{'vq-line-lost' if line_choice.get(line.id) == 'other' else ''}"
+                            <!-- Mỗi mặt hàng 2 hàng: hàng số (giá, VAT, ngày giao) và hàng chữ (tên xuất hóa
+                                 đơn, ghi chú) trải hết bề ngang — để cột chữ không bị bóp còn vài ký tự. -->
+                            <t t-foreach="quote.line_ids" t-as="line">
+                            <t t-set="lid" t-value="line.id"/>
+                            <t t-set="line_editable" t-value="editable and not line.vendor_locked"/>
+                            <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ('vq-line-lost' if line_choice.get(lid) == 'other' else '')"/>
+                            <tr data-vq-line="1" t-attf-class="vq-line vq-line-main #{choice_class}"
                                 t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
                                 t-att-data-vat="line.vat or ''">
-                                <t t-set="lid" t-value="line.id"/>
                                 <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
                                 <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or default_vat)"/>
                                 <td class="vq-col-no" t-esc="line_index + 1"/>
@@ -393,9 +399,10 @@
                                             <div class="vq-line-name" t-esc="line.name or line.product_id.display_name"/>
                                             <div t-if="line_choice.get(line.id) == 'selected'" class="vq-choice vq-choice-won">Được chọn</div>
                                             <div t-if="line_choice.get(line.id) == 'other'" class="vq-choice">Đã chọn nhà cung cấp khác</div>
+                                            <div t-if="line.vendor_locked" class="vq-choice vq-choice-locked">Đã lên đơn mua</div>
                                             <label class="vq-check">
                                                 <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
-                                                       t-att-checked="na_checked" t-att-disabled="not editable"/>
+                                                       t-att-checked="na_checked" t-att-disabled="not line_editable"/>
                                                 Không có hàng
                                             </label>
                                         </div>
@@ -405,13 +412,13 @@
                                     <t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom_id.name"/>
                                 </td>
                                 <td class="vq-col-price" data-label="Đơn giá chưa VAT">
-                                    <input t-if="editable" type="text" inputmode="decimal" class="vq-input vq-input-price"
+                                    <input t-if="line_editable" type="text" inputmode="decimal" class="vq-input vq-input-price"
                                            data-vq-price="1" t-att-name="'price_%s' % lid"
                                            t-att-value="post.get('price_%s' % lid) if post else (fmt(line.price_unit) if line.price_unit else '')"/>
                                     <span t-else="" t-esc="fmt(line.price_unit) if line.price_unit else '—'"/>
                                 </td>
                                 <td class="vq-col-vat" data-label="VAT">
-                                    <select t-if="editable" class="vq-input" data-vq-vat="1" t-att-name="'vat_%s' % lid">
+                                    <select t-if="line_editable" class="vq-input" data-vq-vat="1" t-att-name="'vat_%s' % lid">
                                         <option value="">Chọn</option>
                                         <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]"
                                                 t-att-selected="opt[0] == vat_value" t-esc="opt[1]"/>
@@ -419,25 +426,35 @@
                                     <span t-else="" t-esc="dict(vat_options).get(line.vat, '—')"/>
                                 </td>
                                 <td class="vq-col-days" data-label="Giao sau (ngày)">
-                                    <input t-if="editable" type="text" inputmode="numeric" class="vq-input"
+                                    <input t-if="line_editable" type="text" inputmode="numeric" class="vq-input"
                                            t-att-name="'days_%s' % lid"
                                            t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or '')"/>
                                     <span t-else="" t-esc="line.delivery_days or '—'"/>
                                 </td>
-                                <td class="vq-col-invoice" data-label="Tên xuất hóa đơn">
-                                    <input t-if="editable" type="text" class="vq-input" maxlength="255"
-                                           t-att-name="'inv_%s' % lid" placeholder="Tên hàng trên hóa đơn"
-                                           t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or '')"/>
-                                    <span t-else="" t-esc="line.invoice_name or '—'"/>
-                                </td>
-                                <td class="vq-col-note" data-label="Ghi chú">
-                                    <input t-if="editable" type="text" class="vq-input" maxlength="255"
-                                           t-att-name="'note_%s' % lid" placeholder="Hãng, xuất xứ, quy cách"
-                                           t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or '')"/>
-                                    <span t-else="" t-esc="line.vendor_note or ''"/>
-                                </td>
                                 <td class="vq-num vq-col-total" data-label="Thành tiền" data-vq-subtotal="1">—</td>
                             </tr>
+                            <tr t-attf-class="vq-line-extra #{choice_class}">
+                                <td class="vq-col-no"/>
+                                <td colspan="6" class="vq-extra-cell">
+                                    <div class="vq-extra-grid">
+                                        <label class="vq-extra-field">
+                                            <span class="vq-label">Tên xuất hóa đơn</span>
+                                            <input t-if="line_editable" type="text" class="vq-input" maxlength="255"
+                                                   t-att-name="'inv_%s' % lid" placeholder="Tên hàng NCC ghi trên hóa đơn"
+                                                   t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or '')"/>
+                                            <span t-else="" class="vq-extra-value" t-esc="line.invoice_name or '—'"/>
+                                        </label>
+                                        <label class="vq-extra-field">
+                                            <span class="vq-label">Ghi chú</span>
+                                            <input t-if="line_editable" type="text" class="vq-input" maxlength="255"
+                                                   t-att-name="'note_%s' % lid" placeholder="Hãng, xuất xứ, quy cách"
+                                                   t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or '')"/>
+                                            <span t-else="" class="vq-extra-value" t-esc="line.vendor_note or '—'"/>
+                                        </label>
+                                    </div>
+                                </td>
+                            </tr>
+                            </t>
                         </tbody>
                     </table>
 
