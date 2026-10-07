@@ -11,7 +11,7 @@ from odoo.http import request
 
 from ..models.purchase_order import VENDOR_STATUS
 from ..models.vendor_quote_access import PORTAL_ROUTE
-from ..services.vendor_chat import chat_messages, post_chat
+from ..services.vendor_chat import chat_messages
 from .vendor_portal import VendorQuotePortal
 
 ORDERS = "don-mua"
@@ -61,8 +61,9 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "saved": bool(kw.get("saved")),
             "active_tab": "orders",
             "company": order.company_id,
-            "chat": chat_messages(order),
+            "chat": chat_messages(order, self._file_url(token)),
             "chat_url": f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}/tin-nhan",
+            "chat_error": kw.get("chat_error") or "",
         })
 
     @http.route(
@@ -79,6 +80,27 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         order = access._vendor_purchase_orders().filtered(lambda o: o.id == order_id)
         if not order:
             return self._not_found()
-        if (message or "").strip():
-            post_chat(order, message, access.partner_id, from_vendor=True, notify_partners=order._chat_contacts())
-        return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}#trao-doi")
+        return self._post_vendor_chat(
+            order, access, message, order._chat_contacts(), f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}"
+        )
+
+    @http.route(
+        f"{PORTAL_ROUTE}/<string:token>/{ORDERS}/<int:order_id>/in",
+        type="http",
+        auth="public",
+        methods=["GET"],
+    )
+    def portal_order_print(self, token, order_id, **kw):
+        """Bản in đơn mua cho NCC: mã QR số đơn, danh sách hàng, tổng tiền — không logo."""
+        access = self._get_access(token)
+        if not access:
+            return self._not_found()
+        if not self._is_logged_in(access):
+            return self._render_login(access, next_url=f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order_id}/in")
+        order = access._vendor_purchase_orders().filtered(lambda o: o.id == order_id)
+        if not order:
+            return self._not_found()
+        return self._render("hlv_vendor_quotation.portal_order_print", access, {
+            "order": order,
+            "company": order.company_id,
+        })

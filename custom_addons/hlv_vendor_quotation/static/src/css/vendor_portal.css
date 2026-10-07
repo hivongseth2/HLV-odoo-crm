@@ -288,3 +288,12 @@ a { color: var(--vq-accent); }
 @media (max-width: 760px) {
     .vq-main > .vq-wrap:not(.vq-login) { padding: 18px 14px 24px; border-left: 0; border-right: 0; border-radius: 0; }
 }
+
+/* --- Tệp đính kèm trong trao đổi --- */
+.vq-push { margin-left: auto; }
+.vq-msg-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.vq-msg-img img { display: block; width: 96px; height: 96px; object-fit: cover; border: 1px solid var(--vq-line);
+    border-radius: 3px; background: #fff; }
+.vq-chat-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.vq-file-pick input { font-size: .8rem; max-width: 200px; }
+.vq-chat-error { margin: 0 14px; white-space: pre-line; }

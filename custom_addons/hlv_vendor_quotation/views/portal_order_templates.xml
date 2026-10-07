@@ -72,6 +72,8 @@
                     <span t-if="order.hlv_vendor_status" t-attf-class="vq-status vq-status-#{order.hlv_vendor_status}"
                           t-esc="vendor_status_labels[order.hlv_vendor_status]"/>
                     <span t-else="" class="vq-status vq-status-waiting">Chưa cập nhật tiến độ</span>
+                    <a class="vq-btn vq-btn-secondary vq-push" target="_blank"
+                       t-att-href="'%s/don-mua/%s/in' % (portal_base, order.id)">In đơn mua</a>
                 </div>
 
                 <dl class="vq-facts">
@@ -143,5 +145,70 @@
                 </div>
             </div>
         </t>
+    </template>
+
+    <!-- Bản in đơn mua cho NCC: mã QR số đơn (quét để đối chiếu khi giao), danh sách hàng,
+         tổng tiền. Cố ý không logo / không khung trang: in ra kẹp cùng hàng là đủ. -->
+    <template id="portal_order_print" name="Báo giá NCC - in đơn mua">
+        <t t-out="doctype"/>
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <meta name="robots" content="noindex, nofollow"/>
+                <title>Đơn mua <t t-esc="order.name"/></title>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_order_print.css?v=#{asset_version}"/>
+            </head>
+            <body>
+                <div class="po-print-bar">
+                    <button type="button" onclick="window.print()">In</button>
+                </div>
+                <main class="po-sheet">
+                    <header class="po-head">
+                        <div>
+                            <h1>ĐƠN MUA HÀNG</h1>
+                            <div class="po-number" t-esc="order.name"/>
+                            <table class="po-info">
+                                <tr><th>Ngày đặt</th><td t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/></tr>
+                                <tr t-if="order.date_planned"><th>Ngày nhận dự kiến</th>
+                                    <td t-esc="order.date_planned.strftime('%d/%m/%Y')"/></tr>
+                                <tr><th>Bên mua</th><td t-esc="company.name"/></tr>
+                                <tr><th>Nhà cung cấp</th><td t-esc="vendor.name"/></tr>
+                            </table>
+                        </div>
+                        <img class="po-qr" t-att-alt="order.name"
+                             t-att-src="'/report/barcode/?barcode_type=QR&amp;value=%s&amp;width=180&amp;height=180' % order.name"/>
+                    </header>
+                    <table class="po-lines">
+                        <thead>
+                            <tr>
+                                <th class="po-no">STT</th>
+                                <th>Mặt hàng</th>
+                                <th class="po-num">Số lượng</th>
+                                <th>ĐVT</th>
+                                <th class="po-num">Đơn giá</th>
+                                <th class="po-num">Thành tiền</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
+                                <td class="po-no" t-esc="line_index + 1"/>
+                                <td t-esc="line.name"/>
+                                <td class="po-num" t-esc="fmt(line.product_qty)"/>
+                                <td t-esc="line.product_uom.name"/>
+                                <td class="po-num" t-esc="fmt(line.price_unit)"/>
+                                <td class="po-num" t-esc="fmt(line.price_subtotal)"/>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr><td colspan="5" class="po-num">Tổng chưa VAT</td><td class="po-num" t-esc="fmt(order.amount_untaxed)"/></tr>
+                            <tr><td colspan="5" class="po-num">Thuế</td><td class="po-num" t-esc="fmt(order.amount_tax)"/></tr>
+                            <tr class="po-total"><td colspan="5" class="po-num">Tổng cộng</td>
+                                <td class="po-num" t-esc="fmt(order.amount_total)"/></tr>
+                        </tfoot>
+                    </table>
+                </main>
+            </body>
+        </html>
     </template>
 </odoo>

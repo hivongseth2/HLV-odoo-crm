@@ -228,3 +228,33 @@ def deadline_hint(deadline, today, urgent_days=2):
     if days == 0:
         return "Hết hạn hôm nay", "urgent"
     return f"Còn {days} ngày", "urgent" if days <= urgent_days else "ok"
+
+
+ATTACHMENT_EXTENSIONS = {
+    "jpg", "jpeg", "png", "gif", "webp", "heic",
+    "pdf", "xls", "xlsx", "csv", "doc", "docx", "txt", "zip",
+}
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+
+
+def file_extension(filename):
+    """Đuôi tệp viết thường, không dấu chấm: "Bao gia.PDF" → "pdf". Không có đuôi → ""."""
+    name = (filename or "").strip()
+    return name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+
+def attachment_error(filename, size, max_bytes):
+    """Lý do không nhận một tệp đính kèm tin trao đổi, hoặc "" nếu nhận được.
+
+    Nhận: tên tệp, kích thước (byte), giới hạn (byte). Chỉ nhận ảnh / PDF / Excel / Word /
+    CSV / TXT / ZIP — tệp chạy được (exe, js, html…) bị từ chối vì người tải về là nhân viên.
+    """
+    if not (filename or "").strip():
+        return "Tệp không có tên."
+    if file_extension(filename) not in ATTACHMENT_EXTENSIONS:
+        return f"Không nhận loại tệp \"{filename}\" — chỉ ảnh, PDF, Excel, Word, CSV, TXT, ZIP."
+    if size > max_bytes:
+        return f"Tệp \"{filename}\" quá {max_bytes // (1024 * 1024)}MB."
+    if size <= 0:
+        return f"Tệp \"{filename}\" rỗng."
+    return ""

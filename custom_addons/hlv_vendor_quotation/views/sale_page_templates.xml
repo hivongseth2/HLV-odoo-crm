@@ -190,7 +190,15 @@
                                 <label class="hq-sr-only" for="hq-chat-input">Tin nhắn</label>
                                 <textarea id="hq-chat-input" rows="2" maxlength="2000" class="hq-input hq-textarea"
                                           placeholder="Nhắn cho NCC — NCC đọc trên trang báo giá của họ (Ctrl+Enter để gửi)"></textarea>
-                                <button type="button" class="hq-btn hq-btn-primary" id="hq-chat-send">Gửi</button>
+                                <div class="hq-chat-side">
+                                    <label class="hq-btn hq-btn-mini hq-file-btn" title="Ảnh, PDF, Excel, Word… tối đa 5 tệp, mỗi tệp 10MB">
+                                        Đính kèm
+                                        <input type="file" id="hq-chat-files" multiple="multiple" class="hq-sr-only"
+                                               accept="image/*,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.zip"/>
+                                    </label>
+                                    <button type="button" class="hq-btn hq-btn-primary" id="hq-chat-send">Gửi</button>
+                                </div>
+                                <div id="hq-chat-picked" class="hq-chat-picked"></div>
                             </div>
                         </div>
                     </div>

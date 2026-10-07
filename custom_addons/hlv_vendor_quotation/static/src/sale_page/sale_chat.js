@@ -16,7 +16,13 @@ window.HlvQuote = window.HlvQuote || {};
         '<div class="hq-msg-head"><b>' + esc(m.author) + "</b>" +
         (m.from_vendor ? ' <span class="hq-tag hq-tag-warn">NCC</span>' : "") +
         ' <span class="hq-muted">' + esc(m.date) + "</span></div>" +
-        '<div class="hq-msg-body">' + esc(m.body) + "</div></div>";
+        (m.body ? '<div class="hq-msg-body">' + esc(m.body) + "</div>" : "") +
+        (m.attachments.length ? '<div class="hq-msg-files">' + m.attachments.map(function (f) {
+          return f.is_image
+            ? '<a class="hq-msg-img" target="_blank" href="' + esc(f.url) + '" title="' + esc(f.name) + '">' +
+              '<img loading="lazy" src="' + esc(f.url) + '" alt="' + esc(f.name) + '"/></a>'
+            : '<a class="hq-chip hq-chip-blue" target="_blank" href="' + esc(f.url) + '">' + esc(f.name) + "</a>";
+        }).join("") + "</div>" : "") + "</div>";
     }).join("") : '<div class="hq-empty">Chưa có tin nhắn nào.</div>';
     list.scrollTop = list.scrollHeight;
   }
@@ -25,18 +31,42 @@ window.HlvQuote = window.HlvQuote || {};
     current = { model: model, id: id };
     HQ.$("hq-chat-list").innerHTML = '<div class="hq-loading">Đang tải…</div>';
     HQ.$("hq-chat-input").value = "";
+    clearFiles();
     HQ.show("hq-chat", true);
     HQ.api("chat", { model: model, res_id: id }).then(render).catch(function (err) { HQ.toast(err.message); });
   };
 
+  function clearFiles() {
+    HQ.$("hq-chat-files").value = "";
+    HQ.$("hq-chat-picked").textContent = "";
+  }
+
+  /** Đọc tệp đã chọn thành base64 để gửi kèm trong JSON. Server kiểm loại + cỡ. */
+  function readFiles(fileList) {
+    return Promise.all(Array.prototype.map.call(fileList, function (file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          resolve({ name: file.name, data: String(reader.result).split(",")[1] || "" });
+        };
+        reader.onerror = function () { reject(new Error("Không đọc được tệp " + file.name)); };
+        reader.readAsDataURL(file);
+      });
+    }));
+  }
+
   function send() {
     var input = HQ.$("hq-chat-input");
-    if (!current || !input.value.trim()) {
+    var picked = HQ.$("hq-chat-files").files;
+    if (!current || (!input.value.trim() && !picked.length)) {
       return;
     }
     HQ.$("hq-chat-send").disabled = true;
-    HQ.api("chat_post", { model: current.model, res_id: current.id, body: input.value }).then(function (res) {
+    readFiles(picked).then(function (files) {
+      return HQ.api("chat_post", { model: current.model, res_id: current.id, body: input.value, files: files });
+    }).then(function (res) {
       input.value = "";
+      clearFiles();
       render(res);
     }).catch(function (err) {
       HQ.toast(err.message);
@@ -62,6 +92,11 @@ window.HlvQuote = window.HlvQuote || {};
       }
     });
     HQ.on(HQ.$("hq-chat"), "click", "[data-close-chat]", close);
+    HQ.$("hq-chat-files").addEventListener("change", function (event) {
+      HQ.$("hq-chat-picked").textContent = Array.prototype.map.call(event.target.files, function (f) {
+        return f.name;
+      }).join(", ");
+    });
     HQ.on(HQ.$("hq-app"), "click", "[data-chat-model]", function (el) {
       HQ.openChat(el.dataset.chatModel, +el.dataset.chatId);
     });

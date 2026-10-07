@@ -282,3 +282,12 @@
 .hq-msg-head { display: flex; gap: .4rem; align-items: baseline; font-size: .8125rem; margin-bottom: .15rem; }
 .hq-msg-body { white-space: pre-line; font-size: .875rem; }
 .hq-chat-form .hq-textarea { flex: 1 1 auto; }
+
+.hq-chat-form { flex-wrap: wrap; }
+.hq-chat-side { display: flex; flex-direction: column; gap: .35rem; }
+.hq-file-btn { justify-content: center; cursor: pointer; }
+.hq-chat-picked { flex-basis: 100%; color: var(--hq-muted); font-size: .75rem; }
+.hq-chat-picked:empty { display: none; }
+.hq-msg-files { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+.hq-msg-img img { display: block; width: 88px; height: 88px; object-fit: cover; border: 1px solid var(--hq-line);
+    border-radius: 3px; background: #fff; }

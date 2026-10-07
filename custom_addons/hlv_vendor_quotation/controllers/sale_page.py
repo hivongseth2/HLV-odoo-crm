@@ -9,7 +9,10 @@ File này: trang, danh sách / chi tiết phiếu và các thao tác trên phi�
 tìm (sản phẩm, NCC, đơn bán) ở sale_page_create.py.
 """
 
+import base64
+import binascii
 from collections import defaultdict
+from urllib.parse import urlencode
 
 from odoo import fields, http
 from odoo.exceptions import UserError
@@ -23,7 +26,7 @@ from ..models.vendor_quote_utils import paginate
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
 from ..services.asset_version import asset_version
-from ..services.vendor_chat import chat_messages, post_chat
+from ..services.vendor_chat import FILE_MAX_BYTES, chat_attachment, chat_messages, post_chat
 from .sale_page_common import API, SalePageMixin, to_int
 
 PER_PAGE = 30
@@ -143,15 +146,48 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     def api_chat(self, code="", model="", res_id=None, **kw):
         """Tin trao đổi với NCC trên một báo giá (model="quote") hoặc đơn mua ("order")."""
         record = self._chat_record(model, res_id, self._check(code))
-        return {"title": record.name, "messages": chat_messages(record)}
+        return {"title": record.name, "messages": chat_messages(record, self._file_url(code))}
 
     @http.route(f"{API}/chat_post", type="json", auth="user", methods=["POST"])
-    def api_chat_post(self, code="", model="", res_id=None, body="", **kw):
+    def api_chat_post(self, code="", model="", res_id=None, body="", files=None, **kw):
+        """files: [{name, data (base64)}] — trang gửi kèm trong JSON cho khỏi tách form upload."""
         record = self._chat_record(model, res_id, self._check(code))
-        post_chat(record, body, request.env.user.partner_id, from_vendor=False)
-        return {"title": record.name, "messages": chat_messages(record)}
+        post_chat(record, body, request.env.user.partner_id, from_vendor=False,
+                  files=self._decode_files(files or []))
+        return {"title": record.name, "messages": chat_messages(record, self._file_url(code))}
+
+    @http.route(f"{SALE_PAGE_ROUTE}/tep/<int:attachment_id>", type="http", auth="user", methods=["GET"])
+    def chat_file(self, attachment_id, code="", **kw):
+        """Tải tệp đính kèm tin trao đổi — chỉ khi cuộc trao đổi thuộc phạm vi mã sale đang xem."""
+        attachment, record = chat_attachment(request.env, attachment_id)
+        if not record:
+            return request.not_found()
+        try:
+            self._chat_record(
+                "quote" if record._name == "hlv.vendor.quote" else "order", record.id, self._check(code)
+            )
+        except UserError:
+            return request.not_found()
+        inline = (attachment.mimetype or "").startswith("image/") or attachment.mimetype == "application/pdf"
+        return request.env["ir.binary"]._get_stream_from(attachment).get_response(as_attachment=not inline)
 
     # ------------------------------------------------------------------
+    def _file_url(self, code):
+        return lambda attachment_id: f"{SALE_PAGE_ROUTE}/tep/{attachment_id}?{urlencode({'code': code})}"
+
+    def _decode_files(self, files):
+        """[{name, data base64}] → [(tên, bytes)]. Chặn cỡ trước khi giải mã cho đỡ tốn bộ nhớ."""
+        decoded = []
+        for item in files:
+            data = item.get("data") or ""
+            if len(data) * 3 // 4 > FILE_MAX_BYTES + 3:
+                raise UserError(f"Tệp \"{item.get('name')}\" quá {FILE_MAX_BYTES // (1024 * 1024)}MB.")
+            try:
+                decoded.append((item.get("name") or "", base64.b64decode(data, validate=True)))
+            except (binascii.Error, ValueError):
+                raise UserError(f"Không đọc được tệp \"{item.get('name')}\".") from None
+        return decoded
+
     def _chat_record(self, model, res_id, scope):
         """Báo giá / đơn mua thuộc một phiếu trong phạm vi mã sale đã kiểm — không cho mở cuộc
         trao đổi của sale khác bằng id. Đơn mua trả về bằng sudo (sale không có quyền đơn mua)."""

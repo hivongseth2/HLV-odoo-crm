@@ -122,15 +122,30 @@
                         <b t-esc="'Quý công ty' if msg['from_vendor'] else msg['author']"/>
                         <span class="vq-muted" t-esc="msg['date']"/>
                     </div>
-                    <div class="vq-msg-body" t-esc="msg['body']"/>
+                    <div t-if="msg['body']" class="vq-msg-body" t-esc="msg['body']"/>
+                    <div t-if="msg['attachments']" class="vq-msg-files">
+                        <t t-foreach="msg['attachments']" t-as="file">
+                            <a t-if="file['is_image']" class="vq-msg-img" t-att-href="file['url']" target="_blank"
+                               t-att-title="file['name']"><img t-att-src="file['url']" t-att-alt="file['name']" loading="lazy"/></a>
+                            <a t-else="" class="vq-block-link" t-att-href="file['url']" target="_blank" t-esc="file['name']"/>
+                        </t>
+                    </div>
                 </div>
             </div>
-            <form method="post" class="vq-chat-form" t-att-action="chat_url">
+            <div t-if="chat_error" class="vq-alert vq-alert-error vq-chat-error" t-esc="chat_error"/>
+            <form method="post" class="vq-chat-form" t-att-action="chat_url" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                 <label class="vq-sr-only" for="vq-chat-message">Tin nhắn</label>
                 <textarea id="vq-chat-message" name="message" rows="3" class="vq-input" maxlength="2000"
-                          required="required" placeholder="Nhập tin nhắn…"/>
-                <button type="submit" class="vq-btn vq-btn-primary">Gửi</button>
+                          placeholder="Nhập tin nhắn…"/>
+                <div class="vq-chat-actions">
+                    <label class="vq-file-pick">
+                        <input type="file" name="attachments" multiple="multiple"
+                               accept="image/*,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.zip"/>
+                    </label>
+                    <button type="submit" class="vq-btn vq-btn-primary">Gửi</button>
+                </div>
+                <span class="vq-muted vq-small">Ảnh, PDF, Excel, Word… tối đa 5 tệp, mỗi tệp 10MB.</span>
             </form>
         </details>
     </template>
