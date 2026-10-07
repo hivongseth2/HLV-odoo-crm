@@ -148,7 +148,6 @@ a { color: var(--vq-accent); }
     border-radius: 3px; background: #fff; color: var(--vq-accent); font-size: .85rem; font-weight: 600;
     text-decoration: none; white-space: nowrap; }
 .vq-block-link:hover { border-color: var(--vq-accent); background: #f5f8fc; }
-.vq-phone { display: block; font-weight: 400; text-decoration: none; }
 .vq-note { background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; }
 
 .vq-section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }

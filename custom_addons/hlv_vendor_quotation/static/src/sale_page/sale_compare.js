@@ -101,7 +101,6 @@ window.HlvQuote = window.HlvQuote || {};
         return esc(r.name) + ' <span class="hq-muted">(' + esc(r.state) + ")</span>";
       }).join("<br/>")) +
       fact("Đơn mua", orders) +
-      fact("Người tạo", esc(d.user_name)) +
       "</div>";
   }
 

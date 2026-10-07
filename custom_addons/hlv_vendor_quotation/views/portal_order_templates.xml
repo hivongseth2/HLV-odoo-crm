@@ -94,11 +94,6 @@
                     <div t-if="quotes"><dt>Từ báo giá</dt>
                         <dd><a t-foreach="quotes" t-as="quote" class="vq-block-link"
                                t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/></dd></div>
-                    <div t-if="order.user_id"><dt>Người phụ trách</dt>
-                        <dd><t t-esc="order.user_id.name"/>
-                            <t t-set="contact_phone" t-value="order.user_id.partner_id.mobile or order.user_id.partner_id.phone"/>
-                            <a t-if="contact_phone" class="vq-phone" t-att-href="'tel:%s' % contact_phone"
-                               t-esc="contact_phone"/></dd></div>
                     <div t-if="order.hlv_vendor_status_date"><dt>Cập nhật tiến độ lúc</dt>
                         <dd t-esc="order.hlv_vendor_status_date.strftime('%d/%m/%Y')"/></div>
                 </dl>

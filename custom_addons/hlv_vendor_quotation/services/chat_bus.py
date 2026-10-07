@@ -34,6 +34,7 @@ def sale_channel(env, code):
 
 
 def notify_chat(record, author_name, from_vendor):
+    # author_name: tên công ty (vendor_chat.author_label), không phải tên tài khoản.
     """Báo có tin trao đổi mới trên báo giá / đơn mua record.
 
     Bên sale: kênh "tất cả" (thu mua) + kênh mã sale của các phiếu liên quan. Bên NCC: chỉ khi

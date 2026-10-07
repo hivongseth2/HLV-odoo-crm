@@ -145,7 +145,6 @@ class VendorQuotePortal(http.Controller):
             status=STATUS_DISPLAY[quote._vendor_status()],
             editable=quote._is_open_for_vendor(),
             hint=deadline_hint(quote.date_deadline, quote._vendor_today()),
-            contact=quote.user_id,
             company=quote.company_id or request.env.company.sudo(),
             orders=quote._vendor_purchase_orders(),
             chat=chat_messages(quote, self._file_url(token)),
