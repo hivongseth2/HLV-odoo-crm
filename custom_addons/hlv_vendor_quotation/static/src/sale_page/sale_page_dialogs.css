@@ -139,7 +139,7 @@
     box-shadow: 0 8px 24px rgba(28, 32, 36, .12);
 }
 /* Ô tìm nằm trong cột Bootstrap: kéo thả xuống thẳng mép ô nhập, không tràn ra phần gutter. */
-.col-md-6.hq-picker .hq-dropdown { left: calc(var(--bs-gutter-x) * .5); right: calc(var(--bs-gutter-x) * .5); }
+.row > .hq-picker .hq-dropdown { left: calc(var(--bs-gutter-x) * .5); right: calc(var(--bs-gutter-x) * .5); }
 .hq-dropdown-item {
     display: block;
     width: 100%;
@@ -155,6 +155,8 @@
 .hq-dropdown-empty { padding: .6rem .75rem; color: var(--hq-muted); font-size: .875rem; }
 
 .hq-chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hq-source-note { background: var(--hq-accent-soft); color: var(--hq-accent-dark); border-radius: 8px; padding: .5rem .75rem; font-size: .8125rem; }
+.hq-source-note .hq-link { padding: 0 .25rem; font-size: inherit; font-weight: 600; }
 .hq-chip-row:empty { display: none; }
 .hq-chip {
     display: inline-flex;

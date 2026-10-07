@@ -9,6 +9,7 @@ from odoo import fields
 
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import build_share_message
+from .sale_code import sale_code
 
 STATE_LABELS = {
     "draft": "Nháp",
@@ -19,8 +20,6 @@ STATE_LABELS = {
 }
 VAT_LABELS = dict(VAT_SELECTION)
 DATE_FMT = "%d/%m/%Y"
-# Mã sale MISA trên đơn bán — cùng field /giao-hang và /sale_plan dùng để biết đơn của ai.
-SALE_CODE_FIELD = "x_studio_misa_saler_code"
 
 
 def _date_text(value):
@@ -31,13 +30,6 @@ def _datetime_text(record, value):
     if not value:
         return ""
     return fields.Datetime.context_timestamp(record, value).strftime("%H:%M " + DATE_FMT)
-
-
-def sale_code(order):
-    """Mã sale MISA của đơn bán (field Studio, không phải bản cài nào cũng có). Không có → ""."""
-    if not order or SALE_CODE_FIELD not in order._fields:
-        return ""
-    return (order[SALE_CODE_FIELD] or "").strip()
 
 
 def quote_state(quote):
@@ -164,6 +156,32 @@ def request_line_payload(line, remaining_qty):
         "qty": remaining_qty,
         "uom_id": line.product_uom_id.id,
         "uom": line.product_uom_id.name or "",
+    }
+
+
+def sale_order_summary(order, requests=None):
+    """Đơn bán trong ô chọn; requests = các YCMH đang mở của đơn (để sale chọn nếu muốn)."""
+    return {
+        "id": order.id,
+        "name": order.name,
+        "partner": order.partner_id.display_name or "",
+        "date": _date_text(order.date_order),
+        "sale_code": sale_code(order.sudo()),
+        "requests": [request_summary(r) for r in (requests or [])],
+    }
+
+
+def sale_line_payload(line):
+    """Dòng đơn bán → dòng hàng trong hộp hỏi giá. Số lượng mặc định = số lượng bán."""
+    product = line.product_id
+    return {
+        "sale_line_id": line.id,
+        "product_id": product.id,
+        "product": product.display_name,
+        "name": product.display_name,
+        "qty": line.product_uom_qty,
+        "uom_id": line.product_uom.id,
+        "uom": line.product_uom.name or "",
     }
 
 

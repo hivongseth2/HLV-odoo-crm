@@ -118,14 +118,19 @@
                                 <section class="hq-step">
                                     <h3 class="hq-h3">1. Mặt hàng cần báo giá</h3>
                                     <div class="row g-2">
-                                        <div class="col-md-6 hq-picker">
-                                            <label class="form-label small mb-1" for="hq-req-search">
-                                                Lấy từ Yêu cầu mua hàng (không bắt buộc)</label>
+                                        <div class="col-md-4 hq-picker">
+                                            <label class="form-label small mb-1" for="hq-so-search">Từ đơn bán</label>
+                                            <input type="search" id="hq-so-search" class="hq-input w-100" autocomplete="off"
+                                                   placeholder="Số đơn, khách, mã sale…"/>
+                                            <div id="hq-so-results" class="hq-dropdown hq-hidden"></div>
+                                        </div>
+                                        <div class="col-md-4 hq-picker">
+                                            <label class="form-label small mb-1" for="hq-req-search">Từ yêu cầu mua hàng</label>
                                             <input type="search" id="hq-req-search" class="hq-input w-100" autocomplete="off"
                                                    placeholder="Số YCMH, đơn bán…"/>
                                             <div id="hq-req-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
-                                        <div class="col-md-6 hq-picker">
+                                        <div class="col-md-4 hq-picker">
                                             <label class="form-label small mb-1" for="hq-prod-search">Thêm sản phẩm</label>
                                             <input type="search" id="hq-prod-search" class="hq-input w-100" autocomplete="off"
                                                    placeholder="Mã hoặc tên sản phẩm…"/>
@@ -133,6 +138,7 @@
                                         </div>
                                     </div>
                                     <div id="hq-req-chip" class="hq-chip-row"></div>
+                                    <div id="hq-source-note" class="hq-source-note hq-hidden"></div>
                                     <div id="hq-lines"></div>
                                 </section>
 

@@ -16,6 +16,7 @@ from ..models.vendor_quote_access import SALE_PAGE_ROUTE as PAGE_ROUTE
 from ..models.vendor_quote_line import SELECTOR_GROUP, VAT_SELECTION
 from ..models.vendor_quote_utils import paginate
 from ..services import sale_page_payload as payload
+from ..services.sale_code import SALE_CODE_FIELD, has_sale_code
 
 API = "/api/hoi-gia-ncc"
 PAGE_GROUPS = (
@@ -170,6 +171,50 @@ class VendorQuoteSalePage(http.Controller):
             ],
         }
 
+    @http.route(f"{API}/sale_orders", type="json", auth="user", methods=["POST"])
+    def api_sale_orders(self, search="", **kw):
+        """Đơn bán để hỏi giá theo đơn. Không sudo: sale chỉ thấy đơn mình được xem."""
+        self._check()
+        search = (search or "").strip()
+        if not search:
+            return {"orders": []}
+        domains = [
+            [("name", "ilike", search)],
+            [("client_order_ref", "ilike", search)],
+            [("partner_id", "ilike", search)],
+        ]
+        if has_sale_code(request.env):
+            domains.append([(SALE_CODE_FIELD, "ilike", search)])
+        orders = request.env["sale.order"].search(
+            expression.AND([[("state", "!=", "cancel")], expression.OR(domains)]),
+            order="id desc", limit=SEARCH_LIMIT,
+        )
+        return {"orders": [payload.sale_order_summary(o) for o in orders]}
+
+    @http.route(f"{API}/sale_order_lines", type="json", auth="user", methods=["POST"])
+    def api_sale_order_lines(self, order_id=None, **kw):
+        """Hàng hoá của một đơn bán + các YCMH đang mở của đơn (để sale chọn nếu muốn)."""
+        self._check()
+        order = request.env["sale.order"].browse(_to_int(order_id)).exists()
+        if not order:
+            raise UserError("Không tìm thấy đơn bán.")
+        lines = order.order_line.filtered(
+            lambda l: not l.display_type and not l.is_downpayment
+            and l.product_id.purchase_ok and l.product_uom_qty > 0
+        )
+        requests_ = request.env["purchase.request"].search([
+            ("sale_order_id", "=", order.id),
+            ("state", "not in", ("done", "rejected")),
+        ])
+        merge_into = request.env["purchase.request"]._mergeable_for_sale_order(order)
+        return {
+            "order": dict(
+                payload.sale_order_summary(order, requests_),
+                merge_request=payload.request_summary(merge_into) if merge_into else None,
+            ),
+            "lines": [payload.sale_line_payload(line) for line in lines],
+        }
+
     @http.route(f"{API}/products", type="json", auth="user", methods=["POST"])
     def api_products(self, search="", **kw):
         self._check()
@@ -203,25 +248,50 @@ class VendorQuoteSalePage(http.Controller):
             [_to_int(pid) for pid in product_ids or []]
         ).exists()
         pr = request.env["purchase.request"].browse(_to_int(request_id)).exists()
-        exclude = request.env["hlv.vendor.quote"]._vendors_with_open_quote(pr)
-        items = request.env["hlv.vendor.suggestion"].suggest(products, exclude)
+        # NCC đã hỏi cho YCMH này vẫn gợi ý: chọn lại thì hàng mới được bổ sung vào báo giá cũ.
+        quoted = request.env["hlv.vendor.quote"]._vendors_with_open_quote(pr)
+        items = request.env["hlv.vendor.suggestion"].suggest(products)
         names = {p.id: p.display_name for p in request.env["res.partner"].browse([i["partner_id"] for i in items])}
         return {
             "suggestions": [
                 dict(payload.suggestion_payload(item, products), name=names.get(item["partner_id"], ""))
                 for item in items
             ],
-            "quoted_vendor_ids": exclude.ids,
+            "quoted_vendor_ids": quoted.ids,
         }
 
     @http.route(f"{API}/create", type="json", auth="user", methods=["POST"])
-    def api_create(self, lines=None, vendor_ids=None, request_id=None, deadline=None, note="", **kw):
+    def api_create(self, lines=None, vendor_ids=None, request_id=None, sale_order_id=None,
+                   deadline=None, note="", **kw):
+        """Gửi báo giá cho các NCC. Có đơn bán mà chưa chọn YCMH → đưa hàng vào YCMH trước:
+        gộp vào YCMH chưa duyệt của đơn, không có thì tạo YCMH mới. Cùng một transaction:
+        báo giá lỗi thì YCMH cũng không bị đụng."""
         self._check()
-        pr = request.env["purchase.request"].browse(_to_int(request_id)).exists()
-        partners = request.env["res.partner"].browse([_to_int(v) for v in vendor_ids or []]).exists()
-        quotes = request.env["hlv.vendor.quote"]._create_and_send(
+        env = request.env
+        pr = env["purchase.request"].browse(_to_int(request_id)).exists()
+        partners = env["res.partner"].browse([_to_int(v) for v in vendor_ids or []]).exists()
+        if not partners:
+            raise UserError("Chọn ít nhất một nhà cung cấp.")
+        Quote = env["hlv.vendor.quote"]
+        line_vals = self._line_vals(lines or [], pr)
+        request_result = None
+        order = env["sale.order"].browse(_to_int(sale_order_id)).exists()
+        if order and not pr:
+            pr, request_lines, merged = env["purchase.request"]._add_sale_order_lines(order, [
+                {
+                    "product_id": vals["product_id"],
+                    "name": vals["name"],
+                    "product_qty": vals["product_qty"],
+                    "product_uom_id": vals["product_uom_id"],
+                }
+                for vals in line_vals
+            ])
+            # Báo giá theo dòng YCMH: dòng vừa gộp hỏi giá cho TỔNG số lượng của dòng đó.
+            line_vals = Quote._line_vals_from_request_lines(request_lines)
+            request_result = dict(payload.request_summary(pr), merged=merged)
+        quotes = Quote._create_and_send(
             partners,
-            self._line_vals(lines or [], pr),
+            line_vals,
             pr or None,
             fields.Date.to_date(deadline) if deadline else False,
             (note or "").strip() or False,
@@ -232,6 +302,7 @@ class VendorQuoteSalePage(http.Controller):
                      portal_url=q.portal_quote_url, password=q.portal_password)
                 for q in quotes
             ],
+            "request_result": request_result,
         }
 
     # ------------------------------------------------------------------
@@ -266,10 +337,10 @@ class VendorQuoteSalePage(http.Controller):
             # Người yêu cầu trên YCMH, dạng "TÊN (MÃ SALE)".
             [("request_id.x_misa_requested_by", "ilike", search)],
         ]
-        if payload.SALE_CODE_FIELD in request.env["sale.order"]._fields:
+        if has_sale_code(request.env):
             domains += [
-                [(f"sale_order_id.{payload.SALE_CODE_FIELD}", "ilike", search)],
-                [(f"request_id.sale_order_id.{payload.SALE_CODE_FIELD}", "ilike", search)],
+                [(f"sale_order_id.{SALE_CODE_FIELD}", "ilike", search)],
+                [(f"request_id.sale_order_id.{SALE_CODE_FIELD}", "ilike", search)],
             ]
         return expression.OR(domains)
 

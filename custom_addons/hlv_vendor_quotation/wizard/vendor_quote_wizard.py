@@ -103,11 +103,12 @@ class VendorQuoteWizard(models.TransientModel):
 
     def action_create_quotes(self):
         self.ensure_one()
-        vendors = self._chosen_vendors() - self._quoted_vendors(self.request_id, self.source_quote_id)
         if self.source_quote_id:
+            vendors = self._chosen_vendors() - self._quoted_vendors(self.request_id, self.source_quote_id)
             quotes = self._send_source_quote(vendors)
         else:
-            quotes = self._create_request_quotes(vendors)
+            # NCC đã có báo giá mở cho YCMH này: _create_and_send bổ sung vào báo giá đó.
+            quotes = self._create_request_quotes(self._chosen_vendors())
 
         action = self.env["ir.actions.act_window"]._for_xml_id(
             "hlv_vendor_quotation.action_vendor_quote"

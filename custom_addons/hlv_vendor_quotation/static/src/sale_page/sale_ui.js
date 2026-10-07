@@ -20,6 +20,7 @@ window.HlvQuote = window.HlvQuote || {};
 
     create: {
       request: null,    // YCMH đã chọn (nếu có)
+      saleOrder: null,  // đơn bán đã chọn khi chưa có YCMH — gửi đi thì tạo YCMH mới
       lines: [],        // [{product_id, product, name, qty, uom_id, uom, request_line_id}]
       chosen: [],       // [{id, name}] NCC sẽ gửi
       suggestions: [],

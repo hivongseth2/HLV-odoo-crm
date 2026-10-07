@@ -249,19 +249,35 @@ class VendorQuote(models.Model):
 
     @api.model
     def _create_and_send(self, vendors, line_vals, request=None, date_deadline=False, note=False):
-        """Mỗi NCC một báo giá cùng danh sách mặt hàng, mở ngay cho NCC báo giá.
+        """Gửi danh sách mặt hàng cho các NCC, mở ngay cho NCC báo giá.
 
-        Dùng chung cho wizard backend và trang /hoi-gia-ncc của sale. NCC đã có báo giá mở
-        cho cùng YCMH bị bỏ qua (bảng so sánh sẽ đếm trùng NCC).
+        Dùng chung cho wizard backend và trang /hoi-gia-ncc của sale. Mỗi YCMH, mỗi NCC chỉ
+        một báo giá (bảng so sánh đếm theo NCC), nên NCC đã có báo giá đang mở cho YCMH này
+        thì hàng được BỔ SUNG vào báo giá đó (xem _merge_lines) thay vì tạo báo giá thứ hai.
+        NCC có báo giá đã đóng cho YCMH này thì bỏ qua.
         """
         if not line_vals:
             raise UserError(_("Chọn ít nhất một mặt hàng cần báo giá."))
-        vendors = vendors.commercial_partner_id - self._vendors_with_open_quote(request)
-        if not vendors:
+        open_quotes = {}
+        if request:
+            for quote in request.vendor_quote_ids.filtered(lambda q: q.state in ("draft", "sent", "quoted")):
+                open_quotes[quote.access_id.partner_id.id] = quote
+        closed_vendors = self._vendors_with_open_quote(request) - self.env["res.partner"].browse(list(open_quotes))
+
+        updated = self.browse()
+        new_vendors = self.env["res.partner"]
+        for vendor in vendors.commercial_partner_id:
+            if vendor.id in open_quotes:
+                quote = open_quotes[vendor.id]
+                quote._merge_lines(line_vals, date_deadline, note)
+                updated |= quote
+            elif vendor not in closed_vendors:
+                new_vendors |= vendor
+        if not updated and not new_vendors:
             raise UserError(_(
-                "Chưa chọn nhà cung cấp nào mới — NCC đã có yêu cầu báo giá cho YCMH này được bỏ qua."
+                "Các NCC đã chọn đều có báo giá đã đóng cho YCMH này — mở lại báo giá đó nếu cần hỏi thêm."
             ))
-        return self.create([
+        created = self.create([
             {
                 "request_id": request.id if request else False,
                 "partner_id": vendor.id,
@@ -270,8 +286,47 @@ class VendorQuote(models.Model):
                 "state": "sent",
                 "line_ids": [Command.create(vals) for vals in line_vals],
             }
-            for vendor in vendors
+            for vendor in new_vendors
         ])
+        return updated | created
+
+    def _merge_lines(self, line_vals, date_deadline=False, note=False):
+        """Bổ sung mặt hàng vào báo giá đang mở của cùng YCMH.
+
+        Dòng ứng với cùng dòng YCMH lấy số lượng mới (YCMH vừa được gộp thêm); dòng mới thêm
+        vào cuối. Giá NCC đã điền giữ nguyên. Có thay đổi thì báo giá về "Chờ NCC báo giá"
+        để NCC báo nốt phần mới — trang NCC bắt điền đủ giá mới cho gửi lại.
+        """
+        self.ensure_one()
+        changed = False
+        next_sequence = max(self.line_ids.mapped("sequence") or [0]) + 1
+        for vals in line_vals:
+            request_line_id = vals.get("request_line_id")
+            line = self.line_ids.filtered(
+                lambda l: request_line_id and l.request_line_id.id == request_line_id
+            )[:1]
+            if line:
+                if line.product_qty != vals["product_qty"]:
+                    line.product_qty = vals["product_qty"]
+                    changed = True
+            else:
+                self.env["hlv.vendor.quote.line"].create(
+                    dict(vals, quote_id=self.id, sequence=next_sequence)
+                )
+                next_sequence += 1
+                changed = True
+        updates = {}
+        if date_deadline and (not self.date_deadline or date_deadline > self.date_deadline):
+            updates["date_deadline"] = date_deadline
+        if note:
+            updates["note"] = note
+        if changed and self.state in ("draft", "quoted"):
+            updates["state"] = "sent"
+        if updates:
+            self.write(updates)
+        if changed:
+            self.message_post(body=_("Bổ sung / cập nhật mặt hàng — NCC cần báo giá phần mới."))
+        return changed
 
     # ------------------------------------------------------------------
     # Nút thao tác nội bộ
