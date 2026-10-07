@@ -22,6 +22,9 @@ window.HlvQuote = window.HlvQuote || {};
 
   function onChat(payload) {
     var reload = HQ.reloadChat(payload.model, payload.res_id);
+    if (payload.from_vendor && window.HlvChatAlert) {
+      window.HlvChatAlert.notify(payload.author + " (NCC) vừa nhắn");
+    }
     if (payload.from_vendor && !reload) {
       HQ.toast(payload.author + " (NCC) vừa nhắn trên " + payload.name + " — bấm để xem", function () {
         HQ.openChat(payload.model, payload.res_id);

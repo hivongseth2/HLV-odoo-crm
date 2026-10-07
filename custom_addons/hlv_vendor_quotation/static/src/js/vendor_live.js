@@ -1,6 +1,7 @@
 /**
  * Phần "sống" của trang NCC: khung trao đổi (cuộn xuống tin mới nhất, hiện tên tệp đã chọn),
- * chuông thông báo, và nhận tin mới qua websocket (odoo_bus.js).
+ * chuông thông báo, và nhận tin mới qua websocket (odoo_bus.js) — kèm tiếng + số trên tab
+ * (chat_alert.js), dán ảnh vào ô tin nhắn (chat_paste.js).
  *
  * Có tin mới: lấy lại chính trang đang xem (chạy nền) rồi thay các vùng data-live — số
  * trên chuông, danh sách thông báo, dòng trong bảng, khung trao đổi. Không tải lại cả trang,
@@ -21,6 +22,9 @@
 
     function bindFilePickers() {
         document.querySelectorAll(".vq-chat-form input[type=file]").forEach(function (input) {
+            if (window.HlvChatPaste) {
+                window.HlvChatPaste.bind(input.closest("form").querySelector("textarea"), input);
+            }
             input.addEventListener("change", function () {
                 var out = input.closest("form").querySelector("[data-file-names]");
                 if (out) {
@@ -28,6 +32,14 @@
                 }
             });
         });
+    }
+
+    /** Số trên tab = số trên chuông ("99+" tính 99). */
+    function syncTabCount() {
+        var count = document.querySelector(".vq-notify-count");
+        if (window.HlvChatAlert) {
+            window.HlvChatAlert.setUnread(count ? parseInt(count.textContent, 10) || 0 : 0);
+        }
     }
 
     /** Bấm ra ngoài thì đóng bảng thông báo (details không tự đóng). */
@@ -73,7 +85,11 @@
 
     function onChat(payload) {
         var section = document.querySelector('[data-chat-key="' + payload.model + ":" + payload.res_id + '"]');
+        if (window.HlvChatAlert) {
+            window.HlvChatAlert.notify((payload.author || "Bên mua") + " vừa nhắn");
+        }
         refreshLive().then(function () {
+            syncTabCount();
             if (section) {
                 flash(section);
                 scrollChats();
@@ -105,6 +121,7 @@
     }
 
     scrollChats();
+    syncTabCount();
     bindFilePickers();
     bindNotifyClose();
     listenBus();

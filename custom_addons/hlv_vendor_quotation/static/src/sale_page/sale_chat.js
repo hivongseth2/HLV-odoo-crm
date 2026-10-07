@@ -102,6 +102,9 @@ window.HlvQuote = window.HlvQuote || {};
       }
     });
     HQ.on(HQ.$("hq-chat"), "click", "[data-close-chat]", close);
+    if (window.HlvChatPaste) {
+      window.HlvChatPaste.bind(HQ.$("hq-chat-input"), HQ.$("hq-chat-files"));
+    }
     HQ.$("hq-chat-files").addEventListener("change", function (event) {
       HQ.$("hq-chat-picked").textContent = Array.prototype.map.call(event.target.files, function (f) {
         return f.name;

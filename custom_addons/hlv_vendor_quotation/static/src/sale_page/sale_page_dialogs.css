@@ -276,12 +276,13 @@
 /* ------------------------------------------------------------ trao đổi với NCC */
 
 .hq-chat-modal { z-index: 1060; }
-.hq-chat-box { width: min(640px, 100%); height: min(640px, calc(100vh - 2rem)); }
+.hq-chat-box { width: min(1040px, 100%); height: calc(100vh - 2rem); }
 .hq-chat-list { flex: 1 1 auto; align-content: start; gap: .5rem; }
 .hq-msg { background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); padding: .5rem .75rem;
-    max-width: 85%; margin-left: auto; }
+    max-width: min(75%, 640px); margin-left: auto; }
 .hq-msg-vendor { margin-left: 0; margin-right: auto; background: #FAF9F6; }
-.hq-msg-head { display: flex; gap: .4rem; align-items: baseline; font-size: .8125rem; margin-bottom: .15rem; }
+.hq-msg-head { display: flex; flex-wrap: wrap; gap: .2rem .4rem; align-items: baseline; font-size: .8125rem; margin-bottom: .15rem; }
+.hq-msg-head .hq-muted { white-space: nowrap; }
 .hq-msg-body { white-space: pre-line; font-size: .875rem; }
 .hq-chat-form .hq-textarea { flex: 1 1 auto; }
 
@@ -294,7 +295,7 @@
 .hq-chat-picked { flex-basis: 100%; color: var(--hq-muted); font-size: .75rem; }
 .hq-chat-picked:empty { display: none; }
 .hq-msg-files { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
-.hq-msg-img img { display: block; width: 88px; height: 88px; object-fit: cover; border: 1px solid var(--hq-line);
+.hq-msg-img img { display: block; width: 120px; height: 120px; object-fit: cover; border: 1px solid var(--hq-line);
     border-radius: 3px; background: #fff; }
 
 /* ------------------------------------------------------------ xem đơn mua (chỉ đọc) */

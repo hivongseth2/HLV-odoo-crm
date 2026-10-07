@@ -261,7 +261,7 @@ a { color: var(--vq-accent); }
 
 /* --- Trao đổi với bên mua: cột phải, dính khi cuộn, mở / thu gọn được --- */
 .vq-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.vq-with-chat { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+.vq-with-chat { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; align-items: start; }
 .vq-main-col { min-width: 0; }
 .vq-chat-col { position: sticky; top: 16px; }
 .vq-chat { background: #fff; border: 1px solid var(--vq-line); border-radius: 4px; }

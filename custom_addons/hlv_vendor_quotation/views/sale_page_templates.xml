@@ -189,7 +189,7 @@
                             <div class="hq-modal-foot hq-chat-form">
                                 <label class="hq-sr-only" for="hq-chat-input">Tin nhắn</label>
                                 <textarea id="hq-chat-input" rows="2" maxlength="2000" class="hq-input hq-textarea"
-                                          placeholder="Nhắn cho NCC — NCC đọc trên trang báo giá của họ (Ctrl+Enter để gửi)"></textarea>
+                                          placeholder="Nhắn cho NCC — NCC đọc trên trang báo giá của họ. Ctrl+Enter để gửi, Ctrl+V để dán ảnh."></textarea>
                                 <div class="hq-chat-side">
                                     <label class="hq-attach-btn" title="Đính kèm ảnh, PDF, Excel, Word… (tối đa 5 tệp, mỗi tệp 10MB)">
                                         <svg class="hq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>
@@ -227,6 +227,8 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_paste.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_app.js?v=#{asset_version}"></script>
             </body>

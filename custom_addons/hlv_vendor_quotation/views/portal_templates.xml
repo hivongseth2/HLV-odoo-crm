@@ -46,6 +46,8 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_paste.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_live.js?v=#{asset_version}"></script>
             </body>
         </html>
@@ -183,7 +185,7 @@
                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                 <label class="vq-sr-only" for="vq-chat-message">Tin nhắn</label>
                 <textarea id="vq-chat-message" name="message" rows="3" class="vq-input" maxlength="2000"
-                          placeholder="Nhập tin nhắn…"/>
+                          placeholder="Nhập tin nhắn… (Ctrl+V để dán ảnh)"/>
                 <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
                 <div class="vq-chat-actions">
                     <label class="vq-icon-btn" title="Đính kèm ảnh, PDF, Excel, Word… (tối đa 5 tệp, mỗi tệp 10MB)">
