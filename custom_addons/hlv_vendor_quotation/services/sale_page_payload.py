@@ -46,6 +46,8 @@ def purchase_order_payload(order):
         "chat_unread": chat_unread,
         "id": order.id,
         "name": order.name,
+        "origin": order.origin or "",
+        "can_set_origin": order.state != "cancel",
         "vendor": order.partner_id.commercial_partner_id.display_name,
         "date": _date_text(order.date_approve or order.date_order),
         "amount_untaxed": order.amount_untaxed,

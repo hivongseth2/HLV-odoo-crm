@@ -204,7 +204,7 @@
                         </div>
                     </div>
 
-                    <!-- Xem đơn mua (chỉ đọc) — mở từ mục "Đơn mua" trong phiếu. -->
+                    <!-- Xem đơn mua (sale chỉ sửa được mã đơn hàng) — mở từ mục "Đơn mua" trong phiếu. -->
                     <div id="hq-po" class="hq-modal hq-chat-modal hq-hidden">
                         <div class="hq-modal-box hq-po-box">
                             <div class="hq-modal-head">
@@ -225,6 +225,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>

@@ -4,6 +4,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from ..services.notify import post_internal
+from .vendor_quote_utils import normalize_origin
 
 # Trạng thái NCC tự báo trên trang báo giá của họ — thứ tự là thứ tự tiến trình.
 VENDOR_STATUS = [
@@ -45,6 +46,23 @@ class PurchaseOrder(models.Model):
         """Người trong công ty cần biết khi NCC nhắn trên đơn mua: người mua + sale tạo phiếu."""
         self.ensure_one()
         return (self.user_id | self.hlv_inquiry_ids.user_id).partner_id
+
+    def _hlv_set_origin(self, origin):
+        """Sale ghi mã đơn hàng của khách vào Tài liệu gốc khi khách chốt mua — lúc hỏi giá
+        khách chưa chắc mua nên chưa có. Ghi bằng sudo (sale không có quyền ghi đơn mua):
+        controller phải kiểm đơn thuộc phạm vi mã sale trước khi gọi."""
+        origin = normalize_origin(origin)
+        author = self.env.user.partner_id
+        for order in self.sudo():
+            if order.state == "cancel":
+                raise UserError(_("Đơn mua %s đã huỷ.", order.name))
+            old = order.origin or ""
+            if old == origin:
+                continue
+            order.origin = origin or False
+            post_internal(order, Markup(_("%s cập nhật Tài liệu gốc: <b>%s</b> → <b>%s</b>.")) % (
+                author.name, old or _("(trống)"), origin or _("(trống)"),
+            ), author)
 
     def _vendor_set_status(self, status, vendor_partner):
         """NCC báo tiến độ từ trang công khai. Chỉ đi tới (đóng gói → đã giao), không lùi."""

@@ -162,7 +162,7 @@ class VendorInquiry(models.Model):
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
             [line._request_line_vals() for line in pending],
             order=order or None,
-            origin=self.name,
+            source=self.name,
             requester_code=self.sale_code or "",
             merge_into=self.request_id,
         )

@@ -82,6 +82,7 @@ window.HlvQuote = window.HlvQuote || {};
       (d.can_cancel ? '<div class="hq-drawer-actions"><button type="button" class="hq-btn hq-btn-danger" ' +
         'data-cancel-inquiry="1">Huỷ phiếu</button></div>' : "");
     bindSaleOrderPicker();
+    HQ.bindOriginPicker("inquiry");
   }
 
   function fact(label, value) {
@@ -218,15 +219,29 @@ window.HlvQuote = window.HlvQuote || {};
       (unread ? unread + " tin mới" : "Trao đổi" + (count ? " (" + count + ")" : "")) + "</button>";
   }
 
+  /** Ô mã đơn hàng cho mọi đơn mua của phiếu; điền sẵn khi các đơn đang cùng một mã. */
+  function originBox(d) {
+    var editable = d.purchase_orders.filter(function (o) { return o.can_set_origin; });
+    if (!editable.length) {
+      return "";
+    }
+    var origins = editable.map(function (o) { return o.origin; });
+    var common = origins.every(function (v) { return v === origins[0]; }) ? origins[0] : "";
+    return HQ.originEditor("inquiry", common, editable.map(function (o) { return o.id; }),
+      editable.length > 1 ? "Cập nhật cho " + editable.length + " đơn mua" : "Cập nhật",
+      function () { HQ.openInquiry(d.id, true); });
+  }
+
   function renderOrders(d) {
     if (!d.purchase_orders.length) {
       return "";
     }
-    return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' +
+    return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' + originBox(d) +
       '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
       d.purchase_orders.map(function (o) {
         return '<tr><td><button type="button" class="hq-link-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
-          esc(o.name) + "</button></td><td>" + esc(o.vendor) + "</td>" +
+          esc(o.name) + "</button>" + (o.origin ? '<div class="hq-muted">Mã ĐH ' + esc(o.origin) + "</div>"
+            : '<div class="hq-muted">Chưa có mã đơn hàng</div>') + "</td><td>" + esc(o.vendor) + "</td>" +
           "<td>" + (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
             : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +
           '<td class="hq-num">' + HQ.money(o.amount_untaxed) + "</td>" +

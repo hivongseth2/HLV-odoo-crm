@@ -157,6 +157,18 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         order = self._chat_record("order", order_id, self._check(code))
         return payload.purchase_order_detail(order)
 
+    @http.route(f"{API}/po_origin", type="json", auth="user", methods=["POST"])
+    def api_po_origin(self, code="", order_ids=None, origin="", **kw):
+        """Sale ghi mã đơn hàng của khách vào Tài liệu gốc của các đơn mua (một đơn trong hộp
+        xem đơn mua, hoặc mọi đơn của phiếu). Mỗi đơn kiểm phạm vi như xem đơn mua."""
+        scope = self._check(code)
+        orders = [self._chat_record("order", order_id, scope) for order_id in (order_ids or [])]
+        if not orders:
+            raise UserError("Chưa chọn đơn mua.")
+        for order in orders:
+            order._hlv_set_origin(origin)
+        return {"orders": [payload.purchase_order_payload(order) for order in orders]}
+
     @http.route(f"{API}/chat", type="json", auth="user", methods=["POST"])
     def api_chat(self, code="", model="", res_id=None, **kw):
         """Tin trao đổi với NCC trên một báo giá (model="quote") hoặc đơn mua ("order")."""

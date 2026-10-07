@@ -300,7 +300,13 @@
 
 /* ------------------------------------------------------------ xem đơn mua (chỉ đọc) */
 
-.hq-po-box { width: min(860px, 100%); }
+.hq-po-box { width: min(1100px, 100%); }
+.hq-origin { display: grid; gap: .35rem; padding: .75rem 1rem; background: #fff; border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius); }
+.hq-origin-row { display: flex; gap: .5rem; align-items: center; }
+.hq-origin-picker { flex: 1 1 auto; min-width: 0; }
+.hq-origin-picker .hq-input { width: 100%; }
+.hq-origin .hq-small { margin: 0; font-size: .75rem; }
 .hq-link-btn { border: 0; background: transparent; padding: 0; font: inherit; font-weight: 700;
     color: var(--hq-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .hq-link-btn:hover { color: var(--hq-accent-dark); }

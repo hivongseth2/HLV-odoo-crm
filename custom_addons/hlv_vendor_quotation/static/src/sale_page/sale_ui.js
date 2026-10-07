@@ -140,8 +140,9 @@ window.HlvQuote = window.HlvQuote || {};
     });
     HQ.on(list, "mousedown", ".hq-dropdown-item", function (el, event) {
       event.preventDefault();
-      onPick(items[+el.dataset.index]);
-      input.value = "";
+      // onPick trả chuỗi thì ô nhập giữ chuỗi đó (VD ô nhiều mã); không thì xoá ô để tìm tiếp.
+      var next = onPick(items[+el.dataset.index]);
+      input.value = typeof next === "string" ? next : "";
       list.classList.add("hq-hidden");
     });
   };

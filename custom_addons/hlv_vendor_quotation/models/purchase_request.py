@@ -47,7 +47,7 @@ class PurchaseRequest(models.Model):
         ], order="id desc", limit=1).with_env(self.env)
 
     @api.model
-    def _add_request_lines(self, line_vals, order=None, origin=False, requester_code="", merge_into=None):
+    def _add_request_lines(self, line_vals, order=None, source="", requester_code="", merge_into=None):
         """Đưa hàng vào YCMH lập ở Odoo (YCMH không còn lập trên MISA).
 
         merge_into (YCMH gần nhất của phiếu hỏi giá) còn chưa duyệt → gộp vào đó. Không thì có
@@ -55,8 +55,11 @@ class PurchaseRequest(models.Model):
         theo sản phẩm. Không thì tạo YCMH mới — một đơn được có nhiều YCMH (YCMH trước đã
         duyệt mà mua thiếu thì lên YCMH bổ sung).
         YCMH mới dựng giống YCMH đi từ MISA để thu mua xử lý như cũ: "Chờ phê duyệt", giao
-        admin, nguồn = số đơn bán (hoặc origin), "Người yêu cầu" = mã sale (requester_code,
-        không có thì lấy mã trên đơn bán; rỗng nếu đều thiếu).
+        admin, "Người yêu cầu" = mã sale (requester_code, không có thì lấy mã trên đơn bán; rỗng
+        nếu đều thiếu). Tài liệu gốc CHỈ là số đơn bán, không có thì để trống — đơn mua lấy
+        origin từ đây, mà origin là mã đơn hàng của khách để thu mua / MISA khớp đơn; hỏi giá
+        khi khách chưa chốt thì sale điền sau (purchase.order._hlv_set_origin). source: tên
+        phiếu hỏi giá, chỉ để ghi chatter.
         line_vals: [{product_id, name, product_qty, product_uom_id, actual_*...}].
         Trả (YCMH, list dòng YCMH ứng với từng phần tử line_vals theo thứ tự, True nếu là gộp).
 
@@ -72,7 +75,7 @@ class PurchaseRequest(models.Model):
         if target:
             lines = target.sudo()._merge_lines(line_vals)
             target.sudo().message_post(body=self._lines_message(
-                _("Bổ sung hàng từ trang Hỏi giá NCC (%s):", origin or order.name), line_vals
+                _("Bổ sung hàng từ trang Hỏi giá NCC (%s):", source or order.name), line_vals
             ))
             return target, [line.with_env(self.env) for line in lines], True
 
@@ -80,7 +83,7 @@ class PurchaseRequest(models.Model):
         request = self.sudo().create({
             "requested_by": self.env.uid,
             "assigned_to": admin.id if admin else False,
-            "origin": order.name if order else origin,
+            "origin": order.name if order else False,
             "sale_order_id": order.id if order else False,
             "company_id": (order.company_id if order else self.env.company).id,
             "x_misa_requested_by": requester_code or (sale_code(order.sudo()) if order else ""),
@@ -88,7 +91,7 @@ class PurchaseRequest(models.Model):
             "line_ids": [Command.create(vals) for vals in line_vals],
         })
         request.button_to_approve()
-        request.message_post(body=Markup(_("Tạo từ trang Hỏi giá NCC (%s).")) % (origin or order.name))
+        request.message_post(body=Markup(_("Tạo từ trang Hỏi giá NCC (%s).")) % (source or order.name))
         # Dòng tạo theo đúng thứ tự line_vals nên id tăng dần; sắp theo id thay vì tin _order
         # của purchase.request.line (OCA để "id desc", module MISA đổi thành "id").
         lines = request.line_ids.sorted("id")

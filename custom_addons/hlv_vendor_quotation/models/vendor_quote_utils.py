@@ -258,3 +258,18 @@ def attachment_error(filename, size, max_bytes):
     if size <= 0:
         return f"Tệp \"{filename}\" rỗng."
     return ""
+
+
+def normalize_origin(text):
+    """Chuẩn hoá "Tài liệu gốc" (mã đơn hàng của khách) sale gõ cho đơn mua.
+
+    Nhận chuỗi tự do: một hoặc nhiều mã, cách nhau dấu phẩy, chấm phẩy hoặc xuống dòng.
+    Trả các mã đã gọn khoảng trắng, bỏ trùng (giữ thứ tự), nối bằng ", " — đồng bộ MISA tách
+    origin theo dấu phẩy rồi strip từng mã. Rỗng / None / toàn dấu phân cách → "".
+    """
+    codes = []
+    for part in re.split(r"[,;\n]+", text or ""):
+        code = " ".join(part.split())
+        if code and code not in codes:
+            codes.append(code)
+    return ", ".join(codes)
