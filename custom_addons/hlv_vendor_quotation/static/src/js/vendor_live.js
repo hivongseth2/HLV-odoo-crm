@@ -13,6 +13,7 @@
     "use strict";
 
     var body = document.body;
+    var CHAT_OPEN_KEY = "vq_chat_open";
 
     function scrollChats() {
         document.querySelectorAll(".vq-chat-list").forEach(function (list) {
@@ -31,6 +32,57 @@
                     out.textContent = Array.prototype.map.call(input.files, function (f) { return f.name; }).join(", ");
                 }
             });
+        });
+    }
+
+    function readChatPref() {
+        try {
+            return window.localStorage.getItem(CHAT_OPEN_KEY) === "1";
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function saveChatPref(open) {
+        try {
+            window.localStorage.setItem(CHAT_OPEN_KEY, open ? "1" : "0");
+        } catch (e) { /* trình duyệt chặn lưu: lần sau mặc định đóng */ }
+    }
+
+    /**
+     * Khung trao đổi nổi: mặc định là nút tròn, nhớ lần NCC mở / đóng gần nhất. Link
+     * #trao-doi (thông báo, sau khi gửi tin) hoặc gửi tin bị lỗi thì mở sẵn.
+     */
+    function initChatPanel() {
+        var section = document.querySelector("details.vq-chat");
+        if (!section) {
+            return;
+        }
+        var wanted = window.location.hash === "#trao-doi" || !!section.querySelector(".vq-chat-error") || readChatPref();
+        // Lần mở do trang tự mở (không phải NCC bấm) thì không focus ô nhập — trên điện thoại
+        // focus là bật bàn phím che trang.
+        var autoOpening = wanted;
+        section.addEventListener("toggle", function () {
+            if (section.open) {
+                section.classList.remove("vq-chat-new");
+                scrollChats();
+                if (!autoOpening) {
+                    var input = section.querySelector("textarea");
+                    if (input) {
+                        input.focus({ preventScroll: true });
+                    }
+                }
+            }
+            if (!autoOpening) {
+                saveChatPref(section.open);
+            }
+            autoOpening = false;
+        });
+        section.open = wanted;
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && section.open) {
+                section.open = false;
+            }
         });
     }
 
@@ -90,7 +142,9 @@
         }
         refreshLive().then(function () {
             syncTabCount();
-            if (section) {
+            if (section && !section.open) {
+                section.classList.add("vq-chat-new");  // khung đang thu thành nút: nút nháy + badge đỏ
+            } else if (section) {
                 flash(section);
                 scrollChats();
             } else {
@@ -120,6 +174,7 @@
         });
     }
 
+    initChatPanel();
     scrollChats();
     syncTabCount();
     bindFilePickers();
