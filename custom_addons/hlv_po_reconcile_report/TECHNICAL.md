@@ -36,6 +36,7 @@ hlv_po_reconcile_report/
 |---|---|
 | `misa_po_reconcile_emails` | Email nhận báo cáo, phân cách dấu phẩy. Tạo sẵn với giá trị tạm `chua_cau_hinh` (cron bỏ qua) |
 | `misa_po_reconcile_days` | Số ngày lấy dữ liệu, tạo sẵn = `1` |
+| `misa_po_reconcile_email_from` | Địa chỉ người gửi, tạo sẵn = `thietbicongnghiephoanglongvu@gmail.com`. Phải có Outgoing Mail Server đăng nhập đúng tài khoản này. Không có `@` → gửi từ OdooBot (server mặc định Odoo.sh) |
 
 Hai param được `_init_default_params` tạo khi cài/upgrade nếu chưa có; giá trị đã cấu hình không bị ghi đè.
 

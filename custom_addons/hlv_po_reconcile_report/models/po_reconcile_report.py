@@ -8,6 +8,7 @@ from datetime import timedelta
 from markupsafe import Markup, escape
 
 from odoo import api, fields, models
+from odoo.tools import formataddr
 
 from .po_reconcile_engine import reconcile_po
 from .po_reconcile_xlsx import STATUS_LABELS, build_reconcile_xlsx
@@ -16,7 +17,9 @@ _logger = logging.getLogger(__name__)
 
 RECIPIENTS_PARAM = "misa_po_reconcile_emails"
 DAYS_PARAM = "misa_po_reconcile_days"
+EMAIL_FROM_PARAM = "misa_po_reconcile_email_from"
 EMAILS_PLACEHOLDER = "chua_cau_hinh"
+DEFAULT_EMAIL_FROM = "thietbicongnghiephoanglongvu@gmail.com"
 # Thư mục riêng ở gốc My Drive, tách khỏi các thư mục kho chứa video đóng gói
 DRIVE_FOLDER = "DOI_CHIEU_DON_MUA_HANG"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -31,7 +34,8 @@ class HlvPoReconcileReport(models.AbstractModel):
         """Gọi từ data/ir_config_parameter.xml khi cài/upgrade: tạo param nếu chưa có, không ghi đè giá trị đã cấu hình.
         ir.config_parameter bắt buộc có value nên email dùng giá trị tạm không có '@' (cron sẽ bỏ qua)."""
         ICP = self.env["ir.config_parameter"].sudo()
-        for key, value in ((RECIPIENTS_PARAM, EMAILS_PLACEHOLDER), (DAYS_PARAM, "1")):
+        for key, value in ((RECIPIENTS_PARAM, EMAILS_PLACEHOLDER), (DAYS_PARAM, "1"),
+                           (EMAIL_FROM_PARAM, DEFAULT_EMAIL_FROM)):
             if not ICP.get_param(key):
                 ICP.set_param(key, value)
 
@@ -155,9 +159,15 @@ class HlvPoReconcileReport(models.AbstractModel):
             "<p>Chi tiết xem file Excel đính kèm.</p>%s"
         ) % (escape(period), summary.get("total_odoo") or 0, summary.get("total_misa") or 0, status_rows, drive_html)
 
+        # Người gửi lấy từ System Parameter; phải có Outgoing Mail Server đăng nhập đúng tài khoản đó, nếu không
+        # server sẽ ngắt kết nối ("Connection unexpectedly closed"). Param không hợp lệ → gửi từ OdooBot
+        # (vd odoobot@hoanglongvu.odoo.com, server mặc định Odoo.sh). Tên hiển thị luôn là tên công ty.
+        from_email = (ICP.get_param(EMAIL_FROM_PARAM) or "").strip()
+        if "@" not in from_email:
+            from_email = self.env.ref("base.partner_root").email
         mail = self.env["mail.mail"].sudo().create({
             "subject": "Đối chiếu Đơn mua hàng Odoo - MISA ngày %s" % period,
-            "email_from": self.env.company.email_formatted or self.env.user.email_formatted,
+            "email_from": formataddr((self.env.company.name, from_email)) if from_email else self.env.user.email_formatted,
             "email_to": emails,
             "body_html": body,
             "attachment_ids": [fields.Command.link(attachment.id)],
