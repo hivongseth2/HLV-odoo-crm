@@ -373,6 +373,7 @@
                                 <th class="vq-col-price">Đơn giá chưa VAT</th>
                                 <th class="vq-col-vat">VAT</th>
                                 <th class="vq-col-days">Giao sau (ngày)</th>
+                                <th class="vq-col-invoice">Tên xuất hóa đơn</th>
                                 <th class="vq-col-note">Ghi chú</th>
                                 <th class="vq-num vq-col-total">Thành tiền</th>
                             </tr>
@@ -427,6 +428,12 @@
                                            t-att-name="'days_%s' % lid"
                                            t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or '')"/>
                                     <span t-else="" t-esc="line.delivery_days or '—'"/>
+                                </td>
+                                <td class="vq-col-invoice" data-label="Tên xuất hóa đơn">
+                                    <input t-if="editable" type="text" class="vq-input" maxlength="255"
+                                           t-att-name="'inv_%s' % lid" placeholder="Tên hàng trên hóa đơn"
+                                           t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or '')"/>
+                                    <span t-else="" t-esc="line.invoice_name or '—'"/>
                                 </td>
                                 <td class="vq-col-note" data-label="Ghi chú">
                                     <input t-if="editable" type="text" class="vq-input" maxlength="255"

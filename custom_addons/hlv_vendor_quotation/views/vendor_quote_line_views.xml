@@ -29,6 +29,7 @@
                 <field name="price_total" optional="hide"/>
                 <field name="delivery_days" optional="show"/>
                 <field name="unavailable" optional="show"/>
+                <field name="invoice_name" optional="show"/>
                 <field name="vendor_note" optional="show"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="is_best_price" column_invisible="1"/>

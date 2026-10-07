@@ -160,7 +160,8 @@ a { color: var(--vq-accent); }
 .vq-col-price { width: 170px; }
 .vq-col-vat { width: 140px; }
 .vq-col-days { width: 110px; }
-.vq-col-note { width: 210px; }
+.vq-col-note { width: 170px; }
+.vq-col-invoice { width: 170px; }
 .vq-col-total { width: 140px; font-weight: 600; }
 .vq-input-price { text-align: right; font-variant-numeric: tabular-nums; }
 .vq-price-table .vq-num, .vq-summary dd { font-variant-numeric: tabular-nums; }
@@ -221,7 +222,7 @@ a { color: var(--vq-accent); }
     .vq-cell-action .vq-btn { width: 100%; }
     .vq-clamp { white-space: normal; }
     .vq-price-table td.vq-col-no { display: none; }
-    .vq-price-table td.vq-col-product, .vq-price-table td.vq-col-note { grid-column: 1 / -1; }
+    .vq-price-table td.vq-col-product, .vq-price-table td.vq-col-invoice, .vq-price-table td.vq-col-note { grid-column: 1 / -1; }
     .vq-line-na td { background: transparent; }
     .vq-submit-row { justify-content: space-between; }
     .vq-btn-lg { padding: 12px 20px; }

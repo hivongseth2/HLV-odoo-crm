@@ -419,7 +419,7 @@ class VendorQuote(models.Model):
         """Ghi báo giá NCC gửi lên.
 
         line_values: {quote_line_id: {"price_unit", "vat", "delivery_days",
-        "vendor_note", "unavailable"}} — controller đã đọc số xong.
+        "vendor_note", "invoice_name", "unavailable"}} — controller đã đọc số xong.
         Mọi dòng phải có giá + VAT, trừ dòng NCC đánh dấu không cung cấp.
         """
         self.ensure_one()

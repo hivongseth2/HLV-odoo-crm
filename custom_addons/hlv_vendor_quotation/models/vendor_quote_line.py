@@ -63,6 +63,10 @@ class VendorQuoteLine(models.Model):
     tax_rate = fields.Float(string="% VAT", compute="_compute_tax_rate", store=True)
     delivery_days = fields.Integer(string="Giao sau (ngày)", aggregator="min", copy=False)
     vendor_note = fields.Char(string="Ghi chú NCC", copy=False)
+    invoice_name = fields.Char(
+        string="Tên xuất hóa đơn", copy=False,
+        help="Tên hàng NCC sẽ ghi trên hóa đơn — NCC điền khi báo giá, có thể khác tên hàng bên mình.",
+    )
     unavailable = fields.Boolean(string="Không có hàng", copy=False)
     price_subtotal = fields.Monetary(
         string="Thành tiền chưa VAT",

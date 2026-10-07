@@ -173,6 +173,7 @@ def _compare_row(line, quotes):
             "vat": VAT_LABELS.get(quote_line.vat, ""),
             "delivery_days": quote_line.delivery_days,
             "vendor_note": quote_line.vendor_note or "",
+            "invoice_name": quote_line.invoice_name or "",
             "unavailable": quote_line.unavailable,
             "subtotal": quote_line.price_subtotal,
             # Đơn giá + thành tiền sau VAT để sale đối chiếu với giá bán (đã gồm VAT).
