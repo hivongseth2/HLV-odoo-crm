@@ -230,7 +230,6 @@ def vendor_info(quote):
     quote = quote.sudo()
     access = quote.access_id
     partner = (access.partner_id or quote.partner_id).commercial_partner_id
-    address = partner._display_address(without_company=True) or ""
     contacts = partner.child_ids.filtered(lambda c: c.type == "contact" and c.active)[:CONTACT_LIMIT]
     return {
         "name": partner.display_name,
@@ -239,7 +238,9 @@ def vendor_info(quote):
         "mobile": partner.mobile or "",
         "email": partner.email or "",
         "website": partner.website or "",
-        "address": ", ".join(part.strip() for part in address.splitlines() if part.strip()),
+        # Chỉ ô "Đường": danh bạ NCC hay ghi cả địa chỉ đầy đủ vào đó, ghép thêm phường / tỉnh /
+        # nước là lặp lại hai lần.
+        "address": (partner.street or "").strip(),
         "contacts": [
             {
                 "name": c.name or "",
