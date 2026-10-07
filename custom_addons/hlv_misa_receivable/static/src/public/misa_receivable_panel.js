@@ -54,7 +54,7 @@
         if (row.collect_rate) { parts.push(row.collect_rate + '%'); }
         var head = parts.length ? parts.join(' · ') : '<span class="msu-muted">Chưa hẹn</span>';
         var note = row.followup_note ? '<div class="msr-note">' + msu.esc(row.followup_note) + '</div>' : '';
-        return '<button type="button" class="msr-followup-btn" data-invoice="' + msu.esc(row.invoice_no) + '" title="Ghi ngày hẹn thu / xác suất thu">' +
+        return '<button type="button" class="msr-followup-btn" data-invoice="' + msu.esc(row.invoice_key) + '" title="Ghi ngày hẹn thu / xác suất thu">' +
             head + ' <i class="fa fa-pencil"></i></button>' + note;
     }
 
@@ -93,11 +93,12 @@
         var own = row.amount_unpaid && row.own_amount_unpaid !== row.amount_unpaid
             ? '<div class="msr-sub msr-own">Của mã này: ' + msu.fmtMoney(row.own_amount_unpaid) + '</div>'
             : '';
-        var isOpen = state.open.hasOwnProperty(row.invoice_no);
+        var isOpen = state.open.hasOwnProperty(row.invoice_key);
         var html = '<tr class="' + (!row.is_paid && row.overdue_days > 0 ? 'msr-row-overdue' : '') + '">' +
             '<td class="msu-col-num">' + ((state.page - 1) * PAGE_SIZE + index + 1) + '</td>' +
             '<td class="msr-col-partner"><b>' + msu.esc(row.partner_name) + '</b><div class="msu-muted msr-sub">' + msu.esc(row.partner_code) + '</div></td>' +
             '<td class="msr-col-invoice"><b>HĐ ' + msu.esc(row.invoice_no) + '</b>' +
+                (row.invoice_series ? ' <span class="msr-series" title="Ký hiệu hóa đơn">' + msu.esc(row.invoice_series) + '</span>' : '') +
                 (row.voucher_refnos.length ? '<div class="msr-sub">' + shortList(row.voucher_refnos, 2) + '</div>' : '') +
                 (row.orders.length ? '<div class="msu-muted msr-sub">' + shortList(row.orders, 2) + '</div>' : '') + '</td>' +
             '<td class="msr-nowrap">' + msu.fmtDate(row.invoice_date) +
@@ -110,13 +111,13 @@
                 ? row.saler_codes.map(function (c) { return '<div>' + msu.esc(c) + '</div>'; }).join('')
                 : '<span class="msu-muted">—</span>') + '</td>' +
             '<td class="msr-actions">' +
-                '<button type="button" class="msu-btn msu-btn-outline-muted msu-btn-xs msr-detail-btn" data-invoice="' + msu.esc(row.invoice_no) + '" title="Xem theo dòng đơn bán">' +
+                '<button type="button" class="msu-btn msu-btn-outline-muted msu-btn-xs msr-detail-btn" data-invoice="' + msu.esc(row.invoice_key) + '" title="Xem theo dòng đơn bán">' +
                     '<i class="fa fa-' + (isOpen ? 'chevron-up' : 'list') + '"></i></button>' +
-                '<button type="button" class="msu-btn msu-btn-outline-primary msu-btn-xs msr-recheck-btn" data-invoice="' + msu.esc(row.invoice_no) + '" title="Tra lại MISA ngay cho hóa đơn này">' +
+                '<button type="button" class="msu-btn msu-btn-outline-primary msu-btn-xs msr-recheck-btn" data-invoice="' + msu.esc(row.invoice_key) + '" title="Tra lại MISA ngay cho hóa đơn này">' +
                     '<i class="fa fa-refresh"></i></button>' +
             '</td></tr>';
         if (isOpen) {
-            html += '<tr class="msr-detail-row"><td colspan="' + COLS + '">' + renderDetail(state.open[row.invoice_no]) + '</td></tr>';
+            html += '<tr class="msr-detail-row"><td colspan="' + COLS + '">' + renderDetail(state.open[row.invoice_key]) + '</td></tr>';
         }
         return html;
     }
@@ -159,32 +160,32 @@
         });
     }
 
-    function toggleDetail(invoiceNo) {
-        if (state.open.hasOwnProperty(invoiceNo)) {
-            delete state.open[invoiceNo];
+    function toggleDetail(invoiceKey) {
+        if (state.open.hasOwnProperty(invoiceKey)) {
+            delete state.open[invoiceKey];
             renderRows();
             return;
         }
-        state.open[invoiceNo] = null;
+        state.open[invoiceKey] = null;
         renderRows();
-        msu.rpc('/misa_sale_status/api/receivable/lines', {saler_code: msu.getSalerCode(), invoice_no: invoiceNo}).then(function (res) {
-            if (state.open.hasOwnProperty(invoiceNo)) {
-                state.open[invoiceNo] = res.data;
+        msu.rpc('/misa_sale_status/api/receivable/lines', {saler_code: msu.getSalerCode(), invoice_key: invoiceKey}).then(function (res) {
+            if (state.open.hasOwnProperty(invoiceKey)) {
+                state.open[invoiceKey] = res.data;
                 renderRows();
             }
         }).catch(function (e) {
-            delete state.open[invoiceNo];
+            delete state.open[invoiceKey];
             renderRows();
             msu.toast('Lỗi tải chi tiết: ' + e.message, 'error');
         });
     }
 
     function recheck(btn) {
-        var invoiceNo = btn.dataset.invoice;
+        var row = state.rows.find(function (r) { return r.invoice_key === btn.dataset.invoice; });
         msu.setBtnLoading(btn, true);
-        msu.rpc('/misa_sale_status/api/receivable/recheck', {saler_code: msu.getSalerCode(), invoice_no: invoiceNo}).then(function (res) {
+        msu.rpc('/misa_sale_status/api/receivable/recheck', {saler_code: msu.getSalerCode(), invoice_key: btn.dataset.invoice}).then(function (res) {
             var r = res.data;
-            msu.toast('HĐ ' + invoiceNo + ': ' + (r.done ? 'đã thu đủ.' : 'vẫn còn phần chưa thu.') +
+            msu.toast('HĐ ' + (row ? row.invoice_no : '') + ': ' + (r.done ? 'đã thu đủ.' : 'vẫn còn phần chưa thu.') +
                 (r.reused ? ' (chứng từ không đổi, chỉ cập nhật tình trạng thu)' : '') +
                 (r.unmatched ? ' ' + r.unmatched + ' dòng chứng từ không gắn được dòng đơn bán.' : ''), 'success');
             load(state.page);
@@ -201,8 +202,8 @@
         load(1);
     }
 
-    function openFollowup(invoiceNo) {
-        var row = state.rows.find(function (r) { return r.invoice_no === invoiceNo; });
+    function openFollowup(invoiceKey) {
+        var row = state.rows.find(function (r) { return r.invoice_key === invoiceKey; });
         if (!row) { return; }
         state.editing = row;
         el('msr-followup-target').textContent = 'HĐ ' + row.invoice_no + ' — ' + row.partner_name + ' — còn ' + msu.fmtMoney(row.amount_unpaid);
@@ -222,7 +223,7 @@
         };
         msu.setBtnLoading(btn, true);
         msu.rpc('/misa_sale_status/api/receivable/followup', {
-            saler_code: msu.getSalerCode(), invoice_no: row.invoice_no,
+            saler_code: msu.getSalerCode(), invoice_key: row.invoice_key,
             promise_date: values.promise_date, collect_rate: values.collect_rate, note: values.note,
         }).then(function () {
             row.promise_date = values.promise_date;

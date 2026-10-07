@@ -43,6 +43,20 @@ def parse_misa_date(value):
         return None
 
 
+def invoice_identity(invoice_no, series, invoice_date):
+    """Danh tính 1 hóa đơn MISA: số + ký hiệu + ngày.
+
+    Số hóa đơn KHÔNG đủ: MISA đánh số riêng theo từng ký hiệu, hóa đơn thường và hóa đơn từ máy
+    tính tiền có thể cùng số (case thật 00003261: hóa đơn 13/06 của JYJ WALLCOVERINGS và hóa đơn
+    máy tính tiền 29/04 của ANH LUYỆN). Ngày đi kèm để vẫn tách được khi MISA không trả ký hiệu.
+
+    Nhận str, str|None, date|None. Trả str 'số|ký hiệu|YYYY-MM-DD' (phần thiếu để rỗng).
+    """
+    return '%s|%s|%s' % (
+        (invoice_no or '').strip(), (series or '').strip(), invoice_date.isoformat() if invoice_date else '',
+    )
+
+
 def voucher_payment_entries(voucher, lines):
     """Các dòng hàng của 1 chứng từ bán hàng MISA, mỗi dòng mang theo tình trạng thu tiền.
 
@@ -54,11 +68,14 @@ def voucher_payment_entries(voucher, lines):
     Trả list dict, rỗng nếu lines rỗng.
     """
     paid_state, _label = paid_state_of(voucher.get('paid_type'))
+    invoice_date = parse_misa_date(voucher.get('inv_date'))
     ratio = invoice_vat_ratio(voucher.get('total_amount'), [line.get('amount_oc') or 0.0 for line in lines or []])
     head = {
         'voucher_refid': voucher.get('refid') or '',
         'voucher_refno': voucher.get('refno_finance') or '',
-        'invoice_date': parse_misa_date(voucher.get('inv_date')),
+        'invoice_date': invoice_date,
+        'invoice_series': voucher.get('inv_series') or '',
+        'invoice_key': invoice_identity(voucher.get('inv_no'), voucher.get('inv_series'), invoice_date),
         'partner_code': voucher.get('account_object_code') or '',
         'partner_name': voucher.get('account_object_name') or '',
         'voucher_total': voucher.get('total_amount') or 0.0,

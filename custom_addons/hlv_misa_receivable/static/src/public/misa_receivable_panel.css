@@ -51,3 +51,4 @@
    đảo lại: STT co sát, cột sản phẩm nhận phần thừa và được xuống dòng. */
 .msr-detail-table th:first-child,.msr-detail-table td:first-child{width:1%;white-space:nowrap}
 .msr-detail-table th.msr-detail-product,.msr-detail-table td.msr-detail-product{width:auto;min-width:220px;white-space:normal}
+.msr-series{display:inline-block;padding:0 6px;border-radius:4px;background:#eef0f3;color:#52514e;font-size:.68rem;font-weight:700}

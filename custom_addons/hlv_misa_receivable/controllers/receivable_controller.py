@@ -35,19 +35,19 @@ class MisaReceivableController(http.Controller):
         )
 
     @http.route('/misa_sale_status/api/receivable/lines', type='json', auth='user', methods=['POST'])
-    def api_receivable_lines(self, saler_code='', invoice_no='', **kwargs):
-        return self._call('api_receivable_lines', 'get_public_receivable_lines', saler_code, invoice_no)
+    def api_receivable_lines(self, saler_code='', invoice_key='', **kwargs):
+        return self._call('api_receivable_lines', 'get_public_receivable_lines', saler_code, invoice_key)
 
     @http.route('/misa_sale_status/api/receivable/followup', type='json', auth='user', methods=['POST'])
-    def api_receivable_followup(self, saler_code='', invoice_no='', promise_date='', collect_rate=None, note='', **kwargs):
+    def api_receivable_followup(self, saler_code='', invoice_key='', promise_date='', collect_rate=None, note='', **kwargs):
         return self._call(
-            'api_receivable_followup', 'update_public_receivable_followup', saler_code, invoice_no,
+            'api_receivable_followup', 'update_public_receivable_followup', saler_code, invoice_key,
             promise_date=promise_date or False, collect_rate=collect_rate, note=note,
         )
 
     @http.route('/misa_sale_status/api/receivable/recheck', type='json', auth='user', methods=['POST'])
-    def api_receivable_recheck(self, saler_code='', invoice_no='', **kwargs):
-        return self._call('api_receivable_recheck', 'recheck_public_invoice', saler_code, invoice_no)
+    def api_receivable_recheck(self, saler_code='', invoice_key='', **kwargs):
+        return self._call('api_receivable_recheck', 'recheck_public_invoice', saler_code, invoice_key)
 
     @http.route('/misa_sale_status/api/receivable/sync', type='json', auth='user', methods=['POST'])
     def api_receivable_sync(self, **kwargs):

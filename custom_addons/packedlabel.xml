@@ -1,0 +1,319 @@
+<t t-name="hlv_pack_sequence.report_package_label_document">
+    <t t-call="web.basic_layout">
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+        <t t-foreach="docs" t-as="o">
+            <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
+            <t t-set="total_packs" t-value="len(packs)"/>
+
+            <t t-set="sale_code" t-value="o.sale_id and o.sale_id.x_studio_misa_saler_code or ''"/>
+            
+            <t t-set="sales_map" t-value="{                  'DUONGTHIHA':           {'phone': 'xxxxx', 'name': 'Dương Thị Hà'},                  'HUYNHTHIMYPHUONG':     {'phone': '09xx xxx xxx', 'name': 'Huỳnh Thị Mỹ Phương'},                  'HTMP':                 {'phone': '09xx xxx xxx', 'name': 'Huỳnh Thị Mỹ Phương'},                  'ADMIN':                {'phone': '0909 123 456', 'name': 'Administrator'},                  'BACHTHIKIMTHUY':       {'phone': 'xxxx', 'name': 'Bạch Thị Kim Thùy'},                  'TRUONGTHAIQUANG':      {'phone': 'xxxx', 'name': 'Trương Thái Quang'},                  'TRANHOANGPHILONG':     {'phone': 'xxxx', 'name': 'Trần Hoàng Phi Long'},                  'DANGTHIHONGHANH':      {'phone': 'xxxx', 'name': 'Đặng Thị Hồng Hạnh'},                  'NGUYENTHITRAM':        {'phone': 'xxxx', 'name': 'Nguyễn Thị Trâm'},                  'PHAMTHIHONGNHI':       {'phone': 'xxxx', 'name': 'Phạm Thị Hồng Nhi'},                  'DANGTHIKIEUTHUONG':    {'phone': 'xxxx', 'name': 'Đặng Thị Kiều Thương'},                  'NGUYENTHIHUYEN':       {'phone': 'xxxx', 'name': 'Nguyễn Thị Huyền'},                  'LUUTHICONG1':          {'phone': 'xxxx', 'name': 'Lưu Thị Công'},                  'LUUTHICONG':           {'phone': 'xxxx', 'name': 'Lưu Thị Công'},                  'MAIVANNAM1':           {'phone': 'xxxx', 'name': 'Mai Văn Nam'},                  'MAIVANNAM':            {'phone': 'xxxx', 'name': 'Mai Văn Nam'},                  'ngoclan0411.kt@gmail.com': {'phone': 'xxxx', 'name': 'Ngọc Lan'},                  'LEHOANGMINHTHU_DEL9d24':   {'phone': 'xxxx', 'name': 'Lê Hoàng Minh Thư'},                  'DAOTHITHANHNHAN':      {'phone': 'xxxx', 'name': 'Đào Thị Thanh Nhàn'},                  'NGUYENTHIHAN':         {'phone': 'xxxx', 'name': 'Nguyễn Thị Hân'},                  'VYVANHUAN':            {'phone': 'xxxx', 'name': 'Vy Văn Huân'},                  'lengadoan10@gmail.com': {'phone': 'xxxx', 'name': 'Lê Nga Đoàn'},                  'LEBICHTRAM':           {'phone': 'xxxx', 'name': 'Lê Bích Trâm'},                  'Lê Bích Trâm':         {'phone': 'xxxx', 'name': 'Lê Bích Trâm'},                  'PHANQUOCVUONG':        {'phone': 'xxxx', 'name': 'Phan Quốc Vương'},                  'NGUYENQUOCTRI':        {'phone': 'xxxx', 'name': 'Nguyễn Quốc Trí'},                  'DINHTRANTHIKIMQUYEN':  {'phone': 'xxxx', 'name': 'Đinh Trần Thị Kim Quyên'},                  'DOTHIMYHIEN':          {'phone': 'xxxx', 'name': 'Đỗ Thị Mỹ Hiền'},                  'TRANTHIMYDUYEN':       {'phone': 'xxxx', 'name': 'Trần Thị Mỹ Duyên'},                  'NGUYENTHANHLUAN':      {'phone': 'xxxx', 'name': 'Nguyễn Thành Luân'},                  'VUDUCTAP':             {'phone': 'xxxx', 'name': 'Vũ Đức Tập'},                  'khohcm.hlv@gmail.com': {'phone': 'xxxx', 'name': 'Kho Hồ Chí Minh'},                  'khobencam.hlv@gmail.com': {'phone': 'xxxx', 'name': 'Kho Bến Cam'}              }"/>
+            <t t-set="current_sale" t-value="sales_map.get(sale_code, {'phone': '', 'name': sale_code})"/>
+
+            <t t-foreach="packs" t-as="pack">
+                
+                <div class="page" t-att-style="'position: relative; width: 80mm; height: 75mm; margin: 0; padding: 0; overflow: hidden;' + (not pack_last and 'page-break-after: always;' or '')">
+                    
+                    <style type="text/css">
+                        /* Reset */
+                        html, body { margin: 0 !important; padding: 0 !important; width: 100%; height: 100%; }
+                        .header, .footer { display: none !important; }
+
+                        /* Font */
+                        @font-face {
+                            font-family: "VNFont";
+                            src: url("<t t-esc="BASE"/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
+                            font-weight: 400;
+                        }
+                        @font-face {
+                            font-family: "VNFont";
+                            src: url("<t t-esc="BASE"/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
+                            font-weight: 700;
+                        }
+                        .hlv, .hlv * { font-family: "VNFont", Arial, sans-serif !important; box-sizing: border-box; }
+
+                        /* 2. INNER CONTENT (Phần nội dung thực sự) */
+                        .print-content {
+                            position: absolute;
+                            /* KÉO NGƯỢC LÊN ĐỂ LẤP KHOẢNG TRẮNG ĐẦU TRANG */
+                            top: 0mm;  
+                            left: 0mm;
+                            width: 78mm; 
+                            height: 85mm; /* Cho cao hơn wrapper để chứa đủ nội dung */
+                            background: white;
+                            z-index: 9999;
+                        }
+
+                        /* BẢNG */
+                        table.layout-grid {
+                            width: 100%;
+                            /* Chiều cao bảng khoảng 72mm */
+                            height: 72mm; 
+                            border-collapse: collapse;
+                            table-layout: fixed;
+                            border: 1px solid #000;
+                        }
+                         .pack-number {
+                                font-size: 26px;
+                                font-weight: 700;
+                                display: block; 
+                                margin: 0 auto;
+                                line-height: 1;
+                            }
+                        .td-center-middle {
+                                vertical-align: middle !important;
+                                text-align: center !important;
+                                padding: 0 !important;
+                            }
+                            
+                        
+                        table.layout-grid td {
+                            border: 1px solid #000;
+                            padding: 0; 
+                            vertical-align: top;
+                        }
+
+                        .sub-table { width: 100%; height: 100%; border-collapse: collapse; border: none; margin: 0; }
+                        .sub-table td { border: none !important; padding: 0; }
+
+                        .box-header {
+                            background-color: #e6e6e6;
+                            border-bottom: 1px solid #000;
+                            color: #000;
+                            font-weight: 700;
+                            font-size: 7px;
+                            text-transform: uppercase;
+                            padding: 1px 0;
+                            text-align: center;
+                            width: 100%;
+                            display: block;
+                        }
+
+                        .box-value {
+                            background-color: #fff;
+                            color: #000;
+                            font-weight: 400;
+                            font-size: 8px;
+                            padding: 1px;
+                            text-align: center;
+                            vertical-align: middle !important;
+                            height: 100%; 
+                            word-wrap: break-word;
+                        }
+
+                        .product-desc-header {
+                            background-color: #e6e6e6;
+                            color: #000;
+                            font-weight: 700;
+                            font-size: 7px;
+                            text-transform: uppercase;
+                            padding: 1px 0;
+                            text-align: center;
+                            width: 100%;
+                            border-bottom: 0; 
+                            height: 4mm;
+                        }
+                        .product-desc-content {
+                            text-align: left !important;
+                            vertical-align: top !important;
+                            padding: 2px;
+                            font-size: 8px;
+                            height: 8mm; 
+                            overflow: hidden; 
+                        }
+                       
+                    </style>
+
+                    <t t-set="lines" t-value="o.move_line_ids.filtered_domain([('result_package_id', '=', pack.id)])"/>
+                    <!-- Gộp theo (sản phẩm, đơn vị): cùng một sản phẩm có thể nằm ở nhiều move line trong một kiện (nhiều lô / quét nhiều lần).
+                         Cộng số lượng bằng filtered_domain chứ không dùng sum(... for l in lines ...) lồng trong list comprehension:
+                         QWeb Odoo 18 cấm closure nên biểu thức lồng sẽ báo "Error when compiling xml template". -->
+                    <t t-set="prod_uoms" t-value="[(l.product_id, l.product_uom_id) for l in lines]"/>
+                    <t t-set="prod_uoms" t-value="[k for i, k in enumerate(prod_uoms) if k not in prod_uoms[:i]]"/>
+                    <t t-set="product_names" t-value="', '.join(['%s: %g %s' % (prod.name, sum(lines.filtered_domain([('product_id', '=', prod.id), ('product_uom_id', '=', uom.id)]).mapped('quantity')), uom.name) for prod, uom in prod_uoms])"/>
+                    
+                    <t t-set="cust_name" t-value="o.partner_id.parent_id.name or o.partner_id.name or ''"/>
+                    <t t-set="recv_name" t-value="o.partner_id.name or ''"/>
+                    <t t-set="sup_name" t-value="o.company_id.name or ''"/>
+                    
+                    <t t-set="name_length" t-value="len(product_names)"/>
+                    <t t-set="desc_font" t-value="'8px'"/>
+                    <t t-if="name_length &gt; 80"><t t-set="desc_font" t-value="'7px'"/></t>
+                    <t t-if="name_length &gt; 140"><t t-set="desc_font" t-value="'6px'"/></t>
+                    <t t-if="name_length &gt; 200"><t t-set="desc_font" t-value="'5px'"/></t>
+                    <t t-if="name_length &gt; 260"><t t-set="desc_font" t-value="'4.5px'"/></t>
+
+                    <t t-set="cust_font" t-value="'7px'"/>
+                    <t t-if="len(cust_name) &gt; 40"><t t-set="cust_font" t-value="'6px'"/></t>
+                    <t t-if="len(cust_name) &gt; 60"><t t-set="cust_font" t-value="'5px'"/></t>
+                    <t t-if="len(cust_name) &gt; 90"><t t-set="cust_font" t-value="'4.5px'"/></t>
+
+                    <t t-set="recv_font" t-value="'7px'"/>
+                    <t t-if="len(recv_name) &gt; 40"><t t-set="recv_font" t-value="'6px'"/></t>
+                    <t t-if="len(recv_name) &gt; 60"><t t-set="recv_font" t-value="'5px'"/></t>
+                    <t t-if="len(recv_name) &gt; 90"><t t-set="recv_font" t-value="'4.5px'"/></t>
+
+                    <t t-set="sup_font" t-value="'8px'"/>
+                    <t t-if="len(sup_name) &gt; 30"><t t-set="sup_font" t-value="'7px'"/></t>
+                    <t t-if="len(sup_name) &gt; 50"><t t-set="sup_font" t-value="'6px'"/></t>
+                    <t t-if="len(sup_name) &gt; 70"><t t-set="sup_font" t-value="'5px'"/></t>
+                    <t t-if="len(sup_name) &gt; 90"><t t-set="sup_font" t-value="'4.5px'"/></t>
+                    
+                    <div class="hlv print-content">
+                        <table class="layout-grid">
+                            <tr style="height: 7mm;">
+                                <td style="width: 30%;">
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Số PO - Order</div></td></tr>
+                                        <tr><td class="box-value"><t t-esc="o.sale_id and o.sale_id.x_studio_customer_po or ''"/></td></tr>
+                                    </table>
+                                </td>
+                                <td style="width: 35%;">
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Ngày đặt hàng</div></td></tr>
+                                        <tr><td class="box-value"><span t-esc="o.sale_id and o.sale_id.x_studio_misa_order_date" t-options="{&quot;widget&quot;: &quot;date&quot;}"/></td></tr>
+                                    </table>
+                                </td>
+                                <td style="width: 35%;">
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Ngày giao hàng</div></td></tr>
+                                        <tr><td class="box-value"><span t-esc="context_timestamp(datetime.datetime.now()).strftime('%d/%m/%Y')"/></td></tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <tr style="height: 8mm;">
+                                <td colspan="1">
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Khách hàng</div></td></tr>
+                                        <tr><td class="box-value" t-att-style="'font-size: ' + cust_font + ';'"><t t-esc="cust_name"/></td></tr>
+                                    </table>
+                                </td>
+                                <td colspan="1">
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Kho khách nhận</div></td></tr>
+                                        <tr><td class="box-value"><t t-esc="o.partner_id.city or o.partner_id.state_id.name or ''"/></td></tr>
+                                    </table>
+                                </td>
+                                <td colspan="1">
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Địa chỉ giao hàng</div></td></tr>
+                                        <tr>
+                                            <td class="box-value" style="font-size: 5px; text-align: left; padding: 2px;">
+                                                <t t-set="p" t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id"/>
+                                                <t t-if="o.x_studio_dia_chi_giao_hang">
+                                                    <t t-esc="o.x_studio_dia_chi_giao_hang"/>
+                                                </t>
+                                                <t t-elif="o.sale_id and o.sale_id.misa_shipping_address">
+                                                    <t t-esc="o.sale_id.misa_shipping_address"/>
+                                                </t>
+                                                <t t-else="">
+                                                    <t t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')"/>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <tr style="height: 9mm;">
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Kiểu giao hàng</div></td></tr>
+                                        <tr><td class="box-value"><span t-field="o.sale_id.x_studio_delivery_type"/></td></tr>
+                                    </table>
+                                </td>
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Tên người nhận</div></td></tr>
+                                        <tr><td class="box-value" t-att-style="'font-size: ' + recv_font + ';'"><t t-esc="recv_name"/></td></tr>
+                                    </table>
+                                </td>
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">SĐT người nhận</div></td></tr>
+                                        <tr><td class="box-value">xxxx</td></tr> 
+                                       <!--<tr><td class="box-value"><t t-esc="o.partner_id.phone or o.partner_id.mobile"/></td></tr> -->
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <tr style="height: 10mm;"> 
+                                <td colspan="3" style="vertical-align: top; padding: 0;">
+                                    <div class="product-desc-header">MÔ TẢ HÀNG HÓA</div>
+                                    <div class="product-desc-content" t-att-style="'font-size: ' + desc_font + ';'">
+                                        <t t-esc="product_names"/>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr style="height: 6mm;">
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Nhà cung cấp</div></td></tr>
+                                        <tr><td class="box-value" t-att-style="'font-size: ' + sup_font + ';'"><t t-esc="sup_name"/></td></tr>
+                                    </table>
+                                </td>
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Kho HLV</div></td></tr>
+                                        <tr><td class="box-value"><t t-esc="o.picking_type_id.warehouse_id.code or 'HLV'"/></td></tr>
+                                    </table>
+                                </td>
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Tuyến</div></td></tr>
+                                        <tr>
+                                            <td class="box-value" style="font-size: 6px;">
+                                                <t t-if="o.sale_id and o.sale_id.tag_ids">
+                                                    <t t-esc="', '.join(o.sale_id.tag_ids.mapped('name'))"/>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <tr style="height: 7mm;">
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">Số đơn đặt hàng</div></td></tr>
+                                        <tr><td class="box-value" style="font-size: 7px;"><t t-esc="o.origin"/></td></tr>
+                                    </table>
+                                </td>
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">NV Sales</div></td></tr>
+                                        <tr><td class="box-value"><t t-esc="current_sale['name']"/></td></tr>
+                                    </table>
+                                </td>
+                                <td>
+                                    <table class="sub-table">
+                                        <tr><td style="height:auto;"><div class="box-header">SĐT NV Sales</div></td></tr>
+                                        <tr><td class="box-value"><t t-esc="current_sale['phone']"/></td></tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <tr style="height: 15mm;">
+                                <td class="td-center-middle">
+                                    <div class="pack-number">
+                                        <t t-esc="pack.pack_sequence or 0"/>/<t t-esc="pack.pack_total or total_packs"/>
+                                    </div>
+                                </td>
+
+                                <td colspan="2" class="td-center-middle">
+                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; margin-top:2px">
+                                        <span t-field="pack.name" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 450, 'height': 450, 'img_style': 'width:13mm; height:13mm; margin:0px auto; display:block;'}"/>
+                                        <div style="font-size:6px; margin-top:0px; font-weight:bold;"><t t-esc="pack.name"/></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </t>
+</t>

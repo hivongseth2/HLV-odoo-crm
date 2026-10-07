@@ -153,6 +153,8 @@ class StockPickingMisaPayment(models.Model):
                 'sale_line_id': sale_line.id,
                 'invoice_no': invoice_no,
                 'invoice_date': alloc['invoice_date'],
+                'invoice_series': alloc['invoice_series'],
+                'invoice_key': alloc['invoice_key'],
                 'due_date': due_date,
                 'due_source': due_source,
                 'voucher_refid': alloc['voucher_refid'],

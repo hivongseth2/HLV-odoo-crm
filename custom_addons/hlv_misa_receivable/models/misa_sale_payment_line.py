@@ -24,6 +24,10 @@ class MisaSalePaymentLine(models.Model):
     # Khóa tra lại = đúng chuỗi số hóa đơn lưu trên phiếu xuất kho (misa_invoice_no) — tra lại
     # theo khóa này nên không chuẩn hóa thêm.
     invoice_no = fields.Char(string='Số hóa đơn', required=True, index=True)
+    invoice_series = fields.Char(string='Ký hiệu hóa đơn')
+    # Danh tính hóa đơn để gộp/lọc/hẹn thu — số hóa đơn có thể trùng giữa 2 ký hiệu (xem
+    # invoice_identity). invoice_no ở trên chỉ là khóa để tra lại MISA.
+    invoice_key = fields.Char(string='Mã nhận diện hóa đơn', index=True)
     invoice_date = fields.Date(string='Ngày hóa đơn')
     due_date = fields.Date(string='Hạn thu', index=True)
     due_source = fields.Selection([

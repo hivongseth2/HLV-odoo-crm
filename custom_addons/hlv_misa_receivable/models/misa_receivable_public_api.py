@@ -35,24 +35,29 @@ class MisaSalePaymentLinePublicApi(models.Model):
     def _public_scope_domain(self, code):
         """Phạm vi theo HÓA ĐƠN, không theo từng dòng: 1 hóa đơn có thể gộp đơn của 2-3 sale, lọc
         theo dòng thì mỗi sale chỉ thấy mẩu của mình — tiền, tình trạng thu, chi tiết đều bị cắt.
-        Hóa đơn thuộc mã này khi có dòng đơn bán của mã này, HOẶC có phiếu xuất kho của mã này
-        (misa_invoice_saler_code — đơn không ghi mã sale trên dòng vẫn không lọt). So không phân
-        biệt hoa/thường."""
+        Hóa đơn thuộc mã này khi có dòng đơn bán của mã này. Dòng không có mã sale (đơn không ghi
+        mã) thì xét theo phiếu xuất kho của mã này (misa_invoice_saler_code) — chỉ bù cho các dòng
+        đó, vì phiếu chỉ biết SỐ hóa đơn, mà 1 số có thể là 2 hóa đơn khác ký hiệu của 2 khách.
+        So không phân biệt hoa/thường."""
         if not code:
             return []
-        invoice_nos = set(self.sudo().search([('saler_code', '=ilike', code)]).mapped('invoice_no'))
-        invoice_nos |= set(self.env['stock.picking'].sudo().search([
+        Line = self.sudo()
+        keys = set(Line.search([('saler_code', '=ilike', code)]).mapped('invoice_key'))
+        picking_invoice_nos = self.env['stock.picking'].sudo().search([
             ('misa_invoice_saler_code', '=ilike', code), ('misa_invoice_no', '!=', False),
-        ]).mapped('misa_invoice_no'))
-        return [('invoice_no', 'in', list(invoice_nos))]
+        ]).mapped('misa_invoice_no')
+        keys |= set(Line.search([
+            ('invoice_no', 'in', picking_invoice_nos), ('saler_code', '=', False),
+        ]).mapped('invoice_key'))
+        return [('invoice_key', 'in', list(keys))]
 
-    def _public_invoice_lines(self, saler_code, invoice_no):
+    def _public_invoice_lines(self, saler_code, invoice_key):
         """Mọi dòng (đã thu lẫn chưa) của 1 hóa đơn trong phạm vi mã sale. Không có = không được xem."""
         lines = self.sudo().search(expression.AND([
-            self._public_scope_domain(self._public_code(saler_code)), [('invoice_no', '=', invoice_no)],
+            self._public_scope_domain(self._public_code(saler_code)), [('invoice_key', '=', invoice_key)],
         ]))
         if not lines:
-            raise UserError('Không tìm thấy hóa đơn %s trong mã sale đang xem.' % invoice_no)
+            raise UserError('Không tìm thấy hóa đơn này trong mã sale đang xem.')
         return lines
 
     @staticmethod
@@ -73,9 +78,9 @@ class MisaSalePaymentLinePublicApi(models.Model):
         due_labels = dict(self._fields['due_source'].selection)
         groups = {}
         for line in self:
-            groups.setdefault(line.invoice_no, []).append(line)
+            groups.setdefault(line.invoice_key, []).append(line)
         rows = []
-        for invoice_no, line_list in groups.items():
+        for invoice_key, line_list in groups.items():
             lines = self.browse([line.id for line in line_list])
             unpaid = lines.filtered(lambda l: l.paid_state != 'paid')
             amount_unpaid = sum(unpaid.mapped('amount'))
@@ -83,9 +88,11 @@ class MisaSalePaymentLinePublicApi(models.Model):
             # Hạn sớm nhất quyết định quá hạn; dòng thiếu hạn xếp sau cùng.
             first = (unpaid or lines).sorted(lambda l: (l.due_date or date.max, l.id))[0]
             days = 0 if is_paid else overdue_days(first.due_date, today)
-            followup = followups.get(invoice_no)
+            followup = followups.get(invoice_key)
             rows.append({
-                'invoice_no': invoice_no,
+                'invoice_key': invoice_key,
+                'invoice_no': first.invoice_no,
+                'invoice_series': first.invoice_series or '',
                 'voucher_refnos': list(dict.fromkeys(r for r in lines.mapped('voucher_refno') if r)),
                 'partner_code': first.partner_code or '',
                 'partner_name': first.partner_name or '',
@@ -151,11 +158,11 @@ class MisaSalePaymentLinePublicApi(models.Model):
         Line = self.sudo()
         domain = saler_domain
         if search:
-            invoice_nos = list(set(Line.search(expression.AND([saler_domain, self._public_search_domain(search)])).mapped('invoice_no')))
-            domain = expression.AND([saler_domain, [('invoice_no', 'in', invoice_nos)]])
+            invoice_keys = list(set(Line.search(expression.AND([saler_domain, self._public_search_domain(search)])).mapped('invoice_key')))
+            domain = expression.AND([saler_domain, [('invoice_key', 'in', invoice_keys)]])
         lines = Line.search(domain)
         Followup = self.env['misa.receivable.followup'].sudo()
-        followups = {f.invoice_no: f for f in Followup.search([('invoice_no', 'in', list(set(lines.mapped('invoice_no'))))])}
+        followups = {f.invoice_key: f for f in Followup.search([('invoice_key', 'in', list(set(lines.mapped('invoice_key'))))])}
         rows = lines._public_invoice_rows(followups, today, code)
         in_month = [row for row in rows if not month or row['invoice_month'] == month]
         visible = [row for row in rows if self._public_row_visible(row, paid_filter, month, bucket)]
@@ -177,7 +184,7 @@ class MisaSalePaymentLinePublicApi(models.Model):
         }
 
     @api.model
-    def get_public_receivable_lines(self, saler_code, invoice_no):
+    def get_public_receivable_lines(self, saler_code, invoice_key):
         """Chi tiết theo dòng đơn bán của 1 hóa đơn: hàng gì, đơn nào, bao nhiêu tiền, đã thu chưa."""
         paid_labels = dict(self._fields['paid_state'].selection)
         scope_labels = dict(self._fields['match_scope'].selection)
@@ -198,12 +205,12 @@ class MisaSalePaymentLinePublicApi(models.Model):
             'voucher_refno': line.voucher_refno or '',
             'paid_state': line.paid_state,
             'paid_label': paid_labels.get(line.paid_state, ''),
-        } for line in self._public_invoice_lines(saler_code, invoice_no)]
+        } for line in self._public_invoice_lines(saler_code, invoice_key)]
 
     @api.model
-    def update_public_receivable_followup(self, saler_code, invoice_no, promise_date=False, collect_rate=None, note=''):
+    def update_public_receivable_followup(self, saler_code, invoice_key, promise_date=False, collect_rate=None, note=''):
         """Sale ghi lịch hẹn thu / xác suất thu / ghi chú cho 1 hóa đơn thuộc mã của mình."""
-        self._public_invoice_lines(saler_code, invoice_no)
+        lines = self._public_invoice_lines(saler_code, invoice_key)
         rate = 0 if collect_rate in (None, '') else int(collect_rate)
         if not 0 <= rate <= 100:
             raise UserError('Xác suất thu phải từ 0 đến 100.')
@@ -213,19 +220,19 @@ class MisaSalePaymentLinePublicApi(models.Model):
             'note': (note or '').strip() or False,
         }
         Followup = self.env['misa.receivable.followup'].sudo()
-        followup = Followup.search([('invoice_no', '=', invoice_no)], limit=1)
+        followup = Followup.search([('invoice_key', '=', invoice_key)], limit=1)
         if followup:
             followup.write(vals)
         else:
-            Followup.create(dict(vals, invoice_no=invoice_no))
+            Followup.create(dict(vals, invoice_key=invoice_key, invoice_no=lines[0].invoice_no))
         return True
 
     @api.model
-    def recheck_public_invoice(self, saler_code, invoice_no):
+    def recheck_public_invoice(self, saler_code, invoice_key):
         """Tra lại MISA ngay cho 1 hóa đơn (vài lệnh gọi, chạy luôn trong request) — dùng khi
-        khách vừa trả mà chưa tới lượt cron."""
-        self._public_invoice_lines(saler_code, invoice_no)
-        result = self.env['stock.picking'].sudo()._misa_payment_scan_invoice(invoice_no)
+        khách vừa trả mà chưa tới lượt cron. Tra theo số hóa đơn (MISA chỉ tìm được theo số)."""
+        lines = self._public_invoice_lines(saler_code, invoice_key)
+        result = self.env['stock.picking'].sudo()._misa_payment_scan_invoice(lines[0].invoice_no)
         if result.get('error'):
             raise UserError('Lỗi tra MISA: %s' % result['error'])
         return result
