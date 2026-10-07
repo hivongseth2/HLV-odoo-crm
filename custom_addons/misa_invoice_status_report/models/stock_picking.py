@@ -2997,7 +2997,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         invoice_no = effective.misa_invoice_no
         if invoice_no:
             try:
-                voucher = misa_utils._misa_invoice_voucher_for_inv_no(invoice_no)
+                voucher = misa_utils._misa_invoice_voucher_for_inv_no(invoice_no, invoice_date=effective.misa_invoice_date)
             except Exception:
                 _logger.exception("Lỗi tải hóa đơn MISA (inv_no=%s)", invoice_no)
                 voucher = None

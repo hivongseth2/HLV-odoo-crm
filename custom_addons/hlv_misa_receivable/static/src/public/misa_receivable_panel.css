@@ -1,0 +1,54 @@
+/* Tab "Công nợ phải thu" — chỉ phần riêng của tab; nút, bảng, modal dùng class msu-* của trang gốc. */
+.msr-sync-info{display:inline-flex;align-items:center;gap:10px;margin-left:auto;font-size:.78rem}
+
+.msr-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+.msr-card{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid #eceae4;border-radius:12px;background:#fff;padding:12px 14px;cursor:pointer;font-family:inherit;transition:border-color .12s,box-shadow .12s}
+.msr-card:hover{border-color:#c9c8c1}
+.msr-card-active{border-color:#2a78d6;box-shadow:0 0 0 2px rgba(42,120,214,.15)}
+.msr-card-label{font-size:.74rem;font-weight:700;color:#52514e}
+.msr-card-amount{font-size:1.05rem;font-weight:800;color:#111827;font-variant-numeric:tabular-nums}
+.msr-card-count{font-size:.72rem;color:#8b8d94}
+.msr-card-total{background:#f3f6fb}
+.msr-card-overdue{background:#fdf1f1;border-color:#f3caca}
+.msr-card-overdue .msr-card-amount{color:#d03b3b}
+
+.msr-table .msr-sub{font-size:.74rem;margin-top:2px}
+.msu-table tbody tr.msr-row-overdue{background:#fff6f6}
+.msu-table tbody tr.msr-row-overdue:hover{background:#fdeaea}
+
+.msr-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800;white-space:nowrap}
+.msr-badge-overdue{background:#fdf1f1;color:#d03b3b}
+.msr-badge-due{background:#fef8e9;color:#92600a}
+.msr-badge-ok{background:#eaf8ea;color:#0ca30c}
+.msr-badge-muted{background:#f1f0eb;color:#52514e}
+
+.msr-followup-btn{background:none;border:1px dashed #d8d7d0;border-radius:6px;padding:3px 8px;font-size:.78rem;color:#3f3e3a;cursor:pointer;font-family:inherit;white-space:nowrap}
+.msr-followup-btn:hover{border-color:#2a78d6;color:#2a78d6}
+.msr-note{font-size:.74rem;color:#52514e;margin-top:3px;max-width:220px}
+
+.msr-field{display:flex;flex-direction:column;gap:4px;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:10px}
+.msr-field .msu-input{width:100%}
+
+.msr-actions{white-space:nowrap}
+.msr-actions .msu-btn + .msu-btn{margin-left:4px}
+.msu-table tbody tr.msr-detail-row,.msu-table tbody tr.msr-detail-row:hover{background:#f7f9fc}
+.msr-detail-row > td{padding:6px 10px 12px}
+.msr-match-note{color:#c98500;cursor:help}
+.msr-card-paid{background:#eaf8ea;border-color:#bfe6bf}
+.msr-card-paid .msr-card-amount{color:#0ca30c}
+
+/* Bảng hóa đơn: gọn để vừa khung trang, không phải cuộn ngang mới thấy nút */
+.msr-table > thead > tr > th,.msr-table > tbody > tr > td{padding:9px 8px}
+.msr-table > tbody > tr > td{font-size:.8rem}
+.msr-nowrap{white-space:nowrap}
+.msr-col-partner{min-width:130px;max-width:200px}
+.msr-col-invoice{max-width:190px}
+.msr-col-salers{font-size:.72rem;color:#52514e;line-height:1.35}
+.msr-more{display:inline-block;padding:0 6px;border-radius:999px;background:#eef0f3;color:#52514e;font-size:.68rem;font-weight:700;cursor:help}
+.msr-own{color:#2a78d6;font-weight:700}
+.msr-detail-table{background:#fff;border:1px solid #eceae4;border-radius:8px}
+/* Bảng compact của trang gốc dồn bề rộng thừa cho CỘT ĐẦU (tên hàng); ở đây cột đầu là STT nên
+   đảo lại: STT co sát, cột sản phẩm nhận phần thừa và được xuống dòng. */
+.msr-detail-table th:first-child,.msr-detail-table td:first-child{width:1%;white-space:nowrap}
+.msr-detail-table th.msr-detail-product,.msr-detail-table td.msr-detail-product{width:auto;min-width:220px;white-space:normal}
+.msr-series{display:inline-block;padding:0 6px;border-radius:4px;background:#eef0f3;color:#52514e;font-size:.68rem;font-weight:700}

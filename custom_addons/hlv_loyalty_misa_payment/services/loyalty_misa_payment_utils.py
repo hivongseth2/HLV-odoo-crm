@@ -6,11 +6,6 @@ Thuần theo đúng nghĩa: chỉ nhận dict/list/str, không đụng self.env,
 effect — nhờ vậy phần logic khớp mã hàng/số hóa đơn kiểm chứng được mà không cần Odoo lẫn MISA.
 """
 
-# MISA trả paid_type ngay trên chứng từ bán hàng (sa_voucher_get): 1 = đã thu tiền,
-# 0 = chưa thu. Giá trị khác (MISA có thể thêm) KHÔNG đoán bừa — xem paid_state_of().
-PAID_TYPE_PAID = 1
-PAID_TYPE_UNPAID = 0
-
 # Bộ mã trạng thái thu tiền dùng CHUNG cho cả kết luận tính tại chỗ (summarize_line_states)
 # lẫn field lưu trên hlv.loyalty.history — khai 1 chỗ để 2 nơi không bao giờ lệch bộ mã. Nhãn
 # ở đây là nhãn NGẮN cho list view; câu giải thích dài nằm trong summarize_line_states.
@@ -49,24 +44,6 @@ def normalize_invoice_no(value):
     if not raw:
         return ''
     return raw.lstrip('0') or '0'
-
-
-def paid_state_of(paid_type):
-    """Quy paid_type của MISA về (state, label) để hiển thị.
-
-    Nhận int/str/None. Trả ('paid'|'unpaid'|'unknown', <nhãn tiếng Việt>). paid_type không đọc
-    được (None, rỗng, giá trị lạ) trả 'unknown' kèm giá trị thô — thà nói "không rõ" còn hơn
-    đoán bừa thành "chưa thu" rồi để kế toán đi đòi tiền một đơn đã thu.
-    """
-    try:
-        value = int(paid_type)
-    except (TypeError, ValueError):
-        return ('unknown', 'Không rõ (paid_type=%s)' % (paid_type,))
-    if value == PAID_TYPE_PAID:
-        return ('paid', 'Đã thu tiền')
-    if value == PAID_TYPE_UNPAID:
-        return ('unpaid', 'Chưa thu tiền')
-    return ('unknown', 'Không rõ (paid_type=%s)' % (value,))
 
 
 def split_vouchers_by_invoice_no(page_data, inv_no):

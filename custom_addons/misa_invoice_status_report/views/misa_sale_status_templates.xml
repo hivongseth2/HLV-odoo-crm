@@ -1042,6 +1042,7 @@
                             loadReminders();
                             if (state.activeTab === 'shopee') { loadShopeeList(1); }
                         }
+                        document.dispatchEvent(new CustomEvent('msu:saler-chosen', {detail: {salerCode: state.salerCode}}));
                     }
 
                     // ===== Chuông thông báo: nhắc nhở xuất hóa đơn =====
@@ -1128,13 +1129,7 @@
                                 }).then(function() { loadReminders(); }).catch(function() {});
                                 document.getElementById('msu-bell-panel').style.display = 'none';
                                 if (orderName) {
-                                    state.activeTab = 'orders';
-                                    document.querySelectorAll('.msu-tab').forEach(function(b) { b.classList.remove('msu-tab-active'); });
-                                    document.querySelector('.msu-tab[data-tab="orders"]').classList.add('msu-tab-active');
-                                    document.getElementById('msu-tab-pickings').style.display = 'none';
-                                    document.getElementById('msu-tab-orders').style.display = '';
-                                    document.getElementById('msu-tab-shopee').style.display = 'none';
-                                    document.getElementById('msu-tab-customs').style.display = 'none';
+                                    showTab('orders');
                                     state.orders.search = orderName;
                                     document.getElementById('msu-orders-search').value = orderName;
                                     document.getElementById('msu-orders-search-clear').style.display = '';
@@ -1221,15 +1216,21 @@
                     }
 
                     // ===== Tab: Phiếu xuất kho (MISA) / Đơn Shopee / Đơn hải quan =====
+                    // Panel của tab <key> luôn là #msu-tab-<key> — module khác thêm tab chỉ cần thêm
+                    // nút + panel đúng quy ước này rồi nghe sự kiện 'msu:tab-shown', không phải sửa
+                    // danh sách tab ở đây.
+                    function showTab(key) {
+                        state.activeTab = key;
+                        document.querySelectorAll('.msu-tab').forEach(function(b) {
+                            b.classList.toggle('msu-tab-active', b.dataset.tab === key);
+                            var panel = document.getElementById('msu-tab-' + b.dataset.tab);
+                            if (panel) { panel.style.display = b.dataset.tab === key ? '' : 'none'; }
+                        });
+                        document.dispatchEvent(new CustomEvent('msu:tab-shown', {detail: {tab: key}}));
+                    }
                     document.querySelectorAll('.msu-tab').forEach(function(btn) {
                         btn.addEventListener('click', function() {
-                            state.activeTab = this.dataset.tab;
-                            document.querySelectorAll('.msu-tab').forEach(function(b) { b.classList.remove('msu-tab-active'); });
-                            this.classList.add('msu-tab-active');
-                            document.getElementById('msu-tab-pickings').style.display = state.activeTab === 'pickings' ? '' : 'none';
-                            document.getElementById('msu-tab-orders').style.display = state.activeTab === 'orders' ? '' : 'none';
-                            document.getElementById('msu-tab-shopee').style.display = state.activeTab === 'shopee' ? '' : 'none';
-                            document.getElementById('msu-tab-customs').style.display = state.activeTab === 'customs' ? '' : 'none';
+                            showTab(this.dataset.tab);
                             if (state.activeTab === 'orders' && !state.orders.loaded) { loadOrdersList(1); }
                             if (state.activeTab === 'shopee' && !state.shopee.loaded) { loadShopeeList(1); }
                             if (state.activeTab === 'customs' && !state.customs.loaded) { loadCustomsList(1); }
@@ -2936,6 +2937,16 @@
                         getRange: function() { return {date_from: state.dateFrom, date_to: state.dateTo}; },
                         setRange: setDateScope,
                     });
+
+                    // Điểm gắn cho module khác thêm tab vào trang (VD hlv_misa_receivable): dùng
+                    // chung đúng 1 bản rpc/định dạng/toast thay vì mỗi module tự chép lại.
+                    window.MsuSaleStatus = {
+                        rpc: rpc, esc: esc, fmtMoney: fmtMoney, fmtDate: fmtDate,
+                        toast: toast, setBtnLoading: setBtnLoading,
+                        getSalerCode: function() { return state.salerCode; },
+                        isAdmin: function() { return state.isAdmin; },
+                        getActiveTab: function() { return state.activeTab; },
+                    };
 
                     loadSalerCodes();
                     // Cảnh báo trong trang: tự làm mới định kỳ để badge/đếm luôn cập nhật kể cả

@@ -65,6 +65,31 @@ def _pick_request_for_refno(rows, refno):
     return rows[0]
 
 
+def _pick_voucher_for_invoice(vouchers, series=None, invoice_date=None):
+    """Chọn chứng từ bán hàng đúng HÓA ĐƠN trong các chứng từ cùng SỐ hóa đơn.
+
+    MISA đánh số riêng theo từng ký hiệu: hóa đơn thường và hóa đơn từ máy tính tiền có thể cùng
+    số (case thật 00003261: HĐ 13/06 của JYJ WALLCOVERINGS và HĐ máy tính tiền 29/04 của ANH
+    LUYỆN). MISA xếp mới nhất lên đầu nên lấy dòng đầu là phiếu của HĐ cũ hơn nhận nhầm tiền/ngày
+    của HĐ kia. Dòng đề nghị xuất HĐ ghi sẵn ký hiệu + ngày của đúng HĐ — lọc theo đó.
+
+    Nhận: vouchers — các chứng từ đã khớp đúng số; series — ký hiệu (inv_series); invoice_date —
+    ngày HĐ (chuỗi ISO MISA hoặc date). Trả: chứng từ đầu tiên khớp ký hiệu (nếu có) và ngày (nếu
+    có). Không gợi ý nào khớp thì trả dòng đầu như trước (không tệ hơn cách cũ); vouchers rỗng trả
+    None.
+    """
+    if not vouchers:
+        return None
+    candidates = vouchers
+    target_series = (series or '').strip().upper()
+    if target_series:
+        candidates = [v for v in candidates if (v.get('inv_series') or '').strip().upper() == target_series] or candidates
+    target_date = str(invoice_date)[:10] if invoice_date else ''
+    if target_date:
+        candidates = [v for v in candidates if str(v.get('inv_date') or '')[:10] == target_date] or candidates
+    return candidates[0]
+
+
 def _misa_json_or_raise(resp, context):
     """MISA có thể trả HTTP 200 kèm {"Success": false, ...} khi phiên/cookie hết hạn (không
     chỉ 401) — nếu chỉ kiểm tra status_code thì các API bên dưới sẽ ÂM THẦM đọc ra PageData
@@ -176,7 +201,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             # Đề nghị chưa phát hành hóa đơn — đúng nghĩa "đã đề nghị, chờ HĐ".
             return result
 
-        voucher = self._misa_invoice_voucher_for_inv_no(inv_no)
+        voucher = self._misa_invoice_voucher_for_inv_no(
+            inv_no, series=req_info.get("inv_series"), invoice_date=req_info.get("inv_date"),
+        )
         if not voucher:
             # Đề nghị có ghi số hóa đơn nhưng không tra ra chứng từ (hóa đơn bị hủy/thay thế,
             # hoặc ngoài khoảng ngày tìm kiếm) — GIỮ 'requested' thay vì tự nhận đã xuất HĐ với
@@ -386,12 +413,13 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             return []
         return [row for row in self.get_vouchers_by_inv_no(inv_no) if _normalize_inv_no(row.get('inv_no')) == target]
 
-    def _misa_invoice_voucher_for_inv_no(self, inv_no):
-        """Chứng từ bán hàng ĐẦU TIÊN khớp chính xác số hóa đơn này, hoặc None — chỉ dùng ở chỗ
-        cần 1 chứng từ để hiển thị/lấy tiền của đề nghị. Ghi nhận hóa đơn hải quan phải dùng
-        _misa_invoice_vouchers_for_inv_no (lấy hết), không thì mất dòng của các chứng từ còn lại."""
-        vouchers = self._misa_invoice_vouchers_for_inv_no(inv_no)
-        return vouchers[0] if vouchers else None
+    def _misa_invoice_voucher_for_inv_no(self, inv_no, series=None, invoice_date=None):
+        """1 chứng từ bán hàng khớp chính xác số hóa đơn này, hoặc None — chỉ dùng ở chỗ cần 1
+        chứng từ để hiển thị/lấy tiền của đề nghị. series/invoice_date (ký hiệu, ngày HĐ) để chọn
+        đúng HĐ khi 2 ký hiệu trùng số, xem _pick_voucher_for_invoice. Ghi nhận hóa đơn hải quan
+        phải dùng _misa_invoice_vouchers_for_inv_no (lấy hết), không thì mất dòng của các chứng từ
+        còn lại."""
+        return _pick_voucher_for_invoice(self._misa_invoice_vouchers_for_inv_no(inv_no), series, invoice_date)
 
     def get_voucher_lines(self, refid):
         """Chi tiết TỪNG DÒNG HÀNG (mã đơn hàng gốc order_code, mã hàng, số lượng, tiền) của
