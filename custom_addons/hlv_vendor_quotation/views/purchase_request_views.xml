@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_purchase_request_form_vendor_quote" model="ir.ui.view">
+        <field name="name">purchase.request.form.vendor.quote</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_open_vendor_quote_wizard" type="object" string="Hỏi giá NCC"
+                        invisible="state in ('draft', 'done', 'rejected')"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_vendor_quotes" type="object" class="oe_stat_button"
+                        icon="fa-envelope-o" invisible="vendor_quote_count == 0">
+                    <field name="vendor_quote_count" widget="statinfo" string="Báo giá NCC"/>
+                </button>
+                <button name="action_compare_vendor_quotes" type="object" class="oe_stat_button"
+                        icon="fa-balance-scale" string="So sánh giá" invisible="vendor_quote_count == 0"/>
+                <button name="action_view_inquiries" type="object" class="oe_stat_button"
+                        icon="fa-tags" invisible="hlv_inquiry_count == 0">
+                    <field name="hlv_inquiry_count" widget="statinfo" string="Phiếu hỏi giá"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Đơn mua: NCC báo tiến độ trên trang của họ; phiếu hỏi giá sinh ra đơn này. -->
+    <record id="view_purchase_order_form_vendor_quote" model="ir.ui.view">
+        <field name="name">purchase.order.form.vendor.quote</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_ref']" position="after">
+                <field name="hlv_vendor_status" readonly="1" invisible="not hlv_vendor_status"/>
+                <field name="hlv_vendor_status_date" invisible="not hlv_vendor_status_date"/>
+                <field name="hlv_inquiry_ids" widget="many2many_tags" readonly="1" invisible="not hlv_inquiry_ids"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

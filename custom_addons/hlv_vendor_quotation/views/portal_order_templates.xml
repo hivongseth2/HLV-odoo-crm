@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tab "Đơn mua hàng" của NCC: đơn mua đã xác nhận sinh ra từ báo giá của chính NCC. -->
+    <template id="portal_order_list" name="Báo giá NCC - đơn mua">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Đơn mua hàng'"/>
+            <t t-set="logged_in" t-value="True"/>
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <div class="vq-page-head">
+                    <h1>Đơn mua hàng</h1>
+                </div>
+                <p class="vq-muted">Đơn mua của <t t-esc="company.name"/> lên từ các báo giá quý công ty đã gửi.
+                    Khi hàng đã đóng gói hoặc đã giao, vui lòng cập nhật ở từng đơn.</p>
+
+                <p t-if="not orders" class="vq-empty">Chưa có đơn mua nào từ báo giá của quý công ty.</p>
+                <table t-if="orders" class="vq-table vq-list-table">
+                    <thead>
+                        <tr>
+                            <th>Số đơn</th>
+                            <th>Ngày đặt</th>
+                            <th>Ngày nhận dự kiến</th>
+                            <th>Từ báo giá</th>
+                            <th class="vq-num">Tổng chưa VAT</th>
+                            <th>Tiến độ</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody data-live="rows">
+                        <tr t-foreach="orders" t-as="order"
+                            t-att-class="'vq-row-new' if marks[order.id]['unread'] or marks[order.id]['new'] else None">
+                            <t t-set="mark" t-value="marks[order.id]"/>
+                            <t t-set="order_url" t-value="'%s/don-mua/%s' % (portal_base, order.id)"/>
+                            <td class="vq-cell-ref"><a t-att-href="order_url" t-esc="order.name"/>
+                                <span t-if="mark['unread']" class="vq-chip-new" t-att-title="'%s tin nhắn chưa xem' % mark['unread']"><svg class="vq-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg><t t-esc="mark['unread']"/> tin mới</span>
+                                <span t-elif="mark['new']" class="vq-chip-fresh">Mới</span>
+                            </td>
+                            <td data-label="Ngày đặt" t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/>
+                            <td data-label="Ngày nhận dự kiến">
+                                <t t-if="order.date_planned" t-esc="order.date_planned.strftime('%d/%m/%Y')"/>
+                                <t t-else="">—</t>
+                            </td>
+                            <td data-label="Từ báo giá">
+                                <a t-foreach="order_quotes[order.id]" t-as="quote" class="vq-block-link"
+                                   t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/>
+                            </td>
+                            <td class="vq-num" data-label="Tổng chưa VAT" t-esc="fmt(order.amount_untaxed)"/>
+                            <td data-label="Tiến độ">
+                                <span t-if="order.hlv_vendor_status" t-attf-class="vq-status vq-status-#{order.hlv_vendor_status}"
+                                      t-esc="vendor_status_labels[order.hlv_vendor_status]"/>
+                                <span t-else="" class="vq-status vq-status-waiting">Chưa cập nhật</span>
+                            </td>
+                            <td class="vq-cell-action">
+                                <a t-att-href="order_url" class="vq-btn vq-btn-secondary">Xem</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_order_form" name="Báo giá NCC - chi tiết đơn mua">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="order.name"/>
+            <t t-set="logged_in" t-value="True"/>
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <!-- Nội dung bên trái, trao đổi bên phải (màn hẹp: xuống dưới). -->
+                <div class="vq-with-chat">
+                <div class="vq-main-col">
+                <!-- Vào từ một báo giá thì breadcrumb đi qua báo giá đó để quay lại được. -->
+                <nav class="vq-breadcrumb">
+                    <t t-if="from_quote">
+                        <a t-att-href="portal_base">Yêu cầu báo giá</a> /
+                        <a t-att-href="'%s/%s' % (portal_base, from_quote.id)" t-esc="from_quote.name"/> /
+                    </t>
+                    <a t-else="" t-att-href="'%s/don-mua' % portal_base">Đơn mua hàng</a><t t-if="not from_quote"> /</t>
+                    <span t-esc="order.name"/>
+                </nav>
+                <div class="vq-page-head">
+                    <h1 t-esc="order.name"/>
+                    <span t-if="order.hlv_vendor_status" t-attf-class="vq-status vq-status-#{order.hlv_vendor_status}"
+                          t-esc="vendor_status_labels[order.hlv_vendor_status]"/>
+                    <span t-else="" class="vq-status vq-status-waiting">Chưa cập nhật tiến độ</span>
+                    <a class="vq-btn vq-btn-secondary vq-push" target="_blank"
+                       t-att-href="'%s/don-mua/%s/in' % (portal_base, order.id)">In đơn mua</a>
+                </div>
+
+                <dl class="vq-facts">
+                    <div><dt>Ngày đặt</dt><dd t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/></div>
+                    <div t-if="order.date_planned"><dt>Ngày nhận dự kiến</dt>
+                        <dd t-esc="order.date_planned.strftime('%d/%m/%Y')"/></div>
+                    <div t-if="quotes"><dt>Từ báo giá</dt>
+                        <dd><a t-foreach="quotes" t-as="quote" class="vq-block-link"
+                               t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/></dd></div>
+                    <div t-if="order.user_id"><dt>Người phụ trách</dt>
+                        <dd><t t-esc="order.user_id.name"/>
+                            <t t-set="contact_phone" t-value="order.user_id.partner_id.mobile or order.user_id.partner_id.phone"/>
+                            <a t-if="contact_phone" class="vq-phone" t-att-href="'tel:%s' % contact_phone"
+                               t-esc="contact_phone"/></dd></div>
+                    <div t-if="order.hlv_vendor_status_date"><dt>Cập nhật tiến độ lúc</dt>
+                        <dd t-esc="order.hlv_vendor_status_date.strftime('%d/%m/%Y')"/></div>
+                </dl>
+
+                <div t-if="saved" class="vq-alert vq-alert-ok">Đã cập nhật tiến độ đơn. Cảm ơn quý công ty!</div>
+
+                <section class="vq-status-panel">
+                    <h2>Cập nhật tiến độ</h2>
+                    <p class="vq-muted vq-small">Bấm khi hàng đã đóng gói xong, và khi đã giao tới kho của
+                        <t t-esc="company.name"/>.</p>
+                    <form method="post" class="vq-status-actions" t-att-action="'%s/don-mua/%s' % (portal_base, order.id)">
+                        <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <t t-set="current_index" t-value="[s[0] for s in vendor_status].index(order.hlv_vendor_status) if order.hlv_vendor_status else -1"/>
+                        <t t-foreach="vendor_status" t-as="option">
+                            <button type="submit" name="status" t-att-value="option[0]"
+                                    t-att-disabled="option_index &lt;= current_index"
+                                    t-attf-class="vq-btn #{'vq-btn-primary' if option_index == current_index + 1 else 'vq-btn-secondary'}"
+                                    t-esc="option[1]"/>
+                        </t>
+                    </form>
+                </section>
+
+                <h2 class="vq-section-title">Mặt hàng</h2>
+                <table class="vq-table vq-price-table">
+                    <thead>
+                        <tr>
+                            <th class="vq-col-no">STT</th>
+                            <th>Mặt hàng</th>
+                            <th class="vq-num">Số lượng</th>
+                            <th class="vq-num">Đã nhận</th>
+                            <th class="vq-num">Đơn giá</th>
+                            <th class="vq-num">Thành tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
+                            <td class="vq-col-no" t-esc="line_index + 1"/>
+                            <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/></td>
+                            <td class="vq-num" data-label="Số lượng">
+                                <t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></td>
+                            <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
+                            <td class="vq-num" data-label="Đơn giá" t-esc="fmt(line.price_unit)"/>
+                            <td class="vq-num vq-col-total" data-label="Thành tiền" t-esc="fmt(line.price_subtotal)"/>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <dl class="vq-summary vq-summary-inline">
+                    <div><dt>Tổng chưa VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
+                    <div><dt>Thuế</dt><dd t-esc="fmt(order.amount_tax)"/></div>
+                    <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
+                </dl>
+                </div>
+                <aside class="vq-chat-col"><t t-call="hlv_vendor_quotation.portal_chat"/></aside>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Bản in đơn mua cho NCC: mã QR số đơn (quét để đối chiếu khi giao), danh sách hàng,
+         tổng tiền. Cố ý không logo / không khung trang: in ra kẹp cùng hàng là đủ. -->
+    <template id="portal_order_print" name="Báo giá NCC - in đơn mua">
+        <t t-out="doctype"/>
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <meta name="robots" content="noindex, nofollow"/>
+                <title>Đơn mua <t t-esc="order.name"/></title>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_order_print.css?v=#{asset_version}"/>
+            </head>
+            <body>
+                <div class="po-print-bar">
+                    <button type="button" onclick="window.print()">In</button>
+                </div>
+                <main class="po-sheet">
+                    <header class="po-head">
+                        <div>
+                            <h1>ĐƠN MUA HÀNG</h1>
+                            <div class="po-number" t-esc="order.name"/>
+                            <table class="po-info">
+                                <tr><th>Ngày đặt</th><td t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/></tr>
+                                <tr t-if="order.date_planned"><th>Ngày nhận dự kiến</th>
+                                    <td t-esc="order.date_planned.strftime('%d/%m/%Y')"/></tr>
+                                <tr><th>Bên mua</th><td t-esc="company.name"/></tr>
+                                <tr><th>Nhà cung cấp</th><td t-esc="vendor.name"/></tr>
+                            </table>
+                        </div>
+                        <img class="po-qr" t-att-alt="order.name"
+                             t-att-src="'/report/barcode/?barcode_type=QR&amp;value=%s&amp;width=180&amp;height=180' % order.name"/>
+                    </header>
+                    <table class="po-lines">
+                        <thead>
+                            <tr>
+                                <th class="po-no">STT</th>
+                                <th>Mặt hàng</th>
+                                <th class="po-num">Số lượng</th>
+                                <th>ĐVT</th>
+                                <th class="po-num">Đơn giá</th>
+                                <th class="po-num">Thành tiền</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
+                                <td class="po-no" t-esc="line_index + 1"/>
+                                <td t-esc="line.name"/>
+                                <td class="po-num" t-esc="fmt(line.product_qty)"/>
+                                <td t-esc="line.product_uom.name"/>
+                                <td class="po-num" t-esc="fmt(line.price_unit)"/>
+                                <td class="po-num" t-esc="fmt(line.price_subtotal)"/>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr><td colspan="5" class="po-num">Tổng chưa VAT</td><td class="po-num" t-esc="fmt(order.amount_untaxed)"/></tr>
+                            <tr><td colspan="5" class="po-num">Thuế</td><td class="po-num" t-esc="fmt(order.amount_tax)"/></tr>
+                            <tr class="po-total"><td colspan="5" class="po-num">Tổng cộng</td>
+                                <td class="po-num" t-esc="fmt(order.amount_total)"/></tr>
+                        </tfoot>
+                    </table>
+                </main>
+            </body>
+        </html>
+    </template>
+</odoo>

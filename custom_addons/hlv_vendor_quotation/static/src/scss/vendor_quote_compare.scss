@@ -1,0 +1,13 @@
+// Chỉ áp cho bảng so sánh báo giá NCC (class trên <list>), không đụng list khác.
+// Decoration của Odoo chỉ đổi màu chữ; tô nền để nhìn lướt cả bảng là thấy dòng đã chọn.
+.o_hlv_vq_compare {
+    .o_data_row.text-success > td {
+        background-color: rgba(25, 135, 84, 0.12);
+    }
+    .o_data_row.text-success > td:first-child {
+        box-shadow: inset 4px 0 0 #198754;
+    }
+    .o_data_row.text-muted > td {
+        background-color: rgba(108, 117, 125, 0.06);
+    }
+}

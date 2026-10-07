@@ -1,0 +1,32 @@
+/* Bản in đơn mua cho NCC (/bao-gia/<mã>/don-mua/<id>/in): chữ đen trên giấy trắng, khổ A4,
+   không màu, không logo — in máy laser đen trắng vẫn rõ. */
+
+* { box-sizing: border-box; }
+body { margin: 0; background: #f2f2f2; color: #000; font: 13px/1.45 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+.po-print-bar { max-width: 210mm; margin: 16px auto 0; text-align: right; }
+.po-print-bar button { font: inherit; font-weight: 600; padding: 8px 22px; border: 1px solid #000; background: #fff; cursor: pointer; }
+.po-sheet { max-width: 210mm; margin: 12px auto 24px; background: #fff; padding: 14mm 14mm 18mm; }
+.po-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+.po-head h1 { font-size: 18px; letter-spacing: .04em; margin: 0 0 2px; }
+.po-number { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.po-info { border-collapse: collapse; }
+.po-info th { text-align: left; font-weight: 400; color: #444; padding: 2px 16px 2px 0; white-space: nowrap; }
+.po-info td { padding: 2px 0; font-weight: 600; }
+.po-qr { width: 40mm; height: 40mm; flex: none; }
+.po-lines { width: 100%; border-collapse: collapse; }
+.po-lines th, .po-lines td { border: 1px solid #000; padding: 5px 7px; vertical-align: top; }
+.po-lines th { background: #eee; text-align: left; font-weight: 600; }
+.po-lines tfoot td { border: 0; padding: 4px 7px; }
+.po-lines tfoot tr:first-child td { border-top: 1px solid #000; }
+.po-total td { font-weight: 700; font-size: 14px; border-top: 1px solid #000 !important; }
+.po-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.po-lines th.po-num { text-align: right; }
+.po-no { width: 38px; text-align: center; }
+
+@page { size: A4; margin: 10mm; }
+@media print {
+    body { background: #fff; }
+    .po-print-bar { display: none; }
+    .po-sheet { margin: 0; padding: 0; max-width: none; }
+    .po-lines tr { page-break-inside: avoid; }
+}

@@ -1,0 +1,322 @@
+/* Trang /hoi-gia-ncc — NGĂN CHI TIẾT một báo giá và HỘP "Hỏi giá NCC".
+   Biến màu khai ở :root của sale_page.css nên phải nạp file đó trước. */
+
+/* ------------------------------------------------------------ ngăn chi tiết */
+
+.hq-drawer { position: fixed; inset: 0; z-index: 1040; }
+.hq-drawer-backdrop { position: absolute; inset: 0; background: rgba(28, 32, 36, .35); }
+.hq-drawer-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(1280px, 100%);
+    background: var(--hq-bg);
+    overflow-y: auto;
+    padding: 1rem 1.25rem 2rem;
+    border-left: 1px solid var(--hq-line);
+}
+.hq-drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; margin-bottom: .75rem; }
+.hq-drawer-head .hq-h2 { font-size: 20px; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .15rem; }
+
+.hq-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: .6rem 1.25rem;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    padding: .75rem 1rem;
+    margin-bottom: .75rem;
+    font-size: .875rem;
+}
+.hq-label { display: block; color: var(--hq-muted); font-size: .75rem; margin-bottom: .1rem; }
+/* Mã YCMH / đơn bán dài liền một khối, không có chỗ xuống dòng — không cho phép ngắt thì
+   nó tràn sang ô bên cạnh và dính chữ. */
+.hq-fact { min-width: 0; overflow-wrap: anywhere; }
+
+.hq-share, .hq-result, .hq-note {
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    padding: .75rem 1rem;
+    margin-bottom: .75rem;
+}
+.hq-note { white-space: pre-line; font-size: .875rem; }
+.hq-share-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.hq-share-text {
+    white-space: pre-wrap;
+    margin: 0;
+    font: inherit;
+    font-size: .8125rem;
+    background: #FAF9F6;
+    border: 1px solid var(--hq-line-soft);
+    border-radius: var(--hq-radius);
+    padding: .6rem .8rem;
+}
+
+.hq-drawer-panel .hq-table-wrap { background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); }
+.hq-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.hq-table th {
+    background: #FAF9F6;
+    color: var(--hq-muted);
+    font-weight: 500;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hq-line);
+    white-space: nowrap;
+}
+.hq-table td { padding: 9px 10px; border-bottom: 1px solid var(--hq-line-soft); vertical-align: middle; }
+.hq-table th.hq-num, .hq-table td.hq-num { text-align: right; white-space: nowrap; }
+.hq-table tbody tr:last-child td { border-bottom: 0; }
+.hq-table tfoot td { background: #FAF9F6; border-top: 1px solid var(--hq-line); border-bottom: 0; }
+.hq-table .hq-tag { margin: .15rem .25rem 0 0; }
+.hq-row-muted td { color: var(--hq-muted); }
+.hq-row-selected td { background: var(--hq-ok-soft); }
+.hq-thumb { display: block; width: 40px; height: 40px; object-fit: contain; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); background: #fff; }
+.hq-drawer-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
+
+/* ------------------------------------------------------------ hộp "Hỏi giá NCC" */
+
+.hq-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background: rgba(28, 32, 36, .45);
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+}
+.hq-modal-box {
+    width: min(920px, 100%);
+    max-height: calc(100vh - 2rem);
+    display: flex;
+    flex-direction: column;
+    background: var(--hq-bg);
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    overflow: hidden;
+}
+.hq-modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .75rem 1rem;
+    background: #fff;
+    border-bottom: 1px solid var(--hq-line);
+}
+.hq-modal-body { padding: 1rem; overflow-y: auto; display: grid; gap: .75rem; }
+.hq-modal-foot {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .65rem 1rem;
+    background: #fff;
+    border-top: 1px solid var(--hq-line);
+}
+.hq-step {
+    display: grid;
+    gap: .6rem;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    padding: .85rem 1rem;
+}
+
+.hq-picker { position: relative; }
+.hq-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 10;
+    margin-top: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    box-shadow: 0 8px 24px rgba(28, 32, 36, .12);
+}
+/* Ô tìm nằm trong cột Bootstrap: kéo thả xuống thẳng mép ô nhập, không tràn ra phần gutter. */
+.row > .hq-picker .hq-dropdown { left: calc(var(--bs-gutter-x) * .5); right: calc(var(--bs-gutter-x) * .5); }
+.hq-dropdown-item {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: #fff;
+    text-align: left;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: .875rem;
+    cursor: pointer;
+}
+.hq-dropdown-item:hover { background: #FAF9F6; }
+.hq-dropdown-empty { padding: .6rem .75rem; color: var(--hq-muted); font-size: .875rem; }
+
+.hq-chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hq-source-note { background: var(--hq-accent-soft); color: var(--hq-accent-dark); border-radius: var(--hq-radius); padding: .5rem .75rem; font-size: .8125rem; }
+.hq-source-note .hq-link { padding: 0 .25rem; font-size: inherit; font-weight: 600; }
+.hq-chip-row:empty { display: none; }
+.hq-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    border-radius: 3px;
+    padding: .1rem .2rem .1rem .65rem;
+    font-size: .8125rem;
+    background: #eef0f3;
+    color: #41505f;
+}
+.hq-chip-blue, .hq-chip-green { background: var(--hq-accent-soft); color: var(--hq-accent-dark); }
+.hq-chip-warn { background: var(--hq-warn-soft); color: var(--hq-warn-ink); }
+.hq-chip-x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 .35rem; }
+.hq-icon-btn { border: 0; background: transparent; color: var(--hq-muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: .15rem .45rem; border-radius: var(--hq-radius); }
+.hq-icon-btn:hover { background: #FAF9F6; color: var(--hq-danger); }
+.hq-table-edit { border: 1px solid var(--hq-line); border-radius: var(--hq-radius); }
+.hq-qty { width: 100px; height: 30px; padding: 0 8px; border: 1px solid #D8D5CD; border-radius: var(--hq-radius); text-align: right; font: inherit; }
+
+/* Gợi ý NCC: chỉ để tham khảo nên gọn — mỗi NCC một dòng chữ nhỏ, liền nhau như một danh
+   sách, tích để chọn. Đã chọn = nền màu nhấn nhạt. */
+.hq-suggestions { border: 1px solid var(--hq-line-soft); border-radius: var(--hq-radius); overflow: hidden; }
+.hq-suggestions:empty { display: none; }
+.hq-suggestions > .hq-muted { padding: .4rem .6rem; }
+.hq-suggest {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    background: #fff;
+    border: 0;
+    border-bottom: 1px solid var(--hq-line-soft);
+    padding: .3rem .6rem;
+    text-align: left;
+    font: inherit;
+    font-size: .8125rem;
+    color: inherit;
+    cursor: pointer;
+}
+.hq-suggest:last-child { border-bottom: 0; }
+.hq-suggest:hover { background: #FAF9F6; }
+.hq-suggest-on, .hq-suggest-on:hover { background: var(--hq-accent-soft); }
+.hq-check-box {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #b9bec6;
+    border-radius: 3px;
+    display: grid;
+    place-items: center;
+    font-size: .6rem;
+    font-weight: 700;
+    color: #fff;
+}
+.hq-suggest-on .hq-check-box { background: var(--hq-accent); border-color: var(--hq-accent); }
+.hq-suggest-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.hq-suggest-stats { flex: none; color: var(--hq-muted); font-size: .75rem; white-space: nowrap; }
+.hq-link { border: 0; background: transparent; color: var(--hq-accent); font: inherit; font-size: .75rem; padding: .3rem .6rem; cursor: pointer; }
+.hq-link:hover { text-decoration: underline; }
+
+@media (max-width: 767.98px) {
+    .hq-drawer-panel { padding: .75rem .75rem 1.5rem; }
+    .hq-modal { padding: 0; }
+    .hq-modal-box { max-height: 100vh; height: 100%; border-radius: 0; }
+    .hq-suggest { flex-wrap: wrap; }
+    .hq-suggest-stats { width: 100%; padding-left: 1.4rem; white-space: normal; }
+    .hq-modal-foot { flex-wrap: wrap; }
+    .hq-modal-foot #hq-summary { flex-basis: 100%; }
+}
+
+/* ------------------------------------------------------------ bảng so giá trong phiếu */
+
+.hq-section-title { margin: 1rem 0 .5rem; }
+.hq-compare-wrap { overflow-x: auto; }
+/* Tên NCC trong đầu cột hiện ĐỦ (xuống dòng) — cắt "CÔNG TY TNHH THIẾT…" thì ba công ty
+   cùng tiền tố trông như nhau. */
+.hq-compare th:first-child { min-width: 15rem; }
+.hq-compare th.hq-vendor-col { min-width: 11rem; vertical-align: top; white-space: normal; }
+.hq-compare th.hq-vendor-col .hq-ellipsis { white-space: normal; overflow: visible; color: var(--hq-ink);
+    font-weight: 600; margin-bottom: .25rem; line-height: 1.3; }
+.hq-compare td { vertical-align: top; }
+.hq-offer { padding: 0 !important; }
+.hq-offer.hq-muted { padding: 9px 10px !important; font-size: .8125rem; }
+/* Cả ô là nút: sale bấm vào giá để chọn NCC cho sản phẩm. Ô khoá (đã lên đơn mua) dùng
+   .hq-offer-static cùng khoảng đệm để hai loại ô thẳng hàng. */
+.hq-offer-static { padding: 9px 10px; }
+.hq-offer-btn {
+    display: block;
+    width: 100%;
+    min-height: 100%;
+    border: 0;
+    background: transparent;
+    padding: 9px 10px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.hq-offer-btn:hover { background: var(--hq-accent-soft); }
+.hq-offer.is-selected, .hq-offer.is-selected .hq-offer-btn:hover { background: var(--hq-ok-soft); }
+.hq-offer.is-selected { box-shadow: inset 3px 0 0 var(--hq-ok); }
+/* Một ô giá: giá chưa VAT đậm là chính; giá sau VAT và VAT · ngày giao nhỏ, xám, cách dòng rõ. */
+.hq-offer-static, .hq-offer-btn { display: grid; gap: 2px; line-height: 1.3; }
+.hq-offer-price { display: block; font-weight: 700; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.hq-offer-price.is-best { color: var(--hq-accent); }
+.hq-offer.hq-offer-alert { padding: 9px 10px !important; background: var(--hq-danger-soft); color: var(--hq-danger);
+    font-size: .8125rem; font-weight: 600; box-shadow: inset 3px 0 0 var(--hq-danger); }
+.hq-offer-meta { display: block; color: var(--hq-muted); font-size: .75rem; }
+.hq-offer-unit { font-weight: 400; font-size: .7rem; color: var(--hq-muted); }
+.hq-offer-incl { display: block; font-size: .75rem; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
+.hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }
+
+.hq-request-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .35rem 0; }
+.hq-request-so { flex: 1 1 16rem; max-width: 22rem; }
+.hq-code-select { width: auto; min-width: 9rem; }
+
+/* ------------------------------------------------------------ trao đổi với NCC */
+
+.hq-chat-modal { z-index: 1060; }
+.hq-chat-box { width: min(1040px, 100%); height: calc(100vh - 2rem); }
+.hq-chat-list { flex: 1 1 auto; align-content: start; gap: .5rem; }
+.hq-msg { background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); padding: .5rem .75rem;
+    max-width: min(75%, 640px); margin-left: auto; }
+.hq-msg-vendor { margin-left: 0; margin-right: auto; background: #FAF9F6; }
+.hq-msg-head { display: flex; flex-wrap: wrap; gap: .2rem .4rem; align-items: baseline; font-size: .8125rem; margin-bottom: .15rem; }
+.hq-msg-head .hq-muted { white-space: nowrap; }
+.hq-msg-body { white-space: pre-line; font-size: .875rem; }
+.hq-chat-form .hq-textarea { flex: 1 1 auto; }
+
+.hq-chat-form { flex-wrap: wrap; }
+.hq-chat-side { display: flex; align-items: center; gap: .4rem; align-self: flex-end; }
+.hq-attach-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+    border: 1px solid var(--hq-line); border-radius: var(--hq-radius); background: #fff; color: var(--hq-ink); cursor: pointer; }
+.hq-attach-btn:hover { background: #FAF9F6; }
+.hq-send-btn { display: inline-flex; align-items: center; gap: .35rem; }
+.hq-chat-picked { flex-basis: 100%; color: var(--hq-muted); font-size: .75rem; }
+.hq-chat-picked:empty { display: none; }
+.hq-msg-files { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+.hq-msg-img img { display: block; width: 120px; height: 120px; object-fit: cover; border: 1px solid var(--hq-line);
+    border-radius: 3px; background: #fff; }
+
+/* ------------------------------------------------------------ xem đơn mua (chỉ đọc) */
+
+.hq-po-box { width: min(1100px, 100%); }
+.hq-origin { display: grid; gap: .35rem; padding: .75rem 1rem; background: #fff; border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius); }
+.hq-origin-row { display: flex; gap: .5rem; align-items: center; }
+.hq-origin-picker { flex: 1 1 auto; min-width: 0; }
+.hq-origin-picker .hq-input { width: 100%; }
+.hq-origin .hq-small { margin: 0; font-size: .75rem; }
+.hq-link-btn { border: 0; background: transparent; padding: 0; font: inherit; font-weight: 700;
+    color: var(--hq-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.hq-link-btn:hover { color: var(--hq-accent-dark); }
+
+/* ------------------------------------------------------------ thông tin NCC */
+
+.hq-vendor-box { width: min(760px, 100%); }
+.hq-vendor-col .hq-link-btn { display: block; max-width: 100%; text-align: left; }
+.hq-access { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem .75rem; align-items: center;
+    padding: .75rem 1rem; background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); }
+.hq-access .hq-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hq-access-pass { font-size: 1rem; letter-spacing: .08em; }
+.hq-section-title .hq-small { font-size: .75rem; font-weight: 400; }

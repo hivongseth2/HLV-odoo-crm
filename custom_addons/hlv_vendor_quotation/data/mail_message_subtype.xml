@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kênh trao đổi sale/thu mua ↔ NCC trên báo giá và đơn mua. Trang NCC và trang sale chỉ
+         hiện tin thuộc kênh này, nên tin hệ thống (thay đổi field, ghi chú nội bộ, "NCC đã gửi
+         báo giá"...) tự bị bỏ qua.
+         default=False: follower không tự đăng ký kênh này — tin không bị gửi email cho ai (NCC
+         là follower đơn mua của họ). Ai cần biết thì code gọi tên đích danh. -->
+    <record id="mt_vendor_chat" model="mail.message.subtype">
+        <field name="name">Trao đổi với NCC</field>
+        <field name="default" eval="False"/>
+        <field name="internal" eval="False"/>
+        <field name="hidden" eval="True"/>
+    </record>
+</odoo>

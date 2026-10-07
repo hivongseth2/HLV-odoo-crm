@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Cửa vào của sale: mỗi thẻ là một NCC, bấm vào là trang quản lý báo giá của NCC đó. -->
+    <record id="view_vendor_quote_access_kanban" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.kanban</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <field name="quoted_quote_count"/>
+                <templates>
+                    <t t-name="card">
+                        <field name="partner_id" class="fw-bold fs-5"/>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <span class="badge text-bg-warning">
+                                <field name="open_quote_count"/> chờ NCC báo giá
+                            </span>
+                            <span t-if="record.quoted_quote_count.raw_value" class="badge text-bg-success">
+                                <field name="quoted_quote_count"/> NCC đã báo giá
+                            </span>
+                        </div>
+                        <div class="text-muted small mt-2" t-if="record.last_login_date.raw_value">
+                            NCC vào link lần cuối: <field name="last_login_date" widget="date"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_vendor_quote_access_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.list</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <list string="Nhà cung cấp">
+                <field name="partner_id"/>
+                <field name="open_quote_count"/>
+                <field name="quoted_quote_count"/>
+                <field name="portal_url" widget="CopyClipboardChar" optional="show"/>
+                <field name="password" widget="CopyClipboardChar" optional="show"/>
+                <field name="last_login_date" optional="hide"/>
+                <field name="active" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Trang quản lý một NCC: link /odoo/bao-gia-ncc/<id> mở thẳng vào đây. -->
+    <record id="view_vendor_quote_access_form" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.form</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <form string="Báo giá theo nhà cung cấp">
+                <header>
+                    <button name="action_new_quote" type="object" string="Tạo yêu cầu báo giá"
+                            class="oe_highlight" invisible="not id"/>
+                    <button name="action_regenerate_password" type="object" string="Đổi mật khẩu NCC"
+                            invisible="not id" confirm="NCC sẽ phải nhập mật khẩu mới. Tiếp tục?"/>
+                    <button name="action_regenerate_token" type="object" string="Tạo link NCC mới"
+                            invisible="not id"
+                            confirm="Link cũ sẽ không dùng được nữa, cần gửi lại link mới cho NCC. Tiếp tục?"/>
+                    <button name="action_unlock" type="object" string="Mở khoá đăng nhập"
+                            invisible="failed_login_count == 0"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_quotes" type="object" class="oe_stat_button" icon="fa-hourglass-half">
+                            <field name="open_quote_count" widget="statinfo" string="Chờ NCC báo giá"/>
+                        </button>
+                        <button name="action_view_quotes" type="object" class="oe_stat_button" icon="fa-check-circle">
+                            <field name="quoted_quote_count" widget="statinfo" string="NCC đã báo giá"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Đã lưu trữ" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <h1><field name="partner_id" readonly="id" placeholder="Chọn nhà cung cấp"
+                                   context="{'res_partner_search_mode': 'supplier'}"/></h1>
+                    </div>
+                    <group invisible="not id">
+                        <group string="Gửi cho NCC">
+                            <field name="portal_url" widget="CopyClipboardChar"/>
+                            <field name="password" widget="CopyClipboardChar"/>
+                        </group>
+                        <group string="Nội bộ">
+                            <field name="manage_url" widget="CopyClipboardChar"/>
+                            <field name="last_login_date"/>
+                            <field name="failed_login_count" invisible="failed_login_count == 0"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                    </group>
+                    <field name="quote_ids" invisible="not id" readonly="1"
+                           context="{'default_partner_id': partner_id}">
+                        <list decoration-muted="state in ('done', 'cancel')">
+                            <field name="name"/>
+                            <field name="request_id"/>
+                            <field name="sale_order_id" optional="show"/>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="date_deadline"/>
+                            <field name="submit_date" optional="show"/>
+                            <field name="amount_untaxed"/>
+                            <field name="currency_id" column_invisible="1"/>
+                            <field name="state" widget="badge"
+                                   decoration-warning="state == 'sent'"
+                                   decoration-success="state == 'quoted'"
+                                   decoration-muted="state in ('draft', 'done', 'cancel')"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vendor_quote_access_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.access.search</field>
+        <field name="model">hlv.vendor.quote.access</field>
+        <field name="arch" type="xml">
+            <search string="Nhà cung cấp">
+                <field name="partner_id"/>
+                <filter name="filter_archived" string="Đã lưu trữ" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_quote_access" model="ir.actions.act_window">
+        <field name="name">Báo giá theo nhà cung cấp</field>
+        <field name="res_model">hlv.vendor.quote.access</field>
+        <field name="path">bao-gia-ncc</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_vendor_quote_access_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có nhà cung cấp nào</p>
+            <p>Bấm "Mới", chọn nhà cung cấp, rồi "Tạo yêu cầu báo giá". Mỗi NCC có một link báo giá
+                cố định + mật khẩu để gửi qua Zalo; NCC báo giá xong thu mua so sánh và chọn.</p>
+        </field>
+    </record>
+</odoo>
