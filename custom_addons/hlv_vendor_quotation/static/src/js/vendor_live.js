@@ -14,6 +14,7 @@
 
     var body = document.body;
     var CHAT_OPEN_KEY = "vq_chat_open";
+    var TAB_ROOM = 48;  // chỗ cần bên phải tờ giấy cho tab (rộng 36px, 44px khi rê chuột)
 
     function scrollChats() {
         document.querySelectorAll(".vq-chat-list").forEach(function (list) {
@@ -84,6 +85,23 @@
                 section.open = false;
             }
         });
+    }
+
+    /**
+     * Gắn tab trao đổi vào mép phải tờ chứng từ thật (bề rộng tờ đổi theo trang / màn hình nên
+     * không đoán bằng CSS): gán --vq-paper-edge = toạ độ mép phải. Bên ngoài tờ không đủ chỗ
+     * cho tab (màn hẹp) thì lật tab vào trong, dán mép phải màn hình.
+     */
+    function placeChatTab() {
+        var section = document.querySelector("details.vq-chat");
+        var paper = document.querySelector(".vq-main > .vq-wrap");
+        if (!section || !paper) {
+            return;
+        }
+        var edge = paper.getBoundingClientRect().right;
+        var viewport = document.documentElement.clientWidth;
+        document.documentElement.style.setProperty("--vq-paper-edge", Math.round(edge) + "px");
+        section.classList.toggle("vq-chat-inside", viewport - edge < TAB_ROOM);
     }
 
     /** Số trên tab = số trên chuông ("99+" tính 99). */
@@ -175,6 +193,8 @@
     }
 
     initChatPanel();
+    placeChatTab();
+    window.addEventListener("resize", placeChatTab);
     scrollChats();
     syncTabCount();
     bindFilePickers();
