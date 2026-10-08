@@ -135,6 +135,21 @@
                                             <div id="hq-so-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
                                     </div>
+                                    <div class="hq-paste-toggle">
+                                        <button type="button" class="hq-btn hq-btn-mini" id="hq-paste-open">Dán danh sách (Zalo, Excel)</button>
+                                        <span class="hq-muted hq-small">mỗi dòng một mặt hàng — VD "Vòng bi 6212-ZZCM NSK: 2 cái",
+                                            "2608595053:  6". Dán nhiều dòng vào ô "Thêm sản phẩm" cũng được.</span>
+                                    </div>
+                                    <div id="hq-paste-box" class="hq-paste hq-hidden">
+                                        <label class="hq-sr-only" for="hq-paste-text">Danh sách hàng</label>
+                                        <textarea id="hq-paste-text" rows="6" class="hq-input hq-textarea w-100"
+                                                  placeholder="Dán nguyên tin nhắn Zalo hoặc cột Excel — dòng nhắn kèm (@tên, xin giá…) tự bỏ qua"></textarea>
+                                        <div class="hq-paste-actions">
+                                            <button type="button" class="hq-btn hq-btn-primary" id="hq-paste-run">Nhận diện</button>
+                                            <button type="button" class="hq-btn" id="hq-paste-cancel">Đóng</button>
+                                        </div>
+                                        <div id="hq-paste-result"></div>
+                                    </div>
                                     <div id="hq-req-chip" class="hq-chip-row"></div>
                                     <div id="hq-lines"></div>
                                 </section>
@@ -241,6 +256,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_history.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_paste.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
