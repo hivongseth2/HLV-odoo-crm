@@ -4,8 +4,12 @@
 Giá NCC báo là cam kết cho ĐÚNG số lượng đã hỏi, tới ngày hiệu lực. Chỉ được dùng lại khi
 (reuse_block_reason trả ""):
 - giá còn hiệu lực, NCC có báo giá (không "hết hàng");
-- phiếu gốc đã đóng "Không mua" — phiếu gốc còn đang hỏi là hàng NCC đang giữ cho sale đó,
-  đã lên YCMH là lượng hàng đó đã mua;
+- giá đó không còn ai ở phiếu gốc cần tới — xét THEO TỪNG GIÁ, không theo cả phiếu:
+  * phiếu gốc "Không mua": mọi giá trong phiếu đều trống;
+  * giá được chọn ở phiếu gốc (đang hỏi / đã lên YCMH): hàng đó đang / đã mua → không dùng;
+  * giá KHÔNG được chọn: trống khi mặt hàng đó ở phiếu gốc đã lên đơn mua đủ (dòng khoá —
+    sale gốc không đổi sang NCC này được nữa); trước đó vẫn là phương án dự phòng của sale
+    gốc (NCC đang chọn báo hết hàng thì đổi sang) nên chưa dùng;
 - chưa phiếu nào khác đang giữ giá này (đã kế thừa và phiếu đó đang hỏi / đã lên YCMH) —
   một cam kết chỉ một người dùng tại một lúc; phiếu đang giữ "Không mua" thì giá trống lại;
 - là giá NCC tự báo, không phải bản kế thừa (khỏi một cam kết bị nhân thành nhiều nguồn);
@@ -47,12 +51,15 @@ def reuse_block_reason(source_line, today, exclude_line=None):
         return "hết hiệu lực"
     if not inquiry:
         return "giá hỏi từ YCMH, không thuộc phiếu hỏi giá"
-    if inquiry.state == "open":
-        return "phiếu gốc đang hỏi giá"
-    if inquiry.state == "requested":
-        return "phiếu gốc đã mua"
-    if inquiry.state != "closed":
+    if inquiry.state == "cancel":
         return "phiếu gốc đã huỷ"
+    if inquiry.state != "closed":
+        if line.selected:
+            return "phiếu gốc đã mua giá này" if line.inquiry_line_id.request_line_id else "phiếu gốc đang chọn giá này"
+        if not line.inquiry_line_id.locked:
+            if inquiry.state == "open":
+                return "phiếu gốc chưa chốt NCC cho hàng này"
+            return "phiếu gốc còn có thể đổi sang NCC này (chưa lên đơn mua)"
     holder = _holder(line, exclude_line)
     if holder:
         return "đang được %s giữ" % holder.inquiry_line_id.inquiry_id.name
@@ -70,7 +77,7 @@ def valid_price_line(quote_line, today):
         ("quote_id.partner_id.commercial_partner_id", "=", vendor.id),
         ("product_qty", ">=", quote_line.product_qty),
         ("inherited_from_id", "=", False),
-        ("inquiry_line_id.inquiry_id.state", "=", "closed"),
+        ("inquiry_line_id.inquiry_id.state", "!=", "cancel"),
         ("quote_id.price_valid_until", ">=", today),
         ("price_unit", ">", 0),
         ("unavailable", "=", False),
