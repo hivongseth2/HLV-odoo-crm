@@ -12,6 +12,7 @@
                 <field name="origin" optional="hide"/>
                 <field name="date_deadline"/>
                 <field name="submit_date" optional="show"/>
+                <field name="price_valid_until" optional="show"/>
                 <field name="amount_untaxed" sum="Tổng" optional="show"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="selected_line_count" string="Dòng được chọn" optional="hide"/>
@@ -94,6 +95,7 @@
                                    invisible="not access_id"/>
                             <field name="access_id" invisible="1"/>
                             <field name="submit_date" invisible="not submit_date"/>
+                            <field name="price_valid_until" invisible="state not in ('quoted', 'done')"/>
                             <field name="currency_id" invisible="1"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
@@ -118,6 +120,7 @@
                                     <field name="unavailable" optional="show"/>
                                     <field name="invoice_name" optional="show"/>
                                     <field name="vendor_note" optional="show"/>
+                                    <field name="inherited_from_id" optional="hide" readonly="1"/>
                                     <field name="price_subtotal" sum="Tổng"/>
                                     <field name="currency_id" column_invisible="1"/>
                                     <field name="is_best_price" column_invisible="1"/>

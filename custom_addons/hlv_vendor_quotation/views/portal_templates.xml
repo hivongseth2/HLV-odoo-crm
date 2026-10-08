@@ -317,6 +317,8 @@
                     <div><dt>Số mặt hàng</dt><dd t-esc="len(quote.line_ids)"/></div>
                     <div t-if="quote.submit_date"><dt>Gửi giá lần cuối</dt>
                         <dd t-esc="fdate(quote.submit_date)"/></div>
+                    <div t-if="quote.price_valid_until"><dt>Giá hiệu lực đến</dt>
+                        <dd t-esc="fdate(quote.price_valid_until)"/></div>
                 </dl>
 
                 <section t-if="orders" class="vq-note">
@@ -340,7 +342,8 @@
                 <div t-elif="not editable and quote.state != 'done'" class="vq-alert">Đã quá hạn báo giá, không sửa
                     được nữa. Cần điều chỉnh giá, vui lòng nhắn ở khung trao đổi.</div>
                 <div t-if="quote.state == 'done'" class="vq-alert">Yêu cầu báo giá này đã đóng. Cảm ơn quý công ty
-                    đã báo giá.</div>
+                    đã báo giá.<t t-if="quote.price_valid_until"> Giá của quý công ty được lưu và có thể được bên mua dùng
+                    cho các lần đặt hàng đến hết ngày <t t-esc="fdate(quote.price_valid_until)"/>.</t></div>
 
                 <form method="post" class="vq-quote-form" t-att-action="'%s/%s' % (portal_base, quote.id)">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
@@ -460,6 +463,15 @@
                     </table>
 
                     <div class="vq-form-foot">
+                        <div class="vq-foot-left">
+                        <label class="vq-valid-field">
+                            <span class="vq-label">Giá có hiệu lực đến</span>
+                            <input t-if="editable" type="date" name="price_valid_until" class="vq-input" t-att-min="today_iso"
+                                   t-att-value="post.get('price_valid_until') if post else (quote.price_valid_until.isoformat() if quote.price_valid_until else default_valid_iso)"/>
+                            <span t-else="" t-esc="fdate(quote.price_valid_until) or '—'"/>
+                            <span class="vq-muted vq-small">Mặc định 7 ngày. Trong thời hạn này bên mua có thể đặt theo giá
+                                quý công ty đã báo mà không hỏi lại.</span>
+                        </label>
                         <label class="vq-general-note">
                             <span class="vq-label">Ghi chú chung</span>
                             <textarea name="vendor_note" rows="4" class="vq-input" maxlength="2000"
@@ -467,6 +479,7 @@
                                       placeholder="Điều kiện thanh toán, giao hàng, hiệu lực báo giá"
                                       t-esc="post.get('vendor_note') if post else (quote.vendor_note or '')"/>
                         </label>
+                        </div>
                         <div class="vq-summary-col">
                             <span class="vq-label">Tổng tiền</span>
                             <dl class="vq-summary">

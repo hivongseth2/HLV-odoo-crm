@@ -19,7 +19,7 @@ from odoo.exceptions import UserError
 from odoo.osv import expression
 from odoo.http import request
 
-from ..models.vendor_inquiry import SALE_STATUS
+from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_access import SALE_PAGE_ROUTE
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import local_date_text, paginate
@@ -56,6 +56,8 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "all_code": sale_scope.ALL_SALES,
             "vat_options": VAT_SELECTION,
             "status_tabs": STATUS_TABS,
+            # Lý do sale chọn khi đóng "Không mua" ("auto" chỉ cron dùng).
+            "close_reasons": [r for r in CLOSE_REASONS if r[0] != "auto"],
             # Ngày VN cố định — tài khoản dùng chung hay để trống múi giờ, context_today ra ngày UTC.
             "today": local_date_text(fields.Datetime.now(), "%Y-%m-%d"),
             # Kênh websocket báo tin trao đổi mới — tên kênh do server đặt, JS không tự ghép.
@@ -149,6 +151,14 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
         inquiry.action_cancel()
+        return payload.inquiry_detail(inquiry)
+
+    @http.route(f"{API}/close", type="json", auth="user", methods=["POST"])
+    def api_close(self, code="", inquiry_id=None, reason="", note="", **kw):
+        """Đóng phiếu "Không mua" (khách không lấy…): giá NCC vẫn giữ cho phiếu sau dùng lại."""
+        scope = self._check(code)
+        inquiry = self._get_inquiry(inquiry_id, scope)
+        inquiry.action_close(reason, note)
         return payload.inquiry_detail(inquiry)
 
     @http.route(f"{API}/purchase_order", type="json", auth="user", methods=["POST"])
@@ -254,5 +264,6 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     def _status_domain(self, status):
         if status == "all":
-            return [("sale_status", "!=", "cancel")]
+            # "Tất cả" = phiếu còn theo dõi; phiếu đã đóng / huỷ xem ở tab riêng.
+            return [("sale_status", "not in", ("cancel", "closed"))]
         return [("sale_status", "=", status)]

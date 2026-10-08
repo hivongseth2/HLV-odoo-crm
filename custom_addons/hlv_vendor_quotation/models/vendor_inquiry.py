@@ -3,11 +3,24 @@ from markupsafe import Markup
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
+from ..services.price_reuse import apply_valid_prices
+from .vendor_quote_utils import inquiry_close_day
+
 SALE_STATUS = [
     ("waiting", "Chờ NCC báo giá"),
     ("quoted", "NCC đã báo giá"),
     ("requested", "Đã lên YCMH"),
+    ("closed", "Không mua"),
     ("cancel", "Đã huỷ"),
+]
+# Lý do đóng "Không mua" — "auto": cron đóng khi giá NCC đã hết hiệu lực (_cron_auto_close).
+CLOSE_REASONS = [
+    ("customer", "Khách không lấy"),
+    ("price", "Giá cao"),
+    ("lead_time", "Giao lâu"),
+    ("stock", "NCC hết hàng"),
+    ("other", "Khác"),
+    ("auto", "Tự đóng — hết hiệu lực giá"),
 ]
 
 
@@ -45,9 +58,11 @@ class VendorInquiry(models.Model):
     date_deadline = fields.Date(string="Hạn báo giá")
     note = fields.Text(string="Lời nhắn gửi NCC")
     state = fields.Selection(
-        [("open", "Đang hỏi giá"), ("requested", "Đã lên YCMH"), ("cancel", "Đã huỷ")],
+        [("open", "Đang hỏi giá"), ("requested", "Đã lên YCMH"), ("closed", "Không mua"), ("cancel", "Đã huỷ")],
         string="Trạng thái", default="open", required=True, tracking=True,
     )
+    close_reason = fields.Selection(CLOSE_REASONS, string="Lý do không mua", readonly=True, tracking=True)
+    close_note = fields.Char(string="Ghi chú không mua", readonly=True)
     sale_status = fields.Selection(
         SALE_STATUS, string="Tình trạng", compute="_compute_sale_status", store=True, index=True
     )
@@ -62,7 +77,7 @@ class VendorInquiry(models.Model):
     @api.depends("state", "quote_ids.state")
     def _compute_sale_status(self):
         for inquiry in self:
-            if inquiry.state in ("requested", "cancel"):
+            if inquiry.state in ("requested", "closed", "cancel"):
                 inquiry.sale_status = inquiry.state
             elif any(q.state in ("quoted", "done") for q in inquiry.quote_ids):
                 inquiry.sale_status = "quoted"
@@ -132,7 +147,7 @@ class VendorInquiry(models.Model):
             raise UserError(_("Phiếu %s không còn ở trạng thái hỏi giá.", self.name))
         asked = self.quote_ids.filtered(lambda q: q.state != "cancel").access_id.partner_id
         new_vendors = vendors.commercial_partner_id - asked
-        return self.env["hlv.vendor.quote"].create([
+        quotes = self.env["hlv.vendor.quote"].create([
             {
                 "inquiry_id": self.id,
                 "partner_id": vendor.id,
@@ -144,6 +159,9 @@ class VendorInquiry(models.Model):
             }
             for vendor in new_vendors
         ])
+        # Giá NCC còn hiệu lực (kể cả từ phiếu "Không mua" của sale khác) — điền sẵn, khỏi hỏi lại.
+        apply_valid_prices(quotes)
+        return quotes
 
     def action_create_request(self, sale_order=None):
         """Đưa các sản phẩm đã chọn NCC mà CHƯA nằm trong YCMH nào lên YCMH, kèm giá + NCC.
@@ -153,8 +171,8 @@ class VendorInquiry(models.Model):
         chưa duyệt của đơn nếu có) hoặc tạo YCMH mới. Sản phẩm chưa chọn NCC không lên.
         """
         self.ensure_one()
-        if self.state == "cancel":
-            raise UserError(_("Phiếu %s đã huỷ.", self.name))
+        if self.state in ("cancel", "closed"):
+            raise UserError(_("Phiếu %s đã đóng — lập phiếu mới, giá còn hiệu lực sẽ được dùng lại.", self.name))
         pending = self.line_ids.filtered(lambda l: l.chosen_line_id and not l.request_line_id)
         if not pending:
             raise UserError(_("Không có sản phẩm nào đã chọn NCC mà chưa lên YCMH."))
@@ -179,6 +197,43 @@ class VendorInquiry(models.Model):
             _("Gộp vào") if merged else _("Đã tạo"), request.name, len(pending),
         ))
         return request, merged
+
+    def action_close(self, reason, note=""):
+        """Sale đóng phiếu "Không mua": nhu cầu kết thúc, nhưng giá NCC đã báo vẫn giữ (báo giá
+        chuyển "Đã đóng" — NCC không sửa nữa, sale khác dùng lại được tới ngày hiệu lực).
+        Chỉ phiếu đang hỏi giá; đã lên YCMH thì không đóng được."""
+        if reason not in dict(CLOSE_REASONS):
+            raise UserError(_("Chọn lý do không mua."))
+        for inquiry in self:
+            if inquiry.state != "open":
+                raise UserError(_("Phiếu %s không còn ở trạng thái hỏi giá.", inquiry.name))
+        self.quote_ids.filtered(lambda q: q.state in ("draft", "sent", "quoted")).write({"state": "done"})
+        self.write({"state": "closed", "close_reason": reason, "close_note": (note or "").strip()[:255] or False})
+        label = dict(CLOSE_REASONS)[reason]
+        for inquiry in self:
+            inquiry.message_post(body=Markup(_("Đóng phiếu — không mua: <b>%s</b>%s")) % (
+                label, Markup(" — %s") % inquiry.close_note if inquiry.close_note else "",
+            ))
+
+    def _close_day(self):
+        """Ngày cuối phiếu còn mở (vendor_quote_utils.inquiry_close_day)."""
+        self.ensure_one()
+        quoted = self.quote_ids.filtered(lambda q: q.state in ("quoted", "done"))
+        return inquiry_close_day(
+            quoted.mapped("price_valid_until"), self.date_deadline,
+            self.create_date.date() if self.create_date else None,
+        )
+
+    @api.model
+    def _cron_auto_close(self):
+        """Hằng ngày: phiếu chưa lên YCMH mà qua ngày cuối (giá NCC hết hiệu lực / chưa ai báo
+        sau hạn + 7 ngày) thì tự đóng "Không mua" — danh sách gọn, giá vẫn giữ để tra."""
+        today = self.env["hlv.vendor.quote"]._vendor_today()
+        expired = self.search([("state", "=", "open")]).filtered(
+            lambda inquiry: inquiry._close_day() and inquiry._close_day() < today
+        )
+        if expired:
+            expired.action_close("auto")
 
     def action_cancel(self):
         for inquiry in self:

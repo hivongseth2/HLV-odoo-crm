@@ -11,7 +11,30 @@ window.HlvQuote = window.HlvQuote || {};
     waiting: "hq-tag-warn",
     quoted: "hq-tag-mine",
     requested: "hq-tag-ok",
+    closed: "hq-tag-soft",
     cancel: "hq-tag-soft",
+  };
+
+  /* Trạng thái YCMH (purchase_request) — từ chối tô đỏ để sale thấy ngay. */
+  HQ.REQUEST_STATE_CLASS = {
+    draft: "hq-tag-soft",
+    to_approve: "hq-tag-warn",
+    approved: "hq-tag-mine",
+    in_progress: "hq-tag-mine",
+    done: "hq-tag-ok",
+    rejected: "hq-tag-danger",
+  };
+
+  /** Số YCMH kèm nhãn trạng thái màu. r: {name, state, label}. */
+  HQ.requestTag = function (r) {
+    return '<span class="hq-doc-tag">' + HQ.esc(r.name) + ' <span class="hq-tag ' +
+      (HQ.REQUEST_STATE_CLASS[r.state] || "hq-tag-soft") + '">' + HQ.esc(r.label) + "</span></span>";
+  };
+
+  /** Số đơn mua kèm tiến độ NCC báo. o: {name, vendor_status}. */
+  HQ.orderTag = function (o) {
+    return '<span class="hq-doc-tag">' + HQ.esc(o.name) + (o.vendor_status ? ' <span class="hq-tag hq-tag-ok">' +
+      HQ.esc(o.vendor_status) + "</span>" : "") + "</span>";
   };
 
   /* Trạng thái báo giá của từng NCC trong phiếu. */

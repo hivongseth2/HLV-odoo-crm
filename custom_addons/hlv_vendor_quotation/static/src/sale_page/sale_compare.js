@@ -74,13 +74,19 @@ window.HlvQuote = window.HlvQuote || {};
       '">' + esc(d.sale_status_label) + "</span></h2></div>" +
       '<button type="button" class="btn-close" data-close="drawer" aria-label="Đóng"></button></div>' +
       renderFacts(d) +
+      renderRejected(d) +
+      HQ.closedBanner(d) +
       renderCompare(d) +
       renderRequestBox(d) +
       renderOrders(d) +
       renderVendors(d) +
       (d.note ? '<div class="hq-note"><span class="hq-label">Lời nhắn gửi NCC</span>' + esc(d.note) + "</div>" : "") +
-      (d.can_cancel ? '<div class="hq-drawer-actions"><button type="button" class="hq-btn hq-btn-danger" ' +
-        'data-cancel-inquiry="1">Huỷ phiếu</button></div>' : "");
+      HQ.closeBox(d) +
+      (d.can_cancel || d.can_close ? '<div class="hq-drawer-actions">' +
+        (d.can_close ? '<button type="button" class="hq-btn" data-close-toggle="1" title="Khách không lấy… — giá NCC ' +
+          'vẫn giữ để lần sau dùng lại">Không mua</button>' : "") +
+        (d.can_cancel ? '<button type="button" class="hq-btn hq-btn-danger" data-cancel-inquiry="1" title="Hỏi nhầm / ' +
+          'lập sai — bỏ luôn giá">Huỷ phiếu</button>' : "") + "</div>" : "");
     bindSaleOrderPicker();
     HQ.bindOriginPicker("inquiry");
   }
@@ -90,18 +96,25 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   function renderFacts(d) {
-    var orders = d.purchase_orders.map(function (o) {
-      return esc(o.name) + (o.vendor_status ? ' <span class="hq-muted">(' + esc(o.vendor_status) + ")</span>" : "");
-    }).join("<br/>");
+    var orders = d.orders.map(HQ.orderTag).join("");
     return '<div class="hq-facts">' +
       fact("Mã sale", esc(d.sale_code)) +
       fact("Đơn bán", esc(d.sale_order)) +
       fact("Hạn báo giá", esc(d.deadline)) +
-      fact("Yêu cầu mua hàng", d.requests.map(function (r) {
-        return esc(r.name) + ' <span class="hq-muted">(' + esc(r.state) + ")</span>";
-      }).join("<br/>")) +
+      fact("Yêu cầu mua hàng", d.requests.map(HQ.requestTag).join("")) +
       fact("Đơn mua", orders) +
       "</div>";
+  }
+
+  /** YCMH bị thu mua từ chối: báo đỏ ngay đầu ngăn — trước đây chỉ là chữ nhỏ trong ngoặc. */
+  function renderRejected(d) {
+    var rejected = d.requests.filter(function (r) { return r.state === "rejected"; });
+    if (!rejected.length) {
+      return "";
+    }
+    return '<div class="hq-alert hq-alert-strong">' + rejected.map(function (r) { return esc(r.name); }).join(", ") +
+      " bị thu mua <b>từ chối</b>. Hỏi thu mua lý do (nút Trao đổi trên đơn mua, hoặc chatter YCMH), chọn lại NCC " +
+      "nếu cần rồi lên YCMH mới.</div>";
   }
 
   /** Bảng sản phẩm (dòng) × NCC (cột). Ô có giá bấm được để chọn khi phiếu còn mở. */
@@ -155,7 +168,9 @@ window.HlvQuote = window.HlvQuote || {};
       (offer.invoice_name ? '<span class="hq-offer-meta" title="Tên xuất hóa đơn: ' + esc(offer.invoice_name) + '">HĐ: ' +
         esc(offer.invoice_name) + "</span>" : "") +
       (offer.vendor_note ? '<span class="hq-offer-meta" title="' + esc(offer.vendor_note) + '">' +
-        esc(offer.vendor_note) + "</span>" : "");
+        esc(offer.vendor_note) + "</span>" : "") +
+      (offer.inherited_from ? '<span class="hq-offer-reuse" title="Giá còn hiệu lực lấy lại từ ' +
+        esc(offer.inherited_from) + ' — không hỏi lại NCC">giá cũ · ' + esc(offer.inherited_from) + "</span>" : "");
     var cls = "hq-offer" + (offer.selected ? " is-selected" : "");
     if (!canChoose) {
       return '<td class="' + cls + '"><div class="hq-offer-static">' + body + "</div></td>";
@@ -209,7 +224,10 @@ window.HlvQuote = window.HlvQuote || {};
         return '<tr><td><button type="button" class="hq-link-btn" data-vendor-info="' + v.quote_id +
           '" title="Xem thông tin, link và mật khẩu">' + esc(v.name) + "</button></td>" +
           '<td><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span>" +
-          (v.submit_date ? '<div class="hq-muted">gửi ' + esc(v.submit_date) + "</div>" : "") + "</td>" +
+          (v.submit_date ? '<div class="hq-muted">gửi ' + esc(v.submit_date) + "</div>" : "") +
+          (v.price_valid_until ? '<div class="' + (v.price_valid ? "hq-muted" : "hq-expired") + '">giá hiệu lực đến ' +
+            esc(v.price_valid_until) + (v.price_valid ? "" : " — đã hết") + "</div>" : "") +
+          (v.reused ? '<div><span class="hq-tag hq-tag-mine">Dùng lại giá cũ</span></div>' : "") + "</td>" +
           '<td class="hq-num">' + (v.amount_untaxed ? HQ.money(v.amount_untaxed) : "") + "</td>" +
           '<td class="hq-num hq-nowrap">' + chatButton("quote", v.quote_id, v.chat_count, v.chat_unread) + " " +
           (v.share_message ? '<button type="button" class="hq-btn hq-btn-mini" data-copy-msg="' + index +

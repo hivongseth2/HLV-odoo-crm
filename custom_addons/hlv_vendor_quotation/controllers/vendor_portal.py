@@ -5,7 +5,7 @@ import hmac
 from urllib.parse import urlencode
 
 from markupsafe import Markup
-from odoo import http
+from odoo import fields, http
 from odoo.exceptions import UserError
 from odoo.http import request
 
@@ -13,7 +13,7 @@ from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
-    deadline_hint, format_vn_number, local_date_text, paginate, parse_vn_number,
+    deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate, parse_vn_number,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -135,15 +135,19 @@ class VendorQuotePortal(http.Controller):
         values = {"quote": quote, "saved": bool(post.get("saved"))}
         if request.httprequest.method == "POST":
             line_values, errors = self._read_quote_form(quote, post)
+            valid_until = self._read_valid_until(post, errors)
             if not errors:
                 try:
-                    quote._vendor_submit(line_values, (post.get("vendor_note") or "")[:VENDOR_NOTE_MAX])
+                    quote._vendor_submit(line_values, (post.get("vendor_note") or "")[:VENDOR_NOTE_MAX], valid_until)
                 except UserError as exc:
                     errors = [exc.args[0]]
                 else:
                     return request.redirect(f"{PORTAL_ROUTE}/{token}/{quote.id}?saved=1")
             values.update(post=post, errors=errors, saved=False)
+        today = quote._vendor_today()
         values.update(
+            today_iso=today.isoformat(),
+            default_valid_iso=default_price_valid_until(today).isoformat(),
             status=STATUS_DISPLAY[quote._vendor_status()],
             editable=quote._is_open_for_vendor(),
             fully_ordered=quote._fully_ordered(),
@@ -329,6 +333,18 @@ class VendorQuotePortal(http.Controller):
                 "unavailable": bool(post.get(f"na_{line.id}")),
             }
         return line_values, errors
+
+    def _read_valid_until(self, post, errors):
+        """Ô "Giá có hiệu lực đến" (yyyy-mm-dd từ input date). Trống → False (model lấy mặc định
+        7 ngày); sai định dạng → thêm lỗi, trả False."""
+        raw = (post.get("price_valid_until") or "").strip()
+        if not raw:
+            return False
+        try:
+            return fields.Date.to_date(raw)
+        except ValueError:
+            errors.append(f"Không đọc được ngày giá hiệu lực \"{raw}\".")
+            return False
 
     def _render_login(self, access, error=None, next_url=""):
         return self._render("hlv_vendor_quotation.portal_login", access, {

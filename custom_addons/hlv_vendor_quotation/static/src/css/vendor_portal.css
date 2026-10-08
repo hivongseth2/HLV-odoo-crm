@@ -411,3 +411,8 @@ a { color: var(--vq-accent); }
     .vq-extra-grid { grid-template-columns: 1fr; }
     .vq-price-table tr.vq-line-extra td.vq-col-no { display: none; }
 }
+
+/* --- Hiệu lực giá (cột trái chân form, trên ghi chú chung) --- */
+.vq-foot-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.vq-valid-field { display: grid; gap: 4px; max-width: 360px; }
+.vq-valid-field .vq-input { max-width: 200px; }
