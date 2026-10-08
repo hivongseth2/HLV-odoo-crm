@@ -155,10 +155,10 @@ a { color: var(--vq-accent); }
 .vq-inline-field { display: flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--vq-muted); }
 .vq-inline-field .vq-input { width: auto; min-width: 140px; }
 
-.vq-col-no { width: 56px; color: var(--vq-muted); }
-.vq-col-price { width: 170px; }
-.vq-col-vat { width: 140px; }
-.vq-col-days { width: 110px; }
+.vq-col-no { width: 48px; color: var(--vq-muted); }
+.vq-col-price { width: 150px; }
+.vq-col-disc { width: 84px; }
+.vq-col-vat { width: 110px; }
 .vq-col-total { width: 140px; font-weight: 600; }
 .vq-input-price { text-align: right; font-variant-numeric: tabular-nums; }
 .vq-price-table .vq-num, .vq-summary dd { font-variant-numeric: tabular-nums; }
@@ -402,7 +402,7 @@ a { color: var(--vq-accent); }
 /* --- Bảng giá: hàng phụ (tên xuất hóa đơn + ghi chú) dưới mỗi mặt hàng --- */
 .vq-price-table tr.vq-line-main td { border-bottom: 0; }
 .vq-price-table tr.vq-line-extra td { padding-top: 0; }
-.vq-extra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.vq-extra-grid { display: grid; grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; }
 .vq-extra-field { display: grid; gap: 4px; margin: 0; }
 .vq-extra-field .vq-label { margin: 0; font-size: .8rem; }
 .vq-extra-value { white-space: pre-line; }
@@ -420,3 +420,14 @@ a { color: var(--vq-accent); }
 /* --- Giá lần trước (hỏi lại trong 7 ngày) --- */
 .vq-choice-ref { color: #8a5a00; font-weight: 600; }
 .vq-ref-legend { margin: 6px 0 0; color: #8a5a00; }
+
+/* --- Chiết khấu (tuỳ chọn): cột "Đơn giá trước CK" + "% CK" chỉ hiện khi bật --- */
+.vq-quote-form:not(.vq-disc-on) .vq-disc-only { display: none; }
+.vq-head-tools { display: flex; align-items: center; gap: 12px 24px; flex-wrap: wrap; justify-content: flex-end; }
+.vq-disc-toggle { margin: 0; color: var(--vq-text); font-weight: 500; }
+.vq-input-disc { text-align: right; font-variant-numeric: tabular-nums; }
+.vq-inline-field .vq-input-disc { min-width: 0; width: 84px; }
+.vq-input-error { border-color: var(--vq-danger); box-shadow: 0 0 0 2px rgba(185, 28, 28, .15); }
+@media (max-width: 760px) {
+    .vq-head-tools { justify-content: flex-start; }
+}

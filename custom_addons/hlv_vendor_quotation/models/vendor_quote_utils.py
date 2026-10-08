@@ -84,6 +84,26 @@ def format_vn_number(value):
     return f"{integer_part},{decimal_part}" if decimal_part else integer_part
 
 
+def resolve_net_price(price, gross, tax_rate, list_price, discount):
+    """Đơn giá chưa VAT (đã trừ chiết khấu) của một dòng NCC gửi — giá lưu và đem so.
+
+    Nhận các số đã đọc từ form (None khi ô trống): price = đơn giá chưa VAT; gross = đơn giá
+    sau VAT; tax_rate = % VAT (0 khi không chịu thuế / chưa chọn); list_price = đơn giá trước
+    chiết khấu; discount = % chiết khấu (None = không dùng chiết khấu).
+    Trả float làm tròn 2 chữ số lẻ, hoặc None khi không suy ra được.
+
+    Ưu tiên price: trang có JS đã tính sẵn cả ba ô, lấy thẳng ô này để khỏi lệch vì làm tròn
+    hai lần. Chỉ khi price trống (JS hỏng / NCC tắt JS) mới suy từ gross, rồi từ list_price.
+    """
+    if price:
+        return round(price, 2)
+    if gross:
+        return round(gross / (1 + (tax_rate or 0) / 100.0), 2)
+    if list_price:
+        return round(list_price * (1 - (discount or 0) / 100.0), 2)
+    return None
+
+
 def session_fingerprint(token, password):
     """Dấu vân tay của một lần đăng nhập link báo giá.
 

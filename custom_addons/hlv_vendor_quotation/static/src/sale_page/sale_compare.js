@@ -169,6 +169,8 @@ window.HlvQuote = window.HlvQuote || {};
       ' <span class="hq-offer-unit">chưa VAT</span></span>' +
       (offer.vat ? '<span class="hq-offer-incl">' + HQ.money(offer.price_incl) + " sau VAT</span>" : "") +
       (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
+      (offer.list_price ? '<span class="hq-offer-meta">Giá trước CK ' + HQ.money(offer.list_price) + " · CK " +
+        HQ.qty(offer.discount) + "%</span>" : "") +
       (offer.invoice_name ? '<span class="hq-offer-meta" title="Tên xuất hóa đơn: ' + esc(offer.invoice_name) + '">HĐ: ' +
         esc(offer.invoice_name) + "</span>" : "") +
       (offer.vendor_note ? '<span class="hq-offer-meta" title="' + esc(offer.vendor_note) + '">' +

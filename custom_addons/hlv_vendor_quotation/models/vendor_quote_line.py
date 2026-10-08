@@ -59,6 +59,10 @@ class VendorQuoteLine(models.Model):
     price_unit = fields.Float(
         string="Đơn giá chưa VAT", digits="Product Price", aggregator="min", copy=False
     )
+    # NCC báo kiểu "giá niêm yết − % chiết khấu" (tuỳ chọn): lưu lại để đối chiếu với bảng giá
+    # của NCC; price_unit vẫn là giá sau chiết khấu — mọi chỗ so giá / lên YCMH dùng price_unit.
+    list_price = fields.Float(string="Đơn giá trước CK", digits="Product Price", copy=False)
+    discount = fields.Float(string="% Chiết khấu", digits=(5, 2), copy=False)
     vat = fields.Selection(VAT_SELECTION, string="VAT", copy=False)
     tax_rate = fields.Float(string="% VAT", compute="_compute_tax_rate", store=True)
     delivery_days = fields.Integer(string="Giao sau (ngày)", aggregator="min", copy=False)

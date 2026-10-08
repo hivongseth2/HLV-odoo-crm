@@ -436,8 +436,8 @@ class VendorQuote(models.Model):
     def _vendor_submit(self, line_values, vendor_note, price_valid_until=False):
         """Ghi báo giá NCC gửi lên.
 
-        line_values: {quote_line_id: {"price_unit", "vat", "delivery_days",
-        "vendor_note", "invoice_name", "unavailable"}} — controller đã đọc số xong.
+        line_values: {quote_line_id: {"price_unit", "list_price", "discount", "vat",
+        "delivery_days", "vendor_note", "invoice_name", "unavailable"}} — controller đã đọc số xong.
         Mọi dòng phải có giá + VAT, trừ dòng NCC đánh dấu không cung cấp. Dòng đã lên đơn
         mua (vendor_locked) giữ nguyên — giá trị gửi lên cho dòng đó bị bỏ qua.
         price_valid_until: date NCC ghi; trống → hôm nay + 7 ngày. Trước hôm nay → UserError.
@@ -467,7 +467,7 @@ class VendorQuote(models.Model):
         for line in open_lines:
             vals = dict(line_values[line.id])
             if vals.get("unavailable"):
-                vals.update(price_unit=0.0, vat=False)
+                vals.update(price_unit=0.0, list_price=0.0, discount=0.0, vat=False)
             line.write(vals)
         self._notify_chosen_lines_changed(chosen_before)
         resubmitted = self.state == "quoted"

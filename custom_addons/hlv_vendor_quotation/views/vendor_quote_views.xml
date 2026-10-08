@@ -114,6 +114,8 @@
                                     <field name="request_line_id" optional="show" column_invisible="not parent.request_id"
                                            domain="[('request_id', '=', parent.request_id)]"
                                            options="{'no_create': True}"/>
+                                    <field name="list_price" optional="hide"/>
+                                    <field name="discount" optional="hide"/>
                                     <field name="price_unit"/>
                                     <field name="vat"/>
                                     <field name="delivery_days" optional="show"/>
