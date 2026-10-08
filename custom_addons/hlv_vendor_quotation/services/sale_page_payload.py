@@ -163,7 +163,7 @@ def _vendor_column(quote):
         "price_valid_until": _date_text(quote.price_valid_until),
         "price_valid": bool(quote.price_valid_until) and quote.price_valid_until >= quote._vendor_today(),
         # Mọi dòng lấy giá còn hiệu lực từ báo giá trước — không cần gửi link cho NCC.
-        "reused": bool(quote.line_ids) and all(quote.line_ids.mapped("inherited_from_id")),
+        "reused": quote._fully_reused(),
         "amount_untaxed": quote.amount_untaxed,
         "vendor_note": quote.vendor_note or "",
         "portal_url": quote.portal_quote_url or "",

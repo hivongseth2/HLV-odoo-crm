@@ -421,6 +421,13 @@ class VendorQuote(models.Model):
         self.ensure_one()
         return self._vendor_status() in VENDOR_EDITABLE_STATUSES and not self._fully_ordered()
 
+    def _fully_reused(self):
+        """Mọi dòng đều lấy giá còn hiệu lực từ báo giá trước (services/price_reuse.py) — coi như
+        NCC đã báo, không cần gửi link. Xét TỪNG dòng: mapped() trên field quan hệ trả recordset
+        đã gộp, báo giá không dòng nào kế thừa thì rỗng — all() của rỗng lại là True."""
+        self.ensure_one()
+        return bool(self.line_ids) and all(line.inherited_from_id for line in self.line_ids)
+
     def _fully_ordered(self):
         """Mọi mặt hàng đều đã lên đơn mua — báo giá khoá hẳn với NCC."""
         self.ensure_one()
