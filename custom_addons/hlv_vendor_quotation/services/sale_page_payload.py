@@ -74,6 +74,7 @@ def purchase_order_detail(order):
         "lines": [
             {
                 "name": line.name,
+                "invoice_name": line.hlv_invoice_name or "",
                 "qty": line.product_qty,
                 "uom": line.product_uom.name or "",
                 "qty_received": line.qty_received,

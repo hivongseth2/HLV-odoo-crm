@@ -29,7 +29,9 @@ window.HlvQuote = window.HlvQuote || {};
       '<th class="hq-num">SL</th><th class="hq-num">Đã nhận</th><th class="hq-num">Đơn giá</th>' +
       '<th class="hq-num">Thành tiền</th></tr></thead><tbody>' +
       o.lines.map(function (l) {
-        return "<tr><td>" + esc(l.name) + '</td><td class="hq-num">' + HQ.qty(l.qty) + " " + esc(l.uom) +
+        return "<tr><td>" + esc(l.name) +
+          (l.invoice_name ? '<div class="hq-muted">Tên xuất HĐ: ' + esc(l.invoice_name) + "</div>" : "") +
+          '</td><td class="hq-num">' + HQ.qty(l.qty) + " " + esc(l.uom) +
           '</td><td class="hq-num">' + HQ.qty(l.qty_received) + '</td><td class="hq-num">' + HQ.money(l.price_unit) +
           '</td><td class="hq-num">' + HQ.money(l.subtotal) + "</td></tr>";
       }).join("") +

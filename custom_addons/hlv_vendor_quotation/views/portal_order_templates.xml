@@ -129,7 +129,8 @@
                     <tbody>
                         <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
                             <td class="vq-col-no" t-esc="line_index + 1"/>
-                            <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/></td>
+                            <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/>
+                                <div t-if="line.hlv_invoice_name" class="vq-muted vq-small">Tên xuất HĐ: <t t-esc="line.hlv_invoice_name"/></div></td>
                             <td class="vq-num" data-label="Số lượng">
                                 <t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></td>
                             <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
@@ -195,7 +196,8 @@
                         <tbody>
                             <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
                                 <td class="po-no" t-esc="line_index + 1"/>
-                                <td t-esc="line.name"/>
+                                <td><t t-esc="line.name"/>
+                                    <div t-if="line.hlv_invoice_name" class="po-sub">Tên xuất HĐ: <t t-esc="line.hlv_invoice_name"/></div></td>
                                 <td class="po-num" t-esc="fmt(line.product_qty)"/>
                                 <td t-esc="line.product_uom.name"/>
                                 <td class="po-num" t-esc="fmt(line.price_unit)"/>

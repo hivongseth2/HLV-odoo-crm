@@ -35,6 +35,9 @@
                 <field name="hlv_vendor_status_date" invisible="not hlv_vendor_status_date"/>
                 <field name="hlv_inquiry_ids" widget="many2many_tags" readonly="1" invisible="not hlv_inquiry_ids"/>
             </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
+                <field name="hlv_invoice_name" optional="show"/>
+            </xpath>
         </field>
     </record>
 </odoo>
