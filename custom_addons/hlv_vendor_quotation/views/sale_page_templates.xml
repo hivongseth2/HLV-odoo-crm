@@ -71,6 +71,8 @@
                             </aside>
                         </div>
                         <div class="col-lg-9">
+                            <!-- Giá NCC đã báo cho sản phẩm khớp ô tìm — mọi mã sale (sale_price_history.js). -->
+                            <section id="hq-price-history" class="hq-panel hq-price-history hq-hidden" aria-live="polite"></section>
                             <section class="hq-panel">
                                 <div class="hq-panel-head hq-panel-head-wrap">
                                     <h2 class="hq-h2" id="hq-title">Tất cả nhà cung cấp</h2>
@@ -235,6 +237,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_history.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>
