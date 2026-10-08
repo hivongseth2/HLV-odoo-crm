@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_guide_list" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.list</field>
+        <field name="model">hlv.sale.guide</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="topic"/>
+                <field name="url" widget="url"/>
+                <field name="group_ids" widget="many2many_tags" optional="show"/>
+                <field name="published_on"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sale_guide_form" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.form</field>
+        <field name="model">hlv.sale.guide</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_open_page" type="object" string="Mở trang" class="btn-primary"
+                            invisible="not published_on"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Đã ẩn" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="VD Hỏi giá nhà cung cấp"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="slug"/>
+                            <field name="url" widget="url" invisible="not published_on"/>
+                            <field name="topic"/>
+                            <field name="group_ids" widget="many2many_tags" placeholder="Mọi người dùng nội bộ"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="package"/>
+                            <field name="published_on"/>
+                            <field name="file_summary" invisible="not file_summary"/>
+                        </group>
+                    </group>
+                    <field name="summary" placeholder="Một hai câu hiện trên trang danh sách: hướng dẫn này giúp làm gì."/>
+                    <div class="text-muted small mt-3">
+                        Tải lên một file .html, hoặc .zip gồm index.html và các ảnh/CSS đi kèm (giữ nguyên
+                        thư mục như trong trang, VD img/anh.png). Tải lên lần nữa là thay toàn bộ nội dung cũ.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_sale_guide_search" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.search</field>
+        <field name="model">hlv.sale.guide</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="topic"/>
+                <filter name="inactive" string="Đã ẩn" domain="[('active', '=', False)]"/>
+                <filter name="group_topic" string="Nhóm" context="{'group_by': 'topic'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_sale_guide" model="ir.actions.act_window">
+        <field name="name">Quản lý hướng dẫn</field>
+        <field name="res_model">hlv.sale.guide</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Thêm hướng dẫn đầu tiên</p>
+            <p>Đặt tên, tải file .html hoặc .zip lên. Sale đọc ở trang /huong-dan.</p>
+        </field>
+    </record>
+
+    <record id="action_guide_page" model="ir.actions.act_url">
+        <field name="name">Đọc hướng dẫn</field>
+        <field name="url">/huong-dan</field>
+        <field name="target">self</field>
+    </record>
+
+    <menuitem id="menu_guide_root" name="Hướng dẫn" sequence="95" groups="base.group_user"/>
+    <menuitem id="menu_guide_read" name="Đọc hướng dẫn" parent="menu_guide_root" action="action_guide_page" sequence="10"/>
+    <menuitem id="menu_guide_manage" name="Quản lý hướng dẫn" parent="menu_guide_root" action="action_sale_guide"
+              sequence="20" groups="group_guide_manager"/>
+</odoo>
