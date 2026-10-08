@@ -14,7 +14,7 @@ from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
     deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate, parse_vn_number,
-    resolve_net_price,
+    resolve_net_price, split_code_name,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -42,20 +42,22 @@ STATUS_DISPLAY = {
 class VendorQuotePortal(http.Controller):
 
     @http.route(f"{PORTAL_ROUTE}/<string:token>", type="http", auth="public", methods=["GET"])
-    def portal_home(self, token, status="all", q="", page=1, **kw):
+    def portal_home(self, token, status=None, q="", page=1, **kw):
         access = self._get_access(token)
         if not access:
             return self._not_found()
         if not self._is_logged_in(access):
             return self._render_login(access)
 
-        status = status if status in STATUS_DISPLAY else "all"
         q = (q or "").strip()[:SEARCH_MAX]
         Quote = request.env["hlv.vendor.quote"].sudo()
         base_domain = self._list_domain(access, q)
         counts = {"all": Quote.search_count(base_domain)}
         for key in VENDOR_STATUSES:
             counts[key] = Quote.search_count(base_domain + Quote._vendor_status_domain(key))
+        if status not in STATUS_DISPLAY:
+            # Mở trang chưa chọn tab: ưu tiên "Chờ báo giá" — việc NCC cần làm; hết thì xem tất cả.
+            status = "waiting" if counts["waiting"] else "all"
 
         domain = base_domain if status == "all" else base_domain + Quote._vendor_status_domain(status)
         pager = paginate(counts[status], page, PER_PAGE)
@@ -71,7 +73,7 @@ class VendorQuotePortal(http.Controller):
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
-                for key in ("all",) + VENDOR_STATUSES
+                for key in VENDOR_STATUSES + ("all",)
             ],
             "status": status,
             "q": q,
@@ -287,8 +289,9 @@ class VendorQuotePortal(http.Controller):
             ]
         return domain
 
-    def _list_url(self, access, status="all", q="", page=1):
-        params = {"status": status if status != "all" else None, "q": q or None, "page": page if page > 1 else None}
+    def _list_url(self, access, status=None, q="", page=1):
+        # Luôn ghi status (kể cả "all"): thiếu status là trang tự chọn tab "Chờ báo giá".
+        params = {"status": status, "q": q or None, "page": page if page > 1 else None}
         query = urlencode({key: value for key, value in params.items() if value})
         base = f"{PORTAL_ROUTE}/{access.access_token}"
         return f"{base}?{query}" if query else base
@@ -393,6 +396,8 @@ class VendorQuotePortal(http.Controller):
             "company": request.env.company.sudo(),
             "portal_base": f"{PORTAL_ROUTE}/{access.access_token}",
             "fmt": format_vn_number,
+            # Mã hàng và tên hàng hiện thành hai cột: bỏ tiền tố "[mã]" khỏi tên.
+            "code_name": split_code_name,
             # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
             "fdate": local_date_text,
             "vat_options": VAT_SELECTION,

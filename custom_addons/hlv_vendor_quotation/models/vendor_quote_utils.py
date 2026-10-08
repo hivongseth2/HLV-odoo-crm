@@ -84,6 +84,20 @@ def format_vn_number(value):
     return f"{integer_part},{decimal_part}" if decimal_part else integer_part
 
 
+def split_code_name(name, code):
+    """Tên hàng bỏ tiền tố mã, để hiện mã và tên thành hai cột riêng.
+
+    name: tên dòng, có thể dạng "[MÃ] Tên" (display_name của Odoo); code: mã hàng hoặc rỗng.
+    Trả tên đã bỏ "[code]" ở đầu và khoảng trắng thừa. Không có mã / không có tiền tố → tên
+    nguyên (đã strip); bỏ tiền tố mà hết chữ → giữ tên nguyên. None → "".
+    """
+    name = (name or "").strip()
+    prefix = f"[{code}]" if code else ""
+    if prefix and name.startswith(prefix):
+        return name[len(prefix):].strip() or name
+    return name
+
+
 def resolve_net_price(price, gross, tax_rate, list_price, discount):
     """Đơn giá chưa VAT (đã trừ chiết khấu) của một dòng NCC gửi — giá lưu và đem so.
 

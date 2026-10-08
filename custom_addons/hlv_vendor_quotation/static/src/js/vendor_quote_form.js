@@ -19,8 +19,6 @@
     const discountShownByServer = form.classList.contains("vq-disc-on");
     // Ô giá theo "mốc": NCC gõ ô nào thì ô đó là mốc, hai ô kia tính lại theo nó.
     const PRICE_INPUTS = { list: "[data-vq-list]", net: "[data-vq-price]", gross: "[data-vq-gross]" };
-    // Số cột sau cột STT — hàng phụ (ngày giao, tên HĐ, ghi chú) trải hết chừng ấy cột.
-    const EXTRA_SPAN = { off: 6, on: 8 };
 
     function vatRate(value) {
         return value && value !== "kct" ? parseFloat(value) : 0;
@@ -70,7 +68,13 @@
             if (!input || input === typing || key === line.dataset.anchor || (key === "list" && !discountOn())) {
                 continue;
             }
-            input.value = result[key] == null ? "" : formatVnNumber(result[key]);
+            let value = result[key];
+            // Giá sau VAT tự tính chỉ để NCC đối chiếu (server lưu giá chưa VAT): làm tròn tới
+            // đồng cho gọn ô. NCC gõ vào ô này thì nó thành mốc và giữ nguyên số đã gõ.
+            if (key === "gross" && value != null) {
+                value = Math.round(value);
+            }
+            input.value = value == null ? "" : formatVnNumber(value);
         }
     }
 
@@ -122,9 +126,6 @@
     function applyDiscountMode() {
         const on = discountOn();
         form.classList.toggle("vq-disc-on", on);
-        for (const cell of form.querySelectorAll("[data-vq-extra-cell]")) {
-            cell.colSpan = on ? EXTRA_SPAN.on : EXTRA_SPAN.off;
-        }
         for (const line of lines) {
             if (!on && line.dataset.anchor === "list") {
                 line.dataset.anchor = "net";
