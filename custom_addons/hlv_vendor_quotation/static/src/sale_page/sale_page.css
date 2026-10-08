@@ -295,3 +295,14 @@ body {
 /* Chọn mã sale cho tài khoản dùng chung nhiều mã */
 .hq-code-choices { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
 .hq-code-select:disabled { background: #f3f4f6; color: var(--hq-ink); cursor: not-allowed; opacity: 1; }
+
+/* ------------------------------------------------------------ trang tra giá */
+.pl-page { display: grid; gap: 1rem; max-width: 1400px; }
+.pl-search .hq-picker { max-width: 640px; }
+.pl-search p { margin: .4rem 0 0; }
+.pl-product { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
+.pl-product .hq-h2 { margin: 0; }
+#pl-result { display: grid; gap: 1rem; }
+.pl-vendor-row { cursor: pointer; }
+.pl-vendor-row:hover td, .pl-vendor-row.is-active td { background: var(--hq-accent-soft); }
+.pl-quote-old td { color: var(--hq-muted); }

@@ -20,6 +20,7 @@
                     <div class="container-fluid">
                         <span class="navbar-brand mb-0">Hỏi giá nhà cung cấp</span>
                         <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link text-white-50" href="/hoi-gia-ncc/tra-gia">Tra giá</a>
                             <a class="nav-link text-white-50" href="/sale_plan">Tình trạng đơn</a>
                             <a class="nav-link text-white-50 d-none d-md-inline" href="/giao-hang">Giao hàng</a>
                             <a class="nav-link text-white-50 d-none d-md-inline" href="/search_stock">Tồn kho</a>

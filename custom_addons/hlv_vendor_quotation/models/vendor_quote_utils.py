@@ -315,3 +315,35 @@ def inquiry_close_day(price_valid_untils, deadline, created_day, grace_days=CLOS
         return max(valid)
     base = deadline or created_day
     return base + timedelta(days=grace_days) if base else None
+
+
+def summarize_vendor_prices(purchases, quotes):
+    """Tóm tắt giá theo từng NCC cho trang tra giá.
+
+    purchases / quotes: list dict đã sắp mới nhất trước, mỗi dict có vendor_id, vendor,
+    day (chuỗi yyyy-mm-dd để so), price (đơn giá đem so). Trả list dict {vendor_id, vendor,
+    last_purchase, min_purchase, purchase_count, last_quote, min_quote, quote_count, last_day}
+    — last_* / min_* là chính dict dòng (None nếu NCC chưa có loại đó), sắp theo hoạt động gần
+    nhất trước. Dòng quote có "unavailable" thật thì không tính vào min_quote. Rỗng → [].
+    """
+    summary = {}
+
+    def entry(row):
+        return summary.setdefault(row["vendor_id"], {
+            "vendor_id": row["vendor_id"], "vendor": row["vendor"],
+            "last_purchase": None, "min_purchase": None, "purchase_count": 0,
+            "last_quote": None, "min_quote": None, "quote_count": 0, "last_day": "",
+        })
+
+    for kind, rows in (("purchase", purchases), ("quote", quotes)):
+        for row in rows:
+            item = entry(row)
+            item[kind + "_count"] += 1
+            if item["last_" + kind] is None:
+                item["last_" + kind] = row
+            if not row.get("unavailable") and row["price"] > 0:
+                current = item["min_" + kind]
+                if current is None or row["price"] < current["price"]:
+                    item["min_" + kind] = row
+            item["last_day"] = max(item["last_day"], row["day"] or "")
+    return sorted(summary.values(), key=lambda item: item["last_day"], reverse=True)
