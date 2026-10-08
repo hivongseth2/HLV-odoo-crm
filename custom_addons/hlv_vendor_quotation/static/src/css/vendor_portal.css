@@ -222,7 +222,8 @@ a { color: var(--vq-accent); }
 }
 
 /* --- Tab mục (Yêu cầu báo giá / Đơn mua hàng) và tiến độ đơn mua --- */
-.vq-section-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--vq-line); margin-bottom: 24px; overflow-x: auto; }
+/* overflow-y: hidden — gạch chân tab (margin -1px) làm trình duyệt hiện thanh cuộn dọc thừa ở cuối hàng tab. */
+.vq-section-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--vq-line); margin-bottom: 24px; overflow-x: auto; overflow-y: hidden; }
 .vq-section-tab { padding: 10px 0; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--vq-muted);
     text-decoration: none; font-weight: 600; white-space: nowrap; }
 .vq-section-tab:hover { color: var(--vq-text); }
@@ -401,8 +402,8 @@ a { color: var(--vq-accent); }
 .vq-grid-hint { margin: 0 0 8px; font-size: .8rem; color: var(--vq-muted); }
 .vq-grid-hint kbd { padding: 0 5px; border: 1px solid var(--vq-line-strong); border-bottom-width: 2px; border-radius: 4px;
     background: #fff; font: inherit; font-size: .74rem; }
-.vq-grid { min-width: 1080px; border-collapse: collapse; }
-.vq-disc-on .vq-grid { min-width: 1240px; }
+.vq-grid { min-width: 1060px; border-collapse: collapse; }
+.vq-disc-on .vq-grid { min-width: 1120px; }
 .vq-grid th, .vq-grid td { border: 1px solid var(--vq-line); white-space: nowrap; }
 .vq-grid tr > :first-child { border-left: 0; }
 .vq-grid tr > :last-child { border-right: 0; }
@@ -420,18 +421,23 @@ select.vq-cell-input { padding: 0 4px; cursor: pointer; }
 .vq-cell-input:focus { outline: 2px solid var(--vq-accent); outline-offset: -2px; background: #fff; }
 .vq-cell-input.vq-input-error { outline: 2px solid var(--vq-danger); outline-offset: -2px; }
 .vq-cell-calc { background: #f8fafc; font-variant-numeric: tabular-nums; }
+/* Có chiết khấu: ô đơn giá (giá trước CK) thấp lại để vừa dòng nhỏ "sau CK …" bên dưới — hàng không cao thêm. */
+.vq-unit-sub { padding: 0 8px 2px; font-size: .7rem; line-height: 1.2; color: var(--vq-ok); font-variant-numeric: tabular-nums;
+    text-align: right; }
+.vq-quote-form:not(.vq-disc-on) .vq-unit-sub { display: none; }
+.vq-disc-on .vq-grid .vq-col-price .vq-cell-input { height: 22px; margin-top: 2px; }
+.vq-disc-on .vq-grid .vq-col-price .vq-cell-text { line-height: 1.3; }
 .vq-grid .vq-col-total { font-weight: 600; }
 .vq-cell-text { display: block; padding: 0 8px; }
 
 .vq-grid .vq-col-no { width: 34px; text-align: center; color: var(--vq-muted); }
 .vq-grid .vq-col-code { width: 108px; font-variant-numeric: tabular-nums; color: #374151; }
 .vq-grid .vq-col-name { min-width: 220px; }
-.vq-grid .vq-col-uom { width: 52px; }
-.vq-grid .vq-col-qty { width: 50px; }
+.vq-grid .vq-col-qty { width: 76px; }
+.vq-uom { color: var(--vq-muted); }
 .vq-grid .vq-col-vat { width: 78px; }
 .vq-grid .vq-col-price { width: 112px; }
 .vq-grid .vq-col-disc { width: 54px; }
-.vq-grid .vq-col-list { width: 100px; }
 .vq-grid .vq-col-total { width: 112px; }
 .vq-grid .vq-col-days { width: 54px; }
 .vq-grid .vq-col-na { width: 64px; text-align: center; }
@@ -458,7 +464,9 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-name-cell { max-width: none; }
     .vq-cell-text { padding: 0; }
     .vq-cell-calc { background: transparent; }
-    .vq-grid .vq-num .vq-cell-input, .vq-cell-value { text-align: left; }
+    .vq-grid .vq-num .vq-cell-input, .vq-cell-value, .vq-unit-sub { text-align: left; }
+    .vq-disc-on .vq-grid .vq-col-price .vq-cell-input { height: 38px; margin-top: 0; }
+    .vq-unit-sub { padding: 2px 0 0; }
 }
 
 /* --- Hiệu lực giá (cột trái chân form, trên ghi chú chung) --- */
