@@ -67,7 +67,7 @@ window.HlvQuote = window.HlvQuote || {};
 
   function renderCodeSelect() {
     var options = (S.config.can_see_all ? [[S.config.all_code, "Tất cả mã sale"]] : [])
-      .concat((S.config.codes || []).map(function (c) { return [c.code, c.code]; }));
+      .concat((S.config.codes || []).map(function (c) { return [c.code, HQ.saleLabel(c.code)]; }));
     var select = HQ.$("hq-code");
     select.innerHTML = options.map(function (o) {
       return '<option value="' + HQ.esc(o[0]) + '"' + (o[0] === S.code ? " selected" : "") + ">" +
@@ -101,7 +101,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<p class="hq-muted">Tài khoản này dùng chung cho nhiều mã sale. Chọn mã của bạn — máy này sẽ nhớ cho ' +
       "lần sau. Mở link riêng của mình (có ?t=…) thì vào thẳng, khỏi chọn.</p>" +
       '<div class="hq-code-choices">' + (S.config.codes || []).map(function (c) {
-        return '<button type="button" class="hq-btn" data-pick-code="' + HQ.esc(c.code) + '">' + HQ.esc(c.code) + "</button>";
+        return '<button type="button" class="hq-btn" data-pick-code="' + HQ.esc(c.code) + '">' + HQ.esc(HQ.saleLabel(c.code)) + "</button>";
       }).join("") + "</div>");
   }
 
@@ -187,6 +187,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindPasteEvents();
     HQ.rpc("/api/hoi-gia-ncc/config", {}).then(function (config) {
       S.config = config;
+      HQ.saleNames = config.sale_names || {};
       var code = resolveCode(config);
       if (code === null) {
         deny((config.codes || []).length

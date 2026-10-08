@@ -491,3 +491,8 @@ a { color: var(--vq-accent); }
         border-bottom: 1px solid var(--vq-line); }
     .vq-list-table .vq-quick-table td.vq-num { text-align: right; }
 }
+
+/* --- Người hỏi giá (đầu trang báo giá) --- */
+.vq-tel { display: block; font-weight: 600; text-decoration: none; font-variant-numeric: tabular-nums; }
+.vq-quick-requester { margin-right: auto; color: var(--vq-muted); }
+.vq-quick-requester b { color: var(--vq-text); }

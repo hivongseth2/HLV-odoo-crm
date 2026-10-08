@@ -2,6 +2,8 @@
 """Trang /hoi-gia-ncc/tra-gia: sale gõ mã sản phẩm, xem mọi giá đã mua / NCC từng báo theo
 từng NCC (services/price_lookup.py). Cùng quyền vào trang với /hoi-gia-ncc, không theo mã sale."""
 
+import json
+
 from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import request
@@ -22,6 +24,7 @@ class SalePriceLookup(SalePageMixin, http.Controller):
             "asset_version": asset_version(),
             "allowed": self._allowed(),
             "initial_product_id": to_int(p),
+            "sale_names": json.dumps(request.env["hlv.vendor.sale.contact"]._name_map()),
         })
 
     @http.route(f"{API}/product_prices", type="json", auth="user", methods=["POST"])

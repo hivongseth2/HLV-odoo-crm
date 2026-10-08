@@ -340,6 +340,10 @@
                             <span t-if="hint[0] and editable" t-attf-class="vq-small vq-hint-#{hint[1]}">
                                 (<t t-esc="hint[0].lower()"/>)</span></dd></div>
                     <div><dt>Số mặt hàng</dt><dd t-esc="len(quote.line_ids)"/></div>
+                    <div t-if="requester"><dt>Người hỏi giá</dt>
+                        <dd><t t-esc="requester['name']"/>
+                            <a t-if="requester['phone']" class="vq-tel" t-attf-href="tel:#{requester['phone']}"
+                               t-esc="requester['phone']"/></dd></div>
                     <div t-if="quote.submit_date"><dt>Gửi giá lần cuối</dt>
                         <dd t-esc="fdate(quote.submit_date)"/></div>
                     <div t-if="quote.price_valid_until"><dt>Giá hiệu lực đến</dt>

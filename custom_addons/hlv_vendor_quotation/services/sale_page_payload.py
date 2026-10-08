@@ -257,6 +257,7 @@ def share_message(quotes):
         deadline_text=_date_text(min(deadlines)) if deadlines else "",
         url=url,
         reask=_reask_lines(quotes),
+        requester=quotes.env["hlv.vendor.sale.contact"]._requester(first.inquiry_id.sale_code),
         password=access._shown_password() if access else "",
     )
 

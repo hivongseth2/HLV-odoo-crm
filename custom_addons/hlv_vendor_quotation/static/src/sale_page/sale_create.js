@@ -64,7 +64,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (all) {
       HQ.$("hq-create-code").innerHTML = '<option value="' + esc(S.config.all_code) + '">— Không gắn mã sale —</option>' +
         S.config.codes.map(function (c) {
-          return '<option value="' + esc(c.code) + '">' + esc(c.code) + "</option>";
+          return '<option value="' + esc(c.code) + '">' + esc(HQ.saleLabel(c.code)) + "</option>";
         }).join("");
     }
   }
@@ -306,7 +306,7 @@ window.HlvQuote = window.HlvQuote || {};
       return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term }).then(function (r) { return r.orders; });
     }, function (o) {
       return '<span class="hq-strong">' + esc(o.name) + "</span> " +
-        '<span class="hq-muted">' + esc([o.partner, o.sale_code, o.date].filter(Boolean).join(" · ")) + "</span>";
+        '<span class="hq-muted">' + esc([o.partner, HQ.saleName(o.sale_code), o.date].filter(Boolean).join(" · ")) + "</span>";
     }, pickSaleOrder);
 
     HQ.bindPicker("hq-prod-search", "hq-prod-results", function (term) {

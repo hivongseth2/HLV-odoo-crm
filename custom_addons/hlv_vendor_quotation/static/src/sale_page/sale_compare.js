@@ -69,7 +69,7 @@ window.HlvQuote = window.HlvQuote || {};
     D.detail = d;
     HQ.$("hq-drawer-panel").innerHTML =
       '<div class="hq-drawer-head"><div><div class="hq-muted">Phiếu hỏi giá' +
-      (d.sale_code ? " · " + esc(d.sale_code) : "") + "</div>" +
+      (d.sale_code ? " · " + esc(HQ.saleName(d.sale_code)) : "") + "</div>" +
       '<h2 class="hq-h2">' + esc(d.name) + ' <span class="hq-tag ' + (HQ.SALE_STATUS_CLASS[d.sale_status] || "") +
       '">' + esc(d.sale_status_label) + "</span></h2></div>" +
       '<button type="button" class="btn-close" data-close="drawer" aria-label="Đóng"></button></div>' +
@@ -98,7 +98,7 @@ window.HlvQuote = window.HlvQuote || {};
   function renderFacts(d) {
     var orders = d.orders.map(HQ.orderTag).join("");
     return '<div class="hq-facts">' +
-      fact("Mã sale", esc(d.sale_code)) +
+      fact("Sale", esc(HQ.saleLabel(d.sale_code))) +
       fact("Đơn bán", esc(d.sale_order)) +
       fact("Hạn báo giá", esc(d.deadline)) +
       fact("Yêu cầu mua hàng", d.requests.map(HQ.requestTag).join("")) +
@@ -288,7 +288,7 @@ window.HlvQuote = window.HlvQuote || {};
       return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term }).then(function (r) { return r.orders; });
     }, function (o) {
       return '<span class="hq-strong">' + esc(o.name) + "</span> " +
-        '<span class="hq-muted">' + esc([o.partner, o.sale_code, o.date].filter(Boolean).join(" · ")) + "</span>";
+        '<span class="hq-muted">' + esc([o.partner, HQ.saleName(o.sale_code), o.date].filter(Boolean).join(" · ")) + "</span>";
     }, function (order) {
       D.saleOrder = { id: order.id, name: order.name };
       HQ.$("hq-req-so-chip").innerHTML = saleOrderChip();

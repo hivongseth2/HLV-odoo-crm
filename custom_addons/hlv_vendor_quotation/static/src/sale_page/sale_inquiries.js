@@ -130,7 +130,7 @@ window.HlvQuote = window.HlvQuote || {};
       return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") + (q.request_rejected ? " hq-row-alert" : "") +
         '" data-inquiry="' + q.id + '">' +
         '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" + (chat ? " " + chat : "") +
-        (q.sale_code ? '<div class="hq-muted">' + esc(q.sale_code) + "</div>" : "") + "</td>" +
+        (q.sale_code ? '<div class="hq-muted">' + esc(HQ.saleName(q.sale_code)) + "</div>" : "") + "</td>" +
         '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.products) + "</span>" +
         (q.sale_order ? '<div class="hq-muted">Đơn bán ' + esc(q.sale_order) + "</div>" : "") + "</td>" +
         '<td class="hq-nowrap hq-num">' + q.quoted_count + "/" + q.vendor_count + " NCC</td>" +

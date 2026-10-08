@@ -84,6 +84,38 @@ def format_vn_number(value):
     return f"{integer_part},{decimal_part}" if decimal_part else integer_part
 
 
+_EMAIL_RE = re.compile(r"[^@\s,;<>\"']+@[^@\s,;<>\"']+\.[^@\s,;<>\"']+")
+
+
+def parse_email_list(text):
+    """Ô "gửi tới" sale gõ → (email hợp lệ, phần không phải email).
+
+    text: chuỗi, các địa chỉ cách nhau bằng dấu phẩy, chấm phẩy, khoảng trắng hoặc xuống dòng.
+    Trả hai list theo thứ tự gõ; email hợp lệ đã bỏ trùng (không phân biệt hoa thường) và
+    viết thường. None / rỗng → ([], []).
+    """
+    valid, invalid, seen = [], [], set()
+    for part in re.split(r"[,;\s]+", text or ""):
+        if not part:
+            continue
+        if not _EMAIL_RE.fullmatch(part):
+            invalid.append(part)
+            continue
+        email = part.lower()
+        if email not in seen:
+            seen.add(email)
+            valid.append(email)
+    return valid, invalid
+
+
+def requester_text(name, phone):
+    """Người hỏi giá hiện cho NCC: "Trâm Bến Cam – 0983300122".
+
+    name, phone: chuỗi (None coi như rỗng). Thiếu một trong hai → phần còn lại; thiếu cả hai → "".
+    """
+    return " – ".join(part.strip() for part in (name or "", phone or "") if part and part.strip())
+
+
 def split_code_name(name, code):
     """Tên hàng bỏ tiền tố mã, để hiện mã và tên thành hai cột riêng.
 
@@ -248,12 +280,12 @@ def rank_vendor_suggestions(coverage, order_stats, limit):
     return sorted(vendors.values(), key=sort_key)[:limit]
 
 
-def build_share_message(company_name, vendor_name, quote_names, deadline_text, url, password, reask=()):
+def build_share_message(company_name, vendor_name, quote_names, deadline_text, url, password, reask=(), requester=""):
     """Tin nhắn sale dán vào Zalo gửi NCC — gọn: số báo giá, hạn, link chung của NCC, mật khẩu.
 
     Nhận: tên công ty mình, tên NCC, list số báo giá, hạn báo giá đã định dạng ("" nếu
     không có hạn), link chung của NCC, mật khẩu (chuỗi; rỗng = đang tắt mật khẩu, bỏ dòng
-    mật khẩu), reask: list chuỗi "hàng — giá lần
+    mật khẩu), requester: "Tên – SĐT" người hỏi giá (rỗng thì bỏ dòng), reask: list chuỗi "hàng — giá lần
     trước" cho mặt hàng NCC vừa báo gần đây (đã điền sẵn, chỉ cần xác nhận); rỗng thì bỏ.
     Trả: chuỗi nhiều dòng. Nhiều báo giá thì liệt kê các số, cách nhau dấu phẩy.
     """
@@ -266,6 +298,8 @@ def build_share_message(company_name, vendor_name, quote_names, deadline_text, u
     ]
     if password:
         lines.append(f"Mật khẩu: {password}")
+    if requester:
+        lines.append(f"Người hỏi giá: {requester}")
     if reask:
         lines.append("Hàng quý công ty vừa báo giá gần đây (giá cũ đã điền sẵn, nhờ xác nhận còn hàng / đúng giá):")
         lines += [f"- {item}" for item in reask]

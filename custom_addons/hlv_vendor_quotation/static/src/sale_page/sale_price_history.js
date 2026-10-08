@@ -34,7 +34,7 @@ window.HlvQuote = window.HlvQuote || {};
       (p.vat ? " · " + esc(p.vat) : "") + "</td>" +
       '<td class="hq-num">' + (p.delivery_days ? p.delivery_days + " ngày" : "—") + "</td>" +
       '<td class="hq-nowrap">' + esc(p.date) + "</td>" +
-      '<td class="hq-nowrap">' + esc(p.doc) + (p.sale_code ? '<div class="hq-muted">' + esc(p.sale_code) + "</div>" : "") +
+      '<td class="hq-nowrap">' + esc(p.doc) + (p.sale_code ? '<div class="hq-muted">' + esc(HQ.saleName(p.sale_code)) + "</div>" : "") +
       "</td></tr>";
   }
 
@@ -160,7 +160,7 @@ window.HlvQuote = window.HlvQuote || {};
           "<b>" + esc(p.vendor) + "</b> · <b>" + HQ.money(p.price_unit) + "</b> chưa VAT" +
           (p.vat ? " (" + esc(p.vat) + ")" : "") + " · báo cho " + HQ.qty(p.qty) + " " + esc(p.uom) +
           (p.valid_until ? " · hiệu lực đến " + esc(p.valid_until) : "") +
-          '<div class="hq-reuse-sub">' + esc(p.doc) + (p.sale_code ? " · " + esc(p.sale_code) : "") + " · " +
+          '<div class="hq-reuse-sub">' + esc(p.doc) + (p.sale_code ? " · " + esc(HQ.saleName(p.sale_code)) : "") + " · " +
           (problem ? "không dùng được: " + esc(problem) : esc(p.origin_status)) + "</div></div>" + action + "</div>";
       }).join("") + "</div>";
   };

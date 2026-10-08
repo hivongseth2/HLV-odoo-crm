@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Danh bạ sale ban đầu. Mã sale MISA của các sale này là số điện thoại; mã nào khác thì
+         sửa ở Báo giá NCC → Cấu hình → Danh bạ sale (noupdate: nâng cấp module không ghi đè). -->
+    <record id="sale_contact_0983300122" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0983300122</field><field name="name">Trâm Bến Cam</field><field name="phone">0983300122</field>
+    </record>
+    <record id="sale_contact_0975545785" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0975545785</field><field name="name">Hân</field><field name="phone">0975545785</field>
+    </record>
+    <record id="sale_contact_0961348454" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0961348454</field><field name="name">Phương Đà Nẵng</field><field name="phone">0961348454</field>
+    </record>
+    <record id="sale_contact_0975562062" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0975562062</field><field name="name">Nhi</field><field name="phone">0975562062</field>
+    </record>
+    <record id="sale_contact_0962103710" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0962103710</field><field name="name">Trâm HCM</field><field name="phone">0962103710</field>
+    </record>
+    <record id="sale_contact_0392196168" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0392196168</field><field name="name">Trọng HCM</field><field name="phone">0392196168</field>
+    </record>
+    <record id="sale_contact_0328174969" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0328174969</field><field name="name">Nam</field><field name="phone">0328174969</field>
+    </record>
+    <record id="sale_contact_0795585562" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0795585562</field><field name="name">Quang HCM</field><field name="phone">0795585562</field>
+    </record>
+    <record id="sale_contact_0932632563" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0932632563</field><field name="name">Hà HCM</field><field name="phone">0932632563</field>
+    </record>
+    <record id="sale_contact_0976453750" model="hlv.vendor.sale.contact">
+        <field name="sale_code">0976453750</field><field name="name">Thùy HCM</field><field name="phone">0976453750</field>
+    </record>
+</odoo>
