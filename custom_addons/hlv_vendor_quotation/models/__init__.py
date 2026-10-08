@@ -8,3 +8,4 @@ from . import purchase_order
 from . import vendor_suggestion
 from . import vendor_chat_read
 from . import mail_message
+from . import res_config_settings

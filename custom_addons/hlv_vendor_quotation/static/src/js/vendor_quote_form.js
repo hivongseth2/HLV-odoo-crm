@@ -1,6 +1,6 @@
 /**
- * Trang nhập giá của NCC: quy đổi 2 chiều giá trước chiết khấu ↔ đơn giá chưa VAT ↔ đơn giá
- * sau VAT (vendor_quote_price.js), tính thành tiền tạm, đếm số dòng đã điền, định dạng lại
+ * Trang nhập giá của NCC: NCC gõ đơn giá sau VAT (hoặc giá trước chiết khấu + %), đơn giá
+ * chưa VAT — giá được lưu — tự tính vào ô ẩn và hiện ra (vendor_quote_price.js); tính thành tiền tạm, đếm số dòng đã điền, định dạng lại
  * số khi rời ô, chọn VAT / % chiết khấu cho tất cả dòng. Trang vẫn gửi được khi JS hỏng —
  * server tự suy đơn giá từ ô có số (resolve_net_price). Báo giá đã đóng không có ô nhập:
  * giá / VAT đọc từ data-price, data-vat của dòng.
@@ -76,6 +76,10 @@
             }
             input.value = value == null ? "" : formatVnNumber(value);
         }
+        const netText = line.querySelector("[data-vq-net-text]");
+        if (netText) {
+            netText.textContent = result.net == null ? "—" : formatVnNumber(result.net);
+        }
     }
 
     function readLine(line) {
@@ -128,7 +132,7 @@
         form.classList.toggle("vq-disc-on", on);
         for (const line of lines) {
             if (!on && line.dataset.anchor === "list") {
-                line.dataset.anchor = "net";
+                line.dataset.anchor = "gross";
             }
             recompute(line);
         }
@@ -188,11 +192,15 @@
     applyToAll("[data-vq-vat-all]", "[data-vq-vat]");
     applyToAll("[data-vq-disc-all]", "[data-vq-disc]");
 
-    // Mốc ban đầu: dòng đã lưu giá trước chiết khấu thì giữ đúng số đó, còn lại theo đơn giá chưa VAT.
+    // Mở trang: điền giá sau VAT từ đơn giá chưa VAT đã lưu, rồi lấy ô NCC nhìn thấy làm mốc —
+    // giá trước CK nếu có, không thì giá sau VAT — để đổi VAT / % CK là tính lại giá chưa VAT.
     for (const line of lines) {
-        const list = line.querySelector("[data-vq-list]");
-        line.dataset.anchor = discountOn() && list && parseVnNumber(list.value) != null ? "list" : "net";
+        line.dataset.anchor = "net";
     }
     applyDiscountMode();
+    for (const line of lines) {
+        const list = line.querySelector("[data-vq-list]");
+        line.dataset.anchor = discountOn() && list && parseVnNumber(list.value) != null ? "list" : "gross";
+    }
     refresh();
 })();

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Công tắc mật khẩu link NCC, đặt trong Cài đặt → Mua hàng (xmlid view cài đặt Mua hàng
+         của Odoo 18: purchase.res_config_settings_view_form_purchase, app name="purchase"). -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hlv.vendor.quotation</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="purchase.res_config_settings_view_form_purchase"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='purchase']" position="inside">
+                <block title="Hỏi giá NCC" name="hlv_vendor_quote_setting_container">
+                    <setting id="hlv_vq_require_password" string="Mật khẩu link báo giá NCC"
+                             help="Bật: NCC phải nhập mật khẩu khi mở link báo giá, tin nhắn Zalo gửi kèm mật khẩu. Tắt: mở link là vào thẳng.">
+                        <field name="hlv_vq_require_password"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

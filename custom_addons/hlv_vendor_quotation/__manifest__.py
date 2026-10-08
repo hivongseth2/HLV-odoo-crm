@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.3.21.0",
+    "version": "18.0.3.22.0",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
 - Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
@@ -23,6 +23,8 @@
     "depends": [
         "mail",
         "sale",
+        # Công tắc mật khẩu NCC nằm trong Cài đặt → Mua hàng.
+        "purchase",
         "hlv_contact_refine",
         # Mã sale + link riêng từng sale dùng lại cơ chế /misa_sale_status của module này.
         "misa_invoice_status_report",
@@ -47,6 +49,7 @@
         "views/sale_page_templates.xml",
         "views/sale_price_lookup_templates.xml",
         "views/menus.xml",
+        "views/res_config_settings_views.xml",
     ],
     "assets": {
         "web.assets_backend": [

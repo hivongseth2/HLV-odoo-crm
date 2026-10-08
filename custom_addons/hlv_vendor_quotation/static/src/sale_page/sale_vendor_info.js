@@ -23,8 +23,9 @@ window.HlvQuote = window.HlvQuote || {};
       '<span class="hq-label">Link NCC</span><code class="hq-code" title="' + esc(v.portal_url) + '">' +
       esc(v.portal_url) + "</code>" +
       '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(v.portal_url) + '">Copy link</button>' +
-      '<span class="hq-label">Mật khẩu</span><code class="hq-code hq-access-pass">' + esc(v.password) + "</code>" +
-      '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(v.password) + '">Copy</button>' +
+      // Mật khẩu rỗng = đang tắt mật khẩu trong Cài đặt: NCC mở link là vào, không cần gửi.
+      (v.password ? '<span class="hq-label">Mật khẩu</span><code class="hq-code hq-access-pass">' + esc(v.password) +
+        "</code>" + '<button type="button" class="hq-btn hq-btn-mini" data-copy="' + esc(v.password) + '">Copy</button>' : "") +
       "</div>";
   }
 

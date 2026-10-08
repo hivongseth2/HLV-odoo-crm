@@ -257,7 +257,7 @@ def share_message(quotes):
         deadline_text=_date_text(min(deadlines)) if deadlines else "",
         url=url,
         reask=_reask_lines(quotes),
-        password=access.password or "",
+        password=access._shown_password() if access else "",
     )
 
 
@@ -270,7 +270,7 @@ def vendor_summary(partner, access, counts):
         "quoted": counts.get("quoted", 0),
         "total": sum(counts.values()),
         "portal_url": access.portal_url or "",
-        "password": access.password or "",
+        "password": access._shown_password() if access else "",
     }
 
 
@@ -302,7 +302,7 @@ def vendor_info(quote):
             for c in contacts
         ],
         "portal_url": access.portal_url or "",
-        "password": access.password or "",
+        "password": access._shown_password() if access else "",
         "share_message": share_message(quote) if access else "",
     }
 
