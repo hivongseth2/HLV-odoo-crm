@@ -15,6 +15,7 @@ INDEX = "index.html"
 PDF_FILE = "document.pdf"
 MAX_FILES = 300
 MAX_TOTAL_BYTES = 40 * 1024 * 1024
+MAX_MARKDOWN_BYTES = 2 * 1024 * 1024
 # File rác do máy nén Mac/Windows thêm vào, không thuộc hướng dẫn.
 JUNK_PARTS = ("__MACOSX", ".DS_Store", "Thumbs.db")
 
@@ -97,6 +98,26 @@ def unpack_package(data):
             raise ValueError("File nén phải có index.html (hoặc đúng một file .html) ở thư mục gốc.")
         files[INDEX] = files.pop(pages[0])
     return files
+
+
+def decode_markdown(data):
+    """bytes của file .md → str để lưu làm kiến thức: UTF-8, bỏ BOM, xuống dòng kiểu LF, bỏ
+    dòng trống thừa cuối file.
+
+    Rỗng → "". Quá MAX_MARKDOWN_BYTES, có byte NUL (file nhị phân đổi đuôi), hoặc không phải
+    UTF-8 → ValueError (thông điệp cho người dùng).
+    """
+    if not data:
+        return ""
+    if len(data) > MAX_MARKDOWN_BYTES:
+        raise ValueError(f"File Markdown vượt {MAX_MARKDOWN_BYTES // (1024 * 1024)}MB.")
+    if b"\x00" in data:
+        raise ValueError("File không phải văn bản Markdown.")
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError("File Markdown phải lưu dạng UTF-8.") from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
 
 
 def normalize_document(page):

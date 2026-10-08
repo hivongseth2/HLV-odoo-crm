@@ -13,7 +13,7 @@ import mimetypes
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
-from .guide_utils import INDEX, PDF_FILE, normalize_document, slugify, unpack_package
+from .guide_utils import INDEX, PDF_FILE, decode_markdown, normalize_document, slugify, unpack_package
 
 GUIDE_ROUTE = "/huong-dan"
 
@@ -48,6 +48,20 @@ class SaleGuide(models.Model):
         [("html", "Trang"), ("pdf", "PDF")], string="Loại nội dung", readonly=True,
     )
     published_on = fields.Datetime(string="Cập nhật nội dung lúc", readonly=True)
+    # Bản chữ thuần của hướng dẫn để sau này nạp làm kiến thức cho AI (trợ lý trả lời sale).
+    # Tách khỏi nội dung hiển thị: trang HTML/PDF dành cho người đọc, còn AI cần văn bản sạch
+    # không lẫn CSS/ảnh — nên lưu thẳng thành Text, tìm và đọc được bằng ORM.
+    knowledge_md = fields.Text(
+        string="Kiến thức cho AI (Markdown)",
+        help="Không bắt buộc. Nội dung hướng dẫn viết bằng Markdown, dùng làm kiến thức cho AI sau này. "
+             "Sale không thấy phần này.",
+    )
+    knowledge_file = fields.Binary(
+        string="Tải file .md", compute="_compute_knowledge_file", inverse="_inverse_knowledge_file",
+        help="Tải file Markdown lên là thay toàn bộ ô Kiến thức cho AI.",
+    )
+    knowledge_updated_on = fields.Datetime(string="Cập nhật kiến thức lúc", readonly=True)
+    has_knowledge = fields.Boolean(string="Có kiến thức AI", compute="_compute_has_knowledge", store=True)
     file_summary = fields.Text(string="Các file đang dùng", compute="_compute_file_summary")
     url = fields.Char(string="Link", compute="_compute_url")
 
@@ -72,6 +86,23 @@ class SaleGuide(models.Model):
                 raise UserError(str(exc)) from exc
             guide._replace_files(files)
 
+    def _compute_knowledge_file(self):
+        # Ô chỉ để tải lên: nội dung nằm ở knowledge_md.
+        self.knowledge_file = False
+
+    def _inverse_knowledge_file(self):
+        for guide in self.filtered("knowledge_file"):
+            try:
+                text = decode_markdown(base64.b64decode(guide.knowledge_file))
+            except ValueError as exc:
+                raise UserError(str(exc)) from exc
+            guide.write({"knowledge_md": text})
+
+    @api.depends("knowledge_md")
+    def _compute_has_knowledge(self):
+        for guide in self:
+            guide.has_knowledge = bool((guide.knowledge_md or "").strip())
+
     @api.depends("published_on")
     def _compute_file_summary(self):
         for guide in self:
@@ -94,11 +125,16 @@ class SaleGuide(models.Model):
         for vals in vals_list:
             # Gõ "Hỏi giá NCC" vẫn được: đổi sẵn thành hoi-gia-ncc thay vì bắt nhập lại.
             vals["slug"] = slugify(vals.get("slug") or vals.get("name"))
+            if vals.get("knowledge_md"):
+                vals["knowledge_updated_on"] = fields.Datetime.now()
         return super().create(vals_list)
 
     def write(self, vals):
         if "slug" in vals:
             vals["slug"] = slugify(vals["slug"])
+        if "knowledge_md" in vals:
+            # Ghi lại lúc đổi kiến thức để bộ nạp AI sau này biết bản nào cần nạp lại.
+            vals["knowledge_updated_on"] = fields.Datetime.now()
         return super().write(vals)
 
     def unlink(self):
