@@ -208,13 +208,15 @@ class VendorInquiryLine(models.Model):
     )
     locked = fields.Boolean(
         string="Đã lên đơn mua", compute="_compute_locked",
-        help="Dòng YCMH đã lên RFQ/đơn mua: đổi NCC ở phiếu không đổi được đơn đã tạo nữa.",
+        help="Dòng YCMH đã lên RFQ/đơn mua đủ số lượng: đổi NCC ở phiếu không đổi được đơn đã tạo. "
+             "Thu mua sửa số lượng dòng đơn mua xuống (NCC giao thiếu / hết hàng) thì mở lại cho phần còn thiếu.",
     )
 
-    @api.depends("request_line_id.purchase_lines.state")
+    @api.depends("request_line_id.purchased_qty", "request_line_id.product_qty",
+                 "request_line_id.purchase_lines.state")
     def _compute_locked(self):
         for line in self:
-            line.locked = bool(line.request_line_id.sudo().purchase_lines.filtered(lambda l: l.state != "cancel"))
+            line.locked = bool(line.request_line_id) and line.request_line_id._hlv_fully_ordered()
 
     @api.depends("quote_line_ids.selected")
     def _compute_chosen_line_id(self):

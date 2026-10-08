@@ -320,3 +320,5 @@
 .hq-access .hq-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hq-access-pass { font-size: 1rem; letter-spacing: .08em; }
 .hq-section-title .hq-small { font-size: .75rem; font-weight: 400; }
+
+.hq-partial { color: var(--hq-warn); font-weight: 600; font-size: .8125rem; }

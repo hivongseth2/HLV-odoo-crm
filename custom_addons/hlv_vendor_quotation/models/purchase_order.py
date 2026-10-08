@@ -29,18 +29,29 @@ class PurchaseOrder(models.Model):
         "hlv.vendor.inquiry", string="Phiếu hỏi giá", compute="_compute_hlv_vendor_links"
     )
 
-    @api.depends("order_line.purchase_request_lines")
+    @api.depends("order_line.purchase_request_lines", "partner_id")
     def _compute_hlv_vendor_links(self):
-        """Ngược chuỗi đơn mua → dòng YCMH → dòng báo giá NCC đã được chọn → báo giá / phiếu."""
+        """Ngược chuỗi đơn mua → dòng YCMH → phiếu hỏi giá, và báo giá của CHÍNH NCC của đơn.
+
+        Không dựa vào "dòng đang được chọn": NCC giao thiếu, sale chọn NCC khác cho phần còn
+        lại thì đơn cũ vẫn thuộc báo giá của NCC cũ (NCC cũ vẫn thấy đơn, báo tiến độ, in đơn).
+        """
+        InquiryLine = self.env["hlv.vendor.inquiry.line"]
         QuoteLine = self.env["hlv.vendor.quote.line"]
         for order in self:
             request_lines = order.order_line.purchase_request_lines
-            chosen = QuoteLine.search([
-                ("request_line_id", "in", request_lines.ids),
-                ("selected", "=", True),
-            ]) if request_lines else QuoteLine
-            order.hlv_vendor_quote_ids = chosen.quote_id
-            order.hlv_inquiry_ids = chosen.inquiry_line_id.inquiry_id
+            if not request_lines:
+                order.hlv_inquiry_ids = order.hlv_vendor_quote_ids = False
+                continue
+            inquiry_lines = InquiryLine.search([("request_line_id", "in", request_lines.ids)])
+            quote_lines = QuoteLine.search([
+                "|", ("inquiry_line_id", "in", inquiry_lines.ids), ("request_line_id", "in", request_lines.ids),
+            ])
+            vendor = order.partner_id.commercial_partner_id
+            order.hlv_inquiry_ids = inquiry_lines.inquiry_id
+            order.hlv_vendor_quote_ids = quote_lines.quote_id.filtered(
+                lambda q: q.state != "cancel" and q.partner_id.commercial_partner_id == vendor
+            )
 
     def _chat_contacts(self):
         """Người trong công ty cần biết khi NCC nhắn trên đơn mua: người mua + sale tạo phiếu."""
