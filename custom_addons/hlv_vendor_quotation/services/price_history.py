@@ -7,6 +7,7 @@ phiếu của sale khác (API phiếu vẫn kiểm mã sale). Đọc bằng sudo
 """
 
 from ..models.vendor_quote_utils import local_date_text
+from .price_reuse import reuse_block_reason
 from .vendor_chat import display_time
 
 QUOTED_STATES = ("quoted", "done")
@@ -16,15 +17,20 @@ MAX_PRODUCTS = 12       # tối đa sản phẩm trong kết quả tìm
 
 
 def _line_payload(line, today):
+    reuse_note = reuse_block_reason(line, today)
     quote = line.quote_id
     inquiry = line.inquiry_line_id.inquiry_id
     vendor = quote.partner_id.commercial_partner_id
     return {
         "vendor": vendor.display_name,
         "vendor_id": vendor.id,
-        # Còn hiệu lực thì lập phiếu mới với NCC này là tự dùng lại giá (services/price_reuse.py).
         "valid_until": local_date_text(quote.price_valid_until),
         "valid": bool(quote.price_valid_until) and quote.price_valid_until >= today,
+        # Dùng lại được (lập phiếu mới là tự điền giá) — cùng luật với services/price_reuse.py.
+        "reuse_note": reuse_note,
+        "reusable": not reuse_note,
+        # Giá chỉ đúng cho tối đa số lượng đã hỏi.
+        "qty": line.product_qty,
         "price_unit": line.price_unit,
         "price_incl": line.price_unit * (1 + line.tax_rate / 100.0),
         "vat": dict(line._fields["vat"].selection).get(line.vat, ""),
@@ -47,6 +53,8 @@ def quoted_prices(env, product_ids=None, search=""):
         ("price_unit", ">", 0),
         ("unavailable", "=", False),
         ("product_id", "!=", False),
+        # Bản kế thừa chỉ là bản sao giá gốc — hiện giá gốc thôi.
+        ("inherited_from_id", "=", False),
     ]
     if product_ids:
         domain.append(("product_id", "in", list(product_ids)))
