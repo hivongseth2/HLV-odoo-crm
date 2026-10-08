@@ -46,6 +46,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_price.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_grid.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_list.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>
@@ -384,17 +385,12 @@
                     <div class="vq-section-head">
                         <div>
                             <h2>Mặt hàng cần báo giá</h2>
+                            <!-- Chú thích ngắn, chỉ hiện khi có trường hợp đó — chi tiết xem bằng cách rê chuột lên chip. -->
                             <p t-if="any(line_choice.values())" class="vq-small vq-choice-legend">
-                                Dòng nền xanh: <t t-esc="company.name"/> đã chọn giá của quý công ty. Dòng gạch:
-                                đã chọn nhà cung cấp khác.</p>
-                            <p t-if="editable" class="vq-muted vq-small">Nhập đơn giá sau VAT cho một đơn vị (đã trừ
-                                chiết khấu nếu có) — giá chưa VAT tự tính. Có chiết khấu thì tích "Có chiết khấu" và ghi
-                                % CK — giá trước chiết khấu tự tính. Mặt hàng không cung cấp được, vui lòng chọn "Không có hàng".</p>
-                            <p t-if="references" class="vq-small vq-ref-legend">Mặt hàng ghi "Giá lần trước" đã điền sẵn giá
-                                quý công ty báo trong <t t-esc="reference_days"/> ngày qua — kiểm tra còn hàng, đúng giá thì bấm
-                                Gửi báo giá; khác thì sửa lại.</p>
-                            <p t-if="editable and any(quote.line_ids.mapped('vendor_locked'))" class="vq-muted vq-small">
-                                Mặt hàng ghi "Đã lên đơn mua" không sửa được nữa.</p>
+                                Dòng nền xanh: <t t-esc="company.name"/> đã chọn giá của quý công ty. Dòng gạch: đã chọn
+                                nhà cung cấp khác.</p>
+                            <p t-if="references" class="vq-small vq-ref-legend">Chip "giá cũ": đã điền sẵn giá quý công ty báo
+                                trong <t t-esc="reference_days"/> ngày qua — đúng giá, còn hàng thì cứ gửi.</p>
                         </div>
                         <div t-if="editable" class="vq-head-tools">
                             <label class="vq-check vq-disc-toggle">
@@ -417,26 +413,32 @@
                         </div>
                     </div>
 
-                    <!-- Mỗi mặt hàng một dòng. NCC chỉ nhập MỘT ô giá: đơn giá sau VAT, đã trừ chiết khấu
-                         (thói quen báo giá của NCC và của bên mình). Giá chưa VAT — giá được lưu và đem so —
-                         và giá trước CK tự tính, ghi nhỏ dưới ô; hai số đó đi theo ô ẩn (JS điền; trống thì
-                         server tự tính từ giá sau VAT, xem resolve_net_price). Bảng rộng thì cuộn ngang. -->
+                    <!-- Bảng kiểu bảng tính (giống bảng báo giá trên phần mềm bán hàng của NCC): mỗi mặt hàng
+                         ĐÚNG MỘT dòng, ô nhập phủ kín ô bảng nên mọi ô thẳng hàng. NCC chỉ nhập một ô giá:
+                         đơn giá sau VAT, đã trừ chiết khấu. Giá chưa VAT (giá được lưu) và giá trước CK tự
+                         tính vào ô ẩn (JS; trống thì server tự tính, xem resolve_net_price) — xem bằng
+                         cách rê chuột vào ô đơn giá. Enter / dán cột từ Excel: js/vendor_quote_grid.js. -->
+                    <p t-if="editable" class="vq-grid-hint">
+                        <b>Đơn giá</b> = giá sau VAT cho một đơn vị, đã trừ chiết khấu. Nhấn <kbd>Enter</kbd> để xuống
+                        dòng dưới; dán cả cột giá từ Excel cũng được.
+                    </p>
                     <div class="vq-table-scroll">
-                    <table class="vq-table vq-price-table">
+                    <table class="vq-table vq-price-table vq-grid" data-vq-grid="1">
                         <thead>
                             <tr>
-                                <th class="vq-col-no">STT</th>
-                                <th class="vq-col-name">Hàng hóa</th>
+                                <th class="vq-col-no">#</th>
+                                <th class="vq-col-code">Mã hàng</th>
+                                <th class="vq-col-name">Tên hàng</th>
+                                <th class="vq-col-uom">ĐVT</th>
                                 <th class="vq-num vq-col-qty">SL</th>
                                 <th class="vq-col-vat">VAT</th>
-                                <th class="vq-col-price">
-                                    <span class="vq-disc-off-only">Đơn giá sau VAT</span>
-                                    <span class="vq-disc-only">Đơn giá sau CK, sau VAT</span>
-                                </th>
-                                <th class="vq-col-disc vq-disc-only">% CK</th>
-                                <th class="vq-num vq-col-list vq-disc-only">Giá trước CK</th>
-                                <th class="vq-col-days">Giao (ngày)</th>
-                                <th class="vq-num vq-col-total">Thành tiền sau VAT</th>
+                                <th class="vq-num vq-col-price">Đơn giá</th>
+                                <th class="vq-num vq-col-disc vq-disc-only">%CK</th>
+                                <th class="vq-num vq-col-list vq-disc-only">Trước CK</th>
+                                <th class="vq-num vq-col-total">Thành tiền</th>
+                                <th class="vq-num vq-col-days">Giao</th>
+                                <th class="vq-col-na">Hết hàng</th>
+                                <th class="vq-col-text">Tên xuất HĐ</th>
                                 <th class="vq-col-text">Ghi chú</th>
                             </tr>
                         </thead>
@@ -447,95 +449,85 @@
                             <t t-set="ref" t-value="references.get(lid)"/>
                             <t t-set="ref_disc" t-value="ref and ref.list_price"/>
                             <t t-set="code" t-value="line.product_id.default_code or ''"/>
+                            <t t-set="product_name" t-value="code_name(line.name or line.product_id.name, code)"/>
                             <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ('vq-line-lost' if line_choice.get(lid) == 'other' else '')"/>
                             <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
                             <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
-                            <tr data-vq-line="1" t-attf-class="vq-line #{choice_class}"
+                            <tr data-vq-line="1" t-attf-class="vq-line #{choice_class} #{'vq-line-locked' if line.vendor_locked else ''}"
                                 t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
                                 t-att-data-vat="line.vat or ''">
                                 <td class="vq-col-no" t-esc="line_index + 1"/>
-                                <td class="vq-col-name">
-                                    <!-- Mã hàng + "Không có hàng" chung một dòng nhỏ trên tên — ô tên xuất HĐ bên dưới gọn. -->
-                                    <div class="vq-line-top">
-                                        <span class="vq-line-code" t-esc="code"/>
-                                        <label class="vq-check">
-                                            <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
-                                                   t-att-checked="na_checked" t-att-disabled="not line_editable"/>
-                                            Không có hàng
-                                        </label>
+                                <td class="vq-col-code" data-label="Mã hàng" t-esc="code or '—'"/>
+                                <td class="vq-col-name" t-att-title="product_name">
+                                    <div class="vq-name-cell">
+                                        <a t-if="line.product_id.image_128" class="vq-name-text" target="_blank"
+                                           t-att-href="'%s/img/%s/1024' % (portal_base, lid)" title="Xem ảnh sản phẩm"
+                                           t-esc="product_name"/>
+                                        <span t-else="" class="vq-name-text" t-esc="product_name"/>
+                                        <!-- Trạng thái dòng: chip nhỏ cùng dòng (rê chuột xem chi tiết) — dòng không cao thêm. -->
+                                        <span t-if="line.vendor_locked" class="vq-chip vq-chip-locked"
+                                              title="Đã lên đơn mua — không sửa được nữa">đã đặt</span>
+                                        <span t-elif="line_choice.get(lid) == 'other'" class="vq-chip"
+                                              title="Bên mua đã chọn nhà cung cấp khác cho mặt hàng này">NCC khác</span>
+                                        <span t-if="ref and line_editable" class="vq-chip vq-chip-ref"
+                                              t-att-title="'Giá lần trước: %s sau VAT cho %s %s (%s) — đã điền sẵn, kiểm tra rồi gửi' % (fmt(ref.price_unit * (1 + ref.tax_rate / 100.0)), fmt(ref.product_qty), ref.product_uom_id.name, fdate(ref.quote_id.submit_date))">giá cũ</span>
                                     </div>
-                                    <div class="vq-name-row">
-                                        <a t-if="line.product_id.image_128" class="vq-line-img" target="_blank"
-                                           t-att-href="'%s/img/%s/1024' % (portal_base, lid)" title="Xem ảnh lớn">
-                                            <img t-att-src="'%s/img/%s/128' % (portal_base, lid)" loading="lazy"
-                                                 t-att-alt="line.product_id.name"/>
-                                        </a>
-                                        <span class="vq-line-name" t-esc="code_name(line.name or line.product_id.name, code)"/>
-                                    </div>
-                                    <!-- Dòng được chọn: nền xanh là đủ, không ghi chữ. -->
-                                    <div t-if="line_choice.get(lid) == 'other' or line.vendor_locked or ref" class="vq-line-flags">
-                                        <span t-if="line_choice.get(lid) == 'other'" class="vq-choice">Đã chọn NCC khác</span>
-                                        <span t-if="line.vendor_locked" class="vq-choice vq-choice-locked">Đã lên đơn mua</span>
-                                        <span t-if="ref" class="vq-choice vq-choice-ref">Giá lần trước:
-                                            <t t-esc="fmt(ref.price_unit * (1 + ref.tax_rate / 100.0))"/> sau VAT, cho <t t-esc="fmt(ref.product_qty)"/>
-                                            <t t-esc="ref.product_uom_id.name"/> (<t t-esc="fdate(ref.quote_id.submit_date)"/>)</span>
-                                    </div>
-                                    <label class="vq-inv-field">
-                                        <span class="vq-sr-only">Tên xuất hóa đơn</span>
-                                        <input t-if="line_editable" type="text" class="vq-input" maxlength="255"
-                                               t-att-name="'inv_%s' % lid" placeholder="Tên xuất hóa đơn (nếu khác tên hàng)"
-                                               t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or (ref and ref.invoice_name) or '')"/>
-                                        <span t-elif="line.invoice_name" class="vq-text-value">Tên xuất HĐ: <t t-esc="line.invoice_name"/></span>
-                                    </label>
                                 </td>
-                                <td class="vq-num vq-col-qty" data-label="Số lượng">
-                                    <t t-esc="fmt(line.product_qty)"/> <span class="vq-uom" t-esc="line.product_uom_id.name"/>
-                                </td>
+                                <td class="vq-col-uom" data-label="ĐVT" t-esc="line.product_uom_id.name"/>
+                                <td class="vq-num vq-col-qty" data-label="SL" t-esc="fmt(line.product_qty)"/>
                                 <td class="vq-col-vat" data-label="VAT">
-                                    <select t-if="line_editable" class="vq-input" data-vq-vat="1" t-att-name="'vat_%s' % lid">
-                                        <option value="">Chọn</option>
+                                    <select t-if="line_editable" class="vq-cell-input" data-vq-vat="1" t-att-name="'vat_%s' % lid">
+                                        <option value="">—</option>
                                         <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]"
                                                 t-att-selected="opt[0] == vat_value" t-esc="opt[1]"/>
                                     </select>
-                                    <span t-else="" t-esc="dict(vat_options).get(line.vat, '—')"/>
-                                    <div class="vq-price-sub">VAT <span data-vq-vat-text="1" t-esc="fmt(line.price_unit * line.tax_rate / 100.0) if line.price_unit else '—'"/></div>
+                                    <span t-else="" class="vq-cell-text" t-esc="dict(vat_options).get(line.vat, '—')"/>
                                 </td>
-                                <td class="vq-col-price" data-label="Đơn giá sau VAT">
-                                    <input t-if="line_editable" type="text" inputmode="decimal" class="vq-input vq-input-price"
-                                           data-vq-gross="1" t-att-name="'gross_%s' % lid"
-                                           t-att-value="post.get('gross_%s' % lid) if post else ''"/>
-                                    <span t-else="" class="vq-cell-value vq-price-main" t-esc="fmt(line.price_unit * (1 + line.tax_rate / 100.0)) if line.price_unit else '—'"/>
+                                <td class="vq-num vq-col-price" data-label="Đơn giá (sau VAT)" data-vq-price-cell="1"
+                                    t-att-title="('Chưa VAT %s · VAT %s' % (fmt(line.price_unit), fmt(line.price_unit * line.tax_rate / 100.0))) if line.price_unit else None">
                                     <t t-if="line_editable">
+                                        <input type="text" inputmode="decimal" class="vq-cell-input" data-vq-gross="1"
+                                               t-att-name="'gross_%s' % lid" t-att-aria-label="'Đơn giá sau VAT — %s' % product_name"
+                                               t-att-value="post.get('gross_%s' % lid) if post else ''"/>
                                         <input type="hidden" data-vq-price="1" t-att-name="'price_%s' % lid"
                                                t-att-value="post.get('price_%s' % lid) if post else (fmt(line.price_unit) if line.price_unit else (fmt(ref.price_unit) if ref else ''))"/>
                                         <input type="hidden" data-vq-list="1" t-att-name="'list_%s' % lid"
                                                t-att-value="post.get('list_%s' % lid) if post else (fmt(line.list_price) if line.list_price else (fmt(ref.list_price) if ref_disc else ''))"/>
                                     </t>
-                                    <div class="vq-price-sub">chưa VAT <span data-vq-net-text="1" t-esc="fmt(line.price_unit) if line.price_unit else '—'"/></div>
+                                    <span t-else="" class="vq-cell-text" t-esc="fmt(line.price_unit * (1 + line.tax_rate / 100.0)) if line.price_unit else '—'"/>
                                 </td>
-                                <td class="vq-col-disc vq-disc-only" data-label="% CK">
-                                    <input t-if="line_editable" type="text" inputmode="decimal" class="vq-input vq-input-disc"
+                                <td class="vq-num vq-col-disc vq-disc-only" data-label="%CK">
+                                    <input t-if="line_editable" type="text" inputmode="decimal" class="vq-cell-input"
                                            data-vq-disc="1" t-att-name="'disc_%s' % lid" placeholder="0"
                                            t-att-value="post.get('disc_%s' % lid) if post else (fmt(line.discount) if line.list_price else (fmt(ref.discount) if ref_disc else ''))"/>
-                                    <span t-else="" class="vq-cell-value" t-esc="('%s%%' % fmt(line.discount)) if line.list_price else '—'"/>
+                                    <span t-else="" class="vq-cell-text" t-esc="fmt(line.discount) if line.list_price else '—'"/>
                                 </td>
-                                <!-- Giá trước CK (sau VAT) tự tính từ giá NCC nhập và % CK — chỉ để bên mua biết giá gốc. -->
-                                <td class="vq-num vq-col-list vq-disc-only" data-label="Giá trước CK">
-                                    <span class="vq-cell-value" data-vq-list-text="1"
-                                          t-esc="fmt(line.list_price * (1 + line.tax_rate / 100.0)) if line.list_price else '—'"/>
-                                </td>
-                                <td class="vq-col-days" data-label="Giao (ngày)">
-                                    <input t-if="line_editable" type="text" inputmode="numeric" class="vq-input vq-input-days"
-                                           t-att-name="'days_%s' % lid"
+                                <!-- Giá trước CK (sau VAT) tự tính từ đơn giá và %CK — để bên mua biết giá gốc. -->
+                                <td class="vq-num vq-col-list vq-disc-only vq-cell-calc" data-label="Trước CK" data-vq-list-text="1"
+                                    t-esc="fmt(line.list_price * (1 + line.tax_rate / 100.0)) if line.list_price else '—'"/>
+                                <td class="vq-num vq-col-total vq-cell-calc" data-label="Thành tiền" data-vq-subtotal="1">—</td>
+                                <td class="vq-num vq-col-days" data-label="Giao (ngày)">
+                                    <input t-if="line_editable" type="text" inputmode="numeric" class="vq-cell-input"
+                                           t-att-name="'days_%s' % lid" placeholder="ngày"
                                            t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or (ref and ref.delivery_days) or '')"/>
-                                    <span t-else="" t-esc="line.delivery_days or '—'"/>
+                                    <span t-else="" class="vq-cell-text" t-esc="line.delivery_days or '—'"/>
                                 </td>
-                                <td class="vq-num vq-col-total" data-label="Thành tiền sau VAT" data-vq-subtotal="1">—</td>
+                                <td class="vq-col-na" data-label="Hết hàng">
+                                    <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
+                                           t-att-checked="na_checked" t-att-disabled="not line_editable"
+                                           t-att-aria-label="'Không có hàng — %s' % product_name"/>
+                                </td>
+                                <td class="vq-col-text" data-label="Tên xuất HĐ">
+                                    <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
+                                           t-att-name="'inv_%s' % lid" placeholder="nếu khác tên hàng"
+                                           t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or (ref and ref.invoice_name) or '')"/>
+                                    <span t-else="" class="vq-cell-text" t-esc="line.invoice_name or ''"/>
+                                </td>
                                 <td class="vq-col-text" data-label="Ghi chú">
-                                    <input t-if="line_editable" type="text" class="vq-input" maxlength="255"
-                                           t-att-name="'note_%s' % lid" placeholder="Hãng, xuất xứ, quy cách"
+                                    <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
+                                           t-att-name="'note_%s' % lid" placeholder="hãng, xuất xứ…"
                                            t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or (ref and ref.vendor_note) or '')"/>
-                                    <span t-else="" class="vq-text-value" t-esc="line.vendor_note or '—'"/>
+                                    <span t-else="" class="vq-cell-text" t-esc="line.vendor_note or ''"/>
                                 </td>
                             </tr>
                             </t>
@@ -564,9 +556,9 @@
                         <div class="vq-summary-col">
                             <span class="vq-label">Tổng tiền</span>
                             <dl class="vq-summary">
-                                <div class="vq-summary-total"><dt>Tổng sau VAT</dt><dd data-vq-total="1">—</dd></div>
-                                <div><dt>Chưa VAT</dt><dd data-vq-total-untaxed="1">—</dd></div>
+                                <div><dt>Trước VAT</dt><dd data-vq-total-untaxed="1">—</dd></div>
                                 <div><dt>Tiền VAT</dt><dd data-vq-total-tax="1">—</dd></div>
+                                <div class="vq-summary-total"><dt>Thành tiền</dt><dd data-vq-total="1">—</dd></div>
                             </dl>
                         </div>
                     </div>
