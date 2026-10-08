@@ -189,14 +189,18 @@ class VendorQuoteLine(models.Model):
         if request_line:
             self.request_line_id = request_line
             # Sale chỉ có quyền đọc YCMH; ghi đúng các field NCC/giá đã chọn.
-            request_line.sudo().write(self._request_line_actual_vals())
+            request_line.sudo().write(self._request_line_choice_vals(request_line))
+            partial = request_line.sudo().purchased_qty > 0
             request_line.request_id.sudo().message_post(body=Markup(_(
-                "Sale đổi NCC cho <i>%(product)s</i> sang <b>%(vendor)s</b>: %(price)s chưa VAT (%(inquiry)s)."
+                "Sale đổi NCC cho <i>%(product)s</i> sang <b>%(vendor)s</b>: %(price)s chưa VAT (%(inquiry)s).%(rest)s"
             )) % {
                 "product": inquiry_line.name or inquiry_line.product_id.display_name,
                 "vendor": self.partner_id.commercial_partner_id.display_name,
                 "price": self.currency_id.format(self.price_unit),
                 "inquiry": inquiry_line.inquiry_id.name,
+                # Đã đặt một phần: nhắc thu mua tạo RFQ cho phần còn thiếu.
+                "rest": Markup(_(" Còn phải mua <b>%s</b> — tạo RFQ cho phần này.")) % request_line._hlv_remaining_qty()
+                if partial else "",
             })
         return True
 
@@ -213,20 +217,41 @@ class VendorQuoteLine(models.Model):
     def _check_not_ordered(self, inquiry_line):
         if inquiry_line.locked:
             raise UserError(_(
-                "%s đã lên RFQ/đơn mua — đổi NCC ở đây không đổi được đơn đã tạo. Báo thu mua "
-                "huỷ / sửa đơn mua.",
+                "%s đã lên RFQ/đơn mua đủ số lượng — đổi NCC ở đây không đổi được đơn đã tạo. NCC "
+                "giao thiếu / hết hàng: nhờ thu mua sửa số lượng dòng đơn mua xuống đúng số NCC giao "
+                "được, rồi chọn NCC khác cho phần còn thiếu.",
                 inquiry_line.name or inquiry_line.product_id.display_name,
             ))
 
-    @api.depends("inquiry_line_id.locked", "request_line_id.purchase_lines.state")
+    @api.depends("inquiry_line_id.locked", "request_line_id.purchased_qty", "request_line_id.product_qty",
+                 "request_line_id.purchase_lines.state")
     def _compute_vendor_locked(self):
         for line in self:
             if line.inquiry_line_id:
                 line.vendor_locked = line.inquiry_line_id.locked
             else:
-                line.vendor_locked = bool(
-                    line.request_line_id.sudo().purchase_lines.filtered(lambda l: l.state != "cancel")
-                )
+                line.vendor_locked = bool(line.request_line_id) and line.request_line_id._hlv_fully_ordered()
+
+    def _hlv_request_line(self):
+        """Dòng YCMH của mặt hàng này — qua phiếu hỏi giá, hoặc gắn thẳng (luồng hỏi giá từ YCMH)."""
+        self.ensure_one()
+        return self.inquiry_line_id.request_line_id or self.request_line_id
+
+    def _hlv_ordered_from_vendor(self):
+        """NCC của dòng này đang có hàng trên đơn mua cho mặt hàng (kể cả khi sale đã chọn NCC
+        khác cho phần còn thiếu) — để trang NCC không gạch dòng NCC vẫn đang giao."""
+        self.ensure_one()
+        vendor = self.quote_id.access_id.partner_id or self.partner_id.commercial_partner_id
+        return bool(self._hlv_request_line().sudo().purchase_lines.filtered(
+            lambda l: l.state in ("purchase", "done") and l.product_qty > 0
+            and l.order_id.partner_id.commercial_partner_id == vendor
+        ))
+
+    def _request_line_choice_vals(self, request_line):
+        """NCC + giá đã chọn ghi xuống dòng YCMH, kèm số lượng cần mua = phần CÒN THIẾU: wizard
+        "Tạo RFQ" ưu tiên actual_qty của dòng YCMH, mà lần tạo RFQ trước đã ghi actual_qty = cả
+        số lượng — không ghi lại thì RFQ cho NCC mới ra lại cả số lượng thay vì phần còn thiếu."""
+        return dict(self._request_line_actual_vals(), actual_qty=request_line._hlv_remaining_qty())
 
     def action_select(self):
         """Chốt NCC cho dòng YCMH: ghi NCC + giá vào actual_* để wizard "Tạo RFQ" dùng luôn."""
@@ -240,9 +265,10 @@ class VendorQuoteLine(models.Model):
             ))
         if self.unavailable or not self.price_unit:
             raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
-        if request_line.purchase_lines.filtered(lambda l: l.state != "cancel"):
+        if request_line._hlv_fully_ordered():
             raise UserError(_(
-                "%s đã lên RFQ/PO. Chọn lại NCC ở đây không đổi được đơn đã tạo.",
+                "%s đã lên RFQ/PO đủ số lượng. Chọn lại NCC ở đây không đổi được đơn đã tạo — NCC "
+                "giao thiếu / hết hàng thì sửa số lượng dòng đơn mua xuống rồi chọn lại cho phần còn thiếu.",
                 request_line.name or request_line.product_id.display_name,
             ))
 
@@ -253,7 +279,7 @@ class VendorQuoteLine(models.Model):
         ])
         previous.write({"selected": False})
         self.selected = True
-        request_line.write(self._request_line_actual_vals())
+        request_line.write(self._request_line_choice_vals(request_line))
         # Markup(...) % dict để tên NCC / mô tả hàng được escape.
         body = Markup(_(
             "Chọn <b>%(vendor)s</b> cho <i>%(product)s</i>: %(price)s/%(uom)s chưa VAT (%(quote)s)."

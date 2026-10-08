@@ -180,6 +180,9 @@ def _compare_row(line, quotes):
         "id": line.id,
         "product_id": line.product_id.id,
         "locked": line.locked,
+        # Đã đặt một phần (NCC giao thiếu): sale chọn NCC cho phần còn lại.
+        "ordered_qty": line.request_line_id.sudo().purchased_qty if line.request_line_id else 0,
+        "requested_qty": line.request_line_id.sudo().product_qty if line.request_line_id else 0,
         "request_name": line.request_line_id.sudo().request_id.name or "",
         "name": line.name or line.product_id.display_name,
         "qty": line.product_qty,

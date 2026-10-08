@@ -2,6 +2,7 @@
 from markupsafe import Markup
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools import float_compare
 
 from ..services.sale_code import sale_code
 
@@ -181,3 +182,29 @@ class PurchaseRequest(models.Model):
             ("quote_state", "in", ("quoted", "done")),
         ]
         return action
+
+
+class PurchaseRequestLine(models.Model):
+    _inherit = "purchase.request.line"
+
+    def _hlv_remaining_qty(self):
+        """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của
+        purchase_request: cộng dòng đơn mua chưa huỷ, quy về ĐVT của YCMH). Không âm."""
+        self.ensure_one()
+        line = self.sudo()
+        return max(0.0, line.product_qty - line.purchased_qty)
+
+    def _hlv_fully_ordered(self):
+        """Đã lên đơn mua ĐỦ số lượng — mặt hàng khoá, không đổi NCC được nữa.
+
+        Còn thiếu thì mở: NCC báo hết hàng / chỉ giao được một phần sau khi đã đặt, thu mua sửa
+        số lượng dòng đơn mua xuống đúng số NCC giao được (về 0 nếu hết hẳn — đơn mua đã xác
+        nhận không xoá được dòng, mà huỷ cả đơn thì hỏng mặt hàng khác), rồi sale chọn NCC
+        cho phần còn lại. Chưa có dòng đơn mua nào → chưa khoá.
+        """
+        self.ensure_one()
+        line = self.sudo()
+        if not line.purchase_lines.filtered(lambda l: l.state != "cancel"):
+            return False
+        rounding = line.product_uom_id.rounding or 0.01
+        return float_compare(line.purchased_qty, line.product_qty, precision_rounding=rounding) >= 0

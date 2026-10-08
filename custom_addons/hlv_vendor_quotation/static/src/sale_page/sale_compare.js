@@ -115,7 +115,10 @@ window.HlvQuote = window.HlvQuote || {};
         '</button><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span></th>";
     }).join("") + "</tr>";
     var rows = d.lines.map(function (line) {
-      var tag = line.locked ? '<span class="hq-muted">đã lên đơn mua — khoá</span>'
+      var tag = line.locked ? '<span class="hq-muted" title="NCC giao thiếu / hết hàng: nhờ thu mua sửa số lượng dòng ' +
+        'này trên đơn mua xuống đúng số NCC giao được — phần còn thiếu mở ra để chọn NCC khác">đã lên đơn mua — khoá</span>'
+        : line.ordered_qty > 0 ? '<span class="hq-partial">đã đặt ' + HQ.qty(line.ordered_qty) + "/" +
+          HQ.qty(line.requested_qty) + " — chọn NCC cho " + HQ.qty(line.requested_qty - line.ordered_qty) + " còn thiếu</span>"
         : line.request_name ? '<span class="hq-muted">trong ' + esc(line.request_name) + "</span>" : "";
       return "<tr><td>" + esc(line.name) + (tag ? "<div>" + tag + "</div>" : "") +
         '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " +

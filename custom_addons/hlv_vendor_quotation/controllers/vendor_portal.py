@@ -157,10 +157,7 @@ class VendorQuotePortal(http.Controller):
             chat_error=post.get("chat_error") if request.httprequest.method == "GET" else "",
             # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
             # khác, "" = chưa chọn ai — để NCC biết dòng nào đã được đặt.
-            line_choice={
-                line.id: line.selection_state if line.selection_state != "pending" else ""
-                for line in quote.line_ids
-            },
+            line_choice={line.id: self._line_choice(line) for line in quote.line_ids},
         )
         return self._render("hlv_vendor_quotation.portal_quote_form", access, values)
 
@@ -220,6 +217,13 @@ class VendorQuotePortal(http.Controller):
         return stream.get_response()
 
     # ------------------------------------------------------------------
+    def _line_choice(self, line):
+        """"selected" = bên mua chọn / đang đặt hàng của NCC này cho mặt hàng (kể cả khi phần
+        còn thiếu đã chuyển NCC khác); "other" = chọn NCC khác; "" = chưa chọn ai."""
+        if line.selection_state == "selected" or line._hlv_ordered_from_vendor():
+            return "selected"
+        return "other" if line.selection_state == "other" else ""
+
     def _file_url(self, token):
         return lambda attachment_id: f"{PORTAL_ROUTE}/{token}/tep/{attachment_id}"
 

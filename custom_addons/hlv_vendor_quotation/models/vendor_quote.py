@@ -466,11 +466,13 @@ class VendorQuote(models.Model):
         self._notify_vendor_submitted(resubmitted)
 
     def _vendor_purchase_orders(self):
-        """Đơn mua (đã xác nhận) của chính NCC này sinh ra từ báo giá này: dòng NCC được chọn
-        → dòng YCMH → dòng đơn mua. Đọc bằng sudo — gọi được từ trang công khai của NCC."""
+        """Đơn mua (đã xác nhận) của chính NCC này cho các mặt hàng của báo giá: dòng báo giá →
+        dòng YCMH → dòng đơn mua của NCC này. Không chỉ dòng đang được chọn — NCC giao thiếu
+        rồi sale chọn NCC khác cho phần còn lại thì NCC cũ vẫn thấy đơn của mình (cùng luật với
+        purchase.order._compute_hlv_vendor_links). Đọc bằng sudo — gọi được từ trang NCC."""
         orders = self.env["purchase.order"]
         for quote in self.sudo():
-            request_lines = quote.line_ids.filtered("selected").request_line_id
+            request_lines = quote.line_ids.inquiry_line_id.request_line_id | quote.line_ids.request_line_id
             orders |= request_lines.purchase_lines.order_id.filtered(
                 lambda o, v=quote.access_id.partner_id: o.state in ("purchase", "done")
                 and o.partner_id.commercial_partner_id == v
