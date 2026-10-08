@@ -252,7 +252,8 @@ def build_share_message(company_name, vendor_name, quote_names, deadline_text, u
     """Tin nhắn sale dán vào Zalo gửi NCC — gọn: số báo giá, hạn, link chung của NCC, mật khẩu.
 
     Nhận: tên công ty mình, tên NCC, list số báo giá, hạn báo giá đã định dạng ("" nếu
-    không có hạn), link chung của NCC, mật khẩu (chuỗi), reask: list chuỗi "hàng — giá lần
+    không có hạn), link chung của NCC, mật khẩu (chuỗi; rỗng = đang tắt mật khẩu, bỏ dòng
+    mật khẩu), reask: list chuỗi "hàng — giá lần
     trước" cho mặt hàng NCC vừa báo gần đây (đã điền sẵn, chỉ cần xác nhận); rỗng thì bỏ.
     Trả: chuỗi nhiều dòng. Nhiều báo giá thì liệt kê các số, cách nhau dấu phẩy.
     """
@@ -262,8 +263,9 @@ def build_share_message(company_name, vendor_name, quote_names, deadline_text, u
         f"Kính gửi {vendor_name},",
         first + (f", hạn {deadline_text}." if deadline_text else "."),
         f"Link báo giá: {url}",
-        f"Mật khẩu: {password}",
     ]
+    if password:
+        lines.append(f"Mật khẩu: {password}")
     if reask:
         lines.append("Hàng quý công ty vừa báo giá gần đây (giá cũ đã điền sẵn, nhờ xác nhận còn hàng / đúng giá):")
         lines += [f"- {item}" for item in reask]

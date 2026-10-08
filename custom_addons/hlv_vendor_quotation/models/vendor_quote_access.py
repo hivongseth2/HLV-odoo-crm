@@ -4,6 +4,7 @@ import secrets
 
 from odoo import _, api, fields, models
 from odoo.osv import expression
+from odoo.tools import str2bool
 
 from .vendor_quote_utils import is_login_locked, next_failed_count, session_fingerprint
 
@@ -15,6 +16,9 @@ LOCK_MINUTES = 15
 PORTAL_ROUTE = "/bao-gia"
 # Trang quản lý của sale (controllers/sale_page.py); ?ncc=<id> mở sẵn NCC đó.
 SALE_PAGE_ROUTE = "/hoi-gia-ncc"
+# Bật trong Cài đặt → Mua hàng → Hỏi giá NCC. Mặc định tắt: tin Zalo gửi link kèm mật khẩu
+# trong cùng một tin nên mật khẩu gần như không chặn thêm được ai, chỉ làm NCC mất công nhập.
+REQUIRE_PASSWORD_PARAM = "hlv_vendor_quotation.require_password"
 
 
 class VendorQuoteAccess(models.Model):
@@ -182,6 +186,16 @@ class VendorQuoteAccess(models.Model):
         """Đơn mua đã xác nhận sinh ra từ các báo giá của NCC này (xem hlv.vendor.quote)."""
         self.ensure_one()
         return self.quote_ids._vendor_purchase_orders()
+
+    @api.model
+    def _password_required(self):
+        """NCC có phải nhập mật khẩu khi mở link không (Cài đặt, mặc định không)."""
+        return str2bool(self.env["ir.config_parameter"].sudo().get_param(REQUIRE_PASSWORD_PARAM, "False"))
+
+    def _shown_password(self):
+        """Mật khẩu để sale gửi NCC — rỗng khi đang tắt mật khẩu (khỏi gửi thứ không dùng)."""
+        self.ensure_one()
+        return (self.password or "") if self._password_required() else ""
 
     def _session_key(self):
         self.ensure_one()

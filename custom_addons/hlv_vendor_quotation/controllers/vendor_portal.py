@@ -87,6 +87,8 @@ class VendorQuotePortal(http.Controller):
         access = self._get_access(token)
         if not access:
             return self._not_found()
+        if not access._password_required():
+            return request.redirect(self._safe_next(access, next_url))
         result = access._vendor_login(password)
         if result == "ok":
             self._remember_login(access)
@@ -307,6 +309,8 @@ class VendorQuotePortal(http.Controller):
         return base
 
     def _is_logged_in(self, access):
+        if not access._password_required():
+            return True  # đang tắt mật khẩu: có link là vào
         saved = (request.session.get(SESSION_KEY) or {}).get(str(access.id), "")
         return hmac.compare_digest(saved.encode(), access._session_key().encode())
 
@@ -392,6 +396,7 @@ class VendorQuotePortal(http.Controller):
             "bus_channel": vendor_channel(access),
             "bus_version": bus_version(),
             "access": access,
+            "password_required": access._password_required(),
             "vendor": access.partner_id,
             "company": request.env.company.sudo(),
             "portal_base": f"{PORTAL_ROUTE}/{access.access_token}",

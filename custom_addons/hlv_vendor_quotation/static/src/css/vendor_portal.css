@@ -397,18 +397,21 @@ a { color: var(--vq-accent); }
 /* --- Bảng nhập giá: mỗi mặt hàng một dòng, gọn như bảng tính; rộng thì cuộn ngang trong khung --- */
 .vq-choice-locked { color: var(--vq-accent); font-weight: 600; }
 .vq-table-scroll { overflow-x: auto; border: 1px solid var(--vq-line); border-radius: 6px; }
-.vq-table-scroll .vq-price-table { border: 0; min-width: 1080px; }
-.vq-disc-on .vq-table-scroll .vq-price-table { min-width: 1260px; }
-.vq-price-table th { padding: 8px; font-size: .78rem; line-height: 1.25; vertical-align: bottom; background: #f8fafc; }
-.vq-price-table td { padding: 6px 8px; font-size: .9rem; border-right: 1px solid #f1f2f4; }
+.vq-table-scroll .vq-price-table { border: 0; min-width: 980px; }
+.vq-disc-on .vq-table-scroll .vq-price-table { min-width: 1140px; }
+.vq-price-table th { padding: 6px 8px; font-size: .72rem; line-height: 1.25; vertical-align: bottom; background: #f8fafc; }
+.vq-price-table td { padding: 5px 8px; font-size: .82rem; line-height: 1.35; border-right: 1px solid #f1f2f4; }
 .vq-price-table td:last-child { border-right: 0; }
-.vq-price-table .vq-input { padding: 6px 7px; font-size: .88rem; }
-.vq-price-table .vq-col-no { width: 40px; text-align: center; }
-.vq-col-code { width: 100px; white-space: nowrap; }
-.vq-col-name { min-width: 190px; }
-.vq-col-uom { width: 60px; }
-.vq-col-qty { width: 56px; }
-.vq-price-table .vq-col-price { width: 124px; }
+.vq-price-table .vq-input { padding: 4px 6px; font-size: .82rem; border-radius: 4px; }
+.vq-price-table .vq-col-no { width: 36px; text-align: center; }
+.vq-col-name { min-width: 220px; }
+.vq-line-code { font-size: .74rem; color: var(--vq-muted); font-variant-numeric: tabular-nums; }
+.vq-price-table .vq-line-name { font-weight: 600; }
+.vq-col-qty { width: 70px; white-space: nowrap; }
+.vq-uom { color: var(--vq-muted); }
+.vq-price-table .vq-col-price { width: 116px; }
+.vq-col-net { width: 104px; white-space: nowrap; }
+.vq-net-value { font-variant-numeric: tabular-nums; color: #374151; }
 .vq-price-table .vq-col-disc { width: 58px; }
 .vq-price-table .vq-col-vat { width: 84px; }
 .vq-col-days { width: 58px; }
@@ -416,7 +419,7 @@ a { color: var(--vq-accent); }
 .vq-col-text { width: 140px; }
 .vq-name-row { display: flex; align-items: center; gap: 8px; }
 .vq-line-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
-.vq-line-flags .vq-choice, .vq-line-flags .vq-check { margin-top: 2px; font-size: .78rem; }
+.vq-line-flags .vq-choice, .vq-line-flags .vq-check { margin-top: 1px; font-size: .72rem; }
 .vq-cell-value { display: block; text-align: right; font-variant-numeric: tabular-nums; }
 .vq-input-days { text-align: right; }
 .vq-text-value { white-space: pre-line; }
@@ -424,7 +427,7 @@ a { color: var(--vq-accent); }
     .vq-table-scroll { overflow: visible; border: 0; }
     .vq-table-scroll .vq-price-table, .vq-disc-on .vq-table-scroll .vq-price-table { min-width: 0; }
     .vq-price-table td { border-right: 0; }
-    .vq-price-table .vq-col-total, .vq-cell-value { text-align: left; }
+    .vq-price-table .vq-col-total, .vq-price-table .vq-col-net, .vq-cell-value { text-align: left; }
 }
 
 /* --- Hiệu lực giá (cột trái chân form, trên ghi chú chung) --- */
