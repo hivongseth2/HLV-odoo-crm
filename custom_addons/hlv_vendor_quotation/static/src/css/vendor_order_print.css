@@ -30,3 +30,6 @@ body { margin: 0; background: #f2f2f2; color: #000; font: 13px/1.45 -apple-syste
     .po-sheet { margin: 0; padding: 0; max-width: none; }
     .po-lines tr { page-break-inside: avoid; }
 }
+
+/* Tên xuất hoá đơn NCC ghi dưới tên hàng */
+.po-sub { font-size: 11px; color: #555; margin-top: 2px; }

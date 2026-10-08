@@ -53,6 +53,13 @@ class PurchaseOrder(models.Model):
                 lambda q: q.state != "cancel" and q.partner_id.commercial_partner_id == vendor
             )
 
+    def write(self, vals):
+        result = super().write(vals)
+        # Đổi NCC trên RFQ: tên xuất hóa đơn phải là của NCC mới.
+        if "partner_id" in vals:
+            self.order_line._hlv_fill_invoice_name(overwrite=True)
+        return result
+
     def _chat_contacts(self):
         """Người trong công ty cần biết khi NCC nhắn trên đơn mua: người mua + sale tạo phiếu."""
         self.ensure_one()
@@ -87,3 +94,63 @@ class PurchaseOrder(models.Model):
         # Ghi chú nội bộ: NCC là follower của đơn mua của họ — đăng "comment" sẽ email ra ngoài.
         post_internal(self, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status], vendor_partner)
         return True
+
+
+class PurchaseOrderLine(models.Model):
+    _inherit = "purchase.order.line"
+
+    # Lưu thật (không tính) để xuất PDF / đẩy MISA dùng được, và thu mua sửa tay được. Không để
+    # field tính-lưu: thêm vào lúc nâng cấp module là Odoo tính lại cho TOÀN BỘ dòng đơn mua cũ.
+    hlv_invoice_name = fields.Char(
+        string="Tên xuất hóa đơn", copy=False,
+        help="Tên hàng NCC sẽ ghi trên hóa đơn — NCC điền trên trang báo giá; tự ghi khi dòng đơn "
+             "mua lên từ YCMH có báo giá của chính NCC này. Thu mua sửa tay được.",
+    )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        # Wizard "Tạo RFQ" tạo dòng kèm purchase_request_lines ngay trong vals.
+        lines.filtered(lambda l: not l.hlv_invoice_name)._hlv_fill_invoice_name()
+        return lines
+
+    def write(self, vals):
+        result = super().write(vals)
+        # Wizard gộp thêm dòng YCMH vào dòng đơn mua đã có (cùng sản phẩm).
+        if "purchase_request_lines" in vals:
+            self.filtered(lambda l: not l.hlv_invoice_name)._hlv_fill_invoice_name()
+        return result
+
+    def _hlv_vendor_invoice_name(self):
+        """Tên xuất hóa đơn NCC của đơn điền cho mặt hàng: dòng đơn mua → dòng YCMH → dòng báo
+        giá của đúng NCC của đơn (qua phiếu hỏi giá, hoặc gắn thẳng YCMH). Không có → ""."""
+        self.ensure_one()
+        request_lines = self.sudo().purchase_request_lines
+        if not request_lines:
+            return ""
+        vendor = self.order_id.partner_id.commercial_partner_id
+        candidates = self.env["hlv.vendor.quote.line"].sudo().search([
+            ("invoice_name", "!=", False),
+            "|", ("inquiry_line_id.request_line_id", "in", request_lines.ids),
+            ("request_line_id", "in", request_lines.ids),
+        ], order="id desc")
+        match = candidates.filtered(lambda q: q.quote_id.partner_id.commercial_partner_id == vendor)[:1]
+        return match.invoice_name or ""
+
+    def _hlv_fill_invoice_name(self, overwrite=False):
+        """Ghi tên xuất hóa đơn từ báo giá. overwrite=False: chỉ dòng còn trống (giữ tên thu mua
+        đã sửa tay)."""
+        for line in self:
+            if line.hlv_invoice_name and not overwrite:
+                continue
+            name = line._hlv_vendor_invoice_name()
+            if name or overwrite:
+                line.hlv_invoice_name = name or False
+
+    @api.model
+    def _hlv_backfill_invoice_names(self):
+        """Điền cho dòng đơn mua đã có trước khi field được lưu — chỉ dòng có báo giá ghi tên
+        xuất hóa đơn (đi từ báo giá sang, không quét cả bảng dòng đơn mua)."""
+        quote_lines = self.env["hlv.vendor.quote.line"].sudo().search([("invoice_name", "!=", False)])
+        request_lines = quote_lines.inquiry_line_id.request_line_id | quote_lines.request_line_id
+        request_lines.sudo().purchase_lines._hlv_fill_invoice_name()

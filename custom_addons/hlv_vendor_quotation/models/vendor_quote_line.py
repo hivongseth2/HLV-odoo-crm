@@ -232,6 +232,26 @@ class VendorQuoteLine(models.Model):
             else:
                 line.vendor_locked = bool(line.request_line_id) and line.request_line_id._hlv_fully_ordered()
 
+    def write(self, vals):
+        if "invoice_name" not in vals:
+            return super().write(vals)
+        old_names = {line.id: line.invoice_name or "" for line in self}
+        result = super().write(vals)
+        for line in self:
+            line._hlv_sync_invoice_name(old_names[line.id])
+        return result
+
+    def _hlv_sync_invoice_name(self, old_name):
+        """Đẩy tên xuất hóa đơn mới xuống dòng đơn mua của NCC này cho mặt hàng — chỉ dòng đang
+        trống hoặc còn đúng tên cũ (tên thu mua sửa tay trên đơn mua thì giữ)."""
+        vendor = self.quote_id.access_id.partner_id or self.partner_id.commercial_partner_id
+        po_lines = self._hlv_request_line().sudo().purchase_lines.filtered(
+            lambda l: l.state != "cancel" and l.order_id.partner_id.commercial_partner_id == vendor
+            and (l.hlv_invoice_name or "") in ("", old_name)
+        )
+        if po_lines:
+            po_lines.write({"hlv_invoice_name": self.invoice_name or False})
+
     def _hlv_request_line(self):
         """Dòng YCMH của mặt hàng này — qua phiếu hỏi giá, hoặc gắn thẳng (luồng hỏi giá từ YCMH)."""
         self.ensure_one()
