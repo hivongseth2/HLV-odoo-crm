@@ -5,13 +5,11 @@ from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
 from ..services import sale_scope
+from ..services.access_setup import USER_GROUP
 
 API = "/api/hoi-gia-ncc"
-PAGE_GROUPS = (
-    "sales_team.group_sale_salesman",
-    "purchase.group_purchase_user",
-    "purchase_request.group_purchase_request_user",
-)
+# Quản lý kế thừa Người dùng nên chỉ cần kiểm nhóm Người dùng.
+PAGE_GROUP = USER_GROUP
 SEARCH_LIMIT = 20
 
 
@@ -27,7 +25,7 @@ class SalePageMixin:
 
     def _allowed(self):
         user = request.env.user
-        return any(user.has_group(group) for group in PAGE_GROUPS)
+        return user.has_group(PAGE_GROUP)
 
     def _check(self, code=None):
         """Kiểm quyền vào trang; có truyền code thì trả mã sale đã kiểm (False = mọi mã)."""

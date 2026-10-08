@@ -35,9 +35,9 @@
                                 <span t-if="mark['unread']" class="vq-chip-new" t-att-title="'%s tin nhắn chưa xem' % mark['unread']"><svg class="vq-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg><t t-esc="mark['unread']"/> tin mới</span>
                                 <span t-elif="mark['new']" class="vq-chip-fresh">Mới</span>
                             </td>
-                            <td data-label="Ngày đặt" t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/>
+                            <td data-label="Ngày đặt" t-esc="fdate((order.date_approve or order.date_order))"/>
                             <td data-label="Ngày nhận dự kiến">
-                                <t t-if="order.date_planned" t-esc="order.date_planned.strftime('%d/%m/%Y')"/>
+                                <t t-if="order.date_planned" t-esc="fdate(order.date_planned)"/>
                                 <t t-else="">—</t>
                             </td>
                             <td data-label="Từ báo giá">
@@ -85,14 +85,14 @@
                 </div>
 
                 <dl class="vq-facts">
-                    <div><dt>Ngày đặt</dt><dd t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/></div>
+                    <div><dt>Ngày đặt</dt><dd t-esc="fdate((order.date_approve or order.date_order))"/></div>
                     <div t-if="order.date_planned"><dt>Ngày nhận dự kiến</dt>
-                        <dd t-esc="order.date_planned.strftime('%d/%m/%Y')"/></div>
+                        <dd t-esc="fdate(order.date_planned)"/></div>
                     <div t-if="quotes"><dt>Từ báo giá</dt>
                         <dd><a t-foreach="quotes" t-as="quote" class="vq-block-link"
                                t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/></dd></div>
                     <div t-if="order.hlv_vendor_status_date"><dt>Cập nhật tiến độ lúc</dt>
-                        <dd t-esc="order.hlv_vendor_status_date.strftime('%d/%m/%Y')"/></div>
+                        <dd t-esc="fdate(order.hlv_vendor_status_date)"/></div>
                 </dl>
 
                 <div t-if="saved" class="vq-alert vq-alert-ok">Đã cập nhật tiến độ đơn. Cảm ơn quý công ty!</div>
@@ -171,9 +171,9 @@
                             <h1>ĐƠN MUA HÀNG</h1>
                             <div class="po-number" t-esc="order.name"/>
                             <table class="po-info">
-                                <tr><th>Ngày đặt</th><td t-esc="(order.date_approve or order.date_order).strftime('%d/%m/%Y')"/></tr>
+                                <tr><th>Ngày đặt</th><td t-esc="fdate((order.date_approve or order.date_order))"/></tr>
                                 <tr t-if="order.date_planned"><th>Ngày nhận dự kiến</th>
-                                    <td t-esc="order.date_planned.strftime('%d/%m/%Y')"/></tr>
+                                    <td t-esc="fdate(order.date_planned)"/></tr>
                                 <tr><th>Bên mua</th><td t-esc="company.name"/></tr>
                                 <tr><th>Nhà cung cấp</th><td t-esc="vendor.name"/></tr>
                             </table>

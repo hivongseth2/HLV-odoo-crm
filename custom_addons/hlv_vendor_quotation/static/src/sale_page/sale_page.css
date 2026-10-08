@@ -291,3 +291,7 @@ body {
     .hq-quotes td.hq-cell-vendor { display: block; max-width: none; margin: .15rem 0; font-weight: 500; }
     .hq-quotes td.hq-right { display: block; text-align: left; margin-top: .2rem; font-weight: 600; }
 }
+
+/* Chọn mã sale cho tài khoản dùng chung nhiều mã */
+.hq-code-choices { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.hq-code-select:disabled { background: #f3f4f6; color: var(--hq-ink); cursor: not-allowed; opacity: 1; }

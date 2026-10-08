@@ -7,26 +7,21 @@ THẬT nằm ở server: mọi API nhận mã sale và kiểm lại mã đó có
 không (misa_invoice_status_report._misa_invoice_validate_public_saler_code). Không chép lại
 luật ở đây — gọi thẳng hàm bên đó.
 
-Khác /misa_sale_status một chỗ: thu mua cũng xem được "Tất cả", vì thu mua là người duyệt
-YCMH sinh ra từ mọi phiếu hỏi giá.
+"Tất cả mã sale" chỉ cho nhóm Quản lý của module (security/security.xml) — khác
+/misa_sale_status (nhóm Đối soát XHD). Nhóm Người dùng chỉ thấy mã của tài khoản mình.
 """
 
 from odoo.addons.misa_invoice_status_report.models.misa_invoice_public_api import (
     MISA_INVOICE_PUBLIC_ALL_SALERS as ALL_SALES,
 )
-from odoo.addons.misa_invoice_status_report.models.stock_picking import MISA_INVOICE_RECONCILE_GROUP
 from odoo.exceptions import UserError
 
-SEE_ALL_GROUPS = (
-    MISA_INVOICE_RECONCILE_GROUP,
-    "purchase.group_purchase_user",
-    "purchase_request.group_purchase_request_user",
-)
+from .access_setup import MANAGER_GROUP
 
 
 def can_see_all(env):
-    """Tài khoản được chọn "Tất cả mã sale" không."""
-    return any(env.user.has_group(group) for group in SEE_ALL_GROUPS)
+    """Tài khoản được chọn "Tất cả mã sale" không — chỉ nhóm Quản lý Hỏi giá NCC."""
+    return env.user.has_group(MANAGER_GROUP)
 
 
 def sale_code_options(env):
@@ -42,7 +37,7 @@ def validate_sale_code(env, code):
     code = (code or "").strip()
     if code == ALL_SALES:
         if not can_see_all(env):
-            raise UserError("Chỉ thu mua / quản lý được xem phiếu hỏi giá của mọi sale.")
+            raise UserError("Chỉ nhóm Quản lý Hỏi giá NCC được xem phiếu hỏi giá của mọi sale.")
         return False
     return env["stock.picking"]._misa_invoice_validate_public_saler_code(code)
 

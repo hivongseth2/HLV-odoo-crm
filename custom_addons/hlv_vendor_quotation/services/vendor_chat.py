@@ -7,12 +7,12 @@ sale không có quyền trên đơn mua — controller phải kiểm phạm vi (
 khi gọi vào đây, kể cả khi tải tệp (chat_attachment chỉ trả về record để controller kiểm).
 """
 
-import pytz
-
 from odoo.exceptions import UserError
 from odoo.tools import html2plaintext, plaintext2html
 
-from ..models.vendor_quote_utils import IMAGE_EXTENSIONS, attachment_error, file_extension
+from ..models.vendor_quote_utils import (
+    DATETIME_FMT, IMAGE_EXTENSIONS, attachment_error, file_extension, local_date_text,
+)
 from .chat_bus import notify_chat
 from .notify import internal_followers
 
@@ -21,7 +21,6 @@ CHAT_MODELS = ("hlv.vendor.quote", "purchase.order")
 MESSAGE_MAX = 2000
 FILE_MAX_BYTES = 10 * 1024 * 1024
 FILES_PER_MESSAGE = 5
-DISPLAY_TZ = "Asia/Ho_Chi_Minh"
 
 
 def _is_internal(partner):
@@ -39,9 +38,7 @@ def author_label(record, author):
 
 def display_time(value):
     """Datetime UTC (naive, như Odoo lưu) → "HH:MM dd/mm/YYYY" giờ Việt Nam; rỗng → ""."""
-    if not value:
-        return ""
-    return pytz.utc.localize(value).astimezone(pytz.timezone(DISPLAY_TZ)).strftime("%H:%M %d/%m/%Y")
+    return local_date_text(value, DATETIME_FMT)
 
 
 def chat_messages(record, file_url=None):

@@ -23,3 +23,10 @@ access_vendor_inquiry_line_pr_user,hlv.vendor.inquiry.line pr user,model_hlv_ven
 access_vendor_inquiry_line_purchase_user,hlv.vendor.inquiry.line purchase user,model_hlv_vendor_inquiry_line,purchase.group_purchase_user,1,1,1,1
 access_vendor_inquiry_line_salesman,hlv.vendor.inquiry.line salesman,model_hlv_vendor_inquiry_line,sales_team.group_sale_salesman,1,1,1,1
 access_vendor_chat_read_system,hlv.vendor.chat.read system,model_hlv_vendor_chat_read,base.group_system,1,1,1,1
+access_vendor_quote_vq_user,hlv.vendor.quote vq user,model_hlv_vendor_quote,group_vendor_quote_user,1,1,1,0
+access_vendor_quote_line_vq_user,hlv.vendor.quote.line vq user,model_hlv_vendor_quote_line,group_vendor_quote_user,1,1,1,1
+access_vendor_quote_access_vq_user,hlv.vendor.quote.access vq user,model_hlv_vendor_quote_access,group_vendor_quote_user,1,1,1,0
+access_vendor_quote_wizard_vq_user,hlv.vendor.quote.wizard vq user,model_hlv_vendor_quote_wizard,group_vendor_quote_user,1,1,1,1
+access_vendor_quote_wizard_suggestion_vq_user,hlv.vendor.quote.wizard.suggestion vq user,model_hlv_vendor_quote_wizard_suggestion,group_vendor_quote_user,1,1,1,1
+access_vendor_inquiry_vq_user,hlv.vendor.inquiry vq user,model_hlv_vendor_inquiry,group_vendor_quote_user,1,1,1,0
+access_vendor_inquiry_line_vq_user,hlv.vendor.inquiry.line vq user,model_hlv_vendor_inquiry_line,group_vendor_quote_user,1,1,1,1

@@ -259,9 +259,9 @@
                                 <div class="vq-clamp" t-esc="', '.join(quote.line_ids[:3].mapped(lambda l: l.name or l.product_id.name)) + (' …' if len(quote.line_ids) &gt; 3 else '')"/>
                                 <span class="vq-muted vq-small"><t t-esc="len(quote.line_ids)"/> mặt hàng</span>
                             </td>
-                            <td data-label="Ngày gửi" t-esc="quote.create_date.strftime('%d/%m/%Y')"/>
+                            <td data-label="Ngày gửi" t-esc="fdate(quote.create_date)"/>
                             <td data-label="Hạn báo giá">
-                                <t t-if="quote.date_deadline" t-esc="quote.date_deadline.strftime('%d/%m/%Y')"/>
+                                <t t-if="quote.date_deadline" t-esc="fdate(quote.date_deadline)"/>
                                 <t t-else="">—</t>
                                 <div t-if="quote_hint[0] and quote_status[1] != 'closed'"
                                      t-attf-class="vq-small vq-hint-#{quote_hint[1]}" t-esc="quote_hint[0]"/>
@@ -309,14 +309,14 @@
                 </div>
 
                 <dl class="vq-facts">
-                    <div><dt>Ngày gửi</dt><dd t-esc="quote.create_date.strftime('%d/%m/%Y')"/></div>
+                    <div><dt>Ngày gửi</dt><dd t-esc="fdate(quote.create_date)"/></div>
                     <div t-if="quote.date_deadline"><dt>Hạn báo giá</dt>
-                        <dd><t t-esc="quote.date_deadline.strftime('%d/%m/%Y')"/>
+                        <dd><t t-esc="fdate(quote.date_deadline)"/>
                             <span t-if="hint[0] and editable" t-attf-class="vq-small vq-hint-#{hint[1]}">
                                 (<t t-esc="hint[0].lower()"/>)</span></dd></div>
                     <div><dt>Số mặt hàng</dt><dd t-esc="len(quote.line_ids)"/></div>
                     <div t-if="quote.submit_date"><dt>Gửi giá lần cuối</dt>
-                        <dd t-esc="quote.submit_date.strftime('%d/%m/%Y')"/></div>
+                        <dd t-esc="fdate(quote.submit_date)"/></div>
                 </dl>
 
                 <section t-if="orders" class="vq-note">

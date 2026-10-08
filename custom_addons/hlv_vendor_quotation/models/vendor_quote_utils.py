@@ -3,9 +3,28 @@
 
 import hashlib
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
+
+import pytz
 
 _CURRENCY_SUFFIX = re.compile(r"(vn)?[dđ]$", re.IGNORECASE)
+LOCAL_TZ = "Asia/Ho_Chi_Minh"
+DATE_FMT = "%d/%m/%Y"
+DATETIME_FMT = "%H:%M %d/%m/%Y"
+
+
+def local_date_text(value, fmt=DATE_FMT):
+    """Ngày / giờ để hiện cho người Việt Nam đọc.
+
+    value: datetime naive theo UTC (đúng kiểu Odoo lưu Datetime) → đổi sang giờ Việt Nam rồi
+    định dạng — in thẳng thì 00:00 ngày 08 giờ VN ra ngày 07; date (Field Date, không có giờ)
+    → định dạng giữ nguyên ngày; None / False / rỗng → "".
+    """
+    if not value:
+        return ""
+    if isinstance(value, datetime):
+        value = pytz.utc.localize(value).astimezone(pytz.timezone(LOCAL_TZ))
+    return value.strftime(fmt)
 
 
 def parse_vn_number(text):
