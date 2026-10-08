@@ -31,7 +31,7 @@
                 </div>
 
                 <div t-else="" id="hq-app" class="container-fluid py-3 pl-page"
-                     t-att-data-initial-product="initial_product_id or ''">
+                     t-att-data-initial-product="initial_product_id or ''" t-att-data-sale-names="sale_names">
                     <section class="hq-panel hq-pad pl-search">
                         <label class="hq-label" for="pl-search">Mã hoặc tên sản phẩm</label>
                         <div class="hq-picker">

@@ -72,7 +72,7 @@ window.HlvQuote = window.HlvQuote || {};
               '</td><td class="hq-num hq-muted">' + HQ.money(r.price_incl) + (r.vat ? " · " + esc(r.vat) : "") + "</td>";
           return "<tr" + (r.reusable ? "" : ' class="pl-quote-old"') + '><td class="hq-nowrap">' + esc(r.date) + "</td><td>" +
             esc(r.vendor) + '</td><td class="hq-nowrap">' + esc(r.doc) + (r.sale_code ? '<div class="hq-muted hq-small">' +
-            esc(r.sale_code) + "</div>" : "") + '</td><td class="hq-num hq-nowrap">' + HQ.qty(r.qty) + " " + esc(r.uom) + "</td>" +
+            esc(HQ.saleName(r.sale_code)) + "</div>" : "") + '</td><td class="hq-num hq-nowrap">' + HQ.qty(r.qty) + " " + esc(r.uom) + "</td>" +
             price + '<td class="hq-num">' + (r.delivery_days ? r.delivery_days + " ngày" : "—") + "</td>" +
             "<td>" + (r.valid_until ? esc(r.valid_until) : "—") + (r.reusable
               ? '<div><span class="hq-tag hq-tag-ok">dùng lại được</span></div>'
@@ -110,6 +110,11 @@ window.HlvQuote = window.HlvQuote || {};
     var app = HQ.$("hq-app");
     if (!app || !HQ.$("pl-search")) {
       return;
+    }
+    try {
+      HQ.saleNames = JSON.parse(app.dataset.saleNames || "{}");
+    } catch (e) {
+      HQ.saleNames = {};  // danh bạ hỏng: vẫn hiện mã sale như cũ
     }
     HQ.bindPicker("pl-search", "pl-results", searchProducts, function (p) {
       return esc(p.product);

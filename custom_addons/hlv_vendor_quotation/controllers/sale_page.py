@@ -29,6 +29,7 @@ from ..services.asset_version import asset_version
 from ..services.chat_bus import SALE_ALL_CHANNEL, bus_version, sale_channel
 from ..services.chat_read import mark_seen
 from ..services.vendor_chat import FILE_MAX_BYTES, chat_attachment, chat_messages, post_chat
+from ..services.vendor_mail import mail_defaults, send_vendor_mail
 from .sale_page_common import API, SalePageMixin, to_int
 
 PER_PAGE = 30
@@ -56,6 +57,8 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "all_code": sale_scope.ALL_SALES,
             "vat_options": VAT_SELECTION,
             "status_tabs": STATUS_TABS,
+            # Danh bạ sale: JS hiện tên thay cho mã sale (mã chưa khai vẫn hiện mã).
+            "sale_names": env["hlv.vendor.sale.contact"]._name_map(),
             # Lý do sale chọn khi đóng "Không mua" ("auto" chỉ cron dùng).
             "close_reasons": [r for r in CLOSE_REASONS if r[0] != "auto"],
             # Ngày VN cố định — tài khoản dùng chung hay để trống múi giờ, context_today ra ngày UTC.
@@ -169,8 +172,18 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/vendor_info", type="json", auth="user", methods=["POST"])
     def api_vendor_info(self, code="", quote_id=None, **kw):
-        """Thông tin + link / mật khẩu của NCC trên một báo giá trong phạm vi mã sale."""
-        return payload.vendor_info(self._chat_record("quote", quote_id, self._check(code)))
+        """Thông tin + link / mật khẩu của NCC trên một báo giá trong phạm vi mã sale, kèm giá
+        trị điền sẵn cho hộp gửi email."""
+        scope = self._check(code)
+        quote = self._chat_record("quote", quote_id, scope)
+        return dict(payload.vendor_info(quote), mail=mail_defaults(quote.sudo(), scope or ""))
+
+    @http.route(f"{API}/send_mail", type="json", auth="user", methods=["POST"])
+    def api_send_mail(self, code="", quote_id=None, to="", cc="", subject="", body="", **kw):
+        """Sale gửi email cho NCC của một báo giá (hộp thông tin NCC)."""
+        scope = self._check(code)
+        quote = self._chat_record("quote", quote_id, scope)
+        return send_vendor_mail(quote.sudo(), to, cc, subject, body, scope or "")
 
     @http.route(f"{API}/po_origin", type="json", auth="user", methods=["POST"])
     def api_po_origin(self, code="", order_ids=None, origin="", **kw):

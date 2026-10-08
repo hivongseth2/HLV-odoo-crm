@@ -70,6 +70,22 @@ window.HlvQuote = window.HlvQuote || {};
     });
   };
 
+  /* Danh bạ sale {MÃ VIẾT HOA: tên} — trang chính nạp từ config, trang tra giá từ data-sale-names. */
+  HQ.saleNames = {};
+
+  /** Tên sale của một mã (không phân biệt hoa thường). Mã chưa có trong danh bạ → chính mã; rỗng → "". */
+  HQ.saleName = function (code) {
+    var value = String(code == null ? "" : code).trim();
+    return HQ.saleNames[value.toUpperCase()] || value;
+  };
+
+  /** "Tên (mã)" cho ô chọn mã sale — để còn nhận ra mã; chưa có tên → chỉ mã. */
+  HQ.saleLabel = function (code) {
+    var value = String(code == null ? "" : code).trim();
+    var name = HQ.saleName(value);
+    return name && name !== value ? name + " (" + value + ")" : value;
+  };
+
   /** Số tiền -> "1.250.000 ₫" (làm tròn đồng). null/NaN -> "—". */
   HQ.money = function (value) {
     if (value == null || isNaN(value)) {

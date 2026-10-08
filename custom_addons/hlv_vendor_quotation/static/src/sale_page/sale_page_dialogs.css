@@ -377,3 +377,20 @@
 .hq-paste-matched td { background: #f3faf5; }
 .hq-paste-ambiguous td { background: #fdf6e7; }
 .hq-paste-missing td { color: var(--hq-muted); }
+
+/* --- Gửi email cho NCC (hộp thông tin NCC) --- */
+.hq-mail { margin-top: .75rem; padding: .75rem 1rem; border: 1px solid var(--hq-accent-line); border-radius: var(--hq-radius);
+  background: #fff; display: grid; gap: .5rem; }
+.hq-mail .hq-share-head { margin-bottom: 0; }
+.hq-mail-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); align-items: center; gap: .5rem; margin: 0; }
+.hq-mail-body { align-items: start; }
+.hq-mail-body .hq-label { padding-top: .4rem; }
+.hq-mail textarea { resize: vertical; min-height: 8rem; font-family: inherit; }
+.hq-mail-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-left: 6rem; }
+.hq-mail-chips .hq-chip { cursor: pointer; border: 1px solid var(--hq-line); }
+.hq-mail-foot { display: flex; justify-content: flex-end; align-items: center; gap: .75rem; }
+.hq-mail-foot .hq-error { color: var(--hq-danger); }
+@media (max-width: 640px) {
+  .hq-mail-row { grid-template-columns: 1fr; gap: .2rem; }
+  .hq-mail-chips { margin-left: 0; }
+}

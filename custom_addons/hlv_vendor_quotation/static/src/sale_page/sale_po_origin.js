@@ -59,7 +59,7 @@ window.HlvQuote = window.HlvQuote || {};
         : Promise.resolve([]);
     }, function (o) {
       return '<span class="hq-strong">' + esc(o.name) + "</span> " +
-        '<span class="hq-muted">' + esc([o.partner, o.sale_code, o.date].filter(Boolean).join(" · ")) + "</span>";
+        '<span class="hq-muted">' + esc([o.partner, HQ.saleName(o.sale_code), o.date].filter(Boolean).join(" · ")) + "</span>";
     }, function (order) {
       return replaceLastCode(input.value, order.name);
     });

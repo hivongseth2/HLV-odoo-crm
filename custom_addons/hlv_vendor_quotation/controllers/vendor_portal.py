@@ -70,6 +70,11 @@ class VendorQuotePortal(http.Controller):
             "quote_orders": {quote.id: quote._vendor_purchase_orders() for quote in quotes},
             # Dòng có tin bên mua chưa xem / báo giá chưa mở lần nào.
             "marks": row_marks(quotes, access),
+            # "Tên – SĐT" sale hỏi giá, hiện ở khung xem nhanh.
+            "requesters": {
+                quote.id: request.env["hlv.vendor.sale.contact"]._requester(quote.inquiry_id.sale_code)
+                for quote in quotes
+            },
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
@@ -171,8 +176,19 @@ class VendorQuotePortal(http.Controller):
             # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
             # khác, "" = chưa chọn ai — để NCC biết dòng nào đã được đặt.
             line_choice={line.id: self._line_choice(line) for line in quote.line_ids},
+            requester=self._requester(quote),
         )
         return self._render("hlv_vendor_quotation.portal_quote_form", access, values)
+
+    @staticmethod
+    def _requester(quote):
+        """Sale hỏi giá để NCC biết ai hỏi, gọi số nào: {"name", "phone"}; báo giá không gắn phiếu
+        hỏi giá / phiếu chưa có mã sale → None. Mã chưa có trong danh bạ → tên là mã."""
+        code = (quote.inquiry_id.sale_code or "").strip()
+        if not code:
+            return None
+        info = request.env["hlv.vendor.sale.contact"]._for_code(code)
+        return info or {"name": code, "phone": ""}
 
     @http.route(
         f"{PORTAL_ROUTE}/<string:token>/<int:quote_id>/tin-nhan",

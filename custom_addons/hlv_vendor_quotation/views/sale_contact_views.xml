@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_sale_contact_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.sale.contact.list</field>
+        <field name="model">hlv.vendor.sale.contact</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sale_code"/>
+                <field name="name"/>
+                <field name="phone"/>
+                <field name="email"/>
+                <field name="active" widget="boolean_toggle" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_vendor_sale_contact" model="ir.actions.act_window">
+        <field name="name">Danh bạ sale</field>
+        <field name="res_model">hlv.vendor.sale.contact</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Thêm sale đầu tiên</p>
+            <p>Mã sale MISA → tên, điện thoại, email. Trang hỏi giá hiện tên thay cho mã; NCC thấy ai hỏi giá và số liên hệ.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_vendor_sale_contact"
+              name="Danh bạ sale"
+              parent="menu_vendor_quote_root"
+              action="action_vendor_sale_contact"
+              sequence="90"
+              groups="hlv_vendor_quotation.group_vendor_quote_manager,purchase.group_purchase_manager"/>
+</odoo>
