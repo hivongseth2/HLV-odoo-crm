@@ -29,8 +29,8 @@ window.HlvQuote = window.HlvQuote || {};
           '" title="Lập phiếu hỏi lại NCC này — giá lần trước điền sẵn để NCC xác nhận">Hỏi lại NCC này</button>');
     return "<tr" + (p.reusable ? "" : ' class="hq-price-old"') + "><td>" + esc(p.vendor) +
       (p.chosen ? ' <span class="hq-tag hq-tag-ok">đã chọn</span>' : "") + validity + "</td>" +
-      '<td class="hq-num">' + HQ.money(p.price_unit) + '<div class="hq-muted">cho ' + HQ.qty(p.qty) + "</div>" +
-      '</td><td class="hq-num hq-muted">' + HQ.money(p.price_incl) +
+      '<td class="hq-num"><b>' + HQ.money(p.price_incl) + '</b><div class="hq-muted">cho ' + HQ.qty(p.qty) + "</div>" +
+      '</td><td class="hq-num hq-muted">' + HQ.money(p.price_unit) +
       (p.vat ? " · " + esc(p.vat) : "") + "</td>" +
       '<td class="hq-num">' + (p.delivery_days ? p.delivery_days + " ngày" : "—") + "</td>" +
       '<td class="hq-nowrap">' + esc(p.date) + "</td>" +
@@ -57,7 +57,7 @@ window.HlvQuote = window.HlvQuote || {};
       box.innerHTML = '<div class="hq-panel-head"><h2 class="hq-h3">Giá NCC đã báo cho sản phẩm khớp “' + esc(search) +
         '”</h2><span class="hq-muted hq-small">mọi mã sale · mới nhất trước</span></div>' +
         '<div class="hq-table-wrap"><table class="hq-table hq-price-table"><thead><tr><th>NCC</th>' +
-        '<th class="hq-num">Chưa VAT</th><th class="hq-num">Sau VAT</th><th class="hq-num">Giao</th><th>Ngày báo</th>' +
+        '<th class="hq-num">Sau VAT</th><th class="hq-num">Chưa VAT</th><th class="hq-num">Giao</th><th>Ngày báo</th>' +
         "<th>Phiếu · mã sale</th></tr></thead>" +
         products.map(function (g, index) {
           return '<tbody><tr class="hq-price-product"><th colspan="6">' + esc(g.product) +
@@ -157,7 +157,7 @@ window.HlvQuote = window.HlvQuote || {};
               p.vendor_id + '">Dùng giá này</button>';
         return '<div class="hq-reuse-row ' + state + '"><div class="hq-reuse-main">' +
           (picked ? '<span class="hq-reuse-check">✓ Đang dùng</span> ' : "") +
-          "<b>" + esc(p.vendor) + "</b> · <b>" + HQ.money(p.price_unit) + "</b> chưa VAT" +
+          "<b>" + esc(p.vendor) + "</b> · <b>" + HQ.money(p.price_incl) + "</b> sau VAT" +
           (p.vat ? " (" + esc(p.vat) + ")" : "") + " · báo cho " + HQ.qty(p.qty) + " " + esc(p.uom) +
           (p.valid_until ? " · hiệu lực đến " + esc(p.valid_until) : "") +
           '<div class="hq-reuse-sub">' + esc(p.doc) + (p.sale_code ? " · " + esc(HQ.saleName(p.sale_code)) : "") + " · " +

@@ -1,7 +1,7 @@
 /**
  * Trang nhập giá của NCC. NCC chỉ gõ MỘT ô giá: đơn giá sau VAT, đã trừ chiết khấu (thói quen
  * báo giá). Đơn giá chưa VAT — giá được lưu — và giá trước chiết khấu (khi có % CK) tự tính vào ô
- * ẩn và ghi nhỏ dưới ô giá (vendor_quote_price.js). Thành tiền / tổng hiện theo giá sau VAT, đếm số
+ * ẩn (vendor_quote_price.js); hiện ra: giá chưa VAT + tiền VAT dưới ô, giá trước CK (sau VAT) ở cột riêng. Thành tiền / tổng hiện theo giá sau VAT, đếm số
  * dòng đã điền, định dạng lại số khi rời ô, chọn VAT / % CK cho tất cả dòng.
  * Trang vẫn gửi được khi JS hỏng — server tự tính từ ô sau VAT (resolve_net_price). Báo giá đã
  * đóng không có ô nhập: giá / VAT đọc từ data-price, data-vat của dòng.
@@ -78,8 +78,13 @@
             const value = key === "gross" && result[key] != null ? Math.round(result[key]) : result[key];
             input.value = value == null ? "" : formatVnNumber(value);
         }
+        const factor = 1 + vatRate(vatSelect.value) / 100;
         setLineText(line, "[data-vq-net-text]", result.net);
-        setLineText(line, "[data-vq-list-text]", discountOn() ? result.list : null);
+        setLineText(line, "[data-vq-vat-text]", result.net == null || !vatSelect.value ? null
+            : Math.round(result.net * (factor - 1)));
+        // Giá trước CK hiện SAU VAT như mọi giá NCC nhìn; ô ẩn list_ vẫn giữ chưa VAT (giá lưu).
+        setLineText(line, "[data-vq-list-text]", discountOn() && result.list != null
+            ? Math.round(result.list * factor) : null);
     }
 
     function readLine(line) {
@@ -124,6 +129,7 @@
         }
         setText("[data-vq-total-untaxed]", formatVnNumber(Math.round(untaxed)));
         setText("[data-vq-total]", formatVnNumber(Math.round(total)));
+        setText("[data-vq-total-tax]", formatVnNumber(Math.round(total) - Math.round(untaxed)));
         setText("[data-vq-progress]", `Đã điền ${done}/${lines.length} mặt hàng`);
     }
 

@@ -400,7 +400,7 @@ a { color: var(--vq-accent); }
 .vq-choice-locked { color: var(--vq-accent); font-weight: 600; }
 .vq-table-scroll { overflow-x: auto; border: 1px solid var(--vq-line); border-radius: 6px; }
 .vq-table-scroll .vq-price-table { border: 0; min-width: 980px; }
-.vq-disc-on .vq-table-scroll .vq-price-table { min-width: 1040px; }
+.vq-disc-on .vq-table-scroll .vq-price-table { min-width: 1140px; }
 .vq-price-table th { padding: 6px 8px; font-size: .72rem; line-height: 1.25; vertical-align: bottom; background: #f8fafc; }
 .vq-price-table td { padding: 5px 8px; font-size: .82rem; line-height: 1.35; border-right: 1px solid #f1f2f4; }
 .vq-price-table td:last-child { border-right: 0; }
@@ -414,12 +414,17 @@ a { color: var(--vq-accent); }
 .vq-price-table .vq-col-price { width: 132px; }
 .vq-price-sub { margin-top: 2px; font-size: .72rem; color: var(--vq-muted); white-space: nowrap; text-align: right;
     font-variant-numeric: tabular-nums; }
-.vq-quote-form:not(.vq-disc-on) .vq-price-sub.vq-disc-only { display: none; }
+.vq-quote-form.vq-disc-on .vq-disc-off-only { display: none; }
+.vq-price-table .vq-col-list { width: 104px; white-space: nowrap; }
+.vq-price-table .vq-col-vat .vq-price-sub { text-align: left; }
+/* Mã hàng (trái) + "Không có hàng" (phải) chung một dòng nhỏ trên tên hàng. */
+.vq-line-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 18px; }
+.vq-line-top .vq-check { margin: 0; font-size: .72rem; }
 .vq-price-main { font-weight: 600; }
-/* Tên xuất hóa đơn nằm dưới tên hàng — cùng mặt hàng, khỏi chiếm một cột. */
-.vq-inv-field { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; }
-.vq-inv-label { flex: none; font-size: .72rem; color: var(--vq-muted); }
+/* Tên xuất hóa đơn nằm dưới tên hàng — cùng mặt hàng, khỏi chiếm một cột; chỉ placeholder, không nhãn. */
+.vq-inv-field { display: block; margin: 4px 0 0; }
 .vq-inv-field .vq-input { padding: 3px 6px; font-size: .78rem; }
+.vq-inv-field .vq-text-value { font-size: .76rem; color: var(--vq-muted); }
 .vq-price-table .vq-col-disc { width: 58px; }
 .vq-price-table .vq-col-vat { width: 84px; }
 .vq-col-days { width: 58px; }
