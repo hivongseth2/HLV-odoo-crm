@@ -23,6 +23,7 @@ window.HlvQuote = window.HlvQuote || {};
       chosen: [],       // [{id, name}] NCC sẽ gửi
       suggestions: [],
       priceHints: {},   // {product_id: [giá NCC đã báo]} — mọi mã sale (sale_price_history.js)
+      reuse: {},        // {product_id: vendor_id} — giá dùng lại sale đã chọn ("Dùng giá này")
       showAllSuggestions: false,
     },
   };

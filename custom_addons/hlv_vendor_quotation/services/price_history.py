@@ -6,6 +6,7 @@ Cố ý vượt phạm vi mã sale của trang: chỉ đưa giá / NCC / số ph
 phiếu của sale khác (API phiếu vẫn kiểm mã sale). Đọc bằng sudo.
 """
 
+from ..models.vendor_inquiry import CLOSE_REASONS
 from ..models.vendor_quote_utils import local_date_text
 from .price_reuse import reuse_block_reason
 from .vendor_chat import display_time
@@ -14,6 +15,15 @@ QUOTED_STATES = ("quoted", "done")
 SCAN_LIMIT = 300        # số dòng báo giá mới nhất đem ra lọc
 PER_PRODUCT = 5         # tối đa giá mỗi sản phẩm
 MAX_PRODUCTS = 12       # tối đa sản phẩm trong kết quả tìm
+
+
+def _origin_status(line):
+    """Vì sao giá trống để dùng lại (chỉ gọi khi dùng lại được): sale trước bỏ, hay đã mua NCC khác."""
+    inquiry = line.inquiry_line_id.inquiry_id
+    if inquiry.state == "closed":
+        reason = dict(CLOSE_REASONS).get(inquiry.close_reason, "")
+        return "sale trước đã bỏ" + (f" — {reason.lower()}" if reason and inquiry.close_reason != "auto" else "")
+    return "sale trước đã mua NCC khác"
 
 
 def _line_payload(line, today):
@@ -29,8 +39,11 @@ def _line_payload(line, today):
         # Dùng lại được (lập phiếu mới là tự điền giá) — cùng luật với services/price_reuse.py.
         "reuse_note": reuse_note,
         "reusable": not reuse_note,
-        # Giá chỉ đúng cho tối đa số lượng đã hỏi.
+        # Giá chỉ đúng cho tối đa số lượng đã hỏi, đúng ĐVT đã hỏi.
         "qty": line.product_qty,
+        "uom_id": line.product_uom_id.id,
+        "uom": line.product_uom_id.name or "",
+        "origin_status": _origin_status(line) if not reuse_note else "",
         "price_unit": line.price_unit,
         "price_incl": line.price_unit * (1 + line.tax_rate / 100.0),
         "vat": dict(line._fields["vat"].selection).get(line.vat, ""),

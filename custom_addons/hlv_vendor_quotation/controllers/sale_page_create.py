@@ -100,18 +100,23 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/create", type="json", auth="user", methods=["POST"])
     def api_create(self, code="", lines=None, vendor_ids=None, sale_order_id=None,
-                   deadline=None, note="", **kw):
+                   deadline=None, note="", reuse=None, request_now=False, **kw):
         """Tạo phiếu hỏi giá + mỗi NCC một báo giá. Trả tin nhắn Zalo cho từng NCC.
 
         code là mã sale của phiếu. "Tất cả" không phải một mã: thu mua tạo phiếu khi đang xem
         tất cả thì phiếu không gắn mã sale.
+        reuse: {product_id: vendor_id} — giá dùng lại sale đã chọn ("Dùng giá này"); NCC đó
+        được thêm vào phiếu và giá được chọn sẵn. request_now: mọi sản phẩm đều dùng lại giá →
+        chỉ gửi các NCC đó và lên YCMH luôn, không hỏi giá ai.
         """
         self._check()
         env = request.env
         sale_code = "" if code == sale_scope.ALL_SALES else sale_scope.validate_sale_code(env, code)
         if code == sale_scope.ALL_SALES and not sale_scope.can_see_all(env):
             raise UserError("Chọn mã sale của bạn trước khi hỏi giá.")
-        partners = env["res.partner"].browse([to_int(v) for v in vendor_ids or []]).exists()
+        choices = {to_int(p): to_int(v) for p, v in (reuse or {}).items() if to_int(p) and to_int(v)}
+        vendor_ids = list(choices.values()) if request_now else list(vendor_ids or []) + list(choices.values())
+        partners = env["res.partner"].browse([to_int(v) for v in vendor_ids]).exists()
         order = env["sale.order"].browse(to_int(sale_order_id)).exists()
         inquiry = env["hlv.vendor.inquiry"]._create_with_quotes(
             partners,
@@ -121,8 +126,17 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             date_deadline=fields.Date.to_date(deadline) if deadline else False,
             note=(note or "").strip() or False,
         )
+        missing = inquiry._apply_reuse_choices(choices) if choices else inquiry.line_ids.browse()
+        request_name = ""
+        if request_now and not missing:
+            purchase_request, _merged = inquiry.action_create_request()
+            request_name = purchase_request.name
         return {
             "inquiry": payload.inquiry_summary(inquiry),
+            "request": request_name,
+            # Giá dùng lại không chọn được (vừa bị phiếu khác giữ / hết hạn) — phiếu vẫn tạo,
+            # NCC báo giá như bình thường.
+            "reuse_missing": [line.name or line.product_id.display_name for line in missing],
             "results": [
                 {
                     "vendor_name": q.partner_id.commercial_partner_id.display_name,

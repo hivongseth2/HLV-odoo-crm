@@ -78,7 +78,8 @@ window.HlvQuote = window.HlvQuote || {};
         // Số lượng = số NCC đã báo (tối đa được dùng lại); sale giảm nếu cần ít hơn.
         [{ product_id: group.product_id, product: group.product, name: group.name, qty: price.qty,
            uom_id: group.uom_id, uom: group.uom }],
-        [{ id: price.vendor_id, name: price.vendor }]
+        [{ id: price.vendor_id, name: price.vendor }],
+        { [group.product_id]: price.vendor_id }
       );
     });
   };
@@ -95,17 +96,49 @@ window.HlvQuote = window.HlvQuote || {};
     });
   };
 
-  /** Dòng gợi ý dưới sản phẩm trong hộp lập phiếu; chưa ai hỏi giá → "". */
-  HQ.priceHintHtml = function (prices) {
+  /**
+   * Lý do giá p KHÔNG dùng được cho dòng line của phiếu đang lập; dùng được → "". Ngoài luật
+   * chung của server (p.reuse_note) còn xét theo dòng: cùng ĐVT, số lượng ≤ số NCC đã báo.
+   */
+  HQ.reuseProblem = function (p, line) {
+    if (!p.reusable) {
+      return p.reuse_note;
+    }
+    if (p.uom_id !== line.uom_id) {
+      return "NCC báo theo " + p.uom + ", phiếu đang hỏi theo " + line.uom;
+    }
+    if (line.qty > p.qty) {
+      return "chỉ dùng được tối đa " + HQ.qty(p.qty) + " " + p.uom + " (sale trước hỏi " + HQ.qty(p.qty) + ")";
+    }
+    return "";
+  };
+
+  /**
+   * Giá đã hỏi dưới một sản phẩm trong hộp lập phiếu. Xanh = dùng lại được (bấm "Dùng giá
+   * này" là chọn NCC đó, khỏi hỏi lại); xanh đậm = đang dùng; xám = không dùng được, kèm lý do.
+   * pickedVendorId: NCC sale đang chọn dùng lại cho sản phẩm này (hoặc rỗng).
+   */
+  HQ.priceReuseHtml = function (prices, line, pickedVendorId) {
     if (!prices || !prices.length) {
       return "";
     }
-    return '<div class="hq-price-hint"><span class="hq-muted">Đã hỏi giá:</span> ' +
+    return '<div class="hq-reuse"><div class="hq-reuse-title">Đã có người hỏi giá</div>' +
       prices.slice(0, HINT_PRICES).map(function (p) {
-        return '<span class="hq-price-chip' + (p.reusable ? "" : " is-old") + '" title="' +
-          esc(p.doc + (p.sale_code ? " · " + p.sale_code : "") + " · báo cho " + HQ.qty(p.qty) +
-            (p.reusable ? " · dùng lại được, hiệu lực đến " + p.valid_until : " · không dùng lại được: " + p.reuse_note)) + '">' +
-          esc(p.vendor) + " <b>" + HQ.money(p.price_unit) + "</b> · " + esc(p.date.split(" ").pop()) + "</span>";
+        var problem = HQ.reuseProblem(p, line);
+        var picked = !problem && p.vendor_id === pickedVendorId;
+        var state = picked ? "is-picked" : problem ? "is-off" : "is-ok";
+        var action = picked
+          ? '<button type="button" class="hq-btn hq-btn-mini" data-reuse-unpick="' + line.product_id + '">Bỏ</button>'
+          : problem ? ""
+          : '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-reuse-pick="' + line.product_id + ":" +
+            p.vendor_id + '">Dùng giá này</button>';
+        return '<div class="hq-reuse-row ' + state + '"><div class="hq-reuse-main">' +
+          (picked ? '<span class="hq-reuse-check">✓ Đang dùng</span> ' : "") +
+          "<b>" + esc(p.vendor) + "</b> · <b>" + HQ.money(p.price_unit) + "</b> chưa VAT" +
+          (p.vat ? " (" + esc(p.vat) + ")" : "") + " · báo cho " + HQ.qty(p.qty) + " " + esc(p.uom) +
+          (p.valid_until ? " · hiệu lực đến " + esc(p.valid_until) : "") +
+          '<div class="hq-reuse-sub">' + esc(p.doc) + (p.sale_code ? " · " + esc(p.sale_code) : "") + " · " +
+          (problem ? "không dùng được: " + esc(problem) : esc(p.origin_status)) + "</div></div>" + action + "</div>";
       }).join("") + "</div>";
   };
 })(window.HlvQuote);
