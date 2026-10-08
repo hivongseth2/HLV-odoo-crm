@@ -18,14 +18,17 @@ window.HlvQuote = window.HlvQuote || {};
   var shown = [];  // nhóm sản phẩm đang hiện — nút "Dùng giá này" lấy lại theo chỉ số
 
   function priceRow(p, groupIndex) {
-    var validity = p.valid
-      ? '<div class="hq-muted">hiệu lực đến ' + esc(p.valid_until) + "</div>" +
-        '<button type="button" class="hq-btn hq-btn-mini" data-reuse-price="' + groupIndex + ":" + p.vendor_id +
-        '" title="Lập phiếu với NCC này — giá còn hiệu lực được điền sẵn, không hỏi lại NCC">Dùng giá này</button>'
-      : '<div class="hq-expired">' + (p.valid_until ? "hết hiệu lực " + esc(p.valid_until) : "không ghi hiệu lực") + "</div>";
-    return "<tr" + (p.valid ? "" : ' class="hq-price-old"') + "><td>" + esc(p.vendor) +
+    var validity = (p.valid_until ? '<div class="hq-muted">' + (p.valid ? "hiệu lực đến " : "hết hiệu lực ") +
+        esc(p.valid_until) + "</div>" : "") +
+      (p.reusable
+        ? '<button type="button" class="hq-btn hq-btn-mini" data-reuse-price="' + groupIndex + ":" + p.vendor_id +
+          '" title="Lập phiếu với NCC này — tối đa ' + HQ.qty(p.qty) + ' như đã hỏi, giá được điền sẵn, không hỏi lại NCC">' +
+          "Dùng giá này</button>"
+        : '<div class="hq-expired">Không dùng lại được: ' + esc(p.reuse_note) + "</div>");
+    return "<tr" + (p.reusable ? "" : ' class="hq-price-old"') + "><td>" + esc(p.vendor) +
       (p.chosen ? ' <span class="hq-tag hq-tag-ok">đã chọn</span>' : "") + validity + "</td>" +
-      '<td class="hq-num">' + HQ.money(p.price_unit) + '</td><td class="hq-num hq-muted">' + HQ.money(p.price_incl) +
+      '<td class="hq-num">' + HQ.money(p.price_unit) + '<div class="hq-muted">cho ' + HQ.qty(p.qty) + "</div>" +
+      '</td><td class="hq-num hq-muted">' + HQ.money(p.price_incl) +
       (p.vat ? " · " + esc(p.vat) : "") + "</td>" +
       '<td class="hq-num">' + (p.delivery_days ? p.delivery_days + " ngày" : "—") + "</td>" +
       '<td class="hq-nowrap">' + esc(p.date) + "</td>" +
@@ -65,12 +68,14 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(HQ.$("hq-app"), "click", "[data-reuse-price]", function (el) {
       var parts = el.dataset.reusePrice.split(":");
       var group = shown[+parts[0]];
-      var price = group && group.prices.find(function (p) { return p.vendor_id === +parts[1]; });
+      var price = group && group.prices.find(function (p) { return p.vendor_id === +parts[1] && p.reusable; });
       if (!price) {
         return;
       }
       HQ.openCreateWith(
-        [{ product_id: group.product_id, product: group.product, name: group.name, qty: 1, uom_id: group.uom_id, uom: group.uom }],
+        // Số lượng = số NCC đã báo (tối đa được dùng lại); sale giảm nếu cần ít hơn.
+        [{ product_id: group.product_id, product: group.product, name: group.name, qty: price.qty,
+           uom_id: group.uom_id, uom: group.uom }],
         [{ id: price.vendor_id, name: price.vendor }]
       );
     });
@@ -95,8 +100,9 @@ window.HlvQuote = window.HlvQuote || {};
     }
     return '<div class="hq-price-hint"><span class="hq-muted">Đã hỏi giá:</span> ' +
       prices.slice(0, HINT_PRICES).map(function (p) {
-        return '<span class="hq-price-chip' + (p.valid ? "" : " is-old") + '" title="' +
-          esc(p.doc + (p.sale_code ? " · " + p.sale_code : "") + (p.valid ? " · hiệu lực đến " + p.valid_until : " · hết hiệu lực")) + '">' +
+        return '<span class="hq-price-chip' + (p.reusable ? "" : " is-old") + '" title="' +
+          esc(p.doc + (p.sale_code ? " · " + p.sale_code : "") + " · báo cho " + HQ.qty(p.qty) +
+            (p.reusable ? " · dùng lại được, hiệu lực đến " + p.valid_until : " · không dùng lại được: " + p.reuse_note)) + '">' +
           esc(p.vendor) + " <b>" + HQ.money(p.price_unit) + "</b> · " + esc(p.date.split(" ").pop()) + "</span>";
       }).join("") + "</div>";
   };
