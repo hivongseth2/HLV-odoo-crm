@@ -21,7 +21,7 @@
                             <th>Ngày đặt</th>
                             <th>Ngày nhận dự kiến</th>
                             <th>Từ báo giá</th>
-                            <th class="vq-num">Tổng chưa VAT</th>
+                            <th class="vq-num">Tổng tiền</th>
                             <th>Tiến độ</th>
                             <th></th>
                         </tr>
@@ -44,7 +44,10 @@
                                 <a t-foreach="order_quotes[order.id]" t-as="quote" class="vq-block-link"
                                    t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/>
                             </td>
-                            <td class="vq-num" data-label="Tổng chưa VAT" t-esc="fmt(order.amount_untaxed)"/>
+                            <td class="vq-num vq-cell-amount" data-label="Tổng tiền">
+                                <b t-esc="fmt(order.amount_total)"/>
+                                <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(order.amount_untaxed)"/></div>
+                            </td>
                             <td data-label="Tiến độ">
                                 <span t-if="order.hlv_vendor_status" t-attf-class="vq-status vq-status-#{order.hlv_vendor_status}"
                                       t-esc="vendor_status_labels[order.hlv_vendor_status]"/>
@@ -122,8 +125,8 @@
                             <th>Mặt hàng</th>
                             <th class="vq-num">Số lượng</th>
                             <th class="vq-num">Đã nhận</th>
-                            <th class="vq-num">Đơn giá</th>
-                            <th class="vq-num">Thành tiền</th>
+                            <th class="vq-num">Đơn giá sau VAT</th>
+                            <th class="vq-num">Thành tiền sau VAT</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,16 +137,20 @@
                             <td class="vq-num" data-label="Số lượng">
                                 <t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></td>
                             <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
-                            <td class="vq-num" data-label="Đơn giá" t-esc="fmt(line.price_unit)"/>
-                            <td class="vq-num vq-col-total" data-label="Thành tiền" t-esc="fmt(line.price_subtotal)"/>
+                            <!-- Giá sau VAT (đã trừ chiết khấu dòng nếu có) — thói quen đọc giá của hai bên. -->
+                            <td class="vq-num" data-label="Đơn giá sau VAT">
+                                <t t-esc="fmt(line.price_total / line.product_qty) if line.product_qty else '—'"/>
+                                <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(line.price_unit)"/></div>
+                            </td>
+                            <td class="vq-num vq-col-total" data-label="Thành tiền sau VAT" t-esc="fmt(line.price_total)"/>
                         </tr>
                     </tbody>
                 </table>
 
                 <dl class="vq-summary vq-summary-inline">
-                    <div><dt>Tổng chưa VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
-                    <div><dt>Thuế</dt><dd t-esc="fmt(order.amount_tax)"/></div>
-                    <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
+                    <div class="vq-summary-total"><dt>Tổng sau VAT</dt><dd t-esc="fmt(order.amount_total)"/></div>
+                    <div><dt>Chưa VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
+                    <div><dt>Thuế VAT</dt><dd t-esc="fmt(order.amount_tax)"/></div>
                 </dl>
                 <t t-call="hlv_vendor_quotation.portal_chat"/>
             </div>

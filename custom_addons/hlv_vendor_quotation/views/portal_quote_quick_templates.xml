@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Xem nhanh một báo giá ngay trong danh sách (dòng ẩn dưới mỗi báo giá, bấm để mở):
-         bảng hàng theo kiểu phiếu báo giá NCC quen dùng — Đơn giá là giá trước chiết khấu nếu
-         NCC báo kiểu niêm yết − % CK, Thành tiền là sau chiết khấu, chưa VAT.
+         bảng hàng theo kiểu phiếu báo giá NCC quen dùng. Giá hiện SAU VAT (đã trừ chiết khấu) —
+         bên mình và NCC đều quen đọc giá sau VAT; % CK chỉ để biết NCC có chiết khấu.
          Biến vào: quote, quote_url, quote_status, requesters (từ portal_quote_list), fmt. -->
     <template id="portal_quote_quick" name="Báo giá NCC - xem nhanh">
         <div class="vq-quick">
@@ -15,10 +15,10 @@
                             <th class="vq-quick-name">Tên hàng</th>
                             <th>ĐVT</th>
                             <th class="vq-num">SL</th>
-                            <th class="vq-num">Đơn giá</th>
+                            <th class="vq-num">Đơn giá sau VAT</th>
                             <th class="vq-num">% CK</th>
                             <th class="vq-num">VAT</th>
-                            <th class="vq-num">Thành tiền</th>
+                            <th class="vq-num">Thành tiền sau VAT</th>
                             <th>Ghi chú</th>
                         </tr>
                     </thead>
@@ -34,10 +34,10 @@
                                 <td colspan="4" class="vq-num vq-muted">Không có hàng</td>
                             </t>
                             <t t-else="">
-                                <td class="vq-num" t-esc="fmt(line.list_price or line.price_unit) if line.price_unit else '—'"/>
+                                <td class="vq-num" t-esc="fmt(line.price_unit * (1 + line.tax_rate / 100.0)) if line.price_unit else '—'"/>
                                 <td class="vq-num" t-esc="fmt(line.discount) if line.list_price and line.discount else ''"/>
                                 <td class="vq-num" t-esc="dict(vat_options).get(line.vat, '') if line.price_unit else ''"/>
-                                <td class="vq-num" t-esc="fmt(line.price_subtotal) if line.price_unit else '—'"/>
+                                <td class="vq-num" t-esc="fmt(line.price_total) if line.price_unit else '—'"/>
                             </t>
                             <td class="vq-quick-note" t-esc="line.vendor_note or ''"/>
                         </tr>
@@ -48,7 +48,7 @@
                 <span t-if="requesters.get(quote.id)" class="vq-quick-requester">Người hỏi giá:
                     <b t-esc="requesters[quote.id]"/></span>
                 <span t-if="quote.amount_untaxed" class="vq-quick-total">
-                    Chưa VAT <b t-esc="fmt(quote.amount_untaxed)"/> · Sau VAT <b t-esc="fmt(quote.amount_total)"/>
+                    Sau VAT <b t-esc="fmt(quote.amount_total)"/> · chưa VAT <t t-esc="fmt(quote.amount_untaxed)"/>
                 </span>
                 <a t-att-href="quote_url" class="vq-btn vq-btn-secondary"
                    t-esc="'Điền giá →' if quote_status[1] == 'waiting' else 'Mở báo giá →'"/>
