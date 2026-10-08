@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Hướng dẫn nội bộ",
-    "version": "18.0.1.0.0",
-    "summary": "Trang /huong-dan cho sale đọc các hướng dẫn sử dụng (HTML + ảnh) tải lên từ backend",
+    "version": "18.0.1.2.0",
+    "summary": "Trang /huong-dan cho sale đọc hướng dẫn sử dụng (HTML + ảnh, PDF) xếp theo cây thư mục",
     "description": """
-- Quản lý tải lên một file .html hoặc .zip (index.html + ảnh/CSS) cho mỗi hướng dẫn; bấm Lưu là
-  có hiệu lực, không cần nâng cấp module.
-- Người dùng nội bộ đọc ở /huong-dan (danh sách theo nhóm) và /huong-dan/<đường-dẫn>/.
+- Quản lý tải lên một file .html, .pdf hoặc .zip (index.html + ảnh/CSS) cho mỗi hướng dẫn; bấm Lưu
+  là có hiệu lực, không cần nâng cấp module. Nút "+ Thêm hướng dẫn" ngay trên trang /huong-dan.
+- Hướng dẫn xếp trong cây thư mục lồng nhau. /huong-dan: cây bên trái, khung xem bên phải
+  (điện thoại: chỉ cây, bấm là mở trang); /huong-dan/<đường-dẫn>/ mở toàn trang.
 - Mỗi hướng dẫn có thể giới hạn cho một số nhóm người dùng.
 - Link "Hướng dẫn" trên navbar /sale_plan (nếu có module trang sale).
 """,

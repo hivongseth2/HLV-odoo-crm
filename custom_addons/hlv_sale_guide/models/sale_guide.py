@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Một hướng dẫn nội bộ: trang HTML (kèm ảnh/CSS) tải lên từ backend, đọc ở /huong-dan/<slug>/.
+"""Một hướng dẫn nội bộ: trang HTML (kèm ảnh/CSS) hoặc file PDF tải lên từ backend, đọc ở
+/huong-dan/<slug>/.
 
-Nội dung không nằm trong code: quản lý tải file .html hoặc .zip lên form, bấm Lưu là trang mới
-có hiệu lực, không cần nâng cấp module. Các file của gói lưu thành ir.attachment gắn với bản
-ghi, tên attachment là đường dẫn tương đối trong gói (index.html, img/a.png…).
+Nội dung không nằm trong code: quản lý tải file .html, .zip hoặc .pdf lên form, bấm Lưu là có
+hiệu lực, không cần nâng cấp module. Các file lưu thành ir.attachment gắn với bản ghi, tên
+attachment là đường dẫn tương đối trong gói (index.html, img/a.png, document.pdf…).
 """
 
 import base64
@@ -12,7 +13,7 @@ import mimetypes
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
-from .guide_utils import INDEX, normalize_document, slugify, unpack_package
+from .guide_utils import INDEX, PDF_FILE, normalize_document, slugify, unpack_package
 
 GUIDE_ROUTE = "/huong-dan"
 
@@ -20,14 +21,17 @@ GUIDE_ROUTE = "/huong-dan"
 class SaleGuide(models.Model):
     _name = "hlv.sale.guide"
     _description = "Hướng dẫn nội bộ"
-    _order = "topic, sequence, name"
+    _order = "sequence, name"
 
     name = fields.Char(string="Tên", required=True)
     slug = fields.Char(
         string="Đường dẫn", required=True, copy=False,
         help="Phần sau /huong-dan/ trên link, VD hoi-gia-ncc. Chỉ chữ thường không dấu, số và dấu -.",
     )
-    topic = fields.Char(string="Nhóm", default="Bán hàng", help="Gom các hướng dẫn trên trang danh sách.")
+    folder_id = fields.Many2one(
+        "hlv.sale.guide.folder", string="Thư mục", ondelete="set null", index=True,
+        help="Để trống: nằm ở gốc cây thư mục.",
+    )
     summary = fields.Text(string="Mô tả ngắn")
     sequence = fields.Integer(default=10)
     active = fields.Boolean(default=True)
@@ -36,8 +40,12 @@ class SaleGuide(models.Model):
         help="Để trống: mọi người dùng nội bộ đều đọc được. Chọn nhóm: chỉ người trong nhóm đó.",
     )
     package = fields.Binary(
-        string="Tải nội dung (.html / .zip)", compute="_compute_package", inverse="_inverse_package",
-        help="Một file .html, hoặc .zip gồm index.html và ảnh/CSS đi kèm. Tải lên là thay toàn bộ nội dung cũ.",
+        string="Tải nội dung (.html / .zip / .pdf)", compute="_compute_package", inverse="_inverse_package",
+        help="Một file .html, một file .pdf, hoặc .zip gồm index.html và ảnh/CSS đi kèm. "
+             "Tải lên là thay toàn bộ nội dung cũ.",
+    )
+    content_kind = fields.Selection(
+        [("html", "Trang"), ("pdf", "PDF")], string="Loại nội dung", readonly=True,
     )
     published_on = fields.Datetime(string="Cập nhật nội dung lúc", readonly=True)
     file_summary = fields.Text(string="Các file đang dùng", compute="_compute_file_summary")
@@ -53,7 +61,7 @@ class SaleGuide(models.Model):
             guide.url = f"{GUIDE_ROUTE}/{guide.slug}/" if guide.slug else False
 
     def _compute_package(self):
-        # Ô chỉ để tải lên: nội dung thật nằm ở attachment (_guide_files), không giữ bản zip.
+        # Ô chỉ để tải lên: nội dung thật nằm ở attachment (_guide_files), không giữ bản gốc.
         self.package = False
 
     def _inverse_package(self):
@@ -111,8 +119,9 @@ class SaleGuide(models.Model):
     def _replace_files(self, files):
         """Thay toàn bộ nội dung bằng files {đường dẫn: bytes} (đã qua unpack_package)."""
         self.ensure_one()
-        page = files[INDEX].decode("utf-8-sig", errors="replace")
-        files = {**files, INDEX: normalize_document(page).encode("utf-8")}
+        if INDEX in files:
+            page = files[INDEX].decode("utf-8-sig", errors="replace")
+            files = {**files, INDEX: normalize_document(page).encode("utf-8")}
         self._guide_files().unlink()
         # sudo: attachment HTML do người không phải admin tạo bị Odoo ép về text/plain — trang
         # phục vụ theo đuôi file ở controller nên không sao, nhưng tạo bằng sudo cho gọn.
@@ -127,7 +136,10 @@ class SaleGuide(models.Model):
             }
             for path, content in files.items()
         ])
-        self.published_on = fields.Datetime.now()
+        self.write({
+            "content_kind": "pdf" if PDF_FILE in files else "html",
+            "published_on": fields.Datetime.now(),
+        })
 
     def action_open_page(self):
         self.ensure_one()

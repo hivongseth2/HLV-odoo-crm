@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Hàm thuần cho module hướng dẫn: đặt đường dẫn, mở gói tải lên, chuẩn hoá trang HTML.
+"""Hàm thuần cho module hướng dẫn: đặt đường dẫn, mở gói tải lên, chuẩn hoá trang HTML,
+trang xem PDF, dựng cây thư mục.
 
 Không đụng Odoo (không env, không DB) để test được bằng Python thường.
 """
@@ -11,6 +12,7 @@ import unicodedata
 import zipfile
 
 INDEX = "index.html"
+PDF_FILE = "document.pdf"
 MAX_FILES = 300
 MAX_TOTAL_BYTES = 40 * 1024 * 1024
 # File rác do máy nén Mac/Windows thêm vào, không thuộc hướng dẫn.
@@ -64,9 +66,10 @@ def _strip_common_root(files):
 
 
 def unpack_package(data):
-    """Gói tải lên → {đường dẫn tương đối: bytes}, luôn có "index.html".
+    """Gói tải lên → {đường dẫn tương đối: bytes}: có "index.html" (trang), hoặc chỉ
+    "document.pdf" khi tải lên một file PDF.
 
-    data: bytes của một file .html, hoặc .zip chứa trang + ảnh/CSS đi kèm (đường dẫn trong
+    data: bytes của một file .html, một file .pdf, hoặc .zip chứa trang + ảnh/CSS đi kèm (đường dẫn trong
     trang là tương đối, VD img/a.png). Nén cả thư mục thì thư mục gốc được bỏ. Zip chỉ có
     đúng một file .html ở gốc mà không tên index.html thì đổi tên thành index.html.
     Rỗng, không phải HTML/zip, zip hỏng, đường dẫn ra ngoài gói, quá MAX_FILES file hoặc
@@ -74,13 +77,17 @@ def unpack_package(data):
     """
     if not data:
         raise ValueError("Chưa chọn file.")
+    if data[:5] == b"%PDF-":
+        if len(data) > MAX_TOTAL_BYTES:
+            raise ValueError(f"File PDF vượt {MAX_TOTAL_BYTES // (1024 * 1024)}MB.")
+        return {PDF_FILE: data}
     if data[:4] == b"PK\x03\x04":
         files = _strip_common_root(_read_zip(data))
     else:
         try:
             text = data.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
-            raise ValueError("Chỉ nhận file .html (UTF-8) hoặc .zip.") from exc
+            raise ValueError("Chỉ nhận file .html (UTF-8), .pdf hoặc .zip.") from exc
         if "<" not in text[:2000]:
             raise ValueError("File không phải trang HTML.")
         return {INDEX: data}
@@ -124,3 +131,57 @@ def add_back_link(page, href, label):
     if not match:
         return page + link
     return page[:match.start()] + link + page[match.start():]
+
+
+def pdf_viewer_page(title, pdf_url, back_href=None):
+    """Trang HTML hiện một file PDF bằng trình xem PDF của trình duyệt, kèm thanh trên cùng.
+
+    Bọc PDF trong trang để có nút quay lại và nút "Mở / tải PDF" — trình duyệt điện thoại
+    (Chrome Android) không hiện PDF trong khung, người đọc bấm nút đó để mở. title, pdf_url,
+    back_href: str (được escape). back_href rỗng → không có nút quay lại (trang đang nằm
+    trong khung xem của /huong-dan). Trả str.
+    """
+    title = html.escape(title or "")
+    pdf_url = html.escape(pdf_url)
+    back = f'<a href="{html.escape(back_href)}">← Tất cả hướng dẫn</a>' if back_href else ""
+    return (
+        '<!doctype html><html lang="vi"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{title}</title><style>"
+        "html,body{margin:0;height:100%}"
+        "body{display:flex;flex-direction:column;font:14px/1.4 system-ui,-apple-system,'Segoe UI',sans-serif}"
+        ".bar{display:flex;gap:14px;align-items:center;padding:8px 14px;background:#1c1c1a;color:#fff}"
+        ".bar b{margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+        ".bar a{color:#fff;text-decoration:none;white-space:nowrap}"
+        "iframe{flex:1;width:100%;border:0}"
+        "</style></head><body>"
+        f'<div class="bar">{back}<b>{title}</b><a href="{pdf_url}" target="_blank" rel="noopener">Mở / tải PDF ↗</a></div>'
+        f'<iframe src="{pdf_url}" title="{title}"></iframe>'
+        "</body></html>"
+    )
+
+
+def build_tree(folders, guides):
+    """Dựng cây thư mục → hướng dẫn cho trang danh sách.
+
+    folders: list dict {"id", "parent_id" (id hoặc None), "name"} theo thứ tự hiển thị.
+    guides: list dict có "folder_id" (id hoặc None) theo thứ tự hiển thị (các khoá khác giữ nguyên).
+    Trả nút gốc {"folders": [...], "guides": [...], "count": n}; mỗi thư mục là
+    {"id", "name", "folders", "guides", "count"} với count = số hướng dẫn trong cả nhánh.
+    Thư mục không có hướng dẫn nào trong cả nhánh bị bỏ. Hướng dẫn / thư mục trỏ tới thư mục
+    cha không có trong folders (bị ẩn, không được xem) → coi như nằm ở gốc. Rỗng → gốc rỗng.
+    """
+    root = {"folders": [], "guides": []}
+    nodes = {f["id"]: {"id": f["id"], "name": f["name"], "folders": [], "guides": []} for f in folders}
+    for folder in folders:
+        nodes.get(folder["parent_id"], root)["folders"].append(nodes[folder["id"]])
+    for guide in guides:
+        nodes.get(guide["folder_id"], root)["guides"].append(guide)
+
+    def prune(node):
+        node["folders"] = [child for child in node["folders"] if prune(child)]
+        node["count"] = len(node["guides"]) + sum(child["count"] for child in node["folders"])
+        return node["count"]
+
+    prune(root)
+    return root

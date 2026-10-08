@@ -7,7 +7,8 @@
             <list>
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
-                <field name="topic"/>
+                <field name="folder_id"/>
+                <field name="content_kind"/>
                 <field name="url" widget="url"/>
                 <field name="group_ids" widget="many2many_tags" optional="show"/>
                 <field name="published_on"/>
@@ -33,20 +34,21 @@
                         <group>
                             <field name="slug"/>
                             <field name="url" widget="url" invisible="not published_on"/>
-                            <field name="topic"/>
+                            <field name="folder_id" placeholder="Gốc cây thư mục"/>
                             <field name="group_ids" widget="many2many_tags" placeholder="Mọi người dùng nội bộ"/>
                             <field name="active" invisible="1"/>
                         </group>
                         <group>
                             <field name="package"/>
+                            <field name="content_kind" invisible="not content_kind"/>
                             <field name="published_on"/>
                             <field name="file_summary" invisible="not file_summary"/>
                         </group>
                     </group>
                     <field name="summary" placeholder="Một hai câu hiện trên trang danh sách: hướng dẫn này giúp làm gì."/>
                     <div class="text-muted small mt-3">
-                        Tải lên một file .html, hoặc .zip gồm index.html và các ảnh/CSS đi kèm (giữ nguyên
-                        thư mục như trong trang, VD img/anh.png). Tải lên lần nữa là thay toàn bộ nội dung cũ.
+                        Tải lên một file .html, một file .pdf, hoặc .zip gồm index.html và các ảnh/CSS đi kèm
+                        (giữ nguyên thư mục như trong trang, VD img/anh.png). Tải lên lần nữa là thay toàn bộ nội dung cũ.
                     </div>
                 </sheet>
             </form>
@@ -59,9 +61,9 @@
         <field name="arch" type="xml">
             <search>
                 <field name="name"/>
-                <field name="topic"/>
+                <field name="folder_id"/>
                 <filter name="inactive" string="Đã ẩn" domain="[('active', '=', False)]"/>
-                <filter name="group_topic" string="Nhóm" context="{'group_by': 'topic'}"/>
+                <filter name="group_folder" string="Thư mục" context="{'group_by': 'folder_id'}"/>
             </search>
         </field>
     </record>
@@ -72,7 +74,30 @@
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Thêm hướng dẫn đầu tiên</p>
-            <p>Đặt tên, tải file .html hoặc .zip lên. Sale đọc ở trang /huong-dan.</p>
+            <p>Đặt tên, chọn thư mục, tải file .html, .zip hoặc .pdf lên. Sale đọc ở trang /huong-dan.</p>
+        </field>
+    </record>
+
+    <record id="view_sale_guide_folder_list" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.folder.list</field>
+        <field name="model">hlv.sale.guide.folder</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="parent_id" placeholder="Gốc"/>
+                <field name="complete_name" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_sale_guide_folder" model="ir.actions.act_window">
+        <field name="name">Thư mục hướng dẫn</field>
+        <field name="res_model">hlv.sale.guide.folder</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Tạo thư mục đầu tiên</p>
+            <p>VD "Bán hàng", rồi "Hỏi giá NCC" với thư mục cha là "Bán hàng".</p>
         </field>
     </record>
 
@@ -82,8 +107,11 @@
         <field name="target">self</field>
     </record>
 
-    <menuitem id="menu_guide_root" name="Hướng dẫn" sequence="95" groups="base.group_user"/>
+    <menuitem id="menu_guide_root" name="Hướng dẫn" sequence="95" groups="base.group_user"
+              web_icon="hlv_sale_guide,static/description/icon.png"/>
     <menuitem id="menu_guide_read" name="Đọc hướng dẫn" parent="menu_guide_root" action="action_guide_page" sequence="10"/>
     <menuitem id="menu_guide_manage" name="Quản lý hướng dẫn" parent="menu_guide_root" action="action_sale_guide"
               sequence="20" groups="group_guide_manager"/>
+    <menuitem id="menu_guide_folders" name="Thư mục" parent="menu_guide_root" action="action_sale_guide_folder"
+              sequence="30" groups="group_guide_manager"/>
 </odoo>
