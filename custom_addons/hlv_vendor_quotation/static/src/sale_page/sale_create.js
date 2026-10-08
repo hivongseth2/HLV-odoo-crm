@@ -13,6 +13,14 @@ window.HlvQuote = window.HlvQuote || {};
   // Gợi ý chỉ để tham khảo: hiện vài NCC đầu, phần còn lại mở khi cần.
   var SUGGEST_VISIBLE = 5;
 
+  /** Thêm nhiều dòng một lúc (khung "Dán danh sách" — sale_paste.js); trùng sản phẩm thì cộng SL. */
+  HQ.addCreateLines = function (lines) {
+    lines.forEach(function (line) { C.lines = HQ.mergeLine(C.lines, line); });
+    renderLines();
+    renderSummary();
+    refreshSuggestions();
+  };
+
   /** Mở hộp lập phiếu điền sẵn sản phẩm + NCC (nút "Dùng giá này" ở khung giá đã hỏi).
       reuse: {product_id: vendor_id} — giá chọn dùng lại sẵn. */
   HQ.openCreateWith = function (lines, vendors, reuse) {

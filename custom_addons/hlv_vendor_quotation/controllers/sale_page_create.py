@@ -9,8 +9,11 @@ from odoo.osv import expression
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
 from ..services.price_history import quoted_prices
+from ..services.product_paste import match_pasted
 from ..services.sale_code import SALE_CODE_FIELD, has_sale_code
 from .sale_page_common import API, SEARCH_LIMIT, SalePageMixin, to_int
+
+PASTE_MAX_CHARS = 20000
 
 
 class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
@@ -27,6 +30,12 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             ("barcode", "=", search),
         ], limit=SEARCH_LIMIT)
         return {"products": [payload.product_payload(p) for p in products]}
+
+    @http.route(f"{API}/parse_products", type="json", auth="user", methods=["POST"])
+    def api_parse_products(self, text="", **kw):
+        """Danh sách hàng sale dán từ Zalo / Excel → từng dòng kèm sản phẩm dò được."""
+        self._check()
+        return {"rows": match_pasted(request.env, (text or "")[:PASTE_MAX_CHARS])}
 
     @http.route(f"{API}/price_history", type="json", auth="user", methods=["POST"])
     def api_price_history(self, product_ids=None, search="", **kw):

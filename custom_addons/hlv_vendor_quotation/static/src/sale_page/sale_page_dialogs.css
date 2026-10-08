@@ -364,3 +364,16 @@
 .hq-reuse-row.is-picked .hq-reuse-sub { color: #d6eadd; }
 .hq-reuse-row.is-off { color: var(--hq-muted); }
 .hq-reuse-check { font-weight: 700; }
+
+/* ------------------------------------------------------------ dán danh sách hàng */
+
+.hq-paste-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .6rem; margin-top: .5rem; }
+.hq-paste { display: grid; gap: .5rem; margin-top: .5rem; padding: .75rem; border: 1px dashed var(--hq-line);
+    border-radius: var(--hq-radius); background: #fff; }
+.hq-paste-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.hq-paste-raw { font-family: ui-monospace, Consolas, monospace; font-size: .75rem; color: var(--hq-muted);
+    white-space: pre-wrap; margin-bottom: .15rem; }
+.hq-paste-table .hq-qty { width: 80px; }
+.hq-paste-matched td { background: #f3faf5; }
+.hq-paste-ambiguous td { background: #fdf6e7; }
+.hq-paste-missing td { color: var(--hq-muted); }
