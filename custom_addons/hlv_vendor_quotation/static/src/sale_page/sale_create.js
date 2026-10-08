@@ -327,6 +327,14 @@ window.HlvQuote = window.HlvQuote || {};
       var parts = el.dataset.reusePick.split(":");
       pickReuse(+parts[0], +parts[1]);
     });
+    HQ.on(modal, "click", "[data-reask]", function (el) {
+      var parts = el.dataset.reask.split(":");
+      var price = ((C.priceHints || {})[+parts[0]] || []).find(function (p) { return p.vendor_id === +parts[1]; });
+      if (price && !isChosen(price.vendor_id)) {
+        toggleVendor({ id: price.vendor_id, name: price.vendor });
+      }
+      HQ.toast("Đã thêm " + (price ? price.vendor : "NCC") + " — giá lần trước (trong 7 ngày) sẽ điền sẵn để NCC xác nhận");
+    });
     HQ.on(modal, "click", "[data-reuse-unpick]", function (el) {
       delete C.reuse[+el.dataset.reuseUnpick];
       renderLines();

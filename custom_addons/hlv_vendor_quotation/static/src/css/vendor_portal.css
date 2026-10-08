@@ -416,3 +416,7 @@ a { color: var(--vq-accent); }
 .vq-foot-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .vq-valid-field { display: grid; gap: 4px; max-width: 360px; }
 .vq-valid-field .vq-input { max-width: 200px; }
+
+/* --- Giá lần trước (hỏi lại trong 7 ngày) --- */
+.vq-choice-ref { color: #8a5a00; font-weight: 600; }
+.vq-ref-legend { margin: 6px 0 0; color: #8a5a00; }

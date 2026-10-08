@@ -355,6 +355,9 @@
                                 đã chọn nhà cung cấp khác.</p>
                             <p t-if="editable" class="vq-muted vq-small">Đơn giá là giá chưa VAT cho một đơn vị
                                 tính. Mặt hàng không cung cấp được, vui lòng chọn "Không có hàng".</p>
+                            <p t-if="references" class="vq-small vq-ref-legend">Mặt hàng ghi "Giá lần trước" đã điền sẵn giá
+                                quý công ty báo trong <t t-esc="reference_days"/> ngày qua — kiểm tra còn hàng, đúng giá thì bấm
+                                Gửi báo giá; khác thì sửa lại.</p>
                             <p t-if="editable and any(quote.line_ids.mapped('vendor_locked'))" class="vq-muted vq-small">
                                 Mặt hàng ghi "Đã lên đơn mua" không sửa được nữa.</p>
                         </div>
@@ -385,12 +388,13 @@
                             <t t-foreach="quote.line_ids" t-as="line">
                             <t t-set="lid" t-value="line.id"/>
                             <t t-set="line_editable" t-value="editable and not line.vendor_locked"/>
+                            <t t-set="ref" t-value="references.get(lid)"/>
                             <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ('vq-line-lost' if line_choice.get(lid) == 'other' else '')"/>
                             <tr data-vq-line="1" t-attf-class="vq-line vq-line-main #{choice_class}"
                                 t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
                                 t-att-data-vat="line.vat or ''">
                                 <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
-                                <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or default_vat)"/>
+                                <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
                                 <td class="vq-col-no" t-esc="line_index + 1"/>
                                 <td class="vq-col-product">
                                     <div class="vq-product">
@@ -404,6 +408,9 @@
                                             <div t-if="line_choice.get(line.id) == 'selected'" class="vq-choice vq-choice-won">Được chọn</div>
                                             <div t-if="line_choice.get(line.id) == 'other'" class="vq-choice">Đã chọn nhà cung cấp khác</div>
                                             <div t-if="line.vendor_locked" class="vq-choice vq-choice-locked">Đã lên đơn mua</div>
+                                            <div t-if="ref" class="vq-choice vq-choice-ref">Giá lần trước:
+                                                <t t-esc="fmt(ref.price_unit)"/> cho <t t-esc="fmt(ref.product_qty)"/>
+                                                <t t-esc="ref.product_uom_id.name"/> (<t t-esc="fdate(ref.quote_id.submit_date)"/>)</div>
                                             <label class="vq-check">
                                                 <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
                                                        t-att-checked="na_checked" t-att-disabled="not line_editable"/>
@@ -418,7 +425,7 @@
                                 <td class="vq-col-price" data-label="Đơn giá chưa VAT">
                                     <input t-if="line_editable" type="text" inputmode="decimal" class="vq-input vq-input-price"
                                            data-vq-price="1" t-att-name="'price_%s' % lid"
-                                           t-att-value="post.get('price_%s' % lid) if post else (fmt(line.price_unit) if line.price_unit else '')"/>
+                                           t-att-value="post.get('price_%s' % lid) if post else (fmt(line.price_unit) if line.price_unit else (fmt(ref.price_unit) if ref else ''))"/>
                                     <span t-else="" t-esc="fmt(line.price_unit) if line.price_unit else '—'"/>
                                 </td>
                                 <td class="vq-col-vat" data-label="VAT">
@@ -432,7 +439,7 @@
                                 <td class="vq-col-days" data-label="Giao sau (ngày)">
                                     <input t-if="line_editable" type="text" inputmode="numeric" class="vq-input"
                                            t-att-name="'days_%s' % lid"
-                                           t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or '')"/>
+                                           t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or (ref and ref.delivery_days) or '')"/>
                                     <span t-else="" t-esc="line.delivery_days or '—'"/>
                                 </td>
                                 <td class="vq-num vq-col-total" data-label="Thành tiền" data-vq-subtotal="1">—</td>
@@ -445,14 +452,14 @@
                                             <span class="vq-label">Tên xuất hóa đơn</span>
                                             <input t-if="line_editable" type="text" class="vq-input" maxlength="255"
                                                    t-att-name="'inv_%s' % lid" placeholder="Tên hàng NCC ghi trên hóa đơn"
-                                                   t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or '')"/>
+                                                   t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or (ref and ref.invoice_name) or '')"/>
                                             <span t-else="" class="vq-extra-value" t-esc="line.invoice_name or '—'"/>
                                         </label>
                                         <label class="vq-extra-field">
                                             <span class="vq-label">Ghi chú</span>
                                             <input t-if="line_editable" type="text" class="vq-input" maxlength="255"
                                                    t-att-name="'note_%s' % lid" placeholder="Hãng, xuất xứ, quy cách"
-                                                   t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or '')"/>
+                                                   t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or (ref and ref.vendor_note) or '')"/>
                                             <span t-else="" class="vq-extra-value" t-esc="line.vendor_note or '—'"/>
                                         </label>
                                     </div>

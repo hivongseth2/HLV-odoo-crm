@@ -150,6 +150,10 @@ window.HlvQuote = window.HlvQuote || {};
 
   function offerCell(offer, vendor, canChoose) {
     if (!offer || (!offer.price_unit && !offer.unavailable)) {
+      if (offer && offer.reference_price) {
+        return '<td class="hq-offer hq-muted">Chờ NCC xác nhận<span class="hq-offer-meta">lần trước ' +
+          HQ.money(offer.reference_price) + " — đã điền sẵn cho NCC</span></td>";
+      }
       return '<td class="hq-offer hq-muted">' + (vendor.state === "sent" ? "Chờ báo giá" : "—") + "</td>";
     }
     if (offer.unavailable) {
