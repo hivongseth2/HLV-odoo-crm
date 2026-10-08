@@ -178,6 +178,9 @@ def _compare_row(line, quotes):
         offers[quote_line.quote_id.id] = {
             "line_id": quote_line.id,
             "price_unit": quote_line.price_unit,
+            # NCC báo kiểu giá niêm yết − % chiết khấu (tuỳ chọn): hiện kèm để sale đối chiếu.
+            "list_price": quote_line.list_price,
+            "discount": quote_line.discount,
             "vat": VAT_LABELS.get(quote_line.vat, ""),
             "delivery_days": quote_line.delivery_days,
             "vendor_note": quote_line.vendor_note or "",

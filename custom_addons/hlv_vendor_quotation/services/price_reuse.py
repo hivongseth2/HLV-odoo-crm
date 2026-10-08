@@ -22,7 +22,7 @@ from datetime import timedelta
 
 from odoo import fields
 
-REUSED_FIELDS = ("price_unit", "vat", "delivery_days", "vendor_note", "invoice_name")
+REUSED_FIELDS = ("price_unit", "list_price", "discount", "vat", "delivery_days", "vendor_note", "invoice_name")
 # Hỏi lại cùng NCC trong chừng này ngày: điền sẵn giá NCC báo lần trước vào form của NCC
 # (NCC vẫn phải bấm gửi — khác "dùng lại giá" là tự coi như NCC đã báo).
 REFERENCE_DAYS = 7

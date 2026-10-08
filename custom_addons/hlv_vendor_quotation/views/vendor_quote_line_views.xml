@@ -23,6 +23,8 @@
                 <field name="quote_id" optional="show"/>
                 <field name="product_qty"/>
                 <field name="product_uom_id" groups="uom.group_uom"/>
+                <field name="list_price" optional="hide"/>
+                <field name="discount" optional="hide"/>
                 <field name="price_unit" decoration-info="is_best_price" decoration-bf="is_best_price"/>
                 <field name="vat"/>
                 <field name="price_subtotal"/>

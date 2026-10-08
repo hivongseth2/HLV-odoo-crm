@@ -14,6 +14,7 @@ from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
     deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate, parse_vn_number,
+    resolve_net_price,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -315,21 +316,35 @@ class VendorQuotePortal(http.Controller):
     def _read_quote_form(self, quote, post):
         """Đọc ô nhập theo từng dòng. Trả (giá trị theo id dòng, danh sách lỗi đọc số)."""
         valid_vat = {key for key, _label in VAT_SELECTION}
+        use_discount = bool(post.get("use_discount"))
         line_values, errors = {}, []
         for index, line in enumerate(quote.line_ids, start=1):
-            raw_price = (post.get(f"price_{line.id}") or "").strip()
-            price = parse_vn_number(raw_price)
-            if raw_price and price is None:
-                errors.append(f"Dòng {index}: không đọc được đơn giá \"{raw_price}\".")
+            def number(field, label):
+                return self._read_line_number(post, f"{field}_{line.id}", f"Dòng {index}: không đọc được {label}", errors)
+
             vat = post.get(f"vat_{line.id}") or False
             if vat and vat not in valid_vat:
                 vat = False
+            discount = number("disc", "% chiết khấu") if use_discount else None
+            if discount is not None and discount >= 100:
+                errors.append(f"Dòng {index}: chiết khấu phải nhỏ hơn 100%.")
+                discount = None
+            list_price = number("list", "đơn giá trước chiết khấu") if use_discount else None
+            # Trang có JS đã điền đủ cả ô chưa VAT; hai ô kia chỉ dùng khi ô này trống (xem
+            # resolve_net_price) — NCC chỉ cần gõ một trong ba.
+            price = resolve_net_price(
+                number("price", "đơn giá chưa VAT"), number("gross", "đơn giá sau VAT"),
+                float(vat) if vat and vat != "kct" else 0.0, list_price, discount,
+            )
             raw_days = (post.get(f"days_{line.id}") or "").strip()
             days = int(raw_days) if raw_days.isdigit() else 0
             if raw_days and not raw_days.isdigit():
                 errors.append(f"Dòng {index}: số ngày giao \"{raw_days}\" phải là số nguyên.")
             line_values[line.id] = {
                 "price_unit": price or 0.0,
+                # Chỉ lưu khi NCC bật "nhập giá trước chiết khấu"; tắt đi là xoá số cũ.
+                "list_price": (list_price or 0.0) if discount is not None else 0.0,
+                "discount": discount or 0.0,
                 "vat": vat,
                 "delivery_days": days,
                 "vendor_note": (post.get(f"note_{line.id}") or "").strip()[:LINE_NOTE_MAX],
@@ -337,6 +352,15 @@ class VendorQuotePortal(http.Controller):
                 "unavailable": bool(post.get(f"na_{line.id}")),
             }
         return line_values, errors
+
+    @staticmethod
+    def _read_line_number(post, key, label, errors):
+        """Số trong ô `key` của form; trống → None; gõ sai → None và thêm lỗi `label "chữ đã gõ".`"""
+        raw = (post.get(key) or "").strip()
+        value = parse_vn_number(raw)
+        if raw and value is None:
+            errors.append(f"{label} \"{raw}\".")
+        return value
 
     def _read_valid_until(self, post, errors):
         """Ô "Giá có hiệu lực đến" (yyyy-mm-dd từ input date). Trống → False (model lấy mặc định
