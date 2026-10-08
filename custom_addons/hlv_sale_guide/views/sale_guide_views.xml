@@ -11,6 +11,7 @@
                 <field name="content_kind"/>
                 <field name="url" widget="url"/>
                 <field name="group_ids" widget="many2many_tags" optional="show"/>
+                <field name="has_knowledge" optional="show"/>
                 <field name="published_on"/>
             </list>
         </field>
@@ -50,6 +51,21 @@
                         Tải lên một file .html, một file .pdf, hoặc .zip gồm index.html và các ảnh/CSS đi kèm
                         (giữ nguyên thư mục như trong trang, VD img/anh.png). Tải lên lần nữa là thay toàn bộ nội dung cũ.
                     </div>
+                    <separator string="Kiến thức cho AI (không bắt buộc)"/>
+                    <div class="text-muted small mb-2">
+                        Bản chữ thuần của hướng dẫn bằng Markdown, để sau này nạp làm kiến thức cho trợ lý AI.
+                        Sale không thấy phần này. Tải file .md lên hoặc dán / sửa thẳng trong ô bên dưới.
+                    </div>
+                    <group>
+                        <group>
+                            <field name="knowledge_file"/>
+                        </group>
+                        <group>
+                            <field name="knowledge_updated_on" invisible="not knowledge_updated_on"/>
+                        </group>
+                    </group>
+                    <field name="knowledge_md" class="font-monospace"
+                           placeholder="# Tên hướng dẫn&#10;&#10;## Khi nào dùng&#10;…"/>
                 </sheet>
             </form>
         </field>
@@ -62,6 +78,7 @@
             <search>
                 <field name="name"/>
                 <field name="folder_id"/>
+                <filter name="no_knowledge" string="Chưa có kiến thức AI" domain="[('has_knowledge', '=', False)]"/>
                 <filter name="inactive" string="Đã ẩn" domain="[('active', '=', False)]"/>
                 <filter name="group_folder" string="Thư mục" context="{'group_by': 'folder_id'}"/>
             </search>
