@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Xem nhanh một báo giá ngay trong danh sách (dòng ẩn dưới mỗi báo giá, bấm để mở):
+         bảng hàng theo kiểu phiếu báo giá NCC quen dùng — Đơn giá là giá trước chiết khấu nếu
+         NCC báo kiểu niêm yết − % CK, Thành tiền là sau chiết khấu, chưa VAT.
+         Biến vào: quote, quote_url, quote_status (từ portal_quote_list), fmt. -->
+    <template id="portal_quote_quick" name="Báo giá NCC - xem nhanh">
+        <div class="vq-quick">
+            <div class="vq-quick-scroll">
+                <table class="vq-quick-table">
+                    <thead>
+                        <tr>
+                            <th class="vq-quick-no">#</th>
+                            <th>Mã hàng</th>
+                            <th class="vq-quick-name">Tên hàng</th>
+                            <th>ĐVT</th>
+                            <th class="vq-num">SL</th>
+                            <th class="vq-num">Đơn giá</th>
+                            <th class="vq-num">% CK</th>
+                            <th class="vq-num">VAT</th>
+                            <th class="vq-num">Thành tiền</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="quote.line_ids" t-as="line" t-att-class="'vq-quick-na' if line.unavailable else None">
+                            <t t-set="code" t-value="line.product_id.default_code or ''"/>
+                            <td class="vq-quick-no" t-esc="line_index + 1"/>
+                            <td class="vq-nowrap" t-esc="code or '—'"/>
+                            <td class="vq-quick-name" t-esc="code_name(line.name or line.product_id.name, code)"/>
+                            <td t-esc="line.product_uom_id.name"/>
+                            <td class="vq-num" t-esc="fmt(line.product_qty)"/>
+                            <t t-if="line.unavailable">
+                                <td colspan="4" class="vq-num vq-muted">Không có hàng</td>
+                            </t>
+                            <t t-else="">
+                                <td class="vq-num" t-esc="fmt(line.list_price or line.price_unit) if line.price_unit else '—'"/>
+                                <td class="vq-num" t-esc="fmt(line.discount) if line.list_price and line.discount else ''"/>
+                                <td class="vq-num" t-esc="dict(vat_options).get(line.vat, '') if line.price_unit else ''"/>
+                                <td class="vq-num" t-esc="fmt(line.price_subtotal) if line.price_unit else '—'"/>
+                            </t>
+                            <td class="vq-quick-note" t-esc="line.vendor_note or ''"/>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="vq-quick-foot">
+                <span t-if="quote.amount_untaxed" class="vq-quick-total">
+                    Chưa VAT <b t-esc="fmt(quote.amount_untaxed)"/> · Sau VAT <b t-esc="fmt(quote.amount_total)"/>
+                </span>
+                <a t-att-href="quote_url" class="vq-btn vq-btn-secondary"
+                   t-esc="'Điền giá →' if quote_status[1] == 'waiting' else 'Mở báo giá →'"/>
+            </div>
+        </div>
+    </template>
+</odoo>
