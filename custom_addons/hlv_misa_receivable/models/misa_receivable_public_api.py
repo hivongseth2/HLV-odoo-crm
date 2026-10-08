@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from datetime import date
-
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
@@ -41,15 +39,16 @@ class MisaSalePaymentLinePublicApi(models.Model):
         So không phân biệt hoa/thường."""
         if not code:
             return []
-        Line = self.sudo()
-        keys = set(Line.search([('saler_code', '=ilike', code)]).mapped('invoice_key'))
-        picking_invoice_nos = self.env['stock.picking'].sudo().search([
-            ('misa_invoice_saler_code', '=ilike', code), ('misa_invoice_no', '!=', False),
-        ]).mapped('misa_invoice_no')
-        keys |= set(Line.search([
-            ('invoice_no', 'in', picking_invoice_nos), ('saler_code', '=', False),
-        ]).mapped('invoice_key'))
+        picking_invoice_nos = [no for (no,) in self.env['stock.picking'].sudo()._read_group(
+            [('misa_invoice_saler_code', '=ilike', code), ('misa_invoice_no', '!=', False)], ['misa_invoice_no'],
+        )]
+        keys = self._public_invoice_keys([('saler_code', '=ilike', code)])
+        keys |= self._public_invoice_keys([('invoice_no', 'in', picking_invoice_nos), ('saler_code', '=', False)])
         return [('invoice_key', 'in', list(keys))]
+
+    def _public_invoice_keys(self, domain):
+        """Tập khóa hóa đơn có ít nhất 1 dòng khớp domain — GROUP BY ở Postgres, không nạp bản ghi."""
+        return {key for (key,) in self.sudo()._read_group(domain, ['invoice_key'])}
 
     def _public_invoice_lines(self, saler_code, invoice_key):
         """Mọi dòng (đã thu lẫn chưa) của 1 hóa đơn trong phạm vi mã sale. Không có = không được xem."""
@@ -71,49 +70,77 @@ class MisaSalePaymentLinePublicApi(models.Model):
             [('order_id.name', 'ilike', term)], [('item_code', 'ilike', term)],
         ])
 
-    def _public_invoice_rows(self, followups, today, code=False):
-        """Gộp dòng theo hóa đơn → 1 hàng/hóa đơn, kèm tổng tiền, đã thu, chưa thu. Quá hạn tính
-        theo hạn sớm nhất của phần CHƯA thu; hóa đơn đã thu hết không có quá hạn. Có code thì kèm
-        phần chưa thu của riêng mã đó (hóa đơn chung nhiều sale)."""
-        due_labels = dict(self._fields['due_source'].selection)
-        groups = {}
-        for line in self:
-            groups.setdefault(line.invoice_key, []).append(line)
+    def _public_invoice_rows(self, domain, today, code=False):
+        """1 hàng nhẹ/hóa đơn trong domain: tổng tiền, chưa thu, hạn, quá hạn — đủ để tính ô số
+        liệu, lọc, sắp xếp, phân trang mà không nạp bản ghi nào (vài câu GROUP BY ở Postgres).
+        Phần tốn kém (đơn, chứng từ, sale, hẹn thu) chỉ đọc cho trang đang xem, xem
+        _public_enrich_rows.
+
+        Quá hạn tính theo hạn sớm nhất của phần CHƯA thu; hóa đơn đã thu hết không có quá hạn. Có
+        code thì kèm phần chưa thu của riêng mã đó (hóa đơn chung nhiều sale)."""
+        Line = self.sudo()
+        unpaid_domain = expression.AND([domain, [('paid_state', '!=', 'paid')]])
+        unpaid = {key: (amount, due) for key, amount, due in Line._read_group(
+            unpaid_domain, ['invoice_key'], ['amount:sum', 'due_date:min'],
+        )}
+        unknown = self._public_invoice_keys(expression.AND([domain, [('paid_state', '=', 'unknown')]]))
+        own = {key: amount for key, amount in Line._read_group(
+            expression.AND([unpaid_domain, [('saler_code', '=ilike', code)]]), ['invoice_key'], ['amount:sum'],
+        )} if code else {}
         rows = []
-        for invoice_key, line_list in groups.items():
-            lines = self.browse([line.id for line in line_list])
-            unpaid = lines.filtered(lambda l: l.paid_state != 'paid')
-            amount_unpaid = sum(unpaid.mapped('amount'))
+        for key, total, invoice_no, series, invoice_date, due_any, partner_name, partner_code in Line._read_group(
+            domain, ['invoice_key'], [
+                'amount:sum', 'invoice_no:min', 'invoice_series:min', 'invoice_date:min', 'due_date:min',
+                'partner_name:min', 'partner_code:min',
+            ],
+        ):
+            amount_unpaid, due_unpaid = unpaid.get(key, (0.0, None))
             is_paid = amount_unpaid <= MISA_INVOICE_AMOUNT_TOLERANCE
-            # Hạn sớm nhất quyết định quá hạn; dòng thiếu hạn xếp sau cùng.
-            first = (unpaid or lines).sorted(lambda l: (l.due_date or date.max, l.id))[0]
-            days = 0 if is_paid else overdue_days(first.due_date, today)
-            followup = followups.get(invoice_key)
+            due_date = due_any if is_paid else due_unpaid
+            days = 0 if is_paid else overdue_days(due_date, today)
             rows.append({
-                'invoice_key': invoice_key,
-                'invoice_no': first.invoice_no,
-                'invoice_series': first.invoice_series or '',
-                'voucher_refnos': list(dict.fromkeys(r for r in lines.mapped('voucher_refno') if r)),
-                'partner_code': first.partner_code or '',
-                'partner_name': first.partner_name or '',
-                'invoice_date': fields.Date.to_string(first.invoice_date) or '',
-                'invoice_month': first.invoice_date.strftime('%Y-%m') if first.invoice_date else '',
-                'due_date': fields.Date.to_string(first.due_date) or '',
-                'due_source': due_labels.get(first.due_source, ''),
-                'amount_total': sum(lines.mapped('amount')),
+                'invoice_key': key,
+                'invoice_no': invoice_no or '',
+                'invoice_series': series or '',
+                'partner_code': partner_code or '',
+                'partner_name': partner_name or '',
+                'invoice_date': fields.Date.to_string(invoice_date) or '',
+                'invoice_month': invoice_date.strftime('%Y-%m') if invoice_date else '',
+                'due_date': fields.Date.to_string(due_date) or '',
+                'amount_total': total or 0.0,
                 'amount_unpaid': amount_unpaid,
-                'amount_paid': sum(lines.mapped('amount')) - amount_unpaid,
-                'own_amount_unpaid': sum(
-                    line.amount for line in unpaid if (line.saler_code or '').upper() == code.upper()
-                ) if code else amount_unpaid,
+                'amount_paid': (total or 0.0) - amount_unpaid,
+                'own_amount_unpaid': own.get(key, 0.0) if code else amount_unpaid,
                 'is_paid': is_paid,
-                'line_count': len(lines),
-                'orders': list(dict.fromkeys(lines.mapped('order_id.name'))),
-                'saler_codes': list(dict.fromkeys(c for c in lines.mapped('saler_code') if c)),
-                'has_unknown': any(state == 'unknown' for state in lines.mapped('paid_state')),
+                'has_unknown': key in unknown,
                 'overdue_days': days,
                 'status_label': 'Đã thu' if is_paid else status_label(days),
                 'bucket': '' if is_paid else aging_bucket_of(days),
+            })
+        return rows
+
+    def _public_enrich_rows(self, rows):
+        """Bổ sung cho các hàng của TRANG đang xem: chứng từ, đơn, sale, cách tính hạn, hẹn thu."""
+        if not rows:
+            return rows
+        Line = self.sudo()
+        keys = [row['invoice_key'] for row in rows]
+        due_labels = dict(self._fields['due_source'].selection)
+        details = {key: (refnos, order_ids, salers, sources) for key, refnos, order_ids, salers, sources in Line._read_group(
+            [('invoice_key', 'in', keys)], ['invoice_key'],
+            ['voucher_refno:array_agg', 'order_id:array_agg', 'saler_code:array_agg', 'due_source:array_agg'],
+        )}
+        all_order_ids = {oid for _r, order_ids, _s, _d in details.values() for oid in order_ids if oid}
+        order_names = {order.id: order.name for order in self.env['sale.order'].sudo().browse(list(all_order_ids))}
+        followups = {f.invoice_key: f for f in self.env['misa.receivable.followup'].sudo().search([('invoice_key', 'in', keys)])}
+        for row in rows:
+            refnos, order_ids, salers, sources = details.get(row['invoice_key'], ([], [], [], []))
+            followup = followups.get(row['invoice_key'])
+            row.update({
+                'voucher_refnos': list(dict.fromkeys(r for r in refnos if r)),
+                'orders': list(dict.fromkeys(order_names[oid] for oid in order_ids if oid in order_names)),
+                'saler_codes': list(dict.fromkeys(c for c in salers if c)),
+                'due_source': ', '.join(due_labels.get(src, '') for src in dict.fromkeys(s for s in sources if s)),
                 'promise_date': fields.Date.to_string(followup.promise_date) if followup else '',
                 'collect_rate': followup.collect_rate if followup else 0,
                 'followup_note': (followup.note or '') if followup else '',
@@ -150,20 +177,15 @@ class MisaSalePaymentLinePublicApi(models.Model):
         Ô tìm kiếm chọn ra HÓA ĐƠN (khớp 1 dòng là lấy cả hóa đơn, để tổng tiền không bị cắt). Ô số
         liệu và danh sách tháng tính trên phạm vi mã sale + tìm kiếm (+ tháng cho ô số liệu), KHÔNG
         theo bộ lọc đã thu/nhóm tuổi nợ — để bấm qua lại vẫn thấy đủ số. Quá hạn đổi theo ngày nên
-        gộp/lọc làm bằng Python.
+        lọc/sắp xếp làm bằng Python, trên hàng nhẹ đã gộp sẵn ở Postgres.
         """
         today = fields.Date.context_today(self)
         code = self._public_code(saler_code)
-        saler_domain = self._public_scope_domain(code)
-        Line = self.sudo()
-        domain = saler_domain
+        domain = self._public_scope_domain(code)
         if search:
-            invoice_keys = list(set(Line.search(expression.AND([saler_domain, self._public_search_domain(search)])).mapped('invoice_key')))
-            domain = expression.AND([saler_domain, [('invoice_key', 'in', invoice_keys)]])
-        lines = Line.search(domain)
-        Followup = self.env['misa.receivable.followup'].sudo()
-        followups = {f.invoice_key: f for f in Followup.search([('invoice_key', 'in', list(set(lines.mapped('invoice_key'))))])}
-        rows = lines._public_invoice_rows(followups, today, code)
+            keys = self._public_invoice_keys(expression.AND([domain, self._public_search_domain(search)]))
+            domain = expression.AND([domain, [('invoice_key', 'in', list(keys))]])
+        rows = self._public_invoice_rows(domain, today, code)
         in_month = [row for row in rows if not month or row['invoice_month'] == month]
         visible = [row for row in rows if self._public_row_visible(row, paid_filter, month, bucket)]
         # Còn nợ trước (quá hạn lâu nhất lên đầu), đã thu sau (hóa đơn mới nhất lên đầu).
@@ -176,7 +198,7 @@ class MisaSalePaymentLinePublicApi(models.Model):
         summary['paid_amount'] = sum(row['amount_paid'] for row in in_month)
         summary['paid_count'] = sum(1 for row in in_month if row['is_paid'])
         return {
-            'rows': visible[int(offset):int(offset) + int(limit)],
+            'rows': self._public_enrich_rows(visible[int(offset):int(offset) + int(limit)]),
             'total': len(visible),
             'summary': summary,
             'months': month_options([fields.Date.from_string(row['invoice_date']) for row in rows if row['invoice_date']]),
