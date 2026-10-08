@@ -214,11 +214,12 @@ def rank_vendor_suggestions(coverage, order_stats, limit):
     return sorted(vendors.values(), key=sort_key)[:limit]
 
 
-def build_share_message(company_name, vendor_name, quote_names, deadline_text, url, password):
+def build_share_message(company_name, vendor_name, quote_names, deadline_text, url, password, reask=()):
     """Tin nhắn sale dán vào Zalo gửi NCC — gọn: số báo giá, hạn, link chung của NCC, mật khẩu.
 
     Nhận: tên công ty mình, tên NCC, list số báo giá, hạn báo giá đã định dạng ("" nếu
-    không có hạn), link chung của NCC, mật khẩu (chuỗi).
+    không có hạn), link chung của NCC, mật khẩu (chuỗi), reask: list chuỗi "hàng — giá lần
+    trước" cho mặt hàng NCC vừa báo gần đây (đã điền sẵn, chỉ cần xác nhận); rỗng thì bỏ.
     Trả: chuỗi nhiều dòng. Nhiều báo giá thì liệt kê các số, cách nhau dấu phẩy.
     """
     subject = f"yêu cầu báo giá {', '.join(quote_names)}"
@@ -229,6 +230,9 @@ def build_share_message(company_name, vendor_name, quote_names, deadline_text, u
         f"Link báo giá: {url}",
         f"Mật khẩu: {password}",
     ]
+    if reask:
+        lines.append("Hàng quý công ty vừa báo giá gần đây (giá cũ đã điền sẵn, nhờ xác nhận còn hàng / đúng giá):")
+        lines += [f"- {item}" for item in reask]
     return "\n".join(lines)
 
 

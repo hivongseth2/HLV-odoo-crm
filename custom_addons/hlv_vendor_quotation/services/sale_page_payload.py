@@ -8,9 +8,10 @@ chỉ việc gọi và trả về. Số tiền trả dạng số, trang tự đ�
 from ..models.purchase_order import VENDOR_STATUS
 from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
-from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, local_date_text
+from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, format_vn_number, local_date_text
 from .sale_code import sale_code
 from .chat_read import chat_stats, seen_markers
+from .price_reuse import recent_vendor_price, reference_prices
 
 QUOTE_STATE_LABELS = {
     "draft": "Nháp",
@@ -190,6 +191,9 @@ def _compare_row(line, quotes):
             "selected": quote_line.selected,
             # Giá dùng lại từ báo giá trước (còn hiệu lực) — ghi phiếu gốc để sale biết nguồn.
             "inherited_from": _inherited_doc(quote_line.inherited_from_id),
+            # NCC chưa báo mà có giá lần trước (≤ 7 ngày): chỉ để hiện "chờ xác nhận", KHÔNG phải giá.
+            "reference_price": recent_vendor_price(quote_line).price_unit
+            if quote_line.quote_id.state == "sent" and not quote_line.price_unit else 0,
         }
     return {
         "id": line.id,
@@ -222,6 +226,20 @@ def _request_payload(request):
     }
 
 
+def _reask_lines(quotes):
+    """ "Tên hàng: lần trước X ₫ cho N ĐVT" cho mặt hàng NCC vừa báo trong 7 ngày (đã điền sẵn)."""
+    items = []
+    for quote in quotes:
+        lines = {line.id: line for line in quote.line_ids}
+        for line_id, reference in reference_prices(quote).items():
+            line = lines[line_id]
+            items.append(
+                f"{line.name or line.product_id.display_name}: lần trước {format_vn_number(reference.price_unit)} ₫ "
+                f"cho {format_vn_number(reference.product_qty)} {reference.product_uom_id.name or ''}".rstrip()
+            )
+    return items
+
+
 def share_message(quotes):
     """Tin nhắn Zalo cho các báo giá cùng một NCC: nêu số báo giá, gửi link chung của NCC
     (một link cho mọi báo giá + đơn mua của họ — NCC chỉ cần lưu một link)."""
@@ -235,6 +253,7 @@ def share_message(quotes):
         quote_names=quotes.mapped("name"),
         deadline_text=_date_text(min(deadlines)) if deadlines else "",
         url=url,
+        reask=_reask_lines(quotes),
         password=access.password or "",
     )
 

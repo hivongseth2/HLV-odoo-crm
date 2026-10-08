@@ -24,7 +24,9 @@ window.HlvQuote = window.HlvQuote || {};
         ? '<button type="button" class="hq-btn hq-btn-mini" data-reuse-price="' + groupIndex + ":" + p.vendor_id +
           '" title="Lập phiếu với NCC này — tối đa ' + HQ.qty(p.qty) + ' như đã hỏi, giá được điền sẵn, không hỏi lại NCC">' +
           "Dùng giá này</button>"
-        : '<div class="hq-expired">Không dùng lại được: ' + esc(p.reuse_note) + "</div>");
+        : '<div class="hq-expired">Không dùng lại được: ' + esc(p.reuse_note) + "</div>" +
+          '<button type="button" class="hq-btn hq-btn-mini" data-reask-price="' + groupIndex + ":" + p.vendor_id +
+          '" title="Lập phiếu hỏi lại NCC này — giá lần trước điền sẵn để NCC xác nhận">Hỏi lại NCC này</button>');
     return "<tr" + (p.reusable ? "" : ' class="hq-price-old"') + "><td>" + esc(p.vendor) +
       (p.chosen ? ' <span class="hq-tag hq-tag-ok">đã chọn</span>' : "") + validity + "</td>" +
       '<td class="hq-num">' + HQ.money(p.price_unit) + '<div class="hq-muted">cho ' + HQ.qty(p.qty) + "</div>" +
@@ -66,7 +68,24 @@ window.HlvQuote = window.HlvQuote || {};
     }).catch(function () { box.classList.add("hq-hidden"); });
   };
 
+  function groupPrice(key) {
+    var parts = key.split(":");
+    var group = shown[+parts[0]];
+    var price = group && group.prices.find(function (p) { return p.vendor_id === +parts[1]; });
+    return price ? { group: group, price: price } : null;
+  }
+
   HQ.bindPriceHistoryEvents = function () {
+    HQ.on(HQ.$("hq-app"), "click", "[data-reask-price]", function (el) {
+      var hit = groupPrice(el.dataset.reaskPrice);
+      if (hit) {
+        HQ.openCreateWith(
+          [{ product_id: hit.group.product_id, product: hit.group.product, name: hit.group.name, qty: hit.price.qty,
+             uom_id: hit.group.uom_id, uom: hit.group.uom }],
+          [{ id: hit.price.vendor_id, name: hit.price.vendor }]
+        );
+      }
+    });
     HQ.on(HQ.$("hq-app"), "click", "[data-reuse-price]", function (el) {
       var parts = el.dataset.reusePrice.split(":");
       var group = shown[+parts[0]];
@@ -129,9 +148,13 @@ window.HlvQuote = window.HlvQuote || {};
         var state = picked ? "is-picked" : problem ? "is-off" : "is-ok";
         var action = picked
           ? '<button type="button" class="hq-btn hq-btn-mini" data-reuse-unpick="' + line.product_id + '">Bỏ</button>'
-          : problem ? ""
-          : '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-reuse-pick="' + line.product_id + ":" +
-            p.vendor_id + '">Dùng giá này</button>';
+          : problem
+            // Không dùng lại được (đã mua hết, hết hạn, vượt số lượng…): hỏi lại đúng NCC đó — giá
+            // lần trước được điền sẵn cho NCC xác nhận.
+            ? '<button type="button" class="hq-btn hq-btn-mini" data-reask="' + line.product_id + ":" + p.vendor_id +
+              '" title="Thêm NCC này vào phiếu — giá lần trước điền sẵn để NCC xác nhận">Hỏi lại NCC này</button>'
+            : '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-reuse-pick="' + line.product_id + ":" +
+              p.vendor_id + '">Dùng giá này</button>';
         return '<div class="hq-reuse-row ' + state + '"><div class="hq-reuse-main">' +
           (picked ? '<span class="hq-reuse-check">✓ Đang dùng</span> ' : "") +
           "<b>" + esc(p.vendor) + "</b> · <b>" + HQ.money(p.price_unit) + "</b> chưa VAT" +

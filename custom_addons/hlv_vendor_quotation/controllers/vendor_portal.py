@@ -18,6 +18,7 @@ from ..models.vendor_quote_utils import (
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
 from ..services.chat_read import mark_seen
+from ..services.price_reuse import REFERENCE_DAYS, reference_prices
 from ..services.vendor_feed import row_marks, vendor_feed
 from ..services.vendor_chat import chat_attachment, chat_messages, post_chat
 
@@ -147,6 +148,9 @@ class VendorQuotePortal(http.Controller):
         today = quote._vendor_today()
         values.update(
             today_iso=today.isoformat(),
+            # Dòng chưa có giá mà NCC đã báo trong 7 ngày: điền sẵn giá đó — NCC kiểm rồi gửi.
+            references=reference_prices(quote) if quote._is_open_for_vendor() else {},
+            reference_days=REFERENCE_DAYS,
             default_valid_iso=default_price_valid_until(today).isoformat(),
             status=STATUS_DISPLAY[quote._vendor_status()],
             editable=quote._is_open_for_vendor(),

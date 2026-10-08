@@ -18,9 +18,14 @@ Báo giá mà mọi dòng đều kế thừa được thì coi như NCC đã bá
 NCC. Đọc / ghi bằng sudo (giá của sale khác).
 """
 
+from datetime import timedelta
+
 from odoo import fields
 
 REUSED_FIELDS = ("price_unit", "vat", "delivery_days", "vendor_note", "invoice_name")
+# Hỏi lại cùng NCC trong chừng này ngày: điền sẵn giá NCC báo lần trước vào form của NCC
+# (NCC vẫn phải bấm gửi — khác "dùng lại giá" là tự coi như NCC đã báo).
+REFERENCE_DAYS = 7
 HOLDING_STATES = ("open", "requested")
 
 
@@ -86,6 +91,36 @@ def valid_price_line(quote_line, today):
         if not reuse_block_reason(candidate, today, exclude_line=quote_line):
             return candidate
     return candidates.browse()
+
+
+def recent_vendor_price(quote_line):
+    """Giá chính NCC này báo gần nhất (≤ REFERENCE_DAYS ngày) cho cùng sản phẩm, cùng ĐVT, ở báo
+    giá khác — để điền sẵn khi hỏi lại. Không có → rỗng."""
+    since = fields.Datetime.now() - timedelta(days=REFERENCE_DAYS)
+    vendor = quote_line.quote_id.partner_id.commercial_partner_id
+    return quote_line.sudo().search([
+        ("quote_id", "!=", quote_line.quote_id.id),
+        ("product_id", "=", quote_line.product_id.id),
+        ("product_uom_id", "=", quote_line.product_uom_id.id),
+        ("quote_id.partner_id.commercial_partner_id", "=", vendor.id),
+        ("quote_id.state", "in", ("quoted", "done")),
+        ("quote_id.submit_date", ">=", since),
+        ("inherited_from_id", "=", False),
+        ("price_unit", ">", 0),
+        ("unavailable", "=", False),
+    ], order="id desc", limit=1)
+
+
+def reference_prices(quote):
+    """{id dòng: dòng giá lần trước} cho các dòng CHƯA có giá của báo giá đang chờ NCC báo."""
+    if quote.state != "sent":
+        return {}
+    references = {}
+    for line in quote.line_ids.filtered(lambda l: not l.price_unit and not l.unavailable):
+        reference = recent_vendor_price(line)
+        if reference:
+            references[line.id] = reference
+    return references
 
 
 def apply_valid_prices(quotes):
