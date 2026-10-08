@@ -1,61 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Trang danh sách /huong-dan — HTML tự dựng, CSS viết liền trong trang (nhỏ, một trang),
-         cùng kiểu các trang /sale_plan, /hoi-gia-ncc: không qua web.layout + asset bundle. -->
-    <template id="guide_index" name="Danh sách hướng dẫn">
+    <!-- Trang /huong-dan — HTML tự dựng như /sale_plan, /hoi-gia-ncc (không qua web.layout + asset
+         bundle), CSS/JS nạp bằng link thường kèm ?v=version để trình duyệt tải lại sau nâng cấp.
+         Máy tính: cây thư mục bên trái, khung xem bên phải. Điện thoại: chỉ cây, bấm là mở trang. -->
+    <template id="guide_index" name="Hướng dẫn — cây thư mục">
         &lt;!DOCTYPE html&gt;
         <html lang="vi">
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <title>Hướng dẫn</title>
-                <style>
-                    :root { --desk: #eceae4; --paper: #fbfaf6; --ink: #1c1c1a; --ink-2: #57554f; --rule: #d6d2c8; --red: #8c2a1c; }
-                    * { box-sizing: border-box; }
-                    body { margin: 0; background: var(--desk); color: var(--ink); line-height: 1.5;
-                        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-                    .bar { background: var(--ink); color: #fff; padding: 10px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-                    .bar b { font-size: 16px; margin-right: auto; }
-                    .bar a { color: rgba(255, 255, 255, .75); text-decoration: none; font-size: 14px; }
-                    .bar a:hover { color: #fff; }
-                    main { max-width: 960px; margin: 0 auto; padding: 28px 16px 64px; }
-                    h1 { font-size: 26px; margin: 0 0 4px; }
-                    .lead { color: var(--ink-2); margin: 0 0 8px; }
-                    h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2);
-                        margin: 28px 0 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
-                    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-                    .card { display: flex; flex-direction: column; gap: 6px; background: var(--paper); border: 1px solid var(--rule);
-                        border-top: 4px solid var(--ink); padding: 14px 16px 12px; color: inherit; text-decoration: none;
-                        transition: border-color .15s, box-shadow .15s; }
-                    .card:hover, .card:focus-visible { border-top-color: var(--red); box-shadow: 0 6px 18px rgba(28, 28, 26, .10); outline: none; }
-                    .card b { font-size: 16px; }
-                    .card p { margin: 0; color: var(--ink-2); font-size: 14px; flex: 1; }
-                    .card small { color: #85827a; font-size: 12px; }
-                    .empty { background: var(--paper); border: 1px dashed var(--rule); padding: 24px; color: var(--ink-2); }
-                </style>
+                <link rel="icon" type="image/png" href="/hlv_sale_guide/static/description/icon.png"/>
+                <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_index.css?v=#{asset_version}"/>
             </head>
             <body>
                 <nav class="bar">
                     <b>Hướng dẫn</b>
+                    <t t-if="is_manager">
+                        <a class="bar-btn" t-attf-href="#{backend_guides}/new">+ Thêm hướng dẫn</a>
+                        <a t-att-href="backend_guides">Quản lý</a>
+                        <a t-att-href="backend_folders">Thư mục</a>
+                    </t>
                     <a href="/sale_plan">Tình trạng đơn</a>
                     <a href="/odoo">Odoo</a>
                 </nav>
-                <main>
-                    <h1>Hướng dẫn sử dụng</h1>
-                    <p class="lead">Chọn một hướng dẫn để đọc. Trong trang hướng dẫn, nút góc dưới trái đưa về đây.</p>
-                    <div t-if="not topics" class="empty">Chưa có hướng dẫn nào.</div>
-                    <t t-foreach="topics" t-as="topic">
-                        <h2 t-out="topic[0]"/>
-                        <div class="grid">
-                            <a t-foreach="topic[1]" t-as="guide" class="card" t-att-href="guide.url">
-                                <b t-out="guide.name"/>
-                                <p t-out="guide.summary or ''"/>
-                                <small>Cập nhật <span t-field="guide.published_on" t-options="{'widget': 'date'}"/></small>
-                            </a>
+                <div class="layout">
+                    <aside class="tree">
+                        <input type="search" id="guide-search" class="tree-search" placeholder="Tìm hướng dẫn…"
+                               aria-label="Tìm hướng dẫn" t-if="tree['count']"/>
+                        <div t-if="not tree['count']" class="empty">
+                            Chưa có hướng dẫn nào.
+                            <t t-if="is_manager">Bấm <b>+ Thêm hướng dẫn</b> ở trên để tải file .html, .zip hoặc .pdf lên.</t>
                         </div>
-                    </t>
-                </main>
+                        <t t-foreach="tree['folders']" t-as="child">
+                            <t t-call="hlv_sale_guide.guide_tree_folder"><t t-set="node" t-value="child"/></t>
+                        </t>
+                        <t t-foreach="tree['guides']" t-as="guide">
+                            <t t-call="hlv_sale_guide.guide_tree_leaf"/>
+                        </t>
+                    </aside>
+                    <section class="viewer" t-if="tree['count']">
+                        <div class="viewer-head">
+                            <b id="guide-view-title"/>
+                            <a id="guide-view-full" target="_blank" rel="noopener">Mở toàn trang ↗</a>
+                        </div>
+                        <iframe id="guide-view" name="guide-view" title="Nội dung hướng dẫn"/>
+                    </section>
+                </div>
+                <script t-attf-src="/hlv_sale_guide/static/src/guide_index.js?v=#{asset_version}"/>
             </body>
         </html>
+    </template>
+
+    <!-- Một thư mục, gọi đệ quy cho thư mục con. Biến vào: node (xem build_tree). -->
+    <template id="guide_tree_folder" name="Hướng dẫn — thư mục">
+        <details class="folder" open="open">
+            <summary><span class="folder-name" t-out="node['name']"/><small t-out="node['count']"/></summary>
+            <div class="folder-body">
+                <t t-foreach="node['folders']" t-as="child">
+                    <t t-call="hlv_sale_guide.guide_tree_folder"><t t-set="node" t-value="child"/></t>
+                </t>
+                <t t-foreach="node['guides']" t-as="guide">
+                    <t t-call="hlv_sale_guide.guide_tree_leaf"/>
+                </t>
+            </div>
+        </details>
+    </template>
+
+    <!-- Một hướng dẫn. Biến vào: guide (dict từ GuidePage._guide_item). -->
+    <template id="guide_tree_leaf" name="Hướng dẫn — mục">
+        <a class="leaf" t-att-href="guide['url']" t-att-data-slug="guide['slug']" t-att-data-name="guide['name']"
+           t-att-title="guide['summary'] or None">
+            <span t-attf-class="kind kind-#{guide['kind']}" t-out="'PDF' if guide['kind'] == 'pdf' else 'Trang'"/>
+            <span class="leaf-name" t-out="guide['name']"/>
+        </a>
     </template>
 </odoo>
