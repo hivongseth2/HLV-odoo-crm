@@ -50,6 +50,7 @@ def purchase_order_payload(order):
         "vendor": order.partner_id.commercial_partner_id.display_name,
         "date": _date_text(order.date_approve or order.date_order),
         "amount_untaxed": order.amount_untaxed,
+        "amount_total": order.amount_total,
         "vendor_status": VENDOR_STATUS_LABELS.get(order.hlv_vendor_status, ""),
     }
 
@@ -166,10 +167,16 @@ def _vendor_column(quote):
         # Mọi dòng lấy giá còn hiệu lực từ báo giá trước — không cần gửi link cho NCC.
         "reused": quote._fully_reused(),
         "amount_untaxed": quote.amount_untaxed,
+        "amount_total": quote.amount_total,
         "vendor_note": quote.vendor_note or "",
         "portal_url": quote.portal_quote_url or "",
         "share_message": share_message(quote) if quote.access_id else "",
     }
+
+
+def _price_incl(quote_line):
+    """Đơn giá sau VAT của một dòng báo giá (rỗng → 0) — giá bên mình đọc và so."""
+    return quote_line.price_unit * (1 + quote_line.tax_rate / 100.0) if quote_line else 0.0
 
 
 def _compare_row(line, quotes):
@@ -180,6 +187,7 @@ def _compare_row(line, quotes):
             "price_unit": quote_line.price_unit,
             # NCC báo kiểu giá niêm yết − % chiết khấu (tuỳ chọn): hiện kèm để sale đối chiếu.
             "list_price": quote_line.list_price,
+            "list_price_incl": quote_line.list_price * (1 + quote_line.tax_rate / 100.0),
             "discount": quote_line.discount,
             "vat": VAT_LABELS.get(quote_line.vat, ""),
             "delivery_days": quote_line.delivery_days,
@@ -188,14 +196,14 @@ def _compare_row(line, quotes):
             "unavailable": quote_line.unavailable,
             "subtotal": quote_line.price_subtotal,
             # Đơn giá + thành tiền sau VAT để sale đối chiếu với giá bán (đã gồm VAT).
-            "price_incl": quote_line.price_unit * (1 + quote_line.tax_rate / 100.0),
+            "price_incl": _price_incl(quote_line),
             "total_incl": quote_line.price_total,
             "is_best": quote_line.is_best_price,
             "selected": quote_line.selected,
             # Giá dùng lại từ báo giá trước (còn hiệu lực) — ghi phiếu gốc để sale biết nguồn.
             "inherited_from": _inherited_doc(quote_line.inherited_from_id),
             # NCC chưa báo mà có giá lần trước (≤ 7 ngày): chỉ để hiện "chờ xác nhận", KHÔNG phải giá.
-            "reference_price": recent_vendor_price(quote_line).price_unit
+            "reference_price": _price_incl(recent_vendor_price(quote_line))
             if quote_line.quote_id.state == "sent" and not quote_line.price_unit else 0,
         }
     return {

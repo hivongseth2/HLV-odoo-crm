@@ -26,8 +26,10 @@ def _purchase_rows(env, product):
         order = line.order_id
         vendor = order.partner_id.commercial_partner_id
         day = order.date_approve or order.date_order
-        # Giá thực mua sau chiết khấu dòng (nếu có), chưa VAT.
+        # Giá thực mua sau chiết khấu dòng (nếu có) — "price" là SAU VAT (giá bên mình đọc và so),
+        # "price_untaxed" chưa VAT ghi phụ.
         net = line.price_subtotal / line.product_qty if line.product_qty else line.price_unit
+        gross = line.price_total / line.product_qty if line.product_qty else line.price_unit
         rows.append({
             "vendor_id": vendor.id,
             "vendor": vendor.display_name,
@@ -39,7 +41,8 @@ def _purchase_rows(env, product):
             "uom": line.product_uom.name or "",
             "price_unit": line.price_unit,
             "discount": line.discount,
-            "price": net,
+            "price": gross,
+            "price_untaxed": net,
             "currency": order.currency_id.name or "",
             "invoice_name": line.hlv_invoice_name or "",
         })
@@ -71,8 +74,9 @@ def _quote_rows(env, product):
             "sale_code": inquiry.sale_code or "",
             "qty": line.product_qty,
             "uom": line.product_uom_id.name or "",
-            "price": line.price_unit,
-            "price_incl": line.price_unit * (1 + line.tax_rate / 100.0),
+            # Giá đem so / hiện chính: sau VAT (summarize_vendor_prices lấy min theo "price").
+            "price": line.price_unit * (1 + line.tax_rate / 100.0),
+            "price_untaxed": line.price_unit,
             "vat": VAT_LABELS.get(line.vat, ""),
             "delivery_days": line.delivery_days,
             "unavailable": line.unavailable,

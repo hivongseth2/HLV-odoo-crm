@@ -25,7 +25,7 @@ window.HlvQuote = window.HlvQuote || {};
     return '<section class="hq-panel"><div class="hq-panel-head"><h2 class="hq-h3">Theo nhà cung cấp</h2>' +
       '<span class="hq-muted hq-small">bấm một NCC để xem riêng</span>' +
       (vendorFilter ? '<button type="button" class="hq-btn hq-btn-mini hq-push" data-vendor-filter="">Xem tất cả NCC</button>' : "") +
-      '</div><div class="hq-table-wrap"><table class="hq-table pl-vendors"><thead><tr><th>NCC</th>' +
+      '</div><div class="hq-table-wrap"><table class="hq-table pl-vendors"><thead><tr><th>NCC <span class="hq-muted hq-small">(giá sau VAT)</span></th>' +
       '<th class="hq-num">Mua gần nhất</th><th class="hq-num">Mua thấp nhất</th><th class="hq-num">Số lần mua</th>' +
       '<th class="hq-num">Báo gần nhất</th><th class="hq-num">Báo thấp nhất</th><th class="hq-num">Số lần báo</th></tr></thead><tbody>' +
       data.vendors.map(function (v) {
@@ -47,14 +47,15 @@ window.HlvQuote = window.HlvQuote || {};
     return '<section class="hq-panel"><div class="hq-panel-head"><h2 class="hq-h3">Giá đã mua</h2>' +
       '<span class="hq-muted hq-small">' + rows.length + " lần · đơn mua đã xác nhận, mới nhất trước</span></div>" +
       (rows.length ? '<div class="hq-table-wrap"><table class="hq-table"><thead><tr><th>Ngày</th><th>NCC</th><th>Đơn mua</th>' +
-        '<th class="hq-num">SL</th><th class="hq-num">Đơn giá</th><th class="hq-num">Thực mua</th><th>Tên xuất HĐ</th></tr></thead><tbody>' +
+        '<th class="hq-num">SL</th><th class="hq-num">Đơn giá (chưa VAT)</th><th class="hq-num">Thực mua sau VAT</th><th>Tên xuất HĐ</th></tr></thead><tbody>' +
         rows.map(function (r) {
           return "<tr><td class=\"hq-nowrap\">" + esc(r.date) + "</td><td>" + esc(r.vendor) + "</td><td>" + esc(r.order) + "</td>" +
             '<td class="hq-num hq-nowrap">' + HQ.qty(r.qty) + " " + esc(r.uom) +
             (r.qty_received ? '<div class="hq-muted hq-small">đã nhận ' + HQ.qty(r.qty_received) + "</div>" : "") + "</td>" +
             '<td class="hq-num">' + HQ.money(r.price_unit) + (r.currency && r.currency !== "VND" ? " " + esc(r.currency) : "") +
             (r.discount ? '<div class="hq-muted hq-small">CK ' + HQ.qty(r.discount) + "%</div>" : "") + "</td>" +
-            '<td class="hq-num"><b>' + HQ.money(r.price) + "</b></td><td>" + esc(r.invoice_name) + "</td></tr>";
+            '<td class="hq-num"><b>' + HQ.money(r.price) + '</b><div class="hq-muted hq-small">chưa VAT ' +
+            HQ.money(r.price_untaxed) + "</div></td><td>" + esc(r.invoice_name) + "</td></tr>";
         }).join("") + "</tbody></table></div>"
         : '<div class="hq-empty">Chưa có lần mua nào' + (vendorFilter ? " từ NCC này" : "") + ".</div>") + "</section>";
   }
@@ -64,12 +65,12 @@ window.HlvQuote = window.HlvQuote || {};
     return '<section class="hq-panel"><div class="hq-panel-head"><h2 class="hq-h3">Giá NCC đã báo</h2>' +
       '<span class="hq-muted hq-small">' + rows.length + " lần · mọi sale, mới nhất trước</span></div>" +
       (rows.length ? '<div class="hq-table-wrap"><table class="hq-table"><thead><tr><th>Ngày báo</th><th>NCC</th>' +
-        '<th>Phiếu · mã sale</th><th class="hq-num">SL hỏi</th><th class="hq-num">Chưa VAT</th><th class="hq-num">Sau VAT</th>' +
+        '<th>Phiếu · mã sale</th><th class="hq-num">SL hỏi</th><th class="hq-num">Sau VAT</th><th class="hq-num">Chưa VAT</th>' +
         '<th class="hq-num">Giao</th><th>Hiệu lực</th></tr></thead><tbody>' +
         rows.map(function (r) {
           var price = r.unavailable ? '<td class="hq-num hq-muted" colspan="2">Không có hàng</td>'
             : '<td class="hq-num"><b>' + HQ.money(r.price) + "</b>" + (r.chosen ? ' <span class="hq-tag hq-tag-ok">đã chọn</span>' : "") +
-              '</td><td class="hq-num hq-muted">' + HQ.money(r.price_incl) + (r.vat ? " · " + esc(r.vat) : "") + "</td>";
+              '</td><td class="hq-num hq-muted">' + HQ.money(r.price_untaxed) + (r.vat ? " · " + esc(r.vat) : "") + "</td>";
           return "<tr" + (r.reusable ? "" : ' class="pl-quote-old"') + '><td class="hq-nowrap">' + esc(r.date) + "</td><td>" +
             esc(r.vendor) + '</td><td class="hq-nowrap">' + esc(r.doc) + (r.sale_code ? '<div class="hq-muted hq-small">' +
             esc(HQ.saleName(r.sale_code)) + "</div>" : "") + '</td><td class="hq-num hq-nowrap">' + HQ.qty(r.qty) + " " + esc(r.uom) + "</td>" +

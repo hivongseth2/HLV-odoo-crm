@@ -142,17 +142,17 @@ window.HlvQuote = window.HlvQuote || {};
     return '<h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
       '<div class="hq-table-wrap hq-compare-wrap"><table class="hq-table hq-compare"><thead>' + head +
       "</thead><tbody>" + rows + "</tbody><tfoot><tr><td colspan=\"" + (2 + d.vendors.length) +
-      '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total) + "</b> chưa VAT · <b>" +
-      HQ.money(d.chosen_total_incl) + "</b> sau VAT</td></tr></tfoot>" +
+      '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
+      HQ.money(d.chosen_total) + " chưa VAT</td></tr></tfoot>" +
       "</table></div>" +
-      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá thấp nhất · nền xanh = giá đã chọn.</div>';
+      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn.</div>';
   }
 
   function offerCell(offer, vendor, canChoose) {
     if (!offer || (!offer.price_unit && !offer.unavailable)) {
       if (offer && offer.reference_price) {
         return '<td class="hq-offer hq-muted">Chờ NCC xác nhận<span class="hq-offer-meta">lần trước ' +
-          HQ.money(offer.reference_price) + " — đã điền sẵn cho NCC</span></td>";
+          HQ.money(offer.reference_price) + " sau VAT — đã điền sẵn cho NCC</span></td>";
       }
       return '<td class="hq-offer hq-muted">' + (vendor.state === "sent" ? "Chờ báo giá" : "—") + "</td>";
     }
@@ -165,11 +165,12 @@ window.HlvQuote = window.HlvQuote || {};
     }
     var meta = [offer.vat ? "VAT " + offer.vat : "", offer.delivery_days ? offer.delivery_days + " ngày" : ""]
       .filter(Boolean).join(" · ");
-    var body = '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' + HQ.money(offer.price_unit) +
-      ' <span class="hq-offer-unit">chưa VAT</span></span>' +
-      (offer.vat ? '<span class="hq-offer-incl">' + HQ.money(offer.price_incl) + " sau VAT</span>" : "") +
+    // Giá sau VAT là số chính (bên mình đọc và so theo giá sau VAT); giá chưa VAT ghi phụ.
+    var body = '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' + HQ.money(offer.price_incl) +
+      ' <span class="hq-offer-unit">sau VAT</span></span>' +
+      '<span class="hq-offer-incl">' + HQ.money(offer.price_unit) + " chưa VAT</span>" +
       (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
-      (offer.list_price ? '<span class="hq-offer-meta">Giá trước CK ' + HQ.money(offer.list_price) + " · CK " +
+      (offer.list_price ? '<span class="hq-offer-meta">Trước CK ' + HQ.money(offer.list_price_incl) + " · CK " +
         HQ.qty(offer.discount) + "%</span>" : "") +
       (offer.invoice_name ? '<span class="hq-offer-meta" title="Tên xuất hóa đơn: ' + esc(offer.invoice_name) + '">HĐ: ' +
         esc(offer.invoice_name) + "</span>" : "") +
@@ -234,7 +235,7 @@ window.HlvQuote = window.HlvQuote || {};
           (v.price_valid_until ? '<div class="' + (v.price_valid ? "hq-muted" : "hq-expired") + '">giá hiệu lực đến ' +
             esc(v.price_valid_until) + (v.price_valid ? "" : " — đã hết") + "</div>" : "") +
           (v.reused ? '<div><span class="hq-tag hq-tag-mine">Dùng lại giá cũ</span></div>' : "") + "</td>" +
-          '<td class="hq-num">' + (v.amount_untaxed ? HQ.money(v.amount_untaxed) : "") + "</td>" +
+          '<td class="hq-num">' + (v.amount_total ? HQ.money(v.amount_total) : "") + "</td>" +
           '<td class="hq-num hq-nowrap">' + chatButton("quote", v.quote_id, v.chat_count, v.chat_unread) + " " +
           (v.share_message ? '<button type="button" class="hq-btn hq-btn-mini" data-copy-msg="' + index +
             '">Copy tin nhắn</button> ' : "") +
@@ -275,7 +276,7 @@ window.HlvQuote = window.HlvQuote || {};
             : '<div class="hq-muted">Chưa có mã đơn hàng</div>') + "</td><td>" + esc(o.vendor) + "</td>" +
           "<td>" + (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
             : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +
-          '<td class="hq-num">' + HQ.money(o.amount_untaxed) + "</td>" +
+          '<td class="hq-num">' + HQ.money(o.amount_total) + "</td>" +
           '<td class="hq-num">' + chatButton("order", o.id, o.chat_count, o.chat_unread) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
   }

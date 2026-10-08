@@ -134,19 +134,19 @@ class VendorQuoteLine(models.Model):
             "&", ("inquiry_line_id", "=", False), ("request_line_id", "in", request_lines.ids),
         ] + extra_domain)
 
-    @api.depends("price_unit", "unavailable", "quote_state", "request_line_id", "inquiry_line_id")
+    @api.depends("price_unit", "tax_rate", "unavailable", "quote_state", "request_line_id", "inquiry_line_id")
     def _compute_is_best_price(self):
-        """So giữa các NCC cùng nhóm (xem _compare_key), theo đơn giá chưa VAT như core so RFQ.
+        """So giữa các NCC cùng nhóm (xem _compare_key), theo đơn giá SAU VAT.
 
-        Giá chưa VAT vì VAT đầu vào được khấu trừ — so sau VAT sẽ thiên vị hàng
-        không chịu thuế.
+        Bên mình đọc và chốt giá theo giá sau VAT (yêu cầu của người dùng, 10/2026) — dù VAT đầu
+        vào khấu trừ được, NCC 10% và NCC 8% cùng giá chưa VAT thì NCC 8% vẫn được coi là rẻ hơn.
         """
         siblings = self._compare_siblings([
             ("quote_state", "in", COMPARED_STATES),
             ("unavailable", "=", False),
         ])
         best_ids = best_price_ids(
-            (line.id, line._compare_key(), line.price_unit) for line in siblings
+            (line.id, line._compare_key(), line.price_unit * (1 + line.tax_rate / 100.0)) for line in siblings
         )
         for line in self:
             line.is_best_price = line.id in best_ids
