@@ -115,7 +115,8 @@ a { color: var(--vq-accent); }
 /* --- Danh sách --- */
 .vq-page-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .vq-search { display: flex; gap: 8px; flex: 0 1 420px; }
-.vq-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--vq-line); margin-bottom: 4px; overflow-x: auto; }
+/* overflow-y: hidden — chỉ cuộn ngang; thiếu nó, gạch chân tab (margin -1px) làm hiện thanh cuộn dọc thừa. */
+.vq-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--vq-line); margin-bottom: 4px; overflow-x: auto; overflow-y: hidden; }
 .vq-tab { padding: 10px 0; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--vq-muted);
     text-decoration: none; font-weight: 500; white-space: nowrap; }
 .vq-tab:hover { color: var(--vq-text); }
@@ -170,16 +171,17 @@ a { color: var(--vq-accent); }
 
 /* Hai cột cùng một hàng nhãn + một khối cao bằng nhau: ô ghi chú và bảng tổng tiền thẳng
    mép trên lẫn mép dưới. */
-.vq-form-foot { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; margin-top: 24px; align-items: stretch; }
+.vq-form-foot { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; margin-top: 24px; align-items: start; }
 .vq-general-note, .vq-summary-col { display: flex; flex-direction: column; }
 .vq-general-note textarea { flex: 1 1 auto; min-height: 110px; resize: vertical; }
-.vq-summary { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; margin: 0;
+.vq-summary { display: flex; flex-direction: column; margin: 0;
     background: var(--vq-surface); border: 1px solid var(--vq-line-strong); border-radius: 6px; padding: 4px 20px; }
 .vq-summary div { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--vq-line); }
 .vq-summary div:last-child { border-bottom: 0; }
 .vq-summary dt { color: var(--vq-muted); }
 .vq-summary dd { margin: 0; font-weight: 600; }
-.vq-summary-total dd { font-size: 1.2rem; }
+.vq-summary-total dt { color: var(--vq-text); font-weight: 600; }
+.vq-summary-total dd { font-size: 1.3rem; }
 
 /* Nút gửi dính đáy để NCC không phải cuộn xuống tìm. */
 .vq-submit-bar { position: sticky; bottom: 0; z-index: 10; margin-top: 24px; background: var(--vq-surface);
@@ -398,7 +400,7 @@ a { color: var(--vq-accent); }
 .vq-choice-locked { color: var(--vq-accent); font-weight: 600; }
 .vq-table-scroll { overflow-x: auto; border: 1px solid var(--vq-line); border-radius: 6px; }
 .vq-table-scroll .vq-price-table { border: 0; min-width: 980px; }
-.vq-disc-on .vq-table-scroll .vq-price-table { min-width: 1140px; }
+.vq-disc-on .vq-table-scroll .vq-price-table { min-width: 1040px; }
 .vq-price-table th { padding: 6px 8px; font-size: .72rem; line-height: 1.25; vertical-align: bottom; background: #f8fafc; }
 .vq-price-table td { padding: 5px 8px; font-size: .82rem; line-height: 1.35; border-right: 1px solid #f1f2f4; }
 .vq-price-table td:last-child { border-right: 0; }
@@ -409,14 +411,20 @@ a { color: var(--vq-accent); }
 .vq-price-table .vq-line-name { font-weight: 600; }
 .vq-col-qty { width: 70px; white-space: nowrap; }
 .vq-uom { color: var(--vq-muted); }
-.vq-price-table .vq-col-price { width: 116px; }
-.vq-col-net { width: 104px; white-space: nowrap; }
-.vq-net-value { font-variant-numeric: tabular-nums; color: #374151; }
+.vq-price-table .vq-col-price { width: 132px; }
+.vq-price-sub { margin-top: 2px; font-size: .72rem; color: var(--vq-muted); white-space: nowrap; text-align: right;
+    font-variant-numeric: tabular-nums; }
+.vq-quote-form:not(.vq-disc-on) .vq-price-sub.vq-disc-only { display: none; }
+.vq-price-main { font-weight: 600; }
+/* Tên xuất hóa đơn nằm dưới tên hàng — cùng mặt hàng, khỏi chiếm một cột. */
+.vq-inv-field { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; }
+.vq-inv-label { flex: none; font-size: .72rem; color: var(--vq-muted); }
+.vq-inv-field .vq-input { padding: 3px 6px; font-size: .78rem; }
 .vq-price-table .vq-col-disc { width: 58px; }
 .vq-price-table .vq-col-vat { width: 84px; }
 .vq-col-days { width: 58px; }
 .vq-price-table .vq-col-total { width: 108px; text-align: right; }
-.vq-col-text { width: 140px; }
+.vq-col-text { width: 180px; }
 .vq-name-row { display: flex; align-items: center; gap: 8px; }
 .vq-line-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
 .vq-line-flags .vq-choice, .vq-line-flags .vq-check { margin-top: 1px; font-size: .72rem; }
@@ -427,7 +435,7 @@ a { color: var(--vq-accent); }
     .vq-table-scroll { overflow: visible; border: 0; }
     .vq-table-scroll .vq-price-table, .vq-disc-on .vq-table-scroll .vq-price-table { min-width: 0; }
     .vq-price-table td { border-right: 0; }
-    .vq-price-table .vq-col-total, .vq-price-table .vq-col-net, .vq-cell-value { text-align: left; }
+    .vq-price-table .vq-col-total, .vq-cell-value, .vq-price-sub { text-align: left; }
 }
 
 /* --- Hiệu lực giá (cột trái chân form, trên ghi chú chung) --- */
@@ -452,6 +460,8 @@ a { color: var(--vq-accent); }
 
 /* --- Danh sách báo giá: cột tổng tiền + xem nhanh danh sách hàng dưới dòng --- */
 .vq-quote-row { cursor: pointer; }
+.vq-list-scroll { overflow-x: auto; }
+.vq-list-table .vq-cell-products { max-width: 340px; }
 .vq-list-table .vq-cell-ref { white-space: nowrap; }
 .vq-cell-amount { white-space: nowrap; }
 .vq-quick-toggle { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 6px; padding: 0;

@@ -1,9 +1,10 @@
 /**
- * Trang nhập giá của NCC: NCC gõ đơn giá sau VAT (hoặc giá trước chiết khấu + %), đơn giá
- * chưa VAT — giá được lưu — tự tính vào ô ẩn và hiện ra (vendor_quote_price.js); tính thành tiền tạm, đếm số dòng đã điền, định dạng lại
- * số khi rời ô, chọn VAT / % chiết khấu cho tất cả dòng. Trang vẫn gửi được khi JS hỏng —
- * server tự suy đơn giá từ ô có số (resolve_net_price). Báo giá đã đóng không có ô nhập:
- * giá / VAT đọc từ data-price, data-vat của dòng.
+ * Trang nhập giá của NCC. NCC chỉ gõ MỘT ô giá: đơn giá sau VAT, đã trừ chiết khấu (thói quen
+ * báo giá). Đơn giá chưa VAT — giá được lưu — và giá trước chiết khấu (khi có % CK) tự tính vào ô
+ * ẩn và ghi nhỏ dưới ô giá (vendor_quote_price.js). Thành tiền / tổng hiện theo giá sau VAT, đếm số
+ * dòng đã điền, định dạng lại số khi rời ô, chọn VAT / % CK cho tất cả dòng.
+ * Trang vẫn gửi được khi JS hỏng — server tự tính từ ô sau VAT (resolve_net_price). Báo giá đã
+ * đóng không có ô nhập: giá / VAT đọc từ data-price, data-vat của dòng.
  */
 (function () {
     "use strict";
@@ -17,7 +18,6 @@
     const discountToggle = form.querySelector("[data-vq-disc-toggle]");
     // Báo giá đã đóng không có ô bật/tắt: server tự gắn vq-disc-on nếu NCC từng nhập chiết khấu.
     const discountShownByServer = form.classList.contains("vq-disc-on");
-    // Ô giá theo "mốc": NCC gõ ô nào thì ô đó là mốc, hai ô kia tính lại theo nó.
     const PRICE_INPUTS = { list: "[data-vq-list]", net: "[data-vq-price]", gross: "[data-vq-gross]" };
 
     function vatRate(value) {
@@ -37,26 +37,32 @@
         return value == null ? 0 : value;
     }
 
-    function priceInputs(line) {
+    function setLineText(line, selector, value) {
+        const el = line.querySelector(selector);
+        if (el) {
+            el.textContent = value == null ? "—" : formatVnNumber(value);
+        }
+    }
+
+    /**
+     * Tính lại các mức giá của dòng từ ô mốc (dataset.anchor): "gross" khi NCC đã gõ / sau khi mở
+     * trang, "net" lúc mở trang (lấy giá đã lưu điền ra ô sau VAT). Ô mốc không bị ghi đè.
+     */
+    function recompute(line) {
+        const vatSelect = line.querySelector("[data-vq-vat]");
         const inputs = {};
         for (const [key, selector] of Object.entries(PRICE_INPUTS)) {
             inputs[key] = line.querySelector(selector);
         }
-        return inputs;
-    }
-
-    /** Tính lại các ô giá của dòng theo ô mốc; ô `typing` (đang gõ) không bị ghi đè. */
-    function recompute(line, typing) {
-        const inputs = priceInputs(line);
-        const vatSelect = line.querySelector("[data-vq-vat]");
         if (!inputs.net || !vatSelect) {
             return;  // dòng không sửa được
         }
+        const anchor = line.dataset.anchor || "gross";
         const values = {};
         for (const [key, input] of Object.entries(inputs)) {
             values[key] = input ? parseVnNumber(input.value) : null;
         }
-        const result = derivePrices(line.dataset.anchor || "net", values, vatRate(vatSelect.value), lineDiscount(line));
+        const result = derivePrices(anchor, values, vatRate(vatSelect.value), lineDiscount(line));
         const discInput = line.querySelector("[data-vq-disc]");
         if (discInput) {
             discInput.classList.toggle("vq-input-error", discountOn() && result === null);
@@ -65,21 +71,15 @@
             return;
         }
         for (const [key, input] of Object.entries(inputs)) {
-            if (!input || input === typing || key === line.dataset.anchor || (key === "list" && !discountOn())) {
+            if (!input || key === anchor || (key === "list" && !discountOn())) {
                 continue;
             }
-            let value = result[key];
-            // Giá sau VAT tự tính chỉ để NCC đối chiếu (server lưu giá chưa VAT): làm tròn tới
-            // đồng cho gọn ô. NCC gõ vào ô này thì nó thành mốc và giữ nguyên số đã gõ.
-            if (key === "gross" && value != null) {
-                value = Math.round(value);
-            }
+            // Giá sau VAT tự tính (lúc mở trang): làm tròn tới đồng cho gọn ô.
+            const value = key === "gross" && result[key] != null ? Math.round(result[key]) : result[key];
             input.value = value == null ? "" : formatVnNumber(value);
         }
-        const netText = line.querySelector("[data-vq-net-text]");
-        if (netText) {
-            netText.textContent = result.net == null ? "—" : formatVnNumber(result.net);
-        }
+        setLineText(line, "[data-vq-net-text]", result.net);
+        setLineText(line, "[data-vq-list-text]", discountOn() ? result.list : null);
     }
 
     function readLine(line) {
@@ -108,17 +108,18 @@
         for (const line of lines) {
             const { unavailable, price, vat, qty } = readLine(line);
             const subtotal = unavailable || price == null ? null : price * qty;
+            const withVat = subtotal == null ? null : subtotal * (1 + vatRate(vat) / 100);
             line.classList.toggle("vq-line-na", unavailable);
             line.querySelector("[data-vq-subtotal]").textContent = unavailable
                 ? "Không có hàng"
-                : subtotal == null ? "—" : formatVnNumber(Math.round(subtotal));
+                : withVat == null ? "—" : formatVnNumber(Math.round(withVat));
             // "Đã điền" khớp điều kiện server nhận: có giá + VAT, hoặc báo không có hàng.
             if (unavailable || (price && vat)) {
                 done += 1;
             }
             if (subtotal != null) {
                 untaxed += subtotal;
-                total += subtotal * (1 + vatRate(vat) / 100);
+                total += withVat;
             }
         }
         setText("[data-vq-total-untaxed]", formatVnNumber(Math.round(untaxed)));
@@ -126,29 +127,18 @@
         setText("[data-vq-progress]", `Đã điền ${done}/${lines.length} mặt hàng`);
     }
 
-    /** Bật / tắt cột "giá trước chiết khấu" + "% CK". Tắt thì đơn giá chưa VAT là mốc. */
+    /** Bật / tắt cột % CK và dòng "trước CK"; giá sau VAT NCC đã gõ giữ nguyên. */
     function applyDiscountMode() {
-        const on = discountOn();
-        form.classList.toggle("vq-disc-on", on);
-        for (const line of lines) {
-            if (!on && line.dataset.anchor === "list") {
-                line.dataset.anchor = "gross";
-            }
-            recompute(line);
-        }
+        form.classList.toggle("vq-disc-on", discountOn());
+        lines.forEach(recompute);
     }
 
     form.addEventListener("input", (ev) => {
         const target = ev.target;
         const line = target.closest("[data-vq-line]");
-        if (line) {
-            const anchor = Object.keys(PRICE_INPUTS).find((key) => target.matches(PRICE_INPUTS[key]));
-            if (anchor) {
-                line.dataset.anchor = anchor;
-                recompute(line, target);
-            } else if (target.matches("[data-vq-disc], [data-vq-vat]")) {
-                recompute(line, target);
-            }
+        if (line && target.matches("[data-vq-gross], [data-vq-disc], [data-vq-vat]")) {
+            line.dataset.anchor = "gross";
+            recompute(line);
         }
         refresh();
     });
@@ -161,7 +151,7 @@
     });
 
     form.addEventListener("focusout", (ev) => {
-        if (!ev.target.matches("[data-vq-list], [data-vq-price], [data-vq-gross], [data-vq-disc]")) {
+        if (!ev.target.matches("[data-vq-gross], [data-vq-disc]")) {
             return;
         }
         const value = parseVnNumber(ev.target.value);
@@ -183,6 +173,7 @@
                 const target = line.querySelector(targetSelector);
                 if (target) {
                     target.value = source.value;
+                    line.dataset.anchor = "gross";
                     recompute(line);
                 }
             }
@@ -192,15 +183,14 @@
     applyToAll("[data-vq-vat-all]", "[data-vq-vat]");
     applyToAll("[data-vq-disc-all]", "[data-vq-disc]");
 
-    // Mở trang: điền giá sau VAT từ đơn giá chưa VAT đã lưu, rồi lấy ô NCC nhìn thấy làm mốc —
-    // giá trước CK nếu có, không thì giá sau VAT — để đổi VAT / % CK là tính lại giá chưa VAT.
+    // Mở trang: điền ô sau VAT từ giá chưa VAT đã lưu, rồi lấy ô sau VAT làm mốc — đổi VAT / % CK
+    // là tính lại giá chưa VAT (và giá trước CK), số NCC nhìn thấy giữ nguyên.
     for (const line of lines) {
         line.dataset.anchor = "net";
     }
     applyDiscountMode();
     for (const line of lines) {
-        const list = line.querySelector("[data-vq-list]");
-        line.dataset.anchor = discountOn() && list && parseVnNumber(list.value) != null ? "list" : "gross";
+        line.dataset.anchor = "gross";
     }
     refresh();
 })();
