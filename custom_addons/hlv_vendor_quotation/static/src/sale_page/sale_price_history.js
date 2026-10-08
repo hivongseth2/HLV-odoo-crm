@@ -58,7 +58,9 @@ window.HlvQuote = window.HlvQuote || {};
         '<th class="hq-num">Chưa VAT</th><th class="hq-num">Sau VAT</th><th class="hq-num">Giao</th><th>Ngày báo</th>' +
         "<th>Phiếu · mã sale</th></tr></thead>" +
         products.map(function (g, index) {
-          return '<tbody><tr class="hq-price-product"><th colspan="6">' + esc(g.product) + "</th></tr>" +
+          return '<tbody><tr class="hq-price-product"><th colspan="6">' + esc(g.product) +
+            ' <a class="hq-small" href="/hoi-gia-ncc/tra-gia?p=' + g.product_id + '">xem mọi giá đã mua / đã báo →</a>' +
+            "</th></tr>" +
             g.prices.map(function (p) { return priceRow(p, index); }).join("") + "</tbody>";
         }).join("") + "</table></div>";
     }).catch(function () { box.classList.add("hq-hidden"); });

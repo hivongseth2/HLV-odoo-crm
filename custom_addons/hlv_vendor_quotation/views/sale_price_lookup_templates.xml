@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang tra giá /hoi-gia-ncc/tra-gia — dựng HTML riêng như /hoi-gia-ncc (xem chú thích ở
+         sale_page_templates.xml: không dùng web.layout + asset bundle). -->
+    <template id="sale_price_lookup" name="Tra giá sản phẩm">
+        &lt;!DOCTYPE html&gt;
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Tra giá sản phẩm</title>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/sale_page/sale_page.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/sale_page/sale_page_dialogs.css?v=#{asset_version}"/>
+            </head>
+            <body>
+                <nav class="navbar navbar-dark hq-navbar py-2">
+                    <div class="container-fluid">
+                        <span class="navbar-brand mb-0">Tra giá sản phẩm</span>
+                        <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link text-white-50" href="/hoi-gia-ncc">Hỏi giá NCC</a>
+                            <a class="nav-link text-white-50 d-none d-md-inline" href="/sale_plan">Tình trạng đơn</a>
+                            <a class="nav-link text-white-50 d-none d-md-inline" href="/search_stock">Tồn kho</a>
+                        </div>
+                    </div>
+                </nav>
+
+                <div t-if="not allowed" class="container py-5">
+                    <div class="hq-panel hq-pad">Tài khoản chưa được cấp quyền hỏi giá nhà cung cấp. Liên hệ
+                        quản trị để được thêm vào nhóm "Hỏi giá NCC" (Thiết lập → Người dùng).</div>
+                </div>
+
+                <div t-else="" id="hq-app" class="container-fluid py-3 pl-page"
+                     t-att-data-initial-product="initial_product_id or ''">
+                    <section class="hq-panel hq-pad pl-search">
+                        <label class="hq-label" for="pl-search">Mã hoặc tên sản phẩm</label>
+                        <div class="hq-picker">
+                            <input type="search" id="pl-search" class="hq-input w-100" autocomplete="off" autofocus="autofocus"
+                                   placeholder="VD M9200B, 2608595053, vòng bi 6212…"/>
+                            <div id="pl-results" class="hq-dropdown hq-hidden"></div>
+                        </div>
+                        <p class="hq-muted hq-small">Giá đã mua (đơn mua đã xác nhận) và giá NCC từng báo — của mọi sale.
+                            Giá chưa VAT, theo ĐVT ghi trên từng dòng.</p>
+                    </section>
+                    <div id="pl-result" aria-live="polite"></div>
+                    <div id="hq-toast" class="hq-toast hq-hidden"></div>
+                </div>
+
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_utils.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_lookup.js?v=#{asset_version}"></script>
+            </body>
+        </html>
+    </template>
+</odoo>
