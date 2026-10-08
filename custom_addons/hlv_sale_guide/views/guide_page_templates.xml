@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang danh sách /huong-dan — HTML tự dựng, CSS viết liền trong trang (nhỏ, một trang),
+         cùng kiểu các trang /sale_plan, /hoi-gia-ncc: không qua web.layout + asset bundle. -->
+    <template id="guide_index" name="Danh sách hướng dẫn">
+        &lt;!DOCTYPE html&gt;
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Hướng dẫn</title>
+                <style>
+                    :root { --desk: #eceae4; --paper: #fbfaf6; --ink: #1c1c1a; --ink-2: #57554f; --rule: #d6d2c8; --red: #8c2a1c; }
+                    * { box-sizing: border-box; }
+                    body { margin: 0; background: var(--desk); color: var(--ink); line-height: 1.5;
+                        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+                    .bar { background: var(--ink); color: #fff; padding: 10px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+                    .bar b { font-size: 16px; margin-right: auto; }
+                    .bar a { color: rgba(255, 255, 255, .75); text-decoration: none; font-size: 14px; }
+                    .bar a:hover { color: #fff; }
+                    main { max-width: 960px; margin: 0 auto; padding: 28px 16px 64px; }
+                    h1 { font-size: 26px; margin: 0 0 4px; }
+                    .lead { color: var(--ink-2); margin: 0 0 8px; }
+                    h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2);
+                        margin: 28px 0 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
+                    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+                    .card { display: flex; flex-direction: column; gap: 6px; background: var(--paper); border: 1px solid var(--rule);
+                        border-top: 4px solid var(--ink); padding: 14px 16px 12px; color: inherit; text-decoration: none;
+                        transition: border-color .15s, box-shadow .15s; }
+                    .card:hover, .card:focus-visible { border-top-color: var(--red); box-shadow: 0 6px 18px rgba(28, 28, 26, .10); outline: none; }
+                    .card b { font-size: 16px; }
+                    .card p { margin: 0; color: var(--ink-2); font-size: 14px; flex: 1; }
+                    .card small { color: #85827a; font-size: 12px; }
+                    .empty { background: var(--paper); border: 1px dashed var(--rule); padding: 24px; color: var(--ink-2); }
+                </style>
+            </head>
+            <body>
+                <nav class="bar">
+                    <b>Hướng dẫn</b>
+                    <a href="/sale_plan">Tình trạng đơn</a>
+                    <a href="/odoo">Odoo</a>
+                </nav>
+                <main>
+                    <h1>Hướng dẫn sử dụng</h1>
+                    <p class="lead">Chọn một hướng dẫn để đọc. Trong trang hướng dẫn, nút góc dưới trái đưa về đây.</p>
+                    <div t-if="not topics" class="empty">Chưa có hướng dẫn nào.</div>
+                    <t t-foreach="topics" t-as="topic">
+                        <h2 t-out="topic[0]"/>
+                        <div class="grid">
+                            <a t-foreach="topic[1]" t-as="guide" class="card" t-att-href="guide.url">
+                                <b t-out="guide.name"/>
+                                <p t-out="guide.summary or ''"/>
+                                <small>Cập nhật <span t-field="guide.published_on" t-options="{'widget': 'date'}"/></small>
+                            </a>
+                        </div>
+                    </t>
+                </main>
+            </body>
+        </html>
+    </template>
+</odoo>

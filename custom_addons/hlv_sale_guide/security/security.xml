@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_sale_guide" model="ir.module.category">
+        <field name="name">Hướng dẫn nội bộ</field>
+        <field name="sequence">90</field>
+    </record>
+
+    <!-- Người đọc là mọi người dùng nội bộ (base.group_user), không cần nhóm riêng.
+         Quản lý được tải nội dung lên: trang phục vụ nguyên văn trên cùng tên miền với Odoo
+         (script trong trang chạy được với phiên đăng nhập của người đọc), nên chỉ giao cho
+         người tin cậy. -->
+    <record id="group_guide_manager" model="res.groups">
+        <field name="name">Quản lý hướng dẫn</field>
+        <field name="category_id" ref="module_category_sale_guide"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+        <field name="comment">Tạo, sửa, tải nội dung hướng dẫn lên.</field>
+    </record>
+
+    <!-- Hướng dẫn có "Chỉ cho nhóm" thì chỉ người trong nhóm đó thấy; để trống là mọi người. -->
+    <record id="rule_guide_reader" model="ir.rule">
+        <field name="name">Hướng dẫn: theo nhóm được xem</field>
+        <field name="model_id" ref="model_hlv_sale_guide"/>
+        <field name="domain_force">['|', ('group_ids', '=', False), ('group_ids', 'in', user.groups_id.ids)]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="rule_guide_manager" model="ir.rule">
+        <field name="name">Hướng dẫn: quản lý thấy hết</field>
+        <field name="model_id" ref="model_hlv_sale_guide"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_guide_manager'))]"/>
+    </record>
+</odoo>

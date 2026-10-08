@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_sale_guide_user,hlv.sale.guide user,model_hlv_sale_guide,base.group_user,1,0,0,0
+access_sale_guide_manager,hlv.sale.guide manager,model_hlv_sale_guide,group_guide_manager,1,1,1,1
