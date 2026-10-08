@@ -159,6 +159,7 @@ window.HlvQuote = window.HlvQuote || {};
       S.search = event.target.value.trim();
       S.page = 1;
       HQ.loadInquiries();
+      HQ.loadPriceHistory(S.search);
     }, 300));
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape") {

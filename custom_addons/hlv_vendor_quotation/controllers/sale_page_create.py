@@ -8,6 +8,7 @@ from odoo.osv import expression
 
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
+from ..services.price_history import quoted_prices
 from ..services.sale_code import SALE_CODE_FIELD, has_sale_code
 from .sale_page_common import API, SEARCH_LIMIT, SalePageMixin, to_int
 
@@ -26,6 +27,14 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             ("barcode", "=", search),
         ], limit=SEARCH_LIMIT)
         return {"products": [payload.product_payload(p) for p in products]}
+
+    @http.route(f"{API}/price_history", type="json", auth="user", methods=["POST"])
+    def api_price_history(self, product_ids=None, search="", **kw):
+        """Giá NCC đã báo cho sản phẩm — mọi mã sale (cố ý: để khỏi hỏi giá trùng). Chỉ cần quyền
+        vào trang; không mở được phiếu của sale khác (xem services/price_history.py)."""
+        self._check()
+        ids = [to_int(i) for i in (product_ids or []) if to_int(i)]
+        return {"products": quoted_prices(request.env, product_ids=ids, search=(search or "").strip()[:100])}
 
     @http.route(f"{API}/partners", type="json", auth="user", methods=["POST"])
     def api_partners(self, search="", **kw):

@@ -322,3 +322,13 @@
 .hq-section-title .hq-small { font-size: .75rem; font-weight: 400; }
 
 .hq-partial { color: var(--hq-warn); font-weight: 600; font-size: .8125rem; }
+
+/* ------------------------------------------------------------ giá đã hỏi (mọi mã sale) */
+
+.hq-price-history { margin-bottom: 1rem; }
+.hq-price-history .hq-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
+.hq-price-table .hq-price-product th { background: #FAF9F6; text-transform: none; letter-spacing: 0;
+    font-size: .8125rem; color: var(--hq-ink); }
+.hq-price-hint { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; margin-top: .25rem; font-size: .75rem; }
+.hq-price-chip { padding: 0 .4rem; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); background: #fff;
+    white-space: nowrap; }

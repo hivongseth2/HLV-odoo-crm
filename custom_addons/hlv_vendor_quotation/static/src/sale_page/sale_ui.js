@@ -22,6 +22,7 @@ window.HlvQuote = window.HlvQuote || {};
       lines: [],        // [{product_id, product, name, qty, uom_id, uom}]
       chosen: [],       // [{id, name}] NCC sẽ gửi
       suggestions: [],
+      priceHints: {},   // {product_id: [giá NCC đã báo]} — mọi mã sale (sale_price_history.js)
       showAllSuggestions: false,
     },
   };

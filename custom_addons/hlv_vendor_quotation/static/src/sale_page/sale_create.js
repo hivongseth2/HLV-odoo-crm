@@ -19,6 +19,7 @@ window.HlvQuote = window.HlvQuote || {};
     var vendor = S.vendors.find(function (v) { return v.id === S.vendorId; });
     C.chosen = vendor ? [{ id: vendor.id, name: vendor.name }] : [];
     C.suggestions = [];
+    C.priceHints = {};
     C.showAllSuggestions = false;
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
@@ -87,7 +88,8 @@ window.HlvQuote = window.HlvQuote || {};
           return "<tr>" +
             '<td><img class="hq-thumb" loading="lazy" src="/web/image/product.product/' + l.product_id +
             '/image_128" alt=""/></td>' +
-            '<td><div class="hq-strong">' + esc(l.name || l.product) + "</div></td>" +
+            '<td><div class="hq-strong">' + esc(l.name || l.product) + "</div>" +
+            HQ.priceHintHtml((C.priceHints || {})[l.product_id]) + "</td>" +
             '<td class="hq-num"><input type="number" min="0" step="any" class="hq-qty" data-line="' +
             index + '" value="' + l.qty + '"/></td>' +
             "<td>" + esc(l.uom) + "</td>" +
@@ -101,6 +103,11 @@ window.HlvQuote = window.HlvQuote || {};
 
   var refreshSuggestions = HQ.debounce(function () {
     var productIds = C.lines.map(function (l) { return l.product_id; });
+    // Giá đã hỏi (mọi mã sale) hiện dưới từng sản phẩm — để khỏi hỏi trùng.
+    HQ.fetchPriceHints(productIds).then(function (hints) {
+      C.priceHints = hints;
+      renderLines();
+    }).catch(function () { /* gợi ý phụ, lỗi thì thôi */ });
     if (!productIds.length) {
       C.suggestions = [];
       renderSuggestions();

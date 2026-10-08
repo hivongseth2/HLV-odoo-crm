@@ -97,16 +97,16 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
 
     # mail_create_nosubscribe: không để tác giả (nhất là NCC) tự thành follower — xem notify.py.
     record = record.sudo().with_context(mail_create_nosubscribe=True)
-    attachments = record.env["ir.attachment"].create([
-        {"name": name, "raw": data, "res_model": record._name, "res_id": record.id}
-        for name, data in files
-    ])
+    # Tệp đưa qua `attachments` để message_post tự tạo và gắn vào tin. KHÔNG tạo ir.attachment
+    # trước rồi truyền attachment_ids: với người gửi không phải user nội bộ (NCC trên trang công
+    # khai — sudo không đổi env.user), Odoo bỏ mọi attachment_ids không tạo từ hộp soạn thư, nên
+    # tin của NCC mất hết ảnh / tệp.
     message = record.message_post(
         body=plaintext2html(text[:MESSAGE_MAX]) if text else "",
         author_id=author.id,
         message_type="comment",
         subtype_xmlid=CHAT_SUBTYPE,
-        attachment_ids=attachments.ids,
+        attachments=files,
         partner_ids=(internal_followers(record) | (notify_partners or record.env["res.partner"])).ids
         if from_vendor else [],
     )
