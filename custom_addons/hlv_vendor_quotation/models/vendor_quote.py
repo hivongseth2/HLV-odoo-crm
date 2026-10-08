@@ -6,7 +6,7 @@ from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 from ..services.notify import post_internal
-from .vendor_quote_utils import match_by_product
+from .vendor_quote_utils import default_price_valid_until, match_by_product
 
 # NCC chỉ thấy báo giá đã gửi đi; nháp và đã huỷ là việc nội bộ.
 VENDOR_VISIBLE_STATES = ("sent", "quoted", "done")
@@ -75,6 +75,11 @@ class VendorQuote(models.Model):
     note = fields.Text(string="Lời nhắn gửi NCC")
     vendor_note = fields.Text(string="Ghi chú của NCC", copy=False)
     submit_date = fields.Datetime(string="NCC gửi lúc", readonly=True, copy=False)
+    price_valid_until = fields.Date(
+        string="Giá hiệu lực đến", copy=False, tracking=True,
+        help="NCC ghi khi báo giá (mặc định 7 ngày). Còn hiệu lực thì phiếu hỏi giá sau — của bất "
+             "kỳ sale nào — tự dùng lại giá này, không phải hỏi lại NCC.",
+    )
     state = fields.Selection(
         [
             ("draft", "Nháp"),
@@ -421,13 +426,14 @@ class VendorQuote(models.Model):
         self.ensure_one()
         return bool(self.line_ids) and all(self.line_ids.mapped("vendor_locked"))
 
-    def _vendor_submit(self, line_values, vendor_note):
+    def _vendor_submit(self, line_values, vendor_note, price_valid_until=False):
         """Ghi báo giá NCC gửi lên.
 
         line_values: {quote_line_id: {"price_unit", "vat", "delivery_days",
         "vendor_note", "invoice_name", "unavailable"}} — controller đã đọc số xong.
         Mọi dòng phải có giá + VAT, trừ dòng NCC đánh dấu không cung cấp. Dòng đã lên đơn
         mua (vendor_locked) giữ nguyên — giá trị gửi lên cho dòng đó bị bỏ qua.
+        price_valid_until: date NCC ghi; trống → hôm nay + 7 ngày. Trước hôm nay → UserError.
         """
         self.ensure_one()
         if not self._is_open_for_vendor():
@@ -458,10 +464,14 @@ class VendorQuote(models.Model):
             line.write(vals)
         self._notify_chosen_lines_changed(chosen_before)
         resubmitted = self.state == "quoted"
+        today = self._vendor_today()
+        if price_valid_until and price_valid_until < today:
+            raise UserError(_("Ngày giá hiệu lực đến không được trước hôm nay."))
         self.write({
             "vendor_note": vendor_note,
             "state": "quoted",
             "submit_date": fields.Datetime.now(),
+            "price_valid_until": price_valid_until or default_price_valid_until(today),
         })
         self._notify_vendor_submitted(resubmitted)
 

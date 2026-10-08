@@ -84,6 +84,10 @@ class VendorQuoteLine(models.Model):
     )
     is_best_price = fields.Boolean(string="Giá tốt nhất", compute="_compute_is_best_price")
     selected = fields.Boolean(string="Đã chọn", readonly=True, copy=False)
+    inherited_from_id = fields.Many2one(
+        "hlv.vendor.quote.line", string="Giá kế thừa từ", readonly=True, copy=False, ondelete="set null",
+        help="Giá lấy lại từ báo giá trước của cùng NCC, cùng sản phẩm, còn hiệu lực (services/price_reuse.py).",
+    )
     vendor_locked = fields.Boolean(
         string="Đã lên đơn mua", compute="_compute_vendor_locked",
         help="Mặt hàng đã lên đơn mua: NCC không sửa giá dòng này nữa (cả NCC không được chọn — "
@@ -177,8 +181,10 @@ class VendorQuoteLine(models.Model):
         inquiry_line = self.inquiry_line_id
         if not inquiry_line:
             raise UserError(_("Dòng báo giá này không thuộc phiếu hỏi giá nào."))
-        if inquiry_line.inquiry_id.state == "cancel":
-            raise UserError(_("Phiếu %s đã huỷ.", inquiry_line.inquiry_id.name))
+        if inquiry_line.inquiry_id.state in ("cancel", "closed"):
+            raise UserError(_(
+                "Phiếu %s đã đóng — lập phiếu mới, giá còn hiệu lực sẽ được dùng lại.", inquiry_line.inquiry_id.name,
+            ))
         if self.unavailable or not self.price_unit:
             raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
         self._check_not_ordered(inquiry_line)

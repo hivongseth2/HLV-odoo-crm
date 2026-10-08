@@ -6,6 +6,7 @@ Cố ý vượt phạm vi mã sale của trang: chỉ đưa giá / NCC / số ph
 phiếu của sale khác (API phiếu vẫn kiểm mã sale). Đọc bằng sudo.
 """
 
+from ..models.vendor_quote_utils import local_date_text
 from .vendor_chat import display_time
 
 QUOTED_STATES = ("quoted", "done")
@@ -14,11 +15,16 @@ PER_PRODUCT = 5         # tối đa giá mỗi sản phẩm
 MAX_PRODUCTS = 12       # tối đa sản phẩm trong kết quả tìm
 
 
-def _line_payload(line):
+def _line_payload(line, today):
     quote = line.quote_id
     inquiry = line.inquiry_line_id.inquiry_id
+    vendor = quote.partner_id.commercial_partner_id
     return {
-        "vendor": quote.partner_id.commercial_partner_id.display_name,
+        "vendor": vendor.display_name,
+        "vendor_id": vendor.id,
+        # Còn hiệu lực thì lập phiếu mới với NCC này là tự dùng lại giá (services/price_reuse.py).
+        "valid_until": local_date_text(quote.price_valid_until),
+        "valid": bool(quote.price_valid_until) and quote.price_valid_until >= today,
         "price_unit": line.price_unit,
         "price_incl": line.price_unit * (1 + line.tax_rate / 100.0),
         "vat": dict(line._fields["vat"].selection).get(line.vat, ""),
@@ -48,13 +54,17 @@ def quoted_prices(env, product_ids=None, search=""):
         domain += ["|", ("product_id.default_code", "ilike", search), ("product_id.name", "ilike", search)]
     lines = env["hlv.vendor.quote.line"].sudo().search(domain, order="id desc", limit=SCAN_LIMIT)
     lines = lines.sorted(lambda l: l.quote_id.submit_date or l.create_date, reverse=True)
+    today = env["hlv.vendor.quote"]._vendor_today()
     groups = {}
     for line in lines:
         group = groups.setdefault(line.product_id.id, {
             "product_id": line.product_id.id,
             "product": line.product_id.display_name,
+            "name": line.product_id.display_name,
+            "uom_id": line.product_uom_id.id,
+            "uom": line.product_uom_id.name or "",
             "prices": [],
         })
         if len(group["prices"]) < PER_PRODUCT:
-            group["prices"].append(_line_payload(line))
+            group["prices"].append(_line_payload(line, today))
     return list(groups.values())[:MAX_PRODUCTS]

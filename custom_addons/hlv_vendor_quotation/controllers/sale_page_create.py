@@ -127,6 +127,8 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
                 {
                     "vendor_name": q.partner_id.commercial_partner_id.display_name,
                     "name": q.name,
+                    # Đủ giá còn hiệu lực từ báo giá trước — không cần gửi link cho NCC này.
+                    "reused": q.state == "quoted",
                     "share_message": payload.share_message(q),
                 }
                 for q in inquiry.quote_ids

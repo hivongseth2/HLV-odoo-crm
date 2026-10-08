@@ -292,3 +292,26 @@ def normalize_origin(text):
         if code and code not in codes:
             codes.append(code)
     return ", ".join(codes)
+
+
+DEFAULT_PRICE_VALID_DAYS = 7
+CLOSE_GRACE_DAYS = 7
+
+
+def default_price_valid_until(submit_day, days=DEFAULT_PRICE_VALID_DAYS):
+    """Hạn giá mặc định khi NCC không ghi: ngày gửi giá + days. submit_day: date; None → None."""
+    return submit_day + timedelta(days=days) if submit_day else None
+
+
+def inquiry_close_day(price_valid_untils, deadline, created_day, grace_days=CLOSE_GRACE_DAYS):
+    """Ngày cuối phiếu chưa lên YCMH còn mở; qua ngày này thì tự đóng "Không mua".
+
+    price_valid_untils: list date hiệu lực giá của các NCC đã báo (bỏ None). Có → ngày muộn
+    nhất (còn NCC nào giữ giá thì còn mở). Chưa NCC nào báo → (hạn báo giá, không có thì ngày
+    tạo) + grace_days. Thiếu cả hạn lẫn ngày tạo → None (không tự đóng).
+    """
+    valid = [day for day in price_valid_untils if day]
+    if valid:
+        return max(valid)
+    base = deadline or created_day
+    return base + timedelta(days=grace_days) if base else None

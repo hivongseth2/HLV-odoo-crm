@@ -13,6 +13,19 @@ window.HlvQuote = window.HlvQuote || {};
   // Gợi ý chỉ để tham khảo: hiện vài NCC đầu, phần còn lại mở khi cần.
   var SUGGEST_VISIBLE = 5;
 
+  /** Mở hộp lập phiếu điền sẵn sản phẩm + NCC (nút "Dùng giá này" ở khung giá đã hỏi). */
+  HQ.openCreateWith = function (lines, vendors) {
+    HQ.openCreate();
+    lines.forEach(function (line) { C.lines = HQ.mergeLine(C.lines, line); });
+    vendors.forEach(function (v) {
+      if (!isChosen(v.id)) {
+        C.chosen.push(v);
+      }
+    });
+    renderAll();
+    refreshSuggestions();
+  };
+
   HQ.openCreate = function () {
     C.saleOrder = null;
     C.lines = [];
@@ -213,7 +226,9 @@ window.HlvQuote = window.HlvQuote || {};
       "NCC báo giá xong, mở phiếu để so giá và chọn NCC cho từng sản phẩm.</p>" +
       results.map(function (r, index) {
         return '<div class="hq-result"><div class="hq-share-head"><b>' + esc(r.vendor_name) + "</b>" +
-          '<span class="hq-muted">' + esc(r.name) + "</span><span class=\"hq-spacer\"></span>" +
+          '<span class="hq-muted">' + esc(r.name) + "</span>" +
+          (r.reused ? '<span class="hq-tag hq-tag-mine" title="NCC đã báo giá các sản phẩm này, giá còn hiệu lực — ' +
+            'không cần gửi link">Đã có giá — không cần gửi</span>' : "") + "<span class=\"hq-spacer\"></span>" +
           '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-copy-result="' + index +
           '">Copy tin nhắn</button></div>' +
           '<pre class="hq-share-text" id="hq-result-' + index + '">' + esc(r.share_message) + "</pre></div>";

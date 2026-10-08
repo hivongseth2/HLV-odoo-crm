@@ -332,3 +332,20 @@
 .hq-price-hint { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; margin-top: .25rem; font-size: .75rem; }
 .hq-price-chip { padding: 0 .4rem; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); background: #fff;
     white-space: nowrap; }
+
+/* ------------------------------------------------------------ trạng thái nổi bật, không mua, giá cũ */
+
+.hq-docs { min-width: 0; }
+.hq-doc-tag { display: block; white-space: nowrap; margin-bottom: .15rem; }
+.hq-doc-tag .hq-tag { margin: 0 0 0 .2rem; font-size: .6875rem; }
+.hq-row-alert td:first-child { box-shadow: inset 3px 0 0 var(--hq-danger); }
+.hq-alert-strong { margin: 0 0 .75rem; font-weight: 500; }
+.hq-close-box { margin-bottom: .75rem; }
+.hq-close-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
+.hq-close-note { flex: 1 1 220px; min-width: 0; }
+.hq-closed-note { border-color: var(--hq-line); }
+.hq-drawer-actions { display: flex; gap: .5rem; justify-content: flex-end; }
+.hq-offer-reuse { display: block; font-size: .6875rem; color: var(--hq-accent-dark); font-weight: 600; }
+.hq-expired { color: var(--hq-danger); font-size: .75rem; }
+.hq-price-old td { color: var(--hq-muted); }
+.hq-price-chip.is-old { opacity: .6; text-decoration: line-through; }

@@ -6,7 +6,7 @@ chỉ việc gọi và trả về. Số tiền trả dạng số, trang tự đ�
 """
 
 from ..models.purchase_order import VENDOR_STATUS
-from ..models.vendor_inquiry import SALE_STATUS
+from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, local_date_text
 from .sale_code import sale_code
@@ -20,6 +20,7 @@ QUOTE_STATE_LABELS = {
     "cancel": "Đã huỷ",
 }
 SALE_STATUS_LABELS = dict(SALE_STATUS)
+CLOSE_REASON_LABELS = dict(CLOSE_REASONS)
 VENDOR_STATUS_LABELS = dict(VENDOR_STATUS)
 VAT_LABELS = dict(VAT_SELECTION)
 PRODUCT_PREVIEW = 3
@@ -105,7 +106,16 @@ def inquiry_summary(inquiry):
         # chế — ở đây chỉ hiện số chứng từ nên đọc bằng sudo.
         "sale_order": inquiry.sale_order_id.sudo().name or "",
         "request_name": ", ".join(inquiry.request_ids.sudo().mapped("name")),
+        # Trạng thái YCMH / đơn mua hiện thành nhãn ngay ngoài danh sách (từ chối → đỏ).
+        "requests": [_request_payload(r) for r in inquiry.request_ids.sudo()],
+        "request_rejected": any(r.state == "rejected" for r in inquiry.request_ids.sudo()),
+        "orders": [
+            {"name": o.name, "vendor_status": VENDOR_STATUS_LABELS.get(o.hlv_vendor_status, "")}
+            for o in inquiry.purchase_order_ids.sudo()
+        ],
         "purchase_orders": inquiry.purchase_order_ids.sudo().mapped("name"),
+        "close_reason": CLOSE_REASON_LABELS.get(inquiry.close_reason, ""),
+        "close_note": inquiry.close_note or "",
         "deadline": _date_text(inquiry.date_deadline),
         "sale_status": inquiry.sale_status,
         "sale_status_label": SALE_STATUS_LABELS.get(inquiry.sale_status, ""),
@@ -122,16 +132,14 @@ def inquiry_detail(inquiry):
     data.update({
         "note": inquiry.note or "",
         "sale_order_id": inquiry.sale_order_id.id or False,
-        "requests": [
-            {"name": r.name, "state": dict(r._fields["state"].selection).get(r.state, "")}
-            for r in inquiry.request_ids.sudo()
-        ],
         "purchase_orders": [purchase_order_payload(o) for o in inquiry.purchase_order_ids],
         # Đã lên YCMH vẫn chọn lại được (VD NCC báo hết hàng sau đó) — trừ dòng đã lên đơn mua.
-        "can_choose": inquiry.state != "cancel",
+        "can_choose": inquiry.state not in ("cancel", "closed"),
         "pending_count": len(pending),
-        "can_request": inquiry.state != "cancel" and bool(pending),
+        "can_request": inquiry.state not in ("cancel", "closed") and bool(pending),
         "can_cancel": inquiry.state == "open",
+        # "Không mua": đóng phiếu, giá NCC vẫn giữ cho phiếu sau dùng lại.
+        "can_close": inquiry.state == "open",
         "vendors": [_vendor_column(q) for q in quotes],
         "lines": [_compare_row(line, quotes) for line in inquiry.line_ids],
         "chosen_total": sum(inquiry.line_ids.chosen_line_id.mapped("price_subtotal")),
@@ -152,6 +160,10 @@ def _vendor_column(quote):
         "state": quote.state,
         "state_label": QUOTE_STATE_LABELS.get(quote.state, ""),
         "submit_date": _datetime_text(quote.submit_date),
+        "price_valid_until": _date_text(quote.price_valid_until),
+        "price_valid": bool(quote.price_valid_until) and quote.price_valid_until >= quote._vendor_today(),
+        # Mọi dòng lấy giá còn hiệu lực từ báo giá trước — không cần gửi link cho NCC.
+        "reused": bool(quote.line_ids) and all(quote.line_ids.mapped("inherited_from_id")),
         "amount_untaxed": quote.amount_untaxed,
         "vendor_note": quote.vendor_note or "",
         "portal_url": quote.portal_quote_url or "",
@@ -176,6 +188,8 @@ def _compare_row(line, quotes):
             "total_incl": quote_line.price_total,
             "is_best": quote_line.is_best_price,
             "selected": quote_line.selected,
+            # Giá dùng lại từ báo giá trước (còn hiệu lực) — ghi phiếu gốc để sale biết nguồn.
+            "inherited_from": _inherited_doc(quote_line.inherited_from_id),
         }
     return {
         "id": line.id,
@@ -189,6 +203,22 @@ def _compare_row(line, quotes):
         "qty": line.product_qty,
         "uom": line.product_uom_id.name or "",
         "offers": offers,
+    }
+
+
+def _inherited_doc(source_line):
+    if not source_line:
+        return ""
+    source = source_line.sudo()
+    return source.inquiry_line_id.inquiry_id.name or source.quote_id.name
+
+
+def _request_payload(request):
+    """YCMH kèm trạng thái (key để tô màu, nhãn để hiện)."""
+    return {
+        "name": request.name,
+        "state": request.state,
+        "label": dict(request._fields["state"].selection).get(request.state, ""),
     }
 
 

@@ -120,24 +120,27 @@ window.HlvQuote = window.HlvQuote || {};
       return;
     }
     body.innerHTML = inquiries.map(function (q) {
-      var docs = [q.request_name].concat(q.purchase_orders).filter(Boolean);
+      var docs = q.requests.map(HQ.requestTag).concat(q.orders.map(HQ.orderTag));
       // Có tin NCC chưa xem: tô cả dòng + nhãn số tin mới, nhìn bảng là biết phiếu nào cần vào xem.
       var chat = q.chat_unread
         ? '<span class="hq-chat-badge is-new" title="' + q.chat_unread + ' tin NCC bạn chưa xem">' + HQ.ICON_CHAT +
           "NCC nhắn " + q.chat_unread + "</span>"
         : q.chat_count ? '<span class="hq-chat-badge" title="Đã có ' + q.chat_count + ' tin trao đổi với NCC">' +
           HQ.ICON_CHAT + q.chat_count + "</span>" : "";
-      return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") + '" data-inquiry="' + q.id + '">' +
+      return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") + (q.request_rejected ? " hq-row-alert" : "") +
+        '" data-inquiry="' + q.id + '">' +
         '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" + (chat ? " " + chat : "") +
         (q.sale_code ? '<div class="hq-muted">' + esc(q.sale_code) + "</div>" : "") + "</td>" +
         '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.products) + "</span>" +
         (q.sale_order ? '<div class="hq-muted">Đơn bán ' + esc(q.sale_order) + "</div>" : "") + "</td>" +
         '<td class="hq-nowrap hq-num">' + q.quoted_count + "/" + q.vendor_count + " NCC</td>" +
         '<td class="hq-nowrap hq-num">' + q.chosen_count + "/" + q.line_count + " sản phẩm</td>" +
-        '<td class="hq-num">' + (docs.length ? docs.map(esc).join("<br/>") : "—") + "</td>" +
+        '<td class="hq-docs">' + (docs.length ? docs.join("") : "—") + "</td>" +
         '<td class="hq-nowrap hq-num">' + esc(q.deadline || "—") + "</td>" +
         '<td><span class="hq-tag ' + (HQ.SALE_STATUS_CLASS[q.sale_status] || "") + '">' +
-        esc(q.sale_status_label) + "</span></td></tr>";
+        esc(q.sale_status_label) + "</span>" +
+        (q.request_rejected ? '<div><span class="hq-tag hq-tag-danger">YCMH bị từ chối</span></div>' : "") +
+        (q.close_reason ? '<div class="hq-muted hq-small">' + esc(q.close_reason) + "</div>" : "") + "</td></tr>";
     }).join("");
   }
 
