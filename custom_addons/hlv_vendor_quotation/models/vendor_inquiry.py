@@ -163,6 +163,23 @@ class VendorInquiry(models.Model):
         apply_valid_prices(quotes)
         return quotes
 
+    def _apply_reuse_choices(self, choices):
+        """Chọn sẵn giá dùng lại sale đã bấm "Dùng giá này" lúc lập phiếu. choices: {product_id:
+        vendor_id}. Chỉ chọn khi dòng báo giá của NCC đó thật sự đã kế thừa giá (giá có thể vừa bị
+        phiếu khác giữ / hết hạn giữa lúc xem và lúc gửi). Trả các dòng phiếu KHÔNG chọn được."""
+        self.ensure_one()
+        missing = self.env["hlv.vendor.inquiry.line"]
+        for line in self.line_ids.filtered(lambda l: l.product_id.id in choices):
+            vendor_id = choices[line.product_id.id]
+            quote_line = line.quote_line_ids.filtered(
+                lambda q: q.quote_id.partner_id.commercial_partner_id.id == vendor_id and q.inherited_from_id
+            )[:1]
+            if quote_line:
+                quote_line.action_choose()
+            else:
+                missing |= line
+        return missing
+
     def action_create_request(self, sale_order=None):
         """Đưa các sản phẩm đã chọn NCC mà CHƯA nằm trong YCMH nào lên YCMH, kèm giá + NCC.
 

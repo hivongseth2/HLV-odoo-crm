@@ -349,3 +349,18 @@
 .hq-expired { color: var(--hq-danger); font-size: .75rem; }
 .hq-price-old td { color: var(--hq-muted); }
 .hq-price-chip.is-old { opacity: .6; text-decoration: line-through; }
+
+/* ------------------------------------------------------------ giá đã hỏi trong hộp lập phiếu */
+
+.hq-reuse { display: grid; gap: .3rem; margin-top: .4rem; }
+.hq-reuse-title { font-size: .75rem; color: var(--hq-muted); }
+.hq-reuse-row { display: flex; align-items: center; gap: .5rem; padding: .35rem .55rem; border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius); font-size: .8125rem; background: #fff; }
+.hq-reuse-main { flex: 1 1 auto; min-width: 0; }
+.hq-reuse-sub { font-size: .75rem; color: var(--hq-muted); }
+.hq-reuse-row.is-ok { background: var(--hq-ok-soft); border-color: #a9d3b8; }
+.hq-reuse-row.is-ok .hq-reuse-sub { color: #2C5B3D; }
+.hq-reuse-row.is-picked { background: #2C5B3D; border-color: #2C5B3D; color: #fff; }
+.hq-reuse-row.is-picked .hq-reuse-sub { color: #d6eadd; }
+.hq-reuse-row.is-off { color: var(--hq-muted); }
+.hq-reuse-check { font-weight: 700; }

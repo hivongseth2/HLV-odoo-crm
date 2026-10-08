@@ -13,9 +13,11 @@ window.HlvQuote = window.HlvQuote || {};
   // Gợi ý chỉ để tham khảo: hiện vài NCC đầu, phần còn lại mở khi cần.
   var SUGGEST_VISIBLE = 5;
 
-  /** Mở hộp lập phiếu điền sẵn sản phẩm + NCC (nút "Dùng giá này" ở khung giá đã hỏi). */
-  HQ.openCreateWith = function (lines, vendors) {
+  /** Mở hộp lập phiếu điền sẵn sản phẩm + NCC (nút "Dùng giá này" ở khung giá đã hỏi).
+      reuse: {product_id: vendor_id} — giá chọn dùng lại sẵn. */
+  HQ.openCreateWith = function (lines, vendors, reuse) {
     HQ.openCreate();
+    C.reuse = Object.assign({}, reuse || {});
     lines.forEach(function (line) { C.lines = HQ.mergeLine(C.lines, line); });
     vendors.forEach(function (v) {
       if (!isChosen(v.id)) {
@@ -33,6 +35,7 @@ window.HlvQuote = window.HlvQuote || {};
     C.chosen = vendor ? [{ id: vendor.id, name: vendor.name }] : [];
     C.suggestions = [];
     C.priceHints = {};
+    C.reuse = {};
     C.showAllSuggestions = false;
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
@@ -102,7 +105,7 @@ window.HlvQuote = window.HlvQuote || {};
             '<td><img class="hq-thumb" loading="lazy" src="/web/image/product.product/' + l.product_id +
             '/image_128" alt=""/></td>' +
             '<td><div class="hq-strong">' + esc(l.name || l.product) + "</div>" +
-            HQ.priceHintHtml((C.priceHints || {})[l.product_id]) + "</td>" +
+            HQ.priceReuseHtml((C.priceHints || {})[l.product_id], l, C.reuse[l.product_id]) + "</td>" +
             '<td class="hq-num"><input type="number" min="0" step="any" class="hq-qty" data-line="' +
             index + '" value="' + l.qty + '"/></td>' +
             "<td>" + esc(l.uom) + "</td>" +
@@ -120,6 +123,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.fetchPriceHints(productIds).then(function (hints) {
       C.priceHints = hints;
       renderLines();
+      renderSummary();  // có giá dùng lại thì nút đổi thành "Lên YCMH ngay"
     }).catch(function () { /* gợi ý phụ, lỗi thì thôi */ });
     if (!productIds.length) {
       C.suggestions = [];
@@ -180,9 +184,42 @@ window.HlvQuote = window.HlvQuote || {};
       : "");
   }
 
+  /** Giá đang chọn dùng lại cho dòng (còn hợp lệ với số lượng / ĐVT hiện tại) — hoặc null. */
+  function pickedPrice(line) {
+    var vendorId = C.reuse[line.product_id];
+    var price = vendorId && ((C.priceHints || {})[line.product_id] || []).find(function (p) {
+      return p.vendor_id === vendorId;
+    });
+    return price && !HQ.reuseProblem(price, line) ? price : null;
+  }
+
+  /** Mọi sản phẩm đều dùng lại giá → không cần hỏi ai, lên YCMH luôn. */
+  function allReused() {
+    return C.lines.length > 0 && C.lines.every(function (l) { return !!pickedPrice(l); });
+  }
+
   function renderSummary() {
-    HQ.$("hq-summary").textContent = C.lines.length + " sản phẩm · " + C.chosen.length + " nhà cung cấp";
-    HQ.$("hq-submit").disabled = !C.lines.length || !C.chosen.length;
+    var reused = C.lines.filter(function (l) { return !!pickedPrice(l); }).length;
+    var direct = allReused();
+    HQ.$("hq-summary").textContent = C.lines.length + " sản phẩm" + (reused ? " · " + reused + " dùng lại giá" : "") +
+      (direct ? " — không cần hỏi NCC" : " · " + C.chosen.length + " nhà cung cấp");
+    HQ.$("hq-submit").textContent = direct ? "Lên YCMH ngay" : "Gửi hỏi giá";
+    HQ.$("hq-submit").disabled = !C.lines.length || (!direct && !C.chosen.length);
+  }
+
+  function pickReuse(productId, vendorId) {
+    var price = ((C.priceHints || {})[productId] || []).find(function (p) { return p.vendor_id === vendorId; });
+    if (!price) {
+      return;
+    }
+    C.reuse[productId] = vendorId;
+    if (!isChosen(vendorId)) {
+      C.chosen.push({ id: vendorId, name: price.vendor });
+    }
+    renderLines();
+    renderChosen();
+    renderSuggestions();
+    renderSummary();
   }
 
   /* ---------------- Gửi ---------------- */
@@ -190,10 +227,18 @@ window.HlvQuote = window.HlvQuote || {};
   function submit() {
     HQ.showAlert("hq-modal-alert", "");
     HQ.$("hq-submit").disabled = true;
+    var reuse = {};
+    C.lines.forEach(function (l) {
+      if (pickedPrice(l)) {
+        reuse[l.product_id] = C.reuse[l.product_id];
+      }
+    });
     HQ.rpc("/api/hoi-gia-ncc/create", {
       code: createCode(),
       lines: C.lines,
       vendor_ids: C.chosen.map(function (v) { return v.id; }),
+      reuse: reuse,
+      request_now: allReused(),
       sale_order_id: C.saleOrder ? C.saleOrder.id : null,
       deadline: HQ.$("hq-deadline").value,
       note: HQ.$("hq-note").value,
@@ -215,15 +260,23 @@ window.HlvQuote = window.HlvQuote || {};
 
   function showResults(res) {
     var results = res.results || [];
-    HQ.$("hq-modal-title").textContent = "Đã tạo phiếu " + res.inquiry.name + " — gửi cho " + results.length + " NCC";
+    HQ.$("hq-modal-title").textContent = res.request
+      ? "Đã lên YCMH " + res.request + " — phiếu " + res.inquiry.name + " dùng lại giá, không hỏi NCC"
+      : "Đã tạo phiếu " + res.inquiry.name + " — gửi cho " + results.length + " NCC";
     HQ.$("hq-modal-body").classList.add("hq-hidden");
     HQ.show("hq-modal-foot", false);
     removeResults();
     var box = document.createElement("div");
     box.id = "hq-results";
     box.className = "hq-modal-body";
-    box.innerHTML = '<p class="hq-muted">Copy tin nhắn dưới đây gửi Zalo cho từng NCC. ' +
-      "NCC báo giá xong, mở phiếu để so giá và chọn NCC cho từng sản phẩm.</p>" +
+    var missing = (res.reuse_missing || []).length
+      ? '<div class="hq-alert">Không dùng lại được giá cho: ' + res.reuse_missing.map(esc).join(", ") +
+        " (vừa hết hiệu lực hoặc có phiếu khác giữ) — NCC sẽ báo giá như bình thường.</div>" : "";
+    box.innerHTML = missing + (res.request
+      ? '<p class="hq-muted">Thu mua duyệt YCMH rồi tạo đơn mua với đúng NCC và giá đã dùng lại. Mở phiếu ' +
+        esc(res.inquiry.name) + " để theo dõi.</p>"
+      : '<p class="hq-muted">Copy tin nhắn dưới đây gửi Zalo cho từng NCC. ' +
+        "NCC báo giá xong, mở phiếu để so giá và chọn NCC cho từng sản phẩm.</p>") +
       results.map(function (r, index) {
         return '<div class="hq-result"><div class="hq-share-head"><b>' + esc(r.vendor_name) + "</b>" +
           '<span class="hq-muted">' + esc(r.name) + "</span>" +
@@ -270,14 +323,29 @@ window.HlvQuote = window.HlvQuote || {};
     });
 
     var modal = HQ.$("hq-modal");
+    HQ.on(modal, "click", "[data-reuse-pick]", function (el) {
+      var parts = el.dataset.reusePick.split(":");
+      pickReuse(+parts[0], +parts[1]);
+    });
+    HQ.on(modal, "click", "[data-reuse-unpick]", function (el) {
+      delete C.reuse[+el.dataset.reuseUnpick];
+      renderLines();
+      renderSummary();
+    });
     HQ.on(modal, "click", "[data-remove-line]", function (el) {
+      var removed = C.lines[+el.dataset.removeLine];
+      delete C.reuse[removed.product_id];
       C.lines.splice(+el.dataset.removeLine, 1);
       renderLines();
       renderSummary();
       refreshSuggestions();
     });
     HQ.on(modal, "change", ".hq-qty", function (el) {
-      C.lines[+el.dataset.line].qty = parseFloat(el.value) || 0;
+      var line = C.lines[+el.dataset.line];
+      line.qty = parseFloat(el.value) || 0;
+      // Đổi số lượng có thể làm giá đang dùng lại hết hợp lệ (vượt số NCC đã báo) — vẽ lại.
+      renderLines();
+      renderSummary();
     });
     HQ.on(modal, "click", "[data-unlink-order]", function () {
       C.saleOrder = null;
