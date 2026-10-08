@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.3.12.4",
+    "version": "18.0.3.13.2",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
 - Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
@@ -30,6 +30,7 @@
         "misa_purchase_request_sync",
     ],
     "data": [
+        "security/security.xml",
         "security/ir.model.access.csv",
         "data/ir_sequence.xml",
         "data/mail_message_subtype.xml",
@@ -49,6 +50,7 @@
             "hlv_vendor_quotation/static/src/scss/vendor_quote_compare.scss",
         ],
     },
+    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
 }

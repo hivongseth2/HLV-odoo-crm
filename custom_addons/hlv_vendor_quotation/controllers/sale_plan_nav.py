@@ -12,7 +12,7 @@ vào /hoi-gia-ncc bằng URL.
 from odoo.http import request
 
 from ..models.vendor_quote_access import SALE_PAGE_ROUTE as PAGE_ROUTE
-from .sale_page_common import PAGE_GROUPS
+from .sale_page_common import PAGE_GROUP
 
 ANCHOR = "<!-- HLV_NAV_EXT -->"
 NAV_LINK = (
@@ -34,7 +34,7 @@ if sale_plan_controller:
         def sale_plan_page(self, **kwargs):
             response = super().sale_plan_page(**kwargs)
             user = request.env.user
-            if user.share or not any(user.has_group(group) for group in PAGE_GROUPS):
+            if user.share or not user.has_group(PAGE_GROUP):
                 return response
             try:
                 body = response.get_data(as_text=True)

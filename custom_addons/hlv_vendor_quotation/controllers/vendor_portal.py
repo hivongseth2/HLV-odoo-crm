@@ -12,7 +12,9 @@ from odoo.http import request
 from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
-from ..models.vendor_quote_utils import deadline_hint, format_vn_number, paginate, parse_vn_number
+from ..models.vendor_quote_utils import (
+    deadline_hint, format_vn_number, local_date_text, paginate, parse_vn_number,
+)
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
 from ..services.chat_read import mark_seen
@@ -343,6 +345,8 @@ class VendorQuotePortal(http.Controller):
             "company": request.env.company.sudo(),
             "portal_base": f"{PORTAL_ROUTE}/{access.access_token}",
             "fmt": format_vn_number,
+            # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
+            "fdate": local_date_text,
             "vat_options": VAT_SELECTION,
             "default_vat": DEFAULT_VENDOR_VAT,
             "post": {},

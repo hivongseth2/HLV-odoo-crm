@@ -8,6 +8,9 @@
  * kẻo mất giá NCC đang gõ dở trong bảng. Server ghi "đã xem" khi trả trang chi tiết, nên tin
  * trên đúng chứng từ đang mở không bị tính là chưa xem.
  * Tin ở chứng từ khác: thêm thông báo nhỏ ở góc kèm link.
+ *
+ * Gửi tin cũng chạy nền (không tải lại trang): khung chat giữ nguyên đang mở / đóng, chữ đang
+ * gõ trong bảng giá không mất. Trình duyệt quá cũ không có fetch thì form gửi kiểu thường.
  */
 (function () {
     "use strict";
@@ -51,15 +54,31 @@
     }
 
     /**
-     * Khung trao đổi nổi: mặc định là nút tròn, nhớ lần NCC mở / đóng gần nhất. Link
-     * #trao-doi (thông báo, sau khi gửi tin) hoặc gửi tin bị lỗi thì mở sẵn.
+     * #trao-doi và ?chat_error= chỉ dùng MỘT lần lúc vào trang (mở sẵn khung chat / báo lỗi
+     * gửi tin). Xoá khỏi URL ngay, kẻo F5 lại tưởng vừa bấm thông báo và mở chat ra lại.
+     */
+    function consumeChatUrlHints() {
+        var url = new URL(window.location.href);
+        var had = url.hash === "#trao-doi" || url.searchParams.has("chat_error");
+        if (had) {
+            url.hash = "";
+            url.searchParams.delete("chat_error");
+            window.history.replaceState(null, "", url.pathname + url.search);
+        }
+        return had;
+    }
+
+    /**
+     * Khung trao đổi nổi: mặc định là nút, nhớ lần NCC mở / đóng gần nhất. Link #trao-doi
+     * (bấm thông báo) hoặc gửi tin bị lỗi thì mở sẵn.
      */
     function initChatPanel() {
         var section = document.querySelector("details.vq-chat");
         if (!section) {
             return;
         }
-        var wanted = window.location.hash === "#trao-doi" || !!section.querySelector(".vq-chat-error") || readChatPref();
+        var hinted = consumeChatUrlHints();
+        var wanted = hinted || !!section.querySelector(".vq-chat-error") || readChatPref();
         // Lần mở do trang tự mở (không phải NCC bấm) thì không focus ô nhập — trên điện thoại
         // focus là bật bàn phím che trang.
         var autoOpening = wanted;
@@ -123,19 +142,87 @@
         });
     }
 
+    function parsePage(response) {
+        return response.text().then(function (html) {
+            return new DOMParser().parseFromString(html, "text/html");
+        });
+    }
+
+    /** Thay nội dung các vùng data-live bằng bản trong doc — không thay phần tử, để giữ trạng
+        thái đóng / mở và ô đang gõ. */
+    function applyLive(doc) {
+        document.querySelectorAll("[data-live]").forEach(function (region) {
+            var fresh = doc.querySelector('[data-live="' + region.dataset.live + '"]');
+            if (fresh) {
+                region.innerHTML = fresh.innerHTML;
+            }
+        });
+    }
+
     function refreshLive() {
         return fetch(window.location.pathname + window.location.search, { credentials: "same-origin" })
-            .then(function (response) { return response.text(); })
-            .then(function (html) {
-                var doc = new DOMParser().parseFromString(html, "text/html");
-                // Thay nội dung chứ không thay phần tử: giữ trạng thái đóng / mở và ô đang gõ.
-                document.querySelectorAll("[data-live]").forEach(function (region) {
-                    var fresh = doc.querySelector('[data-live="' + region.dataset.live + '"]');
-                    if (fresh) {
-                        region.innerHTML = fresh.innerHTML;
-                    }
-                });
+            .then(parsePage)
+            .then(applyLive);
+    }
+
+    function showChatError(form, message) {
+        var box = form.parentNode.querySelector(".vq-chat-error");
+        if (!message) {
+            if (box) {
+                box.remove();
+            }
+            return;
+        }
+        if (!box) {
+            box = document.createElement("div");
+            box.className = "vq-alert vq-alert-error vq-chat-error";
+            form.parentNode.insertBefore(box, form);
+        }
+        box.textContent = message;
+    }
+
+    /**
+     * Gửi tin chạy nền: server vẫn trả chuyển hướng về trang chứng từ như form thường (lỗi đi
+     * kèm ?chat_error=), fetch đi theo chuyển hướng nên nhận đúng trang mới — lấy khung chat
+     * và lỗi (nếu có) từ đó.
+     */
+    function bindChatSend() {
+        if (!window.fetch || !window.FormData) {
+            return;
+        }
+        document.querySelectorAll(".vq-chat-form").forEach(function (form) {
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+                var button = form.querySelector("[type=submit]");
+                if (button) {
+                    button.disabled = true;
+                }
+                fetch(form.action, { method: "POST", body: new FormData(form), credentials: "same-origin" })
+                    .then(parsePage)
+                    .then(function (doc) {
+                        applyLive(doc);
+                        syncTabCount();
+                        var error = doc.querySelector(".vq-chat-error");
+                        showChatError(form, error ? error.textContent.trim() : "");
+                        if (!error) {
+                            form.reset();
+                            var names = form.querySelector("[data-file-names]");
+                            if (names) {
+                                names.textContent = "";
+                            }
+                        }
+                        scrollChats();
+                    })
+                    .catch(function () {
+                        showChatError(form, "Chưa gửi được — mạng chập chờn, vui lòng bấm Gửi lại.");
+                    })
+                    .finally(function () {
+                        if (button) {
+                            button.disabled = false;
+                        }
+                    });
             });
+        });
     }
 
     function flash(section) {
@@ -198,6 +285,7 @@
     scrollChats();
     syncTabCount();
     bindFilePickers();
+    bindChatSend();
     bindNotifyClose();
     listenBus();
 })();

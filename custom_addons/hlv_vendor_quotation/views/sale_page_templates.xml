@@ -29,17 +29,19 @@
 
                 <div t-if="not allowed" class="container py-5">
                     <div class="hq-panel hq-pad">Tài khoản chưa được cấp quyền hỏi giá nhà cung cấp. Liên hệ
-                        quản trị để được thêm vào nhóm Bán hàng hoặc Mua hàng.</div>
+                        quản trị để được thêm vào nhóm "Hỏi giá NCC" (Thiết lập → Người dùng).</div>
                 </div>
 
                 <div t-else="" id="hq-app" class="container-fluid py-3"
                      t-att-data-initial-vendor="initial_vendor_id or ''">
-                    <!-- Tài khoản chưa khai mã sale MISA: không có phiếu nào để xem. -->
+                    <!-- Không xem được (chưa khai mã sale / link của sale khác) hoặc phải chọn mã sale. -->
                     <div id="hq-denied" class="hq-panel hq-pad hq-hidden"></div>
 
                     <div class="hq-toolbar">
                         <label class="hq-muted" for="hq-code">Mã sale</label>
                         <select id="hq-code" class="hq-input hq-code-select"></select>
+                        <button type="button" class="hq-btn hq-btn-mini hq-hidden" id="hq-switch-code"
+                                title="Tài khoản dùng chung nhiều mã sale — chọn lại mã của bạn">Đổi mã</button>
                         <button type="button" class="hq-btn hq-btn-mini hq-hidden" id="hq-copy-code-link"
                                 title="Link riêng của mã sale này — gửi cho đúng sale đó">Copy link mã này</button>
                         <label class="hq-sr-only" for="hq-search">Tìm phiếu hỏi giá</label>

@@ -22,7 +22,7 @@ from odoo.http import request
 from ..models.vendor_inquiry import SALE_STATUS
 from ..models.vendor_quote_access import SALE_PAGE_ROUTE
 from ..models.vendor_quote_line import VAT_SELECTION
-from ..models.vendor_quote_utils import paginate
+from ..models.vendor_quote_utils import local_date_text, paginate
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
 from ..services.asset_version import asset_version
@@ -56,7 +56,8 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "all_code": sale_scope.ALL_SALES,
             "vat_options": VAT_SELECTION,
             "status_tabs": STATUS_TABS,
-            "today": fields.Date.to_string(fields.Date.context_today(env.user)),
+            # Ngày VN cố định — tài khoản dùng chung hay để trống múi giờ, context_today ra ngày UTC.
+            "today": local_date_text(fields.Datetime.now(), "%Y-%m-%d"),
             # Kênh websocket báo tin trao đổi mới — tên kênh do server đặt, JS không tự ghép.
             "bus": {
                 "version": bus_version(),

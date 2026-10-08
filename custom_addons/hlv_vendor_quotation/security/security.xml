@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_vendor_quote" model="ir.module.category">
+        <field name="name">Hỏi giá NCC</field>
+        <field name="sequence">60</field>
+    </record>
+
+    <!-- Người dùng: vào trang /hoi-gia-ncc, chỉ thấy mã sale của tài khoản mình (ô chọn mã khoá).
+         Quản lý: thêm lựa chọn "Tất cả mã sale". Gán sẵn cho người đang dùng: services/access_setup.py. -->
+    <record id="group_vendor_quote_user" model="res.groups">
+        <field name="name">Người dùng</field>
+        <field name="category_id" ref="module_category_vendor_quote"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Vào trang Hỏi giá NCC, chỉ xem phiếu của mã sale MISA khai trên tài khoản.</field>
+    </record>
+
+    <record id="group_vendor_quote_manager" model="res.groups">
+        <field name="name">Quản lý</field>
+        <field name="category_id" ref="module_category_vendor_quote"/>
+        <field name="implied_ids" eval="[(4, ref('group_vendor_quote_user'))]"/>
+        <field name="comment">Xem phiếu hỏi giá của mọi mã sale ("Tất cả mã sale") và copy link riêng cho từng sale.</field>
+    </record>
+</odoo>

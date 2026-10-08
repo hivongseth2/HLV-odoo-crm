@@ -5,12 +5,10 @@ Không phải util thuần (đọc record), nhưng không ghi gì và không đ�
 chỉ việc gọi và trả về. Số tiền trả dạng số, trang tự định dạng theo vi-VN.
 """
 
-from odoo import fields
-
 from ..models.purchase_order import VENDOR_STATUS
 from ..models.vendor_inquiry import SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
-from ..models.vendor_quote_utils import build_share_message
+from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, local_date_text
 from .sale_code import sale_code
 from .chat_read import chat_stats, seen_markers
 
@@ -24,19 +22,17 @@ QUOTE_STATE_LABELS = {
 SALE_STATUS_LABELS = dict(SALE_STATUS)
 VENDOR_STATUS_LABELS = dict(VENDOR_STATUS)
 VAT_LABELS = dict(VAT_SELECTION)
-DATE_FMT = "%d/%m/%Y"
 PRODUCT_PREVIEW = 3
 CONTACT_LIMIT = 10
 
 
-def _date_text(value):
-    return value.strftime(DATE_FMT) if value else ""
+# Giờ Việt Nam cố định (không theo múi giờ khai ở tài khoản — tài khoản dùng chung, nhiều cái
+# để trống là ra giờ UTC).
+_date_text = local_date_text
 
 
-def _datetime_text(record, value):
-    if not value:
-        return ""
-    return fields.Datetime.context_timestamp(record, value).strftime("%H:%M " + DATE_FMT)
+def _datetime_text(value):
+    return local_date_text(value, DATETIME_FMT)
 
 
 def purchase_order_payload(order):
@@ -154,7 +150,7 @@ def _vendor_column(quote):
         "name": quote.partner_id.commercial_partner_id.display_name,
         "state": quote.state,
         "state_label": QUOTE_STATE_LABELS.get(quote.state, ""),
-        "submit_date": _datetime_text(quote, quote.submit_date),
+        "submit_date": _datetime_text(quote.submit_date),
         "amount_untaxed": quote.amount_untaxed,
         "vendor_note": quote.vendor_note or "",
         "portal_url": quote.portal_quote_url or "",

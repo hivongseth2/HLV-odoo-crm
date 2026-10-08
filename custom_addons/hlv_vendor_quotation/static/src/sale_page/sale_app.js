@@ -4,7 +4,9 @@
    HQ.listenBus.
 
    Mã sale lấy từ link riêng ?t=<token> như /misa_sale_status: mỗi sale chỉ có mã của mình
-   (khai ở tài khoản), thu mua / quản lý thêm "Tất cả". Trang chỉ chọn mã để hiển thị — server
+   (khai ở tài khoản); nhóm Quản lý Hỏi giá NCC thêm "Tất cả" và đổi mã tự do, nhóm Người dùng
+   bị khoá ô mã. Tài khoản dùng chung nhiều mã mà vào không kèm ?t= (VD từ menu /sale_plan) thì
+   hỏi "Bạn là sale nào?" một lần, máy nhớ cho lần sau. Trang chỉ chọn mã để hiển thị — server
    kiểm lại mã ở mọi API. */
 window.HlvQuote = window.HlvQuote || {};
 
@@ -13,13 +15,16 @@ window.HlvQuote = window.HlvQuote || {};
 
   var S = HQ.S;
   var CODE_KEY = "hq_sale_code";
+  var CHOOSE = "";  // resolveCode: tài khoản nhiều mã, chưa biết người đang xem là sale nào
+  var GATED = ".hq-toolbar, .hq-kpis, #hq-app > .row";
 
   function tokenOf(code) {
     var match = (S.config.codes || []).find(function (c) { return c.code === code; });
     return match ? match.token : "";
   }
 
-  /** Mã sale ban đầu: theo ?t=, rồi mã đã chọn lần trước, rồi mặc định. null = không được xem. */
+  /** Mã sale ban đầu: theo ?t=, rồi mã đã chọn lần trước trên máy này, rồi mặc định.
+      null = không được xem; CHOOSE = phải hỏi sale chọn mã. */
   function resolveCode(config) {
     var token = new URLSearchParams(window.location.search).get("t");
     var codes = config.codes || [];
@@ -41,7 +46,10 @@ window.HlvQuote = window.HlvQuote || {};
     if (config.can_see_all) {
       return config.all_code;
     }
-    return codes.length ? codes[0].code : null;
+    if (codes.length === 1) {
+      return codes[0].code;
+    }
+    return codes.length ? CHOOSE : null;
   }
 
   /** Giữ URL khớp với mã sale + NCC đang xem, để copy link là ra đúng màn hình này. */
@@ -59,19 +67,51 @@ window.HlvQuote = window.HlvQuote || {};
   function renderCodeSelect() {
     var options = (S.config.can_see_all ? [[S.config.all_code, "Tất cả mã sale"]] : [])
       .concat((S.config.codes || []).map(function (c) { return [c.code, c.code]; }));
-    HQ.$("hq-code").innerHTML = options.map(function (o) {
+    var select = HQ.$("hq-code");
+    select.innerHTML = options.map(function (o) {
       return '<option value="' + HQ.esc(o[0]) + '"' + (o[0] === S.code ? " selected" : "") + ">" +
         HQ.esc(o[1]) + "</option>";
     }).join("");
+    // Nhóm Người dùng: khoá ô mã. Tài khoản dùng chung nhiều mã đổi qua nút "Đổi mã" (hỏi lại).
+    select.disabled = !S.config.can_see_all;
+    select.title = select.disabled ? "Mã sale của bạn — chỉ nhóm Quản lý Hỏi giá NCC đổi được" : "";
+    HQ.show("hq-switch-code", !S.config.can_see_all && (S.config.codes || []).length > 1);
+  }
+
+  /** Che trang, chỉ hiện một ô thông báo (không có quyền / chọn mã). html đã escape. */
+  function showGate(html) {
+    var box = HQ.$("hq-denied");
+    box.innerHTML = html;
+    box.classList.remove("hq-hidden");
+    Array.prototype.forEach.call(document.querySelectorAll(GATED), function (el) { el.classList.add("hq-hidden"); });
+  }
+
+  function hideGate() {
+    HQ.$("hq-denied").classList.add("hq-hidden");
+    Array.prototype.forEach.call(document.querySelectorAll(GATED), function (el) { el.classList.remove("hq-hidden"); });
   }
 
   function deny(message) {
-    var box = HQ.$("hq-denied");
-    box.textContent = message;
-    box.classList.remove("hq-hidden");
-    Array.prototype.forEach.call(document.querySelectorAll(".hq-toolbar, .hq-kpis, #hq-app > .row"), function (el) {
-      el.classList.add("hq-hidden");
-    });
+    showGate(HQ.esc(message));
+  }
+
+  function chooseCode() {
+    showGate('<h2 class="hq-h2">Bạn là sale nào?</h2>' +
+      '<p class="hq-muted">Tài khoản này dùng chung cho nhiều mã sale. Chọn mã của bạn — máy này sẽ nhớ cho ' +
+      "lần sau. Mở link riêng của mình (có ?t=…) thì vào thẳng, khỏi chọn.</p>" +
+      '<div class="hq-code-choices">' + (S.config.codes || []).map(function (c) {
+        return '<button type="button" class="hq-btn" data-pick-code="' + HQ.esc(c.code) + '">' + HQ.esc(c.code) + "</button>";
+      }).join("") + "</div>");
+  }
+
+  function enterCode(code) {
+    hideGate();
+    S.code = code;
+    S.page = 1;
+    renderCodeSelect();
+    HQ.syncUrl();
+    HQ.listenBus();
+    return HQ.reloadAll();
   }
 
   function bindEvents(app) {
@@ -99,6 +139,10 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.show(el.dataset.close === "drawer" ? "hq-drawer" : "hq-modal", false);
     });
 
+    HQ.on(app, "click", "[data-pick-code]", function (el) {
+      enterCode(el.dataset.pickCode);
+    });
+    HQ.$("hq-switch-code").addEventListener("click", chooseCode);
     HQ.$("hq-code").addEventListener("change", function (event) {
       S.code = event.target.value;
       S.page = 1;
@@ -146,11 +190,11 @@ window.HlvQuote = window.HlvQuote || {};
             "nên chưa xem được phiếu hỏi giá. Liên hệ quản trị để bổ sung.");
         return null;
       }
-      S.code = code;
-      renderCodeSelect();
-      HQ.syncUrl();
-      HQ.listenBus();
-      return HQ.reloadAll();
+      if (code === CHOOSE) {
+        chooseCode();
+        return null;
+      }
+      return enterCode(code);
     }).catch(function (err) {
       HQ.showAlert("hq-alert", err.message);
     });
