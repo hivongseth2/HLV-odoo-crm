@@ -99,7 +99,7 @@ def apply_valid_prices(quotes):
             if source:
                 line.write(dict({field: source[field] for field in REUSED_FIELDS}, inherited_from_id=source.id))
                 sources |= source
-        if quote.line_ids and all(quote.line_ids.mapped("inherited_from_id")):
+        if quote._fully_reused():
             quote.write({
                 "state": "quoted",
                 "submit_date": fields.Datetime.now(),
