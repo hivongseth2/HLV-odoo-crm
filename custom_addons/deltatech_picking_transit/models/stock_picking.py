@@ -190,6 +190,65 @@ class StockPicking(models.Model):
                 warehouse.pick_type_id | warehouse.pack_type_id
             )
 
+    def _compute_location_id(self):
+        """Form backend: chọn Liên hệ là kho khác thì đích tự là CHUYENKHO của kho nguồn;
+        phiếu bước 2 luôn lấy nguồn = đích của phiếu bước 1."""
+        super()._compute_location_id()
+        for picking in self:
+            if picking.state in ("cancel", "done") or picking.return_id:
+                continue
+            if picking.source_transfer_id:
+                picking.location_id = picking.source_transfer_id.location_dest_id
+                continue
+            src_wh = picking.picking_type_id.warehouse_id
+            dest_wh = self.env["stock.warehouse"].search([("partner_id", "=", picking.partner_id.id)], limit=1) if picking.partner_id else False
+            if picking.hlv_allow_transfer_location and src_wh and dest_wh and dest_wh != src_wh:
+                picking.location_dest_id = src_wh._hlv_get_transfer_location()
+
+    def _hlv_check_transfer_route(self):
+        """Chặn xác nhận khi vị trí nguồn/đích không khớp kho của loại hoạt động.
+        Bước 1: nguồn thuộc kho của loại phiếu, đích thuộc kho đó (CHUYENKHO) — muốn sang kho khác phải qua CHUYENKHO.
+        Bước 2: nguồn đúng là đích của bước 1, đích thuộc kho nhận (kho của loại phiếu)."""
+        def wh_name(loc):
+            return loc.warehouse_id.name or _("không thuộc kho nào")
+
+        for picking in self:
+            if picking.state in ("cancel", "done") or picking.return_id or not picking.hlv_allow_transfer_location:
+                continue
+            warehouse = picking.picking_type_id.warehouse_id
+            if not warehouse:
+                continue
+            lines = picking.move_line_ids
+            sources = picking.location_id | lines.location_id
+            dests = picking.location_dest_id | lines.location_dest_id
+            if picking.source_transfer_id:
+                hub = picking.source_transfer_id.location_dest_id
+                for loc in sources - hub:
+                    raise UserError(_(
+                        "Phiếu bước 2 %(picking)s phải lấy hàng từ %(hub)s (đích của phiếu bước 1 %(src)s), "
+                        "không được lấy từ %(loc)s."
+                    ) % {"picking": picking.name, "hub": hub.display_name, "src": picking.source_transfer_id.name, "loc": loc.display_name})
+                for loc in dests.filtered(lambda l: l.warehouse_id != warehouse):
+                    raise UserError(_(
+                        "Phiếu bước 2 %(picking)s nhập vào kho %(wh)s nhưng vị trí đích %(loc)s thuộc %(loc_wh)s. "
+                        "Hãy chọn vị trí đích trong kho %(wh)s."
+                    ) % {"picking": picking.name, "wh": warehouse.name, "loc": loc.display_name, "loc_wh": wh_name(loc)})
+                continue
+            # Transit cũ: còn phiếu bước 1 mở đi vào / phiếu dọn hàng lấy ra — vẫn cho qua
+            for loc in sources.filtered(lambda l: l.warehouse_id != warehouse and l.usage != "transit"):
+                raise UserError(_(
+                    "Phiếu %(picking)s dùng loại hoạt động %(type)s nhưng vị trí nguồn %(loc)s thuộc %(loc_wh)s. "
+                    "Hãy lấy hàng từ vị trí của kho %(wh)s hoặc đổi loại hoạt động cho đúng kho nguồn."
+                ) % {"picking": picking.name, "type": picking.picking_type_id.display_name, "loc": loc.display_name,
+                     "loc_wh": wh_name(loc), "wh": warehouse.name})
+            for loc in dests.filtered(lambda l: l.warehouse_id != warehouse and l.usage != "transit"):
+                raise UserError(_(
+                    "Phiếu %(picking)s dùng loại hoạt động %(type)s nhưng vị trí đích %(loc)s thuộc %(loc_wh)s. "
+                    "Chuyển sang kho khác phải đi vào %(hub)s (bước 1) và chọn Liên hệ là kho nhận; "
+                    "phiếu bước 2 sẽ tự nhập vào kho nhận."
+                ) % {"picking": picking.name, "type": picking.picking_type_id.display_name, "loc": loc.display_name,
+                     "loc_wh": wh_name(loc), "hub": warehouse._hlv_get_transfer_location().display_name})
+
     @api.constrains("location_id", "location_dest_id", "picking_type_id")
     def _check_hlv_transfer_location(self):
         """CHUYENKHO chỉ làm đích bước 1 / nguồn bước 2 của phiếu chuyển nội bộ."""
@@ -436,6 +495,7 @@ class StockPicking(models.Model):
     def button_validate(self):
         # Lưu thông tin để tạo phiếu bước 2 SAU khi đã validate và tách kiện
         pickings_need_second_transfer = []
+        self._hlv_check_transfer_route()
 
         for picking in self:
             # Auto chỉ khi: Internal + chưa tạo lần nào + không phải phiếu con + ĐÍCH là transit
