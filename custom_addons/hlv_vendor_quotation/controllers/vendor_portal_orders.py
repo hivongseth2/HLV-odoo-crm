@@ -17,7 +17,7 @@ from odoo.http import request
 
 from ..models.purchase_order import PROGRESS_LABELS
 from ..models.vendor_quote_access import PORTAL_ROUTE
-from ..models.vendor_quote_utils import DATETIME_FMT, DELIVERY_CHANH, DELIVERY_CPN
+from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN
 from ..services.chat_read import mark_seen
 from ..services.vendor_chat import chat_messages, post_chat
 from ..services.vendor_feed import row_marks
@@ -69,22 +69,21 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "order_quotes": {order.id: order.hlv_vendor_quote_ids for order in shown},
             "marks": row_marks(shown, access),
             "progress_labels": PROGRESS_LABELS,
-            "datetime_fmt": DATETIME_FMT,
             "post": {},
             "active_tab": "orders",
         })
 
     @staticmethod
     def _order_info(order):
-        """Thông tin một đơn cho trang NCC: tiến độ, giao hàng, thanh toán, cách giao (CPN / chành → NCC
-        phải báo thông tin gửi; trống = kho nhận là xong)."""
+        """Thông tin một đơn cho trang NCC: tiến độ, phương thức / địa điểm giao hàng, cách giao đoán từ
+        phương thức (CPN / chành → mặc định chọn "Gửi CPN / chành" khi NCC báo đã gửi)."""
         mode = order._hlv_delivery_mode()
         return {
             "progress": order._hlv_vendor_progress(),
             "delivery_term": order._hlv_delivery_term(),
             "delivery_place": order._hlv_delivery_place(),
-            "payment_term": order._hlv_payment_term(),
             "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",
+            "ship_text": order._hlv_ship_text(),
         }
 
     @http.route(
@@ -127,7 +126,6 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "quotes": order.hlv_vendor_quote_ids,
             "info": self._order_info(order),
             "progress_labels": PROGRESS_LABELS,
-            "datetime_fmt": DATETIME_FMT,
             "saved": bool(kw.get("saved")),
             "ship_error": error,
             "post": request.params if error else {},
@@ -144,7 +142,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
     def _mark_shipped(self, order, access, form):
         """NCC báo đã gửi CPN / chành; ảnh vận đơn / phiếu gửi (nếu có) đăng vào trao đổi của đơn để
         bên mua xem cùng chỗ với tin nhắn."""
-        order._vendor_mark_shipped(form.get("carrier"), form.get("ref"), access.partner_id)
+        order._vendor_mark_shipped(form.get("method"), form.get("carrier"), form.get("ref"), access.partner_id)
         files = self._uploaded_files()
         if files:
             post_chat(order, f"Ảnh vận đơn / phiếu gửi: {order.hlv_ship_carrier or ''} {order.hlv_ship_ref}".strip(),

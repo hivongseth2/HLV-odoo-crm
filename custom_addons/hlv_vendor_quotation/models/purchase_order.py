@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
+import logging
+
 from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from ..services.chat_bus import notify_order_status
 from ..services.notify import post_internal
-from .vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN, delivery_mode, normalize_origin
+from ..services.vendor_chat import post_chat
+from .vendor_quote_utils import DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin
+
+_logger = logging.getLogger(__name__)
 
 # Tiến độ đơn mua trên trang NCC — thứ tự là thứ tự tiến trình. Trống = đã nhận đơn, chờ đóng gói.
 # NCC tự báo "Đã đóng gói"; "Đã gửi hàng" chỉ khi đơn gửi CPN / gửi chành (kèm thông tin gửi);
@@ -15,10 +21,14 @@ VENDOR_STATUS = [
     ("delivered", "Đã giao"),
 ]
 VENDOR_STATUS_ORDER = [key for key, _label in VENDOR_STATUS]
+# NCC báo đã gửi hàng bằng cách nào: gửi CPN / chành (cần mã vận đơn / số xe) hay tự chở tới.
+SHIP_METHODS = [
+    ("cpn", "Gửi CPN / chành"),
+    ("self", "NCC tự vận chuyển"),
+]
 # Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ đóng gói / đã hủy.
 PROGRESS_LABELS = dict(VENDOR_STATUS, waiting="Chờ đóng gói", cancel="Đã hủy")
-# Trường Studio trên đơn mua (không có ở mọi môi trường — đọc qua _misa_field_value của amis_callback,
-# cùng cách module đồng bộ MISA đọc).
+# Trường Studio trên đơn mua — không có ở mọi môi trường (DB test, cài mới) nên đọc qua _hlv_studio_text.
 DELIVERY_TERM_FIELD = "x_studio_delivery_term"
 DELIVERY_PLACE_FIELD = "x_studio_ddgh"
 SHIP_TEXT_MAX = 120
@@ -32,9 +42,10 @@ class PurchaseOrder(models.Model):
         help="Nhà cung cấp tự cập nhật trên trang báo giá của họ.",
     )
     hlv_vendor_status_date = fields.Datetime(string="NCC báo lúc", copy=False, readonly=True)
-    # NCC báo khi gửi CPN / gửi chành: hãng CPN hoặc tên chành, và mã vận đơn hoặc số xe / SĐT tài xế.
-    hlv_ship_carrier = fields.Char(string="NCC gửi qua (hãng CPN / chành)", copy=False, readonly=True)
-    hlv_ship_ref = fields.Char(string="Mã vận đơn / số xe", copy=False, readonly=True)
+    # NCC báo đã gửi hàng: cách gửi, hãng CPN / tên chành, mã vận đơn / số xe / người giao.
+    hlv_ship_method = fields.Selection(SHIP_METHODS, string="NCC gửi hàng bằng", copy=False, readonly=True)
+    hlv_ship_carrier = fields.Char(string="Hãng CPN / chành", copy=False, readonly=True)
+    hlv_ship_ref = fields.Char(string="Mã vận đơn / số xe / người giao", copy=False, readonly=True)
     hlv_vendor_quote_ids = fields.Many2many(
         "hlv.vendor.quote", string="Báo giá NCC", compute="_compute_hlv_vendor_links"
     )
@@ -95,15 +106,26 @@ class PurchaseOrder(models.Model):
                 old or _("(trống)"), origin or _("(trống)"),
             ), author)
 
+    def _hlv_studio_text(self, field_name):
+        """Giá trị trường Studio dạng chữ ("" nếu DB không có trường / trường trống). convert_to_export ra
+        nhãn của selection, tên của many2one — không ra mã kỹ thuật."""
+        self.ensure_one()
+        field = self._fields.get(field_name)
+        if not field:
+            return ""
+        return str(field.convert_to_export(self[field_name], self) or "").strip()
+
     def _hlv_delivery_term(self):
-        return self._misa_field_value(DELIVERY_TERM_FIELD)
+        return self._hlv_studio_text(DELIVERY_TERM_FIELD)
 
     def _hlv_delivery_place(self):
-        return self._misa_field_value(DELIVERY_PLACE_FIELD)
+        return self._hlv_studio_text(DELIVERY_PLACE_FIELD)
 
-    def _hlv_payment_term(self):
-        """Điều kiện thanh toán: trường Studio, không có thì điều khoản thanh toán của đơn (amis_callback)."""
-        return self._misa_payment_term_text()
+    def _hlv_ship_text(self):
+        """Thông tin gửi hàng NCC đã báo, một dòng: "Gửi CPN / chành · Viettel Post · VTP123"."""
+        self.ensure_one()
+        parts = [dict(SHIP_METHODS).get(self.hlv_ship_method, ""), self.hlv_ship_carrier, self.hlv_ship_ref]
+        return " · ".join(part for part in parts if part)
 
     def _hlv_delivery_mode(self):
         """Cách giao (vendor_quote_utils.delivery_mode) theo "Phương thức giao hàng" của đơn."""
@@ -141,26 +163,25 @@ class PurchaseOrder(models.Model):
         self._hlv_check_not_cancelled()
         return self._hlv_advance_status(status, vendor_partner, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status])
 
-    def _vendor_mark_shipped(self, carrier, ref, vendor_partner):
-        """NCC báo đã gửi CPN / gửi chành, kèm hãng CPN / tên chành và mã vận đơn / số xe. Gửi lại được
-        (sửa thông tin) khi đơn chưa giao. Đơn giao thẳng không cần bước này."""
+    def _vendor_mark_shipped(self, method, carrier, ref, vendor_partner):
+        """NCC báo đã gửi hàng: gửi CPN / chành (bắt buộc mã vận đơn / số xe; hãng / chành tuỳ) hoặc
+        NCC tự vận chuyển (người giao / SĐT / biển số tuỳ). Sửa lại được tới khi kho nhận hàng."""
         self.ensure_one()
         self._hlv_check_not_cancelled()
-        mode = self._hlv_delivery_mode()
-        if mode not in (DELIVERY_CPN, DELIVERY_CHANH):
-            raise UserError(_("Đơn này không gửi CPN / chành — kho bên mua nhận hàng là đơn tự chuyển Đã giao."))
-        carrier = " ".join((carrier or "").split())[:SHIP_TEXT_MAX]
+        if method not in dict(SHIP_METHODS):
+            raise UserError(_("Chọn cách gửi hàng."))
+        carrier = " ".join((carrier or "").split())[:SHIP_TEXT_MAX] if method == "cpn" else ""
         ref = " ".join((ref or "").split())[:SHIP_TEXT_MAX]
-        if not ref or (mode == DELIVERY_CHANH and not carrier):
-            raise UserError(_("Nhập tên chành và số xe / SĐT tài xế.") if mode == DELIVERY_CHANH
-                            else _("Nhập mã vận đơn."))
-        if self.hlv_vendor_status == "delivered":
+        if method == "cpn" and not ref:
+            raise UserError(_("Nhập mã vận đơn (hoặc số xe nếu gửi chành)."))
+        if self._hlv_vendor_progress() == "delivered":
             raise UserError(_("Đơn đã giao — không sửa thông tin gửi được nữa."))
-        self.write({"hlv_ship_carrier": carrier or False, "hlv_ship_ref": ref})
-        what = _("Gửi chành") if mode == DELIVERY_CHANH else _("Gửi CPN")
-        body = Markup(_("NCC báo <b>%s</b>: %s — %s.")) % (what, carrier or "—", ref)
+        self.write({"hlv_ship_method": method, "hlv_ship_carrier": carrier or False, "hlv_ship_ref": ref or False})
+        body = Markup(_("NCC báo <b>đã gửi hàng</b>: %s.")) % self._hlv_ship_text()
         if not self._hlv_advance_status("shipped", vendor_partner, body):
-            post_internal(self, body, vendor_partner)  # đã báo gửi từ trước: chỉ cập nhật thông tin
+            # Đã báo gửi từ trước: chỉ cập nhật thông tin — vẫn báo sale biết.
+            post_internal(self, body, vendor_partner)
+            notify_order_status(self)
         return True
 
     def _hlv_check_not_cancelled(self):
@@ -175,16 +196,50 @@ class PurchaseOrder(models.Model):
         self.write({"hlv_vendor_status": status, "hlv_vendor_status_date": fields.Datetime.now()})
         # Ghi chú nội bộ: NCC là follower của đơn mua của họ — đăng "comment" sẽ email ra ngoài.
         post_internal(self, body, author)
+        notify_order_status(self)  # trang /hoi-gia-ncc: popup + chuông cho sale
         return True
+
+    # ------------------------------------------------------------------
+    # Báo NCC: tin trong khung trao đổi của đơn (trang NCC có chuông, tiếng, số chưa đọc sẵn cho tin
+    # bên mua) — đơn xác nhận, đơn hủy, kho đã nhận hàng. Không làm hỏng thao tác của thu mua / kho
+    # nếu báo lỗi: chỉ ghi log.
+    # ------------------------------------------------------------------
+    def _hlv_notify_vendor(self, text):
+        for order in self.sudo().filtered("hlv_vendor_quote_ids"):
+            try:
+                with self.env.cr.savepoint():
+                    post_chat(order, text(order), order.company_id.partner_id, from_vendor=False)
+            except Exception:  # noqa: BLE001 — thông báo phụ, không chặn xác nhận / nhận hàng
+                _logger.exception("Không báo được NCC về đơn mua %s", order.name)
+
+    def button_approve(self, force=False):
+        waiting = self.filtered(lambda o: o.state not in ("purchase", "done"))
+        result = super().button_approve(force=force)
+        waiting.filtered(lambda o: o.state in ("purchase", "done"))._hlv_notify_vendor(lambda o: _(
+            "Đơn mua %(name)s đã xác nhận: %(count)s mặt hàng, %(amount)s sau VAT%(eta)s. Vui lòng chuẩn bị hàng "
+            "và bấm \"Đã đóng gói\" khi xong.",
+            name=o.name, count=len(o.order_line.filtered(lambda l: not l.display_type)),
+            amount=format_vn_number(o.amount_total),
+            eta=_(", hàng về dự kiến %s", local_date_text(o.date_planned, DATE_FMT)) if o.date_planned else "",
+        ))
+        return result
+
+    def button_cancel(self):
+        confirmed = self.filtered(lambda o: o.state in ("purchase", "done"))
+        result = super().button_cancel()
+        confirmed.filtered(lambda o: o.state == "cancel")._hlv_notify_vendor(
+            lambda o: _("Đơn mua %s đã hủy — quý công ty không cần đóng gói / giao hàng cho đơn này.", o.name)
+        )
+        return result
 
     def _hlv_mark_delivered_by_receipt(self):
         """Kho bên mình nhận xong hàng (phiếu nhập đã xác nhận) → đơn tự chuyển "Đã giao" trên trang
         NCC, NCC khỏi bấm. Gọi sau khi xác nhận phiếu nhập (stock.picking._action_done)."""
         for order in self.sudo().filtered(lambda o: o.hlv_vendor_status != "delivered"):
-            if order._hlv_receipts_done():
-                order._hlv_advance_status(
-                    "delivered", self.env.user.partner_id, Markup(_("Kho đã nhận đủ hàng — đơn tự chuyển <b>Đã giao</b>.")),
-                )
+            if order._hlv_receipts_done() and order._hlv_advance_status(
+                "delivered", self.env.user.partner_id, Markup(_("Kho đã nhận đủ hàng — đơn tự chuyển <b>Đã giao</b>.")),
+            ):
+                order._hlv_notify_vendor(lambda o: _("Kho đã nhận đủ hàng đơn %s. Cảm ơn quý công ty!", o.name))
 
 
 class PurchaseOrderLine(models.Model):

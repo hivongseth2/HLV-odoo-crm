@@ -598,7 +598,21 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 .vq-progress-action { padding-top: 14px; border-top: 1px solid var(--vq-line); }
 .vq-progress-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .vq-progress-note { margin: 0; color: var(--vq-muted); }
-.vq-progress-note + .vq-ship-grid { margin-top: 12px; }
+.vq-ship-box { margin-top: 12px; }
+.vq-ship-box > summary { list-style: none; display: inline-block; cursor: pointer; }
+.vq-ship-box > summary::-webkit-details-marker { display: none; }
+.vq-ship-box[open] > summary { display: none; }
+.vq-ship-form { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--vq-line); border-radius: 6px;
+    background: #fafbfc; }
+/* Chọn cách gửi: hai nút liền nhau; ô nhập đổi theo lựa chọn (không cần JS). */
+.vq-seg { display: inline-flex; width: max-content; border: 1px solid var(--vq-line-strong); border-radius: 6px; overflow: hidden; }
+.vq-seg label { display: flex; align-items: center; padding: 7px 14px; font-size: .86rem; cursor: pointer; background: #fff; }
+.vq-seg label + label { border-left: 1px solid var(--vq-line-strong); }
+.vq-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.vq-seg label:has(input:checked) { background: var(--vq-accent); color: #fff; font-weight: 600; }
+.vq-seg label:has(input:focus-visible) { outline: 2px solid var(--vq-accent); outline-offset: 2px; }
+.vq-ship-form:has(input[value="self"]:checked) .vq-if-cpn { display: none; }
+.vq-ship-form:has(input[value="cpn"]:checked) .vq-if-self { display: none; }
 .vq-progress-cancel { padding: 10px 14px; border-radius: 6px; background: #f3f4f6; color: #4b5563; }
 /* Thông tin gửi: nhãn trên, ô nhập cùng một hàng, nút thẳng mép dưới ô. */
 .vq-ship-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px;

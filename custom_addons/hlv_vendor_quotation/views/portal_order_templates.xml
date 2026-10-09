@@ -33,7 +33,6 @@
                             <th>Ngày đặt</th>
                             <th>Hàng về dự kiến</th>
                             <th>Giao hàng</th>
-                            <th>Thanh toán</th>
                             <th class="vq-num">Tổng tiền</th>
                             <th>Tiến độ</th>
                             <th></th>
@@ -59,7 +58,6 @@
                             <td data-label="Ngày đặt" t-esc="fdate(order.date_approve or order.date_order)"/>
                             <td data-label="Hàng về dự kiến" t-esc="fdate(order.date_planned) or '—'"/>
                             <td data-label="Giao hàng" class="vq-cell-term" t-esc="info['delivery_term'] or '—'"/>
-                            <td data-label="Thanh toán" class="vq-cell-term" t-esc="info['payment_term'] or '—'"/>
                             <td class="vq-num vq-cell-amount" data-label="Tổng tiền">
                                 <b t-esc="fmt(order.amount_total)"/>
                                 <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(order.amount_untaxed)"/></div>
@@ -74,14 +72,13 @@
                                     <input type="hidden" name="next" t-att-value="next_url"/>
                                     <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
                                 </form>
-                                <button t-elif="info['progress'] == 'packed' and info['ship_mode']" type="button"
-                                        class="vq-btn vq-btn-primary" t-att-data-quick-toggle="order.id"
-                                        t-esc="'Báo đã gửi chành' if info['ship_mode'] == 'chanh' else 'Báo đã gửi CPN'"/>
+                                <button t-elif="info['progress'] == 'packed'" type="button"
+                                        class="vq-btn vq-btn-secondary" t-att-data-quick-toggle="order.id">Báo đã gửi hàng</button>
                                 <a t-else="" t-att-href="order_url" class="vq-btn vq-btn-secondary">Xem</a>
                             </td>
                         </tr>
                         <tr class="vq-quick-row" t-att-data-quick-row="order.id" hidden="hidden">
-                            <td colspan="8" class="vq-quick-cell">
+                            <td colspan="7" class="vq-quick-cell">
                                 <t t-call="hlv_vendor_quotation.portal_order_quick"/>
                             </td>
                         </tr>
@@ -115,7 +112,8 @@
                 </table>
             </div>
             <div class="vq-quick-progress">
-                <t t-call="hlv_vendor_quotation.portal_order_progress"/>
+                <!-- Mở xem nhanh là để cập nhật: khung "Báo đã gửi hàng" mở sẵn. -->
+                <t t-call="hlv_vendor_quotation.portal_order_progress"><t t-set="ship_open" t-value="True"/></t>
             </div>
             <div class="vq-quick-foot">
                 <span class="vq-quick-requester">
@@ -145,13 +143,13 @@
         </tr>
     </template>
 
-    <!-- Tiến độ đơn: thanh các bước + đúng MỘT việc NCC cần làm lúc này (đóng gói → báo thông tin gửi
-         nếu đơn gửi CPN / chành). "Đã giao" tự chuyển khi kho bên mua nhận đủ hàng.
-         Biến vào: order, info, order_url; tuỳ chọn: next_url (về lại danh sách), from_quote, post. -->
+    <!-- Tiến độ đơn: thanh các bước + đúng MỘT việc NCC cần làm lúc này. Báo đã gửi hàng thu gọn sau
+         một nút (bấm mới hiện ô nhập): gửi CPN / chành (cần mã vận đơn / số xe) hay NCC tự vận chuyển.
+         "Đã giao" tự chuyển khi kho bên mua nhận đủ hàng. Biến vào: order, info, order_url; tuỳ chọn:
+         next_url (về lại danh sách), from_quote, post, ship_open (mở sẵn khung báo gửi). -->
     <template id="portal_order_progress" name="Báo giá NCC - tiến độ đơn mua">
         <t t-set="progress" t-value="info['progress']"/>
-        <t t-set="ship_mode" t-value="info['ship_mode']"/>
-        <t t-set="steps" t-value="['waiting', 'packed'] + (['shipped'] if ship_mode else []) + ['delivered']"/>
+        <t t-set="steps" t-value="['waiting', 'packed'] + (['shipped'] if info['ship_mode'] or progress == 'shipped' else []) + ['delivered']"/>
         <t t-set="current" t-value="steps.index(progress) if progress in steps else len(steps)"/>
         <div t-if="progress == 'cancel'" class="vq-progress-cancel">Đơn đã hủy — quý công ty không cần đóng gói / giao hàng.</div>
         <t t-else="">
@@ -162,48 +160,53 @@
                 </li>
             </ol>
             <div class="vq-progress-action">
-                <t t-if="progress == 'waiting'">
-                    <form method="post" class="vq-progress-row" t-att-action="order_url">
-                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                        <input t-if="next_url" type="hidden" name="next" t-att-value="next_url"/>
-                        <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
-                        <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
-                        <span class="vq-muted vq-small" t-esc="'Đóng gói xong, bước sau: báo thông tin gửi.' if ship_mode else 'Bấm khi hàng đã đóng gói xong.'"/>
-                    </form>
-                </t>
-                <t t-elif="progress in ('packed', 'shipped') and ship_mode">
-                    <p t-if="progress == 'shipped'" class="vq-progress-note">Đã gửi:
-                        <b><t t-esc="order.hlv_ship_carrier or ''"/> <t t-esc="order.hlv_ship_ref"/></b> — sửa bên dưới nếu cần.</p>
-                    <form method="post" enctype="multipart/form-data" class="vq-ship-grid" t-att-action="order_url">
-                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                        <input t-if="next_url" type="hidden" name="next" t-att-value="next_url"/>
-                        <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
-                        <input type="hidden" name="ship" value="1"/>
-                        <label class="vq-ship-field">
-                            <span class="vq-label" t-esc="'Tên chành / nhà xe' if ship_mode == 'chanh' else 'Hãng CPN'"/>
-                            <input type="text" name="carrier" class="vq-input" maxlength="120"
-                                   t-att-required="ship_mode == 'chanh'"
-                                   t-att-placeholder="'VD Chành Phương Trang' if ship_mode == 'chanh' else 'VD Viettel Post (không bắt buộc)'"
-                                   t-att-value="post.get('carrier') if post else (order.hlv_ship_carrier or '')"/>
-                        </label>
-                        <label class="vq-ship-field">
-                            <span class="vq-label" t-esc="'Số xe / SĐT tài xế' if ship_mode == 'chanh' else 'Mã vận đơn'"/>
-                            <input type="text" name="ref" class="vq-input" maxlength="120" required="required"
-                                   t-att-placeholder="'VD 51B-123.45 · 0909 xxx xxx' if ship_mode == 'chanh' else 'Mã trên phiếu gửi'"
-                                   t-att-value="post.get('ref') if post else (order.hlv_ship_ref or '')"/>
-                        </label>
-                        <label class="vq-ship-field">
-                            <span class="vq-label">Ảnh phiếu gửi (không bắt buộc)</span>
-                            <input type="file" name="attachments" multiple="multiple" accept="image/*,.pdf" class="vq-file"/>
-                        </label>
-                        <button type="submit" class="vq-btn vq-btn-primary"
-                                t-esc="'Cập nhật' if progress == 'shipped' else ('Đã gửi chành' if ship_mode == 'chanh' else 'Đã gửi CPN')"/>
-                    </form>
-                </t>
+                <form t-if="progress == 'waiting'" method="post" class="vq-progress-row" t-att-action="order_url">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input t-if="next_url" type="hidden" name="next" t-att-value="next_url"/>
+                    <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                    <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
+                    <span class="vq-muted vq-small">Bấm khi hàng đã đóng gói xong.</span>
+                </form>
                 <p t-elif="progress == 'delivered'" class="vq-progress-note">Kho <t t-esc="company.name"/> đã nhận hàng —
                     đơn đã giao xong. Cảm ơn quý công ty!</p>
-                <p t-else="" class="vq-progress-note">Chờ kho <t t-esc="company.name"/> nhận hàng — nhận xong đơn tự chuyển
-                    "Đã giao", quý công ty không cần bấm.</p>
+                <t t-else="">
+                    <p class="vq-progress-note">
+                        <t t-if="progress == 'shipped'">Đã gửi hàng: <b t-esc="info['ship_text']"/>. </t>
+                        Kho <t t-esc="company.name"/> nhận hàng xong, đơn tự chuyển "Đã giao".
+                    </p>
+                    <t t-set="method" t-value="(post.get('method') if post else order.hlv_ship_method) or ('cpn' if info['ship_mode'] else 'self')"/>
+                    <details class="vq-ship-box" t-att-open="bool(post or ship_open) or None">
+                        <summary t-attf-class="vq-btn #{'vq-btn-secondary' if progress == 'shipped' else 'vq-btn-primary'}"
+                                 t-esc="'Sửa thông tin gửi' if progress == 'shipped' else 'Báo đã gửi hàng'"/>
+                        <form method="post" enctype="multipart/form-data" class="vq-ship-form" t-att-action="order_url">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input t-if="next_url" type="hidden" name="next" t-att-value="next_url"/>
+                            <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                            <input type="hidden" name="ship" value="1"/>
+                            <div class="vq-seg" role="radiogroup" aria-label="Cách gửi hàng">
+                                <label><input type="radio" name="method" value="cpn" t-att-checked="method == 'cpn'"/>Gửi CPN / chành</label>
+                                <label><input type="radio" name="method" value="self" t-att-checked="method == 'self'"/>NCC tự vận chuyển</label>
+                            </div>
+                            <div class="vq-ship-grid">
+                                <label class="vq-ship-field vq-if-cpn">
+                                    <span class="vq-label">Hãng CPN / chành <span class="vq-muted">(tuỳ chọn)</span></span>
+                                    <input type="text" name="carrier" class="vq-input" maxlength="120" placeholder="VD Viettel Post"
+                                           t-att-value="post.get('carrier') if post else (order.hlv_ship_carrier or '')"/>
+                                </label>
+                                <label class="vq-ship-field">
+                                    <span class="vq-label"><span class="vq-if-cpn">Mã vận đơn / số xe</span><span class="vq-if-self">Người giao · SĐT · biển số <span class="vq-muted">(tuỳ chọn)</span></span></span>
+                                    <input type="text" name="ref" class="vq-input" maxlength="120"
+                                           t-att-value="post.get('ref') if post else (order.hlv_ship_ref or '')"/>
+                                </label>
+                                <label class="vq-ship-field">
+                                    <span class="vq-label">Ảnh phiếu gửi <span class="vq-muted">(tuỳ chọn)</span></span>
+                                    <input type="file" name="attachments" multiple="multiple" accept="image/*,.pdf" class="vq-file"/>
+                                </label>
+                                <button type="submit" class="vq-btn vq-btn-primary">Gửi</button>
+                            </div>
+                        </form>
+                    </details>
+                </t>
             </div>
         </t>
     </template>
@@ -233,11 +236,9 @@
                 <dl class="vq-facts">
                     <div><dt>Ngày đặt</dt><dd t-esc="fdate(order.date_approve or order.date_order)"/></div>
                     <!-- Datetime lưu UTC — fdate đổi sang giờ VN (00:00 ngày 08 giờ VN không bị in thành ngày 07). -->
-                    <div t-if="order.date_planned"><dt>Hàng về dự kiến</dt>
-                        <dd t-esc="fdate(order.date_planned, datetime_fmt)"/></div>
+                    <div t-if="order.date_planned"><dt>Hàng về dự kiến</dt><dd t-esc="fdate(order.date_planned)"/></div>
                     <div t-if="info['delivery_term']"><dt>Phương thức giao hàng</dt><dd t-esc="info['delivery_term']"/></div>
                     <div t-if="info['delivery_place']"><dt>Địa điểm giao hàng</dt><dd class="vq-pre" t-esc="info['delivery_place']"/></div>
-                    <div t-if="info['payment_term']"><dt>Điều kiện thanh toán</dt><dd t-esc="info['payment_term']"/></div>
                     <div t-if="quotes"><dt>Từ báo giá</dt>
                         <dd><a t-foreach="quotes" t-as="quote" class="vq-block-link"
                                t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/></dd></div>
@@ -268,9 +269,9 @@
                 </table>
 
                 <dl class="vq-summary vq-summary-inline">
-                    <div class="vq-summary-total"><dt>Tổng sau VAT</dt><dd t-esc="fmt(order.amount_total)"/></div>
-                    <div><dt>Chưa VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
-                    <div><dt>Thuế VAT</dt><dd t-esc="fmt(order.amount_tax)"/></div>
+                    <div><dt>Trước VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
+                    <div><dt>VAT</dt><dd t-esc="fmt(order.amount_tax)"/></div>
+                    <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
                 </dl>
                 <t t-call="hlv_vendor_quotation.portal_chat"/>
             </div>
