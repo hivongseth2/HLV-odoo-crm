@@ -146,11 +146,11 @@
                                             <div id="hq-prod-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
                                         <div class="col-md-6 hq-picker">
-                                            <label class="form-label small mb-1" for="hq-so-search">
-                                                Lấy hàng từ đơn bán (không bắt buộc)</label>
-                                            <input type="search" id="hq-so-search" class="hq-input w-100" autocomplete="off"
-                                                   placeholder="Số đơn, khách, mã sale…"/>
-                                            <div id="hq-so-results" class="hq-dropdown hq-hidden"></div>
+                                            <label class="form-label small mb-1" for="hq-opp-search">
+                                                Lấy hàng từ cơ hội MISA CRM (không bắt buộc)</label>
+                                            <input type="search" id="hq-opp-search" class="hq-input w-100" autocomplete="off"
+                                                   placeholder="Số cơ hội (VD CH0042467), tên khách…"/>
+                                            <div id="hq-opp-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
                                     </div>
                                     <div id="hq-crm-results" class="hq-share hq-crm-box hq-hidden"></div>
@@ -169,7 +169,7 @@
                                         </div>
                                         <div id="hq-paste-result"></div>
                                     </div>
-                                    <div id="hq-req-chip" class="hq-chip-row"></div>
+                                    <div id="hq-opp-chip" class="hq-chip-row hq-opp-chip"></div>
                                     <div id="hq-lines"></div>
                                 </section>
 

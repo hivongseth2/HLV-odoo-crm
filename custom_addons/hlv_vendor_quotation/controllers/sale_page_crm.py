@@ -12,7 +12,8 @@ from odoo.http import request
 
 from ..models.paste_utils import parse_paste_line, pick_best, score_product_match
 from ..services import sale_page_payload as payload
-from .sale_page_common import API, SalePageMixin
+from ..services.crm_opportunity import opportunity_lines
+from .sale_page_common import API, SalePageMixin, to_int
 
 # Mỗi dòng dán là 1–2 lần gọi CRM (~1 giây) — chặn trên để trang không treo lâu.
 CRM_ROWS_MAX = 30
@@ -72,6 +73,20 @@ class VendorQuoteSalePageCrm(SalePageMixin, http.Controller):
                     "product": payload.product_payload(product.with_env(request.env)),
                 })
         return {"results": results}
+
+    @http.route(f"{API}/crm_opportunities", type="json", auth="user", methods=["POST"])
+    def api_crm_opportunities(self, search="", **kw):
+        """Cơ hội trên MISA CRM theo số cơ hội / tên / khách hàng (ô "Lấy hàng từ cơ hội CRM")."""
+        self._check()
+        return {"opportunities": self._misa().crm_search_opportunities((search or "")[:100])}
+
+    @http.route(f"{API}/crm_opportunity_lines", type="json", auth="user", methods=["POST"])
+    def api_crm_opportunity_lines(self, opportunity_id=None, **kw):
+        """Hàng của một cơ hội CRM, ghép sẵn sản phẩm Odoo (product = None: Odoo chưa có mã)."""
+        self._check()
+        if not to_int(opportunity_id):
+            raise UserError("Chưa chọn cơ hội.")
+        return {"lines": opportunity_lines(request.env, self._misa().crm_opportunity_products(to_int(opportunity_id)))}
 
     def _misa(self):
         return request.env["misa.api.utils"].sudo()

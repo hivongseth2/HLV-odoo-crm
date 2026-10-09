@@ -37,7 +37,6 @@ window.HlvQuote = window.HlvQuote || {};
   };
 
   HQ.openCreate = function () {
-    C.saleOrder = null;
     C.lines = [];
     var vendor = S.vendors.find(function (v) { return v.id === S.vendorId; });
     C.chosen = vendor ? [{ id: vendor.id, name: vendor.name }] : [];
@@ -48,6 +47,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
     HQ.$("hq-opportunity").value = "";
+    HQ.resetOpportunityPick();
     HQ.show("hq-crm-results", false);
     renderCodePicker();
     HQ.$("hq-modal-title").textContent = "Hỏi giá nhà cung cấp";
@@ -76,7 +76,6 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   function renderAll() {
-    renderSourceChip();
     renderLines();
     renderChosen();
     renderSuggestions();
@@ -84,27 +83,6 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   /* ---------------- Sản phẩm ---------------- */
-
-  function pickSaleOrder(order) {
-    HQ.rpc("/api/hoi-gia-ncc/sale_order_lines", { order_id: order.id }).then(function (res) {
-      C.saleOrder = res.order;
-      res.lines.forEach(function (line) { C.lines = HQ.mergeLine(C.lines, line); });
-      if (!res.lines.length) {
-        HQ.toast("Đơn này không có mặt hàng mua được");
-      }
-      renderAll();
-      refreshSuggestions();
-    }).catch(function (err) { HQ.toast(err.message); });
-  }
-
-  function renderSourceChip() {
-    HQ.$("hq-req-chip").innerHTML = C.saleOrder
-      ? '<span class="hq-chip hq-chip-blue">Đơn bán ' + esc(C.saleOrder.name) +
-        (C.saleOrder.partner ? " · " + esc(C.saleOrder.partner) : "") +
-        '<button type="button" class="hq-chip-x" data-unlink-order="1" title="Bỏ gắn đơn bán">×</button></span>' +
-        '<span class="hq-muted">Phiếu gắn đơn này; khi lên YCMH vẫn đổi được.</span>'
-      : "";
-  }
 
   function renderLines() {
     HQ.$("hq-lines").innerHTML = C.lines.length
@@ -249,7 +227,6 @@ window.HlvQuote = window.HlvQuote || {};
       vendor_ids: C.chosen.map(function (v) { return v.id; }),
       reuse: reuse,
       request_now: allReused(),
-      sale_order_id: C.saleOrder ? C.saleOrder.id : null,
       deadline: HQ.$("hq-deadline").value,
       note: HQ.$("hq-note").value,
       opportunity_ref: HQ.$("hq-opportunity").value,
@@ -305,13 +282,6 @@ window.HlvQuote = window.HlvQuote || {};
   /* ---------------- Nối sự kiện ---------------- */
 
   HQ.bindCreateEvents = function () {
-    HQ.bindPicker("hq-so-search", "hq-so-results", function (term) {
-      return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term }).then(function (r) { return r.orders; });
-    }, function (o) {
-      return '<span class="hq-strong">' + esc(o.name) + "</span> " +
-        '<span class="hq-muted">' + esc([o.partner, HQ.saleName(o.sale_code), o.date].filter(Boolean).join(" · ")) + "</span>";
-    }, pickSaleOrder);
-
     // Dòng cuối luôn là "tìm trên MISA CRM": hàng CRM có mà Odoo chưa có (sale_crm_product.js).
     HQ.bindPicker("hq-prod-search", "hq-prod-results", function (term) {
       return HQ.rpc("/api/hoi-gia-ncc/products", { search: term }).then(function (r) {
@@ -376,10 +346,6 @@ window.HlvQuote = window.HlvQuote || {};
       // Đổi số lượng có thể làm giá đang dùng lại hết hợp lệ (vượt số NCC đã báo) — vẽ lại.
       renderLines();
       renderSummary();
-    });
-    HQ.on(modal, "click", "[data-unlink-order]", function () {
-      C.saleOrder = null;
-      renderSourceChip();
     });
     HQ.on(modal, "click", "[data-suggest]", function (el) {
       var id = +el.dataset.suggest;
