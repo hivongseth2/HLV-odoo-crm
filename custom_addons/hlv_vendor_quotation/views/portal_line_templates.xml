@@ -46,8 +46,7 @@
                         <div>
                             <h2><t t-esc="len(lines)"/> mặt hàng · <t t-esc="len(quote_info)"/> yêu cầu báo giá</h2>
                             <p class="vq-small vq-muted">Điền giá những mặt hàng có thể báo rồi bấm Gửi. Yêu cầu nào
-                                chưa điền thì để trống, báo sau. Cột "Phiếu": rê chuột xem hạn, người hỏi giá; bấm để
-                                mở riêng phiếu đó.</p>
+                                chưa điền thì để trống, báo sau. Bấm số phiếu để mở riêng phiếu đó.</p>
                             <t t-call="hlv_vendor_quotation.portal_grid_legend"/>
                         </div>
                         <t t-call="hlv_vendor_quotation.portal_grid_tools"/>
