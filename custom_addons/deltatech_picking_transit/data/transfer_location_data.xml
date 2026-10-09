@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tạo vị trí CHUYENKHO (ngang Tồn kho) cho mọi kho, chạy mỗi lần nâng cấp; đã có thì bỏ qua -->
+    <function model="stock.warehouse" name="_hlv_ensure_transfer_locations"/>
+</odoo>

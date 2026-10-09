@@ -9,6 +9,7 @@
         <field name="is_transit_transfer" invisible="1"/>
         <field name="sub_location_existent" invisible="1"/>
         <field name="create_second_transfer_automatically" invisible="1"/>
+        <field name="hlv_allow_transfer_location" invisible="1"/>
         <button name="reassign_location"
                 type="object"
                 string="Phân bổ lại vị trí"

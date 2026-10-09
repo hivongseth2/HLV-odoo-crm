@@ -1,11 +1,11 @@
 {
     'name': 'HLV Sale Delivery Planning',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.0.1',
     'summary': 'Điều phối giao hàng: Bán hàng -> Mua hàng',
     'description': 'Dashboard trực quan bằng OWL quản lý kế hoạch giao hàng từ đơn bán và tiến độ hàng từ đơn mua.',
     'category': 'Sales',
     'author': 'HLV',
-    'depends': ['sale_management', 'purchase_stock', 'bus', 'iot', 'mail'],
+    'depends': ['sale_management', 'purchase_stock', 'bus', 'iot', 'mail', 'deltatech_picking_transit'],
     'external_dependencies': {
         'python': ['bs4'],
     },

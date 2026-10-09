@@ -30,8 +30,11 @@ class MisaTransferFetch(models.TransientModel):
                 return wh2.int_type_id
         return False
 
-    # ===== Helper: lấy Transit Location chuẩn =====
-    def _get_transit_location(self):
+    # ===== Helper: đích phiếu 1 =====
+    def _get_transit_location(self, from_loc):
+        """CHUYENKHO của kho nguồn; nguồn không thuộc kho nào thì dùng Transit cũ."""
+        if from_loc.warehouse_id:
+            return from_loc.warehouse_id._hlv_get_transfer_location()
         Location = self.env['stock.location']
         # Ưu tiên đúng đường dẫn bạn muốn
         transit = Location.search([
@@ -96,7 +99,6 @@ class MisaTransferFetch(models.TransientModel):
         }
         default_location_path = "Partners/Vendors"
 
-        transit_loc = self._get_transit_location()  # dùng 1 lần cho toàn batch
 
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},"
@@ -168,7 +170,7 @@ class MisaTransferFetch(models.TransientModel):
                 if not lines:
                     continue
 
-                # gom theo (from_location_id, dest_warehouse) — ĐÍCH lúc tạo phiếu 1 luôn là TRANSIT
+                # gom theo (from_location_id, dest_warehouse) — ĐÍCH phiếu 1 là CHUYENKHO của kho nguồn
                 grouped = {}  # key: (from_location_id, to_wh_id or None) -> [lines]
                 for ln in lines:
                     from_code = str(ln.get("from_stock_code", "")).strip().upper()
@@ -194,16 +196,17 @@ class MisaTransferFetch(models.TransientModel):
                     picking_type = self._get_internal_picking_type_for_location(from_loc)
                     if not picking_type:
                         continue
+                    transit_loc = self._get_transit_location(from_loc)
 
                     # partner: lấy partner của KHO ĐÍCH (để module auto tạo phiếu 2)
                     partner_id = dest_wh.partner_id.id if dest_wh and dest_wh.partner_id else False
 
-                    # PHIẾU 1: từ kho nguồn -> TRANSIT (KHÔNG đổ thẳng kho đích)
+                    # PHIẾU 1: từ kho nguồn -> CHUYENKHO của kho nguồn (KHÔNG đổ thẳng kho đích)
                     picking = self.env['stock.picking'].search([
                         ('name', '=', ref_info.get('refno_finance', '')),
                         ('picking_type_id', '=', picking_type.id),
                         ('location_id', '=', from_id),
-                        ('location_dest_id', '=', transit_loc.id),
+                        # không lọc theo đích: phiếu cũ đi Transit, phiếu mới đi CHUYENKHO
                     ], limit=1)
 
                     if not picking:

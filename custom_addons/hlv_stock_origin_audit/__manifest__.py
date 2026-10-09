@@ -1,6 +1,6 @@
 {
     "name": "HLV Stock Origin Audit",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.0.1",
     "category": "Inventory/Inventory",
     "summary": "Điều tra nguồn gốc tồn kho: hàng đang nằm ở vị trí này từ đâu ra",
     "description": """
@@ -15,7 +15,7 @@
         - Quét cả kho để tìm sẵn các trường hợp như vậy.
     """,
     "author": "HLV",
-    "depends": ["stock", "web", "hlv_stock_trace"],
+    "depends": ["stock", "web", "hlv_stock_trace", "deltatech_picking_transit"],
     "data": [
         "security/ir.model.access.csv",
         "views/stock_origin_audit_views.xml",

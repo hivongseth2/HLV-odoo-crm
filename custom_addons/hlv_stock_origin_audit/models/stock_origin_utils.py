@@ -62,7 +62,7 @@ ANOMALY_META = {
     "ton_dong_trung_chuyen": {
         "label": "Tồn đọng ở vị trí trung chuyển",
         "severity": SEV_WARN,
-        "explain": "Vị trí này (Input/QC/Đóng gói/Output) chỉ để hàng đi ngang qua. "
+        "explain": "Vị trí này (Input/QC/Đóng gói/Output/CHUYENKHO/Transit) chỉ để hàng đi ngang qua. "
                    "Hàng nằm lại lâu nghĩa là một phiếu đã dở dang hoặc bị bỏ quên.",
     },
     "ton_am": {

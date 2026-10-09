@@ -123,6 +123,7 @@ class HlvStockQuick(models.TransientModel):
                         ("id", "child_of", wh.wh_output_stock_loc_id.id),
                     ])
                     all_loc_ids.extend(out_locs.ids)
+                all_loc_ids.extend(self.env["stock.location"].search([("hlv_is_transfer_location", "=", True), ("warehouse_id", "=", wh.id)]).ids)
             all_loc_ids = list(set(all_loc_ids))
         else:
             all_loc_ids = self.env["stock.location"].search([("usage", "=", "internal")]).ids
