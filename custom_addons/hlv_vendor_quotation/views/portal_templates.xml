@@ -45,6 +45,7 @@
                 </footer>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_number.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_price.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_stock.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_form.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_grid.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_quote_list.js?v=#{asset_version}"></script>

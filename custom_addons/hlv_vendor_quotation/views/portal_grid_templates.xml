@@ -184,6 +184,7 @@
             </td>
             <td class="vq-col-avail" data-label="Sẵn hàng">
                 <input type="checkbox" value="1" data-vq-instock="1" t-att-name="'instock_%s' % lid"
+                       t-att-data-note="'note_%s' % lid"
                        t-att-checked="in_stock and not na_checked" t-att-disabled="not line_editable"
                        t-att-aria-label="'Sẵn hàng — %s' % product_name"
                        title="Có sẵn trong kho — ghi chú của dòng thêm &quot;Sẵn hàng&quot;"/>
@@ -197,8 +198,8 @@
             <td class="vq-col-text" data-label="Ghi chú">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
                        t-att-name="'note_%s' % lid" placeholder="hãng, xuất xứ…"
-                       t-att-value="post.get('note_%s' % lid) if post else saved_note[1]"/>
-                <span t-else="" class="vq-cell-text" t-esc="saved_note[1]"/>
+                       t-att-value="post.get('note_%s' % lid) if post else stock_note(in_stock and not na_checked, saved_note[1])"/>
+                <span t-else="" class="vq-cell-text" t-esc="line.vendor_note or ''"/>
             </td>
         </tr>
     </template>

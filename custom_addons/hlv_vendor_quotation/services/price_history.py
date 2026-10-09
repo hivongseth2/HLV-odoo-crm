@@ -50,6 +50,7 @@ def _line_payload(line, today):
         "delivery_days": line.delivery_days,
         "date": display_time(quote.submit_date),
         "doc": inquiry.name or quote.name,
+        "opportunity_ref": inquiry.opportunity_ref or "",
         "sale_code": inquiry.sale_code or "",
         "chosen": line.selected,
     }
@@ -57,7 +58,8 @@ def _line_payload(line, today):
 
 def quoted_prices(env, product_ids=None, search=""):
     """[{product_id, product, prices: [..mới nhất trước]}] — theo product_ids, hoặc theo chữ
-    tìm (mã / tên sản phẩm). Chỉ giá thật: NCC đã gửi, có đơn giá, không báo hết hàng.
+    tìm (mã / tên sản phẩm, hoặc số cơ hội của phiếu hỏi giá — cùng ô tìm với danh sách phiếu).
+    Chỉ giá thật: NCC đã gửi, có đơn giá, không báo hết hàng.
     Không có điều kiện nào → []."""
     if not product_ids and not search:
         return []
@@ -72,7 +74,10 @@ def quoted_prices(env, product_ids=None, search=""):
     if product_ids:
         domain.append(("product_id", "in", list(product_ids)))
     if search:
-        domain += ["|", ("product_id.default_code", "ilike", search), ("product_id.name", "ilike", search)]
+        domain += [
+            "|", "|", ("product_id.default_code", "ilike", search), ("product_id.name", "ilike", search),
+            ("inquiry_line_id.inquiry_id.opportunity_ref", "ilike", search),
+        ]
     lines = env["hlv.vendor.quote.line"].sudo().search(domain, order="id desc", limit=SCAN_LIMIT)
     lines = lines.sorted(lambda l: l.quote_id.submit_date or l.create_date, reverse=True)
     today = env["hlv.vendor.quote"]._vendor_today()
