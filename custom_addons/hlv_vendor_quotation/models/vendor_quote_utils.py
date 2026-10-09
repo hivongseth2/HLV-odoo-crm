@@ -131,6 +131,32 @@ def split_code_name(name, code):
 
 
 REF_MAX = 64
+IN_STOCK_NOTE = "Sẵn hàng"
+_IN_STOCK_SEP = "; "
+
+
+def split_stock_note(note):
+    """Ghi chú dòng NCC → (có "Sẵn hàng" ở đầu không, phần ghi chú còn lại).
+
+    Nhận chuỗi hoặc None. "Sẵn hàng; hàng chính hãng" → (True, "hàng chính hãng"); "sẵn hàng" →
+    (True, ""); "giao 3 ngày" → (False, "giao 3 ngày"); None / "" → (False, "").
+    """
+    text = (note or "").strip()
+    head = text[:len(IN_STOCK_NOTE)]
+    if head.casefold() != IN_STOCK_NOTE.casefold():
+        return False, text
+    rest = text[len(IN_STOCK_NOTE):]
+    if rest and rest[0] not in ";,.-: ":
+        return False, text  # "Sẵn hàngxyz" không phải nhãn
+    return True, rest.lstrip(";,.-: ").strip()
+
+
+def stock_note(in_stock, note, max_len=255):
+    """Ghép ghi chú dòng NCC: thêm "Sẵn hàng" ở đầu khi NCC tick ô "Sẵn hàng" (sale đọc ngay ở bảng so
+    giá), bỏ nhãn đó khi không tick. Nhận bool + chuỗi (có thể đã có nhãn); trả chuỗi tối đa max_len."""
+    rest = split_stock_note(note)[1]
+    text = (IN_STOCK_NOTE + (_IN_STOCK_SEP + rest if rest else "")) if in_stock else rest
+    return text[:max_len]
 
 
 def clean_ref(text):
