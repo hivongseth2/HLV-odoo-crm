@@ -538,3 +538,24 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 .vq-tel { display: block; font-weight: 600; text-decoration: none; font-variant-numeric: tabular-nums; }
 .vq-quick-requester { margin-right: auto; color: var(--vq-muted); }
 .vq-quick-requester b { color: var(--vq-text); }
+
+/* --- Báo giá theo mặt hàng: cột "Phiếu" cho biết hàng thuộc yêu cầu nào --- */
+.vq-board-alert { margin-top: 16px; }
+.vq-grid-board { min-width: 1180px; }
+.vq-disc-on .vq-grid-board { min-width: 1240px; }
+.vq-grid .vq-col-quote { width: 118px; line-height: 1.25; }
+.vq-quote-ref { color: var(--vq-accent); font-size: .78rem; font-weight: 600; text-decoration: none; }
+.vq-quote-ref:hover { text-decoration: underline; }
+.vq-quote-meta { display: flex; align-items: center; gap: 6px; }
+.vq-quote-date { color: var(--vq-muted); font-size: .7rem; }
+.vq-quote-urgent .vq-quote-date { color: var(--vq-danger); font-weight: 600; }
+.vq-chip-note { background: #fdf3e1; color: #8a5a00; }
+/* Dòng bị báo thiếu giá / VAT khi gửi. */
+.vq-price-table tr.vq-line-error td { background: #fef2f2; }
+@media (max-width: 760px) {
+    .vq-grid-board, .vq-disc-on .vq-grid-board { min-width: 0; }
+    .vq-grid .vq-col-quote { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+    .vq-grid td.vq-col-quote::before { display: inline; margin: 0; }
+    .vq-price-table tr.vq-line-error { border-color: #fca5a5; background: #fef2f2; }
+    .vq-price-table tr.vq-line-error td { background: transparent; }
+}
