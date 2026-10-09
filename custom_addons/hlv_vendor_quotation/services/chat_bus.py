@@ -14,6 +14,7 @@ khách chưa đăng nhập. Nên:
 from odoo.addons.bus.websocket import WebsocketConnectionHandler
 
 BUS_TYPE = "hlv_vq_chat"
+QUOTED_TYPE = "hlv_vq_quoted"
 SALE_ALL_CHANNEL = "hlv_vq_sale_all"
 
 
@@ -31,6 +32,30 @@ def sale_channel(env, code):
     if not code:
         return SALE_ALL_CHANNEL
     return f"hlv_vq_sale_{env['stock.picking']._misa_invoice_saler_code_token(code)}"
+
+
+def sale_channels(env, inquiries):
+    """Kênh bên sale nhận tin về các phiếu hỏi giá: kênh "tất cả" (thu mua) + kênh mã sale của phiếu."""
+    return {SALE_ALL_CHANNEL} | {sale_channel(env, c) for c in inquiries.mapped("sale_code") if c}
+
+
+def notify_quoted(quote, resubmitted):
+    """Báo trang sale: NCC vừa gửi / cập nhật báo giá (chuông + popup + tiếng). Báo giá không
+    thuộc phiếu hỏi giá (luồng thu mua hỏi từ YCMH) thì không có trang sale nào để báo."""
+    quote = quote.sudo()
+    if not quote.inquiry_id:
+        return
+    message = {
+        "quote_id": quote.id,
+        "name": quote.name,
+        "vendor": quote.partner_id.commercial_partner_id.display_name,
+        "inquiry_id": quote.inquiry_id.id,
+        "inquiry_name": quote.inquiry_id.name,
+        "resubmitted": resubmitted,
+    }
+    bus = quote.env["bus.bus"].sudo()
+    for channel in sale_channels(quote.env, quote.inquiry_id):
+        bus._sendone(channel, QUOTED_TYPE, message)
 
 
 def notify_chat(record, author_name, from_vendor):
@@ -58,8 +83,7 @@ def notify_chat(record, author_name, from_vendor):
         "from_vendor": from_vendor,
     }
     notifications = [
-        (channel, BUS_TYPE, dict(base, inquiry_ids=inquiries.ids))
-        for channel in {SALE_ALL_CHANNEL} | {sale_channel(env, c) for c in inquiries.mapped("sale_code") if c}
+        (channel, BUS_TYPE, dict(base, inquiry_ids=inquiries.ids)) for channel in sale_channels(env, inquiries)
     ]
     if not from_vendor:
         notifications += [(vendor_channel(access), BUS_TYPE, base) for access in accesses]

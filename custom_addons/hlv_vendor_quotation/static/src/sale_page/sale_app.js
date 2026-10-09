@@ -1,7 +1,7 @@
 /* Khởi động trang /hoi-gia-ncc. Phải nạp SAU các file feature vì gọi HQ.loadVendors,
    HQ.loadInquiries, HQ.openInquiry, HQ.openCreate, HQ.bindCreateEvents, HQ.bindCompareEvents,
    HQ.bindChatEvents, HQ.bindOrderViewEvents, HQ.bindOriginEvents, HQ.bindVendorInfoEvents,
-   HQ.bindCloseEvents, HQ.bindAddVendorEvents, HQ.bindPriceHistoryEvents, HQ.bindPasteEvents, HQ.bindCrmEvents,
+   HQ.bindCloseEvents, HQ.bindBellEvents, HQ.loadBell, HQ.bindAddVendorEvents, HQ.bindPriceHistoryEvents, HQ.bindPasteEvents, HQ.bindCrmEvents,
    HQ.listenBus.
 
    Mã sale lấy từ link riêng ?t=<token> như /misa_sale_status: mỗi sale chỉ có mã của mình
@@ -112,6 +112,7 @@ window.HlvQuote = window.HlvQuote || {};
     renderCodeSelect();
     HQ.syncUrl();
     HQ.listenBus();
+    HQ.loadBell();
     return HQ.reloadAll();
   }
 
@@ -149,6 +150,7 @@ window.HlvQuote = window.HlvQuote || {};
       S.page = 1;
       HQ.syncUrl();
       HQ.listenBus();
+      HQ.loadBell();
       HQ.reloadAll();
     });
     HQ.$("hq-copy-code-link").addEventListener("click", function () {
@@ -183,6 +185,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindOriginEvents();
     HQ.bindVendorInfoEvents();
     HQ.bindCloseEvents();
+    HQ.bindBellEvents();
     HQ.bindAddVendorEvents();
     HQ.bindPriceHistoryEvents();
     HQ.bindPasteEvents();

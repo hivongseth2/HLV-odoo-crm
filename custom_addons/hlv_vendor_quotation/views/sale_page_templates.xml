@@ -20,6 +20,24 @@
                     <div class="container-fluid">
                         <span class="navbar-brand mb-0">Hỏi giá nhà cung cấp</span>
                         <div class="d-flex align-items-center gap-3">
+                            <!-- Chuông báo giá NCC mới (js sale_notify.js). -->
+                            <div t-if="allowed" class="hq-bell-wrap">
+                                <button type="button" id="hq-bell" class="hq-bell" aria-expanded="false"
+                                        aria-label="Thông báo báo giá NCC" title="Báo giá NCC mới">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                                    <span id="hq-bell-count" class="hq-bell-count hq-hidden"></span>
+                                </button>
+                                <div id="hq-bell-panel" class="hq-bell-panel hq-hidden">
+                                    <div class="hq-bell-head">Báo giá NCC mới</div>
+                                    <div id="hq-bell-list" class="hq-bell-list"></div>
+                                    <div id="hq-bell-permission" class="hq-bell-permission hq-hidden">
+                                        <button type="button" class="hq-link" data-bell-permission="1">Bật thông báo trên máy tính</button>
+                                        — báo cả khi đang ở tab khác.
+                                    </div>
+                                </div>
+                            </div>
                             <a class="nav-link text-white-50" href="/hoi-gia-ncc/tra-gia">Tra giá</a>
                             <a class="nav-link text-white-50" href="/sale_plan">Tình trạng đơn</a>
                             <a class="nav-link text-white-50 d-none d-md-inline" href="/giao-hang">Giao hàng</a>
@@ -252,6 +270,7 @@
                     </div>
 
                     <div id="hq-toast" class="hq-toast hq-hidden"></div>
+                    <div id="hq-popups" class="hq-popups" aria-live="polite"></div>
                 </div>
 
                 <!-- Thứ tự quan trọng: utils → ui → feature → app. -->
@@ -269,6 +288,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_vendor_info.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_notify.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_paste.js?v=#{asset_version}"></script>
