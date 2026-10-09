@@ -31,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.5.0'
+AGENT_VERSION = '2.5.1'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -418,7 +418,7 @@ class Recorder:
             self.proc.kill()
             self.proc.wait(timeout=5)
 
-    def stderr_tail(self, limit=400):
+    def stderr_tail(self, limit=1500):
         """Phần cuối những gì ffmpeg đã kêu. Rỗng nếu nó im lặng suốt."""
         # Luồng đọc là daemon và ống đã đóng khi tiến trình thoát, nên chỉ cần
         # nhường một nhịp cho nó gom nốt phần cuối.
@@ -1284,6 +1284,19 @@ FFMPEG_HINTS = (
      "không kết nối được camera IP — sai IP/cổng, hoặc camera đang tắt."),
     ('401 Unauthorized',
      "sai tài khoản hoặc mật khẩu trong URL RTSP."),
+    # Camera TRA LOI dang hoang chu khong phai mang hong: no hieu yeu cau nhung
+    # khong con luong de cap. Phan biet duoc voi 401 (sai mat khau) va voi
+    # Connection refused (camera tat).
+    ('method SETUP failed: 500',
+     "camera hết suất phát luồng — máy khác đang chiếm, hoặc camera cần khởi "
+     "động lại. KHÔNG phải sai mật khẩu (sai thì dừng ở 401) và không phải lỗi "
+     "mạng. Kiểm xem có bàn nào khác đang quay cùng camera này không."),
+    ('Server returned 5XX Server Error',
+     "camera báo lỗi nội bộ khi cấp luồng — thường là hết suất phát. Kiểm xem "
+     "có máy khác đang kéo cùng camera này không."),
+    ('Error number -10054',
+     "camera cắt phăng kết nối. Hay gặp khi camera đã hết suất phát luồng, "
+     "hoặc đường mạng tới camera chập chờn."),
     ('Immediate exit requested',
      "ffmpeg bị dừng ngang trước khi ghi được gì."),
 )
