@@ -47,6 +47,7 @@ window.HlvQuote = window.HlvQuote || {};
     C.showAllSuggestions = false;
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
+    HQ.show("hq-crm-results", false);
     renderCodePicker();
     HQ.$("hq-modal-title").textContent = "Hỏi giá nhà cung cấp";
     HQ.show("hq-modal-foot", true);
@@ -309,11 +310,22 @@ window.HlvQuote = window.HlvQuote || {};
         '<span class="hq-muted">' + esc([o.partner, HQ.saleName(o.sale_code), o.date].filter(Boolean).join(" · ")) + "</span>";
     }, pickSaleOrder);
 
+    // Dòng cuối luôn là "tìm trên MISA CRM": hàng CRM có mà Odoo chưa có (sale_crm_product.js).
     HQ.bindPicker("hq-prod-search", "hq-prod-results", function (term) {
-      return HQ.rpc("/api/hoi-gia-ncc/products", { search: term }).then(function (r) { return r.products; });
+      return HQ.rpc("/api/hoi-gia-ncc/products", { search: term }).then(function (r) {
+        return r.products.concat([{ crm_search: term, found: r.products.length }]);
+      });
     }, function (p) {
+      if (p.crm_search) {
+        return '<span class="hq-crm-item">' + (p.found ? "Không thấy đúng hàng? " : "Odoo chưa có. ") +
+          "Tìm “" + esc(p.crm_search) + "” trên MISA CRM</span>";
+      }
       return esc(p.product) + ' <span class="hq-muted">' + esc(p.uom) + "</span>";
     }, function (product) {
+      if (product.crm_search) {
+        HQ.openCrmSearch(product.crm_search);
+        return;
+      }
       C.lines = HQ.mergeLine(C.lines, product);
       renderLines();
       renderSummary();

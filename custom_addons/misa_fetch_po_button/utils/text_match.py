@@ -32,6 +32,16 @@ def normalize_vn(text):
     return _NON_ALNUM_RE.sub("", without_marks.lower())
 
 
+def uom_key(name):
+    """Tên đơn vị tính để so khớp: "cái", "Cái", " CÁI " là một ĐVT.
+
+    Nhận: chuỗi hoặc None. Trả: chuỗi đã chuẩn hoá Unicode (NFC), bỏ khoảng trắng thừa, chữ thường.
+    GIỮ dấu tiếng Việt — bỏ dấu thì "Bộ" và "Bó", "Cây" và "Cầy" thành một ĐVT.
+    Biên: None / chuỗi trắng -> "".
+    """
+    return " ".join(unicodedata.normalize("NFC", str(name or "")).split()).casefold()
+
+
 def same_name(left, right):
     """Hai tên có cùng chỉ một thứ không, bỏ qua khác biệt dấu và khoảng trắng.
 

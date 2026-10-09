@@ -410,3 +410,7 @@
 /* Bảng tóm tắt trước khi tạo YCMH. */
 .hq-request-summary { margin: .5rem 0; }
 .hq-request-summary tfoot td { font-weight: 500; }
+
+/* Hàng trên MISA CRM (Odoo chưa có): dòng cuối ô tìm + khung kết quả dưới ô tìm. */
+.hq-crm-item { color: var(--hq-accent-dark); font-weight: 500; }
+.hq-crm-box { margin-top: .5rem; }

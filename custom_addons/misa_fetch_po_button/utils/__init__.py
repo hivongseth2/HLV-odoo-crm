@@ -5,3 +5,5 @@ from . import odoo_utils
 from . import misa_config
 from . import misa_product_export
 from . import text_match
+from . import crm_product
+from . import misa_product_import

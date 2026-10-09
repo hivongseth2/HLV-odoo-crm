@@ -2,6 +2,8 @@ from odoo import models
 import logging
 import requests
 
+from .text_match import uom_key
+
 _logger = logging.getLogger(__name__)
 
 class OdooUtils(models.AbstractModel):
@@ -145,12 +147,20 @@ class OdooUtils(models.AbstractModel):
         return partner
 
     def _get_or_create_uom(self, name):
-        """Tìm hoặc tạo mới đơn vị tính (UoM) dựa trên tên."""
+        """Tìm hoặc tạo mới đơn vị tính (UoM) dựa trên tên.
+
+        So tên không phân biệt hoa thường / khoảng trắng thừa (text_match.uom_key): ĐVT "cái" đã có
+        thì MISA gửi "Cái" vẫn dùng nó, không đẻ thêm ĐVT trùng. Không có mới tạo (tên viết hoa
+        chữ đầu như trước).
+        """
         name = name.strip().title()
         UoM = self.env['uom.uom']
         UoMCat = self.env['uom.category']
 
-        uom = UoM.search([('name', '=', name)], limit=1)
+        key = uom_key(name)
+        # Bảng ĐVT nhỏ — lọc trong Python để so theo uom_key (tên ĐVT là trường dịch, domain không
+        # chuẩn hoá được khoảng trắng / Unicode).
+        uom = UoM.search([]).filtered(lambda u: uom_key(u.name) == key)[:1]
         if uom:
             return uom
 

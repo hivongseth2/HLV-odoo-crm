@@ -1,6 +1,6 @@
 {
     'name': 'HLV MISA Product Import',
-    'version': '2.0',
+    'version': '2.1',
     'depends': ['base', 'product', 'website', 'misa_fetch_po_button'],
     'author': 'HLV',
     'category': 'Inventory',
