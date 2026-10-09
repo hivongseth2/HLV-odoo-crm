@@ -45,9 +45,9 @@
     <template id="portal_grid" name="Báo giá NCC - bảng giá">
         <p t-if="editable" class="vq-grid-hint">
             Đơn giá tính cho một đơn vị, đã gồm VAT<span class="vq-disc-only">, chưa trừ chiết khấu</span>.
-            Mặt hàng không có: bỏ tick "Sẵn hàng" (hoặc bấm <b>×</b> cạnh mã hàng); để trống đơn giá cũng tính là
-            không có hàng. Bấm <kbd>Enter</kbd> để xuống dòng dưới. Có sẵn bảng giá trong Excel thì copy cả cột,
-            dán vào ô đơn giá đầu tiên.
+            Mặt hàng không có: bấm <b>×</b> cạnh mã hàng. Có sẵn trong kho thì để tick "Sẵn hàng", phải đặt thì
+            bỏ tick. Bấm <kbd>Enter</kbd> để xuống dòng dưới. Có sẵn bảng giá trong Excel thì copy cả cột, dán vào
+            ô đơn giá đầu tiên.
         </p>
         <div class="vq-table-scroll">
         <table t-attf-class="vq-table vq-price-table vq-grid #{'vq-grid-board' if show_quote else ''}" data-vq-grid="1">
@@ -78,11 +78,12 @@
         </div>
     </template>
 
-    <!-- Nút "×" cạnh mã hàng: lối tắt bỏ tick "Sẵn hàng" của dòng (nhãn for= ô đó — trình duyệt tự đảo
-         tick, không cần JS). Bấm lại là tick lại. Dòng không sửa được thì không có nút. -->
+    <!-- Nút "×" cạnh mã hàng: NCC bấm = không có hàng (bấm lại để bỏ). Checkbox thật nằm trong nhãn
+         nên form vẫn gửi na_<id>, không cần JS. Dòng không sửa được thì không có nút. -->
     <template id="portal_grid_na" name="Báo giá NCC - nút không có hàng">
-        <label t-if="line_editable" class="vq-na-x" t-att-for="'vq-avail-%s' % lid"
-               title="Không có hàng — bấm lại để có hàng">×</label>
+        <label t-if="line_editable" class="vq-na-x" title="Không có hàng — bấm lại để bỏ">
+            <input type="checkbox" value="1" class="vq-sr-only" data-vq-na="1" t-att-name="'na_%s' % lid"
+                   t-att-checked="na_checked" t-att-aria-label="'Không có hàng — %s' % product_name"/>×</label>
     </template>
 
     <template id="portal_grid_row" name="Báo giá NCC - dòng bảng giá">
@@ -93,8 +94,10 @@
         <t t-set="code" t-value="line.product_id.default_code or ''"/>
         <t t-set="product_name" t-value="code_name(line.name or line.product_id.name, code)"/>
         <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ''"/>
-        <!-- Ô "Sẵn hàng" tick sẵn; bỏ tick = không có hàng (form không gửi avail_<id>). -->
-        <t t-set="na_checked" t-value="('avail_%s' % lid) not in post if post else line.unavailable"/>
+        <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
+        <!-- "Sẵn hàng": nhãn ở đầu ghi chú (stock_note). Dòng chưa báo lần nào thì tick sẵn. -->
+        <t t-set="saved_note" t-value="stock_note_parts(line.vendor_note if (line.price_unit or line.unavailable) else (ref and ref.vendor_note))"/>
+        <t t-set="in_stock" t-value="('instock_%s' % lid) in post if post else (saved_note[0] if (line.price_unit or line.unavailable or ref) else True)"/>
         <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
         <tr data-vq-line="1"
             t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''}"
@@ -180,9 +183,10 @@
                 <span t-else="" class="vq-cell-text" t-esc="line.delivery_days or '—'"/>
             </td>
             <td class="vq-col-avail" data-label="Sẵn hàng">
-                <input type="checkbox" value="1" data-vq-avail="1" t-att-id="'vq-avail-%s' % lid"
-                       t-att-name="'avail_%s' % lid" t-att-checked="not na_checked" t-att-disabled="not line_editable"
-                       t-att-aria-label="'Sẵn hàng — %s' % product_name"/>
+                <input type="checkbox" value="1" data-vq-instock="1" t-att-name="'instock_%s' % lid"
+                       t-att-checked="in_stock and not na_checked" t-att-disabled="not line_editable"
+                       t-att-aria-label="'Sẵn hàng — %s' % product_name"
+                       title="Có sẵn trong kho — ghi chú của dòng thêm &quot;Sẵn hàng&quot;"/>
             </td>
             <td class="vq-col-text" data-label="Tên xuất HĐ">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
@@ -193,8 +197,8 @@
             <td class="vq-col-text" data-label="Ghi chú">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
                        t-att-name="'note_%s' % lid" placeholder="hãng, xuất xứ…"
-                       t-att-value="post.get('note_%s' % lid) if post else (line.vendor_note or (ref and ref.vendor_note) or '')"/>
-                <span t-else="" class="vq-cell-text" t-esc="line.vendor_note or ''"/>
+                       t-att-value="post.get('note_%s' % lid) if post else saved_note[1]"/>
+                <span t-else="" class="vq-cell-text" t-esc="saved_note[1]"/>
             </td>
         </tr>
     </template>

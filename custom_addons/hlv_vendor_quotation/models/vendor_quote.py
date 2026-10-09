@@ -440,10 +440,8 @@ class VendorQuote(models.Model):
 
         line_values: {quote_line_id: {"price_unit", "list_price", "discount", "vat",
         "delivery_days", "vendor_note", "invoice_name", "unavailable"}} — controller đã đọc số xong.
-        Dòng NCC bỏ tick "Sẵn hàng" (unavailable) hoặc để trống đơn giá = không có hàng — sale không chọn
-        được. Dòng có giá thì phải có VAT. Cả phiếu không có giá nào, cũng không dòng nào bỏ tick → báo
-        (thường là bấm Gửi nhầm khi chưa điền). Dòng đã lên đơn mua (vendor_locked) giữ nguyên —
-        giá trị gửi lên cho dòng đó bị bỏ qua.
+        Mọi dòng phải khai: có giá + VAT, hoặc NCC bấm "×" (unavailable = không có hàng — sale không
+        chọn được). Dòng đã lên đơn mua (vendor_locked) giữ nguyên — giá trị gửi lên cho dòng đó bị bỏ qua.
         price_valid_until: date NCC ghi; trống → hôm nay + 7 ngày. Trước hôm nay → UserError.
         """
         self.ensure_one()
@@ -452,25 +450,24 @@ class VendorQuote(models.Model):
 
         open_lines = self.line_ids.filtered(lambda l: not l.vendor_locked)
         submitted = {line.id: line_values.get(line.id, {}) for line in open_lines}
-        if not any(vals.get("price_unit") or vals.get("unavailable") for vals in submitted.values()):
-            raise UserError(_(
-                "Chưa điền giá mặt hàng nào. Mặt hàng không có thì bỏ tick \"Sẵn hàng\" (hoặc để trống đơn giá)."
-            ))
-        missing_vat = [
+        missing = [
             str(index) for index, line in enumerate(self.line_ids, start=1)
             if line.id in submitted and not submitted[line.id].get("unavailable")
-            and submitted[line.id].get("price_unit") and not submitted[line.id].get("vat")
+            and not (submitted[line.id].get("price_unit") and submitted[line.id].get("vat"))
         ]
-        if missing_vat:
-            raise UserError(_("Dòng %s có đơn giá nhưng chưa chọn VAT.", ", ".join(missing_vat)))
+        if missing:
+            raise UserError(_(
+                "Dòng %s chưa có đơn giá hoặc VAT. Mặt hàng không có thì bấm \"×\" cạnh mã hàng.",
+                ", ".join(missing),
+            ))
 
         chosen_before = {
             line.id: (line.price_unit, line.unavailable) for line in self.line_ids.filtered("selected")
         }
         for line in open_lines:
             vals = dict(submitted[line.id])
-            if vals.get("unavailable") or not vals.get("price_unit"):
-                vals.update(unavailable=True, price_unit=0.0, list_price=0.0, discount=0.0, vat=False)
+            if vals.get("unavailable"):
+                vals.update(price_unit=0.0, list_price=0.0, discount=0.0, vat=False)
             line.write(vals)
         self._notify_chosen_lines_changed(chosen_before)
         resubmitted = self.state == "quoted"

@@ -517,8 +517,10 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 
 /* --- Báo giá theo mặt hàng: cột "Phiếu" cho biết hàng thuộc yêu cầu nào --- */
 .vq-board-alert { margin-top: 16px; }
-.vq-grid-board { min-width: 1290px; }
-.vq-disc-on .vq-grid-board { min-width: 1350px; }
+/* Vừa khung 1286px của trang (thêm cột "Sẵn hàng" thì cột chữ co lại) — không hiện thanh cuộn ngang. */
+.vq-grid-board { min-width: 1240px; }
+.vq-disc-on .vq-grid-board { min-width: 1300px; }
+.vq-grid-board .vq-col-text { width: 120px; }
 .vq-grid .vq-col-quote { width: 118px; line-height: 1.25; }
 .vq-quote-ref { color: var(--vq-accent); font-size: .78rem; font-weight: 600; text-decoration: none; }
 .vq-quote-ref:hover { text-decoration: underline; }
@@ -553,13 +555,15 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-ref-requester { padding-left: 0; }
 }
 
-/* --- Sẵn hàng / không có hàng: ô "Sẵn hàng" + nút "×" cạnh mã hàng (nhãn for= ô đó) --- */
+/* --- Không có hàng: nút "×" cạnh mã hàng; có sẵn trong kho: ô "Sẵn hàng" --- */
 .vq-na-x { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; margin-right: 6px;
     border: 1px solid var(--vq-line-strong); border-radius: 3px; color: var(--vq-muted); font-size: .8rem;
     line-height: 1; cursor: pointer; vertical-align: 1px; user-select: none; }
 .vq-na-x:hover { color: var(--vq-danger); border-color: var(--vq-danger); }
-/* Dòng đã bỏ tick "Sẵn hàng": nút × đỏ. */
-.vq-line:has([data-vq-avail]:not(:checked)) .vq-na-x { background: var(--vq-danger); border-color: var(--vq-danger); color: #fff; }
+.vq-na-x:has(input:checked) { background: var(--vq-danger); border-color: var(--vq-danger); color: #fff; }
+.vq-na-x:has(input:focus-visible) { outline: 2px solid var(--vq-accent); outline-offset: 1px; }
+/* Dòng hết hàng: ô "Sẵn hàng" không còn nghĩa — làm mờ (server bỏ nhãn "Sẵn hàng" khỏi ghi chú). */
+.vq-line-na .vq-col-avail input { opacity: .35; }
 .vq-grid .vq-col-avail { width: 70px; text-align: center; }
 .vq-grid .vq-col-avail input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--vq-ok); }
 .vq-grid .vq-col-avail input:disabled { cursor: default; }

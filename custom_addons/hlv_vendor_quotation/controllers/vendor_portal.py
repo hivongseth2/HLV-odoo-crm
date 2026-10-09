@@ -14,7 +14,7 @@ from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
     deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate, parse_vn_number,
-    split_code_name, split_unit_price,
+    split_code_name, split_unit_price, split_stock_note, stock_note,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -376,10 +376,14 @@ class VendorQuotePortal(http.Controller):
                 "discount": discount or 0.0,
                 "vat": vat,
                 "delivery_days": days,
-                "vendor_note": (post.get(f"note_{line.id}") or "").strip()[:LINE_NOTE_MAX],
+                # Ô "Sẵn hàng" (tick sẵn) → nhãn "Sẵn hàng" ở đầu ghi chú, sale đọc ngay ở bảng so giá.
+                "vendor_note": stock_note(
+                    bool(post.get(f"instock_{line.id}")) and not post.get(f"na_{line.id}"),
+                    post.get(f"note_{line.id}"), LINE_NOTE_MAX,
+                ),
                 "invoice_name": (post.get(f"inv_{line.id}") or "").strip()[:LINE_NOTE_MAX],
-                # Ô "Sẵn hàng" tick sẵn — bỏ tick (hoặc bấm × cạnh mã hàng) thì form không gửi avail_<id>.
-                "unavailable": not post.get(f"avail_{line.id}"),
+                # Nút "×" cạnh mã hàng = không có hàng.
+                "unavailable": bool(post.get(f"na_{line.id}")),
             }
         return line_values, errors
 
@@ -426,6 +430,8 @@ class VendorQuotePortal(http.Controller):
             "fmt": format_vn_number,
             # Mã hàng và tên hàng hiện thành hai cột: bỏ tiền tố "[mã]" khỏi tên.
             "code_name": split_code_name,
+            # Ô "Sẵn hàng" + ô ghi chú đọc từ ghi chú đã lưu (nhãn "Sẵn hàng" ở đầu).
+            "stock_note_parts": split_stock_note,
             # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
             "fdate": local_date_text,
             "vat_options": VAT_SELECTION,
