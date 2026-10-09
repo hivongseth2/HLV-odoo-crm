@@ -1,7 +1,7 @@
 # models/stock_picking.py
 import logging
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -16,6 +16,14 @@ class StockPicking(models.Model):
     source_transfer_id = fields.Many2one("stock.picking", copy=False)  # Không copy khi nhân bản
 
    
+    # CHUYENKHO chỉ được chọn trên phiếu chuyển nội bộ (ràng buộc đầy đủ ở _check_hlv_transfer_location)
+    location_id = fields.Many2one(
+        domain="[('hlv_is_transfer_location', '=', False)] if picking_type_code != 'internal' else []"
+    )
+    location_dest_id = fields.Many2one(
+        domain="[('hlv_is_transfer_location', '=', False)] if picking_type_code != 'internal' else []"
+    )
+
     create_second_transfer_automatically = fields.Boolean(
         string="Tự động tạo phiếu bước 2",
         related="picking_type_id.auto_second_transfer",
@@ -73,12 +81,12 @@ class StockPicking(models.Model):
                 current_location = picking.location_id
                 new_location_id = vals.get('location_id')
                 
-                # Nếu location hiện tại là transit và đang bị thay đổi
-                if current_location and current_location.usage == 'transit':
+                # Nếu location hiện tại là transit/CHUYENKHO và đang bị thay đổi
+                if current_location and self._is_inter_warehouse_transit(current_location):
                     new_location = self.env['stock.location'].browse(new_location_id) if new_location_id else False
-                    
-                    # Nếu location mới KHÔNG phải transit, ngăn việc thay đổi
-                    if new_location and new_location.usage != 'transit':
+
+                    # Nếu location mới KHÔNG phải transit/CHUYENKHO, ngăn việc thay đổi
+                    if new_location and not self._is_inter_warehouse_transit(new_location):
                         _logger.warning(f"WRITE PROTECTION: Ngăn thay đổi location_id từ Transit ({current_location.id}) sang {new_location.id}")
                         # Xóa location_id khỏi vals để không ghi đè
                         vals = dict(vals)  # Copy để không ảnh hưởng original
@@ -156,7 +164,9 @@ class StockPicking(models.Model):
         """
         if not location:
             return False
-        
+        if location.hlv_is_transfer_location:
+            return True
+
         complete_name = (location.complete_name or "").strip().lower()
         
         # Danh sách các tên được chấp nhận (mapping Việt - Anh)
@@ -169,6 +179,21 @@ class StockPicking(models.Model):
         name_ok = any(complete_name.endswith(name) or complete_name == name for name in accepted_names)
         
         return name_ok or (location.usage == "transit" and ("inter-warehouse transit" in complete_name or "trung chuyển liên kho" in complete_name or "kho trung gian" in complete_name))
+
+    @api.constrains("location_id", "location_dest_id", "picking_type_id")
+    def _check_hlv_transfer_location(self):
+        """CHUYENKHO chỉ làm đích bước 1 / nguồn bước 2 của phiếu chuyển nội bộ."""
+        for picking in self:
+            locations = (picking.location_id | picking.location_dest_id).filtered("hlv_is_transfer_location")
+            if not locations:
+                continue
+            picking_type = picking.picking_type_id
+            warehouse = picking_type.warehouse_id
+            if picking_type.code != "internal" or picking_type in (warehouse.pick_type_id | warehouse.pack_type_id):
+                raise ValidationError(
+                    _("Vị trí %(location)s chỉ dùng cho phiếu chuyển kho nội bộ, không dùng cho loại phiếu %(type)s.")
+                    % {"location": locations[0].display_name, "type": picking_type.display_name}
+                )
 
     # -------------- Wizard mở tay --------------
     def open_transfer_wizard(self):
@@ -424,6 +449,8 @@ class StockPicking(models.Model):
                 ops = self.env["stock.picking.type"].search(
                     [("warehouse_id", "=", warehouse.id), ("code", "=", "internal")]
                 )
+                # Bước 2 xuất phát từ CHUYENKHO, không được là phiếu lấy hàng / đóng gói
+                ops -= warehouse.pick_type_id | warehouse.pack_type_id
                 next_operation = ops.filtered(lambda r: r.two_step_transfer_use == "reception")[:1] or ops[:1]
                 if not next_operation:
                     raise UserError(_("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name)

@@ -22,6 +22,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         ]
         all_child_locs = self.env['stock.location'].sudo().search([
             ('id', 'child_of', root_loc_ids), ('usage', '=', 'internal'),
+            ('hlv_is_transfer_location', '=', False),  # CHUYENKHO: hàng đang chuyển đi, không tính tồn khả dụng
         ]) if root_loc_ids else self.env['stock.location']
         loc_to_wh_id = {}
         for loc in all_child_locs:

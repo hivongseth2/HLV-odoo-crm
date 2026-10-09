@@ -1,6 +1,6 @@
 {
     'name': 'HLV Báo cáo tồn kho theo nhóm',
-    'version': '1.1.1',
+    'version': '1.1.2',
     'category': 'Inventory',
     'summary': 'Báo cáo tồn kho theo nhóm sản phẩm tuỳ chỉnh',
     'description': """
@@ -10,7 +10,7 @@
         Xuất báo cáo dạng PDF hoặc xem trực tiếp trên trình duyệt.
     """,
     'author': 'HLV',
-    'depends': ['product', 'stock', 'purchase'],
+    'depends': ['product', 'stock', 'purchase', 'deltatech_picking_transit'],
     'data': [
         'security/ir.model.access.csv',
         'views/product_report_group_views.xml',

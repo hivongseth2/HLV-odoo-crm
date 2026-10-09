@@ -39,6 +39,7 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         all_root_locs = list({root_loc for _wh_id, root_loc in unique_wh_roots})
         child_locs = self.env['stock.location'].sudo().search([
             ('id', 'child_of', all_root_locs), ('usage', '=', 'internal'),
+            ('hlv_is_transfer_location', '=', False),  # CHUYENKHO: hàng đang chuyển đi, không tính tồn khả dụng
         ])
         loc_to_whs = {}
         for loc in child_locs:

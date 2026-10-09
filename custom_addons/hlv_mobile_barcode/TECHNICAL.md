@@ -18,7 +18,7 @@ HLV Mobile Barcode là ứng dụng quét mã vạch tối ưu cho điện tho�
 | 2 | **Xử lý phiếu kho (Picking Scanner)** | Quét sản phẩm để tăng số lượng hoàn thành trên phiếu kho. Hỗ trợ đầy đủ các loại phiếu: Nhập (IN), Xuất (OUT), Chuyển nội bộ (INT), Lấy hàng (PICK), Đóng gói (PACK), Lưu kho (STO). |
 | 3 | **Quét camera tích hợp** | Camera điện thoại nhúng trực tiếp trên giao diện, quét liên tục không cần bấm nút. Hỗ trợ quét bằng súng USB, dán mã (Ctrl+V), hoặc gõ tay. |
 | 4 | **Tra cứu tồn kho** | Quét mã sản phẩm / vị trí / kiện hàng để xem tồn kho theo cây vị trí phân cấp, bao gồm cả vị trí con. |
-| 5 | **Chuyển vị trí hàng hóa** | Tạo phiếu chuyển kho nội bộ (Internal Transfer) để di chuyển sản phẩm từ vị trí này sang vị trí khác, tự động xác nhận phiếu. Hỗ trợ cấu hình cùng kho khác vị trí đi 1 bước hoặc 2 bước qua Transit. |
+| 5 | **Chuyển vị trí hàng hóa** | Tạo phiếu chuyển kho nội bộ (Internal Transfer) để di chuyển sản phẩm từ vị trí này sang vị trí khác, tự động xác nhận phiếu. Hỗ trợ cấu hình cùng kho khác vị trí đi 1 bước hoặc 2 bước qua CHUYENKHO của kho nguồn. |
 | 6 | **Chuyển kho đa vị trí** | Gom hàng từ nhiều kệ (vị trí con) khác nhau vào một phiếu chuyển kho chung. Phù hợp cho nghiệp vụ dọn kho, gom hàng. |
 | 7 | **Quản lý kiện hàng (Đóng gói)** | Đóng gói sản phẩm đã quét thành kiện (Package), gỡ kiện, chỉnh sửa số lượng trong kiện, chuyển sản phẩm giữa các kiện. Hỗ trợ in nhãn kiện tự động. |
 | 8 | **Liên kết quy trình 2 bước** | Khi hoàn thành phiếu Bước 1 (ví dụ INT), hệ thống tự tìm và hiển thị nút chuyển nhanh sang phiếu Bước 2 (IN / STO). |
@@ -144,7 +144,7 @@ Mở rộng cấu hình hệ thống với các tham số:
 | `hlv_barcode_allow_package_scan` | Boolean (config_parameter) | Cho phép quét mã kiện hàng để hoàn thành hàng loạt |
 | `hlv_barcode_show_qty_buttons` | Boolean (config_parameter) | Hiển thị nút +1/-1/+10/-10 trên giao diện quét |
 | `hlv_barcode_camera_default_on` | Boolean (config_parameter) | Camera tự động bật khi vào phiếu |
-| `hlv_barcode_same_warehouse_one_step` | Boolean (config_parameter, mặc định `True`) | Bật: chuyển giữa các vị trí trong cùng kho đi thẳng 1 bước. Tắt: cùng kho khác vị trí cũng đi qua Transit và tạo quy trình 2 bước |
+| `hlv_barcode_same_warehouse_one_step` | Boolean (config_parameter, mặc định `True`) | Bật: chuyển giữa các vị trí trong cùng kho đi thẳng 1 bước. Tắt: cùng kho khác vị trí cũng đi qua CHUYENKHO và tạo quy trình 2 bước |
 
 ### 2.2.4. Model kế thừa: `stock.picking`
 
@@ -280,10 +280,12 @@ Quản lý kiện hàng (Modal chỉnh sửa):
 ### 2.4.4. Luồng liên kết quy trình 2 bước
 
 Quy tắc tạo 1 bước/2 bước khi chuyển vị trí:
-- Khác kho: luôn đi qua Transit và tạo quy trình 2 bước.
+- Khác kho: luôn đi qua CHUYENKHO của kho nguồn và tạo quy trình 2 bước.
+- CHUYENKHO lấy bằng `_transfer_location_for(source_loc)` → `stock.warehouse._hlv_get_transfer_location()` (module `deltatech_picking_transit`). Không tự search `usage='transit'` nữa; vị trí Transit cũ chỉ còn cho phiếu tạo trước khi đổi.
+- CHUYENKHO bị loại khỏi tra cứu vị trí khi quét (`smart_scan`, `process_barcode`, `validate_location`): app không cho chọn nó làm vị trí nguồn/đích.
 - Cùng kho khác vị trí:
   - `hlv_barcode_same_warehouse_one_step = True` (mặc định): chuyển thẳng từ vị trí nguồn sang vị trí đích trong 1 bước.
-  - `hlv_barcode_same_warehouse_one_step = False`: cũng đi qua Transit và tạo bước 2 như chuyển khác kho.
+  - `hlv_barcode_same_warehouse_one_step = False`: cũng đi qua CHUYENKHO và tạo bước 2 như chuyển khác kho.
 - Khi cần ép bước 2 về một vị trí đích cụ thể, phiếu bước 1 lưu marker `DEST_LOC_OVERRIDE:<location_id>` trong `note`; sau khi Odoo sinh bước 2, backend cập nhật `location_dest_id` của `stock.picking`, `stock.move`, `stock.move.line` bước 2 về vị trí đích này.
 
 ```
@@ -305,7 +307,7 @@ Phiếu Bước 1 (INT) hoàn thành (state = 'done')
 ```
 
 **Hành vi phiếu Bước 2 / putaway**:
-- Phiếu Bước 2 được nhận diện qua `source_transfer_id` và thường là phiếu nhập/putaway từ Transit về vị trí đích.
+- Phiếu Bước 2 được nhận diện qua `source_transfer_id` và thường là phiếu nhập/putaway từ CHUYENKHO của kho nguồn (hoặc Transit cũ) về vị trí đích.
 - Khi vào phiếu Bước 2, mobile không yêu cầu quét vị trí nguồn. Thủ kho quét sản phẩm để tăng `quantity`, sau đó bấm xác nhận.
 - Backend bỏ qua `location_mode='source'` mặc định của frontend đối với phiếu putaway/incoming, để không biến phiếu nhập thành luồng lấy hàng khỏi source.
 - Khi quét ở Bước 2, backend cập nhật các `stock.move.line` đã được Odoo sinh sẵn, bao gồm cả dòng có `package_id/result_package_id`; không tạo dòng hàng rời mới nếu đã có dòng phù hợp.
@@ -331,7 +333,7 @@ Chọn "Chuyển kho đa vị trí" từ trang tra cứu vị trí
   RPC /create_empty_int → Tạo phiếu INT trống
   (location_id = lot_stock_id của kho nguồn)
   - Nếu đích cùng kho và setting 1 bước bật: location_dest_id = vị trí đích
-  - Nếu đích khác kho hoặc setting 1 bước tắt: location_dest_id = Transit,
+  - Nếu đích khác kho hoặc setting 1 bước tắt: location_dest_id = CHUYENKHO của kho nguồn,
     note có DEST_LOC_OVERRIDE để bước 2 đi về đúng vị trí đích
         │
         ▼
