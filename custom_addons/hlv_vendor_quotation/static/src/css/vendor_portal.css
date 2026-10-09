@@ -574,3 +574,11 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 @media (max-width: 760px) {
     .vq-grid .vq-col-avail { text-align: left; }
 }
+
+/* --- Đơn mua: đã gửi hàng (CPN / chành) + khung nhập thông tin gửi --- */
+.vq-status-shipped { background: #f5f3ff; border-color: #ddd6fe; color: #5b21b6; }
+.vq-ship-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--vq-line); }
+.vq-ship-form h3 { flex-basis: 100%; margin: 0; font-size: .95rem; }
+.vq-ship-field { display: grid; gap: 4px; min-width: 220px; flex: 1 1 220px; }
+.vq-ship-field input[type="file"] { font-size: .85rem; }

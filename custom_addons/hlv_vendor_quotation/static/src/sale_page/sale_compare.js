@@ -349,7 +349,8 @@ window.HlvQuote = window.HlvQuote || {};
         return '<tr><td><button type="button" class="hq-link-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
           esc(o.name) + "</button>" + (o.origin ? '<div class="hq-muted">Mã ĐH ' + esc(o.origin) + "</div>"
             : '<div class="hq-muted">Chưa có mã đơn hàng</div>') + "</td><td>" + esc(o.vendor) + "</td>" +
-          "<td>" + (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
+          "<td>" + (o.vendor_ship ? '<div class="hq-muted hq-small" title="NCC đã gửi">' + esc(o.vendor_ship) + "</div>" : "") +
+          (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
             : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +
           '<td class="hq-num">' + HQ.money(o.amount_total) + "</td>" +
           '<td class="hq-num">' + chatButton("order", o.id, o.chat_count, o.chat_unread) + "</td></tr>";
