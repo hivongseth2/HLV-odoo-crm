@@ -108,6 +108,8 @@ class VendorLineBoardPortal(VendorQuotePortal):
             ) if part).strip(),
             "urgent": hint[1] in ("urgent", "over"),
             "note": quote.note or "",
+            # Cột "Người hỏi": {"name", "phone"} hoặc None (báo giá không gắn mã sale).
+            "requester": requester,
         }
 
     @staticmethod

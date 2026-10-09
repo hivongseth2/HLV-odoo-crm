@@ -39,8 +39,9 @@
          dòng, ô nhập phủ kín ô bảng nên mọi ô thẳng hàng. NCC chỉ gõ một ô giá "Đơn giá" (đã gồm VAT;
          bật chiết khấu thì là giá trước CK) + %CK. Server tự tính giá chưa VAT (split_unit_price); JS
          chỉ hiện giá sau CK, thành tiền, tổng. Enter / dán cột từ Excel: js/vendor_quote_grid.js.
-         Cần biến: grid_lines, editable, references, line_choice, post, disc_on; show_quote = thêm cột
-         "Phiếu" (cần quote_info); error_line_ids = dòng tô đỏ (tuỳ chọn). -->
+         Cần biến: grid_lines, editable, references, line_choice, post, disc_on; show_quote = bảng theo mặt
+         hàng: thêm cột "Phiếu" + "Người hỏi" (cần quote_info), mã hàng gộp vào ô tên cho đủ chỗ;
+         error_line_ids = dòng tô đỏ (tuỳ chọn). -->
     <template id="portal_grid" name="Báo giá NCC - bảng giá">
         <p t-if="editable" class="vq-grid-hint">
             Đơn giá tính cho một đơn vị, đã gồm VAT<span class="vq-disc-only">, chưa trừ chiết khấu</span>.
@@ -53,8 +54,9 @@
                 <tr>
                     <th class="vq-col-no">#</th>
                     <th t-if="show_quote" class="vq-col-quote">Phiếu</th>
-                    <th class="vq-col-code">Mã hàng</th>
-                    <th class="vq-col-name">Tên hàng</th>
+                    <th t-if="show_quote" class="vq-col-requester">Người hỏi</th>
+                    <th t-if="not show_quote" class="vq-col-code">Mã hàng</th>
+                    <th class="vq-col-name" t-esc="'Mã · Tên hàng' if show_quote else 'Tên hàng'"/>
                     <th class="vq-num vq-col-qty">SL</th>
                     <th class="vq-col-vat">VAT</th>
                     <th class="vq-num vq-col-price">Đơn giá</th>
@@ -100,10 +102,19 @@
                         <span t-if="info['note']" class="vq-chip vq-chip-note" t-att-title="info['note']">lời nhắn</span>
                     </div>
                 </td>
+                <td class="vq-col-requester" data-label="Người hỏi">
+                    <t t-if="info['requester']">
+                        <div class="vq-requester-name" t-esc="info['requester']['name']"/>
+                        <a t-if="info['requester']['phone']" class="vq-requester-phone"
+                           t-attf-href="tel:#{info['requester']['phone']}" t-esc="info['requester']['phone']"/>
+                    </t>
+                    <span t-else="" class="vq-muted">—</span>
+                </td>
             </t>
-            <td class="vq-col-code" data-label="Mã hàng" t-esc="code or '—'"/>
-            <td class="vq-col-name" t-att-title="product_name">
+            <td t-if="not show_quote" class="vq-col-code" data-label="Mã hàng" t-esc="code or '—'"/>
+            <td class="vq-col-name" t-att-title="('%s · %s' % (code, product_name)) if show_quote and code else product_name">
                 <div class="vq-name-cell">
+                    <span t-if="show_quote and code" class="vq-name-code" t-esc="code"/>
                     <a t-if="line.product_id.image_128" class="vq-name-text" target="_blank"
                        t-att-href="'%s/img/%s/1024' % (portal_base, lid)" title="Xem ảnh sản phẩm"
                        t-esc="product_name"/>

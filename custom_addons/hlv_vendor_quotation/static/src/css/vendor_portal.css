@@ -537,8 +537,8 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 
 /* --- Báo giá theo mặt hàng: cột "Phiếu" cho biết hàng thuộc yêu cầu nào --- */
 .vq-board-alert { margin-top: 16px; }
-.vq-grid-board { min-width: 1180px; }
-.vq-disc-on .vq-grid-board { min-width: 1240px; }
+.vq-grid-board { min-width: 1220px; }
+.vq-disc-on .vq-grid-board { min-width: 1280px; }
 .vq-grid .vq-col-quote { width: 118px; line-height: 1.25; }
 .vq-quote-ref { color: var(--vq-accent); font-size: .78rem; font-weight: 600; text-decoration: none; }
 .vq-quote-ref:hover { text-decoration: underline; }
@@ -546,11 +546,20 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 .vq-quote-date { color: var(--vq-muted); font-size: .7rem; }
 .vq-quote-urgent .vq-quote-date { color: var(--vq-danger); font-weight: 600; }
 .vq-chip-note { background: #fdf3e1; color: #8a5a00; }
+/* Người hỏi giá: tên + SĐT hai dòng nhỏ, cùng chiều cao ô "Phiếu". */
+.vq-grid .vq-col-requester { width: 140px; line-height: 1.25; font-size: .78rem; }
+.vq-requester-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.vq-requester-phone { color: var(--vq-muted); font-size: .72rem; text-decoration: none; font-variant-numeric: tabular-nums; }
+.vq-requester-phone:hover { color: var(--vq-accent); text-decoration: underline; }
+/* Mã hàng gộp vào ô tên (bảng theo mặt hàng): nhạt, không co. */
+.vq-name-code { flex: none; color: var(--vq-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
 /* Dòng bị báo thiếu giá / VAT khi gửi. */
 .vq-price-table tr.vq-line-error td { background: #fef2f2; }
 @media (max-width: 760px) {
     .vq-grid-board, .vq-disc-on .vq-grid-board { min-width: 0; }
     .vq-grid .vq-col-quote { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+    .vq-grid .vq-col-requester { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; }
+    .vq-grid td.vq-col-requester::before { display: inline; margin: 0; }
     .vq-grid td.vq-col-quote::before { display: inline; margin: 0; }
     .vq-price-table tr.vq-line-error { border-color: #fca5a5; background: #fef2f2; }
     .vq-price-table tr.vq-line-error td { background: transparent; }
