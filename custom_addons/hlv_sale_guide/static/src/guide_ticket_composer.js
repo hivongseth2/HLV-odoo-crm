@@ -17,16 +17,6 @@
     return "anh-dan-" + stamp + (index ? "-" + index : "") + "." + ext;
   }
 
-  function fileIcon(file) {
-    if (file.type.indexOf("video/") === 0) {
-      return "🎬";
-    }
-    if (file.type === "application/pdf") {
-      return "📄";
-    }
-    return "📎";
-  }
-
   /**
    * Dựng khung soạn tin. opts:
    *   placeholder: chữ gợi ý ô nội dung;
@@ -63,7 +53,7 @@
       files.forEach(function (file, index) {
         var thumb = file.type.indexOf("image/") === 0
           ? h("img", { src: URL.createObjectURL(file), alt: "" })
-          : h("span", { class: "cmp-icon", text: fileIcon(file) });
+          : h("span", { class: "cmp-icon", text: text.fileLabel(file.name) });
         previews.appendChild(h("div", { class: "cmp-file", title: file.name }, [
           thumb,
           h("span", { class: "cmp-name", text: file.name }),
@@ -129,7 +119,7 @@
       h("div", { class: "cmp-actions" }, [
         h("button", {
           type: "button", class: "btn btn-light", title: "Đính kèm ảnh, video, file — hoặc Ctrl+V / kéo thả vào đây",
-          text: "📎 Đính kèm", onclick: function () { picker.click(); },
+          text: "Đính kèm", onclick: function () { picker.click(); },
         }),
         h("span", { class: "cmp-hint", text: "Ctrl+V dán ảnh · kéo thả file" }),
       ].concat(buttons)),

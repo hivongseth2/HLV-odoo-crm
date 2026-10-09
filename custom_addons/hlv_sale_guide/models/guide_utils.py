@@ -135,36 +135,16 @@ def normalize_document(page):
     )
 
 
-def add_back_link(page, href, label):
-    """Chèn nút nổi "← label" ở góc dưới trái để quay về danh sách hướng dẫn.
-
-    Nút nổi (position: fixed) thay vì thanh trên cùng để không đẩy lệch bố cục của trang
-    hướng dẫn. page: str; href, label: str (được escape). Có </body> → chèn ngay trước nó,
-    không có → thêm vào cuối trang.
-    """
-    link = (
-        f'<a href="{html.escape(href)}" style="position:fixed;left:12px;bottom:12px;z-index:2147483647;'
-        "padding:7px 14px;border-radius:999px;background:#1c1c1a;color:#fff;"
-        "font:600 13px/1.3 system-ui,-apple-system,'Segoe UI',sans-serif;text-decoration:none;"
-        f'box-shadow:0 2px 10px rgba(0,0,0,.25)">← {html.escape(label)}</a>'
-    )
-    match = re.search(r"</body\s*>", page, flags=re.IGNORECASE)
-    if not match:
-        return page + link
-    return page[:match.start()] + link + page[match.start():]
-
-
-def pdf_viewer_page(title, pdf_url, back_href=None):
+def pdf_viewer_page(title, pdf_url):
     """Trang HTML hiện một file PDF bằng trình xem PDF của trình duyệt, kèm thanh trên cùng.
 
-    Bọc PDF trong trang để có nút quay lại và nút "Mở / tải PDF" — trình duyệt điện thoại
-    (Chrome Android) không hiện PDF trong khung, người đọc bấm nút đó để mở. title, pdf_url,
-    back_href: str (được escape). back_href rỗng → không có nút quay lại (trang đang nằm
-    trong khung xem của /huong-dan). Trả str.
+    Bọc PDF trong trang để có nút "Mở / tải PDF" — trình duyệt điện thoại (Chrome Android)
+    không hiện PDF trong khung, người đọc bấm nút đó để mở. Trang luôn nằm trong khung xem của
+    /huong-dan hoặc của trang bọc, nên không có nút quay lại. title, pdf_url: str (được escape).
+    Trả str.
     """
     title = html.escape(title or "")
     pdf_url = html.escape(pdf_url)
-    back = f'<a href="{html.escape(back_href)}">← Tất cả hướng dẫn</a>' if back_href else ""
     return (
         '<!doctype html><html lang="vi"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -176,7 +156,7 @@ def pdf_viewer_page(title, pdf_url, back_href=None):
         ".bar a{color:#fff;text-decoration:none;white-space:nowrap}"
         "iframe{flex:1;width:100%;border:0}"
         "</style></head><body>"
-        f'<div class="bar">{back}<b>{title}</b><a href="{pdf_url}" target="_blank" rel="noopener">Mở / tải PDF ↗</a></div>'
+        f'<div class="bar"><b>{title}</b><a href="{pdf_url}" target="_blank" rel="noopener">Mở / tải PDF ↗</a></div>'
         f'<iframe src="{pdf_url}" title="{title}"></iframe>'
         "</body></html>"
     )

@@ -12,10 +12,10 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.tools import plaintext2html
 
-from .ticket_utils import check_uploads, clean_quote, ticket_title
+from .ticket_utils import check_uploads, join_quotes, ticket_title
 
 MANAGER_GROUP = "hlv_sale_guide.group_guide_manager"
-STATE_EVENTS = {"done": "✔ Đã đánh dấu: đã xử lý", "open": "↺ Đã mở lại ticket"}
+STATE_EVENTS = {"done": "Đã đánh dấu: đã xử lý", "open": "Đã mở lại ticket"}
 
 
 class SaleGuideTicket(models.Model):
@@ -41,19 +41,21 @@ class SaleGuideTicket(models.Model):
         "hlv.sale.guide", string="Hướng dẫn", ondelete="set null", index=True,
         help="Để trống: câu hỏi / yêu cầu chung, VD xin thêm hướng dẫn mới.",
     )
-    quote = fields.Text(
-        string="Đoạn được đánh dấu",
-        help="Đoạn người hỏi bôi đen trong hướng dẫn; bấm vào trên trang /huong-dan là nhảy tới đoạn đó.",
+    quotes = fields.Text(
+        string="Các đoạn được đánh dấu",
+        help="Những đoạn người hỏi bôi đen trong hướng dẫn, mỗi dòng một đoạn (xem join_quotes); "
+             "bấm vào trên trang /huong-dan là nhảy tới đoạn đó.",
     )
     done_by_id = fields.Many2one("res.users", string="Xử lý bởi", readonly=True)
     done_on = fields.Datetime(string="Xử lý lúc", readonly=True)
     last_message_on = fields.Datetime(string="Trao đổi gần nhất", readonly=True, default=fields.Datetime.now)
 
     @api.model
-    def create_from_page(self, kind, guide_id, title, quote, body, files):
+    def create_from_page(self, kind, guide_id, title, quotes, body, files):
         """Tạo ticket từ trang /huong-dan kèm tin đầu tiên.
 
-        files: list (tên, bytes). Trả ticket mới. Thiếu cả nội dung lẫn file → UserError.
+        quotes: list đoạn bôi đen; files: list (tên, bytes). Trả ticket mới.
+        Thiếu cả nội dung lẫn file → UserError.
         """
         body = (body or "").strip()
         if not body and not files:
@@ -65,7 +67,7 @@ class SaleGuideTicket(models.Model):
             "kind": kind if kind in ("question", "request") else "question",
             "guide_id": guide.id if guide else False,
             "name": ticket_title(title, body, guide.name if guide else _("Ticket không tiêu đề")),
-            "quote": clean_quote(quote) or False,
+            "quotes": join_quotes(quotes) or False,
         })
         # sudo: thêm người khác làm người theo dõi cần quyền ghi, người tạo ticket không có.
         managers = self.env.ref(MANAGER_GROUP).sudo().users.filtered("active")

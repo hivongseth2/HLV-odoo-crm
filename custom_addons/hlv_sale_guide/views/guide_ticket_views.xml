@@ -46,7 +46,7 @@
                             <field name="done_on" invisible="state != 'done'"/>
                         </group>
                     </group>
-                    <field name="quote" invisible="not quote" readonly="1"/>
+                    <field name="quotes" invisible="not quotes" readonly="1"/>
                 </sheet>
                 <chatter/>
             </form>

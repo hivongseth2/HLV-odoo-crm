@@ -1,7 +1,7 @@
 /* Gắn ticket với nội dung hướng dẫn đang mở trong khung xem (cùng origin nên đọc được DOM):
-   - bôi đen một đoạn → nút nổi "Hỏi / yêu cầu sửa đoạn này" → mở form ticket kèm đoạn trích;
-   - tô màu các đoạn đã có ticket, bấm vào là mở ticket đó;
-   - nhảy tới đoạn trích của một ticket.
+   - bôi đen một đoạn → nút nổi cạnh đoạn đó → đưa đoạn trích vào form ticket;
+   - tô màu các đoạn đã có ticket (một ticket có thể có nhiều đoạn), bấm vào là mở ticket đó;
+   - nhảy tới một đoạn trích của ticket.
    Hướng dẫn PDF nằm trong trình xem PDF của trình duyệt — không đọc được, các việc trên bỏ qua. */
 (function (ns) {
   "use strict";
@@ -14,6 +14,8 @@
     "mark." + MARK + ".is-done{background:transparent;border-bottom:2px dotted #9ca3af}" +
     "mark." + MARK + ".is-flash{animation:hlv-flash 1.2s ease-out 2}" +
     "@keyframes hlv-flash{0%{background:#fb923c}100%{background:#fde68a}}";
+  // Điện thoại không có mouseup sau khi kéo chọn chữ: chờ vùng chọn đứng yên rồi mới hiện nút.
+  var SETTLE_MS = 350;
   var handlers = { pick: null, open: null };
   var picked = "";
 
@@ -48,7 +50,7 @@
     }
     var left = Math.min(Math.max(frame.left + rect.left, frame.left + 8), window.innerWidth - pick.offsetWidth - 12);
     pick.style.top = Math.max(top, frame.top + 4) + "px";
-    pick.style.left = left + "px";
+    pick.style.left = Math.max(left, 8) + "px";
   }
 
   function textNodes(doc) {
@@ -78,13 +80,13 @@
   }
 
   /**
-   * Bọc đoạn trích của ticket bằng <mark>. Đoạn trích có thể vắt qua nhiều thẻ (in đậm, hai đoạn
-   * văn…) nên bọc riêng từng text node; text node chỉ có khoảng trắng (giữa các <li>, <tr>) bỏ qua
-   * để không chèn <mark> vào chỗ trình duyệt không cho.
+   * Bọc đoạn trích thứ index của ticket bằng <mark>. Đoạn trích có thể vắt qua nhiều thẻ (in đậm,
+   * hai đoạn văn…) nên bọc riêng từng text node; text node chỉ có khoảng trắng (giữa các <li>,
+   * <tr>) bỏ qua để không chèn <mark> vào chỗ trình duyệt không cho.
    */
-  function wrapQuote(doc, ticket) {
+  function wrapQuote(doc, ticket, quote, index) {
     var nodes = textNodes(doc);
-    var hit = ns.text.locateQuote(nodes.map(function (node) { return node.data; }), ticket.quote);
+    var hit = ns.text.locateQuote(nodes.map(function (node) { return node.data; }), quote);
     if (!hit) {
       return;
     }
@@ -104,6 +106,7 @@
       var mark = doc.createElement("mark");
       mark.className = MARK + (ticket.state === "done" ? " is-done" : "");
       mark.dataset.ticket = ticket.id;
+      mark.dataset.quote = index;
       mark.title = (ticket.state === "done" ? "Đã xử lý: " : "Ticket: ") + ticket.name;
       part.parentNode.insertBefore(mark, part);
       mark.appendChild(part);
@@ -113,39 +116,49 @@
   function attach() {
     var doc = frameDoc();
     hidePick();
-    if (!doc) {
+    // Cờ trên document: trang đã tải xong trước khi file này chạy thì attach() được gọi tay,
+    // sự kiện load có thể vẫn tới sau — không gắn trùng.
+    if (!doc || doc.hlvTicketAttached) {
       return;
     }
-    if (!doc.getElementById("hlv-ticket-style")) {
-      var style = doc.createElement("style");
-      style.id = "hlv-ticket-style";
-      style.textContent = STYLE;
-      (doc.head || doc.documentElement).appendChild(style);
-    }
-    var later = function () { setTimeout(function () { placePick(doc); }, 0); };
-    doc.addEventListener("mouseup", later);
-    doc.addEventListener("keyup", later);
-    doc.addEventListener("scroll", hidePick, true);
+    doc.hlvTicketAttached = true;
+    var style = doc.createElement("style");
+    style.textContent = STYLE;
+    (doc.head || doc.documentElement).appendChild(style);
+    var settle = null;
+    doc.addEventListener("mouseup", function () { setTimeout(function () { placePick(doc); }, 0); });
     doc.addEventListener("selectionchange", function () {
+      clearTimeout(settle);
       if (doc.getSelection().isCollapsed) {
         hidePick();
+      } else {
+        settle = setTimeout(function () { placePick(doc); }, SETTLE_MS);
       }
     });
+    doc.addEventListener("scroll", hidePick, true);
     doc.addEventListener("click", function (event) {
       var mark = event.target.closest && event.target.closest("mark." + MARK);
       if (mark && doc.getSelection().isCollapsed && handlers.open) {
-        handlers.open(Number(mark.dataset.ticket));
+        handlers.open(Number(mark.dataset.ticket), Number(mark.dataset.quote));
       }
     });
     document.dispatchEvent(new CustomEvent("hlv:guide-loaded"));
   }
 
   ns.quote = {
+    /** Có khung xem hướng dẫn để bôi đen trích đoạn hay không. */
+    available: function () { return !!(view && pick); },
     /** fn(đoạn trích) khi bấm nút nổi. */
     onPick: function (fn) { handlers.pick = fn; },
-    /** fn(id ticket) khi bấm vào một đoạn đã đánh dấu. */
+    /** Chữ trên nút nổi, VD "Thêm đoạn này vào ticket" khi đang soạn ticket. */
+    setPickLabel: function (label) {
+      if (pick) {
+        pick.textContent = label;
+      }
+    },
+    /** fn(id ticket, thứ tự đoạn) khi bấm vào một đoạn đã đánh dấu. */
     onOpen: function (fn) { handlers.open = fn; },
-    /** Tô các đoạn trích của tickets ([{id, name, state, quote}]) trên hướng dẫn đang mở. */
+    /** Tô các đoạn trích của tickets ([{id, name, state, quotes}]) trên hướng dẫn đang mở. */
     mark: function (tickets) {
       var doc = frameDoc();
       if (!doc) {
@@ -153,15 +166,23 @@
       }
       clearMarks(doc);
       tickets.forEach(function (ticket) {
-        if (ticket.quote) {
-          wrapQuote(doc, ticket);
-        }
+        ticket.quotes.forEach(function (quote, index) { wrapQuote(doc, ticket, quote, index); });
       });
     },
-    /** Cuộn tới đoạn trích của ticket và nháy sáng. Không thấy trên trang → false. */
-    reveal: function (ticketId) {
+    /**
+     * Cuộn tới đoạn trích thứ index của ticket (không thấy đoạn đó thì đoạn đầu tiên tìm được)
+     * và nháy sáng. Không có đoạn nào của ticket trên trang → false.
+     */
+    reveal: function (ticketId, index) {
       var doc = frameDoc();
-      var marks = doc ? doc.querySelectorAll('mark.' + MARK + '[data-ticket="' + ticketId + '"]') : [];
+      if (!doc) {
+        return false;
+      }
+      var selector = "mark." + MARK + '[data-ticket="' + ticketId + '"]';
+      var marks = doc.querySelectorAll(selector + '[data-quote="' + (index || 0) + '"]');
+      if (!marks.length) {
+        marks = doc.querySelectorAll(selector);
+      }
       if (!marks.length) {
         return false;
       }
@@ -179,6 +200,9 @@
     return;
   }
   view.addEventListener("load", attach);
+  if (view.contentDocument && view.contentDocument.readyState === "complete" && view.contentWindow.location.href !== "about:blank") {
+    attach();
+  }
   // Nhấn giữ chuột trên nút: không để trang ngoài lấy focus làm mất vùng bôi đen trong khung.
   pick.addEventListener("mousedown", function (event) { event.preventDefault(); });
   pick.addEventListener("click", function () {

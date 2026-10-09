@@ -8,6 +8,7 @@ import re
 
 TITLE_MAX = 80
 QUOTE_MAX = 2000
+MAX_QUOTES = 20
 MAX_UPLOAD_FILES = 10
 # Request của Odoo bị chặn ở 128MB (http.DEFAULT_MAX_CONTENT_LENGTH) — để dư chỗ cho phần chữ.
 MAX_UPLOAD_FILE_BYTES = 50 * 1024 * 1024
@@ -32,13 +33,30 @@ def ticket_title(title, body, fallback):
     return fallback
 
 
-def clean_quote(text):
-    """Đoạn người dùng bôi đen trong hướng dẫn → chuỗi lưu vào ticket.
-
-    Gộp mọi khoảng trắng / xuống dòng thành một dấu cách (trang HTML xuống dòng tuỳ bố cục,
-    JS tìm lại đoạn này cũng so theo kiểu đó), cắt còn QUOTE_MAX ký tự. None / rỗng → "".
-    """
+def _clean_quote(text):
+    """Một đoạn bôi đen → gộp mọi khoảng trắng / xuống dòng thành một dấu cách, cắt còn QUOTE_MAX."""
     return _cut(re.sub(r"\s+", " ", text or "").strip(), QUOTE_MAX)
+
+
+def join_quotes(texts):
+    """Các đoạn người dùng bôi đen trong hướng dẫn → chuỗi lưu vào ticket, mỗi dòng một đoạn.
+
+    Mỗi đoạn được gộp khoảng trắng (nên không còn xuống dòng bên trong — xuống dòng dùng làm
+    dấu ngăn; JS tìm lại đoạn trên trang cũng bỏ qua khoảng trắng), cắt còn QUOTE_MAX ký tự.
+    Bỏ đoạn rỗng và đoạn trùng, giữ tối đa MAX_QUOTES đoạn đầu. texts: list str (None được bỏ
+    qua). Không còn đoạn nào → "".
+    """
+    quotes = []
+    for text in texts or []:
+        quote = _clean_quote(text)
+        if quote and quote not in quotes:
+            quotes.append(quote)
+    return "\n".join(quotes[:MAX_QUOTES])
+
+
+def split_quotes(text):
+    """Chuỗi đã lưu bằng join_quotes → list đoạn. None / rỗng → []."""
+    return [line for line in (text or "").split("\n") if line.strip()]
 
 
 def check_uploads(sizes):

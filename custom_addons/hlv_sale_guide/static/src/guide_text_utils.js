@@ -59,6 +59,12 @@
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  /** Tên file → nhãn ngắn hiện thay biểu tượng: "bao-gia.pdf" → "PDF". Không có đuôi → "FILE". */
+  function fileLabel(name) {
+    var match = /\.([a-z0-9]{1,5})$/i.exec(name || "");
+    return match ? match[1].toUpperCase() : "FILE";
+  }
+
   /** Ngày giờ máy chủ gửi xuống ("2026-10-09 07:30:00", giờ UTC) → Date. Rỗng → null. */
   function parseServerDate(text) {
     return text ? new Date(text.replace(" ", "T") + "Z") : null;
@@ -115,6 +121,7 @@
     plain: plain,
     locateQuote: locateQuote,
     formatSize: formatSize,
+    fileLabel: fileLabel,
     parseServerDate: parseServerDate,
     timeAgo: timeAgo,
     uploadProblem: uploadProblem,
