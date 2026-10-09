@@ -15,7 +15,10 @@ VENDOR_STATUS = [
     ("delivered", "Đã giao"),
 ]
 VENDOR_STATUS_ORDER = [key for key, _label in VENDOR_STATUS]
-# Trường Studio trên đơn mua (không có ở mọi môi trường — đọc qua _hlv_studio_text).
+# Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ đóng gói / đã hủy.
+PROGRESS_LABELS = dict(VENDOR_STATUS, waiting="Chờ đóng gói", cancel="Đã hủy")
+# Trường Studio trên đơn mua (không có ở mọi môi trường — đọc qua _misa_field_value của amis_callback,
+# cùng cách module đồng bộ MISA đọc).
 DELIVERY_TERM_FIELD = "x_studio_delivery_term"
 DELIVERY_PLACE_FIELD = "x_studio_ddgh"
 SHIP_TEXT_MAX = 120
@@ -92,28 +95,34 @@ class PurchaseOrder(models.Model):
                 old or _("(trống)"), origin or _("(trống)"),
             ), author)
 
-    def _hlv_studio_text(self, field_name):
-        """Chữ trong một trường Studio của đơn mua; môi trường chưa có trường đó → ""."""
-        self.ensure_one()
-        return (self[field_name] or "").strip() if field_name in self._fields else ""
-
     def _hlv_delivery_term(self):
-        return self._hlv_studio_text(DELIVERY_TERM_FIELD)
+        return self._misa_field_value(DELIVERY_TERM_FIELD)
 
     def _hlv_delivery_place(self):
-        return self._hlv_studio_text(DELIVERY_PLACE_FIELD)
+        return self._misa_field_value(DELIVERY_PLACE_FIELD)
+
+    def _hlv_payment_term(self):
+        """Điều kiện thanh toán: trường Studio, không có thì điều khoản thanh toán của đơn (amis_callback)."""
+        return self._misa_payment_term_text()
 
     def _hlv_delivery_mode(self):
         """Cách giao (vendor_quote_utils.delivery_mode) theo "Phương thức giao hàng" của đơn."""
         return delivery_mode(self._hlv_delivery_term())
 
-    def _hlv_vendor_stage(self):
-        """Tab của đơn trên trang NCC: "waiting" (đã nhận, chờ đóng gói), "packed" (đã đóng gói / đã
-        gửi), "delivered" (đã giao — kể cả đơn kho đã nhận đủ từ trước khi có tự chuyển)."""
+    def _hlv_vendor_progress(self):
+        """Tiến độ hiện trên trang NCC: "cancel" (đơn đã hủy), "delivered" (đã giao — kể cả đơn kho đã
+        nhận đủ từ trước khi có tự chuyển), "shipped", "packed", hoặc "waiting" (chờ đóng gói)."""
         self.ensure_one()
+        if self.state == "cancel":
+            return "cancel"
         if self.hlv_vendor_status == "delivered" or self._hlv_receipts_done():
             return "delivered"
-        return "packed" if self.hlv_vendor_status in ("packed", "shipped") else "waiting"
+        return self.hlv_vendor_status or "waiting"
+
+    def _hlv_vendor_stage(self):
+        """Tab của đơn trên trang NCC: như _hlv_vendor_progress, gộp "đã gửi hàng" vào tab "Đã đóng gói"."""
+        progress = self._hlv_vendor_progress()
+        return "packed" if progress == "shipped" else progress
 
     def _hlv_receipts_done(self):
         """Kho đã nhận xong mọi phiếu NHẬP từ NCC của đơn (có ít nhất một phiếu đã nhận). Chỉ xét
@@ -129,12 +138,14 @@ class PurchaseOrder(models.Model):
         self.ensure_one()
         if status != "packed":
             raise UserError(_("Trạng thái không hợp lệ."))
+        self._hlv_check_not_cancelled()
         return self._hlv_advance_status(status, vendor_partner, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status])
 
     def _vendor_mark_shipped(self, carrier, ref, vendor_partner):
         """NCC báo đã gửi CPN / gửi chành, kèm hãng CPN / tên chành và mã vận đơn / số xe. Gửi lại được
         (sửa thông tin) khi đơn chưa giao. Đơn giao thẳng không cần bước này."""
         self.ensure_one()
+        self._hlv_check_not_cancelled()
         mode = self._hlv_delivery_mode()
         if mode not in (DELIVERY_CPN, DELIVERY_CHANH):
             raise UserError(_("Đơn này không gửi CPN / chành — kho bên mua nhận hàng là đơn tự chuyển Đã giao."))
@@ -151,6 +162,10 @@ class PurchaseOrder(models.Model):
         if not self._hlv_advance_status("shipped", vendor_partner, body):
             post_internal(self, body, vendor_partner)  # đã báo gửi từ trước: chỉ cập nhật thông tin
         return True
+
+    def _hlv_check_not_cancelled(self):
+        if self.state == "cancel":
+            raise UserError(_("Đơn %s đã hủy — không cần giao.", self.name))
 
     def _hlv_advance_status(self, status, author, body):
         """Đưa tiến độ tới status (không lùi) + ghi chú nội bộ. Trả False nếu đơn đã ở / qua status."""

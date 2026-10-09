@@ -575,10 +575,42 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-grid .vq-col-avail { text-align: left; }
 }
 
-/* --- Đơn mua: đã gửi hàng (CPN / chành) + khung nhập thông tin gửi --- */
+/* --- Đơn mua: tiến độ (thanh các bước + một việc cần làm), cột giao hàng / thanh toán --- */
 .vq-status-shipped { background: #f5f3ff; border-color: #ddd6fe; color: #5b21b6; }
-.vq-ship-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-top: 16px; padding-top: 16px;
-    border-top: 1px solid var(--vq-line); }
-.vq-ship-form h3 { flex-basis: 100%; margin: 0; font-size: .95rem; }
-.vq-ship-field { display: grid; gap: 4px; min-width: 220px; flex: 1 1 220px; }
-.vq-ship-field input[type="file"] { font-size: .85rem; }
+.vq-status-cancel { background: #f3f4f6; border-color: #e5e7eb; color: #6b7280; text-decoration: line-through; }
+.vq-order-table .vq-cell-term { max-width: 180px; font-size: .86rem; color: #374151; }
+.vq-progress-panel { background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px; padding: 18px 20px;
+    margin-bottom: 8px; }
+.vq-progress-panel h2 { margin: 0 0 14px; font-size: 1rem; }
+.vq-track { display: flex; max-width: 720px; margin: 0 0 16px; padding: 0; list-style: none; }
+.vq-track-step { position: relative; flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    color: var(--vq-muted); font-size: .8rem; text-align: center; }
+/* Đường nối giữa hai chấm: nửa phải của bước trước + nửa trái của bước sau. */
+.vq-track-step::before { content: ""; position: absolute; top: 7px; right: 50%; left: -50%; height: 2px; background: var(--vq-line-strong); }
+.vq-track-step:first-child::before { display: none; }
+.vq-track-dot { position: relative; z-index: 1; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    border: 2px solid var(--vq-line-strong); }
+.vq-track-step.is-done { color: var(--vq-text); }
+.vq-track-step.is-done .vq-track-dot { background: var(--vq-ok); border-color: var(--vq-ok); }
+.vq-track-step.is-done::before, .vq-track-step.is-current::before { background: var(--vq-ok); }
+.vq-track-step.is-current { color: var(--vq-text); font-weight: 600; }
+.vq-track-step.is-current .vq-track-dot { border-color: var(--vq-accent); box-shadow: 0 0 0 4px rgba(31, 58, 95, .12); }
+.vq-progress-action { padding-top: 14px; border-top: 1px solid var(--vq-line); }
+.vq-progress-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.vq-progress-note { margin: 0; color: var(--vq-muted); }
+.vq-progress-note + .vq-ship-grid { margin-top: 12px; }
+.vq-progress-cancel { padding: 10px 14px; border-radius: 6px; background: #f3f4f6; color: #4b5563; }
+/* Thông tin gửi: nhãn trên, ô nhập cùng một hàng, nút thẳng mép dưới ô. */
+.vq-ship-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px;
+    align-items: start; }
+.vq-ship-grid > .vq-btn { align-self: end; }
+.vq-ship-field { display: grid; gap: 4px; min-width: 0; }
+.vq-ship-field .vq-input { width: 100%; }
+.vq-file { width: 100%; padding: 8px 10px; border: 1px dashed var(--vq-line-strong); border-radius: 6px; background: #fff;
+    font-size: .82rem; color: var(--vq-muted); }
+.vq-quick-progress { padding: 14px 16px; border-top: 1px solid var(--vq-line); }
+.vq-quick-progress .vq-track { max-width: 560px; }
+@media (max-width: 760px) {
+    .vq-ship-grid { grid-template-columns: 1fr; }
+    .vq-order-table .vq-cell-term { max-width: none; }
+}

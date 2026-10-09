@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.3.40.0",
+    "version": "18.0.3.41.0",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
 - Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
@@ -34,6 +34,8 @@
         "misa_purchase_request_sync",
         # Hàng có trên MISA CRM mà Odoo chưa có: tìm + tạo sản phẩm (misa.api.utils.import_product_from_crm).
         "misa_fetch_po_button",
+        # Đọc phương thức giao / điều kiện thanh toán trên đơn mua bằng hàm của module đồng bộ đơn mua MISA.
+        "amis_callback",
     ],
     "data": [
         "security/security.xml",
