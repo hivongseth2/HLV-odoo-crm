@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Hướng dẫn nội bộ",
-    "version": "18.0.1.3.0",
+    "version": "18.0.1.4.0",
     "summary": "Trang /huong-dan cho sale đọc hướng dẫn sử dụng (HTML + ảnh, PDF) xếp theo cây thư mục",
     "description": """
 - Quản lý tải lên một file .html, .pdf hoặc .zip (index.html + ảnh/CSS) cho mỗi hướng dẫn; bấm Lưu
@@ -12,15 +12,19 @@
 - Mỗi hướng dẫn kèm tuỳ chọn một bản Markdown (tải file .md hoặc gõ thẳng) để sau này làm
   kiến thức cho AI; sale không thấy phần này.
 - Link "Hướng dẫn" trên navbar /sale_plan (nếu có module trang sale).
+- Tab "Hỏi đáp & yêu cầu" ở ngăn trái /huong-dan: người dùng đặt câu hỏi hoặc yêu cầu sửa hướng
+  dẫn, bôi đen một đoạn trong hướng dẫn để trích vào ticket, dán ảnh (Ctrl+V) / kéo thả video,
+  file; mỗi ticket có thảo luận (chatter) và trạng thái Chưa xử lý / Đã xử lý.
 """,
     "author": "HLV",
     "category": "Productivity",
     "license": "LGPL-3",
-    "depends": ["base", "web"],
+    "depends": ["base", "web", "mail"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
         "views/sale_guide_views.xml",
+        "views/guide_ticket_views.xml",
         "views/guide_page_templates.xml",
     ],
     "installable": True,

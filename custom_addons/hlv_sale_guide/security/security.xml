@@ -31,4 +31,21 @@
         <field name="domain_force">[(1, '=', 1)]</field>
         <field name="groups" eval="[(4, ref('group_guide_manager'))]"/>
     </record>
+
+    <!-- Ticket thấy được khi thấy được hướng dẫn của nó (ticket chung không gắn hướng dẫn: mọi người).
+         Phải lặp lại điều kiện nhóm của rule_guide_reader vì domain record rule chạy bằng sudo —
+         ('guide_id', 'any', []) KHÔNG áp rule của hướng dẫn. Sửa rule kia thì sửa cả rule này. -->
+    <record id="rule_ticket_reader" model="ir.rule">
+        <field name="name">Ticket hướng dẫn: theo hướng dẫn được xem</field>
+        <field name="model_id" ref="model_hlv_sale_guide_ticket"/>
+        <field name="domain_force">['|', '|', ('guide_id', '=', False), ('guide_id.group_ids', '=', False), ('guide_id.group_ids', 'in', user.groups_id.ids)]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="rule_ticket_manager" model="ir.rule">
+        <field name="name">Ticket hướng dẫn: quản lý thấy hết</field>
+        <field name="model_id" ref="model_hlv_sale_guide_ticket"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_guide_manager'))]"/>
+    </record>
 </odoo>
