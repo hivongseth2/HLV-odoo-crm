@@ -47,7 +47,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
     HQ.$("hq-opportunity").value = "";
-    HQ.resetOpportunityPick();
+    HQ.resetSourcePick();
     HQ.show("hq-crm-results", false);
     renderCodePicker();
     HQ.$("hq-modal-title").textContent = "Hỏi giá nhà cung cấp";
@@ -230,6 +230,7 @@ window.HlvQuote = window.HlvQuote || {};
       deadline: HQ.$("hq-deadline").value,
       note: HQ.$("hq-note").value,
       opportunity_ref: HQ.$("hq-opportunity").value,
+      sale_order_id: C.saleOrder ? C.saleOrder.id : null,
     }).then(function (res) {
       showResults(res);
       HQ.reloadAll();

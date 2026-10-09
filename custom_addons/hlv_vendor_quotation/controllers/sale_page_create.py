@@ -91,8 +91,24 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         )
         return {"orders": [payload.sale_order_summary(o) for o in orders]}
 
+    @http.route(f"{API}/sale_order_lines", type="json", auth="user", methods=["POST"])
+    def api_sale_order_lines(self, order_id=None, **kw):
+        """Hàng hoá của một đơn bán để đổ sẵn vào phiếu hỏi giá (ô lấy hàng, mã DH… / S…)."""
+        self._check()
+        order = request.env["sale.order"].browse(to_int(order_id)).exists()
+        if not order:
+            raise UserError("Không tìm thấy đơn bán.")
+        lines = order.order_line.filtered(
+            lambda l: not l.display_type and not l.is_downpayment
+            and l.product_id.purchase_ok and l.product_uom_qty > 0
+        )
+        return {
+            "order": payload.sale_order_summary(order),
+            "lines": [payload.sale_line_payload(line) for line in lines],
+        }
+
     @http.route(f"{API}/create", type="json", auth="user", methods=["POST"])
-    def api_create(self, code="", lines=None, vendor_ids=None,
+    def api_create(self, code="", lines=None, vendor_ids=None, sale_order_id=None,
                    deadline=None, note="", reuse=None, request_now=False, opportunity_ref="", **kw):
         """Tạo phiếu hỏi giá + mỗi NCC một báo giá. Trả tin nhắn Zalo cho từng NCC.
 
@@ -110,10 +126,12 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         choices = {to_int(p): to_int(v) for p, v in (reuse or {}).items() if to_int(p) and to_int(v)}
         vendor_ids = list(choices.values()) if request_now else list(vendor_ids or []) + list(choices.values())
         partners = env["res.partner"].browse([to_int(v) for v in vendor_ids]).exists()
+        order = env["sale.order"].browse(to_int(sale_order_id)).exists()
         inquiry = env["hlv.vendor.inquiry"]._create_with_quotes(
             partners,
             self._line_vals(lines or []),
             sale_code,
+            sale_order=order or None,
             date_deadline=fields.Date.to_date(deadline) if deadline else False,
             note=(note or "").strip() or False,
             opportunity_ref=opportunity_ref,
