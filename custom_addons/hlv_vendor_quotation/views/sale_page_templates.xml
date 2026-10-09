@@ -253,6 +253,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_close.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_add_vendor.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_history.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>

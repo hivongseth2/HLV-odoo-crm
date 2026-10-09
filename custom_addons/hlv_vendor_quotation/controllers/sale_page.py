@@ -149,6 +149,20 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "name": request_record.sudo().name, "merged": merged,
         })
 
+    @http.route(f"{API}/add_vendors", type="json", auth="user", methods=["POST"])
+    def api_add_vendors(self, code="", inquiry_id=None, vendor_ids=None, line_ids=None, deadline=None, note="", **kw):
+        """Hỏi thêm NCC cho các sản phẩm đã chọn của phiếu (đang hỏi giá hoặc đã lên YCMH)."""
+        scope = self._check(code)
+        inquiry = self._get_inquiry(inquiry_id, scope)
+        wanted = {to_int(line_id) for line_id in line_ids or []}
+        quotes = inquiry.action_ask_more_vendors(
+            request.env["res.partner"].browse([to_int(v) for v in vendor_ids or []]).exists(),
+            inquiry.line_ids.filtered(lambda line: line.id in wanted),
+            fields.Date.to_date(deadline) if deadline else False,
+            note,
+        )
+        return dict(payload.inquiry_detail(inquiry), add_results=[payload.quote_share_result(q) for q in quotes])
+
     @http.route(f"{API}/cancel", type="json", auth="user", methods=["POST"])
     def api_cancel(self, code="", inquiry_id=None, **kw):
         scope = self._check(code)
