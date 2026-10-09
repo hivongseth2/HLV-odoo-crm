@@ -4,7 +4,7 @@ from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
 from ..services.price_reuse import apply_valid_prices
-from .vendor_quote_utils import inquiry_close_day
+from .vendor_quote_utils import clean_ref, inquiry_close_day
 
 SALE_STATUS = [
     ("waiting", "Chờ NCC báo giá"),
@@ -56,6 +56,9 @@ class VendorInquiry(models.Model):
         "purchase.request", string="Yêu cầu mua hàng", compute="_compute_request_ids"
     )
     date_deadline = fields.Date(string="Hạn báo giá")
+    # Số cơ hội bên CRM sale gõ tay — tìm lại mọi báo giá NCC của một cơ hội. Không đặt tên "origin":
+    # báo giá NCC đã có origin = Tài liệu nguồn của YCMH (số đơn bán), hai thứ khác nhau.
+    opportunity_ref = fields.Char(string="Số cơ hội", index=True, tracking=True)
     note = fields.Text(string="Lời nhắn gửi NCC")
     state = fields.Selection(
         [("open", "Đang hỏi giá"), ("requested", "Đã lên YCMH"), ("closed", "Không mua"), ("cancel", "Đã huỷ")],
@@ -116,11 +119,11 @@ class VendorInquiry(models.Model):
 
     @api.model
     def _create_with_quotes(self, vendors, line_vals, sale_code, sale_order=None,
-                            date_deadline=False, note=False):
+                            date_deadline=False, note=False, opportunity_ref=""):
         """Tạo phiếu + mỗi NCC một báo giá (mở ngay cho NCC), cùng danh sách sản phẩm.
 
         line_vals: [{product_id, name, product_qty, product_uom_id}]. vendors: res.partner,
-        gộp về công ty NCC.
+        gộp về công ty NCC. opportunity_ref: số cơ hội CRM (tuỳ chọn).
         """
         if not line_vals:
             raise UserError(_("Chọn ít nhất một sản phẩm cần hỏi giá."))
@@ -132,6 +135,7 @@ class VendorInquiry(models.Model):
             "sale_order_id": sale_order.id if sale_order else False,
             "date_deadline": date_deadline,
             "note": note,
+            "opportunity_ref": clean_ref(opportunity_ref) or False,
             "line_ids": [
                 Command.create(dict(vals, sequence=index))
                 for index, vals in enumerate(line_vals, start=1)
@@ -197,6 +201,14 @@ class VendorInquiry(models.Model):
             ", ".join(quotes.partner_id.commercial_partner_id.mapped("display_name")), len(quotes[:1].line_ids),
         ))
         return quotes
+
+    def action_set_opportunity(self, opportunity_ref):
+        """Sale ghi / sửa số cơ hội sau khi lập phiếu (thường có số cơ hội sau khi đã hỏi giá).
+        Rỗng = bỏ số cơ hội. Phiếu đã huỷ thì không sửa."""
+        for inquiry in self:
+            if inquiry.state == "cancel":
+                raise UserError(_("Phiếu %s đã huỷ.", inquiry.name))
+        self.write({"opportunity_ref": clean_ref(opportunity_ref) or False})
 
     def _apply_reuse_choices(self, choices):
         """Chọn sẵn giá dùng lại sale đã bấm "Dùng giá này" lúc lập phiếu. choices: {product_id:

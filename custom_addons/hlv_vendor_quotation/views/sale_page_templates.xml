@@ -47,7 +47,7 @@
                                 title="Link riêng của mã sale này — gửi cho đúng sale đó">Copy link mã này</button>
                         <label class="hq-sr-only" for="hq-search">Tìm phiếu hỏi giá</label>
                         <input type="search" id="hq-search" class="hq-input hq-input-wide"
-                               placeholder="Tìm số phiếu, sản phẩm, NCC, đơn bán, YCMH…"/>
+                               placeholder="Tìm số phiếu, số cơ hội, sản phẩm, NCC, đơn bán, YCMH…"/>
                         <button type="button" class="hq-btn hq-btn-primary hq-push" id="hq-new">Hỏi giá NCC</button>
                     </div>
 
@@ -181,7 +181,12 @@
                                             <label class="form-label small mb-1" for="hq-deadline">Hạn báo giá</label>
                                             <input type="date" id="hq-deadline" class="hq-input w-100"/>
                                         </div>
-                                        <div class="col-md-8">
+                                        <div class="col-md-4">
+                                            <label class="form-label small mb-1" for="hq-opportunity">Số cơ hội (không bắt buộc)</label>
+                                            <input type="text" id="hq-opportunity" class="hq-input w-100" maxlength="64"
+                                                   autocomplete="off" placeholder="Để sau tìm lại báo giá theo cơ hội"/>
+                                        </div>
+                                        <div class="col-md-12">
                                             <label class="form-label small mb-1" for="hq-note">Lời nhắn hiện đầu trang báo giá của NCC</label>
                                             <textarea id="hq-note" rows="2" class="hq-input hq-textarea w-100"
                                                       placeholder="Thời gian giao mong muốn, quy cách, xuất hoá đơn…"></textarea>

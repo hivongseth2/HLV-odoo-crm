@@ -45,8 +45,8 @@
     <template id="portal_grid" name="Báo giá NCC - bảng giá">
         <p t-if="editable" class="vq-grid-hint">
             Đơn giá tính cho một đơn vị, đã gồm VAT<span class="vq-disc-only">, chưa trừ chiết khấu</span>.
-            Bấm <kbd>Enter</kbd> để xuống dòng dưới. Có sẵn bảng giá trong Excel thì copy cả cột, dán vào ô
-            đơn giá đầu tiên.
+            Mặt hàng không có: bấm <b>×</b> cạnh mã hàng hoặc để trống đơn giá. Bấm <kbd>Enter</kbd> để xuống
+            dòng dưới. Có sẵn bảng giá trong Excel thì copy cả cột, dán vào ô đơn giá đầu tiên.
         </p>
         <div class="vq-table-scroll">
         <table t-attf-class="vq-table vq-price-table vq-grid #{'vq-grid-board' if show_quote else ''}" data-vq-grid="1">
@@ -63,7 +63,6 @@
                     <th class="vq-num vq-col-disc vq-disc-only">%CK</th>
                     <th class="vq-num vq-col-total">Thành tiền</th>
                     <th class="vq-num vq-col-days">Giao</th>
-                    <th class="vq-col-na">Hết hàng</th>
                     <th class="vq-col-text">Tên xuất HĐ</th>
                     <th class="vq-col-text">Ghi chú</th>
                 </tr>
@@ -77,6 +76,14 @@
         </div>
     </template>
 
+    <!-- Nút "×" cạnh mã hàng: NCC bấm = không có hàng (bấm lại để bỏ). Checkbox thật nằm trong nhãn
+         nên form vẫn gửi na_<id> như cũ, không cần JS. Dòng không sửa được thì không có nút. -->
+    <template id="portal_grid_na" name="Báo giá NCC - nút không có hàng">
+        <label t-if="line_editable" class="vq-na-x" title="Không có hàng — bấm lại để bỏ">
+            <input type="checkbox" value="1" class="vq-sr-only" data-vq-na="1" t-att-name="'na_%s' % lid"
+                   t-att-checked="na_checked" t-att-aria-label="'Không có hàng — %s' % product_name"/>×</label>
+    </template>
+
     <template id="portal_grid_row" name="Báo giá NCC - dòng bảng giá">
         <t t-set="lid" t-value="line.id"/>
         <t t-set="line_editable" t-value="editable and not line.vendor_locked"/>
@@ -88,9 +95,9 @@
         <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
         <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
         <tr data-vq-line="1"
-            t-attf-class="vq-line #{choice_class} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''}"
+            t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''}"
             t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
-            t-att-data-vat="line.vat or ''">
+            t-att-data-vat="line.vat or ''" t-att-data-na="'1' if na_checked else None">
             <td class="vq-col-no" t-esc="line_index + 1"/>
             <t t-if="show_quote">
                 <t t-set="info" t-value="quote_info[line.quote_id.id]"/>
@@ -111,9 +118,12 @@
                     <span t-else="" class="vq-muted">—</span>
                 </td>
             </t>
-            <td t-if="not show_quote" class="vq-col-code" data-label="Mã hàng" t-esc="code or '—'"/>
+            <td t-if="not show_quote" class="vq-col-code" data-label="Mã hàng">
+                <t t-call="hlv_vendor_quotation.portal_grid_na"/><t t-esc="code or '—'"/>
+            </td>
             <td class="vq-col-name" t-att-title="('%s · %s' % (code, product_name)) if show_quote and code else product_name">
                 <div class="vq-name-cell">
+                    <t t-if="show_quote" t-call="hlv_vendor_quotation.portal_grid_na"/>
                     <span t-if="show_quote and code" class="vq-name-code" t-esc="code"/>
                     <a t-if="line.product_id.image_128" class="vq-name-text" target="_blank"
                        t-att-href="'%s/img/%s/1024' % (portal_base, lid)" title="Xem ảnh sản phẩm"
@@ -158,17 +168,14 @@
                        t-att-value="post.get('disc_%s' % lid) if post else (fmt(line.discount) if line.list_price else (fmt(ref.discount) if disc_on and ref_disc else ''))"/>
                 <span t-else="" class="vq-cell-text" t-esc="fmt(line.discount) if line.list_price else '—'"/>
             </td>
-            <td class="vq-num vq-col-total vq-cell-calc" data-label="Thành tiền" data-vq-subtotal="1">—</td>
+            <!-- Tính sẵn ở server cho bảng chỉ đọc (xem nhanh ở danh sách); trang nhập giá thì JS tính lại khi gõ. -->
+            <td class="vq-num vq-col-total vq-cell-calc" data-label="Thành tiền" data-vq-subtotal="1"
+                t-esc="'Không có hàng' if na_checked else (fmt(round(line.price_total)) if line.price_unit else '—')"/>
             <td class="vq-num vq-col-days" data-label="Giao (ngày)">
                 <input t-if="line_editable" type="text" inputmode="numeric" class="vq-cell-input"
                        t-att-name="'days_%s' % lid" placeholder="ngày"
                        t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or (ref and ref.delivery_days) or '')"/>
                 <span t-else="" class="vq-cell-text" t-esc="line.delivery_days or '—'"/>
-            </td>
-            <td class="vq-col-na" data-label="Hết hàng">
-                <input type="checkbox" value="1" data-vq-na="1" t-att-name="'na_%s' % lid"
-                       t-att-checked="na_checked" t-att-disabled="not line_editable"
-                       t-att-aria-label="'Không có hàng — %s' % product_name"/>
             </td>
             <td class="vq-col-text" data-label="Tên xuất HĐ">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"

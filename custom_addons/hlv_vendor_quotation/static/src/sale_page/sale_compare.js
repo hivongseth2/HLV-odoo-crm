@@ -112,11 +112,34 @@ window.HlvQuote = window.HlvQuote || {};
     var orders = d.orders.map(HQ.orderTag).join("");
     return '<div class="hq-facts">' +
       fact("Sale", esc(HQ.saleLabel(d.sale_code))) +
+      opportunityFact(d) +
       fact("Đơn bán", esc(d.sale_order)) +
       fact("Hạn báo giá", esc(d.deadline)) +
       fact("Yêu cầu mua hàng", d.requests.map(HQ.requestTag).join("")) +
       fact("Đơn mua", orders) +
       "</div>";
+  }
+
+  /** Số cơ hội: sửa tại chỗ (thường có số cơ hội sau khi đã hỏi giá). */
+  function opportunityFact(d) {
+    if (!d.can_set_opportunity) {
+      return fact("Số cơ hội", esc(d.opportunity_ref));
+    }
+    return '<div class="hq-fact"><label class="hq-label" for="hq-opp-input">Số cơ hội</label>' +
+      '<span class="hq-opp-edit"><input type="text" id="hq-opp-input" class="hq-input" maxlength="64" autocomplete="off" ' +
+      'value="' + esc(d.opportunity_ref) + '" placeholder="Chưa có"/>' +
+      '<button type="button" class="hq-btn hq-btn-mini" data-save-opp="1">Lưu</button></span></div>';
+  }
+
+  function saveOpportunity(button) {
+    var value = HQ.$("hq-opp-input").value;
+    button.disabled = true;
+    HQ.api("set_opportunity", { inquiry_id: D.detail.id, opportunity_ref: value }).then(function (detail) {
+      afterChange(detail, detail.opportunity_ref ? "Đã lưu số cơ hội " + detail.opportunity_ref : "Đã bỏ số cơ hội");
+    }).catch(function (err) {
+      button.disabled = false;
+      HQ.toast(err.message);
+    });
   }
 
   /** YCMH bị thu mua từ chối: báo đỏ ngay đầu ngăn — trước đây chỉ là chữ nhỏ trong ngoặc. */
@@ -357,6 +380,13 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(panel, "click", "[data-review-request]", function (el) { reviewRequest(el.dataset.reviewRequest === "1"); });
     HQ.on(panel, "click", "[data-create-request]", createRequest);
     HQ.on(panel, "click", "[data-cancel-inquiry]", cancelInquiry);
+    HQ.on(panel, "click", "[data-save-opp]", saveOpportunity);
+    HQ.on(panel, "keydown", "#hq-opp-input", function (el, event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveOpportunity(panel.querySelector("[data-save-opp]"));
+      }
+    });
     HQ.on(panel, "click", "[data-clear-so]", function () {
       D.saleOrder = null;
       HQ.$("hq-req-so-chip").innerHTML = "";

@@ -10,6 +10,7 @@
                 <field name="request_id"/>
                 <field name="sale_order_id" optional="show"/>
                 <field name="origin" optional="hide"/>
+                <field name="opportunity_ref" optional="show"/>
                 <field name="date_deadline"/>
                 <field name="submit_date" optional="show"/>
                 <field name="price_valid_until" optional="show"/>
@@ -155,6 +156,7 @@
                 <field name="name"/>
                 <field name="request_id"/>
                 <field name="origin"/>
+                <field name="opportunity_ref"/>
                 <field name="sale_order_id"/>
                 <field name="partner_id"/>
                 <filter name="filter_sent" string="Chờ NCC báo giá" domain="[('state', '=', 'sent')]"/>

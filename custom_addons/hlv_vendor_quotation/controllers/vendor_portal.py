@@ -75,6 +75,8 @@ class VendorQuotePortal(http.Controller):
                 quote.id: request.env["hlv.vendor.sale.contact"]._requester(quote.inquiry_id.sale_code)
                 for quote in quotes
             },
+            # Bảng xem nhanh dùng chung bảng giá trang báo giá: dòng nền xanh = bên mua chọn NCC này.
+            "line_choice": {line.id: self._line_choice(line) for line in quotes.line_ids},
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
