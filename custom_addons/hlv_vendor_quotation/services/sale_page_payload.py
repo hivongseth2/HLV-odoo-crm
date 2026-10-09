@@ -350,19 +350,6 @@ def sale_order_summary(order):
     }
 
 
-def sale_line_payload(line):
-    """Dòng đơn bán → dòng hàng trong hộp hỏi giá. Số lượng mặc định = số lượng bán."""
-    product = line.product_id
-    return {
-        "product_id": product.id,
-        "product": product.display_name,
-        "name": product.display_name,
-        "qty": line.product_uom_qty,
-        "uom_id": line.product_uom.id,
-        "uom": line.product_uom.name or "",
-    }
-
-
 def product_payload(product):
     uom = product.uom_po_id or product.uom_id
     return {

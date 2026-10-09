@@ -18,7 +18,6 @@ window.HlvQuote = window.HlvQuote || {};
     openInquiryId: null,
 
     create: {
-      saleOrder: null,  // đơn bán đã lấy hàng — gắn sẵn vào phiếu, dùng lại khi lên YCMH
       lines: [],        // [{product_id, product, name, qty, uom_id, uom}]
       chosen: [],       // [{id, name}] NCC sẽ gửi
       suggestions: [],

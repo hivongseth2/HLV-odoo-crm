@@ -118,8 +118,7 @@ class VendorInquiry(models.Model):
         return super().create(vals_list)
 
     @api.model
-    def _create_with_quotes(self, vendors, line_vals, sale_code, sale_order=None,
-                            date_deadline=False, note=False, opportunity_ref=""):
+    def _create_with_quotes(self, vendors, line_vals, sale_code, date_deadline=False, note=False, opportunity_ref=""):
         """Tạo phiếu + mỗi NCC một báo giá (mở ngay cho NCC), cùng danh sách sản phẩm.
 
         line_vals: [{product_id, name, product_qty, product_uom_id}]. vendors: res.partner,
@@ -132,7 +131,7 @@ class VendorInquiry(models.Model):
             raise UserError(_("Chọn ít nhất một nhà cung cấp."))
         inquiry = self.create({
             "sale_code": sale_code or False,
-            "sale_order_id": sale_order.id if sale_order else False,
+            # Đơn bán gắn sau, lúc lên YCMH (action_create_request) — hàng lấy từ cơ hội CRM.
             "date_deadline": date_deadline,
             "note": note,
             "opportunity_ref": clean_ref(opportunity_ref) or False,
