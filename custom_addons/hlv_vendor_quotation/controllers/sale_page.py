@@ -105,11 +105,11 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         base = sale_scope.scope_domain(scope) + self._search_domain(search)
         if to_int(vendor_id):
             base.append(("quote_ids.access_id.partner_id", "=", to_int(vendor_id)))
-        counts = {key: Inquiry.search_count(base + self._status_domain(key)) for key, _label in STATUS_TABS}
+        counts = {key: Inquiry.search_count(base + self._status_domain(key, search)) for key, _label in STATUS_TABS}
         status = status if status in counts else "all"
         pager = paginate(counts[status], page, PER_PAGE)
         inquiries = Inquiry.search(
-            base + self._status_domain(status), order="id desc",
+            base + self._status_domain(status, search), order="id desc",
             offset=pager["offset"], limit=pager["limit"],
         )
         return {
@@ -162,6 +162,13 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             note,
         )
         return dict(payload.inquiry_detail(inquiry), add_results=[payload.quote_share_result(q) for q in quotes])
+
+    @http.route(f"{API}/set_opportunity", type="json", auth="user", methods=["POST"])
+    def api_set_opportunity(self, code="", inquiry_id=None, opportunity_ref="", **kw):
+        """Ghi / sửa số cơ hội của phiếu (ngăn chi tiết phiếu)."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        inquiry.action_set_opportunity(opportunity_ref)
+        return payload.inquiry_detail(inquiry)
 
     @http.route(f"{API}/cancel", type="json", auth="user", methods=["POST"])
     def api_cancel(self, code="", inquiry_id=None, **kw):
@@ -282,6 +289,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             return []
         return expression.OR([
             [("name", "ilike", search)],
+            [("opportunity_ref", "ilike", search)],
             [("sale_code", "ilike", search)],
             [("sale_order_id.name", "ilike", search)],
             [("request_id.name", "ilike", search)],
@@ -289,8 +297,9 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             [("quote_ids.partner_id", "ilike", search)],
         ])
 
-    def _status_domain(self, status):
+    def _status_domain(self, status, search=""):
         if status == "all":
-            # "Tất cả" = phiếu còn theo dõi; phiếu đã đóng / huỷ xem ở tab riêng.
-            return [("sale_status", "not in", ("cancel", "closed"))]
+            # "Tất cả" = phiếu còn theo dõi; phiếu đã đóng / huỷ xem ở tab riêng. Đang tìm thì gồm cả
+            # phiếu đã đóng / huỷ: tìm lại số cơ hội sau một thời gian, phiếu thường đã tự đóng.
+            return [] if (search or "").strip() else [("sale_status", "not in", ("cancel", "closed"))]
         return [("sale_status", "=", status)]

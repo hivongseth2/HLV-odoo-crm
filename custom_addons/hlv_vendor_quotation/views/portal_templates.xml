@@ -274,7 +274,7 @@
                                 <a t-att-href="quote_url" t-esc="quote.name"/>
                                 <span t-if="mark['unread']" class="vq-chip-new" t-att-title="'%s tin nhắn chưa xem' % mark['unread']"><svg class="vq-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg><t t-esc="mark['unread']"/> tin mới</span>
                                 <span t-elif="mark['new']" class="vq-chip-fresh">Mới</span>
-                                <div t-if="requesters.get(quote.id)" class="vq-ref-requester" title="Người hỏi giá"
+                                <div t-if="requesters.get(quote.id)" class="vq-ref-requester" t-att-title="'Người hỏi giá: %s' % requesters[quote.id]"
                                      t-esc="requesters[quote.id]"/>
                             </td>
                             <td class="vq-cell-products" data-label="Mặt hàng">

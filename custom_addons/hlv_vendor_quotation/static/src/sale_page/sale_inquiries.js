@@ -130,6 +130,7 @@ window.HlvQuote = window.HlvQuote || {};
       return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") + (q.request_rejected ? " hq-row-alert" : "") +
         '" data-inquiry="' + q.id + '">' +
         '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" + (chat ? " " + chat : "") +
+        (q.opportunity_ref ? '<div class="hq-muted" title="Số cơ hội">CH ' + esc(q.opportunity_ref) + "</div>" : "") +
         (q.sale_code ? '<div class="hq-muted">' + esc(HQ.saleName(q.sale_code)) + "</div>" : "") + "</td>" +
         '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.products) + "</span>" +
         (q.sale_order ? '<div class="hq-muted">Đơn bán ' + esc(q.sale_order) + "</div>" : "") + "</td>" +

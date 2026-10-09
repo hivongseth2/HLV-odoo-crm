@@ -44,6 +44,7 @@
         const unitInput = line.querySelector("[data-vq-unit]");
         const vatSelect = line.querySelector("[data-vq-vat]");
         const vat = vatSelect ? vatSelect.value : line.dataset.vat;
+        const naInput = line.querySelector("[data-vq-na]");
         let prices;
         if (unitInput) {
             prices = splitUnitPrice(parseVnNumber(unitInput.value), vatRate(vat), lineDiscount(line));
@@ -53,7 +54,8 @@
             prices = net ? { net: net, after: round2(net * (1 + vatRate(vat) / 100)) } : null;
         }
         return {
-            unavailable: line.querySelector("[data-vq-na]").checked,
+            // Dòng sửa được có nút "×" (checkbox); dòng chỉ đọc ghi sẵn data-na.
+            unavailable: naInput ? naInput.checked : line.dataset.na === "1",
             vat: vat,
             qty: parseFloat(line.dataset.qty) || 0,
             prices: prices,

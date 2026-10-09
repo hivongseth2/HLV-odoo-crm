@@ -99,6 +99,7 @@ def inquiry_summary(inquiry):
         "id": inquiry.id,
         "name": inquiry.name,
         "sale_code": inquiry.sale_code or "",
+        "opportunity_ref": inquiry.opportunity_ref or "",
         "products": ", ".join(names) + (f" và {more} sản phẩm khác" if more > 0 else ""),
         "line_count": len(inquiry.line_ids),
         "vendor_count": len(quotes),
@@ -140,6 +141,7 @@ def inquiry_detail(inquiry):
         "pending_count": len(pending),
         "can_request": inquiry.state not in ("cancel", "closed") and bool(pending),
         "can_cancel": inquiry.state == "open",
+        "can_set_opportunity": inquiry.state != "cancel",
         # Hỏi thêm NCC (NCC đã hỏi báo hết hàng…) — cả khi đã lên YCMH, còn sản phẩm chưa lên đơn mua.
         "can_add_vendor": inquiry.state in ("open", "requested") and not all(inquiry.line_ids.mapped("locked")),
         # "Không mua": đóng phiếu, giá NCC vẫn giữ cho phiếu sau dùng lại.

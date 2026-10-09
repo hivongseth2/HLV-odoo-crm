@@ -109,7 +109,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/create", type="json", auth="user", methods=["POST"])
     def api_create(self, code="", lines=None, vendor_ids=None, sale_order_id=None,
-                   deadline=None, note="", reuse=None, request_now=False, **kw):
+                   deadline=None, note="", reuse=None, request_now=False, opportunity_ref="", **kw):
         """Tạo phiếu hỏi giá + mỗi NCC một báo giá. Trả tin nhắn Zalo cho từng NCC.
 
         code là mã sale của phiếu. "Tất cả" không phải một mã: thu mua tạo phiếu khi đang xem
@@ -134,6 +134,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             sale_order=order or None,
             date_deadline=fields.Date.to_date(deadline) if deadline else False,
             note=(note or "").strip() or False,
+            opportunity_ref=opportunity_ref,
         )
         missing = inquiry._apply_reuse_choices(choices) if choices else inquiry.line_ids.browse()
         request_name = ""

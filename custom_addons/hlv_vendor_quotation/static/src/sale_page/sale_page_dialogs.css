@@ -414,3 +414,7 @@
 /* Hàng trên MISA CRM (Odoo chưa có): dòng cuối ô tìm + khung kết quả dưới ô tìm. */
 .hq-crm-item { color: var(--hq-accent-dark); font-weight: 500; }
 .hq-crm-box { margin-top: .5rem; }
+
+/* Số cơ hội sửa tại chỗ trong ô thông tin phiếu. */
+.hq-opp-edit { display: flex; gap: .35rem; align-items: center; }
+.hq-opp-edit .hq-input { width: 150px; min-width: 0; padding-top: .2rem; padding-bottom: .2rem; }

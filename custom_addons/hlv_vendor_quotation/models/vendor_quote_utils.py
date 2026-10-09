@@ -130,6 +130,15 @@ def split_code_name(name, code):
     return name
 
 
+REF_MAX = 64
+
+
+def clean_ref(text):
+    """Số tham chiếu sale gõ tay (số cơ hội…): bỏ khoảng trắng hai đầu, gộp khoảng trắng giữa, tối
+    đa REF_MAX ký tự. Nhận chuỗi hoặc None/False; trả chuỗi ("" khi trống)."""
+    return " ".join(str(text or "").split())[:REF_MAX]
+
+
 def line_values_changed(current, submitted):
     """NCC có sửa gì ở một dòng báo giá không (bảng báo giá theo mặt hàng chỉ gửi lại phiếu có sửa).
 

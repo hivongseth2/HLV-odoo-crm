@@ -9,6 +9,7 @@
             <list string="Phiếu hỏi giá" create="0" decoration-muted="sale_status == 'cancel'">
                 <field name="name"/>
                 <field name="sale_code"/>
+                <field name="opportunity_ref" optional="show"/>
                 <field name="sale_order_id" optional="show"/>
                 <field name="quoted_count" string="NCC đã báo"/>
                 <field name="chosen_count" string="SP đã chọn NCC"/>
@@ -38,6 +39,7 @@
                     <group>
                         <group>
                             <field name="sale_code"/>
+                            <field name="opportunity_ref"/>
                             <field name="sale_order_id"/>
                             <field name="request_id"/>
                         </group>
@@ -92,6 +94,7 @@
         <field name="arch" type="xml">
             <search string="Phiếu hỏi giá">
                 <field name="name"/>
+                <field name="opportunity_ref"/>
                 <field name="sale_code"/>
                 <field name="sale_order_id"/>
                 <field name="request_id"/>

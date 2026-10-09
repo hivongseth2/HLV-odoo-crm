@@ -141,12 +141,11 @@ class VendorLineBoardPortal(VendorQuotePortal):
                 continue
             if not self._board_touched(quote, open_lines, line_values):
                 continue
-            missing = open_lines.filtered(lambda line: not self._line_filled(line_values[line.id]))
+            missing = open_lines.filtered(lambda line: self._missing_vat(line_values[line.id]))
             if missing:
                 error_line_ids.update(missing.ids)
                 errors.append(
-                    f"{quote.name}: chưa có đơn giá hoặc VAT — {', '.join(self._short_name(line) for line in missing)}."
-                    " Mặt hàng không có thì tích \"Hết hàng\"; chưa muốn báo phiếu này thì xoá các giá đã gõ của phiếu."
+                    f"{quote.name}: có đơn giá nhưng chưa chọn VAT — {', '.join(self._short_name(line) for line in missing)}."
                 )
                 continue
             try:
@@ -157,21 +156,26 @@ class VendorLineBoardPortal(VendorQuotePortal):
             else:
                 saved += 1
         if not saved and not errors:
-            errors.append("Chưa có giá nào mới để gửi — điền đơn giá hoặc tích \"Hết hàng\" rồi bấm Gửi.")
+            errors.append("Chưa có giá nào mới để gửi — điền đơn giá hoặc bấm \"×\" cạnh mã hàng không có, rồi bấm Gửi.")
         return saved, errors, error_line_ids
 
     @staticmethod
-    def _line_filled(values):
-        # Cùng điều kiện _vendor_submit nhận một dòng: có giá + VAT, hoặc báo không có hàng.
-        return bool(values["unavailable"] or (values["price_unit"] and values["vat"]))
+    def _missing_vat(values):
+        # Cùng luật _vendor_submit: dòng có giá phải có VAT; để trống giá / bấm "×" = không có hàng.
+        return bool(not values["unavailable"] and values["price_unit"] and not values["vat"])
+
+    @staticmethod
+    def _line_answered(values):
+        # NCC đã trả lời dòng này: có giá, hoặc bấm "×" (không có hàng).
+        return bool(values["unavailable"] or values["price_unit"])
 
     def _board_touched(self, quote, open_lines, line_values):
         """NCC có báo gì cho phiếu này trên bảng chung không.
 
-        Phiếu đã báo giá: có dòng khác giá trị đang lưu. Phiếu chờ báo giá: điền đủ mọi dòng (kể cả
-        đủ nhờ giá cũ điền sẵn — giống bấm Gửi ở trang phiếu), hoặc có dòng mà giá / hết hàng khác số
-        điền sẵn. Không so với số điền sẵn thì phiếu chỉ có vài dòng "giá cũ" sẽ bị báo thiếu dù NCC
-        chưa hề đụng tới.
+        Phiếu đã báo giá: có dòng khác giá trị đang lưu. Phiếu chờ báo giá: mọi dòng đều có giá hoặc
+        "×" (kể cả nhờ giá cũ điền sẵn — giống bấm Gửi ở trang phiếu), hoặc có dòng mà giá / hết hàng
+        khác số điền sẵn. Gửi rồi thì dòng để trống thành không có hàng — nên phiếu chỉ có vài dòng
+        "giá cũ" NCC chưa đụng tới thì KHÔNG gửi, kẻo các dòng còn lại bị coi là hết hàng.
         """
         if quote.state != "sent":
             return any(
@@ -181,7 +185,7 @@ class VendorLineBoardPortal(VendorQuotePortal):
                 )
                 for line in open_lines
             )
-        if all(self._line_filled(line_values[line.id]) for line in open_lines):
+        if all(self._line_answered(line_values[line.id]) for line in open_lines):
             return True
         references = reference_prices(quote)
 
