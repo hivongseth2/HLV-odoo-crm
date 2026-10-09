@@ -309,7 +309,7 @@ class VendorQuotePortal(http.Controller):
         return domain
 
     def _list_url(self, access, status=None, q="", page=1):
-        # Danh sách theo phiếu là trang gốc của link (trang "Báo giá theo mặt hàng" tạm tắt trên prd —
+        # Danh sách theo phiếu là trang gốc của link (trang "Báo giá theo mặt hàng" tạm tắt —
         # xem controllers/__init__.py). Luôn ghi status (kể cả "all") để giữ đúng tab.
         params = {"status": status, "q": q or None, "page": page if page > 1 else None}
         query = urlencode({key: value for key, value in params.items() if value})

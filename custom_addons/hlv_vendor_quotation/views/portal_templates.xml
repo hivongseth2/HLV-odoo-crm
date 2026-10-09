@@ -144,7 +144,7 @@
 
     <!-- Các mục của NCC: báo giá (theo mặt hàng / theo phiếu) và đơn mua sinh ra từ báo giá. -->
     <template id="portal_tabs" name="Báo giá NCC - tab">
-        <!-- Tab "Báo giá theo mặt hàng" tạm tắt trên prd (xem controllers/__init__.py). -->
+        <!-- Tab "Báo giá theo mặt hàng" tạm tắt (xem controllers/__init__.py). -->
         <nav class="vq-section-tabs">
             <a t-att-href="portal_base"
                t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'quotes' else ''}">
