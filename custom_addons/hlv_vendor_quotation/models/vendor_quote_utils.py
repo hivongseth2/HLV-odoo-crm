@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timedelta
 
 import pytz
+from odoo.addons.misa_fetch_po_button.utils.text_match import normalize_vn
 
 _CURRENCY_SUFFIX = re.compile(r"(vn)?[dđ]$", re.IGNORECASE)
 LOCAL_TZ = "Asia/Ho_Chi_Minh"
@@ -131,6 +132,26 @@ def split_code_name(name, code):
 
 
 REF_MAX = 64
+# Cách giao của đơn mua, đọc từ chữ "Phương thức giao hàng" thu mua gõ: chỉ gửi CPN / gửi chành thì
+# NCC mới phải báo thêm (mã vận đơn / chành + số xe); còn lại kho bên mình nhận là xong.
+DELIVERY_CPN = "cpn"
+DELIVERY_CHANH = "chanh"
+DELIVERY_DIRECT = "direct"
+# Chữ dài, ít nhầm — chữ tắt quá ngắn ("ems", "ghn") dễ khớp nhầm giữa một chữ khác khi đã bỏ khoảng trắng.
+_CPN_WORDS = ("cpn", "chuyenphat", "viettelpost", "vnpost", "jtexpress", "giaohangnhanh", "giaohangtietkiem")
+_CHANH_WORDS = ("chanh", "nhaxe", "xekhach", "guixe")
+
+
+def delivery_mode(term):
+    """Chữ "Phương thức giao hàng" → cách giao: DELIVERY_CPN (chuyển phát nhanh), DELIVERY_CHANH (gửi
+    chành / nhà xe) hoặc DELIVERY_DIRECT (giao tận kho, bên mua đến lấy, trống…). So không dấu,
+    bỏ khoảng trắng: "Gửi chành" / "GUI CHANH" / "Chuyển phát nhanh" / "CPN" đều nhận ra."""
+    key = normalize_vn(term)
+    if any(word in key for word in _CPN_WORDS):
+        return DELIVERY_CPN
+    if any(word in key for word in _CHANH_WORDS):
+        return DELIVERY_CHANH
+    return DELIVERY_DIRECT
 IN_STOCK_NOTE = "Sẵn hàng"
 _IN_STOCK_SEP = "; "
 
