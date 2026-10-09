@@ -896,6 +896,14 @@ def _transfer_location_for(source_loc):
         return request.env['stock.location']
     return warehouse.sudo()._hlv_get_transfer_location()
 
+def _transfer_location_error(source_loc, dest_location_id=False):
+    """CHUYENKHO chỉ để xem tồn trên app; không làm nguồn/đích khi chuyển (chỉ đi qua phiếu bước 1/bước 2)."""
+    locations = source_loc | request.env['stock.location'].sudo().browse(int(dest_location_id or 0)).exists()
+    location = locations.filtered('hlv_is_transfer_location')[:1]
+    if location:
+        return {'error': _('%s là vị trí chuyển kho, không chọn làm nguồn/đích. Hàng ở đây được nhập qua phiếu bước 2.', location.display_name)}
+    return False
+
 def _pick_assignment_error(picking):
     try:
         picking._check_hlv_mobile_pick_assignment_access(user=request.env.user)
@@ -1006,7 +1014,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'type': 'product', 'id': product.id, 'name': product.display_name}
 
         # 3. Check if it's a Location (Barcode or Name)
-        location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode), ('hlv_is_transfer_location', '=', False)], limit=1)
+        location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             warehouse_code = location.warehouse_id.code or 'HLV'
             return {'type': 'location', 'id': location.id, 'name': location.display_name, 'warehouse_code': warehouse_code}
@@ -1429,6 +1437,9 @@ class HLVMobileBarcodeController(http.Controller):
         transit_loc = _transfer_location_for(source_loc)
         if not transit_loc:
             return {'error': _('Không tìm thấy vị trí chuyển kho (CHUYENKHO) của kho nguồn')}
+        hub_error = _transfer_location_error(source_loc, dest_location_id)
+        if hub_error:
+            return hub_error
             
         picking_type_int = request.env['stock.picking.type'].search([
             ('code', '=', 'internal'),
@@ -3496,7 +3507,11 @@ class HLVMobileBarcodeController(http.Controller):
                     location = q.location_id
             if location:
                 warehouse_code = location.warehouse_id.code or 'HLV'
-            can_process_whole_package = bool(quants and location and len(quant_locations) == 1)
+            # Kiện ở CHUYENKHO đang chờ phiếu bước 2: chỉ xem, không tháo/chuyển
+            in_transfer_location = any(quant_locations.mapped('hlv_is_transfer_location'))
+            can_process_whole_package = bool(
+                quants and location and len(quant_locations) == 1 and not in_transfer_location
+            )
             return {
                 'title': title,
                 'results': results,
@@ -3506,7 +3521,7 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_id': location.id if location else False,
                 'location_barcode': (location.barcode or location.name) if location else '',
                 'location_name': location.display_name if location else '',
-                'can_unpack_package': bool(quants),
+                'can_unpack_package': bool(quants) and not in_transfer_location,
                 'can_move_package': can_process_whole_package,
             }
                 
@@ -3521,6 +3536,10 @@ class HLVMobileBarcodeController(http.Controller):
             source_location = _single_package_location(package)
         except UserError:
             source_location = package.location_id
+
+        hub_error = _transfer_location_error(source_location or request.env['stock.location'])
+        if hub_error:
+            return hub_error
 
         warehouse = source_location.warehouse_id if source_location else False
         if source_location and not warehouse:
@@ -3584,6 +3603,9 @@ class HLVMobileBarcodeController(http.Controller):
         transit_loc = _transfer_location_for(source_loc)
         if not transit_loc:
             return {'error': _('Không tìm thấy vị trí chuyển kho (CHUYENKHO) của kho nguồn')}
+        hub_error = _transfer_location_error(source_loc, dest_location_id)
+        if hub_error:
+            return hub_error
             
         # Determine warehouse using parent_of logic if warehouse_id is missing
         warehouse = source_loc.warehouse_id
@@ -3798,6 +3820,9 @@ class HLVMobileBarcodeController(http.Controller):
         transit_loc = _transfer_location_for(source_loc)
         if not transit_loc:
             return {'error': _('Không tìm thấy vị trí chuyển kho (CHUYENKHO) của kho nguồn')}
+        hub_error = _transfer_location_error(source_loc)
+        if hub_error:
+            return hub_error
             
         warehouse = source_loc.warehouse_id
         if warehouse and warehouse.int_type_id and warehouse.in_type_id:
