@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Backend cho ticket: quản lý xem tổng, lọc, trả lời bằng chatter. Người hỏi thường dùng ngăn
+         Ticket trên /huong-dan; form này là chỗ thông báo Odoo (hộp thư / email) dẫn tới. -->
+    <record id="view_guide_ticket_list" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.ticket.list</field>
+        <field name="model">hlv.sale.guide.ticket</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'done'">
+                <field name="name"/>
+                <field name="kind"/>
+                <field name="guide_id"/>
+                <field name="create_uid" string="Người hỏi"/>
+                <field name="create_date" string="Ngày hỏi"/>
+                <field name="last_message_on"/>
+                <field name="state" widget="badge" decoration-danger="state == 'open'" decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_guide_ticket_form" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.ticket.form</field>
+        <field name="model">hlv.sale.guide.ticket</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_mark_done" type="object" string="Đánh dấu đã xử lý" class="btn-primary"
+                            invisible="state != 'open'"/>
+                    <button name="action_reopen" type="object" string="Mở lại" invisible="state != 'done'"/>
+                    <button name="action_open_page" type="object" string="Xem trên trang hướng dẫn"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="kind"/>
+                            <field name="guide_id"/>
+                        </group>
+                        <group>
+                            <field name="create_uid" string="Người hỏi" readonly="1"/>
+                            <field name="create_date" string="Ngày hỏi" readonly="1"/>
+                            <field name="done_by_id" invisible="state != 'done'"/>
+                            <field name="done_on" invisible="state != 'done'"/>
+                        </group>
+                    </group>
+                    <field name="quote" invisible="not quote" readonly="1"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_guide_ticket_search" model="ir.ui.view">
+        <field name="name">hlv.sale.guide.ticket.search</field>
+        <field name="model">hlv.sale.guide.ticket</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="guide_id"/>
+                <field name="create_uid" string="Người hỏi"/>
+                <filter name="open" string="Chưa xử lý" domain="[('state', '=', 'open')]"/>
+                <filter name="done" string="Đã xử lý" domain="[('state', '=', 'done')]"/>
+                <separator/>
+                <filter name="question" string="Câu hỏi" domain="[('kind', '=', 'question')]"/>
+                <filter name="request" string="Yêu cầu chỉnh sửa" domain="[('kind', '=', 'request')]"/>
+                <filter name="group_guide" string="Hướng dẫn" context="{'group_by': 'guide_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_guide_ticket" model="ir.actions.act_window">
+        <field name="name">Ticket hỏi đáp &amp; yêu cầu</field>
+        <field name="res_model">hlv.sale.guide.ticket</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có ticket nào</p>
+            <p>Người dùng hỏi hoặc yêu cầu sửa hướng dẫn ở tab "Hỏi đáp &amp; yêu cầu" trên trang /huong-dan.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_guide_tickets" name="Ticket hỏi đáp" parent="menu_guide_root" action="action_guide_ticket"
+              sequence="15" groups="group_guide_manager"/>
+</odoo>

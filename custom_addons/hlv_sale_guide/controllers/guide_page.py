@@ -8,6 +8,7 @@ Trang hướng dẫn phục vụ nguyên văn, cùng origin với Odoo (để �
 đăng nhập). Vì vậy chỉ nhóm Quản lý hướng dẫn được tải nội dung lên — xem security.xml.
 """
 
+import json
 import mimetypes
 
 from odoo import http
@@ -16,6 +17,7 @@ from odoo.modules.module import get_manifest
 
 from ..models.guide_utils import INDEX, PDF_FILE, add_back_link, build_tree, pdf_viewer_page
 from ..models.sale_guide import GUIDE_ROUTE
+from ..models.ticket_utils import MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILES, MAX_UPLOAD_TOTAL_BYTES
 
 MANAGER_GROUP = "hlv_sale_guide.group_guide_manager"
 # Link mở thẳng form backend (Odoo 18 hiểu /odoo/action-<xmlid>[/new]).
@@ -41,6 +43,12 @@ class GuidePage(http.Controller):
             "backend_guides": BACKEND_GUIDES,
             "backend_folders": BACKEND_FOLDERS,
             "asset_version": (get_manifest("hlv_sale_guide") or {}).get("version", ""),
+            # Giới hạn file đính kèm của ticket, để JS báo lỗi trước khi tải (máy chủ vẫn kiểm lại).
+            "upload_limits": json.dumps({
+                "max_files": MAX_UPLOAD_FILES,
+                "max_file_bytes": MAX_UPLOAD_FILE_BYTES,
+                "max_total_bytes": MAX_UPLOAD_TOTAL_BYTES,
+            }),
         })
 
     @http.route(
@@ -90,6 +98,7 @@ class GuidePage(http.Controller):
     @staticmethod
     def _guide_item(guide):
         return {
+            "id": guide.id,
             "folder_id": guide.folder_id.id or None,
             "name": guide.name,
             "slug": guide.slug,

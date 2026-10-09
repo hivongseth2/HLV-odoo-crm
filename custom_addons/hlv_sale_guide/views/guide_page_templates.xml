@@ -2,7 +2,8 @@
 <odoo>
     <!-- Trang /huong-dan — HTML tự dựng như /sale_plan, /hoi-gia-ncc (không qua web.layout + asset
          bundle), CSS/JS nạp bằng link thường kèm ?v=version để trình duyệt tải lại sau nâng cấp.
-         Máy tính: cây thư mục bên trái, khung xem bên phải. Điện thoại: chỉ cây, bấm là mở trang. -->
+         Máy tính: ngăn trái (tab cây thư mục / tab ticket hỏi đáp), khung xem bên phải. Điện thoại:
+         chỉ ngăn trái, bấm hướng dẫn là mở trang. -->
     <template id="guide_index" name="Hướng dẫn — cây thư mục">
         &lt;!DOCTYPE html&gt;
         <html lang="vi">
@@ -12,8 +13,9 @@
                 <title>Hướng dẫn</title>
                 <link rel="icon" type="image/png" href="/hlv_sale_guide/static/description/icon.png"/>
                 <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_index.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_ticket.css?v=#{asset_version}"/>
             </head>
-            <body>
+            <body t-att-data-csrf="request.csrf_token()" t-att-data-limits="upload_limits">
                 <nav class="bar">
                     <b>Hướng dẫn</b>
                     <t t-if="is_manager">
@@ -25,29 +27,51 @@
                     <a href="/odoo">Odoo</a>
                 </nav>
                 <div class="layout">
-                    <aside class="tree">
-                        <input type="search" id="guide-search" class="tree-search" placeholder="Tìm hướng dẫn…"
-                               aria-label="Tìm hướng dẫn" t-if="tree['count']"/>
-                        <div t-if="not tree['count']" class="empty">
-                            Chưa có hướng dẫn nào.
-                            <t t-if="is_manager">Bấm <b>+ Thêm hướng dẫn</b> ở trên để tải file .html, .zip hoặc .pdf lên.</t>
+                    <aside class="side">
+                        <div class="side-tabs" role="tablist">
+                            <button type="button" class="side-tab" role="tab" data-tab="tree" aria-selected="true">Hướng dẫn</button>
+                            <button type="button" class="side-tab" role="tab" data-tab="tickets" aria-selected="false">
+                                Hỏi đáp &amp; yêu cầu <span id="ticket-badge" class="side-badge" title="Ticket chưa xử lý" hidden="hidden"/>
+                            </button>
                         </div>
-                        <t t-foreach="tree['folders']" t-as="child">
-                            <t t-call="hlv_sale_guide.guide_tree_folder"><t t-set="node" t-value="child"/></t>
-                        </t>
-                        <t t-foreach="tree['guides']" t-as="guide">
-                            <t t-call="hlv_sale_guide.guide_tree_leaf"/>
-                        </t>
+                        <div class="tree" id="side-tree">
+                            <input type="search" id="guide-search" class="tree-search" placeholder="Tìm hướng dẫn…"
+                                   aria-label="Tìm hướng dẫn" t-if="tree['count']"/>
+                            <div t-if="not tree['count']" class="empty">
+                                Chưa có hướng dẫn nào.
+                                <t t-if="is_manager">Bấm <b>+ Thêm hướng dẫn</b> ở trên để tải file .html, .zip hoặc .pdf lên.</t>
+                            </div>
+                            <t t-foreach="tree['folders']" t-as="child">
+                                <t t-call="hlv_sale_guide.guide_tree_folder"><t t-set="node" t-value="child"/></t>
+                            </t>
+                            <t t-foreach="tree['guides']" t-as="guide">
+                                <t t-call="hlv_sale_guide.guide_tree_leaf"/>
+                            </t>
+                        </div>
+                        <div class="tickets" id="side-tickets" hidden="hidden"/>
                     </aside>
                     <section class="viewer" t-if="tree['count']">
                         <div class="viewer-head">
                             <b id="guide-view-title"/>
+                            <button type="button" id="guide-tickets" class="head-chip" title="Ticket về hướng dẫn này" hidden="hidden"/>
+                            <button type="button" id="guide-ask" class="head-btn"
+                                    title="Hỏi hoặc yêu cầu sửa hướng dẫn này. Mẹo: bôi đen một đoạn để trích đoạn đó.">
+                                Hỏi / yêu cầu sửa
+                            </button>
                             <a id="guide-view-full" target="_blank" rel="noopener">Mở toàn trang ↗</a>
                         </div>
                         <iframe id="guide-view" name="guide-view" title="Nội dung hướng dẫn"/>
                     </section>
                 </div>
+                <!-- Nút nổi hiện cạnh đoạn đang bôi đen trong khung xem (guide_quote.js đặt vị trí). -->
+                <button type="button" id="quote-pick" class="quote-pick" hidden="hidden">💬 Hỏi / yêu cầu sửa đoạn này</button>
+                <!-- Thứ tự nạp quan trọng: file sau dùng window.HlvGuide.* do file trước khai. -->
+                <script t-attf-src="/hlv_sale_guide/static/src/guide_text_utils.js?v=#{asset_version}"/>
+                <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_core.js?v=#{asset_version}"/>
                 <script t-attf-src="/hlv_sale_guide/static/src/guide_index.js?v=#{asset_version}"/>
+                <script t-attf-src="/hlv_sale_guide/static/src/guide_quote.js?v=#{asset_version}"/>
+                <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_composer.js?v=#{asset_version}"/>
+                <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket.js?v=#{asset_version}"/>
             </body>
         </html>
     </template>
@@ -69,7 +93,7 @@
 
     <!-- Một hướng dẫn. Biến vào: guide (dict từ GuidePage._guide_item). -->
     <template id="guide_tree_leaf" name="Hướng dẫn — mục">
-        <a class="leaf" t-att-href="guide['url']" t-att-data-slug="guide['slug']" t-att-data-name="guide['name']"
+        <a class="leaf" t-att-href="guide['url']" t-att-data-id="guide['id']" t-att-data-slug="guide['slug']" t-att-data-name="guide['name']"
            t-att-title="guide['summary'] or None">
             <span t-attf-class="kind kind-#{guide['kind']}" t-out="'PDF' if guide['kind'] == 'pdf' else 'Trang'"/>
             <span class="leaf-name" t-out="guide['name']"/>

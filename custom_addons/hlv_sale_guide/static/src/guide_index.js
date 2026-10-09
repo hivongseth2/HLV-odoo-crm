@@ -1,21 +1,24 @@
 /* Trang /huong-dan: bấm một hướng dẫn trên cây thì mở trong khung xem bên phải (máy tính),
    ?g=<slug> nhớ hướng dẫn đang mở để F5 / gửi link vẫn đúng chỗ; ô tìm lọc cây theo tên.
-   Điện thoại (khung xem bị ẩn) để link đi bình thường — mở cả trang. */
-(function () {
+   Điện thoại (khung xem bị ẩn) để link đi bình thường — mở cả trang.
+   Cho ngăn Ticket dùng: HlvGuide.viewer.current (hướng dẫn đang mở), .show(slug), .guides(),
+   sự kiện "hlv:guide-shown" trên document mỗi khi đổi hướng dẫn. */
+(function (ns) {
   "use strict";
 
   var view = document.getElementById("guide-view");
   var tree = document.querySelector(".tree");
-  if (!view || !tree) {
-    return;
-  }
   var wide = window.matchMedia("(min-width: 821px)");
   var title = document.getElementById("guide-view-title");
   var full = document.getElementById("guide-view-full");
+  var plain = ns.text.plain;
 
-  /** Chữ thường, bỏ dấu tiếng Việt — để gõ "hoi gia" vẫn ra "Hỏi giá". */
-  function plain(text) {
-    return text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  function guideOf(link) {
+    return { id: Number(link.dataset.id), slug: link.dataset.slug, name: link.dataset.name, url: link.getAttribute("href") };
+  }
+
+  function leafOf(slug) {
+    return tree && slug ? tree.querySelector('.leaf[data-slug="' + CSS.escape(slug) + '"]') : null;
   }
 
   function show(link, remember) {
@@ -25,8 +28,37 @@
     title.textContent = link.dataset.name;
     full.href = link.getAttribute("href");
     if (remember) {
-      history.replaceState(null, "", "?g=" + encodeURIComponent(link.dataset.slug));
+      var params = new URLSearchParams(location.search);
+      params.set("g", link.dataset.slug);
+      history.replaceState(null, "", "?" + params.toString());
     }
+    ns.viewer.current = guideOf(link);
+    document.dispatchEvent(new CustomEvent("hlv:guide-shown", { detail: ns.viewer.current }));
+  }
+
+  ns.viewer = {
+    current: null,
+    /** Có khung xem (máy tính, đã có hướng dẫn) hay không — điện thoại thì mở cả trang. */
+    available: function () { return !!view && wide.matches; },
+    /** Mở hướng dẫn slug trong khung xem. Không có khung xem / không thấy hướng dẫn → false. */
+    show: function (slug) {
+      var link = leafOf(slug);
+      if (!link || !ns.viewer.available()) {
+        return false;
+      }
+      if (!ns.viewer.current || ns.viewer.current.slug !== slug) {
+        show(link, true);
+      }
+      return true;
+    },
+    /** Mọi hướng dẫn trên cây (đã lọc theo quyền xem) để chọn khi tạo ticket. */
+    guides: function () {
+      return tree ? Array.prototype.map.call(tree.querySelectorAll(".leaf"), guideOf) : [];
+    },
+  };
+
+  if (!view || !tree) {
+    return;
   }
 
   tree.addEventListener("click", function (event) {
@@ -39,8 +71,7 @@
     show(link, true);
   });
 
-  var wanted = new URLSearchParams(location.search).get("g");
-  var start = (wanted && tree.querySelector('.leaf[data-slug="' + CSS.escape(wanted) + '"]')) || tree.querySelector(".leaf");
+  var start = leafOf(new URLSearchParams(location.search).get("g")) || tree.querySelector(".leaf");
   if (start && wide.matches) {
     show(start, false);
   }
@@ -60,4 +91,4 @@
       });
     });
   }
-})();
+})(window.HlvGuide = window.HlvGuide || {});

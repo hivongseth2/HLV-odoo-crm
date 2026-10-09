@@ -3,3 +3,5 @@ access_sale_guide_user,hlv.sale.guide user,model_hlv_sale_guide,base.group_user,
 access_sale_guide_manager,hlv.sale.guide manager,model_hlv_sale_guide,group_guide_manager,1,1,1,1
 access_sale_guide_folder_user,hlv.sale.guide.folder user,model_hlv_sale_guide_folder,base.group_user,1,0,0,0
 access_sale_guide_folder_manager,hlv.sale.guide.folder manager,model_hlv_sale_guide_folder,group_guide_manager,1,1,1,1
+access_sale_guide_ticket_user,hlv.sale.guide.ticket user,model_hlv_sale_guide_ticket,base.group_user,1,0,1,0
+access_sale_guide_ticket_manager,hlv.sale.guide.ticket manager,model_hlv_sale_guide_ticket,group_guide_manager,1,1,1,1
