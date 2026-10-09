@@ -147,9 +147,9 @@
                                         </div>
                                         <div class="col-md-6 hq-picker">
                                             <label class="form-label small mb-1" for="hq-opp-search">
-                                                Lấy hàng từ cơ hội MISA CRM (không bắt buộc)</label>
+                                                Lấy hàng từ cơ hội CRM hoặc đơn bán (không bắt buộc)</label>
                                             <input type="search" id="hq-opp-search" class="hq-input w-100" autocomplete="off"
-                                                   placeholder="Số cơ hội (VD CH0042467), tên khách…"/>
+                                                   placeholder="CH… (cơ hội MISA CRM) hoặc DH… / S… (đơn bán)"/>
                                             <div id="hq-opp-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
                                     </div>
