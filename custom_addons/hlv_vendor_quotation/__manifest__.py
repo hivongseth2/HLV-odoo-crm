@@ -15,8 +15,6 @@
 - Gợi ý NCC theo lịch sử mua hàng + bảng giá NCC của sản phẩm (không hiện giá mua cho sale).
 - Lối tắt trong app Mua hàng → Đơn hàng: "Báo giá NCC", "So sánh báo giá NCC".
 - Mỗi NCC có một link công khai cố định + mật khẩu, hiện mọi yêu cầu báo giá gửi NCC đó.
-- Mở link là trang "Báo giá theo mặt hàng": mọi mặt hàng của các yêu cầu còn mở trong một bảng,
-  điền một lần rồi gửi; xem theo từng phiếu ở mục "Theo phiếu báo giá" (/phieu).
 - NCC nhập đơn giá chưa VAT, VAT, thời gian giao, ghi chú hoặc báo "không có hàng".
 - Thu mua (nhóm Mua hàng) so sánh theo từng mặt hàng (giá rẻ nhất tô xanh), bấm "Chọn" để ghi NCC + giá
   vào dòng YCMH; nút "Tạo RFQ" có sẵn sẽ dùng luôn NCC và giá đó.
@@ -52,7 +50,6 @@
         "wizard/vendor_quote_wizard_views.xml",
         "views/portal_templates.xml",
         "views/portal_grid_templates.xml",
-        "views/portal_line_templates.xml",
         "views/portal_quote_quick_templates.xml",
         "views/portal_order_templates.xml",
         "views/sale_page_templates.xml",

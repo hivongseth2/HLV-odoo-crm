@@ -72,7 +72,7 @@
                 <!-- Vào từ một báo giá thì breadcrumb đi qua báo giá đó để quay lại được. -->
                 <nav class="vq-breadcrumb">
                     <t t-if="from_quote">
-                        <a t-att-href="'%s/phieu' % portal_base">Yêu cầu báo giá</a> /
+                        <a t-att-href="portal_base">Yêu cầu báo giá</a> /
                         <a t-att-href="'%s/%s' % (portal_base, from_quote.id)" t-esc="from_quote.name"/> /
                     </t>
                     <a t-else="" t-att-href="'%s/don-mua' % portal_base">Đơn mua hàng</a><t t-if="not from_quote"> /</t>
