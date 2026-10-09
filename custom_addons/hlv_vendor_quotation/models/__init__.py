@@ -10,3 +10,4 @@ from . import vendor_chat_read
 from . import mail_message
 from . import res_config_settings
 from . import sale_contact
+from . import res_users

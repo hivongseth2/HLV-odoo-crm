@@ -28,6 +28,7 @@ from ..services import sale_scope
 from ..services.asset_version import asset_version
 from ..services.chat_bus import SALE_ALL_CHANNEL, bus_version, sale_channel
 from ..services.chat_read import mark_seen
+from ..services.sale_feed import mark_feed_seen, quote_feed
 from ..services.vendor_chat import FILE_MAX_BYTES, chat_attachment, chat_messages, post_chat
 from ..services.vendor_mail import mail_defaults, send_vendor_mail
 from .sale_page_common import API, SalePageMixin, to_int
@@ -162,6 +163,18 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             note,
         )
         return dict(payload.inquiry_detail(inquiry), add_results=[payload.quote_share_result(q) for q in quotes])
+
+    @http.route(f"{API}/notifications", type="json", auth="user", methods=["POST"])
+    def api_notifications(self, code="", **kw):
+        """Chuông thông báo: báo giá NCC vừa gửi trong phạm vi mã sale."""
+        return quote_feed(request.env, self._check(code))
+
+    @http.route(f"{API}/notifications_seen", type="json", auth="user", methods=["POST"])
+    def api_notifications_seen(self, code="", **kw):
+        """Người dùng mở chuông: đánh dấu đã xem, trả lại danh sách."""
+        scope = self._check(code)
+        mark_feed_seen(request.env)
+        return quote_feed(request.env, scope)
 
     @http.route(f"{API}/set_opportunity", type="json", auth="user", methods=["POST"])
     def api_set_opportunity(self, code="", inquiry_id=None, opportunity_ref="", **kw):

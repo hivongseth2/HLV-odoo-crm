@@ -5,6 +5,7 @@ from markupsafe import Markup
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from ..services.chat_bus import notify_quoted
 from ..services.notify import post_internal
 from .vendor_quote_utils import default_price_valid_until, match_by_product
 
@@ -548,3 +549,5 @@ class VendorQuote(models.Model):
         )
         for record in list(self.inquiry_id) + list(self.request_id):
             post_internal(record, headline, self.partner_id)
+        # Trang /hoi-gia-ncc đang mở: chuông + popup + tiếng cho sale (gửi sau khi commit).
+        notify_quoted(self, resubmitted)

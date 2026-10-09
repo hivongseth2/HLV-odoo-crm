@@ -39,6 +39,16 @@ window.HlvQuote = window.HlvQuote || {};
     });
   }
 
+  /** NCC vừa gửi / cập nhật báo giá: chuông + popup + tiếng (sale_notify.js), rồi làm mới danh sách
+      và ngăn phiếu đang mở nếu đúng phiếu đó. */
+  function onQuoted(payload) {
+    HQ.onQuoted(payload);
+    if (isOpen("hq-drawer") && S.openInquiryId === payload.inquiry_id) {
+      HQ.openInquiry(S.openInquiryId, true);
+    }
+    HQ.loadInquiries();
+  }
+
   /** Nghe kênh của mã sale đang xem; gọi lại mỗi lần đổi mã. */
   HQ.listenBus = function () {
     var channel = channelOf(S.code);
@@ -55,6 +65,8 @@ window.HlvQuote = window.HlvQuote || {};
       onMessage: function (type, payload) {
         if (type === "hlv_vq_chat") {
           onChat(payload);
+        } else if (type === "hlv_vq_quoted") {
+          onQuoted(payload);
         }
       },
     });
