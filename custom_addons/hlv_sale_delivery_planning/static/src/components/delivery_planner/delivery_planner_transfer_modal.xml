@@ -197,7 +197,7 @@
 
                         <div class="text-muted small">
                             <i class="fa fa-info-circle me-1 text-info"></i>
-                            Vị trí đích: <span class="fw-bold"><t t-esc="state.transferModalData.warehouses[0] ? state.transferModalData.warehouses[0].transit_location_name : ''"/></span>
+                            Vị trí đích: <span class="fw-bold">CHUYENKHO của từng kho nguồn</span> (phiếu bước 2 nhập vào kho nhận)
                         </div>
 
                         <div class="d-flex gap-2">

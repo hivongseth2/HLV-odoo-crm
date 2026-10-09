@@ -98,6 +98,10 @@ class HlvStockQuick(models.TransientModel):
                     ])
                     loc_ids.extend(out_locs.ids)
                     outgoing_loc_ids.update(out_locs.ids)
+                # CHUYENKHO: hàng đang chuyển sang kho khác
+                hub_locs = self.env["stock.location"].search([("hlv_is_transfer_location", "=", True), ("warehouse_id", "=", wh.id)])
+                loc_ids.extend(hub_locs.ids)
+                outgoing_loc_ids.update(hub_locs.ids)
             loc_ids = list(set(loc_ids))
         else:
             locs = self.env["stock.location"].search([("usage", "=", "internal")])
@@ -115,6 +119,7 @@ class HlvStockQuick(models.TransientModel):
                 "warehouse": wh.name if wh else "",
                 "qty": q.quantity,
                 "outgoing": q.location_id.id in outgoing_loc_ids,
+                "transfer": q.location_id.hlv_is_transfer_location,
             })
         return result
 

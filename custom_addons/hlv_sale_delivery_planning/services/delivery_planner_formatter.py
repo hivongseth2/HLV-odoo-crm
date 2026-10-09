@@ -132,6 +132,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 comp_locs = self.env['stock.location'].sudo().search([
                     ('id', 'child_of', wh_stock_root.id),
                     ('usage', '=', 'internal'),
+                    ('hlv_is_transfer_location', '=', False),
                 ])
                 comp_q_rows = self.env['stock.quant'].sudo().read_group(
                     domain=[

@@ -43,6 +43,8 @@ class HlvStockQuick(models.TransientModel):
                     if loc:
                         children = self.env["stock.location"].search([("id", "child_of", loc.id)])
                         ids.extend(children.ids)
+                # CHUYENKHO: hàng đang chuyển sang kho khác
+                ids.extend(self.env["stock.location"].search([("hlv_is_transfer_location", "=", True), ("warehouse_id", "=", wh.id)]).ids)
                 wh_outgoing_locs[wh.id] = ids
         if limit and not show_zero and products:
             visible_product_ids = set()

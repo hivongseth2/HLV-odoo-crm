@@ -1,9 +1,10 @@
 {
     'name': 'MISA PO Fetch Button',
-    'version': '1.4',
+    'version': '1.5',
     'depends': [
         'base', 'contacts', 'stock', 'purchase', 'sale', 'sale_stock',
         'sales_team', 'point_of_sale', 'hlv_zalo_zns', 'hlv_loyalty',
+        'deltatech_picking_transit',
     ],
     'author': 'Luan',
     'category': 'Purchases',

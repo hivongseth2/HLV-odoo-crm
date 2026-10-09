@@ -59,7 +59,7 @@ class StockOriginAudit(models.AbstractModel):
     def staging_location_map(self):
         """{location_id: {"warehouse", "role"}} cho các vị trí chỉ để hàng đi ngang.
 
-        Lấy từ cấu hình kho (Input / QC / Đóng gói / Output) chứ không dò theo
+        Lấy từ cấu hình kho (Input / QC / Đóng gói / Output, CHUYENKHO) chứ không dò theo
         tên vị trí: tên do người dùng đặt, đổi lúc nào không biết, còn field
         cấu hình thì luôn đúng với luồng mà Odoo thực sự chạy.
         """
@@ -75,6 +75,14 @@ class StockOriginAudit(models.AbstractModel):
                 location = warehouse[field_name]
                 if location:
                     result[location.id] = {"warehouse": warehouse.name, "role": role}
+        # Hàng chờ phiếu chuyển kho bước 2: CHUYENKHO của từng kho + vị trí Transit cũ
+        for location in self.env["stock.location"].sudo().search(
+            ["|", ("hlv_is_transfer_location", "=", True), ("usage", "=", "transit")]
+        ):
+            result[location.id] = {
+                "warehouse": location.warehouse_id.name or "",
+                "role": "Chuyển kho" if location.hlv_is_transfer_location else "Trung chuyển (cũ)",
+            }
         return result
 
     # ------------------------------------------------------------------
