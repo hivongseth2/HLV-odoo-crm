@@ -308,10 +308,11 @@ class VendorQuotePortal(http.Controller):
         return domain
 
     def _list_url(self, access, status=None, q="", page=1):
-        # Luôn ghi status (kể cả "all"): thiếu status là trang tự chọn tab "Chờ báo giá".
+        # Danh sách theo phiếu nằm ở /phieu — trang gốc của link giờ là bảng báo giá theo mặt hàng
+        # (controllers/vendor_portal_lines.py). Luôn ghi status (kể cả "all") để giữ đúng tab.
         params = {"status": status, "q": q or None, "page": page if page > 1 else None}
         query = urlencode({key: value for key, value in params.items() if value})
-        base = f"{PORTAL_ROUTE}/{access.access_token}"
+        base = f"{PORTAL_ROUTE}/{access.access_token}/phieu"
         return f"{base}?{query}" if query else base
 
     def _safe_next(self, access, next_url):
@@ -336,14 +337,19 @@ class VendorQuotePortal(http.Controller):
         logins[str(access.id)] = access._session_key()
         request.session[SESSION_KEY] = logins
 
-    def _read_quote_form(self, quote, post):
-        """Đọc ô nhập theo từng dòng. Trả (giá trị theo id dòng, danh sách lỗi đọc số)."""
+    def _read_quote_form(self, quote, post, line_label=None):
+        """Đọc ô nhập theo từng dòng. Trả (giá trị theo id dòng, danh sách lỗi đọc số).
+
+        line_label(index, line): tên dòng trong câu báo lỗi; mặc định "Dòng <số thứ tự trong phiếu>".
+        """
         valid_vat = {key for key, _label in VAT_SELECTION}
         use_discount = bool(post.get("use_discount"))
         line_values, errors = {}, []
         for index, line in enumerate(quote.line_ids, start=1):
+            prefix = line_label(index, line) if line_label else f"Dòng {index}"
+
             def number(field, label):
-                return self._read_line_number(post, f"{field}_{line.id}", f"Dòng {index}: không đọc được {label}", errors)
+                return self._read_line_number(post, f"{field}_{line.id}", f"{prefix}: không đọc được {label}", errors)
 
             vat = post.get(f"vat_{line.id}") or False
             if vat and vat not in valid_vat:
@@ -351,7 +357,7 @@ class VendorQuotePortal(http.Controller):
             # Bật "Có chiết khấu" mà để trống % của dòng = 0%.
             discount = (number("disc", "% chiết khấu") or 0.0) if use_discount else None
             if discount is not None and discount >= 100:
-                errors.append(f"Dòng {index}: chiết khấu phải nhỏ hơn 100%.")
+                errors.append(f"{prefix}: chiết khấu phải nhỏ hơn 100%.")
                 discount = 0.0
             # NCC chỉ gõ một ô: đơn giá đã gồm VAT (có chiết khấu thì là giá trước CK). Giá chưa VAT
             # — giá lưu và đem so — tính ở đây, không tin số nào JS gửi lên.
@@ -361,7 +367,7 @@ class VendorQuotePortal(http.Controller):
             raw_days = (post.get(f"days_{line.id}") or "").strip()
             days = int(raw_days) if raw_days.isdigit() else 0
             if raw_days and not raw_days.isdigit():
-                errors.append(f"Dòng {index}: số ngày giao \"{raw_days}\" phải là số nguyên.")
+                errors.append(f"{prefix}: số ngày giao \"{raw_days}\" phải là số nguyên.")
             line_values[line.id] = {
                 "price_unit": price or 0.0,
                 # Chỉ có khi NCC bật "Có chiết khấu"; tắt đi là xoá số cũ.
@@ -426,6 +432,10 @@ class VendorQuotePortal(http.Controller):
             "errors": [],
             # Số trên hai tab "Yêu cầu báo giá" / "Đơn mua hàng" ở mọi trang của NCC.
             "quote_count": len(access.quote_ids.filtered(lambda q: q.state in VENDOR_VISIBLE_STATES)),
+            # Tab "Báo giá theo mặt hàng": số mặt hàng còn chờ NCC báo giá.
+            "pending_line_count": len(access.quote_ids.filtered(
+                lambda q: q.state == "sent" and q._is_open_for_vendor()
+            ).line_ids.filtered(lambda line: not line.vendor_locked)),
             "order_count": len(access._vendor_purchase_orders()),
         }
         if self._is_logged_in(access):

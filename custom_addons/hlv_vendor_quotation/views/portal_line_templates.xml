@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Báo giá theo mặt hàng — trang mặc định của link NCC (controllers/vendor_portal_lines.py):
+         mọi mặt hàng của các yêu cầu còn mở trong một bảng, cột "Phiếu" cho biết hàng thuộc yêu cầu
+         nào. Ô nhập trùng tên với trang từng phiếu (portal_grid), nên NCC báo ở đâu cũng như nhau. -->
+    <template id="portal_line_board" name="Báo giá NCC - báo giá theo mặt hàng">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Báo giá theo mặt hàng'"/>
+            <t t-set="logged_in" t-value="True"/>
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <div class="vq-page-head">
+                    <h1>Báo giá theo mặt hàng</h1>
+                </div>
+
+                <nav class="vq-tabs">
+                    <a t-att-href="'%s/mat-hang?show=pending' % portal_base"
+                       t-attf-class="vq-tab #{'vq-tab-active' if show == 'pending' else ''}">
+                        Chưa báo giá <span class="vq-tab-count">(<t t-esc="pending_quote_count"/> phiếu)</span></a>
+                    <a t-att-href="'%s/mat-hang?show=all' % portal_base"
+                       t-attf-class="vq-tab #{'vq-tab-active' if show == 'all' else ''}">
+                        Tất cả đang mở <span class="vq-tab-count">(<t t-esc="open_quote_count"/> phiếu)</span></a>
+                </nav>
+
+                <div t-if="saved_count" class="vq-alert vq-alert-ok vq-board-alert">Đã gửi báo giá cho
+                    <t t-esc="saved_count"/> yêu cầu. Cảm ơn quý công ty — giá đã gửi vẫn sửa được ở mục
+                    "Tất cả đang mở" trước khi hết hạn.</div>
+                <div t-if="errors" class="vq-alert vq-alert-error vq-board-alert">
+                    <div t-foreach="errors" t-as="error" t-esc="error"/>
+                </div>
+
+                <p t-if="not lines" class="vq-empty">
+                    <t t-if="show == 'pending' and open_quote_count">Đã báo giá hết các yêu cầu đang chờ. Xem lại giá
+                        đã gửi ở mục <a t-att-href="'%s/mat-hang?show=all' % portal_base">Tất cả đang mở</a>.</t>
+                    <t t-else="">Hiện không có mặt hàng nào cần báo giá. Các yêu cầu cũ xem ở mục
+                        <a t-att-href="'%s/phieu' % portal_base">Theo phiếu báo giá</a>.</t>
+                </p>
+
+                <t t-if="lines">
+                <!-- Cột "giá trước chiết khấu" + "% CK" chỉ hiện khi NCC bật (hoặc đã từng nhập). -->
+                <t t-set="disc_on" t-value="bool(post.get('use_discount')) if post else any(lines.mapped('list_price'))"/>
+                <form method="post" t-attf-class="vq-quote-form #{'vq-disc-on' if disc_on else ''}"
+                      t-att-action="'%s/mat-hang?show=%s' % (portal_base, show)">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="vq-section-head">
+                        <div>
+                            <h2><t t-esc="len(lines)"/> mặt hàng · <t t-esc="len(quote_info)"/> yêu cầu báo giá</h2>
+                            <p class="vq-small vq-muted">Điền giá những mặt hàng có thể báo rồi bấm Gửi. Yêu cầu nào
+                                chưa điền thì để trống, báo sau. Cột "Phiếu": rê chuột xem hạn, người hỏi giá; bấm để
+                                mở riêng phiếu đó.</p>
+                            <t t-call="hlv_vendor_quotation.portal_grid_legend"/>
+                        </div>
+                        <t t-call="hlv_vendor_quotation.portal_grid_tools"/>
+                    </div>
+
+                    <t t-call="hlv_vendor_quotation.portal_grid">
+                        <t t-set="grid_lines" t-value="lines"/>
+                        <t t-set="show_quote" t-value="True"/>
+                    </t>
+
+                    <div class="vq-form-foot">
+                        <div class="vq-foot-left">
+                        <label class="vq-valid-field">
+                            <span class="vq-label">Giá có hiệu lực đến</span>
+                            <input type="date" name="price_valid_until" class="vq-input" t-att-min="today_iso"
+                                   t-att-value="post.get('price_valid_until') if post else default_valid_iso"/>
+                            <span class="vq-muted vq-small">Áp dụng cho các yêu cầu gửi lần này. Mặc định 7 ngày —
+                                trong thời hạn này bên mua có thể đặt theo giá quý công ty đã báo mà không hỏi lại.</span>
+                        </label>
+                        </div>
+                    </div>
+
+                    <div class="vq-submit-bar">
+                        <div class="vq-wrap vq-submit-row">
+                            <span class="vq-muted" data-vq-progress="1"></span>
+                            <button type="submit" class="vq-btn vq-btn-primary vq-btn-lg">Gửi báo giá</button>
+                        </div>
+                    </div>
+                </form>
+                </t>
+            </div>
+        </t>
+    </template>
+</odoo>

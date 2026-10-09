@@ -130,6 +130,30 @@ def split_code_name(name, code):
     return name
 
 
+def line_values_changed(current, submitted):
+    """NCC có sửa gì ở một dòng báo giá không (bảng báo giá theo mặt hàng chỉ gửi lại phiếu có sửa).
+
+    current, submitted: dict theo tên trường NCC điền (price_unit, discount, vat, delivery_days,
+    vendor_note, invoice_name, unavailable…) — giá trị đang lưu và giá trị đọc từ form. Số lệch
+    không quá 0,01 coi như bằng (giá hiện trên form đã qua làm tròn khi quy đổi có / chưa VAT), chữ
+    bỏ khoảng trắng hai đầu, rỗng / False / 0 coi như nhau. Khoá chỉ có ở một bên coi như rỗng ở
+    bên kia. Trả True khi có ít nhất một khoá khác nhau.
+    """
+    def norm(value):
+        if isinstance(value, str):
+            value = value.strip()
+        return value or 0
+
+    def differ(old, new):
+        old, new = norm(old), norm(new)
+        if isinstance(old, (int, float)) and isinstance(new, (int, float)) and not isinstance(old, bool):
+            return abs(old - new) > 0.011
+        return old != new
+
+    keys = set(current) | set(submitted)
+    return any(differ(current.get(key), submitted.get(key)) for key in keys)
+
+
 def split_unit_price(unit_price, tax_rate, discount=None):
     """Tách đơn giá NCC gõ ra các mức giá bên mình lưu.
 
