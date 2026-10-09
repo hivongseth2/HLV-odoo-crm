@@ -16,12 +16,13 @@ class StockPicking(models.Model):
     source_transfer_id = fields.Many2one("stock.picking", copy=False)  # Không copy khi nhân bản
 
    
-    # CHUYENKHO chỉ được chọn trên phiếu chuyển nội bộ (ràng buộc đầy đủ ở _check_hlv_transfer_location)
+    # CHUYENKHO chỉ được chọn trên phiếu chuyển nội bộ (ràng buộc phía server ở _check_hlv_transfer_location)
+    hlv_allow_transfer_location = fields.Boolean(compute="_compute_hlv_allow_transfer_location")
     location_id = fields.Many2one(
-        domain="[('hlv_is_transfer_location', '=', False)] if picking_type_code != 'internal' else []"
+        domain="[] if hlv_allow_transfer_location else [('hlv_is_transfer_location', '=', False)]"
     )
     location_dest_id = fields.Many2one(
-        domain="[('hlv_is_transfer_location', '=', False)] if picking_type_code != 'internal' else []"
+        domain="[] if hlv_allow_transfer_location else [('hlv_is_transfer_location', '=', False)]"
     )
 
     create_second_transfer_automatically = fields.Boolean(
@@ -180,16 +181,22 @@ class StockPicking(models.Model):
         
         return name_ok or (location.usage == "transit" and ("inter-warehouse transit" in complete_name or "trung chuyển liên kho" in complete_name or "kho trung gian" in complete_name))
 
+    @api.depends("picking_type_id")
+    def _compute_hlv_allow_transfer_location(self):
+        for picking in self:
+            picking_type = picking.picking_type_id
+            warehouse = picking_type.warehouse_id
+            picking.hlv_allow_transfer_location = picking_type.code == "internal" and picking_type not in (
+                warehouse.pick_type_id | warehouse.pack_type_id
+            )
+
     @api.constrains("location_id", "location_dest_id", "picking_type_id")
     def _check_hlv_transfer_location(self):
         """CHUYENKHO chỉ làm đích bước 1 / nguồn bước 2 của phiếu chuyển nội bộ."""
         for picking in self:
             locations = (picking.location_id | picking.location_dest_id).filtered("hlv_is_transfer_location")
-            if not locations:
-                continue
-            picking_type = picking.picking_type_id
-            warehouse = picking_type.warehouse_id
-            if picking_type.code != "internal" or picking_type in (warehouse.pick_type_id | warehouse.pack_type_id):
+            if locations and not picking.hlv_allow_transfer_location:
+                picking_type = picking.picking_type_id
                 raise ValidationError(
                     _("Vị trí %(location)s chỉ dùng cho phiếu chuyển kho nội bộ, không dùng cho loại phiếu %(type)s.")
                     % {"location": locations[0].display_name, "type": picking_type.display_name}
