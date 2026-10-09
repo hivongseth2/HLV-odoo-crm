@@ -1,7 +1,7 @@
 /* Trang /huong-dan: bấm một hướng dẫn trên cây thì mở trong khung xem bên phải (máy tính),
    ?g=<slug> nhớ hướng dẫn đang mở để F5 / gửi link vẫn đúng chỗ; ô tìm lọc cây theo tên.
    Điện thoại (khung xem bị ẩn) để link đi bình thường — mở cả trang.
-   Cho ngăn Ticket dùng: HlvGuide.viewer.current (hướng dẫn đang mở), .show(slug), .guides(),
+   Khai HlvGuide.viewer cho ngăn Ticket (trang một hướng dẫn khai bản riêng: guide_viewer_single.js),
    sự kiện "hlv:guide-shown" trên document mỗi khi đổi hướng dẫn. */
 (function (ns) {
   "use strict";
@@ -37,13 +37,18 @@
   }
 
   ns.viewer = {
+    single: false,
     current: null,
-    /** Có khung xem (máy tính, đã có hướng dẫn) hay không — điện thoại thì mở cả trang. */
-    available: function () { return !!view && wide.matches; },
-    /** Mở hướng dẫn slug trong khung xem. Không có khung xem / không thấy hướng dẫn → false. */
-    show: function (slug) {
+    /** Mở được hướng dẫn khác ngay trong trang (máy tính, có khung xem) hay phải chuyển trang. */
+    canShowInline: function () { return !!view && wide.matches; },
+    /**
+     * Mở hướng dẫn slug trong khung xem → true. Không mở tại chỗ được (điện thoại, không thấy trên
+     * cây) → chuyển sang trang của hướng dẫn đó, kèm ?t=ticketId để mở luôn ticket, trả false.
+     */
+    show: function (slug, ticketId) {
       var link = leafOf(slug);
-      if (!link || !ns.viewer.available()) {
+      if (!link || !ns.viewer.canShowInline()) {
+        location.href = "/huong-dan/" + encodeURIComponent(slug) + "/" + (ticketId ? "?t=" + ticketId : "");
         return false;
       }
       if (!ns.viewer.current || ns.viewer.current.slug !== slug) {

@@ -54,7 +54,8 @@
   }
 
   /**
-   * POST multipart kèm file (tạo / trả lời ticket). fields: {tên: giá trị}, bỏ qua null;
+   * POST multipart kèm file (tạo / trả lời ticket). fields: {tên: giá trị}, bỏ qua null, giá trị
+   * là mảng thì gửi lặp lại cùng tên (máy chủ đọc bằng getlist);
    * files: mảng File; onProgress(tỉ lệ 0..1) khi đang tải lên. Dùng XHR thay fetch để có tiến độ
    * — video vài chục MB mất một lúc. Trả Promise JSON; lỗi → Error có thông điệp.
    */
@@ -63,9 +64,11 @@
       var form = new FormData();
       form.append("csrf_token", data.csrf);
       Object.keys(fields).forEach(function (key) {
-        if (fields[key] !== null && fields[key] !== undefined) {
-          form.append(key, fields[key]);
-        }
+        [].concat(fields[key]).forEach(function (value) {
+          if (value !== null && value !== undefined) {
+            form.append(key, value);
+          }
+        });
       });
       files.forEach(function (file) { form.append("files", file, file.name); });
       var xhr = new XMLHttpRequest();

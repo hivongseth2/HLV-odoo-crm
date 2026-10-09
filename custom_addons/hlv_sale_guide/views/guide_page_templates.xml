@@ -1,19 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Trang /huong-dan — HTML tự dựng như /sale_plan, /hoi-gia-ncc (không qua web.layout + asset
-         bundle), CSS/JS nạp bằng link thường kèm ?v=version để trình duyệt tải lại sau nâng cấp.
-         Máy tính: ngăn trái (tab cây thư mục / tab ticket hỏi đáp), khung xem bên phải. Điện thoại:
-         chỉ ngăn trái, bấm hướng dẫn là mở trang. -->
+    <!-- Trang /huong-dan và /huong-dan/<slug>/ — HTML tự dựng như /sale_plan, /hoi-gia-ncc (không qua
+         web.layout + asset bundle), CSS/JS nạp bằng link thường kèm ?v=version để trình duyệt tải lại
+         sau nâng cấp. -->
+    <template id="guide_page_head" name="Hướng dẫn — phần head chung">
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <link rel="icon" type="image/png" href="/hlv_sale_guide/static/description/icon.png"/>
+        <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_index.css?v=#{asset_version}"/>
+        <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_ticket.css?v=#{asset_version}"/>
+    </template>
+
+    <!-- Nút nổi trích đoạn + script ngăn ticket. Biến vào: viewer_script — file khai HlvGuide.viewer
+         cho trang đó (guide_index.js: cây thư mục; guide_viewer_single.js: một hướng dẫn).
+         Thứ tự nạp quan trọng: file sau dùng window.HlvGuide.* do file trước khai. -->
+    <template id="guide_ticket_scripts" name="Hướng dẫn — script ticket">
+        <button type="button" id="quote-pick" class="quote-pick" hidden="hidden">Hỏi / yêu cầu sửa đoạn này</button>
+        <script t-attf-src="/hlv_sale_guide/static/src/guide_text_utils.js?v=#{asset_version}"/>
+        <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_core.js?v=#{asset_version}"/>
+        <script t-attf-src="/hlv_sale_guide/static/src/#{viewer_script}?v=#{asset_version}"/>
+        <script t-attf-src="/hlv_sale_guide/static/src/guide_quote.js?v=#{asset_version}"/>
+        <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_composer.js?v=#{asset_version}"/>
+        <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_form.js?v=#{asset_version}"/>
+        <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket.js?v=#{asset_version}"/>
+    </template>
+
+    <!-- /huong-dan. Máy tính: ngăn trái (tab cây thư mục / tab hỏi đáp), khung xem bên phải.
+         Điện thoại: chỉ ngăn trái, bấm hướng dẫn là mở trang guide_full. -->
     <template id="guide_index" name="Hướng dẫn — cây thư mục">
         &lt;!DOCTYPE html&gt;
         <html lang="vi">
             <head>
-                <meta charset="utf-8"/>
-                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <t t-call="hlv_sale_guide.guide_page_head"/>
                 <title>Hướng dẫn</title>
-                <link rel="icon" type="image/png" href="/hlv_sale_guide/static/description/icon.png"/>
-                <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_index.css?v=#{asset_version}"/>
-                <link rel="stylesheet" t-attf-href="/hlv_sale_guide/static/src/guide_ticket.css?v=#{asset_version}"/>
             </head>
             <body t-att-data-csrf="request.csrf_token()" t-att-data-limits="upload_limits">
                 <nav class="bar">
@@ -63,15 +82,44 @@
                         <iframe id="guide-view" name="guide-view" title="Nội dung hướng dẫn"/>
                     </section>
                 </div>
-                <!-- Nút nổi hiện cạnh đoạn đang bôi đen trong khung xem (guide_quote.js đặt vị trí). -->
-                <button type="button" id="quote-pick" class="quote-pick" hidden="hidden">💬 Hỏi / yêu cầu sửa đoạn này</button>
-                <!-- Thứ tự nạp quan trọng: file sau dùng window.HlvGuide.* do file trước khai. -->
-                <script t-attf-src="/hlv_sale_guide/static/src/guide_text_utils.js?v=#{asset_version}"/>
-                <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_core.js?v=#{asset_version}"/>
-                <script t-attf-src="/hlv_sale_guide/static/src/guide_index.js?v=#{asset_version}"/>
-                <script t-attf-src="/hlv_sale_guide/static/src/guide_quote.js?v=#{asset_version}"/>
-                <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket_composer.js?v=#{asset_version}"/>
-                <script t-attf-src="/hlv_sale_guide/static/src/guide_ticket.js?v=#{asset_version}"/>
+                <t t-call="hlv_sale_guide.guide_ticket_scripts"><t t-set="viewer_script" t-value="'guide_index.js'"/></t>
+            </body>
+        </html>
+    </template>
+
+    <!-- /huong-dan/<slug>/: một hướng dẫn chiếm cả trang, ngăn hỏi đáp / yêu cầu sửa bên phải (máy
+         tính mở sẵn; điện thoại phủ lên trang, bật bằng nút trên thanh). Biến vào: guide
+         (GuidePage._guide_item), index_href. -->
+    <template id="guide_full" name="Hướng dẫn — một hướng dẫn">
+        &lt;!DOCTYPE html&gt;
+        <html lang="vi">
+            <head>
+                <t t-call="hlv_sale_guide.guide_page_head"/>
+                <title t-out="guide['name']"/>
+            </head>
+            <body class="full" t-att-data-csrf="request.csrf_token()" t-att-data-limits="upload_limits"
+                  t-att-data-guide-id="guide['id']" t-att-data-guide-slug="guide['slug']" t-att-data-guide-name="guide['name']">
+                <nav class="bar">
+                    <a t-att-href="index_href">← Tất cả hướng dẫn</a>
+                    <b t-out="guide['name']"/>
+                    <button type="button" id="guide-ask" class="head-btn"
+                            title="Hỏi hoặc yêu cầu sửa hướng dẫn này. Mẹo: bôi đen một đoạn để trích đoạn đó.">
+                        Hỏi / yêu cầu sửa
+                    </button>
+                    <button type="button" id="side-toggle" class="bar-toggle" aria-expanded="false" aria-controls="side-tickets">
+                        Hỏi đáp <span id="ticket-badge" class="side-badge" title="Ticket chưa xử lý của hướng dẫn này" hidden="hidden"/>
+                    </button>
+                </nav>
+                <div class="layout">
+                    <section class="viewer">
+                        <iframe id="guide-view" name="guide-view" t-att-title="guide['name']"
+                                t-attf-src="#{guide['url']}?embed=1"/>
+                    </section>
+                    <aside class="side">
+                        <div class="tickets" id="side-tickets" hidden="hidden"/>
+                    </aside>
+                </div>
+                <t t-call="hlv_sale_guide.guide_ticket_scripts"><t t-set="viewer_script" t-value="'guide_viewer_single.js'"/></t>
             </body>
         </html>
     </template>

@@ -1,6 +1,7 @@
-/* Ngăn Ticket bên trái trang /huong-dan: danh sách câu hỏi / yêu cầu chỉnh sửa, chi tiết kèm
-   thảo luận, form tạo mới. Ticket có đoạn trích thì đoạn đó được tô trên hướng dẫn bên phải;
-   mở ticket là khung xem nhảy tới đoạn đó. ?t=<id> trên link mở thẳng một ticket. */
+/* Ngăn hỏi đáp / yêu cầu sửa: danh sách ticket, chi tiết kèm thảo luận, form tạo mới
+   (guide_ticket_form.js). Nằm bên trái /huong-dan (tab cạnh cây thư mục) và bên phải trang một
+   hướng dẫn (bật / tắt bằng nút trên thanh). Đoạn trích của ticket được tô trên hướng dẫn; mở
+   ticket là khung xem nhảy tới đoạn đó. ?t=<id> trên link mở thẳng một ticket. */
 (function (ns) {
   "use strict";
 
@@ -10,30 +11,53 @@
   var quote = ns.quote;
   var pane = document.getElementById("side-tickets");
   var treePane = document.getElementById("side-tree");
+  var toggle = document.getElementById("side-toggle");
   var layout = document.querySelector(".layout");
   var badge = document.getElementById("ticket-badge");
   var guideChip = document.getElementById("guide-tickets");
   var askButton = document.getElementById("guide-ask");
-  if (!pane) {
+  if (!pane || !viewer) {
     return;
   }
 
   var KINDS = { question: "Câu hỏi", request: "Yêu cầu sửa" };
   var STATES = { open: "Chưa xử lý", done: "Đã xử lý" };
   var FILTERS = [["open", "Chưa xử lý"], ["done", "Đã xử lý"], ["all", "Tất cả"]];
-  var SCOPES = [["all", "Mọi hướng dẫn"], ["guide", "Hướng dẫn đang mở"], ["mine", "Ticket của tôi"]];
-  var ui = { tickets: [], filter: "open", scope: "all", query: "", view: "list", openId: null, newForm: null };
-  var pendingReveal = null;
+  var SCOPES = [["all", "Mọi hướng dẫn"], ["guide", viewer.single ? "Hướng dẫn này" : "Hướng dẫn đang mở"], ["mine", "Ticket của tôi"]];
+  var PICK_NEW = "Hỏi / yêu cầu sửa đoạn này";
+  var PICK_ADD = "Thêm đoạn này vào ticket";
+  var ui = {
+    tickets: [], filter: "open", scope: viewer.single ? "guide" : "all", query: "",
+    view: "list", openId: null, newForm: null,
+  };
+  var pendingReveal = null; // {id, index} chờ khung xem tải xong mới cuộn được
 
   // ------------------------------------------------------------------ chung
 
+  /** "tree" / "tickets" ở /huong-dan; ở trang một hướng dẫn "tickets" là mở ngăn, null là đóng. */
   function setTab(name) {
     document.querySelectorAll(".side-tab").forEach(function (tab) {
       tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
     });
-    treePane.hidden = name !== "tree";
+    if (treePane) {
+      treePane.hidden = name !== "tree";
+    }
     pane.hidden = name !== "tickets";
     layout.classList.toggle("is-tickets", name === "tickets");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(name === "tickets"));
+    }
+  }
+
+  function setView(name) {
+    ui.view = name;
+    quote.setPickLabel(name === "new" ? PICK_ADD : PICK_NEW);
+    if (name !== "new") {
+      ui.newForm = null;
+    }
+    if (name !== "detail") {
+      ui.openId = null;
+    }
   }
 
   function rememberTicket(id) {
@@ -43,7 +67,8 @@
     } else {
       params.delete("t");
     }
-    history.replaceState(null, "", "?" + params.toString());
+    var query = params.toString();
+    history.replaceState(null, "", location.pathname + (query ? "?" + query : ""));
   }
 
   function when(dateText) {
@@ -57,6 +82,10 @@
 
   function stateBadge(state) {
     return h("span", { class: "tk-state tk-state-" + state, text: STATES[state] || state });
+  }
+
+  function backButton() {
+    return h("button", { type: "button", class: "tk-back", text: "← Danh sách", onclick: openList });
   }
 
   function load() {
@@ -75,41 +104,43 @@
     });
   }
 
-  function currentGuideTickets() {
-    var current = viewer.current;
-    return current ? ui.tickets.filter(function (t) { return t.guide && t.guide.id === current.id; }) : [];
+  function isCurrentGuide(ticket) {
+    return !!(ticket.guide && viewer.current && ticket.guide.id === viewer.current.id);
+  }
+
+  function countOpen(tickets) {
+    return tickets.filter(function (t) { return t.state === "open"; }).length;
   }
 
   function refreshCounts() {
-    var open = ui.tickets.filter(function (t) { return t.state === "open"; }).length;
+    var here = ui.tickets.filter(isCurrentGuide);
+    // Trang một hướng dẫn: số trên nút là ticket của chính hướng dẫn đó.
+    var open = countOpen(viewer.single ? here : ui.tickets);
     badge.textContent = open;
     badge.hidden = !open;
     if (guideChip) {
-      var mine = currentGuideTickets();
-      var openHere = mine.filter(function (t) { return t.state === "open"; }).length;
-      guideChip.textContent = "💬 " + mine.length + (openHere ? " (" + openHere + " chưa xử lý)" : "");
-      guideChip.hidden = !mine.length;
+      var openHere = countOpen(here);
+      guideChip.textContent = here.length + " ticket" + (openHere ? " · " + openHere + " chưa xử lý" : "");
+      guideChip.hidden = !here.length;
     }
   }
 
   function markCurrentGuide() {
-    quote.mark(currentGuideTickets());
+    quote.mark(ui.tickets.filter(isCurrentGuide));
   }
 
-  /** Mở hướng dẫn của ticket ở khung xem và cuộn tới đoạn trích (điện thoại: mở trang hướng dẫn). */
-  function showInGuide(ticket) {
+  /** Cuộn khung xem tới đoạn trích thứ index của ticket; ticket của hướng dẫn khác thì mở hướng dẫn đó trước. */
+  function showInGuide(ticket, index) {
     if (!ticket.guide) {
       return;
     }
-    if (!viewer.available()) {
-      window.open("/huong-dan/" + ticket.guide.slug + "/", "_blank", "noopener");
-      return;
-    }
-    var sameGuide = viewer.current && viewer.current.id === ticket.guide.id;
-    if (sameGuide) {
-      quote.reveal(ticket.id);
-    } else if (viewer.show(ticket.guide.slug)) {
-      pendingReveal = ticket.id; // khung xem tải xong (hlv:guide-loaded) mới cuộn được
+    var target = { id: ticket.id, index: index || 0 };
+    if (isCurrentGuide(ticket)) {
+      if (!quote.reveal(target.id, target.index)) {
+        pendingReveal = target; // khung xem chưa tải xong
+      }
+    } else if (viewer.show(ticket.guide.slug, ticket.id)) {
+      pendingReveal = target;
     }
   }
 
@@ -117,7 +148,6 @@
 
   function visibleTickets() {
     var query = text.plain(ui.query.trim());
-    var current = viewer.current;
     return ui.tickets.filter(function (t) {
       if (ui.filter !== "all" && t.state !== ui.filter) {
         return false;
@@ -125,22 +155,24 @@
       if (ui.scope === "mine" && !t.mine) {
         return false;
       }
-      if (ui.scope === "guide" && !(current && t.guide && t.guide.id === current.id)) {
+      if (ui.scope === "guide" && !isCurrentGuide(t)) {
         return false;
       }
-      return !query || text.plain([t.name, t.quote, t.author, t.guide ? t.guide.name : ""].join(" ")).indexOf(query) >= 0;
+      return !query || text.plain([t.name, t.quotes.join(" "), t.author, t.guide ? t.guide.name : ""].join(" ")).indexOf(query) >= 0;
     });
   }
 
   function ticketItem(t) {
+    var more = t.quotes.length - 1;
     return h("button", { type: "button", class: "tk-item is-" + t.state, onclick: function () { openDetail(t.id); } }, [
       h("div", { class: "tk-item-head" }, [kindBadge(t.kind), h("span", { class: "tk-title", text: t.name })]),
-      t.quote ? h("div", { class: "tk-quote", text: t.quote }) : null,
+      t.quotes.length ? h("div", { class: "tk-quote", text: t.quotes[0] }) : null,
+      more > 0 ? h("div", { class: "tk-more", text: "và " + more + " chỗ khác" }) : null,
       h("div", { class: "tk-meta" }, [
-        h("span", { text: t.guide ? t.guide.name : "Chung" }),
+        viewer.single ? null : h("span", { text: t.guide ? t.guide.name : "Chung" }),
         h("span", { text: t.author }),
         when(t.last_message_on),
-        h("span", { title: "Số tin thảo luận", text: "💬 " + t.message_count }),
+        h("span", { text: t.message_count + " tin" }),
       ]),
     ]);
   }
@@ -162,11 +194,9 @@
   }
 
   function openList() {
-    ui.view = "list";
-    ui.openId = null;
-    ui.newForm = null;
+    setView("list");
     rememberTicket(null);
-    var openCount = ui.tickets.filter(function (t) { return t.state === "open"; }).length;
+    var openCount = countOpen(ui.tickets);
     pane.textContent = "";
     pane.appendChild(h("div", { class: "tk-toolbar" }, [
       h("button", { type: "button", class: "btn btn-primary", text: "+ Ticket mới", onclick: function () { openNew({}); } }),
@@ -208,7 +238,7 @@
       return h("audio", { class: "att-audio", src: att.url, controls: true, preload: "none", title: att.name });
     }
     return h("a", { class: "att-file", href: att.url + "?download=true", title: "Tải về" }, [
-      h("span", { text: att.mimetype === "application/pdf" ? "📄" : "📎" }),
+      h("span", { class: "att-ext", text: text.fileLabel(att.name) }),
       h("span", { class: "att-name", text: att.name }),
       h("small", { text: text.formatSize(att.size) }),
     ]);
@@ -233,13 +263,24 @@
       return [send];
     }
     return t.state === "open"
-      ? [{ label: "✔ Đánh dấu đã xử lý", fields: { state: "done" }, setsState: true }, send]
-      : [{ label: "↺ Mở lại", fields: { state: "open" }, setsState: true }, send];
+      ? [{ label: "Đánh dấu đã xử lý", fields: { state: "done" }, setsState: true }, send]
+      : [{ label: "Mở lại", fields: { state: "open" }, setsState: true }, send];
+  }
+
+  function quoteList(t) {
+    var linked = !!t.guide;
+    return h("div", { class: "tk-quotes" }, t.quotes.map(function (q, index) {
+      return h("blockquote", {
+        class: "tk-quote tk-quote-full" + (linked ? " is-link" : ""),
+        title: linked ? "Bấm để xem chỗ này trong hướng dẫn" : null,
+        text: q,
+        onclick: linked ? function () { showInGuide(t, index); } : null,
+      });
+    }));
   }
 
   function renderDetail(t) {
     pane.textContent = "";
-    var thread = h("div", { class: "tk-thread" }, t.messages.map(messageItem));
     var reply = ns.composer({
       placeholder: "Trả lời, bổ sung… (Ctrl+V để dán ảnh, Ctrl+Enter để gửi)",
       actions: replyActions(t),
@@ -251,8 +292,17 @@
         });
       },
     });
+    var guideLine = null;
+    if (!t.guide) {
+      guideLine = h("div", { class: "tk-meta", text: "Ticket chung, không gắn hướng dẫn" });
+    } else if (!isCurrentGuide(t) || !viewer.single) {
+      guideLine = h("button", {
+        type: "button", class: "tk-guide-link", title: "Mở hướng dẫn này",
+        text: "Hướng dẫn: " + t.guide.name, onclick: function () { showInGuide(t, 0); },
+      });
+    }
     pane.appendChild(h("div", { class: "tk-detail" }, [
-      h("button", { type: "button", class: "tk-back", text: "← Danh sách ticket", onclick: openList }),
+      backButton(),
       h("h2", { class: "tk-detail-title", text: t.name }),
       h("div", { class: "tk-detail-badges" }, [
         kindBadge(t.kind),
@@ -260,24 +310,17 @@
         t.state === "done" && t.done_by ? h("small", { text: "bởi " + t.done_by }) : null,
       ]),
       h("div", { class: "tk-meta" }, [h("span", { text: t.author }), when(t.created_on)]),
-      t.guide ? h("button", {
-        type: "button", class: "tk-guide-link", title: "Mở hướng dẫn này bên phải",
-        text: "📘 " + t.guide.name, onclick: function () { showInGuide(t); },
-      }) : h("div", { class: "tk-meta", text: "Ticket chung, không gắn hướng dẫn" }),
-      t.quote ? h("blockquote", {
-        class: "tk-quote tk-quote-full" + (t.guide ? " is-link" : ""), title: t.guide ? "Bấm để xem đoạn này trong hướng dẫn" : null,
-        text: t.quote, onclick: function () { showInGuide(t); },
-      }) : null,
-      thread,
+      guideLine,
+      t.quotes.length ? quoteList(t) : null,
+      h("div", { class: "tk-thread" }, t.messages.map(messageItem)),
       reply,
     ]));
   }
 
   function openDetail(id, options) {
     var first = ui.openId !== id;
-    ui.view = "detail";
+    setView("detail");
     ui.openId = id;
-    ui.newForm = null;
     rememberTicket(id);
     if (first) {
       pane.textContent = "";
@@ -291,13 +334,14 @@
       if (!first) {
         pane.scrollTop = pane.scrollHeight; // vừa gửi tin: cuộn xuống tin mới nhất
       }
-      // Tự nhảy tới đoạn trích chỉ khi có khung xem; điện thoại thì để người dùng bấm mới mở trang.
-      if ((!options || options.reveal !== false) && viewer.available()) {
-        showInGuide(t);
+      // Tự nhảy tới đoạn trích khi không phải rời trang (hướng dẫn đang mở, hoặc mở được tại chỗ).
+      var reveal = !options || options.reveal !== false;
+      if (reveal && t.guide && (isCurrentGuide(t) || viewer.canShowInline())) {
+        showInGuide(t, (options && options.index) || 0);
       }
     }, function (err) {
       pane.textContent = "";
-      pane.appendChild(h("button", { type: "button", class: "tk-back", text: "← Danh sách ticket", onclick: openList }));
+      pane.appendChild(backButton());
       pane.appendChild(h("div", { class: "tk-empty", text: err.message }));
     });
   }
@@ -306,81 +350,23 @@
 
   function openNew(preset) {
     if (ui.view === "new" && ui.newForm) {
-      ui.newForm.update(preset); // đang soạn dở: chỉ thay đoạn trích / hướng dẫn, giữ chữ đã gõ
+      ui.newForm.add(preset); // đang soạn dở: thêm đoạn trích, giữ chữ đã gõ
       return;
     }
-    ui.view = "new";
-    ui.openId = null;
+    setView("new");
     rememberTicket(null);
-    var kind = "question";
-    var quoteText = preset.quote || "";
-    var guides = viewer.guides();
-    var kindButtons = Object.keys(KINDS).map(function (key) {
-      return h("button", {
-        type: "button", class: "tk-kind-pick", "data-kind": key, "aria-pressed": String(key === kind),
-        text: key === "question" ? "❓ Câu hỏi" : "✏️ Yêu cầu chỉnh sửa",
-        onclick: function () {
-          kind = key;
-          kindButtons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.kind === key)); });
-        },
-      });
-    });
-    var guideSelect = h("select", {
-      class: "tk-input", "aria-label": "Hướng dẫn",
-      onchange: function () { setQuote(""); }, // đoạn trích thuộc hướng dẫn cũ, không còn đúng
-    }, [h("option", { value: "", text: "— Chung, không gắn hướng dẫn —" })].concat(guides.map(function (g) {
-      return h("option", { value: g.id, text: g.name });
-    })));
-    var quoteBox = h("div", { class: "tk-quote-pick" });
-    var titleInput = h("input", { class: "tk-input", type: "text", maxlength: 80, placeholder: "Tiêu đề (bỏ trống: lấy dòng đầu nội dung)" });
-
-    function setQuote(value) {
-      quoteText = value;
-      quoteBox.textContent = "";
-      if (value) {
-        quoteBox.appendChild(h("blockquote", { class: "tk-quote tk-quote-full", text: value }));
-        quoteBox.appendChild(h("button", { type: "button", class: "cmp-remove", title: "Bỏ đoạn trích", text: "×", onclick: function () { setQuote(""); } }));
-      } else if (viewer.available()) {
-        quoteBox.appendChild(h("div", { class: "tk-tip", text: "Mẹo: bôi đen một đoạn trong hướng dẫn bên phải rồi bấm nút hiện ra để trích đoạn đó vào đây." }));
-      }
-    }
-
-    function update(next) {
-      if (next.guide) {
-        guideSelect.value = String(next.guide.id);
-      }
-      setQuote(next.quote || "");
-      form.focus();
-    }
-
-    var form = ns.composer({
-      placeholder: "Nội dung câu hỏi / yêu cầu… (Ctrl+V để dán ảnh chụp màn hình)",
-      extra: h("div", { class: "tk-new-fields" }, [
-        h("div", { class: "tk-kind-row" }, kindButtons),
-        guideSelect,
-        quoteBox,
-        titleInput,
-      ]),
-      actions: [{ label: "Gửi ticket", primary: true }],
-      submit: function (fields, files, onProgress) {
-        fields.kind = kind;
-        fields.guide_id = guideSelect.value;
-        fields.title = titleInput.value;
-        fields.quote = quoteText;
-        return ns.core.send("/new", fields, files, onProgress).then(function (reply) {
-          // Tải lại danh sách trước để đoạn trích mới đã được tô khi khung xem nhảy tới.
-          return load().then(function () { return openDetail(reply.id); });
-        });
+    ui.newForm = ns.ticketForm({
+      guide: preset.guide || viewer.current,
+      quote: preset.quote || "",
+      onBack: openList,
+      onCreated: function (id) {
+        // Tải lại danh sách trước để đoạn trích mới đã được tô khi khung xem nhảy tới.
+        return load().then(function () { return openDetail(id); });
       },
     });
-    ui.newForm = { update: update };
     pane.textContent = "";
-    pane.appendChild(h("div", { class: "tk-detail" }, [
-      h("button", { type: "button", class: "tk-back", text: "← Danh sách ticket", onclick: openList }),
-      h("h2", { class: "tk-detail-title", text: "Ticket mới" }),
-      form,
-    ]));
-    update({ guide: preset.guide || viewer.current, quote: quoteText });
+    pane.appendChild(ui.newForm.el);
+    ui.newForm.add({}); // đặt con trỏ vào ô nội dung khi form đã nằm trên trang
   }
 
   // ------------------------------------------------------------------ nối sự kiện
@@ -389,14 +375,18 @@
     tab.addEventListener("click", function () { setTab(tab.dataset.tab); });
   });
 
+  if (toggle) {
+    toggle.addEventListener("click", function () { setTab(pane.hidden ? "tickets" : null); });
+  }
+
   quote.onPick(function (picked) {
     setTab("tickets");
     openNew({ guide: viewer.current, quote: picked });
   });
 
-  quote.onOpen(function (id) {
+  quote.onOpen(function (id, index) {
     setTab("tickets");
-    openDetail(id, { reveal: false });
+    openDetail(id, { reveal: false, index: index });
   });
 
   document.addEventListener("hlv:guide-shown", function () {
@@ -409,7 +399,7 @@
   document.addEventListener("hlv:guide-loaded", function () {
     markCurrentGuide();
     if (pendingReveal) {
-      quote.reveal(pendingReveal);
+      quote.reveal(pendingReveal.id, pendingReveal.index);
       pendingReveal = null;
     }
   });
@@ -438,6 +428,11 @@
   });
 
   var wanted = Number(new URLSearchParams(location.search).get("t"));
+  // Trang một hướng dẫn trên máy tính: mở sẵn ngăn hỏi đáp; điện thoại thì ngăn phủ lên trang
+  // nên để người dùng tự bật.
+  if (viewer.single && window.matchMedia("(min-width: 821px)").matches) {
+    setTab("tickets");
+  }
   openList();
   load().then(function () {
     if (wanted) {

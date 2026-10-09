@@ -11,6 +11,8 @@ from odoo import fields, http
 from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
+from ..models.ticket_utils import split_quotes
+
 TICKET_ROUTE = "/huong-dan-ticket"
 LIST_LIMIT = 500
 
@@ -35,10 +37,11 @@ class GuideTicket(http.Controller):
         }
 
     @http.route(f"{TICKET_ROUTE}/new", type="http", auth="user", methods=["POST"])
-    def ticket_create(self, kind=None, guide_id=None, title=None, quote=None, body=None, **kw):
+    def ticket_create(self, kind=None, guide_id=None, title=None, body=None, **kw):
         def create():
             ticket = self._tickets().create_from_page(
-                kind, int(guide_id) if (guide_id or "").isdigit() else None, title, quote, body, self._files(),
+                kind, int(guide_id) if (guide_id or "").isdigit() else None, title,
+                request.httprequest.form.getlist("quotes"), body, self._files(),
             )
             return {"id": ticket.id}
         return self._json_call(create)
@@ -90,7 +93,7 @@ class GuideTicket(http.Controller):
             "name": ticket.name,
             "kind": ticket.kind,
             "state": ticket.state,
-            "quote": ticket.quote or "",
+            "quotes": split_quotes(ticket.quotes),
             "guide": {"id": guide.id, "name": guide.name, "slug": guide.slug} if guide else None,
             "author": ticket.create_uid.name,
             "mine": ticket.create_uid == request.env.user,
