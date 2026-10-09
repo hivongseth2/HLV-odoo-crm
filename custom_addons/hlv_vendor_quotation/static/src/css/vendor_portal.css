@@ -399,8 +399,8 @@ a { color: var(--vq-accent); }
 .vq-grid-hint { margin: 0 0 8px; font-size: .8rem; color: var(--vq-muted); }
 .vq-grid-hint kbd { padding: 0 5px; border: 1px solid var(--vq-line-strong); border-bottom-width: 2px; border-radius: 4px;
     background: #fff; font: inherit; font-size: .74rem; }
-.vq-grid { min-width: 1060px; border-collapse: collapse; }
-.vq-disc-on .vq-grid { min-width: 1120px; }
+.vq-grid { min-width: 1130px; border-collapse: collapse; }
+.vq-disc-on .vq-grid { min-width: 1190px; }
 .vq-grid th, .vq-grid td { border: 1px solid var(--vq-line); white-space: nowrap; }
 .vq-grid tr > :first-child { border-left: 0; }
 .vq-grid tr > :last-child { border-right: 0; }
@@ -517,8 +517,8 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 
 /* --- Báo giá theo mặt hàng: cột "Phiếu" cho biết hàng thuộc yêu cầu nào --- */
 .vq-board-alert { margin-top: 16px; }
-.vq-grid-board { min-width: 1220px; }
-.vq-disc-on .vq-grid-board { min-width: 1280px; }
+.vq-grid-board { min-width: 1290px; }
+.vq-disc-on .vq-grid-board { min-width: 1350px; }
 .vq-grid .vq-col-quote { width: 118px; line-height: 1.25; }
 .vq-quote-ref { color: var(--vq-accent); font-size: .78rem; font-weight: 600; text-decoration: none; }
 .vq-quote-ref:hover { text-decoration: underline; }
@@ -553,14 +553,20 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-ref-requester { padding-left: 0; }
 }
 
-/* --- Không có hàng: nút "×" cạnh mã hàng (checkbox thật nằm trong nhãn) --- */
+/* --- Sẵn hàng / không có hàng: ô "Sẵn hàng" + nút "×" cạnh mã hàng (nhãn for= ô đó) --- */
 .vq-na-x { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; margin-right: 6px;
     border: 1px solid var(--vq-line-strong); border-radius: 3px; color: var(--vq-muted); font-size: .8rem;
     line-height: 1; cursor: pointer; vertical-align: 1px; user-select: none; }
 .vq-na-x:hover { color: var(--vq-danger); border-color: var(--vq-danger); }
-.vq-na-x:has(input:checked) { background: var(--vq-danger); border-color: var(--vq-danger); color: #fff; }
-.vq-na-x:has(input:focus-visible) { outline: 2px solid var(--vq-accent); outline-offset: 1px; }
+/* Dòng đã bỏ tick "Sẵn hàng": nút × đỏ. */
+.vq-line:has([data-vq-avail]:not(:checked)) .vq-na-x { background: var(--vq-danger); border-color: var(--vq-danger); color: #fff; }
+.vq-grid .vq-col-avail { width: 70px; text-align: center; }
+.vq-grid .vq-col-avail input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--vq-ok); }
+.vq-grid .vq-col-avail input:disabled { cursor: default; }
 .vq-line-na .vq-col-price .vq-cell-input { text-decoration: line-through; color: var(--vq-muted); }
 /* Xem nhanh dùng bảng giá chung: chưa có chiết khấu thì ẩn cột %CK như trang báo giá. */
 .vq-quick-grid:not(.vq-disc-on) .vq-disc-only { display: none; }
 .vq-quick-grid .vq-table-scroll { border: 0; border-radius: 0; }
+@media (max-width: 760px) {
+    .vq-grid .vq-col-avail { text-align: left; }
+}

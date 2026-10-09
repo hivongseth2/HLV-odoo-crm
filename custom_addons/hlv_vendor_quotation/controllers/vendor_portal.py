@@ -378,7 +378,8 @@ class VendorQuotePortal(http.Controller):
                 "delivery_days": days,
                 "vendor_note": (post.get(f"note_{line.id}") or "").strip()[:LINE_NOTE_MAX],
                 "invoice_name": (post.get(f"inv_{line.id}") or "").strip()[:LINE_NOTE_MAX],
-                "unavailable": bool(post.get(f"na_{line.id}")),
+                # Ô "Sẵn hàng" tick sẵn — bỏ tick (hoặc bấm × cạnh mã hàng) thì form không gửi avail_<id>.
+                "unavailable": not post.get(f"avail_{line.id}"),
             }
         return line_values, errors
 
