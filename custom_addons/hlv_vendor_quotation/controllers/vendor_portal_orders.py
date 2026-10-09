@@ -15,7 +15,7 @@ from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import request
 
-from ..models.purchase_order import VENDOR_STATUS
+from ..models.purchase_order import PROGRESS_LABELS
 from ..models.vendor_quote_access import PORTAL_ROUTE
 from ..models.vendor_quote_utils import DATETIME_FMT, DELIVERY_CHANH, DELIVERY_CPN
 from ..services.chat_read import mark_seen
@@ -26,9 +26,10 @@ from .vendor_portal import VendorQuotePortal
 ORDERS = "don-mua"
 # Tab danh sách đơn mua — khoá trùng PurchaseOrder._hlv_vendor_stage().
 ORDER_TABS = [
-    ("waiting", "Đã nhận chờ đóng"),
+    ("waiting", "Chờ đóng gói"),
     ("packed", "Đã đóng gói"),
     ("delivered", "Đã giao"),
+    ("cancel", "Đã hủy"),
     ("all", "Tất cả"),
 ]
 # Bản in cho NCC: mẫu "Đơn mua hàng" chuẩn của Odoo. Mẫu tự dựng cũ (portal_order_print) giữ lại
@@ -39,7 +40,7 @@ PRINT_REPORT = "purchase.report_purchaseorder"
 class VendorPurchaseOrderPortal(VendorQuotePortal):
 
     @http.route(f"{PORTAL_ROUTE}/<string:token>/{ORDERS}", type="http", auth="public", methods=["GET"])
-    def portal_orders(self, token, stage=None, **kw):
+    def portal_orders(self, token, stage=None, saved=None, **kw):
         access = self._get_access(token)
         if not access:
             return self._not_found()
@@ -53,19 +54,38 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             # Mở tab chưa chọn: ưu tiên đơn đang chờ NCC đóng gói — việc NCC cần làm.
             stage = "waiting" if counts["waiting"] else "all"
         shown = orders if stage == "all" else orders.filtered(lambda o: stages[o.id] == stage)
+        list_url = f"{PORTAL_ROUTE}/{token}/{ORDERS}?{urlencode({'stage': stage})}"
         return self._render("hlv_vendor_quotation.portal_order_list", access, {
             "orders": shown,
             "stage": stage,
-            "stages": stages,
+            "infos": {order.id: self._order_info(order) for order in shown},
+            # Cập nhật tiến độ ngay trong khung xem nhanh → về lại đúng tab này.
+            "next_url": list_url,
+            "saved_order": saved or "",
             "tabs": [
                 (key, label, counts[key], f"{PORTAL_ROUTE}/{token}/{ORDERS}?{urlencode({'stage': key})}")
                 for key, label in ORDER_TABS
             ],
             "order_quotes": {order.id: order.hlv_vendor_quote_ids for order in shown},
             "marks": row_marks(shown, access),
-            "vendor_status_labels": dict(VENDOR_STATUS),
+            "progress_labels": PROGRESS_LABELS,
+            "datetime_fmt": DATETIME_FMT,
+            "post": {},
             "active_tab": "orders",
         })
+
+    @staticmethod
+    def _order_info(order):
+        """Thông tin một đơn cho trang NCC: tiến độ, giao hàng, thanh toán, cách giao (CPN / chành → NCC
+        phải báo thông tin gửi; trống = kho nhận là xong)."""
+        mode = order._hlv_delivery_mode()
+        return {
+            "progress": order._hlv_vendor_progress(),
+            "delivery_term": order._hlv_delivery_term(),
+            "delivery_place": order._hlv_delivery_place(),
+            "payment_term": order._hlv_payment_term(),
+            "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",
+        }
 
     @http.route(
         f"{PORTAL_ROUTE}/<string:token>/{ORDERS}/<int:order_id>",
@@ -95,17 +115,18 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             except UserError as exc:
                 error = exc.args[0]
             else:
+                if kw.get("next"):
+                    # Cập nhật từ khung xem nhanh ở danh sách: về lại danh sách (chỉ trong link của NCC).
+                    back_url = self._safe_next(access, kw["next"])
+                    sep = "&" if "?" in back_url else "?"
+                    return request.redirect(f"{back_url}{sep}{urlencode({'saved': order.name})}")
                 back = f"&from={from_quote.id}" if from_quote else ""
                 return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}?saved=1{back}")
-        mode = order._hlv_delivery_mode()
         return self._render("hlv_vendor_quotation.portal_order_form", access, {
             "order": order,
             "quotes": order.hlv_vendor_quote_ids,
-            "vendor_status_labels": dict(VENDOR_STATUS),
-            "stage": order._hlv_vendor_stage(),
-            "delivery_term": order._hlv_delivery_term(),
-            "delivery_place": order._hlv_delivery_place(),
-            "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",
+            "info": self._order_info(order),
+            "progress_labels": PROGRESS_LABELS,
             "datetime_fmt": DATETIME_FMT,
             "saved": bool(kw.get("saved")),
             "ship_error": error,

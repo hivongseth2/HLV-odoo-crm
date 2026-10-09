@@ -298,7 +298,8 @@
                             <td data-label="Đơn mua">
                                 <t t-set="po_list" t-value="quote_orders[quote.id]"/>
                                 <a t-foreach="po_list" t-as="po" class="vq-block-link"
-                                   t-att-href="'%s/don-mua/%s?from=%s' % (portal_base, po.id, quote.id)" t-esc="po.name"/>
+                                   t-att-href="'%s/don-mua/%s?from=%s' % (portal_base, po.id, quote.id)"
+                                   t-esc="po.name + (' (đã hủy)' if po.state == 'cancel' else '')"/>
                                 <t t-if="not po_list">—</t>
                             </td>
                             <td class="vq-cell-action">
@@ -363,7 +364,7 @@
                     <p class="vq-muted vq-small">Cảm ơn quý công ty — các mặt hàng được chọn đã lên đơn mua:</p>
                     <a t-foreach="orders" t-as="po" class="vq-block-link"
                        t-att-href="'%s/don-mua/%s?from=%s' % (portal_base, po.id, quote.id)">
-                        <t t-esc="po.name"/> · <t t-esc="fmt(po.amount_untaxed)"/> chưa VAT</a>
+                        <t t-esc="po.name"/> · <t t-esc="fmt(po.amount_untaxed)"/> chưa VAT<t t-if="po.state == 'cancel'"> · đã hủy</t></a>
                 </section>
                 <section t-if="quote.note" class="vq-note">
                     <h2>Lời nhắn từ <t t-esc="company.name"/></h2>
