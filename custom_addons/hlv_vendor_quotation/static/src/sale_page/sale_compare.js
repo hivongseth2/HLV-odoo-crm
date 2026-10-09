@@ -7,13 +7,15 @@ window.HlvQuote = window.HlvQuote || {};
 
   var S = HQ.S;
   var esc = HQ.esc;
-  var D = { detail: null, saleOrder: null };  // phiếu đang mở + đơn bán sẽ gắn khi lên YCMH
+  // Phiếu đang mở + đơn bán sẽ gắn khi lên YCMH; confirming: đang xem bảng tóm tắt trước khi tạo YCMH.
+  var D = { detail: null, saleOrder: null, confirming: false };
 
   /** quiet: tải lại ngầm phiếu đang mở (có tin mới) — không nháy "Đang tải…". */
   HQ.openInquiry = function (inquiryId, quiet) {
     S.openInquiryId = inquiryId;
     HQ.show("hq-drawer", true);
     if (!quiet) {
+      D.confirming = false;
       HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-loading">Đang tải…</div>';
     }
     return HQ.api("inquiry", { inquiry_id: inquiryId }).then(function (detail) {
@@ -38,20 +40,27 @@ window.HlvQuote = window.HlvQuote || {};
     }).catch(function (err) { HQ.toast(err.message); });
   }
 
-  function createRequest() {
+  /** Bước 1: hiện bảng tóm tắt (sản phẩm, NCC, giá sẽ lên YCMH) để sale soát trước khi tạo. */
+  function reviewRequest(on) {
+    D.confirming = on;
+    render(D.detail);
+  }
+
+  /** Bước 2: sale bấm xác nhận trên bảng tóm tắt. */
+  function createRequest(button) {
     var d = D.detail;
-    var missing = d.line_count - d.chosen_count;
-    if (!d.requests.length && missing &&
-        !window.confirm(missing + " sản phẩm chưa chọn NCC sẽ không lên yêu cầu mua hàng. Tiếp tục?")) {
-      return;
-    }
+    button.disabled = true;
     HQ.api("create_request", {
       inquiry_id: d.id,
       sale_order_id: D.saleOrder ? D.saleOrder.id : null,
     }).then(function (detail) {
       var r = detail.request_result;
+      D.confirming = false;
       afterChange(detail, (r.merged ? "Đã gộp vào yêu cầu mua hàng " : "Đã tạo yêu cầu mua hàng ") + r.name);
-    }).catch(function (err) { HQ.toast(err.message); });
+    }).catch(function (err) {
+      button.disabled = false;
+      HQ.toast(err.message);
+    });
   }
 
   function cancelInquiry() {
@@ -136,6 +145,7 @@ window.HlvQuote = window.HlvQuote || {};
         'này trên đơn mua xuống đúng số NCC giao được — phần còn thiếu mở ra để chọn NCC khác">đã lên đơn mua — khoá</span>'
         : line.ordered_qty > 0 ? '<span class="hq-partial">đã đặt ' + HQ.qty(line.ordered_qty) + "/" +
           HQ.qty(line.requested_qty) + " — chọn NCC cho " + HQ.qty(line.requested_qty - line.ordered_qty) + " còn thiếu</span>"
+        : line.request_rejected ? '<span class="hq-expired">' + esc(line.request_name) + " bị từ chối — chọn lại NCC rồi lên YCMH mới</span>"
         : line.request_name ? '<span class="hq-muted">trong ' + esc(line.request_name) + "</span>" : "";
       return "<tr><td>" + esc(line.name) + (tag ? "<div>" + tag + "</div>" : "") +
         '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " +
@@ -197,28 +207,64 @@ window.HlvQuote = window.HlvQuote || {};
     if (d.sale_status === "cancel") {
       return "";
     }
-    var done = d.requests.length
-      ? '<div class="hq-muted">Đã lên ' + d.requests.map(function (r) { return esc(r.name); }).join(", ") +
+    // YCMH bị từ chối không tính là "đã lên": sản phẩm trong đó chờ lên YCMH mới.
+    var live = d.requests.filter(function (r) { return r.state !== "rejected"; });
+    var redo = d.lines.some(function (l) { return l.to_request && l.request_rejected; });
+    var done = live.length
+      ? '<div class="hq-muted">Đã lên ' + live.map(function (r) { return esc(r.name); }).join(", ") +
         ". Thu mua duyệt YCMH rồi tạo đơn mua theo NCC và giá đã chọn. Đổi NCC cho sản phẩm chưa lên " +
         "đơn mua: bấm giá NCC khác — YCMH tự cập nhật.</div>"
       : "";
-    if (d.requests.length && !d.pending_count) {
+    if (live.length && !d.pending_count) {
       return '<div class="hq-share"><b>Đã lên yêu cầu mua hàng</b>' + done + "</div>";
     }
-    return '<div class="hq-share"><div class="hq-share-head"><b>' +
-      (d.requests.length ? "Bổ sung vào yêu cầu mua hàng" : "Lên yêu cầu mua hàng") + "</b>" +
-      '<span class="hq-muted">' + (d.requests.length ? d.pending_count + " sản phẩm mới chọn chưa lên YCMH"
-        : d.chosen_count + "/" + d.line_count + " sản phẩm đã chọn NCC") + "</span></div>" + done +
+    var title = redo ? "Lên lại yêu cầu mua hàng" : live.length ? "Bổ sung vào yêu cầu mua hàng" : "Lên yêu cầu mua hàng";
+    var head = '<div class="hq-share"><div class="hq-share-head"><b>' + title + "</b>" +
+      '<span class="hq-muted">' + (live.length || redo ? d.pending_count + " sản phẩm đã chọn NCC chưa lên YCMH"
+        : d.chosen_count + "/" + d.line_count + " sản phẩm đã chọn NCC") + "</span></div>" + done;
+    if (D.confirming && d.can_request) {
+      return head + requestSummary(d) + '<div class="hq-request-row"><span class="hq-push"></span>' +
+        '<button type="button" class="hq-btn" data-review-request="0">Quay lại</button>' +
+        '<button type="button" class="hq-btn hq-btn-primary" data-create-request="1">Xác nhận tạo YCMH</button></div></div>';
+    }
+    return head +
       '<div class="hq-request-row"><div class="hq-picker hq-request-so">' +
       '<label class="hq-sr-only" for="hq-req-so-search">Đơn bán</label>' +
       '<input type="search" id="hq-req-so-search" class="hq-input w-100" autocomplete="off" ' +
       'placeholder="Gắn đơn bán (không bắt buộc)…"/>' +
       '<div id="hq-req-so-results" class="hq-dropdown hq-hidden"></div></div>' +
       '<div id="hq-req-so-chip" class="hq-chip-row">' + saleOrderChip() + "</div>" +
-      '<button type="button" class="hq-btn hq-btn-primary hq-push" data-create-request="1"' +
-      (d.can_request ? "" : " disabled") + ">" + (d.requests.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") +
-      "</button></div>" +
+      '<button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
+      (d.can_request ? "" : " disabled") + ">" +
+      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div>" +
       '<div class="hq-muted hq-small">Có đơn bán và đơn đó có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div>';
+  }
+
+  /** Bảng tóm tắt những gì sẽ lên YCMH: sản phẩm, NCC đã chọn, giá sau VAT; kèm sản phẩm bị bỏ lại. */
+  function requestSummary(d) {
+    var vendorNames = {};
+    d.vendors.forEach(function (v) { vendorNames[v.quote_id] = v.name; });
+    var total = 0;
+    var rows = d.lines.filter(function (l) { return l.to_request; }).map(function (line) {
+      var quoteId = Object.keys(line.offers).find(function (key) { return line.offers[key].selected; });
+      var offer = line.offers[quoteId];
+      total += offer.total_incl;
+      return "<tr><td>" + esc(line.name) + '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
+        "</td><td>" + esc(vendorNames[quoteId] || "") + '</td><td class="hq-num">' + HQ.money(offer.price_incl) +
+        '</td><td class="hq-num">' + HQ.money(offer.total_incl) + "</td></tr>";
+    }).join("");
+    var unchosen = d.lines.filter(function (l) {
+      return !l.locked && !Object.keys(l.offers).some(function (key) { return l.offers[key].selected; });
+    });
+    return '<div class="hq-table-wrap hq-request-summary"><table class="hq-table"><thead><tr><th>Sản phẩm</th>' +
+      '<th class="hq-num">SL</th><th>Nhà cung cấp</th><th class="hq-num">Đơn giá sau VAT</th>' +
+      '<th class="hq-num">Thành tiền</th></tr></thead><tbody>' + rows + "</tbody>" +
+      '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b>' + HQ.money(total) +
+      "</b></td></tr></tfoot></table></div>" +
+      '<div class="hq-muted hq-small">' + (D.saleOrder ? "Gắn đơn bán <b>" + esc(D.saleOrder.name) +
+        "</b> — đơn đã có YCMH chưa duyệt thì hàng được gộp vào đó." : "Không gắn đơn bán.") + "</div>" +
+      (unchosen.length ? '<div class="hq-alert hq-alert-strong">' + unchosen.length + " sản phẩm chưa chọn NCC sẽ " +
+        "không lên YCMH: " + unchosen.map(function (l) { return esc(l.name); }).join(", ") + "</div>" : "");
   }
 
   function saleOrderChip() {
@@ -308,6 +354,7 @@ window.HlvQuote = window.HlvQuote || {};
     var panel = HQ.$("hq-drawer-panel");
     HQ.on(panel, "click", "[data-choose]", function (el) { choose(+el.dataset.choose, true); });
     HQ.on(panel, "click", "[data-unchoose]", function (el) { choose(+el.dataset.unchoose, false); });
+    HQ.on(panel, "click", "[data-review-request]", function (el) { reviewRequest(el.dataset.reviewRequest === "1"); });
     HQ.on(panel, "click", "[data-create-request]", createRequest);
     HQ.on(panel, "click", "[data-cancel-inquiry]", cancelInquiry);
     HQ.on(panel, "click", "[data-clear-so]", function () {

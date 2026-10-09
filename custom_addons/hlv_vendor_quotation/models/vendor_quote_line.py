@@ -195,7 +195,7 @@ class VendorQuoteLine(models.Model):
         previous = (inquiry_line.quote_line_ids - self).filtered("selected")
         previous.write({"selected": False, "request_line_id": False})
         self.selected = True
-        request_line = inquiry_line.request_line_id
+        request_line = inquiry_line._live_request_line()
         if request_line:
             self.request_line_id = request_line
             # Sale chỉ có quyền đọc YCMH; ghi đúng các field NCC/giá đã chọn.
@@ -216,7 +216,7 @@ class VendorQuoteLine(models.Model):
 
     def action_unchoose(self):
         for line in self.filtered("selected"):
-            if line.inquiry_line_id.request_line_id:
+            if line.inquiry_line_id._live_request_line():
                 raise UserError(_(
                     "Sản phẩm này đã lên YCMH — bấm chọn NCC khác để đổi, không bỏ trống được."
                 ))

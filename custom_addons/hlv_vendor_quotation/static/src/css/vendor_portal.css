@@ -243,10 +243,6 @@ a { color: var(--vq-accent); }
 /* --- Kết quả chọn giá của sale trên từng dòng báo giá --- */
 .vq-choice-legend { margin: 6px 0 0; color: var(--vq-muted); }
 .vq-price-table tr.vq-line-chosen td { background: #ecfdf3; }
-.vq-price-table tr.vq-line-lost td { color: var(--vq-muted); }
-.vq-line-lost .vq-name-text, .vq-line-lost .vq-col-total, .vq-line-lost .vq-col-price .vq-cell-input,
-.vq-line-lost .vq-col-price .vq-cell-text { text-decoration: line-through; }
-.vq-line-lost .vq-cell-input { color: var(--vq-muted); }
 @media (max-width: 760px) {
     .vq-price-table tr.vq-line-chosen { background: #ecfdf3; border-color: #86efac; }
     .vq-price-table tr.vq-line-chosen td { background: transparent; }
@@ -558,4 +554,10 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-grid td.vq-col-quote::before { display: inline; margin: 0; }
     .vq-price-table tr.vq-line-error { border-color: #fca5a5; background: #fef2f2; }
     .vq-price-table tr.vq-line-error td { background: transparent; }
+}
+
+/* Người hỏi giá dưới số báo giá (danh sách theo phiếu) — thẳng mép chữ số báo giá, sau nút xem nhanh. */
+.vq-ref-requester { padding-left: 28px; color: var(--vq-muted); font-size: .8rem; white-space: nowrap; }
+@media (max-width: 760px) {
+    .vq-ref-requester { padding-left: 0; }
 }

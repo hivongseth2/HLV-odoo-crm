@@ -129,7 +129,7 @@ def inquiry_summary(inquiry):
 def inquiry_detail(inquiry):
     """Phiếu đầy đủ cho ngăn so sánh: NCC (cột) × sản phẩm (dòng), kèm lựa chọn."""
     quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel").sorted("id")
-    pending = inquiry.line_ids.filtered(lambda l: l.chosen_line_id and not l.request_line_id)
+    pending = inquiry.line_ids.filtered(lambda l: l._needs_request())
     data = inquiry_summary(inquiry)
     data.update({
         "note": inquiry.note or "",
@@ -216,6 +216,10 @@ def _compare_row(line, quotes):
         "ordered_qty": line.request_line_id.sudo().purchased_qty if line.request_line_id else 0,
         "requested_qty": line.request_line_id.sudo().product_qty if line.request_line_id else 0,
         "request_name": line.request_line_id.sudo().request_id.name or "",
+        # Nằm trong YCMH bị từ chối: chờ lên YCMH mới.
+        "request_rejected": bool(line.request_line_id) and not line._live_request_line(),
+        # Sẽ lên YCMH khi bấm nút (bảng tóm tắt xác nhận trước khi tạo).
+        "to_request": line._needs_request(),
         "name": line.name or line.product_id.display_name,
         "qty": line.product_qty,
         "uom": line.product_uom_id.name or "",

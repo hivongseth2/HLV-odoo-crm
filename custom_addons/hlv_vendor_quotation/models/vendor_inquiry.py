@@ -225,7 +225,7 @@ class VendorInquiry(models.Model):
         self.ensure_one()
         if self.state in ("cancel", "closed"):
             raise UserError(_("Phiếu %s đã đóng — lập phiếu mới, giá còn hiệu lực sẽ được dùng lại.", self.name))
-        pending = self.line_ids.filtered(lambda l: l.chosen_line_id and not l.request_line_id)
+        pending = self.line_ids.filtered(lambda l: l._needs_request())
         if not pending:
             raise UserError(_("Không có sản phẩm nào đã chọn NCC mà chưa lên YCMH."))
         order = sale_order or self.sale_order_id
@@ -329,6 +329,21 @@ class VendorInquiryLine(models.Model):
     def _compute_chosen_line_id(self):
         for line in self:
             line.chosen_line_id = line.quote_line_ids.filtered("selected")[:1]
+
+    def _live_request_line(self):
+        """Dòng YCMH còn hiệu lực của sản phẩm. YCMH bị thu mua từ chối coi như chưa lên: sale chọn
+        lại NCC rồi lên YCMH mới, không ghi tiếp vào YCMH đã bị từ chối. Đọc trạng thái bằng sudo —
+        sale chỉ có quyền đọc hạn chế trên YCMH."""
+        self.ensure_one()
+        request_line = self.request_line_id
+        if request_line and request_line.sudo().request_id.state == "rejected":
+            return request_line.browse()
+        return request_line
+
+    def _needs_request(self):
+        """Đã chọn NCC mà chưa nằm trong YCMH còn hiệu lực — nút "Lên / bổ sung YCMH" đưa lên."""
+        self.ensure_one()
+        return bool(self.chosen_line_id) and not self._live_request_line()
 
     def _quote_line_vals(self):
         self.ensure_one()
