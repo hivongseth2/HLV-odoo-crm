@@ -557,7 +557,7 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 }
 
 /* Người hỏi giá dưới số báo giá (danh sách theo phiếu) — thẳng mép chữ số báo giá, sau nút xem nhanh. */
-.vq-ref-requester { padding-left: 28px; color: var(--vq-muted); font-size: .8rem; white-space: nowrap; }
+.vq-ref-requester { padding-left: 32px; color: var(--vq-muted); font-size: .8rem; white-space: nowrap; }
 @media (max-width: 760px) {
     .vq-ref-requester { padding-left: 0; }
 }
