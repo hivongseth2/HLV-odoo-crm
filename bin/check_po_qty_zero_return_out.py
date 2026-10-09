@@ -16,6 +16,9 @@ Cơ chế core Odoo 18 (purchase_stock + stock):
   3. Phần âm còn lại (không khớp khoá / move nhận trong phiếu đó nhỏ hơn SL giảm) bị ĐẢO thành
      move trả hàng: đổi chiều kho → NCC, picking_type = return_picking_type_id của loại phiếu nhập
      (mặc định là loại Phiếu xuất OUT) → _assign_picking() tạo phiếu mới. Đó là "phiếu out".
+  Bẫy: _merge_moves gỡ picking_id của move âm TRƯỚC khi so khoá, nên location_dest_id (compute theo
+  picking_id.location_dest_id) bị tính lại về kệ mặc định của loại phiếu nhập. Phiếu nhập nào kho đã
+  chọn kệ khác mặc định thì move âm không bao giờ khớp — chép khoá vào move âm cũng vô ích.
 
 Script in ra:
   A. Cấu hình ảnh hưởng khoá gộp (ir.config_parameter) + danh sách trường khoá thực tế.
@@ -25,9 +28,9 @@ Script in ra:
   E. Từng dòng của các đơn trong ORDERS: mọi move, và với mỗi move "trả do SL âm" — so khoá gộp
      với các move nhận của cùng dòng, chỉ ra trường lệch / dòng bị tách nhiều phiếu.
   F. Quét SCAN_DAYS ngày gần nhất: các đơn mua khác có move "trả do SL âm" (mức độ lan rộng).
-  G. Module hlv_purchase_qty_decrease: đã cài chưa, cài lúc nào (so với giờ tạo phiếu trả), override
-     có nằm trong chuỗi gọi không. Ở E, mỗi trường lệch được ghi chú module có chép trường đó vào
-     move âm hay bỏ qua — trường lệch mà module bỏ qua là lý do module không chặn được.
+  G. Module hlv_purchase_qty_decrease (trừ thẳng phần giảm vào move nhận còn mở): đã cài chưa, cài
+     lúc nào (so với giờ tạo phiếu trả), override có nằm trong chuỗi gọi không. Module chừa lại phần
+     kho đã đếm (picked) — move nhận có "đã đếm" ở E là lý do phần dư vẫn thành phiếu trả.
 
 CHỈ ĐỌC — không write/create/unlink gì.
 
@@ -207,7 +210,7 @@ def print_move(move):
     flag = '  <<< TRẢ DO SL ÂM' if is_negative_return(move) else ''
     print(f"    move {move.id:<7} {pick.name or '(không phiếu)':<22} {code:<9} {move.state:<10}"
           f" {move.location_id.display_name} → {move.location_dest_id.display_name}"
-          f" | yêu cầu {move.product_uom_qty:g} | thực {move.quantity:g}{flag}")
+          f" | yêu cầu {move.product_uom_qty:g} | thực {move.quantity:g}{' (đã đếm)' if move.picked else ''}{flag}")
     print(f"           giá {move.price_unit:,.2f} | hạn {local(move.date_deadline)} | date {local(move.date)}"
           f" | tạo {local(move.create_date)} bởi {move.create_uid.name}"
           f" | phiếu tạo {local(pick.create_date) if pick else '-'}")
@@ -223,14 +226,12 @@ def diagnose_return(ret_move, line, neg_key):
         print("       Dòng không còn move nhận nào để so.")
         return
     for rec in receipts:
-        copied = set(rec._negative_merge_key_vals()) if hasattr(rec, '_negative_merge_key_vals') else None
         diffs = []
         for fname in comparable:
             neg_val = origin_value(ret_move, fname, as_negative_origin=True)
             rec_val = rec[fname]
             if key_of(ret_move, fname, neg_val, price_digits) != key_of(rec, fname, rec_val, price_digits):
-                diffs.append(f"{fname}: move âm {fmt_value(neg_val)} ≠ move nhận {fmt_value(rec_val)}"
-                             f"{fix_module_note(fname, copied)}")
+                diffs.append(f"{fname}: move âm {fmt_value(neg_val)} ≠ move nhận {fmt_value(rec_val)}")
         head = f"       vs move nhận {rec.id} ({rec.picking_id.name}, {rec.state}, SL {rec.product_uom_qty:g})"
         if diffs:
             print(f"{head}: LỆCH KHOÁ → không trừ được")
@@ -245,12 +246,6 @@ def diagnose_return(ret_move, line, neg_key):
     if receipts.filtered(lambda m: m.state == 'cancel' and not m.product_uom_qty):
         print("       ! Có move nhận bị trừ về 0 rồi hủy: move âm lớn hơn move nhận trong phiếu được chọn"
               " → phần dư bị đảo thành phiếu trả.")
-
-
-def fix_module_note(fname, copied):
-    if copied is None:
-        return f"  [{FIX_MODULE} chưa nạp]"
-    return f"  [{FIX_MODULE} CÓ chép]" if fname in copied else f"  [{FIX_MODULE} BỎ QUA trường này]"
 
 
 def section_order(order, neg_key):
@@ -302,8 +297,7 @@ def section_fix_module():
         return
     print(f"  Trạng thái {mod.state} | phiên bản DB {mod.latest_version} | sửa lần cuối {local(mod.write_date)}"
           " (≈ lúc cài/nâng cấp; phiếu trả tạo TRƯỚC giờ này thì module chưa kịp chạy)")
-    print_overrides('purchase.order.line', ['_prepare_stock_move_vals', '_open_receipt_move'])
-    print_overrides('stock.move', ['_negative_merge_key_vals'])
+    print_overrides('purchase.order.line', ['_create_stock_moves', '_absorb_into_open_receipts', '_open_receipt_moves'])
 
 
 neg_key_fields = section_config()
