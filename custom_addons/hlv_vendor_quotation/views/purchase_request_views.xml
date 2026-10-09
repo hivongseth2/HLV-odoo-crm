@@ -33,6 +33,7 @@
             <xpath expr="//field[@name='partner_ref']" position="after">
                 <field name="hlv_vendor_status" readonly="1" invisible="not hlv_vendor_status"/>
                 <field name="hlv_vendor_status_date" invisible="not hlv_vendor_status_date"/>
+                <field name="hlv_ship_method" invisible="not hlv_ship_method"/>
                 <field name="hlv_ship_carrier" invisible="not hlv_ship_carrier"/>
                 <field name="hlv_ship_ref" invisible="not hlv_ship_ref"/>
                 <field name="hlv_inquiry_ids" widget="many2many_tags" readonly="1" invisible="not hlv_inquiry_ids"/>

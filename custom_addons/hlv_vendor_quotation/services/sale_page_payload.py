@@ -53,7 +53,7 @@ def purchase_order_payload(order):
         "amount_total": order.amount_total,
         "vendor_status": VENDOR_STATUS_LABELS.get(order.hlv_vendor_status, ""),
         # NCC gửi CPN / chành: hãng / chành + mã vận đơn / số xe — sale theo hàng giúp khách.
-        "vendor_ship": " ".join(filter(None, [order.hlv_ship_carrier, order.hlv_ship_ref])),
+        "vendor_ship": order._hlv_ship_text(),
     }
 
 

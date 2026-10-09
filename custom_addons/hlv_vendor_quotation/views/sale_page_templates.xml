@@ -20,7 +20,7 @@
                     <div class="container-fluid">
                         <span class="navbar-brand mb-0">Hỏi giá nhà cung cấp</span>
                         <div class="d-flex align-items-center gap-3">
-                            <!-- Chuông báo giá NCC mới (js sale_notify.js). -->
+                            <!-- Chuông báo giá NCC mới / đơn mua đổi tiến độ (js sale_notify.js). -->
                             <div t-if="allowed" class="hq-bell-wrap">
                                 <button type="button" id="hq-bell" class="hq-bell" aria-expanded="false"
                                         aria-label="Thông báo báo giá NCC" title="Báo giá NCC mới">

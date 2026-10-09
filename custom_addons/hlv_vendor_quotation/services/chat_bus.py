@@ -15,6 +15,7 @@ from odoo.addons.bus.websocket import WebsocketConnectionHandler
 
 BUS_TYPE = "hlv_vq_chat"
 QUOTED_TYPE = "hlv_vq_quoted"
+ORDER_TYPE = "hlv_vq_order"
 SALE_ALL_CHANNEL = "hlv_vq_sale_all"
 
 
@@ -56,6 +57,28 @@ def notify_quoted(quote, resubmitted):
     bus = quote.env["bus.bus"].sudo()
     for channel in sale_channels(quote.env, quote.inquiry_id):
         bus._sendone(channel, QUOTED_TYPE, message)
+
+
+def notify_order_status(order):
+    """Báo trang sale: tiến độ đơn mua đổi (NCC đóng gói / gửi hàng, kho nhận hàng) — popup + chuông.
+    Chỉ đơn lên từ phiếu hỏi giá (có kênh mã sale để báo)."""
+    order = order.sudo()
+    inquiries = order.hlv_inquiry_ids
+    if not inquiries:
+        return
+    from ..models.purchase_order import PROGRESS_LABELS  # tránh vòng import: model import file này
+    message = {
+        "order_id": order.id,
+        "name": order.name,
+        "vendor": order.partner_id.commercial_partner_id.display_name,
+        "status": PROGRESS_LABELS.get(order._hlv_vendor_progress(), ""),
+        "ship": order._hlv_ship_text(),
+        "inquiry_ids": inquiries.ids,
+        "inquiry_name": inquiries[:1].name,
+    }
+    bus = order.env["bus.bus"].sudo()
+    for channel in sale_channels(order.env, inquiries):
+        bus._sendone(channel, ORDER_TYPE, message)
 
 
 def notify_chat(record, author_name, from_vendor):

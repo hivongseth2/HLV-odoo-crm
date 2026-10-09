@@ -419,7 +419,7 @@
 .hq-opp-edit { display: flex; gap: .35rem; align-items: center; }
 .hq-opp-edit .hq-input { width: 150px; min-width: 0; padding-top: .2rem; padding-bottom: .2rem; }
 
-/* ------------------------------------------------------------ chuông + popup báo giá NCC mới */
+/* ------------------------------------------------------------ chuông + popup báo giá NCC mới / đơn mua đổi tiến độ */
 
 .hq-bell-wrap { position: relative; }
 .hq-bell { position: relative; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0;
