@@ -20,7 +20,8 @@ class StockWarehouse(models.Model):
     def _hlv_get_transfer_location(self):
         """Vị trí CHUYENKHO của kho, nằm ngang hàng Tồn kho (dưới vị trí view của kho).
 
-        Tự tạo nếu chưa có; nếu đã có vị trí tên CHUYENKHO trong kho thì đánh dấu và dời lên ngang Tồn kho.
+        Tự tạo nếu chưa có. Không nhận lại vị trí tên CHUYENKHO có sẵn: đó có thể là khu kệ đang dùng
+        (VD TSN/Stock/CHUYENKHO), dời đi sẽ làm đơn bán không lấy được hàng trong đó.
         """
         self.ensure_one()
         # sudo: người quét app mobile không có quyền tạo/sửa vị trí
@@ -30,21 +31,13 @@ class StockWarehouse(models.Model):
         )
         if location:
             return location
-        vals = {"hlv_is_transfer_location": True, "location_id": self.view_location_id.id}
-        location = Location.search(
-            [
-                ("name", "=", TRANSFER_LOCATION_NAME),
-                ("usage", "=", "internal"),
-                ("location_id", "child_of", self.view_location_id.id),
-            ],
-            limit=1,
-        )
-        if location:
-            location.write(vals)
-            return location
-        return Location.create(
-            dict(vals, name=TRANSFER_LOCATION_NAME, usage="internal", company_id=self.company_id.id)
-        )
+        return Location.create({
+            "name": TRANSFER_LOCATION_NAME,
+            "usage": "internal",
+            "location_id": self.view_location_id.id,
+            "company_id": self.company_id.id,
+            "hlv_is_transfer_location": True,
+        })
 
     @api.model
     def _hlv_ensure_transfer_locations(self):
