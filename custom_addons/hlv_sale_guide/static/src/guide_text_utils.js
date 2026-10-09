@@ -70,6 +70,15 @@
     return text ? new Date(text.replace(" ", "T") + "Z") : null;
   }
 
+  /** Date → "dd/mm/yyyy" theo giờ máy người xem. null → "". */
+  function formatDate(date) {
+    if (!date) {
+      return "";
+    }
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return pad(date.getDate()) + "/" + pad(date.getMonth() + 1) + "/" + date.getFullYear();
+  }
+
   /**
    * Thời điểm → chữ ngắn so với now: "vừa xong", "5 phút trước", "3 giờ trước", "hôm qua",
    * "4 ngày trước", quá một tuần thì "dd/mm/yyyy". date, now: Date. date null → "".
@@ -95,8 +104,7 @@
     if (days < 7) {
       return days + " ngày trước";
     }
-    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
-    return pad(date.getDate()) + "/" + pad(date.getMonth() + 1) + "/" + date.getFullYear();
+    return formatDate(date);
   }
 
   /**
@@ -123,6 +131,7 @@
     formatSize: formatSize,
     fileLabel: fileLabel,
     parseServerDate: parseServerDate,
+    formatDate: formatDate,
     timeAgo: timeAgo,
     uploadProblem: uploadProblem,
   };

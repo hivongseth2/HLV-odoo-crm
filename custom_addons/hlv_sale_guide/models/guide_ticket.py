@@ -16,6 +16,7 @@ from .ticket_utils import check_uploads, join_quotes, ticket_title
 
 MANAGER_GROUP = "hlv_sale_guide.group_guide_manager"
 STATE_EVENTS = {"done": "Đã đánh dấu: đã xử lý", "open": "Đã mở lại ticket"}
+GUIDE_UPDATED_EVENT = "Hướng dẫn vừa được tải bản mới. Xem lại, nếu đã ổn thì đánh dấu đã xử lý."
 
 
 class SaleGuideTicket(models.Model):
@@ -46,9 +47,24 @@ class SaleGuideTicket(models.Model):
         help="Những đoạn người hỏi bôi đen trong hướng dẫn, mỗi dòng một đoạn (xem join_quotes); "
              "bấm vào trên trang /huong-dan là nhảy tới đoạn đó.",
     )
+    # Đoạn trích lưu bằng chữ, không theo phiên bản: hướng dẫn tải bản mới thì đoạn đã sửa / xoá
+    # không còn tô được trên trang. Ghi lại bản lúc hỏi để biết ticket nói về bản cũ.
+    guide_published_on = fields.Datetime(
+        string="Bản hướng dẫn lúc hỏi", readonly=True,
+        help="Thời điểm cập nhật nội dung của hướng dẫn khi ticket được tạo.",
+    )
+    guide_changed = fields.Boolean(
+        string="Hướng dẫn đã cập nhật sau khi hỏi", compute="_compute_guide_changed",
+    )
     done_by_id = fields.Many2one("res.users", string="Xử lý bởi", readonly=True)
     done_on = fields.Datetime(string="Xử lý lúc", readonly=True)
     last_message_on = fields.Datetime(string="Trao đổi gần nhất", readonly=True, default=fields.Datetime.now)
+
+    @api.depends("guide_published_on", "guide_id.published_on")
+    def _compute_guide_changed(self):
+        for ticket in self:
+            asked, now = ticket.guide_published_on, ticket.guide_id.published_on
+            ticket.guide_changed = bool(asked and now and now > asked)
 
     @api.model
     def create_from_page(self, kind, guide_id, title, quotes, body, files):
@@ -66,6 +82,7 @@ class SaleGuideTicket(models.Model):
         ticket = self.with_context(mail_create_nolog=True).create({
             "kind": kind if kind in ("question", "request") else "question",
             "guide_id": guide.id if guide else False,
+            "guide_published_on": guide.published_on if guide else False,
             "name": ticket_title(title, body, guide.name if guide else _("Ticket không tiêu đề")),
             "quotes": join_quotes(quotes) or False,
         })
@@ -124,6 +141,16 @@ class SaleGuideTicket(models.Model):
         # Người đã tham gia thảo luận thì nhận thông báo các tin sau (không cần quyền ghi khi tự theo dõi).
         self.message_subscribe(partner_ids=self.env.user.partner_id.ids)
         self.sudo().write({"last_message_on": fields.Datetime.now()})
+
+    @api.model
+    def _notify_guide_updated(self, guide):
+        """Ghi tin "hướng dẫn vừa tải bản mới" vào các ticket chưa xử lý của guide.
+
+        Người theo dõi (người hỏi, người đã trả lời) nhận thông báo để vào kiểm lại — thường là yêu
+        cầu sửa vừa được làm. Ticket đã xử lý thì không làm phiền.
+        """
+        for ticket in self.search([("guide_id", "=", guide.id), ("state", "=", "open")]):
+            ticket._post("", [], GUIDE_UPDATED_EVENT)
 
     def _message_counts(self):
         """{id ticket: số tin thảo luận} cho self, một truy vấn."""

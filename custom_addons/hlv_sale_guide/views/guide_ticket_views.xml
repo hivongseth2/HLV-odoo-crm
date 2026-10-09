@@ -31,6 +31,10 @@
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
+                    <field name="guide_changed" invisible="1"/>
+                    <div class="alert alert-warning" role="alert" invisible="not guide_changed">
+                        Hướng dẫn đã được tải bản mới sau khi ticket được hỏi — đoạn trích có thể không còn trên trang.
+                    </div>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
                     </div>
@@ -38,6 +42,7 @@
                         <group>
                             <field name="kind"/>
                             <field name="guide_id"/>
+                            <field name="guide_published_on" invisible="not guide_published_on"/>
                         </group>
                         <group>
                             <field name="create_uid" string="Người hỏi" readonly="1"/>

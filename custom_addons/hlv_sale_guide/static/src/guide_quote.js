@@ -170,6 +170,17 @@
       });
     },
     /**
+     * Đoạn trích thứ index của ticket có đang được tô trên trang không. Khung xem đang không hiện
+     * guideUrl (đang tải, hoặc hiện hướng dẫn khác) → null: chưa biết, đừng kết luận là mất.
+     */
+    hasMark: function (guideUrl, ticketId, index) {
+      var doc = frameDoc();
+      if (!doc || !doc.hlvTicketAttached || doc.location.pathname !== guideUrl) {
+        return null;
+      }
+      return !!doc.querySelector("mark." + MARK + '[data-ticket="' + ticketId + '"][data-quote="' + index + '"]');
+    },
+    /**
      * Cuộn tới đoạn trích thứ index của ticket (không thấy đoạn đó thì đoạn đầu tiên tìm được)
      * và nháy sáng. Không có đoạn nào của ticket trên trang → false.
      */

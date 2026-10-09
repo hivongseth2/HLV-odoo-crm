@@ -176,6 +176,7 @@ class SaleGuide(models.Model):
             "content_kind": "pdf" if PDF_FILE in files else "html",
             "published_on": fields.Datetime.now(),
         })
+        self.env["hlv.sale.guide.ticket"]._notify_guide_updated(self)
 
     def action_open_page(self):
         self.ensure_one()

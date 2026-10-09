@@ -127,6 +127,22 @@
 
   function markCurrentGuide() {
     quote.mark(ui.tickets.filter(isCurrentGuide));
+    flagMissingQuotes();
+  }
+
+  /**
+   * Làm mờ đoạn trích (trong chi tiết ticket đang mở) không còn tìm thấy trên bản hướng dẫn hiện
+   * tại — thường do hướng dẫn đã tải bản mới sửa / xoá đoạn đó. Chỉ xét khi khung xem đang hiện
+   * đúng hướng dẫn của ticket.
+   */
+  function flagMissingQuotes() {
+    pane.querySelectorAll(".tk-quote[data-index]").forEach(function (el) {
+      var found = quote.hasMark(el.dataset.guideUrl, Number(el.dataset.ticket), Number(el.dataset.index));
+      el.classList.toggle("is-missing", found === false);
+      el.title = found === false
+        ? "Không còn tìm thấy đoạn này trong bản hướng dẫn hiện tại"
+        : "Bấm để xem chỗ này trong hướng dẫn";
+    });
   }
 
   /** Cuộn khung xem tới đoạn trích thứ index của ticket; ticket của hướng dẫn khác thì mở hướng dẫn đó trước. */
@@ -272,11 +288,25 @@
     return h("div", { class: "tk-quotes" }, t.quotes.map(function (q, index) {
       return h("blockquote", {
         class: "tk-quote tk-quote-full" + (linked ? " is-link" : ""),
-        title: linked ? "Bấm để xem chỗ này trong hướng dẫn" : null,
+        "data-ticket": linked ? t.id : null,
+        "data-index": linked ? index : null,
+        "data-guide-url": linked ? "/huong-dan/" + t.guide.slug + "/" : null,
         text: q,
         onclick: linked ? function () { showInGuide(t, index); } : null,
       });
     }));
+  }
+
+  function versionNote(t) {
+    if (!t.guide_changed) {
+      return null;
+    }
+    var day = function (value) { return text.formatDate(text.parseServerDate(value)); };
+    return h("div", {
+      class: "tk-note",
+      text: "Hỏi trên bản hướng dẫn ngày " + day(t.guide_version_asked) + ". Hướng dẫn đã tải bản mới ngày "
+        + day(t.guide_version_now) + ", đoạn trích có thể không còn.",
+    });
   }
 
   function renderDetail(t) {
@@ -311,10 +341,12 @@
       ]),
       h("div", { class: "tk-meta" }, [h("span", { text: t.author }), when(t.created_on)]),
       guideLine,
+      versionNote(t),
       t.quotes.length ? quoteList(t) : null,
       h("div", { class: "tk-thread" }, t.messages.map(messageItem)),
       reply,
     ]));
+    flagMissingQuotes();
   }
 
   function openDetail(id, options) {

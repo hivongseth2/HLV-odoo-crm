@@ -60,6 +60,10 @@
 .tk-quote-full { display: block; -webkit-line-clamp: unset; max-height: 12em; overflow-y: auto; background: #fffbea; padding: 6px 8px; }
 .tk-quote.is-link { cursor: pointer; }
 .tk-quote.is-link:hover { background: #fdf0c2; }
+.tk-quote.is-missing { border-left-color: var(--ink-3); background: var(--paper); color: var(--ink-3); }
+.tk-quote.is-missing::after { content: "Không còn trong bản hướng dẫn hiện tại"; display: block; margin-top: 2px;
+  font-size: 11px; font-style: normal; color: var(--red); }
+.tk-note { padding: 6px 8px; border: 1px solid #e8c97a; border-radius: 4px; background: #fff8e1; color: #6b4e00; font-size: 13px; }
 .tk-quotes { display: flex; flex-direction: column; gap: 6px; }
 .tk-more { margin-top: 2px; padding-left: 11px; color: var(--ink-3); font-size: 12px; }
 
