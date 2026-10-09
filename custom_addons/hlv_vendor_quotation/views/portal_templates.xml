@@ -144,15 +144,11 @@
 
     <!-- Các mục của NCC: báo giá (theo mặt hàng / theo phiếu) và đơn mua sinh ra từ báo giá. -->
     <template id="portal_tabs" name="Báo giá NCC - tab">
-        <!-- Trang mặc định: báo giá theo mặt hàng (controllers/vendor_portal_lines.py); theo phiếu ở /phieu. -->
+        <!-- Tab "Báo giá theo mặt hàng" tạm tắt (xem controllers/__init__.py). -->
         <nav class="vq-section-tabs">
             <a t-att-href="portal_base"
-               t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'lines' else ''}">
-                Báo giá theo mặt hàng <span t-if="pending_line_count" class="vq-tab-count"
-                    t-att-title="'%s mặt hàng chờ báo giá' % pending_line_count">(<t t-esc="pending_line_count"/>)</span></a>
-            <a t-att-href="'%s/phieu' % portal_base"
                t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'quotes' else ''}">
-                Theo phiếu báo giá <span class="vq-tab-count">(<t t-esc="quote_count"/>)</span></a>
+                Yêu cầu báo giá <span class="vq-tab-count">(<t t-esc="quote_count"/>)</span></a>
             <a t-att-href="'%s/don-mua' % portal_base"
                t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'orders' else ''}">
                 Đơn mua hàng <span class="vq-tab-count">(<t t-esc="order_count"/>)</span></a>
@@ -222,7 +218,7 @@
                 <t t-call="hlv_vendor_quotation.portal_tabs"/>
                 <div class="vq-page-head">
                     <h1>Yêu cầu báo giá</h1>
-                    <form method="get" class="vq-search" t-att-action="'%s/phieu' % portal_base">
+                    <form method="get" class="vq-search" t-att-action="portal_base">
                         <input type="hidden" name="status" t-att-value="status"/>
                         <input type="search" name="q" class="vq-input" t-att-value="q"
                                placeholder="Tìm số báo giá hoặc tên hàng"/>
@@ -336,7 +332,7 @@
             <div class="vq-wrap">
                 <t t-call="hlv_vendor_quotation.portal_tabs"/>
                 <nav class="vq-breadcrumb">
-                    <a t-att-href="'%s/phieu' % portal_base">Yêu cầu báo giá</a> / <span t-esc="quote.name"/>
+                    <a t-att-href="portal_base">Yêu cầu báo giá</a> / <span t-esc="quote.name"/>
                 </nav>
 
                 <div class="vq-page-head">

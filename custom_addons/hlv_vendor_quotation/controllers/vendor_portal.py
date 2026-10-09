@@ -309,11 +309,11 @@ class VendorQuotePortal(http.Controller):
         return domain
 
     def _list_url(self, access, status=None, q="", page=1):
-        # Danh sách theo phiếu nằm ở /phieu — trang gốc của link giờ là bảng báo giá theo mặt hàng
-        # (controllers/vendor_portal_lines.py). Luôn ghi status (kể cả "all") để giữ đúng tab.
+        # Danh sách theo phiếu là trang gốc của link (trang "Báo giá theo mặt hàng" tạm tắt —
+        # xem controllers/__init__.py). Luôn ghi status (kể cả "all") để giữ đúng tab.
         params = {"status": status, "q": q or None, "page": page if page > 1 else None}
         query = urlencode({key: value for key, value in params.items() if value})
-        base = f"{PORTAL_ROUTE}/{access.access_token}/phieu"
+        base = f"{PORTAL_ROUTE}/{access.access_token}"
         return f"{base}?{query}" if query else base
 
     def _safe_next(self, access, next_url):
@@ -440,10 +440,6 @@ class VendorQuotePortal(http.Controller):
             "errors": [],
             # Số trên hai tab "Yêu cầu báo giá" / "Đơn mua hàng" ở mọi trang của NCC.
             "quote_count": len(access.quote_ids.filtered(lambda q: q.state in VENDOR_VISIBLE_STATES)),
-            # Tab "Báo giá theo mặt hàng": số mặt hàng còn chờ NCC báo giá.
-            "pending_line_count": len(access.quote_ids.filtered(
-                lambda q: q.state == "sent" and q._is_open_for_vendor()
-            ).line_ids.filtered(lambda line: not line.vendor_locked)),
             "order_count": len(access._vendor_purchase_orders()),
         }
         if self._is_logged_in(access):
