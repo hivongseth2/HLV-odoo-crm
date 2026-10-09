@@ -339,6 +339,9 @@ class StockPicking(models.Model):
                 # ========= FINAL FIX: SQL UPDATE Ở CUỐI CÙNG =========
                 # Đặt SAU tất cả write operations để tránh bị onchange ghi đè
                 _logger.warning(f"FINAL SQL UPDATE với transit_location.id = {transit_location.id}")
+                # Ghi hết các compute đang chờ (location_id tính lại theo partner/loại phiếu) TRƯỚC khi SQL,
+                # nếu không lần flush sau sẽ ghi đè nguồn thành vị trí mặc định của loại phiếu
+                self.env.flush_all()
                 self.env.cr.execute("""
                     UPDATE stock_picking SET location_id = %s WHERE id = %s
                 """, (transit_location.id, new_picking.id))
@@ -348,7 +351,10 @@ class StockPicking(models.Model):
                 self.env.cr.execute("""
                     UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
                 """, (transit_location.id, new_picking.id))
-                
+                new_picking.invalidate_recordset(["location_id"])
+                new_picking.move_ids.invalidate_recordset(["location_id"])
+                new_picking.move_line_ids.invalidate_recordset(["location_id"])
+
                 # Verify in DB
                 self.env.cr.execute("SELECT location_id FROM stock_picking WHERE id = %s", (new_picking.id,))
                 db_check = self.env.cr.fetchone()
