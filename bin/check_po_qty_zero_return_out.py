@@ -25,6 +25,9 @@ Script in ra:
   E. Từng dòng của các đơn trong ORDERS: mọi move, và với mỗi move "trả do SL âm" — so khoá gộp
      với các move nhận của cùng dòng, chỉ ra trường lệch / dòng bị tách nhiều phiếu.
   F. Quét SCAN_DAYS ngày gần nhất: các đơn mua khác có move "trả do SL âm" (mức độ lan rộng).
+  G. Module hlv_purchase_qty_decrease: đã cài chưa, cài lúc nào (so với giờ tạo phiếu trả), override
+     có nằm trong chuỗi gọi không. Ở E, mỗi trường lệch được ghi chú module có chép trường đó vào
+     move âm hay bỏ qua — trường lệch mà module bỏ qua là lý do module không chặn được.
 
 CHỈ ĐỌC — không write/create/unlink gì.
 
@@ -39,7 +42,8 @@ import pytz
 from odoo import fields
 from odoo.tools import float_round
 
-ORDERS = ['DMH23661']
+ORDERS = ['DMH23712']
+FIX_MODULE = 'hlv_purchase_qty_decrease'
 SCAN_DAYS = 60
 ORDER_SHOW_ALL_LINES = False  # True để in cả dòng không có move trả
 TZ = pytz.timezone('Asia/Ho_Chi_Minh')
@@ -219,12 +223,14 @@ def diagnose_return(ret_move, line, neg_key):
         print("       Dòng không còn move nhận nào để so.")
         return
     for rec in receipts:
+        copied = set(rec._negative_merge_key_vals()) if hasattr(rec, '_negative_merge_key_vals') else None
         diffs = []
         for fname in comparable:
             neg_val = origin_value(ret_move, fname, as_negative_origin=True)
             rec_val = rec[fname]
             if key_of(ret_move, fname, neg_val, price_digits) != key_of(rec, fname, rec_val, price_digits):
-                diffs.append(f"{fname}: move âm {fmt_value(neg_val)} ≠ move nhận {fmt_value(rec_val)}")
+                diffs.append(f"{fname}: move âm {fmt_value(neg_val)} ≠ move nhận {fmt_value(rec_val)}"
+                             f"{fix_module_note(fname, copied)}")
         head = f"       vs move nhận {rec.id} ({rec.picking_id.name}, {rec.state}, SL {rec.product_uom_qty:g})"
         if diffs:
             print(f"{head}: LỆCH KHOÁ → không trừ được")
@@ -241,10 +247,18 @@ def diagnose_return(ret_move, line, neg_key):
               " → phần dư bị đảo thành phiếu trả.")
 
 
+def fix_module_note(fname, copied):
+    if copied is None:
+        return f"  [{FIX_MODULE} chưa nạp]"
+    return f"  [{FIX_MODULE} CÓ chép]" if fname in copied else f"  [{FIX_MODULE} BỎ QUA trường này]"
+
+
 def section_order(order, neg_key):
     print(f"\n{SEP}\n  E. {order.name} — {order.partner_id.display_name} | {order.state} | tạo {local(order.create_date)}\n{SEP}")
     section_picking_type(order)
-    print(f"  Phiếu của đơn: {[(p.name, p.picking_type_id.code, p.state) for p in order.picking_ids]}")
+    for pick in order.picking_ids.sorted('id'):
+        print(f"  Phiếu {pick.name:<16} {pick.picking_type_id.code:<9} {pick.state:<10} → {pick.location_dest_id.display_name}"
+              f" | tạo {local(pick.create_date)}")
     for line in order.order_line.filtered(lambda l: l.product_id.type == 'consu'):
         moves = line.move_ids.sorted('id')
         returns = moves.filtered(is_negative_return)
@@ -280,10 +294,23 @@ def section_scan():
               f" | trạng thái {states}")
 
 
+def section_fix_module():
+    print(f"\n{SEP}\n  G. MODULE {FIX_MODULE}\n{SEP}")
+    mod = env['ir.module.module'].sudo().search([('name', '=', FIX_MODULE)])
+    if not mod:
+        print("  Không thấy module trong danh sách ứng dụng (chưa deploy / chưa cập nhật danh sách).")
+        return
+    print(f"  Trạng thái {mod.state} | phiên bản DB {mod.latest_version} | sửa lần cuối {local(mod.write_date)}"
+          " (≈ lúc cài/nâng cấp; phiếu trả tạo TRƯỚC giờ này thì module chưa kịp chạy)")
+    print_overrides('purchase.order.line', ['_prepare_stock_move_vals', '_open_receipt_move'])
+    print_overrides('stock.move', ['_negative_merge_key_vals'])
+
+
 neg_key_fields = section_config()
 section_overrides()
 section_automations()
 for po in env['purchase.order'].sudo().search([('name', 'in', ORDERS)]):
     section_order(po, neg_key_fields)
 section_scan()
+section_fix_module()
 env.cr.rollback()

@@ -10,8 +10,10 @@ class StockMove(models.Model):
     def _negative_merge_key_vals(self):
         """Giá trị khoá gộp của move này, để một move âm tạo sau mang đúng khoá và được trừ vào nó.
 
-        Chỉ chép field thường: field compute/related (vd. scrapped) tự tính lại từ field đã chép,
-        còn ghi thẳng vào related sẽ ghi xuyên sang bản ghi nguồn.
+        Phải chép cả field compute sửa được: location_id / location_dest_id / product_uom của
+        stock.move đều là compute store readonly=False, và kệ nhận chính là trường hay lệch nhất.
+        Bỏ field related (vd. scrapped — ghi vào sẽ ghi xuyên sang stock.location) và field
+        compute chỉ đọc, vì chúng tự tính lại từ các field đã chép.
         """
         self.ensure_one()
         fnames = (
@@ -22,7 +24,8 @@ class StockMove(models.Model):
         vals = {}
         for fname in fnames:
             field = self._fields[fname]
-            if field.compute or field.type == "one2many":
+            # readonly của field thường (date_deadline...) chỉ là cờ giao diện, vẫn phải chép.
+            if field.related or not field.store or (field.compute and field.readonly) or field.type == "one2many":
                 continue
             if field.type == "many2one":
                 vals[fname] = self[fname].id
