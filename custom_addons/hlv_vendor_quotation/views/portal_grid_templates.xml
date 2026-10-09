@@ -7,8 +7,7 @@
     <!-- Chú thích ngắn, chỉ hiện khi có trường hợp đó — chi tiết xem bằng cách rê chuột lên chip. -->
     <template id="portal_grid_legend" name="Báo giá NCC - chú thích bảng giá">
         <p t-if="any(line_choice.values())" class="vq-small vq-choice-legend">
-            Dòng nền xanh: <t t-esc="company.name"/> đã chọn giá của quý công ty. Dòng gạch: đã chọn
-            nhà cung cấp khác.</p>
+            Dòng nền xanh: <t t-esc="company.name"/> đã chọn giá của quý công ty.</p>
         <p t-if="references" class="vq-small vq-ref-legend">Chip "giá cũ": đã điền sẵn giá quý công ty báo
             trong <t t-esc="reference_days"/> ngày qua — đúng giá, còn hàng thì cứ gửi.</p>
     </template>
@@ -83,7 +82,7 @@
         <t t-set="ref_disc" t-value="ref and ref.list_price"/>
         <t t-set="code" t-value="line.product_id.default_code or ''"/>
         <t t-set="product_name" t-value="code_name(line.name or line.product_id.name, code)"/>
-        <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ('vq-line-lost' if line_choice.get(lid) == 'other' else '')"/>
+        <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ''"/>
         <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
         <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
         <tr data-vq-line="1"
@@ -112,8 +111,6 @@
                     <!-- Trạng thái dòng: chip nhỏ cùng dòng (rê chuột xem chi tiết) — dòng không cao thêm. -->
                     <span t-if="line.vendor_locked" class="vq-chip vq-chip-locked"
                           title="Đã lên đơn mua — không sửa được nữa">đã đặt</span>
-                    <span t-elif="line_choice.get(lid) == 'other'" class="vq-chip"
-                          title="Bên mua đã chọn nhà cung cấp khác cho mặt hàng này">NCC khác</span>
                     <span t-if="ref and line_editable" class="vq-chip vq-chip-ref"
                           t-att-title="'Giá lần trước: %s sau VAT cho %s %s (%s) — đã điền sẵn, kiểm tra rồi gửi' % (fmt(ref.price_unit * (1 + ref.tax_rate / 100.0)), fmt(ref.product_qty), ref.product_uom_id.name, fdate(ref.quote_id.submit_date))">giá cũ</span>
                 </div>

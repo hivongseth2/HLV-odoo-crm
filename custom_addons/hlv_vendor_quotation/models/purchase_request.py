@@ -8,6 +8,8 @@ from ..services.sale_code import sale_code
 
 # YCMH còn sửa được: chưa được thu mua duyệt.
 MERGEABLE_STATES = ("draft", "to_approve")
+# Phiếu hỏi giá còn chọn được NCC — chỉ những phiếu này được nhả lựa chọn khi YCMH bị từ chối.
+INQUIRY_ACTIVE_STATES = ("open", "requested")
 
 
 class PurchaseRequest(models.Model):
@@ -25,6 +27,35 @@ class PurchaseRequest(models.Model):
     vendor_quote_count = fields.Integer(
         string="Số báo giá NCC", compute="_compute_vendor_quote_count"
     )
+
+    def write(self, vals):
+        rejecting = self.filtered(lambda r: r.state != "rejected") if vals.get("state") == "rejected" else self.browse()
+        result = super().write(vals)
+        if rejecting:
+            rejecting._hlv_release_rejected_choices()
+        return result
+
+    def _hlv_release_rejected_choices(self):
+        """YCMH bị thu mua từ chối: bỏ chọn NCC cho các mặt hàng phiếu hỏi giá đã lên YCMH này.
+
+        Giữ lựa chọn thì mặt hàng vẫn như "đã chốt NCC": NCC được hỏi thêm thấy dòng gạch "NCC khác"
+        dù chẳng ai được mua, và sale không bỏ chọn được. Dòng phiếu vẫn trỏ dòng YCMH cũ để sale
+        thấy YCMH nào bị từ chối; chọn lại NCC rồi lên YCMH mới (vendor_inquiry._needs_request).
+        """
+        chosen = self.env["hlv.vendor.quote.line"].sudo().search([
+            ("selected", "=", True),
+            ("inquiry_line_id.request_line_id.request_id", "in", self.ids),
+            ("inquiry_line_id.inquiry_id.state", "in", INQUIRY_ACTIVE_STATES),
+        ])
+        if not chosen:
+            return
+        chosen.write({"selected": False, "request_line_id": False})
+        for inquiry in chosen.inquiry_line_id.inquiry_id:
+            lines = chosen.filtered(lambda l, i=inquiry: l.inquiry_line_id.inquiry_id == i)
+            requests = lines.inquiry_line_id.request_line_id.request_id
+            inquiry.message_post(body=Markup(_(
+                "YCMH <b>%s</b> bị thu mua từ chối — đã bỏ chọn NCC cho %s sản phẩm. Chọn lại NCC rồi lên YCMH mới."
+            )) % (", ".join(requests.mapped("name")), len(lines)))
 
     @api.depends("vendor_quote_ids.state")
     def _compute_vendor_quote_count(self):

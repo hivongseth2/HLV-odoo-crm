@@ -406,3 +406,7 @@
 .hq-add-box .hq-close-row { align-items: flex-end; }
 .hq-add-done { margin: 0 0 .5rem; padding: .5rem .75rem; border-radius: var(--hq-radius); background: var(--hq-accent-soft);
     font-size: .875rem; }
+
+/* Bảng tóm tắt trước khi tạo YCMH. */
+.hq-request-summary { margin: .5rem 0; }
+.hq-request-summary tfoot td { font-weight: 500; }

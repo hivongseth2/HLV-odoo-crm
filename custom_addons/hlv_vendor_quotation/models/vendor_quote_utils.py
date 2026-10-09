@@ -314,7 +314,7 @@ def build_share_message(company_name, vendor_name, quote_names, deadline_text, u
     first = f"{company_name} gửi {subject}"
     lines = [
         f"Kính gửi {vendor_name},",
-        first + (f", hạn {deadline_text}." if deadline_text else "."),
+        first + (f", hạn đến hết ngày {deadline_text}." if deadline_text else "."),
         f"Link báo giá: {url}",
     ]
     if password:
@@ -328,7 +328,8 @@ def build_share_message(company_name, vendor_name, quote_names, deadline_text, u
 
 
 def deadline_hint(deadline, today, urgent_days=2):
-    """Nhắc hạn báo giá cho NCC.
+    """Nhắc hạn báo giá cho NCC. Hạn tính tới HẾT ngày hạn (giờ VN) — ngày hạn vẫn báo giá được,
+    nên chữ phải nói "đến hết hôm nay", không được đọc như đã hết hạn.
 
     Nhận: ngày hạn (date hoặc None), hôm nay (date), số ngày coi là gấp.
     Trả: (chữ, mức) với mức "over" (đã quá hạn), "urgent" (hôm nay hoặc còn <= urgent_days
@@ -340,7 +341,7 @@ def deadline_hint(deadline, today, urgent_days=2):
     if days < 0:
         return "Đã quá hạn", "over"
     if days == 0:
-        return "Hết hạn hôm nay", "urgent"
+        return "Hạn đến hết hôm nay", "urgent"
     return f"Còn {days} ngày", "urgent" if days <= urgent_days else "ok"
 
 

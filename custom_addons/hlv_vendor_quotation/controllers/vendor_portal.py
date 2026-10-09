@@ -75,6 +75,8 @@ class VendorQuotePortal(http.Controller):
                 quote.id: request.env["hlv.vendor.sale.contact"]._requester(quote.inquiry_id.sale_code)
                 for quote in quotes
             },
+            # Tên sale hỏi giá, hiện ngay dưới số báo giá để NCC nhìn danh sách là biết ai hỏi.
+            "requester_names": {quote.id: (self._requester(quote) or {}).get("name", "") for quote in quotes},
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
@@ -173,8 +175,8 @@ class VendorQuotePortal(http.Controller):
             chat_doc=quote.name,
             chat_url=f"{PORTAL_ROUTE}/{token}/{quote.id}/tin-nhan",
             chat_error=post.get("chat_error") if request.httprequest.method == "GET" else "",
-            # Sale đã chọn NCC cho mặt hàng nào: "selected" = chọn mình, "other" = chọn NCC
-            # khác, "" = chưa chọn ai — để NCC biết dòng nào đã được đặt.
+            # Mặt hàng bên mua đã chọn giá của chính NCC này ("selected") — để NCC biết dòng nào
+            # đã được đặt. Chọn NCC khác thì không báo (xem _line_choice).
             line_choice={line.id: self._line_choice(line) for line in quote.line_ids},
             requester=self._requester(quote),
         )
@@ -248,10 +250,9 @@ class VendorQuotePortal(http.Controller):
     # ------------------------------------------------------------------
     def _line_choice(self, line):
         """"selected" = bên mua chọn / đang đặt hàng của NCC này cho mặt hàng (kể cả khi phần
-        còn thiếu đã chuyển NCC khác); "other" = chọn NCC khác; "" = chưa chọn ai."""
-        if line.selection_state == "selected" or line._hlv_ordered_from_vendor():
-            return "selected"
-        return "other" if line.selection_state == "other" else ""
+        còn thiếu đã chuyển NCC khác); còn lại "". Không báo NCC rằng bên mua đã chọn NCC khác:
+        dòng gạch / chip "NCC khác" làm NCC được hỏi thêm tưởng mặt hàng đã chốt, bỏ không báo."""
+        return "selected" if line.selection_state == "selected" or line._hlv_ordered_from_vendor() else ""
 
     def _file_url(self, token):
         return lambda attachment_id: f"{PORTAL_ROUTE}/{token}/tep/{attachment_id}"
