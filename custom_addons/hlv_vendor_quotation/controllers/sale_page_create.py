@@ -146,16 +146,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             # Giá dùng lại không chọn được (vừa bị phiếu khác giữ / hết hạn) — phiếu vẫn tạo,
             # NCC báo giá như bình thường.
             "reuse_missing": [line.name or line.product_id.display_name for line in missing],
-            "results": [
-                {
-                    "vendor_name": q.partner_id.commercial_partner_id.display_name,
-                    "name": q.name,
-                    # Đủ giá còn hiệu lực từ báo giá trước — không cần gửi link cho NCC này.
-                    "reused": q.state == "quoted",
-                    "share_message": payload.share_message(q),
-                }
-                for q in inquiry.quote_ids
-            ],
+            "results": [payload.quote_share_result(q) for q in inquiry.quote_ids],
         }
 
     def _line_vals(self, raw_lines):

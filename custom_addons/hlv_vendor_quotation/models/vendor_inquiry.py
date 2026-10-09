@@ -140,11 +140,18 @@ class VendorInquiry(models.Model):
         inquiry._add_vendors(vendors)
         return inquiry
 
-    def _add_vendors(self, vendors):
-        """Gửi phiếu cho thêm NCC. NCC đã có báo giá (chưa huỷ) trong phiếu thì bỏ qua."""
+    def _add_vendors(self, vendors, lines=None, date_deadline=False, note=None):
+        """Gửi phiếu cho thêm NCC. NCC đã có báo giá (chưa huỷ) trong phiếu thì bỏ qua.
+
+        lines: dòng phiếu cần hỏi (mặc định mọi dòng) — dòng đã lên đơn mua đủ thì bỏ. date_deadline,
+        note: hạn và lời nhắn của các báo giá mới; trống → theo phiếu. Trả các báo giá vừa tạo.
+        """
         self.ensure_one()
-        if self.state != "open":
-            raise UserError(_("Phiếu %s không còn ở trạng thái hỏi giá.", self.name))
+        if self.state not in ("open", "requested"):
+            raise UserError(_("Phiếu %s đã đóng hoặc đã huỷ — lập phiếu mới để hỏi giá.", self.name))
+        lines = (self.line_ids if lines is None else lines).filtered(lambda l: not l.locked)
+        if not lines:
+            raise UserError(_("Chọn ít nhất một sản phẩm chưa lên đơn mua."))
         asked = self.quote_ids.filtered(lambda q: q.state != "cancel").access_id.partner_id
         new_vendors = vendors.commercial_partner_id - asked
         quotes = self.env["hlv.vendor.quote"].create([
@@ -152,15 +159,43 @@ class VendorInquiry(models.Model):
                 "inquiry_id": self.id,
                 "partner_id": vendor.id,
                 "sale_order_id": self.sale_order_id.id,
-                "date_deadline": self.date_deadline,
-                "note": self.note,
+                "date_deadline": date_deadline or self.date_deadline,
+                "note": self.note if note is None else note,
                 "state": "sent",
-                "line_ids": [Command.create(line._quote_line_vals()) for line in self.line_ids],
+                "line_ids": [Command.create(line._quote_line_vals()) for line in lines],
             }
             for vendor in new_vendors
         ])
         # Giá NCC còn hiệu lực (kể cả từ phiếu "Không mua" của sale khác) — điền sẵn, khỏi hỏi lại.
         apply_valid_prices(quotes)
+        return quotes
+
+    def action_ask_more_vendors(self, vendors, lines, date_deadline=False, note=""):
+        """Sale hỏi thêm NCC cho một số sản phẩm của phiếu — thường vì NCC đã hỏi báo hết hàng.
+
+        Được cả khi phiếu đã lên YCMH: NCC mới báo giá xong, sale bấm chọn là dòng YCMH (chưa lên
+        đơn mua) tự đổi NCC (action_choose); sản phẩm chưa lên YCMH thì "Bổ sung vào YCMH".
+        Hạn mới muộn hơn hạn phiếu thì dời hạn phiếu theo — không thì cron đóng phiếu (_close_day)
+        tính theo hạn cũ.
+        """
+        self.ensure_one()
+        vendors = vendors.commercial_partner_id
+        if not vendors:
+            raise UserError(_("Chọn ít nhất một nhà cung cấp."))
+        today = self.env["hlv.vendor.quote"]._vendor_today()
+        if date_deadline and date_deadline < today:
+            raise UserError(_("Hạn báo giá không được trước hôm nay."))
+        quotes = self._add_vendors(vendors, lines, date_deadline, (note or "").strip() or self.note)
+        if not quotes:
+            raise UserError(_(
+                "%s đã được hỏi trong phiếu này — xem ở cột NCC của bảng so giá.",
+                ", ".join(vendors.mapped("display_name")),
+            ))
+        if date_deadline and (not self.date_deadline or date_deadline > self.date_deadline):
+            self.date_deadline = date_deadline
+        self.message_post(body=Markup(_("Hỏi thêm NCC <b>%s</b> cho %s sản phẩm.")) % (
+            ", ".join(quotes.partner_id.commercial_partner_id.mapped("display_name")), len(quotes[:1].line_ids),
+        ))
         return quotes
 
     def _apply_reuse_choices(self, choices):

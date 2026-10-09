@@ -394,3 +394,15 @@
   .hq-mail-row { grid-template-columns: 1fr; gap: .2rem; }
   .hq-mail-chips { margin-left: 0; }
 }
+
+/* ------------------------------------------------------------ hỏi thêm NCC (ngăn phiếu) */
+
+.hq-compare-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.hq-add-box { margin-bottom: .75rem; }
+.hq-add-lines { display: flex; flex-direction: column; gap: .2rem; margin-bottom: .6rem; max-height: 220px; overflow-y: auto; }
+.hq-add-line { display: flex; align-items: baseline; gap: .4rem; font-size: .8125rem; cursor: pointer; }
+.hq-add-vendors { display: flex; flex-direction: column; gap: .4rem; }
+.hq-add-field { display: flex; flex-direction: column; gap: .15rem; }
+.hq-add-box .hq-close-row { align-items: flex-end; }
+.hq-add-done { margin: 0 0 .5rem; padding: .5rem .75rem; border-radius: var(--hq-radius); background: var(--hq-accent-soft);
+    font-size: .875rem; }

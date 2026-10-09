@@ -140,6 +140,8 @@ def inquiry_detail(inquiry):
         "pending_count": len(pending),
         "can_request": inquiry.state not in ("cancel", "closed") and bool(pending),
         "can_cancel": inquiry.state == "open",
+        # Hỏi thêm NCC (NCC đã hỏi báo hết hàng…) — cả khi đã lên YCMH, còn sản phẩm chưa lên đơn mua.
+        "can_add_vendor": inquiry.state in ("open", "requested") and not all(inquiry.line_ids.mapped("locked")),
         # "Không mua": đóng phiếu, giá NCC vẫn giữ cho phiếu sau dùng lại.
         "can_close": inquiry.state == "open",
         "vendors": [_vendor_column(q) for q in quotes],
@@ -218,6 +220,11 @@ def _compare_row(line, quotes):
         "qty": line.product_qty,
         "uom": line.product_uom_id.name or "",
         "offers": offers,
+        # Chưa NCC nào báo được giá (hết hàng / chưa báo) và chưa chọn được giá — hộp "Hỏi thêm NCC"
+        # tích sẵn những dòng này.
+        "needs_vendor": not line.locked and not any(
+            o["price_unit"] and not o["unavailable"] for o in offers.values()
+        ),
     }
 
 
@@ -268,6 +275,17 @@ def share_message(quotes):
         requester=quotes.env["hlv.vendor.sale.contact"]._requester(first.inquiry_id.sale_code),
         password=access._shown_password() if access else "",
     )
+
+
+def quote_share_result(quote):
+    """Một NCC vừa được gửi phiếu (tạo phiếu / hỏi thêm NCC): tên, số báo giá, tin nhắn Zalo."""
+    return {
+        "vendor_name": quote.partner_id.commercial_partner_id.display_name,
+        "name": quote.name,
+        # Đủ giá còn hiệu lực từ báo giá trước — không cần gửi link cho NCC này.
+        "reused": quote.state == "quoted",
+        "share_message": share_message(quote),
+    }
 
 
 def vendor_summary(partner, access, counts):

@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.3.27.0",
+    "version": "18.0.3.28.0",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
 - Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
   danh sách theo NCC, tạo yêu cầu báo giá — từ đơn bán (tạo YCMH chờ phê duyệt ngay tại
   đây — YCMH không còn lập trên MISA; một đơn được có nhiều YCMH), từ YCMH, hoặc nhập hàng tự do rồi gắn YCMH sau (mặt hàng tự ghép theo sản phẩm),
   copy tin nhắn Zalo có link + mật khẩu.
+- NCC báo hết hàng (phiếu đang hỏi giá hoặc đã lên YCMH): "Hỏi thêm NCC" trong ngăn phiếu gửi các sản
+  phẩm còn thiếu cho NCC khác; chọn giá mới là dòng YCMH (chưa lên đơn mua) tự đổi NCC.
 - Menu backend "Báo giá NCC" (trong app Yêu cầu mua hàng) cho thu mua tra cứu.
 - Từ YCMH cũng gửi được cho nhiều NCC một lần (nút "Hỏi giá NCC").
 - Gợi ý NCC theo lịch sử mua hàng + bảng giá NCC của sản phẩm (không hiện giá mua cho sale).

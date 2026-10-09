@@ -67,6 +67,7 @@ window.HlvQuote = window.HlvQuote || {};
 
   function render(d) {
     D.detail = d;
+    HQ.addVendorDetail = d;
     HQ.$("hq-drawer-panel").innerHTML =
       '<div class="hq-drawer-head"><div><div class="hq-muted">Phiếu hỏi giá' +
       (d.sale_code ? " · " + esc(HQ.saleName(d.sale_code)) : "") + "</div>" +
@@ -77,6 +78,7 @@ window.HlvQuote = window.HlvQuote || {};
       renderRejected(d) +
       HQ.closedBanner(d) +
       renderCompare(d) +
+      HQ.addVendorBox(d) +
       renderRequestBox(d) +
       renderOrders(d) +
       renderVendors(d) +
@@ -89,7 +91,9 @@ window.HlvQuote = window.HlvQuote || {};
           'lập sai — bỏ luôn giá">Huỷ phiếu</button>' : "") + "</div>" : "");
     bindSaleOrderPicker();
     HQ.bindOriginPicker("inquiry");
+    HQ.bindAddVendorPicker();
   }
+  HQ.renderInquiry = render;
 
   function fact(label, value) {
     return value ? '<div class="hq-fact"><span class="hq-label">' + esc(label) + "</span>" + value + "</div>" : "";
@@ -139,7 +143,9 @@ window.HlvQuote = window.HlvQuote || {};
           return offerCell(line.offers[v.quote_id], v, d.can_choose && !line.locked);
         }).join("") + "</tr>";
     }).join("");
-    return '<h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
+    return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
+      (d.can_add_vendor ? '<button type="button" class="hq-btn hq-btn-mini" data-add-toggle="1" title="NCC báo hết hàng / ' +
+        'cần thêm giá để so — gửi sản phẩm cho NCC khác">+ Hỏi thêm NCC</button>' : "") + "</div>" +
       '<div class="hq-table-wrap hq-compare-wrap"><table class="hq-table hq-compare"><thead>' + head +
       "</thead><tbody>" + rows + "</tbody><tfoot><tr><td colspan=\"" + (2 + d.vendors.length) +
       '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
@@ -160,7 +166,7 @@ window.HlvQuote = window.HlvQuote || {};
       // NCC đang được chọn mà báo hết hàng (thường là sửa sau khi đã lên YCMH): báo đỏ để
       // sale chọn NCC khác.
       return offer.selected
-        ? '<td class="hq-offer hq-offer-alert">Đang được chọn — NCC báo hết hàng, chọn NCC khác</td>'
+        ? '<td class="hq-offer hq-offer-alert">Đang được chọn — NCC báo hết hàng, chọn NCC khác hoặc hỏi thêm NCC</td>'
         : '<td class="hq-offer hq-muted">Không có hàng</td>';
     }
     var meta = [offer.vat ? "VAT " + offer.vat : "", offer.delivery_days ? offer.delivery_days + " ngày" : ""]
