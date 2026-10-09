@@ -70,13 +70,11 @@ class VendorQuotePortal(http.Controller):
             "quote_orders": {quote.id: quote._vendor_purchase_orders() for quote in quotes},
             # Dòng có tin bên mua chưa xem / báo giá chưa mở lần nào.
             "marks": row_marks(quotes, access),
-            # "Tên – SĐT" sale hỏi giá, hiện ở khung xem nhanh.
+            # "Tên – SĐT" sale hỏi giá: dưới số báo giá và ở khung xem nhanh.
             "requesters": {
                 quote.id: request.env["hlv.vendor.sale.contact"]._requester(quote.inquiry_id.sale_code)
                 for quote in quotes
             },
-            # Tên sale hỏi giá, hiện ngay dưới số báo giá để NCC nhìn danh sách là biết ai hỏi.
-            "requester_names": {quote.id: (self._requester(quote) or {}).get("name", "") for quote in quotes},
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
