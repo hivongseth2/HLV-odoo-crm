@@ -135,6 +135,7 @@
                                             <div id="hq-so-results" class="hq-dropdown hq-hidden"></div>
                                         </div>
                                     </div>
+                                    <div id="hq-crm-results" class="hq-share hq-crm-box hq-hidden"></div>
                                     <div class="hq-paste-toggle">
                                         <button type="button" class="hq-btn hq-btn-mini" id="hq-paste-open">Dán danh sách (Zalo, Excel)</button>
                                         <span class="hq-muted hq-small">mỗi dòng một mặt hàng — VD "Vòng bi 6212-ZZCM NSK: 2 cái",
@@ -257,6 +258,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_history.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_crm_product.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_paste.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>

@@ -73,10 +73,6 @@
                 <form method="post" action="/misa/product/create">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <input type="hidden" name="product_code" t-att-value="product.get('code') or code"/>
-                    <input type="hidden" name="product_name" t-att-value="product.get('name')"/>
-                    <input type="hidden" name="product_price" t-att-value="product.get('price') or 0"/>
-                    <input type="hidden" name="product_unit" t-att-value="product.get('unit') or ''"/>
-                    <input type="hidden" name="product_tax" t-att-value="product.get('tax') or ''"/>
                     <button type="submit" class="btn btn-success btn-lg w-100">
                         Tạo sản phẩm vào Odoo
                     </button>

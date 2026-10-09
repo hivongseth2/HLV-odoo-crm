@@ -373,6 +373,20 @@ def product_payload(product):
     }
 
 
+def crm_product_payload(crm):
+    """Một hàng trên MISA CRM (kết quả misa.api.utils.crm_product_candidates) cho trang sale."""
+    return {
+        "code": (crm.get("code") or "").strip(),
+        "name": crm.get("name") or "",
+        "unit": crm.get("unit") or "",
+        "price": crm.get("price") or 0,
+        "tax": crm.get("tax") or "",
+        # Combo không tạo được ở trang hỏi giá (cần dựng thành phần — xem import_product_from_crm).
+        "is_combo": bool(crm.get("is_combo")),
+        "odoo_exists": bool(crm.get("odoo_exists")),
+    }
+
+
 def suggestion_payload(item, products):
     matched = products.filtered(lambda p: p.id in item["product_ids"])
     return {

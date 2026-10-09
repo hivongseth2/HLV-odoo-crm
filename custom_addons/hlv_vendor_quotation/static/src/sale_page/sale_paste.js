@@ -1,8 +1,9 @@
 /* "Dán danh sách" trong hộp lập phiếu: sale dán nguyên tin Zalo / cột Excel ("Vòng bi 6212-ZZCM
    NSK: 2 cái", "2608595053:  6"…), server tách dòng + dò sản phẩm theo mã
    (services/product_paste.py), sale xem lại: xanh = khớp, vàng = nhiều khả năng (chọn đúng
-   mã), xám = không thấy (bỏ qua hoặc tìm tay). Dán nhiều dòng vào ô "Thêm sản phẩm" cũng mở
-   khung này. */
+   mã), xám = không thấy (bỏ qua, tìm tay, hoặc tìm trên MISA CRM — chọn hàng CRM thì khi thêm vào
+   phiếu sản phẩm được tạo trong Odoo, sale_crm_product.js). Dán nhiều dòng vào ô "Thêm sản phẩm"
+   cũng mở khung này. */
 window.HlvQuote = window.HlvQuote || {};
 
 (function (HQ) {
@@ -11,15 +12,34 @@ window.HlvQuote = window.HlvQuote || {};
   var esc = HQ.esc;
   var rows = [];
 
+  /** Dòng thêm được vào phiếu: có sản phẩm Odoo, hoặc đã chọn hàng trên MISA CRM. */
+  function ready(row) {
+    return !!(row.product || row.crmCode);
+  }
+
   function statusTag(row) {
+    if (row.crm) {
+      return '<span class="hq-tag hq-tag-warn">MISA CRM</span>';
+    }
     return row.status === "matched" ? '<span class="hq-tag hq-tag-ok">khớp</span>'
       : row.status === "ambiguous" ? '<span class="hq-tag hq-tag-warn">chọn mã</span>'
       : '<span class="hq-tag hq-tag-soft">không thấy</span>';
   }
 
   function productCell(row, index) {
+    if (row.crm) {
+      if (!row.crm.candidates.length) {
+        return '<span class="hq-muted">MISA CRM cũng không có — tìm tay ở ô "Thêm sản phẩm"</span>';
+      }
+      return '<select class="hq-input w-100" data-paste-crm="' + index + '">' +
+        '<option value="">— Chọn hàng trên MISA CRM —</option>' + row.crm.candidates.map(function (p) {
+          return '<option value="' + esc(p.code) + '"' + (p.code === row.crmCode ? " selected" : "") +
+            (p.is_combo ? " disabled" : "") + ">" + esc(HQ.crmLabel(p)) + (p.is_combo ? " (combo)" : "") + "</option>";
+        }).join("") + "</select>" +
+        '<div class="hq-muted hq-small">Chưa có trong Odoo — thêm vào phiếu là tạo sản phẩm theo CRM.</div>';
+    }
     if (!row.candidates.length) {
-      return '<span class="hq-muted">Không tìm thấy sản phẩm — tìm tay ở ô "Thêm sản phẩm"</span>';
+      return '<span class="hq-muted">Không có trong Odoo</span>';
     }
     if (row.status === "matched" && row.candidates.length === 1) {
       return '<span class="hq-strong">' + esc(row.product.product) + "</span>";
@@ -40,20 +60,22 @@ window.HlvQuote = window.HlvQuote || {};
         'VD "Vòng bi 6212-ZZCM NSK: 2 cái".</div>';
       return;
     }
-    var ready = rows.filter(function (r) { return r.use && r.product; }).length;
+    var count = rows.filter(function (r) { return r.use && ready(r); }).length;
+    var missing = rows.filter(function (r) { return r.status === "missing" && !r.crm; }).length;
     box.innerHTML = '<div class="hq-table-wrap"><table class="hq-table hq-paste-table"><thead><tr><th></th>' +
       "<th>Dòng đã dán</th><th>Sản phẩm</th><th class=\"hq-num\">SL</th></tr></thead><tbody>" +
       rows.map(function (row, index) {
         return '<tr class="hq-paste-' + row.status + '"><td><input type="checkbox" data-paste-use="' + index + '"' +
-          (row.use ? " checked" : "") + (row.product ? "" : " disabled") + ' aria-label="Thêm dòng này"/></td>' +
+          (row.use ? " checked" : "") + (ready(row) ? "" : " disabled") + ' aria-label="Thêm dòng này"/></td>' +
           '<td><div class="hq-paste-raw">' + esc(row.raw) + "</div>" + statusTag(row) + "</td>" +
           "<td>" + productCell(row, index) + "</td>" +
           '<td class="hq-num"><input type="number" min="0" step="any" class="hq-qty" data-paste-qty="' + index +
           '" value="' + row.qty + '"/>' + (row.qty_found ? "" : '<div class="hq-muted hq-small">chưa ghi SL</div>') + "</td></tr>";
       }).join("") + "</tbody></table></div>" +
       '<div class="hq-paste-actions"><button type="button" class="hq-btn hq-btn-primary" id="hq-paste-add"' +
-      (ready ? "" : " disabled") + ">Thêm " + ready + " sản phẩm vào phiếu</button>" +
-      '<span class="hq-muted hq-small">Dòng vàng: chọn đúng mã rồi tick. Dòng xám: tìm tay ở ô "Thêm sản phẩm".</span></div>';
+      (count ? "" : " disabled") + ">Thêm " + count + " sản phẩm vào phiếu</button>" +
+      (missing ? '<button type="button" class="hq-btn" id="hq-paste-crm">Tìm ' + missing + " dòng không thấy trên MISA CRM</button>" : "") +
+      '<span class="hq-muted hq-small">Dòng vàng: chọn đúng mã rồi tick. Dòng xám: tìm trên MISA CRM hoặc tìm tay ở ô "Thêm sản phẩm".</span></div>';
   }
 
   function run(text) {
@@ -88,13 +110,54 @@ window.HlvQuote = window.HlvQuote || {};
     rows = [];
   }
 
-  function addToInquiry() {
-    var lines = rows.filter(function (r) { return r.use && r.product && r.qty > 0; }).map(function (r) {
-      return Object.assign({}, r.product, { qty: r.qty });
+  /** Dòng "không thấy" → tìm trên MISA CRM; chọn sẵn hàng CRM khi chấm điểm chắc chắn. */
+  function searchCrm(button) {
+    var targets = rows.filter(function (r) { return r.status === "missing" && !r.crm; });
+    button.disabled = true;
+    button.textContent = "Đang tìm trên MISA CRM…";
+    HQ.crmMatchRows(targets.map(function (r) { return r.raw; })).then(function (found) {
+      targets.forEach(function (row, i) {
+        row.crm = found[i] || { best: "", candidates: [] };
+        row.crmCode = row.crm.best;
+        row.use = !!row.crmCode;
+      });
+      render();
+    }).catch(function (err) {
+      HQ.toast(err.message);
+      render();
     });
-    HQ.addCreateLines(lines);
-    HQ.toast("Đã thêm " + lines.length + " sản phẩm");
-    close();
+  }
+
+  /** Thêm vào phiếu; dòng chọn hàng CRM thì tạo sản phẩm Odoo trước. Mã tạo lỗi: giữ dòng lại. */
+  function addToInquiry(button) {
+    var picked = rows.filter(function (r) { return r.use && ready(r) && r.qty > 0; });
+    var fromCrm = picked.filter(function (r) { return !r.product; });
+    button.disabled = true;
+    var created = fromCrm.length ? HQ.crmImport(fromCrm.map(function (r) { return r.crmCode; })) : Promise.resolve([]);
+    created.then(function (results) {
+      var errors = [];
+      fromCrm.forEach(function (row, i) {
+        var result = results[i] || { error: "Không tạo được " + row.crmCode };
+        if (result.product) {
+          row.product = result.product;
+        } else {
+          errors.push(result.error);
+        }
+      });
+      var done = picked.filter(function (r) { return r.product; });
+      HQ.addCreateLines(done.map(function (r) { return Object.assign({}, r.product, { qty: r.qty }); }));
+      if (errors.length) {
+        rows = rows.filter(function (r) { return done.indexOf(r) < 0; });
+        render();
+        HQ.toast("Đã thêm " + done.length + " sản phẩm. Lỗi: " + errors.join("; "));
+        return;
+      }
+      HQ.toast("Đã thêm " + done.length + " sản phẩm" + (fromCrm.length ? " (" + fromCrm.length + " tạo từ MISA CRM)" : ""));
+      close();
+    }).catch(function (err) {
+      button.disabled = false;
+      HQ.toast(err.message);
+    });
   }
 
   HQ.bindPasteEvents = function () {
@@ -116,6 +179,13 @@ window.HlvQuote = window.HlvQuote || {};
       row.use = !!row.product;
       render();
     });
+    HQ.on(modal, "change", "[data-paste-crm]", function (el) {
+      var row = rows[+el.dataset.pasteCrm];
+      row.crmCode = el.value;
+      row.use = !!row.crmCode;
+      render();
+    });
+    HQ.on(modal, "click", "#hq-paste-crm", searchCrm);
     HQ.on(modal, "change", "[data-paste-use]", function (el) {
       rows[+el.dataset.pasteUse].use = el.checked;
       render();
