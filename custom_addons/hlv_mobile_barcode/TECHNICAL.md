@@ -282,7 +282,7 @@ Quản lý kiện hàng (Modal chỉnh sửa):
 Quy tắc tạo 1 bước/2 bước khi chuyển vị trí:
 - Khác kho: luôn đi qua CHUYENKHO của kho nguồn và tạo quy trình 2 bước.
 - CHUYENKHO lấy bằng `_transfer_location_for(source_loc)` → `stock.warehouse._hlv_get_transfer_location()` (module `deltatech_picking_transit`). Không tự search `usage='transit'` nữa; vị trí Transit cũ chỉ còn cho phiếu tạo trước khi đổi.
-- CHUYENKHO bị loại khỏi tra cứu vị trí khi quét (`smart_scan`, `process_barcode`, `validate_location`): app không cho chọn nó làm vị trí nguồn/đích.
+- CHUYENKHO quét được ở `smart_scan` để **xem tồn** (màn tra cứu; kiện ở đây không tháo/chuyển được). Không làm nguồn/đích: `_transfer_location_error()` chặn trong `create_empty_int`, `move_location`, `move_location_batch`, `unpack_inventory_package`; `process_barcode` và `validate_location` bỏ qua CHUYENKHO.
 - Cùng kho khác vị trí:
   - `hlv_barcode_same_warehouse_one_step = True` (mặc định): chuyển thẳng từ vị trí nguồn sang vị trí đích trong 1 bước.
   - `hlv_barcode_same_warehouse_one_step = False`: cũng đi qua CHUYENKHO và tạo bước 2 như chuyển khác kho.
