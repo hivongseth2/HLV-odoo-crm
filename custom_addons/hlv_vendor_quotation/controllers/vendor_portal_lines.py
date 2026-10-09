@@ -129,7 +129,7 @@ class VendorLineBoardPortal(VendorQuotePortal):
             return 0, errors, error_line_ids
         for quote in quotes:
             open_lines = quote.line_ids.filtered(lambda line: not line.vendor_locked)
-            if not any(f"unit_{line.id}" in post or f"na_{line.id}" in post for line in open_lines):
+            if not any(f"unit_{line.id}" in post for line in open_lines):
                 continue  # phiếu không có trên bảng đang xem
             line_values, read_errors = self._read_quote_form(
                 quote, post, lambda _index, line, name=quote.name: f"{name} · {self._short_name(line)}",
@@ -156,24 +156,24 @@ class VendorLineBoardPortal(VendorQuotePortal):
             else:
                 saved += 1
         if not saved and not errors:
-            errors.append("Chưa có giá nào mới để gửi — điền đơn giá hoặc bấm \"×\" cạnh mã hàng không có, rồi bấm Gửi.")
+            errors.append("Chưa có giá nào mới để gửi — điền đơn giá hoặc bỏ tick \"Sẵn hàng\" ở mặt hàng không có, rồi bấm Gửi.")
         return saved, errors, error_line_ids
 
     @staticmethod
     def _missing_vat(values):
-        # Cùng luật _vendor_submit: dòng có giá phải có VAT; để trống giá / bấm "×" = không có hàng.
+        # Cùng luật _vendor_submit: dòng có giá phải có VAT; để trống giá / bỏ tick "Sẵn hàng" = không có hàng.
         return bool(not values["unavailable"] and values["price_unit"] and not values["vat"])
 
     @staticmethod
     def _line_answered(values):
-        # NCC đã trả lời dòng này: có giá, hoặc bấm "×" (không có hàng).
+        # NCC đã trả lời dòng này: có giá, hoặc bỏ tick "Sẵn hàng" (không có hàng).
         return bool(values["unavailable"] or values["price_unit"])
 
     def _board_touched(self, quote, open_lines, line_values):
         """NCC có báo gì cho phiếu này trên bảng chung không.
 
         Phiếu đã báo giá: có dòng khác giá trị đang lưu. Phiếu chờ báo giá: mọi dòng đều có giá hoặc
-        "×" (kể cả nhờ giá cũ điền sẵn — giống bấm Gửi ở trang phiếu), hoặc có dòng mà giá / hết hàng
+        bỏ tick "Sẵn hàng" (kể cả nhờ giá cũ điền sẵn — giống bấm Gửi ở trang phiếu), hoặc có dòng mà giá / hết hàng
         khác số điền sẵn. Gửi rồi thì dòng để trống thành không có hàng — nên phiếu chỉ có vài dòng
         "giá cũ" NCC chưa đụng tới thì KHÔNG gửi, kẻo các dòng còn lại bị coi là hết hàng.
         """
