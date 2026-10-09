@@ -1,6 +1,6 @@
 /* Giá NCC đã báo cho sản phẩm — của MỌI mã sale (services/price_history.py), để sale biết sản
    phẩm đã có người hỏi giá và khỏi hỏi trùng:
-   - ô tìm đầu trang: khung "Giá đã hỏi" trên bảng phiếu, theo sản phẩm khớp chữ tìm;
+   - ô tìm đầu trang: khung "Giá đã hỏi" trên bảng phiếu, theo mã / tên sản phẩm hoặc số cơ hội;
    - hộp lập phiếu: dòng gợi ý dưới mỗi sản phẩm vừa thêm. */
 window.HlvQuote = window.HlvQuote || {};
 
@@ -34,7 +34,9 @@ window.HlvQuote = window.HlvQuote || {};
       (p.vat ? " · " + esc(p.vat) : "") + "</td>" +
       '<td class="hq-num">' + (p.delivery_days ? p.delivery_days + " ngày" : "—") + "</td>" +
       '<td class="hq-nowrap">' + esc(p.date) + "</td>" +
-      '<td class="hq-nowrap">' + esc(p.doc) + (p.sale_code ? '<div class="hq-muted">' + esc(HQ.saleName(p.sale_code)) + "</div>" : "") +
+      '<td class="hq-nowrap">' + esc(p.doc) +
+      (p.opportunity_ref ? '<div class="hq-muted" title="Số cơ hội">CH ' + esc(p.opportunity_ref) + "</div>" : "") +
+      (p.sale_code ? '<div class="hq-muted">' + esc(HQ.saleName(p.sale_code)) + "</div>" : "") +
       "</td></tr>";
   }
 
@@ -54,8 +56,8 @@ window.HlvQuote = window.HlvQuote || {};
       }
       shown = products;
       box.classList.toggle("hq-hidden", !products.length);
-      box.innerHTML = '<div class="hq-panel-head"><h2 class="hq-h3">Giá NCC đã báo cho sản phẩm khớp “' + esc(search) +
-        '”</h2><span class="hq-muted hq-small">mọi mã sale · mới nhất trước</span></div>' +
+      box.innerHTML = '<div class="hq-panel-head"><h2 class="hq-h3">Giá NCC đã báo khớp “' + esc(search) +
+        '”</h2><span class="hq-muted hq-small">theo mã, tên sản phẩm hoặc số cơ hội · mọi mã sale · mới nhất trước</span></div>' +
         '<div class="hq-table-wrap"><table class="hq-table hq-price-table"><thead><tr><th>NCC</th>' +
         '<th class="hq-num">Sau VAT</th><th class="hq-num">Chưa VAT</th><th class="hq-num">Giao</th><th>Ngày báo</th>' +
         "<th>Phiếu · mã sale</th></tr></thead>" +

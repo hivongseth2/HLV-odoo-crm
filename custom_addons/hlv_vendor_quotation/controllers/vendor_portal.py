@@ -432,6 +432,7 @@ class VendorQuotePortal(http.Controller):
             "code_name": split_code_name,
             # Ô "Sẵn hàng" + ô ghi chú đọc từ ghi chú đã lưu (nhãn "Sẵn hàng" ở đầu).
             "stock_note_parts": split_stock_note,
+            "stock_note": stock_note,
             # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
             "fdate": local_date_text,
             "vat_options": VAT_SELECTION,

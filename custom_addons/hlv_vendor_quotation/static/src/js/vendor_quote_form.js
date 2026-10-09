@@ -12,7 +12,7 @@
     if (!form) {
         return;
     }
-    const { parseVnNumber, formatVnNumber, splitUnitPrice } = window.hlvVendorQuote;
+    const { parseVnNumber, formatVnNumber, splitUnitPrice, splitStockNote, stockNote } = window.hlvVendorQuote;
     const lines = Array.from(form.querySelectorAll("[data-vq-line]"));
     const discountToggle = form.querySelector("[data-vq-disc-toggle]");
     // Báo giá đã đóng không có ô bật/tắt: server tự gắn vq-disc-on nếu NCC từng nhập chiết khấu.
@@ -126,6 +126,27 @@
             }
         }
     }
+
+    /** Ô "Sẵn hàng" ↔ chữ "Sẵn hàng" đầu ô ghi chú của cùng dòng: tick thì thêm, bỏ tick thì xoá; NCC tự
+        xoá / gõ chữ đó trong ghi chú thì ô tick theo. Server ghép lại đúng như vậy khi lưu (stock_note). */
+    function noteOf(box) {
+        return form.querySelector(`[name="${box.dataset.note}"]`);
+    }
+
+    form.addEventListener("change", (ev) => {
+        const box = ev.target.closest("[data-vq-instock]");
+        const note = box && noteOf(box);
+        if (note) {
+            note.value = stockNote(box.checked, note.value);
+        }
+    });
+    form.addEventListener("focusout", (ev) => {
+        const note = ev.target.matches('input[name^="note_"]') ? ev.target : null;
+        const box = note && form.querySelector(`[data-vq-instock][data-note="${note.name}"]`);
+        if (box && !box.disabled) {
+            box.checked = splitStockNote(note.value).inStock;
+        }
+    });
 
     form.addEventListener("input", refresh);
     form.addEventListener("change", (ev) => {
