@@ -157,10 +157,12 @@ class OdooUtils(models.AbstractModel):
         UoM = self.env['uom.uom']
         UoMCat = self.env['uom.category']
 
+        # Đúng tên như trước (giữ nguyên ĐVT các luồng đồng bộ đang chọn); không có mới so theo
+        # uom_key. Bảng ĐVT nhỏ — lọc trong Python vì tên ĐVT là trường dịch, domain không chuẩn
+        # hoá được hoa thường / khoảng trắng / Unicode.
         key = uom_key(name)
-        # Bảng ĐVT nhỏ — lọc trong Python để so theo uom_key (tên ĐVT là trường dịch, domain không
-        # chuẩn hoá được khoảng trắng / Unicode).
-        uom = UoM.search([]).filtered(lambda u: uom_key(u.name) == key)[:1]
+        uom = UoM.search([('name', '=', name)], limit=1) \
+            or UoM.search([]).filtered(lambda u: uom_key(u.name) == key)[:1]
         if uom:
             return uom
 
