@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Tab "Đơn mua hàng" của NCC: đơn mua đã xác nhận (kể cả đã hủy sau khi xác nhận) sinh ra từ báo
-         giá của chính NCC. Chia tab theo tiến độ; bấm dòng để xem nhanh hàng + cập nhật tiến độ tại chỗ
+    <!-- Tab "Đơn mua hàng" của NCC: đơn mua ở trạng thái admin cho hiện (Cài đặt; kể cả đã hủy sau khi
+         xác nhận) sinh ra từ báo giá của chính NCC. Chia tab theo tiến độ; bấm dòng để xem nhanh hàng + cập nhật tiến độ tại chỗ
          (js/vendor_quote_list.js — dùng chung với danh sách báo giá, cùng thuộc tính data-quote-row). -->
     <template id="portal_order_list" name="Báo giá NCC - đơn mua">
         <t t-call="hlv_vendor_quotation.portal_layout">
@@ -12,9 +12,10 @@
                 <div class="vq-page-head">
                     <h1>Đơn mua hàng</h1>
                 </div>
-                <p class="vq-muted">Đơn mua của <t t-esc="company.name"/> lên từ các báo giá quý công ty đã gửi. Đóng
-                    gói xong bấm "Đã đóng gói"; đơn gửi CPN / gửi chành thì báo thêm thông tin gửi. Kho
-                    <t t-esc="company.name"/> nhận hàng xong, đơn tự chuyển "Đã giao".</p>
+                <p class="vq-muted">Đơn mua của <t t-esc="company.name"/> lên từ các báo giá quý công ty đã gửi. Đơn
+                    "Chờ xác nhận" để quý công ty xem trước — bên mua xác nhận rồi mới chuẩn bị hàng. Đóng gói
+                    xong bấm "Đã đóng gói", gửi hàng thì bấm "Báo đã gửi hàng". Kho <t t-esc="company.name"/>
+                    nhận hàng xong, đơn tự chuyển "Đã giao".</p>
                 <div t-if="saved_order" class="vq-alert vq-alert-ok">Đã cập nhật tiến độ đơn <t t-esc="saved_order"/>.</div>
 
                 <nav class="vq-tabs">
@@ -34,6 +35,7 @@
                             <th>Hàng về dự kiến</th>
                             <th>Giao hàng</th>
                             <th class="vq-num">Tổng tiền</th>
+                            <th>Trạng thái đơn</th>
                             <th>Tiến độ</th>
                             <th></th>
                         </tr>
@@ -62,6 +64,7 @@
                                 <b t-esc="fmt(order.amount_total)"/>
                                 <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(order.amount_untaxed)"/></div>
                             </td>
+                            <td data-label="Trạng thái đơn" class="vq-cell-state" t-esc="info['state_label']"/>
                             <td data-label="Tiến độ">
                                 <span t-attf-class="vq-status vq-status-#{info['progress']}" t-esc="progress_labels[info['progress']]"/>
                             </td>
@@ -78,7 +81,7 @@
                             </td>
                         </tr>
                         <tr class="vq-quick-row" t-att-data-quick-row="order.id" hidden="hidden">
-                            <td colspan="7" class="vq-quick-cell">
+                            <td colspan="8" class="vq-quick-cell">
                                 <t t-call="hlv_vendor_quotation.portal_order_quick"/>
                             </td>
                         </tr>
@@ -152,6 +155,8 @@
         <t t-set="steps" t-value="['waiting', 'packed'] + (['shipped'] if info['ship_mode'] or progress == 'shipped' else []) + ['delivered']"/>
         <t t-set="current" t-value="steps.index(progress) if progress in steps else len(steps)"/>
         <div t-if="progress == 'cancel'" class="vq-progress-cancel">Đơn đã hủy — quý công ty không cần đóng gói / giao hàng.</div>
+        <p t-elif="progress == 'rfq'" class="vq-progress-note">Đơn đang ở trạng thái <b t-esc="info['state_label']"/> — chưa
+            xác nhận, giá / số lượng có thể còn đổi. Bên mua xác nhận đơn, quý công ty sẽ nhận thông báo để chuẩn bị hàng.</p>
         <t t-else="">
             <ol class="vq-track">
                 <li t-foreach="steps" t-as="step"
@@ -234,6 +239,7 @@
                 </div>
 
                 <dl class="vq-facts">
+                    <div><dt>Trạng thái đơn</dt><dd t-esc="info['state_label']"/></div>
                     <div><dt>Ngày đặt</dt><dd t-esc="fdate(order.date_approve or order.date_order)"/></div>
                     <!-- Datetime lưu UTC — fdate đổi sang giờ VN (00:00 ngày 08 giờ VN không bị in thành ngày 07). -->
                     <div t-if="order.date_planned"><dt>Hàng về dự kiến</dt><dd t-esc="fdate(order.date_planned)"/></div>
