@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Tab "Đơn mua hàng" trên link của NCC: đơn mua sinh ra từ báo giá của NCC, chia tab theo tiến độ
-(đã nhận chờ đóng / đã đóng gói / đã giao), và NCC báo tiến độ:
+"""Tab "Đơn mua hàng" trên link của NCC: đơn mua sinh ra từ báo giá của NCC (trạng thái đơn hiện ra
+do admin chọn trong Cài đặt), chia tab theo tiến độ (chờ xác nhận / chờ đóng gói / đã đóng gói / đã
+giao / đã hủy), và NCC báo tiến độ trên đơn đã xác nhận:
 - "Đã đóng gói": NCC bấm;
 - "Đã gửi hàng": chỉ đơn gửi CPN / gửi chành — NCC nhập mã vận đơn hoặc tên chành + số xe;
 - "Đã giao": tự chuyển khi kho bên mua nhận đủ hàng — NCC không phải bấm.
@@ -15,7 +16,7 @@ from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import request
 
-from ..models.purchase_order import PROGRESS_LABELS
+from ..models.purchase_order import CONFIRMED_STATES, PROGRESS_LABELS
 from ..models.vendor_quote_access import PORTAL_ROUTE
 from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN
 from ..services.chat_read import mark_seen
@@ -26,6 +27,7 @@ from .vendor_portal import VendorQuotePortal
 ORDERS = "don-mua"
 # Tab danh sách đơn mua — khoá trùng PurchaseOrder._hlv_vendor_stage().
 ORDER_TABS = [
+    ("rfq", "Chờ xác nhận"),
     ("waiting", "Chờ đóng gói"),
     ("packed", "Đã đóng gói"),
     ("delivered", "Đã giao"),
@@ -53,6 +55,10 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         if stage not in counts:
             # Mở tab chưa chọn: ưu tiên đơn đang chờ NCC đóng gói — việc NCC cần làm.
             stage = "waiting" if counts["waiting"] else "all"
+        # Tab "Chờ xác nhận" chỉ khi Cài đặt cho NCC thấy đơn chưa xác nhận (hoặc đang mở tab đó).
+        show_rfq = stage == "rfq" or any(
+            state not in CONFIRMED_STATES for state in request.env["purchase.order"]._hlv_vendor_visible_states()
+        )
         shown = orders if stage == "all" else orders.filtered(lambda o: stages[o.id] == stage)
         list_url = f"{PORTAL_ROUTE}/{token}/{ORDERS}?{urlencode({'stage': stage})}"
         return self._render("hlv_vendor_quotation.portal_order_list", access, {
@@ -65,6 +71,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "tabs": [
                 (key, label, counts[key], f"{PORTAL_ROUTE}/{token}/{ORDERS}?{urlencode({'stage': key})}")
                 for key, label in ORDER_TABS
+                if key != "rfq" or show_rfq
             ],
             "order_quotes": {order.id: order.hlv_vendor_quote_ids for order in shown},
             "marks": row_marks(shown, access),
@@ -80,6 +87,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         mode = order._hlv_delivery_mode()
         return {
             "progress": order._hlv_vendor_progress(),
+            "state_label": order._hlv_vendor_state_label(),
             "delivery_term": order._hlv_delivery_term(),
             "delivery_place": order._hlv_delivery_place(),
             "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",

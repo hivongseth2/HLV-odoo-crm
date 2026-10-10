@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Công tắc mật khẩu link NCC, đặt trong Cài đặt → Mua hàng (xmlid view cài đặt Mua hàng
+    <!-- Công tắc mật khẩu link NCC + trạng thái đơn mua NCC thấy, đặt trong Cài đặt → Mua hàng (xmlid view cài đặt Mua hàng
          của Odoo 18: purchase.res_config_settings_view_form_purchase, app name="purchase"). -->
     <record id="res_config_settings_view_form" model="ir.ui.view">
         <field name="name">res.config.settings.view.form.inherit.hlv.vendor.quotation</field>
@@ -12,6 +12,16 @@
                     <setting id="hlv_vq_require_password" string="Mật khẩu link báo giá NCC"
                              help="Bật: NCC phải nhập mật khẩu khi mở link báo giá, tin nhắn Zalo gửi kèm mật khẩu. Tắt: mở link là vào thẳng.">
                         <field name="hlv_vq_require_password"/>
+                    </setting>
+                    <setting id="hlv_vq_order_states" string="Đơn mua hiện trên trang NCC"
+                             help="Trạng thái đơn mua NCC thấy ở tab &quot;Đơn mua hàng&quot;. Đơn chưa xác nhận NCC chỉ xem, chưa báo đóng gói / gửi hàng được. Đơn hủy sau khi đã xác nhận luôn hiện để NCC khỏi giao.">
+                        <div class="mt8">
+                            <div><field name="hlv_vq_order_state_draft" class="oe_inline"/><label for="hlv_vq_order_state_draft"/></div>
+                            <div><field name="hlv_vq_order_state_sent" class="oe_inline"/><label for="hlv_vq_order_state_sent"/></div>
+                            <div><field name="hlv_vq_order_state_to_approve" class="oe_inline"/><label for="hlv_vq_order_state_to_approve"/></div>
+                            <div><field name="hlv_vq_order_state_purchase" class="oe_inline"/><label for="hlv_vq_order_state_purchase"/></div>
+                            <div><field name="hlv_vq_order_state_done" class="oe_inline"/><label for="hlv_vq_order_state_done"/></div>
+                        </div>
                     </setting>
                 </block>
             </xpath>

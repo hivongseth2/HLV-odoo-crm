@@ -210,6 +210,16 @@ def line_values_changed(current, submitted):
     return any(differ(current.get(key), submitted.get(key)) for key in keys)
 
 
+def parse_states(text, allowed, default):
+    """Danh sách trạng thái lưu dạng "purchase,done" (tham số hệ thống) → tuple trạng thái.
+
+    Chỉ giữ trạng thái có trong allowed, theo thứ tự của allowed (bỏ giá trị lạ / khoảng trắng).
+    text rỗng / None / không còn trạng thái hợp lệ nào → tuple(default).
+    """
+    picked = {part.strip() for part in (text or "").split(",")}
+    return tuple(state for state in allowed if state in picked) or tuple(default)
+
+
 def price_incl_vat(net_price, tax_rate):
     """Đơn giá sau VAT từ đơn giá chưa VAT và % VAT, làm tròn 2 chữ số lẻ.
 

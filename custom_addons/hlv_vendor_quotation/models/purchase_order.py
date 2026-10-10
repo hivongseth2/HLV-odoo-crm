@@ -8,7 +8,9 @@ from odoo.exceptions import UserError
 from ..services.chat_bus import notify_order_status
 from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
-from .vendor_quote_utils import DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin
+from .vendor_quote_utils import (
+    DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin, parse_states,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -26,8 +28,21 @@ SHIP_METHODS = [
     ("cpn", "Gửi CPN / chành"),
     ("self", "NCC tự vận chuyển"),
 ]
-# Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ đóng gói / đã hủy.
-PROGRESS_LABELS = dict(VENDOR_STATUS, waiting="Chờ đóng gói", cancel="Đã hủy")
+# Trạng thái đơn mua (state của Odoo) admin chọn được để hiện trên trang NCC — Cài đặt → Mua hàng →
+# Hỏi giá NCC. Đơn hủy không chọn được: chỉ hiện đơn hủy SAU khi đã xác nhận (NCC cần biết để khỏi giao).
+VENDOR_ORDER_STATES = [
+    ("draft", "Nháp"),
+    ("sent", "RFQ đã gửi"),
+    ("to approve", "Chờ duyệt"),
+    ("purchase", "Đơn mua hàng"),
+    ("done", "Đã khóa"),
+]
+VENDOR_ORDER_STATE_LABELS = dict(VENDOR_ORDER_STATES, cancel="Đã hủy")
+VENDOR_ORDER_STATES_PARAM = "hlv_vendor_quotation.vendor_order_states"
+# Đơn đã xác nhận: NCC mới đóng gói / gửi hàng được. Cũng là mặc định hiện trên trang NCC.
+CONFIRMED_STATES = ("purchase", "done")
+# Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ xác nhận / chờ đóng gói / đã hủy.
+PROGRESS_LABELS = dict(VENDOR_STATUS, rfq="Chờ xác nhận", waiting="Chờ đóng gói", cancel="Đã hủy")
 # Trường Studio trên đơn mua — không có ở mọi môi trường (DB test, cài mới) nên đọc qua _hlv_studio_text.
 DELIVERY_TERM_FIELD = "x_studio_delivery_term"
 DELIVERY_PLACE_FIELD = "x_studio_ddgh"
@@ -131,12 +146,26 @@ class PurchaseOrder(models.Model):
         """Cách giao (vendor_quote_utils.delivery_mode) theo "Phương thức giao hàng" của đơn."""
         return delivery_mode(self._hlv_delivery_term())
 
+    @api.model
+    def _hlv_vendor_visible_states(self):
+        """Trạng thái đơn mua hiện trên trang NCC (Cài đặt; chưa cấu hình → đơn đã xác nhận)."""
+        param = self.env["ir.config_parameter"].sudo().get_param(VENDOR_ORDER_STATES_PARAM)
+        return parse_states(param, [state for state, _label in VENDOR_ORDER_STATES], CONFIRMED_STATES)
+
+    def _hlv_vendor_state_label(self):
+        """Trạng thái đơn hiện cho NCC: Nháp / RFQ đã gửi / Chờ duyệt / Đơn mua hàng / Đã khóa / Đã hủy."""
+        self.ensure_one()
+        return VENDOR_ORDER_STATE_LABELS.get(self.state, "")
+
     def _hlv_vendor_progress(self):
-        """Tiến độ hiện trên trang NCC: "cancel" (đơn đã hủy), "delivered" (đã giao — kể cả đơn kho đã
-        nhận đủ từ trước khi có tự chuyển), "shipped", "packed", hoặc "waiting" (chờ đóng gói)."""
+        """Tiến độ hiện trên trang NCC: "cancel" (đơn đã hủy), "rfq" (chưa xác nhận — NCC chỉ xem),
+        "delivered" (đã giao — kể cả đơn kho đã nhận đủ từ trước khi có tự chuyển), "shipped",
+        "packed", hoặc "waiting" (chờ đóng gói)."""
         self.ensure_one()
         if self.state == "cancel":
             return "cancel"
+        if self.state not in CONFIRMED_STATES:
+            return "rfq"
         if self.hlv_vendor_status == "delivered" or self._hlv_receipts_done():
             return "delivered"
         return self.hlv_vendor_status or "waiting"
@@ -160,14 +189,14 @@ class PurchaseOrder(models.Model):
         self.ensure_one()
         if status != "packed":
             raise UserError(_("Trạng thái không hợp lệ."))
-        self._hlv_check_not_cancelled()
+        self._hlv_check_vendor_can_update()
         return self._hlv_advance_status(status, vendor_partner, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status])
 
     def _vendor_mark_shipped(self, method, carrier, ref, vendor_partner):
         """NCC báo đã gửi hàng: gửi CPN / chành (bắt buộc mã vận đơn / số xe; hãng / chành tuỳ) hoặc
         NCC tự vận chuyển (người giao / SĐT / biển số tuỳ). Sửa lại được tới khi kho nhận hàng."""
         self.ensure_one()
-        self._hlv_check_not_cancelled()
+        self._hlv_check_vendor_can_update()
         if method not in dict(SHIP_METHODS):
             raise UserError(_("Chọn cách gửi hàng."))
         carrier = " ".join((carrier or "").split())[:SHIP_TEXT_MAX] if method == "cpn" else ""
@@ -184,9 +213,13 @@ class PurchaseOrder(models.Model):
             notify_order_status(self)
         return True
 
-    def _hlv_check_not_cancelled(self):
+    def _hlv_check_vendor_can_update(self):
+        """NCC chỉ báo tiến độ trên đơn đã xác nhận: RFQ hiện cho NCC xem trước (tuỳ Cài đặt) nhưng
+        giá / số lượng còn đổi được — đóng gói theo RFQ là đóng gói sai."""
         if self.state == "cancel":
             raise UserError(_("Đơn %s đã hủy — không cần giao.", self.name))
+        if self.state not in CONFIRMED_STATES:
+            raise UserError(_("Đơn %s chưa xác nhận — bên mua xác nhận đơn rồi mới đóng gói / gửi hàng.", self.name))
 
     def _hlv_advance_status(self, status, author, body, notify_staff=True):
         """Đưa tiến độ tới status (không lùi) + ghi chú nội bộ. Trả False nếu đơn đã ở / qua status.
@@ -214,9 +247,9 @@ class PurchaseOrder(models.Model):
                 _logger.exception("Không báo được NCC về đơn mua %s", order.name)
 
     def button_approve(self, force=False):
-        waiting = self.filtered(lambda o: o.state not in ("purchase", "done"))
+        waiting = self.filtered(lambda o: o.state not in CONFIRMED_STATES)
         result = super().button_approve(force=force)
-        waiting.filtered(lambda o: o.state in ("purchase", "done"))._hlv_notify_vendor(lambda o: _(
+        waiting.filtered(lambda o: o.state in CONFIRMED_STATES)._hlv_notify_vendor(lambda o: _(
             "Đơn mua %(name)s đã xác nhận: %(count)s mặt hàng, %(amount)s sau VAT%(eta)s. Vui lòng chuẩn bị hàng "
             "và bấm \"Đã đóng gói\" khi xong.",
             name=o.name, count=len(o.order_line.filtered(lambda l: not l.display_type)),
@@ -226,7 +259,7 @@ class PurchaseOrder(models.Model):
         return result
 
     def button_cancel(self):
-        confirmed = self.filtered(lambda o: o.state in ("purchase", "done"))
+        confirmed = self.filtered(lambda o: o.state in CONFIRMED_STATES)
         result = super().button_cancel()
         confirmed.filtered(lambda o: o.state == "cancel")._hlv_notify_vendor(
             lambda o: _("Đơn mua %s đã hủy — quý công ty không cần đóng gói / giao hàng cho đơn này.", o.name)

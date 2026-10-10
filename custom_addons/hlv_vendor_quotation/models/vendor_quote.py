@@ -483,18 +483,20 @@ class VendorQuote(models.Model):
         self._notify_vendor_submitted(resubmitted)
 
     def _vendor_purchase_orders(self):
-        """Đơn mua (đã xác nhận) của chính NCC này cho các mặt hàng của báo giá: dòng báo giá →
+        """Đơn mua của chính NCC này cho các mặt hàng của báo giá, ở trạng thái admin cho hiện trên
+        trang NCC (purchase.order._hlv_vendor_visible_states — mặc định đã xác nhận): dòng báo giá →
         dòng YCMH → dòng đơn mua của NCC này. Không chỉ dòng đang được chọn — NCC giao thiếu
         rồi sale chọn NCC khác cho phần còn lại thì NCC cũ vẫn thấy đơn của mình (cùng luật với
         purchase.order._compute_hlv_vendor_links). Đọc bằng sudo — gọi được từ trang NCC.
         Gồm cả đơn đã xác nhận rồi bị hủy (còn date_approve) — NCC cần biết để khỏi giao; đơn hủy
         từ lúc còn nháp thì NCC chưa từng thấy, không hiện."""
         orders = self.env["purchase.order"]
+        visible = orders._hlv_vendor_visible_states()
         for quote in self.sudo():
             request_lines = quote.line_ids.inquiry_line_id.request_line_id | quote.line_ids.request_line_id
             orders |= request_lines.purchase_lines.order_id.filtered(
                 lambda o, v=quote.access_id.partner_id: (
-                    o.state in ("purchase", "done") or (o.state == "cancel" and o.date_approve)
+                    o.state in visible or (o.state == "cancel" and o.date_approve)
                 ) and o.partner_id.commercial_partner_id == v
             )
         return orders
