@@ -437,6 +437,12 @@ select.vq-cell-input { padding: 0 4px; cursor: pointer; }
 .vq-grid .vq-col-disc { width: 54px; }
 .vq-grid .vq-col-total { width: 112px; }
 .vq-grid .vq-col-days { width: 54px; }
+.vq-grid .vq-col-have { width: 124px; }
+.vq-have-more { display: flex; flex-direction: column; gap: 4px; padding: 4px 6px 6px; text-align: left; font-size: .8rem; color: var(--vq-muted); }
+.vq-have-more[hidden] { display: none; }
+.vq-have-more input[type="date"] { width: 100%; font-size: .8rem; padding: 2px 4px; border: 1px solid var(--vq-line); border-radius: 4px; }
+.vq-have-date { display: flex; flex-direction: column; gap: 2px; }
+.vq-have-none { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .vq-grid .vq-col-text { width: 150px; }
 /* Tên dài: cắt bằng "…", rê chuột xem đủ (title ở ô). Chip trạng thái nằm cùng hàng. */
 .vq-name-cell { display: flex; align-items: center; gap: 6px; max-width: 380px; }

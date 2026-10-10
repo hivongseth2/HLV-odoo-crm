@@ -200,6 +200,8 @@ def _compare_row(line, quotes):
             "vendor_note": quote_line.vendor_note or "",
             "invoice_name": quote_line.invoice_name or "",
             "unavailable": quote_line.unavailable,
+            # NCC không đủ SL hỏi: "có 6/10 · 4 hẹn 20/10/2026" ("" = có đủ).
+            "supply": quote_line._availability_text(),
             "subtotal": quote_line.price_subtotal,
             # Đơn giá + thành tiền sau VAT để sale đối chiếu với giá bán (đã gồm VAT).
             "price_incl": _price_incl(quote_line),

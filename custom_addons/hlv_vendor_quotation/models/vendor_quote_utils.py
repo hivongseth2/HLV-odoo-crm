@@ -220,6 +220,52 @@ def parse_states(text, allowed, default):
     return tuple(state for state in allowed if state in picked) or tuple(default)
 
 
+FULL_SUPPLY = {"available_qty": 0.0, "backorder_date": False, "no_more": False}
+
+
+def read_availability(asked_qty, available, backorder_date, no_more, today):
+    """NCC khai số lượng giao được cho một dòng báo giá.
+
+    asked_qty: SL hỏi; available: số NCC gõ ở ô "Có ngay" (None = để trống = có đủ); backorder_date:
+    date hẹn giao phần còn lại hoặc None; no_more: NCC tick "Không có thêm"; today: date hôm nay (giờ VN).
+    Trả (giá trị lưu {available_qty, backorder_date, no_more}, câu lỗi hoặc "").
+    Có đủ (trống / ≥ SL hỏi) → FULL_SUPPLY: available_qty = 0 nghĩa là "có đủ" — "có 0 cái" là hết hàng,
+    NCC bấm "×" chứ không gõ 0 (gõ 0 → lỗi). Thiếu: phải có ngày hẹn (không trước hôm nay) hoặc "Không có
+    thêm"; có cả hai thì "Không có thêm" thắng, bỏ ngày. Có lỗi thì giá trị trả về là FULL_SUPPLY.
+    """
+    if available is None or available >= asked_qty:
+        return dict(FULL_SUPPLY), ""
+    if available <= 0:
+        return dict(FULL_SUPPLY), 'có 0 — mặt hàng không có thì bấm "×" cạnh mã hàng'
+    if no_more:
+        return {"available_qty": available, "backorder_date": False, "no_more": True}, ""
+    if not backorder_date:
+        return dict(FULL_SUPPLY), (
+            f"có {format_vn_number(available)}/{format_vn_number(asked_qty)} — chọn ngày giao phần còn lại "
+            'hoặc tick "Không có thêm"'
+        )
+    if backorder_date < today:
+        return dict(FULL_SUPPLY), "ngày giao phần còn lại không được trước hôm nay"
+    return {"available_qty": available, "backorder_date": backorder_date, "no_more": False}, ""
+
+
+def availability_text(asked_qty, available_qty, backorder_date, no_more):
+    """Một dòng mô tả hàng NCC có, để sale / thu mua đọc nhanh.
+
+    Có đủ (available_qty 0 / None, hoặc ≥ SL hỏi) → "". Thiếu → "có 6/10 · 4 hẹn 20/10/2026" (hẹn
+    ngày), "có 6/10 · không có thêm" (no_more), hoặc "có 6/10" (dữ liệu thiếu cả hai).
+    """
+    if not available_qty or available_qty >= asked_qty:
+        return ""
+    head = f"có {format_vn_number(available_qty)}/{format_vn_number(asked_qty)}"
+    if no_more:
+        return f"{head} · không có thêm"
+    if backorder_date:
+        rest = format_vn_number(asked_qty - available_qty)
+        return f"{head} · {rest} hẹn {backorder_date.strftime(DATE_FMT)}"
+    return head
+
+
 def request_qty(raw, asked):
     """Số lượng lên YCMH sale nhập ở bảng tóm tắt (khách đổi số lượng sau khi hỏi giá).
 

@@ -148,6 +148,37 @@
         }
     });
 
+    /** Ô "Có ngay" < SL hỏi → hiện "còn lại giao ngày / không có thêm" của dòng; trống / đủ thì ẩn.
+        Tick "không có thêm" thì khoá ô ngày (server cũng bỏ ngày khi có tick). */
+    function syncHave(line) {
+        const input = line.querySelector("[data-vq-have]");
+        const more = line.querySelector("[data-vq-have-more]");
+        if (!input || !more) {
+            return;
+        }
+        const have = parseVnNumber(input.value);
+        more.hidden = !(have != null && have < (parseFloat(line.dataset.qty) || 0));
+        const noMore = more.querySelector("[data-vq-nomore]");
+        const date = more.querySelector('input[type="date"]');
+        if (noMore && date) {
+            date.disabled = noMore.checked;
+        }
+    }
+
+    form.addEventListener("input", (ev) => {
+        const line = ev.target.closest("[data-vq-line]");
+        if (line && ev.target.matches("[data-vq-have]")) {
+            syncHave(line);
+        }
+    });
+    form.addEventListener("change", (ev) => {
+        const line = ev.target.closest("[data-vq-line]");
+        if (line && ev.target.matches("[data-vq-nomore]")) {
+            syncHave(line);
+        }
+    });
+    lines.forEach(syncHave);
+
     form.addEventListener("input", refresh);
     form.addEventListener("change", (ev) => {
         if (ev.target === discountToggle) {

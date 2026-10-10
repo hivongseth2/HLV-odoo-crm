@@ -31,6 +31,9 @@
                 <field name="price_total" optional="hide"/>
                 <field name="delivery_days" optional="show"/>
                 <field name="unavailable" optional="show"/>
+                <field name="available_qty" optional="show"/>
+                <field name="backorder_date" optional="show"/>
+                <field name="no_more" optional="hide"/>
                 <field name="invoice_name" optional="show"/>
                 <field name="vendor_note" optional="show"/>
                 <field name="currency_id" column_invisible="1"/>

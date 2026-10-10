@@ -259,6 +259,7 @@ window.HlvQuote = window.HlvQuote || {};
       ' <span class="hq-offer-unit">sau VAT</span></span>' +
       '<span class="hq-offer-incl">' + HQ.money(offer.price_unit) + " chưa VAT</span>" +
       (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
+      (offer.supply ? '<span class="hq-offer-short" title="NCC không đủ số lượng hỏi">' + esc(offer.supply) + "</span>" : "") +
       (offer.list_price ? '<span class="hq-offer-meta">Trước CK ' + HQ.money(offer.list_price_incl) + " · CK " +
         HQ.qty(offer.discount) + "%</span>" : "") +
       (offer.invoice_name ? '<span class="hq-offer-meta" title="Tên xuất hóa đơn: ' + esc(offer.invoice_name) + '">HĐ: ' +

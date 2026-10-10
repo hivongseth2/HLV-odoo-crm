@@ -265,6 +265,7 @@
 .hq-offer.hq-offer-alert { padding: 9px 10px !important; background: var(--hq-danger-soft); color: var(--hq-danger);
     font-size: .8125rem; font-weight: 600; box-shadow: inset 3px 0 0 var(--hq-danger); }
 .hq-offer-meta { display: block; color: var(--hq-muted); font-size: .75rem; }
+.hq-offer-short { display: block; font-size: .78rem; font-weight: 600; color: #b45309; }
 .hq-offer-unit { font-weight: 400; font-size: .7rem; color: var(--hq-muted); }
 .hq-offer-incl { display: block; font-size: .75rem; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
 .hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }

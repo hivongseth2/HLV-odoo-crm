@@ -3,7 +3,7 @@ from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from .vendor_quote_utils import best_price_ids, price_incl_vat
+from .vendor_quote_utils import availability_text, best_price_ids, price_incl_vat
 
 VAT_SELECTION = [
     ("0", "0%"),
@@ -72,6 +72,15 @@ class VendorQuoteLine(models.Model):
         help="Tên hàng NCC sẽ ghi trên hóa đơn — NCC điền khi báo giá, có thể khác tên hàng bên mình.",
     )
     unavailable = fields.Boolean(string="Không có hàng", copy=False)
+    # NCC không đủ SL hỏi: "Có ngay" + phần còn lại hẹn ngày giao hoặc "Không có thêm"
+    # (vendor_quote_utils.read_availability). available_qty = 0 nghĩa là CÓ ĐỦ — có 0 cái là hết hàng (×).
+    available_qty = fields.Float(
+        string="Có ngay", digits="Product Unit of Measure", copy=False,
+        help="Số lượng NCC giao được ngay khi không đủ số lượng hỏi. 0 = có đủ.",
+    )
+    backorder_date = fields.Date(string="Hẹn giao phần còn lại", copy=False)
+    no_more = fields.Boolean(string="Không có thêm", copy=False,
+                             help="NCC chỉ có phần \"Có ngay\", không giao thêm phần còn lại.")
     price_subtotal = fields.Monetary(
         string="Thành tiền chưa VAT",
         compute="_compute_price",
@@ -100,6 +109,13 @@ class VendorQuoteLine(models.Model):
     selection_state = fields.Selection(
         SELECTION_STATES, string="Lựa chọn", compute="_compute_selection_state"
     )
+
+    def _availability_text(self):
+        """"có 6/10 · 4 hẹn 20/10/2026" khi NCC không đủ hàng; đủ / hết hàng → ""."""
+        self.ensure_one()
+        if self.unavailable:
+            return ""
+        return availability_text(self.product_qty, self.available_qty, self.backorder_date, self.no_more)
 
     @api.depends("vat")
     def _compute_tax_rate(self):
