@@ -1,5 +1,7 @@
-/* Ngăn chi tiết một phiếu hỏi giá: bảng so giá sản phẩm × NCC, sale bấm chọn giá, rồi lên
-   yêu cầu mua hàng (đơn bán tuỳ chọn). Sau khi lên YCMH: hiện YCMH và đơn mua sinh ra. */
+/* Ngăn chi tiết một phiếu hỏi giá: bảng so giá sản phẩm × NCC, sale bấm chọn giá — một sản phẩm
+   chọn được nhiều NCC, mỗi NCC một "SL mua" (ô dưới giá đã chọn) — rồi lên yêu cầu mua hàng (đơn bán
+   tuỳ chọn). Còn thiếu SL vẫn lên phần đã có; phần thiếu hỏi thêm NCC sau. Sau khi lên YCMH: hiện YCMH
+   và đơn mua sinh ra. */
 window.HlvQuote = window.HlvQuote || {};
 
 (function (HQ) {
@@ -8,8 +10,10 @@ window.HlvQuote = window.HlvQuote || {};
   var S = HQ.S;
   var esc = HQ.esc;
   // Phiếu đang mở + đơn bán sẽ gắn khi lên YCMH; confirming: đang xem bảng tóm tắt trước khi tạo YCMH;
-  // qty: SL sale sửa ở bảng tóm tắt {id dòng phiếu: SL} — khách đổi số lượng sau khi hỏi giá.
-  var D = { detail: null, saleOrder: null, confirming: false, qty: {} };
+  // qty: SL mua sale sửa ở bảng tóm tắt {id dòng báo giá: SL}; settle: sản phẩm còn thiếu mà sale chốt
+  // "khách chỉ mua chừng này" {id dòng phiếu: true}.
+  var D = { detail: null, saleOrder: null, confirming: false, qty: {}, settle: {} };
+  var EPS = 1e-9;
 
   /** quiet: tải lại ngầm phiếu đang mở (có tin mới) — không nháy "Đang tải…". */
   HQ.openInquiry = function (inquiryId, quiet) {
@@ -41,68 +45,131 @@ window.HlvQuote = window.HlvQuote || {};
     }).catch(function (err) { HQ.toast(err.message); });
   }
 
-  /** Bước 1: hiện bảng tóm tắt (sản phẩm, NCC, giá sẽ lên YCMH) để sale soát trước khi tạo. */
+  /** Sale đổi SL mua của một NCC đã chọn (ô dưới giá trong bảng so giá) — lưu ngay; lỗi thì về số cũ. */
+  function setBuyQty(input) {
+    input.disabled = true;
+    HQ.api("set_qty", { quote_line_id: +input.dataset.buyQty, qty: Number(input.value) }).then(function (detail) {
+      afterChange(detail);
+    }).catch(function (err) {
+      HQ.toast(err.message);
+      render(D.detail);
+    });
+  }
+
+  /** Bước 1: hiện bảng tóm tắt (sản phẩm × NCC, SL, giá sẽ lên YCMH) để sale soát trước khi tạo. */
   function reviewRequest(on) {
     D.confirming = on;
     D.qty = {};
+    D.settle = {};
     render(D.detail);
   }
 
-  /** Dòng sẽ lên YCMH: sản phẩm, giá NCC đã chọn và SL (sale sửa hoặc SL đã hỏi). */
+  /** Cặp sản phẩm × NCC sẽ lên YCMH (NCC đã chọn mà chưa lên): SL mua đang sửa ở bảng tóm tắt hoặc SL đã lưu. */
   function requestRows(d) {
     var vendorNames = {};
     d.vendors.forEach(function (v) { vendorNames[v.quote_id] = v.name; });
-    return d.lines.filter(function (l) { return l.to_request; }).map(function (line) {
-      var quoteId = Object.keys(line.offers).find(function (key) { return line.offers[key].selected; });
-      return {
-        line: line, vendor: vendorNames[quoteId] || "", price: line.offers[quoteId].price_incl,
-        qty: D.qty[line.id] !== undefined ? D.qty[line.id] : line.qty,
-      };
+    var rows = [];
+    d.lines.forEach(function (line) {
+      Object.keys(line.offers).forEach(function (quoteId) {
+        var offer = line.offers[quoteId];
+        if (offer.to_request) {
+          rows.push({
+            line: line, offer: offer, vendor: vendorNames[quoteId] || "", price: offer.price_incl,
+            qty: D.qty[offer.line_id] !== undefined ? D.qty[offer.line_id] : offer.chosen_qty,
+          });
+        }
+      });
     });
+    return rows;
   }
 
-  /** Gõ SL ở bảng tóm tắt: tính lại thành tiền + tổng tại chỗ (không vẽ lại — giữ con trỏ trong ô). */
-  function updateRequestQty(input) {
-    var value = input.value.trim() === "" ? NaN : Number(input.value);
-    D.qty[input.dataset.reqQty] = value;
-    var panel = HQ.$("hq-drawer-panel");
-    var total = 0;
-    var valid = true;
-    requestRows(D.detail).forEach(function (row) {
-      var ok = row.qty > 0;
-      valid = valid && ok;
-      total += ok ? row.price * row.qty : 0;
-      var cell = panel.querySelector('[data-req-total="' + row.line.id + '"]');
-      cell.textContent = ok ? HQ.money(row.price * row.qty) : "—";
-      panel.querySelector('[data-req-hint="' + row.line.id + '"]').innerHTML = qtyHint(row);
-      panel.querySelector('[data-req-qty="' + row.line.id + '"]').classList.toggle("is-invalid", !ok);
-    });
-    panel.querySelector("[data-req-sum]").textContent = HQ.money(total);
-    panel.querySelector("[data-create-request]").disabled = !valid;
-  }
-
-  /** Ghi chú dưới ô SL: SL đã hỏi khi sale sửa khác; SL ≤ 0 thì báo lỗi. */
-  function qtyHint(row) {
+  /** Lỗi SL mua của một dòng tóm tắt ("" = hợp lệ): phải > 0, không quá SL NCC có (max_qty). */
+  function rowError(row) {
     if (!(row.qty > 0)) {
-      return '<span class="hq-expired">SL phải lớn hơn 0 — không mua thì bỏ chọn NCC</span>';
+      return "SL mua phải lớn hơn 0 — không mua của NCC này thì bỏ chọn";
     }
-    if (row.qty === row.line.qty) {
+    if (row.offer.max_qty !== null && row.qty > row.offer.max_qty + EPS) {
+      return "NCC chỉ có " + HQ.qty(row.offer.max_qty);
+    }
+    return "";
+  }
+
+  /** Ghi chú dưới ô SL mua: lỗi, hoặc phần tách khi NCC thiếu hàng có hẹn (cùng luật split_buy_qty). */
+  function qtyHint(row) {
+    var error = rowError(row);
+    if (error) {
+      return '<span class="hq-expired">' + esc(error) + "</span>";
+    }
+    var o = row.offer;
+    if (o.backorder_date && !o.no_more && o.available_qty > 0 && o.available_qty < row.qty) {
+      return "tách: " + HQ.qty(o.available_qty) + " giao ngay · " + HQ.qty(row.qty - o.available_qty) +
+        " hẹn " + esc(o.backorder_date);
+    }
+    return "";
+  }
+
+  /** Sản phẩm còn thiếu SL, tính cả SL đang sửa ở bảng tóm tắt: [{line, shortage}]. */
+  function shortages(d, rows) {
+    return d.lines.filter(function (l) { return !l.locked; }).map(function (line) {
+      var total = line.chosen_qty;
+      rows.forEach(function (r) {
+        if (r.line === line) {
+          total += (r.qty > 0 ? r.qty : 0) - r.offer.chosen_qty;
+        }
+      });
+      return { line: line, shortage: Math.max(0, line.need_qty - total) };
+    }).filter(function (s) { return s.shortage > EPS; });
+  }
+
+  /** Hộp "còn thiếu" của bảng tóm tắt: vẫn lên phần đã có; tick = khách chỉ mua chừng này (hết thiếu). */
+  function shortageBox(d, rows) {
+    var list = shortages(d, rows);
+    if (!list.length) {
       return "";
     }
-    return "hỏi giá " + HQ.qty(row.line.qty) + " " + esc(row.line.uom) +
-      (row.qty > row.line.qty ? ' — <span class="hq-expired">nhiều hơn SL NCC đã báo giá</span>' : "");
+    return '<div class="hq-alert hq-alert-strong hq-short-box"><div>Còn thiếu — vẫn lên YCMH phần đã có, phần ' +
+      'thiếu bấm "Hỏi thêm NCC" sau. Khách chỉ mua chừng này thì tick:</div>' + list.map(function (s) {
+        return '<label class="hq-short-item"><input type="checkbox" data-settle-line="' + s.line.id + '"' +
+          (D.settle[s.line.id] ? " checked" : "") + "/> " + esc(s.line.name) + ": thiếu <b>" + HQ.qty(s.shortage) +
+          " " + esc(s.line.uom) + "</b> (cần " + HQ.qty(s.line.need_qty) + ") — khách chỉ mua chừng này</label>";
+      }).join("") + "</div>";
+  }
+
+  /** Gõ SL ở bảng tóm tắt: tính lại thành tiền, tổng, phần thiếu tại chỗ (không vẽ lại — giữ con trỏ trong ô). */
+  function updateRequestQty(input) {
+    D.qty[input.dataset.reqQty] = input.value.trim() === "" ? NaN : Number(input.value);
+    var panel = HQ.$("hq-drawer-panel");
+    var rows = requestRows(D.detail);
+    var total = 0;
+    var valid = true;
+    rows.forEach(function (row) {
+      var id = row.offer.line_id;
+      var ok = !rowError(row);
+      valid = valid && ok;
+      total += ok ? row.price * row.qty : 0;
+      panel.querySelector('[data-req-total="' + id + '"]').textContent = ok ? HQ.money(row.price * row.qty) : "—";
+      panel.querySelector('[data-req-hint="' + id + '"]').innerHTML = qtyHint(row);
+      panel.querySelector('[data-req-qty="' + id + '"]').classList.toggle("is-invalid", !ok);
+    });
+    panel.querySelector("[data-req-sum]").textContent = HQ.money(total);
+    panel.querySelector("[data-req-short]").innerHTML = shortageBox(D.detail, rows);
+    panel.querySelector("[data-create-request]").disabled = !valid;
   }
 
   /** Bước 2: sale bấm xác nhận trên bảng tóm tắt. */
   function createRequest(button) {
     var d = D.detail;
     button.disabled = true;
+    var rows = requestRows(d);
     var quantities = {};
-    requestRows(d).forEach(function (row) { quantities[row.line.id] = row.qty; });
+    rows.forEach(function (row) { quantities[row.offer.line_id] = row.qty; });
+    var settle = shortages(d, rows).filter(function (s) { return D.settle[s.line.id]; })
+      .map(function (s) { return s.line.id; });
     HQ.api("create_request", {
       inquiry_id: d.id,
       sale_order_id: D.saleOrder ? D.saleOrder.id : null,
       quantities: quantities,
+      settle_line_ids: settle,
     }).then(function (detail) {
       var r = detail.request_result;
       D.confirming = false;
@@ -214,16 +281,12 @@ window.HlvQuote = window.HlvQuote || {};
         '</button><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span></th>";
     }).join("") + "</tr>";
     var rows = d.lines.map(function (line) {
-      var tag = line.locked ? '<span class="hq-muted" title="NCC giao thiếu / hết hàng: nhờ thu mua sửa số lượng dòng ' +
-        'này trên đơn mua xuống đúng số NCC giao được — phần còn thiếu mở ra để chọn NCC khác">đã lên đơn mua — khoá</span>'
-        : line.ordered_qty > 0 ? '<span class="hq-partial">đã đặt ' + HQ.qty(line.ordered_qty) + "/" +
-          HQ.qty(line.requested_qty) + " — chọn NCC cho " + HQ.qty(line.requested_qty - line.ordered_qty) + " còn thiếu</span>"
-        : line.request_rejected ? '<span class="hq-expired">' + esc(line.request_name) + " bị từ chối — chọn lại NCC rồi lên YCMH mới</span>"
-        : line.request_name ? '<span class="hq-muted">trong ' + esc(line.request_name) + "</span>" : "";
+      var tag = allocationTag(line);
       return "<tr><td>" + esc(line.name) + (tag ? "<div>" + tag + "</div>" : "") +
-        '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " +
-        esc(line.uom) + "</td>" + d.vendors.map(function (v) {
-          return offerCell(line.offers[v.quote_id], v, d.can_choose && !line.locked);
+        '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
+        (Math.abs(line.need_qty - line.qty) > EPS ? '<div class="hq-muted hq-small">cần ' + HQ.qty(line.need_qty) + "</div>" : "") +
+        "</td>" + d.vendors.map(function (v) {
+          return offerCell(line.offers[v.quote_id], v, d.can_choose && !line.locked, line.uom);
         }).join("") + "</tr>";
     }).join("");
     return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
@@ -234,10 +297,49 @@ window.HlvQuote = window.HlvQuote || {};
       '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
       HQ.money(d.chosen_total) + " chưa VAT</td></tr></tfoot>" +
       "</table></div>" +
-      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn.</div>';
+      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Một sản phẩm ' +
+      'chọn được nhiều NCC — sửa "SL mua" dưới giá để chia số lượng.</div>';
   }
 
-  function offerCell(offer, vendor, canChoose) {
+  /** Dòng tình trạng dưới tên sản phẩm: đã chia bao nhiêu / thiếu / đã đặt / YCMH / từ chối / khoá. */
+  function allocationTag(line) {
+    if (line.locked) {
+      return '<span class="hq-muted" title="NCC giao thiếu: thu mua sửa số lượng dòng đơn mua xuống, rồi giảm SL mua ' +
+        'của NCC đó — phần còn thiếu mở ra để chọn NCC khác">đã lên đơn mua đủ — khoá</span>';
+    }
+    var parts = [];
+    if (line.chosen_qty > EPS) {
+      parts.push(line.shortage > EPS
+        ? '<span class="hq-partial">đã chia ' + HQ.qty(line.chosen_qty) + "/" + HQ.qty(line.need_qty) + " — thiếu " +
+          HQ.qty(line.shortage) + "</span>"
+        : line.chosen_qty > line.need_qty + EPS
+          ? '<span class="hq-expired">chia ' + HQ.qty(line.chosen_qty) + "/" + HQ.qty(line.need_qty) + " — nhiều hơn SL cần</span>"
+          : '<span class="hq-alloc-ok">đã chia đủ ' + HQ.qty(line.need_qty) + "</span>");
+    }
+    if (line.ordered_qty > EPS) {
+      parts.push('<span class="hq-muted">đã đặt ' + HQ.qty(line.ordered_qty) + "</span>");
+    }
+    if (line.request_rejected) {
+      parts.push('<span class="hq-expired">' + esc(line.rejected_name) + " bị từ chối — chọn lại NCC rồi lên YCMH mới</span>");
+    } else if (line.request_name) {
+      parts.push('<span class="hq-muted">trong ' + esc(line.request_name) + "</span>");
+    }
+    return parts.join(" · ");
+  }
+
+  /** Ô SL mua dưới giá đã chọn: sửa được khi phiếu còn chọn được; kèm phần đã đặt / YCMH của NCC này. */
+  function buyBox(offer, canChoose, uom) {
+    var qty = canChoose
+      ? '<label class="hq-buy-label">SL mua <input type="number" class="hq-input hq-buy-input" min="0" step="any" ' +
+        'inputmode="decimal" data-buy-qty="' + offer.line_id + '" value="' + offer.chosen_qty + '"/></label> ' + esc(uom)
+      : "SL mua " + HQ.qty(offer.chosen_qty) + " " + esc(uom);
+    return '<div class="hq-buy">' + qty +
+      (offer.ordered_qty > EPS ? '<span class="hq-muted">đã đặt ' + HQ.qty(offer.ordered_qty) + "</span>" : "") +
+      (offer.request_name ? '<span class="hq-muted">' + esc(offer.request_name) + "</span>"
+        : offer.to_request ? '<span class="hq-partial">chưa lên YCMH</span>' : "") + "</div>";
+  }
+
+  function offerCell(offer, vendor, canChoose, uom) {
     if (!offer || (!offer.price_unit && !offer.unavailable)) {
       if (offer && offer.reference_price) {
         return '<td class="hq-offer hq-muted">Chờ NCC xác nhận<span class="hq-offer-meta">lần trước ' +
@@ -269,12 +371,14 @@ window.HlvQuote = window.HlvQuote || {};
       (offer.inherited_from ? '<span class="hq-offer-reuse" title="Giá còn hiệu lực lấy lại từ ' +
         esc(offer.inherited_from) + ' — không hỏi lại NCC">giá cũ · ' + esc(offer.inherited_from) + "</span>" : "");
     var cls = "hq-offer" + (offer.selected ? " is-selected" : "");
+    var buy = offer.selected ? buyBox(offer, canChoose, uom) : "";
     if (!canChoose) {
-      return '<td class="' + cls + '"><div class="hq-offer-static">' + body + "</div></td>";
+      return '<td class="' + cls + '"><div class="hq-offer-static">' + body + "</div>" + buy + "</td>";
     }
     return '<td class="' + cls + '"><button type="button" class="hq-offer-btn" data-' +
       (offer.selected ? "unchoose" : "choose") + '="' + offer.line_id + '" title="' +
-      (offer.selected ? "Bấm để bỏ chọn" : "Chọn NCC này") + '">' + body + "</button></td>";
+      (offer.selected ? "Bấm để bỏ chọn NCC này" : "Chọn thêm NCC này (SL mua điền sẵn phần còn thiếu)") + '">' +
+      body + "</button>" + buy + "</td>";
   }
 
   function renderRequestBox(d) {
@@ -286,15 +390,15 @@ window.HlvQuote = window.HlvQuote || {};
     var redo = d.lines.some(function (l) { return l.to_request && l.request_rejected; });
     var done = live.length
       ? '<div class="hq-muted">Đã lên ' + live.map(function (r) { return esc(r.name); }).join(", ") +
-        ". Thu mua duyệt YCMH rồi tạo đơn mua theo NCC và giá đã chọn. Đổi NCC cho sản phẩm chưa lên " +
-        "đơn mua: bấm giá NCC khác — YCMH tự cập nhật.</div>"
+        ". Thu mua duyệt YCMH rồi tạo đơn mua theo NCC và giá đã chọn. Đổi SL mua dưới giá — YCMH tự " +
+        "cập nhật; còn thiếu thì chọn thêm NCC rồi bổ sung vào YCMH.</div>"
       : "";
     if (live.length && !d.pending_count) {
       return '<div class="hq-share"><b>Đã lên yêu cầu mua hàng</b>' + done + "</div>";
     }
     var title = redo ? "Lên lại yêu cầu mua hàng" : live.length ? "Bổ sung vào yêu cầu mua hàng" : "Lên yêu cầu mua hàng";
     var head = '<div class="hq-share"><div class="hq-share-head"><b>' + title + "</b>" +
-      '<span class="hq-muted">' + (live.length || redo ? d.pending_count + " sản phẩm đã chọn NCC chưa lên YCMH"
+      '<span class="hq-muted">' + (live.length || redo ? d.pending_count + " sản phẩm có NCC đã chọn chưa lên YCMH"
         : d.chosen_count + "/" + d.line_count + " sản phẩm đã chọn NCC") + "</span></div>" + done;
     if (D.confirming && d.can_request) {
       return head + requestSummary(d) + '<div class="hq-request-row"><span class="hq-push"></span>' +
@@ -314,33 +418,29 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-muted hq-small">Có đơn bán và đơn đó có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div>';
   }
 
-  /** Bảng tóm tắt những gì sẽ lên YCMH: sản phẩm, SL (sửa được — khách đổi số lượng sau khi hỏi giá),
-      NCC đã chọn, giá sau VAT; kèm sản phẩm bị bỏ lại. */
+  /** Bảng tóm tắt những gì sẽ lên YCMH: từng cặp sản phẩm × NCC, SL mua (sửa được — khách đổi số lượng
+      sau khi hỏi giá), giá sau VAT; kèm sản phẩm còn thiếu (vẫn lên phần đã có). */
   function requestSummary(d) {
     var total = 0;
-    var rows = requestRows(d).map(function (row) {
-      var line = row.line;
+    var rows = requestRows(d);
+    var body = rows.map(function (row) {
+      var id = row.offer.line_id;
       total += row.price * row.qty;
-      return "<tr><td>" + esc(line.name) + '</td><td class="hq-num"><span class="hq-nowrap">' +
-        '<input type="number" class="hq-input hq-qty-input" min="0" step="any" inputmode="decimal" data-req-qty="' +
-        line.id + '" value="' + row.qty + '" aria-label="Số lượng lên YCMH — ' + esc(line.name) + '"/> ' + esc(line.uom) +
-        '</span><div class="hq-muted hq-small" data-req-hint="' + line.id + '">' + qtyHint(row) + "</div></td><td>" +
-        esc(row.vendor) + '</td><td class="hq-num">' + HQ.money(row.price) + '</td><td class="hq-num" data-req-total="' +
-        line.id + '">' + HQ.money(row.price * row.qty) + "</td></tr>";
+      return "<tr><td>" + esc(row.line.name) + "</td><td>" + esc(row.vendor) + '</td><td class="hq-num">' +
+        '<span class="hq-nowrap"><input type="number" class="hq-input hq-qty-input" min="0" step="any" ' +
+        'inputmode="decimal" data-req-qty="' + id + '" value="' + row.qty + '" aria-label="SL mua — ' + esc(row.line.name) +
+        " — " + esc(row.vendor) + '"/> ' + esc(row.line.uom) + '</span><div class="hq-muted hq-small" data-req-hint="' +
+        id + '">' + qtyHint(row) + '</div></td><td class="hq-num">' + HQ.money(row.price) +
+        '</td><td class="hq-num" data-req-total="' + id + '">' + HQ.money(row.price * row.qty) + "</td></tr>";
     }).join("");
-    var unchosen = d.lines.filter(function (l) {
-      return !l.locked && !Object.keys(l.offers).some(function (key) { return l.offers[key].selected; });
-    });
     return '<div class="hq-table-wrap hq-request-summary"><table class="hq-table"><thead><tr><th>Sản phẩm</th>' +
-      '<th class="hq-num">SL</th><th>Nhà cung cấp</th><th class="hq-num">Đơn giá sau VAT</th>' +
-      '<th class="hq-num">Thành tiền</th></tr></thead><tbody>' + rows + "</tbody>" +
+      '<th>Nhà cung cấp</th><th class="hq-num">SL mua</th><th class="hq-num">Đơn giá sau VAT</th>' +
+      '<th class="hq-num">Thành tiền</th></tr></thead><tbody>' + body + "</tbody>" +
       '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b data-req-sum="1">' +
       HQ.money(total) + "</b></td></tr></tfoot></table></div>" +
-      '<div class="hq-muted hq-small">Khách đổi số lượng sau khi hỏi giá thì sửa ở cột SL — phiếu hỏi giá giữ SL đã hỏi.</div>' +
+      '<div data-req-short="1">' + shortageBox(d, rows) + "</div>" +
       '<div class="hq-muted hq-small">' + (D.saleOrder ? "Gắn đơn bán <b>" + esc(D.saleOrder.name) +
-        "</b> — đơn đã có YCMH chưa duyệt thì hàng được gộp vào đó." : "Không gắn đơn bán.") + "</div>" +
-      (unchosen.length ? '<div class="hq-alert hq-alert-strong">' + unchosen.length + " sản phẩm chưa chọn NCC sẽ " +
-        "không lên YCMH: " + unchosen.map(function (l) { return esc(l.name); }).join(", ") + "</div>" : "");
+        "</b> — đơn đã có YCMH chưa duyệt thì hàng được gộp vào đó." : "Không gắn đơn bán.") + "</div>";
   }
 
   function saleOrderChip() {
@@ -434,6 +534,14 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(panel, "click", "[data-review-request]", function (el) { reviewRequest(el.dataset.reviewRequest === "1"); });
     HQ.on(panel, "click", "[data-create-request]", createRequest);
     HQ.on(panel, "input", "[data-req-qty]", updateRequestQty);
+    HQ.on(panel, "change", "[data-settle-line]", function (el) { D.settle[el.dataset.settleLine] = el.checked; });
+    HQ.on(panel, "change", "[data-buy-qty]", setBuyQty);
+    HQ.on(panel, "keydown", "[data-buy-qty]", function (el, event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        el.blur();  // rời ô = "change" → lưu
+      }
+    });
     HQ.on(panel, "click", "[data-cancel-inquiry]", cancelInquiry);
     HQ.on(panel, "click", "[data-save-opp]", saveOpportunity);
     HQ.on(panel, "keydown", "#hq-opp-input", function (el, event) {

@@ -190,71 +190,18 @@ class VendorQuoteLine(models.Model):
         if not self.env.user.has_group(SELECTOR_GROUP):
             raise AccessError(_("Chỉ thu mua mới được chọn / bỏ chọn nhà cung cấp."))
 
-    def action_choose(self):
-        """Sale chọn NCC cho một sản phẩm trong phiếu hỏi giá.
-
-        Chưa lên YCMH: chỉ đánh dấu lựa chọn. Đã lên YCMH (VD NCC đã chọn báo hết hàng sau
-        đó): đổi luôn NCC + giá trên dòng YCMH — miễn dòng đó chưa lên RFQ/đơn mua.
-        Khác action_select (thu mua chọn trên dòng YCMH của luồng hỏi giá từ YCMH).
-        """
-        self.ensure_one()
-        inquiry_line = self.inquiry_line_id
-        if not inquiry_line:
-            raise UserError(_("Dòng báo giá này không thuộc phiếu hỏi giá nào."))
-        if inquiry_line.inquiry_id.state in ("cancel", "closed"):
-            raise UserError(_(
-                "Phiếu %s đã đóng — lập phiếu mới, giá còn hiệu lực sẽ được dùng lại.", inquiry_line.inquiry_id.name,
-            ))
-        if self.unavailable or not self.price_unit:
-            raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
-        self._check_not_ordered(inquiry_line)
-        previous = (inquiry_line.quote_line_ids - self).filtered("selected")
-        previous.write({"selected": False, "request_line_id": False})
-        self.selected = True
-        request_line = inquiry_line._live_request_line()
-        if request_line:
-            self.request_line_id = request_line
-            # Sale chỉ có quyền đọc YCMH; ghi đúng các field NCC/giá đã chọn.
-            request_line.sudo().write(self._request_line_choice_vals(request_line))
-            partial = request_line.sudo().purchased_qty > 0
-            request_line.request_id.sudo().message_post(body=Markup(_(
-                "Sale đổi NCC cho <i>%(product)s</i> sang <b>%(vendor)s</b>: %(price)s chưa VAT (%(inquiry)s).%(rest)s"
-            )) % {
-                "product": inquiry_line.name or inquiry_line.product_id.display_name,
-                "vendor": self.partner_id.commercial_partner_id.display_name,
-                "price": self.currency_id.format(self.price_unit),
-                "inquiry": inquiry_line.inquiry_id.name,
-                # Đã đặt một phần: nhắc thu mua tạo RFQ cho phần còn thiếu.
-                "rest": Markup(_(" Còn phải mua <b>%s</b> — tạo RFQ cho phần này.")) % request_line._hlv_remaining_qty()
-                if partial else "",
-            })
-        return True
-
-    def action_unchoose(self):
-        for line in self.filtered("selected"):
-            if line.inquiry_line_id._live_request_line():
-                raise UserError(_(
-                    "Sản phẩm này đã lên YCMH — bấm chọn NCC khác để đổi, không bỏ trống được."
-                ))
-        self.write({"selected": False})
-        return True
-
-    @api.model
-    def _check_not_ordered(self, inquiry_line):
-        if inquiry_line.locked:
-            raise UserError(_(
-                "%s đã lên RFQ/đơn mua đủ số lượng — đổi NCC ở đây không đổi được đơn đã tạo. NCC "
-                "giao thiếu / hết hàng: nhờ thu mua sửa số lượng dòng đơn mua xuống đúng số NCC giao "
-                "được, rồi chọn NCC khác cho phần còn thiếu.",
-                inquiry_line.name or inquiry_line.product_id.display_name,
-            ))
-
-    @api.depends("inquiry_line_id.locked", "request_line_id.purchased_qty", "request_line_id.product_qty",
-                 "request_line_id.purchase_lines.state")
+    @api.depends("inquiry_line_id.locked", "selected", "request_line_id.purchased_qty", "request_line_id.product_qty",
+                 "request_line_id.purchase_lines.state", "backorder_request_line_id.purchased_qty",
+                 "backorder_request_line_id.purchase_lines.state")
     def _compute_vendor_locked(self):
+        """NCC không sửa giá dòng này nữa: sản phẩm đã lên đơn mua đủ SL cần mua, hoặc phần của chính
+        NCC này (đang được chọn) đã lên đơn mua đủ. Luồng hỏi giá từ YCMH: dòng YCMH đã lên đơn đủ."""
         for line in self:
             if line.inquiry_line_id:
-                line.vendor_locked = line.inquiry_line_id.locked
+                own = line._hlv_live_request_lines()
+                line.vendor_locked = line.inquiry_line_id.locked or (
+                    line.selected and bool(own) and all(own.mapped(lambda l: l._hlv_fully_ordered()))
+                )
             else:
                 line.vendor_locked = bool(line.request_line_id) and line.request_line_id._hlv_fully_ordered()
 
@@ -271,29 +218,30 @@ class VendorQuoteLine(models.Model):
         """Đẩy tên xuất hóa đơn mới xuống dòng đơn mua của NCC này cho mặt hàng — chỉ dòng đang
         trống hoặc còn đúng tên cũ (tên thu mua sửa tay trên đơn mua thì giữ)."""
         vendor = self.quote_id.access_id.partner_id or self.partner_id.commercial_partner_id
-        po_lines = self._hlv_request_line().sudo().purchase_lines.filtered(
+        po_lines = self._hlv_product_request_lines().sudo().purchase_lines.filtered(
             lambda l: l.state != "cancel" and l.order_id.partner_id.commercial_partner_id == vendor
             and (l.hlv_invoice_name or "") in ("", old_name)
         )
         if po_lines:
             po_lines.write({"hlv_invoice_name": self.invoice_name or False})
 
-    def _hlv_request_line(self):
-        """Dòng YCMH của mặt hàng này — qua phiếu hỏi giá, hoặc gắn thẳng (luồng hỏi giá từ YCMH)."""
+    def _hlv_product_request_lines(self):
+        """Mọi dòng YCMH của mặt hàng này — qua phiếu hỏi giá (của mọi NCC được chọn), hoặc gắn thẳng
+        (luồng hỏi giá từ YCMH)."""
         self.ensure_one()
-        return self.inquiry_line_id.request_line_id or self.request_line_id
+        return self.inquiry_line_id.request_line_ids or self.request_line_id
 
     def _hlv_ordered_from_vendor(self):
         """NCC của dòng này đang có hàng trên đơn mua cho mặt hàng (kể cả khi sale đã chọn NCC
         khác cho phần còn thiếu) — để trang NCC không gạch dòng NCC vẫn đang giao."""
         self.ensure_one()
         vendor = self.quote_id.access_id.partner_id or self.partner_id.commercial_partner_id
-        return bool(self._hlv_request_line().sudo().purchase_lines.filtered(
+        return bool(self._hlv_product_request_lines().sudo().purchase_lines.filtered(
             lambda l: l.state in ("purchase", "done") and l.product_qty > 0
             and l.order_id.partner_id.commercial_partner_id == vendor
         ))
 
-    def _request_line_choice_vals(self, request_line):
+    def _request_line_choice_vals(self, request_line):  # luồng thu mua chọn trên dòng YCMH (action_select)
         """NCC + giá đã chọn ghi xuống dòng YCMH, kèm số lượng cần mua = phần CÒN THIẾU: wizard
         "Tạo RFQ" ưu tiên actual_qty của dòng YCMH, mà lần tạo RFQ trước đã ghi actual_qty = cả
         số lượng — không ghi lại thì RFQ cho NCC mới ra lại cả số lượng thay vì phần còn thiếu."""

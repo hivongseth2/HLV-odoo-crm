@@ -39,26 +39,26 @@ class PurchaseRequest(models.Model):
         return result
 
     def _hlv_release_rejected_choices(self):
-        """YCMH bị thu mua từ chối: bỏ chọn NCC cho các mặt hàng phiếu hỏi giá đã lên YCMH này.
+        """YCMH bị thu mua từ chối: bỏ chọn các NCC đã lên YCMH này (phiếu hỏi giá).
 
-        Giữ lựa chọn thì mặt hàng vẫn như "đã chốt NCC": NCC được hỏi thêm thấy dòng gạch "NCC khác"
-        dù chẳng ai được mua, và sale không bỏ chọn được. Dòng phiếu vẫn trỏ dòng YCMH cũ để sale
-        thấy YCMH nào bị từ chối; chọn lại NCC rồi lên YCMH mới (vendor_inquiry._needs_request).
+        Giữ lựa chọn thì mặt hàng vẫn như "đã chốt NCC" dù chẳng ai được mua, và sale không bỏ chọn
+        được. Dòng báo giá vẫn trỏ dòng YCMH cũ để sale thấy YCMH nào bị từ chối; chọn lại NCC rồi lên
+        YCMH mới (hlv.vendor.quote.line._hlv_needs_request).
         """
         chosen = self.env["hlv.vendor.quote.line"].sudo().search([
             ("selected", "=", True),
-            ("inquiry_line_id.request_line_id.request_id", "in", self.ids),
             ("inquiry_line_id.inquiry_id.state", "in", INQUIRY_ACTIVE_STATES),
+            "|", ("request_line_id.request_id", "in", self.ids), ("backorder_request_line_id.request_id", "in", self.ids),
         ])
         if not chosen:
             return
-        chosen.write({"selected": False, "request_line_id": False})
+        chosen.write({"selected": False, "chosen_qty": 0.0})
         for inquiry in chosen.inquiry_line_id.inquiry_id:
             lines = chosen.filtered(lambda l, i=inquiry: l.inquiry_line_id.inquiry_id == i)
-            requests = lines.inquiry_line_id.request_line_id.request_id
+            requests = lines._hlv_own_request_lines().request_id & self
             inquiry.message_post(body=Markup(_(
                 "YCMH <b>%s</b> bị thu mua từ chối — đã bỏ chọn NCC cho %s sản phẩm. Chọn lại NCC rồi lên YCMH mới."
-            )) % (", ".join(requests.mapped("name")), len(lines)))
+            )) % (", ".join(requests.mapped("name")), len(lines.inquiry_line_id)))
 
     @api.depends("vendor_quote_ids.state")
     def _compute_vendor_quote_count(self):
@@ -133,9 +133,11 @@ class PurchaseRequest(models.Model):
         return request.with_env(self.env), [line.with_env(self.env) for line in lines], False
 
     def _merge_lines(self, line_vals):
-        """Gộp hàng vào YCMH theo sản phẩm: cùng sản phẩm, cùng nhóm ĐVT (dòng chưa huỷ) thì
-        cộng số lượng — quy đổi về ĐVT của dòng đang có — và ghi đè NCC/giá đã chọn
-        (CHOICE_FIELD_PREFIXES) bằng lựa chọn mới nhất; không thì thêm dòng mới.
+        """Gộp hàng vào YCMH theo (sản phẩm, NCC): cùng sản phẩm, cùng NCC (actual_supplier_id), cùng
+        nhóm ĐVT, cùng loại phần (giao ngay / NCC hẹn — phần hẹn còn phải cùng ngày cần), dòng chưa huỷ
+        thì cộng số lượng — quy đổi về ĐVT của dòng đang có — và ghi đè NCC/giá đã chọn
+        (CHOICE_FIELD_PREFIXES) bằng lựa chọn mới nhất; không thì thêm dòng mới. Một sản phẩm mua của
+        nhiều NCC nên mỗi NCC một dòng — wizard Tạo RFQ ra mỗi NCC một đơn.
         Trả list dòng YCMH ứng với từng phần tử line_vals (có thể lặp nếu hai phần tử cùng
         gộp vào một dòng)."""
         self.ensure_one()
@@ -147,6 +149,9 @@ class PurchaseRequest(models.Model):
                 lambda l: l.product_id.id == vals["product_id"]
                 and not l.cancelled
                 and l.product_uom_id.category_id == uom.category_id
+                and l.actual_supplier_id.id == vals.get("actual_supplier_id", False)
+                and l.hlv_backorder == bool(vals.get("hlv_backorder"))
+                and (not l.hlv_backorder or l.date_required == vals.get("date_required"))
             )[:1]
             if line:
                 extra = {k: v for k, v in vals.items() if k.startswith(CHOICE_FIELD_PREFIXES)}
@@ -171,7 +176,7 @@ class PurchaseRequest(models.Model):
         Inquiry = self.env["hlv.vendor.inquiry"]
         for request in self:
             request.hlv_inquiry_ids = Inquiry.search([
-                ("line_ids.request_line_id", "in", request.line_ids.ids),
+                ("line_ids.request_line_ids", "in", request.line_ids.ids),
             ]) if request.line_ids else Inquiry
 
     @api.depends("hlv_inquiry_ids")
@@ -220,6 +225,10 @@ class PurchaseRequest(models.Model):
 
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
+
+    # Phần NCC hẹn giao sau (NCC thiếu hàng, hẹn ngày): dòng riêng, "Ngày cần" = ngày hẹn — wizard Tạo
+    # RFQ tách thành dòng đơn mua riêng theo ngày (wizard/request_rfq_wizard.py).
+    hlv_backorder = fields.Boolean(string="Phần NCC hẹn giao", readonly=True, copy=False)
 
     def _hlv_remaining_qty(self):
         """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của

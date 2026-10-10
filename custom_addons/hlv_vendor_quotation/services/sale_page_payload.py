@@ -132,15 +132,17 @@ def inquiry_summary(inquiry):
 def inquiry_detail(inquiry):
     """Phiếu đầy đủ cho ngăn so sánh: NCC (cột) × sản phẩm (dòng), kèm lựa chọn."""
     quotes = inquiry.quote_ids.filtered(lambda q: q.state != "cancel").sorted("id")
-    pending = inquiry.line_ids.filtered(lambda l: l._needs_request())
+    chosen = inquiry.line_ids.chosen_line_ids
+    pending = chosen.filtered(lambda l: l._hlv_needs_request())
     data = inquiry_summary(inquiry)
     data.update({
         "note": inquiry.note or "",
         "sale_order_id": inquiry.sale_order_id.id or False,
         "purchase_orders": [purchase_order_payload(o) for o in inquiry.purchase_order_ids],
-        # Đã lên YCMH vẫn chọn lại được (VD NCC báo hết hàng sau đó) — trừ dòng đã lên đơn mua.
+        # Đã lên YCMH vẫn chọn thêm / đổi được (VD NCC báo hết hàng, mua phần còn thiếu) — trừ phần đã lên đơn mua.
         "can_choose": inquiry.state not in ("cancel", "closed"),
-        "pending_count": len(pending),
+        # Số sản phẩm có NCC đã chọn mà chưa lên YCMH.
+        "pending_count": len(pending.inquiry_line_id),
         "can_request": inquiry.state not in ("cancel", "closed") and bool(pending),
         "can_cancel": inquiry.state == "open",
         "can_set_opportunity": inquiry.state != "cancel",
@@ -150,8 +152,9 @@ def inquiry_detail(inquiry):
         "can_close": inquiry.state == "open",
         "vendors": [_vendor_column(q) for q in quotes],
         "lines": [_compare_row(line, quotes) for line in inquiry.line_ids],
-        "chosen_total": sum(inquiry.line_ids.chosen_line_id.mapped("price_subtotal")),
-        "chosen_total_incl": sum(inquiry.line_ids.chosen_line_id.mapped("price_total")),
+        # Tổng tiền theo SL mua của từng NCC đã chọn.
+        "chosen_total": sum(line.price_unit * line.chosen_qty for line in chosen),
+        "chosen_total_incl": sum(_price_incl(line) * line.chosen_qty for line in chosen),
     })
     return data
 
@@ -208,32 +211,49 @@ def _compare_row(line, quotes):
             "total_incl": quote_line.price_total,
             "is_best": quote_line.is_best_price,
             "selected": quote_line.selected,
+            # Chia SL giữa các NCC: SL mua của NCC này, phần đã lên đơn mua, SL tối đa NCC có (null =
+            # không giới hạn), YCMH của NCC này; to_request = đã chọn mà chưa lên YCMH.
+            "chosen_qty": quote_line.chosen_qty,
+            "ordered_qty": quote_line._hlv_ordered_qty() if quote_line.selected else 0.0,
+            "max_qty": quote_line._hlv_cap(),
+            "request_name": ", ".join(quote_line._hlv_live_request_lines().request_id.mapped("name")),
+            "to_request": quote_line._hlv_needs_request(),
+            # NCC thiếu hàng: có ngay / hẹn ngày / không có thêm — trang tính trước phần tách khi lên YCMH
+            # (cùng luật allocation_utils.split_buy_qty).
+            "available_qty": quote_line.available_qty,
+            "backorder_date": _date_text(quote_line.backorder_date),
+            "no_more": quote_line.no_more,
             # Giá dùng lại từ báo giá trước (còn hiệu lực) — ghi phiếu gốc để sale biết nguồn.
             "inherited_from": _inherited_doc(quote_line.inherited_from_id),
             # NCC chưa báo mà có giá lần trước (≤ 7 ngày): chỉ để hiện "chờ xác nhận", KHÔNG phải giá.
             "reference_price": _price_incl(recent_vendor_price(quote_line))
             if quote_line.quote_id.state == "sent" and not quote_line.price_unit else 0,
         }
+    live = line._hlv_live_request_lines()
+    requests = line.request_line_ids.sudo().request_id
+    shortage = line._hlv_shortage()
     return {
         "id": line.id,
         "product_id": line.product_id.id,
         "locked": line.locked,
-        # Đã đặt một phần (NCC giao thiếu): sale chọn NCC cho phần còn lại.
-        "ordered_qty": line.request_line_id.sudo().purchased_qty if line.request_line_id else 0,
-        "requested_qty": line.request_line_id.sudo().product_qty if line.request_line_id else 0,
-        "request_name": line.request_line_id.sudo().request_id.name or "",
-        # Nằm trong YCMH bị từ chối: chờ lên YCMH mới.
-        "request_rejected": bool(line.request_line_id) and not line._live_request_line(),
-        # Sẽ lên YCMH khi bấm nút (bảng tóm tắt xác nhận trước khi tạo).
-        "to_request": line._needs_request(),
+        "ordered_qty": sum(live.mapped("purchased_qty")),
+        "request_name": ", ".join(live.request_id.mapped("name")),
+        # Có YCMH bị từ chối mà chưa lên lại: chờ lên YCMH mới.
+        "request_rejected": not live and any(r.state == "rejected" for r in requests),
+        "rejected_name": ", ".join(requests.filtered(lambda r: r.state == "rejected").mapped("name")),
+        # Có NCC đã chọn sẽ lên YCMH khi bấm nút (bảng tóm tắt xác nhận trước khi tạo).
+        "to_request": any(o["to_request"] for o in offers.values()),
         "name": line.name or line.product_id.display_name,
         "qty": line.product_qty,
+        # Chia SL: cần mua, đã chia cho các NCC, còn thiếu.
+        "need_qty": line.need_qty,
+        "chosen_qty": line._hlv_chosen_total(),
+        "shortage": shortage,
         "uom": line.product_uom_id.name or "",
         "offers": offers,
-        # Chưa NCC nào báo được giá (hết hàng / chưa báo) và chưa chọn được giá — hộp "Hỏi thêm NCC"
-        # tích sẵn những dòng này.
-        "needs_vendor": not line.locked and not any(
-            o["price_unit"] and not o["unavailable"] for o in offers.values()
+        # Còn thiếu mà không NCC nào khác (chưa chọn) có giá để chọn thêm — hộp "Hỏi thêm NCC" tích sẵn.
+        "needs_vendor": not line.locked and shortage > 0 and not any(
+            o["price_unit"] and not o["unavailable"] and not o["selected"] for o in offers.values()
         ),
     }
 

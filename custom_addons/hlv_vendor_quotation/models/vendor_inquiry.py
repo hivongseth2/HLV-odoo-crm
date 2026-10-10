@@ -6,10 +6,14 @@ from odoo.exceptions import UserError
 from ..services.price_reuse import apply_valid_prices
 from .vendor_quote_utils import clean_ref, format_vn_number, inquiry_close_day, request_qty
 
+# Sai số so SL (ĐVT có số lẻ): chênh dưới mức này coi như bằng.
+QTY_EPSILON = 1e-6
+
 SALE_STATUS = [
     ("waiting", "Chờ NCC báo giá"),
     ("quoted", "NCC đã báo giá"),
     ("requested", "Đã lên YCMH"),
+    ("partial", "Lên YCMH một phần"),
     ("closed", "Không mua"),
     ("cancel", "Đã huỷ"),
 ]
@@ -77,37 +81,40 @@ class VendorInquiry(models.Model):
         "purchase.order", string="Đơn mua", compute="_compute_purchase_order_ids"
     )
 
-    @api.depends("state", "quote_ids.state")
+    @api.depends("state", "quote_ids.state", "line_ids.need_qty", "line_ids.quote_line_ids.selected",
+                 "line_ids.quote_line_ids.chosen_qty")
     def _compute_sale_status(self):
         for inquiry in self:
-            if inquiry.state in ("requested", "closed", "cancel"):
+            if inquiry.state == "requested" and any(line._hlv_shortage() for line in inquiry.line_ids):
+                # Đã lên YCMH phần có NCC, còn sản phẩm thiếu SL — hỏi thêm NCC cho phần thiếu.
+                inquiry.sale_status = "partial"
+            elif inquiry.state in ("requested", "closed", "cancel"):
                 inquiry.sale_status = inquiry.state
             elif any(q.state in ("quoted", "done") for q in inquiry.quote_ids):
                 inquiry.sale_status = "quoted"
             else:
                 inquiry.sale_status = "waiting"
 
-    @api.depends("quote_ids.state", "line_ids.chosen_line_id")
+    @api.depends("quote_ids.state", "line_ids.quote_line_ids.selected")
     def _compute_counts(self):
         for inquiry in self:
             inquiry.quoted_count = len(inquiry.quote_ids.filtered(lambda q: q.state in ("quoted", "done")))
-            inquiry.chosen_count = len(inquiry.line_ids.filtered("chosen_line_id"))
+            inquiry.chosen_count = len(inquiry.line_ids.filtered("chosen_line_ids"))
 
-    @api.depends("line_ids.request_line_id")
+    @api.depends("line_ids.request_line_ids")
     def _compute_request_ids(self):
         for inquiry in self:
-            inquiry.request_ids = inquiry.line_ids.request_line_id.request_id
+            inquiry.request_ids = inquiry.line_ids.request_line_ids.request_id
 
-    @api.depends("line_ids.request_line_id.purchase_lines.order_id")
+    @api.depends("line_ids.request_line_ids.purchase_lines.order_id")
     def _compute_purchase_order_ids(self):
         for inquiry in self:
             # Dòng YCMH có thể bị gộp chung với hàng của phiếu khác — chỉ lấy đơn mua của NCC
-            # mà phiếu này đã chọn, và đã xác nhận.
-            chosen_vendors = inquiry.line_ids.chosen_line_id.partner_id.commercial_partner_id
-            orders = inquiry.line_ids.request_line_id.sudo().purchase_lines.order_id
+            # được hỏi trong phiếu này, và đã xác nhận.
+            vendors = inquiry.quote_ids.partner_id.commercial_partner_id
+            orders = inquiry.line_ids.request_line_ids.sudo().purchase_lines.order_id
             inquiry.purchase_order_ids = orders.filtered(
-                lambda o: o.state in ("purchase", "done")
-                and o.partner_id.commercial_partner_id in chosen_vendors
+                lambda o: o.state in ("purchase", "done") and o.partner_id.commercial_partner_id in vendors
             )
 
     @api.model_create_multi
@@ -178,8 +185,8 @@ class VendorInquiry(models.Model):
     def action_ask_more_vendors(self, vendors, lines, date_deadline=False, note=""):
         """Sale hỏi thêm NCC cho một số sản phẩm của phiếu — thường vì NCC đã hỏi báo hết hàng.
 
-        Được cả khi phiếu đã lên YCMH: NCC mới báo giá xong, sale bấm chọn là dòng YCMH (chưa lên
-        đơn mua) tự đổi NCC (action_choose); sản phẩm chưa lên YCMH thì "Bổ sung vào YCMH".
+        Được cả khi phiếu đã lên YCMH (thường để mua phần còn thiếu): NCC mới báo giá xong, sale chọn
+        thêm NCC đó (action_choose) rồi "Bổ sung vào YCMH".
         Hạn mới muộn hơn hạn phiếu thì dời hạn phiếu theo — không thì cron đóng phiếu (_close_day)
         tính theo hạn cũ.
         """
@@ -228,42 +235,51 @@ class VendorInquiry(models.Model):
                 missing |= line
         return missing
 
-    def action_create_request(self, sale_order=None, quantities=None):
-        """Đưa các sản phẩm đã chọn NCC mà CHƯA nằm trong YCMH nào lên YCMH, kèm giá + NCC.
+    def action_create_request(self, sale_order=None, quantities=None, settle_line_ids=()):
+        """Đưa các NCC đã chọn mà CHƯA nằm trên YCMH lên YCMH — mỗi NCC một dòng (NCC thiếu hàng có
+        hẹn thì thêm dòng phần hẹn), kèm giá + NCC.
 
-        Gọi được nhiều lần: lần đầu lên phần đã chọn; sản phẩm chọn sau thì bổ sung. Bổ sung
-        vào YCMH gần nhất của phiếu nếu nó còn chưa duyệt; không thì theo đơn bán (gộp vào YCMH
-        chưa duyệt của đơn nếu có) hoặc tạo YCMH mới. Sản phẩm chưa chọn NCC không lên.
-        quantities: {id dòng phiếu: SL lên YCMH} — khách đổi số lượng sau khi hỏi giá (hỏi 10, mua 5).
-        Dòng không có trong đó lên đúng SL đã hỏi. SL trên phiếu giữ nguyên: NCC báo giá theo số đó.
+        Gọi được nhiều lần: lên phần đã chọn; chọn thêm NCC sau (phần còn thiếu) thì bổ sung. Bổ sung
+        vào YCMH gần nhất của phiếu nếu còn chưa duyệt; không thì theo đơn bán (gộp vào YCMH chưa
+        duyệt của đơn) hoặc tạo YCMH mới. Còn thiếu SL vẫn lên phần đã có — phiếu "Lên YCMH một phần".
+        quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt (khách đổi số lượng sau khi hỏi giá).
+        settle_line_ids: dòng phiếu sale chốt "khách chỉ mua chừng này" — SL cần mua = SL đã chọn,
+        hết thiếu. SL hỏi trên phiếu giữ nguyên: NCC báo giá theo số đó.
         """
         self.ensure_one()
         if self.state in ("cancel", "closed"):
             raise UserError(_("Phiếu %s đã đóng — lập phiếu mới, giá còn hiệu lực sẽ được dùng lại.", self.name))
-        pending = self.line_ids.filtered(lambda l: l._needs_request())
+        pending = self.line_ids.chosen_line_ids.filtered(lambda l: l._hlv_needs_request())
         if not pending:
-            raise UserError(_("Không có sản phẩm nào đã chọn NCC mà chưa lên YCMH."))
+            raise UserError(_("Không có NCC nào đã chọn mà chưa lên YCMH."))
+        asked_before = {line.id: line._hlv_chosen_total() for line in self.line_ids}
+        for quote_line in pending.filtered(lambda l: l.id in (quantities or {})):
+            qty = request_qty(quantities[quote_line.id], quote_line.chosen_qty)
+            quote_line.action_set_buy_qty(qty if qty is not None else 0.0)
+        settled = self.line_ids.filtered(lambda l: l.id in set(settle_line_ids or ()))._hlv_settle()
         order = sale_order or self.sale_order_id
-        qtys = pending._request_quantities(quantities or {})
+        parts = [(quote_line, vals, is_backorder) for quote_line in pending
+                 for vals, is_backorder in quote_line._hlv_request_parts()]
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
-            [line._request_line_vals(qtys[line.id]) for line in pending],
+            [vals for _quote_line, vals, _bo in parts],
             order=order or None,
             source=self.name,
             requester_code=self.sale_code or "",
             merge_into=self.request_id,
         )
         # _add_request_lines trả dòng YCMH theo đúng thứ tự dòng đã đưa vào.
-        for line, request_line in zip(pending, request_lines, strict=True):
-            line.request_line_id = request_line
-            line.chosen_line_id.request_line_id = request_line
+        self.env["hlv.vendor.quote.line"]._hlv_link_request_lines([
+            (quote_line, request_line, is_backorder)
+            for (quote_line, _vals, is_backorder), request_line in zip(parts, request_lines, strict=True)
+        ])
         self.write({
             "state": "requested",
             "request_id": request.id,
             "sale_order_id": order.id if order else False,
         })
-        self.message_post(body=Markup(_("%s YCMH <b>%s</b> từ %s sản phẩm đã chọn NCC.")) % (
+        self.message_post(body=Markup(_("%s YCMH <b>%s</b>: %s NCC × sản phẩm đã chọn.")) % (
             _("Gộp vào") if merged else _("Đã tạo"), request.name, len(pending),
-        ) + pending._changed_qty_message(qtys))
+        ) + self.line_ids._changed_qty_message(asked_before) + settled)
         return request, merged
 
     def action_close(self, reason, note=""):
@@ -322,44 +338,77 @@ class VendorInquiryLine(models.Model):
     name = fields.Char(string="Mô tả")
     product_qty = fields.Float(string="Số lượng", digits="Product Unit of Measure")
     product_uom_id = fields.Many2one("uom.uom", string="ĐVT")
+    # SL sale cần mua (mặc định = SL hỏi). Giảm khi sale chốt "khách chỉ mua chừng này" lúc lên YCMH —
+    # phần còn thiếu = SL cần mua − tổng SL mua của các NCC đã chọn.
+    need_qty = fields.Float(string="SL cần mua", digits="Product Unit of Measure")
     quote_line_ids = fields.One2many("hlv.vendor.quote.line", "inquiry_line_id", string="Giá các NCC")
-    chosen_line_id = fields.Many2one(
-        "hlv.vendor.quote.line", string="Giá đã chọn", compute="_compute_chosen_line_id", store=True
+    chosen_line_ids = fields.Many2many(
+        "hlv.vendor.quote.line", string="NCC đã chọn", compute="_compute_chosen_line_ids",
+        help="Một sản phẩm chọn được nhiều NCC, mỗi NCC một SL mua.",
     )
-    request_line_id = fields.Many2one(
-        "purchase.request.line", string="Dòng YCMH", readonly=True, ondelete="set null", index=True
+    # Dòng YCMH của mọi NCC (cả đã huỷ / YCMH bị từ chối — để hiện lịch sử). Lưu để tìm ngược từ YCMH /
+    # đơn mua về phiếu (domain "line_ids.request_line_ids").
+    request_line_ids = fields.Many2many(
+        "purchase.request.line", "hlv_vendor_inquiry_line_request_rel", "inquiry_line_id", "request_line_id",
+        string="Dòng YCMH", compute="_compute_request_line_ids", store=True,
     )
     locked = fields.Boolean(
         string="Đã lên đơn mua", compute="_compute_locked",
-        help="Dòng YCMH đã lên RFQ/đơn mua đủ số lượng: đổi NCC ở phiếu không đổi được đơn đã tạo. "
-             "Thu mua sửa số lượng dòng đơn mua xuống (NCC giao thiếu / hết hàng) thì mở lại cho phần còn thiếu.",
+        help="Đã lên RFQ/đơn mua đủ SL cần mua: không chọn thêm NCC. NCC giao thiếu: thu mua sửa số lượng "
+             "dòng đơn mua xuống, sale giảm SL mua của NCC đó — phần còn thiếu mở ra để chọn NCC khác.",
     )
 
-    @api.depends("request_line_id.purchased_qty", "request_line_id.product_qty",
-                 "request_line_id.purchase_lines.state")
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            vals.setdefault("need_qty", vals.get("product_qty", 0.0))
+        return super().create(vals_list)
+
+    @api.depends("quote_line_ids.request_line_id", "quote_line_ids.backorder_request_line_id")
+    def _compute_request_line_ids(self):
+        for line in self:
+            line.request_line_ids = line.quote_line_ids._hlv_own_request_lines()
+
+    @api.depends("need_qty", "request_line_ids.purchased_qty", "request_line_ids.cancelled",
+                 "request_line_ids.purchase_lines.state")
     def _compute_locked(self):
         for line in self:
-            line.locked = bool(line.request_line_id) and line.request_line_id._hlv_fully_ordered()
+            ordered = sum(line.quote_line_ids._hlv_live_request_lines().mapped("purchased_qty"))
+            line.locked = bool(line.request_line_ids) and ordered >= line.need_qty - QTY_EPSILON
 
     @api.depends("quote_line_ids.selected")
-    def _compute_chosen_line_id(self):
+    def _compute_chosen_line_ids(self):
         for line in self:
-            line.chosen_line_id = line.quote_line_ids.filtered("selected")[:1]
+            line.chosen_line_ids = line.quote_line_ids.filtered("selected")
 
-    def _live_request_line(self):
-        """Dòng YCMH còn hiệu lực của sản phẩm. YCMH bị thu mua từ chối coi như chưa lên: sale chọn
-        lại NCC rồi lên YCMH mới, không ghi tiếp vào YCMH đã bị từ chối. Đọc trạng thái bằng sudo —
-        sale chỉ có quyền đọc hạn chế trên YCMH."""
+    def _hlv_chosen_total(self):
+        """Tổng SL mua đã chia cho các NCC đang chọn."""
         self.ensure_one()
-        request_line = self.request_line_id
-        if request_line and request_line.sudo().request_id.state == "rejected":
-            return request_line.browse()
-        return request_line
+        return sum(self.chosen_line_ids.mapped("chosen_qty"))
 
-    def _needs_request(self):
-        """Đã chọn NCC mà chưa nằm trong YCMH còn hiệu lực — nút "Lên / bổ sung YCMH" đưa lên."""
+    def _hlv_shortage(self):
+        """Phần còn thiếu chưa chia cho NCC nào (không âm)."""
         self.ensure_one()
-        return bool(self.chosen_line_id) and not self._live_request_line()
+        return max(0.0, self.need_qty - self._hlv_chosen_total())
+
+    def _hlv_live_request_lines(self):
+        """Dòng YCMH còn hiệu lực của mọi NCC đang chọn."""
+        return self.chosen_line_ids._hlv_live_request_lines()
+
+    def _hlv_settle(self):
+        """Sale chốt "khách chỉ mua chừng này": SL cần mua = SL đã chọn (hết thiếu). Trả dòng chatter."""
+        changed = self.filtered(lambda l: l._hlv_shortage() > QTY_EPSILON)
+        if not changed:
+            return Markup("")
+        items = Markup("").join(
+            Markup("<li>%s: %s → %s %s</li>") % (
+                line.name or line.product_id.display_name, format_vn_number(line.need_qty),
+                format_vn_number(line._hlv_chosen_total()), line.product_uom_id.name or "",
+            ) for line in changed
+        )
+        for line in changed:
+            line.need_qty = line._hlv_chosen_total()
+        return Markup("<p>%s</p><ul>%s</ul>") % (_("Khách chỉ mua chừng này — SL cần mua:"), items)
 
     def _quote_line_vals(self):
         self.ensure_one()
@@ -372,44 +421,19 @@ class VendorInquiryLine(models.Model):
             "product_uom_id": self.product_uom_id.id,
         }
 
-    def _request_quantities(self, quantities):
-        """{id dòng: SL lên YCMH} cho các dòng này — SL sale sửa (quantities) hoặc SL đã hỏi.
-        SL không đọc được / ≤ 0 → UserError nêu tên sản phẩm (muốn bỏ sản phẩm thì bỏ chọn NCC)."""
-        result = {}
-        for line in self:
-            qty = request_qty(quantities.get(line.id), line.product_qty)
-            if qty is None:
-                raise UserError(_(
-                    "Số lượng lên YCMH của %s phải lớn hơn 0 — không mua sản phẩm này thì bỏ chọn NCC.",
-                    line.name or line.product_id.display_name,
-                ))
-            result[line.id] = qty
-        return result
-
-    def _changed_qty_message(self, qtys):
-        """Dòng chatter liệt kê sản phẩm lên YCMH khác SL đã hỏi ("" nếu không dòng nào đổi)."""
-        changed = self.filtered(lambda line: qtys[line.id] != line.product_qty)
+    def _changed_qty_message(self, before):
+        """Dòng chatter: sản phẩm mà tổng SL mua của các NCC khác SL đã hỏi, sau khi sale sửa ở bảng tóm
+        tắt (before: {id dòng: tổng SL mua trước khi sửa}). "" nếu không dòng nào đổi so với trước."""
+        changed = self.filtered(
+            lambda line: abs(line._hlv_chosen_total() - before.get(line.id, 0.0)) > QTY_EPSILON
+            and abs(line._hlv_chosen_total() - line.product_qty) > QTY_EPSILON
+        )
         if not changed:
             return Markup("")
         items = Markup("").join(
             Markup("<li>%s: %s → %s %s</li>") % (
                 line.name or line.product_id.display_name, format_vn_number(line.product_qty),
-                format_vn_number(qtys[line.id]), line.product_uom_id.name or "",
+                format_vn_number(line._hlv_chosen_total()), line.product_uom_id.name or "",
             ) for line in changed
         )
-        return Markup("<p>%s</p><ul>%s</ul>") % (_("Số lượng lên YCMH khác số lượng đã hỏi giá:"), items)
-
-    def _request_line_vals(self, qty=None):
-        """Dòng YCMH cho sản phẩm đã chọn NCC — kèm actual_* để wizard Tạo RFQ dùng luôn, và bộ cột
-        "sale đề xuất" (NCC / giá / thuế) như YCMH đi từ MISA. qty: SL lên YCMH (None = SL đã hỏi)."""
-        self.ensure_one()
-        return dict(
-            {
-                "product_id": self.product_id.id,
-                "name": self.name or self.product_id.display_name,
-                "product_qty": self.product_qty if qty is None else qty,
-                "product_uom_id": self.product_uom_id.id,
-            },
-            **self.chosen_line_id._request_line_actual_vals(),
-            **self.chosen_line_id._request_line_proposal_vals(),
-        )
+        return Markup("<p>%s</p><ul>%s</ul>") % (_("Số lượng mua khác số lượng đã hỏi giá:"), items)

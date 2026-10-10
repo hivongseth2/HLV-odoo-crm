@@ -11,6 +11,7 @@ window.HlvQuote = window.HlvQuote || {};
     waiting: "hq-tag-warn",
     quoted: "hq-tag-mine",
     requested: "hq-tag-ok",
+    partial: "hq-tag-warn",
     closed: "hq-tag-soft",
     cancel: "hq-tag-soft",
   };
@@ -51,6 +52,7 @@ window.HlvQuote = window.HlvQuote || {};
     ["waiting", "phiếu đang chờ NCC báo giá"],
     ["quoted", "phiếu NCC đã báo giá — chờ bạn chọn"],
     ["requested", "phiếu đã lên YCMH"],
+    ["partial", "phiếu còn thiếu hàng — hỏi thêm NCC"],
   ];
 
   /* Icon tin nhắn (đen, vẽ bằng nét) cho badge số tin trao đổi. */

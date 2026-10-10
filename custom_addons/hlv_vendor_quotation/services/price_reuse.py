@@ -60,7 +60,7 @@ def reuse_block_reason(source_line, today, exclude_line=None):
         return "phiếu gốc đã huỷ"
     if inquiry.state != "closed":
         if line.selected:
-            return "phiếu gốc đã mua giá này" if line.inquiry_line_id.request_line_id else "phiếu gốc đang chọn giá này"
+            return "phiếu gốc đã mua giá này" if line._hlv_live_request_lines() else "phiếu gốc đang chọn giá này"
         if not line.inquiry_line_id.locked:
             if inquiry.state == "open":
                 return "phiếu gốc chưa chốt NCC cho hàng này"

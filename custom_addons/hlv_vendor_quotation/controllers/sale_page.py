@@ -127,27 +127,48 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/choose", type="json", auth="user", methods=["POST"])
     def api_choose(self, code="", quote_line_id=None, choose=True, **kw):
-        """Sale chọn (hoặc bỏ chọn) giá của một NCC cho một sản phẩm trong phiếu."""
-        scope = self._check(code)
-        line = request.env["hlv.vendor.quote.line"].browse(to_int(quote_line_id)).exists()
-        if not line or not line.inquiry_line_id:
-            raise UserError("Không tìm thấy dòng báo giá.")
-        inquiry = self._get_inquiry(line.inquiry_line_id.inquiry_id.id, scope)
+        """Sale chọn thêm (hoặc bỏ chọn) một NCC cho một sản phẩm trong phiếu — SL mua điền sẵn phần còn thiếu."""
+        line, inquiry = self._choice_line(code, quote_line_id)
         if choose:
             line.action_choose()
         else:
             line.action_unchoose()
         return payload.inquiry_detail(inquiry)
 
+    @http.route(f"{API}/set_qty", type="json", auth="user", methods=["POST"])
+    def api_set_qty(self, code="", quote_line_id=None, qty=None, **kw):
+        """Sale đổi SL mua của một NCC đã chọn (chia SL giữa các NCC)."""
+        line, inquiry = self._choice_line(code, quote_line_id)
+        line.action_set_buy_qty(self._read_qty(qty))
+        return payload.inquiry_detail(inquiry)
+
+    def _choice_line(self, code, quote_line_id):
+        """Dòng báo giá thuộc phiếu hỏi giá trong phạm vi mã sale → (dòng, phiếu)."""
+        scope = self._check(code)
+        line = request.env["hlv.vendor.quote.line"].browse(to_int(quote_line_id)).exists()
+        if not line or not line.inquiry_line_id:
+            raise UserError("Không tìm thấy dòng báo giá.")
+        return line, self._get_inquiry(line.inquiry_line_id.inquiry_id.id, scope)
+
+    @staticmethod
+    def _read_qty(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise UserError("Số lượng không hợp lệ.") from None
+
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
-    def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None, **kw):
+    def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None,
+                           settle_line_ids=None, **kw):
         """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
-        quantities: {id dòng phiếu: SL} sale sửa ở bảng tóm tắt (khách đổi số lượng sau khi hỏi giá)."""
+        quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt; settle_line_ids: dòng phiếu sale
+        chốt "khách chỉ mua chừng này" (hết thiếu)."""
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
         order = request.env["sale.order"].browse(to_int(sale_order_id)).exists()
         qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
-        request_record, merged = inquiry.action_create_request(order or None, qtys)
+        settle = [to_int(line_id) for line_id in settle_line_ids or []]
+        request_record, merged = inquiry.action_create_request(order or None, qtys, settle)
         return dict(payload.inquiry_detail(inquiry), request_result={
             "name": request_record.sudo().name, "merged": merged,
         })

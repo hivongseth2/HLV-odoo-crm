@@ -494,7 +494,7 @@ class VendorQuote(models.Model):
         orders = self.env["purchase.order"]
         visible = orders._hlv_vendor_visible_states()
         for quote in self.sudo():
-            request_lines = quote.line_ids.inquiry_line_id.request_line_id | quote.line_ids.request_line_id
+            request_lines = quote.line_ids.inquiry_line_id.request_line_ids | quote.line_ids._hlv_own_request_lines()
             orders |= request_lines.purchase_lines.order_id.filtered(
                 lambda o, v=quote.access_id.partner_id: (
                     o.state in visible or (o.state == "cancel" and o.date_approve)
@@ -532,7 +532,7 @@ class VendorQuote(models.Model):
               self.partner_id.commercial_partner_id.display_name),
             items,
         )
-        requests = self.line_ids.filtered(lambda l: l.id in chosen_before).request_line_id.request_id
+        requests = self.line_ids.filtered(lambda l: l.id in chosen_before)._hlv_own_request_lines().request_id
         for record in list(self.inquiry_id) + list(requests):
             post_internal(record, body, self.partner_id)
 

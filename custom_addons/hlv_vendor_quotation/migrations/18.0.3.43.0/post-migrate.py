@@ -1,18 +1,10 @@
 # -*- coding: utf-8 -*-
-"""YCMH lên từ trang hỏi giá trước bản này chỉ có cột thu mua (actual_*) — điền bù bộ cột "sale đề
-xuất" (NCC / giá / thuế) từ giá sale đã chọn, chỉ dòng còn trống để không đè số ai đã sửa tay."""
+"""Điền bù bộ cột "sale đề xuất" trên YCMH — đã chuyển sang migrations/18.0.3.47.0 (bước 4).
 
-from odoo import SUPERUSER_ID, api
+Bản 18.0.3.47.0 bỏ field request_line_id của dòng phiếu hỏi giá (chọn nhiều NCC cho một sản phẩm), nên
+code cũ ở đây không chạy được nữa. DB đã chạy bản này: 3.47 chỉ điền dòng còn trống, không đè gì.
+"""
 
 
 def migrate(cr, version):
-    env = api.Environment(cr, SUPERUSER_ID, {})
-    lines = env["hlv.vendor.inquiry.line"].search([
-        ("request_line_id", "!=", False),
-        ("chosen_line_id", "!=", False),
-        ("request_line_id.request_id.hlv_from_quote_page", "=", True),
-        ("request_line_id.sale_proposed_supplier_id", "=", False),
-        ("request_line_id.misa_price_before_tax", "=", 0),
-    ])
-    for line in lines:
-        line.request_line_id.write(line.chosen_line_id._request_line_proposal_vals())
+    pass

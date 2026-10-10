@@ -19,7 +19,8 @@
                 <field name="sale_status" widget="badge"
                        decoration-warning="sale_status == 'waiting'"
                        decoration-info="sale_status == 'quoted'"
-                       decoration-success="sale_status == 'requested'"/>
+                       decoration-success="sale_status == 'requested'"
+                       decoration-danger="sale_status == 'partial'"/>
             </list>
         </field>
     </record>
@@ -58,10 +59,11 @@
                                 <list>
                                     <field name="product_id"/>
                                     <field name="name" optional="hide"/>
-                                    <field name="product_qty"/>
+                                    <field name="product_qty" string="SL hỏi"/>
+                                    <field name="need_qty"/>
                                     <field name="product_uom_id" groups="uom.group_uom"/>
-                                    <field name="chosen_line_id" string="NCC / giá đã chọn"/>
-                                    <field name="request_line_id" optional="show"/>
+                                    <field name="chosen_line_ids" string="NCC / giá đã chọn" widget="many2many_tags"/>
+                                    <field name="request_line_ids" widget="many2many_tags" optional="show"/>
                                 </list>
                             </field>
                         </page>
@@ -101,6 +103,7 @@
                 <field name="line_ids" string="Sản phẩm" filter_domain="[('line_ids.product_id', 'ilike', self)]"/>
                 <filter name="filter_quoted" string="NCC đã báo giá" domain="[('sale_status', '=', 'quoted')]"/>
                 <filter name="filter_requested" string="Đã lên YCMH" domain="[('sale_status', '=', 'requested')]"/>
+                <filter name="filter_partial" string="Lên YCMH một phần" domain="[('sale_status', '=', 'partial')]"/>
                 <group expand="0" string="Nhóm theo">
                     <filter name="group_sale_code" string="Mã sale" context="{'group_by': 'sale_code'}"/>
                     <filter name="group_status" string="Tình trạng" context="{'group_by': 'sale_status'}"/>

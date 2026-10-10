@@ -82,7 +82,7 @@ class PurchaseOrder(models.Model):
             if not request_lines:
                 order.hlv_inquiry_ids = order.hlv_vendor_quote_ids = False
                 continue
-            inquiry_lines = InquiryLine.search([("request_line_id", "in", request_lines.ids)])
+            inquiry_lines = InquiryLine.search([("request_line_ids", "in", request_lines.ids)])
             quote_lines = QuoteLine.search([
                 "|", ("inquiry_line_id", "in", inquiry_lines.ids), ("request_line_id", "in", request_lines.ids),
             ])
@@ -312,8 +312,8 @@ class PurchaseOrderLine(models.Model):
         vendor = self.order_id.partner_id.commercial_partner_id
         candidates = self.env["hlv.vendor.quote.line"].sudo().search([
             ("invoice_name", "!=", False),
-            "|", ("inquiry_line_id.request_line_id", "in", request_lines.ids),
-            ("request_line_id", "in", request_lines.ids),
+            "|", "|", ("inquiry_line_id.request_line_ids", "in", request_lines.ids),
+            ("request_line_id", "in", request_lines.ids), ("backorder_request_line_id", "in", request_lines.ids),
         ], order="id desc")
         match = candidates.filtered(lambda q: q.quote_id.partner_id.commercial_partner_id == vendor)[:1]
         return match.invoice_name or ""
@@ -333,5 +333,5 @@ class PurchaseOrderLine(models.Model):
         """Điền cho dòng đơn mua đã có trước khi field được lưu — chỉ dòng có báo giá ghi tên
         xuất hóa đơn (đi từ báo giá sang, không quét cả bảng dòng đơn mua)."""
         quote_lines = self.env["hlv.vendor.quote.line"].sudo().search([("invoice_name", "!=", False)])
-        request_lines = quote_lines.inquiry_line_id.request_line_id | quote_lines.request_line_id
+        request_lines = quote_lines.inquiry_line_id.request_line_ids | quote_lines._hlv_own_request_lines()
         request_lines.sudo().purchase_lines._hlv_fill_invoice_name()

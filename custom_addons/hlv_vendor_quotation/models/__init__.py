@@ -2,6 +2,7 @@
 from . import vendor_quote_access
 from . import vendor_quote
 from . import vendor_quote_line
+from . import vendor_quote_line_choice
 from . import vendor_inquiry
 from . import purchase_request
 from . import purchase_order
