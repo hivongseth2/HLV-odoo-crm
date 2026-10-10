@@ -3,7 +3,7 @@ from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from .vendor_quote_utils import best_price_ids
+from .vendor_quote_utils import best_price_ids, price_incl_vat
 
 VAT_SELECTION = [
     ("0", "0%"),
@@ -347,6 +347,17 @@ class VendorQuoteLine(models.Model):
             # Phải ghi cả actual_tax_id: wizard Tạo RFQ ưu tiên thuế MISA khi dòng chưa có
             # actual_tax_id, nên chỉ ghi % thì VAT NCC báo sẽ bị thuế đề xuất của sale đè.
             "actual_tax_id": self._purchase_tax().id,
+        }
+
+    def _request_line_proposal_vals(self):
+        """NCC + giá sale chọn ở trang hỏi giá, ghi vào bộ cột "sale đề xuất" của dòng YCMH — cùng
+        bộ cột đồng bộ MISA điền cho YCMH lập trên MISA, để YCMH hiện NCC / giá / thuế / tổng tiền
+        như cũ (ba cột tổng tự tính từ đơn giá, % thuế, giá sau thuế và số lượng)."""
+        return {
+            "sale_proposed_supplier_id": self.partner_id.id,
+            "misa_price_before_tax": self.price_unit,
+            "misa_tax_rate": self.tax_rate,
+            "misa_price_after_tax": price_incl_vat(self.price_unit, self.tax_rate),
         }
 
     def _purchase_tax(self):

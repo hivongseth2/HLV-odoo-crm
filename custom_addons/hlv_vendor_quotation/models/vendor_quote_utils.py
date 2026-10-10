@@ -210,6 +210,14 @@ def line_values_changed(current, submitted):
     return any(differ(current.get(key), submitted.get(key)) for key in keys)
 
 
+def price_incl_vat(net_price, tax_rate):
+    """Đơn giá sau VAT từ đơn giá chưa VAT và % VAT, làm tròn 2 chữ số lẻ.
+
+    net_price / tax_rate trống (None / 0) coi như 0 → giá trống ra 0.0, VAT trống ra đúng giá chưa VAT.
+    """
+    return round((net_price or 0.0) * (1 + (tax_rate or 0.0) / 100.0), 2)
+
+
 def split_unit_price(unit_price, tax_rate, discount=None):
     """Tách đơn giá NCC gõ ra các mức giá bên mình lưu.
 
