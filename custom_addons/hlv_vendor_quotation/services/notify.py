@@ -28,3 +28,9 @@ def post_internal(record, body, author=None):
         subtype_xmlid="mail.mt_note",
         partner_ids=internal_followers(record).ids,
     )
+
+
+def log_internal(record, body, author=None):
+    """Ghi lên chatter mà không báo ai (không email) — cho việc hệ thống tự làm, người trong công
+    ty đã biết sẵn (VD kho vừa nhận hàng); ai cần thì xem chatter. author: res.partner."""
+    record.sudo()._message_log(body=body, author_id=author.id if author else None)

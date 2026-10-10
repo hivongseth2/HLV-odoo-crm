@@ -6,7 +6,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from ..services.chat_bus import notify_order_status
-from ..services.notify import post_internal
+from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
 from .vendor_quote_utils import DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin
 
@@ -188,14 +188,15 @@ class PurchaseOrder(models.Model):
         if self.state == "cancel":
             raise UserError(_("Đơn %s đã hủy — không cần giao.", self.name))
 
-    def _hlv_advance_status(self, status, author, body):
-        """Đưa tiến độ tới status (không lùi) + ghi chú nội bộ. Trả False nếu đơn đã ở / qua status."""
+    def _hlv_advance_status(self, status, author, body, notify_staff=True):
+        """Đưa tiến độ tới status (không lùi) + ghi chú nội bộ. Trả False nếu đơn đã ở / qua status.
+        notify_staff=False: chỉ ghi chatter, không email follower nội bộ (việc kho tự làm)."""
         current = VENDOR_STATUS_ORDER.index(self.hlv_vendor_status) if self.hlv_vendor_status else -1
         if VENDOR_STATUS_ORDER.index(status) <= current:
             return False
         self.write({"hlv_vendor_status": status, "hlv_vendor_status_date": fields.Datetime.now()})
         # Ghi chú nội bộ: NCC là follower của đơn mua của họ — đăng "comment" sẽ email ra ngoài.
-        post_internal(self, body, author)
+        (post_internal if notify_staff else log_internal)(self, body, author)
         notify_order_status(self)  # trang /hoi-gia-ncc: popup + chuông cho sale
         return True
 
@@ -238,6 +239,7 @@ class PurchaseOrder(models.Model):
         for order in self.sudo().filtered(lambda o: o.hlv_vendor_status != "delivered"):
             if order._hlv_receipts_done() and order._hlv_advance_status(
                 "delivered", self.env.user.partner_id, Markup(_("Kho đã nhận đủ hàng — đơn tự chuyển <b>Đã giao</b>.")),
+                notify_staff=False,  # kho vừa tự bấm nhận — email cả follower đơn mua chỉ là thư rác
             ):
                 order._hlv_notify_vendor(lambda o: _("Kho đã nhận đủ hàng đơn %s. Cảm ơn quý công ty!", o.name))
 
