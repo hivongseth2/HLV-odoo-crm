@@ -172,14 +172,6 @@ def split_stock_note(note):
     return True, rest.lstrip(";,.-: ").strip()
 
 
-def stock_note(in_stock, note, max_len=255):
-    """Ghép ghi chú dòng NCC: thêm "Sẵn hàng" ở đầu khi NCC tick ô "Sẵn hàng" (sale đọc ngay ở bảng so
-    giá), bỏ nhãn đó khi không tick. Nhận bool + chuỗi (có thể đã có nhãn); trả chuỗi tối đa max_len."""
-    rest = split_stock_note(note)[1]
-    text = (IN_STOCK_NOTE + (_IN_STOCK_SEP + rest if rest else "")) if in_stock else rest
-    return text[:max_len]
-
-
 def clean_ref(text):
     """Số tham chiếu sale gõ tay (số cơ hội…): bỏ khoảng trắng hai đầu, gộp khoảng trắng giữa, tối
     đa REF_MAX ký tự. Nhận chuỗi hoặc None/False; trả chuỗi ("" khi trống)."""
@@ -224,25 +216,29 @@ FULL_SUPPLY = {"available_qty": 0.0, "backorder_date": False, "no_more": False}
 
 
 def read_availability(asked_qty, available, backorder_date, no_more, today):
-    """NCC khai số lượng giao được cho một dòng báo giá.
+    """NCC khai số lượng giao được cho một dòng báo giá (ô "Sẵn hàng", điền sẵn SL hỏi).
 
-    asked_qty: SL hỏi; available: số NCC gõ ở ô "Có ngay" (None = để trống = có đủ); backorder_date:
-    date hẹn giao phần còn lại hoặc None; no_more: NCC tick "Không có thêm"; today: date hôm nay (giờ VN).
+    asked_qty: SL hỏi; available: số ở ô "Sẵn hàng" (None = để trống = có đủ); backorder_date: date hẹn
+    giao phần còn lại hoặc None; no_more: NCC tick "không có thêm"; today: date hôm nay (giờ VN).
     Trả (giá trị lưu {available_qty, backorder_date, no_more}, câu lỗi hoặc "").
-    Có đủ (trống / ≥ SL hỏi) → FULL_SUPPLY: available_qty = 0 nghĩa là "có đủ" — "có 0 cái" là hết hàng,
-    NCC bấm "×" chứ không gõ 0 (gõ 0 → lỗi). Thiếu: phải có ngày hẹn (không trước hôm nay) hoặc "Không có
-    thêm"; có cả hai thì "Không có thêm" thắng, bỏ ngày. Có lỗi thì giá trị trả về là FULL_SUPPLY.
+    Có đủ (trống / ≥ SL hỏi) → FULL_SUPPLY. Thiếu: phải có ngày hẹn (không trước hôm nay — sẵn 0 + hẹn
+    ngày = hàng đặt, giao cả sau) hoặc "không có thêm" (cần sẵn > 0: sẵn 0 mà không có thêm là hết hàng,
+    bấm "×"); có cả hai thì "không có thêm" thắng, bỏ ngày. Có lỗi thì giá trị trả về là FULL_SUPPLY.
+    Bẫy: available_qty = 0 vừa là "có đủ" (không ngày hẹn, không no_more) vừa là "hàng đặt" (có ngày hẹn)
+    — luôn xét kèm backorder_date / no_more (availability_text, allocation_utils).
     """
     if available is None or available >= asked_qty:
         return dict(FULL_SUPPLY), ""
-    if available <= 0:
-        return dict(FULL_SUPPLY), 'có 0 — mặt hàng không có thì bấm "×" cạnh mã hàng'
+    if available < 0:
+        return dict(FULL_SUPPLY), "số lượng sẵn hàng không được âm"
     if no_more:
+        if available <= 0:
+            return dict(FULL_SUPPLY), 'sẵn 0 mà không có thêm là hết hàng — bấm "×" cạnh mã hàng'
         return {"available_qty": available, "backorder_date": False, "no_more": True}, ""
     if not backorder_date:
         return dict(FULL_SUPPLY), (
-            f"có {format_vn_number(available)}/{format_vn_number(asked_qty)} — chọn ngày giao phần còn lại "
-            'hoặc tick "Không có thêm"'
+            f"sẵn {format_vn_number(available)}/{format_vn_number(asked_qty)} — chọn ngày giao phần còn lại "
+            'hoặc tick "không có thêm"'
         )
     if backorder_date < today:
         return dict(FULL_SUPPLY), "ngày giao phần còn lại không được trước hôm nay"
@@ -252,18 +248,16 @@ def read_availability(asked_qty, available, backorder_date, no_more, today):
 def availability_text(asked_qty, available_qty, backorder_date, no_more):
     """Một dòng mô tả hàng NCC có, để sale / thu mua đọc nhanh.
 
-    Có đủ (available_qty 0 / None, hoặc ≥ SL hỏi) → "". Thiếu → "có 6/10 · 4 hẹn 20/10/2026" (hẹn
-    ngày), "có 6/10 · không có thêm" (no_more), hoặc "có 6/10" (dữ liệu thiếu cả hai).
+    NCC không báo thiếu (không ngày hẹn, không no_more) hoặc sẵn ≥ SL hỏi → "". Thiếu → "sẵn 6/10 · 4 hẹn
+    20/10/2026" (hẹn ngày; sẵn 0 = hàng đặt), "sẵn 6/10 · không có thêm".
     """
-    if not available_qty or available_qty >= asked_qty:
+    available = available_qty or 0.0
+    if not (backorder_date or no_more) or available >= asked_qty:
         return ""
-    head = f"có {format_vn_number(available_qty)}/{format_vn_number(asked_qty)}"
+    head = f"sẵn {format_vn_number(available)}/{format_vn_number(asked_qty)}"
     if no_more:
         return f"{head} · không có thêm"
-    if backorder_date:
-        rest = format_vn_number(asked_qty - available_qty)
-        return f"{head} · {rest} hẹn {backorder_date.strftime(DATE_FMT)}"
-    return head
+    return f"{head} · {format_vn_number(asked_qty - available)} hẹn {backorder_date.strftime(DATE_FMT)}"
 
 
 def request_qty(raw, asked):

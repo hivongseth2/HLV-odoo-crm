@@ -341,9 +341,16 @@
 
 /* ------------------------------------------------------------ trạng thái nổi bật, không mua, giá cũ */
 
-.hq-docs { min-width: 0; }
-.hq-doc-tag { display: block; white-space: nowrap; margin-bottom: .15rem; }
-.hq-doc-tag .hq-tag { margin: 0 0 0 .2rem; font-size: .6875rem; }
+/* Chip số chứng từ (PR / PO / BG / đơn bán): số đậm + trạng thái nhỏ trong cùng một chip, màu theo trạng thái. */
+.hq-docs { display: flex; flex-wrap: wrap; gap: .25rem; min-width: 0; }
+.hq-doc { display: inline-flex; align-items: baseline; gap: .35rem; border-radius: 3px; padding: .05rem .45rem;
+    font-size: .75rem; font-weight: 600; line-height: 1.5; white-space: nowrap; font-variant-numeric: tabular-nums;
+    vertical-align: baseline; }
+.hq-doc + .hq-doc { margin-left: .25rem; }
+.hq-docs .hq-doc + .hq-doc { margin-left: 0; }
+.hq-doc-state { font-weight: 500; opacity: .85; }
+.hq-doc-state::before { content: "·"; margin-right: .35rem; }
+.hq-doc-btn { padding: 0; border: 0; background: none; }
 .hq-row-alert td:first-child { box-shadow: inset 3px 0 0 var(--hq-danger); }
 .hq-alert-strong { margin: 0 0 .75rem; font-weight: 500; }
 .hq-close-box { margin-bottom: .75rem; }

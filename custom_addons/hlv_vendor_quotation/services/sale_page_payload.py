@@ -110,7 +110,6 @@ def inquiry_summary(inquiry):
         # Đơn bán / YCMH / đơn mua có thể thuộc sale khác hoặc sale chỉ có quyền đọc hạn
         # chế — ở đây chỉ hiện số chứng từ nên đọc bằng sudo.
         "sale_order": inquiry.sale_order_id.sudo().name or "",
-        "request_name": ", ".join(inquiry.request_ids.sudo().mapped("name")),
         # Trạng thái YCMH / đơn mua hiện thành nhãn ngay ngoài danh sách (từ chối → đỏ).
         "requests": [_request_payload(r) for r in inquiry.request_ids.sudo()],
         "request_rejected": any(r.state == "rejected" for r in inquiry.request_ids.sudo()),
@@ -216,9 +215,9 @@ def _compare_row(line, quotes):
             "chosen_qty": quote_line.chosen_qty,
             "ordered_qty": quote_line._hlv_ordered_qty() if quote_line.selected else 0.0,
             "max_qty": quote_line._hlv_cap(),
-            "request_name": ", ".join(quote_line._hlv_live_request_lines().request_id.mapped("name")),
+            "request_names": quote_line._hlv_live_request_lines().request_id.mapped("name"),
             "to_request": quote_line._hlv_needs_request(),
-            # NCC thiếu hàng: có ngay / hẹn ngày / không có thêm — trang tính trước phần tách khi lên YCMH
+            # NCC thiếu hàng: sẵn hàng / hẹn ngày / không có thêm — trang tính trước phần tách khi lên YCMH
             # (cùng luật allocation_utils.split_buy_qty).
             "available_qty": quote_line.available_qty,
             "backorder_date": _date_text(quote_line.backorder_date),
@@ -237,10 +236,10 @@ def _compare_row(line, quotes):
         "product_id": line.product_id.id,
         "locked": line.locked,
         "ordered_qty": sum(live.mapped("purchased_qty")),
-        "request_name": ", ".join(live.request_id.mapped("name")),
+        "request_names": live.request_id.mapped("name"),
         # Có YCMH bị từ chối mà chưa lên lại: chờ lên YCMH mới.
         "request_rejected": not live and any(r.state == "rejected" for r in requests),
-        "rejected_name": ", ".join(requests.filtered(lambda r: r.state == "rejected").mapped("name")),
+        "rejected_names": requests.filtered(lambda r: r.state == "rejected").mapped("name"),
         # Có NCC đã chọn sẽ lên YCMH khi bấm nút (bảng tóm tắt xác nhận trước khi tạo).
         "to_request": any(o["to_request"] for o in offers.values()),
         "name": line.name or line.product_id.display_name,

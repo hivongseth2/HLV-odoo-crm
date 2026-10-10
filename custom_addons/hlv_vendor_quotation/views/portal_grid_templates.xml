@@ -45,10 +45,9 @@
     <template id="portal_grid" name="Báo giá NCC - bảng giá">
         <p t-if="editable" class="vq-grid-hint">
             Đơn giá tính cho một đơn vị, đã gồm VAT<span class="vq-disc-only">, chưa trừ chiết khấu</span>.
-            Mặt hàng không có: bấm <b>×</b> cạnh mã hàng. Không đủ số lượng: gõ số có được ở cột "Có ngay" rồi
-            chọn ngày giao phần còn lại (hoặc "không có thêm"); đủ thì để trống. Có sẵn trong kho thì để tick
-            "Sẵn hàng", phải đặt thì bỏ tick. Bấm <kbd>Enter</kbd> để xuống dòng dưới. Có sẵn bảng giá trong Excel thì copy cả cột, dán vào
-            ô đơn giá đầu tiên.
+            Ô nền trắng là ô cần điền. Mặt hàng không có: bấm <b>×</b> cạnh mã hàng. Không đủ hàng: sửa số ở cột
+            "Sẵn hàng" rồi chọn ngày giao phần còn lại (hoặc "không có thêm"). Bấm <kbd>Enter</kbd> để xuống dòng dưới.
+            Có sẵn bảng giá trong Excel thì copy cả cột, dán vào ô đơn giá đầu tiên.
         </p>
         <div class="vq-table-scroll">
         <table t-attf-class="vq-table vq-price-table vq-grid #{'vq-grid-board' if show_quote else ''}" data-vq-grid="1">
@@ -60,13 +59,12 @@
                     <th t-if="not show_quote" class="vq-col-code">Mã hàng</th>
                     <th class="vq-col-name" t-esc="'Mã · Tên hàng' if show_quote else 'Tên hàng'"/>
                     <th class="vq-num vq-col-qty">SL</th>
-                    <th class="vq-num vq-col-have" title="Không đủ số lượng: số giao được ngay. Đủ thì để trống.">Có ngay</th>
+                    <th class="vq-num vq-col-have" title="Số lượng có sẵn để giao — không đủ thì sửa số này">Sẵn hàng</th>
                     <th class="vq-col-vat">VAT</th>
                     <th class="vq-num vq-col-price">Đơn giá</th>
                     <th class="vq-num vq-col-disc vq-disc-only">%CK</th>
                     <th class="vq-num vq-col-total">Thành tiền</th>
                     <th class="vq-num vq-col-days">Giao</th>
-                    <th class="vq-col-avail">Sẵn hàng</th>
                     <th class="vq-col-text">Tên xuất HĐ</th>
                     <th class="vq-col-text">Ghi chú</th>
                 </tr>
@@ -88,27 +86,32 @@
                    t-att-checked="na_checked" t-att-aria-label="'Không có hàng — %s' % product_name"/>×</label>
     </template>
 
-    <!-- Ô "Có ngay": NCC không đủ SL hỏi thì gõ số có được → hiện "còn lại giao ngày" / "không có thêm"
-         (js/vendor_quote_form.js ẩn / hiện; server kiểm bằng read_availability). Đủ thì để trống. -->
-    <template id="portal_grid_have" name="Báo giá NCC - ô có ngay">
-        <t t-set="have_raw" t-value="post.get('avail_%s' % lid) if post else (fmt(line.available_qty) if line.available_qty else '')"/>
-        <t t-set="bo_raw" t-value="post.get('bodate_%s' % lid) if post else (line.backorder_date and line.backorder_date.isoformat() or '')"/>
-        <t t-set="nomore_on" t-value="('nomore_%s' % lid) in post if post else line.no_more"/>
-        <td class="vq-num vq-col-have" data-label="Có ngay">
-            <t t-if="line_editable">
-                <input type="text" inputmode="decimal" class="vq-cell-input" data-vq-have="1"
-                       t-att-name="'avail_%s' % lid" placeholder="đủ" t-att-value="have_raw"
-                       t-att-aria-label="'Số lượng có ngay — %s (để trống nếu đủ)' % product_name"/>
-                <div class="vq-have-more" data-vq-have-more="1" t-att-hidden="None if have_raw else 'hidden'">
-                    <label class="vq-have-date">còn lại giao
-                        <input type="date" t-att-name="'bodate_%s' % lid" t-att-value="bo_raw" t-att-min="today_iso"
-                               t-att-disabled="nomore_on or None"/></label>
-                    <label class="vq-have-none"><input type="checkbox" value="1" data-vq-nomore="1"
-                           t-att-name="'nomore_%s' % lid" t-att-checked="nomore_on"/> không có thêm</label>
-                </div>
-            </t>
+    <!-- Ô "Sẵn hàng": điền sẵn SL hỏi; NCC không đủ thì sửa số → hiện dòng phụ portal_grid_short ngay dưới
+         (js/vendor_quote_form.js ẩn / hiện; server kiểm bằng read_availability). Đủ hàng: không đụng gì. -->
+    <template id="portal_grid_have" name="Báo giá NCC - ô sẵn hàng">
+        <td class="vq-num vq-col-have" data-label="Sẵn hàng">
+            <input t-if="line_editable" type="text" inputmode="decimal" class="vq-cell-input" data-vq-have="1"
+                   t-att-name="'avail_%s' % lid" t-att-value="have_raw"
+                   t-att-aria-label="'Số lượng sẵn hàng — %s' % product_name"/>
             <span t-else="" class="vq-cell-text" t-esc="line._availability_text() or ('—' if line.unavailable else 'đủ')"/>
         </td>
+    </template>
+
+    <!-- Dòng phụ khi NCC không đủ hàng: phần còn lại giao ngày nào, hoặc không có thêm. Chỉ hiện khi "Sẵn hàng"
+         < SL hỏi — đa số dòng đủ hàng nên bảng vẫn gọn. Không có data-vq-line: Enter / dán Excel bỏ qua dòng này. -->
+    <template id="portal_grid_short" name="Báo giá NCC - dòng thiếu hàng">
+        <tr class="vq-short-row" t-att-data-vq-short-for="lid" t-att-hidden="None if short_on else 'hidden'">
+            <td t-att-colspan="13 if show_quote else 12" class="vq-short-cell"><div class="vq-short-box">
+                <span class="vq-short-label">Thiếu <b data-vq-short-qty="1" t-esc="short_text"/>
+                    <t t-esc="line.product_uom_id.name"/> — phần còn lại:</span>
+                <label class="vq-short-opt">giao ngày
+                    <input type="date" class="vq-input vq-short-date" t-att-name="'bodate_%s' % lid" t-att-value="bo_raw"
+                           t-att-min="today_iso" t-att-disabled="nomore_on or None"/></label>
+                <span class="vq-muted">hoặc</span>
+                <label class="vq-short-opt"><input type="checkbox" value="1" data-vq-nomore="1"
+                       t-att-name="'nomore_%s' % lid" t-att-checked="nomore_on"/> không có thêm</label>
+            </div></td>
+        </tr>
     </template>
 
     <template id="portal_grid_row" name="Báo giá NCC - dòng bảng giá">
@@ -120,11 +123,18 @@
         <t t-set="product_name" t-value="code_name(line.name or line.product_id.name, code)"/>
         <t t-set="choice_class" t-value="'vq-line-chosen' if line_choice.get(lid) == 'selected' else ''"/>
         <t t-set="na_checked" t-value="('na_%s' % lid) in post if post else line.unavailable"/>
-        <!-- "Sẵn hàng": nhãn ở đầu ghi chú (stock_note). Dòng chưa báo lần nào thì tick sẵn. -->
-        <t t-set="saved_note" t-value="stock_note_parts(line.vendor_note if (line.price_unit or line.unavailable) else (ref and ref.vendor_note))"/>
-        <t t-set="in_stock" t-value="('instock_%s' % lid) in post if post else (saved_note[0] if (line.price_unit or line.unavailable or ref) else True)"/>
+        <!-- Ghi chú cũ có nhãn "Sẵn hàng" ở đầu (ô tick cũ, nay thay bằng cột số lượng) — chỉ hiện phần sau nhãn. -->
+        <t t-set="saved_note" t-value="stock_note_parts(line.vendor_note if (line.price_unit or line.unavailable) else (ref and ref.vendor_note))[1]"/>
+        <!-- Sẵn hàng: điền sẵn SL hỏi; NCC đã báo thiếu (có hẹn / không có thêm) thì số đã báo. -->
+        <t t-set="short_saved" t-value="line.backorder_date or line.no_more"/>
+        <t t-set="have_raw" t-value="post.get('avail_%s' % lid) if post else fmt(line.available_qty if short_saved else line.product_qty)"/>
+        <t t-set="have_num" t-value="parse_num(have_raw)"/>
+        <t t-set="short_on" t-value="line_editable and not na_checked and have_num is not None and have_num &lt; line.product_qty"/>
+        <t t-set="short_text" t-value="fmt(line.product_qty - have_num) if short_on else ''"/>
+        <t t-set="bo_raw" t-value="post.get('bodate_%s' % lid) if post else (line.backorder_date and line.backorder_date.isoformat() or '')"/>
+        <t t-set="nomore_on" t-value="('nomore_%s' % lid) in post if post else line.no_more"/>
         <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
-        <tr data-vq-line="1"
+        <tr data-vq-line="1" t-att-data-vq-lid="lid"
             t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''}"
             t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
             t-att-data-vat="line.vat or ''" t-att-data-na="'1' if na_checked else None">
@@ -208,13 +218,6 @@
                        t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or (ref and ref.delivery_days) or '')"/>
                 <span t-else="" class="vq-cell-text" t-esc="line.delivery_days or '—'"/>
             </td>
-            <td class="vq-col-avail" data-label="Sẵn hàng">
-                <input type="checkbox" value="1" data-vq-instock="1" t-att-name="'instock_%s' % lid"
-                       t-att-data-note="'note_%s' % lid"
-                       t-att-checked="in_stock and not na_checked" t-att-disabled="not line_editable"
-                       t-att-aria-label="'Sẵn hàng — %s' % product_name"
-                       title="Có sẵn trong kho — ghi chú của dòng thêm &quot;Sẵn hàng&quot;"/>
-            </td>
             <td class="vq-col-text" data-label="Tên xuất HĐ">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
                        t-att-name="'inv_%s' % lid" placeholder="nếu khác tên hàng"
@@ -224,9 +227,10 @@
             <td class="vq-col-text" data-label="Ghi chú">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
                        t-att-name="'note_%s' % lid" placeholder="hãng, xuất xứ…"
-                       t-att-value="post.get('note_%s' % lid) if post else stock_note(in_stock and not na_checked, saved_note[1])"/>
-                <span t-else="" class="vq-cell-text" t-esc="line.vendor_note or ''"/>
+                       t-att-value="post.get('note_%s' % lid) if post else saved_note"/>
+                <span t-else="" class="vq-cell-text" t-esc="stock_note_parts(line.vendor_note)[1]"/>
             </td>
         </tr>
+        <t t-if="line_editable" t-call="hlv_vendor_quotation.portal_grid_short"/>
     </template>
 </odoo>

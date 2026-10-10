@@ -2,7 +2,7 @@
 """Hàm thuần chia số lượng mua một sản phẩm giữa nhiều NCC (phiếu hỏi giá) — không đụng env.
 
 Một sản phẩm của phiếu có "SL cần mua" (need); sale chọn một hay nhiều NCC, mỗi NCC một "SL mua".
-NCC không đủ hàng khai "có ngay" + hẹn ngày giao phần còn lại, hoặc "không có thêm"
+NCC không đủ hàng khai "sẵn hàng" (số có) + hẹn ngày giao phần còn lại, hoặc "không có thêm"
 (vendor_quote_utils.read_availability).
 """
 
@@ -49,12 +49,13 @@ def split_buy_qty(qty, available_qty, backorder_date, no_more):
     """Tách SL mua của một NCC thành phần giao ngay và phần NCC hẹn — mỗi phần một dòng YCMH (khác
     "Ngày cần", để đơn mua ra 2 dòng theo ngày).
 
-    Trả list (SL, ngày hẹn hoặc None). NCC thiếu hàng có hẹn ngày (available_qty > 0, backorder_date,
-    không no_more) và mua nhiều hơn phần có ngay → [(available_qty, None), (phần còn lại, backorder_date)].
-    Còn lại → [(qty, None)].
+    Trả list (SL, ngày hẹn hoặc None). NCC thiếu hàng có hẹn ngày (backorder_date, không no_more) và mua
+    nhiều hơn phần sẵn → [(phần sẵn, None), (phần còn lại, backorder_date)]; sẵn 0 (hàng đặt) → chỉ
+    [(qty, backorder_date)]. Còn lại → [(qty, None)].
     """
-    if backorder_date and not no_more and 0 < (available_qty or 0) < qty:
-        return [(available_qty, None), (qty - available_qty, backorder_date)]
+    now = available_qty or 0.0
+    if backorder_date and not no_more and now < qty:
+        return ([(now, None)] if now > 0 else []) + [(qty - now, backorder_date)]
     return [(qty, None)]
 
 

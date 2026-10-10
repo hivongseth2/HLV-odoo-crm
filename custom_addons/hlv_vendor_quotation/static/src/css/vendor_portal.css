@@ -408,6 +408,11 @@ a { color: var(--vq-accent); }
 .vq-grid tbody tr:last-child td { border-bottom: 0; }
 .vq-grid td { height: 36px; padding: 0 8px; font-size: .84rem; vertical-align: middle; }
 .vq-grid td:has(.vq-cell-input) { padding: 0; }
+/* Ô chỉ đọc (mã, tên, SL, thành tiền…) nền xám nhạt; ô cần điền nền trắng + viền trong xanh nhạt — nhìn là biết
+   ô nào gõ được. */
+.vq-grid tbody td { background: #f7f8fa; }
+.vq-grid tbody td:has(.vq-cell-input) { background: #fff; }
+.vq-grid tbody .vq-cell-input { box-shadow: inset 0 0 0 1px #c9d6e6; }
 /* Ô nhập như ô Excel: không viền riêng, phủ kín ô; rê chuột / đang gõ thì sáng lên. */
 .vq-cell-input { display: block; width: 100%; height: 35px; margin: 0; padding: 0 8px; border: 0; border-radius: 0;
     background: transparent; color: inherit; font: inherit; font-size: .84rem; text-align: inherit; }
@@ -437,12 +442,14 @@ select.vq-cell-input { padding: 0 4px; cursor: pointer; }
 .vq-grid .vq-col-disc { width: 54px; }
 .vq-grid .vq-col-total { width: 112px; }
 .vq-grid .vq-col-days { width: 54px; }
-.vq-grid .vq-col-have { width: 124px; }
-.vq-have-more { display: flex; flex-direction: column; gap: 4px; padding: 4px 6px 6px; text-align: left; font-size: .8rem; color: var(--vq-muted); }
-.vq-have-more[hidden] { display: none; }
-.vq-have-more input[type="date"] { width: 100%; font-size: .8rem; padding: 2px 4px; border: 1px solid var(--vq-line); border-radius: 4px; }
-.vq-have-date { display: flex; flex-direction: column; gap: 2px; }
-.vq-have-none { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.vq-grid .vq-col-have { width: 80px; }
+/* Dòng phụ khi thiếu hàng: nền vàng nhạt, một dòng ngang dưới mặt hàng. */
+.vq-grid tbody tr.vq-short-row td { height: auto; padding: 6px 12px; background: #fffbeb; white-space: normal; }
+.vq-short-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: .82rem; }
+.vq-short-row[hidden] { display: none; }
+.vq-short-label { color: #92400e; }
+.vq-short-opt { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.vq-short-date { height: 30px; padding: 0 6px; font-size: .82rem; }
 .vq-grid .vq-col-text { width: 150px; }
 /* Tên dài: cắt bằng "…", rê chuột xem đủ (title ở ô). Chip trạng thái nằm cùng hàng. */
 .vq-name-cell { display: flex; align-items: center; gap: 6px; max-width: 380px; }
@@ -459,6 +466,8 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-table-scroll { overflow: visible; border: 0; }
     .vq-grid, .vq-disc-on .vq-grid { min-width: 0; }
     .vq-grid td, .vq-grid td:has(.vq-cell-input) { height: auto; padding: 0; border: 0; white-space: normal; }
+    .vq-grid tbody td, .vq-grid tbody td:has(.vq-cell-input) { background: transparent; }
+    .vq-grid tbody .vq-cell-input { box-shadow: none; }
     .vq-grid .vq-cell-input { height: 38px; border: 1px solid var(--vq-line-strong); border-radius: 6px; background: #fff; }
     .vq-grid .vq-col-name, .vq-grid .vq-col-text { grid-column: 1 / -1; }
     .vq-name-cell { max-width: none; }

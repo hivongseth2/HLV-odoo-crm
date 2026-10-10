@@ -26,16 +26,33 @@ window.HlvQuote = window.HlvQuote || {};
     rejected: "hq-tag-danger",
   };
 
-  /** Số YCMH kèm nhãn trạng thái màu. r: {name, state, label}. */
-  HQ.requestTag = function (r) {
-    return '<span class="hq-doc-tag">' + HQ.esc(r.name) + ' <span class="hq-tag ' +
-      (HQ.REQUEST_STATE_CLASS[r.state] || "hq-tag-soft") + '">' + HQ.esc(r.label) + "</span></span>";
+  /**
+   * Chip một số chứng từ (YCMH / đơn mua / báo giá / đơn bán) — mọi số chứng từ trên trang hiện bằng chip này.
+   * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám).
+   */
+  HQ.docChip = function (name, state, cls) {
+    return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '">' + HQ.esc(name) +
+      (state ? '<span class="hq-doc-state">' + HQ.esc(state) + "</span>" : "") + "</span>";
   };
 
-  /** Số đơn mua kèm tiến độ NCC báo. o: {name, vendor_status}. */
+  /** Chip YCMH, màu theo trạng thái. r: {name, state, label}. */
+  HQ.requestTag = function (r) {
+    return HQ.docChip(r.name, r.label, HQ.REQUEST_STATE_CLASS[r.state]);
+  };
+
+  /** Chip đơn mua kèm tiến độ NCC báo. o: {name, vendor_status}. */
   HQ.orderTag = function (o) {
-    return '<span class="hq-doc-tag">' + HQ.esc(o.name) + (o.vendor_status ? ' <span class="hq-tag hq-tag-ok">' +
-      HQ.esc(o.vendor_status) + "</span>" : "") + "</span>";
+    return HQ.docChip(o.name, o.vendor_status, o.vendor_status ? "hq-tag-ok" : "");
+  };
+
+  /** Icon tin nhắn + số ở góc: unread > 0 → nền cam (NCC nhắn chưa xem), không thì số tin đã có. "" khi chưa có tin. */
+  HQ.chatIcon = function (count, unread) {
+    if (!unread && !count) {
+      return "";
+    }
+    var title = unread ? unread + " tin NCC bạn chưa xem" : "Đã có " + count + " tin trao đổi với NCC";
+    return '<span class="hq-chat-icon' + (unread ? " is-new" : "") + '" title="' + title + '" aria-label="' + title + '">' +
+      HQ.ICON_CHAT + '<span class="hq-chat-count">' + (unread || count) + "</span></span>";
   };
 
   /* Trạng thái báo giá của từng NCC trong phiếu. */

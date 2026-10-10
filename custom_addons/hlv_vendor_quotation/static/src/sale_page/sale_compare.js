@@ -101,9 +101,11 @@ window.HlvQuote = window.HlvQuote || {};
       return '<span class="hq-expired">' + esc(error) + "</span>";
     }
     var o = row.offer;
-    if (o.backorder_date && !o.no_more && o.available_qty > 0 && o.available_qty < row.qty) {
-      return "tách: " + HQ.qty(o.available_qty) + " giao ngay · " + HQ.qty(row.qty - o.available_qty) +
-        " hẹn " + esc(o.backorder_date);
+    if (o.backorder_date && !o.no_more && o.available_qty < row.qty) {
+      return o.available_qty > 0
+        ? "tách: " + HQ.qty(o.available_qty) + " giao ngay · " + HQ.qty(row.qty - o.available_qty) +
+          " hẹn " + esc(o.backorder_date)
+        : "hàng đặt — hẹn giao " + esc(o.backorder_date);
     }
     return "";
   }
@@ -230,7 +232,7 @@ window.HlvQuote = window.HlvQuote || {};
     return '<div class="hq-facts">' +
       fact("Sale", esc(HQ.saleLabel(d.sale_code))) +
       opportunityFact(d) +
-      fact("Đơn bán", esc(d.sale_order)) +
+      fact("Đơn bán", d.sale_order ? HQ.docChip(d.sale_order) : "") +
       fact("Hạn báo giá", esc(d.deadline)) +
       fact("Yêu cầu mua hàng", d.requests.map(HQ.requestTag).join("")) +
       fact("Đơn mua", orders) +
@@ -265,7 +267,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (!rejected.length) {
       return "";
     }
-    return '<div class="hq-alert hq-alert-strong">' + rejected.map(function (r) { return esc(r.name); }).join(", ") +
+    return '<div class="hq-alert hq-alert-strong">' + rejected.map(HQ.requestTag).join("") +
       " bị thu mua <b>từ chối</b>. Hỏi thu mua lý do (nút Trao đổi trên đơn mua, hoặc chatter YCMH), chọn lại NCC " +
       "nếu cần rồi lên YCMH mới.</div>";
   }
@@ -320,11 +322,17 @@ window.HlvQuote = window.HlvQuote || {};
       parts.push('<span class="hq-muted">đã đặt ' + HQ.qty(line.ordered_qty) + "</span>");
     }
     if (line.request_rejected) {
-      parts.push('<span class="hq-expired">' + esc(line.rejected_name) + " bị từ chối — chọn lại NCC rồi lên YCMH mới</span>");
-    } else if (line.request_name) {
-      parts.push('<span class="hq-muted">trong ' + esc(line.request_name) + "</span>");
+      parts.push(docChips(line.rejected_names, "hq-tag-danger") +
+        '<span class="hq-expired"> bị từ chối — chọn lại NCC rồi lên YCMH mới</span>');
+    } else if ((line.request_names || []).length) {
+      parts.push(docChips(line.request_names));
     }
     return parts.join(" · ");
+  }
+
+  /** Chip cho từng số chứng từ trong danh sách names. */
+  function docChips(names, cls) {
+    return (names || []).map(function (name) { return HQ.docChip(name, "", cls); }).join("");
   }
 
   /** Ô SL mua dưới giá đã chọn: sửa được khi phiếu còn chọn được; kèm phần đã đặt / YCMH của NCC này. */
@@ -335,7 +343,7 @@ window.HlvQuote = window.HlvQuote || {};
       : "SL mua " + HQ.qty(offer.chosen_qty) + " " + esc(uom);
     return '<div class="hq-buy">' + qty +
       (offer.ordered_qty > EPS ? '<span class="hq-muted">đã đặt ' + HQ.qty(offer.ordered_qty) + "</span>" : "") +
-      (offer.request_name ? '<span class="hq-muted">' + esc(offer.request_name) + "</span>"
+      ((offer.request_names || []).length ? docChips(offer.request_names)
         : offer.to_request ? '<span class="hq-partial">chưa lên YCMH</span>' : "") + "</div>";
   }
 
@@ -389,7 +397,7 @@ window.HlvQuote = window.HlvQuote || {};
     var live = d.requests.filter(function (r) { return r.state !== "rejected"; });
     var redo = d.lines.some(function (l) { return l.to_request && l.request_rejected; });
     var done = live.length
-      ? '<div class="hq-muted">Đã lên ' + live.map(function (r) { return esc(r.name); }).join(", ") +
+      ? '<div class="hq-muted">Đã lên ' + live.map(HQ.requestTag).join("") +
         ". Thu mua duyệt YCMH rồi tạo đơn mua theo NCC và giá đã chọn. Đổi SL mua dưới giá — YCMH tự " +
         "cập nhật; còn thiếu thì chọn thêm NCC rồi bổ sung vào YCMH.</div>"
       : "";
@@ -499,8 +507,8 @@ window.HlvQuote = window.HlvQuote || {};
     return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' + originBox(d) +
       '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
       d.purchase_orders.map(function (o) {
-        return '<tr><td><button type="button" class="hq-link-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
-          esc(o.name) + "</button>" + (o.origin ? '<div class="hq-muted">Mã ĐH ' + esc(o.origin) + "</div>"
+        return '<tr><td><button type="button" class="hq-link-btn hq-doc-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
+          HQ.docChip(o.name) + "</button>" + (o.origin ? '<div class="hq-muted">Mã ĐH ' + esc(o.origin) + "</div>"
             : '<div class="hq-muted">Chưa có mã đơn hàng</div>') + "</td><td>" + esc(o.vendor) + "</td>" +
           "<td>" + (o.vendor_ship ? '<div class="hq-muted hq-small" title="NCC đã gửi">' + esc(o.vendor_ship) + "</div>" : "") +
           (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"

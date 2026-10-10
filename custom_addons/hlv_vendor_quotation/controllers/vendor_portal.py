@@ -14,7 +14,7 @@ from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
     FULL_SUPPLY, deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate,
-    parse_vn_number, read_availability, split_code_name, split_unit_price, split_stock_note, stock_note,
+    parse_vn_number, read_availability, split_code_name, split_unit_price, split_stock_note,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -377,11 +377,7 @@ class VendorQuotePortal(http.Controller):
                 "discount": discount or 0.0,
                 "vat": vat,
                 "delivery_days": days,
-                # Ô "Sẵn hàng" (tick sẵn) → nhãn "Sẵn hàng" ở đầu ghi chú, sale đọc ngay ở bảng so giá.
-                "vendor_note": stock_note(
-                    bool(post.get(f"instock_{line.id}")) and not post.get(f"na_{line.id}"),
-                    post.get(f"note_{line.id}"), LINE_NOTE_MAX,
-                ),
+                "vendor_note": (post.get(f"note_{line.id}") or "").strip()[:LINE_NOTE_MAX],
                 "invoice_name": (post.get(f"inv_{line.id}") or "").strip()[:LINE_NOTE_MAX],
                 # Nút "×" cạnh mã hàng = không có hàng.
                 "unavailable": bool(post.get(f"na_{line.id}")),
@@ -390,11 +386,11 @@ class VendorQuotePortal(http.Controller):
         return line_values, errors
 
     def _read_availability(self, line, post, prefix, today, errors):
-        """Ô "Có ngay" + "còn lại giao ngày" / "Không có thêm" của một dòng (read_availability).
+        """Ô "Sẵn hàng" + "giao ngày" / "không có thêm" (dòng phụ thiếu hàng) của một dòng (read_availability).
         Dòng bấm "×" thì bỏ qua — _vendor_submit tự xoá các giá trị này."""
         if post.get(f"na_{line.id}"):
             return dict(FULL_SUPPLY)
-        available = self._read_line_number(post, f"avail_{line.id}", f"{prefix}: không đọc được số lượng có ngay", errors)
+        available = self._read_line_number(post, f"avail_{line.id}", f"{prefix}: không đọc được số lượng sẵn hàng", errors)
         raw_date = (post.get(f"bodate_{line.id}") or "").strip()
         try:
             backorder_date = fields.Date.to_date(raw_date) if raw_date else None
@@ -451,9 +447,10 @@ class VendorQuotePortal(http.Controller):
             "fmt": format_vn_number,
             # Mã hàng và tên hàng hiện thành hai cột: bỏ tiền tố "[mã]" khỏi tên.
             "code_name": split_code_name,
-            # Ô "Sẵn hàng" + ô ghi chú đọc từ ghi chú đã lưu (nhãn "Sẵn hàng" ở đầu).
+            # Ghi chú cũ có nhãn "Sẵn hàng" ở đầu (ô tick cũ) — tách bỏ nhãn khi hiện.
             "stock_note_parts": split_stock_note,
-            "stock_note": stock_note,
+            # Đọc số ô "Sẵn hàng" (kiểu VN) để biết có hiện dòng phụ thiếu hàng không.
+            "parse_num": parse_vn_number,
             # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
             "fdate": local_date_text,
             "vat_options": VAT_SELECTION,
