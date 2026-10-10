@@ -370,7 +370,8 @@ class VendorInquiryLine(models.Model):
         }
 
     def _request_line_vals(self):
-        """Dòng YCMH cho sản phẩm đã chọn NCC — kèm actual_* để wizard Tạo RFQ dùng luôn."""
+        """Dòng YCMH cho sản phẩm đã chọn NCC — kèm actual_* để wizard Tạo RFQ dùng luôn, và bộ cột
+        "sale đề xuất" (NCC / giá / thuế) như YCMH đi từ MISA."""
         self.ensure_one()
         return dict(
             {
@@ -380,4 +381,5 @@ class VendorInquiryLine(models.Model):
                 "product_uom_id": self.product_uom_id.id,
             },
             **self.chosen_line_id._request_line_actual_vals(),
+            **self.chosen_line_id._request_line_proposal_vals(),
         )

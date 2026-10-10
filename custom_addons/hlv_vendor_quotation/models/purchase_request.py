@@ -8,6 +8,9 @@ from ..services.sale_code import sale_code
 
 # YCMH còn sửa được: chưa được thu mua duyệt.
 MERGEABLE_STATES = ("draft", "to_approve")
+# Trường lựa chọn NCC / giá trên dòng YCMH (thu mua: actual_*; sale đề xuất: sale_proposed_*, misa_*)
+# — gộp hàng vào dòng có sẵn thì lấy theo lần chọn mới nhất.
+CHOICE_FIELD_PREFIXES = ("actual_", "sale_proposed_", "misa_")
 # Phiếu hỏi giá còn chọn được NCC — chỉ những phiếu này được nhả lựa chọn khi YCMH bị từ chối.
 INQUIRY_ACTIVE_STATES = ("open", "requested")
 
@@ -131,8 +134,8 @@ class PurchaseRequest(models.Model):
 
     def _merge_lines(self, line_vals):
         """Gộp hàng vào YCMH theo sản phẩm: cùng sản phẩm, cùng nhóm ĐVT (dòng chưa huỷ) thì
-        cộng số lượng — quy đổi về ĐVT của dòng đang có — và ghi đè NCC/giá đã chọn (actual_*)
-        bằng lựa chọn mới nhất; không thì thêm dòng mới.
+        cộng số lượng — quy đổi về ĐVT của dòng đang có — và ghi đè NCC/giá đã chọn
+        (CHOICE_FIELD_PREFIXES) bằng lựa chọn mới nhất; không thì thêm dòng mới.
         Trả list dòng YCMH ứng với từng phần tử line_vals (có thể lặp nếu hai phần tử cùng
         gộp vào một dòng)."""
         self.ensure_one()
@@ -146,7 +149,7 @@ class PurchaseRequest(models.Model):
                 and l.product_uom_id.category_id == uom.category_id
             )[:1]
             if line:
-                extra = {k: v for k, v in vals.items() if k.startswith("actual_")}
+                extra = {k: v for k, v in vals.items() if k.startswith(CHOICE_FIELD_PREFIXES)}
                 line.write(dict(
                     extra,
                     product_qty=line.product_qty + uom._compute_quantity(vals["product_qty"], line.product_uom_id),
