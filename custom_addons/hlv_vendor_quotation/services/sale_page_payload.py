@@ -52,6 +52,8 @@ def purchase_order_payload(order):
         "amount_untaxed": order.amount_untaxed,
         "amount_total": order.amount_total,
         "vendor_status": VENDOR_STATUS_LABELS.get(order.hlv_vendor_status, ""),
+        # NCC gửi CPN / chành: hãng / chành + mã vận đơn / số xe — sale theo hàng giúp khách.
+        "vendor_ship": order._hlv_ship_text(),
     }
 
 
@@ -347,6 +349,19 @@ def sale_order_summary(order):
         "partner": order.partner_id.display_name or "",
         "date": _date_text(order.date_order),
         "sale_code": sale_code(order.sudo()),
+    }
+
+
+def sale_line_payload(line):
+    """Dòng đơn bán → dòng hàng trong hộp hỏi giá. Số lượng mặc định = số lượng bán."""
+    product = line.product_id
+    return {
+        "product_id": product.id,
+        "product": product.display_name,
+        "name": product.display_name,
+        "qty": line.product_uom_qty,
+        "uom_id": line.product_uom.id,
+        "uom": line.product_uom.name or "",
     }
 
 

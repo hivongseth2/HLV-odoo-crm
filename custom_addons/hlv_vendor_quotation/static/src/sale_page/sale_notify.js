@@ -1,8 +1,9 @@
-/* Chuông thông báo + popup khi NCC gửi / cập nhật báo giá.
+/* Chuông thông báo + popup khi NCC gửi / cập nhật báo giá, và khi tiến độ đơn mua đổi (NCC đóng gói /
+   gửi hàng, kho nhận hàng).
 
-   - Chuông (thanh trên cùng): báo giá NCC gửi trong 14 ngày (services/sale_feed.py), số đỏ = gửi
-     sau lần cuối mở chuông. Mở chuông là đánh dấu đã xem; bấm một mục để mở phiếu.
-   - Có báo giá mới (tin "hlv_vq_quoted" trên websocket — sale_bus.js): popup góc phải dưới (bấm để
+   - Chuông (thanh trên cùng): báo giá NCC gửi và đơn mua đổi tiến độ trong 14 ngày
+     (services/sale_feed.py), số đỏ = sau lần cuối mở chuông. Mở chuông là đánh dấu đã xem; bấm một mục để mở phiếu.
+   - Có báo giá mới / đơn mua đổi tiến độ (tin "hlv_vq_quoted" / "hlv_vq_order" — sale_bus.js): popup góc phải dưới (bấm để
      mở phiếu), tiếng "ting" + nháy tiêu đề tab (js/chat_alert.js), và thông báo của hệ điều hành
      khi đang ở tab khác — nếu sale đã bấm "Bật thông báo trên máy tính" trong chuông. */
 window.HlvQuote = window.HlvQuote || {};
@@ -27,15 +28,21 @@ window.HlvQuote = window.HlvQuote || {};
     var count = HQ.$("hq-bell-count");
     count.textContent = data.unread > 99 ? "99+" : String(data.unread);
     count.classList.toggle("hq-hidden", !data.unread);
-    HQ.$("hq-bell").setAttribute("aria-label", data.unread ? data.unread + " báo giá NCC mới" : "Thông báo báo giá NCC");
+    HQ.$("hq-bell").setAttribute("aria-label", data.unread ? data.unread + " thông báo mới" : "Thông báo báo giá / đơn mua NCC");
     HQ.$("hq-bell-list").innerHTML = data.items.length ? data.items.map(itemHtml).join("")
-      : '<div class="hq-bell-empty">Chưa có NCC nào báo giá trong 14 ngày qua.</div>';
+      : '<div class="hq-bell-empty">Chưa có báo giá hay đơn mua nào đổi trong 14 ngày qua.</div>';
     HQ.show("hq-bell-permission", "Notification" in window && window.Notification.permission === "default");
   }
 
   function itemHtml(item) {
-    return '<button type="button" class="hq-bell-item' + (item.unread ? " is-new" : "") + '" data-bell-inquiry="' +
-      item.inquiry_id + '"><span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> đã báo giá " +
+    var head = '<button type="button" class="hq-bell-item' + (item.unread ? " is-new" : "") + '" data-bell-inquiry="' +
+      item.inquiry_id + '">';
+    if (item.kind === "order") {
+      return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> · đơn mua " + esc(item.order_name) +
+        ': <span class="hq-tag hq-tag-ok">' + esc(item.status) + '</span></span><span class="hq-bell-meta">' +
+        esc([item.inquiry_name, item.ship, item.date].filter(Boolean).join(" · ")) + "</span></button>";
+    }
+    return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> đã báo giá " +
       esc(item.inquiry_name) + '</span><span class="hq-bell-meta">' + esc(item.quote_name) + " · " + item.offered + "/" +
       item.total + " mặt hàng" + (item.amount_total ? " · " + HQ.money(item.amount_total) + " sau VAT" : "") +
       " · " + esc(item.date) + "</span></button>";
@@ -57,19 +64,20 @@ window.HlvQuote = window.HlvQuote || {};
     return payload.vendor + (payload.resubmitted ? " vừa cập nhật báo giá " : " vừa báo giá ") + payload.inquiry_name;
   }
 
-  function showPopup(payload, text) {
+  /** note: {title, text, meta, inquiryId} — bấm popup mở phiếu hỏi giá inquiryId. */
+  function showPopup(note) {
     var box = HQ.$("hq-popups");
     var popup = document.createElement("div");
     popup.className = "hq-popup";
     popup.setAttribute("role", "status");
     popup.innerHTML = '<button type="button" class="hq-popup-x" aria-label="Đóng thông báo">×</button>' +
-      '<div class="hq-popup-title">' + (payload.resubmitted ? "NCC cập nhật báo giá" : "NCC đã báo giá") + "</div>" +
-      '<div class="hq-popup-text">' + esc(text) + "</div>" +
-      '<div class="hq-popup-meta">' + esc(payload.name) + " — bấm để mở phiếu</div>";
+      '<div class="hq-popup-title">' + esc(note.title) + "</div>" +
+      '<div class="hq-popup-text">' + esc(note.text) + "</div>" +
+      '<div class="hq-popup-meta">' + esc(note.meta) + " — bấm để mở phiếu</div>";
     popup.addEventListener("click", function (event) {
       popup.remove();
-      if (!event.target.closest(".hq-popup-x")) {
-        HQ.openInquiry(payload.inquiry_id);
+      if (!event.target.closest(".hq-popup-x") && note.inquiryId) {
+        HQ.openInquiry(note.inquiryId);
       }
     });
     box.appendChild(popup);
@@ -80,27 +88,45 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   /** Thông báo của hệ điều hành — chỉ khi tab đang ẩn (đang mở trang thì đã có popup). */
-  function desktopNotify(payload, text) {
+  function desktopNotify(note, tag) {
     if (!document.hidden || !("Notification" in window) || window.Notification.permission !== "granted") {
       return;
     }
-    var note = new window.Notification("Báo giá NCC", { body: text, tag: "hlv-vq-quote-" + payload.quote_id });
-    note.onclick = function () {
+    var desktop = new window.Notification(note.title, { body: note.text, tag: tag });
+    desktop.onclick = function () {
       window.focus();
-      HQ.openInquiry(payload.inquiry_id);
-      note.close();
+      if (note.inquiryId) {
+        HQ.openInquiry(note.inquiryId);
+      }
+      desktop.close();
     };
+  }
+
+  /** Popup + tiếng + thông báo máy tính + tải lại chuông — chung cho mọi tin. */
+  function announce(note, tag) {
+    showPopup(note);
+    if (window.HlvChatAlert) {
+      window.HlvChatAlert.notify(note.text);
+    }
+    desktopNotify(note, tag);
+    HQ.loadBell();
   }
 
   /** Tin "NCC đã báo giá" từ websocket (sale_bus.js). */
   HQ.onQuoted = function (payload) {
-    var text = quotedText(payload);
-    showPopup(payload, text);
-    if (window.HlvChatAlert) {
-      window.HlvChatAlert.notify(text);
-    }
-    desktopNotify(payload, text);
-    HQ.loadBell();
+    announce({
+      title: payload.resubmitted ? "NCC cập nhật báo giá" : "NCC đã báo giá",
+      text: quotedText(payload), meta: payload.name, inquiryId: payload.inquiry_id,
+    }, "hlv-vq-quote-" + payload.quote_id);
+  };
+
+  /** Tin "tiến độ đơn mua đổi" từ websocket (sale_bus.js): NCC đóng gói / gửi hàng, kho nhận hàng. */
+  HQ.onOrderStatus = function (payload) {
+    announce({
+      title: "Đơn mua " + payload.name + ": " + payload.status,
+      text: payload.vendor + " — " + payload.status + (payload.ship ? " (" + payload.ship + ")" : ""),
+      meta: payload.inquiry_name, inquiryId: (payload.inquiry_ids || [])[0],
+    }, "hlv-vq-order-" + payload.order_id + "-" + payload.status);
   };
 
   HQ.bindBellEvents = function () {

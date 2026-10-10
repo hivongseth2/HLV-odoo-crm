@@ -5,6 +5,7 @@ from . import vendor_quote_line
 from . import vendor_inquiry
 from . import purchase_request
 from . import purchase_order
+from . import stock_picking
 from . import vendor_suggestion
 from . import vendor_chat_read
 from . import mail_message

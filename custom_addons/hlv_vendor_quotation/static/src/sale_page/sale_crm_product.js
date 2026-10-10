@@ -1,6 +1,8 @@
-/* Lấy hàng từ MISA CRM vào hộp lập phiếu (controllers/sale_page_crm.py):
-   - ô "Lấy hàng từ cơ hội MISA CRM": tìm cơ hội, chọn → mọi mặt hàng của cơ hội vào phiếu (đúng số
-     lượng CRM), hàng Odoo chưa có thì tạo từ CRM; số cơ hội điền sẵn vào ô "Số cơ hội";
+/* Lấy hàng vào hộp lập phiếu (controllers/sale_page_crm.py, sale_page_create.py):
+   - ô "Lấy hàng từ cơ hội CRM hoặc đơn bán" — đọc mã theo tiền tố (HQ.sourceKind):
+     · "CH…" tìm cơ hội trên MISA CRM, chọn → mọi mặt hàng của cơ hội vào phiếu (đúng số lượng CRM),
+       hàng Odoo chưa có thì tạo từ CRM; số cơ hội điền sẵn vào ô "Số cơ hội";
+     · "DH…" / "S…" tìm đơn bán trong Odoo, chọn → hàng của đơn vào phiếu, phiếu gắn đơn đó;
    - ô "Thêm sản phẩm" không thấy trong Odoo → dòng "Tìm trên MISA CRM" → khung kết quả CRM, bấm
      "Thêm" là tạo sản phẩm Odoo từ CRM rồi đưa vào phiếu;
    - khung dán danh sách (sale_paste.js) dùng HQ.crmMatchRows / HQ.crmImport cho dòng "không thấy". */
@@ -12,12 +14,14 @@ window.HlvQuote = window.HlvQuote || {};
   var esc = HQ.esc;
   var found = [];   // kết quả CRM đang hiện trong khung
   var OPP_MIN_SEARCH = 3;
-  var opportunity = null;  // cơ hội vừa lấy hàng: {code, account, state, added, created, failed}
+  var opportunity = null;  // nguồn vừa lấy hàng: {kind: "crm"|"order", code, account, state, added, created, failed}
 
-  /* ---------------- Lấy hàng từ cơ hội CRM ---------------- */
+  /* ---------------- Lấy hàng từ cơ hội CRM / đơn bán ---------------- */
 
-  HQ.resetOpportunityPick = function () {
+  /** Bỏ nguồn đang hiện (và bỏ gắn đơn bán) — mở hộp lập phiếu mới, hoặc bấm × trên chip. */
+  HQ.resetSourcePick = function () {
     opportunity = null;
+    HQ.S.create.saleOrder = null;
     renderOpportunity();
   };
 
@@ -28,6 +32,13 @@ window.HlvQuote = window.HlvQuote || {};
       return;
     }
     var o = opportunity;
+    if (o.kind === "order") {
+      box.innerHTML = '<span class="hq-chip hq-chip-blue">Đơn bán ' + esc(o.code) + (o.account ? " · " + esc(o.account) : "") +
+        '<button type="button" class="hq-chip-x" data-opp-clear="1" title="Bỏ gắn đơn bán">×</button></span>' +
+        '<span class="hq-muted">' + (o.added ? "Đã thêm " + o.added + " mặt hàng. " : "Đơn này không có mặt hàng mua được. ") +
+        "Phiếu gắn đơn này; khi lên YCMH vẫn đổi được.</span>";
+      return;
+    }
     var head = "Cơ hội " + esc(o.code) + (o.account ? " · " + esc(o.account) : "");
     if (o.state === "loading") {
       box.innerHTML = '<span class="hq-muted">Đang lấy hàng của ' + head + " từ MISA CRM…</span>";
@@ -43,7 +54,7 @@ window.HlvQuote = window.HlvQuote || {};
 
   /** Chọn một cơ hội: lấy hàng, tạo hàng Odoo còn thiếu (trừ combo), thêm cả vào phiếu. */
   function pickOpportunity(item) {
-    opportunity = { code: item.code, account: item.account, state: "loading", added: 0, created: 0, failed: [] };
+    opportunity = { kind: "crm", code: item.code, account: item.account, state: "loading", added: 0, created: 0, failed: [] };
     renderOpportunity();
     HQ.rpc("/api/hoi-gia-ncc/crm_opportunity_lines", { opportunity_id: item.id }).then(function (res) {
       var rows = res.lines || [];
@@ -77,6 +88,55 @@ window.HlvQuote = window.HlvQuote || {};
       renderOpportunity();
       HQ.toast(err.message);
     });
+  }
+
+  /** Chọn một đơn bán Odoo: hàng của đơn vào phiếu (số lượng bán), phiếu gắn đơn này. */
+  function pickSaleOrder(order) {
+    HQ.rpc("/api/hoi-gia-ncc/sale_order_lines", { order_id: order.id }).then(function (res) {
+      HQ.S.create.saleOrder = res.order;
+      HQ.addCreateLines(res.lines);
+      opportunity = { kind: "order", code: res.order.name, account: res.order.partner, added: res.lines.length };
+      renderOpportunity();
+    }).catch(function (err) { HQ.toast(err.message); });
+  }
+
+  /** Ô lấy hàng: mã CH… tìm cơ hội trên CRM, DH… / S… tìm đơn bán Odoo, còn lại nhắc cách gõ. */
+  function searchSource(term) {
+    var kind = HQ.sourceKind(term);
+    var tag = function (item) { return Object.assign({ kind: kind }, item); };
+    if (kind === "crm") {
+      // Mỗi lần tìm là một lần gọi CRM — đợi gõ đủ vài ký tự.
+      return term.length < OPP_MIN_SEARCH ? Promise.resolve([{ kind: "hint", term: term }])
+        : HQ.rpc("/api/hoi-gia-ncc/crm_opportunities", { search: term }).then(function (r) { return r.opportunities.map(tag); });
+    }
+    if (kind === "order") {
+      return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term }).then(function (r) { return r.orders.map(tag); });
+    }
+    return Promise.resolve([{ kind: "hint", term: term }]);
+  }
+
+  function sourceItemHtml(item) {
+    if (item.kind === "hint") {
+      return '<span class="hq-muted">Gõ số cơ hội (CH…) để lấy từ MISA CRM, hoặc số đơn bán (DH…, S…)</span>';
+    }
+    if (item.kind === "order") {
+      return '<span class="hq-strong">' + esc(item.name) + "</span> " + esc(item.partner) +
+        '<div class="hq-muted hq-small">Đơn bán · ' + esc([HQ.saleName(item.sale_code), item.date].filter(Boolean).join(" · ")) + "</div>";
+    }
+    return '<span class="hq-strong">' + esc(item.code) + "</span> " + esc(item.account || item.name) +
+      '<div class="hq-muted hq-small">Cơ hội CRM · ' + esc([item.stage, item.owner, item.products].filter(Boolean).join(" · ")) + "</div>";
+  }
+
+  function pickSource(item) {
+    if (item.kind === "hint") {
+      return item.term;  // giữ chữ đang gõ trong ô
+    }
+    if (item.kind === "order") {
+      pickSaleOrder(item);
+    } else {
+      pickOpportunity(item);
+    }
+    return undefined;
   }
 
   /** Dòng đã dán → [{best: mã CRM chắc chắn hoặc "", candidates}] cùng thứ tự. */
@@ -145,17 +205,8 @@ window.HlvQuote = window.HlvQuote || {};
 
   HQ.bindCrmEvents = function () {
     var modal = HQ.$("hq-modal");
-    // Mỗi lần tìm là một lần gọi CRM — đợi gõ đủ vài ký tự.
-    HQ.bindPicker("hq-opp-search", "hq-opp-results", function (term) {
-      if (term.length < OPP_MIN_SEARCH) {
-        return Promise.resolve([]);
-      }
-      return HQ.rpc("/api/hoi-gia-ncc/crm_opportunities", { search: term }).then(function (r) { return r.opportunities; });
-    }, function (o) {
-      return '<span class="hq-strong">' + esc(o.code) + "</span> " + esc(o.account || o.name) +
-        '<div class="hq-muted hq-small">' + esc([o.stage, o.owner, o.products].filter(Boolean).join(" · ")) + "</div>";
-    }, pickOpportunity);
-    HQ.on(modal, "click", "[data-opp-clear]", HQ.resetOpportunityPick);
+    HQ.bindPicker("hq-opp-search", "hq-opp-results", searchSource, sourceItemHtml, pickSource);
+    HQ.on(modal, "click", "[data-opp-clear]", HQ.resetSourcePick);
     HQ.on(modal, "click", "[data-crm-add]", function (el) { add(el, found[+el.dataset.crmAdd]); });
     HQ.on(modal, "click", "[data-crm-close]", function () { HQ.show("hq-crm-results", false); });
   };

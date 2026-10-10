@@ -49,6 +49,15 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.loadInquiries();
   }
 
+  /** Tiến độ đơn mua đổi: popup + chuông, làm mới danh sách và ngăn phiếu đang mở nếu liên quan. */
+  function onOrderStatus(payload) {
+    HQ.onOrderStatus(payload);
+    if (isOpen("hq-drawer") && (payload.inquiry_ids || []).indexOf(S.openInquiryId) >= 0) {
+      HQ.openInquiry(S.openInquiryId, true);
+    }
+    HQ.loadInquiries();
+  }
+
   /** Nghe kênh của mã sale đang xem; gọi lại mỗi lần đổi mã. */
   HQ.listenBus = function () {
     var channel = channelOf(S.code);
@@ -67,6 +76,8 @@ window.HlvQuote = window.HlvQuote || {};
           onChat(payload);
         } else if (type === "hlv_vq_quoted") {
           onQuoted(payload);
+        } else if (type === "hlv_vq_order") {
+          onOrderStatus(payload);
         }
       },
     });

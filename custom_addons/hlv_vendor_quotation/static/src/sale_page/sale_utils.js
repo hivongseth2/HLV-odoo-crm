@@ -64,6 +64,18 @@ window.HlvQuote = window.HlvQuote || {};
    * Escape HTML. Nhận mọi kiểu; null/undefined ra chuỗi rỗng.
    * Mọi dữ liệu từ server phải qua đây trước khi nhét vào innerHTML.
    */
+  /**
+   * Ô lấy hàng ở bước 1 nhận hai loại mã: "CH…" = số cơ hội trên MISA CRM, "DH…" / "S…" = số đơn bán
+   * trong Odoo (không phân biệt hoa thường, bỏ khoảng trắng đầu). Trả "crm" | "order" | "" (chưa biết).
+   */
+  HQ.sourceKind = function (term) {
+    var text = String(term || "").trim().toUpperCase();
+    if (text.indexOf("CH") === 0) {
+      return "crm";
+    }
+    return text.indexOf("DH") === 0 || text.indexOf("S") === 0 ? "order" : "";
+  };
+
   HQ.esc = function (value) {
     return (value == null ? "" : String(value)).replace(/[&<>"']/g, function (ch) {
       return ESCAPES[ch];

@@ -117,17 +117,26 @@
           </div>
           <notebook>
             <page string="Camera">
-              <field name="camera_ids">
-                <list editable="bottom">
+              <!-- active_test=False: camera tắt vẫn phải THẤY được. Bỏ tick là
+                   Odoo ngừng tạo bản ghi cho nó, nhưng ràng buộc trùng mã vẫn
+                   tính cả dòng đã tắt — không thấy dòng cũ thì người dùng sẽ
+                   thêm lại và nhận lỗi "trùng mã" không hiểu vì sao. -->
+              <field name="camera_ids" context="{'active_test': False}">
+                <list editable="bottom" decoration-muted="not active">
                   <field name="sequence" widget="handle"/>
                   <field name="name"/>
                   <field name="code"/>
-                  <field name="active"/>
+                  <field name="active" string="Đang dùng"/>
                 </list>
               </field>
               <p class="text-muted">
                 <b>Mã camera</b> phải trùng khoá trong file cấu hình của agent. Odoo cố ý
                 không lưu URL hay mật khẩu camera — agent tự giữ.
+                <br/>
+                Bỏ tick <b>Đang dùng</b> để ngừng quay một camera: Odoo sẽ không tạo
+                bản ghi cho nó nữa và agent không mở camera đó. Dòng vẫn nằm lại đây
+                (màu xám) để tick lại lúc nào cũng được. Xoá hẳn thì không được, vì
+                các video cũ còn trỏ vào.
               </p>
             </page>
           </notebook>
