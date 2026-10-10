@@ -7,8 +7,9 @@ window.HlvQuote = window.HlvQuote || {};
 
   var S = HQ.S;
   var esc = HQ.esc;
-  // Phiếu đang mở + đơn bán sẽ gắn khi lên YCMH; confirming: đang xem bảng tóm tắt trước khi tạo YCMH.
-  var D = { detail: null, saleOrder: null, confirming: false };
+  // Phiếu đang mở + đơn bán sẽ gắn khi lên YCMH; confirming: đang xem bảng tóm tắt trước khi tạo YCMH;
+  // qty: SL sale sửa ở bảng tóm tắt {id dòng phiếu: SL} — khách đổi số lượng sau khi hỏi giá.
+  var D = { detail: null, saleOrder: null, confirming: false, qty: {} };
 
   /** quiet: tải lại ngầm phiếu đang mở (có tin mới) — không nháy "Đang tải…". */
   HQ.openInquiry = function (inquiryId, quiet) {
@@ -43,16 +44,65 @@ window.HlvQuote = window.HlvQuote || {};
   /** Bước 1: hiện bảng tóm tắt (sản phẩm, NCC, giá sẽ lên YCMH) để sale soát trước khi tạo. */
   function reviewRequest(on) {
     D.confirming = on;
+    D.qty = {};
     render(D.detail);
+  }
+
+  /** Dòng sẽ lên YCMH: sản phẩm, giá NCC đã chọn và SL (sale sửa hoặc SL đã hỏi). */
+  function requestRows(d) {
+    var vendorNames = {};
+    d.vendors.forEach(function (v) { vendorNames[v.quote_id] = v.name; });
+    return d.lines.filter(function (l) { return l.to_request; }).map(function (line) {
+      var quoteId = Object.keys(line.offers).find(function (key) { return line.offers[key].selected; });
+      return {
+        line: line, vendor: vendorNames[quoteId] || "", price: line.offers[quoteId].price_incl,
+        qty: D.qty[line.id] !== undefined ? D.qty[line.id] : line.qty,
+      };
+    });
+  }
+
+  /** Gõ SL ở bảng tóm tắt: tính lại thành tiền + tổng tại chỗ (không vẽ lại — giữ con trỏ trong ô). */
+  function updateRequestQty(input) {
+    var value = input.value.trim() === "" ? NaN : Number(input.value);
+    D.qty[input.dataset.reqQty] = value;
+    var panel = HQ.$("hq-drawer-panel");
+    var total = 0;
+    var valid = true;
+    requestRows(D.detail).forEach(function (row) {
+      var ok = row.qty > 0;
+      valid = valid && ok;
+      total += ok ? row.price * row.qty : 0;
+      var cell = panel.querySelector('[data-req-total="' + row.line.id + '"]');
+      cell.textContent = ok ? HQ.money(row.price * row.qty) : "—";
+      panel.querySelector('[data-req-hint="' + row.line.id + '"]').innerHTML = qtyHint(row);
+      panel.querySelector('[data-req-qty="' + row.line.id + '"]').classList.toggle("is-invalid", !ok);
+    });
+    panel.querySelector("[data-req-sum]").textContent = HQ.money(total);
+    panel.querySelector("[data-create-request]").disabled = !valid;
+  }
+
+  /** Ghi chú dưới ô SL: SL đã hỏi khi sale sửa khác; SL ≤ 0 thì báo lỗi. */
+  function qtyHint(row) {
+    if (!(row.qty > 0)) {
+      return '<span class="hq-expired">SL phải lớn hơn 0 — không mua thì bỏ chọn NCC</span>';
+    }
+    if (row.qty === row.line.qty) {
+      return "";
+    }
+    return "hỏi giá " + HQ.qty(row.line.qty) + " " + esc(row.line.uom) +
+      (row.qty > row.line.qty ? ' — <span class="hq-expired">nhiều hơn SL NCC đã báo giá</span>' : "");
   }
 
   /** Bước 2: sale bấm xác nhận trên bảng tóm tắt. */
   function createRequest(button) {
     var d = D.detail;
     button.disabled = true;
+    var quantities = {};
+    requestRows(d).forEach(function (row) { quantities[row.line.id] = row.qty; });
     HQ.api("create_request", {
       inquiry_id: d.id,
       sale_order_id: D.saleOrder ? D.saleOrder.id : null,
+      quantities: quantities,
     }).then(function (detail) {
       var r = detail.request_result;
       D.confirming = false;
@@ -263,18 +313,19 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-muted hq-small">Có đơn bán và đơn đó có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div>';
   }
 
-  /** Bảng tóm tắt những gì sẽ lên YCMH: sản phẩm, NCC đã chọn, giá sau VAT; kèm sản phẩm bị bỏ lại. */
+  /** Bảng tóm tắt những gì sẽ lên YCMH: sản phẩm, SL (sửa được — khách đổi số lượng sau khi hỏi giá),
+      NCC đã chọn, giá sau VAT; kèm sản phẩm bị bỏ lại. */
   function requestSummary(d) {
-    var vendorNames = {};
-    d.vendors.forEach(function (v) { vendorNames[v.quote_id] = v.name; });
     var total = 0;
-    var rows = d.lines.filter(function (l) { return l.to_request; }).map(function (line) {
-      var quoteId = Object.keys(line.offers).find(function (key) { return line.offers[key].selected; });
-      var offer = line.offers[quoteId];
-      total += offer.total_incl;
-      return "<tr><td>" + esc(line.name) + '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
-        "</td><td>" + esc(vendorNames[quoteId] || "") + '</td><td class="hq-num">' + HQ.money(offer.price_incl) +
-        '</td><td class="hq-num">' + HQ.money(offer.total_incl) + "</td></tr>";
+    var rows = requestRows(d).map(function (row) {
+      var line = row.line;
+      total += row.price * row.qty;
+      return "<tr><td>" + esc(line.name) + '</td><td class="hq-num"><span class="hq-nowrap">' +
+        '<input type="number" class="hq-input hq-qty-input" min="0" step="any" inputmode="decimal" data-req-qty="' +
+        line.id + '" value="' + row.qty + '" aria-label="Số lượng lên YCMH — ' + esc(line.name) + '"/> ' + esc(line.uom) +
+        '</span><div class="hq-muted hq-small" data-req-hint="' + line.id + '">' + qtyHint(row) + "</div></td><td>" +
+        esc(row.vendor) + '</td><td class="hq-num">' + HQ.money(row.price) + '</td><td class="hq-num" data-req-total="' +
+        line.id + '">' + HQ.money(row.price * row.qty) + "</td></tr>";
     }).join("");
     var unchosen = d.lines.filter(function (l) {
       return !l.locked && !Object.keys(l.offers).some(function (key) { return l.offers[key].selected; });
@@ -282,8 +333,9 @@ window.HlvQuote = window.HlvQuote || {};
     return '<div class="hq-table-wrap hq-request-summary"><table class="hq-table"><thead><tr><th>Sản phẩm</th>' +
       '<th class="hq-num">SL</th><th>Nhà cung cấp</th><th class="hq-num">Đơn giá sau VAT</th>' +
       '<th class="hq-num">Thành tiền</th></tr></thead><tbody>' + rows + "</tbody>" +
-      '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b>' + HQ.money(total) +
-      "</b></td></tr></tfoot></table></div>" +
+      '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b data-req-sum="1">' +
+      HQ.money(total) + "</b></td></tr></tfoot></table></div>" +
+      '<div class="hq-muted hq-small">Khách đổi số lượng sau khi hỏi giá thì sửa ở cột SL — phiếu hỏi giá giữ SL đã hỏi.</div>' +
       '<div class="hq-muted hq-small">' + (D.saleOrder ? "Gắn đơn bán <b>" + esc(D.saleOrder.name) +
         "</b> — đơn đã có YCMH chưa duyệt thì hàng được gộp vào đó." : "Không gắn đơn bán.") + "</div>" +
       (unchosen.length ? '<div class="hq-alert hq-alert-strong">' + unchosen.length + " sản phẩm chưa chọn NCC sẽ " +
@@ -380,6 +432,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(panel, "click", "[data-unchoose]", function (el) { choose(+el.dataset.unchoose, false); });
     HQ.on(panel, "click", "[data-review-request]", function (el) { reviewRequest(el.dataset.reviewRequest === "1"); });
     HQ.on(panel, "click", "[data-create-request]", createRequest);
+    HQ.on(panel, "input", "[data-req-qty]", updateRequestQty);
     HQ.on(panel, "click", "[data-cancel-inquiry]", cancelInquiry);
     HQ.on(panel, "click", "[data-save-opp]", saveOpportunity);
     HQ.on(panel, "keydown", "#hq-opp-input", function (el, event) {

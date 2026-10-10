@@ -220,6 +220,21 @@ def parse_states(text, allowed, default):
     return tuple(state for state in allowed if state in picked) or tuple(default)
 
 
+def request_qty(raw, asked):
+    """Số lượng lên YCMH sale nhập ở bảng tóm tắt (khách đổi số lượng sau khi hỏi giá).
+
+    raw: số hoặc chuỗi số từ JSON trang sale; None / "" = sale không sửa → trả asked (SL đã hỏi).
+    Trả float > 0; None khi không đọc được hoặc ≤ 0 (nơi gọi báo lỗi dòng đó).
+    """
+    if raw is None or raw == "":
+        return asked
+    try:
+        qty = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return qty if qty > 0 else None
+
+
 def price_incl_vat(net_price, tax_rate):
     """Đơn giá sau VAT từ đơn giá chưa VAT và % VAT, làm tròn 2 chữ số lẻ.
 

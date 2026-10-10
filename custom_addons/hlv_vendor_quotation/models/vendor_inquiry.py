@@ -4,7 +4,7 @@ from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
 from ..services.price_reuse import apply_valid_prices
-from .vendor_quote_utils import clean_ref, inquiry_close_day
+from .vendor_quote_utils import clean_ref, format_vn_number, inquiry_close_day, request_qty
 
 SALE_STATUS = [
     ("waiting", "Chờ NCC báo giá"),
@@ -228,12 +228,14 @@ class VendorInquiry(models.Model):
                 missing |= line
         return missing
 
-    def action_create_request(self, sale_order=None):
+    def action_create_request(self, sale_order=None, quantities=None):
         """Đưa các sản phẩm đã chọn NCC mà CHƯA nằm trong YCMH nào lên YCMH, kèm giá + NCC.
 
         Gọi được nhiều lần: lần đầu lên phần đã chọn; sản phẩm chọn sau thì bổ sung. Bổ sung
         vào YCMH gần nhất của phiếu nếu nó còn chưa duyệt; không thì theo đơn bán (gộp vào YCMH
         chưa duyệt của đơn nếu có) hoặc tạo YCMH mới. Sản phẩm chưa chọn NCC không lên.
+        quantities: {id dòng phiếu: SL lên YCMH} — khách đổi số lượng sau khi hỏi giá (hỏi 10, mua 5).
+        Dòng không có trong đó lên đúng SL đã hỏi. SL trên phiếu giữ nguyên: NCC báo giá theo số đó.
         """
         self.ensure_one()
         if self.state in ("cancel", "closed"):
@@ -242,8 +244,9 @@ class VendorInquiry(models.Model):
         if not pending:
             raise UserError(_("Không có sản phẩm nào đã chọn NCC mà chưa lên YCMH."))
         order = sale_order or self.sale_order_id
+        qtys = pending._request_quantities(quantities or {})
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
-            [line._request_line_vals() for line in pending],
+            [line._request_line_vals(qtys[line.id]) for line in pending],
             order=order or None,
             source=self.name,
             requester_code=self.sale_code or "",
@@ -260,7 +263,7 @@ class VendorInquiry(models.Model):
         })
         self.message_post(body=Markup(_("%s YCMH <b>%s</b> từ %s sản phẩm đã chọn NCC.")) % (
             _("Gộp vào") if merged else _("Đã tạo"), request.name, len(pending),
-        ))
+        ) + pending._changed_qty_message(qtys))
         return request, merged
 
     def action_close(self, reason, note=""):
@@ -369,15 +372,42 @@ class VendorInquiryLine(models.Model):
             "product_uom_id": self.product_uom_id.id,
         }
 
-    def _request_line_vals(self):
+    def _request_quantities(self, quantities):
+        """{id dòng: SL lên YCMH} cho các dòng này — SL sale sửa (quantities) hoặc SL đã hỏi.
+        SL không đọc được / ≤ 0 → UserError nêu tên sản phẩm (muốn bỏ sản phẩm thì bỏ chọn NCC)."""
+        result = {}
+        for line in self:
+            qty = request_qty(quantities.get(line.id), line.product_qty)
+            if qty is None:
+                raise UserError(_(
+                    "Số lượng lên YCMH của %s phải lớn hơn 0 — không mua sản phẩm này thì bỏ chọn NCC.",
+                    line.name or line.product_id.display_name,
+                ))
+            result[line.id] = qty
+        return result
+
+    def _changed_qty_message(self, qtys):
+        """Dòng chatter liệt kê sản phẩm lên YCMH khác SL đã hỏi ("" nếu không dòng nào đổi)."""
+        changed = self.filtered(lambda line: qtys[line.id] != line.product_qty)
+        if not changed:
+            return Markup("")
+        items = Markup("").join(
+            Markup("<li>%s: %s → %s %s</li>") % (
+                line.name or line.product_id.display_name, format_vn_number(line.product_qty),
+                format_vn_number(qtys[line.id]), line.product_uom_id.name or "",
+            ) for line in changed
+        )
+        return Markup("<p>%s</p><ul>%s</ul>") % (_("Số lượng lên YCMH khác số lượng đã hỏi giá:"), items)
+
+    def _request_line_vals(self, qty=None):
         """Dòng YCMH cho sản phẩm đã chọn NCC — kèm actual_* để wizard Tạo RFQ dùng luôn, và bộ cột
-        "sale đề xuất" (NCC / giá / thuế) như YCMH đi từ MISA."""
+        "sale đề xuất" (NCC / giá / thuế) như YCMH đi từ MISA. qty: SL lên YCMH (None = SL đã hỏi)."""
         self.ensure_one()
         return dict(
             {
                 "product_id": self.product_id.id,
                 "name": self.name or self.product_id.display_name,
-                "product_qty": self.product_qty,
+                "product_qty": self.product_qty if qty is None else qty,
                 "product_uom_id": self.product_uom_id.id,
             },
             **self.chosen_line_id._request_line_actual_vals(),

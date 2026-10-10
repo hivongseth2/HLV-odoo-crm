@@ -410,6 +410,8 @@
 /* Bảng tóm tắt trước khi tạo YCMH. */
 .hq-request-summary { margin: .5rem 0; }
 .hq-request-summary tfoot td { font-weight: 500; }
+.hq-qty-input { width: 6rem; text-align: right; display: inline-block; padding: .25rem .4rem; }
+.hq-qty-input.is-invalid { border-color: #dc2626; }
 
 /* Hàng trên MISA CRM (Odoo chưa có): dòng cuối ô tìm + khung kết quả dưới ô tìm. */
 .hq-crm-item { color: var(--hq-accent-dark); font-weight: 500; }
