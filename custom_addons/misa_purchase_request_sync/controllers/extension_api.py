@@ -928,10 +928,12 @@ class MisaExtensionController(http.Controller):
         domain = [
             ('parent_id', '=', False),
             ('active', '=', True),
-            '|', '|',
+            # Bắt buộc có mã MISA (AND), không OR: luồng đẩy đơn bán sang MISA cũng ghi
+            # field này cho KHÁCH HÀNG, OR sẽ kéo hồ sơ khách vào dropdown NCC.
+            ('misa_account_object_id', '!=', False),
+            '|',
             ('hlv_business_role', 'in', ['supplier', 'vendor']),
             ('supplier_rank', '>', 0),
-            ('misa_account_object_id', '!=', False),
         ]
         q = payload.get('q') or kwargs.get('q')
         if q:
