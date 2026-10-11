@@ -154,7 +154,10 @@ class PurchaseOrderDelivery(models.Model):
         """Ghi ngày mới lên dòng đơn mua + hàng chờ nhận (ngày phiếu nhập). Có người mua: qua đường chuẩn
         _update_date_planned_for_lines (thêm hoạt động "Date Updated" giao người mua); không có thì ghi thẳng —
         hoạt động sẽ giao nhầm cho người đang thao tác (trên trang NCC là user công khai)."""
-        dated = [(line, due_datetime(new, line.date_planned)) for line, _old, new in changes]
+        # Chỉ dời ngày — không đánh dấu thay chứng từ MISA (amis_callback theo dõi date_planned trên dòng đơn mua;
+        # tiền / số lượng không đổi thì không đẩy lại MISA).
+        dated = [(line.with_context(skip_misa_purchase_order_lifecycle=True), due_datetime(new, line.date_planned))
+                 for line, _old, new in changes]
         if self.user_id:
             self._update_date_planned_for_lines(dated)
         else:

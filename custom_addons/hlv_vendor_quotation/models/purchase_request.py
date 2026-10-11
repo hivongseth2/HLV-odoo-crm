@@ -154,7 +154,7 @@ class PurchaseRequest(models.Model):
                 and (not l.hlv_backorder or l.date_required == vals.get("date_required"))
             )[:1]
             if line:
-                extra = {k: v for k, v in vals.items() if k.startswith(CHOICE_FIELD_PREFIXES)}
+                extra = {k: v for k, v in vals.items() if k.startswith(CHOICE_FIELD_PREFIXES) or k == "hlv_separate_po"}
                 line.write(dict(
                     extra,
                     product_qty=line.product_qty + uom._compute_quantity(vals["product_qty"], line.product_uom_id),
@@ -229,6 +229,9 @@ class PurchaseRequestLine(models.Model):
     # Phần NCC hẹn giao sau (NCC thiếu hàng, hẹn ngày): dòng riêng, "Ngày cần" = ngày hẹn — wizard Tạo
     # RFQ tách thành dòng đơn mua riêng theo ngày (wizard/request_rfq_wizard.py).
     hlv_backorder = fields.Boolean(string="Phần NCC hẹn giao", readonly=True, copy=False)
+    # Sale chọn lúc lên YCMH: phần hẹn ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn). Chỉ là gợi ý
+    # cho wizard Tạo RFQ — thu mua đổi được ở ô "Tách đơn mua riêng cho phần NCC hẹn giao".
+    hlv_separate_po = fields.Boolean(string="Phần hẹn: đơn mua riêng", copy=False)
 
     def _hlv_remaining_qty(self):
         """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của

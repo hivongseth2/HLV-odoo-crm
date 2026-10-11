@@ -12,7 +12,8 @@ window.HlvQuote = window.HlvQuote || {};
   // Phiếu đang mở + đơn bán sẽ gắn khi lên YCMH; confirming: đang xem bảng tóm tắt trước khi tạo YCMH;
   // qty: SL mua sale sửa ở bảng tóm tắt {id dòng báo giá: SL}; settle: sản phẩm còn thiếu mà sale chốt
   // "khách chỉ mua chừng này" {id dòng phiếu: true}.
-  var D = { detail: null, saleOrder: null, confirming: false, qty: {}, settle: {} };
+  // separate: phần NCC hẹn giao ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn).
+  var D = { detail: null, saleOrder: null, confirming: false, qty: {}, settle: {}, separate: false };
   var EPS = 1e-9;
 
   /** quiet: tải lại ngầm phiếu đang mở (có tin mới) — không nháy "Đang tải…". */
@@ -61,6 +62,7 @@ window.HlvQuote = window.HlvQuote || {};
     D.confirming = on;
     D.qty = {};
     D.settle = {};
+    D.separate = false;
     render(D.detail);
   }
 
@@ -110,6 +112,24 @@ window.HlvQuote = window.HlvQuote || {};
     return "";
   }
 
+  /** Dòng tóm tắt có phần NCC hẹn giao (sẽ tách dòng YCMH theo ngày hẹn — cùng luật split_buy_qty). */
+  function hasBackorder(row) {
+    var o = row.offer;
+    return !rowError(row) && !!o.backorder_date && !o.no_more && o.available_qty < row.qty;
+  }
+
+  /** Lựa chọn cho phần hẹn: gộp chung đơn mua với hàng có sẵn (mặc định) hay đơn mua riêng. "" khi không có phần hẹn. */
+  function splitChoice(rows) {
+    if (!rows.some(hasBackorder)) {
+      return "";
+    }
+    return '<div class="hq-split-choice"><span class="hq-label">Phần NCC hẹn giao</span>' +
+      '<label><input type="radio" name="hq-split" value="0"' + (D.separate ? "" : " checked") + "/> Gộp chung đơn mua " +
+      "với hàng có sẵn (mỗi dòng giữ ngày riêng)</label>" +
+      '<label><input type="radio" name="hq-split" value="1"' + (D.separate ? " checked" : "") + "/> Tạo đơn mua riêng " +
+      '(phiếu nhập riêng)</label><span class="hq-muted hq-small">Thu mua đổi được khi tạo đơn mua.</span></div>';
+  }
+
   /** Sản phẩm còn thiếu SL, tính cả SL đang sửa ở bảng tóm tắt: [{line, shortage}]. */
   function shortages(d, rows) {
     return d.lines.filter(function (l) { return !l.locked; }).map(function (line) {
@@ -155,6 +175,7 @@ window.HlvQuote = window.HlvQuote || {};
     });
     panel.querySelector("[data-req-sum]").textContent = HQ.money(total);
     panel.querySelector("[data-req-short]").innerHTML = shortageBox(D.detail, rows);
+    panel.querySelector("[data-req-split]").innerHTML = splitChoice(rows);
     panel.querySelector("[data-create-request]").disabled = !valid;
   }
 
@@ -172,6 +193,7 @@ window.HlvQuote = window.HlvQuote || {};
       sale_order_id: D.saleOrder ? D.saleOrder.id : null,
       quantities: quantities,
       settle_line_ids: settle,
+      separate_backorder: D.separate && rows.some(hasBackorder),
     }).then(function (detail) {
       var r = detail.request_result;
       D.confirming = false;
@@ -482,6 +504,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b data-req-sum="1">' +
       HQ.money(total) + "</b></td></tr></tfoot></table></div>" +
       '<div data-req-short="1">' + shortageBox(d, rows) + "</div>" +
+      '<div data-req-split="1">' + splitChoice(rows) + "</div>" +
       '<div class="hq-muted hq-small">' + (D.saleOrder ? "Gắn đơn bán <b>" + esc(D.saleOrder.name) +
         "</b> — đơn đã có YCMH chưa duyệt thì hàng được gộp vào đó." : "Không gắn đơn bán.") + "</div>";
   }
@@ -580,6 +603,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(panel, "click", "[data-create-request]", createRequest);
     HQ.on(panel, "input", "[data-req-qty]", updateRequestQty);
     HQ.on(panel, "change", "[data-settle-line]", function (el) { D.settle[el.dataset.settleLine] = el.checked; });
+    HQ.on(panel, "change", 'input[name="hq-split"]', function (el) { D.separate = el.value === "1"; });
     HQ.on(panel, "change", "[data-buy-qty]", setBuyQty);
     HQ.on(panel, "keydown", "[data-buy-qty]", function (el, event) {
       if (event.key === "Enter") {

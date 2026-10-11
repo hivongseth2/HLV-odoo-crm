@@ -106,8 +106,8 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "delivery_place": order._hlv_delivery_place(),
             "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",
             "ship_text": order._hlv_ship_text(),
-            # Hàng còn chờ giao (đổi ngày giao dự kiến được) — chỉ đơn đã xác nhận, chưa hủy.
-            "pending": order._hlv_pending_info() if order.state in CONFIRMED_STATES else [],
+            # Hàng còn chờ giao theo id dòng đơn mua (ngày giao dự kiến, quá hẹn) — chỉ đơn đã xác nhận, chưa hủy.
+            "due": {item["line_id"]: item for item in order._hlv_pending_info()} if order.state in CONFIRMED_STATES else {},
         }
 
     @http.route(

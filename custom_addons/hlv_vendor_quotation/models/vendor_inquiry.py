@@ -235,7 +235,7 @@ class VendorInquiry(models.Model):
                 missing |= line
         return missing
 
-    def action_create_request(self, sale_order=None, quantities=None, settle_line_ids=()):
+    def action_create_request(self, sale_order=None, quantities=None, settle_line_ids=(), separate_backorder=False):
         """Đưa các NCC đã chọn mà CHƯA nằm trên YCMH lên YCMH — mỗi NCC một dòng (NCC thiếu hàng có
         hẹn thì thêm dòng phần hẹn), kèm giá + NCC.
 
@@ -245,6 +245,8 @@ class VendorInquiry(models.Model):
         quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt (khách đổi số lượng sau khi hỏi giá).
         settle_line_ids: dòng phiếu sale chốt "khách chỉ mua chừng này" — SL cần mua = SL đã chọn,
         hết thiếu. SL hỏi trên phiếu giữ nguyên: NCC báo giá theo số đó.
+        separate_backorder: phần NCC hẹn giao ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn) — ghi
+        lên dòng YCMH phần hẹn làm mặc định cho wizard Tạo RFQ, thu mua đổi được.
         """
         self.ensure_one()
         if self.state in ("cancel", "closed"):
@@ -258,8 +260,8 @@ class VendorInquiry(models.Model):
             quote_line.action_set_buy_qty(qty if qty is not None else 0.0)
         settled = self.line_ids.filtered(lambda l: l.id in set(settle_line_ids or ()))._hlv_settle()
         order = sale_order or self.sale_order_id
-        parts = [(quote_line, vals, is_backorder) for quote_line in pending
-                 for vals, is_backorder in quote_line._hlv_request_parts()]
+        parts = [(quote_line, dict(vals, hlv_separate_po=True) if is_backorder and separate_backorder else vals, is_backorder)
+                 for quote_line in pending for vals, is_backorder in quote_line._hlv_request_parts()]
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
             [vals for _quote_line, vals, _bo in parts],
             order=order or None,
@@ -277,9 +279,11 @@ class VendorInquiry(models.Model):
             "request_id": request.id,
             "sale_order_id": order.id if order else False,
         })
+        split_note = Markup(" ") + _("Phần NCC hẹn giao: đơn mua riêng.") if separate_backorder and any(
+            is_backorder for _q, _v, is_backorder in parts) else ""
         self.message_post(body=Markup(_("%s YCMH <b>%s</b>: %s NCC × sản phẩm đã chọn.")) % (
             _("Gộp vào") if merged else _("Đã tạo"), request.name, len(pending),
-        ) + self.line_ids._changed_qty_message(asked_before) + settled)
+        ) + split_note + self.line_ids._changed_qty_message(asked_before) + settled)
         return request, merged
 
     def action_close(self, reason, note=""):

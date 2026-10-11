@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard "Tạo RFQ" từ YCMH: ô tách đơn mua riêng cho phần NCC hẹn giao (wizard/request_rfq_wizard.py).
+         Kế thừa view của misa_purchase_request_sync (module trong repo, xmlid ổn định) — chỉ hiện khi có dòng hẹn. -->
+    <record id="view_request_rfq_wizard_split_backorder" model="ir.ui.view">
+        <field name="name">purchase.request.line.make.purchase.order.hlv.split.backorder</field>
+        <field name="model">purchase.request.line.make.purchase.order</field>
+        <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_line_make_purchase_order_inherit_misa"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='sync_data_planned']" position="after">
+                <field name="hlv_has_backorder" invisible="1"/>
+                <field name="hlv_split_backorder" invisible="not hlv_has_backorder"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -102,9 +102,10 @@
                     <thead>
                         <tr>
                             <th class="vq-col-no">#</th>
-                            <th>Mặt hàng</th>
+                            <th>Hàng hóa</th>
                             <th class="vq-num">Số lượng</th>
                             <th class="vq-num">Đã nhận</th>
+                            <th>Ngày giao dự kiến</th>
                             <th class="vq-num">Đơn giá sau VAT</th>
                             <th class="vq-num">Thành tiền sau VAT</th>
                         </tr>
@@ -138,6 +139,26 @@
                 <div t-if="line.hlv_invoice_name" class="vq-muted vq-small">Tên xuất HĐ: <t t-esc="line.hlv_invoice_name"/></div></td>
             <td class="vq-num" data-label="Số lượng"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></td>
             <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
+            <t t-set="due" t-value="info['due'].get(line.id)"/>
+            <td class="vq-due-cell" data-label="Ngày giao dự kiến">
+                <t t-if="due">
+                    <span t-attf-class="vq-due-text #{'is-late' if due['late'] else ''}" t-esc="due['due_text'] or '—'"/>
+                    <span t-if="due['late']" class="vq-due-late-tag">quá hẹn</span>
+                    <!-- Bút chì mở ô ngày + nút lưu ngay trên dòng (details: không cần JS). -->
+                    <details t-if="due_editable" class="vq-due-edit">
+                        <summary class="vq-due-pencil" t-att-title="'Sửa ngày giao — %s' % line.product_id.display_name"
+                                 t-att-aria-label="'Sửa ngày giao — %s' % line.product_id.display_name"><svg class="vq-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></summary>
+                        <form method="post" class="vq-due-form" t-att-action="order_url">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                            <input type="date" class="vq-input vq-due-input" required="required"
+                                   t-att-name="'due_%s' % line.id" t-att-value="due['due']" t-att-min="today_iso"/>
+                            <button type="submit" name="due" value="1" class="vq-btn vq-btn-primary">Lưu</button>
+                        </form>
+                    </details>
+                </t>
+                <span t-else="" class="vq-muted" t-esc="fdate(line.date_planned) or '—'"/>
+            </td>
             <td class="vq-num" data-label="Đơn giá sau VAT">
                 <t t-esc="fmt(line.price_total / line.product_qty) if line.product_qty else '—'"/>
                 <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(line.price_unit)"/></div>
@@ -219,37 +240,6 @@
         </t>
     </template>
 
-    <!-- Hàng còn chờ giao + ngày giao dự kiến NCC sửa được (trễ hẹn tô đỏ). Lưu = tự cập nhật ngày trên đơn mua
-         và phiếu nhập bên mua (purchase_order_delivery._vendor_set_due_dates). Biến vào: order, info, order_url. -->
-    <template id="portal_order_due" name="Báo giá NCC - hàng còn chờ giao">
-        <section t-if="info['pending'] and info['progress'] not in ('cancel', 'rfq')" class="vq-progress-panel vq-due-panel">
-            <h2>Hàng còn chờ giao</h2>
-            <form method="post" t-att-action="order_url">
-                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
-                <table class="vq-table vq-due-table">
-                    <thead><tr><th>Mặt hàng</th><th class="vq-num">Còn chờ</th><th>Ngày giao dự kiến</th></tr></thead>
-                    <tbody>
-                        <tr t-foreach="info['pending']" t-as="item" t-attf-class="#{'vq-due-late' if item['late'] else ''}">
-                            <td data-label="Mặt hàng" t-esc="item['name']"/>
-                            <td class="vq-num" data-label="Còn chờ"><t t-esc="fmt(item['remaining'])"/> <t t-esc="item['uom']"/></td>
-                            <td data-label="Ngày giao dự kiến">
-                                <input type="date" class="vq-input vq-due-input" t-att-name="'due_%s' % item['line_id']"
-                                       t-att-value="item['due']" t-att-min="today_iso"
-                                       t-att-aria-label="'Ngày giao dự kiến — %s' % item['name']"/>
-                                <span t-if="item['late']" class="vq-due-late-tag">quá hẹn</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="vq-progress-row">
-                    <button type="submit" name="due" value="1" class="vq-btn vq-btn-secondary">Lưu ngày giao</button>
-                    <span class="vq-muted vq-small">Chưa giao kịp thì đổi ngày ở đây — <t t-esc="company.name"/> được báo ngay.</span>
-                </div>
-            </form>
-        </section>
-    </template>
-
     <template id="portal_order_form" name="Báo giá NCC - chi tiết đơn mua">
         <t t-call="hlv_vendor_quotation.portal_layout">
             <t t-set="page_title" t-value="order.name"/>
@@ -290,16 +280,18 @@
                     <h2>Tiến độ đơn</h2>
                     <t t-call="hlv_vendor_quotation.portal_order_progress"/>
                 </section>
-                <t t-call="hlv_vendor_quotation.portal_order_due"/>
 
-                <h2 class="vq-section-title">Mặt hàng</h2>
+                <h2 class="vq-section-title">Danh sách hàng hóa</h2>
+                <!-- Ngày giao dự kiến sửa ngay trên dòng (bút chì) — đơn đã xác nhận, hàng còn chờ giao. -->
+                <t t-set="due_editable" t-value="info['progress'] not in ('cancel', 'rfq')"/>
                 <table class="vq-table vq-price-table">
                     <thead>
                         <tr>
                             <th class="vq-col-no">STT</th>
-                            <th>Mặt hàng</th>
+                            <th>Hàng hóa</th>
                             <th class="vq-num">Số lượng</th>
                             <th class="vq-num">Đã nhận</th>
+                            <th>Ngày giao dự kiến</th>
                             <th class="vq-num">Đơn giá sau VAT</th>
                             <th class="vq-num">Thành tiền sau VAT</th>
                         </tr>

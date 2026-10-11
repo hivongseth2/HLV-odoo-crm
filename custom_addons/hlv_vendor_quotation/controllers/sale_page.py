@@ -170,7 +170,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
     def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None,
-                           settle_line_ids=None, **kw):
+                           settle_line_ids=None, separate_backorder=False, **kw):
         """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
         quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt; settle_line_ids: dòng phiếu sale
         chốt "khách chỉ mua chừng này" (hết thiếu)."""
@@ -179,7 +179,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         order = request.env["sale.order"].browse(to_int(sale_order_id)).exists()
         qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
         settle = [to_int(line_id) for line_id in settle_line_ids or []]
-        request_record, merged = inquiry.action_create_request(order or None, qtys, settle)
+        request_record, merged = inquiry.action_create_request(order or None, qtys, settle, bool(separate_backorder))
         return dict(payload.inquiry_detail(inquiry), request_result={
             "name": request_record.sudo().name, "merged": merged,
         })
