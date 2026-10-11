@@ -69,6 +69,23 @@ def _anthropic():
     return anthropic
 
 
+def _client(anthropic, api_key, **options):
+    """Client Claude API chỉ nhận câu trả lời nén gzip.
+
+    httpx2 thấy có module brotli là xin nén brotli, rồi gọi API của brotli >= 1.2. Máy
+    chủ Odoo có sẵn brotli cũ: giải nén lỗi TypeError, SDK báo thành "không kết nối được"
+    và thử lại mãi vẫn hỏng. Xin gzip thì không phụ thuộc bản brotli nào.
+    """
+    return anthropic.Anthropic(
+        api_key=api_key, default_headers={'Accept-Encoding': 'gzip, deflate'}, **options)
+
+
+def _connection_cause(error):
+    """Lỗi gốc bên dưới APIConnectionError, để biết là mạng hay lỗi khác bị gói lại."""
+    cause = error.__cause__ or error.__context__
+    return ("%s: %s" % (type(cause).__name__, cause))[:150] if cause else str(error)
+
+
 class HlvProductAgentApiRunner(models.AbstractModel):
     _name = 'hlv.product.agent.api.runner'
     _description = "Chạy trợ lý tạo mã hàng bằng Claude API"
@@ -117,7 +134,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
     def check_connection(self, api_key, model):
         """Thử key + model bằng Models API (không tốn token). Trả chuỗi báo kết quả."""
         anthropic = _anthropic()
-        client = anthropic.Anthropic(api_key=api_key, timeout=30, max_retries=1)
+        client = _client(anthropic, api_key, timeout=30, max_retries=1)
         try:
             info = client.models.retrieve(model)
         except anthropic.AuthenticationError:
@@ -126,8 +143,9 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             raise TurnFailed("API key không có quyền dùng model %s." % model)
         except anthropic.NotFoundError:
             raise TurnFailed("Tài khoản chưa dùng được model %s." % model)
-        except anthropic.APIConnectionError:
-            raise TurnFailed("Odoo không kết nối được tới Claude API.")
+        except anthropic.APIConnectionError as error:
+            _logger.warning("PRODUCT_AGENT kiểm tra Claude API lỗi kết nối", exc_info=True)
+            raise TurnFailed("Odoo không kết nối được tới Claude API (%s)." % _connection_cause(error))
         except anthropic.APIStatusError as error:
             raise TurnFailed("Claude API lỗi %s." % error.status_code)
         return "Kết nối được, model %s." % (info.display_name or model)
@@ -228,7 +246,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
     def _run_steps(self, session, claim_token, config, prompt_text, history, turn):
         """Vòng gọi API + chạy tool cho tới khi Claude trả lời xong. Trả ``(reply, messages)``."""
         anthropic = _anthropic()
-        client = anthropic.Anthropic(api_key=config['api_key'], timeout=REQUEST_TIMEOUT_SECONDS)
+        client = _client(anthropic, config['api_key'], timeout=REQUEST_TIMEOUT_SECONDS)
         model = config['model']
         text = turn['prompt'] if history else turn['prompt_cold']
         messages = history + [{'role': 'user', 'content': user_content(text, turn['images'])}]
@@ -280,8 +298,9 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             raise TurnFailed("API key Claude không có quyền dùng model này")
         except anthropic.RateLimitError:
             raise TurnFailed("Claude API đang hết hạn mức, thử lại sau ít phút")
-        except anthropic.APIConnectionError:
-            raise TurnFailed("không kết nối được Claude API")
+        except anthropic.APIConnectionError as error:
+            _logger.warning("PRODUCT_AGENT Claude API lỗi kết nối", exc_info=True)
+            raise TurnFailed("không kết nối được Claude API (%s)" % _connection_cause(error))
         except anthropic.APIStatusError as error:
             raise TurnFailed("Claude API lỗi %s, thử lại sau" % error.status_code)
 
