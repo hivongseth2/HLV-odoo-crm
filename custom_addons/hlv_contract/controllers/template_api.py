@@ -72,6 +72,14 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
             template = request.env['hlv.contract.template'].create(vals)
         return payload.template_detail(template)
 
+    @http.route(f'{API}/template/duplicate', type='json', auth='user', methods=['POST'])
+    def api_template_duplicate(self, template_id=None, **kw):
+        """Nhân bản mẫu (nội dung + bộ biến) để làm mẫu mới từ mẫu có sẵn."""
+        self._check_manager()
+        template = self._get_record('hlv.contract.template', template_id)
+        duplicate = template.copy({'name': '%s (bản sao)' % template.name, 'active': True})
+        return payload.template_detail(duplicate)
+
     @http.route(f'{API}/template/convert', type='json', auth='user', methods=['POST'])
     def api_template_convert(self, template_id=None, **kw):
         self._check_manager()

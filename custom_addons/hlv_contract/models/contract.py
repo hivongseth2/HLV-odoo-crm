@@ -10,7 +10,7 @@ Giao diện là trang /hop-dong (controllers/), không dùng form backend.
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from ..utils import contract_vars, docx_io, docx_merge, html_blocks
+from ..utils import contract_vars, docx_io, docx_merge, html_blocks, preview_marks
 
 _SEQUENCE_CODE = {'sale': 'hlv.contract.sale', 'principle': 'hlv.contract.principle'}
 STATES = [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đã ký'), ('cancel', 'Đã huỷ')]
@@ -188,6 +188,24 @@ class Contract(models.Model):
                                          line_count=len(self.line_ids))
         except ValueError as err:
             raise UserError('Không điền được mẫu "%s": %s' % (self.template_id.name, err))
+
+    def _preview_html(self):
+        """Bản xem trước khi đang soạn: như bản in, nhưng mỗi biến nhập được đánh dấu (đã điền /
+        còn trống, trống thì hiện nhãn) để người soạn thấy ô nào nằm chỗ nào trên hợp đồng.
+        Chạy được cả với hợp đồng chưa lưu (record new()) — số hợp đồng khi đó chưa có."""
+        self.ensure_one()
+        values = self._merge_vars()
+        for var in self.template_id.variable_ids:
+            text = values.get(var.name) or ''
+            values[var.name] = preview_marks.mark(var.name, text or var.label, not text)
+        if values.get('So_Hop_Dong') in ('', '/', False):
+            values['So_Hop_Dong'] = preview_marks.mark('So_Hop_Dong', 'số tự cấp khi lưu', True)
+        try:
+            docx = docx_merge.fill_docx(self.template_id._docx_bytes(), values, line_count=len(self.line_ids))
+        except ValueError as err:
+            raise UserError('Không điền được mẫu "%s": %s' % (self.template_id.name, err))
+        html = html_blocks.blocks_to_html(docx_io.read_docx(docx, keep_fields=False))
+        return preview_marks.marks_to_html(html)
 
     def _render_html_fragment(self):
         """Nội dung hợp đồng dạng HTML (không có thẻ html/body), dùng cho xem nhanh và PDF."""

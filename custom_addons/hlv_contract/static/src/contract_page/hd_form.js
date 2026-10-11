@@ -7,7 +7,9 @@ window.HlvContract = window.HlvContract || {};
 
   var S = HD.S;
   var esc = HD.esc;
-  var SECTION_ORDER = ["general", "buyer", "terms", "other"];
+  var SECTION_ORDER = ["general", "buyer", "goods", "terms", "other"];
+  var preview = null;
+  var previewToken = 0;
 
   function template() {
     var id = S.form.template_id;
@@ -52,7 +54,8 @@ window.HlvContract = window.HlvContract || {};
     (S.config.library.sections || []).forEach(function (s) { labels[s[0]] = s[1]; });
     return SECTION_ORDER.map(function (section) {
       var items = vars.filter(function (v) { return v.section === section; });
-      if (!items.length) {
+      // Mẫu có bảng hàng: biến nhóm Hàng hoá vẽ chung trong khung bảng hàng (linesHtml)
+      if (!items.length || (section === "goods" && template().has_lines)) {
         return "";
       }
       var hasSuggestField = vars.some(function (v) { return HD.PARTNER_SUGGEST_FIELDS.indexOf(v.name) >= 0; });
@@ -93,10 +96,12 @@ window.HlvContract = window.HlvContract || {};
       return "";
     }
     var c = S.contract || {};
+    var goodsVars = template().variables.filter(function (v) { return v.section === "goods"; });
     return '<section class="hd-step"><div class="hd-step-head"><h3 class="hd-h3">Hàng hoá</h3>' +
       '<span class="hd-muted hd-small">Gõ mã/tên để chọn sản phẩm, hoặc gõ tự do · giá nhập là giá SAU VAT</span>' +
       '<div class="hd-push d-flex gap-2"><button type="button" class="hd-btn hd-btn-mini" id="hd-paste-toggle">Dán từ Excel</button>' +
       '<button type="button" class="hd-btn hd-btn-mini" id="hd-add-line">+ Thêm dòng</button></div></div>' +
+      (goodsVars.length ? '<div class="hd-grid">' + goodsVars.map(fieldHtml).join("") + "</div>" : "") +
       '<div class="hd-picker hd-order-picker"><input type="search" id="hd-order-search" class="hd-input w-100" autocomplete="off" ' +
       'placeholder="Lấy hàng từ đơn bán: gõ số đơn (S…, DH…) hoặc tên khách"/>' +
       '<div id="hd-order-results" class="hd-dropdown hd-hidden"></div></div>' +
@@ -136,9 +141,11 @@ window.HlvContract = window.HlvContract || {};
         '<button type="button" class="hd-btn" data-act="docx">Word</button>' +
         '<button type="button" class="hd-btn" data-act="pdf">PDF</button>'
       : "";
+    var toggle = '<button type="button" class="hd-btn' + (S.previewOn ? " is-on" : "") + '" data-toggle-preview="1">' +
+      (S.previewOn ? "Ẩn xem trước" : "Xem trước khi soạn") + "</button>";
     return '<header class="hd-drawer-head"><div><h2 class="hd-h2">' + (c ? esc(c.name) : "Hợp đồng mới") + " " + tag + "</h2>" +
       (c ? '<div class="hd-muted hd-small">Phụ trách: ' + esc(c.user) + "</div>" : "") + "</div>" +
-      '<div class="hd-push d-flex flex-wrap gap-2">' + files + "</div>" +
+      '<div class="hd-push d-flex flex-wrap gap-2">' + toggle + files + "</div>" +
       '<button type="button" class="btn-close ms-2" data-close="drawer" aria-label="Đóng"></button></header>';
   }
 
@@ -165,7 +172,16 @@ window.HlvContract = window.HlvContract || {};
       '<section class="hd-step"><label class="hd-label" for="hd-f-note">Ghi chú nội bộ (không in ra hợp đồng)</label>' +
       '<textarea class="hd-input hd-textarea w-100" id="hd-f-note" rows="2">' + esc(S.form.note) + "</textarea></section>" +
       "</fieldset>";
-    HD.$("hd-drawer-panel").innerHTML = headerHtml() + '<div class="hd-drawer-body">' + body + "</div>" + footerHtml();
+    var panel = HD.$("hd-drawer-panel");
+    panel.classList.toggle("with-preview", !!S.previewOn);
+    panel.innerHTML = headerHtml() +
+      '<div class="hd-drawer-body hd-compose"><div class="hd-compose-form">' + body + "</div>" +
+      (S.previewOn ? '<aside class="hd-compose-preview" id="hd-compose-preview"></aside>' : "") + "</div>" + footerHtml();
+    preview = S.previewOn ? HD.mountLivePreview(HD.$("hd-compose-preview"), {
+      title: "bấm vào để tới ô nhập",
+      onPick: focusVariable,
+    }) : null;
+    refreshPreview();
     if (HD.$("hd-partner-search")) {
       bindPartnerPicker();
     }
@@ -181,6 +197,54 @@ window.HlvContract = window.HlvContract || {};
     if (label) {
       label.textContent = on ? "Có thay đổi chưa lưu" : "";
     }
+    if (on) {
+      refreshPreview();
+    }
+  }
+
+  /* ---------------------------------------------------------- xem trước khi soạn */
+
+  /** Dựng lại bản xem trước từ nội dung đang gõ (chưa lưu). Chỉ lấy kết quả của lần gọi mới nhất. */
+  var refreshPreview = HD.debounce(function () {
+    if (!preview || !S.form.template_id || !HD.$("hd-f-date")) {
+      return;
+    }
+    collectForm();
+    var payload = {
+      contract_id: S.contract ? S.contract.id : null,
+      template_id: S.form.template_id,
+      contract_date: S.form.contract_date,
+      partner_id: S.form.partner_id || false,
+      vat_rate: S.form.vat_rate,
+      values: S.form.values,
+    };
+    if (template().has_lines) {
+      payload.lines = S.lines;
+    }
+    var token = ++previewToken;
+    var target = preview;
+    target.setStatus("đang cập nhật…");
+    HD.api("preview_draft", payload).then(function (result) {
+      if (token === previewToken && target === preview) {
+        target.setHtml(result.html);
+        target.setStatus("");
+      }
+    }).catch(function (err) {
+      if (target === preview) {
+        target.setStatus(err.message);
+      }
+    });
+  }, 500);
+
+  /** Bấm chỗ biến trên bản xem trước: nhảy tới ô nhập của biến đó. */
+  function focusVariable(name) {
+    var input = document.querySelector('#hd-form [data-var="' + name + '"]');
+    if (!input) {
+      HD.toast(name === "So_Hop_Dong" ? "Số hợp đồng tự cấp khi lưu" : "Chỗ này tự điền, không cần nhập");
+      return;
+    }
+    input.scrollIntoView({ block: "center", behavior: "smooth" });
+    input.focus({ preventScroll: true });
   }
 
   /* ---------------------------------------------------------- chọn khách / đơn bán */
@@ -415,6 +479,7 @@ window.HlvContract = window.HlvContract || {};
   /** Mở hợp đồng id; id = null là hợp đồng mới, templateId (tuỳ chọn) chọn sẵn mẫu. */
   HD.openContract = function (id, templateId) {
     S.dirty = false;
+    S.previewOn = HD.previewEnabled();
     var load = id ? HD.api("get", { contract_id: id }) : Promise.resolve(null);
     load.then(function (detail) {
       if (detail) {
@@ -457,6 +522,16 @@ window.HlvContract = window.HlvContract || {};
     var panel = HD.$("hd-drawer-panel");
 
     HD.on(panel, "input", "[data-var], #hd-f-date, #hd-f-note", function () { markDirty(true); });
+    HD.on(panel, "focusin", "[data-var]", function (el) {
+      if (preview) {
+        preview.highlight(el.dataset.var);
+      }
+    });
+    HD.on(panel, "click", "[data-toggle-preview]", function () {
+      collectForm();
+      S.previewOn = HD.previewEnabled(!S.previewOn);
+      render();
+    });
     HD.on(panel, "input", "[data-partner-suggest]", function (el) {
       if (el.dataset.var === "Ten_Ben_Mua" && S.form.partner_id) {
         S.form.partner_id = false;   // gõ tay tên khác: không còn là khách trong danh bạ

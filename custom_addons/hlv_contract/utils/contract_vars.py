@@ -31,7 +31,8 @@ LINE_VARIABLE_RE = re.compile(r'^(%s)_(\d+)$' % '|'.join(LINE_FIELDS))
 SYSTEM_VARIABLES = DATE_VARIABLES + SELLER_VARIABLES + TOTAL_VARIABLES
 
 VARIABLE_TYPES = [('text', 'Chữ'), ('textarea', 'Đoạn văn'), ('number', 'Số'), ('money', 'Số tiền'), ('date', 'Ngày')]
-SECTIONS = [('general', 'Thông tin chung'), ('buyer', 'Bên mua'), ('terms', 'Điều khoản'), ('other', 'Khác')]
+SECTIONS = [('general', 'Thông tin chung'), ('buyer', 'Bên mua'), ('goods', 'Hàng hoá'), ('terms', 'Điều khoản'),
+            ('other', 'Khác')]
 
 # Thư viện biến hay dùng: tên -> (nhãn, kiểu, nhóm). Không bắt buộc mẫu nào phải có.
 STANDARD_VARIABLES = {
@@ -45,7 +46,7 @@ STANDARD_VARIABLES = {
     'Thoi_Gian_Giao_Hang': ('Thời gian giao hàng', 'text', 'terms'),
     'Dia_Diem_Giao_Hang': ('Địa điểm giao hàng', 'text', 'terms'),
     'Dieu_Kien_Thanh_Toan': ('Điều kiện thanh toán', 'textarea', 'terms'),
-    'Mat_Hang_Chinh': ('Mặt hàng chính', 'text', 'terms'),
+    'Mat_Hang_Chinh': ('Mặt hàng chính', 'text', 'goods'),
     'Ngay_Het_Han': ('Hiệu lực đến ngày', 'date', 'general'),
     'Toa_An_Giai_Quyet': ('Toà án giải quyết tranh chấp', 'text', 'terms'),
 }

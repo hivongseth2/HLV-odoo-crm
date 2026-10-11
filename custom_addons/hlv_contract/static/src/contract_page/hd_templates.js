@@ -102,9 +102,12 @@ window.HlvContract = window.HlvContract || {};
     var isNew = !t.id;
     return '<div class="hd-tpl-head">' +
       '<input type="text" class="hd-input hd-tpl-name" id="hd-tpl-name" placeholder="Tên mẫu" value="' + esc(t.name) + '"/>' +
-      '<select class="hd-input" id="hd-tpl-type" title="Loại — quyết định dãy số HĐMB-/HĐNT-">' + HD.typeOptions(t.contract_type) + "</select>" +
+      '<label class="hd-inline-label" for="hd-tpl-type">Dãy số</label>' +
+      '<select class="hd-input" id="hd-tpl-type" title="Hợp đồng theo mẫu này đánh số HĐMB-… hay HĐNT-…">' +
+      HD.typeOptions(t.contract_type) + "</select>" +
       '<label class="hd-check-label"><input type="checkbox" id="hd-tpl-active"' + (t.active ? " checked" : "") + "/> Đang dùng</label>" +
       '<div class="hd-push d-flex flex-wrap gap-2">' +
+      (isNew ? "" : '<button type="button" class="hd-btn" id="hd-tpl-duplicate" title="Tạo mẫu mới từ mẫu này">Nhân bản</button>') +
       (isNew ? "" : '<button type="button" class="hd-btn" id="hd-tpl-download">Tải file Word</button>') +
       (isNew ? "" : '<button type="button" class="hd-btn" id="hd-tpl-replace">Thay bằng file Word…</button>') +
       (t.source === "docx" && !isNew ? '<button type="button" class="hd-btn" id="hd-tpl-convert">Chuyển sang soạn trên trang</button>' : "") +
@@ -300,6 +303,11 @@ window.HlvContract = window.HlvContract || {};
       renderTemplate();
     });
     HD.on(panel, "click", "#hd-tpl-save", saveTemplate);
+    HD.on(panel, "click", "#hd-tpl-duplicate", function () {
+      HD.api("template/duplicate", { template_id: S.template.id }).then(function (detail) {
+        return afterTemplateChange(detail, "Đã tạo bản sao — đổi tên rồi sửa nội dung");
+      }).then(function () { HD.$("hd-tpl-name").select(); }).catch(HD.fail);
+    });
     HD.on(panel, "click", "#hd-tpl-download", function () {
       HD.download("/hop-dong/mau/" + S.template.id + "/file");
     });

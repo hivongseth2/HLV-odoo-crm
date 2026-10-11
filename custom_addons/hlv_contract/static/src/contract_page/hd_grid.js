@@ -8,6 +8,8 @@ window.HlvContract = window.HlvContract || {};
   var S = HD.S;
   var esc = HD.esc;
   var editing = null;   // {td, input, id, name, original}
+  var preview = null;   // khung xem trước của dòng đang chọn
+  var previewId = null;
 
   function columns() {
     var template = S.gridTemplate;
@@ -57,6 +59,7 @@ window.HlvContract = window.HlvContract || {};
         '<td class="hd-right hd-num hd-strong">' + HD.money(row.amount_total) + "</td>"
       : "";
     return '<tr data-id="' + row.id + '" class="hd-row hd-grid-row' + (S.selected[row.id] ? " is-selected" : "") +
+      (row.id === previewId ? " is-previewing" : "") +
       (row.editable ? "" : " is-locked") + '">' + HD.checkCell(row) +
       '<td class="hd-strong hd-nowrap hd-sticky-col">' + esc(row.name) + "</td>" + cells + lines +
       "<td>" + HD.stateTag(row) + "</td>" + HD.rowActions(row) + "</tr>";
@@ -82,10 +85,16 @@ window.HlvContract = window.HlvContract || {};
         ? S.rows.map(rowHtml).join("")
         : '<tr><td colspan="' + (columns().length + 6) + '" class="hd-empty">Chưa có hợp đồng nào theo mẫu này. ' +
           "Bấm “+ Thêm dòng” để tạo.</td></tr>";
-      HD.$("hd-sheet-hint").innerHTML = "Bấm vào ô để sửa — <b>Enter</b> lưu, <b>Tab</b> sang ô kế, <b>Esc</b> huỷ. " +
+      HD.$("hd-sheet-hint").innerHTML = '<span>Bấm vào ô để sửa — <b>Enter</b> lưu, <b>Tab</b> sang ô kế, <b>Esc</b> huỷ. ' +
         (S.gridTemplate.has_lines ? "Hàng hoá: bấm ô “Hàng hoá” để mở ngăn soạn. " : "") +
-        "Hợp đồng đã xác nhận / đã ký bị khoá (chỉ Quản lý sửa).";
+        "Hợp đồng đã xác nhận / đã ký bị khoá (chỉ Quản lý sửa).</span>" +
+        '<button type="button" class="hd-btn hd-btn-mini hd-push' + (S.gridPreviewOn ? " is-on" : "") +
+        '" data-grid-preview-toggle="1">' + (S.gridPreviewOn ? "Ẩn xem trước" : "Xem trước hợp đồng") + "</button>";
       HD.show("hd-sheet-hint", true);
+      if (previewId && !findRow(previewId)) {
+        previewId = null;
+      }
+      showPreview(previewId || (S.rows[0] && S.rows[0].id));
       HD.show("hd-grid-add", true);
       HD.afterLoad(result);
     }).catch(HD.fail);
@@ -122,6 +131,12 @@ window.HlvContract = window.HlvContract || {};
     td.classList.add("is-editing");
     td.innerHTML = "";
     td.appendChild(input);
+    if (row.id !== previewId) {
+      showPreview(row.id);
+    }
+    if (preview) {
+      preview.highlight(name);
+    }
     input.focus();
     if (input.select && type !== "date") {
       input.select();
@@ -157,6 +172,56 @@ window.HlvContract = window.HlvContract || {};
     var tr = HD.$("hd-list").querySelector('tr[data-id="' + row.id + '"]');
     if (tr) {
       tr.outerHTML = rowHtml(row);
+    }
+    if (row.id === previewId) {
+      showPreview(row.id);
+    }
+  }
+
+  /* ---------------------------------------------------------- xem trước dòng đang chọn */
+
+  /** Hiện hợp đồng của dòng id ở khung bên phải (dữ liệu đã lưu, có đánh dấu chỗ từng biến). */
+  function showPreview(id) {
+    var aside = HD.$("hd-grid-preview");
+    HD.show("hd-grid-preview", !!S.gridPreviewOn && !!id);
+    HD.$("hd-sheet-body").classList.toggle("with-preview", !!S.gridPreviewOn && !!id);
+    if (!S.gridPreviewOn || !id) {
+      preview = null;
+      return;
+    }
+    if (previewId !== id || !preview) {
+      HD.$("hd-list").querySelectorAll("tr.is-previewing").forEach(function (tr) { tr.classList.remove("is-previewing"); });
+      var tr = HD.$("hd-list").querySelector('tr[data-id="' + id + '"]');
+      if (tr) {
+        tr.classList.add("is-previewing");
+      }
+    }
+    if (!preview) {
+      preview = HD.mountLivePreview(aside, { title: "bấm vào để sửa ô đó trong bảng", onPick: editFromPreview });
+    }
+    previewId = id;
+    preview.setStatus("đang tải…");
+    HD.api("preview", { contract_id: id, marks: true }).then(function (result) {
+      if (preview && previewId === id) {
+        preview.setHtml(result.html);
+        preview.setStatus(result.name);
+      }
+    }).catch(function (err) {
+      if (preview) {
+        preview.setStatus(err.message);
+      }
+    });
+  }
+
+  /** Bấm chỗ biến trên tờ hợp đồng: mở ô tương ứng của dòng đang xem để sửa. */
+  function editFromPreview(name) {
+    var tr = HD.$("hd-list").querySelector('tr[data-id="' + previewId + '"]');
+    var td = tr ? tr.querySelector('td.is-editable[data-cell="' + name + '"]') : null;
+    if (td) {
+      td.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+      startEdit(td);
+    } else {
+      HD.toast(name === "So_Hop_Dong" ? "Số hợp đồng tự cấp khi lưu" : "Ô này không sửa được ở đây");
     }
   }
 
@@ -237,6 +302,18 @@ window.HlvContract = window.HlvContract || {};
 
   HD.initGrid = function () {
     var list = HD.$("hd-list");
+    S.gridPreviewOn = HD.previewEnabled();
+    HD.on(HD.$("hd-sheet-hint"), "click", "[data-grid-preview-toggle]", function () {
+      S.gridPreviewOn = HD.previewEnabled(!S.gridPreviewOn);
+      preview = null;
+      HD.loadGrid();
+    });
+    // Bấm vào dòng (chỗ không phải ô sửa / nút) thì xem trước hợp đồng của dòng đó
+    HD.on(list, "click", "tr.hd-grid-row", function (tr, event) {
+      if (!event.target.closest("input, button, textarea, td.is-editable, [data-lines]")) {
+        showPreview(+tr.dataset.id);
+      }
+    });
     HD.on(list, "click", "td.is-editable", function (td, event) {
       if (!event.target.closest("input, textarea")) {
         startEdit(td);

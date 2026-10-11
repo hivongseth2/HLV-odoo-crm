@@ -25,6 +25,8 @@
                             <button type="button" class="hd-nav-tab hd-hidden" data-open-seller="1" data-manager="1">Thông tin bên bán</button>
                         </div>
                         <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link text-white" href="/hop-dong/huong-dan" target="_blank"
+                               rel="noopener">Hướng dẫn</a>
                             <a class="nav-link text-white-50 d-none d-md-inline" href="/hoi-gia-ncc">Hỏi giá NCC</a>
                             <a class="nav-link text-white-50" href="/odoo">Odoo</a>
                         </div>
@@ -53,13 +55,17 @@
                         <div id="hd-sheets" class="hd-sheets" role="tablist"></div>
                         <section class="hd-panel hd-sheet-panel">
                             <div id="hd-sheet-hint" class="hd-sheet-hint hd-hidden"></div>
-                            <div class="hd-table-wrap hd-grid-scroll">
-                                <table class="hd-table" id="hd-table">
-                                    <thead id="hd-thead"></thead>
-                                    <tbody id="hd-list">
-                                        <tr><td class="hd-empty">Đang tải…</td></tr>
-                                    </tbody>
-                                </table>
+                            <div class="hd-sheet-body" id="hd-sheet-body">
+                                <div class="hd-table-wrap hd-grid-scroll">
+                                    <table class="hd-table" id="hd-table">
+                                        <thead id="hd-thead"></thead>
+                                        <tbody id="hd-list">
+                                            <tr><td class="hd-empty">Đang tải…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <!-- Xem trước hợp đồng của dòng đang chọn trong bảng dữ liệu (hd_grid.js) -->
+                                <aside class="hd-grid-preview hd-hidden" id="hd-grid-preview"></aside>
                             </div>
                             <div class="hd-sheet-foot">
                                 <button type="button" class="hd-btn hd-btn-mini hd-hidden" id="hd-grid-add">+ Thêm dòng</button>
@@ -155,6 +161,21 @@
                                     <span><b>Mở trong trình soạn</b> — để sửa nội dung, chèn biến ngay trên trang</span></label>
                                 <p class="hd-muted hd-small mt-2">File .doc (Word 97-2003) chỉ đọc được chữ và trường trộn, mất định
                                     dạng — luôn mở trong trình soạn để chỉnh lại.</p>
+                                <details class="hd-import-help">
+                                    <summary>Chuẩn bị file Word thế nào?</summary>
+                                    <ol>
+                                        <li>Mở hợp đồng mẫu trong Word, xoá chữ ở chỗ cần điền (tên bên mua, số tiền…).</li>
+                                        <li>Đặt con trỏ vào chỗ đó → <b>Insert → Quick Parts → Field…</b> → chọn <b>MergeField</b>,
+                                            gõ tên biến (không dấu, nối bằng _), ví dụ <code>Ten_Ben_Mua</code> → OK.
+                                            Chỗ đó hiện «Ten_Ben_Mua».</li>
+                                        <li>Dùng đúng tên biến có sẵn (bảng biến ở màn soạn mẫu, hoặc file mẫu gốc) để được tự điền;
+                                            tên mới thì thành biến riêng của mẫu.</li>
+                                        <li>Bảng hàng: chỉ cần một dòng có <code>Ten_Hang_1</code>, <code>DVT_1</code>,
+                                            <code>So_Luong_1</code>, <code>Don_Gia_1</code>, <code>Thanh_Tien_1</code>.</li>
+                                        <li>Lưu dạng .docx rồi Import. Xem thêm ở trang <a href="/hop-dong/huong-dan#mau-word"
+                                            target="_blank" rel="noopener">Hướng dẫn</a>.</li>
+                                    </ol>
+                                </details>
                             </div>
                             <div class="hd-modal-foot">
                                 <button type="button" class="hd-btn" data-close="import">Huỷ</button>
@@ -184,6 +205,7 @@
                 <!-- Thứ tự quan trọng: utils → ui → tính năng → app. -->
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_utils.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_ui.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_preview.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_list.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_grid.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_form.js?v=#{asset_version}"></script>

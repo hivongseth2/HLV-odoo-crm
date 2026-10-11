@@ -38,7 +38,7 @@ class ContractTemplate(models.Model):
     note = fields.Text(string='Ghi chú')
     active = fields.Boolean(default=True)
     company_id = fields.Many2one('res.company', string='Công ty', default=lambda self: self.env.company)
-    variable_ids = fields.One2many('hlv.contract.template.variable', 'template_id', string='Biến nhập')
+    variable_ids = fields.One2many('hlv.contract.template.variable', 'template_id', string='Biến nhập', copy=True)
     has_lines = fields.Boolean(string='Có bảng hàng hoá', readonly=True,
                                help='Mẫu có biến dòng hàng (Ten_Hang_1...) — hợp đồng sẽ có bảng hàng và tổng tiền.')
     system_fields = fields.Char(readonly=True, help='Biến tự điền có trong mẫu, cách nhau dấu phẩy.')

@@ -106,6 +106,7 @@ window.HlvContract = window.HlvContract || {};
   function loadSummary() {
     HD.show("hd-grid-add", false);
     HD.show("hd-sheet-hint", false);
+    HD.show("hd-grid-preview", false);
     return HD.api("list", { search: S.search, state: S.state, page: S.page }).then(function (result) {
       S.rows = result.contracts;
       HD.$("hd-thead").innerHTML = SUMMARY_HEAD;

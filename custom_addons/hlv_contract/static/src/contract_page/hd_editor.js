@@ -214,6 +214,11 @@ window.HlvContract = window.HlvContract || {};
       var suggestions = library.standard.filter(function (v) { return mineNames.indexOf(v.name) < 0; });
       palette.innerHTML =
         '<div class="hd-palette-head">Bấm để chèn vào chỗ con trỏ</div>' +
+        '<details class="hd-palette-help"><summary>Biến dùng chung giữa các mẫu?</summary>' +
+        "<p>Mỗi mẫu tự chọn biến nào cần. <b>Cùng tên biến = cùng một thông tin</b> ở mọi mẫu: " +
+        "đổi mẫu khi đang soạn thì giá trị đã gõ được giữ; chọn khách thì các biến Bên mua tự điền.</p>" +
+        "<p>Nên dùng biến trong <b>Gợi ý</b> cho thông tin chung (bên mua, giao hàng…); chỉ tạo " +
+        "<b>Biến mới</b> cho thông tin riêng của mẫu này.</p></details>" +
         '<div class="hd-palette-group"><div class="hd-palette-title">Biến của mẫu này — người dùng điền</div>' +
         (mine.length ? mine.map(function (v) { return chip(v.name, v.label, "is-mine"); }).join("")
           : '<div class="hd-muted hd-small">Chưa có. Thêm biến mới hoặc chọn từ gợi ý bên dưới.</div>') +
