@@ -8,12 +8,19 @@ window.HlvQuote = window.HlvQuote || {};
   var esc = HQ.esc;
   var current = null;  // {model: "quote" | "order", id}
 
+  /** Người nhắn: tên công ty (server đã đổi user nội bộ → công ty của chứng từ, NCC → công ty NCC); tin do sale
+      gửi thì ghi thêm tên sale. */
+  function authorLabel(m) {
+    var sale = m.from_vendor ? "" : HQ.saleName(m.sale_code);
+    return m.author + (sale ? " · " + sale : "");
+  }
+
   function render(res) {
     HQ.$("hq-chat-title").textContent = "Trao đổi với NCC — " + res.title;
     var list = HQ.$("hq-chat-list");
     list.innerHTML = res.messages.length ? res.messages.map(function (m) {
       return '<div class="hq-msg' + (m.from_vendor ? " hq-msg-vendor" : "") + '">' +
-        '<div class="hq-msg-head"><b>' + esc(m.from_vendor ? m.author : HQ.saleName(m.sale_code) || "Bên mình") + "</b>" +
+        '<div class="hq-msg-head"><b>' + esc(authorLabel(m)) + "</b>" +
         (m.from_vendor ? ' <span class="hq-tag hq-tag-warn">NCC</span>' : "") +
         ' <span class="hq-muted">' + esc(m.date) + "</span></div>" +
         (m.body ? '<div class="hq-msg-body">' + esc(m.body) + "</div>" : "") +
