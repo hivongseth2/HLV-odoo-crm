@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Khối trong Cài đặt > Tồn kho, kế thừa view cài đặt của stock (xmlid ổn định qua các
+         bản Odoo, cùng cách misa_fetch_po_button làm). -->
+    <record id="res_config_settings_view_form_product_agent" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.hlv.product.agent</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='stock']" position="inside">
+                <block title="Trợ lý tạo mã hàng (Claude)" name="hlv_product_agent_settings">
+                    <setting id="hlv_product_agent_mode"
+                             help="Máy chạy Claude: agent trên máy văn phòng (menu Trợ lý tạo mã hàng &gt; Máy chạy Claude). Claude API: Odoo tự gọi, không cần máy nào bật.">
+                        <field name="hlv_product_agent_mode" widget="radio"/>
+                    </setting>
+                    <setting id="hlv_product_agent_api" string="Claude API"
+                             invisible="hlv_product_agent_mode != 'api'"
+                             help="Tính tiền theo token trên tài khoản Anthropic. Số token từng cuộc xem ở Trợ lý tạo mã hàng &gt; Hội thoại.">
+                        <div class="content-group">
+                            <div class="row mt8">
+                                <label for="hlv_product_agent_api_key" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_product_agent_api_key" password="True"
+                                       required="hlv_product_agent_mode == 'api'"/>
+                            </div>
+                            <div class="row">
+                                <label for="hlv_product_agent_api_model" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_product_agent_api_model"/>
+                            </div>
+                            <div class="row">
+                                <label for="hlv_product_agent_api_effort" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_product_agent_api_effort"/>
+                            </div>
+                            <div class="row">
+                                <label for="hlv_product_agent_api_parallel" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_product_agent_api_parallel"/>
+                            </div>
+                            <button name="action_hlv_product_agent_check_api" type="object"
+                                    string="Kiểm tra kết nối" class="btn-link" icon="oi-arrow-right"/>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

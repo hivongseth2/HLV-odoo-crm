@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Chế độ Claude API: sale gửi tin là cron được gọi ngay (_trigger); chu kỳ 1 phút chỉ
+         để vớt tin sót và dọn lượt treo. Lưu cài đặt là bật/tắt cron theo chế độ
+         (res.config.settings.set_values); noupdate để nâng cấp module không bật/tắt lại. -->
+    <record id="ir_cron_product_agent_api" model="ir.cron">
+        <field name="name">Trợ lý tạo mã hàng: trả lời bằng Claude API</field>
+        <field name="model_id" ref="model_hlv_product_agent_api_runner"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_run_queue()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <!-- Tắt sẵn: mặc định chạy bằng máy văn phòng. Chọn Claude API trong Cài đặt là bật. -->
+        <field name="active" eval="False"/>
+    </record>
+</odoo>

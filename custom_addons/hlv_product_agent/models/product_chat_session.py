@@ -2,8 +2,12 @@
 """Một cuộc hội thoại của một sale với trợ lý tạo mã hàng.
 
 Vòng đời một lượt:
-    sale gửi tin (to_send=True) -> agent poll, claim_jobs() cầm tin bằng claim_token
-    -> agent chạy Claude, tool MISA đi qua Odoo kèm claim_token -> deliver_reply().
+    sale gửi tin (to_send=True) -> claim_jobs() cầm tin bằng claim_token
+    -> Claude chạy, tool MISA đi qua Odoo kèm claim_token -> deliver_reply().
+
+Ai cầm tin tuỳ chế độ (Cài đặt > Tồn kho > Trợ lý tạo mã hàng): agent trên máy văn phòng
+poll về (Claude Code), hoặc cron của chính Odoo gọi Claude API bằng API key
+(hlv.product.agent.api.runner). Hai bên dùng chung hàng chờ và claim_token.
 """
 import base64
 import binascii
@@ -15,6 +19,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from ..services import build_turn_prompt, parse_sale_identities
+from ..services.claude_api_payload import INLINE_IMAGE_NOTE
 
 _logger = logging.getLogger(__name__)
 
@@ -61,6 +66,23 @@ class HlvProductChatSession(models.Model):
         help="Agent dùng mã này để --resume, nhờ vậy lượt sau chỉ cần gửi tin mới.",
     )
     message_ids = fields.One2many('hlv.product.chat.message', 'session_id', string="Tin nhắn")
+    # Chế độ API: Odoo tự giữ lịch sử (không có phiên Claude Code để --resume). JSON list
+    # message đúng như đã gửi Claude, chỉ được NỐI THÊM — sửa phần cũ là API từ chối các
+    # khối thinking đã sinh sau phần đó.
+    api_messages = fields.Text(readonly=True, copy=False)
+    api_context_key = fields.Char(
+        readonly=True, copy=False,
+        help="Vân tay model + prompt + tool lúc lịch sử API được mở; đổi là mở lại lịch sử.",
+    )
+    # Token Claude API đã dùng cho cuộc này (chế độ API) — để biết chi phí từng cuộc.
+    # input gồm cả phần ghi cache; cache_read tính giá rẻ hơn nhiều nên để riêng.
+    api_input_tokens = fields.Integer("Token vào", readonly=True, copy=False)
+    api_cache_read_tokens = fields.Integer("Token đọc cache", readonly=True, copy=False)
+    api_output_tokens = fields.Integer("Token ra", readonly=True, copy=False)
+    api_last_prompt_tokens = fields.Integer(
+        "Độ dài prompt gần nhất", readonly=True, copy=False,
+        help="Token của request gần nhất (system + lịch sử). Quá ngưỡng thì lượt sau mở lại lịch sử.",
+    )
 
     # =========================================================================
     # PHÍA SALE (khung chat)
@@ -140,6 +162,7 @@ class HlvProductChatSession(models.Model):
         if self.name == "Hội thoại mới" and text:
             vals['name'] = text[:60]
         self.sudo().write(vals)
+        self.env['hlv.product.agent.api.runner'].wake()
         return message
 
     @staticmethod
@@ -226,27 +249,51 @@ class HlvProductChatSession(models.Model):
         pending.write({'claim_token': token})
         self.write({'state': 'processing', 'claim_token': token, 'claim_date': fields.Datetime.now()})
 
-        is_admin = self.user_id.has_group(MANAGER_GROUP)
-        new_items = [msg.to_prompt_dict() for msg in pending]
-        history = self.message_ids.filtered(
-            lambda m: m.id < pending[:1].id and m.role in ('user', 'assistant')
-        )[-COLD_START_HISTORY_LIMIT:]
-        prompt = build_turn_prompt(new_items, is_admin)
+        prompt, prompt_cold, new_items = self._turn_prompts(pending)
         return {
             'claim_token': token,
             'session_id': self.id,
             'claude_session_id': self.claude_session_id or '',
             'prompt': prompt,
             # Chỉ dùng khi agent không resume được phiên Claude cũ.
-            'prompt_cold': build_turn_prompt(
-                new_items, is_admin, [msg.to_prompt_dict() for msg in history],
-            ) if history else prompt,
+            'prompt_cold': prompt_cold,
             'attachments': [
                 {'id': att.id, 'filename': name}
                 for msg, item in zip(pending, new_items)
                 for att, name in zip(msg.attachment_ids, item['attachments'])
             ],
         }
+
+    def _turn_prompts(self, pending, image_note=None):
+        """Chữ của một lượt: ``(prompt, prompt_cold, new_items)``.
+
+        prompt_cold kèm các tin gần nhất, dùng khi Claude không còn nhớ cuộc này.
+        """
+        self.ensure_one()
+        extra = {'image_note': image_note} if image_note else {}
+        is_admin = self.user_id.has_group(MANAGER_GROUP)
+        new_items = [msg.to_prompt_dict() for msg in pending]
+        history = self.message_ids.filtered(
+            lambda m: m.id < pending[:1].id and m.role in ('user', 'assistant')
+        )[-COLD_START_HISTORY_LIMIT:]
+        prompt = build_turn_prompt(new_items, is_admin, **extra)
+        prompt_cold = build_turn_prompt(
+            new_items, is_admin, [msg.to_prompt_dict() for msg in history], **extra,
+        ) if history else prompt
+        return prompt, prompt_cold, new_items
+
+    def api_turn_input(self):
+        """Đầu vào lượt đang cầm cho chế độ API: chữ + ảnh gửi thẳng trong tin.
+
+        Trả dict ``{'prompt', 'prompt_cold', 'images': [{'filename', 'mimetype', 'data'}]}``,
+        data là base64 của ảnh đã thu nhỏ (xem hlv.product.chat.message.api_image_payloads).
+        """
+        self.ensure_one()
+        claimed = self.message_ids.filtered(
+            lambda m: self.claim_token and m.claim_token == self.claim_token and m.role == 'user')
+        prompt, prompt_cold, _items = self._turn_prompts(claimed, INLINE_IMAGE_NOTE)
+        images = [image for msg in claimed for image in msg.api_image_payloads()]
+        return {'prompt': prompt, 'prompt_cold': prompt_cold, 'images': images}
 
     @api.model
     def from_claim(self, claim_token):
@@ -268,7 +315,7 @@ class HlvProductChatSession(models.Model):
         if error or not reply:
             _logger.warning("PRODUCT_AGENT phiên %s lỗi: %s", self.id, error)
             self._post('event', _(
-                "Máy trợ lý gặp lỗi nên chưa trả lời được (%s). Anh/chị gửi lại tin giúp em."
+                "Trợ lý gặp lỗi nên chưa trả lời được (%s). Anh/chị gửi lại tin giúp em."
             ) % (error or _("không có câu trả lời"))[:300])
 
         vals = {'state': 'idle', 'claim_token': False, 'claim_date': False,

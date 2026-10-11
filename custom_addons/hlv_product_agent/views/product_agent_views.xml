@@ -56,6 +56,8 @@
                         Máy đã cài rồi mà muốn lên bản agent mới: chạy lại đúng lệnh cài, script
                         dùng lại token cũ, không cần mã. Prompt và quy tắc đặt tên sửa ở menu
                         Prompt trợ lý / Quy tắc riêng theo dòng hàng — agent tự tải, không cần cài lại.
+                        <br/>Không muốn bật máy nào: Cài đặt &gt; Tồn kho &gt; Trợ lý tạo mã hàng, chọn
+                        <b>Claude API</b> (API key) — khi đó agent vẫn chạy nhưng không nhận tin.
                     </div>
                     <group string="Kết nối">
                         <field name="token" widget="CopyClipboardChar"/>

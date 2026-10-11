@@ -46,6 +46,10 @@ class ProductAgentApi(http.Controller):
             max_jobs = min(int(kw.get('max_jobs', 1)), MAX_JOBS_PER_POLL)
         except (TypeError, ValueError):
             max_jobs = 1
+        # Đang chạy bằng Claude API thì cron của Odoo nhận việc; agent vẫn poll để sẵn
+        # sàng khi chuyển lại chế độ máy văn phòng.
+        if request.env['hlv.product.agent.api.runner'].sudo().is_api_mode():
+            max_jobs = 0
         jobs = Session.claim_jobs(max_jobs) if max_jobs > 0 else []
         _text, version = request.env['hlv.product.agent.prompt'].sudo().build_prompt()
         return {'ok': True, 'jobs': jobs, 'prompt_version': version}
@@ -83,6 +87,9 @@ class ProductAgentApi(http.Controller):
             # Lượt đã bị thả vì quá hạn: sale đã được báo gửi lại, trả lời muộn bỏ đi.
             _logger.info("PRODUCT_AGENT bỏ câu trả lời muộn của lượt %s", kw.get('claim_token'))
             return {'ok': False, 'error': 'stale'}
+        # Lịch sử chế độ Claude API (nếu từng chạy) không có lượt này: bỏ, để lần sau chuyển
+        # lại API thì mở từ các tin gần nhất thay vì nối vào lịch sử thiếu.
+        session.write({'api_messages': False, 'api_context_key': False})
         session.deliver_reply(
             kw.get('reply') or '',
             claude_session_id=kw.get('claude_session_id') or None,

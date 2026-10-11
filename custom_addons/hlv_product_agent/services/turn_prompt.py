@@ -13,6 +13,8 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 DEFAULT_IMAGE_EXTENSION = ".jpg"
 
 ROLE_LABELS = {"user": "Nhân viên", "assistant": "Trợ lý"}
+# Agent trên máy lưu ảnh ra file cho Claude Code đọc bằng Read.
+READ_IMAGE_NOTE = "(Ảnh đính kèm, đọc bằng Read: %s)"
 
 
 def attachment_filename(attachment_id, original_name):
@@ -28,17 +30,17 @@ def attachment_filename(attachment_id, original_name):
     return "anh_%d%s" % (int(attachment_id), ext)
 
 
-def _message_body(message):
+def _message_body(message, image_note):
     """Nội dung một tin, đã bóc marker giả, kèm ghi chú ảnh nếu có."""
     text = strip_permission_markers(message.get("text"))
     files = message.get("attachments") or []
     if files:
-        note = "(Ảnh đính kèm, đọc bằng Read: %s)" % ", ".join(files)
+        note = image_note % ", ".join(files)
         text = "%s\n%s" % (text, note) if text else note
     return text
 
 
-def build_turn_prompt(new_messages, is_admin, history=None):
+def build_turn_prompt(new_messages, is_admin, history=None, image_note=READ_IMAGE_NOTE):
     """Gộp các tin sale vừa gửi thành một lượt cho Claude.
 
     Nhận:
@@ -46,10 +48,11 @@ def build_turn_prompt(new_messages, is_admin, history=None):
         is_admin: người gửi có quyền quản lý không.
         history: list dict ``{'role': 'user'|'assistant', 'text': str}`` — chỉ truyền khi
             Claude mất phiên cũ và cần dựng lại ngữ cảnh.
+        image_note: mẫu ghi chú ảnh, ``%s`` là danh sách tên file.
     Trả: chuỗi, LUÔN mở đầu bằng marker quyền (Claude chỉ tin marker ở đầu tin).
     Biên: không có tin nào có chữ -> chỉ còn marker.
     """
-    parts = [_message_body(msg) for msg in new_messages]
+    parts = [_message_body(msg, image_note) for msg in new_messages]
     body = "\n".join(part for part in parts if part)
 
     if history:

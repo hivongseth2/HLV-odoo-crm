@@ -38,7 +38,7 @@ def _state(session, identity, choices, after_id=0):
     payload.update({
         'identity': {'key': identity.get('key'), 'name': identity.get('name')} if identity else None,
         'identity_choices': choices,
-        'agent_online': request.env['hlv.product.agent'].is_any_online(),
+        'agent_online': request.env['hlv.product.agent'].is_available(),
     })
     return payload
 

@@ -1,7 +1,19 @@
 # -*- coding: utf-8 -*-
+import base64
+import logging
+
 from odoo import fields, models
+from odoo.tools.image import image_process
 
 from ..services import attachment_filename
+
+_logger = logging.getLogger(__name__)
+
+# Chế độ API gửi ảnh thẳng cho Claude: thu về cạnh dài 1600px. Ảnh điện thoại gốc vừa
+# vượt giới hạn dung lượng của API vừa tốn token mà không đọc thêm được chữ nào.
+API_IMAGE_MAX_SIDE = 1600
+API_IMAGE_QUALITY = 85
+API_IMAGE_TYPES = ('image/jpeg', 'image/png', 'image/gif', 'image/webp')
 
 
 class HlvProductChatMessage(models.Model):
@@ -51,3 +63,25 @@ class HlvProductChatMessage(models.Model):
             'text': self.content or '',
             'attachments': [attachment_filename(att.id, att.name) for att in self.attachment_ids],
         }
+
+    def api_image_payloads(self):
+        """Ảnh của tin này để gửi Claude API: list ``{'filename', 'mimetype', 'data'}``.
+
+        data là base64 (str) của ảnh đã thu nhỏ về JPEG. Ảnh không thu nhỏ được thì gửi bản
+        gốc nếu là định dạng API nhận; định dạng lạ thì bỏ (Claude vẫn thấy tên file).
+        """
+        self.ensure_one()
+        payloads = []
+        for att in self.attachment_ids:
+            filename = attachment_filename(att.id, att.name)
+            raw, mimetype = att.raw or b'', (att.mimetype or '').lower()
+            try:
+                raw = image_process(raw, size=(API_IMAGE_MAX_SIDE, API_IMAGE_MAX_SIDE),
+                                    quality=API_IMAGE_QUALITY, output_format='JPEG')
+                mimetype = 'image/jpeg'
+            except Exception:  # noqa: BLE001 — ảnh hỏng không được làm chết cả lượt
+                _logger.warning("PRODUCT_AGENT không thu nhỏ được ảnh %s", att.id, exc_info=True)
+            if raw and mimetype in API_IMAGE_TYPES:
+                payloads.append({'filename': filename, 'mimetype': mimetype,
+                                 'data': base64.b64encode(raw).decode('ascii')})
+        return payloads

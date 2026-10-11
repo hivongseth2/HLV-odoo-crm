@@ -136,6 +136,34 @@ Lưu ý riêng Mac:
 5. Đăng nhập Claude trên Mac bằng **cùng tài khoản** (hoặc tài khoản khác, nếu muốn
    tách hạn mức với các việc khác trên máy Windows).
 
+## Không cần máy nào: chạy bằng Claude API (API key)
+
+Cách thứ hai, song song với agent: chính Odoo gọi Claude API bằng API key của tài khoản
+Anthropic. Không cần bật máy văn phòng, nhưng tính tiền theo token (khác gói Claude mà
+Claude Code đang dùng).
+
+1. Tạo key ở console.anthropic.com > API keys.
+2. Odoo: **Cài đặt > Tồn kho > Trợ lý tạo mã hàng (Claude)** → chọn **Claude API**, dán
+   key, chọn model, bấm **Kiểm tra kết nối** (không tốn token), rồi **Lưu**.
+3. Xong. Sale gửi tin là cron "Trợ lý tạo mã hàng: trả lời bằng Claude API" chạy ngay.
+
+- Odoo.sh cần thư viện `anthropic` — đã khai trong `requirements.txt` ở gốc repo.
+- Model mặc định **Haiku 5.5** (nhanh, rẻ nhất). Thấy tên / nhóm hàng đặt chưa chuẩn thì
+  đổi sang Sonnet 5.5 trong cài đặt. Haiku không có model dự phòng khi bị bộ lọc an toàn
+  từ chối nhầm (hiếm với tạo mã hàng).
+- Cùng prompt, cùng quy tắc riêng, cùng tool MISA, cùng chốt "chỉ tạo đúng thứ đã đề xuất"
+  và cùng nhật ký như agent. Đọc web bằng `web_fetch` / `web_search` của Anthropic; ảnh sale
+  gửi được thu nhỏ rồi gửi thẳng trong tin.
+- Agent trên máy văn phòng vẫn chạy được, vẫn báo "còn sống", chỉ là không nhận tin.
+  Chuyển lại **Máy chạy Claude** là agent nhận việc ngay — không phải cài lại gì.
+- Sửa prompt: chế độ API dùng bản mới ngay từ tin kế tiếp (không cần "Áp dụng ngay").
+- Chi phí: số token từng cuộc ở **Trợ lý tạo mã hàng > Hội thoại** (bật cột Token vào /
+  Token đọc cache / Token ra). Token đọc cache rẻ hơn token vào 10–20 lần (tuỳ model).
+- Sonnet / Opus: bộ lọc an toàn từ chối nhầm thì Anthropic tự chạy lại trên model dự
+  phòng (`fallbacks: "default"`).
+- Cuộc chat dài quá khoảng 90K token prompt thì lượt sau mở lại từ các tin gần nhất (Haiku
+  tính giá gấp 5 khi prompt vượt 100K).
+
 ## Cài thủ công
 
 Dùng khi muốn chạy agent ngay trong repo để sửa code.
