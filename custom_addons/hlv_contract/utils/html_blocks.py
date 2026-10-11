@@ -8,7 +8,7 @@ bản PDF của hợp đồng. Trong HTML, trường biến viết là {{Ten_Bie
 blocks_to_html(blocks) -> chuỗi HTML (không có <html>/<body>).
 html_to_blocks(html)   -> blocks. Hiểu: p, div, h1-h6, br, strong/b, em/i, u, span,
     ul/ol/li (thêm dấu • ), table/tr/td/th (colspan, <col style="width:..%">, class
-    hlv-noborder = bảng không viền), căn lề text-align/align, font-size, margin-left,
+    hlv-noborder = bảng không viền, còn lại có viền), căn lề text-align/align, font-size, margin-left,
     text-indent, margin-bottom (pt hoặc px). Thẻ lạ bị bỏ qua nhưng giữ chữ bên trong.
 wrap_html_document(fragment) -> trang HTML đầy đủ cho wkhtmltopdf.
 Trường hợp biên: {{ ten }} có khoảng trắng vẫn nhận; HTML rỗng -> [].
@@ -26,11 +26,16 @@ _ALIGN_RE = re.compile(r'text-align\s*:\s*(left|center|right|justify)', re.IGNOR
 _LENGTH_RE = r'(?:^|;)\s*%s\s*:\s*(-?[\d.]+)\s*(pt|px)'
 _WIDTH_PCT_RE = re.compile(r'width\s*:\s*([\d.]+)\s*%')
 _BLOCK_TAGS = {'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'ul', 'ol', 'table', 'blockquote'}
+# Dán từ Word vào trình soạn kèm <style>/<meta>/<o:p>...: bỏ cả thẻ lẫn chữ bên trong
+_SKIP_TAGS = {'style', 'script', 'meta', 'title', 'head', 'xml', 'link'}
 _BOLD_TAGS = {'strong', 'b'}
 _ITALIC_TAGS = {'em', 'i'}
 _UNDERLINE_TAGS = {'u'}
 _ALIGNS = {'left', 'center', 'right', 'justify'}
 _PLAIN_FLAGS = {'b': False, 'i': False, 'u': False, 'sz': None}
+# Viền bảng đi bằng class (CSS ở wrap_html_document và trang /hop-dong), không inline vào ô,
+# để trình soạn mẫu bật/tắt viền cả bảng chỉ bằng đổi class.
+_GRID_CLASS = 'hlv-grid'
 _NO_BORDER_CLASS = 'hlv-noborder'
 _DEFAULT_AFTER_TWIPS = 60
 _TWIPS_PER_PT = 20
@@ -78,7 +83,6 @@ def _para_html(para):
 
 def _table_html(table):
     borders = table.get('borders', True)
-    cell_border = 'border:1px solid #000;' if borders else ''
     rows = []
     for row in table.get('rows') or []:
         cells = []
@@ -86,7 +90,7 @@ def _table_html(table):
             span = int(cell.get('span') or 1)
             colspan = ' colspan="%d"' % span if span > 1 else ''
             inner = ''.join(_para_html(p) for p in cell.get('paras') or [])
-            cells.append('<td%s style="%spadding:2px 5px;vertical-align:top">%s</td>' % (colspan, cell_border, inner))
+            cells.append('<td%s style="padding:2px 5px;vertical-align:top">%s</td>' % (colspan, inner))
         rows.append('<tr>%s</tr>' % ''.join(cells))
     colgroup = ''
     widths = table.get('widths') or []
@@ -94,8 +98,8 @@ def _table_html(table):
         total = float(sum(widths))
         colgroup = '<colgroup>%s</colgroup>' % ''.join(
             '<col style="width:%.2f%%">' % (100 * w / total) for w in widths)
-    css_class = '' if borders else ' class="%s"' % _NO_BORDER_CLASS
-    return '<table%s style="border-collapse:collapse;width:100%%;table-layout:fixed">%s%s</table>' % (
+    css_class = _GRID_CLASS if borders else _NO_BORDER_CLASS
+    return '<table class="%s" style="border-collapse:collapse;width:100%%;table-layout:fixed">%s%s</table>' % (
         css_class, colgroup, ''.join(rows))
 
 
@@ -153,7 +157,7 @@ def _inline_runs(node, flags, runs):
     if node.text:
         _text_to_runs(node.text, flags, runs)
     for child in node:
-        if isinstance(child.tag, str):
+        if isinstance(child.tag, str) and child.tag.lower() not in _SKIP_TAGS:
             if child.tag.lower() == 'br':
                 runs.append({'br': True})
             else:
@@ -224,7 +228,7 @@ def _emit_blocks(node, align=None):
     if node.text:
         _text_to_runs(node.text, _PLAIN_FLAGS, pending)
     for child in node:
-        if isinstance(child.tag, str):
+        if isinstance(child.tag, str) and child.tag.lower() not in _SKIP_TAGS:
             tag = child.tag.lower()
             if tag == 'br':
                 pending.append({'br': True})
@@ -261,6 +265,7 @@ def html_to_blocks(html):
 _PAGE_CSS = (
     'body { font-family: "Times New Roman", serif; font-size: 13pt; color: #000; }'
     'table { border-collapse: collapse; }'
+    'table.hlv-grid td { border: 1px solid #000; }'
     'tr { page-break-inside: avoid; }'
 )
 

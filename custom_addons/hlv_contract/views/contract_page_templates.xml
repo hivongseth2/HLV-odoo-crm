@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang /hop-dong. Tự dựng HTML như /hoi-gia-ncc (hlv_vendor_quotation), KHÔNG dùng
+         web.layout + asset bundle: Odoo 18 bọc mọi file JS trong static/src thành
+         odoo.define(...) mà trang ngoài backend không có bộ nạp module. Nạp thẳng bằng
+         <script src> thì file chạy nguyên văn. -->
+    <template id="contract_page" name="Hợp đồng">
+        &lt;!DOCTYPE html&gt;
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Hợp đồng</title>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+                <link rel="stylesheet" t-attf-href="/hlv_contract/static/src/contract_page/hd_page.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_contract/static/src/contract_page/hd_dialogs.css?v=#{asset_version}"/>
+            </head>
+            <body>
+                <nav class="navbar navbar-dark hd-navbar py-2">
+                    <div class="container-fluid">
+                        <span class="navbar-brand mb-0">Hợp đồng</span>
+                        <div t-if="allowed" class="hd-nav-tabs" id="hd-nav">
+                            <button type="button" class="hd-nav-tab is-active" data-view="contracts">Danh sách hợp đồng</button>
+                            <button type="button" class="hd-nav-tab hd-hidden" data-view="templates" data-manager="1">Mẫu hợp đồng</button>
+                            <button type="button" class="hd-nav-tab hd-hidden" data-open-seller="1" data-manager="1">Thông tin bên bán</button>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link text-white-50 d-none d-md-inline" href="/hoi-gia-ncc">Hỏi giá NCC</a>
+                            <a class="nav-link text-white-50" href="/odoo">Odoo</a>
+                        </div>
+                    </div>
+                </nav>
+
+                <div t-if="not allowed" class="container py-5">
+                    <div class="hd-panel hd-pad">Tài khoản chưa được cấp quyền dùng trang Hợp đồng. Liên hệ quản trị
+                        để được thêm vào nhóm "Hợp đồng / Nhân viên" (Thiết lập → Người dùng).</div>
+                </div>
+
+                <div t-else="" id="hd-app" class="container-fluid py-3">
+
+                    <!-- ============================================== danh sách hợp đồng -->
+                    <section id="hd-view-contracts">
+                        <div class="hd-toolbar">
+                            <label class="hd-sr-only" for="hd-search">Tìm hợp đồng</label>
+                            <input type="search" id="hd-search" class="hd-input hd-input-wide"
+                                   placeholder="Tìm số hợp đồng, tên bên mua, mã số thuế…"/>
+                            <label class="hd-sr-only" for="hd-type-filter">Loại hợp đồng</label>
+                            <select id="hd-type-filter" class="hd-input"></select>
+                            <button type="button" class="hd-btn hd-push" id="hd-export-open" disabled="disabled">
+                                Xuất / In <span id="hd-selected-count"></span></button>
+                            <button type="button" class="hd-btn hd-btn-primary" id="hd-new">+ Hợp đồng mới</button>
+                        </div>
+                        <section class="hd-panel">
+                            <div class="hd-panel-head">
+                                <div id="hd-tabs" class="hd-tabs"></div>
+                            </div>
+                            <div class="hd-table-wrap">
+                                <table class="hd-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="hd-col-check"><input type="checkbox" id="hd-check-all" aria-label="Chọn tất cả"/></th>
+                                            <th>Số hợp đồng</th>
+                                            <th>Ngày ký</th>
+                                            <th>Loại</th>
+                                            <th>Bên mua</th>
+                                            <th class="hd-right">Giá trị</th>
+                                            <th>Phụ trách</th>
+                                            <th>Trạng thái</th>
+                                            <th class="hd-right"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="hd-list">
+                                        <tr><td colspan="9" class="hd-empty">Đang tải…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="hd-pager" class="hd-pager"></div>
+                        </section>
+                    </section>
+
+                    <!-- ============================================== mẫu hợp đồng (Quản lý) -->
+                    <section id="hd-view-templates" class="hd-hidden">
+                        <div class="row g-3">
+                            <div class="col-lg-3">
+                                <aside class="hd-panel">
+                                    <div class="hd-panel-head">
+                                        <h2 class="hd-h3">Mẫu hợp đồng</h2>
+                                    </div>
+                                    <div class="hd-side-actions">
+                                        <button type="button" class="hd-btn hd-btn-primary" id="hd-tpl-new">+ Soạn mẫu mới</button>
+                                        <button type="button" class="hd-btn" id="hd-tpl-import-open">Import .doc/.docx</button>
+                                    </div>
+                                    <div id="hd-tpl-list" class="hd-tpl-list"></div>
+                                </aside>
+                            </div>
+                            <div class="col-lg-9">
+                                <section class="hd-panel" id="hd-tpl-editor">
+                                    <div class="hd-pad hd-muted">Chọn một mẫu bên trái, hoặc soạn mẫu mới.</div>
+                                </section>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== ngăn soạn hợp đồng -->
+                    <div id="hd-drawer" class="hd-drawer hd-hidden">
+                        <div class="hd-drawer-backdrop" data-close="drawer"></div>
+                        <section class="hd-drawer-panel" id="hd-drawer-panel"></section>
+                    </div>
+
+                    <!-- Xem nhanh: hợp đồng đã điền trên tờ A4 -->
+                    <div id="hd-preview" class="hd-modal hd-hidden">
+                        <div class="hd-modal-box hd-preview-box">
+                            <div class="hd-modal-head">
+                                <h2 class="hd-h2" id="hd-preview-title">Xem nhanh</h2>
+                                <div class="hd-push d-flex gap-2" id="hd-preview-actions"></div>
+                                <button type="button" class="btn-close ms-2" data-close="preview" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hd-preview-scroll">
+                                <article class="hd-paper" id="hd-preview-paper"></article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Xuất / in hàng loạt -->
+                    <div id="hd-export" class="hd-modal hd-hidden">
+                        <div class="hd-modal-box hd-small-box">
+                            <div class="hd-modal-head">
+                                <h2 class="hd-h2">Xuất / In hợp đồng</h2>
+                                <button type="button" class="btn-close" data-close="export" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hd-modal-body">
+                                <p class="hd-muted" id="hd-export-count"></p>
+                                <label class="hd-choice"><input type="radio" name="hd-fmt" value="pdf" checked="checked"/>
+                                    <span><b>PDF</b> — gộp một file, mỗi hợp đồng một trang mới, mở ra in luôn</span></label>
+                                <label class="hd-choice"><input type="radio" name="hd-fmt" value="docx"/>
+                                    <span><b>Word (.docx)</b> — nhiều hợp đồng thì gói thành file .zip</span></label>
+                                <label class="hd-choice"><input type="radio" name="hd-fmt" value="xlsx"/>
+                                    <span><b>Excel</b> — một dòng một hợp đồng, cột giống form Excel cũ</span></label>
+                            </div>
+                            <div class="hd-modal-foot">
+                                <button type="button" class="hd-btn" data-close="export">Huỷ</button>
+                                <button type="button" class="hd-btn hd-btn-primary" id="hd-export-run">Tải xuống</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Import mẫu từ Word -->
+                    <div id="hd-import" class="hd-modal hd-hidden">
+                        <div class="hd-modal-box hd-small-box">
+                            <div class="hd-modal-head">
+                                <h2 class="hd-h2">Import mẫu từ Word</h2>
+                                <button type="button" class="btn-close" data-close="import" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hd-modal-body">
+                                <label class="hd-label" for="hd-import-file">File .docx hoặc .doc</label>
+                                <input type="file" id="hd-import-file" class="form-control form-control-sm" accept=".doc,.docx"/>
+                                <label class="hd-label" for="hd-import-name">Tên mẫu</label>
+                                <input type="text" id="hd-import-name" class="hd-input w-100"/>
+                                <label class="hd-label" for="hd-import-type">Loại hợp đồng</label>
+                                <select id="hd-import-type" class="hd-input w-100"></select>
+                                <div class="hd-label">Cách dùng</div>
+                                <label class="hd-choice"><input type="radio" name="hd-import-mode" value="keep" checked="checked"/>
+                                    <span><b>Giữ nguyên file Word</b> — đúng định dạng gốc, điền vào trường trộn (MERGEFIELD) có sẵn</span></label>
+                                <label class="hd-choice"><input type="radio" name="hd-import-mode" value="builder"/>
+                                    <span><b>Mở trong trình soạn</b> — để sửa nội dung, chèn biến ngay trên trang</span></label>
+                                <p class="hd-muted hd-small mt-2">File .doc (Word 97-2003) chỉ đọc được chữ và trường trộn, mất định
+                                    dạng — luôn mở trong trình soạn để chỉnh lại.</p>
+                            </div>
+                            <div class="hd-modal-foot">
+                                <button type="button" class="hd-btn" data-close="import">Huỷ</button>
+                                <button type="button" class="hd-btn hd-btn-primary" id="hd-import-run">Import</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thông tin bên bán (cấu hình công ty) -->
+                    <div id="hd-seller" class="hd-modal hd-hidden">
+                        <div class="hd-modal-box">
+                            <div class="hd-modal-head">
+                                <h2 class="hd-h2">Thông tin bên bán</h2>
+                                <button type="button" class="btn-close" data-close="seller" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hd-modal-body" id="hd-seller-body"></div>
+                            <div class="hd-modal-foot">
+                                <button type="button" class="hd-btn" data-close="seller">Huỷ</button>
+                                <button type="button" class="hd-btn hd-btn-primary" id="hd-seller-save">Lưu</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="hd-toast" class="hd-toast hd-hidden"></div>
+                </div>
+
+                <!-- Thứ tự quan trọng: utils → ui → tính năng → app. -->
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_utils.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_ui.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_list.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_form.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_editor.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_templates.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_app.js?v=#{asset_version}"></script>
+            </body>
+        </html>
+    </template>
+</odoo>

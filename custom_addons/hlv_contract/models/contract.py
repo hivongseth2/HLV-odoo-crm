@@ -3,24 +3,29 @@
 
 Số hợp đồng lấy từ ir.sequence theo loại và năm (HĐMB-001/2026), không đếm theo thứ tự
 dòng như form Excel cũ. Tổng tiền và chữ được tính lại ở đây; mẫu Word chỉ hiển thị.
+Giao diện là trang /hop-dong (controllers/), không dùng form backend.
 """
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 from ..utils import contract_vars, docx_io, docx_merge, html_blocks
-from ..utils.amount_words import amount_in_words_vi
+from .contract_template import CONTRACT_TYPES
 
 _SEQUENCE_CODE = {'sale': 'hlv.contract.sale', 'principle': 'hlv.contract.principle'}
-# Nội dung hợp đồng: khoá khi đã rời trạng thái Nháp (giao diện readonly chỉ chặn trên form,
-# còn import/RPC vẫn ghi được nên chặn thêm ở server). Quản lý vẫn sửa được.
-_CONTENT_FIELDS = {
+STATES = [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đã ký'), ('cancel', 'Đã huỷ')]
+# Field trang /hop-dong được ghi. Không có state/name/user_id: trạng thái đi qua action_*,
+# số hợp đồng do sequence cấp.
+FORM_FIELDS = (
     'contract_type', 'template_id', 'contract_date', 'expiry_date', 'partner_id',
     'buyer_name', 'buyer_address', 'buyer_vat', 'buyer_phone', 'buyer_fax',
     'buyer_representative', 'buyer_position', 'delivery_time', 'delivery_place',
-    'payment_terms', 'court', 'main_product', 'vat_rate', 'line_ids',
-}
-_MANAGER_GROUP = 'hlv_contract.group_contract_manager'
+    'payment_terms', 'court', 'main_product', 'vat_rate', 'note',
+)
+# Nội dung hợp đồng: khoá khi đã rời trạng thái Nháp (chặn ở server vì import/RPC vẫn ghi
+# được dù giao diện khoá). Quản lý vẫn sửa được.
+_CONTENT_FIELDS = set(FORM_FIELDS) - {'note'} | {'line_ids'}
+MANAGER_GROUP = 'hlv_contract.group_contract_manager'
 _DATE_FMT = '%d/%m/%Y'
 
 
@@ -31,14 +36,10 @@ class Contract(models.Model):
     _order = 'contract_date desc, id desc'
 
     name = fields.Char(string='Số hợp đồng', default='/', copy=False, readonly=True, tracking=True, index=True)
-    contract_type = fields.Selection(
-        [('sale', 'Hợp đồng mua bán hàng hoá'), ('principle', 'Hợp đồng nguyên tắc')],
-        string='Loại hợp đồng', required=True, default='sale', tracking=True)
-    template_id = fields.Many2one('hlv.contract.template', string='Mẫu', required=True, tracking=True,
-                                  domain="[('contract_type', '=', contract_type), ('active', '=', True)]")
-    state = fields.Selection(
-        [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đã ký'), ('cancel', 'Đã huỷ')],
-        string='Trạng thái', default='draft', required=True, tracking=True, copy=False)
+    contract_type = fields.Selection(CONTRACT_TYPES, string='Loại hợp đồng', required=True, default='sale',
+                                     tracking=True)
+    template_id = fields.Many2one('hlv.contract.template', string='Mẫu', required=True, tracking=True)
+    state = fields.Selection(STATES, string='Trạng thái', default='draft', required=True, tracking=True, copy=False)
     contract_date = fields.Date(string='Ngày ký', required=True, default=fields.Date.context_today, tracking=True)
     expiry_date = fields.Date(string='Ngày hết hạn')
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
@@ -75,13 +76,11 @@ class Contract(models.Model):
     @api.depends('line_ids.subtotal', 'vat_rate')
     def _compute_amounts(self):
         for rec in self:
-            untaxed = sum(rec.line_ids.mapped('subtotal'))
-            vat = untaxed * (rec.vat_rate or 0.0) / 100
-            total = untaxed + vat
-            rec.amount_untaxed = untaxed
-            rec.amount_vat = vat
-            rec.amount_total = total
-            rec.amount_words = amount_in_words_vi(total)
+            totals = contract_vars.compute_totals(rec.line_ids.mapped('subtotal'), rec.vat_rate)
+            rec.amount_untaxed = totals['untaxed']
+            rec.amount_vat = totals['vat']
+            rec.amount_total = totals['total']
+            rec.amount_words = totals['words']
 
     @api.constrains('template_id', 'contract_type')
     def _check_template_type(self):
@@ -89,26 +88,22 @@ class Contract(models.Model):
             if rec.template_id and rec.template_id.contract_type != rec.contract_type:
                 raise ValidationError('Mẫu "%s" không đúng loại hợp đồng.' % rec.template_id.name)
 
-    @api.onchange('contract_type')
-    def _onchange_contract_type(self):
-        if self.template_id.contract_type != self.contract_type:
-            self.template_id = self.env['hlv.contract.template'].search(
-                [('contract_type', '=', self.contract_type)], limit=1)
-
-    @api.onchange('partner_id')
-    def _onchange_partner_id(self):
-        if not self.partner_id:
-            return
-        # Bên mua trên hợp đồng là pháp nhân: chọn người liên hệ thì lấy công ty cha
-        company = self.partner_id.commercial_partner_id
+    @api.model
+    def _buyer_values_from_partner(self, partner):
+        """Thông tin bên mua điền sẵn khi chọn khách. Bên mua là pháp nhân: chọn người liên
+        hệ thì lấy công ty cha, người liên hệ thành người đại diện. Địa chỉ gộp một dòng."""
+        company = partner.commercial_partner_id
         address_lines = (company.contact_address or '').splitlines()
-        self.buyer_name = company.name
-        self.buyer_address = ', '.join(line.strip() for line in address_lines if line.strip())
-        self.buyer_vat = company.vat
-        self.buyer_phone = company.phone or self.partner_id.phone
-        if self.partner_id != company:
-            self.buyer_representative = self.partner_id.name
-            self.buyer_position = self.partner_id.function
+        values = {
+            'partner_id': partner.id,
+            'buyer_name': company.name or '',
+            'buyer_address': ', '.join(line.strip() for line in address_lines if line.strip()),
+            'buyer_vat': company.vat or '',
+            'buyer_phone': company.phone or partner.phone or '',
+        }
+        if partner != company:
+            values.update({'buyer_representative': partner.name or '', 'buyer_position': partner.function or ''})
+        return values
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -122,9 +117,17 @@ class Contract(models.Model):
             self._check_content_editable()
         return super().write(vals)
 
+    def unlink(self):
+        if self.filtered(lambda r: r.state not in ('draft', 'cancel')):
+            raise UserError('Chỉ xoá được hợp đồng Nháp hoặc Đã huỷ.')
+        return super().unlink()
+
+    def _is_manager(self):
+        return self.env.su or self.env.user.has_group(MANAGER_GROUP)
+
     def _check_content_editable(self):
         """Chặn sửa nội dung hợp đồng đã xác nhận/ký, trừ Quản lý."""
-        if self.env.su or self.env.user.has_group(_MANAGER_GROUP):
+        if self._is_manager():
             return
         locked = self.filtered(lambda r: r.state != 'draft')
         if locked:
@@ -194,7 +197,7 @@ class Contract(models.Model):
         self.ensure_one()
         row = {
             'So_Hop_Dong': self.name,
-            'Loai_Hop_Dong': dict(self._fields['contract_type'].selection).get(self.contract_type),
+            'Loai_Hop_Dong': dict(CONTRACT_TYPES).get(self.contract_type),
             'Ngay_Ky': self.contract_date,
             'Ngay_Het_Han': self.expiry_date,
             'Ten_Ben_Mua': self.buyer_name,
@@ -214,7 +217,7 @@ class Contract(models.Model):
             'Tien_Thue_VAT': self.amount_vat,
             'Tong_Gia_Tri_HD': self.amount_total,
             'Tong_Gia_Tri_Bang_Chu': self.amount_words,
-            'Trang_Thai': dict(self._fields['state'].selection).get(self.state),
+            'Trang_Thai': dict(STATES).get(self.state),
             'Ghi_Chu': self.note,
         }
         for idx, line in enumerate(self.line_ids, start=1):
@@ -227,7 +230,7 @@ class Contract(models.Model):
             })
         return row
 
-    # ---------- thao tác ----------
+    # ---------- chuyển trạng thái ----------
 
     def action_confirm(self):
         self.filtered(lambda r: r.state == 'draft').write({'state': 'confirmed'})
@@ -236,34 +239,13 @@ class Contract(models.Model):
         self.filtered(lambda r: r.state == 'confirmed').write({'state': 'signed'})
 
     def action_cancel(self):
+        if not self._is_manager():
+            raise AccessError('Chỉ Quản lý hợp đồng được huỷ hợp đồng.')
         self.filtered(lambda r: r.state != 'cancel').write({'state': 'cancel'})
 
     def action_draft(self):
-        self.filtered(lambda r: r.state == 'cancel').write({'state': 'draft'})
-
-    def action_preview(self):
-        """Xem nhanh: mở hợp đồng đã điền trong cửa sổ đọc, không tạo file."""
-        self.ensure_one()
-        preview = self.env['hlv.contract.preview'].create({
-            'contract_id': self.id,
-            'html': self._render_html_fragment(),
-        })
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Xem nhanh: %s' % self.name,
-            'res_model': 'hlv.contract.preview',
-            'res_id': preview.id,
-            'view_mode': 'form',
-            'target': 'new',
-            'views': [(self.env.ref('hlv_contract.view_hlv_contract_preview_form').id, 'form')],
-        }
-
-    def action_open_export(self):
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Xuất hợp đồng',
-            'res_model': 'hlv.contract.export',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {'active_model': self._name, 'active_ids': self.ids},
-        }
+        """Đưa về Nháp để sửa: nhân viên được làm với hợp đồng Đã xác nhận của mình (chưa ký);
+        hợp đồng đã ký hoặc đã huỷ chỉ Quản lý mở lại."""
+        if not self._is_manager() and self.filtered(lambda r: r.state != 'confirmed'):
+            raise AccessError('Chỉ Quản lý được mở lại hợp đồng đã ký hoặc đã huỷ.')
+        self.filtered(lambda r: r.state != 'draft').write({'state': 'draft'})

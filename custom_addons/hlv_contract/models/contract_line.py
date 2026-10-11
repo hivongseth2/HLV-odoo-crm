@@ -3,6 +3,8 @@
 
 from odoo import api, fields, models
 
+from ..utils.contract_vars import line_subtotal
+
 
 class ContractLine(models.Model):
     _name = 'hlv.contract.line'
@@ -22,7 +24,7 @@ class ContractLine(models.Model):
     @api.depends('quantity', 'price_unit')
     def _compute_subtotal(self):
         for line in self:
-            line.subtotal = line.quantity * line.price_unit
+            line.subtotal = line_subtotal(line.quantity, line.price_unit)
 
     @api.model_create_multi
     def create(self, vals_list):

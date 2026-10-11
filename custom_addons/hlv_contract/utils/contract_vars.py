@@ -95,6 +95,21 @@ def format_number(number):
     return ('%s' % round(value, 4)).rstrip('0').replace('.', ',')
 
 
+def line_subtotal(quantity, price_unit):
+    """Thành tiền một dòng = số lượng x đơn giá; None/'' coi là 0."""
+    return float(quantity or 0) * float(price_unit or 0)
+
+
+def compute_totals(subtotals, vat_rate):
+    """Tổng hợp đồng từ thành tiền từng dòng và thuế suất (%).
+    Trả {'untaxed', 'vat', 'total', 'words'}; danh sách rỗng / thuế None -> 0 và "Không đồng".
+    Một chỗ tính duy nhất cho model, file xuất và trang /hop-dong."""
+    untaxed = sum(float(s or 0) for s in subtotals)
+    vat = untaxed * float(vat_rate or 0) / 100
+    total = untaxed + vat
+    return {'untaxed': untaxed, 'vat': vat, 'total': total, 'words': amount_in_words_vi(total)}
+
+
 def build_vars(values):
     """Dựng dict biến từ giá trị thô.
 
@@ -115,26 +130,25 @@ def build_vars(values):
         out['Thang_Ky'] = str(contract_date.month)
         out['Nam_Ky'] = str(contract_date.year)
 
-    total_untaxed = 0.0
+    subtotals = []
     for idx, line in enumerate(lines, start=1):
         qty = line.get('So_Luong')
         price = line.get('Don_Gia')
         subtotal = line.get('Thanh_Tien')
         if subtotal in (None, '') and qty not in (None, '') and price not in (None, ''):
-            subtotal = float(qty) * float(price)
+            subtotal = line_subtotal(qty, price)
         out['Ten_Hang_%d' % idx] = line.get('Ten_Hang') or ''
         out['DVT_%d' % idx] = line.get('DVT') or ''
         out['So_Luong_%d' % idx] = format_number(qty)
         out['Don_Gia_%d' % idx] = format_money(price)
         out['Thanh_Tien_%d' % idx] = format_money(subtotal)
-        total_untaxed += float(subtotal or 0)
+        subtotals.append(subtotal)
 
     vat_rate = float(values.get('Thue_Suat_VAT') or 0)
-    vat_amount = total_untaxed * vat_rate / 100
-    grand_total = total_untaxed + vat_amount
-    out['Tong_Tien_Hang'] = format_money(total_untaxed)
+    totals = compute_totals(subtotals, vat_rate)
+    out['Tong_Tien_Hang'] = format_money(totals['untaxed'])
     out['Thue_Suat_VAT'] = format_number(vat_rate)
-    out['Tien_Thue_VAT'] = format_money(vat_amount)
-    out['Tong_Gia_Tri_HD'] = format_money(grand_total)
-    out['Tong_Gia_Tri_Bang_Chu'] = amount_in_words_vi(grand_total)
+    out['Tien_Thue_VAT'] = format_money(totals['vat'])
+    out['Tong_Gia_Tri_HD'] = format_money(totals['total'])
+    out['Tong_Gia_Tri_Bang_Chu'] = totals['words']
     return out

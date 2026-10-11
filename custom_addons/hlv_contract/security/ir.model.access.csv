@@ -4,7 +4,4 @@ access_hlv_contract_manager,hlv.contract manager,model_hlv_contract,group_contra
 access_hlv_contract_line_user,hlv.contract.line user,model_hlv_contract_line,group_contract_user,1,1,1,1
 access_hlv_contract_template_user,hlv.contract.template user,model_hlv_contract_template,group_contract_user,1,0,0,0
 access_hlv_contract_template_manager,hlv.contract.template manager,model_hlv_contract_template,group_contract_manager,1,1,1,1
-access_hlv_contract_export_user,hlv.contract.export user,model_hlv_contract_export,group_contract_user,1,1,1,1
-access_hlv_contract_preview_user,hlv.contract.preview user,model_hlv_contract_preview,group_contract_user,1,1,1,1
-access_hlv_contract_template_import_manager,hlv.contract.template.import manager,model_hlv_contract_template_import,group_contract_manager,1,1,1,1
 access_res_company_hlv_contract_manager,res.company hlv contract manager,base.model_res_company,group_contract_manager,1,1,0,0

@@ -1,17 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Giao diện hợp đồng là trang riêng /hop-dong (như /hoi-gia-ncc); menu Odoo chỉ trỏ sang đó -->
+    <record id="action_hlv_contract_page" model="ir.actions.act_url">
+        <field name="name">Hợp đồng</field>
+        <field name="url">/hop-dong</field>
+        <field name="target">self</field>
+    </record>
+
     <menuitem id="menu_hlv_contract_root" name="Hợp đồng" sequence="45"
+              action="action_hlv_contract_page"
+              web_icon="hlv_contract,static/description/icon.png"
               groups="group_contract_user"/>
-
-    <menuitem id="menu_hlv_contract_list" name="Hợp đồng" parent="menu_hlv_contract_root"
-              action="action_hlv_contract" sequence="10"/>
-
-    <menuitem id="menu_hlv_contract_config" name="Cấu hình" parent="menu_hlv_contract_root"
-              sequence="90" groups="group_contract_manager"/>
-    <menuitem id="menu_hlv_contract_template" name="Mẫu hợp đồng" parent="menu_hlv_contract_config"
-              action="action_hlv_contract_template" sequence="10"/>
-    <menuitem id="menu_hlv_contract_template_import" name="Import mẫu từ Word" parent="menu_hlv_contract_config"
-              action="action_hlv_contract_template_import" sequence="20"/>
-    <menuitem id="menu_hlv_contract_company_seller" name="Thông tin bên bán" parent="menu_hlv_contract_config"
-              action="action_hlv_contract_company_seller" sequence="30"/>
 </odoo>
