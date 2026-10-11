@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Tab "Lịch sử báo giá" của NCC (controllers/vendor_portal_history.py): chỉ số tổng, mặt hàng hay được
+    <!-- Không dùng định dạng "%s%%" trong biểu thức: Odoo nạp XML đổi "%%" thành "%" (tools/convert.py) → lỗi
+         "incomplete format" lúc render. Ghép chuỗi thay thế.
+         Tab "Lịch sử báo giá" của NCC (controllers/vendor_portal_history.py): chỉ số tổng, mặt hàng hay được
          hỏi, bảng mọi mặt hàng đã báo (phân trang). Lọc bằng form GET — chạy không cần JS. -->
     <template id="portal_history" name="Báo giá NCC - lịch sử báo giá">
         <t t-call="hlv_vendor_quotation.portal_layout">
@@ -49,7 +51,7 @@
                         <span class="vq-muted">/ <t t-esc="summary['asked']"/> được hỏi</span></span></div>
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="summary['won']"/><span class="vq-kpi-label">lượt được chọn / lên đơn</span></div>
                     <div class="vq-kpi" title="Được chọn hoặc lên đơn ÷ (đó + không được chọn). Chưa tính dòng còn chờ bên mua chọn và dòng báo hết hàng.">
-                        <span class="vq-kpi-num" t-esc="'%s%%' % summary['rate'] if summary['rate'] is not None else '—'"/>
+                        <span class="vq-kpi-num" t-esc="(str(summary['rate']) + '%') if summary['rate'] is not None else '—'"/>
                         <span class="vq-kpi-label">tỉ lệ báo giá thành công</span></div>
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="summary['orders']"/><span class="vq-kpi-label">đơn mua</span></div>
                 </div>
@@ -78,7 +80,7 @@
                                 <td class="vq-num" data-label="Lượt hỏi" t-esc="p['asked']"/>
                                 <td class="vq-num" data-label="Có giá" t-esc="p['priced']"/>
                                 <td class="vq-num" data-label="Được chọn / lên đơn" t-esc="p['won']"/>
-                                <td class="vq-num" data-label="Tỉ lệ thành công" t-esc="'%s%%' % p['rate'] if p['rate'] is not None else '—'"/>
+                                <td class="vq-num" data-label="Tỉ lệ thành công" t-esc="(str(p['rate']) + '%') if p['rate'] is not None else '—'"/>
                                 <td class="vq-num" data-label="Lượt đơn mua" t-esc="p['orders']"/>
                                 <td class="vq-num" data-label="Giá gần nhất" t-esc="fmt(round(p['last_price'])) if p['last_price'] else '—'"/>
                             </tr>
