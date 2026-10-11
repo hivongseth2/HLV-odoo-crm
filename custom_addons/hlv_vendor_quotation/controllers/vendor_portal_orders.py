@@ -34,13 +34,13 @@ ORDER_TABS = [
     ("cancel", "Đã hủy"),
     ("all", "Tất cả"),
 ]
-# Thông báo sau khi lưu (?saved=…): báo tiến độ / gửi đề xuất thay đổi / áp ngay / chỉ đổi ngày / rút đề xuất.
+# Thông báo sau khi lưu (?saved=…): báo tiến độ / gửi yêu cầu thay đổi / áp ngay / chỉ đổi ngày / rút yêu cầu.
 SAVED_MESSAGES = {
     "1": "Đã cập nhật tiến độ đơn. Cảm ơn quý công ty!",
-    "pending": "Đã gửi đề xuất thay đổi — bên mua duyệt xong sẽ áp vào đơn và báo quý công ty.",
+    "pending": "Đã gửi yêu cầu thay đổi — bên mua duyệt xong sẽ áp vào đơn và báo quý công ty.",
     "applied": "Đã cập nhật đơn.",
     "dates": "Đã lưu ngày giao — bên mua đã được báo.",
-    "withdrawn": "Đã rút đề xuất thay đổi.",
+    "withdrawn": "Đã rút yêu cầu thay đổi.",
 }
 # Bản in cho NCC: mẫu "Đơn mua hàng" chuẩn của Odoo. Mẫu tự dựng cũ (portal_order_print) giữ lại
 # trong views/portal_order_templates.xml để dùng lại sau, hiện không route nào gọi.
@@ -125,7 +125,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "ship_text": order._hlv_ship_text(),
             # Hàng còn chờ giao theo id dòng đơn mua (ngày giao dự kiến, quá hẹn) — chỉ đơn đã xác nhận, chưa hủy.
             "due": {item["line_id"]: item for item in order._hlv_pending_info()} if order.state in CONFIRMED_STATES else {},
-            # Đề xuất thay đổi đơn của NCC (phiên bản): đang chờ duyệt, lịch sử, giá sau VAT từng dòng.
+            # Yêu cầu thay đổi đơn của NCC (phiên bản): đang chờ duyệt, lịch sử, giá sau VAT từng dòng.
             "revision": order._hlv_revision_info(),
         }
 
@@ -159,7 +159,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
                 elif withdraw:
                     revision = order.sudo().hlv_revision_ids.filtered(lambda r: str(r.id) == str(withdraw))
                     if not revision:
-                        raise UserError("Không tìm thấy đề xuất.")
+                        raise UserError("Không tìm thấy yêu cầu.")
                     revision._vendor_withdraw(access.partner_id)
                     saved = "withdrawn"
                 else:

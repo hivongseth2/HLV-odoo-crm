@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Đề xuất thay đổi đơn mua của NCC (models/purchase_order_revision.py): thu mua xem cũ → mới từng dòng,
-         duyệt (áp vào đơn) hoặc không duyệt (ghi lý do). NCC thấy kết quả trên khung trao đổi + lịch sử đề xuất. -->
+    <!-- Yêu cầu thay đổi đơn mua của NCC (models/purchase_order_revision.py): thu mua xem cũ → mới từng dòng,
+         duyệt (áp vào đơn) hoặc không duyệt (ghi lý do). NCC thấy kết quả trên khung trao đổi + lịch sử yêu cầu. -->
     <record id="view_po_revision_list" model="ir.ui.view">
         <field name="name">hlv.po.revision.list</field>
         <field name="model">hlv.po.revision</field>
         <field name="arch" type="xml">
-            <list string="Đề xuất thay đổi đơn mua" create="0"
+            <list string="Yêu cầu thay đổi đơn mua" create="0"
                   decoration-warning="state == 'pending'" decoration-muted="state in ('rejected', 'withdrawn')">
                 <field name="purchase_order_id"/>
                 <field name="partner_id"/>
@@ -23,17 +23,17 @@
         <field name="name">hlv.po.revision.form</field>
         <field name="model">hlv.po.revision</field>
         <field name="arch" type="xml">
-            <form string="Đề xuất thay đổi đơn mua" create="0">
+            <form string="Yêu cầu thay đổi đơn mua" create="0">
                 <header>
                     <button name="action_approve" type="object" string="Duyệt — áp vào đơn" class="btn-primary"
                             invisible="state != 'pending'" groups="purchase.group_purchase_user"
-                            confirm="Áp số lượng / đơn giá / ngày giao đề xuất vào đơn mua?"/>
+                            confirm="Áp số lượng / đơn giá / ngày giao NCC yêu cầu vào đơn mua?"/>
                     <button name="action_reject" type="object" string="Không duyệt"
                             invisible="state != 'pending'" groups="purchase.group_purchase_user"/>
                     <field name="state" widget="statusbar" statusbar_visible="pending,approved,rejected"/>
                 </header>
                 <sheet>
-                    <div class="oe_title"><h1>Đề xuất số <field name="number" class="oe_inline"/></h1></div>
+                    <div class="oe_title"><h1>Yêu cầu số <field name="number" class="oe_inline"/></h1></div>
                     <group>
                         <group>
                             <field name="purchase_order_id"/>
@@ -81,13 +81,13 @@
     </record>
 
     <record id="action_po_revision" model="ir.actions.act_window">
-        <field name="name">Đề xuất thay đổi đơn mua của NCC</field>
+        <field name="name">Yêu cầu thay đổi đơn mua của NCC</field>
         <field name="res_model">hlv.po.revision</field>
         <field name="view_mode">list,form</field>
         <field name="context">{"search_default_filter_pending": 1}</field>
     </record>
 
-    <!-- Đơn mua: nút "Đề xuất NCC" + báo đầu đơn khi có đề xuất chờ duyệt. -->
+    <!-- Đơn mua: nút "Yêu cầu NCC" + báo đầu đơn khi có yêu cầu chờ duyệt. -->
     <record id="view_purchase_order_form_po_revision" model="ir.ui.view">
         <field name="name">purchase.order.form.po.revision</field>
         <field name="model">purchase.order</field>
@@ -96,13 +96,13 @@
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_hlv_revisions" type="object" class="oe_stat_button" icon="fa-history"
                         invisible="not hlv_revision_ids">
-                    <field name="hlv_revision_pending_count" widget="statinfo" string="Đề xuất NCC chờ duyệt"/>
+                    <field name="hlv_revision_pending_count" widget="statinfo" string="Yêu cầu NCC chờ duyệt"/>
                 </button>
                 <field name="hlv_revision_ids" invisible="1"/>
             </xpath>
             <xpath expr="//sheet" position="before">
                 <div class="alert alert-warning mb-0" role="alert" invisible="not hlv_revision_pending_count">
-                    NCC đề xuất thay đổi đơn này — bấm "Đề xuất NCC chờ duyệt" để xem và duyệt.
+                    NCC yêu cầu thay đổi đơn này — bấm "Yêu cầu NCC chờ duyệt" để xem và duyệt.
                 </div>
             </xpath>
         </field>

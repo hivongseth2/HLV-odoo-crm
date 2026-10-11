@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Hàm thuần cho đề xuất thay đổi đơn mua của NCC (phiên bản / snapshot) — không đụng env."""
+"""Hàm thuần cho yêu cầu thay đổi đơn mua của NCC (phiên bản / snapshot) — không đụng env."""
 
 from .vendor_quote_utils import DATE_FMT, format_vn_number
 
@@ -12,13 +12,13 @@ def line_changes(old_qty, new_qty, old_price, new_price, old_day, new_day):
 
     *_qty: số lượng; *_price: đơn giá SAU VAT; *_day: ngày giao (date). new_* = None nghĩa là NCC không
     sửa ô đó. Trả dict chỉ gồm khoá thật sự đổi: {"qty": (cũ, mới), "price": (cũ, mới), "day": (cũ, mới)};
-    không đổi gì → {}. Giá so theo 2 chữ số lẻ (như ô hiện cho NCC): giá sau VAT tính lại từ giá chưa VAT lệch
-    vài phần nghìn (30.000,0024) không phải NCC đổi giá.
+    không đổi gì → {}. Giá so theo đồng (ô sửa điền sẵn giá làm tròn tới đồng): giá sau VAT tính lại từ giá chưa VAT
+    lệch phần lẻ (1.644.146,64 → ô hiện 1.644.147) không phải NCC đổi giá.
     """
     changes = {}
     if new_qty is not None and abs(new_qty - (old_qty or 0.0)) > EPSILON:
         changes["qty"] = (old_qty, new_qty)
-    if new_price is not None and round(new_price, 2) != round(old_price or 0.0, 2):
+    if new_price is not None and round(new_price) != round(old_price or 0.0):
         changes["price"] = (old_price, new_price)
     if new_day is not None and new_day != old_day:
         changes["day"] = (old_day, new_day)
@@ -26,7 +26,7 @@ def line_changes(old_qty, new_qty, old_price, new_price, old_day, new_day):
 
 
 def line_change_error(new_qty, received_qty, new_price, new_day, today):
-    """Kiểm giá trị NCC đề xuất cho một dòng. Trả câu lỗi (không có tên hàng — nơi gọi thêm) hoặc "".
+    """Kiểm giá trị NCC yêu cầu cho một dòng. Trả câu lỗi (không có tên hàng — nơi gọi thêm) hoặc "".
 
     SL: không âm (0 = hết hàng) và không dưới SL kho đã nhận; giá: > 0; ngày giao: không trước hôm nay.
     Giá trị None (không sửa) không kiểm.
@@ -64,7 +64,7 @@ def is_dates_only(changes_list):
 
 
 def needs_approval(changes_list, state, approval_states, confirmed):
-    """Đề xuất của NCC có phải chờ thu mua duyệt (tạo phiên bản) không.
+    """Yêu cầu của NCC có phải chờ thu mua duyệt (tạo phiên bản) không.
 
     changes_list: các dict line_changes của mọi dòng đổi; state: trạng thái đơn mua; approval_states: trạng thái
     cấu hình "tạo phiên bản chờ duyệt"; confirmed: đơn đã xác nhận. Đơn đã xác nhận mà chỉ đổi ngày giao → không

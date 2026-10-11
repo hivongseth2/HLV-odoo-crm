@@ -87,7 +87,7 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
     Tin của NCC gọi tên follower nội bộ + notify_partners (sale tạo phiếu, người phụ trách
     đơn mua) để họ nhận thông báo trong Odoo; tin của sale không gửi đi đâu — NCC đọc trên
     trang báo giá của họ.
-    notify=False: tin ghi lại thay đổi (đề xuất / đổi ngày của NCC) — không gọi tên ai, không email; vẫn hiện trên
+    notify=False: tin ghi lại thay đổi (yêu cầu / đổi ngày của NCC) — không gọi tên ai, không email; vẫn hiện trên
     khung trao đổi + chuông / số chưa đọc trong Odoo như mọi tin.
     """
     text = (text or "").strip()

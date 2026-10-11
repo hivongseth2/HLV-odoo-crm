@@ -1,0 +1,44 @@
+/* Trang "Lịch sử báo giá" của NCC (portal_history_templates.xml) + bảng kiểu bảng tính .vq-sheet (dùng cả ở bản chụp
+   phiên bản đơn mua). Tách khỏi vendor_portal.css cho file gọn; nạp sau nó, dùng chung biến màu --vq-*. */
+
+/* Bộ lọc + chỉ số tổng */
+.vq-history-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-bottom: 14px; padding: 14px 16px;
+    background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px; }
+.vq-filter-field { display: flex; flex-direction: column; margin: 0; }
+.vq-filter-field .vq-label { margin-bottom: 4px; font-size: .8rem; }
+.vq-filter-search { flex: 1 1 240px; }
+.vq-filter-actions { display: flex; gap: 8px; }
+.vq-active-filter { margin: 0 0 12px; }
+.vq-active-filter .vq-chip-x { margin-left: 6px; text-decoration: none; font-weight: 700; }
+.vq-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.vq-kpi { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: #fff; border: 1px solid var(--vq-line); border-radius: 6px; }
+.vq-kpi-num { font-size: 1.4rem; font-weight: 700; color: var(--vq-accent); font-variant-numeric: tabular-nums; }
+.vq-kpi-label { font-size: .82rem; color: var(--vq-muted); }
+
+/* Bảng kiểu bảng tính (lịch sử báo giá, bản chụp đơn): lưới ô đủ bốn cạnh, dòng thấp, đầu cột xám dính trên cùng,
+   cột STT như số dòng của Excel, rê chuột tô cả dòng. Điện thoại: theo bảng xếp khối chung (.vq-table). */
+@media (min-width: 761px) {
+    .vq-sheet { font-size: .87rem; border: 1px solid #cfd5dd; }
+    .vq-sheet th, .vq-sheet td { padding: 7px 10px; border: 1px solid #dde2e8; }
+    .vq-sheet thead th { position: sticky; top: 0; z-index: 1; background: #eef1f4; color: #374151; font-size: .8rem;
+        white-space: nowrap; }
+    .vq-sheet tbody tr:hover td { background: #f3f8ff; }
+    .vq-sheet .vq-col-no { width: 48px; background: #f6f7f9; color: var(--vq-muted); text-align: center; }
+    .vq-sheet tbody tr:hover td.vq-col-no { background: #e8f0fb; }
+}
+.vq-sheet td.vq-num { font-variant-numeric: tabular-nums; }
+.vq-sheet-total td { font-weight: 700; background: #f6f7f9; }
+.vq-sheet-action { width: 1%; white-space: nowrap; text-align: center; }
+.vq-btn-sm { padding: 4px 10px; font-size: .8rem; }
+.vq-history-tabs { margin: 6px 0 14px; }
+.vq-history-hint { margin: 0 0 10px; }
+/* Mật độ hỏi: ô "Lượt hỏi" đậm dần (history_utils.heat_level 1–4). Selector đủ mạnh để rê chuột không xoá màu. */
+.vq-heat-legend { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.vq-heat-swatch { display: inline-block; width: 18px; height: 12px; border: 1px solid #dde2e8; }
+.vq-heat-swatch.vq-heat-1, .vq-sheet tbody tr td.vq-heat-1 { background: #eaf2fd; }
+.vq-heat-swatch.vq-heat-2, .vq-sheet tbody tr td.vq-heat-2 { background: #c9ddf8; }
+.vq-heat-swatch.vq-heat-3, .vq-sheet tbody tr td.vq-heat-3 { background: #93bbef; }
+.vq-heat-swatch.vq-heat-4, .vq-sheet tbody tr td.vq-heat-4 { background: #4f8fdf; color: #fff; font-weight: 700; }
+/* Biến động giá: tăng đỏ, giảm xanh. */
+.vq-delta-up { color: var(--vq-danger); font-weight: 600; }
+.vq-delta-down { color: #166534; font-weight: 600; }

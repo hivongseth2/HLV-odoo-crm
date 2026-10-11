@@ -28,7 +28,7 @@
               action="action_vendor_quote_compare"
               sequence="30"/>
     <menuitem id="menu_po_revision"
-              name="Đề xuất thay đổi đơn mua"
+              name="Yêu cầu thay đổi đơn mua"
               parent="menu_vendor_quote_root"
               action="action_po_revision"
               sequence="40"

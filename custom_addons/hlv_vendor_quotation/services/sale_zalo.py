@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Báo sale qua Zalo OA khi NCC có thay đổi — đúng những việc chuông trang /hoi-gia-ncc đang báo: NCC gửi / cập nhật
-báo giá, NCC nhắn tin, tiến độ đơn mua (đóng gói, gửi hàng, giao một phần, đổi ngày giao, đề xuất thay đổi đơn,
+báo giá, NCC nhắn tin, tiến độ đơn mua (đóng gói, gửi hàng, giao một phần, đổi ngày giao, yêu cầu thay đổi đơn,
 trễ hẹn). Gọi từ chat_bus, ngay cạnh chỗ báo chuông.
 
 Dùng lại cấu hình Zalo + mapping mã sale → Zalo user của module hlv_zalo_zns (hold_unreserve_saler_mapping_text, gửi
@@ -55,7 +55,7 @@ def zalo_quoted(quote, resubmitted):
 
 
 def zalo_order(order, inquiries, status, event, ship):
-    """Tiến độ đơn mua đổi — status: nhãn tiến độ, event: giao một phần / đổi ngày / đề xuất / trễ hẹn ("" nếu không)."""
+    """Tiến độ đơn mua đổi — status: nhãn tiến độ, event: giao một phần / đổi ngày / yêu cầu / trễ hẹn ("" nếu không)."""
     vendor = order.partner_id.commercial_partner_id
     details = " · ".join(part for part in (event or status, ship) if part)
     _send(order, inquiries.mapped("sale_code"), f"🚚 Đơn mua {order.name} — {vendor.display_name}: {details}", vendor)

@@ -312,7 +312,7 @@ a { color: var(--vq-accent); }
 @keyframes vq-tab-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(6px); } }
 @keyframes vq-badge-pulse { 0% { box-shadow: 0 0 0 0 rgba(180, 83, 42, .6); } 100% { box-shadow: 0 0 0 10px rgba(180, 83, 42, 0); } }
 @media (prefers-reduced-motion: reduce) {
-    .vq-chat, .vq-chat-head, .vq-count-badge { animation: none !important; transition: none !important; }
+    .vq-chat, .vq-chat-head, .vq-count-badge { animation: none; transition: none; }
 }
 .vq-msg { background: #f8f9fb; border: 1px solid var(--vq-line); border-radius: 4px; padding: 8px 10px; max-width: 92%; }
 .vq-msg-mine { margin-left: auto; background: #eef3fa; border-color: #d8e2f0; }
@@ -507,21 +507,6 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 .vq-quote-row { cursor: pointer; }
 .vq-list-scroll { overflow-x: auto; }
 
-/* Lịch sử báo giá (portal_history_templates.xml) */
-.vq-history-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-bottom: 14px; padding: 14px 16px;
-    background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px; }
-.vq-filter-field { display: flex; flex-direction: column; margin: 0; }
-.vq-filter-field .vq-label { margin-bottom: 4px; font-size: .8rem; }
-.vq-filter-search { flex: 1 1 240px; }
-.vq-filter-actions { display: flex; gap: 8px; }
-.vq-active-filter { margin: 0 0 12px; }
-.vq-active-filter .vq-chip-x { margin-left: 6px; text-decoration: none; font-weight: 700; }
-.vq-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.vq-kpi { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: #fff; border: 1px solid var(--vq-line); border-radius: 6px; }
-.vq-kpi-num { font-size: 1.4rem; font-weight: 700; color: var(--vq-accent); font-variant-numeric: tabular-nums; }
-.vq-kpi-label { font-size: .82rem; color: var(--vq-muted); }
-.vq-history-section { margin-bottom: 22px; }
-.vq-history-section h2 { margin: 0 0 10px; font-size: 1rem; }
 .vq-nowrap { white-space: nowrap; }
 /* Số chứng từ (BG / PO) bọc trong chip — cùng kiểu với trang sale. */
 .vq-doc-chip { display: inline-block; margin: 0 4px 2px 0; padding: 0 7px; border-radius: 3px; background: #eef0f3; color: #374151;
@@ -543,7 +528,7 @@ a.vq-doc-chip:hover { background: #e2e6ec; }
 .vq-quick-toggle .vq-icon { transition: transform .15s; }
 .vq-row-open .vq-quick-toggle .vq-icon { transform: rotate(90deg); }
 .vq-list-table tr.vq-row-open td { background: #f5f8fc; border-bottom-color: transparent; }
-.vq-quick-row[hidden] { display: none !important; }
+.vq-quick-row[hidden] { display: none; }
 .vq-list-table .vq-quick-cell { padding: 0 16px 16px; background: #f5f8fc; }
 .vq-quick { border: 1px solid var(--vq-line-strong); border-radius: 6px; background: var(--vq-surface); overflow: hidden; }
 /* width: 0 + min-width: 100%: bảng con không góp bề rộng cho bảng danh sách (nếu không, mở xem nhanh là
@@ -639,8 +624,19 @@ a.vq-doc-chip:hover { background: #e2e6ec; }
 .vq-price-table tr:has(.vq-edit-toggle:checked) td { background: #fffbeb; }
 tr:has(.vq-edit-toggle:checked) .vq-view { display: none; }
 tr:has(.vq-edit-toggle:checked) .vq-edit { display: block; }
-.vq-edit-num { width: 110px; margin-left: auto; text-align: right; }
-.vq-edit-date { width: 150px; }
+/* Ô sửa kiểu bảng tính: phủ kín ô bảng, góc vuông, viền ô mảnh; đang gõ thì viền đậm màu nhấn. Điện thoại (bảng
+   xếp thành khối) giữ ô nhập thường. */
+.vq-input.vq-edit { border-radius: 0; background: #fff; font-variant-numeric: tabular-nums; }
+.vq-edit-num { text-align: right; }
+@media (min-width: 761px) {
+    tr:has(.vq-edit-toggle:checked) td.vq-cell-edit { padding: 0; }
+    .vq-input.vq-edit { width: 100%; height: 100%; min-height: 48px; padding: 0 14px; border: 0;
+        box-shadow: inset 0 0 0 1px #cbd5e1; }
+    .vq-input.vq-edit:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--vq-accent); }
+    /* size="6" trên ô số: cột giữ bề rộng như lúc xem, ô phủ kín cột. */
+    .vq-edit-num { min-width: 96px; }
+    .vq-edit-date { min-width: 150px; }
+}
 .vq-revise-bar { display: none; gap: 8px; margin: 10px 0 0; padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; }
 .vq-revise-form:has(.vq-edit-toggle:checked) .vq-revise-bar { display: flex; flex-direction: column; }
 .vq-revise-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -655,6 +651,12 @@ tr:has(.vq-edit-toggle:checked) .vq-edit { display: block; }
 .vq-revision-approved, .vq-revision-applied { background: #f0fdf4; color: #166534; }
 .vq-revision-rejected { background: #fef2f2; color: var(--vq-danger); }
 .vq-revision-withdrawn { background: #f3f4f6; color: #4b5563; }
+.vq-version-chip { padding: 0 7px; border: 1px solid var(--vq-line-strong); border-radius: 3px; font-size: .78rem;
+    font-weight: 600; color: var(--vq-accent); }
+.vq-snapshot { margin-top: 6px; }
+.vq-snapshot > summary { cursor: pointer; color: var(--vq-accent); font-size: .88rem; font-weight: 600; }
+.vq-snapshot > .vq-list-scroll, .vq-snapshot > p { margin-top: 8px; }
+
 .vq-status-cancel { background: #f3f4f6; border-color: #e5e7eb; color: #6b7280; text-decoration: line-through; }
 .vq-status-rfq { background: #fefce8; border-color: #fde68a; color: #854d0e; }
 .vq-cell-state { white-space: nowrap; color: var(--vq-muted); }

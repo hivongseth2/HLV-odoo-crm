@@ -91,3 +91,38 @@ def aggregate_products(rows):
         })
     result.sort(key=lambda r: (-r["asked"], -(r["last_at"].timestamp() if r["last_at"] else 0)))
     return result
+
+
+def heat_level(value, max_value, levels=4):
+    """Mức màu mật độ (0..levels) của value so với max_value — tô ô "Lượt hỏi" đậm dần theo số lần được hỏi.
+
+    0 chỉ khi value <= 0 hoặc max_value <= 0; mọi value > 0 ít nhất mức 1, bằng max_value là mức levels
+    (chia đều theo tỉ lệ, làm tròn lên).
+    """
+    if value <= 0 or max_value <= 0:
+        return 0
+    return min(levels, max(1, -(-value * levels // max_value)))
+
+
+def price_history(rows):
+    """Biến động giá một mặt hàng từ các dòng lịch sử của nó.
+
+    rows: [{at (datetime), price_incl, outcome, ...}] — dòng báo hết hàng (outcome "na") bỏ qua. Trả
+    {"rows": các dòng có giá, MỚI trước, mỗi dòng thêm "delta" (chênh so lần báo liền trước, 0 nếu là lần
+    đầu) và "pct" (% chênh, None nếu lần đầu), "first", "last", "low", "high" (giá), "changes" (số lần đổi
+    giá)}. Không dòng nào có giá → rows rỗng, các giá 0, changes 0. Giá so theo đồng (làm tròn).
+    """
+    priced = sorted((r for r in rows if r["outcome"] != "na"), key=lambda r: r["at"])
+    result, previous, changes = [], None, 0
+    for row in priced:
+        price = round(row["price_incl"])
+        delta = price - previous if previous is not None else 0
+        changes += bool(delta)
+        result.append(dict(row, delta=delta, pct=round(delta * 100 / previous, 1) if previous else None))
+        previous = price
+    prices = [round(r["price_incl"]) for r in priced]
+    return {
+        "rows": result[::-1], "changes": changes,
+        "first": prices[0] if prices else 0, "last": prices[-1] if prices else 0,
+        "low": min(prices) if prices else 0, "high": max(prices) if prices else 0,
+    }
