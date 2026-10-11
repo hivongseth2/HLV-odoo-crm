@@ -88,6 +88,7 @@ def _order_item(order, scope, seen_at):
         "inquiry_id": inquiry.id,
         "inquiry_name": inquiry.name,
         "vendor": order.partner_id.commercial_partner_id.display_name,
+        "actor": order._hlv_event_actor(),
         "status": PROGRESS_LABELS.get(order._hlv_vendor_progress(), ""),
         "ship": order._hlv_ship_text(),
         "event": order.hlv_vendor_event or "",

@@ -79,7 +79,7 @@ class PurchaseOrderRevision(models.Model):
             revision._close_activity(_("Đã duyệt"))
             revision._log(_("Thu mua đã DUYỆT yêu cầu số %(n)s — đơn đã cập nhật:\n%(items)s",
                             n=revision.number, items=revision._bullet_text()), self.env.user.partner_id, from_vendor=False)
-            revision._tell_sale(_("Thu mua duyệt thay đổi đơn của NCC: %s", "; ".join(revision._change_texts())))
+            revision._tell_sale(_("Thu mua duyệt thay đổi đơn của NCC: %s", "; ".join(revision._change_texts())), "buyer")
         return True
 
     def action_reject(self):
@@ -92,7 +92,7 @@ class PurchaseOrderRevision(models.Model):
             revision._close_activity(_("Không duyệt: %s", revision.reject_reason))
             revision._log(_("Thu mua KHÔNG DUYỆT yêu cầu số %(n)s — đơn giữ nguyên. Lý do: %(reason)s",
                             n=revision.number, reason=revision.reject_reason), self.env.user.partner_id, from_vendor=False)
-            revision._tell_sale(_("Thu mua không duyệt thay đổi đơn của NCC (%s)", revision.reject_reason))
+            revision._tell_sale(_("Thu mua không duyệt thay đổi đơn của NCC (%s)", revision.reject_reason), "buyer")
         return True
 
     def _vendor_withdraw(self, vendor_partner):
@@ -131,9 +131,11 @@ class PurchaseOrderRevision(models.Model):
         """Ghi vào khung trao đổi của đơn (NCC + bên mua cùng xem) — không gọi tên ai, không email."""
         post_chat(self.purchase_order_id, text, author, from_vendor=from_vendor, notify=False)
 
-    def _tell_sale(self, event):
+    def _tell_sale(self, event, source):
+        """Báo trang sale (chuông / popup / Zalo). source: "vendor" (NCC gửi / áp ngay) hoặc "buyer" (thu mua quyết)."""
         order = self.purchase_order_id.sudo()
-        order.write({"hlv_vendor_event": event, "hlv_vendor_status_date": fields.Datetime.now()})
+        order.write({"hlv_vendor_event": event, "hlv_vendor_status_date": fields.Datetime.now(),
+                     "hlv_vendor_event_source": source})
         notify_order_status(order)
 
     def _notify_buyer(self):
@@ -296,14 +298,14 @@ class PurchaseOrderRevisionMixin(models.Model):
             revision._log(_("NCC yêu cầu thay đổi đơn (yêu cầu số %(n)s) — chờ thu mua duyệt:\n%(items)s%(note)s",
                             n=revision.number, items=revision._bullet_text(),
                             note=_("\nGhi chú: %s", note) if note else ""), vendor_partner, from_vendor=True)
-            revision._tell_sale(_("NCC yêu cầu thay đổi đơn (chờ thu mua duyệt): %s", "; ".join(revision._change_texts())))
+            revision._tell_sale(_("NCC yêu cầu thay đổi đơn (chờ thu mua duyệt): %s", "; ".join(revision._change_texts())), "vendor")
             return "pending"
         revision._apply()
         revision.state = "applied"
         revision._log(_("NCC thay đổi đơn (áp ngay — trạng thái đơn không cần duyệt):\n%(items)s%(note)s",
                         items=revision._bullet_text(), note=_("\nGhi chú: %s", note) if note else ""),
                       vendor_partner, from_vendor=True)
-        revision._tell_sale(_("NCC thay đổi đơn: %s", "; ".join(revision._change_texts())))
+        revision._tell_sale(_("NCC thay đổi đơn: %s", "; ".join(revision._change_texts())), "vendor")
         return "applied"
 
     def _hlv_collect_changes(self, edits):

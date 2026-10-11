@@ -54,11 +54,13 @@ def zalo_quoted(quote, resubmitted):
     ), vendor)
 
 
-def zalo_order(order, inquiries, status, event, ship):
-    """Tiến độ đơn mua đổi — status: nhãn tiến độ, event: giao một phần / đổi ngày / yêu cầu / trễ hẹn ("" nếu không)."""
+def zalo_order(order, inquiries, status, event, ship, actor=""):
+    """Tiến độ đơn mua đổi — status: nhãn tiến độ, event: giao một phần / đổi ngày / yêu cầu / trễ hẹn ("" nếu không),
+    actor: người báo (purchase.order._hlv_event_actor) — khác NCC thì ghi kèm, để sale không tưởng NCC báo."""
     vendor = order.partner_id.commercial_partner_id
     details = " · ".join(part for part in (event or status, ship) if part)
-    _send(order, inquiries.mapped("sale_code"), f"🚚 Đơn mua {order.name} — {vendor.display_name}: {details}", vendor)
+    by = f" (báo bởi: {actor})" if actor and actor != vendor.display_name else ""
+    _send(order, inquiries.mapped("sale_code"), f"🚚 Đơn mua {order.name} — {vendor.display_name}{by}: {details}", vendor)
 
 
 def zalo_chat(record, inquiries, author, text):

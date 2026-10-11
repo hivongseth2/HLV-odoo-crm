@@ -460,6 +460,8 @@
 .hq-bell-item.is-new { background: var(--hq-accent-soft); box-shadow: inset 3px 0 0 var(--hq-accent); }
 .hq-bell-title { display: block; font-size: .8125rem; }
 .hq-bell-meta { display: block; margin-top: .1rem; color: var(--hq-muted); font-size: .75rem; }
+/* Người báo không phải NCC (hệ thống: trễ hẹn / kho nhận; bên mua: thu mua duyệt) — nhạt hơn tên NCC. */
+.hq-bell-system { color: var(--hq-muted); }
 .hq-bell-empty { padding: 1rem .8rem; color: var(--hq-muted); font-size: .8125rem; }
 .hq-bell-permission { padding: .5rem .8rem; color: var(--hq-muted); font-size: .75rem; }
 

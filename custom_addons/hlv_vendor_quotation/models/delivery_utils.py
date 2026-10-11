@@ -58,3 +58,22 @@ def pending_text(parts):
         text = f"{name} {format_vn_number(qty)} {uom}".strip()
         items.append(f"{text} hẹn {day.strftime(DATE_FMT)}" if day else text)
     return "; ".join(items)
+
+# Ai gây ra tiến độ / tin giao hàng mới nhất của đơn mua (purchase.order.hlv_vendor_event_source) — để chuông, popup,
+# Zalo của sale ghi đúng người báo: tin "Trễ hẹn giao" do hệ thống tự sinh chứ không phải NCC báo.
+EVENT_SOURCES = [("vendor", "NCC"), ("buyer", "Bên mua"), ("system", "Hệ thống")]
+SYSTEM_ACTOR = "Hệ thống"
+
+
+def event_actor(source, vendor_name, company_name):
+    """Tên người báo hiện ở chuông / popup / Zalo của sale cho một sự kiện đơn mua.
+
+    source: "vendor" | "buyer" | "system" | rỗng. Trả vendor_name (NCC báo; rỗng — dữ liệu trước khi có nguồn — cũng
+    coi là NCC), company_name (bên mua: thu mua duyệt / không duyệt yêu cầu của NCC; rỗng → "Bên mua") hoặc
+    "Hệ thống" (kho nhận hàng, trễ hẹn).
+    """
+    if source == "system":
+        return SYSTEM_ACTOR
+    if source == "buyer":
+        return company_name or "Bên mua"
+    return vendor_name or ""
