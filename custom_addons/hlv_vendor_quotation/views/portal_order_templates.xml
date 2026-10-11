@@ -153,7 +153,8 @@
     <template id="portal_order_progress" name="Báo giá NCC - tiến độ đơn mua">
         <t t-set="progress" t-value="info['progress']"/>
         <t t-set="steps" t-value="['waiting', 'packed'] + (['shipped'] if info['ship_mode'] or progress == 'shipped' else []) + ['delivered']"/>
-        <t t-set="current" t-value="steps.index(progress) if progress in steps else len(steps)"/>
+        <!-- Đã giao một phần: đợt sau bắt đầu lại từ "Chờ đóng gói". -->
+        <t t-set="current" t-value="0 if progress == 'partial' else (steps.index(progress) if progress in steps else len(steps))"/>
         <div t-if="progress == 'cancel'" class="vq-progress-cancel">Đơn đã hủy — quý công ty không cần đóng gói / giao hàng.</div>
         <p t-elif="progress == 'rfq'" class="vq-progress-note">Đơn đang ở trạng thái <b t-esc="info['state_label']"/> — chưa
             xác nhận, giá / số lượng có thể còn đổi. Bên mua xác nhận đơn, quý công ty sẽ nhận thông báo để chuẩn bị hàng.</p>
@@ -165,7 +166,9 @@
                 </li>
             </ol>
             <div class="vq-progress-action">
-                <form t-if="progress == 'waiting'" method="post" class="vq-progress-row" t-att-action="order_url">
+                <p t-if="progress == 'partial'" class="vq-progress-note vq-partial-note">Kho <t t-esc="company.name"/> đã nhận
+                    một phần. Chuẩn bị xong phần còn lại thì bấm "Đã đóng gói" cho đợt sau.</p>
+                <form t-if="progress in ('waiting', 'partial')" method="post" class="vq-progress-row" t-att-action="order_url">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <input t-if="next_url" type="hidden" name="next" t-att-value="next_url"/>
                     <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
@@ -216,6 +219,37 @@
         </t>
     </template>
 
+    <!-- Hàng còn chờ giao + ngày giao dự kiến NCC sửa được (trễ hẹn tô đỏ). Lưu = tự cập nhật ngày trên đơn mua
+         và phiếu nhập bên mua (purchase_order_delivery._vendor_set_due_dates). Biến vào: order, info, order_url. -->
+    <template id="portal_order_due" name="Báo giá NCC - hàng còn chờ giao">
+        <section t-if="info['pending'] and info['progress'] not in ('cancel', 'rfq')" class="vq-progress-panel vq-due-panel">
+            <h2>Hàng còn chờ giao</h2>
+            <form method="post" t-att-action="order_url">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                <table class="vq-table vq-due-table">
+                    <thead><tr><th>Mặt hàng</th><th class="vq-num">Còn chờ</th><th>Ngày giao dự kiến</th></tr></thead>
+                    <tbody>
+                        <tr t-foreach="info['pending']" t-as="item" t-attf-class="#{'vq-due-late' if item['late'] else ''}">
+                            <td data-label="Mặt hàng" t-esc="item['name']"/>
+                            <td class="vq-num" data-label="Còn chờ"><t t-esc="fmt(item['remaining'])"/> <t t-esc="item['uom']"/></td>
+                            <td data-label="Ngày giao dự kiến">
+                                <input type="date" class="vq-input vq-due-input" t-att-name="'due_%s' % item['line_id']"
+                                       t-att-value="item['due']" t-att-min="today_iso"
+                                       t-att-aria-label="'Ngày giao dự kiến — %s' % item['name']"/>
+                                <span t-if="item['late']" class="vq-due-late-tag">quá hẹn</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="vq-progress-row">
+                    <button type="submit" name="due" value="1" class="vq-btn vq-btn-secondary">Lưu ngày giao</button>
+                    <span class="vq-muted vq-small">Chưa giao kịp thì đổi ngày ở đây — <t t-esc="company.name"/> được báo ngay.</span>
+                </div>
+            </form>
+        </section>
+    </template>
+
     <template id="portal_order_form" name="Báo giá NCC - chi tiết đơn mua">
         <t t-call="hlv_vendor_quotation.portal_layout">
             <t t-set="page_title" t-value="order.name"/>
@@ -256,6 +290,7 @@
                     <h2>Tiến độ đơn</h2>
                     <t t-call="hlv_vendor_quotation.portal_order_progress"/>
                 </section>
+                <t t-call="hlv_vendor_quotation.portal_order_due"/>
 
                 <h2 class="vq-section-title">Mặt hàng</h2>
                 <table class="vq-table vq-price-table">

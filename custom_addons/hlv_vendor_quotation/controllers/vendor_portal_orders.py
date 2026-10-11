@@ -12,7 +12,7 @@ khung trang và các hàm phụ — không chép lại.
 
 from urllib.parse import urlencode
 
-from odoo import http
+from odoo import fields, http
 from odoo.exceptions import UserError
 from odoo.http import request
 
@@ -81,6 +81,20 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         })
 
     @staticmethod
+    def _read_due_dates(order, form):
+        """Ô "giao ngày" của bảng hàng còn chờ: {id dòng đơn mua: date}. Ô trống bỏ qua; sai định dạng → UserError."""
+        due_days = {}
+        for line in order.sudo().order_line:
+            raw = (form.get(f"due_{line.id}") or "").strip()
+            if not raw:
+                continue
+            try:
+                due_days[line.id] = fields.Date.to_date(raw)
+            except ValueError:
+                raise UserError(f"Không đọc được ngày giao \"{raw}\".") from None
+        return due_days
+
+    @staticmethod
     def _order_info(order):
         """Thông tin một đơn cho trang NCC: tiến độ, phương thức / địa điểm giao hàng, cách giao đoán từ
         phương thức (CPN / chành → mặc định chọn "Gửi CPN / chành" khi NCC báo đã gửi)."""
@@ -92,6 +106,8 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "delivery_place": order._hlv_delivery_place(),
             "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",
             "ship_text": order._hlv_ship_text(),
+            # Hàng còn chờ giao (đổi ngày giao dự kiến được) — chỉ đơn đã xác nhận, chưa hủy.
+            "pending": order._hlv_pending_info() if order.state in CONFIRMED_STATES else [],
         }
 
     @http.route(
@@ -100,7 +116,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         auth="public",
         methods=["GET", "POST"],
     )
-    def portal_order(self, token, order_id, status=None, ship=None, **kw):
+    def portal_order(self, token, order_id, status=None, ship=None, due=None, **kw):
         access = self._get_access(token)
         if not access:
             return self._not_found()
@@ -113,10 +129,12 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         from_quote = self._from_quote(access, kw.get("from"))
         mark_seen([order], access)
         error = ""
-        if request.httprequest.method == "POST" and (status or ship):
+        if request.httprequest.method == "POST" and (status or ship or due):
             try:
                 if ship:
                     self._mark_shipped(order, access, kw)
+                elif due:
+                    order._vendor_set_due_dates(self._read_due_dates(order, kw), access.partner_id)
                 else:
                     order._vendor_set_status(status, access.partner_id)
             except UserError as exc:

@@ -36,6 +36,7 @@
                 <field name="hlv_ship_method" invisible="not hlv_ship_method"/>
                 <field name="hlv_ship_carrier" invisible="not hlv_ship_carrier"/>
                 <field name="hlv_ship_ref" invisible="not hlv_ship_ref"/>
+                <field name="hlv_vendor_event" invisible="not hlv_vendor_event"/>
                 <field name="hlv_inquiry_ids" widget="many2many_tags" readonly="1" invisible="not hlv_inquiry_ids"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">

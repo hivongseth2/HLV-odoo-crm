@@ -73,6 +73,8 @@ def notify_order_status(order):
         "vendor": order.partner_id.commercial_partner_id.display_name,
         "status": PROGRESS_LABELS.get(order._hlv_vendor_progress(), ""),
         "ship": order._hlv_ship_text(),
+        # Giao một phần / NCC đổi ngày giao / trễ hẹn ("" = tiến độ bình thường).
+        "event": order.hlv_vendor_event or "",
         "inquiry_ids": inquiries.ids,
         "inquiry_name": inquiries[:1].name,
     }

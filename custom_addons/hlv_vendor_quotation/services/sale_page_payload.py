@@ -5,7 +5,7 @@ Không phải util thuần (đọc record), nhưng không ghi gì và không đ�
 chỉ việc gọi và trả về. Số tiền trả dạng số, trang tự định dạng theo vi-VN.
 """
 
-from ..models.purchase_order import VENDOR_STATUS
+from ..models.purchase_order import PROGRESS_LABELS
 from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, format_vn_number, local_date_text
@@ -22,7 +22,8 @@ QUOTE_STATE_LABELS = {
 }
 SALE_STATUS_LABELS = dict(SALE_STATUS)
 CLOSE_REASON_LABELS = dict(CLOSE_REASONS)
-VENDOR_STATUS_LABELS = dict(VENDOR_STATUS)
+# Tiến độ NCC hiện cạnh số đơn mua: NCC đã báo / kho đã nhận (một phần / đủ). Chờ đóng gói thì không ghi.
+VENDOR_PROGRESS_SHOWN = ("packed", "shipped", "partial", "delivered")
 VAT_LABELS = dict(VAT_SELECTION)
 PRODUCT_PREVIEW = 3
 CONTACT_LIMIT = 10
@@ -35,6 +36,12 @@ _date_text = local_date_text
 
 def _datetime_text(value):
     return local_date_text(value, DATETIME_FMT)
+
+
+def _vendor_progress_label(order):
+    """Nhãn tiến độ NCC cạnh số đơn mua ("" khi chưa có gì để báo — chờ đóng gói / chưa xác nhận / hủy)."""
+    progress = order._hlv_vendor_progress()
+    return PROGRESS_LABELS.get(progress, "") if progress in VENDOR_PROGRESS_SHOWN else ""
 
 
 def purchase_order_payload(order):
@@ -51,7 +58,9 @@ def purchase_order_payload(order):
         "date": _date_text(order.date_approve or order.date_order),
         "amount_untaxed": order.amount_untaxed,
         "amount_total": order.amount_total,
-        "vendor_status": VENDOR_STATUS_LABELS.get(order.hlv_vendor_status, ""),
+        "vendor_status": _vendor_progress_label(order),
+        # Giao một phần / NCC đổi ngày giao / trễ hẹn.
+        "vendor_event": order.hlv_vendor_event or "",
         # NCC gửi CPN / chành: hãng / chành + mã vận đơn / số xe — sale theo hàng giúp khách.
         "vendor_ship": order._hlv_ship_text(),
     }
@@ -114,7 +123,7 @@ def inquiry_summary(inquiry):
         "requests": [_request_payload(r) for r in inquiry.request_ids.sudo()],
         "request_rejected": any(r.state == "rejected" for r in inquiry.request_ids.sudo()),
         "orders": [
-            {"name": o.name, "vendor_status": VENDOR_STATUS_LABELS.get(o.hlv_vendor_status, "")}
+            {"name": o.name, "vendor_status": _vendor_progress_label(o)}
             for o in inquiry.purchase_order_ids.sudo()
         ],
         "purchase_orders": inquiry.purchase_order_ids.sudo().mapped("name"),

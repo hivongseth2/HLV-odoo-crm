@@ -90,6 +90,7 @@ def _order_item(order, scope, seen_at):
         "vendor": order.partner_id.commercial_partner_id.display_name,
         "status": PROGRESS_LABELS.get(order._hlv_vendor_progress(), ""),
         "ship": order._hlv_ship_text(),
+        "event": order.hlv_vendor_event or "",
         "date": local_date_text(order.hlv_vendor_status_date, DATETIME_FMT),
         "unread": order.hlv_vendor_status_date > seen_at,
     }

@@ -40,7 +40,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (item.kind === "order") {
       return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> · " + HQ.docChip(item.order_name) +
         ': <span class="hq-tag hq-tag-ok">' + esc(item.status) + '</span></span><span class="hq-bell-meta">' +
-        esc([item.inquiry_name, item.ship, item.date].filter(Boolean).join(" · ")) + "</span></button>";
+        esc([item.inquiry_name, item.event || item.ship, item.date].filter(Boolean).join(" · ")) + "</span></button>";
     }
     return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> đã báo giá " +
       esc(item.inquiry_name) + '</span><span class="hq-bell-meta">' + HQ.docChip(item.quote_name) + " " + item.offered + "/" +
@@ -124,7 +124,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.onOrderStatus = function (payload) {
     announce({
       title: "Đơn mua " + payload.name + ": " + payload.status,
-      text: payload.vendor + " — " + payload.status + (payload.ship ? " (" + payload.ship + ")" : ""),
+      text: payload.vendor + " — " + (payload.event || payload.status + (payload.ship ? " (" + payload.ship + ")" : "")),
       meta: payload.inquiry_name, inquiryId: (payload.inquiry_ids || [])[0],
     }, "hlv-vq-order-" + payload.order_id + "-" + payload.status);
   };

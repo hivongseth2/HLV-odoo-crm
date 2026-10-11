@@ -592,6 +592,13 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 
 /* --- Đơn mua: tiến độ (thanh các bước + một việc cần làm), cột giao hàng / thanh toán --- */
 .vq-status-shipped { background: #f5f3ff; border-color: #ddd6fe; color: #5b21b6; }
+.vq-status-partial { background: #fefce8; border-color: #fde68a; color: #854d0e; }
+.vq-partial-note { margin-bottom: 10px; color: #854d0e; }
+.vq-due-panel { margin-top: 12px; }
+.vq-due-table { margin-bottom: 12px; }
+.vq-due-input { max-width: 170px; }
+.vq-due-late td { background: #fef2f2; }
+.vq-due-late-tag { margin-left: 8px; color: var(--vq-danger); font-size: .78rem; font-weight: 600; }
 .vq-status-cancel { background: #f3f4f6; border-color: #e5e7eb; color: #6b7280; text-decoration: line-through; }
 .vq-status-rfq { background: #fefce8; border-color: #fde68a; color: #854d0e; }
 .vq-cell-state { white-space: nowrap; color: var(--vq-muted); }
