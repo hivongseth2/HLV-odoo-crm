@@ -60,8 +60,14 @@ a { color: var(--vq-accent); }
 .vq-logo + .vq-brand-text { padding-left: 14px; border-left: 1px solid var(--vq-line); }
 .vq-company { font-weight: 700; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vq-sub { color: var(--vq-muted); font-size: .8rem; }
-.vq-header-right { display: flex; align-items: center; gap: 20px; flex: none; font-size: .9rem; }
-.vq-header-vendor { font-weight: 600; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Tên NCC dùng hết chỗ trống của header; chỉ khi hẹp thật mới xuống 2 dòng (cắt "…" ở dòng 2). Chuông / đăng xuất
+   giữ nguyên cỡ. */
+.vq-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 20px; flex: 0 1 auto; min-width: 0;
+    font-size: .9rem; }
+.vq-header-right > * { flex: none; }
+.vq-header-right > .vq-header-vendor { flex: 0 1 auto; min-width: 0; }
+.vq-header-vendor { font-weight: 600; text-align: right; line-height: 1.3; overflow: hidden; display: -webkit-box;
+    -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .vq-header-link { color: var(--vq-muted); }
 .vq-footer { border-top: 1px solid var(--vq-line); background: var(--vq-surface); color: var(--vq-muted); font-size: .82rem; }
 .vq-footer-row { display: flex; flex-wrap: wrap; gap: 4px 24px; min-height: var(--vq-footer-h); align-items: center; padding-top: 10px; padding-bottom: 10px; }
@@ -620,16 +626,35 @@ a.vq-doc-chip:hover { background: #e2e6ec; }
 .vq-status-shipped { background: #f5f3ff; border-color: #ddd6fe; color: #5b21b6; }
 .vq-status-partial { background: #fefce8; border-color: #fde68a; color: #854d0e; }
 .vq-partial-note { margin-bottom: 10px; color: #854d0e; }
-/* Ngày giao dự kiến trên bảng hàng hóa của đơn mua: bút chì mở ô sửa ngay trên dòng. */
+/* Bảng hàng hóa của đơn mua: bút chì → dòng chuyển sang ô sửa SL / đơn giá / ngày giao (CSS :has, không JS). */
 .vq-due-cell { white-space: nowrap; }
 .vq-due-text.is-late { color: var(--vq-danger); font-weight: 600; }
 .vq-due-late-tag { margin-left: 6px; color: var(--vq-danger); font-size: .78rem; font-weight: 600; }
-.vq-due-edit { display: inline-block; margin-left: 4px; vertical-align: middle; }
-.vq-due-pencil { display: inline-flex; padding: 4px; border-radius: 4px; color: var(--vq-muted); cursor: pointer; list-style: none; }
-.vq-due-pencil::-webkit-details-marker { display: none; }
-.vq-due-pencil:hover, .vq-due-edit[open] .vq-due-pencil { color: var(--vq-accent); background: #eef2f7; }
-.vq-due-form { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-.vq-due-input { max-width: 160px; height: 34px; }
+.vq-col-edit { width: 44px; text-align: center; }
+.vq-edit-toggle { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.vq-edit-pencil { display: inline-flex; padding: 6px; border-radius: 4px; color: var(--vq-muted); cursor: pointer; }
+.vq-edit-pencil:hover, .vq-edit-toggle:checked + .vq-edit-pencil { color: var(--vq-accent); background: #eef2f7; }
+.vq-edit-toggle:focus-visible + .vq-edit-pencil { outline: 2px solid var(--vq-accent); }
+.vq-edit { display: none; }
+.vq-price-table tr:has(.vq-edit-toggle:checked) td { background: #fffbeb; }
+tr:has(.vq-edit-toggle:checked) .vq-view { display: none; }
+tr:has(.vq-edit-toggle:checked) .vq-edit { display: block; }
+.vq-edit-num { width: 110px; margin-left: auto; text-align: right; }
+.vq-edit-date { width: 150px; }
+.vq-revise-bar { display: none; gap: 8px; margin: 10px 0 0; padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; }
+.vq-revise-form:has(.vq-edit-toggle:checked) .vq-revise-bar { display: flex; flex-direction: column; }
+.vq-revise-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.vq-pending-hint { margin-top: 2px; color: #92400e; font-size: .8rem; }
+.vq-revision-box { margin-bottom: 10px; padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; }
+.vq-revision-box ul, .vq-revision-item ul { margin: 6px 0; padding-left: 20px; }
+.vq-revision-history { margin-top: 18px; }
+.vq-revision-item { padding: 10px 0; border-top: 1px solid var(--vq-line); }
+.vq-revision-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vq-revision-reason { color: var(--vq-danger); font-size: .85rem; }
+.vq-outcome.vq-revision-pending { padding: 0 7px; background: #fff7ed; border: 0; color: #9a3412; }
+.vq-revision-approved, .vq-revision-applied { background: #f0fdf4; color: #166534; }
+.vq-revision-rejected { background: #fef2f2; color: var(--vq-danger); }
+.vq-revision-withdrawn { background: #f3f4f6; color: #4b5563; }
 .vq-status-cancel { background: #f3f4f6; border-color: #e5e7eb; color: #6b7280; text-decoration: line-through; }
 .vq-status-rfq { background: #fefce8; border-color: #fde68a; color: #854d0e; }
 .vq-cell-state { white-space: nowrap; color: var(--vq-muted); }

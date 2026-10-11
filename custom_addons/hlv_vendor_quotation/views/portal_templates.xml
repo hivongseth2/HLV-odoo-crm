@@ -27,7 +27,7 @@
                         </a>
                         <div t-if="logged_in" class="vq-header-right">
                             <t t-if="feed" t-call="hlv_vendor_quotation.portal_notify"/>
-                            <span class="vq-header-vendor" t-esc="vendor.name"/>
+                            <span class="vq-header-vendor" t-att-title="vendor.name" t-esc="vendor.name"/>
                             <a t-if="password_required" t-att-href="'%s/logout' % portal_base" class="vq-header-link">Đăng xuất</a>
                         </div>
                     </div>

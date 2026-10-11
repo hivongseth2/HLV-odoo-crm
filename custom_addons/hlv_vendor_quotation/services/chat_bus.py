@@ -13,6 +13,8 @@ khách chưa đăng nhập. Nên:
 
 from odoo.addons.bus.websocket import WebsocketConnectionHandler
 
+from .sale_zalo import zalo_chat, zalo_order, zalo_quoted
+
 BUS_TYPE = "hlv_vq_chat"
 QUOTED_TYPE = "hlv_vq_quoted"
 ORDER_TYPE = "hlv_vq_order"
@@ -57,6 +59,7 @@ def notify_quoted(quote, resubmitted):
     bus = quote.env["bus.bus"].sudo()
     for channel in sale_channels(quote.env, quote.inquiry_id):
         bus._sendone(channel, QUOTED_TYPE, message)
+    zalo_quoted(quote, resubmitted)
 
 
 def notify_order_status(order):
@@ -81,14 +84,17 @@ def notify_order_status(order):
     bus = order.env["bus.bus"].sudo()
     for channel in sale_channels(order.env, inquiries):
         bus._sendone(channel, ORDER_TYPE, message)
+    zalo_order(order, inquiries, message["status"], message["event"], message["ship"])
 
 
-def notify_chat(record, author_name, from_vendor):
+def notify_chat(record, author_name, from_vendor, zalo_text=""):
     # author_name: tên công ty (vendor_chat.author_label), không phải tên tài khoản.
     """Báo có tin trao đổi mới trên báo giá / đơn mua record.
 
     Bên sale: kênh "tất cả" (thu mua) + kênh mã sale của các phiếu liên quan. Bên NCC: chỉ khi
     tin do sale gửi (NCC tự gửi thì trang của họ đã tự tải lại).
+    zalo_text: tin NCC nhắn — có thì báo thêm sale qua Zalo (rỗng với tin ghi lại thay đổi: chuông
+    tiến độ đơn đã báo việc đó).
     """
     env = record.env
     record = record.sudo()
@@ -115,3 +121,5 @@ def notify_chat(record, author_name, from_vendor):
     bus = env["bus.bus"].sudo()
     for channel, notification_type, message in notifications:
         bus._sendone(channel, notification_type, message)
+    if from_vendor and zalo_text:
+        zalo_chat(record, inquiries, author_name, zalo_text)

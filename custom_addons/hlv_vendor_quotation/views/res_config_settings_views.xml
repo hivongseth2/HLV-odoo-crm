@@ -23,6 +23,20 @@
                             <div><field name="hlv_vq_order_state_done" class="oe_inline"/><label for="hlv_vq_order_state_done"/></div>
                         </div>
                     </setting>
+                    <setting id="hlv_vq_zalo_notify_sale"
+                             help="NCC gửi / cập nhật báo giá, nhắn tin, đóng gói / gửi hàng, đổi ngày giao, đề xuất thay đổi đơn, trễ hẹn → nhắn Zalo cho sale của phiếu hỏi giá (kèm link trang Hỏi giá NCC). Dùng cấu hình Zalo Stock Notification đang chạy và mapping mã sale 'Hủy dự trữ / Giữ hàng'; mã sale không có trong mapping thì không gửi.">
+                        <field name="hlv_vq_zalo_notify_sale"/>
+                    </setting>
+                    <setting id="hlv_vq_revision_states" string="Đề xuất thay đổi đơn mua của NCC cần duyệt"
+                             help="NCC đổi số lượng / đơn giá trên đơn ở trạng thái được tick: tạo phiên bản chờ thu mua duyệt, duyệt mới áp vào đơn. Không tick: áp ngay (vẫn ghi lại). Chỉ đổi ngày giao trên đơn đã xác nhận thì luôn tự cập nhật.">
+                        <div class="mt8">
+                            <div><field name="hlv_vq_revision_state_draft" class="oe_inline"/><label for="hlv_vq_revision_state_draft"/></div>
+                            <div><field name="hlv_vq_revision_state_sent" class="oe_inline"/><label for="hlv_vq_revision_state_sent"/></div>
+                            <div><field name="hlv_vq_revision_state_to_approve" class="oe_inline"/><label for="hlv_vq_revision_state_to_approve"/></div>
+                            <div><field name="hlv_vq_revision_state_purchase" class="oe_inline"/><label for="hlv_vq_revision_state_purchase"/></div>
+                            <div><field name="hlv_vq_revision_state_done" class="oe_inline"/><label for="hlv_vq_revision_state_done"/></div>
+                        </div>
+                    </setting>
                 </block>
             </xpath>
         </field>

@@ -132,38 +132,68 @@
     </template>
 
     <!-- Dòng hàng của đơn mua (trang đơn + xem nhanh). Giá sau VAT là số chính — thói quen đọc giá của hai bên. -->
+    <!-- Lịch sử đề xuất thay đổi đơn (phiên bản) — NCC xem lại đã đề xuất gì, bên mua duyệt hay không, lý do. -->
+    <template id="portal_order_revisions" name="Báo giá NCC - lịch sử thay đổi đơn mua">
+        <section t-if="info['revision']['history']" class="vq-revision-history">
+            <h2 class="vq-section-title">Lịch sử thay đổi đơn <span class="vq-muted vq-small">— phiên bản hiện tại:
+                v<t t-esc="info['revision']['version']"/></span></h2>
+            <div t-foreach="info['revision']['history']" t-as="rev" class="vq-revision-item">
+                <div class="vq-revision-head">
+                    <b>Đề xuất số <t t-esc="rev['number']"/></b>
+                    <span class="vq-muted vq-small" t-esc="fdate(rev['at'], '%H:%M %d/%m/%Y')"/>
+                    <span t-attf-class="vq-outcome vq-revision-#{rev['state']}" t-esc="rev['state_label']"/>
+                </div>
+                <ul><li t-foreach="rev['texts']" t-as="text" t-esc="text"/></ul>
+                <div t-if="rev['note']" class="vq-muted vq-small">Ghi chú: <t t-esc="rev['note']"/></div>
+                <div t-if="rev['reason']" class="vq-revision-reason">Lý do không duyệt: <t t-esc="rev['reason']"/></div>
+            </div>
+        </section>
+    </template>
+
     <template id="portal_order_line_rows" name="Báo giá NCC - dòng hàng đơn mua">
         <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
             <td class="vq-col-no" t-esc="line_index + 1"/>
+            <t t-set="pending_hint" t-value="info['revision']['pending_lines'].get(line.id)"/>
             <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/>
-                <div t-if="line.hlv_invoice_name" class="vq-muted vq-small">Tên xuất HĐ: <t t-esc="line.hlv_invoice_name"/></div></td>
-            <td class="vq-num" data-label="Số lượng"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></td>
+                <div t-if="line.hlv_invoice_name" class="vq-muted vq-small">Tên xuất HĐ: <t t-esc="line.hlv_invoice_name"/></div>
+                <div t-if="pending_hint" class="vq-pending-hint">Chờ duyệt — <t t-esc="pending_hint"/></div></td>
+            <td class="vq-num" data-label="Số lượng">
+                <span class="vq-view"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></span>
+                <input t-if="revise_editable" type="text" inputmode="decimal" class="vq-input vq-edit vq-edit-num"
+                       t-att-name="'qty_%s' % line.id" t-att-value="fmt(line.product_qty)"
+                       t-att-aria-label="'Số lượng — %s (hết hàng thì để 0)' % line.product_id.display_name"/>
+            </td>
             <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
             <t t-set="due" t-value="info['due'].get(line.id)"/>
             <td class="vq-due-cell" data-label="Ngày giao dự kiến">
-                <t t-if="due">
-                    <span t-attf-class="vq-due-text #{'is-late' if due['late'] else ''}" t-esc="due['due_text'] or '—'"/>
-                    <span t-if="due['late']" class="vq-due-late-tag">quá hẹn</span>
-                    <!-- Bút chì mở ô ngày + nút lưu ngay trên dòng (details: không cần JS). -->
-                    <details t-if="due_editable" class="vq-due-edit">
-                        <summary class="vq-due-pencil" t-att-title="'Sửa ngày giao — %s' % line.product_id.display_name"
-                                 t-att-aria-label="'Sửa ngày giao — %s' % line.product_id.display_name"><svg class="vq-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></summary>
-                        <form method="post" class="vq-due-form" t-att-action="order_url">
-                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                            <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
-                            <input type="date" class="vq-input vq-due-input" required="required"
-                                   t-att-name="'due_%s' % line.id" t-att-value="due['due']" t-att-min="today_iso"/>
-                            <button type="submit" name="due" value="1" class="vq-btn vq-btn-primary">Lưu</button>
-                        </form>
-                    </details>
-                </t>
-                <span t-else="" class="vq-muted" t-esc="fdate(line.date_planned) or '—'"/>
+                <span class="vq-view">
+                    <t t-if="due">
+                        <span t-attf-class="vq-due-text #{'is-late' if due['late'] else ''}" t-esc="due['due_text'] or '—'"/>
+                        <span t-if="due['late']" class="vq-due-late-tag">quá hẹn</span>
+                    </t>
+                    <span t-else="" class="vq-muted" t-esc="fdate(line.date_planned) or '—'"/>
+                </span>
+                <!-- Hàng đã nhận đủ: không đổi ngày giao. -->
+                <input t-if="revise_editable and due" type="date" class="vq-input vq-edit vq-edit-date"
+                       t-att-name="'day_%s' % line.id" t-att-value="due['due']"
+                       t-att-aria-label="'Ngày giao dự kiến — %s' % line.product_id.display_name"/>
             </td>
             <td class="vq-num" data-label="Đơn giá sau VAT">
-                <t t-esc="fmt(line.price_total / line.product_qty) if line.product_qty else '—'"/>
-                <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(line.price_unit)"/></div>
+                <span class="vq-view">
+                    <t t-esc="fmt(line.price_total / line.product_qty) if line.product_qty else '—'"/>
+                    <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(line.price_unit)"/></div>
+                </span>
+                <input t-if="revise_editable" type="text" inputmode="decimal" class="vq-input vq-edit vq-edit-num"
+                       t-att-name="'price_%s' % line.id" t-att-value="fmt(round(info['revision']['prices'][line.id], 2))"
+                       t-att-aria-label="'Đơn giá sau VAT — %s' % line.product_id.display_name"/>
             </td>
             <td class="vq-num vq-col-total" data-label="Thành tiền sau VAT" t-esc="fmt(line.price_total)"/>
+            <td t-if="revise_editable" class="vq-col-edit">
+                <!-- Ô tick ẩn + nhãn bút chì: bấm là dòng chuyển sang ô sửa (CSS :has, không cần JS); chỉ dòng có tick mới gửi. -->
+                <input type="checkbox" value="1" class="vq-edit-toggle" t-att-id="'edit_%s' % line.id" t-att-name="'edit_%s' % line.id"/>
+                <label class="vq-edit-pencil" t-att-for="'edit_%s' % line.id"
+                       t-att-title="'Sửa số lượng / đơn giá / ngày giao — %s' % line.product_id.display_name"><svg class="vq-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></label>
+            </td>
         </tr>
     </template>
 
@@ -274,7 +304,7 @@
                                t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/></dd></div>
                 </dl>
 
-                <div t-if="saved" class="vq-alert vq-alert-ok">Đã cập nhật tiến độ đơn. Cảm ơn quý công ty!</div>
+                <div t-if="saved" class="vq-alert vq-alert-ok" t-esc="saved"/>
                 <div t-if="ship_error" class="vq-alert vq-alert-error" t-esc="ship_error"/>
                 <section class="vq-progress-panel">
                     <h2>Tiến độ đơn</h2>
@@ -282,30 +312,57 @@
                 </section>
 
                 <h2 class="vq-section-title">Danh sách hàng hóa</h2>
-                <!-- Ngày giao dự kiến sửa ngay trên dòng (bút chì) — đơn đã xác nhận, hàng còn chờ giao. -->
-                <t t-set="due_editable" t-value="info['progress'] not in ('cancel', 'rfq')"/>
-                <table class="vq-table vq-price-table">
-                    <thead>
-                        <tr>
-                            <th class="vq-col-no">STT</th>
-                            <th>Hàng hóa</th>
-                            <th class="vq-num">Số lượng</th>
-                            <th class="vq-num">Đã nhận</th>
-                            <th>Ngày giao dự kiến</th>
-                            <th class="vq-num">Đơn giá sau VAT</th>
-                            <th class="vq-num">Thành tiền sau VAT</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <t t-call="hlv_vendor_quotation.portal_order_line_rows"/>
-                    </tbody>
-                </table>
+                <t t-set="revision" t-value="info['revision']"/>
+                <!-- Đề xuất đang chờ bên mua duyệt: NCC rút được (để sửa lại). -->
+                <div t-if="revision['pending']" class="vq-revision-box">
+                    <div><b>Đề xuất số <t t-esc="revision['pending']['number']"/> đang chờ bên mua duyệt</b> — duyệt xong mới
+                        áp vào đơn.</div>
+                    <ul><li t-foreach="revision['pending']['texts']" t-as="text" t-esc="text"/></ul>
+                    <form method="post" t-att-action="order_url">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                        <button type="submit" name="withdraw" t-att-value="revision['pending']['id']" class="vq-btn vq-btn-secondary">Rút đề xuất</button>
+                    </form>
+                </div>
+                <!-- Sửa theo dòng: bấm bút chì → ô số lượng / đơn giá / ngày giao; một nút gửi cho mọi dòng đã sửa. -->
+                <t t-set="revise_editable" t-value="revision['editable']"/>
+                <form method="post" class="vq-revise-form" t-att-action="order_url">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
+                    <table class="vq-table vq-price-table">
+                        <thead>
+                            <tr>
+                                <th class="vq-col-no">STT</th>
+                                <th>Hàng hóa</th>
+                                <th class="vq-num">Số lượng</th>
+                                <th class="vq-num">Đã nhận</th>
+                                <th>Ngày giao dự kiến</th>
+                                <th class="vq-num">Đơn giá sau VAT</th>
+                                <th class="vq-num">Thành tiền sau VAT</th>
+                                <th t-if="revise_editable" class="vq-col-edit"><span class="vq-sr-only">Sửa</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-call="hlv_vendor_quotation.portal_order_line_rows"/>
+                        </tbody>
+                    </table>
+                    <div t-if="revise_editable" class="vq-revise-bar">
+                        <textarea name="revise_note" class="vq-input" rows="2" maxlength="500"
+                                  placeholder="Ghi chú cho bên mua (VD: mặt hàng tạm hết, giá nhà máy tăng)"/>
+                        <div class="vq-revise-actions">
+                            <button type="submit" name="revise" value="1" class="vq-btn vq-btn-primary">Gửi thay đổi</button>
+                            <span class="vq-muted vq-small">Đổi số lượng / đơn giá: bên mua duyệt rồi mới áp vào đơn.
+                                Chỉ đổi ngày giao: cập nhật ngay.</span>
+                        </div>
+                    </div>
+                </form>
 
                 <dl class="vq-summary vq-summary-inline">
                     <div><dt>Trước VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
                     <div><dt>VAT</dt><dd t-esc="fmt(order.amount_tax)"/></div>
                     <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
                 </dl>
+                <t t-call="hlv_vendor_quotation.portal_order_revisions"/>
                 <t t-call="hlv_vendor_quotation.portal_chat"/>
             </div>
         </t>

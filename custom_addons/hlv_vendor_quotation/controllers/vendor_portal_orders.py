@@ -18,7 +18,7 @@ from odoo.http import request
 
 from ..models.purchase_order import CONFIRMED_STATES, PROGRESS_LABELS
 from ..models.vendor_quote_access import PORTAL_ROUTE
-from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN
+from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN, parse_vn_number
 from ..services.chat_read import mark_seen
 from ..services.vendor_chat import chat_messages, post_chat
 from ..services.vendor_feed import row_marks
@@ -34,6 +34,14 @@ ORDER_TABS = [
     ("cancel", "Đã hủy"),
     ("all", "Tất cả"),
 ]
+# Thông báo sau khi lưu (?saved=…): báo tiến độ / gửi đề xuất thay đổi / áp ngay / chỉ đổi ngày / rút đề xuất.
+SAVED_MESSAGES = {
+    "1": "Đã cập nhật tiến độ đơn. Cảm ơn quý công ty!",
+    "pending": "Đã gửi đề xuất thay đổi — bên mua duyệt xong sẽ áp vào đơn và báo quý công ty.",
+    "applied": "Đã cập nhật đơn.",
+    "dates": "Đã lưu ngày giao — bên mua đã được báo.",
+    "withdrawn": "Đã rút đề xuất thay đổi.",
+}
 # Bản in cho NCC: mẫu "Đơn mua hàng" chuẩn của Odoo. Mẫu tự dựng cũ (portal_order_print) giữ lại
 # trong views/portal_order_templates.xml để dùng lại sau, hiện không route nào gọi.
 PRINT_REPORT = "purchase.report_purchaseorder"
@@ -81,18 +89,27 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         })
 
     @staticmethod
-    def _read_due_dates(order, form):
-        """Ô "giao ngày" của bảng hàng còn chờ: {id dòng đơn mua: date}. Ô trống bỏ qua; sai định dạng → UserError."""
-        due_days = {}
-        for line in order.sudo().order_line:
-            raw = (form.get(f"due_{line.id}") or "").strip()
-            if not raw:
+    def _read_revision_edits(order, form):
+        """Dòng NCC bấm bút chì sửa (edit_<id>): {id dòng: {"qty", "price" (sau VAT), "day"}} — ô trống = không sửa
+        ô đó (None). Số / ngày không đọc được → UserError nêu tên hàng."""
+        edits = {}
+        for line in order.sudo().order_line.filtered(lambda l: not l.display_type):
+            if not form.get(f"edit_{line.id}"):
                 continue
+            name = line.product_id.display_name
+            values = {}
+            for key, label in (("qty", "số lượng"), ("price", "đơn giá")):
+                raw = (form.get(f"{key}_{line.id}") or "").strip()
+                values[key] = parse_vn_number(raw) if raw else None
+                if raw and values[key] is None:
+                    raise UserError(f"{name}: không đọc được {label} \"{raw}\".")
+            raw_day = (form.get(f"day_{line.id}") or "").strip()
             try:
-                due_days[line.id] = fields.Date.to_date(raw)
+                values["day"] = fields.Date.to_date(raw_day) if raw_day else None
             except ValueError:
-                raise UserError(f"Không đọc được ngày giao \"{raw}\".") from None
-        return due_days
+                raise UserError(f"{name}: không đọc được ngày giao \"{raw_day}\".") from None
+            edits[line.id] = values
+        return edits
 
     @staticmethod
     def _order_info(order):
@@ -108,6 +125,8 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
             "ship_text": order._hlv_ship_text(),
             # Hàng còn chờ giao theo id dòng đơn mua (ngày giao dự kiến, quá hẹn) — chỉ đơn đã xác nhận, chưa hủy.
             "due": {item["line_id"]: item for item in order._hlv_pending_info()} if order.state in CONFIRMED_STATES else {},
+            # Đề xuất thay đổi đơn của NCC (phiên bản): đang chờ duyệt, lịch sử, giá sau VAT từng dòng.
+            "revision": order._hlv_revision_info(),
         }
 
     @http.route(
@@ -116,7 +135,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         auth="public",
         methods=["GET", "POST"],
     )
-    def portal_order(self, token, order_id, status=None, ship=None, due=None, **kw):
+    def portal_order(self, token, order_id, status=None, ship=None, revise=None, withdraw=None, **kw):
         access = self._get_access(token)
         if not access:
             return self._not_found()
@@ -129,12 +148,20 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         from_quote = self._from_quote(access, kw.get("from"))
         mark_seen([order], access)
         error = ""
-        if request.httprequest.method == "POST" and (status or ship or due):
+        saved = "1"
+        if request.httprequest.method == "POST" and (status or ship or revise or withdraw):
             try:
                 if ship:
                     self._mark_shipped(order, access, kw)
-                elif due:
-                    order._vendor_set_due_dates(self._read_due_dates(order, kw), access.partner_id)
+                elif revise:
+                    saved = order._vendor_propose_changes(
+                        self._read_revision_edits(order, kw), (kw.get("revise_note") or "")[:500], access.partner_id)
+                elif withdraw:
+                    revision = order.sudo().hlv_revision_ids.filtered(lambda r: str(r.id) == str(withdraw))
+                    if not revision:
+                        raise UserError("Không tìm thấy đề xuất.")
+                    revision._vendor_withdraw(access.partner_id)
+                    saved = "withdrawn"
                 else:
                     order._vendor_set_status(status, access.partner_id)
             except UserError as exc:
@@ -146,13 +173,13 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
                     sep = "&" if "?" in back_url else "?"
                     return request.redirect(f"{back_url}{sep}{urlencode({'saved': order.name})}")
                 back = f"&from={from_quote.id}" if from_quote else ""
-                return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}?saved=1{back}")
+                return request.redirect(f"{PORTAL_ROUTE}/{token}/{ORDERS}/{order.id}?saved={saved}{back}")
         return self._render("hlv_vendor_quotation.portal_order_form", access, {
             "order": order,
             "quotes": order.hlv_vendor_quote_ids,
             "info": self._order_info(order),
             "progress_labels": PROGRESS_LABELS,
-            "saved": bool(kw.get("saved")),
+            "saved": SAVED_MESSAGES.get(kw.get("saved") or "", ""),
             "ship_error": error,
             "post": request.params if error else {},
             "active_tab": "orders",

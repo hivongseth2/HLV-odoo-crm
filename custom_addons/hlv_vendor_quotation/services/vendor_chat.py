@@ -24,7 +24,11 @@ FILES_PER_MESSAGE = 5
 
 
 def _is_internal(partner):
-    return bool(partner.user_ids.filtered(lambda user: not user.share))
+    """Người nhắn bên mình: user nội bộ, hoặc partner của chính công ty — tin tự động (đơn đã xác nhận, kho đã nhận
+    hàng…) đăng dưới tên công ty, partner đó không có user nên không xét thì bị coi là NCC (hiện "Bạn")."""
+    if partner.user_ids.filtered(lambda user: not user.share):
+        return True
+    return bool(partner and partner.env["res.company"].sudo().search_count([("partner_id", "=", partner.id)], limit=1))
 
 
 def author_label(record, author):
@@ -75,7 +79,7 @@ def chat_messages(record, file_url=None):
     ]
 
 
-def post_chat(record, text, author, from_vendor, notify_partners=None, files=None, sale_code=""):
+def post_chat(record, text, author, from_vendor, notify_partners=None, files=None, sale_code="", notify=True):
     """Đăng một tin trao đổi, có thể kèm tệp. text: chữ thường NCC / sale gõ (được escape).
 
     files: list (tên tệp, nội dung bytes). Tệp sai loại / quá lớn → UserError, không đăng gì.
@@ -83,6 +87,8 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
     Tin của NCC gọi tên follower nội bộ + notify_partners (sale tạo phiếu, người phụ trách
     đơn mua) để họ nhận thông báo trong Odoo; tin của sale không gửi đi đâu — NCC đọc trên
     trang báo giá của họ.
+    notify=False: tin ghi lại thay đổi (đề xuất / đổi ngày của NCC) — không gọi tên ai, không email; vẫn hiện trên
+    khung trao đổi + chuông / số chưa đọc trong Odoo như mọi tin.
     """
     text = (text or "").strip()
     files = [(name, data) for name, data in (files or []) if name or data]
@@ -108,11 +114,11 @@ def post_chat(record, text, author, from_vendor, notify_partners=None, files=Non
         subtype_xmlid=CHAT_SUBTYPE,
         attachments=files,
         partner_ids=(internal_followers(record) | (notify_partners or record.env["res.partner"])).ids
-        if from_vendor else [],
+        if from_vendor and notify else [],
     )
     if sale_code:
         message.hlv_sale_code = sale_code
-    notify_chat(record, author_label(record, author), from_vendor)
+    notify_chat(record, author_label(record, author), from_vendor, zalo_text=(text or "[ảnh / tệp]") if notify else "")
 
 
 def chat_attachment(env, attachment_id):

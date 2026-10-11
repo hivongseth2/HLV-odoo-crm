@@ -14,6 +14,7 @@ from odoo.exceptions import UserError
 
 from ..services.chat_bus import notify_order_status
 from ..services.notify import log_internal
+from ..services.vendor_chat import post_chat
 from .delivery_utils import due_datetime, due_day_error, is_late, local_day, pending_text, remaining_qty
 from .purchase_order import CONFIRMED_STATES
 from .vendor_quote_utils import DATE_FMT
@@ -136,12 +137,12 @@ class PurchaseOrderDelivery(models.Model):
         if not changes:
             return False
         order._hlv_apply_due_dates(changes)
-        items = Markup("").join(
-            Markup("<li>%s: %s → <b>%s</b></li>") % (
-                line.product_id.display_name, old.strftime(DATE_FMT) if old else "—", new.strftime(DATE_FMT))
-            for line, old, new in changes
-        )
-        log_internal(order, Markup("<p>%s</p><ul>%s</ul>") % (_("NCC đổi ngày giao dự kiến:"), items), vendor_partner)
+        # Ghi vào khung trao đổi của đơn (NCC + bên mua cùng xem) — không gọi tên ai, không email.
+        items = "\n".join(
+            f"- {line.product_id.display_name}: {old.strftime(DATE_FMT) if old else '—'} → {new.strftime(DATE_FMT)}"
+            for line, old, new in changes)
+        post_chat(order, _("NCC đổi ngày giao dự kiến (tự cập nhật vào đơn):\n%s", items), vendor_partner,
+                  from_vendor=True, notify=False)
         order.write({
             "hlv_vendor_status_date": fields.Datetime.now(),
             "hlv_vendor_event": _("NCC đổi ngày giao: %s", "; ".join(
@@ -159,7 +160,8 @@ class PurchaseOrderDelivery(models.Model):
         dated = [(line.with_context(skip_misa_purchase_order_lifecycle=True), due_datetime(new, line.date_planned))
                  for line, _old, new in changes]
         if self.user_id:
-            self._update_date_planned_for_lines(dated)
+            # mail_activity_quick_update: hoạt động "Date Updated" cho người mua không kèm email báo giao việc.
+            self.with_context(mail_activity_quick_update=True)._update_date_planned_for_lines(dated)
         else:
             for line, when in dated:
                 line._update_date_planned(when)
@@ -183,16 +185,26 @@ class PurchaseOrderDelivery(models.Model):
             if late and order.hlv_vendor_quote_ids:
                 order._hlv_report_late(late, today)
 
+    def _hlv_buyer_activity(self, summary, note):
+        """Báo người mua của đơn bằng hoạt động trong Odoo — KHÔNG email (mail_activity_quick_update bỏ thư báo giao
+        việc). Đơn đã có hoạt động mở cùng tiêu đề thì cập nhật nội dung, không đẻ thêm. Không có người mua → bỏ qua."""
+        self.ensure_one()
+        if not self.user_id:
+            return
+        existing = self.activity_ids.filtered(lambda a: a.summary == summary and a.user_id == self.user_id)[:1]
+        if existing:
+            existing.with_context(mail_activity_quick_update=True).note = note
+        else:
+            self.with_context(mail_activity_quick_update=True).activity_schedule(
+                "mail.mail_activity_data_warning", summary=summary, note=note, user_id=self.user_id.id,
+            )
+
     def _hlv_report_late(self, lines, today):
         self.ensure_one()
         text = self._hlv_pending_text(lines)
         lines.write({"hlv_late_notified": today})
         self.write({"hlv_vendor_status_date": fields.Datetime.now(), "hlv_vendor_event": _("Trễ hẹn giao: %s", text)})
-        if self.user_id:
-            self.message_post(
-                body=Markup(_("<b>Trễ hẹn giao</b>: %s — kho chưa nhận.")) % text,
-                message_type="comment", subtype_xmlid="mail.mt_note", partner_ids=self.user_id.partner_id.ids,
-            )
+        self._hlv_buyer_activity(_("Trễ hẹn giao"), Markup(_("<b>Trễ hẹn giao</b>: %s — kho chưa nhận.")) % text)
         notify_order_status(self)
         self._hlv_notify_vendor(lambda o: _(
             "Đơn %(name)s đã quá ngày hẹn giao: %(items)s. Vui lòng giao hàng hoặc cập nhật ngày giao dự kiến trên "
