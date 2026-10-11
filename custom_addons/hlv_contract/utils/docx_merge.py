@@ -16,7 +16,8 @@ fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True):
     dù biến rỗng (bảng bố cục thông tin bên mua không bị mất dòng).
     Trả về bytes của file .docx mới.
 list_merge_fields(docx_bytes):
-    Trả về list tên trường MERGEFIELD (thân + đầu/chân trang) đã sắp xếp, không trùng.
+    Trả về list tên trường MERGEFIELD (thân + đầu/chân trang) theo thứ tự xuất hiện, không
+    trùng — thứ tự này là thứ tự ô nhập trên hợp đồng.
 Trường hợp biên: file hỏng -> ValueError. Field lồng trong field chỉ xử lý field ngoài cùng.
 """
 
@@ -106,10 +107,13 @@ def _line_indexes(row):
 
 
 def _is_empty_line_row(row, values):
+    """Dòng hàng thừa: có biến dòng hàng và mọi biến đều rỗng. Biến dòng hàng không có trong
+    values (mẫu có nhiều dòng hơn số mặt hàng) cũng tính là rỗng."""
     fields = _top_level_fields(row)
     if not any(LINE_VARIABLE_RE.match(f['name']) for f in fields):
         return False
-    return all(f['name'] in values and values[f['name']] == '' for f in fields)
+    return all(values.get(f['name'], '' if LINE_VARIABLE_RE.match(f['name']) else None) == ''
+               for f in fields)
 
 
 def _renumber_row(row, old, new):
@@ -171,4 +175,9 @@ def fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True):
 def list_merge_fields(docx_bytes):
     """Xem docstring đầu module."""
     parts = read_xml_parts(docx_bytes, _is_fillable_part)
-    return sorted({f['name'] for root in parts.values() for f in _top_level_fields(root)})
+    names = []
+    for root in parts.values():
+        for field in _top_level_fields(root):
+            if field['name'] not in names:
+                names.append(field['name'])
+    return names

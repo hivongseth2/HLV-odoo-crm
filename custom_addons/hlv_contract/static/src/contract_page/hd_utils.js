@@ -71,9 +71,9 @@ window.HlvContract = window.HlvContract || {};
   };
 
   /**
-   * Dòng hàng dán từ Excel / Zalo: mỗi dòng "Tên<TAB>ĐVT<TAB>Số lượng<TAB>Đơn giá" (tab hoặc ";").
-   * Thiếu cột thì để trống; dòng trống bỏ qua. Dòng chỉ có 3 cột mà cột 2 là số thì hiểu là
-   * "Tên, Số lượng, Đơn giá". Trả [{product_name, uom, quantity, price_unit}].
+   * Dòng hàng dán từ Excel / Zalo: mỗi dòng "Tên<TAB>ĐVT<TAB>Số lượng<TAB>Đơn giá sau VAT" (tab
+   * hoặc ";"). Thiếu cột thì để trống; dòng trống bỏ qua. Dòng chỉ có 3 cột mà cột 2 là số thì
+   * hiểu là "Tên, Số lượng, Đơn giá". Trả [{product_name, uom, quantity, price_incl}].
    */
   HD.parsePastedLines = function (text) {
     return String(text || "").split(/\r?\n/).map(function (row) {
@@ -88,9 +88,22 @@ window.HlvContract = window.HlvContract || {};
         product_name: cells[0],
         uom: cells[1] || "",
         quantity: cells[2] ? HD.parseNumber(cells[2]) : 1,
-        price_unit: HD.parseNumber(cells[3]),
+        price_incl: HD.parseNumber(cells[3]),
       };
     });
+  };
+
+  /**
+   * Nhãn tiếng Việt -> tên biến: "Thời hạn bảo hành" -> "Thoi_Han_Bao_Hanh". Bỏ dấu, đ -> d,
+   * chỉ giữ chữ/số; rỗng -> "Bien"; bắt đầu bằng số thì thêm "Bien_". Tên này là thứ nằm trong
+   * mẫu — server lấy tên trong mẫu làm chuẩn nên không cần trùng khớp với cách đặt ở Python.
+   */
+  HD.variableCode = function (label) {
+    var text = String(label || "").replace(/đ/g, "d").replace(/Đ/g, "D")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "");
+    var words = text.match(/[A-Za-z0-9]+/g) || [];
+    var code = words.map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }).join("_") || "Bien";
+    return /^\d/.test(code) ? "Bien_" + code : code;
   };
 
   /** Chip biến trong trình soạn — không cho sửa chữ bên trong để biến không bị gõ hỏng. */

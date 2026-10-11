@@ -57,6 +57,7 @@ window.HlvContract = window.HlvContract || {};
       });
       bindGlobal();
       HD.initList();
+      HD.initGrid();
       HD.initForm();
       HD.initTemplates();
       return HD.loadList();

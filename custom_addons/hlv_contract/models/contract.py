@@ -1,32 +1,33 @@
 # -*- coding: utf-8 -*-
-"""Hợp đồng mua bán hàng hoá / hợp đồng nguyên tắc, điền từ mẫu (xem contract_template).
+"""Hợp đồng điền từ mẫu (xem contract_template).
 
-Số hợp đồng lấy từ ir.sequence theo loại và năm (HĐMB-001/2026), không đếm theo thứ tự
-dòng như form Excel cũ. Tổng tiền và chữ được tính lại ở đây; mẫu Word chỉ hiển thị.
+Giá trị các biến nhập lưu trong variable_values (JSON {tên biến: giá trị}) vì mỗi mẫu có
+bộ biến riêng, giống mỗi sheet Excel cũ có cột riêng. Số hợp đồng lấy từ ir.sequence theo
+loại và năm (HĐMB-001/2026). Tổng tiền và chữ được tính ở đây; mẫu Word chỉ hiển thị.
 Giao diện là trang /hop-dong (controllers/), không dùng form backend.
 """
 
 from odoo import api, fields, models
-from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.exceptions import AccessError, UserError
 
 from ..utils import contract_vars, docx_io, docx_merge, html_blocks
-from .contract_template import CONTRACT_TYPES
 
 _SEQUENCE_CODE = {'sale': 'hlv.contract.sale', 'principle': 'hlv.contract.principle'}
 STATES = [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đã ký'), ('cancel', 'Đã huỷ')]
-# Field trang /hop-dong được ghi. Không có state/name/user_id: trạng thái đi qua action_*,
-# số hợp đồng do sequence cấp.
-FORM_FIELDS = (
-    'contract_type', 'template_id', 'contract_date', 'expiry_date', 'partner_id',
-    'buyer_name', 'buyer_address', 'buyer_vat', 'buyer_phone', 'buyer_fax',
-    'buyer_representative', 'buyer_position', 'delivery_time', 'delivery_place',
-    'payment_terms', 'court', 'main_product', 'vat_rate', 'note',
-)
 # Nội dung hợp đồng: khoá khi đã rời trạng thái Nháp (chặn ở server vì import/RPC vẫn ghi
-# được dù giao diện khoá). Quản lý vẫn sửa được.
-_CONTENT_FIELDS = set(FORM_FIELDS) - {'note'} | {'line_ids'}
+# được dù giao diện khoá). Quản lý vẫn sửa được. Ghi chú nội bộ luôn sửa được.
+_CONTENT_FIELDS = {'template_id', 'contract_date', 'partner_id', 'variable_values', 'vat_rate', 'line_ids'}
 MANAGER_GROUP = 'hlv_contract.group_contract_manager'
-_DATE_FMT = '%d/%m/%Y'
+# Biến chuẩn điền sẵn khi chọn khách: tên biến -> hàm lấy từ (công ty khách, người liên hệ)
+_PARTNER_FILL = {
+    'Ten_Ben_Mua': lambda company, contact: company.name,
+    'Dia_Chi_Ben_Mua': lambda company, contact: ', '.join(
+        line.strip() for line in (company.contact_address or '').splitlines() if line.strip()),
+    'Ma_So_Thue_Ben_Mua': lambda company, contact: company.vat,
+    'Dien_Thoai_Ben_Mua': lambda company, contact: company.phone or contact.phone,
+    'Nguoi_Dai_Dien_Ben_Mua': lambda company, contact: contact.name if contact != company else '',
+    'Chuc_Vu_Ben_Mua': lambda company, contact: contact.function if contact != company else '',
+}
 
 
 class Contract(models.Model):
@@ -36,33 +37,21 @@ class Contract(models.Model):
     _order = 'contract_date desc, id desc'
 
     name = fields.Char(string='Số hợp đồng', default='/', copy=False, readonly=True, tracking=True, index=True)
-    contract_type = fields.Selection(CONTRACT_TYPES, string='Loại hợp đồng', required=True, default='sale',
-                                     tracking=True)
-    template_id = fields.Many2one('hlv.contract.template', string='Mẫu', required=True, tracking=True)
+    template_id = fields.Many2one('hlv.contract.template', string='Mẫu', required=True, tracking=True, index=True)
+    contract_type = fields.Selection(related='template_id.contract_type', store=True, string='Loại hợp đồng')
     state = fields.Selection(STATES, string='Trạng thái', default='draft', required=True, tracking=True, copy=False)
     contract_date = fields.Date(string='Ngày ký', required=True, default=fields.Date.context_today, tracking=True)
-    expiry_date = fields.Date(string='Ngày hết hạn')
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
     currency_id = fields.Many2one(related='company_id.currency_id', store=True, readonly=True)
     user_id = fields.Many2one('res.users', string='Nhân viên phụ trách', default=lambda self: self.env.user,
                               tracking=True, index=True)
-
     partner_id = fields.Many2one('res.partner', string='Khách hàng', tracking=True)
-    buyer_name = fields.Char(string='Tên bên mua', required=True, tracking=True)
-    buyer_address = fields.Char(string='Địa chỉ bên mua')
-    buyer_vat = fields.Char(string='MST bên mua')
-    buyer_phone = fields.Char(string='Điện thoại bên mua')
-    buyer_fax = fields.Char(string='Fax bên mua')
-    buyer_representative = fields.Char(string='Người đại diện bên mua')
-    buyer_position = fields.Char(string='Chức vụ bên mua')
+    variable_values = fields.Json(string='Giá trị biến', default=dict, copy=True)
+    # Tách ra cột thường để danh sách tìm/sắp xếp được (JSON không tìm kiếm được)
+    party_name = fields.Char(string='Bên mua', compute='_compute_party', store=True, index=True)
+    party_vat = fields.Char(string='MST bên mua', compute='_compute_party', store=True)
 
-    delivery_time = fields.Char(string='Thời gian giao hàng')
-    delivery_place = fields.Char(string='Địa điểm giao hàng')
-    payment_terms = fields.Text(string='Điều kiện thanh toán')
-    court = fields.Char(string='Toà án giải quyết', default=lambda self: self.env.company.contract_court)
-    main_product = fields.Char(string='Mặt hàng chính', help='Dùng cho hợp đồng nguyên tắc')
     vat_rate = fields.Float(string='Thuế suất VAT (%)', default=lambda self: self.env.company.contract_vat_rate)
-
     line_ids = fields.One2many('hlv.contract.line', 'contract_id', string='Hàng hoá', copy=True)
     amount_untaxed = fields.Monetary(string='Tổng tiền hàng', compute='_compute_amounts', store=True,
                                      currency_field='currency_id')
@@ -71,7 +60,7 @@ class Contract(models.Model):
     amount_total = fields.Monetary(string='Tổng giá trị', compute='_compute_amounts', store=True,
                                    currency_field='currency_id', tracking=True)
     amount_words = fields.Char(string='Bằng chữ', compute='_compute_amounts', store=True)
-    note = fields.Text(string='Ghi chú')
+    note = fields.Text(string='Ghi chú nội bộ')
 
     @api.depends('line_ids.subtotal', 'vat_rate')
     def _compute_amounts(self):
@@ -82,39 +71,52 @@ class Contract(models.Model):
             rec.amount_total = totals['total']
             rec.amount_words = totals['words']
 
-    @api.constrains('template_id', 'contract_type')
-    def _check_template_type(self):
+    @api.depends('variable_values', 'partner_id')
+    def _compute_party(self):
         for rec in self:
-            if rec.template_id and rec.template_id.contract_type != rec.contract_type:
-                raise ValidationError('Mẫu "%s" không đúng loại hợp đồng.' % rec.template_id.name)
+            values = rec.variable_values or {}
+            company = rec.partner_id.commercial_partner_id
+            rec.party_name = values.get('Ten_Ben_Mua') or company.name or ''
+            rec.party_vat = values.get('Ma_So_Thue_Ben_Mua') or company.vat or ''
 
     @api.model
     def _buyer_values_from_partner(self, partner):
-        """Thông tin bên mua điền sẵn khi chọn khách. Bên mua là pháp nhân: chọn người liên
-        hệ thì lấy công ty cha, người liên hệ thành người đại diện. Địa chỉ gộp một dòng."""
+        """Giá trị biến chuẩn bên mua khi chọn khách. Bên mua là pháp nhân: chọn người liên hệ
+        thì lấy công ty cha, người liên hệ thành người đại diện. Trang chỉ điền các biến mẫu có."""
         company = partner.commercial_partner_id
-        address_lines = (company.contact_address or '').splitlines()
-        values = {
-            'partner_id': partner.id,
-            'buyer_name': company.name or '',
-            'buyer_address': ', '.join(line.strip() for line in address_lines if line.strip()),
-            'buyer_vat': company.vat or '',
-            'buyer_phone': company.phone or partner.phone or '',
-        }
-        if partner != company:
-            values.update({'buyer_representative': partner.name or '', 'buyer_position': partner.function or ''})
-        return values
+        return {name: getter(company, partner) or '' for name, getter in _PARTNER_FILL.items()}
+
+    def _template_defaults(self, template, values):
+        """values + giá trị mặc định của biến mẫu chưa có giá trị. Toà án mặc định lấy theo
+        cấu hình công ty nếu biến không khai mặc định riêng."""
+        merged = dict(values or {})
+        for var in template.variable_ids:
+            if merged.get(var.name) not in (None, ''):
+                continue
+            default = var.default_value
+            if not default and var.name == 'Toa_An_Giai_Quyet':
+                default = self.env.company.contract_court
+            if default:
+                merged[var.name] = default
+        return merged
 
     @api.model_create_multi
     def create(self, vals_list):
+        Template = self.env['hlv.contract.template']
         for vals in vals_list:
+            template = Template.browse(vals.get('template_id'))
+            vals['variable_values'] = self._template_defaults(template, vals.get('variable_values'))
             if vals.get('name', '/') in ('/', False):
-                vals['name'] = self._next_contract_number(vals)
+                vals['name'] = self._next_contract_number(template, vals.get('contract_date'))
         return super().create(vals_list)
 
     def write(self, vals):
         if _CONTENT_FIELDS.intersection(vals):
             self._check_content_editable()
+        if vals.get('template_id') and len(self) == 1:
+            template = self.env['hlv.contract.template'].browse(vals['template_id'])
+            vals['variable_values'] = self._template_defaults(
+                template, vals.get('variable_values', self.variable_values))
         return super().write(vals)
 
     def unlink(self):
@@ -134,54 +136,55 @@ class Contract(models.Model):
             raise UserError('Hợp đồng %s không còn ở trạng thái Nháp, chỉ Quản lý được sửa nội dung.'
                             % ', '.join(locked.mapped('name')))
 
-    def _next_contract_number(self, vals):
-        contract_type = vals.get('contract_type') or self.default_get(['contract_type']).get('contract_type')
-        code = _SEQUENCE_CODE.get(contract_type)
+    def _next_contract_number(self, template, contract_date):
+        code = _SEQUENCE_CODE.get(template.contract_type)
         if not code:
             return '/'
-        sequence_date = vals.get('contract_date') or fields.Date.context_today(self)
+        sequence_date = contract_date or fields.Date.context_today(self)
         return self.env['ir.sequence'].with_context(ir_sequence_date=sequence_date).next_by_code(
             code, sequence_date=sequence_date)
 
+    def set_variable(self, name, value):
+        """Ghi một biến nhập (ô trong bảng dữ liệu). Tên phải là biến của mẫu hợp đồng này.
+        Gõ tay tên bên mua khác tên khách đang gắn thì bỏ gắn khách (không còn là khách đó)."""
+        self.ensure_one()
+        if name not in self.template_id.variable_ids.mapped('name'):
+            raise UserError('Mẫu "%s" không có biến %s.' % (self.template_id.name, name))
+        values = dict(self.variable_values or {})
+        values[name] = value
+        vals = {'variable_values': values}
+        if name == 'Ten_Ben_Mua' and self.partner_id and value != self.partner_id.commercial_partner_id.name:
+            vals['partner_id'] = False
+        self.write(vals)
+
+    def apply_partner(self, partner):
+        """Gắn khách và điền các biến bên mua mẫu này có (ghi đè giá trị đang có)."""
+        self.ensure_one()
+        names = set(self.template_id.variable_ids.mapped('name'))
+        values = dict(self.variable_values or {})
+        values.update({k: v for k, v in self._buyer_values_from_partner(partner).items() if k in names})
+        self.write({'partner_id': partner.id, 'variable_values': values})
+
     # ---------- dựng file ----------
 
-    def _merge_values(self):
-        """Giá trị thô đưa vào contract_vars.build_vars, định dạng để build_vars lo."""
+    def _merge_vars(self):
+        """Dict {tên biến: chữ in ra} cho fill_docx."""
         self.ensure_one()
-        values = {
-            'So_Hop_Dong': self.name,
-            'Ngay_Ky': self.contract_date,
-            'Ten_Ben_Mua': self.buyer_name,
-            'Dia_Chi_Ben_Mua': self.buyer_address,
-            'Ma_So_Thue_Ben_Mua': self.buyer_vat,
-            'Dien_Thoai_Ben_Mua': self.buyer_phone,
-            'Fax_Ben_Mua': self.buyer_fax,
-            'Nguoi_Dai_Dien_Ben_Mua': self.buyer_representative,
-            'Chuc_Vu_Ben_Mua': self.buyer_position,
-            'Thoi_Gian_Giao_Hang': self.delivery_time,
-            'Dia_Diem_Giao_Hang': self.delivery_place,
-            'Dieu_Kien_Thanh_Toan': self.payment_terms,
-            'Ngay_Het_Han': self.expiry_date.strftime(_DATE_FMT) if self.expiry_date else '',
-            'Toa_An_Giai_Quyet': self.court,
-            'Mat_Hang_Chinh': self.main_product,
-            'Thue_Suat_VAT': self.vat_rate,
-            'lines': [{
-                'Ten_Hang': line.product_name,
-                'DVT': line.uom,
-                'So_Luong': line.quantity,
-                'Don_Gia': line.price_unit,
-                'Thanh_Tien': line.subtotal,
-            } for line in self.line_ids],
-        }
-        values.update(self.company_id._contract_seller_vars())
-        return values
+        system = dict(self.company_id._contract_seller_vars(), So_Hop_Dong=self.name, Ngay_Ky=self.contract_date)
+        input_types = {var.name: var.var_type for var in self.template_id.variable_ids}
+        lines = [{
+            'Ten_Hang': line.product_name,
+            'DVT': line.uom,
+            'So_Luong': line.quantity,
+            'Don_Gia': line.price_unit,
+        } for line in self.line_ids]
+        return contract_vars.build_vars(system, self.variable_values or {}, input_types, lines, self.vat_rate)
 
     def _render_docx_bytes(self):
         """File .docx của hợp đồng này, đã điền đủ biến."""
         self.ensure_one()
-        filled = contract_vars.build_vars(self._merge_values())
         try:
-            return docx_merge.fill_docx(self.template_id._docx_bytes(), filled,
+            return docx_merge.fill_docx(self.template_id._docx_bytes(), self._merge_vars(),
                                          line_count=len(self.line_ids))
         except ValueError as err:
             raise UserError('Không điền được mẫu "%s": %s' % (self.template_id.name, err))
@@ -191,44 +194,6 @@ class Contract(models.Model):
         self.ensure_one()
         blocks = docx_io.read_docx(self._render_docx_bytes(), keep_fields=False)
         return html_blocks.blocks_to_html(blocks)
-
-    def _excel_row(self):
-        """Một dòng cho file Excel, theo cột CONTRACT_XLSX_COLUMNS, số để nguyên kiểu."""
-        self.ensure_one()
-        row = {
-            'So_Hop_Dong': self.name,
-            'Loai_Hop_Dong': dict(CONTRACT_TYPES).get(self.contract_type),
-            'Ngay_Ky': self.contract_date,
-            'Ngay_Het_Han': self.expiry_date,
-            'Ten_Ben_Mua': self.buyer_name,
-            'Dia_Chi_Ben_Mua': self.buyer_address,
-            'Ma_So_Thue_Ben_Mua': self.buyer_vat,
-            'Dien_Thoai_Ben_Mua': self.buyer_phone,
-            'Fax_Ben_Mua': self.buyer_fax,
-            'Nguoi_Dai_Dien_Ben_Mua': self.buyer_representative,
-            'Chuc_Vu_Ben_Mua': self.buyer_position,
-            'Mat_Hang_Chinh': self.main_product,
-            'Thoi_Gian_Giao_Hang': self.delivery_time,
-            'Dia_Diem_Giao_Hang': self.delivery_place,
-            'Dieu_Kien_Thanh_Toan': self.payment_terms,
-            'Toa_An_Giai_Quyet': self.court,
-            'Tong_Tien_Hang': self.amount_untaxed,
-            'Thue_Suat_VAT': self.vat_rate,
-            'Tien_Thue_VAT': self.amount_vat,
-            'Tong_Gia_Tri_HD': self.amount_total,
-            'Tong_Gia_Tri_Bang_Chu': self.amount_words,
-            'Trang_Thai': dict(STATES).get(self.state),
-            'Ghi_Chu': self.note,
-        }
-        for idx, line in enumerate(self.line_ids, start=1):
-            row.update({
-                'Ten_Hang_%d' % idx: line.product_name,
-                'DVT_%d' % idx: line.uom,
-                'So_Luong_%d' % idx: line.quantity,
-                'Don_Gia_%d' % idx: line.price_unit,
-                'Thanh_Tien_%d' % idx: line.subtotal,
-            })
-        return row
 
     # ---------- chuyển trạng thái ----------
 

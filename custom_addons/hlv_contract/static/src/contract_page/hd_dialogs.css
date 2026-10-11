@@ -146,6 +146,12 @@
 .hd-preview-scroll, .hd-paper-scroll { padding: 1.25rem; overflow-x: auto; }
 .hd-paper-scroll { background: #E9E7E1; border-radius: 0 0 var(--hd-radius) var(--hd-radius); max-height: 75vh; overflow-y: auto; }
 
+/* Cùng font Tinos với bản PDF (static/fonts) để xem nhanh giống bản in trên mọi máy */
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-Regular.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-Bold.ttf") format("truetype"); font-weight: bold; font-style: normal; }
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-Italic.ttf") format("truetype"); font-weight: normal; font-style: italic; }
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-BoldItalic.ttf") format("truetype"); font-weight: bold; font-style: italic; }
+
 /* Lề trong = lề khổ giấy PDF (trái 2,5 cm, phải 2 cm, trên/dưới 2 cm) để ngắt dòng gần đúng bản in */
 .hd-paper {
     background: #fff;
@@ -154,7 +160,7 @@
     margin: 0 auto;
     padding: 20mm 20mm 20mm 25mm;
     box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
-    font-family: "Times New Roman", Times, serif;
+    font-family: "Tinos", "Times New Roman", Times, serif;
     font-size: 13pt;
     line-height: 1.35;
     color: #000;
@@ -252,3 +258,45 @@
     .hd-palette { flex-basis: auto; border-left: 0; border-top: 1px solid var(--hd-line); max-height: none; }
     .hd-paper { width: 100%; min-height: 0; padding: 12mm; }
 }
+
+/* ------------------------------------------------------------ ngăn soạn: bảng hàng, chọn sản phẩm */
+
+.hd-lines-wrap { position: relative; overflow: visible; }
+.hd-line-name { position: relative; }
+.hd-linked { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--hd-ok); font-size: 10px; }
+.hd-sub-price { font-size: 11px; color: var(--hd-muted); text-align: right; padding: 1px 6px 0; white-space: nowrap; }
+.hd-dropdown-hint { padding: .35rem .75rem; font-size: 11.5px; color: var(--hd-muted); border-bottom: 1px solid var(--hd-line-soft); }
+.hd-order-picker { margin: .5rem 0; max-width: 520px; }
+.hd-total-sub { font-size: 12.5px; color: var(--hd-muted); }
+.hd-total-grand { border-top: 0; margin-top: 0; padding-top: 0 !important; }
+
+/* ------------------------------------------------------------ màn mẫu: tab, bảng biến */
+
+.hd-subtabs { display: flex; gap: .25rem; padding: .5rem 1rem 0; border-bottom: 1px solid var(--hd-line); background: #FBFAF8; }
+.hd-subtab {
+    border: 1px solid transparent;
+    border-bottom: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    padding: .4rem .9rem;
+    border-radius: var(--hd-radius) var(--hd-radius) 0 0;
+    color: var(--hd-muted);
+    cursor: pointer;
+    margin-bottom: -1px;
+}
+.hd-subtab.is-active { background: #fff; border-color: var(--hd-line); color: var(--hd-ink); font-weight: 600; }
+.hd-vars-table td { vertical-align: middle; }
+.hd-vars-table .hd-input { height: 30px; }
+.hd-chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hlv-var.is-system { background: var(--hd-accent-soft); border-color: var(--hd-accent-line); color: var(--hd-accent); }
+.hd-var-btn { display: flex; justify-content: space-between; gap: .4rem; align-items: baseline; }
+.hd-var-btn code { font-size: 10px; color: var(--hd-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.hd-var-btn.is-mine { background: #FFF8E0; }
+.hd-var-btn.is-system span { color: var(--hd-accent); }
+.hd-palette-sub { font-size: 11px; color: var(--hd-muted); margin: .4rem 0 .1rem .45rem; }
+
+/* Gợi ý thả xuống dùng chung (khách hàng, sản phẩm): khung nổi, đặt theo vị trí ô đang gõ */
+.hd-suggest { position: fixed; right: auto; z-index: 1500; max-height: 320px; }
+.hd-suggest .hd-dropdown-item.is-active { background: var(--hd-accent-soft); }
+.hd-linked-tag { margin-left: .4rem; font-size: 11px; color: var(--hd-ok); font-weight: 600; }

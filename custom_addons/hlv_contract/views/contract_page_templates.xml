@@ -44,37 +44,27 @@
                             <label class="hd-sr-only" for="hd-search">Tìm hợp đồng</label>
                             <input type="search" id="hd-search" class="hd-input hd-input-wide"
                                    placeholder="Tìm số hợp đồng, tên bên mua, mã số thuế…"/>
-                            <label class="hd-sr-only" for="hd-type-filter">Loại hợp đồng</label>
-                            <select id="hd-type-filter" class="hd-input"></select>
+                            <div id="hd-tabs" class="hd-tabs"></div>
                             <button type="button" class="hd-btn hd-push" id="hd-export-open" disabled="disabled">
                                 Xuất / In <span id="hd-selected-count"></span></button>
                             <button type="button" class="hd-btn hd-btn-primary" id="hd-new">+ Hợp đồng mới</button>
                         </div>
-                        <section class="hd-panel">
-                            <div class="hd-panel-head">
-                                <div id="hd-tabs" class="hd-tabs"></div>
-                            </div>
-                            <div class="hd-table-wrap">
-                                <table class="hd-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="hd-col-check"><input type="checkbox" id="hd-check-all" aria-label="Chọn tất cả"/></th>
-                                            <th>Số hợp đồng</th>
-                                            <th>Ngày ký</th>
-                                            <th>Loại</th>
-                                            <th>Bên mua</th>
-                                            <th class="hd-right">Giá trị</th>
-                                            <th>Phụ trách</th>
-                                            <th>Trạng thái</th>
-                                            <th class="hd-right"></th>
-                                        </tr>
-                                    </thead>
+                        <!-- Mỗi mẫu một "sheet" như file Excel cũ (HDMB, HDNT): cột là biến của mẫu -->
+                        <div id="hd-sheets" class="hd-sheets" role="tablist"></div>
+                        <section class="hd-panel hd-sheet-panel">
+                            <div id="hd-sheet-hint" class="hd-sheet-hint hd-hidden"></div>
+                            <div class="hd-table-wrap hd-grid-scroll">
+                                <table class="hd-table" id="hd-table">
+                                    <thead id="hd-thead"></thead>
                                     <tbody id="hd-list">
-                                        <tr><td colspan="9" class="hd-empty">Đang tải…</td></tr>
+                                        <tr><td class="hd-empty">Đang tải…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <div id="hd-pager" class="hd-pager"></div>
+                            <div class="hd-sheet-foot">
+                                <button type="button" class="hd-btn hd-btn-mini hd-hidden" id="hd-grid-add">+ Thêm dòng</button>
+                                <div id="hd-pager" class="hd-pager"></div>
+                            </div>
                         </section>
                     </section>
 
@@ -195,6 +185,7 @@
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_utils.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_ui.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_list.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_grid.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_form.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_editor.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_templates.js?v=#{asset_version}"></script>

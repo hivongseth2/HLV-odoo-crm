@@ -1,24 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Trang /hop-dong: danh sách, soạn, chuyển trạng thái, xem nhanh và xuất hợp đồng.
+"""Trang /hop-dong: danh sách, bảng dữ liệu theo mẫu (kiểu Excel), soạn, chuyển trạng thái,
+xem nhanh và xuất hợp đồng.
 
 Trang tự dựng như /hoi-gia-ncc (QWeb + JS thuần), không dùng form backend. API mẫu hợp
-đồng và thông tin bên bán ở template_api.py.
+đồng và thông tin bên bán ở template_api.py; ô tìm sản phẩm / đơn bán ở lookup_api.py.
 """
 
 from odoo import fields, http
 from odoo.exceptions import UserError
 from odoo.http import content_disposition, request
 
-from ..models.contract import FORM_FIELDS, STATES
+from ..models.contract import STATES
 from ..models.contract_template import CONTRACT_TYPES
 from ..services import contract_payload as payload
 from ..services.asset_version import asset_version
 from ..services.contract_export import FORMATS, export_contracts
-from ..utils.contract_vars import compute_totals, line_subtotal
+from ..utils.contract_vars import compute_totals, line_subtotal, price_excl
 from .common import API, PAGE_ROUTE, ContractPageMixin, parse_ids, to_int
 
 PER_PAGE = 40
-PARTNER_LIMIT = 15
+GRID_PER_PAGE = 80
 _ACTIONS = {
     'confirm': 'action_confirm',
     'sign': 'action_sign',
@@ -27,27 +28,9 @@ _ACTIONS = {
 }
 
 
-def _clean_form_values(values):
-    """Giữ đúng các field form được ghi, đổi giá trị rỗng về kiểu Odoo cần."""
-    vals = {}
-    for name in FORM_FIELDS:
-        if name not in values:
-            continue
-        value = values[name]
-        if name in ('partner_id', 'template_id'):
-            value = to_int(value) or False
-        elif name in ('contract_date', 'expiry_date'):
-            value = value or False
-        elif name == 'vat_rate':
-            value = float(value or 0)
-        elif isinstance(value, str):
-            value = value.strip()
-        vals[name] = value
-    return vals
-
-
-def _line_commands(lines):
-    """Ghi lại toàn bộ dòng hàng theo thứ tự trên trang; dòng không có tên hàng bị bỏ."""
+def _line_commands(lines, vat_rate):
+    """Ghi lại toàn bộ dòng hàng theo thứ tự trên trang; dòng không có tên hàng bị bỏ.
+    Trang gửi giá SAU VAT (price_incl) vì người dùng quen gõ giá sau thuế; lưu giá chưa VAT."""
     commands = [(5, 0, 0)]
     for index, line in enumerate(lines or []):
         name = (line.get('product_name') or '').strip()
@@ -55,12 +38,19 @@ def _line_commands(lines):
             continue
         commands.append((0, 0, {
             'sequence': index + 1,
+            'product_id': to_int(line.get('product_id')) or False,
             'product_name': name,
             'uom': (line.get('uom') or '').strip(),
             'quantity': float(line.get('quantity') or 0),
-            'price_unit': float(line.get('price_unit') or 0),
+            'price_unit': price_excl(line.get('price_incl'), vat_rate),
         }))
     return commands
+
+
+def _clean_values(template, values):
+    """Chỉ giữ biến của mẫu, chữ thì bỏ khoảng trắng hai đầu."""
+    names = set(template.variable_ids.mapped('name'))
+    return {k: (v.strip() if isinstance(v, str) else v) for k, v in (values or {}).items() if k in names}
 
 
 class ContractPage(ContractPageMixin, http.Controller):
@@ -75,43 +65,53 @@ class ContractPage(ContractPageMixin, http.Controller):
     @http.route(f'{API}/config', type='json', auth='user', methods=['POST'])
     def api_config(self, **kw):
         self._check()
-        company = request.env.company
         templates = request.env['hlv.contract.template'].search([])
         return {
             'is_manager': self._is_manager(),
-            'user_name': request.env.user.name,
             'today': fields.Date.to_string(fields.Date.context_today(request.env.user)),
             'types': CONTRACT_TYPES,
             'states': STATES,
             'templates': [payload.template_summary(t) for t in templates],
-            'defaults': {'vat_rate': company.contract_vat_rate, 'court': company.contract_court or ''},
-            'variables': payload.variable_groups(),
+            'default_vat': request.env.company.contract_vat_rate,
+            'library': payload.variable_library(),
         }
 
-    @http.route(f'{API}/list', type='json', auth='user', methods=['POST'])
-    def api_list(self, search='', state='all', contract_type='', page=1, **kw):
-        self._check()
-        Contract = request.env['hlv.contract']
-        base = []
+    def _base_domain(self, search, template_id=None):
+        domain = []
         term = (search or '').strip()
         if term:
-            base += ['|', '|', ('name', 'ilike', term), ('buyer_name', 'ilike', term), ('buyer_vat', 'ilike', term)]
-        if contract_type:
-            base.append(('contract_type', '=', contract_type))
-        counts = {'all': Contract.search_count(base)}
+            domain += ['|', '|', ('name', 'ilike', term), ('party_name', 'ilike', term), ('party_vat', 'ilike', term)]
+        if to_int(template_id):
+            domain.append(('template_id', '=', to_int(template_id)))
+        return domain
+
+    def _paged(self, domain, state, page, per_page):
+        Contract = request.env['hlv.contract']
+        counts = {'all': Contract.search_count(domain)}
         for key, _label in STATES:
-            counts[key] = Contract.search_count(base + [('state', '=', key)])
-        domain = base + ([('state', '=', state)] if state in counts and state != 'all' else [])
+            counts[key] = Contract.search_count(domain + [('state', '=', key)])
+        if state in counts and state != 'all':
+            domain = domain + [('state', '=', state)]
         total = Contract.search_count(domain)
         page = max(1, to_int(page) or 1)
-        contracts = Contract.search(domain, offset=(page - 1) * PER_PAGE, limit=PER_PAGE)
-        return {
-            'contracts': [payload.contract_summary(c) for c in contracts],
-            'counts': counts,
-            'page': page,
-            'pages': max(1, -(-total // PER_PAGE)),
-            'total': total,
-        }
+        records = Contract.search(domain, offset=(page - 1) * per_page, limit=per_page)
+        return records, {'counts': counts, 'page': page, 'pages': max(1, -(-total // per_page)), 'total': total}
+
+    @http.route(f'{API}/list', type='json', auth='user', methods=['POST'])
+    def api_list(self, search='', state='all', page=1, **kw):
+        self._check()
+        contracts, meta = self._paged(self._base_domain(search), state, page, PER_PAGE)
+        return dict(meta, contracts=[payload.contract_summary(c) for c in contracts])
+
+    @http.route(f'{API}/grid', type='json', auth='user', methods=['POST'])
+    def api_grid(self, template_id=None, search='', state='all', page=1, **kw):
+        """Bảng dữ liệu một mẫu: cột là biến của mẫu, mỗi hợp đồng một dòng — như sheet Excel cũ."""
+        self._check()
+        template = self._get_record('hlv.contract.template', template_id)
+        contracts, meta = self._paged(self._base_domain(search, template.id), state, page, GRID_PER_PAGE)
+        manager = self._is_manager()
+        return dict(meta, template=payload.template_summary(template),
+                    rows=[payload.grid_row(c, manager) for c in contracts])
 
     @http.route(f'{API}/get', type='json', auth='user', methods=['POST'])
     def api_get(self, contract_id=None, **kw):
@@ -119,18 +119,58 @@ class ContractPage(ContractPageMixin, http.Controller):
         return payload.contract_detail(self._get_record('hlv.contract', contract_id), self._is_manager())
 
     @http.route(f'{API}/save', type='json', auth='user', methods=['POST'])
-    def api_save(self, contract_id=None, values=None, lines=None, **kw):
-        """Tạo mới (không có contract_id) hoặc ghi lại hợp đồng; trả chi tiết sau khi lưu."""
+    def api_save(self, contract_id=None, template_id=None, contract_date=None, partner_id=None,
+                 vat_rate=None, note=None, values=None, lines=None, **kw):
+        """Tạo mới (không có contract_id) hoặc ghi lại hợp đồng; trả chi tiết sau khi lưu.
+        Tham số nào không gửi thì giữ nguyên."""
         self._check()
-        vals = _clean_form_values(values or {})
+        contract = self._get_record('hlv.contract', contract_id) if to_int(contract_id) else None
+        template = request.env['hlv.contract.template'].browse(
+            to_int(template_id) or (contract.template_id.id if contract else 0)).exists()
+        if not template:
+            raise UserError('Chọn mẫu hợp đồng.')
+        vals = {'template_id': template.id}
+        if contract_date is not None:
+            vals['contract_date'] = contract_date or fields.Date.context_today(request.env.user)
+        if partner_id is not None:
+            vals['partner_id'] = to_int(partner_id) or False
+        if vat_rate is not None:
+            vals['vat_rate'] = float(vat_rate or 0)
+        if note is not None:
+            vals['note'] = note
+        if values is not None:
+            existing = dict(contract.variable_values or {}) if contract else {}
+            vals['variable_values'] = dict(existing, **_clean_values(template, values))
         if lines is not None:
-            vals['line_ids'] = _line_commands(lines)
-        if to_int(contract_id):
-            contract = self._get_record('hlv.contract', contract_id)
+            rate = vals['vat_rate'] if 'vat_rate' in vals else (
+                contract.vat_rate if contract else request.env.company.contract_vat_rate)
+            vals['line_ids'] = _line_commands(lines, rate)
+        if contract:
+            if contract.template_id == template:
+                vals.pop('template_id')
             contract.write(vals)
         else:
             contract = request.env['hlv.contract'].create(vals)
         return payload.contract_detail(contract, self._is_manager())
+
+    @http.route(f'{API}/set_value', type='json', auth='user', methods=['POST'])
+    def api_set_value(self, contract_id=None, name='', value='', **kw):
+        """Sửa một ô trong bảng dữ liệu. name='contract_date' là ngày ký, còn lại là biến của mẫu."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id)
+        if name == 'contract_date':
+            contract.write({'contract_date': value or fields.Date.context_today(request.env.user)})
+        else:
+            contract.set_variable(name, value.strip() if isinstance(value, str) else value)
+        return payload.grid_row(contract, self._is_manager())
+
+    @http.route(f'{API}/set_partner', type='json', auth='user', methods=['POST'])
+    def api_set_partner(self, contract_id=None, partner_id=None, **kw):
+        """Chọn khách ở ô tên/MST bên mua của bảng dữ liệu: điền cả cụm thông tin bên mua."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id)
+        contract.apply_partner(self._get_record('res.partner', partner_id))
+        return payload.grid_row(contract, self._is_manager())
 
     @http.route(f'{API}/action', type='json', auth='user', methods=['POST'])
     def api_action(self, contract_id=None, action='', **kw):
@@ -150,22 +190,11 @@ class ContractPage(ContractPageMixin, http.Controller):
         """Thành tiền từng dòng + tổng + chữ khi đang gõ, tính ở server bằng đúng hàm model dùng
         để JS không giữ bản sao quy tắc tính tiền."""
         self._check()
-        subtotals = [line_subtotal(l.get('quantity'), l.get('price_unit')) for l in (lines or [])]
-        return dict(compute_totals(subtotals, vat_rate), subtotals=subtotals)
-
-    @http.route(f'{API}/partners', type='json', auth='user', methods=['POST'])
-    def api_partners(self, search='', **kw):
-        self._check()
-        Partner = request.env['res.partner']
-        term = (search or '').strip()
-        domain = ['|', '|', ('name', 'ilike', term), ('vat', 'ilike', term), ('ref', 'ilike', term)] if term else []
-        Contract = request.env['hlv.contract']
-        return [{
-            'id': partner.id,
-            'label': partner.display_name,
-            'vat': partner.commercial_partner_id.vat or '',
-            'values': Contract._buyer_values_from_partner(partner),
-        } for partner in Partner.search(domain, limit=PARTNER_LIMIT)]
+        lines = lines or []
+        prices = [price_excl(l.get('price_incl'), vat_rate) for l in lines]
+        subtotals = [line_subtotal(l.get('quantity'), p) for l, p in zip(lines, prices)]
+        return dict(compute_totals(subtotals, vat_rate), subtotals=subtotals, prices_excl=prices,
+                    subtotals_incl=[line_subtotal(l.get('quantity'), l.get('price_incl')) for l in lines])
 
     @http.route(f'{API}/preview', type='json', auth='user', methods=['POST'])
     def api_preview(self, contract_id=None, **kw):

@@ -13,10 +13,14 @@ class ContractLine(models.Model):
 
     contract_id = fields.Many2one('hlv.contract', required=True, ondelete='cascade', index=True)
     sequence = fields.Integer(default=10)
+    # Chọn từ danh mục sản phẩm là tuỳ chọn: tên/ĐVT vẫn là chữ người dùng sửa được như gõ tay
+    product_id = fields.Many2one('product.product', string='Sản phẩm', ondelete='set null')
     product_name = fields.Char(string='Tên hàng', required=True)
     uom = fields.Char(string='ĐVT')
     quantity = fields.Float(string='Số lượng', digits='Product Unit of Measure', default=1.0)
-    price_unit = fields.Monetary(string='Đơn giá', currency_field='currency_id')
+    # Đơn giá chưa VAT, giữ 4 số lẻ: người dùng nhập giá SAU VAT, chia ngược ra giá chưa VAT
+    # mà làm tròn đồng ngay thì tổng sau VAT lệch vài đồng so với số họ đã gõ
+    price_unit = fields.Float(string='Đơn giá (chưa VAT)', digits=(16, 4))
     subtotal = fields.Monetary(string='Thành tiền', compute='_compute_subtotal', store=True,
                                currency_field='currency_id')
     currency_id = fields.Many2one(related='contract_id.currency_id', store=True)

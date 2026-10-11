@@ -7,7 +7,7 @@ JS lo hiển thị.
 
 from odoo import fields
 
-from ..models.contract import FORM_FIELDS, STATES
+from ..models.contract import STATES
 from ..models.contract_template import CONTRACT_TYPES
 from ..utils import contract_vars
 
@@ -25,51 +25,48 @@ def _date(value):
 
 
 def contract_summary(contract):
-    """Một dòng trong danh sách."""
+    """Một dòng trong danh sách tổng hợp."""
     return {
         'id': contract.id,
         'name': contract.name,
-        'contract_type': contract.contract_type,
-        'type_label': TYPE_LABELS.get(contract.contract_type, ''),
+        'template_id': contract.template_id.id,
+        'template_name': contract.template_id.name or '',
         'contract_date': _date(contract.contract_date),
-        'buyer_name': contract.buyer_name or '',
-        'buyer_vat': contract.buyer_vat or '',
+        'party_name': contract.party_name or '',
+        'party_vat': contract.party_vat or '',
         'amount_total': contract.amount_total,
+        'has_lines': contract.template_id.has_lines,
         'state': contract.state,
         'state_label': STATE_LABELS.get(contract.state, ''),
         'user': contract.user_id.name or '',
-        'line_count': len(contract.line_ids),
     }
 
 
-def _form_value(contract, name):
-    """Giá trị một field của form: ngày -> chuỗi, many2one -> id (False nếu trống), số giữ
-    nguyên, chữ trống -> ''."""
-    field = contract._fields[name]
-    value = contract[name]
-    if field.type == 'date':
-        return _date(value)
-    if field.type == 'many2one':
-        return value.id or False
-    if field.type in ('float', 'integer', 'monetary'):
-        return value
-    return value or ''
+def _lines(contract):
+    rate = contract.vat_rate
+    return [{
+        'id': line.id,
+        'product_id': line.product_id.id or False,
+        'product_name': line.product_name,
+        'uom': line.uom or '',
+        'quantity': line.quantity,
+        'price_unit': line.price_unit,
+        'price_incl': contract_vars.price_incl(line.price_unit, rate),
+        'subtotal': line.subtotal,
+        'subtotal_incl': contract_vars.price_incl(line.subtotal, rate),
+    } for line in contract.line_ids]
 
 
 def contract_detail(contract, can_manage):
     """Đủ dữ liệu cho ngăn soạn hợp đồng. can_manage: người xem thuộc nhóm Quản lý."""
     detail = contract_summary(contract)
     detail.update({
-        'values': {name: _form_value(contract, name) for name in FORM_FIELDS},
+        'values': dict(contract.variable_values or {}),
+        'partner_id': contract.partner_id.id or False,
         'partner_label': contract.partner_id.display_name or '',
-        'lines': [{
-            'id': line.id,
-            'product_name': line.product_name,
-            'uom': line.uom or '',
-            'quantity': line.quantity,
-            'price_unit': line.price_unit,
-            'subtotal': line.subtotal,
-        } for line in contract.line_ids],
+        'vat_rate': contract.vat_rate,
+        'note': contract.note or '',
+        'lines': _lines(contract),
         'amount_untaxed': contract.amount_untaxed,
         'amount_vat': contract.amount_vat,
         'amount_words': contract.amount_words or '',
@@ -77,6 +74,17 @@ def contract_detail(contract, can_manage):
         'actions': _allowed_actions(contract, can_manage),
     })
     return detail
+
+
+def grid_row(contract, can_manage):
+    """Một dòng trong bảng dữ liệu kiểu Excel của một mẫu."""
+    row = contract_summary(contract)
+    row.update({
+        'values': dict(contract.variable_values or {}),
+        'lines': [{'name': line.product_name, 'quantity': line.quantity} for line in contract.line_ids],
+        'editable': contract.state == 'draft' or can_manage,
+    })
+    return row
 
 
 def _allowed_actions(contract, can_manage):
@@ -105,38 +113,43 @@ def template_summary(template):
         'source': template.source,
         'filename': template.docx_filename or '',
         'active': template.active,
+        'has_lines': template.has_lines,
+        'variables': [var._to_dict() for var in template.variable_ids],
     }
 
 
 def template_detail(template):
-    try:
-        field_report = template._field_report()
-        file_error = ''
-    except ValueError as err:
-        field_report, file_error = [], str(err)
+    """Chi tiết mẫu cho màn soạn mẫu; file hỏng thì báo lỗi thay vì vỡ trang."""
     detail = template_summary(template)
+    system = [n for n in (template.system_fields or '').split(',') if n]
     detail.update({
         'body_html': (template.body_html or '') if template.source == 'builder' else '',
         'note': template.note or '',
-        'fields': field_report,
-        'file_error': file_error,
+        'system_fields': [{'name': n, 'label': contract_vars.SYSTEM_LABELS.get(n, n)} for n in system],
     })
     return detail
 
 
-def variable_groups():
-    """Bảng biến cho trình soạn mẫu. Dòng hàng chỉ đưa dòng 1: bảng hàng chỉ cần một dòng mẫu,
-    hợp đồng nhiều dòng hơn thì dòng cuối tự nhân bản khi xuất."""
-    groups = [
-        ('Hợp đồng & bên mua', contract_vars.HEADER_VARIABLES),
-        ('Tổng tiền', contract_vars.TOTAL_VARIABLES),
-        ('Bên bán (cấu hình công ty)', contract_vars.SELLER_VARIABLES),
-        ('Dòng hàng', ['%s_1' % f for f in contract_vars.LINE_FIELDS]),
-    ]
-    return [{
-        'title': title,
-        'items': [{'name': n, 'label': contract_vars.VARIABLE_LABELS.get(n, n)} for n in names],
-    } for title, names in groups]
+def variable_library():
+    """Thư viện biến cho trình soạn mẫu: biến chuẩn (gợi ý nhãn/kiểu, tự điền khi chọn khách)
+    và biến tự điền (không cần nhập). Biến dòng hàng chỉ đưa dòng 1: bảng hàng chỉ cần một
+    dòng mẫu, hợp đồng nhiều mặt hàng thì dòng đó tự nhân bản khi xuất."""
+    def items(names):
+        return [{'name': n, 'label': contract_vars.SYSTEM_LABELS.get(n, n)} for n in names]
+
+    standard = [dict(contract_vars.default_variable_def(n)) for n in contract_vars.STANDARD_VARIABLES]
+    return {
+        'standard': standard,
+        'system': [
+            {'title': 'Số & ngày hợp đồng', 'items': items(contract_vars.DATE_VARIABLES)},
+            {'title': 'Bên bán (cấu hình công ty)', 'items': items(contract_vars.SELLER_VARIABLES)},
+            {'title': 'Bảng hàng hoá — dùng trong bảng hàng', 'items': items(
+                ['%s_1' % f for f in contract_vars.LINE_FIELDS])},
+            {'title': 'Tổng tiền — tính từ bảng hàng', 'items': items(contract_vars.TOTAL_VARIABLES)},
+        ],
+        'types': contract_vars.VARIABLE_TYPES,
+        'sections': contract_vars.SECTIONS,
+    }
 
 
 def seller_values(company):

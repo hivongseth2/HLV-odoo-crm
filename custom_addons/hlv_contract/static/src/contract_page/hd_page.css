@@ -257,3 +257,54 @@ body {
     .hd-nav-tabs { margin-left: .5rem; }
     .hd-nav-tab { padding: .3rem .45rem; font-size: 12.5px; }
 }
+
+/* ------------------------------------------------------------ thanh sheet + bảng dữ liệu kiểu Excel */
+
+.hd-sheets { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: -1px; position: relative; z-index: 1; }
+.hd-sheet {
+    border: 1px solid var(--hd-line);
+    border-bottom-color: transparent;
+    background: #EFEDE7;
+    color: var(--hd-muted);
+    font: inherit;
+    font-size: 13px;
+    padding: .4rem 1rem;
+    border-radius: var(--hd-radius) var(--hd-radius) 0 0;
+    cursor: pointer;
+}
+.hd-sheet:hover { background: #F6F4EF; color: var(--hd-ink); }
+.hd-sheet.is-active { background: #fff; color: var(--hd-accent); font-weight: 600; border-bottom-color: #fff; }
+.hd-sheet-panel { border-top-left-radius: 0; }
+.hd-sheet-hint { padding: .45rem 1rem; font-size: 12px; color: var(--hd-muted); border-bottom: 1px solid var(--hd-line-soft); background: #FBFAF8; }
+.hd-sheet-foot { display: flex; align-items: center; gap: .75rem; padding: .5rem 1rem; }
+.hd-sheet-foot .hd-pager { margin-left: auto; padding: 0; }
+
+.hd-grid-scroll { max-height: calc(100vh - 260px); overflow: auto; }
+.hd-grid-scroll thead th { position: sticky; top: 0; z-index: 2; }
+.hd-sticky-col { position: sticky; left: 0; background: #fff; z-index: 1; }
+thead .hd-sticky-col { background: #FBFAF8; z-index: 3; }
+.hd-th-code { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; color: #9aa0a6; }
+
+.hd-grid-row td { border-right: 1px solid var(--hd-line-soft); }
+.hd-cell { min-width: 140px; max-width: 320px; white-space: normal; }
+.hd-cell-textarea { min-width: 220px; }
+.hd-cell-date, .hd-cell-number { min-width: 110px; white-space: nowrap; }
+.hd-cell-money { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hd-cell.is-editable { cursor: text; }
+.hd-cell.is-editable:hover { background: #FFFBEA !important; box-shadow: inset 0 0 0 1px #F0D27A; }
+.hd-cell.is-editing { padding: 2px !important; background: #fff !important; box-shadow: inset 0 0 0 2px var(--hd-accent); }
+.hd-cell.is-saving { opacity: .55; }
+.hd-cell-input {
+    width: 100%;
+    min-width: 120px;
+    border: 0;
+    outline: none;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 4px 6px;
+    background: transparent;
+    resize: vertical;
+}
+.hd-grid-row.is-locked .hd-cell { color: var(--hd-muted); }
+.hd-cell-lines { min-width: 200px; cursor: pointer; font-size: 12.5px; }
+.hd-cell-lines:hover { background: var(--hd-accent-soft) !important; }

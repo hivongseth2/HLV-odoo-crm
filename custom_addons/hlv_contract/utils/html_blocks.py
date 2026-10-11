@@ -262,16 +262,31 @@ def html_to_blocks(html):
     return _emit_blocks(root)
 
 
+# Font in hợp đồng: Tinos (OFL, đo chữ y hệt Times New Roman, đủ tiếng Việt) đóng gói trong
+# static/fonts. Server Linux không có Times New Roman; để wkhtmltopdf tự chọn font thay thế
+# thì dòng chữ in hoa đậm bị rơi dấu (CỘNG HOÀ -> CỌNG HOA).
+FONT_FAMILY = '"Tinos", "Times New Roman", "Liberation Serif", serif'
+_FONT_FILES = (('Regular', 'normal', 'normal'), ('Bold', 'bold', 'normal'),
+               ('Italic', 'normal', 'italic'), ('BoldItalic', 'bold', 'italic'))
 _PAGE_CSS = (
-    'body { font-family: "Times New Roman", serif; font-size: 13pt; color: #000; }'
+    'body { font-family: %s; font-size: 13pt; line-height: 1.3; color: #000; }'
     'table { border-collapse: collapse; }'
     'table.hlv-grid td { border: 1px solid #000; }'
     'tr { page-break-inside: avoid; }'
-)
+) % FONT_FAMILY
 
 
-def wrap_html_document(fragment):
+def font_face_css(base_url):
+    """@font-face cho 4 kiểu Tinos. base_url: gốc web Odoo mà wkhtmltopdf truy cập được
+    (ví dụ 'http://localhost:8069'); '' -> đường dẫn tương đối (dùng trong trình duyệt)."""
+    return ''.join(
+        '@font-face { font-family: "Tinos"; src: url("%s/hlv_contract/static/fonts/Tinos-%s.ttf") '
+        'format("truetype"); font-weight: %s; font-style: %s; }' % ((base_url or '').rstrip('/'), name, weight, style)
+        for name, weight, style in _FONT_FILES)
+
+
+def wrap_html_document(fragment, base_url=''):
     """Bọc phần thân hợp đồng thành một trang HTML đầy đủ cho wkhtmltopdf. Mỗi hợp đồng
-    là một tài liệu riêng nên khi gộp PDF sẽ bắt đầu trên trang mới."""
-    return ('<!DOCTYPE html><html><head><meta charset="utf-8"><style>%s</style></head>'
-            '<body>%s</body></html>') % (_PAGE_CSS, fragment)
+    là một tài liệu riêng nên khi gộp PDF sẽ bắt đầu trên trang mới. base_url: xem font_face_css."""
+    return ('<!DOCTYPE html><html><head><meta charset="utf-8"><style>%s%s</style></head>'
+            '<body>%s</body></html>') % (font_face_css(base_url), _PAGE_CSS, fragment)

@@ -1,5 +1,5 @@
-/* Màn Mẫu hợp đồng (chỉ Quản lý): danh sách mẫu, trình soạn, import .doc/.docx, thay file
-   Word; và hộp Thông tin bên bán. */
+/* Màn Mẫu hợp đồng (chỉ Quản lý): danh sách mẫu, trình soạn, bộ biến riêng của từng mẫu,
+   import .doc/.docx, thay file Word; và hộp Thông tin bên bán. */
 window.HlvContract = window.HlvContract || {};
 
 (function (HD) {
@@ -31,10 +31,8 @@ window.HlvContract = window.HlvContract || {};
     "<p>Hôm nay, ngày " + HD.varChip("Ngay_Ky") + " tháng " + HD.varChip("Thang_Ky") + " năm " +
     HD.varChip("Nam_Ky") + ", chúng tôi gồm có:</p><p><br></p>";
 
-  function refreshConfigTemplates() {
-    return HD.api("config").then(function (config) {
-      S.config = config;
-    });
+  function refreshConfig() {
+    return HD.api("config").then(function (config) { S.config = config; });
   }
 
   function sourceBadge(t) {
@@ -49,7 +47,7 @@ window.HlvContract = window.HlvContract || {};
       return '<button type="button" class="hd-tpl-item' + (t.id === currentId ? " is-active" : "") +
         (t.active ? "" : " is-archived") + '" data-tpl="' + t.id + '">' +
         '<span class="hd-strong">' + esc(t.name) + "</span>" +
-        '<span class="hd-tpl-meta">' + esc(t.type_label) + " · " + sourceBadge(t) +
+        '<span class="hd-tpl-meta">' + esc(t.type_label) + " · " + sourceBadge(t) + " · " + t.variables.length + " biến" +
         (t.active ? "" : ' <span class="hd-tag hd-tag-muted">Ngừng dùng</span>') + "</span></button>";
     }).join("") : '<div class="hd-pad hd-muted">Chưa có mẫu nào.</div>';
   }
@@ -61,77 +59,125 @@ window.HlvContract = window.HlvContract || {};
     }).catch(HD.fail);
   };
 
-  function fieldReportHtml(t) {
-    if (t.file_error) {
-      return '<div class="hd-alert">Không đọc được file Word: ' + esc(t.file_error) + "</div>";
-    }
-    if (!t.fields.length) {
-      return '<p class="hd-muted">Mẫu chưa có biến nào.</p>';
-    }
-    return '<table class="hd-table hd-fields-table"><thead><tr><th>Biến</th><th>Ý nghĩa</th><th></th></tr></thead><tbody>' +
-      t.fields.map(function (f) {
-        return "<tr><td><code>" + esc(f.name) + "</code></td><td>" + esc(f.label) + "</td><td>" +
-          (f.known ? '<span class="hd-tag hd-tag-ok">Điền được</span>'
-            : '<span class="hd-tag hd-tag-danger">Sai tên — sẽ hiện «' + esc(f.name) + "»</span>") + "</td></tr>";
-      }).join("") + "</tbody></table>";
+  /* ---------------------------------------------------------- tab Biến của mẫu */
+
+  function options(list, selected) {
+    return list.map(function (item) {
+      return '<option value="' + item[0] + '"' + (item[0] === selected ? " selected" : "") + ">" + esc(item[1]) + "</option>";
+    }).join("");
   }
+
+  function variablesHtml() {
+    var lib = S.config.library;
+    var rows = S.varDefs.map(function (v, i) {
+      return "<tr>" +
+        '<td class="hd-nowrap"><button type="button" class="hd-icon-btn" data-move="' + i + '" data-dir="-1" title="Lên">▲</button>' +
+        '<button type="button" class="hd-icon-btn" data-move="' + i + '" data-dir="1" title="Xuống">▼</button></td>' +
+        '<td><input type="text" class="hd-input w-100" data-var-index="' + i + '" data-var-field="label" value="' + esc(v.label) + '"/></td>' +
+        "<td><code>" + esc(v.name) + "</code></td>" +
+        '<td><select class="hd-input" data-var-index="' + i + '" data-var-field="var_type">' + options(lib.types, v.var_type) + "</select></td>" +
+        '<td><select class="hd-input" data-var-index="' + i + '" data-var-field="section">' + options(lib.sections, v.section) + "</select></td>" +
+        '<td><input type="text" class="hd-input w-100" data-var-index="' + i + '" data-var-field="default_value" value="' +
+        esc(v.default_value) + '" placeholder="(trống)"/></td></tr>';
+    }).join("");
+    var system = (S.template.system_fields || []).map(function (f) {
+      return '<span class="hlv-var is-system" title="' + esc(f.name) + '">' + esc(f.label) + "</span>";
+    }).join(" ");
+    return '<div class="hd-pad">' +
+      '<p class="hd-muted">Mỗi biến là một ô người dùng điền trên hợp đồng (và một cột trong bảng dữ liệu). ' +
+      "Thêm/bớt biến bằng cách chèn/xoá biến trong nội dung mẫu" +
+      (S.template.source === "docx" ? " (với mẫu file Word: sửa trường trộn trong Word rồi thay file)" : "") +
+      ". Ở đây chỉnh nhãn, kiểu ô, nhóm và thứ tự hiện.</p>" +
+      (rows ? '<div class="hd-table-wrap"><table class="hd-table hd-vars-table"><thead><tr><th></th><th>Nhãn hiện cho người điền</th>' +
+        "<th>Tên trong mẫu</th><th>Kiểu ô</th><th>Nhóm</th><th>Giá trị mặc định</th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+        : '<div class="hd-info">Mẫu chưa có biến nào người dùng phải điền.</div>') +
+      (system ? '<h3 class="hd-h3 mt-3 mb-2">Biến tự điền có trong mẫu</h3><div class="hd-chip-row">' + system + "</div>" +
+        (S.template.has_lines ? '<p class="hd-muted mt-2">Mẫu có bảng hàng hoá — hợp đồng sẽ có phần nhập hàng và tổng tiền.</p>' : "") : "") +
+      "</div>";
+  }
+
+  /* ---------------------------------------------------------- vẽ mẫu đang mở */
 
   function headerHtml(t) {
     var isNew = !t.id;
     return '<div class="hd-tpl-head">' +
       '<input type="text" class="hd-input hd-tpl-name" id="hd-tpl-name" placeholder="Tên mẫu" value="' + esc(t.name) + '"/>' +
-      '<select class="hd-input" id="hd-tpl-type">' + HD.typeOptions(t.contract_type) + "</select>" +
-      '<label class="hd-check-label"><input type="checkbox" id="hd-tpl-active"' + (t.active ? " checked" : "") +
-      "/> Đang dùng</label>" +
+      '<select class="hd-input" id="hd-tpl-type" title="Loại — quyết định dãy số HĐMB-/HĐNT-">' + HD.typeOptions(t.contract_type) + "</select>" +
+      '<label class="hd-check-label"><input type="checkbox" id="hd-tpl-active"' + (t.active ? " checked" : "") + "/> Đang dùng</label>" +
       '<div class="hd-push d-flex flex-wrap gap-2">' +
       (isNew ? "" : '<button type="button" class="hd-btn" id="hd-tpl-download">Tải file Word</button>') +
       (isNew ? "" : '<button type="button" class="hd-btn" id="hd-tpl-replace">Thay bằng file Word…</button>') +
       (t.source === "docx" && !isNew ? '<button type="button" class="hd-btn" id="hd-tpl-convert">Chuyển sang soạn trên trang</button>' : "") +
       '<button type="button" class="hd-btn hd-btn-primary" id="hd-tpl-save">Lưu mẫu</button>' +
       '<input type="file" id="hd-tpl-replace-file" class="hd-hidden" accept=".doc,.docx"/>' +
-      "</div></div>";
+      "</div></div>" +
+      '<div class="hd-subtabs">' +
+      '<button type="button" class="hd-subtab' + (S.tplTab === "content" ? " is-active" : "") + '" data-tpl-tab="content">Nội dung mẫu</button>' +
+      '<button type="button" class="hd-subtab' + (S.tplTab === "vars" ? " is-active" : "") + '" data-tpl-tab="vars">Biến của mẫu (' +
+      S.varDefs.length + ")</button></div>";
+  }
+
+  function contentHtml(t) {
+    if (t.source === "builder") {
+      return '<div id="hd-editor-host"></div>';
+    }
+    return '<div class="hd-pad"><div class="hd-info">Mẫu dùng nguyên file Word <b>' + esc(t.filename) +
+      "</b> — giữ đúng định dạng gốc, hợp đồng được điền vào các trường trộn (MERGEFIELD) trong file. " +
+      "Muốn sửa chữ: tải file về sửa bằng Word rồi bấm “Thay bằng file Word…”, hoặc chuyển sang soạn trên trang.</div></div>";
   }
 
   function renderTemplate() {
     var t = S.template;
     var panel = HD.$("hd-tpl-editor");
-    var body;
-    if (t.source === "builder") {
-      body = '<div id="hd-editor-host"></div>';
-    } else {
-      body = '<div class="hd-pad"><div class="hd-info">Mẫu dùng nguyên file Word <b>' + esc(t.filename) +
-        "</b> — giữ đúng định dạng gốc, hợp đồng được điền vào các trường trộn (MERGEFIELD) trong file. " +
-        "Muốn sửa chữ: tải file về sửa bằng Word rồi bấm “Thay bằng file Word…”, hoặc chuyển sang soạn trên trang." +
-        '</div><h3 class="hd-h3 mt-3 mb-2">Biến trong file</h3>' + fieldReportHtml(t) + "</div>";
+    // Vẽ lại (đổi tab, đổi thứ tự biến) thì giữ nội dung đang soạn dở
+    if (editorApi) {
+      t.body_html = editorApi.getHtml();
     }
-    panel.innerHTML = headerHtml(t) + body +
+    panel.innerHTML = headerHtml(t) +
+      '<div class="' + (S.tplTab === "content" ? "" : "hd-hidden") + '">' + contentHtml(t) + "</div>" +
+      '<div class="' + (S.tplTab === "vars" ? "" : "hd-hidden") + '">' + variablesHtml() + "</div>" +
       '<div class="hd-pad hd-tpl-note"><label class="hd-label" for="hd-tpl-note">Ghi chú</label>' +
       '<textarea id="hd-tpl-note" class="hd-input hd-textarea w-100" rows="2">' + esc(t.note) + "</textarea></div>";
-    editorApi = t.source === "builder" ? HD.mountEditor(HD.$("hd-editor-host"), t.body_html) : null;
+    editorApi = t.source === "builder" ? HD.mountEditor(HD.$("hd-editor-host"), t.body_html, {
+      variables: function () { return S.varDefs; },
+      onAddVariable: function (def) {
+        S.varDefs.push(def);
+        var tab = document.querySelector('[data-tpl-tab="vars"]');
+        if (tab) {
+          tab.textContent = "Biến của mẫu (" + S.varDefs.length + ")";
+        }
+      },
+    }) : null;
     renderList();
+  }
+
+  function setTemplate(detail) {
+    editorApi = null;
+    S.template = detail;
+    S.varDefs = detail.variables.map(function (v) { return Object.assign({}, v); });
+    renderTemplate();
   }
 
   function openTemplate(id) {
     HD.api("template", { template_id: id }).then(function (detail) {
-      S.template = detail;
-      renderTemplate();
+      S.tplTab = "content";
+      setTemplate(detail);
     }).catch(HD.fail);
   }
 
   function newTemplate() {
-    S.template = {
-      id: null, name: "", contract_type: "sale", source: "builder", active: true,
-      body_html: STARTER_HTML, note: "", fields: [], filename: "",
-    };
-    renderTemplate();
+    S.tplTab = "content";
+    setTemplate({
+      id: null, name: "", contract_type: "sale", source: "builder", active: true, has_lines: false,
+      body_html: STARTER_HTML, note: "", variables: [], system_fields: [], filename: "",
+    });
     HD.$("hd-tpl-name").focus();
   }
 
   function afterTemplateChange(detail, message) {
-    S.template = detail;
-    renderTemplate();
+    setTemplate(detail);
     HD.toast(message);
-    return Promise.all([HD.loadTemplates(), refreshConfigTemplates()]);
+    return Promise.all([HD.loadTemplates(), refreshConfig()]).then(HD.refreshSheets);
   }
 
   function saveTemplate() {
@@ -142,9 +188,10 @@ window.HlvContract = window.HlvContract || {};
       contract_type: HD.$("hd-tpl-type").value,
       active: HD.$("hd-tpl-active").checked,
       note: HD.$("hd-tpl-note").value,
+      variables: S.varDefs,
     };
-    if (editorApi) {
-      params.body_html = editorApi.getHtml();
+    if (t.source === "builder") {
+      params.body_html = editorApi ? editorApi.getHtml() : t.body_html;
     }
     HD.api("template/save", params).then(function (detail) {
       return afterTemplateChange(detail, "Đã lưu mẫu");
@@ -157,7 +204,7 @@ window.HlvContract = window.HlvContract || {};
     });
   }
 
-  /* -------------------------------------------------------------- import / bên bán */
+  /* ---------------------------------------------------------- import / bên bán */
 
   function openImport() {
     HD.$("hd-import-file").value = "";
@@ -179,7 +226,8 @@ window.HlvContract = window.HlvContract || {};
       keep_word_file: mode === "keep",
     }).then(function (detail) {
       HD.closeModal("hd-import");
-      return afterTemplateChange(detail, "Đã import " + file.name);
+      S.tplTab = "vars";
+      return afterTemplateChange(detail, "Đã import " + file.name + " — kiểm tra lại nhãn các biến");
     }).catch(HD.fail);
   }
 
@@ -189,7 +237,7 @@ window.HlvContract = window.HlvContract || {};
         return '<div class="hd-field"><label class="hd-label" for="hd-s-' + f[0] + '">' + f[1] + "</label>" +
           '<input type="text" class="hd-input w-100" id="hd-s-' + f[0] + '" data-seller="' + f[0] + '" value="' +
           esc(values[f[0]]) + '" placeholder="' + esc(f[2]) + '"/></div>';
-      }).join("") + '</div><p class="hd-muted hd-small mt-2">Dùng cho biến {{Ten_Ben_Ban}}, {{Tai_Khoan_Ben_Ban}}… trong mẫu. ' +
+      }).join("") + '</div><p class="hd-muted hd-small mt-2">Dùng cho các biến "Bên bán" tự điền trong mẫu. ' +
         "Hai mẫu Word gốc ghi cứng bên bán trong file nên không đổi theo chỗ này.</p>";
       HD.openModal("hd-seller");
     }).catch(HD.fail);
@@ -203,13 +251,15 @@ window.HlvContract = window.HlvContract || {};
     HD.api("seller", { values: values }).then(function () {
       HD.closeModal("hd-seller");
       HD.toast("Đã lưu thông tin bên bán");
-      return refreshConfigTemplates();
+      return refreshConfig();
     }).catch(HD.fail);
   }
 
   HD.openSeller = openSeller;
 
   HD.initTemplates = function () {
+    S.tplTab = "content";
+    S.varDefs = [];
     HD.on(HD.$("hd-tpl-list"), "click", "[data-tpl]", function (el) { openTemplate(+el.dataset.tpl); });
     HD.$("hd-tpl-new").addEventListener("click", newTemplate);
     HD.$("hd-tpl-import-open").addEventListener("click", openImport);
@@ -229,6 +279,26 @@ window.HlvContract = window.HlvContract || {};
     HD.$("hd-seller-save").addEventListener("click", saveSeller);
 
     var panel = HD.$("hd-tpl-editor");
+    HD.on(panel, "click", "[data-tpl-tab]", function (el) {
+      S.tplTab = el.dataset.tplTab;
+      renderTemplate();
+    });
+    HD.on(panel, "input", "[data-var-field]", function (el) {
+      S.varDefs[+el.dataset.varIndex][el.dataset.varField] = el.value;
+    });
+    HD.on(panel, "change", "select[data-var-field]", function (el) {
+      S.varDefs[+el.dataset.varIndex][el.dataset.varField] = el.value;
+    });
+    HD.on(panel, "click", "[data-move]", function (el) {
+      var from = +el.dataset.move;
+      var to = from + (+el.dataset.dir);
+      if (to < 0 || to >= S.varDefs.length) {
+        return;
+      }
+      var item = S.varDefs.splice(from, 1)[0];
+      S.varDefs.splice(to, 0, item);
+      renderTemplate();
+    });
     HD.on(panel, "click", "#hd-tpl-save", saveTemplate);
     HD.on(panel, "click", "#hd-tpl-download", function () {
       HD.download("/hop-dong/mau/" + S.template.id + "/file");

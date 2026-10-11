@@ -6,18 +6,23 @@
     'description': """
 Quản lý hợp đồng theo mẫu Word có trường trộn (MERGEFIELD), thay cho form Excel + Mail Merge.
 
-- Mẫu: tải .docx giữ nguyên định dạng, import .doc/.docx, hoặc soạn trực tiếp trên Odoo.
-- Hợp đồng: số tự sinh theo loại/năm, tổng tiền và số tiền bằng chữ tự tính.
-- Giao diện là trang riêng /hop-dong (như /hoi-gia-ncc), không dùng form backend: danh sách,
-  ngăn soạn hợp đồng, xem nhanh, xuất Word (zip khi nhiều) / PDF gộp để in / Excel theo cột form cũ,
-  trình soạn mẫu bấm chèn biến.
+- Mẫu: tải .docx giữ nguyên định dạng, import .doc/.docx, hoặc soạn trực tiếp trên trang
+  (bấm chèn biến, bảng hàng hoá dựng sẵn).
+- Mỗi mẫu có bộ biến riêng, tự nhận từ trường trộn trong mẫu; người dùng tự đặt biến mới,
+  sửa nhãn/kiểu/nhóm/mặc định. Biến tự điền: số HĐ, ngày ký, bên bán, bảng hàng, tổng tiền.
+- Trang riêng /hop-dong (như /hoi-gia-ncc): bảng dữ liệu kiểu Excel theo từng mẫu (sửa tại ô),
+  ngăn soạn hợp đồng (chọn khách, chọn sản phẩm, lấy hàng từ đơn bán, giá nhập sau VAT),
+  xem nhanh, xuất Word (zip) / PDF gộp để in / Excel mỗi mẫu một sheet.
+- Số hợp đồng tự sinh theo loại/năm, tổng tiền và số tiền bằng chữ tự tính.
 - Phân quyền Nhân viên / Quản lý, thông tin bên bán lấy từ cấu hình công ty.
+- PDF dùng font Tinos (OFL) đóng gói sẵn để tiếng Việt không rơi dấu trên server Linux.
 """,
     'author': 'HLV',
     'category': 'Sales',
-    'version': '18.0.2.0.0',
+    'version': '18.0.3.0.0',
     'license': 'LGPL-3',
-    'depends': ['base', 'mail', 'web'],
+    # sale: chọn hàng từ danh mục sản phẩm và lấy dòng hàng từ đơn bán
+    'depends': ['base', 'mail', 'web', 'sale'],
     'data': [
         'security/contract_security.xml',
         'security/ir.model.access.csv',

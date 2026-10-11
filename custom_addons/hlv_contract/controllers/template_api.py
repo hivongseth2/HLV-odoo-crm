@@ -33,9 +33,10 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
 
     @http.route(f'{API}/template/save', type='json', auth='user', methods=['POST'])
     def api_template_save(self, template_id=None, name='', contract_type='sale', body_html=None,
-                          note='', active=True, **kw):
+                          note='', active=True, variables=None, **kw):
         """Lưu thông tin mẫu; body_html chỉ gửi khi soạn trên trang. Không có template_id thì
-        tạo mẫu soạn trên trang mới."""
+        tạo mẫu soạn trên trang mới. variables: nhãn/kiểu/nhóm/mặc định/thứ tự các biến nhập
+        người dùng sửa — áp sau khi lưu nội dung (biến mới chèn vào mẫu cũng nhận cấu hình)."""
         self._check_manager()
         vals = {'name': (name or '').strip() or 'Mẫu mới', 'contract_type': contract_type,
                 'note': note or '', 'active': bool(active)}
@@ -47,6 +48,8 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
         else:
             vals.setdefault('source', 'builder')
             template = request.env['hlv.contract.template'].create(vals)
+        if variables is not None:
+            template._sync_variables(variables)
         return payload.template_detail(template)
 
     @http.route(f'{API}/template/upload', type='json', auth='user', methods=['POST'])
