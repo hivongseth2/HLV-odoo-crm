@@ -194,6 +194,12 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         """
         super()._post_process_po_line(item, po_line, new_pr_line)
 
+        # Ghi SL / giá / chiết khấu trong MỘT lần write, kèm ngày dự kiến super() vừa đặt theo "Ngày cần"
+        # của YCMH: ghi riêng product_qty làm Odoo tính lại đơn giá + ngày theo bảng giá NCC
+        # (_compute_price_unit_and_date_planned_and_name) — NCC đã có trong bảng giá thì ngày về "hôm nay
+        # + thời gian giao", mất ngày hẹn của phần NCC giao sau. Field ghi cùng lần thì Odoo không tính đè.
+        vals = {'date_planned': po_line.date_planned, 'price_unit': po_line.price_unit}
+
         # --- Quantity: OCA base vừa ghi đè po_line.product_qty bằng
         # _calc_new_qty (tính từ PR line gốc). Ta override lại bằng actual_qty.
         actual_qty = item.actual_qty or item.product_qty or 0.0
@@ -204,17 +210,18 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             qty = item.product_uom_id._compute_quantity(actual_qty, target_uom)
             # Áp dụng supplier min qty
             min_qty = item.line_id._get_supplier_min_qty(product, po_line.order_id.partner_id)
-            po_line.product_qty = max(qty, min_qty)
+            vals['product_qty'] = max(qty, min_qty)
 
         # --- Price: OCA base tính price_unit = estimated_cost / product_qty,
         # ta override lại với actual_price_unit trực tiếp
         if item.actual_price_unit and item.keep_estimated_cost:
-            po_line.price_unit = item.actual_price_unit
+            vals['price_unit'] = item.actual_price_unit
 
         # --- Chiết khấu: re-apply chiết khấu
         if 'discount' in po_line._fields:
-            po_line.discount = item.actual_discount_rate or 0.0
+            vals['discount'] = item.actual_discount_rate or 0.0
 
+        po_line.write(vals)
         po_line._compute_amount()
 
     def _reload_wizard(self):

@@ -127,25 +127,59 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/choose", type="json", auth="user", methods=["POST"])
     def api_choose(self, code="", quote_line_id=None, choose=True, **kw):
-        """Sale chọn (hoặc bỏ chọn) giá của một NCC cho một sản phẩm trong phiếu."""
-        scope = self._check(code)
-        line = request.env["hlv.vendor.quote.line"].browse(to_int(quote_line_id)).exists()
-        if not line or not line.inquiry_line_id:
-            raise UserError("Không tìm thấy dòng báo giá.")
-        inquiry = self._get_inquiry(line.inquiry_line_id.inquiry_id.id, scope)
+        """Sale chọn thêm (hoặc bỏ chọn) một NCC cho một sản phẩm trong phiếu — SL mua điền sẵn phần còn thiếu."""
+        line, inquiry = self._choice_line(code, quote_line_id)
         if choose:
             line.action_choose()
         else:
             line.action_unchoose()
         return payload.inquiry_detail(inquiry)
 
+    @http.route(f"{API}/choose_all", type="json", auth="user", methods=["POST"])
+    def api_choose_all(self, code="", quote_id=None, **kw):
+        """Sale bấm tên NCC ở bảng so giá: chọn NCC đó cho mọi mặt hàng NCC đã báo giá."""
+        scope = self._check(code)
+        quote = request.env["hlv.vendor.quote"].browse(to_int(quote_id)).exists()
+        if not quote or not quote.inquiry_id:
+            raise UserError("Không tìm thấy báo giá.")
+        inquiry = self._get_inquiry(quote.inquiry_id.id, scope)
+        chosen, skipped = quote.line_ids.filtered("inquiry_line_id").action_choose_all()
+        return dict(payload.inquiry_detail(inquiry), choose_all_result={"chosen": chosen, "skipped": skipped})
+
+    @http.route(f"{API}/set_qty", type="json", auth="user", methods=["POST"])
+    def api_set_qty(self, code="", quote_line_id=None, qty=None, **kw):
+        """Sale đổi SL mua của một NCC đã chọn (chia SL giữa các NCC)."""
+        line, inquiry = self._choice_line(code, quote_line_id)
+        line.action_set_buy_qty(self._read_qty(qty))
+        return payload.inquiry_detail(inquiry)
+
+    def _choice_line(self, code, quote_line_id):
+        """Dòng báo giá thuộc phiếu hỏi giá trong phạm vi mã sale → (dòng, phiếu)."""
+        scope = self._check(code)
+        line = request.env["hlv.vendor.quote.line"].browse(to_int(quote_line_id)).exists()
+        if not line or not line.inquiry_line_id:
+            raise UserError("Không tìm thấy dòng báo giá.")
+        return line, self._get_inquiry(line.inquiry_line_id.inquiry_id.id, scope)
+
+    @staticmethod
+    def _read_qty(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise UserError("Số lượng không hợp lệ.") from None
+
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
-    def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, **kw):
-        """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn."""
+    def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None,
+                           settle_line_ids=None, separate_backorder=False, **kw):
+        """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
+        quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt; settle_line_ids: dòng phiếu sale
+        chốt "khách chỉ mua chừng này" (hết thiếu)."""
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
         order = request.env["sale.order"].browse(to_int(sale_order_id)).exists()
-        request_record, merged = inquiry.action_create_request(order or None)
+        qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
+        settle = [to_int(line_id) for line_id in settle_line_ids or []]
+        request_record, merged = inquiry.action_create_request(order or None, qtys, settle, bool(separate_backorder))
         return dict(payload.inquiry_detail(inquiry), request_result={
             "name": request_record.sudo().name, "merged": merged,
         })

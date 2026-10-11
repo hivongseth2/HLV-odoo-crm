@@ -38,12 +38,12 @@ window.HlvQuote = window.HlvQuote || {};
     var head = '<button type="button" class="hq-bell-item' + (item.unread ? " is-new" : "") + '" data-bell-inquiry="' +
       item.inquiry_id + '">';
     if (item.kind === "order") {
-      return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> · đơn mua " + esc(item.order_name) +
+      return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> · " + HQ.docChip(item.order_name) +
         ': <span class="hq-tag hq-tag-ok">' + esc(item.status) + '</span></span><span class="hq-bell-meta">' +
-        esc([item.inquiry_name, item.ship, item.date].filter(Boolean).join(" · ")) + "</span></button>";
+        esc([item.inquiry_name, item.event || item.ship, item.date].filter(Boolean).join(" · ")) + "</span></button>";
     }
     return head + '<span class="hq-bell-title"><b>' + esc(item.vendor) + "</b> đã báo giá " +
-      esc(item.inquiry_name) + '</span><span class="hq-bell-meta">' + esc(item.quote_name) + " · " + item.offered + "/" +
+      esc(item.inquiry_name) + '</span><span class="hq-bell-meta">' + HQ.docChip(item.quote_name) + " " + item.offered + "/" +
       item.total + " mặt hàng" + (item.amount_total ? " · " + HQ.money(item.amount_total) + " sau VAT" : "") +
       " · " + esc(item.date) + "</span></button>";
   }
@@ -124,7 +124,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.onOrderStatus = function (payload) {
     announce({
       title: "Đơn mua " + payload.name + ": " + payload.status,
-      text: payload.vendor + " — " + payload.status + (payload.ship ? " (" + payload.ship + ")" : ""),
+      text: payload.vendor + " — " + (payload.event || payload.status + (payload.ship ? " (" + payload.ship + ")" : "")),
       meta: payload.inquiry_name, inquiryId: (payload.inquiry_ids || [])[0],
     }, "hlv-vq-order-" + payload.order_id + "-" + payload.status);
   };

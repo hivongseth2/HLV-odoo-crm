@@ -41,8 +41,10 @@ VENDOR_ORDER_STATE_LABELS = dict(VENDOR_ORDER_STATES, cancel="Đã hủy")
 VENDOR_ORDER_STATES_PARAM = "hlv_vendor_quotation.vendor_order_states"
 # Đơn đã xác nhận: NCC mới đóng gói / gửi hàng được. Cũng là mặc định hiện trên trang NCC.
 CONFIRMED_STATES = ("purchase", "done")
-# Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ xác nhận / chờ đóng gói / đã hủy.
-PROGRESS_LABELS = dict(VENDOR_STATUS, rfq="Chờ xác nhận", waiting="Chờ đóng gói", cancel="Đã hủy")
+# Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ xác nhận / chờ đóng gói / đã hủy
+# / đã giao một phần (purchase_order_delivery.py).
+PROGRESS_LABELS = dict(VENDOR_STATUS, rfq="Chờ xác nhận", waiting="Chờ đóng gói", partial="Đã giao một phần",
+                       cancel="Đã hủy")
 # Trường Studio trên đơn mua — không có ở mọi môi trường (DB test, cài mới) nên đọc qua _hlv_studio_text.
 DELIVERY_TERM_FIELD = "x_studio_delivery_term"
 DELIVERY_PLACE_FIELD = "x_studio_ddgh"
@@ -82,7 +84,7 @@ class PurchaseOrder(models.Model):
             if not request_lines:
                 order.hlv_inquiry_ids = order.hlv_vendor_quote_ids = False
                 continue
-            inquiry_lines = InquiryLine.search([("request_line_id", "in", request_lines.ids)])
+            inquiry_lines = InquiryLine.search([("request_line_ids", "in", request_lines.ids)])
             quote_lines = QuoteLine.search([
                 "|", ("inquiry_line_id", "in", inquiry_lines.ids), ("request_line_id", "in", request_lines.ids),
             ])
@@ -312,8 +314,8 @@ class PurchaseOrderLine(models.Model):
         vendor = self.order_id.partner_id.commercial_partner_id
         candidates = self.env["hlv.vendor.quote.line"].sudo().search([
             ("invoice_name", "!=", False),
-            "|", ("inquiry_line_id.request_line_id", "in", request_lines.ids),
-            ("request_line_id", "in", request_lines.ids),
+            "|", "|", ("inquiry_line_id.request_line_ids", "in", request_lines.ids),
+            ("request_line_id", "in", request_lines.ids), ("backorder_request_line_id", "in", request_lines.ids),
         ], order="id desc")
         match = candidates.filtered(lambda q: q.quote_id.partner_id.commercial_partner_id == vendor)[:1]
         return match.invoice_name or ""
@@ -333,5 +335,5 @@ class PurchaseOrderLine(models.Model):
         """Điền cho dòng đơn mua đã có trước khi field được lưu — chỉ dòng có báo giá ghi tên
         xuất hóa đơn (đi từ báo giá sang, không quét cả bảng dòng đơn mua)."""
         quote_lines = self.env["hlv.vendor.quote.line"].sudo().search([("invoice_name", "!=", False)])
-        request_lines = quote_lines.inquiry_line_id.request_line_id | quote_lines.request_line_id
+        request_lines = quote_lines.inquiry_line_id.request_line_ids | quote_lines._hlv_own_request_lines()
         request_lines.sudo().purchase_lines._hlv_fill_invoice_name()

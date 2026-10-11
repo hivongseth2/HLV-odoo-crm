@@ -27,6 +27,12 @@
               parent="menu_vendor_quote_root"
               action="action_vendor_quote_compare"
               sequence="30"/>
+    <menuitem id="menu_po_revision"
+              name="Yêu cầu thay đổi đơn mua"
+              parent="menu_vendor_quote_root"
+              action="action_po_revision"
+              sequence="40"
+              groups="purchase.group_purchase_user"/>
 
     <!-- Lối tắt trong app Mua hàng → Đơn hàng, cạnh "Yêu cầu mua hàng" của purchase_request.
          Menu cha lấy đúng xmlid mà purchase_request (OCA, trong repo) đang dùng. -->

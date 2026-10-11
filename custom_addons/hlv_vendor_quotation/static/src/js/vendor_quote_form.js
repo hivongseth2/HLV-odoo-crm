@@ -12,7 +12,7 @@
     if (!form) {
         return;
     }
-    const { parseVnNumber, formatVnNumber, splitUnitPrice, splitStockNote, stockNote } = window.hlvVendorQuote;
+    const { parseVnNumber, formatVnNumber, splitUnitPrice } = window.hlvVendorQuote;
     const lines = Array.from(form.querySelectorAll("[data-vq-line]"));
     const discountToggle = form.querySelector("[data-vq-disc-toggle]");
     // Báo giá đã đóng không có ô bật/tắt: server tự gắn vq-disc-on nếu NCC từng nhập chiết khấu.
@@ -127,26 +127,47 @@
         }
     }
 
-    /** Ô "Sẵn hàng" ↔ chữ "Sẵn hàng" đầu ô ghi chú của cùng dòng: tick thì thêm, bỏ tick thì xoá; NCC tự
-        xoá / gõ chữ đó trong ghi chú thì ô tick theo. Server ghép lại đúng như vậy khi lưu (stock_note). */
-    function noteOf(box) {
-        return form.querySelector(`[name="${box.dataset.note}"]`);
+    /** Ô "Sẵn hàng" < SL hỏi → hiện dòng phụ "thiếu … — phần còn lại giao ngày / không có thêm" ngay dưới;
+        đủ / trống / bấm × thì ẩn. Tick "không có thêm" thì khoá ô ngày (server cũng bỏ ngày khi có tick). */
+    function syncHave(line) {
+        const input = line.querySelector("[data-vq-have]");
+        const shortRow = form.querySelector(`[data-vq-short-for="${line.dataset.vqLid}"]`);
+        if (!input || !shortRow) {
+            return;
+        }
+        const qty = parseFloat(line.dataset.qty) || 0;
+        const have = parseVnNumber(input.value);
+        const naInput = line.querySelector("[data-vq-na]");
+        const short = have != null && have < qty && !(naInput && naInput.checked);
+        shortRow.hidden = !short;
+        if (short) {
+            shortRow.querySelector("[data-vq-short-qty]").textContent = formatVnNumber(qty - have);
+        }
+        const noMore = shortRow.querySelector("[data-vq-nomore]");
+        const date = shortRow.querySelector('input[type="date"]');
+        if (noMore && date) {
+            date.disabled = noMore.checked;
+        }
     }
 
-    form.addEventListener("change", (ev) => {
-        const box = ev.target.closest("[data-vq-instock]");
-        const note = box && noteOf(box);
-        if (note) {
-            note.value = stockNote(box.checked, note.value);
+    /** Dòng giá cần đồng bộ dòng phụ khi sự kiện đến từ ô "Sẵn hàng", nút ×, hoặc tick "không có thêm". */
+    function shortSource(ev) {
+        if (ev.target.matches("[data-vq-have], [data-vq-na]")) {
+            return ev.target.closest("[data-vq-line]");
         }
-    });
-    form.addEventListener("focusout", (ev) => {
-        const note = ev.target.matches('input[name^="note_"]') ? ev.target : null;
-        const box = note && form.querySelector(`[data-vq-instock][data-note="${note.name}"]`);
-        if (box && !box.disabled) {
-            box.checked = splitStockNote(note.value).inStock;
-        }
-    });
+        const row = ev.target.matches("[data-vq-nomore]") && ev.target.closest("[data-vq-short-for]");
+        return row ? form.querySelector(`[data-vq-lid="${row.dataset.vqShortFor}"]`) : null;
+    }
+
+    for (const type of ["input", "change"]) {
+        form.addEventListener(type, (ev) => {
+            const line = shortSource(ev);
+            if (line) {
+                syncHave(line);
+            }
+        });
+    }
+    lines.forEach(syncHave);
 
     form.addEventListener("input", refresh);
     form.addEventListener("change", (ev) => {

@@ -11,6 +11,12 @@ from .vendor_quote_utils import is_login_locked, next_failed_count, session_fing
 # Bỏ I, L, O, 0, 1: NCC hay gõ mật khẩu trên điện thoại và nhầm các ký tự này.
 PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 PASSWORD_LENGTH = 6
+# Mã ngắn trong link gửi NCC (/bao-gia/k7mx3qp9tz): link dài 32 ký tự trông như link lừa đảo, NCC ngại bấm.
+# 10 ký tự trong 31 ký tự (chữ thường + số, bỏ i l o 0 1 dễ nhầm) ≈ 8·10^14 mã — đoán trúng link của
+# một NCC nào đó vẫn là không thể dù có vài nghìn NCC. Mã dài cũ (access_token) vẫn mở được: NCC đã
+# lưu link cũ không bị chặn.
+SHORT_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+SHORT_CODE_LENGTH = 10
 MAX_LOGIN_ATTEMPTS = 5
 LOCK_MINUTES = 15
 PORTAL_ROUTE = "/bao-gia"
@@ -50,6 +56,12 @@ class VendorQuoteAccess(models.Model):
         index=True,
         default=lambda self: self._new_token(),
     )
+    # Không đặt default: thêm field lúc nâng cấp thì Odoo gọi default MỘT lần rồi gán cùng một mã cho mọi
+    # link cũ (trùng mã). Link mới: sinh trong create(); link cũ: migrations/18.0.3.49.0.
+    short_code = fields.Char(
+        string="Mã link ngắn", readonly=True, copy=False, index=True,
+        help="Mã trong link gửi NCC. Link dài cũ (Mã link) vẫn mở được.",
+    )
     password = fields.Char(
         string="Mật khẩu",
         required=True,
@@ -73,6 +85,7 @@ class VendorQuoteAccess(models.Model):
     _sql_constraints = [
         ("partner_uniq", "unique(partner_id)", "Mỗi nhà cung cấp chỉ có một link báo giá."),
         ("token_uniq", "unique(access_token)", "Mã link bị trùng, hãy tạo lại link."),
+        ("short_code_uniq", "unique(short_code)", "Mã link ngắn bị trùng, hãy tạo lại link."),
     ]
 
     @api.model
@@ -106,11 +119,21 @@ class VendorQuoteAccess(models.Model):
             "|", "|", ("name", "ilike", term), ("ref", "ilike", term), ("vat", "ilike", term),
         ]])
 
-    @api.depends("access_token", "partner_id")
+    def _portal_path(self):
+        """Đường dẫn trang NCC (không domain), dùng mã ngắn; bản ghi chưa có mã ngắn thì mã dài."""
+        self.ensure_one()
+        return f"{PORTAL_ROUTE}/{self.short_code or self.access_token}"
+
+    def _portal_paths(self):
+        """Mọi đường dẫn gốc mở được trang NCC này (mã ngắn + mã dài cũ) — để kiểm link quay về."""
+        self.ensure_one()
+        return {f"{PORTAL_ROUTE}/{code}" for code in (self.short_code, self.access_token) if code}
+
+    @api.depends("access_token", "short_code", "partner_id")
     def _compute_urls(self):
         for rec in self:
             base = rec.get_base_url()
-            rec.portal_url = f"{base}{PORTAL_ROUTE}/{rec.access_token}"
+            rec.portal_url = f"{base}{rec._portal_path()}"
             rec.manage_url = f"{base}{SALE_PAGE_ROUTE}?ncc={rec.partner_id.id}" if rec.partner_id else False
 
     @api.depends("quote_ids.state")
@@ -128,11 +151,27 @@ class VendorQuoteAccess(models.Model):
         for vals in vals_list:
             if vals.get("partner_id"):
                 vals["partner_id"] = Partner.browse(vals["partner_id"]).commercial_partner_id.id
+            vals.setdefault("short_code", self._new_short_code())
         return super().create(vals_list)
 
     @api.model
     def _new_token(self):
         return secrets.token_urlsafe(24)
+
+    @api.model
+    def _new_short_code(self):
+        """Mã ngắn chưa NCC nào dùng (thử lại khi trùng — hiếm tới mức gần như không xảy ra)."""
+        while True:
+            code = "".join(secrets.choice(SHORT_CODE_ALPHABET) for _i in range(SHORT_CODE_LENGTH))
+            if not self.sudo().with_context(active_test=False).search_count([("short_code", "=", code)]):
+                return code
+
+    @api.model
+    def _find_by_code(self, code):
+        """Link NCC theo mã trong URL: mã ngắn (link mới) hoặc mã dài (link cũ NCC đã lưu). Không có → rỗng."""
+        if not code:
+            return self.browse()
+        return self.search(["|", ("short_code", "=", code), ("access_token", "=", code)], limit=1)
 
     @api.model
     def _new_password(self):
@@ -151,7 +190,8 @@ class VendorQuoteAccess(models.Model):
 
     def action_regenerate_token(self):
         for rec in self:
-            rec.access_token = self._new_token()
+            # Đổi cả mã ngắn: thu hồi link là thu hồi cả hai dạng.
+            rec.write({"access_token": self._new_token(), "short_code": self._new_short_code()})
             rec.message_post(body=_("Đã tạo link mới — link cũ không còn dùng được."))
 
     def action_regenerate_password(self):

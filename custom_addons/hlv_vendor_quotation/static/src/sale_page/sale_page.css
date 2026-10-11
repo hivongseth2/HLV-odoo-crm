@@ -242,11 +242,13 @@ body {
 .hq-row { cursor: pointer; }
 .hq-row:hover { background: #FAF9F6; }
 .hq-row-new td { background: var(--hq-warn-soft); }
-/* Badge số tin trao đổi trên dòng phiếu: icon đen + số; NCC nhắn chưa trả lời thì nền cam đậm. */
-.hq-chat-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px;
-    border: 1px solid #c9cdd3; border-radius: 3px; background: #fff; color: #111827; font-size: .72rem;
-    font-weight: 700; vertical-align: middle; white-space: nowrap; }
-.hq-chat-badge.is-new { background: var(--hq-warn); border-color: var(--hq-warn); color: #fff; }
+/* Icon tin nhắn trên dòng phiếu, số ở góc trên: NCC nhắn chưa xem thì số nền cam; đã xem thì số xám. */
+.hq-chat-icon { position: relative; display: inline-flex; margin-left: 8px; padding: 2px; color: #111827; vertical-align: middle; }
+.hq-chat-count { position: absolute; top: -7px; right: -9px; min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: 8px; background: #9ca3af; color: #fff; font-size: .65rem; font-weight: 700; line-height: 16px;
+    text-align: center; }
+.hq-chat-icon.is-new { color: var(--hq-warn); }
+.hq-chat-icon.is-new .hq-chat-count { background: var(--hq-warn); }
 .hq-icon { flex: none; display: block; }
 .hq-row-new:hover td { background: #F8E3D8; }
 .hq-ref { font-weight: 600; color: var(--hq-accent); }

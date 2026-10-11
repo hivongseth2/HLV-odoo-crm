@@ -7,7 +7,7 @@ from odoo.exceptions import UserError, ValidationError
 
 from ..services.chat_bus import notify_quoted
 from ..services.notify import post_internal
-from .vendor_quote_utils import default_price_valid_until, match_by_product
+from .vendor_quote_utils import FULL_SUPPLY, default_price_valid_until, match_by_product
 
 # NCC chỉ thấy báo giá đã gửi đi; nháp và đã huỷ là việc nội bộ.
 VENDOR_VISIBLE_STATES = ("sent", "quoted", "done")
@@ -462,12 +462,13 @@ class VendorQuote(models.Model):
             ))
 
         chosen_before = {
-            line.id: (line.price_unit, line.unavailable) for line in self.line_ids.filtered("selected")
+            line.id: (line.price_unit, line.unavailable, line._availability_text())
+            for line in self.line_ids.filtered("selected")
         }
         for line in open_lines:
             vals = dict(submitted[line.id])
             if vals.get("unavailable"):
-                vals.update(price_unit=0.0, list_price=0.0, discount=0.0, vat=False)
+                vals.update(FULL_SUPPLY, price_unit=0.0, list_price=0.0, discount=0.0, vat=False)
             line.write(vals)
         self._notify_chosen_lines_changed(chosen_before)
         resubmitted = self.state == "quoted"
@@ -493,7 +494,7 @@ class VendorQuote(models.Model):
         orders = self.env["purchase.order"]
         visible = orders._hlv_vendor_visible_states()
         for quote in self.sudo():
-            request_lines = quote.line_ids.inquiry_line_id.request_line_id | quote.line_ids.request_line_id
+            request_lines = quote.line_ids.inquiry_line_id.request_line_ids | quote.line_ids._hlv_own_request_lines()
             orders |= request_lines.purchase_lines.order_id.filtered(
                 lambda o, v=quote.access_id.partner_id: (
                     o.state in visible or (o.state == "cancel" and o.date_approve)
@@ -511,12 +512,16 @@ class VendorQuote(models.Model):
         phiếu và YCMH để sale chọn lại. Không tự đổi giá trên YCMH: giá mua phải do người quyết."""
         changes = []
         for line in self.line_ids.filtered(lambda l: l.id in chosen_before):
-            old_price, old_unavailable = chosen_before[line.id]
+            old_price, old_unavailable, old_supply = chosen_before[line.id]
             if line.unavailable and not old_unavailable:
                 changes.append((line, _("báo HẾT HÀNG")))
-            elif line.price_unit != old_price:
+                continue
+            if line.price_unit != old_price:
                 changes.append((line, _("đổi giá %(old)s → %(new)s", old=self.currency_id.format(old_price),
                                          new=self.currency_id.format(line.price_unit))))
+            supply = line._availability_text()
+            if supply != old_supply:
+                changes.append((line, _("báo số lượng: %s", supply) if supply else _("báo lại có đủ hàng")))
         if not changes:
             return
         items = Markup("").join(
@@ -527,12 +532,13 @@ class VendorQuote(models.Model):
               self.partner_id.commercial_partner_id.display_name),
             items,
         )
-        requests = self.line_ids.filtered(lambda l: l.id in chosen_before).request_line_id.request_id
+        requests = self.line_ids.filtered(lambda l: l.id in chosen_before)._hlv_own_request_lines().request_id
         for record in list(self.inquiry_id) + list(requests):
             post_internal(record, body, self.partner_id)
 
     def _notify_vendor_submitted(self, resubmitted):
         offered = self.line_ids.filtered(lambda l: not l.unavailable)
+        short = offered.filtered(lambda l: l._availability_text())
         body = Markup("<p>%s</p><p>%s</p>") % (
             _("NCC đã cập nhật báo giá.") if resubmitted else _("NCC đã gửi báo giá."),
             _(
@@ -542,6 +548,12 @@ class VendorQuote(models.Model):
                 amount=self.currency_id.format(self.amount_untaxed),
             ),
         )
+        if short:
+            body += Markup("<p>%s</p><ul>%s</ul>") % (
+                _("Không đủ số lượng:"),
+                Markup("").join(Markup("<li>%s: %s</li>") % (l.name or l.product_id.display_name, l._availability_text())
+                                for l in short),
+            )
         # Ghi chú nội bộ gọi tên follower nội bộ (sale tạo phiếu, thu mua theo dõi YCMH) — không
         # email cho NCC / đối tác bên ngoài (xem services/notify.py).
         post_internal(self, body, self.partner_id)

@@ -33,3 +33,5 @@ access_vendor_inquiry_line_vq_user,hlv.vendor.inquiry.line vq user,model_hlv_ven
 access_vendor_sale_contact_user,hlv.vendor.sale.contact user,model_hlv_vendor_sale_contact,base.group_user,1,0,0,0
 access_vendor_sale_contact_manager,hlv.vendor.sale.contact manager,model_hlv_vendor_sale_contact,group_vendor_quote_manager,1,1,1,1
 access_vendor_sale_contact_purchase_manager,hlv.vendor.sale.contact purchase manager,model_hlv_vendor_sale_contact,purchase.group_purchase_manager,1,1,1,1
+access_po_revision_purchase_user,hlv.po.revision purchase user,model_hlv_po_revision,purchase.group_purchase_user,1,1,1,0
+access_po_revision_line_purchase_user,hlv.po.revision.line purchase user,model_hlv_po_revision_line,purchase.group_purchase_user,1,1,1,0

@@ -13,8 +13,8 @@ from ..models.vendor_quote import VENDOR_STATUSES, VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
-    deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate, parse_vn_number,
-    split_code_name, split_unit_price, split_stock_note, stock_note,
+    FULL_SUPPLY, deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate,
+    parse_vn_number, read_availability, split_code_name, split_unit_price, split_stock_note,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -287,8 +287,7 @@ class VendorQuotePortal(http.Controller):
     def _get_access(self, token):
         if not token:
             return None
-        Access = request.env["hlv.vendor.quote.access"].sudo()
-        return Access.search([("access_token", "=", token)], limit=1) or None
+        return request.env["hlv.vendor.quote.access"].sudo()._find_by_code(token) or None
 
     def _get_quote(self, access, quote_id):
         return request.env["hlv.vendor.quote"].sudo().search([
@@ -313,18 +312,18 @@ class VendorQuotePortal(http.Controller):
         # xem controllers/__init__.py). Luôn ghi status (kể cả "all") để giữ đúng tab.
         params = {"status": status, "q": q or None, "page": page if page > 1 else None}
         query = urlencode({key: value for key, value in params.items() if value})
-        base = f"{PORTAL_ROUTE}/{access.access_token}"
+        base = access._portal_path()
         return f"{base}?{query}" if query else base
 
     def _safe_next(self, access, next_url):
-        """Chỉ cho quay về trang trong chính link của NCC này — chặn open redirect."""
-        base = f"{PORTAL_ROUTE}/{access.access_token}"
+        """Chỉ cho quay về trang trong chính link của NCC này (mã ngắn hoặc mã dài cũ) — chặn open redirect."""
         next_url = next_url or ""
-        if next_url == base or (
-            next_url.startswith((f"{base}/", f"{base}?")) and "//" not in next_url and "\\" not in next_url
-        ):
-            return next_url
-        return base
+        for base in access._portal_paths():
+            if next_url == base or (
+                next_url.startswith((f"{base}/", f"{base}?")) and "//" not in next_url and "\\" not in next_url
+            ):
+                return next_url
+        return access._portal_path()
 
     def _is_logged_in(self, access):
         if not access._password_required():
@@ -345,6 +344,7 @@ class VendorQuotePortal(http.Controller):
         """
         valid_vat = {key for key, _label in VAT_SELECTION}
         use_discount = bool(post.get("use_discount"))
+        today = quote._vendor_today()
         line_values, errors = {}, []
         for index, line in enumerate(quote.line_ids, start=1):
             prefix = line_label(index, line) if line_label else f"Dòng {index}"
@@ -376,16 +376,32 @@ class VendorQuotePortal(http.Controller):
                 "discount": discount or 0.0,
                 "vat": vat,
                 "delivery_days": days,
-                # Ô "Sẵn hàng" (tick sẵn) → nhãn "Sẵn hàng" ở đầu ghi chú, sale đọc ngay ở bảng so giá.
-                "vendor_note": stock_note(
-                    bool(post.get(f"instock_{line.id}")) and not post.get(f"na_{line.id}"),
-                    post.get(f"note_{line.id}"), LINE_NOTE_MAX,
-                ),
+                "vendor_note": (post.get(f"note_{line.id}") or "").strip()[:LINE_NOTE_MAX],
                 "invoice_name": (post.get(f"inv_{line.id}") or "").strip()[:LINE_NOTE_MAX],
                 # Nút "×" cạnh mã hàng = không có hàng.
                 "unavailable": bool(post.get(f"na_{line.id}")),
             }
+            line_values[line.id].update(self._read_availability(line, post, prefix, today, errors))
         return line_values, errors
+
+    def _read_availability(self, line, post, prefix, today, errors):
+        """Ô "Sẵn hàng" + "giao ngày" / "không có thêm" (dòng phụ thiếu hàng) của một dòng (read_availability).
+        Dòng bấm "×" thì bỏ qua — _vendor_submit tự xoá các giá trị này."""
+        if post.get(f"na_{line.id}"):
+            return dict(FULL_SUPPLY)
+        available = self._read_line_number(post, f"avail_{line.id}", f"{prefix}: không đọc được số lượng sẵn hàng", errors)
+        raw_date = (post.get(f"bodate_{line.id}") or "").strip()
+        try:
+            backorder_date = fields.Date.to_date(raw_date) if raw_date else None
+        except ValueError:
+            errors.append(f"{prefix}: không đọc được ngày giao phần còn lại \"{raw_date}\".")
+            backorder_date = None
+        values, error = read_availability(
+            line.product_qty, available, backorder_date, bool(post.get(f"nomore_{line.id}")), today,
+        )
+        if error:
+            errors.append(f"{prefix}: {error}.")
+        return values
 
     @staticmethod
     def _read_line_number(post, key, label, errors):
@@ -426,13 +442,14 @@ class VendorQuotePortal(http.Controller):
             "password_required": access._password_required(),
             "vendor": access.partner_id,
             "company": request.env.company.sudo(),
-            "portal_base": f"{PORTAL_ROUTE}/{access.access_token}",
+            "portal_base": access._portal_path(),
             "fmt": format_vn_number,
             # Mã hàng và tên hàng hiện thành hai cột: bỏ tiền tố "[mã]" khỏi tên.
             "code_name": split_code_name,
-            # Ô "Sẵn hàng" + ô ghi chú đọc từ ghi chú đã lưu (nhãn "Sẵn hàng" ở đầu).
+            # Ghi chú cũ có nhãn "Sẵn hàng" ở đầu (ô tick cũ) — tách bỏ nhãn khi hiện.
             "stock_note_parts": split_stock_note,
-            "stock_note": stock_note,
+            # Đọc số ô "Sẵn hàng" (kiểu VN) để biết có hiện dòng phụ thiếu hàng không.
+            "parse_num": parse_vn_number,
             # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
             "fdate": local_date_text,
             "vat_options": VAT_SELECTION,

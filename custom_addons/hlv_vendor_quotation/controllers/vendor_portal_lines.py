@@ -27,7 +27,8 @@ from .vendor_portal import VendorQuotePortal
 QUOTES = "phieu"
 # Trường dòng NCC điền — so với giá trị đang lưu để biết phiếu nào NCC có sửa. Không so list_price:
 # nó suy ra từ đơn giá + %CK (bật "Có chiết khấu" để 0% cũng ghi list_price) — NCC không sửa giá.
-LINE_FIELDS = ("price_unit", "discount", "vat", "delivery_days", "vendor_note", "invoice_name", "unavailable")
+LINE_FIELDS = ("price_unit", "discount", "vat", "delivery_days", "vendor_note", "invoice_name", "unavailable",
+               "available_qty", "backorder_date", "no_more")
 # Phiếu chờ báo giá: chỉ coi là NCC "có báo" khi giá / hết hàng khác số điền sẵn.
 PRICE_FIELDS = ("price_unit", "unavailable")
 NAME_MAX = 40
@@ -98,7 +99,7 @@ class VendorLineBoardPortal(VendorQuotePortal):
         requester = self._requester(quote)
         hint = deadline_hint(quote.date_deadline, today)
         return {
-            "url": f"{PORTAL_ROUTE}/{quote.access_id.access_token}/{quote.id}",
+            "url": f"{quote.access_id._portal_path()}/{quote.id}",
             "deadline": quote.date_deadline.strftime("%d/%m") if quote.date_deadline else "",
             "title": " · ".join(part for part in (
                 quote.name,
