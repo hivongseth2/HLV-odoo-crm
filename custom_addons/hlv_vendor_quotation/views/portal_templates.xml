@@ -180,7 +180,7 @@
                     giao… quý công ty nhắn tại đây.</p>
                 <div t-foreach="chat" t-as="msg" t-attf-class="vq-msg #{'vq-msg-mine' if msg['from_vendor'] else ''}">
                     <div class="vq-msg-head">
-                        <b t-esc="'Bạn' if msg['from_vendor'] else msg['author']"/>
+                        <b t-esc="msg['author']"/>
                         <span class="vq-muted" t-esc="msg['date']"/>
                     </div>
                     <div t-if="msg['body']" class="vq-msg-body" t-esc="msg['body']"/>
