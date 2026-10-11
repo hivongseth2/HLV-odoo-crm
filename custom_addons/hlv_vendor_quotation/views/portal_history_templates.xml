@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tab "Lịch sử báo giá" của NCC (controllers/vendor_portal_history.py): chỉ số tổng, mặt hàng hay được
+         hỏi, bảng mọi mặt hàng đã báo (phân trang). Lọc bằng form GET — chạy không cần JS. -->
+    <template id="portal_history" name="Báo giá NCC - lịch sử báo giá">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Lịch sử báo giá'"/>
+            <t t-set="logged_in" t-value="True"/>
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <div class="vq-page-head">
+                    <h1>Lịch sử báo giá</h1>
+                </div>
+
+                <form method="get" class="vq-history-filter" t-att-action="history_url(q=None, date_from=None, date_to=None, sale=None, product=None, page=None)">
+                    <label class="vq-filter-field vq-filter-search">
+                        <span class="vq-label">Tìm</span>
+                        <input type="search" name="q" class="vq-input" t-att-value="filter_values['q']"
+                               placeholder="Mã hàng, tên hàng hoặc số báo giá"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Từ ngày</span>
+                        <input type="date" name="date_from" class="vq-input" t-att-value="filter_values['date_from']"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Đến ngày</span>
+                        <input type="date" name="date_to" class="vq-input" t-att-value="filter_values['date_to']"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Người hỏi</span>
+                        <select name="sale" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option t-foreach="sale_options" t-as="opt" t-att-value="opt[0]"
+                                    t-att-selected="opt[0] == filter_values['sale'].upper()" t-esc="opt[1]"/>
+                        </select>
+                    </label>
+                    <input t-if="filters['product_id']" type="hidden" name="product" t-att-value="filters['product_id']"/>
+                    <div class="vq-filter-actions">
+                        <button type="submit" class="vq-btn vq-btn-primary">Lọc</button>
+                        <a class="vq-btn vq-btn-secondary" t-att-href="history_url(q=None, date_from=None, date_to=None, sale=None, product=None, page=None)">Xoá lọc</a>
+                    </div>
+                </form>
+                <p t-if="product_label" class="vq-active-filter">Đang xem mặt hàng <b t-esc="product_label"/>
+                    <a t-att-href="history_url(product=None, page=None)" class="vq-chip-x" title="Bỏ lọc mặt hàng">×</a></p>
+
+                <div class="vq-kpis">
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="summary['quotes']"/><span class="vq-kpi-label">lần báo giá</span></div>
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="summary['priced']"/><span class="vq-kpi-label">lượt mặt hàng có giá
+                        <span class="vq-muted">/ <t t-esc="summary['asked']"/> được hỏi</span></span></div>
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="summary['won']"/><span class="vq-kpi-label">lượt được chọn / lên đơn</span></div>
+                    <div class="vq-kpi" title="Được chọn hoặc lên đơn ÷ (đó + không được chọn). Chưa tính dòng còn chờ bên mua chọn và dòng báo hết hàng.">
+                        <span class="vq-kpi-num" t-esc="'%s%%' % summary['rate'] if summary['rate'] is not None else '—'"/>
+                        <span class="vq-kpi-label">tỉ lệ báo giá thành công</span></div>
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="summary['orders']"/><span class="vq-kpi-label">đơn mua</span></div>
+                </div>
+                <p t-if="truncated" class="vq-muted vq-small">Số liệu tính trên <t t-esc="fmt(stat_limit)"/> mặt hàng báo gần nhất —
+                    thu hẹp khoảng ngày để xem đủ.</p>
+
+                <section t-if="products" class="vq-history-section">
+                    <h2>Mặt hàng hay được hỏi</h2>
+                    <div class="vq-list-scroll">
+                    <table class="vq-table vq-history-products">
+                        <thead>
+                            <tr>
+                                <th>Mặt hàng</th>
+                                <th class="vq-num" title="Số lần bên mua hỏi giá mặt hàng này">Lượt hỏi</th>
+                                <th class="vq-num">Có giá</th>
+                                <th class="vq-num">Được chọn / lên đơn</th>
+                                <th class="vq-num" title="Được chọn hoặc lên đơn ÷ (đó + không được chọn)">Tỉ lệ thành công</th>
+                                <th class="vq-num">Lượt đơn mua</th>
+                                <th class="vq-num">Giá gần nhất (sau VAT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="products" t-as="p">
+                                <td data-label="Mặt hàng"><a t-att-href="history_url(product=p['product_id'], page=None)"
+                                       title="Xem lịch sử mặt hàng này" t-esc="p['product']"/></td>
+                                <td class="vq-num" data-label="Lượt hỏi" t-esc="p['asked']"/>
+                                <td class="vq-num" data-label="Có giá" t-esc="p['priced']"/>
+                                <td class="vq-num" data-label="Được chọn / lên đơn" t-esc="p['won']"/>
+                                <td class="vq-num" data-label="Tỉ lệ thành công" t-esc="'%s%%' % p['rate'] if p['rate'] is not None else '—'"/>
+                                <td class="vq-num" data-label="Lượt đơn mua" t-esc="p['orders']"/>
+                                <td class="vq-num" data-label="Giá gần nhất" t-esc="fmt(round(p['last_price'])) if p['last_price'] else '—'"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                </section>
+
+                <section class="vq-history-section">
+                    <h2>Mặt hàng đã báo giá</h2>
+                    <p t-if="not rows" class="vq-empty">Không có mặt hàng nào khớp bộ lọc.</p>
+                    <div t-if="rows" class="vq-list-scroll">
+                    <table class="vq-table vq-history-table">
+                        <thead>
+                            <tr>
+                                <th>Ngày gửi</th>
+                                <th>Báo giá</th>
+                                <th>Người hỏi</th>
+                                <th>Mặt hàng</th>
+                                <th class="vq-num">SL</th>
+                                <th class="vq-num">Đơn giá sau VAT</th>
+                                <th>Kết quả</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="rows" t-as="row">
+                                <td data-label="Ngày gửi" class="vq-nowrap" t-esc="fdate(row['at'])"/>
+                                <td data-label="Báo giá"><a class="vq-doc-chip" t-att-href="'%s/%s' % (portal_base, row['quote_id'])" t-esc="row['quote_name']"/></td>
+                                <td data-label="Người hỏi" t-esc="row['sale'] or '—'"/>
+                                <td data-label="Mặt hàng">
+                                    <a t-att-href="history_url(product=row['product_id'], page=None)" title="Xem lịch sử mặt hàng này">
+                                        <span t-if="row['code']" class="vq-name-code" t-esc="row['code']"/> <t t-esc="row['product']"/></a>
+                                </td>
+                                <td class="vq-num vq-nowrap" data-label="SL"><t t-esc="fmt(row['qty'])"/> <t t-esc="row['uom']"/></td>
+                                <td class="vq-num" data-label="Đơn giá sau VAT" t-esc="fmt(round(row['price_incl'])) if row['price_incl'] else '—'"/>
+                                <td data-label="Kết quả">
+                                    <span t-attf-class="vq-outcome vq-outcome-#{row['outcome']}" t-esc="outcome_labels[row['outcome']]"/>
+                                    <span t-foreach="row['order_names']" t-as="po" class="vq-doc-chip" t-esc="po"/>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <nav t-if="pager['page_count'] &gt; 1" class="vq-pager">
+                        <a t-if="pager['page'] &gt; 1" t-att-href="history_url(page=pager['page'] - 1)" class="vq-btn vq-btn-secondary">Trang trước</a>
+                        <span class="vq-muted">Trang <t t-esc="pager['page']"/> / <t t-esc="pager['page_count']"/></span>
+                        <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="history_url(page=pager['page'] + 1)" class="vq-btn vq-btn-secondary">Trang sau</a>
+                    </nav>
+                </section>
+            </div>
+        </t>
+    </template>
+</odoo>

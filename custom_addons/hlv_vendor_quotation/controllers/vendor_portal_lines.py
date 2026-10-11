@@ -99,7 +99,7 @@ class VendorLineBoardPortal(VendorQuotePortal):
         requester = self._requester(quote)
         hint = deadline_hint(quote.date_deadline, today)
         return {
-            "url": f"{PORTAL_ROUTE}/{quote.access_id.access_token}/{quote.id}",
+            "url": f"{quote.access_id._portal_path()}/{quote.id}",
             "deadline": quote.date_deadline.strftime("%d/%m") if quote.date_deadline else "",
             "title": " · ".join(part for part in (
                 quote.name,

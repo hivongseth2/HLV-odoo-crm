@@ -152,6 +152,9 @@
             <a t-att-href="'%s/don-mua' % portal_base"
                t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'orders' else ''}">
                 Đơn mua hàng <span class="vq-tab-count">(<t t-esc="order_count"/>)</span></a>
+            <a t-att-href="'%s/lich-su' % portal_base"
+               t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'history' else ''}">
+                Lịch sử báo giá</a>
         </nav>
     </template>
 

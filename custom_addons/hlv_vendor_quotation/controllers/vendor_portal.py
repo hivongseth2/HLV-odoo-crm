@@ -287,8 +287,7 @@ class VendorQuotePortal(http.Controller):
     def _get_access(self, token):
         if not token:
             return None
-        Access = request.env["hlv.vendor.quote.access"].sudo()
-        return Access.search([("access_token", "=", token)], limit=1) or None
+        return request.env["hlv.vendor.quote.access"].sudo()._find_by_code(token) or None
 
     def _get_quote(self, access, quote_id):
         return request.env["hlv.vendor.quote"].sudo().search([
@@ -313,18 +312,18 @@ class VendorQuotePortal(http.Controller):
         # xem controllers/__init__.py). Luôn ghi status (kể cả "all") để giữ đúng tab.
         params = {"status": status, "q": q or None, "page": page if page > 1 else None}
         query = urlencode({key: value for key, value in params.items() if value})
-        base = f"{PORTAL_ROUTE}/{access.access_token}"
+        base = access._portal_path()
         return f"{base}?{query}" if query else base
 
     def _safe_next(self, access, next_url):
-        """Chỉ cho quay về trang trong chính link của NCC này — chặn open redirect."""
-        base = f"{PORTAL_ROUTE}/{access.access_token}"
+        """Chỉ cho quay về trang trong chính link của NCC này (mã ngắn hoặc mã dài cũ) — chặn open redirect."""
         next_url = next_url or ""
-        if next_url == base or (
-            next_url.startswith((f"{base}/", f"{base}?")) and "//" not in next_url and "\\" not in next_url
-        ):
-            return next_url
-        return base
+        for base in access._portal_paths():
+            if next_url == base or (
+                next_url.startswith((f"{base}/", f"{base}?")) and "//" not in next_url and "\\" not in next_url
+            ):
+                return next_url
+        return access._portal_path()
 
     def _is_logged_in(self, access):
         if not access._password_required():
@@ -443,7 +442,7 @@ class VendorQuotePortal(http.Controller):
             "password_required": access._password_required(),
             "vendor": access.partner_id,
             "company": request.env.company.sudo(),
-            "portal_base": f"{PORTAL_ROUTE}/{access.access_token}",
+            "portal_base": access._portal_path(),
             "fmt": format_vn_number,
             # Mã hàng và tên hàng hiện thành hai cột: bỏ tiền tố "[mã]" khỏi tên.
             "code_name": split_code_name,

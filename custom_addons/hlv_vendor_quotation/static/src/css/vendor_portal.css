@@ -500,6 +500,32 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 /* --- Danh sách báo giá: cột tổng tiền + xem nhanh danh sách hàng dưới dòng --- */
 .vq-quote-row { cursor: pointer; }
 .vq-list-scroll { overflow-x: auto; }
+
+/* Lịch sử báo giá (portal_history_templates.xml) */
+.vq-history-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-bottom: 14px; padding: 14px 16px;
+    background: var(--vq-surface); border: 1px solid var(--vq-line); border-radius: 6px; }
+.vq-filter-field { display: flex; flex-direction: column; margin: 0; }
+.vq-filter-field .vq-label { margin-bottom: 4px; font-size: .8rem; }
+.vq-filter-search { flex: 1 1 240px; }
+.vq-filter-actions { display: flex; gap: 8px; }
+.vq-active-filter { margin: 0 0 12px; }
+.vq-active-filter .vq-chip-x { margin-left: 6px; text-decoration: none; font-weight: 700; }
+.vq-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.vq-kpi { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: #fff; border: 1px solid var(--vq-line); border-radius: 6px; }
+.vq-kpi-num { font-size: 1.4rem; font-weight: 700; color: var(--vq-accent); font-variant-numeric: tabular-nums; }
+.vq-kpi-label { font-size: .82rem; color: var(--vq-muted); }
+.vq-history-section { margin-bottom: 22px; }
+.vq-history-section h2 { margin: 0 0 10px; font-size: 1rem; }
+.vq-nowrap { white-space: nowrap; }
+/* Số chứng từ (BG / PO) bọc trong chip — cùng kiểu với trang sale. */
+.vq-doc-chip { display: inline-block; margin: 0 4px 2px 0; padding: 0 7px; border-radius: 3px; background: #eef0f3; color: #374151;
+    font-size: .78rem; font-weight: 600; line-height: 1.6; white-space: nowrap; font-variant-numeric: tabular-nums; text-decoration: none; }
+a.vq-doc-chip:hover { background: #e2e6ec; }
+.vq-outcome { display: inline-block; margin-right: 4px; padding: 0 7px; border-radius: 3px; font-size: .78rem; font-weight: 600; line-height: 1.6; white-space: nowrap; }
+.vq-outcome-ordered, .vq-outcome-selected { background: #f0fdf4; color: #166534; }
+.vq-outcome-lost { background: #f3f4f6; color: #4b5563; }
+.vq-outcome-pending { background: #fff7ed; color: #9a3412; }
+.vq-outcome-na { background: #fef2f2; color: var(--vq-danger); }
 /* 300px: cột số báo giá có thêm dòng người hỏi giá — rộng hơn là danh sách tràn ngang ở màn 1440px. */
 .vq-list-table .vq-cell-products { max-width: 300px; }
 .vq-list-table .vq-cell-ref { white-space: nowrap; }
