@@ -132,6 +132,14 @@ class HlvProductAgent(models.Model):
             ('active', '=', True), ('last_seen', '>=', threshold),
         ]))
 
+    @api.model
+    def is_available(self):
+        """Có ai đang nhận tin của sale không: Claude API đã cấu hình, hoặc agent đang chạy."""
+        runner = self.env['hlv.product.agent.api.runner']
+        if runner.is_api_mode():
+            return runner.is_ready()
+        return self.is_any_online()
+
     def action_regenerate_token(self):
         for agent in self:
             agent.sudo().token = secrets.token_urlsafe(32)

@@ -1,0 +1,62 @@
+# -*- coding: utf-8 -*-
+from odoo import _, fields, models
+
+from ..services.claude_api_payload import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORT_CHOICES, MODEL_CHOICES
+from .product_agent_api_runner import (
+    CRON_XMLID, DEFAULT_PARALLEL, MAX_PARALLEL, MODE_API, MODE_LOCAL, PARAM_API_KEY,
+    PARAM_EFFORT, PARAM_MODE, PARAM_MODEL, PARAM_PARALLEL, TurnFailed,
+)
+
+
+class ResConfigSettings(models.TransientModel):
+    _inherit = 'res.config.settings'
+
+    hlv_product_agent_mode = fields.Selection(
+        [(MODE_LOCAL, "Máy chạy Claude (agent trên máy văn phòng)"),
+         (MODE_API, "Claude API (API key, Odoo tự gọi)")],
+        string="Trợ lý tạo mã chạy bằng", default=MODE_LOCAL, config_parameter=PARAM_MODE,
+        help="Máy chạy Claude: agent cài trên máy văn phòng poll về Odoo (Claude Code, gói "
+             "Claude). Claude API: Odoo tự gọi Claude bằng API key, không cần máy nào bật, "
+             "tính tiền theo token. Đổi qua lại lúc nào cũng được; hai bên dùng chung hàng chờ.",
+    )
+    # Chỉ admin hệ thống mở được trang cài đặt, và giá trị nằm trong ir.config_parameter
+    # (chỉ group_system đọc được) — cùng mức bảo vệ với token agent.
+    hlv_product_agent_api_key = fields.Char(
+        "Anthropic API key", config_parameter=PARAM_API_KEY,
+        help="Tạo ở console.anthropic.com > API keys. Dạng sk-ant-...",
+    )
+    hlv_product_agent_api_model = fields.Selection(
+        MODEL_CHOICES, string="Model", default=DEFAULT_MODEL, config_parameter=PARAM_MODEL,
+    )
+    hlv_product_agent_api_effort = fields.Selection(
+        EFFORT_CHOICES, string="Mức suy nghĩ", default=DEFAULT_EFFORT, config_parameter=PARAM_EFFORT,
+        help="Cao: kỹ hơn nhưng chậm và tốn token hơn. Vừa là đủ cho tạo mã hàng.",
+    )
+    hlv_product_agent_api_parallel = fields.Integer(
+        "Số cuộc chạy song song", default=DEFAULT_PARALLEL, config_parameter=PARAM_PARALLEL,
+        help="Số sale được Claude trả lời cùng lúc (1 tới %d). Ai tới sau thì xếp hàng." % MAX_PARALLEL,
+    )
+
+    def set_values(self):
+        super().set_values()
+        # Chế độ máy văn phòng thì tắt cron: khỏi chạy không mỗi phút, khỏi rác log.
+        cron = self.env.ref(CRON_XMLID, raise_if_not_found=False)
+        if cron:
+            cron.sudo().active = self.hlv_product_agent_mode == MODE_API
+
+    def action_hlv_product_agent_check_api(self):
+        """Thử API key + model đang nhập. Không tốn token."""
+        self.ensure_one()
+        try:
+            message = self.env['hlv.product.agent.api.runner'].check_connection(
+                (self.hlv_product_agent_api_key or '').strip(),
+                self.hlv_product_agent_api_model or DEFAULT_MODEL,
+            )
+            kind = 'success'
+        except TurnFailed as failure:
+            message, kind = str(failure), 'danger'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {'type': kind, 'title': _("Claude API"), 'message': message},
+        }

@@ -11,6 +11,9 @@
                 <field name="name"/>
                 <field name="state" widget="badge" decoration-info="state == 'processing'"/>
                 <field name="closed" optional="hide"/>
+                <field name="api_input_tokens" optional="hide" sum="Tổng"/>
+                <field name="api_cache_read_tokens" optional="hide" sum="Tổng"/>
+                <field name="api_output_tokens" optional="hide" sum="Tổng"/>
             </list>
         </field>
     </record>
@@ -32,7 +35,16 @@
                         <group>
                             <field name="state"/>
                             <field name="closed"/>
-                            <field name="claude_session_id"/>
+                            <field name="claude_session_id" invisible="not claude_session_id"/>
+                        </group>
+                    </group>
+                    <group string="Claude API" invisible="not api_input_tokens and not api_output_tokens">
+                        <group>
+                            <field name="api_input_tokens"/>
+                            <field name="api_cache_read_tokens"/>
+                        </group>
+                        <group>
+                            <field name="api_output_tokens"/>
                         </group>
                     </group>
                     <field name="message_ids">
