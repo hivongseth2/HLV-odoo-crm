@@ -227,7 +227,7 @@
             </td>
             <td class="vq-num vq-cell-edit" data-label="Đơn giá sau VAT">
                 <span class="vq-view">
-                    <t t-esc="fmt(line.price_total / line.product_qty) if line.product_qty else '—'"/>
+                    <t t-esc="fmt(round(info['revision']['prices'][line.id]))"/>
                     <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(line.price_unit)"/></div>
                 </span>
                 <input t-if="revise_editable" type="text" inputmode="decimal" size="6" class="vq-input vq-edit vq-edit-num"

@@ -190,7 +190,9 @@ class PurchaseOrderRevisionLine(models.Model):
         po_line = self.order_line_id.sudo()
         vals = {}
         if "qty" in changes:
-            vals["product_qty"] = self.new_qty
+            # Đổi SL làm Odoo tính lại đơn giá + ngày giao theo bảng giá NCC (_compute_price_unit_and_date_planned_and_name)
+            # — ghi kèm giá / ngày đang có trong cùng một write để Odoo không tính đè.
+            vals.update(product_qty=self.new_qty, price_unit=po_line.price_unit, date_planned=po_line.date_planned)
         if "price" in changes:
             vals["price_unit"] = self.new_price_unit
         if vals:
