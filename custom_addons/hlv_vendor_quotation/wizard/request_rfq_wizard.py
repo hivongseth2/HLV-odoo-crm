@@ -26,6 +26,13 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             wizard.hlv_has_backorder = any(wizard.item_ids.line_id.mapped("hlv_backorder"))
 
     @api.model
+    def get_items(self, request_line_ids):
+        """Bỏ dòng YCMH đã huỷ: sale đổi NCC trên trang hỏi giá thì dòng của NCC cũ bị huỷ
+        (vendor_quote_line_choice._hlv_release) — wizard gốc không lọc, sẽ lên đơn mua cả hàng đã đổi NCC."""
+        lines = self.env["purchase.request.line"].browse(request_line_ids).filtered(lambda line: not line.cancelled)
+        return super().get_items(lines.ids)
+
+    @api.model
     def default_get(self, fields_list):
         res = super().default_get(fields_list)
         backorder = self._hlv_selected_request_lines().filtered("hlv_backorder")
