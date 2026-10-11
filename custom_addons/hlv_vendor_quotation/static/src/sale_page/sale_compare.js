@@ -278,9 +278,16 @@ window.HlvQuote = window.HlvQuote || {};
       return "";
     }
     var head = '<tr><th>Sản phẩm</th><th class="hq-num">SL</th>' + d.vendors.map(function (v) {
-      return '<th class="hq-vendor-col"><button type="button" class="hq-link-btn hq-ellipsis" data-vendor-info="' +
-        v.quote_id + '" title="Xem thông tin, link và mật khẩu của ' + esc(v.name) + '">' + esc(v.name) +
-        '</button><span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span></th>";
+      // Bấm tên NCC = chọn NCC đó cho mọi mặt hàng đã báo giá; ⓘ = thông tin, link, mật khẩu.
+      var pick = choosableOffers(d, v.quote_id).length;
+      var name = pick
+        ? '<button type="button" class="hq-link-btn hq-ellipsis" data-choose-all="' + v.quote_id + '" title="Chọn ' +
+          esc(v.name) + " cho " + pick + ' mặt hàng đã báo giá">' + esc(v.name) + "</button>"
+        : '<span class="hq-ellipsis">' + esc(v.name) + "</span>";
+      return '<th class="hq-vendor-col"><div class="hq-vendor-head">' + name +
+        '<button type="button" class="hq-icon-btn hq-info-btn" data-vendor-info="' + v.quote_id + '" title="Thông tin, link ' +
+        'và mật khẩu của ' + esc(v.name) + '" aria-label="Thông tin ' + esc(v.name) + '">ⓘ</button></div>' +
+        '<span class="hq-tag ' + (HQ.QUOTE_STATE_CLASS[v.state] || "") + '">' + esc(v.state_label) + "</span></th>";
     }).join("") + "</tr>";
     var rows = d.lines.map(function (line) {
       var tag = allocationTag(line);
@@ -299,8 +306,36 @@ window.HlvQuote = window.HlvQuote || {};
       '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
       HQ.money(d.chosen_total) + " chưa VAT</td></tr></tfoot>" +
       "</table></div>" +
-      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Một sản phẩm ' +
-      'chọn được nhiều NCC — sửa "SL mua" dưới giá để chia số lượng.</div>';
+      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Bấm tên NCC để ' +
+      'chọn NCC đó cho mọi mặt hàng. Một sản phẩm chọn được nhiều NCC — sửa "SL mua" dưới giá để chia số lượng.</div>';
+  }
+
+  /** Ô giá của NCC (quoteId) chọn thêm được: có giá, không hết hàng, chưa chọn, mặt hàng chưa khoá. [{line, offer}] */
+  function choosableOffers(d, quoteId) {
+    if (!d.can_choose) {
+      return [];
+    }
+    return d.lines.map(function (line) { return { line: line, offer: line.offers[quoteId] }; }).filter(function (x) {
+      return x.offer && x.offer.price_unit && !x.offer.unavailable && !x.offer.selected && !x.line.locked;
+    });
+  }
+
+  /** Bấm tên NCC: chọn NCC đó cho mọi mặt hàng đã báo giá. Mặt hàng đang chọn NCC khác (đã chia đủ) sẽ đổi
+      sang NCC này — hỏi trước. */
+  function chooseAll(quoteId) {
+    var d = D.detail;
+    var vendor = d.vendors.find(function (v) { return v.quote_id === quoteId; });
+    var picks = choosableOffers(d, quoteId);
+    var switching = picks.filter(function (x) { return x.line.chosen_qty > 0 && x.line.shortage <= EPS; });
+    if (switching.length && !window.confirm("Chọn " + vendor.name + " cho " + picks.length + " mặt hàng?\n" +
+        switching.length + " mặt hàng đang chọn NCC khác sẽ đổi sang " + vendor.name + " (NCC đã lên đơn mua thì giữ).")) {
+      return;
+    }
+    HQ.api("choose_all", { quote_id: quoteId }).then(function (detail) {
+      var r = detail.choose_all_result;
+      afterChange(detail, "Đã chọn " + vendor.name + " cho " + r.chosen + " mặt hàng" +
+        (r.skipped.length ? " — bỏ qua " + r.skipped.length + ": " + r.skipped.join("; ") : ""));
+    }).catch(function (err) { HQ.toast(err.message); });
   }
 
   /** Dòng tình trạng dưới tên sản phẩm: đã chia bao nhiêu / thiếu / đã đặt / YCMH / từ chối / khoá. */
@@ -539,6 +574,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.bindCompareEvents = function () {
     var panel = HQ.$("hq-drawer-panel");
     HQ.on(panel, "click", "[data-choose]", function (el) { choose(+el.dataset.choose, true); });
+    HQ.on(panel, "click", "[data-choose-all]", function (el) { chooseAll(+el.dataset.chooseAll); });
     HQ.on(panel, "click", "[data-unchoose]", function (el) { choose(+el.dataset.unchoose, false); });
     HQ.on(panel, "click", "[data-review-request]", function (el) { reviewRequest(el.dataset.reviewRequest === "1"); });
     HQ.on(panel, "click", "[data-create-request]", createRequest);

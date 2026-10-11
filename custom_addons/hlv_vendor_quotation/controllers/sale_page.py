@@ -135,6 +135,17 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             line.action_unchoose()
         return payload.inquiry_detail(inquiry)
 
+    @http.route(f"{API}/choose_all", type="json", auth="user", methods=["POST"])
+    def api_choose_all(self, code="", quote_id=None, **kw):
+        """Sale bấm tên NCC ở bảng so giá: chọn NCC đó cho mọi mặt hàng NCC đã báo giá."""
+        scope = self._check(code)
+        quote = request.env["hlv.vendor.quote"].browse(to_int(quote_id)).exists()
+        if not quote or not quote.inquiry_id:
+            raise UserError("Không tìm thấy báo giá.")
+        inquiry = self._get_inquiry(quote.inquiry_id.id, scope)
+        chosen, skipped = quote.line_ids.filtered("inquiry_line_id").action_choose_all()
+        return dict(payload.inquiry_detail(inquiry), choose_all_result={"chosen": chosen, "skipped": skipped})
+
     @http.route(f"{API}/set_qty", type="json", auth="user", methods=["POST"])
     def api_set_qty(self, code="", quote_line_id=None, qty=None, **kw):
         """Sale đổi SL mua của một NCC đã chọn (chia SL giữa các NCC)."""

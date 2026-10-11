@@ -98,6 +98,22 @@ class VendorQuoteLineChoice(models.Model):
         self.write({"selected": True, "chosen_qty": qty})
         return True
 
+    def action_choose_all(self):
+        """Sale bấm tên NCC ở bảng so giá: chọn NCC này cho mọi mặt hàng NCC đã báo giá — như bấm từng giá
+        (mặt hàng đã chia đủ thì đổi sang NCC này, nhả NCC chưa lên đơn mua). Mặt hàng không chọn được (đã lên
+        đơn mua đủ, đã chia hết cho NCC đã đặt…) bỏ qua, các mặt hàng khác vẫn chọn.
+        Trả (số mặt hàng đã chọn, [lý do từng mặt hàng bỏ qua])."""
+        chosen, skipped = 0, []
+        for line in self.filtered(lambda l: not l.selected and l.price_unit and not l.unavailable):
+            try:
+                with self.env.cr.savepoint():
+                    line.action_choose()
+            except UserError as exc:
+                skipped.append(exc.args[0])
+            else:
+                chosen += 1
+        return chosen, skipped
+
     def _hlv_default_qty(self):
         inquiry_line = self.inquiry_line_id
         others = sum((inquiry_line.chosen_line_ids - self).mapped("chosen_qty"))

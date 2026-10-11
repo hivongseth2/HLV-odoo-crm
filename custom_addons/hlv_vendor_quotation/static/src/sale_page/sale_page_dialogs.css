@@ -316,6 +316,10 @@
 
 .hq-vendor-box { width: min(760px, 100%); }
 .hq-vendor-col .hq-link-btn { display: block; max-width: 100%; text-align: left; }
+.hq-vendor-head { display: flex; align-items: flex-start; gap: .25rem; }
+.hq-vendor-head > :first-child { flex: 1 1 auto; min-width: 0; }
+.hq-info-btn { flex: none; font-size: .95rem; padding: 0 .3rem; }
+.hq-info-btn:hover { color: var(--hq-accent); }
 .hq-access { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem .75rem; align-items: center;
     padding: .75rem 1rem; background: #fff; border: 1px solid var(--hq-line); border-radius: var(--hq-radius); }
 .hq-access .hq-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
