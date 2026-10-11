@@ -1,0 +1,44 @@
+// Trang xem nhanh: mô phỏng tờ A4 để người dùng thấy gần đúng bản in
+.o_hlv_contract_paper {
+    background: #e9ecef;
+    padding: 16px;
+    .o_field_html, .o_readonly {
+        background: #fff;
+        max-width: 794px; // ~A4 ở 96dpi
+        margin: 0 auto;
+        padding: 56px 64px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, .15);
+        font-family: "Times New Roman", serif;
+        font-size: 15px;
+        color: #000;
+    }
+}
+
+// Biến trong trình soạn mẫu: tô nền để nhìn ra ngay chỗ sẽ được điền
+.o_hlv_contract_editor .hlv-var,
+.o_hlv_contract_paper .hlv-var {
+    background: #fff3cd;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-family: monospace;
+}
+
+.o_hlv_contract_editor {
+    font-family: "Times New Roman", serif;
+}
+
+.o_hlv_contract_palette {
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 12px;
+    border-left: 1px solid var(--border-color, #dee2e6);
+    h4 { font-size: 13px; margin-top: 8px; }
+    ul { padding-left: 14px; margin-bottom: 4px; }
+    code { user-select: all; } // một cú click là chọn hết tên biến để copy
+}
+
+.o_hlv_contract_words {
+    text-align: right;
+    clear: both;
+    padding-top: 4px;
+}

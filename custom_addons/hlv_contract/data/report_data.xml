@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Khổ mặc định của công ty (Euro A4) để lề trên 52 mm cho header và lề trái/phải 0:
+         chữ hợp đồng sẽ sát mép giấy. Hợp đồng không có header nên dùng lề văn bản thường,
+         khớp lề trang của file Word dựng ra (trên/dưới 2 cm, trái 2,5 cm, phải 2 cm). -->
+    <record id="paperformat_hlv_contract" model="report.paperformat">
+        <field name="name">Hợp đồng A4</field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">20</field>
+        <field name="margin_bottom">20</field>
+        <field name="margin_left">25</field>
+        <field name="margin_right">20</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">96</field>
+    </record>
+</odoo>
