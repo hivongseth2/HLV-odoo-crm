@@ -40,7 +40,29 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.reloadAll();
   }
 
+  /** Bỏ chọn một giá đã nằm trên YCMH là huỷ dòng YCMH đó (thu mua thấy "Sale đã bỏ") — hỏi lại trước. */
+  function confirmUnchoose(lineId) {
+    var d = D.detail;
+    var hit = null;
+    d.lines.forEach(function (line) {
+      Object.keys(line.offers).forEach(function (quoteId) {
+        if (line.offers[quoteId].line_id === lineId) {
+          hit = { line: line, offer: line.offers[quoteId], vendor: d.vendors.find(function (v) { return v.quote_id === +quoteId; }) };
+        }
+      });
+    });
+    var names = hit && (hit.offer.request_names || []);
+    if (!names || !names.length) {
+      return true;
+    }
+    return window.confirm("Bạn có chắc bỏ \"" + hit.line.name + "\" (" + (hit.vendor ? hit.vendor.name : "NCC") +
+      ") khỏi YCMH " + names.join(", ") + "?\nDòng YCMH sẽ bị huỷ — thu mua thấy dòng ghi \"Sale đã bỏ\".");
+  }
+
   function choose(lineId, on) {
+    if (!on && !confirmUnchoose(lineId)) {
+      return;
+    }
     HQ.api("choose", { quote_line_id: lineId, choose: on }).then(function (detail) {
       afterChange(detail);
     }).catch(function (err) { HQ.toast(err.message); });
