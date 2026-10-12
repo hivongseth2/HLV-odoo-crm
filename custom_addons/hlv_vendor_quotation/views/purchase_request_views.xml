@@ -7,6 +7,11 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
                 <field name="hlv_note" optional="show"/>
+                <field name="hlv_cancel_note" optional="show" decoration-danger="hlv_cancel_note"/>
+            </xpath>
+            <!-- Dòng sale đã bỏ (trang hỏi giá): đỏ, không chỉ mờ như dòng huỷ thường. -->
+            <xpath expr="//field[@name='line_ids']/list" position="attributes">
+                <attribute name="decoration-danger">cancelled and hlv_cancel_note</attribute>
             </xpath>
             <xpath expr="//header" position="inside">
                 <button name="action_open_vendor_quote_wizard" type="object" string="Hỏi giá NCC"

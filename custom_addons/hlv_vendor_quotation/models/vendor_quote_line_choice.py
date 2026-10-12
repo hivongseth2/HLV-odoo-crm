@@ -14,7 +14,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from .allocation_utils import apply_qty_delta, buy_qty_error, default_buy_qty, split_buy_qty, supply_cap
-from .vendor_quote_utils import format_vn_number
+from .vendor_quote_utils import DATETIME_FMT, format_vn_number, local_date_text
 
 
 class VendorQuoteLineChoice(models.Model):
@@ -161,9 +161,11 @@ class VendorQuoteLineChoice(models.Model):
         lines = self.filtered("selected")
         live = {line.id: line._hlv_live_request_lines() for line in lines}
         lines.write({"selected": False, "chosen_qty": 0.0})
+        stamp = "%s — %s, %s" % (reason, self.env.user.name, local_date_text(fields.Datetime.now(), DATETIME_FMT))
         for line in lines:
             if not live[line.id]:
                 continue
+            live[line.id].sudo().write({"hlv_cancel_note": stamp})
             live[line.id].do_cancel()
             for request in live[line.id].request_id:
                 request.message_post(body=Markup(_("%(reason)s: huỷ dòng <i>%(product)s</i> của <b>%(vendor)s</b> (%(inquiry)s).")) % {
