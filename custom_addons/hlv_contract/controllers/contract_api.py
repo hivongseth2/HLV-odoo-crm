@@ -291,6 +291,9 @@ class ContractPage(ContractPageMixin, http.Controller):
             raise UserError('Chưa chọn hợp đồng nào.')
         contracts.check_access('read')
         filename, content, mimetype = export_contracts(contracts, fmt)
+        label = {'pdf': 'PDF', 'docx': 'Word', 'xlsx': 'Excel'}[fmt]
+        for contract in contracts:
+            contract._log('export', 'Xuất %s%s' % (label, '' if len(contracts) == 1 else ' (cùng %d hợp đồng)' % len(contracts)))
         return request.make_response(content, headers=[
             ('Content-Type', mimetype),
             ('Content-Disposition', content_disposition(filename)),

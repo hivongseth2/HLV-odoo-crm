@@ -205,7 +205,9 @@ window.HlvContract = window.HlvContract || {};
       sectionsHtml() + linesHtml() +
       '<section class="hd-step"><label class="hd-label" for="hd-f-note">Ghi chú nội bộ (không in ra hợp đồng)</label>' +
       '<textarea class="hd-input hd-textarea w-100" id="hd-f-note" rows="2">' + esc(S.form.note) + "</textarea></section>" +
-      "</fieldset>";
+      "</fieldset>" +
+      (S.contract ? '<details class="hd-step hd-log-box" id="hd-log-box"><summary class="hd-h3">Nhật ký — ai tạo, sửa, đổi trạng thái, xuất file</summary>' +
+        '<div class="hd-log-list"></div></details>' : "");
     var panel = HD.$("hd-drawer-panel");
     panel.classList.toggle("with-preview", !!S.previewOn);
     panel.innerHTML = headerHtml() +
@@ -216,6 +218,9 @@ window.HlvContract = window.HlvContract || {};
       onPick: focusVariable,
     }) : null;
     refreshPreview();
+    if (S.contract) {
+      HD.bindContractLogs(HD.$("hd-log-box"), S.contract.id);
+    }
     if (HD.$("hd-partner-search")) {
       bindPartnerPicker();
     }

@@ -17,6 +17,7 @@ from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 from ..utils import contract_vars, docx_io, docx_merge, html_blocks, preview_marks
+from ..utils.audit_diff import diff_lines, diff_values
 
 _SEQUENCE_CODE = {'sale': 'hlv.contract.sale', 'principle': 'hlv.contract.principle'}
 STATES = [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đã ký'), ('cancel', 'Đã huỷ')]
@@ -25,6 +26,13 @@ STATES = [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đ�
 _CONTENT_FIELDS = {'template_id', 'contract_date', 'partner_id', 'variable_values', 'vat_rate', 'line_ids',
                    'doc_file', 'doc_variables', 'doc_html', 'doc_custom'}
 MANAGER_GROUP = 'hlv_contract.group_contract_manager'
+# Field thường ghi vào nhật ký khi đổi (cùng các ô biến và hàng hoá)
+_AUDIT_FIELDS = [
+    ('template_id', 'Mẫu'), ('contract_date', 'Ngày ký'), ('partner_id', 'Khách hàng'),
+    ('vat_rate', 'Thuế suất VAT (%)'), ('user_id', 'Phụ trách'), ('note', 'Ghi chú nội bộ'),
+]
+# Ghi bằng context này thì write không tự so trước/sau — hàm gọi tự ghi một dòng nhật ký gọn hơn
+_NO_AUDIT = 'hlv_contract_no_audit'
 # Biến chuẩn điền sẵn khi chọn khách: tên biến -> hàm lấy từ (công ty khách, người liên hệ)
 _PARTNER_FILL = {
     'Ten_Ben_Mua': lambda company, contact: company.name,
@@ -125,12 +133,18 @@ class Contract(models.Model):
             if vals.get('name', '/') in ('/', False):
                 vals['name'] = self._next_contract_number(template, vals.get('contract_date'))
         records = super().create(vals_list)
-        records.filtered(lambda r: not r.doc_file)._snapshot_template()
+        records.filtered(lambda r: not r.doc_file).with_context(**{_NO_AUDIT: True})._snapshot_template()
+        for rec in records:
+            initial = rec._audit_snapshot()
+            rec._log('create', 'Tạo hợp đồng từ mẫu "%s"' % rec.template_id.name,
+                     diff_values({}, initial['fields'], {}) + diff_lines([], initial['lines']))
         return records
 
     def write(self, vals):
         if _CONTENT_FIELDS.intersection(vals):
             self._check_content_editable()
+        audit = not self.env.context.get(_NO_AUDIT)
+        before = {rec.id: rec._audit_snapshot() for rec in self} if audit else {}
         new_template = vals.get('template_id') and len(self) == 1 and vals['template_id'] != self.template_id.id
         if new_template:
             template = self.env['hlv.contract.template'].browse(vals['template_id'])
@@ -138,13 +152,64 @@ class Contract(models.Model):
                 [v._to_dict() for v in template.variable_ids], vals.get('variable_values', self.variable_values))
         res = super().write(vals)
         if new_template:
-            self._snapshot_template()
+            self.with_context(**{_NO_AUDIT: True})._snapshot_template()
+        if audit:
+            self._log_changes(before)
         return res
 
     def unlink(self):
         if self.filtered(lambda r: r.state not in ('draft', 'cancel')):
             raise UserError('Chỉ xoá được hợp đồng Nháp hoặc Đã huỷ.')
+        for rec in self:
+            rec._log('delete', 'Xoá hợp đồng (%s, bên mua: %s, giá trị %s)' % (
+                dict(STATES).get(rec.state), rec.party_name or '—', contract_vars.format_money(rec.amount_total)))
         return super().unlink()
+
+    # ---------- nhật ký ----------
+
+    def _log(self, action, summary, details=None):
+        self.ensure_one()
+        return self.env['hlv.contract.log']._log(self, action, summary, details)
+
+    def _audit_value(self, field_name):
+        """Giá trị field dạng chữ cho nhật ký: ngày dd/mm/yyyy, many2one theo tên."""
+        value = self[field_name]
+        field = self._fields[field_name]
+        if field.type == 'date':
+            return value.strftime('%d/%m/%Y') if value else ''
+        if field.type == 'many2one':
+            return value.display_name or ''
+        if field.type == 'float':
+            return contract_vars.format_number(value)
+        return value or ''
+
+    def _audit_snapshot(self):
+        """Ảnh chụp nội dung để so trước/sau: field thường + ô biến (theo nhãn) + hàng hoá (giá sau VAT)."""
+        self.ensure_one()
+        labels = {v['name']: v['label'] for v in self._doc_variables()}
+        shown = {label: self._audit_value(name) for name, label in _AUDIT_FIELDS}
+        shown.update({labels.get(k, k): v for k, v in (self.variable_values or {}).items()})
+        return {
+            'state': self.state,
+            'fields': shown,
+            'lines': [{
+                'name': line.product_name,
+                'uom': line.uom,
+                'quantity': line.quantity,
+                'price': contract_vars.price_incl(line.price_unit, self.vat_rate),
+            } for line in self.line_ids],
+        }
+
+    def _log_changes(self, before):
+        """Sau một lần ghi: đổi trạng thái thành một dòng, đổi nội dung thành một dòng có chi tiết."""
+        states = dict(STATES)
+        for rec in self:
+            old, new = before[rec.id], rec._audit_snapshot()
+            if old['state'] != new['state']:
+                rec._log('state', '%s → %s' % (states.get(old['state']), states.get(new['state'])))
+            details = diff_values(old['fields'], new['fields'], {}) + diff_lines(old['lines'], new['lines'])
+            if details:
+                rec._log('update', 'Sửa %d mục' % len(details), details)
 
     def _is_manager(self):
         return self.env.su or self.env.user.has_group(MANAGER_GROUP)
@@ -170,7 +235,8 @@ class Contract(models.Model):
         return base64.b64decode(data) if data else self.template_id._docx_bytes()
 
     def _has_snapshot(self):
-        return bool(self.with_context(bin_size=False).doc_file)
+        # bin_size: chỉ hỏi kích thước, không nạp cả file Word (hàm này chạy mỗi lần ghi nhật ký)
+        return bool(self.with_context(bin_size=True).doc_file)
 
     def _doc_variables(self):
         """Biến nhập của hợp đồng (list dict theo thứ tự ô nhập)."""
@@ -205,9 +271,12 @@ class Contract(models.Model):
         """Hợp đồng nháp lấy lại nội dung theo mẫu hiện tại (mẫu vừa được sửa, hoặc bỏ phần chữ đã
         sửa riêng). Giá trị đã điền giữ nguyên; biến mới của mẫu nhận giá trị mặc định."""
         self._check_content_editable()
-        for rec in self:
+        for rec in self.with_context(**{_NO_AUDIT: True}):
+            had_custom = rec.doc_custom
             rec._snapshot_template()
             rec.write({'variable_values': rec._with_defaults(rec._doc_variables(), rec.variable_values)})
+            rec._log('template', 'Lấy lại nội dung theo mẫu "%s"%s' % (
+                rec.template_id.name, ', bỏ phần chữ đã sửa riêng' if had_custom else ''))
 
     def body_html_for_edit(self):
         """Nội dung hợp đồng dạng HTML để sửa chữ, biến hiện dạng {{Ten_Bien}}."""
@@ -224,8 +293,12 @@ class Contract(models.Model):
         self._check_content_editable()
         docx = docx_io.build_docx(html_blocks.html_to_blocks(html))
         names = docx_merge.list_merge_fields(docx)
+        old_vars = {v['name']: v['label'] for v in self._doc_variables()}
         var_defs = contract_vars.merge_variable_defs(names, self._doc_variables(), variable_edits)
-        self.write({
+        new_vars = {v['name']: v['label'] for v in var_defs}
+        details = ['Thêm ô: %s' % new_vars[n] for n in new_vars if n not in old_vars]
+        details += ['Bỏ ô: %s' % old_vars[n] for n in old_vars if n not in new_vars]
+        self.with_context(**{_NO_AUDIT: True}).write({
             'doc_html': html,
             'doc_file': base64.b64encode(docx),
             'doc_variables': var_defs,
@@ -233,6 +306,7 @@ class Contract(models.Model):
             'doc_custom': True,
             'variable_values': self._with_defaults(var_defs, self.variable_values),
         })
+        self._log('body', 'Sửa chữ trên nội dung hợp đồng (mẫu gốc không đổi)', details)
 
     def _next_contract_number(self, template, contract_date):
         code = _SEQUENCE_CODE.get(template.contract_type)

@@ -23,6 +23,7 @@
                             <button type="button" class="hd-nav-tab is-active" data-view="contracts">Danh sách hợp đồng</button>
                             <button type="button" class="hd-nav-tab hd-hidden" data-view="templates" data-manager="1">Mẫu hợp đồng</button>
                             <button type="button" class="hd-nav-tab hd-hidden" data-open-seller="1" data-manager="1">Thông tin bên bán</button>
+                            <button type="button" class="hd-nav-tab hd-hidden" data-view="logs" data-manager="1">Nhật ký</button>
                         </div>
                         <div class="d-flex align-items-center gap-3">
                             <a class="nav-link text-white" href="/hop-dong/huong-dan" target="_blank"
@@ -95,6 +96,21 @@
                                 </section>
                             </div>
                         </div>
+                    </section>
+
+                    <!-- ============================================== nhật ký toàn bộ (Quản lý) -->
+                    <section id="hd-view-logs" class="hd-hidden">
+                        <div class="hd-toolbar">
+                            <label class="hd-sr-only" for="hd-log-search">Tìm trong nhật ký</label>
+                            <input type="search" id="hd-log-search" class="hd-input hd-input-wide"
+                                   placeholder="Tìm số hợp đồng, người làm, nội dung thay đổi…"/>
+                            <label class="hd-sr-only" for="hd-log-action">Loại việc</label>
+                            <select id="hd-log-action" class="hd-input"><option value="">Mọi việc</option></select>
+                        </div>
+                        <section class="hd-panel">
+                            <div id="hd-log-all" class="hd-log-all"></div>
+                            <div id="hd-log-pager" class="hd-pager"></div>
+                        </section>
                     </section>
 
                     <!-- ============================================== ngăn soạn hợp đồng -->
@@ -231,6 +247,7 @@
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_editor.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_templates.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_body.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_logs.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_app.js?v=#{asset_version}"></script>
             </body>
         </html>
