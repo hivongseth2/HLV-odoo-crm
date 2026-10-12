@@ -5,9 +5,6 @@
         <field name="model">purchase.request</field>
         <field name="inherit_id" ref="purchase_request.view_purchase_request_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
-                <field name="hlv_note" optional="show"/>
-            </xpath>
             <!-- Dòng đã huỷ (sale bỏ chọn / đổi NCC ở trang hỏi giá…): đỏ + gạch ngang (scss/purchase_request_lines.scss)
                  thay vì chỉ mờ — lý do ghi ở chatter YCMH. -->
             <xpath expr="//field[@name='line_ids']/list" position="attributes">
@@ -45,6 +42,22 @@
             </xpath>
             <xpath expr="//field[@name='x_misa_requested_by']" position="after">
                 <field name="hlv_from_quote_page" invisible="1"/>
+            </xpath>
+            <!-- Ghi chú dòng dùng chung misa_note (sale ghi lúc lên YCMH từ trang hỏi giá) — bỏ chữ "(MISA)". -->
+            <xpath expr="//field[@name='misa_note']" position="attributes">
+                <attribute name="string">Ghi chú</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Wizard Tạo RFQ: cùng cột ghi chú dòng YCMH — nhãn "Ghi chú" như trên form YCMH. View của misa_purchase_request_sync. -->
+    <record id="view_rfq_wizard_note_label" model="ir.ui.view">
+        <field name="name">purchase.request.line.make.purchase.order.note.label</field>
+        <field name="model">purchase.request.line.make.purchase.order</field>
+        <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_line_make_purchase_order_inherit_misa"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='misa_note']" position="attributes">
+                <attribute name="string">Ghi chú</attribute>
             </xpath>
         </field>
     </record>

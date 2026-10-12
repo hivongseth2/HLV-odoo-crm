@@ -96,7 +96,7 @@ class PurchaseRequest(models.Model):
         origin từ đây, mà origin là mã đơn hàng của khách để thu mua / MISA khớp đơn; hỏi giá
         khi khách chưa chốt thì sale điền sau (purchase.order._hlv_set_origin). source: tên
         phiếu hỏi giá, chỉ để ghi chatter.
-        line_vals: [{product_id, name, product_qty, product_uom_id, actual_*..., hlv_note}].
+        line_vals: [{product_id, name, product_qty, product_uom_id, actual_*..., misa_note}].
         request_vals: {delivery_address, picking_type_id} sale chọn lúc lên YCMH (bỏ khoá rỗng) — YCMH mới ghi
         luôn; gộp vào YCMH chưa duyệt thì ghi đè (lựa chọn mới nhất của sale).
         Trả (YCMH, list dòng YCMH ứng với từng phần tử line_vals theo thứ tự, True nếu là gộp).
@@ -165,9 +165,9 @@ class PurchaseRequest(models.Model):
             )[:1]
             if line:
                 extra = {k: v for k, v in vals.items() if k.startswith(CHOICE_FIELD_PREFIXES) or k == "hlv_separate_po"}
-                note = (vals.get("hlv_note") or "").strip()
-                if note and note not in (line.hlv_note or ""):
-                    extra["hlv_note"] = "; ".join(filter(None, [line.hlv_note, note]))
+                note = (vals.get("misa_note") or "").strip()
+                if note and note not in (line.misa_note or ""):
+                    extra["misa_note"] = "; ".join(filter(None, [line.misa_note, note]))
                 line.write(dict(
                     extra,
                     product_qty=line.product_qty + uom._compute_quantity(vals["product_qty"], line.product_uom_id),
@@ -245,8 +245,10 @@ class PurchaseRequestLine(models.Model):
     # Sale chọn lúc lên YCMH: phần hẹn ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn). Chỉ là gợi ý
     # cho wizard Tạo RFQ — thu mua đổi được ở ô "Tách đơn mua riêng cho phần NCC hẹn giao".
     hlv_separate_po = fields.Boolean(string="Phần hẹn: đơn mua riêng", copy=False)
-    # Sale ghi lúc lên YCMH từ trang hỏi giá — riêng từng dòng hàng (yêu cầu giao, quy cách…).
-    hlv_note = fields.Char(string="Ghi chú", copy=False)
+    # Ghi chú từng dòng: dùng chung trường misa_note của misa_purchase_request_sync — đã hiện ở bảng dòng YCMH, form
+    # dòng và wizard Tạo RFQ. YCMH đi từ MISA: đồng bộ điền; YCMH lập từ trang hỏi giá: sale ghi lúc lên YCMH (không
+    # đồng bộ MISA nên không bị ghi đè). Đổi nhãn "Ghi chú (MISA)" → "Ghi chú" vì không còn chỉ từ MISA.
+    misa_note = fields.Char(string="Ghi chú")
 
     def _hlv_remaining_qty(self):
         """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của

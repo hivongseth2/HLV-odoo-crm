@@ -344,7 +344,7 @@ class VendorInquiry(models.Model):
         hết thiếu. SL hỏi trên phiếu giữ nguyên: NCC báo giá theo số đó.
         separate_backorder: phần NCC hẹn giao ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn) — ghi
         lên dòng YCMH phần hẹn làm mặc định cho wizard Tạo RFQ, thu mua đổi được.
-        line_notes: {id dòng báo giá: ghi chú} → "Ghi chú" của dòng YCMH (cả phần hẹn); request_vals: địa điểm giao,
+        line_notes: {id dòng báo giá: ghi chú} → "Ghi chú" (misa_note) của dòng YCMH (cả phần hẹn); request_vals: địa điểm giao,
         kho nhận của YCMH (purchase_request._add_request_lines).
         """
         self.ensure_one()
@@ -364,7 +364,7 @@ class VendorInquiry(models.Model):
         order = sale_order or self.sale_order_id
         notes = {key: (text or "").strip() for key, text in (line_notes or {}).items() if (text or "").strip()}
         parts = [(quote_line, dict(vals, **({"hlv_separate_po": True} if is_backorder and separate_backorder else {}),
-                                   **({"hlv_note": notes[quote_line.id]} if quote_line.id in notes else {})), is_backorder)
+                                   **({"misa_note": notes[quote_line.id]} if quote_line.id in notes else {})), is_backorder)
                  for quote_line in pending for vals, is_backorder in quote_line._hlv_request_parts()]
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
             [vals for _quote_line, vals, _bo in parts],
