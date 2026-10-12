@@ -193,3 +193,58 @@ def build_vars(system, inputs, input_types, lines, vat_rate):
     out['Tong_Gia_Tri_HD'] = format_money(totals['total'])
     out['Tong_Gia_Tri_Bang_Chu'] = totals['words']
     return out
+
+
+_TYPE_KEYS = {key for key, _label in VARIABLE_TYPES}
+_SECTION_KEYS = {key for key, _label in SECTIONS}
+
+
+def clean_variable_def(definition):
+    """Giữ đúng các khoá người dùng được sửa (label, var_type, section, default_value), bỏ
+    kiểu/nhóm không hợp lệ và nhãn rỗng. None -> {}."""
+    if not definition:
+        return {}
+    vals = {}
+    if (definition.get('label') or '').strip():
+        vals['label'] = definition['label'].strip()
+    if definition.get('var_type') in _TYPE_KEYS:
+        vals['var_type'] = definition['var_type']
+    if definition.get('section') in _SECTION_KEYS:
+        vals['section'] = definition['section']
+    if 'default_value' in definition:
+        vals['default_value'] = (definition.get('default_value') or '').strip()
+    return vals
+
+
+def merge_variable_defs(field_names, existing, edits=None):
+    """Bộ biến nhập mới sau khi nội dung (mẫu hoặc hợp đồng) đổi.
+
+    field_names: tên trường có trong nội dung, theo thứ tự xuất hiện.
+    existing: list dict biến đang có (giữ cấu hình nhãn/kiểu/nhóm/mặc định).
+    edits: list dict người dùng vừa sửa — áp vào biến cùng tên; thứ tự trong edits là thứ tự
+    ô nhập. None -> giữ thứ tự cũ, biến mới đứng sau theo thứ tự xuất hiện.
+    Trả list dict {name, label, var_type, section, default_value, sequence}; biến tự điền bị bỏ,
+    biến không còn trong nội dung bị bỏ, biến mới lấy nhãn/kiểu từ thư viện."""
+    inputs = [n for n in field_names if not is_system_variable(n)]
+    current = {d['name']: d for d in existing or []}
+    edits_by_name = {d.get('name'): d for d in (edits or []) if d.get('name')}
+    if edits is None:
+        old_order = [d['name'] for d in existing or []]
+        rank = lambda n: (old_order.index(n) if n in old_order else len(old_order), inputs.index(n))
+    else:
+        edit_order = [d.get('name') for d in edits]
+        rank = lambda n: (edit_order.index(n) if n in edit_order else len(edit_order), inputs.index(n))
+    merged = []
+    for index, name in enumerate(sorted(inputs, key=rank)):
+        base = current.get(name) or default_variable_def(name)
+        item = {
+            'name': name,
+            'label': base.get('label') or name,
+            'var_type': base.get('var_type') or 'text',
+            'section': base.get('section') or 'other',
+            'default_value': base.get('default_value') or '',
+        }
+        item.update(clean_variable_def(edits_by_name.get(name)))
+        item['sequence'] = (index + 1) * 10
+        merged.append(item)
+    return merged

@@ -343,3 +343,16 @@
 .hd-import-help ol { margin: .4rem 0 0; padding-left: 1.2rem; }
 .hd-import-help li { margin: .2rem 0; }
 .hd-inline-label { font-size: 12px; color: var(--hd-muted); }
+
+/* Sửa nội dung riêng của một hợp đồng + thông báo mẫu đã đổi */
+.hd-body-box { width: min(1280px, 100%); }
+.hd-body-box .hd-modal-head { align-items: flex-start; flex-wrap: wrap; }
+.hd-notice {
+    margin: 0 0 .9rem;
+    padding: .55rem .8rem;
+    background: var(--hd-warn-soft);
+    border: 1px solid #F1CDB8;
+    border-radius: var(--hd-radius);
+    font-size: 13px;
+    color: var(--hd-ink);
+}

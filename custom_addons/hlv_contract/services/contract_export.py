@@ -72,11 +72,16 @@ def _excel_value(var_type, raw):
 
 
 def _template_sheet(template, contracts):
-    """Một sheet cho các hợp đồng cùng mẫu: số HĐ, ngày ký, trạng thái, các biến nhập của mẫu,
-    rồi dòng hàng trải ngang (Ten_Hang_1, DVT_1...) và tổng tiền nếu mẫu có bảng hàng."""
+    """Một sheet cho các hợp đồng cùng mẫu: số HĐ, ngày ký, trạng thái, các biến nhập, rồi dòng
+    hàng trải ngang (Ten_Hang_1, DVT_1...) và tổng tiền nếu có bảng hàng. Biến lấy theo mẫu cộng
+    biến riêng của từng hợp đồng (hợp đồng lập từ mẫu cũ hoặc đã sửa nội dung riêng)."""
+    types = {var.name: var.var_type for var in template.variable_ids}
+    for contract in contracts:
+        for var in contract._doc_variables():
+            types.setdefault(var['name'], var['var_type'])
     columns = [('So_Hop_Dong', 'text'), ('Ngay_Ky', 'date'), ('Trang_Thai', 'text')]
-    columns += [(var.name, _EXCEL_KIND.get(var.var_type, 'text')) for var in template.variable_ids]
-    if template.has_lines:
+    columns += [(name, _EXCEL_KIND.get(var_type, 'text')) for name, var_type in types.items()]
+    if template.has_lines or any(c._doc_has_lines() for c in contracts):
         max_lines = max([1] + [len(c.line_ids) for c in contracts])
         for index in range(1, max_lines + 1):
             columns += [('Ten_Hang_%d' % index, 'text'), ('DVT_%d' % index, 'text'),
@@ -85,7 +90,6 @@ def _template_sheet(template, contracts):
         columns += [(name, 'number' if name == 'Thue_Suat_VAT' else 'text' if name.endswith('Chu') else 'money')
                     for name in TOTAL_VARIABLES]
     columns.append(('Ghi_Chu', 'text'))
-    types = {var.name: var.var_type for var in template.variable_ids}
     states = dict(STATES)
     rows = []
     for contract in contracts:

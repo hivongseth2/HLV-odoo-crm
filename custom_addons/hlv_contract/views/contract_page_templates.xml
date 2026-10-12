@@ -199,6 +199,25 @@
                         </div>
                     </div>
 
+                    <!-- Sửa chữ trên riêng một hợp đồng (hd_body.js) — mẫu gốc không đổi -->
+                    <div id="hd-body" class="hd-modal hd-body-modal hd-hidden">
+                        <div class="hd-modal-box hd-body-box">
+                            <div class="hd-modal-head">
+                                <div>
+                                    <h2 class="hd-h2" id="hd-body-title">Sửa nội dung hợp đồng</h2>
+                                    <div class="hd-muted hd-small">Chỉ sửa trên hợp đồng này — mẫu gốc và các hợp đồng khác không đổi.
+                                        Ô vàng là biến, vẫn tự điền theo giá trị trên ngăn soạn.</div>
+                                </div>
+                                <div class="hd-push d-flex gap-2">
+                                    <button type="button" class="hd-btn" id="hd-body-reset">Khôi phục theo mẫu</button>
+                                    <button type="button" class="hd-btn" data-close="body">Huỷ</button>
+                                    <button type="button" class="hd-btn hd-btn-primary" id="hd-body-save">Lưu nội dung</button>
+                                </div>
+                            </div>
+                            <div id="hd-body-host"></div>
+                        </div>
+                    </div>
+
                     <div id="hd-toast" class="hd-toast hd-hidden"></div>
                 </div>
 
@@ -211,6 +230,7 @@
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_form.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_editor.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_templates.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_body.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_app.js?v=#{asset_version}"></script>
             </body>
         </html>

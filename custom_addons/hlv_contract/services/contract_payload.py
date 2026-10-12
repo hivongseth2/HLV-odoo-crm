@@ -35,7 +35,7 @@ def contract_summary(contract):
         'party_name': contract.party_name or '',
         'party_vat': contract.party_vat or '',
         'amount_total': contract.amount_total,
-        'has_lines': contract.template_id.has_lines,
+        'has_lines': contract._doc_has_lines(),
         'state': contract.state,
         'state_label': STATE_LABELS.get(contract.state, ''),
         'user': contract.user_id.name or '',
@@ -70,8 +70,13 @@ def contract_detail(contract, can_manage):
         'amount_untaxed': contract.amount_untaxed,
         'amount_vat': contract.amount_vat,
         'amount_words': contract.amount_words or '',
-        'editable': contract.state == 'draft' or can_manage,
+        # Hợp đồng đã rời Nháp thì khoá với mọi người (kể cả Quản lý), khớp model
+        'editable': contract.state == 'draft',
         'actions': _allowed_actions(contract, can_manage),
+        # Ô nhập theo bản chụp riêng của hợp đồng, không theo mẫu hiện tại
+        'variables': contract._doc_variables(),
+        'doc_custom': contract.doc_custom,
+        'template_outdated': contract._template_outdated(),
     })
     return detail
 
@@ -82,7 +87,9 @@ def grid_row(contract, can_manage):
     row.update({
         'values': dict(contract.variable_values or {}),
         'lines': [{'name': line.product_name, 'quantity': line.quantity} for line in contract.line_ids],
-        'editable': contract.state == 'draft' or can_manage,
+        'editable': contract.state == 'draft',
+        # Hợp đồng lập từ mẫu cũ có thể thiếu biến mẫu mới thêm: ô đó không sửa được trên dòng này
+        'var_names': [v['name'] for v in contract._doc_variables()],
     })
     return row
 

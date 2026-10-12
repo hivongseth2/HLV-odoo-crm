@@ -50,7 +50,9 @@ window.HlvContract = window.HlvContract || {};
 
   function rowHtml(row) {
     var cells = columns().map(function (col) {
-      var cls = "hd-cell hd-cell-" + col.var_type + (row.editable ? " is-editable" : "");
+      // Hợp đồng lập từ mẫu cũ không có biến mẫu mới thêm: ô đó để trống, không sửa
+      var own = col.fixed || row.var_names.indexOf(col.name) >= 0;
+      var cls = "hd-cell hd-cell-" + col.var_type + (row.editable && own ? " is-editable" : "") + (own ? "" : " is-na");
       return '<td class="' + cls + '" data-cell="' + esc(col.name) + '" data-type="' + col.var_type + '">' +
         displayValue(rawValue(row, col), col.var_type) + "</td>";
     }).join("");

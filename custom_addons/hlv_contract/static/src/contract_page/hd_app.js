@@ -4,7 +4,7 @@ window.HlvContract = window.HlvContract || {};
 (function (HD) {
   "use strict";
 
-  var MODALS = ["hd-preview", "hd-export", "hd-import", "hd-seller"];
+  var MODALS = ["hd-preview", "hd-export", "hd-import", "hd-seller", "hd-body"];
 
   function switchView(view) {
     HD.show("hd-view-contracts", view === "contracts");
@@ -60,6 +60,7 @@ window.HlvContract = window.HlvContract || {};
       HD.initGrid();
       HD.initForm();
       HD.initTemplates();
+      HD.initBody();
       return HD.loadList();
     }).catch(HD.fail);
   }
