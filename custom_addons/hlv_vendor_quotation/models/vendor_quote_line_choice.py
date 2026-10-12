@@ -65,6 +65,8 @@ class VendorQuoteLineChoice(models.Model):
             raise UserError(_(
                 "Phiếu %s đã đóng — lập phiếu mới, giá còn hiệu lực sẽ được dùng lại.", inquiry_line.inquiry_id.name,
             ))
+        if self.withdrawn:
+            raise UserError(_("Đã thu hồi yêu cầu báo giá món này với NCC này — bấm \"Hỏi lại\" trước."))
         if self.unavailable or not self.price_unit:
             raise UserError(_("NCC chưa báo giá cho mặt hàng này."))
 
