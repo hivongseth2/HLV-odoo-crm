@@ -147,7 +147,8 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         if not quote or not quote.inquiry_id:
             raise UserError("Không tìm thấy báo giá.")
         inquiry = self._get_inquiry(quote.inquiry_id.id, scope)
-        chosen, skipped = quote.line_ids.filtered("inquiry_line_id").action_choose_all()
+        # Dòng đã thu hồi (withdrawn) không chọn được — chỉ các món còn hỏi NCC này.
+        chosen, skipped = quote._vendor_lines().filtered("inquiry_line_id").action_choose_all()
         return dict(payload.inquiry_detail(inquiry), choose_all_result={"chosen": chosen, "skipped": skipped})
 
     @http.route(f"{API}/set_qty", type="json", auth="user", methods=["POST"])
