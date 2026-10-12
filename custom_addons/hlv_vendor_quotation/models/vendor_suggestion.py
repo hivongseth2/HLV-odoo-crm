@@ -87,6 +87,7 @@ class VendorSuggestion(models.AbstractModel):
             rows.append({
                 "product_id": line.product_id.id,
                 "partner_id": line.partner_id.commercial_partner_id.id,
+                "order": line.order_id.name,
                 "price": price,
                 "date": day,
                 "received": line.qty_received,

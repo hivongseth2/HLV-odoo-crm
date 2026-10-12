@@ -13,12 +13,26 @@ window.HlvQuote = window.HlvQuote || {};
   // Gợi ý chỉ để tham khảo: hiện vài NCC đầu, phần còn lại mở khi cần.
   var SUGGEST_VISIBLE = 5;
 
-  /** Thêm nhiều dòng một lúc (khung "Dán danh sách" — sale_paste.js); trùng sản phẩm thì cộng SL. */
+  /** Thêm nhiều dòng một lúc (ô tìm, dán danh sách, cơ hội CRM, đơn bán); trùng sản phẩm thì cộng SL.
+      Combo (BoM kit) được tách thành mặt hàng con trước — NCC bán từng thành phần (services/combo_lines.py).
+      Trả Promise các dòng đã thêm. */
   HQ.addCreateLines = function (lines) {
-    lines.forEach(function (line) { C.lines = HQ.mergeLine(C.lines, line); });
-    renderLines();
-    renderSummary();
-    refreshSuggestions();
+    var ready = lines.some(function (l) { return l.is_kit; })
+      ? HQ.rpc("/api/hoi-gia-ncc/expand_lines", { lines: lines }).then(function (r) { return r.lines; })
+      : Promise.resolve(lines);
+    return ready.then(function (rows) {
+      rows.forEach(function (line) { C.lines = HQ.mergeLine(C.lines, line); });
+      renderLines();
+      renderSummary();
+      refreshSuggestions();
+      if (rows.some(function (l) { return l.combo; })) {
+        HQ.toast("Combo đã được tách thành các mặt hàng con để hỏi giá NCC");
+      }
+      return rows;
+    }).catch(function (err) {
+      HQ.toast(err.message);
+      return [];
+    });
   };
 
   /** Mở hộp lập phiếu điền sẵn sản phẩm + NCC (nút "Dùng giá này" ở khung giá đã hỏi).
@@ -45,6 +59,7 @@ window.HlvQuote = window.HlvQuote || {};
     C.reuse = {};
     C.picks = {};  // gợi ý NCC theo từng mặt hàng (sale_create_ask.js)
     C.ask = {};    // ô tick NCC × mặt hàng sale đã bấm tay
+    C.askInfo = {};  // mặt hàng đang mở dẫn chứng gợi ý (nút "i")
     C.showAllSuggestions = false;
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
@@ -95,6 +110,7 @@ window.HlvQuote = window.HlvQuote || {};
             '<td><img class="hq-thumb" loading="lazy" src="/web/image/product.product/' + l.product_id +
             '/image_128" alt=""/></td>' +
             '<td><div class="hq-strong">' + esc(l.name || l.product) + "</div>" +
+            (l.combo ? '<div class="hq-muted hq-small">Thành phần của combo ' + esc(l.combo) + "</div>" : "") +
             HQ.priceReuseHtml((C.priceHints || {})[l.product_id], l, C.reuse[l.product_id]) + "</td>" +
             '<td class="hq-num"><input type="number" min="0" step="any" class="hq-qty" data-line="' +
             index + '" value="' + l.qty + '"/></td>' +
@@ -319,10 +335,7 @@ window.HlvQuote = window.HlvQuote || {};
         HQ.openCrmSearch(product.crm_search);
         return;
       }
-      C.lines = HQ.mergeLine(C.lines, product);
-      renderLines();
-      renderSummary();
-      refreshSuggestions();
+      HQ.addCreateLines([product]);
     });
 
     // Không có trong danh bạ thì tạo nhanh bằng MST (sale_vendor_vat.js).

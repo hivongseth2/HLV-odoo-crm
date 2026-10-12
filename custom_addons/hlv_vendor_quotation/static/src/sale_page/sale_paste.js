@@ -34,7 +34,7 @@ window.HlvQuote = window.HlvQuote || {};
       return '<select class="hq-input w-100" data-paste-crm="' + index + '">' +
         '<option value="">— Chọn hàng trên MISA CRM —</option>' + row.crm.candidates.map(function (p) {
           return '<option value="' + esc(p.code) + '"' + (p.code === row.crmCode ? " selected" : "") +
-            (p.is_combo ? " disabled" : "") + ">" + esc(HQ.crmLabel(p)) + (p.is_combo ? " (combo)" : "") + "</option>";
+            ">" + esc(HQ.crmLabel(p)) + (p.is_combo ? " (combo — tách mặt hàng con)" : "") + "</option>";
         }).join("") + "</select>" +
         '<div class="hq-muted hq-small">Chưa có trong Odoo — thêm vào phiếu là tạo sản phẩm theo CRM.</div>';
     }

@@ -11,6 +11,7 @@ from ..services import sale_scope
 from ..services import vendor_from_vat
 from ..services.price_history import quoted_prices
 from ..services.product_paste import match_pasted
+from ..services.combo_lines import kit_bom, kit_components
 from ..services.sale_code import SALE_CODE_FIELD, has_sale_code
 from .sale_page_common import API, SEARCH_LIMIT, SalePageMixin, to_int
 
@@ -25,8 +26,12 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         search = (search or "").strip()
         if not search:
             return {"products": []}
-        products = request.env["product.product"].search([
-            ("purchase_ok", "=", True),
+        Product = request.env["product.product"]
+        # Combo (BoM kit) để purchase_ok = False nhưng vẫn phải tìm được: thêm vào phiếu là tách thành phần.
+        buyable = [("purchase_ok", "=", True)]
+        if "bom_ids" in Product._fields:
+            buyable = ["|", ("purchase_ok", "=", True), ("bom_ids.type", "=", "phantom")]
+        products = Product.search(buyable + [
             "|", "|", ("default_code", "ilike", search), ("name", "ilike", search),
             ("barcode", "=", search),
         ], limit=SEARCH_LIMIT)
@@ -37,6 +42,26 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         """Danh sách hàng sale dán từ Zalo / Excel → từng dòng kèm sản phẩm dò được."""
         self._check()
         return {"rows": match_pasted(request.env, (text or "")[:PASTE_MAX_CHARS])}
+
+    @http.route(f"{API}/expand_lines", type="json", auth="user", methods=["POST"])
+    def api_expand_lines(self, lines=None, **kw):
+        """Tách combo thành mặt hàng con (theo BoM kit, nhân số combo); dòng thường trả nguyên.
+        lines: [{product_id, qty, uom_id, ...}]. Trả {lines: [...]} — dòng con mang "combo": tên combo."""
+        self._check()
+        env = request.env
+        result = []
+        for raw in lines or []:
+            product = env["product.product"].browse(to_int(raw.get("product_id"))).exists()
+            uom = env["uom.uom"].browse(to_int(raw.get("uom_id"))).exists()
+            qty = float(raw.get("qty") or 1)
+            parts = kit_components(product, qty, uom or None) if product else None
+            if not parts:
+                result.append(raw)
+                continue
+            for component, part_qty, part_uom in parts:
+                result.append(dict(payload.product_payload(component), qty=part_qty, uom_id=part_uom.id,
+                                   uom=part_uom.name, combo=product.display_name))
+        return {"lines": result}
 
     @http.route(f"{API}/price_history", type="json", auth="user", methods=["POST"])
     def api_price_history(self, product_ids=None, search="", **kw):
@@ -81,7 +106,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         items = Suggestion.suggest(products)
         picks = Suggestion.product_picks(products)
         partner_ids = {i["partner_id"] for i in items} | {
-            pick[key] for pick in picks.values() for key in ("cheapest", "delivered", "recent") if pick[key]}
+            e["partner_id"] for pick in picks.values() for e in pick["evidence"]}
         names = {p.id: p.display_name for p in request.env["res.partner"].sudo().browse(list(partner_ids))}
         return {
             "suggestions": [
@@ -120,9 +145,12 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         if not order:
             raise UserError("Không tìm thấy đơn bán.")
         lines = order.order_line.filtered(
-            lambda l: not l.display_type and not l.is_downpayment
-            and l.product_id.purchase_ok and l.product_uom_qty > 0
+            lambda l: not l.display_type and not l.is_downpayment and l.product_uom_qty > 0
         )
+        # Đơn bán đã tách combo thành dòng con (x_studio_is_combo_child) → lấy dòng con, bỏ dòng combo cha;
+        # chưa tách → giữ dòng combo, trang tự tách theo BoM (expand_lines).
+        has_children = any(getattr(line, "x_studio_is_combo_child", False) for line in lines)
+        lines = lines.filtered(lambda l: l.product_id.purchase_ok or (kit_bom(l.product_id) and not has_children))
         return {
             "order": payload.sale_order_summary(order),
             "lines": [payload.sale_line_payload(line) for line in lines],

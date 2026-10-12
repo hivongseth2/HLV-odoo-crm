@@ -87,6 +87,21 @@ window.HlvQuote = window.HlvQuote || {};
     }).join("");
   }
 
+  /** Dẫn chứng của gợi ý (nút "i"): NCC từng bán mặt hàng, hạng giá mua lần gần nhất (không hiện số tiền —
+      giá vốn không lộ cho sale), đơn mua gần nhất, số lần kho nhận được hàng. */
+  function evidenceHtml(productId) {
+    var rows = (C.picks[productId] || {}).evidence || [];
+    return '<div class="hq-ask-evidence"><table class="hq-table"><thead><tr><th>NCC</th><th>Giá mua lần gần nhất</th>' +
+      "<th>Đơn mua gần nhất</th><th>Giao được</th></tr></thead><tbody>" + rows.map(function (e) {
+        return "<tr><td>" + esc(e.name) + "</td><td>" +
+          (e.price_rank ? (e.price_rank === 1 ? "<b>rẻ nhất</b>" : "thứ " + e.price_rank) + " / " + e.priced_count + " NCC"
+            : '<span class="hq-muted">chưa có giá</span>') + "</td><td>" + esc(e.last_order) + " · " + esc(e.last_date) +
+          "</td><td>" + (e.received_count ? e.received_count + " đơn, gần nhất " + esc(e.last_received)
+            : '<span class="hq-muted">chưa nhận hàng</span>') + "</td></tr>";
+      }).join("") + '</tbody></table><div class="hq-muted hq-small">Từ đơn mua đã xác nhận. Giá so theo lần mua ' +
+      "gần nhất của mỗi NCC, quy về ĐVT sản phẩm.</div></div>";
+  }
+
   HQ.renderAskMatrix = function () {
     var box = HQ.$("hq-ask");
     if (!box) {
@@ -96,16 +111,23 @@ window.HlvQuote = window.HlvQuote || {};
       box.innerHTML = "";
       return;
     }
+    C.picks = C.picks || {};
+    C.askInfo = C.askInfo || {};
     var vendors = C.chosen;
     var head = "<tr><th>Mặt hàng · gợi ý NCC</th>" + vendors.map(function (v) {
       return '<th class="hq-ask-col" title="' + esc(v.name) + '">' + esc(v.name) + "</th>";
     }).join("") + "</tr>";
     var body = C.lines.map(function (line) {
-      var count = vendors.filter(function (v) { return asked(v.id, line.product_id); }).length;
-      return "<tr" + (count ? "" : ' class="hq-ask-orphan"') + '><td><div class="hq-strong">' +
-        esc(line.name || line.product) + "</div>" +
+      // Chỉ cảnh báo khi đã chọn NCC mà mặt hàng vẫn không NCC nào được tick.
+      var orphan = vendors.length && !vendors.some(function (v) { return asked(v.id, line.product_id); });
+      var hasEvidence = ((C.picks[line.product_id] || {}).evidence || []).length;
+      return "<tr" + (orphan ? ' class="hq-ask-orphan"' : "") + '><td><div class="hq-strong">' +
+        esc(line.name || line.product) +
+        (hasEvidence ? ' <button type="button" class="hq-ask-info' + (C.askInfo[line.product_id] ? " hq-ask-info-on" : "") +
+          '" data-ask-info="' + line.product_id + '" title="Xem dẫn chứng gợi ý">i</button>' : "") + "</div>" +
         '<div class="hq-ask-picks">' + (pickChips(line.product_id) || '<span class="hq-muted hq-small">Chưa từng mua</span>') +
-        "</div>" + (count ? "" : '<div class="hq-ask-warn">Chưa hỏi NCC nào</div>') + "</td>" +
+        "</div>" + (C.askInfo[line.product_id] ? evidenceHtml(line.product_id) : "") +
+        (orphan ? '<div class="hq-ask-warn">Chưa tick NCC nào cho mặt hàng này</div>' : "") + "</td>" +
         vendors.map(function (v) {
           var on = asked(v.id, line.product_id);
           return '<td class="hq-ask-cell"><input type="checkbox" data-ask="' + v.id + ":" + line.product_id + '"' +
@@ -149,6 +171,10 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(modal, "change", "[data-ask]", function (el) {
       var parts = el.dataset.ask.split(":");
       setAsked(+parts[0], +parts[1], el.checked);
+      HQ.renderAskMatrix();
+    });
+    HQ.on(modal, "click", "[data-ask-info]", function (el) {
+      C.askInfo[+el.dataset.askInfo] = !C.askInfo[+el.dataset.askInfo];
       HQ.renderAskMatrix();
     });
     HQ.on(modal, "click", "[data-ask-pick]", function (el) {
