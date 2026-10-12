@@ -77,12 +77,20 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         products = request.env["product.product"].browse(
             [to_int(pid) for pid in product_ids or []]
         ).exists()
-        items = request.env["hlv.vendor.suggestion"].suggest(products)
-        names = {p.id: p.display_name for p in request.env["res.partner"].browse([i["partner_id"] for i in items])}
-        return {"suggestions": [
-            dict(payload.suggestion_payload(item, products), name=names.get(item["partner_id"], ""))
-            for item in items
-        ]}
+        Suggestion = request.env["hlv.vendor.suggestion"]
+        items = Suggestion.suggest(products)
+        picks = Suggestion.product_picks(products)
+        partner_ids = {i["partner_id"] for i in items} | {
+            pick[key] for pick in picks.values() for key in ("cheapest", "delivered", "recent") if pick[key]}
+        names = {p.id: p.display_name for p in request.env["res.partner"].sudo().browse(list(partner_ids))}
+        return {
+            "suggestions": [
+                dict(payload.suggestion_payload(item, products), name=names.get(item["partner_id"], ""))
+                for item in items
+            ],
+            # Theo từng mặt hàng: rẻ nhất (giá mua thật, chỉ xếp hạng) / đã giao / mua gần nhất.
+            "picks": payload.product_picks_payload(picks, names),
+        }
 
     @http.route(f"{API}/sale_orders", type="json", auth="user", methods=["POST"])
     def api_sale_orders(self, search="", **kw):
@@ -122,7 +130,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/create", type="json", auth="user", methods=["POST"])
     def api_create(self, code="", lines=None, vendor_ids=None, sale_order_id=None,
-                   deadline=None, note="", reuse=None, request_now=False, opportunity_ref="", **kw):
+                   deadline=None, note="", reuse=None, request_now=False, opportunity_ref="", ask=None, **kw):
         """Tạo phiếu hỏi giá + mỗi NCC một báo giá. Trả tin nhắn Zalo cho từng NCC.
 
         code là mã sale của phiếu. "Tất cả" không phải một mã: thu mua tạo phiếu khi đang xem
@@ -130,6 +138,8 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         reuse: {product_id: vendor_id} — giá dùng lại sale đã chọn ("Dùng giá này"); NCC đó
         được thêm vào phiếu và giá được chọn sẵn. request_now: mọi sản phẩm đều dùng lại giá →
         chỉ gửi các NCC đó và lên YCMH luôn, không hỏi giá ai.
+        ask: {vendor_id: [product_id]} — NCC nào hỏi mặt hàng nào (không phải NCC nào cũng bán mọi mã);
+        thiếu thì mỗi NCC hỏi mọi mặt hàng như trước. Mặt hàng dùng lại giá luôn được hỏi NCC đã chọn giá.
         """
         self._check()
         env = request.env
@@ -140,6 +150,12 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         vendor_ids = list(choices.values()) if request_now else list(vendor_ids or []) + list(choices.values())
         partners = env["res.partner"].browse([to_int(v) for v in vendor_ids]).exists()
         order = env["sale.order"].browse(to_int(sale_order_id)).exists()
+        vendor_products = None
+        if ask or request_now:
+            vendor_products = {} if request_now else {
+                to_int(v): {to_int(p) for p in product_ids or []} for v, product_ids in ask.items() if to_int(v)}
+            for product_id, vendor_id in choices.items():
+                vendor_products.setdefault(vendor_id, set()).add(product_id)
         inquiry = env["hlv.vendor.inquiry"]._create_with_quotes(
             partners,
             self._line_vals(lines or []),
@@ -148,6 +164,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             date_deadline=fields.Date.to_date(deadline) if deadline else False,
             note=(note or "").strip() or False,
             opportunity_ref=opportunity_ref,
+            vendor_products=vendor_products,
         )
         missing = inquiry._apply_reuse_choices(choices) if choices else inquiry.line_ids.browse()
         request_name = ""

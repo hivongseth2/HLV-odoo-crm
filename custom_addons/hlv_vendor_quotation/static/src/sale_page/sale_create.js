@@ -43,6 +43,8 @@ window.HlvQuote = window.HlvQuote || {};
     C.suggestions = [];
     C.priceHints = {};
     C.reuse = {};
+    C.picks = {};  // gợi ý NCC theo từng mặt hàng (sale_create_ask.js)
+    C.ask = {};    // ô tick NCC × mặt hàng sale đã bấm tay
     C.showAllSuggestions = false;
     HQ.$("hq-deadline").value = HQ.addDays(S.config.today, DEFAULT_DEADLINE_DAYS);
     HQ.$("hq-note").value = "";
@@ -101,6 +103,7 @@ window.HlvQuote = window.HlvQuote || {};
             '" title="Bỏ dòng">×</button></td></tr>';
         }).join("") + "</tbody></table>"
       : '<div class="hq-muted">Chưa có sản phẩm. Tìm sản phẩm để thêm, hoặc lấy hàng từ một đơn bán.</div>';
+    HQ.renderAskMatrix();
   }
 
   /* ---------------- Nhà cung cấp ---------------- */
@@ -115,13 +118,17 @@ window.HlvQuote = window.HlvQuote || {};
     }).catch(function () { /* gợi ý phụ, lỗi thì thôi */ });
     if (!productIds.length) {
       C.suggestions = [];
+      C.picks = {};
       renderSuggestions();
+      HQ.renderAskMatrix();
       return;
     }
     HQ.$("hq-suggestions").innerHTML = '<div class="hq-loading">Đang tìm NCC phù hợp…</div>';
     HQ.rpc("/api/hoi-gia-ncc/suggest", { product_ids: productIds }).then(function (res) {
       C.suggestions = res.suggestions || [];
+      C.picks = res.picks || {};
       renderSuggestions();
+      HQ.renderAskMatrix();
     }).catch(function (err) { HQ.toast(err.message); });
   }, 300);
 
@@ -136,6 +143,7 @@ window.HlvQuote = window.HlvQuote || {};
     renderChosen();
     renderSuggestions();
     renderSummary();
+    HQ.renderAskMatrix();
   }
 
   function renderChosen() {
@@ -219,6 +227,12 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.showAlert("hq-modal-alert", "Chọn mã sale của phiếu — phiếu này lên YCMH luôn, YCMH cần người yêu cầu.");
       return;
     }
+    // NCC nào hỏi mặt hàng nào. Lên YCMH luôn (dùng lại đủ giá) thì server tự lấy theo giá dùng lại.
+    var plan = allReused() ? { ask: null, error: "" } : HQ.askPlan();
+    if (plan.error) {
+      HQ.showAlert("hq-modal-alert", plan.error);
+      return;
+    }
     HQ.$("hq-submit").disabled = true;
     var reuse = {};
     C.lines.forEach(function (l) {
@@ -236,6 +250,7 @@ window.HlvQuote = window.HlvQuote || {};
       note: HQ.$("hq-note").value,
       opportunity_ref: HQ.$("hq-opportunity").value,
       sale_order_id: C.saleOrder ? C.saleOrder.id : null,
+      ask: plan.ask,
     }).then(function (res) {
       showResults(res);
       HQ.reloadAll();
@@ -360,6 +375,11 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(modal, "click", "[data-more-suggest]", function () {
       C.showAllSuggestions = true;
       renderSuggestions();
+    });
+    HQ.bindAskEvents(function (vendor) {
+      if (!isChosen(vendor.id)) {
+        toggleVendor(vendor);
+      }
     });
     HQ.on(modal, "click", "[data-unchoose-vendor]", function (el) {
       toggleVendor({ id: +el.dataset.unchooseVendor });

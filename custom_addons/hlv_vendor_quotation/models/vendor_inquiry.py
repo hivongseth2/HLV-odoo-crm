@@ -123,11 +123,13 @@ class VendorInquiry(models.Model):
 
     @api.model
     def _create_with_quotes(self, vendors, line_vals, sale_code, sale_order=None,
-                            date_deadline=False, note=False, opportunity_ref=""):
-        """Tạo phiếu + mỗi NCC một báo giá (mở ngay cho NCC), cùng danh sách sản phẩm.
+                            date_deadline=False, note=False, opportunity_ref="", vendor_products=None):
+        """Tạo phiếu + mỗi NCC một báo giá (mở ngay cho NCC).
 
         line_vals: [{product_id, name, product_qty, product_uom_id}]. vendors: res.partner,
         gộp về công ty NCC. opportunity_ref: số cơ hội CRM (tuỳ chọn).
+        vendor_products: {id công ty NCC: set(product_id)} — mỗi NCC chỉ được hỏi các mặt hàng đó (không
+        phải NCC nào cũng bán mọi mã); None → mọi NCC hỏi mọi mặt hàng. Mặt hàng không NCC nào hỏi → lỗi.
         """
         if not line_vals:
             raise UserError(_("Chọn ít nhất một sản phẩm cần hỏi giá."))
@@ -146,7 +148,20 @@ class VendorInquiry(models.Model):
                 for index, vals in enumerate(line_vals, start=1)
             ],
         })
-        inquiry._add_vendors(vendors)
+        if vendor_products is None:
+            inquiry._add_vendors(vendors)
+            return inquiry
+        wanted = {}
+        for vendor_id, product_ids in vendor_products.items():
+            wanted.setdefault(vendors.browse(vendor_id).commercial_partner_id.id, set()).update(product_ids)
+        orphans = inquiry.line_ids.filtered(
+            lambda l: not any(l.product_id.id in wanted.get(v.id, ()) for v in vendors))
+        if orphans:
+            raise UserError(_("Chưa chọn NCC nào để hỏi: %s.", ", ".join(orphans.mapped("name"))))
+        for vendor in vendors:
+            lines = inquiry.line_ids.filtered(lambda l, v=vendor: l.product_id.id in wanted.get(v.id, ()))
+            if lines:
+                inquiry._add_vendors(vendor, lines)
         return inquiry
 
     def _add_vendors(self, vendors, lines=None, date_deadline=False, note=None):

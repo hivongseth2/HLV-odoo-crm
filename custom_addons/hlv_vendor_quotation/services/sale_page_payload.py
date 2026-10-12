@@ -427,10 +427,29 @@ def crm_product_payload(crm):
     }
 
 
+def product_picks_payload(picks, names):
+    """Gợi ý theo từng mặt hàng cho hộp lập phiếu: {product_id: {cheapest, delivered, recent, vendor_ids}}.
+    Mỗi tiêu chí là {id, name} (kèm count / date) hoặc None. Không có giá — giá vốn không lộ cho sale."""
+    def vendor(partner_id, **extra):
+        return dict({"id": partner_id, "name": names.get(partner_id, "")}, **extra) if partner_id else None
+
+    return {
+        product_id: {
+            "cheapest": vendor(pick["cheapest"]),
+            "delivered": vendor(pick["delivered"], count=pick["delivered_count"]),
+            "recent": vendor(pick["recent"], date=_date_text(pick["recent_date"])),
+            "vendor_ids": sorted(pick["vendors"]),
+        }
+        for product_id, pick in picks.items()
+    }
+
+
 def suggestion_payload(item, products):
     matched = products.filtered(lambda p: p.id in item["product_ids"])
     return {
         "partner_id": item["partner_id"],
+        # Mặt hàng NCC từng bán / có bảng giá — hộp lập phiếu tick sẵn đúng các mặt hàng này cho NCC.
+        "product_ids": sorted(item["product_ids"]),
         "matched": len(item["product_ids"]),
         "total": len(products),
         "matched_products": ", ".join(matched.mapped("display_name")),
