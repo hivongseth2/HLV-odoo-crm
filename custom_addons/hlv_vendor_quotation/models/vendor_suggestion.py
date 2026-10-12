@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models
 
+from .suggestion_utils import vendor_picks
 from .vendor_quote_utils import rank_vendor_suggestions
 
 SUGGEST_LIMIT = 10
@@ -61,3 +62,34 @@ class VendorSuggestion(models.AbstractModel):
             row for row in coverage if row[0] in active_vendor_ids and row[0] not in exclude_ids
         ]
         return rank_vendor_suggestions(coverage, order_stats, limit)
+
+    @api.model
+    def product_picks(self, products):
+        """Gợi ý theo từng mặt hàng (suggestion_utils.vendor_picks): rẻ nhất / đã giao / mua gần nhất.
+
+        Giá mua thật chỉ dùng để XẾP ở đây (sudo) — kết quả chỉ có id NCC, không có giá: giá vốn
+        không lộ ra phía sale. NCC đã lưu trữ bị bỏ.
+        """
+        if not products:
+            return {}
+        lines = self.env["purchase.order.line"].sudo().search([
+            ("product_id", "in", products.ids),
+            ("state", "in", PURCHASED_STATES),
+            ("display_type", "=", False),
+        ])
+        company_currency = self.env.company.currency_id
+        rows = []
+        for line in lines:
+            day = fields.Date.to_date(line.date_order)
+            price = line.product_uom._compute_price(line.price_unit, line.product_id.uom_id)
+            if line.currency_id and line.currency_id != company_currency:
+                price = line.currency_id._convert(price, company_currency, line.company_id, day)
+            rows.append({
+                "product_id": line.product_id.id,
+                "partner_id": line.partner_id.commercial_partner_id.id,
+                "price": price,
+                "date": day,
+                "received": line.qty_received,
+            })
+        active = set(self.env["res.partner"].sudo().search([("id", "in", list({r["partner_id"] for r in rows}))]).ids)
+        return vendor_picks(row for row in rows if row["partner_id"] in active)

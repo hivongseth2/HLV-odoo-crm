@@ -487,3 +487,16 @@
 .hq-vat-box { margin: .5rem 0; padding: .6rem .75rem; border: 1px solid var(--hq-accent-line); background: var(--hq-accent-soft); border-radius: var(--hq-radius); font-size: .875rem; }
 .hq-vat-body { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
 .hq-vat-error { color: var(--hq-danger); }
+
+/* Hỏi NCC nào cho từng mặt hàng (sale_create_ask.js). */
+.hq-ask { margin: .6rem 0; }
+.hq-ask-title { margin-bottom: .35rem; }
+.hq-ask-table th.hq-ask-col { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .75rem; text-align: center; }
+.hq-ask-cell { text-align: center; vertical-align: middle; }
+.hq-ask-cell input { width: 1.05rem; height: 1.05rem; cursor: pointer; }
+.hq-ask-picks { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .25rem; }
+.hq-ask-pick { border: 1px dashed var(--hq-accent-line); background: #fff; color: var(--hq-accent-dark); border-radius: var(--hq-radius); padding: .1rem .45rem; font-size: .75rem; cursor: pointer; }
+.hq-ask-pick-on { border-style: solid; background: var(--hq-accent-soft); }
+.hq-ask-pick-why { color: var(--hq-muted); }
+.hq-ask-orphan > td:first-child { box-shadow: inset 3px 0 0 var(--hq-danger); }
+.hq-ask-warn { color: var(--hq-danger); font-size: .75rem; }
