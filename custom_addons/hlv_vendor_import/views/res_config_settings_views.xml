@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa view cài đặt của chính hlv_vendor_quotation (khối "Hỏi giá NCC" trong Cài đặt → Mua hàng). -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hlv.vendor.import</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="hlv_vendor_quotation.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='hlv_vendor_quote_setting_container']" position="inside">
+                <setting id="hlv_vendor_import_ai_model" string="AI duyệt file NCC"
+                         help="Model Claude so mã / tên trong file Excel NCC với sản phẩm bên mình. Dùng API key của Trợ lý tạo mã hàng (Cài đặt → Tồn kho).">
+                    <field name="hlv_vendor_import_ai_model"/>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>

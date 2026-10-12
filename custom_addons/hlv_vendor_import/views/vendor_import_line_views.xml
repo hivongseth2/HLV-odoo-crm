@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Màn hình xác nhận: sửa thẳng ô "Sản phẩm bên mình" là xác nhận luôn (vendor_import_line.write). -->
+    <record id="view_vendor_import_line_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.import.line.list</field>
+        <field name="model">hlv.vendor.import.line</field>
+        <field name="arch" type="xml">
+            <list editable="bottom" create="0" delete="0"
+                  decoration-success="decision == 'confirmed'"
+                  decoration-muted="decision == 'no_product'">
+                <field name="row_no" readonly="1" optional="hide"/>
+                <field name="vendor_code" readonly="1"/>
+                <field name="vendor_name" readonly="1"/>
+                <field name="name_alt" readonly="1" optional="hide"/>
+                <field name="uom_name" readonly="1" optional="show"/>
+                <field name="stock_display" readonly="1"/>
+                <field name="ai_verdict" readonly="1" widget="badge"
+                       decoration-success="ai_verdict == 'match'"
+                       decoration-warning="ai_verdict == 'probable'"
+                       decoration-muted="ai_verdict == 'none'"/>
+                <field name="ai_reason" readonly="1"/>
+                <field name="candidate_ids" readonly="1" widget="many2many_tags" optional="hide"/>
+                <field name="product_id" options="{'no_create': True}"/>
+                <field name="decision" readonly="1" widget="badge"
+                       decoration-success="decision == 'confirmed'"
+                       decoration-info="decision == 'pending'"/>
+                <field name="match_source" readonly="1" optional="hide"/>
+                <field name="ai_state" column_invisible="1"/>
+                <field name="ai_product_id" column_invisible="1"/>
+                <button name="action_confirm" type="object" string="Đúng" icon="fa-check"
+                        invisible="decision != 'pending' or (not product_id and not ai_product_id)"/>
+                <button name="action_no_product" type="object" string="Không có" icon="fa-ban"
+                        invisible="decision != 'pending'"/>
+                <button name="action_reset" type="object" string="Xét lại" icon="fa-undo"
+                        invisible="decision == 'pending'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_import_line_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.import.line.search</field>
+        <field name="model">hlv.vendor.import.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="product_id"/>
+                <filter name="todo" string="Chưa xác nhận" domain="[('decision', '=', 'pending')]"/>
+                <separator/>
+                <filter name="match" string="AI: khớp" domain="[('ai_verdict', '=', 'match')]"/>
+                <filter name="probable" string="AI: có thể" domain="[('ai_verdict', '=', 'probable')]"/>
+                <filter name="none" string="Không có sản phẩm" domain="[('ai_verdict', '=', 'none')]"/>
+                <filter name="ai_pending" string="Chờ AI" domain="[('ai_state', '=', 'pending')]"/>
+                <separator/>
+                <filter name="in_stock" string="Còn tồn" domain="[('stock_total', '>', 0)]"/>
+                <group>
+                    <filter name="group_verdict" string="AI kết luận" context="{'group_by': 'ai_verdict'}"/>
+                    <filter name="group_decision" string="Xác nhận" context="{'group_by': 'decision'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_import_line" model="ir.actions.act_window">
+        <field name="name">Dòng file NCC</field>
+        <field name="res_model">hlv.vendor.import.line</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_vendor_import_line_list"/>
+        <field name="search_view_id" ref="view_vendor_import_line_search"/>
+    </record>
+</odoo>

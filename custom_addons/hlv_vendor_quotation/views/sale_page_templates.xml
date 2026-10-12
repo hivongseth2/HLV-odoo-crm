@@ -276,6 +276,7 @@
                 <!-- Thứ tự quan trọng: utils → ui → feature → app. -->
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_utils.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_ui.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_vendor_vat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiries.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_close.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_add_vendor.js?v=#{asset_version}"></script>

@@ -145,7 +145,8 @@ Claude Code đang dùng).
 1. Tạo key ở console.anthropic.com > API keys.
 2. Odoo: **Cài đặt > Tồn kho > Trợ lý tạo mã hàng (Claude)** → chọn **Claude API**, dán
    key, chọn model, bấm **Kiểm tra kết nối** (không tốn token), rồi **Lưu**.
-3. Xong. Sale gửi tin là cron "Trợ lý tạo mã hàng: trả lời bằng Claude API" chạy ngay.
+3. Xong. Sale gửi tin là Odoo xử lý ngay trong luồng nền (không đợi cron). Cron "Trợ lý
+   tạo mã hàng: trả lời bằng Claude API" 1 phút một lần chỉ để vớt tin sót.
 
 - Odoo.sh cần thư viện `anthropic` — đã khai trong `requirements.txt` ở gốc repo.
 - Model mặc định **Haiku 5.5** (nhanh, rẻ nhất). Thấy tên / nhóm hàng đặt chưa chuẩn thì

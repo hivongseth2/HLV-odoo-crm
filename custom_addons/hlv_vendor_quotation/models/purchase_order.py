@@ -8,6 +8,7 @@ from odoo.exceptions import UserError
 from ..services.chat_bus import notify_order_status
 from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
+from .delivery_utils import EVENT_SOURCES, event_actor
 from .vendor_quote_utils import (
     DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin, parse_states,
 )
@@ -59,6 +60,11 @@ class PurchaseOrder(models.Model):
         help="Nhà cung cấp tự cập nhật trên trang báo giá của họ.",
     )
     hlv_vendor_status_date = fields.Datetime(string="NCC báo lúc", copy=False, readonly=True)
+    hlv_vendor_event_source = fields.Selection(
+        EVENT_SOURCES, string="Ai báo", copy=False, readonly=True,
+        help="Ai gây ra tiến độ / tin giao hàng mới nhất: NCC, bên mua (thu mua duyệt yêu cầu) hay hệ thống "
+             "(kho nhận hàng, trễ hẹn) — chuông / popup / Zalo của sale ghi đúng người báo.",
+    )
     # NCC báo đã gửi hàng: cách gửi, hãng CPN / tên chành, mã vận đơn / số xe / người giao.
     hlv_ship_method = fields.Selection(SHIP_METHODS, string="NCC gửi hàng bằng", copy=False, readonly=True)
     hlv_ship_carrier = fields.Char(string="Hãng CPN / chành", copy=False, readonly=True)
@@ -212,6 +218,7 @@ class PurchaseOrder(models.Model):
         if not self._hlv_advance_status("shipped", vendor_partner, body):
             # Đã báo gửi từ trước: chỉ cập nhật thông tin — vẫn báo sale biết.
             post_internal(self, body, vendor_partner)
+            self.hlv_vendor_event_source = "vendor"
             notify_order_status(self)
         return True
 
@@ -223,17 +230,25 @@ class PurchaseOrder(models.Model):
         if self.state not in CONFIRMED_STATES:
             raise UserError(_("Đơn %s chưa xác nhận — bên mua xác nhận đơn rồi mới đóng gói / gửi hàng.", self.name))
 
-    def _hlv_advance_status(self, status, author, body, notify_staff=True):
+    def _hlv_advance_status(self, status, author, body, notify_staff=True, source="vendor"):
         """Đưa tiến độ tới status (không lùi) + ghi chú nội bộ. Trả False nếu đơn đã ở / qua status.
-        notify_staff=False: chỉ ghi chatter, không email follower nội bộ (việc kho tự làm)."""
+        notify_staff=False: chỉ ghi chatter, không email follower nội bộ (việc kho tự làm).
+        source: ai gây ra (EVENT_SOURCES) — "system" khi kho nhận hàng tự chuyển "Đã giao"."""
         current = VENDOR_STATUS_ORDER.index(self.hlv_vendor_status) if self.hlv_vendor_status else -1
         if VENDOR_STATUS_ORDER.index(status) <= current:
             return False
-        self.write({"hlv_vendor_status": status, "hlv_vendor_status_date": fields.Datetime.now()})
+        self.write({"hlv_vendor_status": status, "hlv_vendor_status_date": fields.Datetime.now(),
+                    "hlv_vendor_event_source": source})
         # Ghi chú nội bộ: NCC là follower của đơn mua của họ — đăng "comment" sẽ email ra ngoài.
         (post_internal if notify_staff else log_internal)(self, body, author)
         notify_order_status(self)  # trang /hoi-gia-ncc: popup + chuông cho sale
         return True
+
+    def _hlv_event_actor(self):
+        """Tên người báo tiến độ / tin giao hàng mới nhất (delivery_utils.event_actor) cho chuông / popup / Zalo."""
+        self.ensure_one()
+        return event_actor(self.hlv_vendor_event_source, self.partner_id.commercial_partner_id.display_name,
+                           (self.company_id or self.env.company).name)
 
     # ------------------------------------------------------------------
     # Báo NCC: tin trong khung trao đổi của đơn (trang NCC có chuông, tiếng, số chưa đọc sẵn cho tin
@@ -275,6 +290,7 @@ class PurchaseOrder(models.Model):
             if order._hlv_receipts_done() and order._hlv_advance_status(
                 "delivered", self.env.user.partner_id, Markup(_("Kho đã nhận đủ hàng — đơn tự chuyển <b>Đã giao</b>.")),
                 notify_staff=False,  # kho vừa tự bấm nhận — email cả follower đơn mua chỉ là thư rác
+                source="system",
             ):
                 order._hlv_notify_vendor(lambda o: _("Kho đã nhận đủ hàng đơn %s. Cảm ơn quý công ty!", o.name))
 

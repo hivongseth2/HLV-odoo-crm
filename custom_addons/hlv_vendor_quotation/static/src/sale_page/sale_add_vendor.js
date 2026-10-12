@@ -175,16 +175,14 @@ window.HlvQuote = window.HlvQuote || {};
     if (!HQ.$("hq-add-search")) {
       return;
     }
-    HQ.bindPicker("hq-add-search", "hq-add-results", function (term) {
-      return HQ.rpc("/api/hoi-gia-ncc/partners", { search: term }).then(function (r) { return r.partners; });
-    }, function (p) {
-      return esc(p.name) + (p.vat ? ' <span class="hq-muted">· MST ' + esc(p.vat) + "</span>" : "");
-    }, function (partner) {
-      if (askedIds(HQ.addVendorDetail).indexOf(partner.id) >= 0) {
-        HQ.toast(partner.name + " đã được hỏi trong phiếu này");
-      } else if (!isChosen(partner.id)) {
-        toggleVendor(partner);
-      }
+    HQ.bindPicker("hq-add-search", "hq-add-results", HQ.fetchVendors, HQ.vendorItemHtml, function (item) {
+      return HQ.pickVendorItem(item, "hq-add-search", function (partner) {
+        if (askedIds(HQ.addVendorDetail).indexOf(partner.id) >= 0) {
+          HQ.toast(partner.name + " đã được hỏi trong phiếu này");
+        } else if (!isChosen(partner.id)) {
+          toggleVendor(partner);
+        }
+      });
     });
   };
 

@@ -74,6 +74,8 @@ def notify_order_status(order):
         "order_id": order.id,
         "name": order.name,
         "vendor": order.partner_id.commercial_partner_id.display_name,
+        # Người báo: NCC / bên mua / "Hệ thống" (kho nhận hàng, trễ hẹn) — popup ghi đúng người, không mặc định là NCC.
+        "actor": order._hlv_event_actor(),
         "status": PROGRESS_LABELS.get(order._hlv_vendor_progress(), ""),
         "ship": order._hlv_ship_text(),
         # Giao một phần / NCC đổi ngày giao / trễ hẹn ("" = tiến độ bình thường).
@@ -84,7 +86,7 @@ def notify_order_status(order):
     bus = order.env["bus.bus"].sudo()
     for channel in sale_channels(order.env, inquiries):
         bus._sendone(channel, ORDER_TYPE, message)
-    zalo_order(order, inquiries, message["status"], message["event"], message["ship"])
+    zalo_order(order, inquiries, message["status"], message["event"], message["ship"], message["actor"])
 
 
 def notify_chat(record, author_name, from_vendor, zalo_text=""):

@@ -61,6 +61,8 @@ def purchase_order_payload(order):
         "vendor_status": _vendor_progress_label(order),
         # Giao một phần / NCC đổi ngày giao / trễ hẹn.
         "vendor_event": order.hlv_vendor_event or "",
+        # Ai báo tin trên (tên NCC / bên mua / "Hệ thống") — tin hệ thống tự sinh không mặc định là NCC.
+        "vendor_event_actor": order._hlv_event_actor() if order.hlv_vendor_event else "",
         # NCC gửi CPN / chành: hãng / chành + mã vận đơn / số xe — sale theo hàng giúp khách.
         "vendor_ship": order._hlv_ship_text(),
     }

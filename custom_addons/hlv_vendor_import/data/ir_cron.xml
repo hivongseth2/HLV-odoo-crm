@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Bình thường AI chạy ngay trong luồng nền khi đọc file (hlv.vendor.import.ai.queue). Cron chỉ vớt
+         lần nhập còn chờ / bị bỏ dở (worker khởi động lại, luồng chết); không có gì thì chỉ là một câu search. -->
+    <record id="ir_cron_vendor_import_ai" model="ir.cron">
+        <field name="name">Nhập file NCC: AI duyệt các dòng còn chờ</field>
+        <field name="model_id" ref="model_hlv_vendor_import_ai"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_review()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

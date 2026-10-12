@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_stock_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.stock.list</field>
+        <field name="model">hlv.vendor.stock</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" decoration-muted="qty &lt;= 0">
+                <field name="partner_id"/>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="product_id"/>
+                <field name="warehouse"/>
+                <field name="qty" sum="Tổng"/>
+                <field name="uom_name"/>
+                <field name="date"/>
+                <field name="import_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_stock_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.stock.search</field>
+        <field name="model">hlv.vendor.stock</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id"/>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="partner_id"/>
+                <filter name="in_stock" string="Còn hàng" domain="[('qty', '>', 0)]"/>
+                <filter name="unmatched" string="Chưa khớp sản phẩm" domain="[('product_id', '=', False)]"/>
+                <group>
+                    <filter name="group_partner" string="Nhà cung cấp" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_product" string="Sản phẩm" context="{'group_by': 'product_id'}"/>
+                    <filter name="group_warehouse" string="Kho NCC" context="{'group_by': 'warehouse'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_stock" model="ir.actions.act_window">
+        <field name="name">Tồn kho NCC</field>
+        <field name="res_model">hlv.vendor.stock</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_vendor_stock_search"/>
+        <field name="context">{'search_default_in_stock': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có tồn kho NCC</p>
+            <p>Tồn kho NCC lấy từ file NCC gửi, sau khi áp dụng ở "Nhập file NCC".</p>
+        </field>
+    </record>
+</odoo>

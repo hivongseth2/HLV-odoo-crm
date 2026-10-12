@@ -8,6 +8,7 @@ from odoo.osv import expression
 
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
+from ..services import vendor_from_vat
 from ..services.price_history import quoted_prices
 from ..services.product_paste import match_pasted
 from ..services.sale_code import SALE_CODE_FIELD, has_sale_code
@@ -57,6 +58,18 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         )
         # Kèm MST: danh bạ có nhiều công ty trùng tên, chỉ nhìn tên thì không biết chọn ai.
         return {"partners": [{"id": p.id, "name": p.display_name, "vat": p.vat or ""} for p in partners]}
+
+    @http.route(f"{API}/vat_lookup", type="json", auth="user", methods=["POST"])
+    def api_vat_lookup(self, vat="", **kw):
+        """Tra MST cho ô tìm NCC: danh bạ đã có thì báo liên hệ đó, chưa có thì thông tin VietQR."""
+        self._check()
+        return vendor_from_vat.lookup(request.env, vat)
+
+    @http.route(f"{API}/vat_create", type="json", auth="user", methods=["POST"])
+    def api_vat_create(self, vat="", **kw):
+        """Tạo NCC từ MST (sale không có quyền tạo liên hệ — service tạo bằng sudo sau khi kiểm)."""
+        self._check()
+        return vendor_from_vat.create(request.env, vat)
 
     @http.route(f"{API}/suggest", type="json", auth="user", methods=["POST"])
     def api_suggest(self, product_ids=None, **kw):

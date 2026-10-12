@@ -568,7 +568,8 @@ window.HlvQuote = window.HlvQuote || {};
         return '<tr><td><button type="button" class="hq-link-btn hq-doc-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
           HQ.docChip(o.name) + "</button>" + (o.origin ? '<div class="hq-muted">Mã ĐH ' + esc(o.origin) + "</div>"
             : '<div class="hq-muted">Chưa có mã đơn hàng</div>') + "</td><td>" + esc(o.vendor) + "</td>" +
-          "<td>" + (o.vendor_event ? '<div class="hq-partial">' + esc(o.vendor_event) + "</div>" : "") +
+          "<td>" + (o.vendor_event ? '<div class="hq-partial">' + (o.vendor_event_actor && o.vendor_event_actor !== o.vendor
+            ? "<b>" + esc(o.vendor_event_actor) + ":</b> " : "") + esc(o.vendor_event) + "</div>" : "") +
           (o.vendor_ship ? '<div class="hq-muted hq-small" title="NCC đã gửi">' + esc(o.vendor_ship) + "</div>" : "") +
           (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
             : '<span class="hq-muted">NCC chưa báo tiến độ</span>') + "</td>" +

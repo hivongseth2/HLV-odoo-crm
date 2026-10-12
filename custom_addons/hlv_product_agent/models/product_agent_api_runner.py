@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
 """Chế độ API key: chính Odoo gọi Claude API, không cần máy văn phòng nào bật.
 
-Cron cầm tin từ CÙNG hàng chờ với agent poll (claim_jobs, SKIP LOCKED), mỗi cuộc chạy
-trong một luồng riêng với cursor riêng để vài sale chat cùng lúc không phải xếp hàng
-nhau. Tool MISA chạy y như khi đi qua /product_agent/agent/tool: cùng handler, cùng chốt
-"chỉ tạo đúng thứ đã đề xuất", cùng khoá tạo mã, cùng nhật ký.
+Sale gửi tin là Odoo mở NGAY một luồng nền (sau khi request /chat/send commit) để cầm tin
+và chạy — không đợi cron: cron của Odoo chạy lần lượt từng job trong một luồng, đứng sau
+cron đồng bộ MISA / mail là chờ cả mấy phút. Cron 1 phút chỉ để vớt tin sót (worker khởi
+động lại, luồng chết) và dọn lượt treo.
 
-Không gọi Claude ngay trong request /chat/send: một lượt có thể mất cả phút (tra MISA,
-đọc web), giữ worker HTTP lâu như vậy là treo trang cho người khác.
+Cầm tin từ CÙNG hàng chờ với agent poll (claim_jobs, SKIP LOCKED), có khoá chung giới hạn
+số cuộc chạy cùng lúc trên mọi worker. Mỗi luồng một cursor riêng. Tool MISA chạy y như khi
+đi qua /product_agent/agent/tool: cùng handler, cùng chốt "chỉ tạo đúng thứ đã đề xuất",
+cùng khoá tạo mã, cùng nhật ký.
+
+Không chạy Claude trong chính request /chat/send: một lượt có thể mất cả phút, trang của
+sale phải trả về ngay.
 """
 import json
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from odoo import SUPERUSER_ID, api, models
 from odoo.modules.registry import Registry
@@ -23,6 +27,7 @@ from ..services.claude_api_payload import (
     build_system, build_tools, context_key, history_content, history_too_long,
     load_history, reply_text, request_extras, tool_result, tool_uses, user_content,
 )
+from ..services.claude_client import api_error_message, connection_cause, load_anthropic, make_client
 
 _logger = logging.getLogger(__name__)
 
@@ -38,10 +43,11 @@ CRON_XMLID = 'hlv_product_agent.ir_cron_product_agent_api'
 DEFAULT_PARALLEL = 2
 MAX_PARALLEL = 4
 # Cron chỉ nhận việc mới trong khoảng này rồi thôi (vẫn chờ các lượt đang chạy xong):
-# không biết giới hạn thời gian cron của máy chủ, nên giữ mỗi lần chạy ngắn và tự hẹn
-# lần sau nếu còn tin chờ.
+# không biết giới hạn thời gian cron của máy chủ, nên giữ mỗi lần chạy ngắn.
 CLAIM_WINDOW_SECONDS = 90
-IDLE_POLL_SECONDS = 2
+# Khoá chung khi đếm + cầm việc: nhiều worker HTTP / cron cùng cầm thì vẫn không vượt quá
+# số cuộc song song đã cấu hình.
+CLAIM_LOCK_KEY = 'hlv_product_agent.api_claim'
 # Một lượt: tối đa ngần ấy lần gọi API và ngần ấy giây — dưới CLAIM_TIMEOUT_MINUTES
 # của hội thoại để lượt không bị thả oan khi đang chạy.
 MAX_STEPS = 15
@@ -60,30 +66,10 @@ class _StaleHistory(Exception):
 
 
 def _anthropic():
-    # Import muộn: chế độ máy văn phòng không cần thư viện này, thiếu nó không được làm
-    # hỏng cả module.
-    try:
-        import anthropic
-    except ImportError:
+    anthropic = load_anthropic()
+    if not anthropic:
         raise TurnFailed("Odoo chưa cài thư viện anthropic (thêm vào requirements.txt).")
     return anthropic
-
-
-def _client(anthropic, api_key, **options):
-    """Client Claude API chỉ nhận câu trả lời nén gzip.
-
-    httpx2 thấy có module brotli là xin nén brotli, rồi gọi API của brotli >= 1.2. Máy
-    chủ Odoo có sẵn brotli cũ: giải nén lỗi TypeError, SDK báo thành "không kết nối được"
-    và thử lại mãi vẫn hỏng. Xin gzip thì không phụ thuộc bản brotli nào.
-    """
-    return anthropic.Anthropic(
-        api_key=api_key, default_headers={'Accept-Encoding': 'gzip, deflate'}, **options)
-
-
-def _connection_cause(error):
-    """Lỗi gốc bên dưới APIConnectionError, để biết là mạng hay lỗi khác bị gói lại."""
-    cause = error.__cause__ or error.__context__
-    return ("%s: %s" % (type(cause).__name__, cause))[:150] if cause else str(error)
 
 
 class HlvProductAgentApiRunner(models.AbstractModel):
@@ -123,18 +109,21 @@ class HlvProductAgentApiRunner(models.AbstractModel):
 
     @api.model
     def wake(self):
-        """Gọi cron chạy ngay (sale vừa gửi tin). Không ở chế độ API thì thôi."""
+        """Sale vừa gửi tin: chạy luôn trong luồng nền, sau khi request commit.
+
+        Phải đợi commit: luồng mở cursor riêng, trước commit nó chưa thấy tin mới. Không ở
+        chế độ API thì thôi.
+        """
         if not self.is_ready():
             return
-        cron = self.env.ref(CRON_XMLID, raise_if_not_found=False)
-        if cron:
-            cron.sudo()._trigger()
+        config, dbname = self.config(), self.env.cr.dbname
+        self.env.cr.postcommit.add(lambda: _start_drain_thread(dbname, config))
 
     @api.model
     def check_connection(self, api_key, model):
         """Thử key + model bằng Models API (không tốn token). Trả chuỗi báo kết quả."""
         anthropic = _anthropic()
-        client = _client(anthropic, api_key, timeout=30, max_retries=1)
+        client = make_client(anthropic, api_key, timeout=30, max_retries=1)
         try:
             info = client.models.retrieve(model)
         except anthropic.AuthenticationError:
@@ -145,7 +134,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             raise TurnFailed("Tài khoản chưa dùng được model %s." % model)
         except anthropic.APIConnectionError as error:
             _logger.warning("PRODUCT_AGENT kiểm tra Claude API lỗi kết nối", exc_info=True)
-            raise TurnFailed("Odoo không kết nối được tới Claude API (%s)." % _connection_cause(error))
+            raise TurnFailed("Odoo không kết nối được tới Claude API (%s)." % connection_cause(error))
         except anthropic.APIStatusError as error:
             raise TurnFailed("Claude API lỗi %s." % error.status_code)
         return "Kết nối được, model %s." % (info.display_name or model)
@@ -155,45 +144,62 @@ class HlvProductAgentApiRunner(models.AbstractModel):
     # =========================================================================
     @api.model
     def _cron_run_queue(self):
-        """Cầm tin chờ và chạy, song song tối đa `parallel` cuộc. Commit sau mỗi lần cầm."""
+        """Vớt tin sót: mở đủ luồng cho số tin đang chờ (trong giới hạn song song) và đợi xong."""
         config = self.config()
-        Session = self.env['hlv.product.chat.session'].sudo()
         if config['mode'] != MODE_API:
             return
-        Session.release_stale()
+        self.env['hlv.product.chat.session'].sudo().release_stale()
         self.env.cr.commit()
         if not config['api_key']:
             _logger.warning("PRODUCT_AGENT chế độ API nhưng chưa khai API key")
             return
-
-        dbname = self.env.cr.dbname
         deadline = time.monotonic() + CLAIM_WINDOW_SECONDS
-        running = []
-        with ThreadPoolExecutor(max_workers=config['parallel'],
-                                thread_name_prefix='hlv_product_agent_api') as pool:
-            while True:
-                running = [future for future in running if not future.done()]
-                free = config['parallel'] - len(running)
-                if free > 0 and time.monotonic() < deadline:
-                    jobs = Session.claim_jobs(free)
-                    # Commit ngay: luồng xử lý mở cursor riêng, phải thấy được lượt đã cầm.
-                    self.env.cr.commit()
-                    running += [
-                        pool.submit(_run_job_in_thread, dbname, job['session_id'], job['claim_token'], config)
-                        for job in jobs
-                    ]
-                if not running:
-                    break
-                time.sleep(IDLE_POLL_SECONDS)
-
-        if self._has_waiting():
-            self.env.ref(CRON_XMLID)._trigger()
+        threads = [
+            _start_drain_thread(self.env.cr.dbname, config, deadline)
+            for _i in range(min(self._waiting_count(), config['parallel']))
+        ]
+        for thread in threads:
+            thread.join()
 
     @api.model
-    def _has_waiting(self):
-        return bool(self.env['hlv.product.chat.message'].sudo().search_count([
-            ('to_send', '=', True), ('session_id.state', '=', 'idle'),
-        ], limit=1))
+    def _waiting_count(self):
+        """Số cuộc đang có tin chờ (không tính cuộc đang xử lý)."""
+        self.env.cr.execute("""
+            SELECT COUNT(DISTINCT m.session_id)
+              FROM hlv_product_chat_message m
+              JOIN hlv_product_chat_session s ON s.id = m.session_id
+             WHERE m.to_send AND s.state = 'idle'
+        """)
+        return self.env.cr.fetchone()[0] or 0
+
+    @api.model
+    def _claim_one(self, config):
+        """Cầm MỘT cuộc nếu còn chỗ trong giới hạn song song. Commit. Trả job hoặc None.
+
+        Đếm và cầm dưới cùng một khoá advisory: hai worker cùng thấy "còn 1 chỗ" thì một
+        bên phải đợi bên kia cầm xong, đếm lại mới cầm.
+        """
+        cr = self.env.cr
+        cr.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [CLAIM_LOCK_KEY])
+        cr.execute("SELECT COUNT(*) FROM hlv_product_chat_session WHERE state = 'processing'")
+        busy = cr.fetchone()[0] or 0
+        jobs = self.env['hlv.product.chat.session'].sudo().claim_jobs(1) if busy < config['parallel'] else []
+        cr.commit()
+        return jobs[0] if jobs else None
+
+    @api.model
+    def _drain(self, config, deadline=None):
+        """Cầm và chạy lần lượt tới khi hết tin chờ, hết chỗ song song, hoặc quá deadline.
+
+        Hết chỗ thì thôi cũng không sót: các luồng đang chạy xong lượt của mình sẽ quay lại
+        cầm tiếp.
+        """
+        while deadline is None or time.monotonic() < deadline:
+            self.env.invalidate_all()
+            job = self._claim_one(config)
+            if not job:
+                return
+            self._run_turn(job['session_id'], job['claim_token'], config)
 
     # =========================================================================
     # Một lượt
@@ -246,7 +252,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
     def _run_steps(self, session, claim_token, config, prompt_text, history, turn):
         """Vòng gọi API + chạy tool cho tới khi Claude trả lời xong. Trả ``(reply, messages)``."""
         anthropic = _anthropic()
-        client = _client(anthropic, config['api_key'], timeout=REQUEST_TIMEOUT_SECONDS)
+        client = make_client(anthropic, config['api_key'], timeout=REQUEST_TIMEOUT_SECONDS)
         model = config['model']
         text = turn['prompt'] if history else turn['prompt_cold']
         messages = history + [{'role': 'user', 'content': user_content(text, turn['images'])}]
@@ -291,18 +297,12 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             if stale_ok:
                 raise _StaleHistory() from error
             _logger.warning("PRODUCT_AGENT API 400: %s", error)
-            raise TurnFailed("Claude API không nhận yêu cầu (%s)" % str(error)[:200])
-        except anthropic.AuthenticationError:
-            raise TurnFailed("API key Claude sai hoặc đã bị thu hồi")
-        except anthropic.PermissionDeniedError:
-            raise TurnFailed("API key Claude không có quyền dùng model này")
-        except anthropic.RateLimitError:
-            raise TurnFailed("Claude API đang hết hạn mức, thử lại sau ít phút")
+            raise TurnFailed(api_error_message(anthropic, error))
         except anthropic.APIConnectionError as error:
             _logger.warning("PRODUCT_AGENT Claude API lỗi kết nối", exc_info=True)
-            raise TurnFailed("không kết nối được Claude API (%s)" % _connection_cause(error))
+            raise TurnFailed(api_error_message(anthropic, error))
         except anthropic.APIStatusError as error:
-            raise TurnFailed("Claude API lỗi %s, thử lại sau" % error.status_code)
+            raise TurnFailed(api_error_message(anthropic, error))
 
     def _call_tool(self, claim_token, call):
         """Chạy một tool MISA và commit ngay, như mỗi lần agent gọi /product_agent/agent/tool.
@@ -338,12 +338,24 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             'api_last_prompt_tokens': (usage.input_tokens or 0) + cache_read + cache_write,
         })
 
-def _run_job_in_thread(dbname, session_id, claim_token, config):
-    """Một lượt trong luồng riêng, cursor riêng (cursor của cron không dùng chung luồng)."""
+def _start_drain_thread(dbname, config, deadline=None):
+    """Mở một luồng chạy hàng chờ. Trả thread (đã start).
+
+    Không daemon: worker Odoo tự tắt (đủ số request, quá RAM mềm) sẽ đợi lượt đang dở xong
+    thay vì cắt ngang giữa chừng một lệnh tạo mã.
+    """
+    thread = threading.Thread(target=_drain_in_thread, args=(dbname, config, deadline),
+                              name='hlv_product_agent_api', daemon=False)
+    thread.start()
+    return thread
+
+
+def _drain_in_thread(dbname, config, deadline):
+    """Thân luồng: cursor riêng (cursor của request / cron không dùng chung luồng được)."""
     threading.current_thread().dbname = dbname
     try:
         with Registry(dbname).cursor() as cr:
             env = api.Environment(cr, SUPERUSER_ID, {})
-            env['hlv.product.agent.api.runner']._run_turn(session_id, claim_token, config)
-    except Exception:  # noqa: BLE001 — lỗi một lượt không được giết cả cron
-        _logger.exception("PRODUCT_AGENT API luồng lượt %s chết", claim_token)
+            env['hlv.product.agent.api.runner']._drain(config, deadline)
+    except Exception:  # noqa: BLE001 — lỗi một luồng không được giết worker
+        _logger.exception("PRODUCT_AGENT API luồng xử lý chết")

@@ -80,11 +80,11 @@ class PurchaseOrderDelivery(models.Model):
         stage = super()._hlv_vendor_stage()
         return "waiting" if stage == "partial" else stage
 
-    def _hlv_advance_status(self, status, author, body, notify_staff=True):
+    def _hlv_advance_status(self, status, author, body, notify_staff=True, source="vendor"):
         """NCC báo tiến độ bình thường → tin giao hàng cũ (giao một phần / đổi ngày / trễ hẹn) hết thời sự."""
         if self.hlv_vendor_event:
             self.hlv_vendor_event = False
-        return super()._hlv_advance_status(status, author, body, notify_staff=notify_staff)
+        return super()._hlv_advance_status(status, author, body, notify_staff=notify_staff, source=source)
 
     # ------------------------------------------------------------------ kho nhận một phần → đợt mới
     def _hlv_mark_delivered_by_receipt(self):
@@ -103,7 +103,7 @@ class PurchaseOrderDelivery(models.Model):
         event = _("Kho đã nhận một phần — còn chờ: %s", pending)
         self.write({
             "hlv_vendor_status": False, "hlv_ship_method": False, "hlv_ship_carrier": False, "hlv_ship_ref": False,
-            "hlv_vendor_status_date": fields.Datetime.now(), "hlv_vendor_event": event,
+            "hlv_vendor_status_date": fields.Datetime.now(), "hlv_vendor_event": event, "hlv_vendor_event_source": "system",
         })
         body = Markup(_("Kho đã nhận một phần%(ship)s. Còn chờ giao: <b>%(pending)s</b> — tiến độ NCC về chờ đóng gói cho đợt sau.")) % {
             "ship": Markup(_(" (đợt vừa nhận: %s)")) % done_ship if done_ship else "", "pending": pending,
@@ -145,6 +145,7 @@ class PurchaseOrderDelivery(models.Model):
                   from_vendor=True, notify=False)
         order.write({
             "hlv_vendor_status_date": fields.Datetime.now(),
+            "hlv_vendor_event_source": "vendor",
             "hlv_vendor_event": _("NCC đổi ngày giao: %s", "; ".join(
                 f"{line.product_id.display_name} → {new.strftime(DATE_FMT)}" for line, _old, new in changes)),
         })
@@ -203,7 +204,8 @@ class PurchaseOrderDelivery(models.Model):
         self.ensure_one()
         text = self._hlv_pending_text(lines)
         lines.write({"hlv_late_notified": today})
-        self.write({"hlv_vendor_status_date": fields.Datetime.now(), "hlv_vendor_event": _("Trễ hẹn giao: %s", text)})
+        self.write({"hlv_vendor_status_date": fields.Datetime.now(), "hlv_vendor_event": _("Trễ hẹn giao: %s", text),
+                    "hlv_vendor_event_source": "system"})
         self._hlv_buyer_activity(_("Trễ hẹn giao"), Markup(_("<b>Trễ hẹn giao</b>: %s — kho chưa nhận.")) % text)
         notify_order_status(self)
         self._hlv_notify_vendor(lambda o: _(
