@@ -156,6 +156,10 @@ def inquiry_detail(inquiry):
         "can_request": inquiry.state not in ("cancel", "closed") and bool(pending),
         "can_cancel": inquiry.state == "open",
         "can_set_opportunity": inquiry.state != "cancel",
+        "can_set_sale_code": inquiry.state != "cancel",
+        # Mã đơn hàng của khách: nhập được ngay khi có YCMH, chưa cần đơn mua (models/vendor_inquiry.py).
+        "order_ref": inquiry.hlv_order_ref(),
+        "can_set_order_ref": inquiry.state != "cancel" and any(inquiry._hlv_order_ref_targets()),
         # Hỏi thêm NCC (NCC đã hỏi báo hết hàng…) — cả khi đã lên YCMH, còn sản phẩm chưa lên đơn mua.
         "can_add_vendor": inquiry.state in ("open", "requested") and not all(inquiry.line_ids.mapped("locked")),
         # "Không mua": đóng phiếu, giá NCC vẫn giữ cho phiếu sau dùng lại.

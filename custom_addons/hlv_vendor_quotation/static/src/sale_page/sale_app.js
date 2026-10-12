@@ -180,6 +180,7 @@ window.HlvQuote = window.HlvQuote || {};
     bindEvents(app);
     HQ.bindCreateEvents();
     HQ.bindCompareEvents();
+    HQ.bindInquiryRefEvents();
     HQ.bindChatEvents();
     HQ.bindOrderViewEvents();
     HQ.bindOriginEvents();

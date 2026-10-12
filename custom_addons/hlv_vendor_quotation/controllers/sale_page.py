@@ -170,12 +170,15 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
     def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None,
-                           settle_line_ids=None, separate_backorder=False, **kw):
+                           settle_line_ids=None, separate_backorder=False, requester_code="", **kw):
         """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
         quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt; settle_line_ids: dòng phiếu sale
-        chốt "khách chỉ mua chừng này" (hết thiếu)."""
+        chốt "khách chỉ mua chừng này" (hết thiếu); requester_code: mã sale làm người yêu cầu (bắt buộc —
+        ghi luôn làm mã sale của phiếu)."""
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
+        if requester_code:
+            inquiry.action_set_sale_code(self._concrete_sale_code(requester_code))
         order = request.env["sale.order"].browse(to_int(sale_order_id)).exists()
         qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
         settle = [to_int(line_id) for line_id in settle_line_ids or []]
@@ -216,6 +219,28 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         inquiry = self._get_inquiry(inquiry_id, self._check(code))
         inquiry.action_set_opportunity(opportunity_ref)
         return payload.inquiry_detail(inquiry)
+
+    @staticmethod
+    def _concrete_sale_code(value):
+        """Mã sale cụ thể đã kiểm quyền; rỗng / "Tất cả mã sale" → UserError."""
+        chosen = sale_scope.validate_sale_code(request.env, value) if value else False
+        if not chosen:
+            raise UserError("Chọn một mã sale cụ thể.")
+        return chosen
+
+    @http.route(f"{API}/set_sale_code", type="json", auth="user", methods=["POST"])
+    def api_set_sale_code(self, code="", inquiry_id=None, sale_code="", **kw):
+        """Đổi mã sale của phiếu — kéo theo "Người yêu cầu" trên YCMH của phiếu."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        inquiry.action_set_sale_code(self._concrete_sale_code(sale_code))
+        return payload.inquiry_detail(inquiry)
+
+    @http.route(f"{API}/set_order_ref", type="json", auth="user", methods=["POST"])
+    def api_set_order_ref(self, code="", inquiry_id=None, origin="", **kw):
+        """Mã đơn hàng của khách cho cả phiếu: Tài liệu gốc của YCMH + các đơn mua (kể cả khi chưa có đơn mua)."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        orders = inquiry.action_set_order_ref(origin)
+        return dict(payload.inquiry_detail(inquiry), order_ref_result={"orders": len(orders)})
 
     @http.route(f"{API}/cancel", type="json", auth="user", methods=["POST"])
     def api_cancel(self, code="", inquiry_id=None, **kw):
