@@ -1,0 +1,6 @@
+// Form YCMH, bảng dòng: dòng đã huỷ (decoration-muted của OCA + decoration-danger của
+// views/purchase_request_views.xml) — đỏ, gạch ngang, để thu mua thấy ngay sale đã bỏ món đó.
+.o_field_widget[name="line_ids"] .o_data_row.text-danger.text-muted > td {
+    color: var(--bs-danger) !important;
+    text-decoration: line-through;
+}

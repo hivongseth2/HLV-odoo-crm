@@ -23,6 +23,14 @@
                             <div><field name="hlv_vq_order_state_done" class="oe_inline"/><label for="hlv_vq_order_state_done"/></div>
                         </div>
                     </setting>
+                    <setting id="hlv_vq_sale_edit_deadline"
+                             help="Bật: sale sửa được &quot;Hạn báo giá&quot; ở đầu ngăn phiếu trên trang Hỏi giá NCC — hạn mới áp cho phiếu và các báo giá NCC còn mở (dời hạn báo giá đã quá hạn là mở lại cho NCC). Tắt: hạn chỉ đặt lúc lập phiếu / hỏi thêm NCC.">
+                        <field name="hlv_vq_sale_edit_deadline"/>
+                    </setting>
+                    <setting id="hlv_vq_vendor_edit_after_deadline"
+                             help="Bật: NCC vẫn sửa / gửi báo giá sau hạn báo giá (tới khi phiếu đóng). Tắt: quá hạn là NCC chỉ xem, không sửa được.">
+                        <field name="hlv_vq_vendor_edit_after_deadline"/>
+                    </setting>
                     <setting id="hlv_vq_zalo_notify_sale"
                              help="NCC gửi / cập nhật báo giá, nhắn tin, đóng gói / gửi hàng, đổi ngày giao, yêu cầu thay đổi đơn, trễ hẹn → nhắn Zalo cho sale của phiếu hỏi giá (kèm link trang Hỏi giá NCC). Dùng cấu hình Zalo Stock Notification đang chạy và mapping mã sale 'Hủy dự trữ / Giữ hàng'; mã sale không có trong mapping thì không gửi.">
                         <field name="hlv_vq_zalo_notify_sale"/>

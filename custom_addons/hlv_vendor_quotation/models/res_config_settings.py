@@ -5,6 +5,8 @@ from odoo.exceptions import UserError
 from ..services.sale_zalo import ZALO_PARAM
 from .purchase_order import VENDOR_ORDER_STATES_PARAM
 from .purchase_order_revision import NO_REVISION_STATES, REVISION_STATES_PARAM
+from .vendor_inquiry import SALE_EDIT_DEADLINE_PARAM
+from .vendor_quote import VENDOR_LATE_EDIT_PARAM
 from .vendor_quote_access import REQUIRE_PASSWORD_PARAM
 
 # Đuôi tên ô tick → state của purchase.order (VENDOR_ORDER_STATES).
@@ -28,6 +30,14 @@ class ResConfigSettings(models.TransientModel):
     hlv_vq_zalo_notify_sale = fields.Boolean(
         string="Báo sale qua Zalo khi NCC có thay đổi",
         config_parameter=ZALO_PARAM,
+    )
+    hlv_vq_sale_edit_deadline = fields.Boolean(
+        string="Sale được sửa hạn báo giá",
+        config_parameter=SALE_EDIT_DEADLINE_PARAM,
+    )
+    hlv_vq_vendor_edit_after_deadline = fields.Boolean(
+        string="NCC sửa báo giá khi đã quá hạn",
+        config_parameter=VENDOR_LATE_EDIT_PARAM,
     )
     # Đơn ở trạng thái nào hiện trên trang NCC (VENDOR_ORDER_STATES_PARAM).
     hlv_vq_order_state_draft = fields.Boolean(string="Nháp")
