@@ -7,7 +7,7 @@ nào. Mã sale chưa có trong danh bạ thì vẫn hiện mã như cũ.
 
 from odoo import api, fields, models, tools
 
-from .vendor_quote_utils import requester_text
+from .vendor_quote_utils import requester_label, requester_text
 
 
 class VendorSaleContact(models.Model):
@@ -66,6 +66,13 @@ class VendorSaleContact(models.Model):
     def _name_map(self):
         """{mã viết hoa: tên} cho JS trang sale tự đổi mã ra tên."""
         return {code: info["name"] for code, info in self._contact_map().items()}
+
+    @api.model
+    def _requester_label(self, code):
+        """"Người yêu cầu" ghi lên YCMH: "TÊN (MÃ)" theo danh bạ, như YCMH đi từ MISA; mã chưa có
+        trong danh bạ → mã; rỗng → ""."""
+        info = self._for_code(code)
+        return requester_label(info["name"] if info else "", code)
 
     @api.model
     def _requester(self, code):

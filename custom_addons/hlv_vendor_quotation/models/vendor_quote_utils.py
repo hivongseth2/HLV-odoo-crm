@@ -117,6 +117,19 @@ def requester_text(name, phone):
     return " – ".join(part.strip() for part in (name or "", phone or "") if part and part.strip())
 
 
+def requester_label(name, code):
+    """"Người yêu cầu" trên YCMH, cùng dạng YCMH đi từ MISA (OwnerIDText): "MAI VĂN NAM (MAIVANNAM1)".
+
+    name: tên sale theo danh bạ; code: mã sale MISA (None coi như rỗng). Không có tên → mã; không có
+    mã → "".
+    """
+    code = (code or "").strip()
+    name = (name or "").strip()
+    if not code:
+        return ""
+    return f"{name} ({code})" if name and name.upper() != code.upper() else code
+
+
 def split_code_name(name, code):
     """Tên hàng bỏ tiền tố mã, để hiện mã và tên thành hai cột riêng.
 

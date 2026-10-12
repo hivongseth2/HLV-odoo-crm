@@ -90,8 +90,8 @@ class PurchaseRequest(models.Model):
         theo sản phẩm. Không thì tạo YCMH mới — một đơn được có nhiều YCMH (YCMH trước đã
         duyệt mà mua thiếu thì lên YCMH bổ sung).
         YCMH mới dựng giống YCMH đi từ MISA để thu mua xử lý như cũ: "Chờ phê duyệt", giao
-        admin, "Người yêu cầu" = mã sale (requester_code, không có thì lấy mã trên đơn bán; rỗng
-        nếu đều thiếu). Tài liệu gốc CHỈ là số đơn bán, không có thì để trống — đơn mua lấy
+        admin, "Người yêu cầu" = "TÊN (MÃ)" của mã sale (requester_code, không có thì lấy mã trên đơn bán;
+        rỗng nếu đều thiếu) — cùng dạng YCMH đi từ MISA. Tài liệu gốc CHỈ là số đơn bán, không có thì để trống — đơn mua lấy
         origin từ đây, mà origin là mã đơn hàng của khách để thu mua / MISA khớp đơn; hỏi giá
         khi khách chưa chốt thì sale điền sau (purchase.order._hlv_set_origin). source: tên
         phiếu hỏi giá, chỉ để ghi chatter.
@@ -102,6 +102,8 @@ class PurchaseRequest(models.Model):
         """
         if not line_vals:
             raise UserError(_("Chọn ít nhất một mặt hàng."))
+        requester = self.env["hlv.vendor.sale.contact"]._requester_label(
+            requester_code or (sale_code(order.sudo()) if order else ""))
         target = self.browse()
         if merge_into and merge_into.sudo().state in MERGEABLE_STATES and merge_into.sudo().hlv_from_quote_page:
             target = merge_into
@@ -109,8 +111,8 @@ class PurchaseRequest(models.Model):
             target = self._mergeable_for_sale_order(order)
         if target:
             lines = target.sudo()._merge_lines(line_vals)
-            if requester_code and not target.sudo().x_misa_requested_by:
-                target.sudo().x_misa_requested_by = requester_code
+            if requester and not target.sudo().x_misa_requested_by:
+                target.sudo().x_misa_requested_by = requester
             target.sudo().message_post(body=self._lines_message(
                 _("Bổ sung hàng từ trang Hỏi giá NCC (%s):", source or order.name), line_vals
             ))
@@ -123,7 +125,7 @@ class PurchaseRequest(models.Model):
             "origin": order.name if order else False,
             "sale_order_id": order.id if order else False,
             "company_id": (order.company_id if order else self.env.company).id,
-            "x_misa_requested_by": requester_code or (sale_code(order.sudo()) if order else ""),
+            "x_misa_requested_by": requester,
             "hlv_from_quote_page": True,
             "line_ids": [Command.create(vals) for vals in line_vals],
         })

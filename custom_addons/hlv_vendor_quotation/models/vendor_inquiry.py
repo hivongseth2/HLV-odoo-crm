@@ -271,7 +271,8 @@ class VendorInquiry(models.Model):
             raise UserError(_("Phiếu %s đã huỷ.", self.name))
         if code != (self.sale_code or ""):
             self.sale_code = code
-        self._hlv_live_requests().filtered(lambda r: r.x_misa_requested_by != code).write({"x_misa_requested_by": code})
+        label = self.env["hlv.vendor.sale.contact"]._requester_label(code)
+        self._hlv_live_requests().filtered(lambda r: r.x_misa_requested_by != label).write({"x_misa_requested_by": label})
 
     def _apply_reuse_choices(self, choices):
         """Chọn sẵn giá dùng lại sale đã bấm "Dùng giá này" lúc lập phiếu. choices: {product_id:
