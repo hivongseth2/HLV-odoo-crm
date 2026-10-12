@@ -100,6 +100,7 @@ window.HlvQuote = window.HlvQuote || {};
    * nhân / hộ kinh doanh dùng số CCCD làm MST); bỏ khoảng trắng và tiền tố "VN". Trả MST đã chuẩn hoá
    * ("0312345678" / "0312345678-001" / "077185006104"), không phải MST → "".
    * Cùng quy tắc với hlv_contact_refine (VIETNAM_TAX_CODE_PATTERN) — server vẫn kiểm lại.
+   * hỗ trợ 12 số
    */
   HQ.taxCode = function (term) {
     var text = String(term || "").replace(/\s+/g, "").toUpperCase().replace(/^VN/, "");
