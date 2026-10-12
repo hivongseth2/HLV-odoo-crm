@@ -12,7 +12,8 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 VIETQR_BUSINESS_API_URL = "https://api.vietqr.io/v2/business"
-VIETNAM_TAX_CODE_PATTERN = re.compile(r"^\d{10}(?:-\d{3})?$")
+# 12 số: từ 07/2025 cá nhân/hộ kinh doanh dùng số định danh cá nhân (CCCD) làm MST.
+VIETNAM_TAX_CODE_PATTERN = re.compile(r"^(?:\d{10}(?:-\d{3})?|\d{12})$")
 
 
 class ResPartner(models.Model):
@@ -62,8 +63,8 @@ class ResPartner(models.Model):
             tax_code = tax_code[2:]
         if not VIETNAM_TAX_CODE_PATTERN.fullmatch(tax_code):
             raise UserError(_(
-                'Mã số thuế không hợp lệ. Vui lòng nhập 10 số hoặc mã chi nhánh '
-                'theo dạng 10 số-3 số.'
+                'Mã số thuế không hợp lệ. Vui lòng nhập 10 số, 12 số (cá nhân/hộ '
+                'kinh doanh) hoặc mã chi nhánh theo dạng 10 số-3 số.'
             ))
         return tax_code
 
