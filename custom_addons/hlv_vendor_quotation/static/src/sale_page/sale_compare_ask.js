@@ -27,9 +27,11 @@ window.HlvQuote = window.HlvQuote || {};
       : "") + "</td>";
   };
 
-  /** Nút "Thu hồi" dưới ô giá: món đang hỏi mà chưa được chọn / chưa lên YCMH. Không xoá dòng (giữ để tra lại). */
+  /** Nút "Thu hồi" dưới ô: chỉ món NCC CHƯA trả lời (chưa báo giá / chưa báo hết hàng), chưa được chọn, chưa lên
+      YCMH. Không xoá dòng (giữ để tra lại). */
   HQ.withdrawLink = function (line, vendor, d, offer) {
-    if (!canEditAsk(line, vendor, d) || offer.selected || (offer.request_names || []).length) {
+    var answered = offer.price_unit || offer.unavailable;
+    if (!canEditAsk(line, vendor, d) || answered || offer.selected || (offer.request_names || []).length) {
       return "";
     }
     return '<button type="button" class="hq-link hq-withdraw" data-withdraw-line="' + vendor.quote_id + ":" + line.id +

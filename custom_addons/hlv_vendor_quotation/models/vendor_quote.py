@@ -462,13 +462,17 @@ class VendorQuote(models.Model):
         """Sale thu hồi yêu cầu báo giá các mặt hàng ``inquiry_lines`` (dòng phiếu) với NCC của báo giá này.
 
         Không xoá dòng (giữ để tra lại): đánh dấu withdrawn, NCC không thấy nữa; ghi chatter ai thu hồi món gì.
-        Không thu hồi được dòng đang được chọn / đã lên YCMH (bỏ chọn trước). Trả các dòng vừa thu hồi.
+        Không thu hồi được dòng NCC đã trả lời (đã báo giá / báo không có hàng — giá đó là cam kết của NCC, giữ
+        nguyên để so) và dòng đang được chọn / đã lên YCMH. Trả các dòng vừa thu hồi.
         """
         self.ensure_one()
         self = self.sudo()  # noqa: PLW0642 — như action_add_inquiry_lines
         lines = self._vendor_lines().filtered(lambda l: l.inquiry_line_id in inquiry_lines)
         if not lines:
             raise UserError(_("Món này không còn trong báo giá %s.", self.name))
+        answered = lines.filtered(lambda l: l.price_unit or l.unavailable)
+        if answered:
+            raise UserError(_("NCC đã báo giá %s — không thu hồi được nữa.", ", ".join(answered.mapped("name"))))
         busy = lines.filtered(lambda l: l.selected or l._hlv_live_request_lines())
         if busy:
             raise UserError(_("%s đang được chọn / đã lên YCMH — bỏ chọn trước khi thu hồi.",
