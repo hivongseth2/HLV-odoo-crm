@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_import_profile_form" model="ir.ui.view">
+        <field name="name">hlv.vendor.import.profile.form</field>
+        <field name="model">hlv.vendor.import.profile</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <widget name="web_ribbon" title="Đã lưu trữ" bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="partner_id" options="{'no_create': True}"/>
+                            <field name="active" invisible="1"/>
+                            <field name="sheet_name"/>
+                        </group>
+                        <group>
+                            <field name="header_row"/>
+                            <field name="header_rows"/>
+                            <field name="code_prefixes"/>
+                            <field name="brand"/>
+                        </group>
+                    </group>
+                    <p class="text-muted">
+                        Đổi dòng tiêu đề thì mở một lần nhập của NCC này và bấm "Đề xuất lại cột" để cột khớp dòng mới.
+                    </p>
+                    <field name="column_ids">
+                        <list editable="bottom" create="0">
+                            <field name="letter"/>
+                            <field name="header"/>
+                            <field name="sample"/>
+                            <field name="role"/>
+                            <field name="warehouse" invisible="role != 'stock'"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_vendor_import_profile_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.import.profile.list</field>
+        <field name="model">hlv.vendor.import.profile</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="partner_id"/>
+                <field name="name"/>
+                <field name="header_row"/>
+                <field name="code_prefixes"/>
+                <field name="brand"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_vendor_import_profile" model="ir.actions.act_window">
+        <field name="name">Mẫu file NCC</field>
+        <field name="res_model">hlv.vendor.import.profile</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có mẫu file nào</p>
+            <p>Mẫu được tạo tự động lần đầu nhập file của một NCC.</p>
+        </field>
+    </record>
+
+    <record id="view_vendor_product_alias_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.product.alias.list</field>
+        <field name="model">hlv.vendor.product.alias</field>
+        <field name="arch" type="xml">
+            <list editable="bottom" create="0">
+                <field name="partner_id" readonly="1"/>
+                <field name="vendor_code" readonly="1"/>
+                <field name="vendor_name" readonly="1"/>
+                <field name="product_id" options="{'no_create': True}"/>
+                <field name="confirmed_by" readonly="1" optional="show"/>
+                <field name="write_date" string="Cập nhật" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_product_alias_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.product.alias.search</field>
+        <field name="model">hlv.vendor.product.alias</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <group>
+                    <filter name="group_partner" string="Nhà cung cấp" context="{'group_by': 'partner_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_product_alias" model="ir.actions.act_window">
+        <field name="name">Mã NCC đã khớp</field>
+        <field name="res_model">hlv.vendor.product.alias</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_vendor_product_alias_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa nhớ mã NCC nào</p>
+            <p>Dòng đã xác nhận khi áp dụng một lần nhập file NCC được nhớ ở đây, lần sau tự khớp.
+               Nhớ sai thì sửa sản phẩm ở đây, hoặc xoá dòng để lần sau AI xét lại.</p>
+        </field>
+    </record>
+</odoo>

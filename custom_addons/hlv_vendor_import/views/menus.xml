@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trong menu "Báo giá NCC" của hlv_vendor_quotation (app Yêu cầu mua hàng). Việc của thu mua. -->
+    <menuitem id="menu_vendor_import"
+              name="Nhập file NCC"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              action="action_vendor_import"
+              sequence="50"
+              groups="purchase.group_purchase_user"/>
+    <menuitem id="menu_vendor_stock"
+              name="Tồn kho NCC"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              action="action_vendor_stock"
+              sequence="55"
+              groups="purchase.group_purchase_user"/>
+    <menuitem id="menu_vendor_import_profile"
+              name="Mẫu file NCC"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              action="action_vendor_import_profile"
+              sequence="60"
+              groups="purchase.group_purchase_user"/>
+    <menuitem id="menu_vendor_product_alias"
+              name="Mã NCC đã khớp"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              action="action_vendor_product_alias"
+              sequence="65"
+              groups="purchase.group_purchase_user"/>
+</odoo>
