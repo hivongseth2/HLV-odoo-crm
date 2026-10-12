@@ -94,7 +94,6 @@ window.HlvQuote = window.HlvQuote || {};
 
   function renderAll() {
     renderLines();
-    renderChosen();
     renderSuggestions();
     renderSummary();
   }
@@ -159,42 +158,40 @@ window.HlvQuote = window.HlvQuote || {};
     C.chosen = isChosen(vendor.id)
       ? C.chosen.filter(function (v) { return v.id !== vendor.id; })
       : C.chosen.concat([{ id: vendor.id, name: vendor.name }]);
-    renderChosen();
     renderSuggestions();
     renderSummary();
     renderLines();  // cột NCC trong bảng sản phẩm
   }
 
-  function renderChosen() {
-    HQ.$("hq-chosen").innerHTML = C.chosen.map(function (v) {
-      return '<span class="hq-chip hq-chip-green">' + esc(v.name) +
-        '<button type="button" class="hq-chip-x" data-unchoose-vendor="' + v.id + '">×</button></span>';
-    }).join("");
+  function vendorRow(id, name, on, stats, title) {
+    return '<button type="button" class="hq-suggest' + (on ? " hq-suggest-on" : "") + '" data-suggest="' + id + '"' +
+      (title ? ' title="' + esc(title) + '"' : "") + ">" +
+      '<span class="hq-check-box">' + (on ? "✓" : "") + "</span>" +
+      '<span class="hq-suggest-name">' + esc(name) + "</span>" +
+      '<span class="hq-suggest-stats">' + esc(stats) + "</span></button>";
   }
 
+  /** MỘT danh sách NCC (không còn hàng chip riêng lặp lại): NCC tự thêm ở ô tìm lên đầu, rồi NCC gợi ý theo lịch
+      sử mua. Ô tick = đã chọn, bấm để chọn / bỏ. Gợi ý chưa chọn chỉ hiện vài cái đầu, còn lại mở khi cần. */
   function renderSuggestions() {
     var box = HQ.$("hq-suggestions");
-    if (!C.lines.length) {
-      box.innerHTML = "";
-      return;
-    }
-    if (!C.suggestions.length) {
-      box.innerHTML = '<div class="hq-muted">Chưa có lịch sử mua các sản phẩm này — tìm NCC ở ô phía trên.</div>';
-      return;
-    }
-    var visible = C.showAllSuggestions ? C.suggestions : C.suggestions.slice(0, SUGGEST_VISIBLE);
+    var suggestedIds = C.suggestions.map(function (s) { return s.partner_id; });
+    var manual = C.chosen.filter(function (v) { return suggestedIds.indexOf(v.id) < 0; });
+    var visible = C.showAllSuggestions ? C.suggestions : C.suggestions.filter(function (s, index) {
+      return index < SUGGEST_VISIBLE || isChosen(s.partner_id);
+    });
     var hidden = C.suggestions.length - visible.length;
-    box.innerHTML = visible.map(function (s) {
-      var on = isChosen(s.partner_id);
+    var rows = manual.map(function (v) {
+      return vendorRow(v.id, v.name, true, "tự thêm");
+    }).concat(visible.map(function (s) {
       var stats = s.matched + "/" + s.total + " sản phẩm · " + s.order_count + " đơn" +
         (s.last_date ? " · " + s.last_date : "") + (s.from_pricelist ? " · có bảng giá" : "");
-      // Tên các sản phẩm NCC từng bán để trong tooltip, cho mỗi gợi ý gọn một dòng.
-      return '<button type="button" class="hq-suggest' + (on ? " hq-suggest-on" : "") +
-        '" data-suggest="' + s.partner_id + '" title="Từng bán: ' + esc(s.matched_products) + '">' +
-        '<span class="hq-check-box">' + (on ? "✓" : "") + "</span>" +
-        '<span class="hq-suggest-name">' + esc(s.name) + "</span>" +
-        '<span class="hq-suggest-stats">' + esc(stats) + "</span></button>";
-    }).join("") + (hidden > 0
+      // Tên các sản phẩm NCC từng bán để trong tooltip, cho mỗi dòng gọn một hàng.
+      return vendorRow(s.partner_id, s.name, isChosen(s.partner_id), stats, "Từng bán: " + s.matched_products);
+    }));
+    var empty = C.lines.length && !C.suggestions.length
+      ? '<div class="hq-muted">Chưa có lịch sử mua các sản phẩm này — tìm NCC ở ô phía trên.</div>' : "";
+    box.innerHTML = rows.join("") + empty + (hidden > 0
       ? '<button type="button" class="hq-link" data-more-suggest="1">Xem thêm ' + hidden + " gợi ý</button>"
       : "");
   }
@@ -232,7 +229,6 @@ window.HlvQuote = window.HlvQuote || {};
       C.chosen.push({ id: vendorId, name: price.vendor });
     }
     renderLines();
-    renderChosen();
     renderSuggestions();
     renderSummary();
   }
@@ -397,9 +393,6 @@ window.HlvQuote = window.HlvQuote || {};
         toggleVendor(vendor);
       }
     }, renderLines);
-    HQ.on(modal, "click", "[data-unchoose-vendor]", function (el) {
-      toggleVendor({ id: +el.dataset.unchooseVendor });
-    });
     HQ.on(modal, "click", "[data-copy-result]", function (el) {
       HQ.copy(HQ.$("hq-result-" + el.dataset.copyResult).textContent);
     });

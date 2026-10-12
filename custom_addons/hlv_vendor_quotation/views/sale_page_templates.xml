@@ -181,9 +181,8 @@
                                                placeholder="Thêm NCC không có trong gợi ý…"/>
                                         <div id="hq-partner-results" class="hq-dropdown hq-hidden"></div>
                                     </div>
-                                    <div id="hq-chosen" class="hq-chip-row"></div>
-                                    <div class="hq-muted">Gợi ý theo lịch sử mua hàng — NCC từng bán nhiều mặt hàng
-                                        trong danh sách lên trước.</div>
+                                    <div class="hq-muted">Tick để chọn NCC — NCC tự thêm ở ô trên lên đầu, tiếp theo là gợi ý
+                                        theo lịch sử mua (NCC từng bán nhiều mặt hàng trong danh sách lên trước).</div>
                                     <div id="hq-suggestions" class="hq-suggestions"></div>
                                 </section>
 
