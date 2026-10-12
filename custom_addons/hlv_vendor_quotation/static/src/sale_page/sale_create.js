@@ -163,37 +163,26 @@ window.HlvQuote = window.HlvQuote || {};
     renderLines();  // cột NCC trong bảng sản phẩm
   }
 
-  function vendorRow(id, name, on, stats, title) {
-    return '<button type="button" class="hq-suggest' + (on ? " hq-suggest-on" : "") + '" data-suggest="' + id + '"' +
-      (title ? ' title="' + esc(title) + '"' : "") + ">" +
-      '<span class="hq-check-box">' + (on ? "✓" : "") + "</span>" +
-      '<span class="hq-suggest-name">' + esc(name) + "</span>" +
-      '<span class="hq-suggest-stats">' + esc(stats) + "</span></button>";
-  }
-
-  /** MỘT danh sách NCC (không còn hàng chip riêng lặp lại): NCC tự thêm ở ô tìm lên đầu, rồi NCC gợi ý theo lịch
-      sử mua. Ô tick = đã chọn, bấm để chọn / bỏ. Gợi ý chưa chọn chỉ hiện vài cái đầu, còn lại mở khi cần. */
+  /** Dưới bảng sản phẩm, cạnh ô thêm NCC: NCC gợi ý theo lịch sử mua CHƯA chọn ("+ Tên"), bấm là thêm thành cột.
+      NCC đã chọn chỉ hiện ở cột bảng (bỏ bằng × trên tiêu đề) — chưa có sản phẩm (chưa có bảng) thì hiện ở đây. */
   function renderSuggestions() {
     var box = HQ.$("hq-suggestions");
-    var suggestedIds = C.suggestions.map(function (s) { return s.partner_id; });
-    var manual = C.chosen.filter(function (v) { return suggestedIds.indexOf(v.id) < 0; });
-    var visible = C.showAllSuggestions ? C.suggestions : C.suggestions.filter(function (s, index) {
-      return index < SUGGEST_VISIBLE || isChosen(s.partner_id);
-    });
-    var hidden = C.suggestions.length - visible.length;
-    var rows = manual.map(function (v) {
-      return vendorRow(v.id, v.name, true, "tự thêm");
-    }).concat(visible.map(function (s) {
-      var stats = s.matched + "/" + s.total + " sản phẩm · " + s.order_count + " đơn" +
-        (s.last_date ? " · " + s.last_date : "") + (s.from_pricelist ? " · có bảng giá" : "");
-      // Tên các sản phẩm NCC từng bán để trong tooltip, cho mỗi dòng gọn một hàng.
-      return vendorRow(s.partner_id, s.name, isChosen(s.partner_id), stats, "Từng bán: " + s.matched_products);
-    }));
-    var empty = C.lines.length && !C.suggestions.length
-      ? '<div class="hq-muted">Chưa có lịch sử mua các sản phẩm này — tìm NCC ở ô phía trên.</div>' : "";
-    box.innerHTML = rows.join("") + empty + (hidden > 0
-      ? '<button type="button" class="hq-link" data-more-suggest="1">Xem thêm ' + hidden + " gợi ý</button>"
-      : "");
+    var chosenHere = C.lines.length ? "" : C.chosen.map(function (v) {
+      return '<span class="hq-chip hq-chip-green">' + esc(v.name) +
+        '<button type="button" class="hq-chip-x" data-unchoose-vendor="' + v.id + '" title="Bỏ NCC">×</button></span>';
+    }).join("");
+    var open = C.suggestions.filter(function (s) { return !isChosen(s.partner_id); });
+    var visible = C.showAllSuggestions ? open : open.slice(0, SUGGEST_VISIBLE);
+    var chips = visible.map(function (s) {
+      var stats = s.matched + "/" + s.total + " SP · " + s.order_count + " đơn" + (s.from_pricelist ? " · bảng giá" : "");
+      // Tên các sản phẩm NCC từng bán để trong tooltip, cho chip gọn.
+      return '<button type="button" class="hq-vendor-chip" data-suggest="' + s.partner_id + '" title="Từng bán: ' +
+        esc(s.matched_products) + (s.last_date ? " — mua gần nhất " + esc(s.last_date) : "") + '">+ ' + esc(s.name) +
+        ' <span class="hq-ask-pick-why">' + esc(stats) + "</span></button>";
+    }).join("");
+    var more = open.length - visible.length;
+    box.innerHTML = chosenHere + (chips ? '<span class="hq-muted hq-small">Gợi ý theo lịch sử mua:</span>' + chips : "") +
+      (more > 0 ? '<button type="button" class="hq-link" data-more-suggest="1">Xem thêm ' + more + " gợi ý</button>" : "");
   }
 
   /** Giá đang chọn dùng lại cho dòng (còn hợp lệ với số lượng / ĐVT hiện tại) — hoặc null. */
@@ -393,6 +382,9 @@ window.HlvQuote = window.HlvQuote || {};
         toggleVendor(vendor);
       }
     }, renderLines);
+    HQ.on(modal, "click", "[data-unchoose-vendor]", function (el) {
+      toggleVendor({ id: +el.dataset.unchooseVendor });
+    });
     HQ.on(modal, "click", "[data-copy-result]", function (el) {
       HQ.copy(HQ.$("hq-result-" + el.dataset.copyResult).textContent);
     });

@@ -47,7 +47,7 @@ window.HlvQuote = window.HlvQuote || {};
     box.innerHTML = '<span class="hq-chip hq-chip-blue">' + head +
       '<button type="button" class="hq-chip-x" data-opp-clear="1" title="Ẩn">×</button></span>' +
       '<span class="hq-muted">Đã thêm ' + o.added + " mặt hàng" +
-      (o.created ? " (" + o.created + " tạo mới từ CRM)" : "") + "; số cơ hội điền sẵn ở bước 3.</span>" +
+      (o.created ? " (" + o.created + " tạo mới từ CRM)" : "") + "; số cơ hội điền sẵn ở bước 2.</span>" +
       (o.failed.length ? '<div class="hq-alert hq-alert-strong">Không thêm được: ' + o.failed.map(esc).join("; ") +
         ". Tìm tay ở ô \"Thêm sản phẩm\".</div>" : "");
   }

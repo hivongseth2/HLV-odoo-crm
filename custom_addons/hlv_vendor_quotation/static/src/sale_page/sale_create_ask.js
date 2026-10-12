@@ -123,10 +123,12 @@ window.HlvQuote = window.HlvQuote || {};
       (orphan ? '<div class="hq-ask-warn">Chưa tick NCC nào cho mặt hàng này</div>' : "");
   };
 
-  /** Ô tiêu đề cột cho từng NCC đã chọn. */
+  /** Ô tiêu đề cột cho từng NCC đã chọn — kèm × để bỏ NCC (sale_create.js data-unchoose-vendor). */
   HQ.askHeadCells = function () {
     return C.chosen.map(function (v) {
-      return '<th class="hq-ask-col" title="' + esc(v.name) + ' — tick mặt hàng hỏi NCC này">' + esc(v.name) + "</th>";
+      return '<th class="hq-ask-col" title="' + esc(v.name) + ' — tick mặt hàng hỏi NCC này"><span class="hq-ask-col-name">' +
+        esc(v.name) + '</span><button type="button" class="hq-chip-x" data-unchoose-vendor="' + v.id +
+        '" title="Bỏ NCC này">×</button></th>';
     }).join("");
   };
 
