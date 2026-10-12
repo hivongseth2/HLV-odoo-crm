@@ -1,7 +1,8 @@
-/* Mã sale và mã đơn hàng của một phiếu hỏi giá (ngăn phiếu, sale_compare.js gọi):
-   - "Sale": đổi mã sale của phiếu bất cứ lúc nào — YCMH lập từ trang này ghi theo làm "Người yêu cầu";
-   - khung lên YCMH: chọn mã sale (người yêu cầu) BẮT BUỘC, điền sẵn mã của phiếu, không có thì mã đang
-     chọn trên đầu trang;
+/* Thông tin của phiếu hỏi giá và YCMH (ngăn phiếu, sale_compare.js gọi):
+   - "Sale" ở đầu ngăn: mã sale của phiếu = "Người yêu cầu" của YCMH — chỗ DUY NHẤT chọn mã. Phiếu chưa có
+     mã thì điền sẵn mã đang xem trên đầu trang; lên YCMH gửi luôn mã đang chọn ở ô này (chưa bấm Lưu cũng
+     được — server ghi làm mã của phiếu). Đổi mã sau → YCMH lập từ trang này ghi theo;
+   - lên YCMH: địa điểm giao, kho nhận hàng, ghi chú từng dòng (giữ qua các lần vẽ lại);
    - "Mã đơn hàng của khách": có ngay khi phiếu đã lên YCMH, chưa cần đơn mua — ghi vào YCMH (đơn mua tạo
      sau tự lấy) và các đơn mua đã có (controllers/sale_page.py set_order_ref). */
 window.HlvQuote = window.HlvQuote || {};
@@ -10,7 +11,8 @@ window.HlvQuote = window.HlvQuote || {};
   "use strict";
 
   var esc = HQ.esc;
-  var picked = {};  // id phiếu → mã sale đang chọn ở khung lên YCMH (giữ qua các lần vẽ lại)
+  // Thông tin lên YCMH sale đang nhập, theo phiếu: {delivery, pickingType, notes: {id dòng báo giá: ghi chú}}.
+  var drafts = {};
 
   function codes() {
     return (HQ.S.config && HQ.S.config.codes) || [];
@@ -27,34 +29,64 @@ window.HlvQuote = window.HlvQuote || {};
     }).join("");
   }
 
+  /** Mã gợi ý cho phiếu chưa có mã: mã đang xem trên đầu trang (không phải "Tất cả"). */
+  function pageCode() {
+    var S = HQ.S;
+    return S.code && S.code !== S.config.all_code ? S.code : "";
+  }
+
   /** Ô "Sale" ở đầu ngăn phiếu: chọn + Lưu; không sửa được thì chỉ hiện tên. */
   HQ.saleCodeFact = function (d) {
     if (!d.can_set_sale_code || !codes().length) {
       return d.sale_code ? '<div class="hq-fact"><span class="hq-label">Sale</span>' + esc(HQ.saleLabel(d.sale_code)) + "</div>" : "";
     }
-    return '<div class="hq-fact"><label class="hq-label" for="hq-sale-code">Sale</label><span class="hq-opp-edit">' +
-      '<select id="hq-sale-code" class="hq-input">' + options(d.sale_code) + "</select>" +
+    return '<div class="hq-fact"><label class="hq-label" for="hq-sale-code">Sale (người yêu cầu YCMH)</label>' +
+      '<span class="hq-opp-edit"><select id="hq-sale-code" class="hq-input hq-sale-code">' +
+      options(d.sale_code || pageCode()) + "</select>" +
       '<button type="button" class="hq-btn hq-btn-mini" data-save-sale-code="1">Lưu</button></span></div>';
   };
 
-  /** Mã sale mặc định cho khung lên YCMH: đã chọn trước đó → mã của phiếu → mã đang xem trên trang. */
-  function defaultCode(d) {
-    if (picked[d.id] !== undefined) {
-      return picked[d.id];
-    }
-    var S = HQ.S;
-    return d.sale_code || (S.code && S.code !== S.config.all_code ? S.code : "");
-  }
-
-  HQ.requestCodePicker = function (d) {
-    return '<label class="hq-req-code"><span class="hq-label">Người yêu cầu (mã sale) *</span>' +
-      '<select id="hq-req-code" class="hq-input">' + options(defaultCode(d)) + "</select></label>";
+  /** Mã sale gửi lên khi tạo YCMH: mã đang chọn ở ô Sale ("" = chưa chọn). */
+  HQ.requestCode = function (d) {
+    var select = HQ.$("hq-sale-code");
+    return select ? select.value : d.sale_code || "";
   };
 
-  /** Mã sale đã chọn cho YCMH ("" = chưa chọn). */
-  HQ.requestCode = function (d) {
-    var select = HQ.$("hq-req-code");
-    return select ? select.value : defaultCode(d);
+  function draft(d) {
+    if (!drafts[d.id]) {
+      drafts[d.id] = { delivery: "", pickingType: HQ.S.config.default_picking_type_id || "", notes: {} };
+    }
+    return drafts[d.id];
+  }
+
+  /** Ô ghi chú cho một dòng ở bảng tóm tắt lên YCMH. quoteLineId: id dòng báo giá. */
+  HQ.requestNoteCell = function (d, quoteLineId) {
+    return '<td><input type="text" class="hq-input hq-req-note" maxlength="255" data-req-note="' + quoteLineId +
+      '" value="' + esc(draft(d).notes[quoteLineId] || "") + '" placeholder="Ghi chú dòng…"/></td>';
+  };
+
+  /** Địa điểm giao + kho nhận của YCMH (bước xác nhận lên YCMH). */
+  HQ.requestFieldsHtml = function (d) {
+    var dr = draft(d);
+    var types = HQ.S.config.picking_types || [];
+    return '<div class="hq-request-fields">' +
+      '<label><span class="hq-label">Kho nhận hàng</span><select class="hq-input" data-req-field="pickingType">' +
+      types.map(function (t) {
+        return '<option value="' + t.id + '"' + (String(t.id) === String(dr.pickingType) ? " selected" : "") + ">" +
+          esc(t.name) + "</option>";
+      }).join("") + "</select></label>" +
+      '<label class="hq-grow"><span class="hq-label">Địa điểm giao</span><input type="text" class="hq-input" maxlength="255" ' +
+      'data-req-field="delivery" value="' + esc(dr.delivery) + '" placeholder="Để trống nếu giao về kho nhận"/></label></div>';
+  };
+
+  /** Thông tin thêm gửi kèm create_request. */
+  HQ.requestExtras = function (d) {
+    var dr = draft(d);
+    return { delivery_address: dr.delivery, picking_type_id: +dr.pickingType || null, line_notes: dr.notes };
+  };
+
+  HQ.clearRequestDraft = function (d) {
+    delete drafts[d.id];
   };
 
   /** Khung mã đơn hàng cho cả phiếu (đã lên YCMH hoặc có đơn mua). */
@@ -76,7 +108,6 @@ window.HlvQuote = window.HlvQuote || {};
     }
     button.disabled = true;
     HQ.api("set_sale_code", { inquiry_id: d.id, sale_code: code }).then(function (detail) {
-      delete picked[d.id];
       HQ.renderInquiry(detail);
       HQ.toast("Đã đổi mã sale của phiếu" + (detail.requests.length ? " và người yêu cầu trên YCMH" : ""));
       HQ.reloadAll();
@@ -89,8 +120,14 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.bindInquiryRefEvents = function () {
     var panel = HQ.$("hq-drawer-panel");
     HQ.on(panel, "click", "[data-save-sale-code]", saveSaleCode);
-    HQ.on(panel, "change", "#hq-req-code", function (el) {
-      picked[HQ.addVendorDetail.id] = el.value;
+    HQ.on(panel, "input", "[data-req-note]", function (el) {
+      draft(HQ.addVendorDetail).notes[el.dataset.reqNote] = el.value;
+    });
+    HQ.on(panel, "input", "[data-req-field]", function (el) {
+      draft(HQ.addVendorDetail)[el.dataset.reqField] = el.value;
+    });
+    HQ.on(panel, "change", "[data-req-field]", function (el) {
+      draft(HQ.addVendorDetail)[el.dataset.reqField] = el.value;
     });
   };
 })(window.HlvQuote);

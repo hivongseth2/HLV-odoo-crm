@@ -68,7 +68,7 @@ class VendorLineBoardPortal(VendorQuotePortal):
         pending = quotes.filtered(lambda q: q.state == "sent")
         show = show if show in ("pending", "all") else ("pending" if pending else "all")
         shown = pending if show == "pending" else quotes
-        lines = shown.mapped("line_ids").filtered(lambda line: not line.vendor_locked)
+        lines = shown._vendor_lines().filtered(lambda line: not line.vendor_locked)
         today = request.env["hlv.vendor.quote"].sudo()._vendor_today()
         references = {}
         for quote in shown:
@@ -129,7 +129,7 @@ class VendorLineBoardPortal(VendorQuotePortal):
         if errors:
             return 0, errors, error_line_ids
         for quote in quotes:
-            open_lines = quote.line_ids.filtered(lambda line: not line.vendor_locked)
+            open_lines = quote._vendor_lines().filtered(lambda line: not line.vendor_locked)
             if not any(f"unit_{line.id}" in post or f"na_{line.id}" in post for line in open_lines):
                 continue  # phiếu không có trên bảng đang xem
             line_values, read_errors = self._read_quote_form(

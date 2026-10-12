@@ -488,8 +488,9 @@
 .hq-vat-error { color: var(--hq-danger); }
 
 /* Hỏi NCC nào cho từng mặt hàng — cột NCC + gợi ý trong bảng sản phẩm (sale_create_ask.js). */
-.hq-table th.hq-ask-col { max-width: 10rem; font-size: .75rem; text-align: center; white-space: nowrap; }
-.hq-ask-col-name { display: inline-block; max-width: 8.5rem; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+/* Tên NCC đầy đủ, xuống dòng (không cắt "…" — nhiều công ty cùng tiền tố "CÔNG TY TNHH" không phân biệt được). */
+.hq-table th.hq-ask-col { min-width: 7.5rem; max-width: 11rem; font-size: .72rem; line-height: 1.25; text-align: center; white-space: normal; vertical-align: bottom; }
+.hq-ask-col-name { display: inline; overflow-wrap: anywhere; }
 .hq-vendor-bar { display: grid; grid-template-columns: minmax(14rem, 22rem) 1fr; gap: .5rem; align-items: start; margin-top: .5rem; }
 .hq-vendor-suggest { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 .hq-vendor-chip { border: 1px dashed var(--hq-accent-line); background: #fff; color: var(--hq-accent-dark); border-radius: var(--hq-radius); padding: .15rem .5rem; font-size: .8rem; cursor: pointer; }
@@ -509,3 +510,12 @@
 /* Bảng so giá: NCC không được hỏi món này — gạch chéo cho khác "Chờ báo giá" (sale_compare.js notAskedCell). */
 .hq-offer-skip { background: repeating-linear-gradient(135deg, var(--hq-line-soft) 0 6px, transparent 6px 12px); }
 .hq-offer-skip .hq-btn { display: block; margin-top: .35rem; background: #fff; }
+.hq-withdraw { display: block; margin-top: .25rem; font-size: .72rem; color: var(--hq-muted); }
+.hq-withdraw:hover { color: var(--hq-danger); }
+/* Ô Sale đầu ngăn phiếu: đủ rộng cho "TÊN SALE (MÃ)". */
+.hq-sale-code { min-width: 17rem; }
+/* Lên YCMH: kho nhận, địa điểm giao, ghi chú dòng. */
+.hq-request-fields { display: flex; flex-wrap: wrap; gap: .6rem; margin: .5rem 0; }
+.hq-request-fields label { display: flex; flex-direction: column; gap: .2rem; min-width: 14rem; }
+.hq-request-fields .hq-grow { flex: 1 1 18rem; }
+.hq-req-note { min-width: 10rem; }

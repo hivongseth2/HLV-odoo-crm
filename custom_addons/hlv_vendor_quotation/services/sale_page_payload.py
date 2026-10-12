@@ -208,6 +208,8 @@ def _compare_row(line, quotes):
     for quote_line in line.quote_line_ids.filtered(lambda l: l.quote_id in quotes):
         offers[quote_line.quote_id.id] = {
             "line_id": quote_line.id,
+            # Bên mua đã thu hồi món này với NCC này — bảng so giá vẽ gạch chéo "Đã thu hồi" + "Hỏi lại".
+            "withdrawn": quote_line.withdrawn,
             "price_unit": quote_line.price_unit,
             # NCC báo kiểu giá niêm yết − % chiết khấu (tuỳ chọn): hiện kèm để sale đối chiếu.
             "list_price": quote_line.list_price,

@@ -62,6 +62,10 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "sale_names": env["hlv.vendor.sale.contact"]._name_map(),
             # Lý do sale chọn khi đóng "Không mua" ("auto" chỉ cron dùng).
             "close_reasons": [r for r in CLOSE_REASONS if r[0] != "auto"],
+            # Kho nhận khi lên YCMH (loại nhập kho) + kho mặc định của YCMH (purchase_request._default_picking_type).
+            "picking_types": [{"id": t.id, "name": t.display_name} for t in env["stock.picking.type"].sudo().search(
+                [("code", "=", "incoming"), ("company_id", "in", [env.company.id, False])])],
+            "default_picking_type_id": env["purchase.request"].sudo()._default_picking_type().id,
             # Ngày VN cố định — tài khoản dùng chung hay để trống múi giờ, context_today ra ngày UTC.
             "today": local_date_text(fields.Datetime.now(), "%Y-%m-%d"),
             # Kênh websocket báo tin trao đổi mới — tên kênh do server đặt, JS không tự ghép.
@@ -170,11 +174,13 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
 
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
     def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None,
-                           settle_line_ids=None, separate_backorder=False, requester_code="", **kw):
+                           settle_line_ids=None, separate_backorder=False, requester_code="",
+                           delivery_address="", picking_type_id=None, line_notes=None, **kw):
         """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
         quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt; settle_line_ids: dòng phiếu sale
         chốt "khách chỉ mua chừng này" (hết thiếu); requester_code: mã sale làm người yêu cầu (bắt buộc —
-        ghi luôn làm mã sale của phiếu)."""
+        ghi luôn làm mã sale của phiếu); delivery_address, picking_type_id (kho nhận — loại nhập kho):
+        lên YCMH; line_notes: {id dòng báo giá: ghi chú dòng YCMH}."""
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
         if requester_code:
@@ -182,7 +188,17 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         order = request.env["sale.order"].browse(to_int(sale_order_id)).exists()
         qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
         settle = [to_int(line_id) for line_id in settle_line_ids or []]
-        request_record, merged = inquiry.action_create_request(order or None, qtys, settle, bool(separate_backorder))
+        request_vals = {}
+        if (delivery_address or "").strip():
+            request_vals["delivery_address"] = delivery_address.strip()[:255]
+        if picking_type_id:
+            picking_type = request.env["stock.picking.type"].sudo().browse(to_int(picking_type_id)).exists()
+            if not picking_type or picking_type.code != "incoming":
+                raise UserError("Kho nhận hàng không hợp lệ.")
+            request_vals["picking_type_id"] = picking_type.id
+        notes = {to_int(line_id): str(text)[:255] for line_id, text in (line_notes or {}).items() if to_int(line_id)}
+        request_record, merged = inquiry.action_create_request(
+            order or None, qtys, settle, bool(separate_backorder), line_notes=notes, request_vals=request_vals)
         return dict(payload.inquiry_detail(inquiry), request_result={
             "name": request_record.sudo().name, "merged": merged,
         })
@@ -198,6 +214,17 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             raise UserError("Không tìm thấy báo giá của NCC này trong phiếu.")
         wanted = {to_int(line_id) for line_id in line_ids or []}
         quote.action_add_inquiry_lines(inquiry.line_ids.filtered(lambda line: line.id in wanted))
+        return payload.inquiry_detail(inquiry)
+
+    @http.route(f"{API}/withdraw_quote_lines", type="json", auth="user", methods=["POST"])
+    def api_withdraw_quote_lines(self, code="", inquiry_id=None, quote_id=None, line_ids=None, **kw):
+        """Thu hồi yêu cầu báo giá món đó với NCC đó (không xoá dòng — vendor_quote.action_withdraw_inquiry_lines)."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        quote = inquiry.quote_ids.filtered(lambda q: q.id == to_int(quote_id))
+        if not quote:
+            raise UserError("Không tìm thấy báo giá của NCC này trong phiếu.")
+        wanted = {to_int(line_id) for line_id in line_ids or []}
+        quote.action_withdraw_inquiry_lines(inquiry.line_ids.filtered(lambda line: line.id in wanted))
         return payload.inquiry_detail(inquiry)
 
     @http.route(f"{API}/add_vendors", type="json", auth="user", methods=["POST"])

@@ -181,6 +181,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindCreateEvents();
     HQ.bindCompareEvents();
     HQ.bindInquiryRefEvents();
+    HQ.bindCompareAskEvents();
     HQ.bindChatEvents();
     HQ.bindOrderViewEvents();
     HQ.bindOriginEvents();

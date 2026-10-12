@@ -76,7 +76,7 @@ class VendorQuotePortal(http.Controller):
                 for quote in quotes
             },
             # Bảng xem nhanh dùng chung bảng giá trang báo giá: dòng nền xanh = bên mua chọn NCC này.
-            "line_choice": {line.id: self._line_choice(line) for line in quotes.line_ids},
+            "line_choice": {line.id: self._line_choice(line) for line in quotes._vendor_lines()},
             "active_tab": "quotes",
             "tabs": [
                 (key, STATUS_DISPLAY[key][0], counts[key], self._list_url(access, key, q))
@@ -177,7 +177,7 @@ class VendorQuotePortal(http.Controller):
             chat_error=post.get("chat_error") if request.httprequest.method == "GET" else "",
             # Mặt hàng bên mua đã chọn giá của chính NCC này ("selected") — để NCC biết dòng nào
             # đã được đặt. Chọn NCC khác thì không báo (xem _line_choice).
-            line_choice={line.id: self._line_choice(line) for line in quote.line_ids},
+            line_choice={line.id: self._line_choice(line) for line in quote._vendor_lines()},
             requester=self._requester(quote),
         )
         return self._render("hlv_vendor_quotation.portal_quote_form", access, values)
@@ -346,7 +346,7 @@ class VendorQuotePortal(http.Controller):
         use_discount = bool(post.get("use_discount"))
         today = quote._vendor_today()
         line_values, errors = {}, []
-        for index, line in enumerate(quote.line_ids, start=1):
+        for index, line in enumerate(quote._vendor_lines(), start=1):
             prefix = line_label(index, line) if line_label else f"Dòng {index}"
 
             def number(field, label):

@@ -101,6 +101,10 @@ class VendorQuoteLine(models.Model):
         "hlv.vendor.quote.line", string="Giá kế thừa từ", readonly=True, copy=False, ondelete="set null",
         help="Giá lấy lại từ báo giá trước của cùng NCC, cùng sản phẩm, còn hiệu lực (services/price_reuse.py).",
     )
+    # Sale thu hồi yêu cầu báo giá món này với NCC này (bảng so giá, nút "Thu hồi"). KHÔNG xoá dòng — giữ để tra
+    # lại (ai thu hồi, lúc nào: chatter của báo giá). NCC không thấy dòng nữa (vendor_quote._vendor_lines),
+    # không so giá, không chọn được. "Hỏi lại" bật lại đúng dòng này (vendor_quote.action_add_inquiry_lines).
+    withdrawn = fields.Boolean(string="Bên mua đã thu hồi", readonly=True, copy=False)
     vendor_locked = fields.Boolean(
         string="Đã lên đơn mua", compute="_compute_vendor_locked",
         help="Mặt hàng đã lên đơn mua: NCC không sửa giá dòng này nữa (cả NCC không được chọn — "
@@ -150,7 +154,8 @@ class VendorQuoteLine(models.Model):
             "&", ("inquiry_line_id", "=", False), ("request_line_id", "in", request_lines.ids),
         ] + extra_domain)
 
-    @api.depends("price_unit", "tax_rate", "unavailable", "quote_state", "request_line_id", "inquiry_line_id")
+    @api.depends("price_unit", "tax_rate", "unavailable", "quote_state", "request_line_id", "inquiry_line_id",
+                 "withdrawn")
     def _compute_is_best_price(self):
         """So giữa các NCC cùng nhóm (xem _compare_key), theo đơn giá SAU VAT.
 
@@ -160,6 +165,7 @@ class VendorQuoteLine(models.Model):
         siblings = self._compare_siblings([
             ("quote_state", "in", COMPARED_STATES),
             ("unavailable", "=", False),
+            ("withdrawn", "=", False),
         ])
         best_ids = best_price_ids(
             (line.id, line._compare_key(), line.price_unit * (1 + line.tax_rate / 100.0)) for line in siblings
@@ -190,14 +196,17 @@ class VendorQuoteLine(models.Model):
         if not self.env.user.has_group(SELECTOR_GROUP):
             raise AccessError(_("Chỉ thu mua mới được chọn / bỏ chọn nhà cung cấp."))
 
-    @api.depends("inquiry_line_id.locked", "selected", "request_line_id.purchased_qty", "request_line_id.product_qty",
+    @api.depends("inquiry_line_id.locked", "selected", "withdrawn", "request_line_id.purchased_qty",
+                 "request_line_id.product_qty",
                  "request_line_id.purchase_lines.state", "backorder_request_line_id.purchased_qty",
                  "backorder_request_line_id.purchase_lines.state")
     def _compute_vendor_locked(self):
         """NCC không sửa giá dòng này nữa: sản phẩm đã lên đơn mua đủ SL cần mua, hoặc phần của chính
         NCC này (đang được chọn) đã lên đơn mua đủ. Luồng hỏi giá từ YCMH: dòng YCMH đã lên đơn đủ."""
         for line in self:
-            if line.inquiry_line_id:
+            if line.withdrawn:
+                line.vendor_locked = True  # đường nào sót lọc _vendor_lines thì NCC cũng không sửa được
+            elif line.inquiry_line_id:
                 own = line._hlv_live_request_lines()
                 line.vendor_locked = line.inquiry_line_id.locked or (
                     line.selected and bool(own) and all(own.mapped(lambda l: l._hlv_fully_ordered()))
