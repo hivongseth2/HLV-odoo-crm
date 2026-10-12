@@ -284,7 +284,7 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.saleCodeFact(d) +
       opportunityFact(d) +
       fact("Đơn bán", d.sale_order ? HQ.docChip(d.sale_order) : "") +
-      fact("Hạn báo giá", esc(d.deadline)) +
+      HQ.deadlineFact(d) +
       fact("Yêu cầu mua hàng", d.requests.map(HQ.requestTag).join("")) +
       fact("Đơn mua", orders) +
       "</div>";

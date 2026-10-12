@@ -157,6 +157,9 @@ def inquiry_detail(inquiry):
         "can_request": inquiry.state not in ("cancel", "closed") and bool(pending),
         "can_cancel": inquiry.state == "open",
         "can_set_opportunity": inquiry.state != "cancel",
+        # Ô "Hạn báo giá" sửa được khi Cài đặt bật và phiếu còn hỏi giá / đã lên YCMH.
+        "can_set_deadline": inquiry.state in ("open", "requested") and inquiry._hlv_sale_can_edit_deadline(),
+        "deadline_iso": inquiry.date_deadline.isoformat() if inquiry.date_deadline else "",
         "can_set_sale_code": inquiry.state != "cancel",
         # Mã đơn hàng của khách: nhập được ngay khi có YCMH, chưa cần đơn mua (models/vendor_inquiry.py).
         "order_ref": inquiry.hlv_order_ref(),

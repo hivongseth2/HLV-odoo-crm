@@ -46,6 +46,34 @@ window.HlvQuote = window.HlvQuote || {};
       '<button type="button" class="hq-btn hq-btn-mini" data-save-sale-code="1">Lưu</button></span></div>';
   };
 
+  /** Ô "Hạn báo giá": sửa được khi Cài đặt bật (can_set_deadline) — không thì chỉ hiện ngày. */
+  HQ.deadlineFact = function (d) {
+    if (!d.can_set_deadline) {
+      return d.deadline ? '<div class="hq-fact"><span class="hq-label">Hạn báo giá</span>' + esc(d.deadline) + "</div>" : "";
+    }
+    return '<div class="hq-fact"><label class="hq-label" for="hq-deadline-edit">Hạn báo giá</label><span class="hq-opp-edit">' +
+      '<input type="date" id="hq-deadline-edit" class="hq-input" min="' + esc(HQ.S.config.today) + '" value="' +
+      esc(d.deadline_iso) + '"/><button type="button" class="hq-btn hq-btn-mini" data-save-deadline="1">Lưu</button></span></div>';
+  };
+
+  function saveDeadline(button) {
+    var d = HQ.addVendorDetail;
+    var value = HQ.$("hq-deadline-edit").value;
+    if (!value) {
+      HQ.toast("Chọn ngày hạn báo giá");
+      return;
+    }
+    button.disabled = true;
+    HQ.api("set_deadline", { inquiry_id: d.id, deadline: value }).then(function (detail) {
+      HQ.renderInquiry(detail);
+      HQ.toast("Đã đổi hạn báo giá thành " + detail.deadline + " — NCC thấy hạn mới");
+      HQ.reloadAll();
+    }).catch(function (err) {
+      button.disabled = false;
+      HQ.toast(err.message);
+    });
+  }
+
   /** Mã sale gửi lên khi tạo YCMH: mã đang chọn ở ô Sale ("" = chưa chọn). */
   HQ.requestCode = function (d) {
     var select = HQ.$("hq-sale-code");
@@ -120,6 +148,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.bindInquiryRefEvents = function () {
     var panel = HQ.$("hq-drawer-panel");
     HQ.on(panel, "click", "[data-save-sale-code]", saveSaleCode);
+    HQ.on(panel, "click", "[data-save-deadline]", saveDeadline);
     HQ.on(panel, "input", "[data-req-note]", function (el) {
       draft(HQ.addVendorDetail).notes[el.dataset.reqNote] = el.value;
     });

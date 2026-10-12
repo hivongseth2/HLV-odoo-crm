@@ -7,6 +7,9 @@ from ..services.price_reuse import apply_valid_prices
 from ..services.notify import post_internal
 from .vendor_quote_utils import clean_ref, format_vn_number, inquiry_close_day, normalize_origin, request_qty
 
+# Cài đặt → Mua hàng → Hỏi giá NCC: sale được sửa hạn báo giá trên ngăn phiếu. Mặc định tắt.
+SALE_EDIT_DEADLINE_PARAM = "hlv_vendor_quotation.sale_edit_deadline"
+
 # Sai số so SL (ĐVT có số lẻ): chênh dưới mức này coi như bằng.
 QTY_EPSILON = 1e-6
 
@@ -221,6 +224,28 @@ class VendorInquiry(models.Model):
             ", ".join(quotes.partner_id.commercial_partner_id.mapped("display_name")), len(quotes[:1].line_ids),
         ))
         return quotes
+
+    @api.model
+    def _hlv_sale_can_edit_deadline(self):
+        """Cài đặt có cho sale sửa hạn báo giá trên ngăn phiếu không (SALE_EDIT_DEADLINE_PARAM)."""
+        return self.env["ir.config_parameter"].sudo().get_param(SALE_EDIT_DEADLINE_PARAM) == "True"
+
+    def action_set_deadline(self, date_deadline):
+        """Sale đổi hạn báo giá của phiếu (chỉ khi Cài đặt cho phép — SALE_EDIT_DEADLINE_PARAM, controller kiểm).
+        Ghi phiếu + các báo giá NCC còn mở (chờ / đã báo, kể cả đã quá hạn — dời hạn là mở lại cho NCC báo).
+        Hạn trước hôm nay (giờ VN) → lỗi."""
+        self.ensure_one()
+        if self.state not in ("open", "requested"):
+            raise UserError(_("Phiếu %s đã đóng hoặc đã huỷ.", self.name))
+        today = self.env["hlv.vendor.quote"]._vendor_today()
+        if not date_deadline or date_deadline < today:
+            raise UserError(_("Hạn báo giá không được trước hôm nay."))
+        old = self.date_deadline
+        self.date_deadline = date_deadline
+        self.quote_ids.sudo().filtered(lambda q: q.state in ("sent", "quoted")).write({"date_deadline": date_deadline})
+        self.message_post(body=_("Sale đổi hạn báo giá: %(old)s → %(new)s.",
+                                 old=old.strftime("%d/%m/%Y") if old else _("(trống)"),
+                                 new=date_deadline.strftime("%d/%m/%Y")))
 
     def action_set_opportunity(self, opportunity_ref):
         """Sale ghi / sửa số cơ hội sau khi lập phiếu (thường có số cơ hội sau khi đã hỏi giá).

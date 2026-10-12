@@ -283,6 +283,15 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         orders = inquiry.action_set_order_ref(origin)
         return dict(payload.inquiry_detail(inquiry), order_ref_result={"orders": len(orders)})
 
+    @http.route(f"{API}/set_deadline", type="json", auth="user", methods=["POST"])
+    def api_set_deadline(self, code="", inquiry_id=None, deadline=None, **kw):
+        """Sale sửa hạn báo giá của phiếu — chỉ khi Cài đặt bật "Sale được sửa hạn báo giá"."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        if not inquiry._hlv_sale_can_edit_deadline():
+            raise UserError("Cài đặt đang không cho sale sửa hạn báo giá.")
+        inquiry.action_set_deadline(fields.Date.to_date(deadline) if deadline else False)
+        return payload.inquiry_detail(inquiry)
+
     @http.route(f"{API}/cancel", type="json", auth="user", methods=["POST"])
     def api_cancel(self, code="", inquiry_id=None, **kw):
         scope = self._check(code)

@@ -247,9 +247,6 @@ class PurchaseRequestLine(models.Model):
     hlv_separate_po = fields.Boolean(string="Phần hẹn: đơn mua riêng", copy=False)
     # Sale ghi lúc lên YCMH từ trang hỏi giá — riêng từng dòng hàng (yêu cầu giao, quy cách…).
     hlv_note = fields.Char(string="Ghi chú", copy=False)
-    # Sale bỏ chọn / đổi NCC ở trang hỏi giá → dòng bị huỷ: ghi lý do + ai + lúc nào để thu mua thấy ngay trên dòng
-    # (dòng huỷ của OCA chỉ hiện mờ, cột "Đã hủy" ẩn). vendor_quote_line_choice._hlv_release ghi.
-    hlv_cancel_note = fields.Char(string="Sale đã bỏ", readonly=True, copy=False)
 
     def _hlv_remaining_qty(self):
         """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của

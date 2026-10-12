@@ -15,6 +15,8 @@ VENDOR_VISIBLE_STATES = ("sent", "quoted", "done")
 # Trạng thái theo góc nhìn NCC, theo thứ tự hiện trên tab lọc.
 VENDOR_STATUSES = ("waiting", "quoted", "expired", "closed")
 VENDOR_EDITABLE_STATUSES = ("waiting", "quoted")
+# Cài đặt → Mua hàng → Hỏi giá NCC: bật thì NCC vẫn sửa / gửi báo giá đã QUÁ HẠN (tới khi phiếu đóng). Mặc định tắt.
+VENDOR_LATE_EDIT_PARAM = "hlv_vendor_quotation.vendor_edit_after_deadline"
 DEFAULT_TZ = "Asia/Ho_Chi_Minh"
 
 
@@ -424,10 +426,13 @@ class VendorQuote(models.Model):
         return False
 
     def _is_open_for_vendor(self):
-        """NCC còn sửa được: đang chờ/đã báo giá, chưa qua hết ngày hạn (giờ VN), và còn ít
-        nhất một mặt hàng chưa lên đơn mua."""
+        """NCC còn sửa được: đang chờ/đã báo giá, chưa qua hết ngày hạn (giờ VN) — hoặc đã quá hạn khi Cài đặt cho
+        NCC sửa sau hạn (VENDOR_LATE_EDIT_PARAM) — và còn ít nhất một mặt hàng chưa lên đơn mua."""
         self.ensure_one()
-        return self._vendor_status() in VENDOR_EDITABLE_STATUSES and not self._fully_ordered()
+        editable = VENDOR_EDITABLE_STATUSES
+        if self.env["ir.config_parameter"].sudo().get_param(VENDOR_LATE_EDIT_PARAM) == "True":
+            editable += ("expired",)
+        return self._vendor_status() in editable and not self._fully_ordered()
 
     def action_add_inquiry_lines(self, inquiry_lines):
         """Sale đổi ý: hỏi thêm NCC của báo giá này các mặt hàng ``inquiry_lines`` (dòng phiếu) — lúc lập phiếu
