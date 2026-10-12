@@ -383,7 +383,7 @@
                     <div t-foreach="errors" t-as="error" t-esc="error"/>
                 </div>
                 <div t-if="fully_ordered" class="vq-alert">Các mặt hàng đã lên đơn mua — báo giá không sửa được
-                    nữa. Cần điều chỉnh, vui lòng nhắn ở khung trao đổi.</div>
+                    nữa. Cần điều chỉnh, vui lòng sửa trên đơn mua hàng đã lên và yêu cầu thu mua duyệt.</div>
                 <div t-elif="not editable and quote.state != 'done'" class="vq-alert">Đã quá hạn báo giá, không sửa
                     được nữa. Cần điều chỉnh giá, vui lòng nhắn ở khung trao đổi.</div>
                 <div t-if="quote.state == 'done'" class="vq-alert">Yêu cầu báo giá này đã đóng. Cảm ơn quý công ty
