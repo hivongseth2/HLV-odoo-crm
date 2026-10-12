@@ -182,6 +182,7 @@
                                         <div id="hq-partner-results" class="hq-dropdown hq-hidden"></div>
                                     </div>
                                     <div id="hq-chosen" class="hq-chip-row"></div>
+                                    <div id="hq-ask" class="hq-ask"></div>
                                     <div class="hq-muted">Gợi ý theo lịch sử mua hàng — NCC từng bán nhiều mặt hàng
                                         trong danh sách lên trước.</div>
                                     <div id="hq-suggestions" class="hq-suggestions"></div>
@@ -284,6 +285,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiry_refs.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_history.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_create_ask.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_crm_product.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_paste.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
