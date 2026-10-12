@@ -24,6 +24,23 @@
         </field>
     </record>
 
+    <!-- "Người yêu cầu" (mã sale) sửa được trên YCMH lập từ trang hỏi giá — sale lên YCMH chọn mã, thu mua
+         sửa khi nhầm. YCMH đi từ MISA giữ chỉ đọc: extension MISA đồng bộ đè lại. Kế thừa view của chính
+         misa_purchase_request_sync (repo này), không phải view lõi. -->
+    <record id="view_purchase_request_form_requester_editable" model="ir.ui.view">
+        <field name="name">purchase.request.form.requester.editable</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_form_inherit_misa_sync"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='x_misa_requested_by']" position="attributes">
+                <attribute name="readonly">not hlv_from_quote_page or state in ('done', 'rejected')</attribute>
+            </xpath>
+            <xpath expr="//field[@name='x_misa_requested_by']" position="after">
+                <field name="hlv_from_quote_page" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
     <!-- Đơn mua: NCC báo tiến độ trên trang của họ; phiếu hỏi giá sinh ra đơn này. -->
     <record id="view_purchase_order_form_vendor_quote" model="ir.ui.view">
         <field name="name">purchase.order.form.vendor.quote</field>

@@ -30,9 +30,10 @@ window.HlvQuote = window.HlvQuote || {};
 
   /**
    * HTML ô nhập mã đơn hàng. key: hậu tố id duy nhất trên trang; orderIds: các đơn sẽ ghi;
-   * onSaved: gọi sau khi lưu xong (vẽ lại phần đang mở).
+   * onSaved: gọi sau khi lưu xong (vẽ lại phần đang mở) với kết quả server;
+   * inquiryId: ghi cho cả phiếu (YCMH + đơn mua — set_order_ref) thay vì từng đơn mua.
    */
-  HQ.originEditor = function (key, value, orderIds, buttonLabel, onSaved) {
+  HQ.originEditor = function (key, value, orderIds, buttonLabel, onSaved, inquiryId) {
     after[key] = onSaved;
     return '<div class="hq-origin">' +
       '<label class="hq-label" for="' + inputId(key) + '">Mã đơn hàng của khách (Tài liệu gốc đơn mua)</label>' +
@@ -41,8 +42,10 @@ window.HlvQuote = window.HlvQuote || {};
       'value="' + esc(value) + '" placeholder="VD DH125524949237215 — nhiều mã cách nhau dấu phẩy"/>' +
       '<div id="' + inputId(key) + '-results" class="hq-dropdown hq-hidden"></div></div>' +
       '<button type="button" class="hq-btn hq-btn-primary" data-save-origin="' + key + '" data-order-ids="' +
-      orderIds.join(",") + '">' + esc(buttonLabel) + "</button></div>" +
-      '<p class="hq-muted hq-small">Khách chốt mua thì điền mã đơn hàng để thu mua và MISA khớp đơn mua với đơn bán.</p>' +
+      orderIds.join(",") + '"' + (inquiryId ? ' data-inquiry-id="' + inquiryId + '"' : "") + ">" +
+      esc(buttonLabel) + "</button></div>" +
+      '<p class="hq-muted hq-small">Khách chốt mua thì điền mã đơn hàng để thu mua và MISA khớp đơn mua với đơn bán.' +
+      (inquiryId ? " Chưa có đơn mua thì mã ghi vào YCMH — đơn mua thu mua tạo sau tự lấy mã này." : "") + "</p>" +
       "</div>";
   };
 
@@ -73,10 +76,16 @@ window.HlvQuote = window.HlvQuote || {};
 
   function save(button) {
     var key = button.dataset.saveOrigin;
-    var ids = button.dataset.orderIds.split(",").map(Number);
+    var origin = HQ.$(inputId(key)).value;
+    var inquiryId = +button.dataset.inquiryId;
     button.disabled = true;
-    HQ.api("po_origin", { order_ids: ids, origin: HQ.$(inputId(key)).value }).then(function (res) {
-      HQ.toast("Đã cập nhật mã đơn hàng cho " + res.orders.length + " đơn mua");
+    var call = inquiryId
+      ? HQ.api("set_order_ref", { inquiry_id: inquiryId, origin: origin })
+      : HQ.api("po_origin", { order_ids: button.dataset.orderIds.split(",").map(Number), origin: origin });
+    call.then(function (res) {
+      HQ.toast(inquiryId
+        ? "Đã cập nhật mã đơn hàng cho YCMH" + (res.order_ref_result.orders ? " và " + res.order_ref_result.orders + " đơn mua" : "")
+        : "Đã cập nhật mã đơn hàng cho " + res.orders.length + " đơn mua");
       if (after[key]) {
         after[key](res);
       }

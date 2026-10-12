@@ -4,7 +4,8 @@ from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
 from ..services.price_reuse import apply_valid_prices
-from .vendor_quote_utils import clean_ref, format_vn_number, inquiry_close_day, request_qty
+from ..services.notify import post_internal
+from .vendor_quote_utils import clean_ref, format_vn_number, inquiry_close_day, normalize_origin, request_qty
 
 # Sai số so SL (ĐVT có số lẻ): chênh dưới mức này coi như bằng.
 QTY_EPSILON = 1e-6
@@ -111,11 +112,7 @@ class VendorInquiry(models.Model):
         for inquiry in self:
             # Dòng YCMH có thể bị gộp chung với hàng của phiếu khác — chỉ lấy đơn mua của NCC
             # được hỏi trong phiếu này, và đã xác nhận.
-            vendors = inquiry.quote_ids.partner_id.commercial_partner_id
-            orders = inquiry.line_ids.request_line_ids.sudo().purchase_lines.order_id
-            inquiry.purchase_order_ids = orders.filtered(
-                lambda o: o.state in ("purchase", "done") and o.partner_id.commercial_partner_id in vendors
-            )
+            inquiry.purchase_order_ids = inquiry._hlv_vendor_orders().filtered(lambda o: o.state in ("purchase", "done"))
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -218,6 +215,64 @@ class VendorInquiry(models.Model):
                 raise UserError(_("Phiếu %s đã huỷ.", inquiry.name))
         self.write({"opportunity_ref": clean_ref(opportunity_ref) or False})
 
+    def _hlv_vendor_orders(self):
+        """Đơn mua (mọi trạng thái) sinh từ YCMH của phiếu — chỉ của NCC được hỏi trong phiếu: dòng YCMH có
+        thể bị gộp chung với hàng của phiếu khác."""
+        self.ensure_one()
+        vendors = self.quote_ids.partner_id.commercial_partner_id
+        orders = self.line_ids.request_line_ids.sudo().purchase_lines.order_id
+        return orders.filtered(lambda o: o.partner_id.commercial_partner_id in vendors)
+
+    def _hlv_live_requests(self):
+        """YCMH lập từ trang hỏi giá của phiếu, chưa bị từ chối — nơi sale còn sửa người yêu cầu / mã đơn
+        hàng. Không đụng YCMH đi từ MISA: còn chờ duyệt thì extension MISA đồng bộ đè lại."""
+        self.ensure_one()
+        return self.request_ids.sudo().filtered(lambda r: r.hlv_from_quote_page and r.state != "rejected")
+
+    def _hlv_order_ref_targets(self):
+        """(YCMH, đơn mua chưa huỷ) nhận mã đơn hàng của khách."""
+        return self._hlv_live_requests(), self._hlv_vendor_orders().filtered(lambda o: o.state != "cancel")
+
+    def hlv_order_ref(self):
+        """Mã đơn hàng đang chung của YCMH + đơn mua của phiếu; chưa có nơi nào / mỗi nơi một mã → ""."""
+        requests, orders = self._hlv_order_ref_targets()
+        values = {r.origin or "" for r in requests} | {o.origin or "" for o in orders}
+        return values.pop() if len(values) == 1 else ""
+
+    def action_set_order_ref(self, origin):
+        """Sale ghi mã đơn hàng của khách cho cả phiếu — được cả khi YCMH còn chờ duyệt, chưa có đơn mua:
+        ghi vào Tài liệu gốc của YCMH (đơn mua thu mua tạo sau lấy origin từ dòng YCMH — wizard Tạo RFQ)
+        và của các đơn mua đã có. Trả các đơn mua đã ghi."""
+        self.ensure_one()
+        if self.state == "cancel":
+            raise UserError(_("Phiếu %s đã huỷ.", self.name))
+        requests, orders = self._hlv_order_ref_targets()
+        if not requests and not orders:
+            raise UserError(_("Phiếu chưa lên YCMH — gắn đơn bán ở bước lên YCMH."))
+        origin = normalize_origin(origin)
+        author = self.env.user.partner_id
+        for purchase_request in requests.filtered(lambda r: (r.origin or "") != origin):
+            old = purchase_request.origin or ""
+            purchase_request.origin = origin or False
+            post_internal(purchase_request, Markup(_(
+                "Sale cập nhật Tài liệu gốc (mã đơn hàng) từ phiếu hỏi giá %s: <b>%s</b> → <b>%s</b>.")) % (
+                self.name, old or _("(trống)"), origin or _("(trống)")), author)
+        orders._hlv_set_origin(origin)
+        return orders
+
+    def action_set_sale_code(self, code):
+        """Đổi mã sale của phiếu; YCMH lập từ trang hỏi giá của phiếu ghi theo làm "Người yêu cầu".
+        code: mã ĐÃ kiểm quyền ở controller (sale_scope.validate_sale_code)."""
+        self.ensure_one()
+        code = (code or "").strip()
+        if not code:
+            raise UserError(_("Chọn mã sale."))
+        if self.state == "cancel":
+            raise UserError(_("Phiếu %s đã huỷ.", self.name))
+        if code != (self.sale_code or ""):
+            self.sale_code = code
+        self._hlv_live_requests().filtered(lambda r: r.x_misa_requested_by != code).write({"x_misa_requested_by": code})
+
     def _apply_reuse_choices(self, choices):
         """Chọn sẵn giá dùng lại sale đã bấm "Dùng giá này" lúc lập phiếu. choices: {product_id:
         vendor_id}. Chỉ chọn khi dòng báo giá của NCC đó thật sự đã kế thừa giá (giá có thể vừa bị
@@ -254,6 +309,9 @@ class VendorInquiry(models.Model):
         pending = self.line_ids.chosen_line_ids.filtered(lambda l: l._hlv_needs_request())
         if not pending:
             raise UserError(_("Không có NCC nào đã chọn mà chưa lên YCMH."))
+        # Mã sale là "Người yêu cầu" của YCMH — thu mua / MISA biết hàng mua cho sale nào.
+        if not self.sale_code:
+            raise UserError(_("Chọn mã sale (người yêu cầu) trước khi lên YCMH."))
         asked_before = {line.id: line._hlv_chosen_total() for line in self.line_ids}
         for quote_line in pending.filtered(lambda l: l.id in (quantities or {})):
             qty = request_qty(quantities[quote_line.id], quote_line.chosen_qty)

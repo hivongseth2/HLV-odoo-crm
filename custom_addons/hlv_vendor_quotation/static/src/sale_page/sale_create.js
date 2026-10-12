@@ -214,6 +214,11 @@ window.HlvQuote = window.HlvQuote || {};
 
   function submit() {
     HQ.showAlert("hq-modal-alert", "");
+    // Dùng lại đủ giá là lên YCMH luôn — YCMH bắt buộc có mã sale (người yêu cầu).
+    if (allReused() && createCode() === S.config.all_code) {
+      HQ.showAlert("hq-modal-alert", "Chọn mã sale của phiếu — phiếu này lên YCMH luôn, YCMH cần người yêu cầu.");
+      return;
+    }
     HQ.$("hq-submit").disabled = true;
     var reuse = {};
     C.lines.forEach(function (l) {

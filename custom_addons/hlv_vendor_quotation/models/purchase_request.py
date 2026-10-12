@@ -109,6 +109,8 @@ class PurchaseRequest(models.Model):
             target = self._mergeable_for_sale_order(order)
         if target:
             lines = target.sudo()._merge_lines(line_vals)
+            if requester_code and not target.sudo().x_misa_requested_by:
+                target.sudo().x_misa_requested_by = requester_code
             target.sudo().message_post(body=self._lines_message(
                 _("Bổ sung hàng từ trang Hỏi giá NCC (%s):", source or order.name), line_vals
             ))

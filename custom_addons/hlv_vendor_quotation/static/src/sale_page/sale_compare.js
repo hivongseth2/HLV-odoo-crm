@@ -59,6 +59,10 @@ window.HlvQuote = window.HlvQuote || {};
 
   /** Bước 1: hiện bảng tóm tắt (sản phẩm × NCC, SL, giá sẽ lên YCMH) để sale soát trước khi tạo. */
   function reviewRequest(on) {
+    if (on && !HQ.requestCode(D.detail)) {
+      HQ.toast("Chọn mã sale (người yêu cầu) trước khi lên YCMH");
+      return;
+    }
     D.confirming = on;
     D.qty = {};
     D.settle = {};
@@ -191,6 +195,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.api("create_request", {
       inquiry_id: d.id,
       sale_order_id: D.saleOrder ? D.saleOrder.id : null,
+      requester_code: HQ.requestCode(d),
       quantities: quantities,
       settle_line_ids: settle,
       separate_backorder: D.separate && rows.some(hasBackorder),
@@ -230,6 +235,7 @@ window.HlvQuote = window.HlvQuote || {};
       renderCompare(d) +
       HQ.addVendorBox(d) +
       renderRequestBox(d) +
+      HQ.orderRefBox(d) +
       renderOrders(d) +
       renderVendors(d) +
       (d.note ? '<div class="hq-note"><span class="hq-label">Lời nhắn gửi NCC</span>' + esc(d.note) + "</div>" : "") +
@@ -252,7 +258,7 @@ window.HlvQuote = window.HlvQuote || {};
   function renderFacts(d) {
     var orders = d.orders.map(HQ.orderTag).join("");
     return '<div class="hq-facts">' +
-      fact("Sale", esc(HQ.saleLabel(d.sale_code))) +
+      HQ.saleCodeFact(d) +
       opportunityFact(d) +
       fact("Đơn bán", d.sale_order ? HQ.docChip(d.sale_order) : "") +
       fact("Hạn báo giá", esc(d.deadline)) +
@@ -464,7 +470,8 @@ window.HlvQuote = window.HlvQuote || {};
     var title = redo ? "Lên lại yêu cầu mua hàng" : live.length ? "Bổ sung vào yêu cầu mua hàng" : "Lên yêu cầu mua hàng";
     var head = '<div class="hq-share"><div class="hq-share-head"><b>' + title + "</b>" +
       '<span class="hq-muted">' + (live.length || redo ? d.pending_count + " sản phẩm có NCC đã chọn chưa lên YCMH"
-        : d.chosen_count + "/" + d.line_count + " sản phẩm đã chọn NCC") + "</span></div>" + done;
+        : d.chosen_count + "/" + d.line_count + " sản phẩm đã chọn NCC") + "</span></div>" + done +
+      HQ.requestCodePicker(d);
     if (D.confirming && d.can_request) {
       return head + requestSummary(d) + '<div class="hq-request-row"><span class="hq-push"></span>' +
         '<button type="button" class="hq-btn" data-review-request="0">Quay lại</button>' +
@@ -545,24 +552,11 @@ window.HlvQuote = window.HlvQuote || {};
       (unread ? unread + " tin mới" : "Trao đổi" + (count ? " (" + count + ")" : "")) + "</button>";
   }
 
-  /** Ô mã đơn hàng cho mọi đơn mua của phiếu; điền sẵn khi các đơn đang cùng một mã. */
-  function originBox(d) {
-    var editable = d.purchase_orders.filter(function (o) { return o.can_set_origin; });
-    if (!editable.length) {
-      return "";
-    }
-    var origins = editable.map(function (o) { return o.origin; });
-    var common = origins.every(function (v) { return v === origins[0]; }) ? origins[0] : "";
-    return HQ.originEditor("inquiry", common, editable.map(function (o) { return o.id; }),
-      editable.length > 1 ? "Cập nhật cho " + editable.length + " đơn mua" : "Cập nhật",
-      function () { HQ.openInquiry(d.id, true); });
-  }
-
   function renderOrders(d) {
     if (!d.purchase_orders.length) {
       return "";
     }
-    return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' + originBox(d) +
+    return '<h3 class="hq-h3 hq-section-title">Đơn mua</h3>' +
       '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
       d.purchase_orders.map(function (o) {
         return '<tr><td><button type="button" class="hq-link-btn hq-doc-btn" data-po="' + o.id + '" title="Xem đơn mua">' +
