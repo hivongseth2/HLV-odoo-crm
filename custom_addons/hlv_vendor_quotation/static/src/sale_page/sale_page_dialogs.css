@@ -479,3 +479,8 @@
 .hq-popup-x:hover { color: var(--hq-ink); }
 @keyframes hq-popup-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .hq-popup { animation: none; } }
+
+/* Khung tra MST để tạo nhanh NCC, ngay dưới ô tìm NCC (sale_vendor_vat.js). */
+.hq-vat-box { margin: .5rem 0; padding: .6rem .75rem; border: 1px solid var(--hq-accent-line); background: var(--hq-accent-soft); border-radius: var(--hq-radius); font-size: .875rem; }
+.hq-vat-body { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
+.hq-vat-error { color: var(--hq-danger); }

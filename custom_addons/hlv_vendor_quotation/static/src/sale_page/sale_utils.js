@@ -95,6 +95,16 @@ window.HlvQuote = window.HlvQuote || {};
     return text.indexOf("DH") === 0 || text.indexOf("S") === 0 ? "order" : "";
   };
 
+  /**
+   * Chữ gõ có phải mã số thuế Việt Nam không: 10 số, hoặc mã chi nhánh 10 số-3 số; bỏ khoảng trắng và
+   * tiền tố "VN". Trả MST đã chuẩn hoá ("0312345678" / "0312345678-001"), không phải MST → "".
+   * Cùng quy tắc với hlv_contact_refine (_hlv_vietqr_normalize_tax_code) — server vẫn kiểm lại.
+   */
+  HQ.taxCode = function (term) {
+    var text = String(term || "").replace(/\s+/g, "").toUpperCase().replace(/^VN/, "");
+    return /^\d{10}(-\d{3})?$/.test(text) ? text : "";
+  };
+
   HQ.esc = function (value) {
     return (value == null ? "" : String(value)).replace(/[&<>"']/g, function (ch) {
       return ESCAPES[ch];

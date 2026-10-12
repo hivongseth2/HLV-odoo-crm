@@ -305,14 +305,13 @@ window.HlvQuote = window.HlvQuote || {};
       refreshSuggestions();
     });
 
-    HQ.bindPicker("hq-partner-search", "hq-partner-results", function (term) {
-      return HQ.rpc("/api/hoi-gia-ncc/partners", { search: term }).then(function (r) { return r.partners; });
-    }, function (p) {
-      return esc(p.name) + (p.vat ? ' <span class="hq-muted">· MST ' + esc(p.vat) + "</span>" : "");
-    }, function (partner) {
-      if (!isChosen(partner.id)) {
-        toggleVendor(partner);
-      }
+    // Không có trong danh bạ thì tạo nhanh bằng MST (sale_vendor_vat.js).
+    HQ.bindPicker("hq-partner-search", "hq-partner-results", HQ.fetchVendors, HQ.vendorItemHtml, function (item) {
+      return HQ.pickVendorItem(item, "hq-partner-search", function (partner) {
+        if (!isChosen(partner.id)) {
+          toggleVendor(partner);
+        }
+      });
     });
 
     var modal = HQ.$("hq-modal");
