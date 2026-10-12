@@ -101,25 +101,29 @@ window.HlvQuote = window.HlvQuote || {};
 
   /* ---------------- Sản phẩm ---------------- */
 
+  /** Bảng sản phẩm — kiêm luôn chỗ chọn NCC hỏi từng mặt hàng: cột tick mỗi NCC đã chọn, gợi ý NCC + nút "i"
+      dưới tên hàng (sale_create_ask.js). */
   function renderLines() {
     HQ.$("hq-lines").innerHTML = C.lines.length
       ? '<table class="hq-table hq-table-edit"><thead><tr><th></th><th>Sản phẩm</th>' +
-        '<th class="hq-num">Số lượng</th><th>ĐVT</th><th></th></tr></thead><tbody>' +
+        '<th class="hq-num">Số lượng</th><th>ĐVT</th>' + HQ.askHeadCells() + "<th></th></tr></thead><tbody>" +
         C.lines.map(function (l, index) {
           return "<tr>" +
             '<td><img class="hq-thumb" loading="lazy" src="/web/image/product.product/' + l.product_id +
             '/image_128" alt=""/></td>' +
             '<td><div class="hq-strong">' + esc(l.name || l.product) + "</div>" +
             (l.combo ? '<div class="hq-muted hq-small">Thành phần của combo ' + esc(l.combo) + "</div>" : "") +
-            HQ.priceReuseHtml((C.priceHints || {})[l.product_id], l, C.reuse[l.product_id]) + "</td>" +
+            HQ.priceReuseHtml((C.priceHints || {})[l.product_id], l, C.reuse[l.product_id]) +
+            HQ.askLineExtras(l) + "</td>" +
             '<td class="hq-num"><input type="number" min="0" step="any" class="hq-qty" data-line="' +
             index + '" value="' + l.qty + '"/></td>' +
-            "<td>" + esc(l.uom) + "</td>" +
+            "<td>" + esc(l.uom) + "</td>" + HQ.askCells(l) +
             '<td><button type="button" class="hq-icon-btn" data-remove-line="' + index +
             '" title="Bỏ dòng">×</button></td></tr>';
-        }).join("") + "</tbody></table>"
+        }).join("") + "</tbody>" + HQ.askFootRow(4, 1) + "</table>" +
+        (C.chosen.length ? '<div class="hq-muted hq-small">Cột NCC: tick mặt hàng hỏi NCC đó — tick sẵn mặt hàng NCC ' +
+          "từng bán; NCC chưa từng bán thì hỏi hết.</div>" : "")
       : '<div class="hq-muted">Chưa có sản phẩm. Tìm sản phẩm để thêm, hoặc lấy hàng từ một đơn bán.</div>';
-    HQ.renderAskMatrix();
   }
 
   /* ---------------- Nhà cung cấp ---------------- */
@@ -136,7 +140,6 @@ window.HlvQuote = window.HlvQuote || {};
       C.suggestions = [];
       C.picks = {};
       renderSuggestions();
-      HQ.renderAskMatrix();
       return;
     }
     HQ.$("hq-suggestions").innerHTML = '<div class="hq-loading">Đang tìm NCC phù hợp…</div>';
@@ -144,7 +147,7 @@ window.HlvQuote = window.HlvQuote || {};
       C.suggestions = res.suggestions || [];
       C.picks = res.picks || {};
       renderSuggestions();
-      HQ.renderAskMatrix();
+      renderLines();
     }).catch(function (err) { HQ.toast(err.message); });
   }, 300);
 
@@ -159,7 +162,7 @@ window.HlvQuote = window.HlvQuote || {};
     renderChosen();
     renderSuggestions();
     renderSummary();
-    HQ.renderAskMatrix();
+    renderLines();  // cột NCC trong bảng sản phẩm
   }
 
   function renderChosen() {
@@ -393,7 +396,7 @@ window.HlvQuote = window.HlvQuote || {};
       if (!isChosen(vendor.id)) {
         toggleVendor(vendor);
       }
-    });
+    }, renderLines);
     HQ.on(modal, "click", "[data-unchoose-vendor]", function (el) {
       toggleVendor({ id: +el.dataset.unchooseVendor });
     });

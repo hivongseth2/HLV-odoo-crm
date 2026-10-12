@@ -67,8 +67,9 @@ class VendorSuggestion(models.AbstractModel):
     def product_picks(self, products):
         """Gợi ý theo từng mặt hàng (suggestion_utils.vendor_picks): rẻ nhất / đã giao / mua gần nhất.
 
-        Giá mua thật chỉ dùng để XẾP ở đây (sudo) — kết quả chỉ có id NCC, không có giá: giá vốn
-        không lộ ra phía sale. NCC đã lưu trữ bị bỏ.
+        Đọc đơn mua bằng sudo. Giá mua lần gần nhất CÓ hiện cho sale (chủ shop yêu cầu, 2026-10-12: sale cần
+        biết "rẻ nhất là bao nhiêu" để chọn NCC). Giá theo đơn giá sau chiết khấu, quy về ĐVT sản phẩm.
+        NCC đã lưu trữ bị bỏ.
         """
         if not products:
             return {}
@@ -81,14 +82,19 @@ class VendorSuggestion(models.AbstractModel):
         rows = []
         for line in lines:
             day = fields.Date.to_date(line.date_order)
-            price = line.product_uom._compute_price(line.price_unit, line.product_id.uom_id)
+            # Đơn giá thật (đã trừ chiết khấu) = thành tiền / SL; dòng SL 0 thì lấy đơn giá niêm yết.
+            qty = line.product_qty or 0.0
+            net = line.price_subtotal / qty if qty else line.price_unit
+            gross = line.price_total / qty if qty else line.price_unit
+            net, gross = (line.product_uom._compute_price(p, line.product_id.uom_id) for p in (net, gross))
             if line.currency_id and line.currency_id != company_currency:
-                price = line.currency_id._convert(price, company_currency, line.company_id, day)
+                net, gross = (line.currency_id._convert(p, company_currency, line.company_id, day) for p in (net, gross))
             rows.append({
                 "product_id": line.product_id.id,
                 "partner_id": line.partner_id.commercial_partner_id.id,
                 "order": line.order_id.name,
-                "price": price,
+                "price": net,
+                "price_incl": gross,
                 "date": day,
                 "received": line.qty_received,
             })

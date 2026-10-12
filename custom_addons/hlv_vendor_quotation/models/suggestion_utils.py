@@ -14,13 +14,15 @@ PICK_RECENT = "recent"
 def vendor_picks(rows):
     """Chọn NCC theo 3 tiêu chí cho từng sản phẩm.
 
-    Nhận: iterable dict ``{"product_id", "partner_id", "order" (số đơn mua), "price" (giá theo ĐVT sản phẩm,
-    tiền công ty), "date" (ngày đặt — so sánh được, không None), "received" (SL kho đã nhận)}``.
+    Nhận: iterable dict ``{"product_id", "partner_id", "order" (số đơn mua), "price" (đơn giá chưa VAT sau chiết
+    khấu, theo ĐVT sản phẩm, tiền công ty — dùng để xếp), "price_incl" (như trên nhưng sau VAT — để hiện),
+    "date" (ngày đặt — so sánh được, không None), "received" (SL kho đã nhận)}``.
     Trả: ``{product_id: {"cheapest": partner_id|None, "delivered": partner_id|None, "delivered_count": int,
     "recent": partner_id|None, "recent_date": date|None, "vendors": set(partner_id), "evidence": [...]}}``.
-    evidence — dẫn chứng từng NCC (nút "i" trên trang): ``{"partner_id", "price_rank" (1 = rẻ nhất theo giá
-    lần mua gần nhất; None nếu giá ≤ 0), "priced_count", "last_order", "last_date", "received_count",
-    "last_received" (ngày đơn gần nhất kho nhận được hàng, None nếu chưa)}``, xếp theo hạng giá.
+    evidence — dẫn chứng từng NCC (nút "i" trên trang): ``{"partner_id", "price", "price_incl" (giá lần mua gần
+    nhất), "price_rank" (1 = rẻ nhất; None nếu giá ≤ 0), "priced_count", "last_order", "last_date",
+    "received_count", "last_received" (ngày đơn gần nhất kho nhận được hàng, None nếu chưa)}``, xếp theo hạng giá.
+    Xếp theo giá CHƯA VAT (giá vốn thật — VAT được khấu trừ), hiện giá sau VAT.
     Giá ≤ 0 (hàng tặng, chưa có giá) không dự "rẻ nhất"; hoà giá thì NCC mua gần hơn. Không dòng nào → {}.
     """
     by_product = {}
@@ -43,6 +45,8 @@ def vendor_picks(rows):
         rank = {row["partner_id"]: index for index, row in enumerate(priced, start=1)}
         evidence = sorted(({
             "partner_id": vendor,
+            "price": row["price"],
+            "price_incl": row["price_incl"],
             "price_rank": rank.get(vendor),
             "priced_count": len(priced),
             "last_order": row["order"],
