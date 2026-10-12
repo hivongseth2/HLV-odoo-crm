@@ -182,7 +182,6 @@
                                         <div id="hq-partner-results" class="hq-dropdown hq-hidden"></div>
                                     </div>
                                     <div id="hq-chosen" class="hq-chip-row"></div>
-                                    <div id="hq-ask" class="hq-ask"></div>
                                     <div class="hq-muted">Gợi ý theo lịch sử mua hàng — NCC từng bán nhiều mặt hàng
                                         trong danh sách lên trước.</div>
                                     <div id="hq-suggestions" class="hq-suggestions"></div>

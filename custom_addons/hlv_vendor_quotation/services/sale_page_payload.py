@@ -432,21 +432,27 @@ def crm_product_payload(crm):
 
 
 def product_picks_payload(picks, names):
-    """Gợi ý theo từng mặt hàng cho hộp lập phiếu: {product_id: {cheapest, delivered, recent, vendor_ids}}.
-    Mỗi tiêu chí là {id, name} (kèm count / date) hoặc None. Không có giá — giá vốn không lộ cho sale."""
+    """Gợi ý theo từng mặt hàng cho hộp lập phiếu: {product_id: {cheapest, delivered, recent, vendor_ids, evidence}}.
+    Mỗi tiêu chí là {id, name} (rẻ nhất kèm giá, đã giao kèm count, gần nhất kèm date) hoặc None."""
     def vendor(partner_id, **extra):
         return dict({"id": partner_id, "name": names.get(partner_id, "")}, **extra) if partner_id else None
 
+    def cheapest(pick):
+        row = next((e for e in pick["evidence"] if e["partner_id"] == pick["cheapest"]), None)
+        return vendor(pick["cheapest"], price=row["price"], price_incl=row["price_incl"]) if row else None
+
     return {
         product_id: {
-            "cheapest": vendor(pick["cheapest"]),
+            "cheapest": cheapest(pick),
             "delivered": vendor(pick["delivered"], count=pick["delivered_count"]),
             "recent": vendor(pick["recent"], date=_date_text(pick["recent_date"])),
             "vendor_ids": sorted(pick["vendors"]),
-            # Dẫn chứng (nút "i"): hạng giá mua (không có số tiền), đơn mua gần nhất, số lần giao được.
+            # Dẫn chứng (nút "i"): giá mua lần gần nhất + hạng, đơn mua gần nhất, số lần giao được.
             "evidence": [{
                 "id": item["partner_id"],
                 "name": names.get(item["partner_id"], ""),
+                "price": item["price"],
+                "price_incl": item["price_incl"],
                 "price_rank": item["price_rank"],
                 "priced_count": item["priced_count"],
                 "last_order": item["last_order"],
