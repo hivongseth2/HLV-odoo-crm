@@ -116,7 +116,7 @@ def reference_prices(quote):
     if quote.state != "sent":
         return {}
     references = {}
-    for line in quote.line_ids.filtered(lambda l: not l.price_unit and not l.unavailable):
+    for line in quote._vendor_lines().filtered(lambda l: not l.price_unit and not l.unavailable):
         reference = recent_vendor_price(line)
         if reference:
             references[line.id] = reference

@@ -21,6 +21,7 @@ def history_domain(access, q="", day_from=None, day_to=None, sale_code="", produ
         ("quote_id.access_id", "=", access.id),
         ("quote_id.state", "in", VENDOR_VISIBLE_STATES),
         ("quote_id.submit_date", "!=", False),
+        ("withdrawn", "=", False),
     ]
     start, end = day_range_utc(day_from, day_to)
     if start:

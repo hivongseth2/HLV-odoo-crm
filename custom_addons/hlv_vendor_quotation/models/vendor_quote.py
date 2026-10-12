@@ -108,11 +108,16 @@ class VendorQuote(models.Model):
         string="Số dòng được chọn", compute="_compute_selected_line_count"
     )
 
-    @api.depends("line_ids.price_subtotal", "line_ids.price_total")
+    @api.depends("line_ids.price_subtotal", "line_ids.price_total", "line_ids.withdrawn")
     def _compute_amounts(self):
         for quote in self:
-            quote.amount_untaxed = sum(quote.line_ids.mapped("price_subtotal"))
-            quote.amount_total = sum(quote.line_ids.mapped("price_total"))
+            lines = quote._vendor_lines()
+            quote.amount_untaxed = sum(lines.mapped("price_subtotal"))
+            quote.amount_total = sum(lines.mapped("price_total"))
+
+    def _vendor_lines(self):
+        """Dòng báo giá NCC thấy / phải báo: bỏ dòng bên mua đã thu hồi (withdrawn). Chạy được trên nhiều báo giá."""
+        return self.line_ids.filtered(lambda line: not line.withdrawn)
 
     @api.depends("access_id.portal_url")
     def _compute_portal_quote_url(self):
@@ -436,17 +441,42 @@ class VendorQuote(models.Model):
         self = self.sudo()  # noqa: PLW0642
         if self.state not in ("sent", "quoted"):
             raise UserError(_("Báo giá %s đã đóng hoặc huỷ — dùng \"Hỏi thêm NCC\" để hỏi lại.", self.name))
-        lines = inquiry_lines.filtered(lambda l: not l.locked and l not in self.line_ids.inquiry_line_id)
-        if not lines:
+        inquiry_lines = inquiry_lines.filtered(lambda l: not l.locked)
+        # Món đã thu hồi trước đó → bật lại đúng dòng cũ (giữ giá NCC đã báo, nếu có); chưa từng hỏi → dòng mới.
+        revived = self.line_ids.filtered(lambda l: l.withdrawn and l.inquiry_line_id in inquiry_lines)
+        lines = inquiry_lines.filtered(lambda l: l not in self.line_ids.inquiry_line_id)
+        if not lines and not revived:
             raise UserError(_("Mặt hàng đã có trong báo giá %s hoặc đã lên đơn mua đủ.", self.name))
+        revived.write({"withdrawn": False})
         added = self.env["hlv.vendor.quote.line"].create([
             dict(line._quote_line_vals(), quote_id=self.id) for line in lines])
         fill_valid_prices(added, self._vendor_today())
-        if self.state == "quoted" and not all(added.mapped("inherited_from_id")):
+        asked = added | revived
+        if self.state == "quoted" and any(not l.price_unit and not l.unavailable for l in asked):
             self.state = "sent"
-        post_internal(self, Markup(_("Sale hỏi thêm: <b>%s</b>.")) % ", ".join(lines.mapped("name")),
-                      self.env.user.partner_id)
-        return added
+        post_internal(self, Markup(_("Sale hỏi %s: <b>%s</b>.")) % (
+            _("lại") if revived and not lines else _("thêm"), ", ".join(asked.mapped("name"))), self.env.user.partner_id)
+        return asked
+
+    def action_withdraw_inquiry_lines(self, inquiry_lines):
+        """Sale thu hồi yêu cầu báo giá các mặt hàng ``inquiry_lines`` (dòng phiếu) với NCC của báo giá này.
+
+        Không xoá dòng (giữ để tra lại): đánh dấu withdrawn, NCC không thấy nữa; ghi chatter ai thu hồi món gì.
+        Không thu hồi được dòng đang được chọn / đã lên YCMH (bỏ chọn trước). Trả các dòng vừa thu hồi.
+        """
+        self.ensure_one()
+        self = self.sudo()  # noqa: PLW0642 — như action_add_inquiry_lines
+        lines = self._vendor_lines().filtered(lambda l: l.inquiry_line_id in inquiry_lines)
+        if not lines:
+            raise UserError(_("Món này không còn trong báo giá %s.", self.name))
+        busy = lines.filtered(lambda l: l.selected or l._hlv_live_request_lines())
+        if busy:
+            raise UserError(_("%s đang được chọn / đã lên YCMH — bỏ chọn trước khi thu hồi.",
+                              ", ".join(busy.mapped("name"))))
+        lines.write({"withdrawn": True})
+        post_internal(self, Markup(_("Sale thu hồi yêu cầu báo giá: <b>%s</b> (dòng vẫn giữ để tra lại).")) % (
+            ", ".join(lines.mapped("name"))), self.env.user.partner_id)
+        return lines
 
     def _fully_reused(self):
         """Mọi dòng đều lấy giá còn hiệu lực từ báo giá trước (services/price_reuse.py) — coi như
@@ -473,10 +503,10 @@ class VendorQuote(models.Model):
         if not self._is_open_for_vendor():
             raise UserError(_("Báo giá này đã đóng, đã quá hạn hoặc đã lên đơn mua hết — không sửa được nữa."))
 
-        open_lines = self.line_ids.filtered(lambda l: not l.vendor_locked)
+        open_lines = self._vendor_lines().filtered(lambda l: not l.vendor_locked)
         submitted = {line.id: line_values.get(line.id, {}) for line in open_lines}
         missing = [
-            str(index) for index, line in enumerate(self.line_ids, start=1)
+            str(index) for index, line in enumerate(self._vendor_lines(), start=1)
             if line.id in submitted and not submitted[line.id].get("unavailable")
             and not (submitted[line.id].get("price_unit") and submitted[line.id].get("vat"))
         ]

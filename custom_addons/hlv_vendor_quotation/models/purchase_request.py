@@ -82,7 +82,8 @@ class PurchaseRequest(models.Model):
         ], order="id desc", limit=1).with_env(self.env)
 
     @api.model
-    def _add_request_lines(self, line_vals, order=None, source="", requester_code="", merge_into=None):
+    def _add_request_lines(self, line_vals, order=None, source="", requester_code="", merge_into=None,
+                           request_vals=None):
         """Đưa hàng vào YCMH lập ở Odoo (YCMH không còn lập trên MISA).
 
         merge_into (YCMH gần nhất của phiếu hỏi giá) còn chưa duyệt → gộp vào đó. Không thì có
@@ -95,7 +96,9 @@ class PurchaseRequest(models.Model):
         origin từ đây, mà origin là mã đơn hàng của khách để thu mua / MISA khớp đơn; hỏi giá
         khi khách chưa chốt thì sale điền sau (purchase.order._hlv_set_origin). source: tên
         phiếu hỏi giá, chỉ để ghi chatter.
-        line_vals: [{product_id, name, product_qty, product_uom_id, actual_*...}].
+        line_vals: [{product_id, name, product_qty, product_uom_id, actual_*..., hlv_note}].
+        request_vals: {delivery_address, picking_type_id} sale chọn lúc lên YCMH (bỏ khoá rỗng) — YCMH mới ghi
+        luôn; gộp vào YCMH chưa duyệt thì ghi đè (lựa chọn mới nhất của sale).
         Trả (YCMH, list dòng YCMH ứng với từng phần tử line_vals theo thứ tự, True nếu là gộp).
 
         Ghi bằng sudo: sale chỉ có quyền ĐỌC YCMH; việc ghi đi qua đúng đường này.
@@ -111,6 +114,8 @@ class PurchaseRequest(models.Model):
             target = self._mergeable_for_sale_order(order)
         if target:
             lines = target.sudo()._merge_lines(line_vals)
+            if request_vals:
+                target.sudo().write(request_vals)
             if requester and not target.sudo().x_misa_requested_by:
                 target.sudo().x_misa_requested_by = requester
             target.sudo().message_post(body=self._lines_message(
@@ -127,6 +132,7 @@ class PurchaseRequest(models.Model):
             "company_id": (order.company_id if order else self.env.company).id,
             "x_misa_requested_by": requester,
             "hlv_from_quote_page": True,
+            **(request_vals or {}),
             "line_ids": [Command.create(vals) for vals in line_vals],
         })
         request.button_to_approve()
@@ -159,6 +165,9 @@ class PurchaseRequest(models.Model):
             )[:1]
             if line:
                 extra = {k: v for k, v in vals.items() if k.startswith(CHOICE_FIELD_PREFIXES) or k == "hlv_separate_po"}
+                note = (vals.get("hlv_note") or "").strip()
+                if note and note not in (line.hlv_note or ""):
+                    extra["hlv_note"] = "; ".join(filter(None, [line.hlv_note, note]))
                 line.write(dict(
                     extra,
                     product_qty=line.product_qty + uom._compute_quantity(vals["product_qty"], line.product_uom_id),
@@ -236,6 +245,8 @@ class PurchaseRequestLine(models.Model):
     # Sale chọn lúc lên YCMH: phần hẹn ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn). Chỉ là gợi ý
     # cho wizard Tạo RFQ — thu mua đổi được ở ô "Tách đơn mua riêng cho phần NCC hẹn giao".
     hlv_separate_po = fields.Boolean(string="Phần hẹn: đơn mua riêng", copy=False)
+    # Sale ghi lúc lên YCMH từ trang hỏi giá — riêng từng dòng hàng (yêu cầu giao, quy cách…).
+    hlv_note = fields.Char(string="Ghi chú", copy=False)
 
     def _hlv_remaining_qty(self):
         """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của

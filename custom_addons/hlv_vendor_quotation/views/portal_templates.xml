@@ -278,8 +278,9 @@
                                      t-esc="requesters[quote.id]"/>
                             </td>
                             <td class="vq-cell-products" data-label="Mặt hàng">
-                                <div class="vq-clamp" t-esc="', '.join(quote.line_ids[:3].mapped(lambda l: l.name or l.product_id.name)) + (' …' if len(quote.line_ids) &gt; 3 else '')"/>
-                                <span class="vq-muted vq-small"><t t-esc="len(quote.line_ids)"/> mặt hàng</span>
+                                <t t-set="vlines" t-value="quote._vendor_lines()"/>
+                                <div class="vq-clamp" t-esc="', '.join(vlines[:3].mapped(lambda l: l.name or l.product_id.name)) + (' …' if len(vlines) &gt; 3 else '')"/>
+                                <span class="vq-muted vq-small"><t t-esc="len(vlines)"/> mặt hàng</span>
                             </td>
                             <td data-label="Ngày gửi" t-esc="fdate(quote.create_date)"/>
                             <td data-label="Hạn báo giá">
@@ -351,7 +352,7 @@
                         <dd><t t-esc="fdate(quote.date_deadline)"/>
                             <span t-if="hint[0] and editable" t-attf-class="vq-small vq-hint-#{hint[1]}">
                                 (<t t-esc="hint[0].lower()"/>)</span></dd></div>
-                    <div><dt>Số mặt hàng</dt><dd t-esc="len(quote.line_ids)"/></div>
+                    <div><dt>Số mặt hàng</dt><dd t-esc="len(quote._vendor_lines())"/></div>
                     <div t-if="requester"><dt>Người hỏi giá</dt>
                         <dd><t t-esc="requester['name']"/>
                             <a t-if="requester['phone']" class="vq-tel" t-attf-href="tel:#{requester['phone']}"
@@ -387,7 +388,7 @@
                     cho các lần đặt hàng đến hết ngày <t t-esc="fdate(quote.price_valid_until)"/>.</t></div>
 
                 <!-- Cột "giá trước chiết khấu" + "% CK" chỉ hiện khi NCC bật (hoặc đã từng nhập). -->
-                <t t-set="disc_on" t-value="bool(post.get('use_discount')) if post else any(quote.line_ids.mapped('list_price'))"/>
+                <t t-set="disc_on" t-value="bool(post.get('use_discount')) if post else any(quote._vendor_lines().mapped('list_price'))"/>
                 <form method="post" t-attf-class="vq-quote-form #{'vq-disc-on' if disc_on else ''}"
                       t-att-action="'%s/%s' % (portal_base, quote.id)">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
@@ -400,7 +401,7 @@
                     </div>
 
                     <t t-call="hlv_vendor_quotation.portal_grid">
-                        <t t-set="grid_lines" t-value="quote.line_ids"/>
+                        <t t-set="grid_lines" t-value="quote._vendor_lines()"/>
                     </t>
 
                     <div class="vq-form-foot">

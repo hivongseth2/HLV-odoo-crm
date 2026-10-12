@@ -306,7 +306,8 @@ class VendorInquiry(models.Model):
                 missing |= line
         return missing
 
-    def action_create_request(self, sale_order=None, quantities=None, settle_line_ids=(), separate_backorder=False):
+    def action_create_request(self, sale_order=None, quantities=None, settle_line_ids=(), separate_backorder=False,
+                              line_notes=None, request_vals=None):
         """Đưa các NCC đã chọn mà CHƯA nằm trên YCMH lên YCMH — mỗi NCC một dòng (NCC thiếu hàng có
         hẹn thì thêm dòng phần hẹn), kèm giá + NCC.
 
@@ -318,6 +319,8 @@ class VendorInquiry(models.Model):
         hết thiếu. SL hỏi trên phiếu giữ nguyên: NCC báo giá theo số đó.
         separate_backorder: phần NCC hẹn giao ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn) — ghi
         lên dòng YCMH phần hẹn làm mặc định cho wizard Tạo RFQ, thu mua đổi được.
+        line_notes: {id dòng báo giá: ghi chú} → "Ghi chú" của dòng YCMH (cả phần hẹn); request_vals: địa điểm giao,
+        kho nhận của YCMH (purchase_request._add_request_lines).
         """
         self.ensure_one()
         if self.state in ("cancel", "closed"):
@@ -334,7 +337,9 @@ class VendorInquiry(models.Model):
             quote_line.action_set_buy_qty(qty if qty is not None else 0.0)
         settled = self.line_ids.filtered(lambda l: l.id in set(settle_line_ids or ()))._hlv_settle()
         order = sale_order or self.sale_order_id
-        parts = [(quote_line, dict(vals, hlv_separate_po=True) if is_backorder and separate_backorder else vals, is_backorder)
+        notes = {key: (text or "").strip() for key, text in (line_notes or {}).items() if (text or "").strip()}
+        parts = [(quote_line, dict(vals, **({"hlv_separate_po": True} if is_backorder and separate_backorder else {}),
+                                   **({"hlv_note": notes[quote_line.id]} if quote_line.id in notes else {})), is_backorder)
                  for quote_line in pending for vals, is_backorder in quote_line._hlv_request_parts()]
         request, request_lines, merged = self.env["purchase.request"]._add_request_lines(
             [vals for _quote_line, vals, _bo in parts],
@@ -342,6 +347,7 @@ class VendorInquiry(models.Model):
             source=self.name,
             requester_code=self.sale_code or "",
             merge_into=self.request_id,
+            request_vals=request_vals,
         )
         # _add_request_lines trả dòng YCMH theo đúng thứ tự dòng đã đưa vào.
         self.env["hlv.vendor.quote.line"]._hlv_link_request_lines([

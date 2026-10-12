@@ -5,11 +5,11 @@
          hai cách trình bày. Biến vào: quote, quote_url, quote_status, requesters, line_choice (từ
          portal_quote_list), cùng các biến chung của _render. -->
     <template id="portal_quote_quick" name="Báo giá NCC - xem nhanh">
-        <t t-set="disc_on" t-value="any(quote.line_ids.mapped('list_price'))"/>
+        <t t-set="disc_on" t-value="any(quote._vendor_lines().mapped('list_price'))"/>
         <div t-attf-class="vq-quick vq-quick-grid #{'vq-disc-on' if disc_on else ''}">
             <div class="vq-quick-scroll">
                 <t t-call="hlv_vendor_quotation.portal_grid">
-                    <t t-set="grid_lines" t-value="quote.line_ids"/>
+                    <t t-set="grid_lines" t-value="quote._vendor_lines()"/>
                     <t t-set="editable" t-value="False"/>
                     <t t-set="references" t-value="{}"/>
                 </t>
