@@ -263,8 +263,8 @@ h2.part-title::before { content: none; }
           đặt biến cho từng mẫu, import file Word, khai thông tin bên bán.</a>
       </nav>
       <div class="toc-groups" aria-label="Mục lục">
-        <div><h4><a href="#phan-chung">1 · Hướng dẫn chung</a></h4><ol><li><a href="#khai-niem">Mẫu, biến, hợp đồng</a></li><li><a href="#loai-bien">Ba loại biến</a></li><li><a href="#trang-thai">Trạng thái &amp; quyền</a></li></ol></div>
-        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li></ol></div>
+        <div><h4><a href="#phan-chung">1 · Hướng dẫn chung</a></h4><ol><li><a href="#khai-niem">Mẫu, biến, hợp đồng</a></li><li><a href="#loai-bien">Ba loại biến</a></li><li><a href="#trang-thai">Trạng thái &amp; quyền</a></li><li><a href="#nhat-ky">Nhật ký</a></li></ol></div>
+        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li><li><a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a></li></ol></div>
         <div><h4><a href="#phan-bang">3 · Bảng dữ liệu &amp; in</a></h4><ol><li><a href="#bang-excel">Bảng kiểu Excel</a></li><li><a href="#xuat-in">Xuất / in hàng loạt</a></li></ol></div>
         <div><h4><a href="#phan-mau">4 · Mẫu hợp đồng</a></h4><ol><li><a href="#tao-mau">Bốn cách tạo mẫu</a></li><li><a href="#soan-mau">Soạn mẫu trên trang</a></li><li><a href="#bien-mau">Biến của mẫu</a></li><li><a href="#ben-ban">Thông tin bên bán</a></li></ol></div>
         <div><h4><a href="#phan-word">5 · Mẫu từ file Word</a></h4><ol><li><a href="#mau-word">Đặt trường trộn trong Word</a></li><li><a href="#ten-bien">Tên biến có sẵn</a></li><li><a href="#bang-hang-word">Bảng hàng trong Word</a></li></ol></div>
@@ -322,8 +322,9 @@ h2.part-title::before { content: none; }
           <div class="st st-conf">Đã xác nhận<small>chờ ký, nội dung bị khoá</small></div>
           <div class="st-arrow" aria-hidden="true">→</div>
           <div class="st st-sign">Đã ký<small>xong</small></div>
-          <div class="st-note">Sửa hợp đồng <span class="chip c-warn">Đã xác nhận</span>: bấm <span class="btn">Về nháp để sửa</span>.
-            Hợp đồng <span class="chip c-ok">Đã ký</span> hoặc <span class="chip c-mute">Đã huỷ</span> chỉ Quản lý mở lại được.</div>
+          <div class="st-note">Từ <span class="chip c-warn">Đã xác nhận</span> trở đi hợp đồng <b>bị khoá với mọi người, kể cả Quản lý</b>.
+            Cần sửa: bấm <span class="btn">Về nháp để sửa</span>, sửa, rồi xác nhận lại — lịch sử trạng thái được lưu.
+            Hợp đồng <span class="chip c-ok">Đã ký</span> hoặc <span class="chip c-mute">Đã huỷ</span> chỉ Quản lý đưa về nháp được.</div>
         </div>
       </div>
       <div class="table-wrap">
@@ -332,11 +333,26 @@ h2.part-title::before { content: none; }
           <tbody>
             <tr><td>Thấy hợp đồng</td><td>Của mình phụ trách</td><td>Tất cả</td></tr>
             <tr><td>Tạo, sửa hợp đồng Nháp, xác nhận, đánh dấu đã ký</td><td><span class="yes">✓</span></td><td><span class="yes">✓</span></td></tr>
-            <tr><td>Sửa hợp đồng đã xác nhận / đã ký</td><td><span class="no">✕</span> <small>về nháp trước</small></td><td><span class="yes">✓</span></td></tr>
+            <tr><td>Sửa hợp đồng đã xác nhận / đã ký</td><td><span class="no">✕</span> <small>về nháp trước</small></td><td><span class="no">✕</span> <small>về nháp trước</small></td></tr>
+            <tr><td>Đưa về nháp</td><td>Hợp đồng đã xác nhận (chưa ký)</td><td>Mọi trạng thái</td></tr>
             <tr><td>Huỷ, xoá hợp đồng</td><td><span class="no">✕</span></td><td><span class="yes">✓</span></td></tr>
             <tr><td>Mẫu hợp đồng, thông tin bên bán</td><td><span class="no">✕</span></td><td><span class="yes">✓</span></td></tr>
+            <tr><td>Xem nhật ký</td><td>Hợp đồng của mình</td><td>Tất cả, kể cả hợp đồng đã xoá (menu Nhật ký)</td></tr>
           </tbody>
         </table>
+      </div>
+      <h3 id="nhat-ky">Nhật ký</h3>
+      <p>Mọi việc trên hợp đồng đều được ghi lại, không ai sửa hay xoá được: <b>ai</b> làm, <b>lúc nào</b>, <b>làm gì</b> và
+        <b>đổi từ gì sang gì</b>, gồm tạo; sửa từng ô, hàng hoá, mẫu, khách, VAT, ghi chú; sửa nội dung riêng; áp dụng mẫu mới;
+        xác nhận, ký, về nháp, huỷ; xuất PDF/Word/Excel; xoá. Xem ở mục <b>Nhật ký</b> cuối ngăn soạn; Quản lý có thêm menu
+        <b>Nhật ký</b> để tìm trên mọi hợp đồng.</p>
+      <div class="fig" style="font-size:12.5px">
+        <div style="color:var(--ink-3)">12/10/2026 09:41 · <b style="color:var(--ink)">Nguyễn Thị Lan</b></div>
+        <div><span class="chip c-mute">Sửa</span> Sửa 2 mục</div>
+        <ul style="margin:4px 0 8px;padding-left:18px;color:var(--ink-2)"><li>Điều kiện thanh toán: “Thanh toán 100% sau khi ký” → “Thanh toán 50% trước”</li>
+          <li>Sửa hàng Máy mài góc M18: SL 4 → 5</li></ul>
+        <div style="color:var(--ink-3)">12/10/2026 09:45 · <b style="color:var(--ink)">Nguyễn Thị Lan</b></div>
+        <div><span class="chip c-warn">Đổi trạng thái</span> Nháp → Đã xác nhận</div>
       </div>
       <p>Số hợp đồng tự cấp khi lưu lần đầu, theo loại và năm của ngày ký: <code>HĐMB-001/2026</code>, <code>HĐNT-001/2026</code>,
         sang năm mới quay về 001.</p>
@@ -476,6 +492,37 @@ h2.part-title::before { content: none; }
         <li>Số kiểu Việt: <code>4.058.000</code>, <code>2,5</code>. Gõ <code>4058000</code> cũng được, rời ô là tự thêm dấu chấm.</li>
         <li>Hợp đồng nguyên tắc (mẫu không có bảng hàng) không có phần này; "Mặt hàng chính" nằm ở nhóm <b>Hàng hoá</b>.</li>
       </ul>
+    </section>
+
+    <section id="sua-noi-dung">
+      <h2>Sửa chữ trên một hợp đồng</h2>
+      <p>Khách muốn đổi một câu, thêm một điều khoản riêng? Sửa ngay trên hợp đồng đó, <b>mẫu gốc và các hợp đồng khác không đổi</b>.</p>
+      <div class="fig">
+        <div class="mock">
+          <div class="mock-tool"><b style="font-size:13px">HĐMB-007/2026</b> <span class="chip c-mute">Nháp</span>
+            <span class="chip c-info">Nội dung sửa riêng</span> <i class="mk">4</i><span style="margin-left:auto"></span>
+            <i class="mk">1</i><span class="btn">Sửa nội dung</span><span class="btn">Xem nhanh</span><span class="btn">PDF</span></div>
+          <div style="background:#e9e7e1;padding:10px">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;font-size:12px">
+              <b>Sửa nội dung · HĐMB-007/2026</b><span style="margin-left:auto"></span><i class="mk">3</i>
+              <span class="btn">Khôi phục theo mẫu</span><span class="btn">Huỷ</span><span class="btn btn-primary">Lưu nội dung</span></div>
+            <div class="a4">
+              <p><b>ĐIỀU 3: PHƯƠNG THỨC GIAO HÀNG</b></p>
+              <p>Thời gian giao hàng: <span class="pv">{{Thoi_Gian_Giao_Hang}}</span>. <i class="mk">2</i>
+                <u>Bên A hỗ trợ lắp đặt miễn phí tại kho Bên B trong vòng 3 ngày sau khi giao.</u></p>
+            </div>
+          </div>
+        </div>
+        <ol class="steps">
+          <li><span>Hợp đồng đang <b>Nháp</b> và đã lưu: bấm <b>Sửa nội dung</b> ở đầu ngăn soạn.</span></li>
+          <li><span>Sửa chữ như trình soạn mẫu. Ô vàng là biến, vẫn tự điền theo giá trị trên ngăn soạn; chèn thêm biến được.</span></li>
+          <li><span><b>Lưu nội dung</b>. Muốn bỏ hết phần đã sửa: <b>Khôi phục theo mẫu</b> (giá trị đã điền được giữ).</span></li>
+          <li><span>Hợp đồng đã sửa riêng có nhãn <span class="chip c-info">Nội dung sửa riêng</span>.</span></li>
+        </ol>
+      </div>
+      <div class="note"><b>Sửa mẫu có làm đổi hợp đồng đã lập không?</b> Không. Lúc lập, mỗi hợp đồng giữ một bản riêng của mẫu
+        (nội dung và các ô nhập). Quản lý sửa mẫu sau đó thì hợp đồng cũ vẫn in đúng như lúc lập. Hợp đồng còn <b>Nháp</b> sẽ hiện
+        dòng "Mẫu … đã được sửa sau khi lập hợp đồng này" kèm nút <span class="btn">Áp dụng mẫu mới</span> nếu muốn lấy nội dung mới.</div>
     </section>
 
     <!-- ================================================================== PHẦN 3 -->
@@ -727,7 +774,13 @@ h2.part-title::before { content: none; }
         <p>Trên hợp đồng in đơn giá và thành tiền <b>chưa VAT</b>, rồi dòng thuế và tổng sau VAT, đúng mẫu cũ. Trên trang thì nhập giá
           <b>sau VAT</b>, trang tự tính ngược; tổng sau VAT luôn khớp đúng số đã gõ.</p></details>
       <details class="faq"><summary>Muốn sửa hợp đồng đã xác nhận?</summary>
-        <p>Bấm <b>Về nháp để sửa</b> (chưa ký thì nhân viên tự làm được), sửa rồi xác nhận lại. Hợp đồng đã ký chỉ Quản lý mở lại được.</p></details>
+        <p>Hợp đồng đã xác nhận bị khoá với mọi người, kể cả Quản lý, để văn bản đã chốt không bị đổi ngầm. Bấm <b>Về nháp để sửa</b>
+          (chưa ký thì nhân viên tự làm được), sửa rồi xác nhận lại. Hợp đồng đã ký chỉ Quản lý đưa về nháp được.</p></details>
+      <details class="faq"><summary>Quản lý sửa mẫu thì hợp đồng đã lập có bị đổi theo không?</summary>
+        <p>Không. Mỗi hợp đồng giữ bản riêng của mẫu lúc lập. Hợp đồng nháp muốn theo mẫu mới thì bấm <b>Áp dụng mẫu mới</b>.
+          Trên bảng kiểu Excel, ô của biến mà mẫu mới thêm sẽ gạch chéo ở các hợp đồng lập từ mẫu cũ (hợp đồng đó không có ô này).</p></details>
+      <details class="faq"><summary>Cần một câu khác mẫu cho riêng một khách?</summary>
+        <p>Dùng <b>Sửa nội dung</b> trên hợp đồng đó (xem <a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a>), không cần tạo mẫu mới.</p></details>
       <details class="faq"><summary>Số hợp đồng có bị nhảy số không?</summary>
         <p>Số cấp khi lưu lần đầu và không lấy lại khi xoá, nên xoá hợp đồng nháp sẽ để lại một số trống trong dãy. Số tính theo năm của
           ngày ký, sang năm mới quay về 001.</p></details>

@@ -16,8 +16,6 @@ from odoo.exceptions import UserError, ValidationError
 from ..utils import contract_vars, docx_io, docx_merge, html_blocks
 
 CONTRACT_TYPES = [('sale', 'Hợp đồng mua bán hàng hoá'), ('principle', 'Hợp đồng nguyên tắc')]
-_TYPE_KEYS = {key for key, _label in contract_vars.VARIABLE_TYPES}
-_SECTION_KEYS = {key for key, _label in contract_vars.SECTIONS}
 
 
 class ContractTemplate(models.Model):
@@ -42,6 +40,9 @@ class ContractTemplate(models.Model):
     has_lines = fields.Boolean(string='Có bảng hàng hoá', readonly=True,
                                help='Mẫu có biến dòng hàng (Ten_Hang_1...) — hợp đồng sẽ có bảng hàng và tổng tiền.')
     system_fields = fields.Char(readonly=True, help='Biến tự điền có trong mẫu, cách nhau dấu phẩy.')
+    # Tăng mỗi lần nội dung hoặc bộ biến của mẫu đổi; hợp đồng lưu số này lúc chụp mẫu để biết
+    # mẫu đã được sửa sau khi lập (hợp đồng không tự đổi theo, xem hlv.contract._snapshot_template)
+    content_version = fields.Integer(default=1, readonly=True, copy=False)
 
     @api.constrains('docx_file')
     def _check_docx_file(self):
@@ -97,35 +98,21 @@ class ContractTemplate(models.Model):
         return docx_merge.list_merge_fields(self._docx_bytes())
 
     def _sync_variables(self, defs=None):
-        """Đồng bộ biến nhập theo các trường có trong file mẫu: thêm biến mới (nhãn/kiểu lấy
-        từ thư viện), xoá biến không còn trong mẫu, giữ cấu hình biến đã có.
-
-        defs: list dict {name, label, var_type, section, default_value} người dùng sửa trên
-        trang — áp vào biến cùng tên, và thứ tự trong defs là thứ tự ô nhập. Biến không có
-        trong defs đứng sau, theo thứ tự xuất hiện trong mẫu."""
-        defs_by_name = {d.get('name'): d for d in (defs or []) if d.get('name')}
-        def_order = [d.get('name') for d in (defs or [])]
+        """Đồng bộ biến nhập theo các trường có trong file mẫu (xem contract_vars.merge_variable_defs)
+        và tăng content_version để hợp đồng nháp biết mẫu đã đổi. defs: cấu hình biến người dùng
+        vừa sửa trên trang (nhãn/kiểu/nhóm/mặc định/thứ tự)."""
         for rec in self:
             names = rec._merge_field_names()
-            inputs = [n for n in names if not contract_vars.is_system_variable(n)]
+            merged = contract_vars.merge_variable_defs(names, [v._to_dict() for v in rec.variable_ids], defs)
             existing = {v.name: v for v in rec.variable_ids}
-            if defs is None:
-                ordered = sorted(inputs, key=lambda n: (existing[n].sequence if n in existing else 10 ** 6,
-                                                        inputs.index(n)))
-            else:
-                ordered = sorted(inputs, key=lambda n: (def_order.index(n) if n in def_order else len(def_order),
-                                                        inputs.index(n)))
-            commands = []
-            for index, name in enumerate(ordered):
-                vals = existing[name]._to_dict() if name in existing else contract_vars.default_variable_def(name)
-                vals.update(_clean_def(defs_by_name.get(name)))
-                vals.update({'name': name, 'sequence': (index + 1) * 10})
-                commands.append((1, existing[name].id, vals) if name in existing else (0, 0, vals))
-            commands += [(2, var.id) for name, var in existing.items() if name not in inputs]
+            keep = {d['name'] for d in merged}
+            commands = [(1, existing[d['name']].id, d) if d['name'] in existing else (0, 0, d) for d in merged]
+            commands += [(2, var.id) for name, var in existing.items() if name not in keep]
             rec.write({
                 'variable_ids': commands,
                 'has_lines': any(contract_vars.is_line_variable(n) for n in names),
                 'system_fields': ','.join(n for n in names if contract_vars.is_system_variable(n)),
+                'content_version': rec.content_version + 1,
             })
 
     def action_convert_to_builder(self):
@@ -136,18 +123,3 @@ class ContractTemplate(models.Model):
             rec.write({'source': 'builder', 'body_html': html_blocks.blocks_to_html(blocks)})
         return True
 
-
-def _clean_def(definition):
-    """Giữ đúng các khoá người dùng được sửa, bỏ giá trị kiểu/nhóm không hợp lệ."""
-    if not definition:
-        return {}
-    vals = {}
-    if (definition.get('label') or '').strip():
-        vals['label'] = definition['label'].strip()
-    if definition.get('var_type') in _TYPE_KEYS:
-        vals['var_type'] = definition['var_type']
-    if definition.get('section') in _SECTION_KEYS:
-        vals['section'] = definition['section']
-    if 'default_value' in definition:
-        vals['default_value'] = (definition.get('default_value') or '').strip()
-    return vals

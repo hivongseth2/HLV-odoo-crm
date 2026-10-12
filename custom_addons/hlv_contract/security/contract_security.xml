@@ -49,6 +49,25 @@
         <field name="groups" eval="[(4, ref('group_contract_manager'))]"/>
         <field name="domain_force">[(1, '=', 1)]</field>
     </record>
+    <!-- Nhật ký: nhân viên xem nhật ký hợp đồng mình phụ trách; quản lý xem hết, kể cả hợp đồng đã xoá -->
+    <record id="rule_hlv_contract_log_company" model="ir.rule">
+        <field name="name">Nhật ký hợp đồng: theo công ty</field>
+        <field name="model_id" ref="model_hlv_contract_log"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_hlv_contract_log_own" model="ir.rule">
+        <field name="name">Nhật ký hợp đồng: hợp đồng mình phụ trách</field>
+        <field name="model_id" ref="model_hlv_contract_log"/>
+        <field name="groups" eval="[(4, ref('group_contract_user'))]"/>
+        <field name="domain_force">['|', '|', ('user_id', '=', user.id), ('contract_id.user_id', '=', user.id), ('contract_id.create_uid', '=', user.id)]</field>
+    </record>
+    <record id="rule_hlv_contract_log_all" model="ir.rule">
+        <field name="name">Nhật ký hợp đồng: quản lý xem hết</field>
+        <field name="model_id" ref="model_hlv_contract_log"/>
+        <field name="groups" eval="[(4, ref('group_contract_manager'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
     <record id="rule_hlv_contract_template_company" model="ir.rule">
         <field name="name">Mẫu hợp đồng: theo công ty</field>
         <field name="model_id" ref="model_hlv_contract_template"/>

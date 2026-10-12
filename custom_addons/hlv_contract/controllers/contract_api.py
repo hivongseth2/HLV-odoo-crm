@@ -53,10 +53,18 @@ def _line_commands(lines, vat_rate):
     return commands
 
 
-def _clean_values(template, values):
-    """Chỉ giữ biến của mẫu, chữ thì bỏ khoảng trắng hai đầu."""
-    names = set(template.variable_ids.mapped('name'))
+def _clean_values(var_names, values):
+    """Chỉ giữ các biến được phép, chữ thì bỏ khoảng trắng hai đầu."""
+    names = set(var_names)
     return {k: (v.strip() if isinstance(v, str) else v) for k, v in (values or {}).items() if k in names}
+
+
+def _var_names(contract, template):
+    """Biến nhập ghi được: hợp đồng đang có giữ mẫu cũ thì theo bản chụp riêng của nó, đổi sang
+    mẫu khác (hoặc hợp đồng mới) thì theo mẫu."""
+    if contract and contract.template_id == template:
+        return [v['name'] for v in contract._doc_variables()]
+    return template.variable_ids.mapped('name')
 
 
 class ContractPage(ContractPageMixin, http.Controller):
@@ -147,7 +155,7 @@ class ContractPage(ContractPageMixin, http.Controller):
             vals['note'] = note
         if values is not None:
             existing = dict(contract.variable_values or {}) if contract else {}
-            vals['variable_values'] = dict(existing, **_clean_values(template, values))
+            vals['variable_values'] = dict(existing, **_clean_values(_var_names(contract, template), values))
         if lines is not None:
             rate = vals['vat_rate'] if 'vat_rate' in vals else (
                 contract.vat_rate if contract else request.env.company.contract_vat_rate)
@@ -235,7 +243,42 @@ class ContractPage(ContractPageMixin, http.Controller):
         vals.setdefault('contract_date', contract.contract_date if contract else fields.Date.context_today(request.env.user))
         vals['name'] = contract.name if contract else '/'
         vals['company_id'] = (contract.company_id if contract else request.env.company).id
+        if contract and contract.template_id == _template:
+            # Giữ nguyên mẫu: xem trước theo bản chụp riêng (có thể đã sửa chữ), không theo mẫu hiện tại
+            vals.update({
+                'doc_file': contract.with_context(bin_size=False).doc_file,
+                'doc_variables': contract.doc_variables,
+                'doc_has_lines': contract.doc_has_lines,
+            })
         return {'html': request.env['hlv.contract'].new(vals)._preview_html()}
+
+    @http.route(f'{API}/body', type='json', auth='user', methods=['POST'])
+    def api_body(self, contract_id=None, **kw):
+        """Nội dung riêng của hợp đồng để sửa chữ (biến hiện dạng {{Ten_Bien}})."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id)
+        return {
+            'name': contract.name,
+            'html': contract.body_html_for_edit(),
+            'variables': contract._doc_variables(),
+            'doc_custom': contract.doc_custom,
+        }
+
+    @http.route(f'{API}/body/save', type='json', auth='user', methods=['POST'])
+    def api_body_save(self, contract_id=None, body_html='', variables=None, **kw):
+        """Lưu chữ sửa trên riêng hợp đồng này; mẫu gốc không đổi."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id)
+        contract.save_custom_body(body_html or '', variables)
+        return payload.contract_detail(contract, self._is_manager())
+
+    @http.route(f'{API}/apply_template', type='json', auth='user', methods=['POST'])
+    def api_apply_template(self, contract_id=None, **kw):
+        """Hợp đồng nháp lấy lại nội dung theo mẫu hiện tại (bỏ chữ đã sửa riêng nếu có)."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id)
+        contract.action_apply_template()
+        return payload.contract_detail(contract, self._is_manager())
 
     @http.route(f'{PAGE_ROUTE}/xuat', type='http', auth='user', methods=['GET'])
     def export(self, ids='', fmt='pdf', **kw):
@@ -248,6 +291,9 @@ class ContractPage(ContractPageMixin, http.Controller):
             raise UserError('Chưa chọn hợp đồng nào.')
         contracts.check_access('read')
         filename, content, mimetype = export_contracts(contracts, fmt)
+        label = {'pdf': 'PDF', 'docx': 'Word', 'xlsx': 'Excel'}[fmt]
+        for contract in contracts:
+            contract._log('export', 'Xuất %s%s' % (label, '' if len(contracts) == 1 else ' (cùng %d hợp đồng)' % len(contracts)))
         return request.make_response(content, headers=[
             ('Content-Type', mimetype),
             ('Content-Disposition', content_disposition(filename)),

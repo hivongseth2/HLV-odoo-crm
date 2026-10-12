@@ -11,8 +11,15 @@ window.HlvContract = window.HlvContract || {};
   var preview = null;
   var previewToken = 0;
 
+  /**
+   * Bộ ô nhập đang dùng. Hợp đồng đã lập giữ bản chụp riêng (mẫu sửa sau không đổi theo) nên
+   * lấy theo hợp đồng; hợp đồng mới hoặc vừa đổi sang mẫu khác thì lấy theo mẫu.
+   */
   function template() {
     var id = S.form.template_id;
+    if (S.contract && S.contract.template_id === id) {
+      return { id: id, variables: S.contract.variables, has_lines: S.contract.has_lines };
+    }
     return (S.config.templates || []).filter(function (t) { return t.id === id; })[0] ||
       { id: id, variables: [], has_lines: false, name: "" };
   }
@@ -143,6 +150,13 @@ window.HlvContract = window.HlvContract || {};
       : "";
     var toggle = '<button type="button" class="hd-btn' + (S.previewOn ? " is-on" : "") + '" data-toggle-preview="1">' +
       (S.previewOn ? "Ẩn xem trước" : "Xem trước khi soạn") + "</button>";
+    var bodyEdit = c && editable()
+      ? '<button type="button" class="hd-btn" data-edit-body="1" title="Sửa chữ trên riêng hợp đồng này, mẫu gốc không đổi">Sửa nội dung</button>'
+      : "";
+    if (c && c.doc_custom) {
+      tag += ' <span class="hd-tag hd-tag-mine" title="Hợp đồng này đã sửa chữ riêng, khác mẫu gốc">Nội dung sửa riêng</span>';
+    }
+    files = bodyEdit + files;
     return '<header class="hd-drawer-head"><div><h2 class="hd-h2">' + (c ? esc(c.name) : "Hợp đồng mới") + " " + tag + "</h2>" +
       (c ? '<div class="hd-muted hd-small">Phụ trách: ' + esc(c.user) + "</div>" : "") + "</div>" +
       '<div class="hd-push d-flex flex-wrap gap-2">' + toggle + files + "</div>" +
@@ -155,12 +169,32 @@ window.HlvContract = window.HlvContract || {};
       return '<button type="button" class="hd-btn ' + def[1] + '" data-action="' + key + '">' + def[0] + "</button>";
     }).join("");
     var save = editable() ? '<button type="button" class="hd-btn hd-btn-primary" id="hd-save">Lưu</button>' : "";
-    var locked = editable() ? "" : '<span class="hd-muted">Hợp đồng đã khoá — chỉ Quản lý sửa được.</span>';
+    var locked = editable() ? "" : '<span class="hd-muted">Hợp đồng đã chốt nên bị khoá — bấm "Về nháp để sửa" nếu cần sửa.</span>';
     return '<footer class="hd-drawer-foot">' + actions + '<span class="hd-push hd-muted" id="hd-dirty"></span>' + locked + save + "</footer>";
   }
 
+  /** Thông báo đầu ngăn: mẫu đã được sửa sau khi lập hợp đồng (nháp thì cho áp dụng mẫu mới). */
+  function noticesHtml() {
+    var c = S.contract;
+    if (!c || !c.template_outdated || c.template_id !== S.form.template_id) {
+      return "";
+    }
+    return '<div class="hd-notice">Mẫu <b>' + esc(c.template_name) + "</b> đã được sửa sau khi lập hợp đồng này. " +
+      "Hợp đồng vẫn giữ nội dung lúc lập." +
+      (editable() ? ' <button type="button" class="hd-btn hd-btn-mini" data-apply-template="1">Áp dụng mẫu mới</button>' : "") +
+      "</div>";
+  }
+
+  /** Hiện lại hợp đồng sau khi thao tác ở nơi khác (hộp sửa nội dung) đã lưu. */
+  HD.showContractDetail = function (detail) {
+    loadDetail(detail);
+    S.dirty = false;
+    render();
+    HD.loadList();
+  };
+
   function render() {
-    var body =
+    var body = noticesHtml() +
       '<fieldset id="hd-form"' + (editable() ? "" : " disabled") + ">" +
       '<section class="hd-step"><h3 class="hd-h3">Hợp đồng</h3><div class="hd-grid">' +
       '<div class="hd-field"><label class="hd-label" for="hd-f-template">Mẫu</label>' +
@@ -171,7 +205,9 @@ window.HlvContract = window.HlvContract || {};
       sectionsHtml() + linesHtml() +
       '<section class="hd-step"><label class="hd-label" for="hd-f-note">Ghi chú nội bộ (không in ra hợp đồng)</label>' +
       '<textarea class="hd-input hd-textarea w-100" id="hd-f-note" rows="2">' + esc(S.form.note) + "</textarea></section>" +
-      "</fieldset>";
+      "</fieldset>" +
+      (S.contract ? '<details class="hd-step hd-log-box" id="hd-log-box"><summary class="hd-h3">Nhật ký — ai tạo, sửa, đổi trạng thái, xuất file</summary>' +
+        '<div class="hd-log-list"></div></details>' : "");
     var panel = HD.$("hd-drawer-panel");
     panel.classList.toggle("with-preview", !!S.previewOn);
     panel.innerHTML = headerHtml() +
@@ -182,6 +218,9 @@ window.HlvContract = window.HlvContract || {};
       onPick: focusVariable,
     }) : null;
     refreshPreview();
+    if (S.contract) {
+      HD.bindContractLogs(HD.$("hd-log-box"), S.contract.id);
+    }
     if (HD.$("hd-partner-search")) {
       bindPartnerPicker();
     }
@@ -526,6 +565,21 @@ window.HlvContract = window.HlvContract || {};
       if (preview) {
         preview.highlight(el.dataset.var);
       }
+    });
+    HD.on(panel, "click", "[data-edit-body]", function () {
+      saveIfDirty().then(function (detail) { HD.openBodyEditor(detail.id); }).catch(HD.fail);
+    });
+    HD.on(panel, "click", "[data-apply-template]", function () {
+      var warn = S.contract.doc_custom ? "\nPhần chữ đã sửa riêng trên hợp đồng này sẽ bị bỏ." : "";
+      if (!window.confirm("Lấy lại nội dung theo mẫu hiện tại? Giá trị đã điền được giữ." + warn)) {
+        return;
+      }
+      saveIfDirty().then(function (detail) {
+        return HD.api("apply_template", { contract_id: detail.id });
+      }).then(function (detail) {
+        HD.showContractDetail(detail);
+        HD.toast("Đã áp dụng mẫu mới");
+      }).catch(HD.fail);
     });
     HD.on(panel, "click", "[data-toggle-preview]", function () {
       collectForm();

@@ -4,16 +4,20 @@ window.HlvContract = window.HlvContract || {};
 (function (HD) {
   "use strict";
 
-  var MODALS = ["hd-preview", "hd-export", "hd-import", "hd-seller"];
+  var MODALS = ["hd-preview", "hd-export", "hd-import", "hd-seller", "hd-body"];
 
   function switchView(view) {
     HD.show("hd-view-contracts", view === "contracts");
     HD.show("hd-view-templates", view === "templates");
+    HD.show("hd-view-logs", view === "logs");
     document.querySelectorAll("[data-view]").forEach(function (tab) {
       tab.classList.toggle("is-active", tab.dataset.view === view);
     });
     if (view === "templates") {
       HD.loadTemplates();
+    }
+    if (view === "logs") {
+      HD.loadAllLogs();
     }
   }
 
@@ -60,6 +64,8 @@ window.HlvContract = window.HlvContract || {};
       HD.initGrid();
       HD.initForm();
       HD.initTemplates();
+      HD.initBody();
+      HD.initLogs();
       return HD.loadList();
     }).catch(HD.fail);
   }

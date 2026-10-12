@@ -7,3 +7,5 @@ access_hlv_contract_template_manager,hlv.contract.template manager,model_hlv_con
 access_hlv_contract_template_variable_user,hlv.contract.template.variable user,model_hlv_contract_template_variable,group_contract_user,1,0,0,0
 access_hlv_contract_template_variable_manager,hlv.contract.template.variable manager,model_hlv_contract_template_variable,group_contract_manager,1,1,1,1
 access_res_company_hlv_contract_manager,res.company hlv contract manager,base.model_res_company,group_contract_manager,1,1,0,0
+access_hlv_contract_log_user,hlv.contract.log user,model_hlv_contract_log,group_contract_user,1,0,0,0
+access_hlv_contract_log_manager,hlv.contract.log manager,model_hlv_contract_log,group_contract_manager,1,0,0,0
