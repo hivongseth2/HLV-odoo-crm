@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Lấy từ hai mẫu Word gốc. noupdate để sửa trên giao diện không bị ghi đè khi nâng cấp -->
+    <record id="base.main_company" model="res.company">
+        <field name="contract_seller_name">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</field>
+        <field name="contract_seller_address">Tổ 2, ấp Hiền Đức, Xã Phước Thái, Thành phố Đồng Nai, Việt Nam</field>
+        <field name="contract_seller_phone">0948.844.070</field>
+        <field name="contract_seller_vat">3603151043</field>
+        <field name="contract_seller_representative">Ông VŨ ĐỨC TẬP</field>
+        <field name="contract_seller_position">Giám đốc</field>
+        <field name="contract_seller_bank_account">700031955760 (VND)</field>
+        <field name="contract_seller_bank_name">Ngân hàng TNHH MTV Shinhan Việt Nam – Chi nhánh Đông Sài Gòn</field>
+        <field name="contract_court">Tòa án Thành phố Đồng Nai</field>
+        <field name="contract_vat_rate">8</field>
+    </record>
+</odoo>

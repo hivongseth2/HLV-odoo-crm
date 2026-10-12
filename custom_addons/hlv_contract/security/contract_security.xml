@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_hlv_contract" model="ir.module.category">
+        <field name="name">Hợp đồng</field>
+        <field name="sequence">40</field>
+    </record>
+
+    <!-- Nhân viên: tạo và sửa hợp đồng của mình, xuất file, chỉ đọc mẫu -->
+    <record id="group_contract_user" model="res.groups">
+        <field name="name">Nhân viên</field>
+        <field name="category_id" ref="module_category_hlv_contract"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+    <!-- Quản lý: thấy mọi hợp đồng, huỷ/xoá, quản lý mẫu và thông tin bên bán -->
+    <record id="group_contract_manager" model="res.groups">
+        <field name="name">Quản lý</field>
+        <field name="category_id" ref="module_category_hlv_contract"/>
+        <field name="implied_ids" eval="[(4, ref('group_contract_user'))]"/>
+        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+    </record>
+
+    <record id="rule_hlv_contract_company" model="ir.rule">
+        <field name="name">Hợp đồng: theo công ty</field>
+        <field name="model_id" ref="model_hlv_contract"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_hlv_contract_own" model="ir.rule">
+        <field name="name">Hợp đồng: nhân viên chỉ thấy hợp đồng mình phụ trách</field>
+        <field name="model_id" ref="model_hlv_contract"/>
+        <field name="groups" eval="[(4, ref('group_contract_user'))]"/>
+        <field name="domain_force">['|', ('user_id', '=', user.id), ('create_uid', '=', user.id)]</field>
+    </record>
+    <record id="rule_hlv_contract_all" model="ir.rule">
+        <field name="name">Hợp đồng: quản lý thấy tất cả</field>
+        <field name="model_id" ref="model_hlv_contract"/>
+        <field name="groups" eval="[(4, ref('group_contract_manager'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+    <record id="rule_hlv_contract_line_own" model="ir.rule">
+        <field name="name">Dòng hợp đồng: theo hợp đồng của nhân viên</field>
+        <field name="model_id" ref="model_hlv_contract_line"/>
+        <field name="groups" eval="[(4, ref('group_contract_user'))]"/>
+        <field name="domain_force">['|', ('contract_id.user_id', '=', user.id), ('contract_id.create_uid', '=', user.id)]</field>
+    </record>
+    <record id="rule_hlv_contract_line_all" model="ir.rule">
+        <field name="name">Dòng hợp đồng: quản lý thấy tất cả</field>
+        <field name="model_id" ref="model_hlv_contract_line"/>
+        <field name="groups" eval="[(4, ref('group_contract_manager'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+    <record id="rule_hlv_contract_template_company" model="ir.rule">
+        <field name="name">Mẫu hợp đồng: theo công ty</field>
+        <field name="model_id" ref="model_hlv_contract_template"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+</odoo>

@@ -1,0 +1,743 @@
+<title>Hướng dẫn Hợp đồng</title>
+<meta name="description" content="Hướng dẫn soạn hợp đồng, bảng dữ liệu kiểu Excel, mẫu hợp đồng và chuẩn bị file Word trên trang /hop-dong">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Hướng dẫn dạng tờ giấy, cùng bộ với "Hướng dẫn Hỏi giá NCC": màn hình mô phỏng khoanh số,
+   chữ chỉ để chú thích. Giao diện giấy cố định, không đổi theo chế độ tối — như bản in dán cạnh bàn. */
+:root {
+  --desk: #e6e3dc;
+  --paper: #fbfaf6;
+  --ink: #1c1c1a;
+  --ink-2: #4b4a46;
+  --ink-3: #77756f;
+  --rule: #cfcbc1;
+  --tint: #f1eee6;
+  --red: #8c2a1c;
+  --ok: #2f7d4a;  --ok-bg: #e3f1e6;
+  --warn: #9a5b07; --warn-bg: #fbf0d6;
+  --bad: #a3301f;  --bad-bg: #f7e1dc;
+  --info: #2b5c8a; --info-bg: #e2ecf5;
+  --mute-bg: #ebe8e1;
+  --mark: #d62d20;          /* màu khoanh số trên màn mô phỏng */
+  --fill: #fff1c2;          /* chỗ biến đã điền trên bản xem trước (giống trang thật) */
+  --fill-line: #f0d27a;
+  --app: #175b72;           /* màu nhấn của trang /hop-dong */
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font-family: var(--font-serif); font-size: 16px; line-height: 1.55;
+  counter-reset: sec; }
+.page { padding-block: 36px 72px; padding-inline: 16px; }
+.sheet { max-width: 920px; margin: 0 auto; background: var(--paper); padding: 56px 64px 48px;
+  box-shadow: 0 1px 2px rgba(28, 28, 26, .08), 0 12px 32px rgba(28, 28, 26, .10); min-width: 0; }
+
+.doc-head { border-bottom: 2px solid var(--ink); padding-bottom: 18px; }
+.doc-kind { font-family: var(--font-sans); font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); margin: 0 0 8px; }
+h1 { font-size: 2.3rem; line-height: 1.12; font-weight: 700; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; }
+.lead { font-size: 1.05rem; color: var(--ink-2); margin: 0; max-width: 64ch; font-style: italic; }
+
+section { counter-increment: sec; }
+h2 { font-size: 1.45rem; line-height: 1.25; font-weight: 700; margin: 44px 0 6px; padding-top: 14px;
+  border-top: 1px solid var(--rule); text-wrap: balance; scroll-margin-top: 20px; }
+h2::before { content: counter(sec) ". "; color: var(--red); }
+h3 { font-size: 1.02rem; margin: 22px 0 8px; scroll-margin-top: 20px; }
+p { margin: 8px 0; max-width: 66ch; }
+a { color: var(--red); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .84em; background: var(--tint); padding: 0 4px; }
+ul.rules { margin: 8px 0; padding-left: 20px; max-width: 70ch; }
+ul.rules li { margin: 4px 0; }
+
+.fig { border: 1px solid var(--ink); padding: 20px; margin: 12px 0 6px; background: var(--paper); font-family: var(--font-sans);
+  font-size: 13.5px; line-height: 1.45; min-width: 0; }
+.fig-cap { font-family: var(--font-sans); font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; }
+.fig-cap .tag { font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--red); margin-right: 6px; }
+.btn { display: inline-block; font-family: var(--font-sans); font-size: 12px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--ink-3); padding: 1px 7px; background: #fff; border-radius: 3px; color: var(--ink); line-height: 1.5; }
+.btn-primary { background: var(--app); color: #fff; border-color: var(--app); }
+.chip { display: inline-block; font-family: var(--font-sans); font-size: 11px; font-weight: 600; letter-spacing: .03em;
+  padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+.c-ok { background: var(--ok-bg); color: var(--ok); }
+.c-warn { background: var(--warn-bg); color: var(--warn); }
+.c-info { background: var(--info-bg); color: var(--info); }
+.c-mute { background: var(--mute-bg); color: var(--ink-2); }
+kbd { font-family: var(--font-sans); font-size: 11px; padding: 0 5px; border: 1px solid var(--ink-3); border-bottom-width: 2px;
+  border-radius: 3px; background: #fff; }
+
+/* Số khoanh đỏ đặt trên màn mô phỏng, khớp với danh sách bước bên dưới */
+.mk { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--mark); color: #fff;
+  font-size: 10.5px; font-weight: 700; font-style: normal; font-family: var(--font-sans); flex: none; vertical-align: 1px; }
+.steps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 20px; font-family: var(--font-sans); font-size: 13px; line-height: 1.45; color: var(--ink-2); counter-reset: st; }
+.steps.one { grid-template-columns: 1fr; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: baseline; min-width: 0; }
+.steps li::before { content: counter(st); display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--mark); color: #fff; font-size: 11px; font-weight: 700; }
+.steps b { color: var(--ink); }
+
+/* Khung màn hình mô phỏng */
+.mock { border: 1px solid var(--ink-3); border-radius: 4px; background: #fff; overflow: hidden; min-width: 0; }
+.mock-bar { background: #1c2024; color: #fff; padding: 7px 12px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12.5px; }
+.mock-bar b { font-size: 13.5px; margin-right: 6px; }
+.mock-bar .on { background: rgba(255, 255, 255, .16); padding: 2px 8px; border-radius: 3px; }
+.mock-bar .dim { color: rgba(255, 255, 255, .62); }
+.mock-tool { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 9px 12px; background: #f7f6f3; border-bottom: 1px solid var(--rule); }
+.mock-input { flex: 1 1 180px; border: 1px solid #d8d5cd; background: #fff; border-radius: 3px; padding: 3px 8px; color: var(--ink-3); font-size: 12px; min-width: 0; }
+.mock-sheets { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px 12px 0; background: #f7f6f3; }
+.mock-sheets span { border: 1px solid var(--rule); border-bottom: 0; padding: 3px 10px; background: #efede7; border-radius: 3px 3px 0 0; font-size: 12px; color: var(--ink-2); }
+.mock-sheets span.on { background: #fff; color: var(--app); font-weight: 600; }
+.mock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mock-table th { background: #fbfaf8; color: var(--ink-2); font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule);
+  font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.mock-table th small { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-3); font-family: var(--font-mono); font-size: 9.5px; }
+.mock-table td { padding: 6px 8px; border-bottom: 1px solid #f1efea; border-right: 1px solid #f1efea; white-space: nowrap; }
+.mock-table td.edit { box-shadow: inset 0 0 0 2px var(--app); background: #fff; }
+.mock-table tr.sel td { background: #f3f8fa; }
+.scroll-x { overflow-x: auto; }
+
+/* Ngăn soạn hai cột: ô nhập | xem trước */
+.compose { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.compose-form { padding: 10px 12px; border-right: 1px solid var(--rule); display: grid; gap: 8px; align-content: start; }
+.box { border: 1px solid var(--rule); border-radius: 3px; padding: 8px 10px; background: #fff; }
+.box h5 { margin: 0 0 6px; font-size: 12.5px; }
+.field { display: grid; gap: 2px; margin-bottom: 6px; }
+.field:last-child { margin-bottom: 0; }
+.field label { font-size: 10.5px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.field .in { border: 1px solid #d8d5cd; border-radius: 3px; padding: 3px 7px; font-size: 12px; background: #fff; min-height: 24px; }
+.field .in.focus { border-color: var(--app); box-shadow: 0 0 0 2px #c6dce4; }
+.linked { color: var(--ok); font-weight: 600; font-size: 10px; }
+.drop { border: 1px solid var(--rule); border-radius: 3px; box-shadow: 0 6px 16px rgba(0, 0, 0, .12); background: #fff; font-size: 11.5px; margin-top: 2px; }
+.drop div { padding: 4px 8px; border-bottom: 1px solid #f1efea; }
+.drop div:last-child { border-bottom: 0; }
+.drop .hint { color: var(--ink-3); font-size: 10.5px; }
+.drop .act { background: #e8f0f3; }
+.compose-pv { background: #e9e7e1; padding: 10px; display: grid; gap: 6px; align-content: start; }
+.pv-head { font-size: 11px; color: var(--ink-2); }
+.a4 { background: #fff; padding: 14px 16px; font-family: "Times New Roman", var(--font-serif); font-size: 11.5px; line-height: 1.45;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .12); color: #000; }
+.a4 .c { text-align: center; }
+.a4 p { margin: 0 0 4px; max-width: none; }
+.pv { background: var(--fill); box-shadow: 0 0 0 1px var(--fill-line); border-radius: 2px; padding: 0 1px; }
+.pv.empty { background: transparent; box-shadow: none; outline: 1px dashed #c9a227; color: #9a7b12; font-style: italic; }
+.pv.focus { background: #ffd966; box-shadow: 0 0 0 2px var(--app); }
+.lines { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.lines th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 10px; padding: 3px 4px; border-bottom: 1px solid var(--rule); }
+.lines td { padding: 3px 4px; border-bottom: 1px solid #f1efea; vertical-align: top; }
+.lines .r { text-align: right; }
+.sub { display: block; color: var(--ink-3); font-size: 10px; }
+
+/* Sơ đồ khái niệm: Mẫu + Biến -> Hợp đồng -> File */
+.flow { display: grid; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr) 34px minmax(0, 1fr); align-items: stretch; }
+.flow .node { border: 1px solid var(--ink); border-top-width: 5px; padding: 9px 11px; background: var(--paper); min-width: 0; }
+.flow .node b { display: block; font-size: 14px; margin-bottom: 3px; }
+.flow .node small { display: block; color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+.flow .arrow { display: grid; place-items: center; font-size: 18px; }
+.n-tpl { border-top-color: var(--info) !important; }
+.n-ct { border-top-color: var(--warn) !important; }
+.n-out { border-top-color: var(--ok) !important; }
+.word { font-family: "Times New Roman", var(--font-serif); font-size: 12px; line-height: 1.5; margin: 8px 0 0; padding: 7px 9px; background: #fff;
+  border: 1px solid var(--rule); }
+.mf { background: #e8e8e8; padding: 0 2px; }
+
+/* Ba loại biến */
+.kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.kind { border: 1px solid var(--ink); padding: 11px 13px; font-size: 13px; min-width: 0; }
+.kind h4 { margin: 0 0 4px; font-size: 14px; }
+.kind p { margin: 0 0 6px; color: var(--ink-2); font-size: 12.5px; }
+.kind code { font-size: 11px; }
+.k-input { border-top: 5px solid var(--warn); }
+.k-std { border-top: 5px solid var(--info); }
+.k-sys { border-top: 5px solid var(--ok); }
+
+/* Trạng thái */
+.states { display: grid; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr) 34px minmax(0, 1fr); }
+.st { border: 1px solid var(--ink); padding: 10px 12px; text-align: center; font-weight: 600; font-size: 13px; }
+.st small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.st-arrow { display: grid; place-items: center; font-size: 18px; }
+.st-draft { background: var(--mute-bg); } .st-conf { background: var(--warn-bg); } .st-sign { background: var(--ok-bg); }
+.st-note { grid-column: 1 / -1; margin-top: 10px; font-size: 12.5px; color: var(--ink-2); border-top: 1px dashed var(--ink-3); padding-top: 8px; }
+
+/* Bảng */
+.table-wrap { overflow-x: auto; margin: 10px 0; }
+table.doc { width: 100%; border-collapse: collapse; font-family: var(--font-sans); font-size: 13px;
+  border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+table.doc th, table.doc td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.doc th { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); font-weight: 600;
+  border-bottom: 1px solid var(--ink); white-space: nowrap; }
+table.doc tr:last-child td { border-bottom: 0; }
+table.doc td small { color: var(--ink-2); }
+.yes, .no { display: inline-block; min-width: 22px; text-align: center; font-weight: 700; border-radius: 3px; padding: 0 5px; }
+.yes { background: var(--ok-bg); color: var(--ok); }
+.no { background: var(--bad-bg); color: var(--bad); }
+
+/* So sánh các cách tạo mẫu */
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.card { border: 1px solid var(--ink); padding: 12px 14px; font-family: var(--font-sans); font-size: 13px; min-width: 0; }
+.card h4 { margin: 0 0 4px; font-size: 14px; }
+.card .when { color: var(--ink-2); font-size: 12.5px; margin: 0 0 8px; }
+.card ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 12.5px; }
+
+/* Hộp thoại Field của Word (mô phỏng) */
+.dlg { border: 1px solid #8a8a8a; background: #f3f3f3; font-family: "Segoe UI", var(--font-sans); font-size: 12px; max-width: 520px; }
+.dlg-title { background: #fff; padding: 5px 10px; border-bottom: 1px solid #d0d0d0; font-weight: 600; }
+.dlg-body { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; padding: 10px; }
+.dlg-list { background: #fff; border: 1px solid #b8b8b8; height: 128px; overflow: hidden; }
+.dlg-list div { padding: 1px 6px; }
+.dlg-list .on { background: #cce4f7; }
+.dlg-in { background: #fff; border: 1px solid #b8b8b8; padding: 2px 6px; margin: 3px 0 8px; font-family: var(--font-mono); }
+.dlg-foot { text-align: right; padding: 0 10px 10px; display: flex; gap: 6px; justify-content: flex-end; }
+.dlg-foot span { border: 1px solid #8a8a8a; background: #fff; padding: 2px 16px; }
+
+/* Hộp nhấn mạnh */
+.note { border-left: 5px solid var(--info); background: var(--info-bg); padding: 10px 14px; margin: 14px 0; font-family: var(--font-sans);
+  font-size: 13.5px; max-width: 74ch; }
+.note b { color: var(--info); }
+.warnbox { border-left-color: var(--warn); background: var(--warn-bg); }
+.warnbox b { color: var(--warn); }
+
+details.faq { border-bottom: 1px solid var(--rule); padding: 9px 0; font-size: 15px; }
+details.faq:first-of-type { border-top: 1px solid var(--ink); }
+details.faq summary { cursor: pointer; font-weight: 700; }
+details.faq p { margin: 6px 0 2px; }
+
+footer { margin-top: 44px; padding-top: 12px; border-top: 2px solid var(--ink); font-family: var(--font-sans); font-size: 12px;
+  color: var(--ink-3); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
+
+/* Chia theo vai trò, mục lục, đầu mỗi phần */
+.roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 20px 0 0; }
+.role { display: block; border: 1px solid var(--ink); padding: 12px 14px; background: var(--paper); color: var(--ink-2);
+  text-decoration: none; font-family: var(--font-sans); font-size: 13px; line-height: 1.45; min-width: 0; }
+.role b { display: block; color: var(--ink); font-size: 16px; font-family: var(--font-serif); margin: 2px 0 4px; }
+.role .reads { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--red); }
+.role:hover, .role:focus-visible { border-color: var(--red); box-shadow: 3px 3px 0 var(--rule); outline: none; }
+.toc-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin-top: 20px;
+  font-family: var(--font-sans); font-size: 13px; }
+.toc-groups h4 { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.toc-groups h4 a { color: var(--red); text-decoration: none; }
+.toc-groups ol { margin: 0; padding: 0; list-style: none; }
+.toc-groups li { margin: 2px 0; }
+.toc-groups li a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.toc-groups li a:hover, .toc-groups li a:focus-visible { color: var(--red); border-color: var(--red); }
+.part-head { margin: 64px 0 0; padding: 16px 0 4px; border-top: 4px double var(--ink); scroll-margin-top: 20px; }
+.part-kicker { margin: 0; font-family: var(--font-sans); font-size: 12px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--red); }
+h2.part-title { margin: 2px 0 6px; padding: 0; border: 0; font-size: 2rem; }
+h2.part-title::before { content: none; }
+.part-who { margin: 0; font-family: var(--font-sans); font-size: 13px; color: var(--ink-2); }
+.part-head + section h2 { border-top: 0; margin-top: 18px; }
+
+@media (max-width: 760px) {
+  .page { padding-block: 0; padding-inline: 0; }
+  .sheet { padding: 28px 16px 32px; box-shadow: none; }
+  h1 { font-size: 1.85rem; }
+  h2.part-title { font-size: 1.6rem; }
+  .fig { padding: 14px; }
+  .steps, .roles, .toc-groups, .kinds, .cards { grid-template-columns: 1fr; }
+  .compose { grid-template-columns: 1fr; }
+  .compose-form { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .flow, .states { grid-template-columns: 1fr; }
+  .flow .arrow, .st-arrow { height: 26px; font-size: 0; }
+  .flow .arrow::before, .st-arrow::before { content: "↓"; font-size: 18px; }
+  .dlg-body { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+  <main class="sheet">
+    <header class="doc-head">
+      <p class="doc-kind">Hướng dẫn sử dụng · Nhân viên · Quản lý hợp đồng</p>
+      <h1>Hợp đồng</h1>
+      <p class="lead">Soạn hợp đồng mua bán và hợp đồng nguyên tắc từ mẫu Word, xem trước ngay khi gõ, in hàng loạt ra PDF, Word
+        hoặc Excel. Thay cho form Excel và Mail Merge của Word. Trang làm việc: <code>/hop-dong</code>.</p>
+      <nav class="roles" aria-label="Chọn phần theo vai trò">
+        <a class="role" href="#phan-soan"><span class="reads">Đọc phần 1 · 2 · 3</span><b>Tôi soạn hợp đồng</b>Lập hợp đồng cho khách,
+          điền bên mua và hàng hoá, xuất PDF để ký, sửa hàng loạt trên bảng kiểu Excel.</a>
+        <a class="role" href="#phan-mau"><span class="reads">Đọc phần 1 · 4 · 5</span><b>Tôi quản lý mẫu</b>Tạo và sửa mẫu hợp đồng,
+          đặt biến cho từng mẫu, import file Word, khai thông tin bên bán.</a>
+      </nav>
+      <div class="toc-groups" aria-label="Mục lục">
+        <div><h4><a href="#phan-chung">1 · Hướng dẫn chung</a></h4><ol><li><a href="#khai-niem">Mẫu, biến, hợp đồng</a></li><li><a href="#loai-bien">Ba loại biến</a></li><li><a href="#trang-thai">Trạng thái &amp; quyền</a></li></ol></div>
+        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li></ol></div>
+        <div><h4><a href="#phan-bang">3 · Bảng dữ liệu &amp; in</a></h4><ol><li><a href="#bang-excel">Bảng kiểu Excel</a></li><li><a href="#xuat-in">Xuất / in hàng loạt</a></li></ol></div>
+        <div><h4><a href="#phan-mau">4 · Mẫu hợp đồng</a></h4><ol><li><a href="#tao-mau">Bốn cách tạo mẫu</a></li><li><a href="#soan-mau">Soạn mẫu trên trang</a></li><li><a href="#bien-mau">Biến của mẫu</a></li><li><a href="#ben-ban">Thông tin bên bán</a></li></ol></div>
+        <div><h4><a href="#phan-word">5 · Mẫu từ file Word</a></h4><ol><li><a href="#mau-word">Đặt trường trộn trong Word</a></li><li><a href="#ten-bien">Tên biến có sẵn</a></li><li><a href="#bang-hang-word">Bảng hàng trong Word</a></li></ol></div>
+        <div><h4><a href="#hoi-dap">Hỏi đáp</a></h4></div>
+      </div>
+    </header>
+
+    <!-- ================================================================== PHẦN 1 -->
+    <div class="part-head" id="phan-chung">
+      <p class="part-kicker">Phần 1</p>
+      <h2 class="part-title">Hướng dẫn chung</h2>
+      <p class="part-who">Mọi người đọc: ba khái niệm của trang, ba loại biến, ai được làm gì.</p>
+    </div>
+
+    <section id="khai-niem">
+      <h2>Mẫu, biến và hợp đồng</h2>
+      <div class="fig">
+        <div class="flow">
+          <div class="node n-tpl"><b>Mẫu hợp đồng</b><small>Văn bản có sẵn chỗ trống. Mỗi chỗ trống là một <b>biến</b>, ví dụ «Ten_Ben_Mua».</small>
+            <div class="word">BÊN MUA: <span class="mf">«Ten_Ben_Mua»</span><br>Mã số thuế: <span class="mf">«Ma_So_Thue_Ben_Mua»</span></div></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node n-ct"><b>Hợp đồng</b><small>Một lần điền mẫu: chọn mẫu, gõ giá trị cho từng biến, thêm hàng hoá.</small>
+            <div class="word">Tên bên mua: <b>CÔNG TY TNHH BOSCH VIỆT NAM</b><br>Mã số thuế: <b>0302…</b></div></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node n-out"><b>File để ký</b><small>Word hoặc PDF điền sẵn, giữ nguyên định dạng mẫu. Excel để thống kê.</small>
+            <div class="word">BÊN MUA: CÔNG TY TNHH BOSCH VIỆT NAM<br>Mã số thuế: 0302…</div></div>
+        </div>
+      </div>
+      <p>Giống cách cũ (file Word mẫu + file Excel dữ liệu + Mail Merge), nhưng tất cả nằm trên một trang: không phải mở Word,
+        không phải chọn dòng Excel, không phải xoá dòng hàng thừa, số tiền bằng chữ tự viết.</p>
+    </section>
+
+    <section id="loai-bien">
+      <h2>Ba loại biến</h2>
+      <div class="kinds">
+        <div class="kind k-input"><h4>Biến nhập</h4><p>Người soạn gõ trên hợp đồng. Mỗi mẫu tự có bộ biến nhập riêng, là các ô
+          trên ngăn soạn và các cột trên bảng kiểu Excel.</p><code>Thoi_Gian_Giao_Hang</code> <code>Bao_Hanh</code></div>
+        <div class="kind k-std"><h4>Biến hay dùng</h4><p>Biến nhập có tên chuẩn cho thông tin chung. Chọn khách là các biến Bên mua
+          tự điền.</p><code>Ten_Ben_Mua</code> <code>Dia_Chi_Ben_Mua</code> <code>Ma_So_Thue_Ben_Mua</code></div>
+        <div class="kind k-sys"><h4>Biến tự điền</h4><p>Trang tự tính, không ai phải gõ: số và ngày hợp đồng, bên bán, bảng hàng, tổng
+          tiền, số tiền bằng chữ.</p><code>So_Hop_Dong</code> <code>Ngay_Ky</code> <code>Tong_Gia_Tri_HD</code></div>
+      </div>
+      <div class="note"><b>Biến có dùng chung giữa các mẫu không?</b> Có, theo tên. Mỗi mẫu tự chọn dùng biến nào, nhưng
+        <b>cùng tên biến là cùng một thông tin</b> ở mọi mẫu: đang soạn mà đổi mẫu thì giá trị đã gõ vẫn còn; chọn khách thì
+        <code>Ten_Ben_Mua</code> được điền ở bất kỳ mẫu nào có nó. Vì vậy hãy dùng tên trong danh sách
+        <a href="#ten-bien">biến có sẵn</a> cho thông tin chung, chỉ đặt tên mới cho thông tin riêng của một mẫu.</div>
+    </section>
+
+    <section id="trang-thai">
+      <h2>Trạng thái hợp đồng &amp; ai được làm gì</h2>
+      <div class="fig">
+        <div class="states">
+          <div class="st st-draft">Nháp<small>đang soạn, sửa thoải mái</small></div>
+          <div class="st-arrow" aria-hidden="true">→</div>
+          <div class="st st-conf">Đã xác nhận<small>chờ ký, nội dung bị khoá</small></div>
+          <div class="st-arrow" aria-hidden="true">→</div>
+          <div class="st st-sign">Đã ký<small>xong</small></div>
+          <div class="st-note">Sửa hợp đồng <span class="chip c-warn">Đã xác nhận</span>: bấm <span class="btn">Về nháp để sửa</span>.
+            Hợp đồng <span class="chip c-ok">Đã ký</span> hoặc <span class="chip c-mute">Đã huỷ</span> chỉ Quản lý mở lại được.</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="doc">
+          <thead><tr><th>Việc</th><th>Nhân viên</th><th>Quản lý</th></tr></thead>
+          <tbody>
+            <tr><td>Thấy hợp đồng</td><td>Của mình phụ trách</td><td>Tất cả</td></tr>
+            <tr><td>Tạo, sửa hợp đồng Nháp, xác nhận, đánh dấu đã ký</td><td><span class="yes">✓</span></td><td><span class="yes">✓</span></td></tr>
+            <tr><td>Sửa hợp đồng đã xác nhận / đã ký</td><td><span class="no">✕</span> <small>về nháp trước</small></td><td><span class="yes">✓</span></td></tr>
+            <tr><td>Huỷ, xoá hợp đồng</td><td><span class="no">✕</span></td><td><span class="yes">✓</span></td></tr>
+            <tr><td>Mẫu hợp đồng, thông tin bên bán</td><td><span class="no">✕</span></td><td><span class="yes">✓</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Số hợp đồng tự cấp khi lưu lần đầu, theo loại và năm của ngày ký: <code>HĐMB-001/2026</code>, <code>HĐNT-001/2026</code>,
+        sang năm mới quay về 001.</p>
+    </section>
+
+    <!-- ================================================================== PHẦN 2 -->
+    <div class="part-head" id="phan-soan">
+      <p class="part-kicker">Phần 2</p>
+      <h2 class="part-title">Soạn hợp đồng</h2>
+      <p class="part-who">Trang /hop-dong, menu "Hợp đồng" trong Odoo: lập hợp đồng cho khách, điền bên mua và hàng hoá.</p>
+    </div>
+
+    <section id="man-hinh">
+      <h2>Màn hình chính</h2>
+      <div class="fig">
+        <div class="mock">
+          <div class="mock-bar"><b>Hợp đồng</b><span class="on"><i class="mk">1</i> Danh sách hợp đồng</span><span class="dim">Mẫu hợp đồng</span>
+            <span class="dim">Thông tin bên bán</span><span style="margin-left:auto">Hướng dẫn</span></div>
+          <div class="mock-tool"><span class="mock-input">Tìm số hợp đồng, tên bên mua, mã số thuế…</span>
+            <span class="chip c-info">Tất cả 12</span><span class="chip c-mute">Nháp 4</span><span class="chip c-mute">Đã xác nhận 3</span>
+            <i class="mk">2</i><span class="btn">Xuất / In (2)</span><i class="mk">3</i><span class="btn btn-primary">+ Hợp đồng mới</span></div>
+          <div class="mock-sheets"><span class="on">Tất cả hợp đồng</span><span>Hợp đồng mua bán hàng hoá</span><span>Hợp đồng nguyên tắc</span><i class="mk">4</i></div>
+          <div class="scroll-x"><table class="mock-table">
+            <thead><tr><th>☐</th><th>Số hợp đồng</th><th>Ngày ký</th><th>Mẫu</th><th>Bên mua</th><th>Giá trị (sau VAT)</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>☑</td><td><b>HĐMB-002/2026</b></td><td>11/10/2026</td><td>Mua bán</td><td>CÔNG TY CỔ PHẦN NGÔ HAN</td><td>24.287.904</td><td><span class="chip c-warn">Đã xác nhận</span></td><td><i class="mk">5</i> <span class="btn">Mở</span> <span class="btn">Xem nhanh</span> <span class="btn">PDF</span></td></tr>
+              <tr><td>☑</td><td><b>HĐNT-001/2026</b></td><td>09/10/2026</td><td>Nguyên tắc</td><td>CÔNG TY TNHH MILWAUKEE TOOL</td><td>—</td><td><span class="chip c-mute">Nháp</span></td><td><span class="btn">Mở</span> <span class="btn">Xem nhanh</span> <span class="btn">PDF</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+        <ol class="steps">
+          <li><span><b>Danh sách hợp đồng</b> là màn làm việc hằng ngày. Quản lý thấy thêm Mẫu hợp đồng và Thông tin bên bán.</span></li>
+          <li><span>Tick nhiều hợp đồng rồi bấm <b>Xuất / In</b> để tải PDF gộp, Word hoặc Excel (xem <a href="#xuat-in">Xuất / in</a>).</span></li>
+          <li><span><b>+ Hợp đồng mới</b> mở ngăn soạn bên phải. Đang ở sheet của một mẫu thì mẫu đó được chọn sẵn.</span></li>
+          <li><span><b>Mỗi mẫu một sheet</b>, như HDMB/HDNT trong file Excel cũ: cột là biến của mẫu, sửa ngay trong ô (xem <a href="#bang-excel">Bảng kiểu Excel</a>).</span></li>
+          <li><span><b>Mở</b> ngăn soạn, <b>Xem nhanh</b> bản in, <b>PDF</b> tải ngay. Bấm vào dòng cũng mở ngăn soạn.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="soan-moi">
+      <h2>Soạn hợp đồng mới: ô nhập bên trái, hợp đồng bên phải</h2>
+      <div class="fig">
+        <div class="mock">
+          <div class="mock-tool"><b style="font-size:13px">Hợp đồng mới</b><span style="margin-left:auto"></span><i class="mk">6</i><span class="btn">Ẩn xem trước</span></div>
+          <div class="compose">
+            <div class="compose-form">
+              <div class="box"><h5>Hợp đồng</h5>
+                <div class="field"><label><i class="mk">1</i> Mẫu</label><div class="in">Hợp đồng mua bán hàng hoá (mẫu gốc) ▾</div></div>
+                <div class="field"><label>Ngày ký</label><div class="in">11/10/2026</div></div></div>
+              <div class="box"><h5>Bên mua</h5>
+                <div class="field"><label><i class="mk">2</i> Tên bên mua <span class="linked">● CÔNG TY TNHH BOSCH VIỆT NAM</span></label>
+                  <div class="in focus">CÔNG TY TNHH BOSCH VIỆT NAM</div></div>
+                <div class="field"><label>Địa chỉ bên mua</label><div class="in">Tầng 14, 33 Lê Duẩn, Bến Nghé, Quận 1, TP.HCM</div></div>
+                <div class="field"><label>Người đại diện bên mua</label><div class="in"></div></div></div>
+              <div class="box"><h5>Điều khoản</h5>
+                <div class="field"><label>Điều kiện thanh toán</label><div class="in">Thanh toán 100% sau khi ký</div></div></div>
+              <div style="font-size:11px;color:var(--ink-3)"><i class="mk">5</i> Hàng hoá, Ghi chú nội bộ… · nút <span class="btn btn-primary">Lưu</span> ở cuối ngăn</div>
+            </div>
+            <div class="compose-pv">
+              <div class="pv-head"><b>Xem trước</b> <i class="mk">3</i> <span class="pv">đã điền</span> <span class="pv empty">còn trống</span> — bấm để tới ô nhập</div>
+              <div class="a4">
+                <p class="c"><b>HỢP ĐỒNG MUA BÁN HÀNG HOÁ</b></p>
+                <p class="c">Số: <span class="pv empty">số tự cấp khi lưu</span></p>
+                <p><b><u>BÊN MUA</u>:</b> <span class="pv focus">CÔNG TY TNHH BOSCH VIỆT NAM</span> <i class="mk">4</i></p>
+                <p>Địa chỉ: <span class="pv">Tầng 14, 33 Lê Duẩn, Bến Nghé, Quận 1, TP.HCM</span></p>
+                <p>Đại diện bởi: <span class="pv empty">Người đại diện bên mua</span></p>
+                <p>Thời hạn và điều kiện thanh toán: <span class="pv">Thanh toán 100% sau khi ký</span>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ol class="steps">
+          <li><span><b>Chọn mẫu</b>. Ô nhập bên dưới đổi theo bộ biến của mẫu. Đổi mẫu giữa chừng thì những gì đã gõ vẫn còn.</span></li>
+          <li><span>Gõ vào ô. Ô tên/MST bên mua có gợi ý khách (xem <a href="#ben-mua">Bên mua</a>).</span></li>
+          <li><span><b>Xem trước</b> cập nhật nửa giây sau khi ngừng gõ: <b>vàng</b> là chỗ đã điền, <b>khung đứt</b> là chỗ còn trống (hiện tên ô).</span></li>
+          <li><span>Đứng ở ô nào thì chỗ của nó trên hợp đồng <b>sáng đậm</b>. Ngược lại, <b>bấm vào chỗ trên hợp đồng</b> để nhảy tới ô nhập.</span></li>
+          <li><span>Kéo xuống: <b>Hàng hoá</b> (mẫu có bảng hàng), <b>Ghi chú nội bộ</b> (không in ra). Bấm <b>Lưu</b> để cấp số hợp đồng.</span></li>
+          <li><span>Màn hình hẹp hoặc muốn rộng chỗ gõ: <b>Ẩn xem trước</b>. Trang nhớ lựa chọn cho lần sau.</span></li>
+        </ol>
+      </div>
+      <p>Sau khi lưu, đầu ngăn có <span class="btn">Xem nhanh</span> <span class="btn">Word</span> <span class="btn">PDF</span>; cuối ngăn có
+        <span class="btn btn-primary">Xác nhận</span> khi nội dung đã chốt. Có thay đổi chưa lưu mà bấm Xem nhanh/Word/PDF thì trang tự lưu trước.</p>
+    </section>
+
+    <section id="ben-mua">
+      <h2>Bên mua: vừa gõ tay, vừa chọn khách có sẵn</h2>
+      <div class="fig">
+        <div style="max-width:440px">
+          <div class="field"><label>Tên bên mua</label><div class="in focus">bosch</div></div>
+          <div class="drop">
+            <div class="hint">Chọn khách có sẵn để điền cả cụm thông tin, hoặc cứ gõ tiếp để nhập tay</div>
+            <div class="act"><b>CÔNG TY TNHH BOSCH VIỆT NAM</b> <span style="color:var(--ink-3)">MST 0302…</span></div>
+            <div><b>CHI NHÁNH CÔNG TY TNHH BOSCH VIỆT NAM TẠI TP.HCM</b></div>
+            <div><b>CÔNG TY TNHH BOSCH VIỆT NAM, Nguyễn Văn An</b></div>
+          </div>
+        </div>
+        <ol class="steps one">
+          <li><span>Gõ 2 ký tự trở lên vào <b>Tên bên mua</b> hoặc <b>Mã số thuế</b>: hiện khách trong danh bạ Odoo. Dùng <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> hoặc bấm chuột.</span></li>
+          <li><span><b>Chọn</b>: điền tên, địa chỉ (gộp một dòng), MST, điện thoại. Chọn một <b>người liên hệ</b> của công ty thì tên công ty thành bên mua, người đó thành <b>người đại diện</b> kèm chức vụ.</span></li>
+          <li><span><b>Không chọn</b>: chữ đã gõ giữ nguyên như nhập tay, các ô khác tự gõ tiếp.</span></li>
+          <li><span>Nhãn <span class="linked">● Tên khách</span> cho biết hợp đồng đang gắn với khách trong danh bạ. Gõ tay một tên khác thì tự bỏ gắn.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="hang-hoa">
+      <h2>Hàng hoá: chọn sản phẩm, lấy từ đơn bán, dán Excel hoặc gõ tự do</h2>
+      <div class="fig">
+        <div class="mock" style="padding:10px 12px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><b style="font-size:13px">Hàng hoá</b>
+            <span style="margin-left:auto"></span><i class="mk">4</i><span class="btn">Dán từ Excel</span><span class="btn">+ Thêm dòng</span></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><i class="mk">3</i><span class="mock-input">Lấy hàng từ đơn bán: gõ số đơn (S…, DH…) hoặc tên khách</span></div>
+          <div class="scroll-x"><table class="lines">
+            <thead><tr><th>STT</th><th>Tên hàng</th><th>ĐVT</th><th class="r">Số lượng</th><th class="r">Đơn giá sau VAT</th><th class="r">Thành tiền sau VAT</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td><i class="mk">1</i> Máy mài góc M18 FSAGV125XPDB-0X0 MILWAUKEE <span class="linked">●</span></td><td>Cái</td><td class="r">4</td>
+                <td class="r"><i class="mk">2</i> 4.382.640<span class="sub">chưa VAT 4.058.000</span></td><td class="r"><b>17.530.560</b><span class="sub">chưa VAT 16.232.000</span></td></tr>
+              <tr><td>2</td><td>Phí vận chuyển nội thành</td><td>Chuyến</td><td class="r">1</td><td class="r">540.000<span class="sub">chưa VAT 500.000</span></td><td class="r"><b>540.000</b><span class="sub">chưa VAT 500.000</span></td></tr>
+            </tbody>
+          </table></div>
+          <div style="text-align:right;font-size:12.5px;margin-top:8px"><b>Tổng giá trị (sau VAT) 18.070.560</b><br>
+            <i style="color:var(--ink-3)">Mười tám triệu không trăm bảy mươi nghìn năm trăm sáu mươi đồng</i><br>
+            <span style="color:var(--ink-3)">Tiền hàng chưa VAT 16.732.000 · Thuế VAT <i class="mk">5</i> <span class="btn">8</span> % 1.338.560</span></div>
+        </div>
+        <ol class="steps">
+          <li><span><b>Tên hàng</b>: gõ mã/tên để chọn sản phẩm (điền tên, ĐVT, giá); hoặc gõ tự do như "Phí vận chuyển". Dấu <span class="linked">●</span> là đã gắn sản phẩm.</span></li>
+          <li><span><b>Giá nhập là giá SAU VAT</b>, đúng thói quen. Giá chưa VAT (in trên hợp đồng) hiện dòng nhỏ bên dưới, tự tính.</span></li>
+          <li><span><b>Lấy từ đơn bán</b>: chọn đơn là kéo hết dòng hàng sang. Chưa có bên mua thì lấy luôn khách của đơn.</span></li>
+          <li><span><b>Dán từ Excel</b>: copy các cột Tên hàng · ĐVT · Số lượng · Đơn giá sau VAT, dán vào, bấm Thêm vào bảng.</span></li>
+          <li><span>Đổi <b>thuế suất</b> thì giá sau VAT giữ nguyên, giá chưa VAT tính lại. Tổng và số tiền bằng chữ tự cập nhật.</span></li>
+        </ol>
+      </div>
+      <ul class="rules">
+        <li><b>Không giới hạn số dòng.</b> Mẫu Word có 10 dòng mà hợp đồng có 25 mặt hàng thì dòng cuối tự nhân bản và đánh số tiếp;
+          hợp đồng có 3 mặt hàng thì 7 dòng thừa tự xoá. Không phải xoá tay trong Word như trước.</li>
+        <li>Số kiểu Việt: <code>4.058.000</code>, <code>2,5</code>. Gõ <code>4058000</code> cũng được, rời ô là tự thêm dấu chấm.</li>
+        <li>Hợp đồng nguyên tắc (mẫu không có bảng hàng) không có phần này; "Mặt hàng chính" nằm ở nhóm <b>Hàng hoá</b>.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================== PHẦN 3 -->
+    <div class="part-head" id="phan-bang">
+      <p class="part-kicker">Phần 3</p>
+      <h2 class="part-title">Bảng dữ liệu &amp; in hàng loạt</h2>
+      <p class="part-who">Khi cần sửa nhanh nhiều hợp đồng một lúc, như sửa file Excel cũ, và khi in nhiều hợp đồng.</p>
+    </div>
+
+    <section id="bang-excel">
+      <h2>Bảng kiểu Excel: mỗi mẫu một sheet</h2>
+      <div class="fig">
+        <div class="mock">
+          <div class="mock-sheets"><span>Tất cả hợp đồng</span><span class="on"><i class="mk">1</i> Hợp đồng nguyên tắc</span><span>Hợp đồng mua bán hàng hoá</span></div>
+          <div class="mock-tool" style="font-size:11.5px;color:var(--ink-2)">Bấm vào ô để sửa — <kbd>Enter</kbd> lưu, <kbd>Tab</kbd> sang ô kế, <kbd>Esc</kbd> huỷ.
+            <span style="margin-left:auto"></span><i class="mk">4</i><span class="btn">Ẩn xem trước</span></div>
+          <div class="scroll-x"><table class="mock-table">
+            <thead><tr><th>Số hợp đồng</th><th>Ngày ký</th><th>Tên bên mua<small>Ten_Ben_Mua</small></th><th>Mã số thuế bên mua<small>Ma_So_Thue_Ben_Mua</small></th>
+              <th>Mặt hàng chính<small>Mat_Hang_Chinh</small></th><th>Hiệu lực đến ngày<small>Ngay_Het_Han</small></th><th>Trạng thái</th></tr></thead>
+            <tbody>
+              <tr class="sel"><td><b>HĐNT-001/2026</b></td><td>09/10/2026</td><td class="edit"><i class="mk">2</i> CÔNG TY TNHH MILW|</td><td>0314999544</td><td>dụng cụ điện cầm tay</td><td>30/06/2027</td><td><span class="chip c-mute">Nháp</span></td></tr>
+              <tr><td><b>HĐNT-002/2026</b></td><td>10/10/2026</td><td>CÔNG TY CP VÍ DỤ XYZ</td><td>3600000000</td><td>tấm bế cao su</td><td>30/06/2027</td><td><span class="chip c-ok">Đã ký</span></td></tr>
+            </tbody>
+          </table></div>
+          <div class="mock-tool" style="border-top:1px solid var(--rule);border-bottom:0"><i class="mk">3</i><span class="btn">+ Thêm dòng</span><span style="margin-left:auto;font-size:11.5px;color:var(--ink-3)">2 hợp đồng</span></div>
+        </div>
+        <ol class="steps">
+          <li><span>Mỗi mẫu là một <b>sheet</b>. Cột là các biến nhập của mẫu (dòng nhỏ dưới tên cột là tên biến), như sheet HDMB/HDNT cũ.</span></li>
+          <li><span><b>Bấm ô để sửa</b> tại chỗ, lưu ngay. Ô tên/MST bên mua cũng có gợi ý khách: chọn là điền cả các cột bên mua của dòng.</span></li>
+          <li><span><b>+ Thêm dòng</b> tạo hợp đồng mới theo mẫu của sheet, con trỏ nhảy vào ô đầu tiên.</span></li>
+          <li><span><b>Xem trước</b> hợp đồng của dòng đang chọn hiện bên phải; bấm chỗ tô màu trên hợp đồng để mở ô đó trong bảng.</span></li>
+        </ol>
+      </div>
+      <p>Hợp đồng đã xác nhận / đã ký: ô bị khoá (chữ xám). Hàng hoá sửa trong ngăn soạn: bấm ô <b>Hàng hoá</b> của dòng.</p>
+    </section>
+
+    <section id="xuat-in">
+      <h2>Xuất / in hàng loạt</h2>
+      <div class="table-wrap">
+        <table class="doc">
+          <thead><tr><th>Định dạng</th><th>Ra gì</th><th>Dùng khi</th></tr></thead>
+          <tbody>
+            <tr><td><b>PDF</b></td><td>Một file gộp, mỗi hợp đồng bắt đầu trang mới</td><td>In ký hàng loạt, gửi khách bản không sửa được</td></tr>
+            <tr><td><b>Word (.docx)</b></td><td>Một hợp đồng: một file. Nhiều: gói .zip, mỗi hợp đồng một file đặt theo số</td><td>Cần sửa câu chữ riêng cho một khách trước khi gửi</td></tr>
+            <tr><td><b>Excel</b></td><td>Mỗi mẫu một sheet, mỗi hợp đồng một dòng, hàng hoá trải ngang Ten_Hang_1, DVT_1…</td><td>Thống kê, đối chiếu. Tiêu đề cột là tên biến nên vẫn làm nguồn Mail Merge được</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Tick các dòng ở danh sách hoặc sheet → <span class="btn">Xuất / In (n)</span> → chọn định dạng → <span class="btn btn-primary">Tải xuống</span>.
+        File tải thẳng về máy, không lưu kèm vào hợp đồng.</p>
+      <div class="note warnbox"><b>PDF gần giống Word, không giống từng điểm ảnh.</b> Cùng font Times, cỡ chữ, bảng, lề trang; đầu/chân trang
+        của file Word không có trong PDF. Cần bản y hệt Word thì tải Word rồi in từ Word.</div>
+    </section>
+
+    <!-- ================================================================== PHẦN 4 -->
+    <div class="part-head" id="phan-mau">
+      <p class="part-kicker">Phần 4</p>
+      <h2 class="part-title">Mẫu hợp đồng</h2>
+      <p class="part-who">Dành cho Quản lý hợp đồng: menu Mẫu hợp đồng trên trang /hop-dong.</p>
+    </div>
+
+    <section id="tao-mau">
+      <h2>Bốn cách tạo mẫu</h2>
+      <div class="cards">
+        <div class="card"><h4>Import file Word, giữ nguyên</h4><p class="when">Đã có hợp đồng mẫu đẹp trong Word.</p>
+          <ul><li>Giữ đúng định dạng, đầu/chân trang, khổ giấy</li><li>Chỗ trống phải là trường trộn MergeField (xem <a href="#mau-word">Phần 5</a>)</li>
+            <li>Sửa chữ: tải file về, sửa trong Word, bấm <b>Thay bằng file Word…</b></li></ul></div>
+        <div class="card"><h4>Soạn trên trang</h4><p class="when">Mẫu mới, hoặc muốn sửa ngay không cần Word.</p>
+          <ul><li>Gõ như Word thu gọn, bấm chèn biến</li><li>Có sẵn bảng hàng hoá kèm dòng tổng</li>
+            <li>File Word tự dựng lại mỗi lần lưu</li></ul></div>
+        <div class="card"><h4>Nhân bản mẫu có sẵn</h4><p class="when">Mẫu mới gần giống một mẫu đang dùng.</p>
+          <ul><li>Mở mẫu → <b>Nhân bản</b> → đổi tên, sửa chỗ khác</li><li>Giữ cả bộ biến và cấu hình biến</li></ul></div>
+        <div class="card"><h4>Import file .doc cũ</h4><p class="when">File Word 97-2003 (.doc).</p>
+          <ul><li>Chỉ lấy được chữ và trường trộn; mất in đậm, căn lề</li><li>Luôn mở trong trình soạn để chỉnh lại</li>
+            <li>Tốt hơn: mở bằng Word, Lưu thành .docx rồi import</li></ul></div>
+      </div>
+      <p>Mỗi mẫu có <b>Dãy số</b>: hợp đồng theo mẫu đó đánh số <code>HĐMB-…</code> (mua bán) hay <code>HĐNT-…</code> (nguyên tắc).
+        Bỏ tick <b>Đang dùng</b> để ẩn mẫu khỏi danh sách chọn mà không mất hợp đồng cũ.</p>
+    </section>
+
+    <section id="soan-mau">
+      <h2>Soạn mẫu trên trang</h2>
+      <div class="fig">
+        <div class="mock">
+          <div class="mock-tool"><span class="mock-input" style="color:var(--ink)">Hợp đồng bảo hành</span><span style="font-size:11px;color:var(--ink-3)">Dãy số</span>
+            <span class="btn">HĐMB ▾</span><span class="btn">Nhân bản</span><span class="btn btn-primary">Lưu mẫu</span></div>
+          <div class="mock-sheets"><span class="on">Nội dung mẫu</span><span><i class="mk">5</i> Biến của mẫu (3)</span></div>
+          <div class="compose" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+            <div style="background:#e9e7e1;padding:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"><span class="btn">B</span><span class="btn">I</span><span class="btn">U</span><span class="btn">≡</span>
+                <i class="mk">3</i><span class="btn">Bảng hàng hoá</span><span class="btn">+ Dòng</span><span class="btn">Viền bảng</span><span class="btn">Cỡ chữ ▾</span></div>
+              <div class="a4">
+                <p class="c"><b>HỢP ĐỒNG BẢO HÀNH</b></p>
+                <p class="c">Số: <span class="pv">{{So_Hop_Dong}}</span></p>
+                <p>Bên mua: <span class="pv">{{Ten_Ben_Mua}}</span> <i class="mk">2</i></p>
+                <p>Thời hạn bảo hành: <span class="pv">{{Thoi_Han_Bao_Hanh}}</span> tháng kể từ ngày giao.</p>
+              </div>
+            </div>
+            <div style="padding:10px;font-size:11.5px;display:grid;gap:6px;align-content:start">
+              <b>Bấm để chèn vào chỗ con trỏ</b>
+              <div style="color:var(--ink-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em">Biến của mẫu này <i class="mk">1</i></div>
+              <div style="background:#fff8e0;padding:2px 6px">Tên bên mua</div><div style="background:#fff8e0;padding:2px 6px">Thời hạn bảo hành</div>
+              <div><span class="btn">+ Biến mới…</span> <i class="mk">4</i></div>
+              <div style="color:var(--ink-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em">Gợi ý hay dùng</div>
+              <div style="padding:2px 6px">Địa chỉ bên mua</div><div style="padding:2px 6px">Mã số thuế bên mua</div>
+              <div style="color:var(--ink-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em">Tự điền, không cần nhập</div>
+              <div style="padding:2px 6px;color:var(--app)">Số hợp đồng · Ngày ký · Bên bán · Tổng tiền…</div>
+            </div>
+          </div>
+        </div>
+        <ol class="steps">
+          <li><span>Bảng biến bên phải chia ba nhóm: <b>biến của mẫu này</b>, <b>gợi ý hay dùng</b>, <b>tự điền</b>.</span></li>
+          <li><span>Đặt con trỏ vào chỗ cần điền rồi <b>bấm tên biến</b>: biến chèn đúng chỗ, cùng dòng, hiện dạng ô vàng không sửa nhầm được.</span></li>
+          <li><span><b>Bảng hàng hoá</b> chèn sẵn tiêu đề + một dòng hàng + 3 dòng tổng. <b>Viền bảng</b> bật/tắt viền (bảng chữ ký thường không viền).</span></li>
+          <li><span><b>+ Biến mới…</b>: gõ nhãn tiếng Việt ("Thời hạn bảo hành"), tên biến tự đặt (<code>Thoi_Han_Bao_Hanh</code>).</span></li>
+          <li><span>Tab <b>Biến của mẫu</b>: chỉnh nhãn, kiểu ô, nhóm, mặc định, thứ tự (xem <a href="#bien-mau">Biến của mẫu</a>).</span></li>
+        </ol>
+      </div>
+      <p>Dán nội dung từ Word vào trình soạn được; định dạng lạ bị bỏ, chữ giữ nguyên. Mẫu file Word muốn sửa trên trang: bấm
+        <span class="btn">Chuyển sang soạn trên trang</span> (một chiều; đầu/chân trang và khổ giấy riêng của file không giữ lại).</p>
+    </section>
+
+    <section id="bien-mau">
+      <h2>Biến của mẫu</h2>
+      <p>Danh sách biến không phải khai tay: mỗi lần lưu mẫu, trang đọc các chỗ biến trong nội dung và tự thêm biến mới, bỏ biến
+        không còn dùng. Tab <b>Biến của mẫu</b> chỉ để chỉnh cách hiện cho người soạn:</p>
+      <div class="table-wrap">
+        <table class="doc">
+          <thead><tr><th>Cột</th><th>Ý nghĩa</th><th>Ví dụ</th></tr></thead>
+          <tbody>
+            <tr><td><b>Nhãn</b></td><td>Tên ô người soạn thấy, và tên cột trên bảng kiểu Excel</td><td>Thời hạn bảo hành (tháng)</td></tr>
+            <tr><td><b>Kiểu ô</b></td><td>Chữ · Đoạn văn (nhiều dòng) · Số · Số tiền (in 1.250.000) · Ngày (in dd/mm/yyyy)</td><td>Ngày cho "Hiệu lực đến ngày"</td></tr>
+            <tr><td><b>Nhóm</b></td><td>Khung chứa ô trên ngăn soạn: Thông tin chung · Bên mua · Hàng hoá · Điều khoản · Khác</td><td>Mặt hàng chính → Hàng hoá</td></tr>
+            <tr><td><b>Mặc định</b></td><td>Điền sẵn khi tạo hợp đồng mới, người soạn sửa được</td><td>Bên Mua thanh toán 100%…</td></tr>
+            <tr><td><b>▲ ▼</b></td><td>Thứ tự ô trong nhóm và thứ tự cột</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Biến tự điền có trong mẫu được liệt kê riêng bên dưới bảng. Mẫu có biến dòng hàng thì hợp đồng có phần Hàng hoá và tổng tiền.</p>
+    </section>
+
+    <section id="ben-ban">
+      <h2>Thông tin bên bán</h2>
+      <p>Menu <b>Thông tin bên bán</b>: tên công ty, MST, địa chỉ, điện thoại, người đại diện, chức vụ, số tài khoản, ngân hàng, toà án
+        mặc định và thuế suất VAT mặc định. Các biến <code>Ten_Ben_Ban</code>, <code>Tai_Khoan_Ben_Ban</code>… lấy từ đây, đổi một chỗ
+        là mọi mẫu dùng biến đó đổi theo.</p>
+      <div class="note"><b>Lưu ý:</b> hai mẫu Word gốc (mua bán, nguyên tắc) ghi cứng bên bán trong file, nên không đổi theo chỗ này.
+        Muốn đổi được, thay chữ bên bán trong file bằng các trường trộn <code>Ten_Ben_Ban</code>, <code>Dia_Chi_Ben_Ban</code>….</div>
+    </section>
+
+    <!-- ================================================================== PHẦN 5 -->
+    <div class="part-head" id="phan-word">
+      <p class="part-kicker">Phần 5</p>
+      <h2 class="part-title">Mẫu từ file Word</h2>
+      <p class="part-who">Dành cho người chuẩn bị file mẫu: đặt chỗ điền bằng trường trộn của Word, rồi import.</p>
+    </div>
+
+    <section id="mau-word">
+      <h2>Đặt trường trộn (MergeField) trong Word</h2>
+      <p>Trang chỉ nhận chỗ điền là <b>trường trộn thật</b> của Word, giống cách Mail Merge. Gõ tay ký tự «Ten» thì chỉ là chữ, không được điền.</p>
+      <div class="fig">
+        <div class="dlg" role="img" aria-label="Hộp thoại Field của Word, chọn MergeField, ô Field name ghi Ten_Ben_Mua">
+          <div class="dlg-title">Field</div>
+          <div class="dlg-body">
+            <div><div>Field names:</div><div class="dlg-list"><div>Link</div><div>ListNum</div><div>MacroButton</div><div class="on">MergeField <i class="mk">2</i></div><div>MergeRec</div><div>MergeSeq</div><div>Next</div></div></div>
+            <div><div>Field name: <i class="mk">3</i></div><div class="dlg-in">Ten_Ben_Mua</div>
+              <div>Format:</div><div class="dlg-in" style="font-family:inherit">(none)</div>
+              <div style="color:#555">☐ Text to be inserted before</div><div style="color:#555">☐ Text to be inserted after</div></div>
+          </div>
+          <div class="dlg-foot"><span>OK <i class="mk">4</i></span><span>Cancel</span></div>
+        </div>
+        <ol class="steps">
+          <li><span>Mở hợp đồng mẫu trong Word. Xoá chữ ở chỗ cần điền, đặt con trỏ vào đó. Vào <b>Insert → Quick Parts → Field…</b>
+            (tiếng Việt: Chèn → Phần Nhanh → Trường…).</span></li>
+          <li><span>Ở danh sách <b>Field names</b> chọn <b>MergeField</b>.</span></li>
+          <li><span>Ô <b>Field name</b>: gõ tên biến, không dấu, nối bằng gạch dưới. Dùng <a href="#ten-bien">tên có sẵn</a> nếu là thông tin chung.</span></li>
+          <li><span><b>OK</b>. Chỗ đó hiện <span class="mf">«Ten_Ben_Mua»</span> nền xám khi bấm vào. Lặp lại cho mọi chỗ cần điền, lưu .docx rồi Import.</span></li>
+        </ol>
+      </div>
+      <ul class="rules">
+        <li><kbd>Alt</kbd>+<kbd>F9</kbd> bật/tắt hiện mã trường (<code>{ MERGEFIELD Ten_Ben_Mua }</code>) để soát tên.</li>
+        <li>Chỗ cần in đậm/nghiêng: định dạng chính trường đó, giá trị điền vào giữ định dạng.</li>
+        <li>Trường đặt ở đầu/chân trang cũng được điền (ví dụ số hợp đồng ở chân trang).</li>
+        <li>Đã có file Mail Merge cũ dùng với form Excel: import thẳng được, tên cột Excel cũ chính là tên biến.</li>
+        <li>Sau khi import, mở tab <b>Biến của mẫu</b> đặt lại nhãn tiếng Việt cho các tên mới.</li>
+      </ul>
+    </section>
+
+    <section id="ten-bien">
+      <h2>Tên biến có sẵn</h2>
+      <div class="table-wrap">
+        <table class="doc">
+          <thead><tr><th>Tên biến</th><th>Nội dung</th><th>Loại</th></tr></thead>
+          <tbody>
+            <tr><td><code>So_Hop_Dong</code></td><td>Số hợp đồng, ví dụ HĐMB-001/2026</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>Ngay_Ky</code> <code>Thang_Ky</code> <code>Nam_Ky</code></td><td>Ngày, tháng, năm ký (ngày 11 tháng 10 năm 2026)</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>Ten_Ben_Mua</code> <code>Dia_Chi_Ben_Mua</code> <code>Ma_So_Thue_Ben_Mua</code> <code>Dien_Thoai_Ben_Mua</code> <code>Fax_Ben_Mua</code></td><td>Thông tin bên mua</td><td><span class="chip c-info">hay dùng</span> <small>chọn khách là điền</small></td></tr>
+            <tr><td><code>Nguoi_Dai_Dien_Ben_Mua</code> <code>Chuc_Vu_Ben_Mua</code></td><td>Người đại diện và chức vụ bên mua</td><td><span class="chip c-info">hay dùng</span></td></tr>
+            <tr><td><code>Thoi_Gian_Giao_Hang</code> <code>Dia_Diem_Giao_Hang</code> <code>Dieu_Kien_Thanh_Toan</code></td><td>Giao hàng, thanh toán</td><td><span class="chip c-info">hay dùng</span></td></tr>
+            <tr><td><code>Mat_Hang_Chinh</code> <code>Ngay_Het_Han</code> <code>Toa_An_Giai_Quyet</code></td><td>Hợp đồng nguyên tắc: mặt hàng, hiệu lực, toà án</td><td><span class="chip c-info">hay dùng</span></td></tr>
+            <tr><td><code>Ten_Ben_Ban</code> <code>Dia_Chi_Ben_Ban</code> <code>Ma_So_Thue_Ben_Ban</code> <code>Dien_Thoai_Ben_Ban</code> <code>Nguoi_Dai_Dien_Ben_Ban</code> <code>Chuc_Vu_Ben_Ban</code> <code>Tai_Khoan_Ben_Ban</code> <code>Ngan_Hang_Ben_Ban</code></td><td>Bên bán, lấy từ Thông tin bên bán</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>Ten_Hang_1</code> <code>DVT_1</code> <code>So_Luong_1</code> <code>Don_Gia_1</code> <code>Thanh_Tien_1</code></td><td>Một dòng hàng (đơn giá, thành tiền chưa VAT)</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>Tong_Tien_Hang</code> <code>Thue_Suat_VAT</code> <code>Tien_Thue_VAT</code> <code>Tong_Gia_Tri_HD</code> <code>Tong_Gia_Tri_Bang_Chu</code></td><td>Tổng chưa VAT, thuế suất (số, không có %), tiền thuế, tổng sau VAT, tổng bằng chữ</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><i>Tên khác bất kỳ</i></td><td>Thành biến nhập riêng của mẫu, nhãn đặt ở tab Biến của mẫu</td><td><span class="chip c-warn">biến nhập</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="bang-hang-word">
+      <h2>Bảng hàng trong file Word</h2>
+      <div class="fig">
+        <div class="scroll-x"><table class="mock-table" style="font-family:'Times New Roman',var(--font-serif);font-size:12px">
+          <thead><tr><th>STT</th><th>Tên hàng</th><th>ĐVT</th><th>Số lượng</th><th>Đơn giá (VND)</th><th>Thành tiền (VND)</th></tr></thead>
+          <tbody>
+            <tr><td>1 <i class="mk">1</i></td><td><span class="mf">«Ten_Hang_1»</span></td><td><span class="mf">«DVT_1»</span></td><td><span class="mf">«So_Luong_1»</span></td><td><span class="mf">«Don_Gia_1»</span></td><td><span class="mf">«Thanh_Tien_1»</span></td></tr>
+            <tr><td colspan="5" style="text-align:right"><b>Tổng tiền hàng</b> <i class="mk">2</i></td><td><span class="mf">«Tong_Tien_Hang»</span></td></tr>
+            <tr><td colspan="5" style="text-align:right"><b>Thuế VAT <span class="mf">«Thue_Suat_VAT»</span>%</b></td><td><span class="mf">«Tien_Thue_VAT»</span></td></tr>
+            <tr><td colspan="5" style="text-align:right"><b>Tổng cộng</b></td><td><span class="mf">«Tong_Gia_Tri_HD»</span></td></tr>
+          </tbody>
+        </table></div>
+        <ol class="steps one">
+          <li><span><b>Một dòng mẫu là đủ</b>, các trường cùng số 1. Hợp đồng nhiều mặt hàng thì dòng này nhân bản thành 2, 3, 4…, ô STT đổi theo.
+            Mẫu cũ có sẵn 10 dòng (1..10) vẫn dùng được: dòng thừa tự xoá, thiếu thì nhân bản dòng 10.</span></li>
+          <li><span>Dòng tổng nằm ngay dưới, không có biến dòng hàng nên luôn giữ lại. Số tiền bằng chữ: <code>Tong_Gia_Tri_Bang_Chu</code> đặt ở câu bất kỳ.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ================================================================== HỎI ĐÁP -->
+    <section id="hoi-dap">
+      <h2>Hỏi đáp</h2>
+      <details class="faq"><summary>Biến có dùng chung giữa các mẫu không?</summary>
+        <p>Có, theo tên. Hai mẫu cùng có <code>Ten_Ben_Mua</code> thì đó là cùng một thông tin: đổi mẫu khi đang soạn vẫn giữ giá trị,
+          chọn khách thì điền cho mẫu nào cũng được. Nhưng mỗi mẫu chỉ hiện ô cho những biến nó có. Thông tin chung nên dùng tên
+          có sẵn; thông tin riêng một mẫu (thời hạn bảo hành…) thì tạo biến mới.</p></details>
+      <details class="faq"><summary>Tạo mẫu mới thì bắt đầu từ đâu cho nhanh?</summary>
+        <p>Gần giống mẫu đang có: mở mẫu đó → <b>Nhân bản</b>. Đã có file Word: chuẩn bị trường trộn theo <a href="#mau-word">Phần 5</a> rồi
+          Import, chọn "Giữ nguyên file Word". Chưa có gì: <b>+ Soạn mẫu mới</b> có sẵn quốc hiệu, số và ngày hợp đồng.</p></details>
+      <details class="faq"><summary>Import file Word xong nhưng chỗ cần điền không thành biến?</summary>
+        <p>Chỗ đó đang là chữ gõ tay (kể cả «…»), không phải trường trộn. Trong Word bấm <kbd>Alt</kbd>+<kbd>F9</kbd>: chỗ đúng sẽ hiện
+          <code>{ MERGEFIELD Ten }</code>. Sửa lại bằng Insert → Quick Parts → Field → MergeField, rồi <b>Thay bằng file Word…</b>.</p></details>
+      <details class="faq"><summary>Tên biến sai chính tả thì sao?</summary>
+        <p>Tên lạ thành biến nhập mới (ô trống phải gõ tay), không còn được tự điền. Mở tab <b>Biến của mẫu</b> soát danh sách: thấy tên gần
+          giống tên có sẵn (vd <code>Ten_Ben_mua</code>) thì sửa trong mẫu cho đúng.</p></details>
+      <details class="faq"><summary>Hợp đồng có hơn 10 mặt hàng?</summary>
+        <p>Không giới hạn. Dòng hàng cuối của bảng trong mẫu tự nhân bản cho đủ số mặt hàng.</p></details>
+      <details class="faq"><summary>Đơn giá trên hợp đồng là trước hay sau VAT?</summary>
+        <p>Trên hợp đồng in đơn giá và thành tiền <b>chưa VAT</b>, rồi dòng thuế và tổng sau VAT, đúng mẫu cũ. Trên trang thì nhập giá
+          <b>sau VAT</b>, trang tự tính ngược; tổng sau VAT luôn khớp đúng số đã gõ.</p></details>
+      <details class="faq"><summary>Muốn sửa hợp đồng đã xác nhận?</summary>
+        <p>Bấm <b>Về nháp để sửa</b> (chưa ký thì nhân viên tự làm được), sửa rồi xác nhận lại. Hợp đồng đã ký chỉ Quản lý mở lại được.</p></details>
+      <details class="faq"><summary>Số hợp đồng có bị nhảy số không?</summary>
+        <p>Số cấp khi lưu lần đầu và không lấy lại khi xoá, nên xoá hợp đồng nháp sẽ để lại một số trống trong dãy. Số tính theo năm của
+          ngày ký, sang năm mới quay về 001.</p></details>
+      <details class="faq"><summary>PDF trông hơi khác file Word?</summary>
+        <p>PDF dựng lại từ nội dung file Word đã điền, cùng font và bảng nhưng không giữ đầu/chân trang của Word. Cần bản y hệt thì tải Word.</p></details>
+    </section>
+
+    <footer>
+      <span>Hướng dẫn Hợp đồng · module hlv_contract · trang /hop-dong</span>
+      <span>Bản tháng 10/2026</span>
+    </footer>
+  </main>
+</div>

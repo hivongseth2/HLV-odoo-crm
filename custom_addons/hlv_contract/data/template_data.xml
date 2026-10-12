@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Hai mẫu Word gốc (đang dùng với form Excel). Giữ nguyên file, chỉ điền MERGEFIELD -->
+    <record id="template_sale_default" model="hlv.contract.template">
+        <field name="name">Hợp đồng mua bán hàng hoá (mẫu gốc)</field>
+        <field name="contract_type">sale</field>
+        <field name="source">docx</field>
+        <field name="docx_file" type="base64" file="hlv_contract/data/templates/Mau_HopDong_MuaBan.docx"/>
+        <field name="docx_filename">Mau_HopDong_MuaBan.docx</field>
+    </record>
+    <record id="template_principle_default" model="hlv.contract.template">
+        <field name="name">Hợp đồng nguyên tắc (mẫu gốc)</field>
+        <field name="contract_type">principle</field>
+        <field name="source">docx</field>
+        <field name="docx_file" type="base64" file="hlv_contract/data/templates/Mau_HopDong_NguyenTac.docx"/>
+        <field name="docx_filename">Mau_HopDong_NguyenTac.docx</field>
+    </record>
+</odoo>

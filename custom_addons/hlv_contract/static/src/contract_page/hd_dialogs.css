@@ -1,0 +1,345 @@
+/* Trang /hop-dong — ngăn soạn hợp đồng, hộp thoại, tờ A4 (xem nhanh + trình soạn mẫu). */
+
+/* ------------------------------------------------------------ ngăn soạn (bên phải) */
+
+.hd-drawer { position: fixed; inset: 0; z-index: 1000; }
+.hd-drawer-backdrop { position: absolute; inset: 0; background: rgba(28, 32, 36, .35); }
+.hd-drawer-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(980px, 100%);
+    background: var(--hd-bg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, .15);
+}
+.hd-drawer-head, .hd-drawer-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .75rem 1.25rem;
+    background: #fff;
+}
+.hd-drawer-head { border-bottom: 1px solid var(--hd-line); }
+.hd-drawer-foot { border-top: 1px solid var(--hd-line); }
+.hd-drawer-body { flex: 1 1 auto; overflow-y: auto; padding: 1rem 1.25rem 2rem; }
+#hd-form { border: 0; margin: 0; padding: 0; min-width: 0; }
+
+.hd-step {
+    background: #fff;
+    border: 1px solid var(--hd-line);
+    border-radius: var(--hd-radius);
+    padding: .9rem 1rem 1rem;
+    margin-bottom: .9rem;
+}
+.hd-step > .hd-h3 { margin-bottom: .25rem; }
+.hd-step-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .25rem; }
+.hd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 1rem; }
+.hd-field-wide { grid-column: 1 / -1; }
+
+.hd-picker { position: relative; margin-bottom: .25rem; }
+.hd-dropdown {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    top: 100%;
+    max-height: 280px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--hd-line);
+    border-radius: var(--hd-radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}
+.hd-dropdown-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: #fff;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.hd-dropdown-item:hover { background: var(--hd-accent-soft); }
+.hd-dropdown-empty { padding: .6rem .75rem; color: var(--hd-muted); font-size: 13px; }
+
+/* Bảng dòng hàng nhập liệu */
+.hd-lines { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+.hd-lines th {
+    font-size: .72rem;
+    color: var(--hd-muted);
+    font-weight: 600;
+    padding: .35rem .4rem;
+    border-bottom: 1px solid var(--hd-line);
+}
+.hd-lines td { padding: .2rem .25rem; border-bottom: 1px solid var(--hd-line-soft); }
+.hd-line-input { width: 100%; height: 30px; padding: 0 6px; }
+.hd-line-input.hd-right { text-align: right; }
+.hd-line-input.hd-center { text-align: center; }
+.hd-col-stt { width: 40px; }
+.hd-col-uom { width: 80px; }
+.hd-col-qty { width: 90px; }
+.hd-col-price { width: 130px; }
+.hd-col-del { width: 36px; }
+.hd-paste { margin: .5rem 0; padding: .75rem; background: var(--hd-line-soft); border-radius: var(--hd-radius); }
+
+.hd-totals {
+    margin: .75rem 0 0 auto;
+    max-width: 420px;
+    font-size: 13.5px;
+}
+.hd-totals > div { display: flex; justify-content: space-between; align-items: center; padding: .2rem 0; }
+.hd-vat-input { width: 56px; height: 28px; text-align: center; margin: 0 .2rem; }
+.hd-total-grand { border-top: 1px solid var(--hd-line); margin-top: .25rem; padding-top: .4rem !important; font-size: 15px; }
+.hd-total-words { display: block !important; text-align: right; font-style: italic; color: var(--hd-muted); }
+
+/* ------------------------------------------------------------ hộp thoại */
+
+.hd-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(28, 32, 36, .45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 4vh 1rem;
+    overflow-y: auto;
+}
+.hd-modal-box {
+    background: #fff;
+    border-radius: 6px;
+    width: min(760px, 100%);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .25);
+}
+.hd-small-box { width: min(520px, 100%); }
+.hd-modal-head, .hd-modal-foot { display: flex; align-items: center; gap: .5rem; padding: .8rem 1.1rem; }
+.hd-modal-head { border-bottom: 1px solid var(--hd-line); }
+.hd-modal-foot { border-top: 1px solid var(--hd-line); justify-content: flex-end; }
+.hd-modal-body { padding: .9rem 1.1rem 1.1rem; }
+.hd-choice { display: flex; gap: .6rem; align-items: flex-start; padding: .5rem 0; cursor: pointer; font-size: 13.5px; }
+.hd-choice input { margin-top: .2rem; }
+.hd-check-label { display: inline-flex; gap: .35rem; align-items: center; font-size: 13px; white-space: nowrap; }
+.hd-info {
+    background: var(--hd-accent-soft);
+    border: 1px solid var(--hd-accent-line);
+    border-radius: var(--hd-radius);
+    padding: .7rem .9rem;
+    font-size: 13.5px;
+}
+.hd-alert {
+    background: var(--hd-danger-soft);
+    color: var(--hd-danger);
+    border-radius: var(--hd-radius);
+    padding: .6rem .9rem;
+}
+
+/* ------------------------------------------------------------ tờ A4 (xem nhanh + soạn mẫu) */
+
+.hd-preview-box { width: min(900px, 100%); background: #E9E7E1; }
+.hd-preview-box .hd-modal-head { background: #fff; border-radius: 6px 6px 0 0; }
+.hd-preview-scroll, .hd-paper-scroll { padding: 1.25rem; overflow-x: auto; }
+.hd-paper-scroll { background: #E9E7E1; border-radius: 0 0 var(--hd-radius) var(--hd-radius); max-height: 75vh; overflow-y: auto; }
+
+/* Cùng font Tinos với bản PDF (static/fonts) để xem nhanh giống bản in trên mọi máy */
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-Regular.ttf") format("truetype"); font-weight: normal; font-style: normal; }
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-Bold.ttf") format("truetype"); font-weight: bold; font-style: normal; }
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-Italic.ttf") format("truetype"); font-weight: normal; font-style: italic; }
+@font-face { font-family: "Tinos"; src: url("../../fonts/Tinos-BoldItalic.ttf") format("truetype"); font-weight: bold; font-style: italic; }
+
+/* Lề trong = lề khổ giấy PDF (trái 2,5 cm, phải 2 cm, trên/dưới 2 cm) để ngắt dòng gần đúng bản in */
+.hd-paper {
+    background: #fff;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 20mm 20mm 20mm 25mm;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
+    font-family: "Tinos", "Times New Roman", Times, serif;
+    font-size: 13pt;
+    line-height: 1.35;
+    color: #000;
+}
+.hd-paper p { margin: 0 0 3pt; }
+.hd-paper table { border-collapse: collapse; width: 100%; }
+.hd-paper table.hlv-grid td { border: 1px solid #000; }
+.hd-paper td { padding: 2px 5px; vertical-align: top; }
+.hd-paper ul { margin: 0 0 3pt 1.2em; padding: 0; }
+
+/* Trình soạn: bảng không viền vẫn hiện nét đứt mờ để còn thấy ô mà gõ */
+.hd-editor { outline: none; }
+.hd-editor table.hlv-noborder td { border: 1px dashed #c9c9c9; }
+.hd-editor:focus { box-shadow: 0 0 0 2px var(--hd-accent-line), 0 2px 12px rgba(0, 0, 0, .15); }
+
+.hlv-var {
+    background: #FFF1C2;
+    border: 1px solid #F0D27A;
+    border-radius: 3px;
+    padding: 0 3px;
+    font-family: var(--hd-font);
+    font-size: .82em;
+    color: #6B4E00;
+    white-space: nowrap;
+    user-select: all;
+}
+
+.hd-tpl-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .75rem 1rem;
+    border-bottom: 1px solid var(--hd-line);
+}
+.hd-tpl-name { flex: 1 1 16rem; font-weight: 600; }
+.hd-tpl-note { border-top: 1px solid var(--hd-line-soft); }
+.hd-fields-table code { color: var(--hd-ink); }
+
+.hd-editor-wrap { display: flex; align-items: stretch; }
+.hd-editor-main { flex: 1 1 auto; min-width: 0; }
+.hd-toolbar-editor {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--hd-line);
+    background: #FBFAF8;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+.hd-tool-group { display: inline-flex; border: 1px solid var(--hd-line); border-radius: var(--hd-radius); overflow: hidden; }
+.hd-tool {
+    border: 0;
+    border-right: 1px solid var(--hd-line);
+    background: #fff;
+    font: inherit;
+    font-size: 12.5px;
+    padding: .3rem .55rem;
+    cursor: pointer;
+    min-width: 30px;
+}
+.hd-tool:last-child { border-right: 0; }
+.hd-tool:hover { background: var(--hd-accent-soft); }
+.hd-tool-size { height: 30px; font-size: 12.5px; }
+
+.hd-palette {
+    flex: 0 0 230px;
+    border-left: 1px solid var(--hd-line);
+    padding: .75rem;
+    max-height: calc(75vh + 46px);
+    overflow-y: auto;
+    background: #fff;
+}
+.hd-palette-head { font-size: 12px; font-weight: 600; margin-bottom: .5rem; }
+.hd-palette-group { margin-bottom: .6rem; }
+.hd-palette-title { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--hd-muted); margin-bottom: .25rem; }
+.hd-var-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid transparent;
+    background: transparent;
+    font: inherit;
+    font-size: 12.5px;
+    padding: .2rem .45rem;
+    border-radius: var(--hd-radius);
+    cursor: pointer;
+}
+.hd-var-btn:hover { background: #FFF1C2; border-color: #F0D27A; }
+
+@media (max-width: 991px) {
+    .hd-editor-wrap { flex-direction: column; }
+    .hd-palette { flex-basis: auto; border-left: 0; border-top: 1px solid var(--hd-line); max-height: none; }
+    .hd-paper { width: 100%; min-height: 0; padding: 12mm; }
+}
+
+/* ------------------------------------------------------------ ngăn soạn: bảng hàng, chọn sản phẩm */
+
+.hd-lines-wrap { position: relative; overflow: visible; }
+.hd-line-name { position: relative; }
+.hd-linked { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--hd-ok); font-size: 10px; }
+.hd-sub-price { font-size: 11px; color: var(--hd-muted); text-align: right; padding: 1px 6px 0; white-space: nowrap; }
+.hd-dropdown-hint { padding: .35rem .75rem; font-size: 11.5px; color: var(--hd-muted); border-bottom: 1px solid var(--hd-line-soft); }
+.hd-order-picker { margin: .5rem 0; max-width: 520px; }
+.hd-total-sub { font-size: 12.5px; color: var(--hd-muted); }
+.hd-total-grand { border-top: 0; margin-top: 0; padding-top: 0 !important; }
+
+/* ------------------------------------------------------------ màn mẫu: tab, bảng biến */
+
+.hd-subtabs { display: flex; gap: .25rem; padding: .5rem 1rem 0; border-bottom: 1px solid var(--hd-line); background: #FBFAF8; }
+.hd-subtab {
+    border: 1px solid transparent;
+    border-bottom: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    padding: .4rem .9rem;
+    border-radius: var(--hd-radius) var(--hd-radius) 0 0;
+    color: var(--hd-muted);
+    cursor: pointer;
+    margin-bottom: -1px;
+}
+.hd-subtab.is-active { background: #fff; border-color: var(--hd-line); color: var(--hd-ink); font-weight: 600; }
+.hd-vars-table td { vertical-align: middle; }
+.hd-vars-table .hd-input { height: 30px; }
+.hd-chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hlv-var.is-system { background: var(--hd-accent-soft); border-color: var(--hd-accent-line); color: var(--hd-accent); }
+.hd-var-btn { display: flex; justify-content: space-between; gap: .4rem; align-items: baseline; }
+.hd-var-btn code { font-size: 10px; color: var(--hd-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.hd-var-btn.is-mine { background: #FFF8E0; }
+.hd-var-btn.is-system span { color: var(--hd-accent); }
+.hd-palette-sub { font-size: 11px; color: var(--hd-muted); margin: .4rem 0 .1rem .45rem; }
+
+/* Gợi ý thả xuống dùng chung (khách hàng, sản phẩm): khung nổi, đặt theo vị trí ô đang gõ */
+.hd-suggest { position: fixed; right: auto; z-index: 1500; max-height: 320px; }
+.hd-suggest .hd-dropdown-item.is-active { background: var(--hd-accent-soft); }
+.hd-linked-tag { margin-left: .4rem; font-size: 11px; color: var(--hd-ok); font-weight: 600; }
+
+/* ------------------------------------------------------------ xem trước khi soạn (ngăn soạn + bảng dữ liệu) */
+
+.hd-drawer-panel.with-preview { width: min(1560px, 100%); }
+.hd-compose { display: flex; padding: 0; overflow: hidden; }
+.hd-compose-form { flex: 1 1 56%; min-width: 0; overflow-y: auto; padding: 1rem 1.25rem 2rem; }
+.hd-compose-preview, .hd-grid-preview {
+    flex: 0 0 44%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--hd-line);
+    background: #E9E7E1;
+}
+.hd-pv-head { padding: .5rem .9rem; background: #fff; border-bottom: 1px solid var(--hd-line); font-size: 13px; }
+.hd-pv-status { color: var(--hd-muted); font-size: 12px; }
+.hd-pv-legend { font-size: 11.5px; color: var(--hd-muted); margin-top: .15rem; }
+.hd-pv-scroll { flex: 1 1 auto; overflow: auto; padding: 12px; }
+.hd-pv-paper { min-height: 0; }
+
+/* Chỗ biến trên tờ hợp đồng: vàng = đã điền, khung đứt = còn trống, viền đậm = ô đang nhập */
+.hd-pv { background: #FFF1C2; border-radius: 2px; cursor: pointer; box-shadow: 0 0 0 1px #F0D27A; }
+.hd-pv.is-empty { background: transparent; box-shadow: none; outline: 1px dashed #C9A227; color: #9A7B12; font-style: italic; }
+.hd-pv.is-focus { background: #FFD966; box-shadow: 0 0 0 2px var(--hd-accent); outline: none; }
+.hd-pv-legend .hd-pv { padding: 0 4px; cursor: default; font-style: normal; }
+
+.hd-btn.is-on { background: var(--hd-accent-soft); border-color: var(--hd-accent-line); color: var(--hd-accent); }
+
+@media (max-width: 1099px) {
+    .hd-compose { flex-direction: column; overflow-y: auto; }
+    .hd-compose-form { overflow: visible; }
+    .hd-compose-preview { border-left: 0; border-top: 1px solid var(--hd-line); min-height: 70vh; }
+}
+
+/* Giải thích ngắn gọn trong màn soạn mẫu / hộp import */
+.hd-palette-help { margin: 0 0 .6rem; padding: .45rem .6rem; background: var(--hd-accent-soft); border-radius: var(--hd-radius); font-size: 12px; }
+.hd-palette-help summary { cursor: pointer; font-weight: 600; color: var(--hd-accent); }
+.hd-palette-help p { margin: .35rem 0 0; }
+.hd-import-help { margin-top: .5rem; font-size: 12.5px; background: var(--hd-line-soft); border-radius: var(--hd-radius); padding: .5rem .75rem; }
+.hd-import-help summary { cursor: pointer; font-weight: 600; }
+.hd-import-help ol { margin: .4rem 0 0; padding-left: 1.2rem; }
+.hd-import-help li { margin: .2rem 0; }
+.hd-inline-label { font-size: 12px; color: var(--hd-muted); }

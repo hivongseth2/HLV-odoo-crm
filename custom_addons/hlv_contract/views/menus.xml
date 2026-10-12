@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Giao diện hợp đồng là trang riêng /hop-dong (như /hoi-gia-ncc); menu Odoo chỉ trỏ sang đó -->
+    <record id="action_hlv_contract_page" model="ir.actions.act_url">
+        <field name="name">Hợp đồng</field>
+        <field name="url">/hop-dong</field>
+        <field name="target">self</field>
+    </record>
+
+    <menuitem id="menu_hlv_contract_root" name="Hợp đồng" sequence="45"
+              action="action_hlv_contract_page"
+              web_icon="hlv_contract,static/description/icon.png"
+              groups="group_contract_user"/>
+</odoo>
