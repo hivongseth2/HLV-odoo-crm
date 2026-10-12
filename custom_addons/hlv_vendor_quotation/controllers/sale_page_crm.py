@@ -12,6 +12,7 @@ from odoo.http import request
 
 from ..models.paste_utils import parse_paste_line, pick_best, score_product_match
 from ..services import sale_page_payload as payload
+from ..services.combo_lines import import_crm_combo
 from ..services.crm_opportunity import opportunity_lines
 from .sale_page_common import API, SalePageMixin, to_int
 
@@ -63,7 +64,7 @@ class VendorQuoteSalePageCrm(SalePageMixin, http.Controller):
         for code in (codes or [])[:IMPORT_MAX]:
             try:
                 with request.env.cr.savepoint():
-                    product, created = misa.import_product_from_crm(code)
+                    product, created = self._import_one(misa, code)
             except UserError as exc:
                 results.append({"code": code, "error": exc.args[0]})
             else:
@@ -87,6 +88,18 @@ class VendorQuoteSalePageCrm(SalePageMixin, http.Controller):
         if not to_int(opportunity_id):
             raise UserError("Chưa chọn cơ hội.")
         return {"lines": opportunity_lines(request.env, self._misa().crm_opportunity_products(to_int(opportunity_id)))}
+
+    @staticmethod
+    def _import_one(misa, code):
+        """(sản phẩm, vừa tạo) cho mã CRM. Hàm tạo hàng đơn chặn combo — combo thì dựng combo + BoM từ CRM
+        (services/combo_lines.py); trang tách tiếp thành mặt hàng con. Lỗi khác giữ nguyên lời báo."""
+        try:
+            return misa.import_product_from_crm(code)
+        except UserError as error:
+            crm = misa.crm_product_candidates(code, limit=10)
+            if not any((p.get("code") or "").strip() == code.strip() and p.get("is_combo") for p in crm):
+                raise error
+        return import_crm_combo(misa.env, code), True
 
     def _misa(self):
         return request.env["misa.api.utils"].sudo()

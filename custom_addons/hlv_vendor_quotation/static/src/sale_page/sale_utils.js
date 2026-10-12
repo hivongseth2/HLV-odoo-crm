@@ -156,6 +156,7 @@ window.HlvQuote = window.HlvQuote || {};
   /**
    * Gộp dòng mới vào danh sách dòng đang có: cùng sản phẩm và cùng dòng YCMH thì cộng
    * số lượng thay vì thêm dòng trùng. Trả mảng mới, không sửa mảng vào.
+   * Dòng tách từ combo mang "combo" (tên combo): gộp thì nối tên các combo, không trùng ("A, B").
    */
   HQ.mergeLine = function (lines, line) {
     var found = false;
@@ -163,7 +164,10 @@ window.HlvQuote = window.HlvQuote || {};
       if (!found && item.product_id === line.product_id &&
           (item.request_line_id || 0) === (line.request_line_id || 0)) {
         found = true;
-        return Object.assign({}, item, { qty: (item.qty || 0) + (line.qty || 0) });
+        var combos = [item.combo, line.combo].filter(Boolean).join(", ").split(", ").filter(function (c, i, all) {
+          return c && all.indexOf(c) === i;
+        });
+        return Object.assign({}, item, { qty: (item.qty || 0) + (line.qty || 0), combo: combos.join(", ") });
       }
       return item;
     });

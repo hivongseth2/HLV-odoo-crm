@@ -52,18 +52,17 @@ window.HlvQuote = window.HlvQuote || {};
         ". Tìm tay ở ô \"Thêm sản phẩm\".</div>" : "");
   }
 
-  /** Chọn một cơ hội: lấy hàng, tạo hàng Odoo còn thiếu (trừ combo), thêm cả vào phiếu. */
+  /** Chọn một cơ hội: lấy hàng, tạo hàng Odoo còn thiếu (combo: dựng từ CRM rồi tách thành phần), thêm vào phiếu. */
   function pickOpportunity(item) {
     opportunity = { kind: "crm", code: item.code, account: item.account, state: "loading", added: 0, created: 0, failed: [] };
     renderOpportunity();
     HQ.rpc("/api/hoi-gia-ncc/crm_opportunity_lines", { opportunity_id: item.id }).then(function (res) {
       var rows = res.lines || [];
-      var missing = rows.filter(function (row) { return !row.product && !row.is_combo; });
-      var combos = rows.filter(function (row) { return !row.product && row.is_combo; });
+      var missing = rows.filter(function (row) { return !row.product; });
       return (missing.length ? HQ.crmImport(missing.map(function (row) { return row.code; })) : Promise.resolve([]))
         .then(function (results) {
           var lines = rows.filter(function (row) { return row.product; }).map(function (row) { return row.product; });
-          var failed = combos.map(function (row) { return row.code + " (combo — tạo qua đơn bán)"; });
+          var failed = [];
           missing.forEach(function (row, i) {
             var result = results[i] || {};
             if (result.product) {
@@ -179,9 +178,9 @@ window.HlvQuote = window.HlvQuote || {};
         return "<tr><td class=\"hq-nowrap\">" + esc(p.code) + "</td><td>" + esc(p.name) +
           (p.odoo_exists ? ' <span class="hq-tag hq-tag-ok">Odoo đã có</span>' : "") + "</td>" +
           "<td>" + esc(p.unit) + '</td><td class="hq-num">' + (p.price ? HQ.money(p.price) : "") + "</td>" +
-          '<td class="hq-num">' + (p.is_combo
-            ? '<span class="hq-muted" title="Hàng combo cần dựng thành phần — tạo qua đơn bán">combo</span>'
-            : '<button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-crm-add="' + index + '">Thêm</button>') +
+          '<td class="hq-num"><button type="button" class="hq-btn hq-btn-mini hq-btn-primary" data-crm-add="' + index +
+            '"' + (p.is_combo ? ' title="Combo: tạo combo theo CRM rồi tách thành các mặt hàng con"' : "") + ">" +
+            (p.is_combo ? "Thêm combo" : "Thêm") + "</button>" +
           "</td></tr>";
       }).join("") + "</tbody></table></div>";
   }

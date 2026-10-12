@@ -8,6 +8,7 @@ chỉ việc gọi và trả về. Số tiền trả dạng số, trang tự đ�
 from ..models.purchase_order import PROGRESS_LABELS
 from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
+from .combo_lines import kit_bom
 from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, format_vn_number, local_date_text
 from .sale_code import sale_code
 from .chat_read import chat_stats, seen_markers
@@ -398,6 +399,7 @@ def sale_line_payload(line):
         "qty": line.product_uom_qty,
         "uom_id": line.product_uom.id,
         "uom": line.product_uom.name or "",
+        "is_kit": bool(kit_bom(product)),
     }
 
 
@@ -410,6 +412,8 @@ def product_payload(product):
         "uom_id": uom.id,
         "uom": uom.name,
         "qty": 1,
+        # Combo (BoM kit): trang tách thành các mặt hàng con trước khi đưa vào phiếu (expand_lines).
+        "is_kit": bool(kit_bom(product)),
     }
 
 
@@ -421,7 +425,7 @@ def crm_product_payload(crm):
         "unit": crm.get("unit") or "",
         "price": crm.get("price") or 0,
         "tax": crm.get("tax") or "",
-        # Combo không tạo được ở trang hỏi giá (cần dựng thành phần — xem import_product_from_crm).
+        # Combo: tạo được (dựng combo + BoM từ CRM — services/combo_lines.py) rồi tách thành mặt hàng con.
         "is_combo": bool(crm.get("is_combo")),
         "odoo_exists": bool(crm.get("odoo_exists")),
     }
@@ -439,6 +443,17 @@ def product_picks_payload(picks, names):
             "delivered": vendor(pick["delivered"], count=pick["delivered_count"]),
             "recent": vendor(pick["recent"], date=_date_text(pick["recent_date"])),
             "vendor_ids": sorted(pick["vendors"]),
+            # Dẫn chứng (nút "i"): hạng giá mua (không có số tiền), đơn mua gần nhất, số lần giao được.
+            "evidence": [{
+                "id": item["partner_id"],
+                "name": names.get(item["partner_id"], ""),
+                "price_rank": item["price_rank"],
+                "priced_count": item["priced_count"],
+                "last_order": item["last_order"],
+                "last_date": _date_text(item["last_date"]),
+                "received_count": item["received_count"],
+                "last_received": _date_text(item["last_received"]),
+            } for item in pick["evidence"]],
         }
         for product_id, pick in picks.items()
     }
