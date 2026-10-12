@@ -3,7 +3,10 @@ from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from .vendor_quote_utils import availability_text, best_price_ids, price_incl_vat
+from odoo.tools.float_utils import float_compare
+
+from ..services.notify import post_internal
+from .vendor_quote_utils import availability_text, best_price_ids, format_vn_number, price_incl_vat
 
 VAT_SELECTION = [
     ("0", "0%"),
@@ -233,6 +236,39 @@ class VendorQuoteLine(models.Model):
         )
         if po_lines:
             po_lines.write({"hlv_invoice_name": self.invoice_name or False})
+
+    @api.model
+    def _hlv_follow_order_price(self, po_line, new_price, order_name):
+        """NCC đổi giá trên đơn mua (phiên bản đơn đã áp — purchase_order_revision) → giá trên báo giá của CHÍNH NCC đó
+        cho mặt hàng đó đổi theo. Mọi chỗ đọc giá NCC đã báo đều lấy dòng báo giá: bảng so giá, tra giá đã hỏi
+        (price_history), giá dùng lại khi hỏi lại (price_reuse) — nên đều ra giá mới nhất NCC đã sửa.
+
+        po_line: dòng đơn mua vừa đổi giá; new_price: đơn giá mới chưa VAT (sau CK, như price_unit); order_name: số
+        đơn để ghi chatter báo giá. Giá trước CK (list_price) còn ≥ giá mới thì giữ, tính lại % CK; không thì bỏ CK.
+        Không có dòng báo giá nối với dòng đơn (đơn không đi từ trang hỏi giá) → không làm gì.
+        """
+        request_lines = po_line.sudo().purchase_request_lines
+        if not request_lines:
+            return
+        vendor = po_line.order_id.partner_id.commercial_partner_id
+        lines = self.sudo().search([
+            "|", ("request_line_id", "in", request_lines.ids), ("backorder_request_line_id", "in", request_lines.ids),
+            ("quote_id.partner_id.commercial_partner_id", "=", vendor.id),
+        ]).filtered(lambda l: float_compare(l.price_unit, new_price, precision_digits=2) != 0)
+        for line in lines:
+            old_incl = price_incl_vat(line.price_unit, line.tax_rate)
+            vals = {"price_unit": new_price}
+            if line.list_price and line.list_price >= new_price:
+                vals["discount"] = round((1 - new_price / line.list_price) * 100, 2)
+            else:
+                vals.update(list_price=0.0, discount=0.0)
+            line.write(vals)
+            post_internal(line.quote_id, Markup(_(
+                "Giá <i>%(product)s</i> cập nhật theo thay đổi đơn mua %(order)s đã áp: %(old)s → %(new)s (sau VAT)."
+            )) % {
+                "product": line.name or line.product_id.display_name, "order": order_name,
+                "old": format_vn_number(round(old_incl)), "new": format_vn_number(round(price_incl_vat(new_price, line.tax_rate))),
+            })
 
     def _hlv_product_request_lines(self):
         """Mọi dòng YCMH của mặt hàng này — qua phiếu hỏi giá (của mọi NCC được chọn), hoặc gắn thẳng

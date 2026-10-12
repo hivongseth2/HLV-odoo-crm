@@ -199,6 +199,10 @@ class PurchaseOrderRevisionLine(models.Model):
             vals["price_unit"] = self.new_price_unit
         if vals:
             po_line.write(vals)
+        if "price" in changes:
+            # Báo giá NCC đổi theo — sale tra / hỏi lại giá thấy giá mới nhất NCC đã sửa.
+            self.env["hlv.vendor.quote.line"]._hlv_follow_order_price(
+                po_line, self.new_price_unit, self.revision_id.purchase_order_id.name)
         if "day" in changes:
             when = due_datetime(self.new_date, po_line.date_planned)
             po_line._update_date_planned(when)
