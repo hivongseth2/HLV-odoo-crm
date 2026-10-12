@@ -97,6 +97,8 @@
     border-radius: var(--hq-radius);
     overflow: hidden;
 }
+/* Hộp lập phiếu rộng hơn các hộp khác: bảng sản phẩm có thêm một cột tick cho mỗi NCC. */
+#hq-modal .hq-modal-box { width: min(1280px, 100%); }
 .hq-modal-head {
     display: flex;
     justify-content: space-between;
