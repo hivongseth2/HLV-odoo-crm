@@ -123,17 +123,22 @@ def reference_prices(quote):
     return references
 
 
+def fill_valid_prices(lines, today):
+    """Điền giá dùng lại được vào các dòng báo giá ``lines`` (mới tạo). Trả các dòng nguồn đã dùng."""
+    sources = lines.browse()
+    for line in lines.sudo():
+        source = valid_price_line(line, today)
+        if source:
+            line.write(dict({field: source[field] for field in REUSED_FIELDS}, inherited_from_id=source.id))
+            sources |= source
+    return sources
+
+
 def apply_valid_prices(quotes):
     """Điền giá dùng lại được vào các báo giá vừa tạo. Trả báo giá đã đủ giá (không cần gửi NCC)."""
     complete = quotes.browse()
     for quote in quotes.sudo():
-        today = quote._vendor_today()
-        sources = quote.line_ids.browse()
-        for line in quote.line_ids:
-            source = valid_price_line(line, today)
-            if source:
-                line.write(dict({field: source[field] for field in REUSED_FIELDS}, inherited_from_id=source.id))
-                sources |= source
+        sources = fill_valid_prices(quote.line_ids, quote._vendor_today())
         if quote._fully_reused():
             quote.write({
                 "state": "quoted",

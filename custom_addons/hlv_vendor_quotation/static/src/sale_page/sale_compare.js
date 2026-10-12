@@ -323,7 +323,8 @@ window.HlvQuote = window.HlvQuote || {};
         '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
         (Math.abs(line.need_qty - line.qty) > EPS ? '<div class="hq-muted hq-small">cần ' + HQ.qty(line.need_qty) + "</div>" : "") +
         "</td>" + d.vendors.map(function (v) {
-          return offerCell(line.offers[v.quote_id], v, d.can_choose && !line.locked, line.uom);
+          var offer = line.offers[v.quote_id];
+          return offer ? offerCell(offer, v, d.can_choose && !line.locked, line.uom) : notAskedCell(line, v, d);
         }).join("") + "</tr>";
     }).join("");
     return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
@@ -408,6 +409,27 @@ window.HlvQuote = window.HlvQuote || {};
       (offer.ordered_qty > EPS ? '<span class="hq-muted">đã đặt ' + HQ.qty(offer.ordered_qty) + "</span>" : "") +
       ((offer.request_names || []).length ? docChips(offer.request_names)
         : offer.to_request ? '<span class="hq-partial">chưa lên YCMH</span>' : "") + "</div>";
+  }
+
+  /** NCC không được hỏi món này (lúc lập phiếu không tick): ô gạch chéo — khác hẳn "Chờ báo giá". Đổi ý thì
+      "+ Hỏi món này": thêm vào chính báo giá đã gửi NCC đó (vendor_quote.action_add_inquiry_lines). */
+  function notAskedCell(line, vendor, d) {
+    var canAsk = d.can_add_vendor && !line.locked && (vendor.state === "sent" || vendor.state === "quoted");
+    return '<td class="hq-offer hq-offer-skip"><span class="hq-muted">Không hỏi</span>' + (canAsk
+      ? '<button type="button" class="hq-btn hq-btn-mini" data-ask-line="' + vendor.quote_id + ":" + line.id +
+        '" title="Hỏi thêm món này với ' + esc(vendor.name) + ' — NCC thấy ngay trên trang báo giá của họ">+ Hỏi món này</button>'
+      : "") + "</td>";
+  }
+
+  function askLine(button) {
+    var parts = button.dataset.askLine.split(":");
+    button.disabled = true;
+    HQ.api("add_quote_lines", { inquiry_id: D.detail.id, quote_id: +parts[0], line_ids: [+parts[1]] }).then(function (detail) {
+      afterChange(detail, "Đã hỏi thêm món này — NCC thấy ngay trên trang báo giá của họ");
+    }).catch(function (err) {
+      button.disabled = false;
+      HQ.toast(err.message);
+    });
   }
 
   function offerCell(offer, vendor, canChoose, uom) {
@@ -592,6 +614,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.bindCompareEvents = function () {
     var panel = HQ.$("hq-drawer-panel");
     HQ.on(panel, "click", "[data-choose]", function (el) { choose(+el.dataset.choose, true); });
+    HQ.on(panel, "click", "[data-ask-line]", askLine);
     HQ.on(panel, "click", "[data-choose-all]", function (el) { chooseAll(+el.dataset.chooseAll); });
     HQ.on(panel, "click", "[data-unchoose]", function (el) { choose(+el.dataset.unchoose, false); });
     HQ.on(panel, "click", "[data-review-request]", function (el) { reviewRequest(el.dataset.reviewRequest === "1"); });

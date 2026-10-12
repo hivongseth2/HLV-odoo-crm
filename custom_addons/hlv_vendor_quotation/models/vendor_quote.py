@@ -7,6 +7,7 @@ from odoo.exceptions import UserError, ValidationError
 
 from ..services.chat_bus import notify_quoted
 from ..services.notify import post_internal
+from ..services.price_reuse import fill_valid_prices
 from .vendor_quote_utils import FULL_SUPPLY, default_price_valid_until, match_by_product
 
 # NCC chỉ thấy báo giá đã gửi đi; nháp và đã huỷ là việc nội bộ.
@@ -422,6 +423,30 @@ class VendorQuote(models.Model):
         nhất một mặt hàng chưa lên đơn mua."""
         self.ensure_one()
         return self._vendor_status() in VENDOR_EDITABLE_STATUSES and not self._fully_ordered()
+
+    def action_add_inquiry_lines(self, inquiry_lines):
+        """Sale đổi ý: hỏi thêm NCC của báo giá này các mặt hàng ``inquiry_lines`` (dòng phiếu) — lúc lập phiếu
+        không tick món đó cho NCC này. Thêm dòng vào CHÍNH báo giá đã gửi (cùng link, NCC thấy ngay), không mở
+        báo giá thứ hai. Giá NCC còn hiệu lực cho món đó thì điền sẵn như lúc lập phiếu. Báo giá NCC đã báo xong
+        thì quay về "Chờ NCC báo giá" để NCC báo nốt món mới. Trả các dòng báo giá vừa thêm.
+        Lỗi: báo giá đã đóng / huỷ; không còn món nào thêm được (đã có trong báo giá hoặc đã lên đơn mua đủ).
+        """
+        self.ensure_one()
+        # Sale không có quyền ghi báo giá NCC — đường này là chỗ được phép (controller đã kiểm phạm vi phiếu).
+        self = self.sudo()  # noqa: PLW0642
+        if self.state not in ("sent", "quoted"):
+            raise UserError(_("Báo giá %s đã đóng hoặc huỷ — dùng \"Hỏi thêm NCC\" để hỏi lại.", self.name))
+        lines = inquiry_lines.filtered(lambda l: not l.locked and l not in self.line_ids.inquiry_line_id)
+        if not lines:
+            raise UserError(_("Mặt hàng đã có trong báo giá %s hoặc đã lên đơn mua đủ.", self.name))
+        added = self.env["hlv.vendor.quote.line"].create([
+            dict(line._quote_line_vals(), quote_id=self.id) for line in lines])
+        fill_valid_prices(added, self._vendor_today())
+        if self.state == "quoted" and not all(added.mapped("inherited_from_id")):
+            self.state = "sent"
+        post_internal(self, Markup(_("Sale hỏi thêm: <b>%s</b>.")) % ", ".join(lines.mapped("name")),
+                      self.env.user.partner_id)
+        return added
 
     def _fully_reused(self):
         """Mọi dòng đều lấy giá còn hiệu lực từ báo giá trước (services/price_reuse.py) — coi như

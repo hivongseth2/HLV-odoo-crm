@@ -506,3 +506,6 @@
 .hq-ask-info-on { background: var(--hq-accent); color: #fff; }
 .hq-ask-evidence { margin: .4rem 0 .2rem; padding: .4rem .5rem; background: var(--hq-bg); border-radius: var(--hq-radius); font-size: .8rem; }
 .hq-ask-evidence .hq-table { margin-bottom: .2rem; }
+/* Bảng so giá: NCC không được hỏi món này — gạch chéo cho khác "Chờ báo giá" (sale_compare.js notAskedCell). */
+.hq-offer-skip { background: repeating-linear-gradient(135deg, var(--hq-line-soft) 0 6px, transparent 6px 12px); }
+.hq-offer-skip .hq-btn { display: block; margin-top: .35rem; background: #fff; }

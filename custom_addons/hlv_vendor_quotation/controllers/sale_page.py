@@ -187,6 +187,19 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "name": request_record.sudo().name, "merged": merged,
         })
 
+    @http.route(f"{API}/add_quote_lines", type="json", auth="user", methods=["POST"])
+    def api_add_quote_lines(self, code="", inquiry_id=None, quote_id=None, line_ids=None, **kw):
+        """Ô gạch chéo trên bảng so giá (NCC không được hỏi món đó) → hỏi thêm món đó với NCC đó."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        if inquiry.state not in ("open", "requested"):
+            raise UserError("Phiếu đã đóng hoặc đã huỷ.")
+        quote = inquiry.quote_ids.filtered(lambda q: q.id == to_int(quote_id))
+        if not quote:
+            raise UserError("Không tìm thấy báo giá của NCC này trong phiếu.")
+        wanted = {to_int(line_id) for line_id in line_ids or []}
+        quote.action_add_inquiry_lines(inquiry.line_ids.filtered(lambda line: line.id in wanted))
+        return payload.inquiry_detail(inquiry)
+
     @http.route(f"{API}/add_vendors", type="json", auth="user", methods=["POST"])
     def api_add_vendors(self, code="", inquiry_id=None, vendor_ids=None, line_ids=None, deadline=None, note="", **kw):
         """Hỏi thêm NCC cho các sản phẩm đã chọn của phiếu (đang hỏi giá hoặc đã lên YCMH)."""
