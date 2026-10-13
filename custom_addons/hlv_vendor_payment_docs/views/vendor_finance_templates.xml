@@ -33,63 +33,19 @@
         </xpath>
     </template>
 
-    <!-- Chi tiết đơn mua: khung "Thanh toán" ngay dưới tiến độ — trạng thái thanh toán + các đề nghị chi liên quan. -->
+    <!-- Chi tiết đơn mua: mục "Đề nghị chi" trong phần thông tin đơn — mỗi đề nghị chi một chip "số · số tiền", màu theo
+         trạng thái (xanh = đã chi, cam = đang xử lý), bấm vào mở thẳng trang đề nghị chi + chứng từ. -->
     <template id="portal_order_form_payment" inherit_id="hlv_vendor_quotation.portal_order_form"
-              name="Báo giá NCC - đơn mua: thanh toán">
-        <xpath expr="//section[hasclass('vq-progress-panel')]" position="after">
+              name="Báo giá NCC - đơn mua: đề nghị chi">
+        <xpath expr="//dl[hasclass('vq-facts')]" position="inside">
             <t t-set="payment" t-value="order._hlv_payment_summary()"/>
-            <t t-set="paid_pct" t-value="min(100, round(payment['paid'] * 100 / payment['total'])) if payment['total'] else (100 if payment['paid'] else 0)"/>
-            <section class="vq-progress-panel">
-                <div class="pay-panel-head">
-                    <h2>Thanh toán</h2>
-                    <span t-attf-class="vq-status vq-pay-#{payment['status']}" t-esc="payment['label']"/>
-                    <a t-if="payment['requests']" class="vq-btn vq-btn-secondary vq-btn-sm vq-push"
-                       t-att-href="'%s/tai-chinh?order=%s' % (portal_base, order.id)">Xem ở tab Tài chính</a>
-                </div>
-                <div class="pay-meter">
-                    <div class="pay-meter-bar"><div class="pay-meter-fill" t-attf-style="width: #{paid_pct}%"/></div>
-                    <div class="pay-meter-text">
-                        <span>Đã chi <b t-esc="fmt(round(payment['paid']))"/> (<t t-esc="paid_pct"/>%)</span>
-                        <span>Giá trị đơn <b t-esc="fmt(round(payment['total']))"/></span>
-                    </div>
-                </div>
-                <p t-if="not payment['requests']" class="vq-muted vq-small">Chưa có đề nghị chi nào cho đơn này.</p>
-                <div t-else="" class="vq-list-scroll">
-                    <table class="vq-table vq-sheet pay-table">
-                        <thead>
-                            <tr>
-                                <th>Số đề nghị chi</th>
-                                <th>Ngày</th>
-                                <th class="vq-num">Số tiền</th>
-                                <th>Trạng thái</th>
-                                <th>Chứng từ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr t-foreach="payment['requests']" t-as="pr">
-                                <td data-label="Số đề nghị chi" class="vq-nowrap"><a class="vq-doc-chip" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
-                                       title="Xem đề nghị chi và chứng từ" t-esc="pr.name"/></td>
-                                <td data-label="Ngày" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
-                                <td class="vq-num" data-label="Số tiền"><b t-esc="fmt(round(pr.amount))"/></td>
-                                <td data-label="Trạng thái">
-                                    <span t-attf-class="vq-status #{'vq-pay-paid' if pr._hlv_is_paid() else 'vq-pay-processing'}" t-esc="pr._hlv_vendor_label()"/>
-                                </td>
-                                <td data-label="Chứng từ">
-                                    <t t-set="docs" t-value="pr._hlv_vendor_documents()"/>
-                                    <span t-if="not docs" class="vq-muted">—</span>
-                                    <div t-else="" class="doc-thumbs">
-                                        <t t-foreach="docs" t-as="doc">
-                                            <t t-call="hlv_vendor_payment_docs.doc_thumb">
-                                                <t t-set="url" t-value="'%s/tai-chinh/chung-tu/%s' % (portal_base, doc.id)"/>
-                                            </t>
-                                        </t>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <div t-if="payment['requests']"><dt>Đề nghị chi <span class="vq-muted" t-esc="'· ' + payment['label'].lower()"/></dt>
+                <dd class="pay-chips">
+                    <a t-foreach="payment['requests']" t-as="pr" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
+                       t-attf-class="pay-chip #{'vq-pay-paid' if pr._hlv_is_paid() else 'vq-pay-processing'}"
+                       t-att-title="pr._hlv_vendor_label() + ' · ' + fdate(pr.payment_date)">
+                        <b t-esc="pr.name"/> · <t t-esc="fmt(round(pr.amount))"/></a>
+                </dd></div>
         </xpath>
     </template>
 
@@ -246,13 +202,13 @@
                     </section>
 
                     <section class="unc-card">
-                        <h2 class="unc-card-title">Chứng từ chi (UNC)
-                            <a t-if="current" class="vq-btn vq-btn-secondary vq-btn-sm" target="_blank" t-att-href="doc_url(current)">Mở tab mới / tải về</a></h2>
+                        <h2 class="unc-card-title">Chứng từ chi (UNC)</h2>
                         <p t-if="not documents" class="vq-muted">Kế toán chưa gửi chứng từ cho đề nghị chi này.</p>
                         <t t-else="">
                             <t t-set="kind" t-value="current._hlv_preview_kind()"/>
                             <div class="pay-viewer">
-                                <img t-if="kind == 'image'" t-att-src="doc_url(current)" t-att-alt="current.name"/>
+                                <a t-if="kind == 'image'" class="pay-viewer-link" target="_blank" t-att-href="doc_url(current)"
+                                   title="Bấm để mở ảnh ở tab mới"><img t-att-src="doc_url(current)" t-att-alt="current.name"/></a>
                                 <iframe t-elif="kind == 'pdf'" t-att-src="doc_url(current)" t-att-title="current.name"/>
                                 <div t-else="" class="pay-viewer-file">
                                     <span class="doc-thumb doc-thumb-file" t-esc="current._hlv_badge()"/>

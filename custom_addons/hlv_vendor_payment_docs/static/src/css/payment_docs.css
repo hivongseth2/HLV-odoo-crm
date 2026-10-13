@@ -6,16 +6,11 @@
 .vq-pay-partial, .vq-pay-processing { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
 .vq-pay-unpaid { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
 
-/* --- Khung "Thanh toán" trên chi tiết đơn mua của NCC --- */
-.pay-panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
-.pay-panel-head h2 { margin: 0; }
-.pay-meter { display: grid; gap: 6px; margin-bottom: 14px; }
-.pay-meter-bar { height: 8px; border-radius: 999px; background: #e9edf2; overflow: hidden; }
-.pay-meter-fill { height: 100%; border-radius: 999px; background: #16a34a; }
-.pay-meter-text { display: flex; justify-content: space-between; gap: 12px; font-size: .85rem; color: var(--vq-muted);
-    font-variant-numeric: tabular-nums; }
-.pay-meter-text b { color: var(--vq-text); }
-.pay-table td { vertical-align: middle; }
+/* --- Chip đề nghị chi trong phần thông tin đơn mua của NCC --- */
+.pay-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pay-chip { display: inline-block; padding: 2px 9px; border: 1px solid; border-radius: 4px; font-size: .85rem;
+    font-variant-numeric: tabular-nums; text-decoration: none; white-space: nowrap; }
+.pay-chip:hover { filter: brightness(.96); text-decoration: underline; }
 
 /* --- Ảnh thu nhỏ chứng từ (bấm xem nhanh) --- */
 .doc-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -43,6 +38,7 @@
 .pay-viewer { display: flex; align-items: center; justify-content: center; height: min(72vh, 760px); border: 1px solid var(--vq-line);
     border-radius: 8px; background: #f3f5f8; overflow: hidden; }
 .pay-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.pay-viewer-link { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; cursor: zoom-in; }
 .pay-viewer iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 .pay-viewer-file { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 16px; }
 .pay-viewer-file .doc-thumb { width: 72px; height: 72px; font-size: .9rem; cursor: default; }
