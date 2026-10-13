@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trong menu "Báo giá NCC" của hlv_vendor_quotation (app Yêu cầu mua hàng). Việc của thu mua. -->
+    <menuitem id="menu_zalo_root"
+              name="Zalo nhóm NCC"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              sequence="80"
+              groups="purchase.group_purchase_user"/>
+    <menuitem id="menu_zalo_message"
+              name="Tin nhắn"
+              parent="menu_zalo_root"
+              action="action_zalo_message"
+              sequence="10"/>
+    <menuitem id="menu_zalo_group"
+              name="Nhóm Zalo"
+              parent="menu_zalo_root"
+              action="action_zalo_group"
+              sequence="20"/>
+    <menuitem id="menu_zalo_member"
+              name="Thành viên"
+              parent="menu_zalo_root"
+              action="action_zalo_member"
+              sequence="30"/>
+    <menuitem id="menu_zalo_listener"
+              name="Máy nghe"
+              parent="menu_zalo_root"
+              action="action_zalo_listener"
+              sequence="40"/>
+</odoo>

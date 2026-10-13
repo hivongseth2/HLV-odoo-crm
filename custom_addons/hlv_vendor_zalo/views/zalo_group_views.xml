@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zalo_group_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.group.list</field>
+        <field name="model">hlv.zalo.group</field>
+        <field name="arch" type="xml">
+            <list create="false" decoration-muted="not enabled" decoration-warning="not enabled and skipped_count">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="enabled" widget="boolean_toggle"/>
+                <field name="message_count"/>
+                <field name="skipped_count"/>
+                <field name="last_message_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zalo_group_form" model="ir.ui.view">
+        <field name="name">hlv.zalo.group.form</field>
+        <field name="model">hlv.zalo.group</field>
+        <field name="arch" type="xml">
+            <form create="false">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_messages" type="object" class="oe_stat_button" icon="fa-comments">
+                            <field name="message_count" widget="statinfo" string="Tin đã lưu"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <div class="alert alert-info" role="alert" invisible="enabled">
+                        Nhóm chưa ghi tin. Chọn NCC của nhóm rồi bật "Ghi tin" — từ lúc đó tin, ảnh, file của nhóm được lưu.
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="enabled" widget="boolean_toggle"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="zalo_group_id"/>
+                            <field name="last_message_at"/>
+                            <field name="skipped_count"/>
+                        </group>
+                    </group>
+                    <field name="note" placeholder="Ghi chú: nhóm này dùng để làm gì, ai phụ trách…"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_zalo_group_search" model="ir.ui.view">
+        <field name="name">hlv.zalo.group.search</field>
+        <field name="model">hlv.zalo.group</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <filter name="enabled" string="Đang ghi tin" domain="[('enabled', '=', True)]"/>
+                <filter name="not_enabled" string="Chưa bật" domain="[('enabled', '=', False)]"/>
+                <filter name="archived" string="Đã lưu trữ" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_zalo_group" model="ir.actions.act_window">
+        <field name="name">Nhóm Zalo</field>
+        <field name="res_model">hlv.zalo.group</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_zalo_group_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có nhóm nào</p>
+            <p>Mời tài khoản Zalo của máy nghe vào nhóm có NCC. Nhóm tự hiện ở đây khi có tin đầu tiên.</p>
+        </field>
+    </record>
+</odoo>

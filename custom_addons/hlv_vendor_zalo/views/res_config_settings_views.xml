@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa view cài đặt của chính hlv_vendor_quotation (khối "Hỏi giá NCC" trong Cài đặt → Mua hàng). -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hlv.vendor.zalo</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="hlv_vendor_quotation.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='hlv_vendor_quote_setting_container']" position="inside">
+                <setting id="hlv_zalo_ingest_key" string="Khoá máy nghe Zalo"
+                         help="Máy nghe Zalo (chạy ngoài Odoo) gửi tin nhóm NCC về Odoo bằng khoá này — dán vào ODOO_KEY trong file .env của máy nghe. Tạo khoá mới thì khoá cũ hết hiệu lực ngay. Chưa có khoá: Odoo không nhận tin nào.">
+                    <field name="hlv_zalo_ingest_key"/>
+                    <div class="mt8">
+                        <button name="action_hlv_zalo_new_key" type="object" string="Tạo khoá mới" class="btn-link"
+                                icon="oi-arrow-right" confirm="Khoá cũ sẽ hết hiệu lực ngay — máy nghe phải dán khoá mới. Tiếp tục?"/>
+                    </div>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>
