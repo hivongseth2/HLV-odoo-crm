@@ -1,6 +1,6 @@
 {
     'name': 'MISA PO Fetch Button',
-    'version': '1.7',
+    'version': '1.8',
     'depends': [
         'base', 'contacts', 'stock', 'purchase', 'sale', 'sale_stock',
         'sales_team', 'point_of_sale', 'hlv_zalo_zns', 'hlv_loyalty',
