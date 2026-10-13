@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Chứng từ chi NCC (UNC) + tab Tài chính trang NCC",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.1.0",
     "summary": "Kế toán tải UNC / chứng từ chi lên đề nghị chi MISA; NCC xem số đã chi + chứng từ trên link báo giá",
     "description": """
 - Trang /unc-ncc riêng cho kế toán (nhóm quyền "Kế toán: chứng từ chi NCC"): tìm đề nghị chi (amis.payment.request)
