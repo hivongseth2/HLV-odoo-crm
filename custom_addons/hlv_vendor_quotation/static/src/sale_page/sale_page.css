@@ -258,8 +258,10 @@ body {
 .hq-row-new:hover td { background: #F8E3D8; }
 .hq-ref { font-weight: 600; color: var(--hq-accent); }
 .hq-cell-vendor { max-width: 16rem; }
-.hq-po-cell + .hq-po-cell { margin-top: .3rem; }
-/* Ghi chú kho trên đơn mua (giờ / ngày hàng về thực tế). */
+/* Đơn mua ở bảng phiếu: mỗi đơn một dòng, ghi chú kho nằm trong chip của chính đơn đó. */
+.hq-docs-stack { flex-direction: column; align-items: flex-start; }
+.hq-doc-note { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
+/* Ghi chú kho trên đơn mua (giờ / ngày hàng về thực tế) — ngăn chi tiết phiếu. */
 .hq-po-note { max-width: 12rem; margin-top: .1rem; color: var(--hq-accent-dark); font-size: .75rem; line-height: 1.3;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hq-list-legend { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; padding: .6rem 16px; font-size: .75rem;

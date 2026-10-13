@@ -57,11 +57,13 @@ window.HlvQuote = window.HlvQuote || {};
 
   /**
    * Chip số chứng từ chỉ có màu (bảng phiếu — chỗ hẹp): trạng thái nằm ở màu + tooltip, không ghi chữ.
-   * name: số; cls: lớp hq-tag-* (trống → xám); label: trạng thái hiện khi rê chuột ("" = không tooltip).
+   * name: số; cls: lớp hq-tag-* (trống → xám); label: trạng thái hiện khi rê chuột ("" = không tooltip);
+   * note: ghi chú đi kèm chính chứng từ này, hiện TRONG chip sau số ("" = không có) — để không bị đọc nhầm sang
+   * chứng từ bên cạnh.
    */
-  HQ.colorChip = function (name, cls, label) {
+  HQ.colorChip = function (name, cls, label, note) {
     return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '"' + (label ? ' title="' + HQ.esc(label) + '"' : "") + ">" +
-      HQ.esc(name) + "</span>";
+      HQ.esc(name) + (note ? '<span class="hq-doc-state hq-doc-note">' + HQ.esc(note) + "</span>" : "") + "</span>";
   };
 
   /**

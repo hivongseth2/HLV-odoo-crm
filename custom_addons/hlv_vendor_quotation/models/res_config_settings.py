@@ -8,6 +8,7 @@ from .purchase_order_revision import NO_REVISION_STATES, REVISION_STATES_PARAM
 from .vendor_inquiry import SALE_EDIT_DEADLINE_PARAM
 from .vendor_quote import VENDOR_LATE_EDIT_PARAM
 from .vendor_quote_access import REQUIRE_PASSWORD_PARAM
+from .vendor_quote_line_choice import REQUEST_PRICE_FOLLOW_PARAM
 
 # Đuôi tên ô tick → state của purchase.order (VENDOR_ORDER_STATES).
 STATE_SUFFIXES = {"draft": "draft", "sent": "sent", "to_approve": "to approve", "purchase": "purchase", "done": "done"}
@@ -38,6 +39,12 @@ class ResConfigSettings(models.TransientModel):
     hlv_vq_vendor_edit_after_deadline = fields.Boolean(
         string="NCC sửa báo giá khi đã quá hạn",
         config_parameter=VENDOR_LATE_EDIT_PARAM,
+    )
+    hlv_vq_request_price_follow = fields.Selection(
+        [("warn", "Chỉ cảnh báo"), ("auto", "Tự đổi theo")],
+        string="NCC sửa giá món đã lên YCMH",
+        default="warn",
+        config_parameter=REQUEST_PRICE_FOLLOW_PARAM,
     )
     # Đơn ở trạng thái nào hiện trên trang NCC (VENDOR_ORDER_STATES_PARAM).
     hlv_vq_order_state_draft = fields.Boolean(string="Nháp")

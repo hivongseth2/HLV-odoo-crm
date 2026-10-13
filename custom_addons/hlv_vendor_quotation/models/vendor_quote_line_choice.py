@@ -16,6 +16,12 @@ from odoo.exceptions import UserError
 from .allocation_utils import apply_qty_delta, buy_qty_error, default_buy_qty, split_buy_qty, supply_cap
 from .vendor_quote_utils import format_vn_number
 
+# Cài đặt: NCC sửa giá món đã lên YCMH — "warn" (mặc định: chỉ báo, YCMH giữ giá cũ) hoặc "auto" (dòng YCMH còn sửa
+# được đổi giá theo NCC).
+REQUEST_PRICE_FOLLOW_PARAM = "hlv_vendor_quotation.request_price_follow"
+# YCMH đã duyệt là thu mua đã chốt giá — "tự đổi theo" chỉ đụng YCMH chưa duyệt.
+PRICE_FOLLOW_REQUEST_STATES = ("draft", "to_approve")
+
 
 class VendorQuoteLineChoice(models.Model):
     _inherit = "hlv.vendor.quote.line"
@@ -44,6 +50,21 @@ class VendorQuoteLineChoice(models.Model):
     def _hlv_ordered_qty(self):
         """Phần SL mua của NCC này đã lên RFQ / đơn mua (cộng các dòng YCMH còn hiệu lực)."""
         return sum(self._hlv_live_request_lines().mapped("purchased_qty"))
+
+    def _hlv_sync_request_price(self):
+        """NCC vừa đổi giá / VAT của món đang được chọn. Cài đặt "tự đổi theo": ghi giá + thuế mới xuống dòng YCMH của
+        NCC này còn sửa được — YCMH chưa duyệt, dòng chưa lên RFQ / đơn mua, NCC trên dòng vẫn là NCC này (thu mua đổi
+        tay thì giữ). Cài đặt "chỉ cảnh báo": không ghi gì. Trả (dòng YCMH đã đổi giá, dòng YCMH còn giá cũ)."""
+        self.ensure_one()
+        live = self._hlv_live_request_lines()
+        if self.env["ir.config_parameter"].sudo().get_param(REQUEST_PRICE_FOLLOW_PARAM) != "auto":
+            return live.browse(), live
+        follow = live.filtered(lambda l: l.request_id.state in PRICE_FOLLOW_REQUEST_STATES
+                               and l.actual_supplier_id == self.partner_id
+                               and not l.purchase_lines.filtered(lambda p: p.state != "cancel"))
+        if follow:
+            follow.write(dict(self._request_line_actual_vals(), **self._request_line_proposal_vals()))
+        return follow, live - follow
 
     def _hlv_needs_request(self):
         """Đã chọn mà chưa nằm trên YCMH còn hiệu lực — nút "Lên / bổ sung YCMH" đưa lên."""
