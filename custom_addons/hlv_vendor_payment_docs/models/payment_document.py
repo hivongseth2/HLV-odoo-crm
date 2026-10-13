@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models
 
+from ..services.asset_version import asset_version
+from .payment_utils import file_badge, preview_kind
+
 
 class PaymentDocument(models.Model):
     """Chứng từ chi (UNC, phiếu chi, ảnh chuyển khoản…) kế toán tải lên một đề nghị chi của đơn mua — NCC xem được
@@ -20,6 +23,21 @@ class PaymentDocument(models.Model):
     mimetype = fields.Char(related="attachment_id.mimetype")
     note = fields.Char(string="Ghi chú", help="VD: UNC đợt 1, phiếu chi tiền mặt…")
     visible_to_vendor = fields.Boolean(string="NCC xem được", default=True)
+
+    def _hlv_preview_kind(self):
+        """"image" / "pdf" / "file" — trang hiện ảnh thu nhỏ, xem nhanh trong trang hay chỉ cho tải (preview_kind)."""
+        self.ensure_one()
+        return preview_kind(self.mimetype, self.name)
+
+    def _hlv_badge(self):
+        """Nhãn loại file cho ô chứng từ không có ảnh thu nhỏ (file_badge)."""
+        self.ensure_one()
+        return file_badge(self.name)
+
+    @api.model
+    def _hlv_asset_version(self):
+        """?v= cho CSS/JS của module — template gọi được (trang NCC / kế toán không truyền sẵn biến này)."""
+        return asset_version()
 
     @api.model
     def _create_for(self, payment_request, files, note):

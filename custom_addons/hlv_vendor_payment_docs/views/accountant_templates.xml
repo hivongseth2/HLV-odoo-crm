@@ -12,15 +12,9 @@
                 <title><t t-esc="page_title"/> · <t t-esc="company.name"/></title>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_history.css?v=#{asset_version}"/>
-                <style>
-                    .unc-docs { margin: 0; padding: 0; list-style: none; }
-                    .unc-docs li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--vq-line); }
-                    .unc-docs form { display: inline; margin: 0; }
-                    .unc-upload { display: grid; gap: 10px; max-width: 640px; padding: 14px 16px; background: #fff; border: 1px dashed var(--vq-line-strong); border-radius: 6px; }
-                    .unc-hidden { opacity: .55; }
-                    .unc-paid { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
-                    .unc-wait { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
-                </style>
+                <t t-set="payment_assets" t-value="request.env['hlv.payment.document'].sudo()._hlv_asset_version()"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_payment_docs/static/src/css/payment_docs.css?v=#{payment_assets}"/>
+                <script defer="defer" t-attf-src="/hlv_vendor_payment_docs/static/src/js/doc_preview.js?v=#{payment_assets}"></script>
             </head>
             <body>
                 <header class="vq-header">
@@ -144,51 +138,78 @@
                 <div t-if="saved" class="vq-alert vq-alert-ok" t-esc="saved"/>
                 <div t-if="error" class="vq-alert vq-alert-error" t-esc="error"/>
 
-                <dl class="vq-facts">
-                    <div><dt>Đơn mua hàng</dt><dd t-esc="payment.purchase_order_id.name"/></div>
-                    <div><dt>Người nhận</dt><dd t-esc="payment.partner_id.display_name"/></div>
-                    <div><dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/></div>
-                    <div><dt>Số tiền đề nghị chi</dt><dd><b t-esc="fmt(round(payment.amount))"/> <t t-esc="payment.currency_id.name"/></dd></div>
-                    <div><dt>Phương thức chi</dt><dd t-esc="dict(payment._fields['payment_method'].selection).get(payment.payment_method)"/></div>
-                    <div t-if="payment.company_bank_account_number"><dt>Tài khoản chi</dt>
-                        <dd><t t-esc="payment.company_bank_account_number"/> — <t t-esc="payment.company_bank_name"/></dd></div>
-                    <div t-if="payment.vendor_bank_account_number"><dt>Tài khoản nhận</dt>
-                        <dd><t t-esc="payment.vendor_bank_account_number"/> — <t t-esc="payment.vendor_bank_name"/>
-                            <div t-if="payment.vendor_account_holder" class="vq-muted vq-small" t-esc="payment.vendor_account_holder"/></dd></div>
-                    <div t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></div>
-                </dl>
+                <div class="unc-grid">
+                    <!-- Trái: thông tin đề nghị chi (đọc để đối chiếu với UNC). -->
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Đề nghị chi</h2>
+                        <p class="unc-amount"><t t-esc="fmt(round(payment.amount))"/> <small t-esc="payment.currency_id.name"/></p>
+                        <dl class="unc-info">
+                            <dt>Đơn mua hàng</dt><dd t-esc="payment.purchase_order_id.name"/>
+                            <dt>Người nhận</dt><dd t-esc="payment.partner_id.display_name"/>
+                            <dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/>
+                            <dt>Phương thức</dt><dd t-esc="dict(payment._fields['payment_method'].selection).get(payment.payment_method)"/>
+                            <t t-if="payment.company_bank_account_number">
+                                <dt>Tài khoản chi</dt>
+                                <dd><t t-esc="payment.company_bank_account_number"/><span class="vq-muted" t-esc="payment.company_bank_name"/></dd>
+                            </t>
+                            <t t-if="payment.vendor_bank_account_number">
+                                <dt>Tài khoản nhận</dt>
+                                <dd><t t-esc="payment.vendor_bank_account_number"/><span class="vq-muted" t-esc="payment.vendor_bank_name"/>
+                                    <span t-if="payment.vendor_account_holder" class="vq-muted" t-esc="payment.vendor_account_holder"/></dd>
+                            </t>
+                            <t t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></t>
+                        </dl>
+                    </section>
 
-                <h2 class="vq-section-title">Tải chứng từ chi lên</h2>
-                <form method="post" enctype="multipart/form-data" class="unc-upload" t-att-action="'%s/%s/tai-len' % (route, payment.id)">
-                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                    <label>
-                        <span class="vq-label">File (ảnh, PDF, Word — chọn được nhiều file, tối đa <t t-esc="max_mb"/>MB mỗi file)</span>
-                        <input type="file" name="files" multiple="multiple" required="required" t-att-accept="accept"/>
-                    </label>
-                    <label>
-                        <span class="vq-label">Ghi chú <span class="vq-muted">(tuỳ chọn — NCC thấy)</span></span>
-                        <input type="text" name="note" class="vq-input" maxlength="255" placeholder="VD: UNC đợt 1"/>
-                    </label>
-                    <div><button type="submit" class="vq-btn vq-btn-primary">Tải lên</button></div>
-                </form>
+                    <!-- Phải: tải lên + chứng từ đã có. -->
+                    <div>
+                        <section class="unc-card">
+                            <h2 class="unc-card-title">Tải chứng từ chi lên</h2>
+                            <form method="post" enctype="multipart/form-data" class="unc-upload" t-att-action="'%s/%s/tai-len' % (route, payment.id)">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <label class="unc-drop">
+                                    <input type="file" name="files" multiple="multiple" required="required" t-att-accept="accept"/>
+                                    <span class="unc-drop-title">Kéo thả file vào đây hoặc bấm để chọn</span>
+                                    <span class="unc-drop-hint">Ảnh, PDF, Word · chọn được nhiều file · tối đa <t t-esc="max_mb"/>MB mỗi file</span>
+                                </label>
+                                <ul class="unc-picked" data-picked="1"/>
+                                <div class="unc-upload-row">
+                                    <label>
+                                        <span class="vq-label">Ghi chú <span class="vq-muted">(tuỳ chọn — NCC thấy)</span></span>
+                                        <input type="text" name="note" class="vq-input" maxlength="255" placeholder="VD: UNC đợt 1"/>
+                                    </label>
+                                    <button type="submit" class="vq-btn vq-btn-primary">Tải lên</button>
+                                </div>
+                            </form>
+                        </section>
 
-                <h2 class="vq-section-title">Chứng từ đã tải (<t t-esc="len(payment.hlv_document_ids)"/>)</h2>
-                <p t-if="not payment.hlv_document_ids" class="vq-muted">Chưa có chứng từ nào.</p>
-                <ul t-else="" class="unc-docs">
-                    <li t-foreach="payment.hlv_document_ids" t-as="doc" t-att-class="'unc-hidden' if not doc.visible_to_vendor else None">
-                        <a target="_blank" t-att-href="'%s/chung-tu/%s/xem' % (route, doc.id)" t-esc="doc.name"/>
-                        <span t-if="doc.note" class="vq-muted" t-esc="doc.note"/>
-                        <span class="vq-muted vq-small"><t t-esc="doc.create_uid.name"/> · <t t-esc="fdate(doc.create_date)"/></span>
-                        <span t-if="not doc.visible_to_vendor" class="vq-status unc-wait">Đang ẩn với NCC</span>
-                        <form method="post" t-att-action="'%s/chung-tu/%s' % (route, doc.id)">
-                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                            <button type="submit" name="action" value="toggle" class="vq-btn vq-btn-secondary vq-btn-sm"
-                                    t-esc="'Cho NCC xem' if not doc.visible_to_vendor else 'Ẩn với NCC'"/>
-                            <button type="submit" name="action" value="delete" class="vq-btn vq-btn-secondary vq-btn-sm"
-                                    onclick="return confirm('Xoá chứng từ này?');">Xoá</button>
-                        </form>
-                    </li>
-                </ul>
+                        <section class="unc-card">
+                            <h2 class="unc-card-title">Chứng từ đã tải <span class="vq-muted" t-esc="len(payment.hlv_document_ids)"/></h2>
+                            <p t-if="not payment.hlv_document_ids" class="vq-muted">Chưa có chứng từ nào.</p>
+                            <div t-else="" class="unc-gallery">
+                                <div t-foreach="payment.hlv_document_ids" t-as="doc"
+                                     t-attf-class="unc-doc #{'is-hidden' if not doc.visible_to_vendor else ''}">
+                                    <t t-call="hlv_vendor_payment_docs.doc_thumb">
+                                        <t t-set="url" t-value="'%s/chung-tu/%s/xem' % (route, doc.id)"/>
+                                    </t>
+                                    <div class="unc-doc-body">
+                                        <span class="unc-doc-name" t-att-title="doc.name" t-esc="doc.name"/>
+                                        <span t-if="doc.note" t-esc="doc.note"/>
+                                        <span class="unc-doc-meta"><t t-esc="doc.create_uid.name"/> · <t t-esc="fdate(doc.create_date)"/></span>
+                                        <span t-if="not doc.visible_to_vendor"><span class="unc-tag-hidden">Đang ẩn với NCC</span></span>
+                                    </div>
+                                    <form method="post" class="unc-doc-actions" t-att-action="'%s/chung-tu/%s' % (route, doc.id)">
+                                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                        <button type="submit" name="action" value="toggle" class="vq-btn vq-btn-secondary"
+                                                t-esc="'Cho NCC xem' if not doc.visible_to_vendor else 'Ẩn với NCC'"/>
+                                        <button type="submit" name="action" value="delete" class="vq-btn vq-btn-secondary"
+                                                onclick="return confirm('Xoá chứng từ này?');">Xoá</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
             </div>
         </t>
     </template>

@@ -28,6 +28,28 @@ def payment_status(order_total, paid_amount):
     return "partial"
 
 
+# Ảnh trình duyệt nào cũng hiện được (HEIC chỉ Safari hiện — coi như file thường, bấm là tải về).
+PREVIEW_IMAGE_MIMETYPES = ("image/png", "image/jpeg", "image/webp", "image/gif")
+
+
+def preview_kind(mimetype, filename):
+    """Cách xem nhanh một chứng từ: "image" (hiện ảnh thu nhỏ + xem to trong trang), "pdf" (xem trong trang), "file"
+    (Word / ảnh HEIC — chỉ tải về). Không rõ mimetype thì đoán theo đuôi file; không đoán được → "file"."""
+    mimetype = (mimetype or "").lower()
+    extension = os.path.splitext(filename or "")[1].lower()
+    if mimetype in PREVIEW_IMAGE_MIMETYPES or (not mimetype and extension in (".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return "image"
+    if mimetype == "application/pdf" or extension == ".pdf":
+        return "pdf"
+    return "file"
+
+
+def file_badge(filename):
+    """Nhãn loại file trên ô chứng từ không có ảnh thu nhỏ: "PDF", "WORD", "ẢNH" (HEIC), đuôi lạ viết hoa; không đuôi → "FILE"."""
+    extension = os.path.splitext(filename or "")[1].lower().lstrip(".")
+    return {"pdf": "PDF", "doc": "WORD", "docx": "WORD", "heic": "ẢNH"}.get(extension, extension.upper() or "FILE")
+
+
 def document_error(filename, size):
     """Lý do không nhận file kế toán tải lên ("" = nhận). filename: tên file gốc; size: số byte."""
     extension = os.path.splitext(filename or "")[1].lower()

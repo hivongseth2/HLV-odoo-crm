@@ -1,0 +1,89 @@
+/* Chứng từ chi NCC: trang kế toán /unc-ncc + khung "Thanh toán" / tab "Tài chính" trên trang NCC. Dựa trên biến màu,
+   nút, bảng của vendor_portal.css (hlv_vendor_quotation) — chỉ thêm phần riêng. */
+
+/* --- Trạng thái thanh toán --- */
+.vq-pay-paid { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.vq-pay-partial, .vq-pay-processing { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+.vq-pay-unpaid { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
+
+/* --- Khung "Thanh toán" trên chi tiết đơn mua của NCC --- */
+.pay-panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
+.pay-panel-head h2 { margin: 0; }
+.pay-meter { display: grid; gap: 6px; margin-bottom: 14px; }
+.pay-meter-bar { height: 8px; border-radius: 999px; background: #e9edf2; overflow: hidden; }
+.pay-meter-fill { height: 100%; border-radius: 999px; background: #16a34a; }
+.pay-meter-text { display: flex; justify-content: space-between; gap: 12px; font-size: .85rem; color: var(--vq-muted);
+    font-variant-numeric: tabular-nums; }
+.pay-meter-text b { color: var(--vq-text); }
+.pay-table td { vertical-align: middle; }
+
+/* --- Ảnh thu nhỏ chứng từ (bấm xem nhanh) --- */
+.doc-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.doc-thumb { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none;
+    border: 1px solid var(--vq-line-strong); border-radius: 6px; background: #f3f5f8; overflow: hidden; text-decoration: none;
+    font-size: .62rem; font-weight: 700; letter-spacing: .02em; color: #475569; cursor: zoom-in; }
+.doc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.doc-thumb-pdf { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+.doc-thumb-file { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; cursor: pointer; }
+.doc-thumb:hover { border-color: var(--vq-accent); box-shadow: 0 0 0 2px rgba(31, 58, 95, .12); }
+
+/* --- Hộp xem nhanh ảnh / PDF (js/doc_preview.js) --- */
+.doc-preview { width: min(94vw, 1100px); height: min(92vh, 920px); padding: 0; border: 0; border-radius: 10px;
+    background: #111827; color: #fff; overflow: hidden; }
+.doc-preview::backdrop { background: rgba(15, 23, 42, .72); }
+.doc-preview-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1f2937; }
+.doc-preview-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.doc-preview-bar a, .doc-preview-bar button { color: #e5e7eb; background: none; border: 1px solid #4b5563; border-radius: 6px;
+    padding: 4px 10px; font: inherit; font-size: .85rem; text-decoration: none; cursor: pointer; }
+.doc-preview-body { height: calc(100% - 50px); display: flex; align-items: center; justify-content: center; }
+.doc-preview-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.doc-preview-body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* --- Trang kế toán: chi tiết một đề nghị chi --- */
+.unc-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .unc-grid { grid-template-columns: 1fr; } }
+.unc-card { background: #fff; border: 1px solid var(--vq-line); border-radius: 10px; padding: 18px 20px; }
+.unc-card + .unc-card { margin-top: 16px; }
+.unc-card-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px;
+    font-size: .95rem; font-weight: 700; }
+.unc-amount { margin: 0 0 14px; font-size: 1.6rem; font-weight: 700; color: var(--vq-accent); font-variant-numeric: tabular-nums; }
+.unc-amount small { font-size: .8rem; font-weight: 500; color: var(--vq-muted); }
+.unc-info { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 9px 14px; margin: 0; font-size: .9rem; }
+.unc-info dt { color: var(--vq-muted); }
+.unc-info dd { margin: 0; overflow-wrap: anywhere; }
+.unc-info dd .vq-muted { display: block; font-size: .8rem; }
+
+/* Ô kéo-thả file */
+.unc-upload { display: grid; gap: 12px; }
+.unc-drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    min-height: 130px; padding: 18px; border: 2px dashed var(--vq-line-strong); border-radius: 10px; background: #f8fafc;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.unc-drop:hover, .unc-drop.is-over { border-color: var(--vq-accent); background: #eef2f7; }
+.unc-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.unc-drop-title { font-weight: 600; }
+.unc-drop-hint { font-size: .8rem; color: var(--vq-muted); }
+.unc-picked { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.unc-picked:empty { display: none; }
+.unc-picked li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--vq-line);
+    border-radius: 6px; background: #fff; font-size: .85rem; }
+.unc-picked .doc-thumb { width: 38px; height: 38px; cursor: default; }
+.unc-picked-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unc-picked-size { color: var(--vq-muted); font-variant-numeric: tabular-nums; }
+.unc-upload-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.unc-upload-row label { flex: 1 1 220px; }
+
+/* Lưới chứng từ đã tải */
+.unc-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+.unc-doc { display: flex; flex-direction: column; border: 1px solid var(--vq-line); border-radius: 10px; background: #fff; overflow: hidden; }
+.unc-doc .doc-thumb { width: 100%; height: 124px; border: 0; border-bottom: 1px solid var(--vq-line); border-radius: 0; font-size: 1.1rem; }
+.unc-doc.is-hidden .doc-thumb { opacity: .45; }
+.unc-doc-body { display: grid; gap: 2px; padding: 8px 10px; font-size: .8rem; }
+.unc-doc-name { font-weight: 600; font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unc-doc-meta { color: var(--vq-muted); }
+.unc-doc-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 10px 10px; margin-top: auto; }
+.unc-doc-actions form { margin: 0; }
+.unc-doc-actions .vq-btn { padding: 3px 9px; font-size: .76rem; }
+.unc-tag-hidden { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 3px; background: #fff7ed; color: #9a3412;
+    font-size: .72rem; font-weight: 600; }
+.unc-paid { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.unc-wait { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
