@@ -1,0 +1,19 @@
+{
+  "name": "hlv-zalo-listener",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Máy nghe nhóm Zalo có NCC: ghi tin vào SQLite trên máy rồi đẩy về Odoo (module hlv_vendor_zalo). Chỉ đọc, không gửi tin.",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node test/run.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.10.1",
+    "zca-js": "2.2.0"
+  }
+}

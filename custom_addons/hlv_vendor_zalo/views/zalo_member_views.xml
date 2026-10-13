@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zalo_member_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.member.list</field>
+        <field name="model">hlv.zalo.member</field>
+        <field name="arch" type="xml">
+            <list create="false" editable="bottom" decoration-warning="kind == 'unknown'">
+                <field name="name" readonly="1"/>
+                <field name="kind"/>
+                <field name="partner_id" invisible="kind != 'vendor'"/>
+                <field name="user_id" invisible="kind != 'staff'"/>
+                <field name="group_ids" widget="many2many_tags" readonly="1"/>
+                <field name="last_seen_at" readonly="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zalo_member_search" model="ir.ui.view">
+        <field name="name">hlv.zalo.member.search</field>
+        <field name="model">hlv.zalo.member</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="group_ids"/>
+                <filter name="unknown" string="Chưa rõ là ai" domain="[('kind', '=', 'unknown')]"/>
+                <filter name="vendor" string="Người của NCC" domain="[('kind', '=', 'vendor')]"/>
+                <filter name="staff" string="Nhân viên mình" domain="[('kind', '=', 'staff')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_zalo_member" model="ir.actions.act_window">
+        <field name="name">Thành viên nhóm Zalo</field>
+        <field name="res_model">hlv.zalo.member</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_zalo_member_search"/>
+        <field name="context">{"search_default_unknown": 1}</field>
+    </record>
+</odoo>

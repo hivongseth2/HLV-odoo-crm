@@ -1,0 +1,9 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_zalo_group_purchase_user,hlv.zalo.group purchase user,model_hlv_zalo_group,purchase.group_purchase_user,1,1,0,0
+access_zalo_group_purchase_manager,hlv.zalo.group purchase manager,model_hlv_zalo_group,purchase.group_purchase_manager,1,1,1,1
+access_zalo_member_purchase_user,hlv.zalo.member purchase user,model_hlv_zalo_member,purchase.group_purchase_user,1,1,0,0
+access_zalo_member_purchase_manager,hlv.zalo.member purchase manager,model_hlv_zalo_member,purchase.group_purchase_manager,1,1,1,1
+access_zalo_message_purchase_user,hlv.zalo.message purchase user,model_hlv_zalo_message,purchase.group_purchase_user,1,0,0,0
+access_zalo_message_purchase_manager,hlv.zalo.message purchase manager,model_hlv_zalo_message,purchase.group_purchase_manager,1,0,0,1
+access_zalo_reaction_purchase_user,hlv.zalo.reaction purchase user,model_hlv_zalo_reaction,purchase.group_purchase_user,1,0,0,0
+access_zalo_listener_purchase_user,hlv.zalo.listener purchase user,model_hlv_zalo_listener,purchase.group_purchase_user,1,0,0,0

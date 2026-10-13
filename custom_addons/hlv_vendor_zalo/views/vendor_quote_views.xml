@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa form báo giá NCC của chính repo (hlv_vendor_quotation) — xmlid do mình đặt, ổn định. Chỉ thêm
+         nút xem tin Zalo, không đổi luồng báo giá. -->
+    <record id="view_vendor_quote_form_zalo" model="ir.ui.view">
+        <field name="name">hlv.vendor.quote.form.zalo</field>
+        <field name="model">hlv.vendor.quote</field>
+        <field name="inherit_id" ref="hlv_vendor_quotation.view_vendor_quote_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/div[hasclass('oe_title')]" position="before">
+                <div class="oe_button_box" name="zalo_button_box" groups="purchase.group_purchase_user">
+                    <button name="action_open_zalo_messages" type="object" class="oe_stat_button" icon="fa-comments"
+                            invisible="not zalo_message_count">
+                        <field name="zalo_message_count" widget="statinfo" string="Tin Zalo"/>
+                    </button>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
