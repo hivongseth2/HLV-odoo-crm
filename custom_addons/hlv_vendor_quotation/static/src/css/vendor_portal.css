@@ -243,11 +243,9 @@ a { color: var(--vq-accent); }
 .vq-status-panel p { margin-bottom: 12px; }
 .vq-status-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .vq-status-actions .vq-btn:disabled { opacity: .55; cursor: default; }
-.vq-summary-inline { max-width: 360px; margin: 20px 0 0 auto; }
 @media (max-width: 760px) {
     .vq-section-tabs { gap: 20px; margin-bottom: 16px; }
     .vq-status-actions .vq-btn { flex: 1 1 auto; }
-    .vq-summary-inline { max-width: none; }
 }
 
 /* --- Kết quả chọn giá của sale trên từng dòng báo giá --- */
@@ -645,6 +643,8 @@ tr:has(.vq-edit-toggle:checked) .vq-edit { display: block; }
 .vq-order-foot td { background: #f8fafc; font-variant-numeric: tabular-nums; }
 .vq-order-foot tr:first-child td { border-top: 1px solid var(--vq-line-strong); }
 .vq-order-foot-total td { font-weight: 700; font-size: .9rem; }
+/* Đang sửa dòng: thành tiền / tổng tính theo số mới (chưa gửi) — tô màu để NCC biết đây là số dự kiến. */
+.vq-order-lines .is-draft-amount { color: var(--vq-warn); }
 @media (max-width: 760px) {
     .vq-order-foot { display: block; }
     .vq-order-foot td[colspan] { display: none; }

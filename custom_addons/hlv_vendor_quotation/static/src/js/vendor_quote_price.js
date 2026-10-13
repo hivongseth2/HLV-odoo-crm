@@ -40,5 +40,15 @@
         return gross ? round2(gross / (1 + (vatRate || 0) / 100)) : null;
     }
 
-    window.hlvVendorQuote = Object.assign(window.hlvVendorQuote || {}, { splitUnitPrice, inclVat, exclVat });
+    /**
+     * Tiền một dòng đơn mua: net = đơn giá chưa VAT, qty = số lượng, vatRate = % VAT (trống coi như 0).
+     * Trả {untaxed, tax, total} làm tròn 2 chữ số lẻ — thuế tính trên tiền trước VAT của dòng, như Odoo.
+     */
+    function lineAmounts(net, qty, vatRate) {
+        const untaxed = round2((net || 0) * (qty || 0));
+        const tax = round2(untaxed * (vatRate || 0) / 100);
+        return { untaxed: untaxed, tax: tax, total: round2(untaxed + tax) };
+    }
+
+    window.hlvVendorQuote = Object.assign(window.hlvVendorQuote || {}, { splitUnitPrice, inclVat, exclVat, lineAmounts });
 })();
