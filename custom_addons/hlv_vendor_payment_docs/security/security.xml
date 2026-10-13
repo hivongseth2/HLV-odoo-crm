@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_payment_docs" model="ir.module.category">
+        <field name="name">Chứng từ chi NCC</field>
+        <field name="sequence">60</field>
+    </record>
+
+    <!-- Quyền riêng cho kế toán: vào trang /unc-ncc, tải / ẩn / xoá chứng từ chi. Không kéo theo quyền mua hàng. -->
+    <record id="group_payment_doc_accountant" model="res.groups">
+        <field name="name">Kế toán: chứng từ chi NCC (UNC)</field>
+        <field name="category_id" ref="module_category_payment_docs"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Vào trang Chứng từ chi NCC (/unc-ncc): tìm đề nghị chi của đơn mua, tải UNC / ảnh / PDF / Word lên để NCC xem trên link báo giá.</field>
+    </record>
+</odoo>

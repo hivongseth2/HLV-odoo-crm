@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang /unc-ncc của kế toán (controllers/accountant_page.py). Dùng lại CSS trang NCC (cùng kiểu bảng, nút, ô lọc)
+         — không dựng bộ giao diện thứ hai. Không dùng "%s%%" trong biểu thức (Odoo nạp XML đổi "%%" thành "%"). -->
+    <template id="accountant_layout" name="Chứng từ chi NCC - khung trang">
+        <t t-out="doctype"/>
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <meta name="robots" content="noindex, nofollow"/>
+                <title><t t-esc="page_title"/> · <t t-esc="company.name"/></title>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_history.css?v=#{asset_version}"/>
+                <style>
+                    .unc-docs { margin: 0; padding: 0; list-style: none; }
+                    .unc-docs li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--vq-line); }
+                    .unc-docs form { display: inline; margin: 0; }
+                    .unc-upload { display: grid; gap: 10px; max-width: 640px; padding: 14px 16px; background: #fff; border: 1px dashed var(--vq-line-strong); border-radius: 6px; }
+                    .unc-hidden { opacity: .55; }
+                    .unc-paid { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+                    .unc-wait { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+                </style>
+            </head>
+            <body>
+                <header class="vq-header">
+                    <div class="vq-wrap vq-header-row">
+                        <a class="vq-brand" t-att-href="route">
+                            <span class="vq-brand-text">
+                                <span class="vq-company" t-esc="company.name"/>
+                                <span class="vq-sub">Chứng từ chi NCC — kế toán</span>
+                            </span>
+                        </a>
+                        <div class="vq-header-right">
+                            <span class="vq-header-vendor" t-esc="request.env.user.name"/>
+                            <a href="/odoo" class="vq-header-link">Về Odoo</a>
+                        </div>
+                    </div>
+                </header>
+                <main class="vq-main">
+                    <t t-out="0"/>
+                </main>
+            </body>
+        </html>
+    </template>
+
+    <!-- Trạng thái MISA của đề nghị chi, tô màu đã chi / chưa. Biến: pr. -->
+    <template id="accountant_state" name="Chứng từ chi NCC - trạng thái">
+        <span t-attf-class="vq-status #{'unc-paid' if pr._hlv_is_paid() else 'unc-wait'}"
+              t-esc="dict(pr._fields['state'].selection).get(pr.state, pr.state)"/>
+    </template>
+
+    <template id="accountant_list" name="Chứng từ chi NCC - danh sách">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <div class="vq-wrap">
+                <div class="vq-page-head"><h1>Đề nghị chi đơn mua</h1></div>
+                <form method="get" class="vq-history-filter" t-att-action="route">
+                    <label class="vq-filter-field vq-filter-search">
+                        <span class="vq-label">Tìm</span>
+                        <input type="search" name="q" class="vq-input" t-att-value="filters['q']" placeholder="Số đề nghị chi, số đơn mua hoặc NCC"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Trạng thái MISA</span>
+                        <select name="state" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option t-foreach="state_options" t-as="opt" t-att-value="opt[0]"
+                                    t-att-selected="opt[0] == filters['state']" t-esc="opt[1]"/>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Chứng từ</span>
+                        <select name="docs" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option value="chua" t-att-selected="filters['docs'] == 'chua'">Chưa có chứng từ</option>
+                            <option value="co" t-att-selected="filters['docs'] == 'co'">Đã có chứng từ</option>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Từ ngày</span>
+                        <input type="date" name="date_from" class="vq-input" t-att-value="filters['date_from'] and filters['date_from'].isoformat() or ''"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Đến ngày</span>
+                        <input type="date" name="date_to" class="vq-input" t-att-value="filters['date_to'] and filters['date_to'].isoformat() or ''"/>
+                    </label>
+                    <div class="vq-filter-actions">
+                        <button type="submit" class="vq-btn vq-btn-primary">Lọc</button>
+                        <a class="vq-btn vq-btn-secondary" t-att-href="route">Xoá lọc</a>
+                    </div>
+                </form>
+
+                <p t-if="not requests" class="vq-empty">Không có đề nghị chi nào khớp bộ lọc.</p>
+                <t t-else="">
+                    <div class="vq-list-scroll">
+                    <table class="vq-table vq-sheet">
+                        <thead>
+                            <tr>
+                                <th>Số đề nghị chi</th>
+                                <th>Đơn mua</th>
+                                <th>Người nhận</th>
+                                <th>Ngày đề nghị chi</th>
+                                <th class="vq-num">Số tiền</th>
+                                <th>Trạng thái MISA</th>
+                                <th class="vq-num">Chứng từ</th>
+                                <th><span class="vq-sr-only">Mở</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="requests" t-as="pr">
+                                <td data-label="Số đề nghị chi" class="vq-nowrap"><a t-att-href="'%s/%s' % (route, pr.id)" t-esc="pr.name"/></td>
+                                <td data-label="Đơn mua" t-esc="pr.purchase_order_id.name"/>
+                                <td data-label="Người nhận" t-esc="pr.partner_id.display_name"/>
+                                <td data-label="Ngày đề nghị chi" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
+                                <td class="vq-num" data-label="Số tiền" t-esc="fmt(round(pr.amount))"/>
+                                <td data-label="Trạng thái MISA"><t t-call="hlv_vendor_payment_docs.accountant_state"/></td>
+                                <td class="vq-num" data-label="Chứng từ" t-esc="pr.hlv_document_count or '—'"/>
+                                <td class="vq-sheet-action">
+                                    <a t-attf-class="vq-btn vq-btn-sm #{'vq-btn-primary' if not pr.hlv_document_count else 'vq-btn-secondary'}"
+                                       t-att-href="'%s/%s' % (route, pr.id)" t-esc="'Tải chứng từ' if not pr.hlv_document_count else 'Xem'"/>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <nav t-if="pager['page_count'] &gt; 1" class="vq-pager">
+                        <a t-if="pager['page'] &gt; 1" t-att-href="list_url(page=pager['page'] - 1)" class="vq-btn vq-btn-secondary">Trang trước</a>
+                        <span class="vq-muted">Trang <t t-esc="pager['page']"/> / <t t-esc="pager['page_count']"/></span>
+                        <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="list_url(page=pager['page'] + 1)" class="vq-btn vq-btn-secondary">Trang sau</a>
+                    </nav>
+                </t>
+            </div>
+        </t>
+    </template>
+
+    <template id="accountant_detail" name="Chứng từ chi NCC - một đề nghị chi">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <t t-set="pr" t-value="payment"/>
+            <div class="vq-wrap">
+                <nav class="vq-breadcrumb"><a t-att-href="route">Đề nghị chi đơn mua</a> / <span t-esc="payment.name"/></nav>
+                <div class="vq-page-head">
+                    <h1 t-esc="payment.name"/>
+                    <t t-call="hlv_vendor_payment_docs.accountant_state"/>
+                </div>
+                <div t-if="saved" class="vq-alert vq-alert-ok" t-esc="saved"/>
+                <div t-if="error" class="vq-alert vq-alert-error" t-esc="error"/>
+
+                <dl class="vq-facts">
+                    <div><dt>Đơn mua hàng</dt><dd t-esc="payment.purchase_order_id.name"/></div>
+                    <div><dt>Người nhận</dt><dd t-esc="payment.partner_id.display_name"/></div>
+                    <div><dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/></div>
+                    <div><dt>Số tiền đề nghị chi</dt><dd><b t-esc="fmt(round(payment.amount))"/> <t t-esc="payment.currency_id.name"/></dd></div>
+                    <div><dt>Phương thức chi</dt><dd t-esc="dict(payment._fields['payment_method'].selection).get(payment.payment_method)"/></div>
+                    <div t-if="payment.company_bank_account_number"><dt>Tài khoản chi</dt>
+                        <dd><t t-esc="payment.company_bank_account_number"/> — <t t-esc="payment.company_bank_name"/></dd></div>
+                    <div t-if="payment.vendor_bank_account_number"><dt>Tài khoản nhận</dt>
+                        <dd><t t-esc="payment.vendor_bank_account_number"/> — <t t-esc="payment.vendor_bank_name"/>
+                            <div t-if="payment.vendor_account_holder" class="vq-muted vq-small" t-esc="payment.vendor_account_holder"/></dd></div>
+                    <div t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></div>
+                </dl>
+
+                <h2 class="vq-section-title">Tải chứng từ chi lên</h2>
+                <form method="post" enctype="multipart/form-data" class="unc-upload" t-att-action="'%s/%s/tai-len' % (route, payment.id)">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <label>
+                        <span class="vq-label">File (ảnh, PDF, Word — chọn được nhiều file, tối đa <t t-esc="max_mb"/>MB mỗi file)</span>
+                        <input type="file" name="files" multiple="multiple" required="required" t-att-accept="accept"/>
+                    </label>
+                    <label>
+                        <span class="vq-label">Ghi chú <span class="vq-muted">(tuỳ chọn — NCC thấy)</span></span>
+                        <input type="text" name="note" class="vq-input" maxlength="255" placeholder="VD: UNC đợt 1"/>
+                    </label>
+                    <div><button type="submit" class="vq-btn vq-btn-primary">Tải lên</button></div>
+                </form>
+
+                <h2 class="vq-section-title">Chứng từ đã tải (<t t-esc="len(payment.hlv_document_ids)"/>)</h2>
+                <p t-if="not payment.hlv_document_ids" class="vq-muted">Chưa có chứng từ nào.</p>
+                <ul t-else="" class="unc-docs">
+                    <li t-foreach="payment.hlv_document_ids" t-as="doc" t-att-class="'unc-hidden' if not doc.visible_to_vendor else None">
+                        <a target="_blank" t-att-href="'%s/chung-tu/%s/xem' % (route, doc.id)" t-esc="doc.name"/>
+                        <span t-if="doc.note" class="vq-muted" t-esc="doc.note"/>
+                        <span class="vq-muted vq-small"><t t-esc="doc.create_uid.name"/> · <t t-esc="fdate(doc.create_date)"/></span>
+                        <span t-if="not doc.visible_to_vendor" class="vq-status unc-wait">Đang ẩn với NCC</span>
+                        <form method="post" t-att-action="'%s/chung-tu/%s' % (route, doc.id)">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <button type="submit" name="action" value="toggle" class="vq-btn vq-btn-secondary vq-btn-sm"
+                                    t-esc="'Cho NCC xem' if not doc.visible_to_vendor else 'Ẩn với NCC'"/>
+                            <button type="submit" name="action" value="delete" class="vq-btn vq-btn-secondary vq-btn-sm"
+                                    onclick="return confirm('Xoá chứng từ này?');">Xoá</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </t>
+    </template>
+</odoo>

@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_payment_document_accountant,hlv.payment.document accountant,model_hlv_payment_document,group_payment_doc_accountant,1,1,1,1
+access_payment_document_purchase_user,hlv.payment.document purchase user,model_hlv_payment_document,purchase.group_purchase_user,1,0,0,0
+access_amis_payment_request_doc_accountant,amis.payment.request doc accountant,amis_callback.model_amis_payment_request,group_payment_doc_accountant,1,0,0,0
+access_purchase_order_doc_accountant,purchase.order doc accountant,purchase.model_purchase_order,group_payment_doc_accountant,1,0,0,0
