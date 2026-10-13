@@ -15,15 +15,19 @@ from .vendor_quote_utils import (
 
 _logger = logging.getLogger(__name__)
 
-# Tiến độ đơn mua trên trang NCC — thứ tự là thứ tự tiến trình. Trống = đã nhận đơn, chờ đóng gói.
-# NCC tự báo "Đã đóng gói"; "Đã gửi hàng" chỉ khi đơn gửi CPN / gửi chành (kèm thông tin gửi);
-# "Đã giao" tự đặt khi kho bên mình nhận đủ hàng (_hlv_mark_delivered_by_receipt), NCC không bấm.
+# Tiến độ đơn mua trên trang NCC — thứ tự là thứ tự tiến trình. Trống = đơn mới, NCC chưa báo gì.
+# NCC tự báo "Nhận thông tin" (đã nắm đơn, đang chuẩn bị — bỏ qua được) và "Đã đóng gói"; "Đã gửi hàng" chỉ khi
+# đơn gửi CPN / gửi chành (kèm thông tin gửi); "Đã giao" tự đặt khi kho bên mình nhận đủ hàng
+# (_hlv_mark_delivered_by_receipt), NCC không bấm.
 VENDOR_STATUS = [
+    ("acknowledged", "Nhận thông tin"),
     ("packed", "Đã đóng gói"),
     ("shipped", "Đã gửi hàng"),
     ("delivered", "Đã giao"),
 ]
 VENDOR_STATUS_ORDER = [key for key, _label in VENDOR_STATUS]
+# Trạng thái NCC tự bấm trên trang của họ (_vendor_set_status).
+VENDOR_BUTTON_STATUSES = ("acknowledged", "packed")
 # NCC báo đã gửi hàng bằng cách nào: gửi CPN / chành (cần mã vận đơn / số xe) hay tự chở tới.
 SHIP_METHODS = [
     ("cpn", "Gửi CPN / chành"),
@@ -44,7 +48,7 @@ VENDOR_ORDER_STATES_PARAM = "hlv_vendor_quotation.vendor_order_states"
 CONFIRMED_STATES = ("purchase", "done")
 # Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ xác nhận / chờ đóng gói / đã hủy
 # / đã giao một phần (purchase_order_delivery.py).
-PROGRESS_LABELS = dict(VENDOR_STATUS, rfq="Chờ xác nhận", waiting="Chờ đóng gói", partial="Đã giao một phần",
+PROGRESS_LABELS = dict(VENDOR_STATUS, rfq="Chờ xác nhận", waiting="Đơn mới", partial="Đã giao một phần",
                        cancel="Đã hủy")
 # Trường Studio trên đơn mua — không có ở mọi môi trường (DB test, cài mới) nên đọc qua _hlv_studio_text.
 DELIVERY_TERM_FIELD = "x_studio_delivery_term"
@@ -173,7 +177,7 @@ class PurchaseOrder(models.Model):
     def _hlv_vendor_progress(self):
         """Tiến độ hiện trên trang NCC: "cancel" (đơn đã hủy), "rfq" (chưa xác nhận — NCC chỉ xem),
         "delivered" (đã giao — kể cả đơn kho đã nhận đủ từ trước khi có tự chuyển), "shipped",
-        "packed", hoặc "waiting" (chờ đóng gói)."""
+        "packed", "acknowledged" (NCC đã nhận thông tin), hoặc "waiting" (đơn mới, NCC chưa báo gì)."""
         self.ensure_one()
         if self.state == "cancel":
             return "cancel"
@@ -184,9 +188,10 @@ class PurchaseOrder(models.Model):
         return self.hlv_vendor_status or "waiting"
 
     def _hlv_vendor_stage(self):
-        """Tab của đơn trên trang NCC: như _hlv_vendor_progress, gộp "đã gửi hàng" vào tab "Đã đóng gói"."""
+        """Tab của đơn trên trang NCC: như _hlv_vendor_progress, gộp "đã gửi hàng" vào tab "Đã đóng gói",
+        "nhận thông tin" vào tab "Chờ đóng gói" (vẫn còn việc đóng gói)."""
         progress = self._hlv_vendor_progress()
-        return "packed" if progress == "shipped" else progress
+        return {"shipped": "packed", "acknowledged": "waiting"}.get(progress, progress)
 
     def _hlv_receipts_done(self):
         """Kho đã nhận xong mọi phiếu NHẬP từ NCC của đơn (có ít nhất một phiếu đã nhận). Chỉ xét
@@ -197,10 +202,11 @@ class PurchaseOrder(models.Model):
         return bool(receipts) and all(p.state == "done" for p in receipts)
 
     def _vendor_set_status(self, status, vendor_partner):
-        """NCC báo "Đã đóng gói" từ trang công khai. Chỉ đi tới, không lùi; "Đã gửi hàng" đi qua
-        _vendor_mark_shipped (cần thông tin gửi), "Đã giao" tự đặt khi kho nhận hàng."""
+        """NCC báo "Nhận thông tin" / "Đã đóng gói" từ trang công khai. Chỉ đi tới, không lùi (bấm thẳng "Đã đóng
+        gói" là bỏ qua "Nhận thông tin"); "Đã gửi hàng" đi qua _vendor_mark_shipped (cần thông tin gửi), "Đã giao" tự
+        đặt khi kho nhận hàng."""
         self.ensure_one()
-        if status != "packed":
+        if status not in VENDOR_BUTTON_STATUSES:
             raise UserError(_("Trạng thái không hợp lệ."))
         self._hlv_check_vendor_can_update()
         return self._hlv_advance_status(status, vendor_partner, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status])

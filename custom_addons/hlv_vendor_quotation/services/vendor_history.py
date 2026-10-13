@@ -3,7 +3,7 @@
 kết quả từng dòng, chỉ số tổng và thống kê theo mặt hàng. Đọc bằng sudo — gọi từ trang công khai, đã
 khoá theo link của NCC (access)."""
 
-from ..models.history_utils import WON_OUTCOMES, day_range_utc, line_outcome, success_rate
+from ..models.history_utils import WON_OUTCOMES, day_range_utc, line_outcome, rate_text, success_rate
 from ..models.purchase_order import CONFIRMED_STATES
 from ..models.vendor_quote import VENDOR_VISIBLE_STATES
 from ..models.vendor_quote_utils import price_incl_vat
@@ -96,6 +96,7 @@ def summarize(facts):
     đơn, tỉ lệ thành công, số đơn mua khác nhau."""
     won = sum(1 for f in facts if f["outcome"] in WON_OUTCOMES)
     lost = sum(1 for f in facts if f["outcome"] == "lost")
+    pending = sum(1 for f in facts if f["outcome"] == "pending")
     orders = set()
     for f in facts:
         orders |= f["order_ids"]
@@ -104,7 +105,10 @@ def summarize(facts):
         "asked": len(facts),
         "priced": sum(1 for f in facts if f["outcome"] != "na"),
         "won": won,
+        "lost": lost,
+        "pending": pending,
         "rate": success_rate(won, lost),
+        "rate_text": rate_text(won, lost, pending),
         "orders": len(orders),
     }
 

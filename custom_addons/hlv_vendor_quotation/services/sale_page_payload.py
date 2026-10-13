@@ -23,8 +23,8 @@ QUOTE_STATE_LABELS = {
 }
 SALE_STATUS_LABELS = dict(SALE_STATUS)
 CLOSE_REASON_LABELS = dict(CLOSE_REASONS)
-# Tiến độ NCC hiện cạnh số đơn mua: NCC đã báo / kho đã nhận (một phần / đủ). Chờ đóng gói thì không ghi.
-VENDOR_PROGRESS_SHOWN = ("packed", "shipped", "partial", "delivered")
+# Tiến độ NCC hiện cạnh số đơn mua: NCC đã báo / kho đã nhận (một phần / đủ). Đơn mới (NCC chưa báo gì) thì không ghi.
+VENDOR_PROGRESS_SHOWN = ("acknowledged", "packed", "shipped", "partial", "delivered")
 VAT_LABELS = dict(VAT_SELECTION)
 PRODUCT_PREVIEW = 3
 CONTACT_LIMIT = 10

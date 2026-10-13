@@ -2,9 +2,10 @@
 """Tab "Lịch sử báo giá" trên link của NCC: chỉ số tổng (tỉ lệ báo giá thành công, số đơn mua) + ba màn
 (?view=): "Mặt hàng hay được hỏi" (thống kê theo mặt hàng, tô màu mật độ hỏi), "Mặt hàng đã báo giá" (từng dòng
 đã báo) và "Biến động giá" của một mặt hàng. Tìm, lọc theo ngày / sale / mặt hàng, phân trang — form GET, chạy
-không cần JS. Kế thừa VendorQuotePortal để dùng chung đăng nhập, khung trang."""
+không cần JS; nút "Xuất Excel" tải đúng bảng đang xem với bộ lọc hiện tại, đủ mọi dòng. Kế thừa VendorQuotePortal để
+dùng chung đăng nhập, khung trang."""
 
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from odoo import fields, http
 from odoo.http import request
@@ -12,10 +13,13 @@ from odoo.http import request
 from ..models.history_utils import OUTCOMES, aggregate_products, heat_level, price_history
 from ..models.vendor_quote_access import PORTAL_ROUTE
 from ..models.vendor_quote_utils import paginate
+from ..services import history_export
 from ..services import vendor_history as history
 from .vendor_portal import VendorQuotePortal
 
 HISTORY = "lich-su"
+EXPORT = "xuat-excel"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PER_PAGE = 30
 SEARCH_MAX = 64
 # Màn của trang (?view=): mặc định thống kê theo mặt hàng; "gia" cần chọn một mặt hàng (?product=).
@@ -31,15 +35,9 @@ class VendorHistoryPortal(VendorQuotePortal):
             return self._not_found()
         if not self._is_logged_in(access):
             return self._render_login(access, next_url=f"{PORTAL_ROUTE}/{token}/{HISTORY}")
-        filters = self._read_history_filters(kw)
-        requester = self._requester_cache()
-        lines, truncated = history.search_lines(request.env, history.history_domain(access, **filters))
-        facts = history.line_facts(lines, access.partner_id, requester)
-        product = request.env["product.product"].sudo().browse(filters["product_id"]).exists()
-        view = kw.get("view") if kw.get("view") in (VIEW_LINES, VIEW_PRICES) else VIEW_PRODUCTS
-        if view == VIEW_PRICES and not product:
-            view = VIEW_PRODUCTS
-        products = aggregate_products(facts)
+        data = self._history_data(access, kw)
+        filters, view, facts, products, product = (data[key] for key in ("filters", "view", "facts", "products", "product"))
+        requester, truncated = data["requester"], data["truncated"]
         top_asked = products[0]["asked"] if products else 0
         for item in products:
             item["heat"] = heat_level(item["asked"], top_asked)
@@ -68,7 +66,61 @@ class VendorHistoryPortal(VendorQuotePortal):
             "stat_limit": history.STAT_LINE_LIMIT,
             "pager": pager,
             "history_url": lambda **changes: self._history_url(access, filters, view, **changes),
+            "export_url": self._history_url(access, filters, view, page=None).replace(
+                f"/{HISTORY}", f"/{HISTORY}/{EXPORT}", 1),
         })
+
+    @http.route(f"{PORTAL_ROUTE}/<string:token>/{HISTORY}/{EXPORT}", type="http", auth="public", methods=["GET"])
+    def portal_history_export(self, token, **kw):
+        """File Excel của bảng đang xem (cùng bộ lọc), đủ mọi dòng."""
+        access = self._get_access(token)
+        if not access:
+            return self._not_found()
+        if not self._is_logged_in(access):
+            return self._render_login(access, next_url=f"{PORTAL_ROUTE}/{token}/{HISTORY}")
+        data = self._history_data(access, kw)
+        labels = dict(OUTCOMES)
+        if data["view"] == VIEW_LINES:
+            title, columns, rows = "Mặt hàng đã báo giá", history_export.LINE_COLUMNS, history_export.line_rows(data["facts"], labels)
+        elif data["view"] == VIEW_PRICES:
+            title, columns = f"Biến động giá {data['product'].display_name}", history_export.PRICE_COLUMNS
+            rows = history_export.price_rows(price_history(data["facts"]), labels)
+        else:
+            title, columns, rows = "Mặt hàng hay được hỏi", history_export.PRODUCT_COLUMNS, history_export.product_rows(data["products"])
+        content = history_export.build_workbook(title, self._filter_text(access, data["filters"]), columns, rows)
+        filename = f"lich-su-bao-gia-{data['view']}-{fields.Date.context_today(access)}.xlsx"
+        return request.make_response(content, headers=[
+            ("Content-Type", XLSX_MIME),
+            ("Content-Disposition", f"attachment; filename*=UTF-8''{quote(filename)}"),
+        ])
+
+    def _history_data(self, access, form):
+        """Dữ liệu chung của trang lịch sử và file Excel: bộ lọc, màn đang xem, các dòng đã báo (facts), thống kê theo
+        mặt hàng (đã sắp), mặt hàng đang lọc. Màn "Biến động giá" mà không có mặt hàng → về màn thống kê."""
+        filters = self._read_history_filters(form)
+        requester = self._requester_cache()
+        lines, truncated = history.search_lines(request.env, history.history_domain(access, **filters))
+        product = request.env["product.product"].sudo().browse(filters["product_id"]).exists()
+        view = form.get("view") if form.get("view") in (VIEW_LINES, VIEW_PRICES) else VIEW_PRODUCTS
+        if view == VIEW_PRICES and not product:
+            view = VIEW_PRODUCTS
+        facts = history.line_facts(lines, access.partner_id, requester)
+        return {"filters": filters, "view": view, "facts": facts, "products": aggregate_products(facts),
+                "product": product, "requester": requester, "truncated": truncated}
+
+    @staticmethod
+    def _filter_text(access, filters):
+        """Dòng mô tả bộ lọc đầu file Excel: NCC + những bộ lọc đang bật."""
+        parts = [access.partner_id.display_name]
+        if filters["q"]:
+            parts.append(f"tìm \"{filters['q']}\"")
+        if filters["day_from"] or filters["day_to"]:
+            parts.append("ngày gửi {} – {}".format(
+                filters["day_from"].strftime("%d/%m/%Y") if filters["day_from"] else "…",
+                filters["day_to"].strftime("%d/%m/%Y") if filters["day_to"] else "…"))
+        if filters["sale_code"]:
+            parts.append(f"người hỏi {filters['sale_code'].upper()}")
+        return " · ".join(parts)
 
     @staticmethod
     def _read_history_filters(form):

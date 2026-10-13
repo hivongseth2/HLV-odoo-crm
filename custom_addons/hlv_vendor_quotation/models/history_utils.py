@@ -57,24 +57,39 @@ def success_rate(won, lost):
     return round(won * 100 / total) if total else None
 
 
+def rate_text(won, lost, pending):
+    """Tỉ lệ thành công để hiện. Còn lượt chờ bên mua chọn: phân số "được chọn/đã quyết (n chờ)" — chỉ % thì
+    "2 lượt hỏi, 1 được chọn, 100%" nhìn như sai; hết lượt chờ: "%". Chưa có gì → "—".
+
+    Ví dụ: (1, 0, 1) → "1/1 (1 chờ)"; (1, 1, 0) → "50%"; (0, 0, 2) → "0/0 (2 chờ)"; (0, 0, 0) → "—".
+    """
+    if pending:
+        return f"{won}/{won + lost} ({pending} chờ)"
+    rate = success_rate(won, lost)
+    return f"{rate}%" if rate is not None else "—"
+
+
 def aggregate_products(rows):
     """Thống kê theo mặt hàng từ các dòng lịch sử.
 
     rows: [{product_id, product, outcome, order_ids (set id đơn mua), price_incl, at (datetime)}].
-    Trả list dict {product_id, product, asked (lượt được hỏi), priced (lượt có giá), won, lost, rate,
-    orders (số đơn mua khác nhau), last_price (giá sau VAT lần báo gần nhất có giá; 0 nếu chưa có giá)},
+    Trả list dict {product_id, product, asked (lượt được hỏi), priced (lượt có giá), won, lost, pending (chờ bên mua
+    chọn), rate, rate_text (rate_text), orders (số đơn mua khác nhau), last_price (giá sau VAT lần báo gần nhất có giá;
+    0 nếu chưa có giá)},
     sắp theo lượt hỏi giảm dần, cùng lượt thì mặt hàng báo gần đây hơn lên trước. rows rỗng → [].
     """
     stats = {}
     for row in rows:
         item = stats.setdefault(row["product_id"], {
             "product_id": row["product_id"], "product": row["product"], "asked": 0, "priced": 0, "won": 0, "lost": 0,
+            "pending": 0,
             "order_ids": set(), "last_price": 0.0, "last_at": None, "priced_at": None,
         })
         item["asked"] += 1
         item["order_ids"] |= row["order_ids"]
         item["won"] += row["outcome"] in WON_OUTCOMES
         item["lost"] += row["outcome"] == "lost"
+        item["pending"] += row["outcome"] == "pending"
         if item["last_at"] is None or row["at"] > item["last_at"]:
             item["last_at"] = row["at"]
         if row["outcome"] != "na":
@@ -85,8 +100,9 @@ def aggregate_products(rows):
     for item in stats.values():
         result.append({
             "product_id": item["product_id"], "product": item["product"], "asked": item["asked"],
-            "priced": item["priced"], "won": item["won"], "lost": item["lost"],
-            "rate": success_rate(item["won"], item["lost"]), "orders": len(item["order_ids"]),
+            "priced": item["priced"], "won": item["won"], "lost": item["lost"], "pending": item["pending"],
+            "rate": success_rate(item["won"], item["lost"]),
+            "rate_text": rate_text(item["won"], item["lost"], item["pending"]), "orders": len(item["order_ids"]),
             "last_price": item["last_price"], "last_at": item["last_at"],
         })
     result.sort(key=lambda r: (-r["asked"], -(r["last_at"].timestamp() if r["last_at"] else 0)))
