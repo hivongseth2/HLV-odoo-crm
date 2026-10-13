@@ -428,6 +428,11 @@
                     </div>
                 </form>
 
+                <dl class="vq-summary vq-summary-inline">
+                    <div><dt>Trước VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
+                    <div><dt>VAT</dt><dd t-esc="fmt(order.amount_tax)"/></div>
+                    <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
+                </dl>
                 <t t-call="hlv_vendor_quotation.portal_order_revisions"/>
                 <t t-call="hlv_vendor_quotation.portal_chat"/>
             </div>

@@ -243,9 +243,11 @@ a { color: var(--vq-accent); }
 .vq-status-panel p { margin-bottom: 12px; }
 .vq-status-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .vq-status-actions .vq-btn:disabled { opacity: .55; cursor: default; }
+.vq-summary-inline { max-width: 360px; margin: 20px 0 0 auto; }
 @media (max-width: 760px) {
     .vq-section-tabs { gap: 20px; margin-bottom: 16px; }
     .vq-status-actions .vq-btn { flex: 1 1 auto; }
+    .vq-summary-inline { max-width: none; }
 }
 
 /* --- Kết quả chọn giá của sale trên từng dòng báo giá --- */
