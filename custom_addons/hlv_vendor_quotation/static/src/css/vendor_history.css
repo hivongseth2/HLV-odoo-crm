@@ -27,10 +27,11 @@
     .vq-sheet tbody tr:hover td.vq-col-no { background: #e8f0fb; }
 }
 .vq-sheet td.vq-num { font-variant-numeric: tabular-nums; }
+.vq-history-export { margin-left: auto; }
 .vq-sheet-total td { font-weight: 700; background: #f6f7f9; }
 .vq-sheet-action { width: 1%; white-space: nowrap; text-align: center; }
 .vq-btn-sm { padding: 4px 10px; font-size: .8rem; }
-.vq-history-tabs { margin: 6px 0 14px; }
+.vq-history-tabs { margin: 6px 0 14px; align-items: center; }
 .vq-history-hint { margin: 0 0 10px; }
 /* Mật độ hỏi: ô "Lượt hỏi" đậm dần (history_utils.heat_level 1–4). Selector đủ mạnh để rê chuột không xoá màu. */
 .vq-heat-legend { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }

@@ -30,6 +30,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.ORDER_PROGRESS_CLASS = {
     rfq: "hq-tag-soft",
     waiting: "hq-tag-warn",
+    acknowledged: "hq-tag-ack",
     packed: "hq-tag-mine",
     shipped: "hq-tag-info",
     partial: "hq-tag-part",
@@ -47,7 +48,8 @@ window.HlvQuote = window.HlvQuote || {};
   ];
   HQ.ORDER_LEGEND = [
     ["hq-tag-soft", "Chờ xác nhận"],
-    ["hq-tag-warn", "Chờ đóng gói"],
+    ["hq-tag-warn", "Đơn mới"],
+    ["hq-tag-ack", "Nhận thông tin"],
     ["hq-tag-mine", "Đã đóng gói"],
     ["hq-tag-info", "Đã gửi hàng"],
     ["hq-tag-part", "Giao một phần"],

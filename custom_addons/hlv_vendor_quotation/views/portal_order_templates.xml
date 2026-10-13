@@ -70,10 +70,12 @@
                             </td>
                             <td class="vq-cell-action">
                                 <!-- Việc NCC cần làm ngay: bấm thẳng ở đây; còn lại mở xem nhanh. -->
-                                <form t-if="info['progress'] == 'waiting'" method="post" t-att-action="order_url">
+                                <form t-if="info['progress'] in ('waiting', 'acknowledged')" method="post" t-att-action="order_url">
                                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                     <input type="hidden" name="next" t-att-value="next_url"/>
-                                    <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
+                                    <button t-if="info['progress'] == 'waiting'" type="submit" name="status" value="acknowledged"
+                                            class="vq-btn vq-btn-primary">Nhận thông tin</button>
+                                    <button t-else="" type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
                                 </form>
                                 <button t-elif="info['progress'] == 'packed'" type="button"
                                         class="vq-btn vq-btn-secondary" t-att-data-quick-toggle="order.id">Báo đã gửi hàng</button>
@@ -291,8 +293,8 @@
          next_url (về lại danh sách), from_quote, post, ship_open (mở sẵn khung báo gửi). -->
     <template id="portal_order_progress" name="Báo giá NCC - tiến độ đơn mua">
         <t t-set="progress" t-value="info['progress']"/>
-        <t t-set="steps" t-value="['waiting', 'packed'] + (['shipped'] if info['ship_mode'] or progress == 'shipped' else []) + ['delivered']"/>
-        <!-- Đã giao một phần: đợt sau bắt đầu lại từ "Chờ đóng gói". -->
+        <t t-set="steps" t-value="['waiting', 'acknowledged', 'packed'] + (['shipped'] if info['ship_mode'] or progress == 'shipped' else []) + ['delivered']"/>
+        <!-- Đã giao một phần: đợt sau bắt đầu lại từ đầu ("Đơn mới"). -->
         <t t-set="current" t-value="0 if progress == 'partial' else (steps.index(progress) if progress in steps else len(steps))"/>
         <div t-if="progress == 'cancel'" class="vq-progress-cancel">Đơn đã hủy — quý công ty không cần đóng gói / giao hàng.</div>
         <p t-elif="progress == 'rfq'" class="vq-progress-note">Đơn đang ở trạng thái <b t-esc="info['state_label']"/> — chưa
@@ -307,12 +309,21 @@
             <div class="vq-progress-action">
                 <p t-if="progress == 'partial'" class="vq-progress-note vq-partial-note">Kho <t t-esc="company.name"/> đã nhận
                     một phần. Chuẩn bị xong phần còn lại thì bấm "Đã đóng gói" cho đợt sau.</p>
-                <form t-if="progress in ('waiting', 'partial')" method="post" class="vq-progress-row" t-att-action="order_url">
+                <!-- Đơn mới: "Nhận thông tin" là bước chính, vẫn bấm thẳng "Đã đóng gói" được. Đợt sau của đơn giao một
+                     phần: NCC đã nắm đơn từ đợt trước, chỉ cần báo đóng gói. -->
+                <form t-if="progress in ('waiting', 'acknowledged', 'partial')" method="post" class="vq-progress-row" t-att-action="order_url">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <input t-if="next_url" type="hidden" name="next" t-att-value="next_url"/>
                     <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
-                    <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
-                    <span class="vq-muted vq-small">Bấm khi hàng đã đóng gói xong.</span>
+                    <t t-if="progress == 'waiting'">
+                        <button type="submit" name="status" value="acknowledged" class="vq-btn vq-btn-primary">Nhận thông tin</button>
+                        <button type="submit" name="status" value="packed" class="vq-btn vq-btn-secondary">Đã đóng gói</button>
+                        <span class="vq-muted vq-small">Bấm "Nhận thông tin" khi đã nắm đơn và đang chuẩn bị hàng.</span>
+                    </t>
+                    <t t-else="">
+                        <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
+                        <span class="vq-muted vq-small">Bấm khi hàng đã đóng gói xong.</span>
+                    </t>
                 </form>
                 <p t-elif="progress == 'delivered'" class="vq-progress-note">Kho <t t-esc="company.name"/> đã nhận hàng —
                     đơn đã giao xong. Cảm ơn quý công ty!</p>

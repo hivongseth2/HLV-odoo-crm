@@ -96,6 +96,7 @@ a { color: var(--vq-accent); }
     border: 1px solid #e5e7eb; border-radius: 3px; background: #f3f4f6; color: #4b5563; white-space: nowrap; }
 .vq-status-waiting { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
 .vq-status-quoted, .vq-status-delivered { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.vq-status-acknowledged { background: #f0fdfa; border-color: #99f6e4; color: #115e59; }
 .vq-status-packed { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
 .vq-status-closed { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
 .vq-hint-ok { color: var(--vq-muted); }

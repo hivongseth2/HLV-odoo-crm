@@ -118,6 +118,7 @@ body {
    đã hủy = xám gạch ngang. */
 .hq-tag-info { background: #e3ecfb; color: #1e4fa3; }
 .hq-tag-part { background: #fff; color: #2C5B3D; box-shadow: inset 0 0 0 1px #8fbf9f; }
+.hq-tag-ack { background: #fff; color: var(--hq-warn-ink); box-shadow: inset 0 0 0 1px #efb999; }
 .hq-tag-void { background: #eef0f3; color: #8a96a3; text-decoration: line-through; }
 
 .hq-code {
