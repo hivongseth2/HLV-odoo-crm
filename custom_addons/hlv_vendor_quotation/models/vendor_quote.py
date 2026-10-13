@@ -8,7 +8,7 @@ from odoo.exceptions import UserError, ValidationError
 from ..services.chat_bus import notify_quoted
 from ..services.notify import post_internal
 from ..services.price_reuse import fill_valid_prices
-from .vendor_quote_utils import FULL_SUPPLY, default_price_valid_until, match_by_product
+from .vendor_quote_utils import FULL_SUPPLY, default_price_valid_until, match_by_product, price_incl_vat
 
 # NCC chỉ thấy báo giá đã gửi đi; nháp và đã huỷ là việc nội bộ.
 VENDOR_VISIBLE_STATES = ("sent", "quoted", "done")
@@ -526,7 +526,7 @@ class VendorQuote(models.Model):
             ))
 
         chosen_before = {
-            line.id: (line.price_unit, line.unavailable, line._availability_text())
+            line.id: (line.price_unit, line.tax_rate, line.unavailable, line._availability_text())
             for line in self.line_ids.filtered("selected")
         }
         for line in open_lines:
@@ -573,16 +573,19 @@ class VendorQuote(models.Model):
 
     def _notify_chosen_lines_changed(self, chosen_before):
         """NCC sửa giá / báo hết hàng cho mặt hàng sale đã chọn (có khi đã lên YCMH) — báo lên
-        phiếu và YCMH để sale chọn lại. Không tự đổi giá trên YCMH: giá mua phải do người quyết."""
+        phiếu và YCMH để sale chọn lại. Giá trên YCMH đổi theo hay không tuỳ cài đặt (_hlv_sync_request_price);
+        hết hàng / đổi số lượng thì chỉ báo — đổi NCC là việc của sale."""
         changes = []
         for line in self.line_ids.filtered(lambda l: l.id in chosen_before):
-            old_price, old_unavailable, old_supply = chosen_before[line.id]
+            old_price, old_tax, old_unavailable, old_supply = chosen_before[line.id]
             if line.unavailable and not old_unavailable:
                 changes.append((line, _("báo HẾT HÀNG")))
                 continue
-            if line.price_unit != old_price:
-                changes.append((line, _("đổi giá %(old)s → %(new)s", old=self.currency_id.format(old_price),
-                                         new=self.currency_id.format(line.price_unit))))
+            if line.price_unit != old_price or line.tax_rate != old_tax:
+                changes.append((line, _("đổi giá %(old)s → %(new)s (sau VAT)%(request)s",
+                                         old=self.currency_id.format(price_incl_vat(old_price, old_tax)),
+                                         new=self.currency_id.format(price_incl_vat(line.price_unit, line.tax_rate)),
+                                         request=self._apply_price_to_requests(line))))
             supply = line._availability_text()
             if supply != old_supply:
                 changes.append((line, _("báo số lượng: %s", supply) if supply else _("báo lại có đủ hàng")))
@@ -599,6 +602,18 @@ class VendorQuote(models.Model):
         requests = self.line_ids.filtered(lambda l: l.id in chosen_before)._hlv_own_request_lines().request_id
         for record in list(self.inquiry_id) + list(requests):
             post_internal(record, body, self.partner_id)
+
+    @staticmethod
+    def _apply_price_to_requests(line):
+        """Đổi giá dòng YCMH của món theo cài đặt (_hlv_sync_request_price); trả câu ghi kèm vào thông báo — YCMH nào
+        đã đổi, YCMH nào giữ giá cũ ("" khi món chưa lên YCMH)."""
+        followed, kept = line._hlv_sync_request_price()
+        parts = []
+        if followed:
+            parts.append(_("đã cập nhật giá trên %s", ", ".join(followed.request_id.mapped("name"))))
+        if kept:
+            parts.append(_("%s vẫn giữ giá cũ", ", ".join(kept.request_id.mapped("name"))))
+        return (" — " + "; ".join(parts)) if parts else ""
 
     def _notify_vendor_submitted(self, resubmitted):
         offered = self.line_ids.filtered(lambda l: not l.unavailable)

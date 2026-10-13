@@ -122,9 +122,10 @@ window.HlvQuote = window.HlvQuote || {};
     }
     body.innerHTML = inquiries.map(function (q) {
       var requests = q.requests.map(function (r) { return HQ.colorChip(r.name, HQ.REQUEST_STATE_CLASS[r.state], r.label); });
+      // Ghi chú kho (giờ hàng về) nằm trong chip của đúng đơn đó.
       var orders = q.orders.map(function (o) {
-        return '<div class="hq-po-cell">' + HQ.colorChip(o.name, HQ.ORDER_PROGRESS_CLASS[o.progress], o.progress_label) +
-          (o.note ? '<div class="hq-po-note" title="Ghi chú odoo (kho)">' + esc(o.note) + "</div>" : "") + "</div>";
+        return HQ.colorChip(o.name, HQ.ORDER_PROGRESS_CLASS[o.progress],
+          o.progress_label + (o.note ? " · Ghi chú kho: " + o.note : ""), o.note);
       });
       var none = '<span class="hq-muted">—</span>';
       // Có tin NCC chưa xem: tô cả dòng + icon tin nhắn nền cam có số — nhìn bảng là biết phiếu nào cần vào xem.
@@ -139,7 +140,7 @@ window.HlvQuote = window.HlvQuote || {};
         '<td class="hq-nowrap hq-num">' + q.quoted_count + "/" + q.vendor_count + " NCC</td>" +
         '<td class="hq-nowrap hq-num">' + q.chosen_count + "/" + q.line_count + " sản phẩm</td>" +
         '<td><div class="hq-docs">' + (requests.join("") || none) + "</div></td>" +
-        "<td>" + (orders.join("") || none) + "</td>" +
+        '<td><div class="hq-docs hq-docs-stack">' + (orders.join("") || none) + "</div></td>" +
         '<td class="hq-nowrap hq-num">' + esc(q.deadline || "—") + "</td>" +
         '<td><span class="hq-tag ' + (HQ.SALE_STATUS_CLASS[q.sale_status] || "") + '">' +
         esc(q.sale_status_label) + "</span>" +
