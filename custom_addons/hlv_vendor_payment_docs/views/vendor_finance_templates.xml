@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Không dùng định dạng "%s%%" trong biểu thức: Odoo nạp XML đổi "%%" thành "%" → lỗi lúc render. Ghép chuỗi.
+         Kế thừa template trang NCC của chính repo (hlv_vendor_quotation) — xmlid do mình đặt, ổn định. -->
+
+    <!-- Màu trạng thái thanh toán + khung "Thanh toán" của đơn mua. Vài dòng nên để thẳng trong khung trang NCC: file
+         CSS riêng sẽ cần mã phiên bản riêng (link ?v= của trang NCC chỉ băm thư mục static của hlv_vendor_quotation). -->
+    <template id="portal_layout_payment_css" inherit_id="hlv_vendor_quotation.portal_layout" name="Báo giá NCC - CSS thanh toán">
+        <xpath expr="//head" position="inside">
+            <style>
+                .vq-pay-paid { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+                .vq-pay-partial, .vq-pay-processing { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+                .vq-pay-unpaid { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
+                .vq-payment-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+                .vq-payment-head h2 { margin: 0; }
+                .vq-payment-list { margin: 10px 0 0; padding: 0; list-style: none; }
+                .vq-payment-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 0;
+                    border-top: 1px solid var(--vq-line); font-variant-numeric: tabular-nums; }
+            </style>
+        </xpath>
+    </template>
+
+    <!-- Tab "Tài chính" cạnh "Đơn mua hàng". -->
+    <template id="portal_tabs_finance" inherit_id="hlv_vendor_quotation.portal_tabs" name="Báo giá NCC - tab Tài chính">
+        <xpath expr="//a[contains(@t-att-href, 'don-mua')]" position="after">
+            <a t-att-href="'%s/tai-chinh' % portal_base"
+               t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'finance' else ''}">
+                Tài chính</a>
+        </xpath>
+    </template>
+
+    <!-- Chi tiết đơn mua: khung "Thanh toán" ngay dưới tiến độ — trạng thái thanh toán + các đề nghị chi liên quan. -->
+    <template id="portal_order_form_payment" inherit_id="hlv_vendor_quotation.portal_order_form"
+              name="Báo giá NCC - đơn mua: thanh toán">
+        <xpath expr="//section[hasclass('vq-progress-panel')]" position="after">
+            <t t-set="payment" t-value="order._hlv_payment_summary()"/>
+            <section class="vq-progress-panel vq-payment-panel">
+                <div class="vq-payment-head">
+                    <h2>Thanh toán</h2>
+                    <span t-attf-class="vq-status vq-pay-#{payment['status']}" t-esc="payment['label']"/>
+                    <span class="vq-muted">Đã chi <b t-esc="fmt(round(payment['paid']))"/> / <t t-esc="fmt(round(payment['total']))"/></span>
+                    <a t-if="payment['requests']" class="vq-btn vq-btn-secondary vq-btn-sm vq-push"
+                       t-att-href="'%s/tai-chinh?order=%s' % (portal_base, order.id)">Xem ở tab Tài chính</a>
+                </div>
+                <p t-if="not payment['requests']" class="vq-muted vq-small">Chưa có đề nghị chi nào cho đơn này.</p>
+                <ul t-else="" class="vq-payment-list">
+                    <li t-foreach="payment['requests']" t-as="pr">
+                        <a class="vq-doc-chip" t-att-href="'%s/tai-chinh?order=%s&amp;q=%s' % (portal_base, order.id, pr.name)" t-esc="pr.name"/>
+                        <span t-esc="fdate(pr.payment_date)"/>
+                        <b t-esc="fmt(round(pr.amount))"/>
+                        <span t-attf-class="vq-status #{'vq-pay-paid' if pr._hlv_is_paid() else 'vq-pay-processing'}" t-esc="pr._hlv_vendor_label()"/>
+                        <span t-if="pr._hlv_vendor_documents()" class="vq-muted vq-small">
+                            · <t t-esc="len(pr._hlv_vendor_documents())"/> chứng từ</span>
+                    </li>
+                </ul>
+            </section>
+        </xpath>
+    </template>
+
+    <template id="portal_finance" name="Báo giá NCC - tài chính">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="'Tài chính'"/>
+            <t t-set="logged_in" t-value="True"/>
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <div class="vq-page-head">
+                    <h1>Tài chính</h1>
+                </div>
+
+                <div class="vq-kpis">
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['paid']))"/><span class="vq-kpi-label">đã chi</span></div>
+                    <div class="vq-kpi" title="Đề nghị chi đã gửi kế toán, chưa duyệt chi">
+                        <span class="vq-kpi-num" t-esc="fmt(round(kpi['processing']))"/><span class="vq-kpi-label">đang xử lý</span></div>
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['orders_total']))"/><span class="vq-kpi-label">giá trị đơn mua đã xác nhận</span></div>
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['remaining']))"/><span class="vq-kpi-label">còn lại (chưa chi)</span></div>
+                </div>
+
+                <form method="get" class="vq-history-filter" t-att-action="finance_url(q=None, status=None, docs=None, date_from=None, date_to=None, order=None, page=None)">
+                    <label class="vq-filter-field vq-filter-search">
+                        <span class="vq-label">Tìm</span>
+                        <input type="search" name="q" class="vq-input" t-att-value="filters['q']" placeholder="Số đề nghị chi hoặc số đơn mua"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Đơn mua</span>
+                        <select name="order" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option t-foreach="order_options" t-as="po" t-att-value="po.id"
+                                    t-att-selected="po.id == filters['order']" t-esc="po.name"/>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Trạng thái</span>
+                        <select name="status" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option value="da-chi" t-att-selected="filters['status'] == 'da-chi'">Đã chi</option>
+                            <option value="dang-xu-ly" t-att-selected="filters['status'] == 'dang-xu-ly'">Đang xử lý</option>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Chứng từ</span>
+                        <select name="docs" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option value="co" t-att-selected="filters['docs'] == 'co'">Có chứng từ</option>
+                            <option value="chua" t-att-selected="filters['docs'] == 'chua'">Chưa có</option>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Từ ngày</span>
+                        <input type="date" name="date_from" class="vq-input" t-att-value="filters['date_from'] and filters['date_from'].isoformat() or ''"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Đến ngày</span>
+                        <input type="date" name="date_to" class="vq-input" t-att-value="filters['date_to'] and filters['date_to'].isoformat() or ''"/>
+                    </label>
+                    <div class="vq-filter-actions">
+                        <button type="submit" class="vq-btn vq-btn-primary">Lọc</button>
+                        <a class="vq-btn vq-btn-secondary" t-att-href="finance_url(q=None, status=None, docs=None, date_from=None, date_to=None, order=None, page=None)">Xoá lọc</a>
+                    </div>
+                </form>
+
+                <p t-if="not requests" class="vq-empty">Không có đề nghị chi nào khớp bộ lọc.</p>
+                <t t-else="">
+                    <p class="vq-muted vq-small"><t t-esc="result_count"/> đề nghị chi</p>
+                    <div class="vq-list-scroll">
+                    <table class="vq-table vq-sheet">
+                        <thead>
+                            <tr>
+                                <th class="vq-col-no">STT</th>
+                                <th>Số đề nghị chi</th>
+                                <th>Đơn mua</th>
+                                <th>Ngày đề nghị chi</th>
+                                <th class="vq-num">Số tiền</th>
+                                <th>Hình thức</th>
+                                <th>Trạng thái</th>
+                                <th>Chứng từ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="requests" t-as="pr">
+                                <td class="vq-col-no" t-esc="pager['offset'] + pr_index + 1"/>
+                                <td data-label="Số đề nghị chi" class="vq-nowrap" t-esc="pr.name"/>
+                                <td data-label="Đơn mua"><a class="vq-doc-chip" t-att-href="'%s/don-mua/%s' % (portal_base, pr.purchase_order_id.id)"
+                                       t-esc="pr.purchase_order_id.name"/></td>
+                                <td data-label="Ngày đề nghị chi" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
+                                <td class="vq-num" data-label="Số tiền" t-esc="fmt(round(pr.amount))"/>
+                                <td data-label="Hình thức" t-esc="'Chuyển khoản' if pr.payment_method == 'bank' else 'Tiền mặt'"/>
+                                <td data-label="Trạng thái">
+                                    <span t-attf-class="vq-status #{'vq-pay-paid' if pr._hlv_is_paid() else 'vq-pay-processing'}" t-esc="pr._hlv_vendor_label()"/>
+                                </td>
+                                <td data-label="Chứng từ">
+                                    <t t-set="docs" t-value="pr._hlv_vendor_documents()"/>
+                                    <span t-if="not docs" class="vq-muted">—</span>
+                                    <a t-foreach="docs" t-as="doc" class="vq-block-link" target="_blank" t-att-href="doc_url(doc)"
+                                       t-att-title="doc.note or doc.name"><t t-esc="doc.name"/><span t-if="doc.note" class="vq-muted vq-small"> · <t t-esc="doc.note"/></span></a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <nav t-if="pager['page_count'] &gt; 1" class="vq-pager">
+                        <a t-if="pager['page'] &gt; 1" t-att-href="finance_url(page=pager['page'] - 1)" class="vq-btn vq-btn-secondary">Trang trước</a>
+                        <span class="vq-muted">Trang <t t-esc="pager['page']"/> / <t t-esc="pager['page_count']"/></span>
+                        <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="finance_url(page=pager['page'] + 1)" class="vq-btn vq-btn-secondary">Trang sau</a>
+                    </nav>
+                </t>
+            </div>
+        </t>
+    </template>
+</odoo>
