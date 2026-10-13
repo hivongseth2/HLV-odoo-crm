@@ -9,6 +9,7 @@
     <menuitem id="menu_accountant_page_root"
               name="Chứng từ chi NCC"
               action="action_accountant_page"
+              web_icon="hlv_vendor_payment_docs,static/description/icon.png"
               sequence="90"
               groups="group_payment_doc_accountant"/>
 </odoo>
