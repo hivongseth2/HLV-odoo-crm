@@ -33,13 +33,14 @@
         </xpath>
     </template>
 
-    <!-- Chi tiết đơn mua: mục "Đề nghị chi" trong phần thông tin đơn — mỗi đề nghị chi một chip "số · số tiền", màu theo
-         trạng thái (xanh = đã chi, cam = đang xử lý), bấm vào mở thẳng trang đề nghị chi + chứng từ. -->
+    <!-- Chi tiết đơn mua: mục "Uỷ nhiệm chi" trong phần thông tin đơn (trang NCC gọi đề nghị chi là "uỷ nhiệm chi" — cách
+         NCC quen gọi) — mỗi đề nghị chi một chip "số · số tiền", màu theo trạng thái (xanh = đã chi, cam = đang xử lý),
+         bấm vào mở thẳng trang đề nghị chi + chứng từ. -->
     <template id="portal_order_form_payment" inherit_id="hlv_vendor_quotation.portal_order_form"
               name="Báo giá NCC - đơn mua: đề nghị chi">
         <xpath expr="//dl[hasclass('vq-facts')]" position="inside">
             <t t-set="payment" t-value="order._hlv_payment_summary()"/>
-            <div t-if="payment['requests']"><dt>Đề nghị chi</dt>
+            <div t-if="payment['requests']"><dt>Uỷ nhiệm chi</dt>
                 <dd class="pay-chips">
                     <a t-foreach="payment['requests']" t-as="pr" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
                        t-attf-class="pay-chip #{'vq-pay-paid' if pr._hlv_is_paid() else 'vq-pay-processing'}"
@@ -61,7 +62,7 @@
 
                 <div class="vq-kpis">
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['paid']))"/><span class="vq-kpi-label">đã chi</span></div>
-                    <div class="vq-kpi" title="Đề nghị chi đã gửi kế toán, chưa duyệt chi">
+                    <div class="vq-kpi" title="Uỷ nhiệm chi đã gửi kế toán, chưa duyệt chi">
                         <span class="vq-kpi-num" t-esc="fmt(round(kpi['processing']))"/><span class="vq-kpi-label">đang xử lý</span></div>
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['orders_total']))"/><span class="vq-kpi-label">giá trị đơn mua đã xác nhận</span></div>
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['remaining']))"/><span class="vq-kpi-label">còn lại (chưa chi)</span></div>
@@ -70,7 +71,7 @@
                 <form method="get" class="vq-history-filter" t-att-action="finance_url(q=None, status=None, docs=None, date_from=None, date_to=None, order=None, page=None)">
                     <label class="vq-filter-field vq-filter-search">
                         <span class="vq-label">Tìm</span>
-                        <input type="search" name="q" class="vq-input" t-att-value="filters['q']" placeholder="Số đề nghị chi hoặc số đơn mua"/>
+                        <input type="search" name="q" class="vq-input" t-att-value="filters['q']" placeholder="Số uỷ nhiệm chi hoặc số đơn mua"/>
                     </label>
                     <label class="vq-filter-field">
                         <span class="vq-label">Đơn mua</span>
@@ -110,17 +111,17 @@
                     </div>
                 </form>
 
-                <p t-if="not requests" class="vq-empty">Không có đề nghị chi nào khớp bộ lọc.</p>
+                <p t-if="not requests" class="vq-empty">Không có uỷ nhiệm chi nào khớp bộ lọc.</p>
                 <t t-else="">
-                    <p class="vq-muted vq-small"><t t-esc="result_count"/> đề nghị chi</p>
+                    <p class="vq-muted vq-small"><t t-esc="result_count"/> uỷ nhiệm chi</p>
                     <div class="vq-list-scroll">
                     <table class="vq-table vq-sheet">
                         <thead>
                             <tr>
                                 <th class="vq-col-no">STT</th>
-                                <th>Số đề nghị chi</th>
+                                <th>Số uỷ nhiệm chi</th>
                                 <th>Đơn mua</th>
-                                <th>Ngày đề nghị chi</th>
+                                <th>Ngày uỷ nhiệm chi</th>
                                 <th class="vq-num">Số tiền</th>
                                 <th>Hình thức</th>
                                 <th>Trạng thái</th>
@@ -130,11 +131,11 @@
                         <tbody>
                             <tr t-foreach="requests" t-as="pr">
                                 <td class="vq-col-no" t-esc="pager['offset'] + pr_index + 1"/>
-                                <td data-label="Số đề nghị chi" class="vq-nowrap"><a class="vq-doc-chip" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
-                                       title="Xem đề nghị chi và chứng từ" t-esc="pr.name"/></td>
+                                <td data-label="Số uỷ nhiệm chi" class="vq-nowrap"><a class="vq-doc-chip" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
+                                       title="Xem uỷ nhiệm chi và chứng từ" t-esc="pr.name"/></td>
                                 <td data-label="Đơn mua"><a class="vq-doc-chip" t-att-href="'%s/don-mua/%s' % (portal_base, pr.purchase_order_id.id)"
                                        t-esc="pr.purchase_order_id.name"/></td>
-                                <td data-label="Ngày đề nghị chi" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
+                                <td data-label="Ngày uỷ nhiệm chi" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
                                 <td class="vq-num" data-label="Số tiền" t-esc="fmt(round(pr.amount))"/>
                                 <td data-label="Hình thức" t-esc="'Chuyển khoản' if pr.payment_method == 'bank' else 'Tiền mặt'"/>
                                 <td data-label="Trạng thái">
@@ -181,12 +182,12 @@
 
                 <div class="unc-grid">
                     <section class="unc-card">
-                        <h2 class="unc-card-title">Đề nghị chi</h2>
+                        <h2 class="unc-card-title">Uỷ nhiệm chi</h2>
                         <p class="unc-amount"><t t-esc="fmt(round(payment.amount))"/> <small t-esc="payment.currency_id.name"/></p>
                         <dl class="unc-info">
                             <dt>Đơn mua hàng</dt>
                             <dd><a t-att-href="'%s/don-mua/%s' % (portal_base, payment.purchase_order_id.id)" t-esc="payment.purchase_order_id.name"/></dd>
-                            <dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/>
+                            <dt>Ngày uỷ nhiệm chi</dt><dd t-esc="fdate(payment.payment_date)"/>
                             <dt>Hình thức</dt><dd t-esc="'Chuyển khoản' if payment.payment_method == 'bank' else 'Tiền mặt'"/>
                             <t t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></t>
                         </dl>
@@ -194,7 +195,7 @@
 
                     <section class="unc-card">
                         <h2 class="unc-card-title">Chứng từ chi (UNC)</h2>
-                        <p t-if="not documents" class="vq-muted">Kế toán chưa gửi chứng từ cho đề nghị chi này.</p>
+                        <p t-if="not documents" class="vq-muted">Kế toán chưa gửi chứng từ cho uỷ nhiệm chi này.</p>
                         <t t-else="">
                             <t t-set="kind" t-value="current._hlv_preview_kind()"/>
                             <div class="pay-viewer">
