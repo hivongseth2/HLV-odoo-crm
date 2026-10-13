@@ -102,7 +102,8 @@
                         <tbody>
                             <tr t-foreach="requests" t-as="pr">
                                 <td data-label="Số đề nghị chi" class="vq-nowrap"><a t-att-href="'%s/%s' % (route, pr.id)" t-esc="pr.name"/></td>
-                                <td data-label="Đơn mua" t-esc="pr.purchase_order_id.name"/>
+                                <td data-label="Đơn mua"><a t-att-href="'%s/don-mua/%s' % (route, pr.purchase_order_id.id)"
+                                       target="_blank" t-esc="pr.purchase_order_id.name"/></td>
                                 <td data-label="Người nhận" t-esc="pr.partner_id.display_name"/>
                                 <td data-label="Ngày đề nghị chi" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
                                 <td class="vq-num" data-label="Số tiền" t-esc="fmt(round(pr.amount))"/>
@@ -144,7 +145,9 @@
                         <h2 class="unc-card-title">Đề nghị chi</h2>
                         <p class="unc-amount"><t t-esc="fmt(round(payment.amount))"/> <small t-esc="payment.currency_id.name"/></p>
                         <dl class="unc-info">
-                            <dt>Đơn mua hàng</dt><dd t-esc="payment.purchase_order_id.name"/>
+                            <dt>Đơn mua hàng</dt>
+                            <dd><a t-att-href="'%s/don-mua/%s' % (route, payment.purchase_order_id.id)" target="_blank"
+                                   t-esc="payment.purchase_order_id.name"/></dd>
                             <dt>Người nhận</dt><dd t-esc="payment.partner_id.display_name"/>
                             <dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/>
                             <dt>Phương thức</dt><dd t-esc="dict(payment._fields['payment_method'].selection).get(payment.payment_method)"/>
@@ -209,6 +212,65 @@
                             </div>
                         </section>
                     </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Đơn mua của đề nghị chi, chỉ đọc (controllers/accountant_page.py order_view). -->
+    <template id="accountant_order" name="Chứng từ chi NCC - xem đơn mua">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <div class="vq-wrap">
+                <nav class="vq-breadcrumb"><a t-att-href="route">Đề nghị chi đơn mua</a> / <span t-esc="order.name"/></nav>
+                <div class="vq-page-head">
+                    <h1 t-esc="order.name"/>
+                    <span class="vq-status vq-status-closed" t-esc="state_label"/>
+                </div>
+                <dl class="vq-facts">
+                    <div><dt>Nhà cung cấp</dt><dd t-esc="order.partner_id.display_name"/></div>
+                    <div><dt>Ngày đặt</dt><dd t-esc="fdate(order.date_approve or order.date_order)"/></div>
+                    <div t-if="order.date_planned"><dt>Hàng về dự kiến</dt><dd t-esc="fdate(order.date_planned)"/></div>
+                    <div t-if="order.origin"><dt>Chứng từ gốc</dt><dd t-esc="order.origin"/></div>
+                    <div><dt>Đề nghị chi</dt>
+                        <dd class="pay-chips">
+                            <a t-foreach="order.misa_payment_request_ids" t-as="pr" t-att-href="'%s/%s' % (route, pr.id)"
+                               t-attf-class="pay-chip #{'unc-paid' if pr._hlv_is_paid() else 'unc-wait'}"
+                               t-att-title="dict(pr._fields['state'].selection).get(pr.state, pr.state)">
+                                <b t-esc="pr.name"/> · <t t-esc="fmt(round(pr.amount))"/></a>
+                        </dd></div>
+                </dl>
+                <div class="vq-list-scroll">
+                <table class="vq-table vq-sheet">
+                    <thead>
+                        <tr>
+                            <th class="vq-col-no">STT</th>
+                            <th>Hàng hóa</th>
+                            <th class="vq-num">Số lượng</th>
+                            <th class="vq-num">Đã nhận</th>
+                            <th class="vq-num">Đơn giá trước VAT</th>
+                            <th class="vq-num">VAT</th>
+                            <th class="vq-num">Thành tiền trước VAT</th>
+                            <th class="vq-num">Thành tiền sau VAT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="lines" t-as="line">
+                            <td class="vq-col-no" t-esc="line_index + 1"/>
+                            <td data-label="Hàng hóa" t-esc="line.name"/>
+                            <td class="vq-num vq-nowrap" data-label="Số lượng"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></td>
+                            <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
+                            <td class="vq-num" data-label="Đơn giá trước VAT" t-esc="fmt(line.price_unit)"/>
+                            <td class="vq-num" data-label="VAT" t-esc="(fmt(tax_rate_of(line)) + '%') if line.taxes_id else '—'"/>
+                            <td class="vq-num" data-label="Thành tiền trước VAT" t-esc="fmt(round(line.price_subtotal))"/>
+                            <td class="vq-num" data-label="Thành tiền sau VAT" t-esc="fmt(round(line.price_total))"/>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr><td colspan="7" class="vq-num">Tổng trước VAT</td><td class="vq-num" t-esc="fmt(round(order.amount_untaxed))"/></tr>
+                        <tr><td colspan="7" class="vq-num">Tiền VAT</td><td class="vq-num" t-esc="fmt(round(order.amount_tax))"/></tr>
+                        <tr><td colspan="7" class="vq-num"><b>Tổng cộng sau VAT</b></td><td class="vq-num"><b t-esc="fmt(round(order.amount_total))"/></td></tr>
+                    </tfoot>
+                </table>
                 </div>
             </div>
         </t>

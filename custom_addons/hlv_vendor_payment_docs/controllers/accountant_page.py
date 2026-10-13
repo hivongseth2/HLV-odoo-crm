@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from markupsafe import Markup
 from odoo import fields, http
+from odoo.addons.hlv_vendor_quotation.models.purchase_order_revision import tax_rate_of
 from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn_number, local_date_text, paginate
 from odoo.addons.hlv_vendor_quotation.services.asset_version import asset_version
 from odoo.http import request
@@ -178,6 +179,23 @@ class AccountantPaymentPage(http.Controller):
             document.visible_to_vendor = not document.visible_to_vendor
             saved = "shown" if document.visible_to_vendor else "hidden"
         return request.redirect(f"{ROUTE}/{payment_id}?saved={saved}")
+
+    @http.route(f"{ROUTE}/don-mua/<int:order_id>", type="http", auth="user", methods=["GET"])
+    def order_view(self, order_id, **_kw):
+        """Xem đơn mua của đề nghị chi (chỉ đọc) — kế toán đối chiếu hàng / tiền mà không cần quyền Mua hàng. Chỉ đơn có
+        đề nghị chi: trang này không phải lối xem mọi đơn mua."""
+        if not self._allowed():
+            return self._forbidden()
+        order = request.env["purchase.order"].sudo().browse(order_id).exists()
+        if not order or not order.misa_payment_request_ids:
+            return request.not_found()
+        return self._render("hlv_vendor_payment_docs.accountant_order", {
+            "page_title": order.name,
+            "order": order,
+            "lines": order.order_line.filtered(lambda l: not l.display_type),
+            "tax_rate_of": tax_rate_of,
+            "state_label": dict(order._fields["state"].selection).get(order.state, order.state),
+        })
 
     @http.route(f"{ROUTE}/chung-tu/<int:doc_id>/xem", type="http", auth="user", methods=["GET"])
     def document_view(self, doc_id, **_kw):
