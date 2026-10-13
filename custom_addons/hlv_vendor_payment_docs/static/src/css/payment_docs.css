@@ -39,6 +39,18 @@
 .doc-preview-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .doc-preview-body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 
+/* --- Trang NCC: xem chứng từ của một đề nghị chi --- */
+.pay-viewer { display: flex; align-items: center; justify-content: center; height: min(72vh, 760px); border: 1px solid var(--vq-line);
+    border-radius: 8px; background: #f3f5f8; overflow: hidden; }
+.pay-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.pay-viewer iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+.pay-viewer-file { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 16px; }
+.pay-viewer-file .doc-thumb { width: 72px; height: 72px; font-size: .9rem; cursor: default; }
+.pay-viewer-caption { margin: 10px 0 0; font-size: .85rem; overflow-wrap: anywhere; }
+.pay-viewer-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pay-viewer-strip .doc-thumb { width: 64px; height: 64px; cursor: pointer; }
+.pay-viewer-strip .doc-thumb.is-active { border-color: var(--vq-accent); box-shadow: 0 0 0 2px rgba(31, 58, 95, .25); }
+
 /* --- Trang kế toán: chi tiết một đề nghị chi --- */
 .unc-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
 @media (max-width: 960px) { .unc-grid { grid-template-columns: 1fr; } }
