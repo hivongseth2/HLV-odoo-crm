@@ -266,7 +266,7 @@
                 </t>
             </td>
             <td class="vq-num vq-col-vat-rate" data-label="VAT"
-                t-esc="('%s%%' % fmt(tax_rate)) if line.taxes_id else '—'"/>
+                t-esc="(fmt(tax_rate) + '%') if line.taxes_id else '—'"/>
             <td class="vq-num vq-cell-edit" data-label="Đơn giá sau VAT">
                 <span class="vq-view" t-esc="fmt(round(info['revision']['prices'][line.id]))"/>
                 <input t-if="revise_editable" type="text" inputmode="decimal" size="6" class="vq-input vq-edit vq-edit-num"
