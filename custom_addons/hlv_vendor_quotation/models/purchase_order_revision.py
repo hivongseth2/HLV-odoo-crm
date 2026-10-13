@@ -237,7 +237,7 @@ class PurchaseOrderRevisionMixin(models.Model):
 
     def _hlv_revision_info(self):
         """Yêu cầu của NCC cho trang NCC: yêu cầu đang chờ, lịch sử (mới trước), phiên bản hiện tại (1 + số yêu cầu đã
-        áp), sửa được không, giá sau VAT từng dòng (điền sẵn ô sửa giá)."""
+        áp), sửa được không, giá sau VAT từng dòng (điền sẵn ô sửa giá), % VAT từng dòng (ô giá chưa VAT tự tính)."""
         self.ensure_one()
         order = self.sudo()
         pending = order._hlv_revision_pending()
@@ -260,6 +260,7 @@ class PurchaseOrderRevisionMixin(models.Model):
             "has_original": bool(applied),
             "editable": order.state != "cancel" and not pending,
             "prices": {l.id: price_incl_vat(l.price_unit, tax_rate_of(l)) for l in lines},
+            "tax_rates": {l.id: tax_rate_of(l) for l in lines},
         }
 
     def _hlv_snapshot(self):

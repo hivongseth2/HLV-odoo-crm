@@ -17,8 +17,9 @@ from odoo.exceptions import UserError
 from odoo.http import request
 
 from ..models.purchase_order import CONFIRMED_STATES, PROGRESS_LABELS
+from ..models.purchase_order_revision import tax_rate_of
 from ..models.vendor_quote_access import PORTAL_ROUTE
-from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN, parse_vn_number
+from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN, parse_vn_number, price_incl_vat
 from ..services.chat_read import mark_seen
 from ..services.vendor_chat import chat_messages, post_chat
 from ..services.vendor_feed import row_marks
@@ -91,18 +92,23 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
     @staticmethod
     def _read_revision_edits(order, form):
         """Dòng NCC bấm bút chì sửa (edit_<id>): {id dòng: {"qty", "price" (sau VAT), "day"}} — ô trống = không sửa
-        ô đó (None). Số / ngày không đọc được → UserError nêu tên hàng."""
+        ô đó (None). Giá: NCC gõ sau VAT (price_) hoặc chưa VAT (pricenet_, pbasis_=net — đổi ra sau VAT theo thuế
+        của dòng). Số / ngày không đọc được → UserError nêu tên hàng."""
         edits = {}
         for line in order.sudo().order_line.filtered(lambda l: not l.display_type):
             if not form.get(f"edit_{line.id}"):
                 continue
             name = line.product_id.display_name
             values = {}
-            for key, label in (("qty", "số lượng"), ("price", "đơn giá")):
-                raw = (form.get(f"{key}_{line.id}") or "").strip()
+            by_net = form.get(f"pbasis_{line.id}") == "net"
+            price_key, price_label = ("pricenet", "đơn giá chưa VAT") if by_net else ("price", "đơn giá")
+            for key, field, label in (("qty", "qty", "số lượng"), ("price", price_key, price_label)):
+                raw = (form.get(f"{field}_{line.id}") or "").strip()
                 values[key] = parse_vn_number(raw) if raw else None
                 if raw and values[key] is None:
                     raise UserError(f"{name}: không đọc được {label} \"{raw}\".")
+            if by_net and values["price"] is not None:
+                values["price"] = price_incl_vat(values["price"], tax_rate_of(line))
             raw_day = (form.get(f"day_{line.id}") or "").strip()
             try:
                 values["day"] = fields.Date.to_date(raw_day) if raw_day else None

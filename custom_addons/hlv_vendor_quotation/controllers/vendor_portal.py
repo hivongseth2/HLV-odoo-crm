@@ -14,7 +14,7 @@ from ..models.vendor_quote_access import LOCK_MINUTES, PORTAL_ROUTE
 from ..models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
 from ..models.vendor_quote_utils import (
     FULL_SUPPLY, deadline_hint, default_price_valid_until, format_vn_number, local_date_text, paginate,
-    parse_vn_number, read_availability, split_code_name, split_unit_price, split_stock_note,
+    parse_vn_number, price_incl_vat, read_availability, split_code_name, split_unit_price, split_stock_note,
 )
 from ..services.asset_version import asset_version
 from ..services.chat_bus import bus_version, vendor_channel
@@ -360,11 +360,15 @@ class VendorQuotePortal(http.Controller):
             if discount is not None and discount >= 100:
                 errors.append(f"{prefix}: chiết khấu phải nhỏ hơn 100%.")
                 discount = 0.0
-            # NCC chỉ gõ một ô: đơn giá đã gồm VAT (có chiết khấu thì là giá trước CK). Giá chưa VAT
-            # — giá lưu và đem so — tính ở đây, không tin số nào JS gửi lên.
-            price, list_price = split_unit_price(
-                number("unit", "đơn giá"), float(vat) if vat and vat != "kct" else 0.0, discount,
-            )
+            # NCC gõ giá sau VAT (unit_) hoặc chưa VAT (net_); basis_ = ô gõ sau cùng, ô kia JS tự tính chỉ để xem.
+            # Có chiết khấu thì cả hai là giá trước CK. Giá chưa VAT lưu tính ở đây từ đúng ô NCC gõ.
+            tax_rate = float(vat) if vat and vat != "kct" else 0.0
+            if post.get(f"basis_{line.id}") == "net":
+                # Đổi sang sau VAT (2 số lẻ) rồi tách lại: ra đúng giá chưa VAT NCC gõ (tới 2 số lẻ).
+                unit = price_incl_vat(number("net", "đơn giá chưa VAT"), tax_rate) or None
+            else:
+                unit = number("unit", "đơn giá")
+            price, list_price = split_unit_price(unit, tax_rate, discount)
             raw_days = (post.get(f"days_{line.id}") or "").strip()
             days = int(raw_days) if raw_days.isdigit() else 0
             if raw_days and not raw_days.isdigit():

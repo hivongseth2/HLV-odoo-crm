@@ -27,5 +27,18 @@
         return { after: round2(after), net: round2(after / vatFactor), listNet: round2(unit / vatFactor) };
     }
 
-    window.hlvVendorQuote = Object.assign(window.hlvVendorQuote || {}, { splitUnitPrice });
+    /**
+     * net: đơn giá chưa VAT (null khi trống); vatRate: % VAT (0 khi không chịu thuế / chưa chọn).
+     * Trả đơn giá sau VAT làm tròn 2 chữ số lẻ — như price_incl_vat (models/vendor_quote_utils.py). net trống / 0 → null.
+     */
+    function inclVat(net, vatRate) {
+        return net ? round2(net * (1 + (vatRate || 0) / 100)) : null;
+    }
+
+    /** Ngược của inclVat: đơn giá sau VAT → chưa VAT, làm tròn 2 chữ số lẻ. gross trống / 0 → null. */
+    function exclVat(gross, vatRate) {
+        return gross ? round2(gross / (1 + (vatRate || 0) / 100)) : null;
+    }
+
+    window.hlvVendorQuote = Object.assign(window.hlvVendorQuote || {}, { splitUnitPrice, inclVat, exclVat });
 })();

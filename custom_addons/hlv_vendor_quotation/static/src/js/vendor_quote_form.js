@@ -1,8 +1,8 @@
 /**
- * Trang nhập giá của NCC. NCC gõ "Đơn giá" (đã gồm VAT; bật chiết khấu thì là giá trước CK) và
- * %CK; trang hiện giá sau CK, thành tiền, tổng trước VAT / VAT / thành tiền, đếm số dòng đã
- * điền, định dạng lại số khi rời ô, chọn VAT / %CK cho tất cả dòng. Server tự tính giá chưa VAT
- * từ đúng con số NCC gõ (split_unit_price) — trang vẫn gửi được khi JS hỏng.
+ * Trang nhập giá của NCC. NCC gõ đơn giá chưa VAT hoặc sau VAT (ô kia tự tính — vendor_price_pair.js; bật chiết
+ * khấu thì là giá trước CK) và %CK; trang hiện giá sau CK, thành tiền, tổng trước VAT / VAT / thành tiền, đếm số
+ * dòng đã điền, định dạng lại số khi rời ô, chọn VAT / %CK cho tất cả dòng. Server tự tính giá chưa VAT
+ * từ đúng ô NCC gõ (split_unit_price) — trang vẫn gửi được khi JS hỏng.
  * Báo giá đã đóng không có ô nhập: giá chưa VAT / VAT đọc từ data-price, data-vat của dòng.
  */
 (function () {
@@ -12,7 +12,7 @@
     if (!form) {
         return;
     }
-    const { parseVnNumber, formatVnNumber, splitUnitPrice } = window.hlvVendorQuote;
+    const { parseVnNumber, formatVnNumber, splitUnitPrice, syncPricePair } = window.hlvVendorQuote;
     const lines = Array.from(form.querySelectorAll("[data-vq-line]"));
     const discountToggle = form.querySelector("[data-vq-disc-toggle]");
     // Báo giá đã đóng không có ô bật/tắt: server tự gắn vq-disc-on nếu NCC từng nhập chiết khấu.
@@ -74,6 +74,8 @@
         let total = 0;
         let done = 0;
         for (const line of lines) {
+            // VAT vừa đổi (một dòng hoặc "cho tất cả dòng") → ô giá không phải ô NCC gõ tính lại theo VAT mới.
+            syncPricePair(line);
             const { unavailable, vat, qty, prices } = readLine(line);
             const discInput = line.querySelector("[data-vq-disc]");
             if (discInput) {
@@ -123,6 +125,11 @@
             if (unit && disc && disc > 0 && disc < 100) {
                 unitInput.value = formatVnNumber(round2(unit * (1 - disc / 100)));
                 discInput.value = "";
+                // Giá sau VAT vừa đổi: tính ô chưa VAT theo nó, không ngược lại.
+                const basis = line.querySelector("[data-vq-basis]");
+                if (basis) {
+                    basis.value = "gross";
+                }
             }
         }
     }
@@ -178,7 +185,7 @@
     });
 
     form.addEventListener("focusout", (ev) => {
-        if (!ev.target.matches("[data-vq-unit], [data-vq-disc]")) {
+        if (!ev.target.matches("[data-vq-unit], [data-vq-net], [data-vq-disc]")) {
             return;
         }
         const value = parseVnNumber(ev.target.value);
