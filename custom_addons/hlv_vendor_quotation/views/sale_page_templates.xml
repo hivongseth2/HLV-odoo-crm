@@ -107,16 +107,18 @@
                                                 <th>Sản phẩm</th>
                                                 <th>NCC đã báo</th>
                                                 <th>Đã chọn giá</th>
-                                                <th>YCMH · Đơn mua</th>
+                                                <th>YCMH</th>
+                                                <th>Đơn mua</th>
                                                 <th>Hạn</th>
                                                 <th>Tình trạng</th>
                                             </tr>
                                         </thead>
                                         <tbody id="hq-quote-list">
-                                            <tr><td colspan="7" class="hq-empty">Đang tải…</td></tr>
+                                            <tr><td colspan="8" class="hq-empty">Đang tải…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
+                                <div id="hq-list-legend" class="hq-list-legend"></div>
                                 <div id="hq-pager" class="hq-pager"></div>
                             </section>
                         </div>

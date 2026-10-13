@@ -49,6 +49,8 @@ PROGRESS_LABELS = dict(VENDOR_STATUS, rfq="Chờ xác nhận", waiting="Chờ đ
 # Trường Studio trên đơn mua — không có ở mọi môi trường (DB test, cài mới) nên đọc qua _hlv_studio_text.
 DELIVERY_TERM_FIELD = "x_studio_delivery_term"
 DELIVERY_PLACE_FIELD = "x_studio_ddgh"
+# "Ghi chú odoo": kho ghi giờ / ngày hàng về thực tế — sale theo dõi trên trang /hoi-gia-ncc.
+WAREHOUSE_NOTE_FIELD = "x_studio_ghi_ch_odoo"
 SHIP_TEXT_MAX = 120
 
 
@@ -140,6 +142,9 @@ class PurchaseOrder(models.Model):
 
     def _hlv_delivery_term(self):
         return self._hlv_studio_text(DELIVERY_TERM_FIELD)
+
+    def _hlv_warehouse_note(self):
+        return self._hlv_studio_text(WAREHOUSE_NOTE_FIELD)
 
     def _hlv_delivery_place(self):
         return self._hlv_studio_text(DELIVERY_PLACE_FIELD)
