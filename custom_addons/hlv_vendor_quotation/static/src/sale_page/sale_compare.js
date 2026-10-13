@@ -504,19 +504,27 @@ window.HlvQuote = window.HlvQuote || {};
         '<button type="button" class="hq-btn hq-btn-primary" data-create-request="1">Xác nhận tạo YCMH</button></div></div>';
     }
     return head +
-      '<div class="hq-request-row"><button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
+      '<div class="hq-request-row"><div class="hq-request-so-field">' + saleOrderPicker() + "</div>" +
+      '<button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
       (d.can_request ? "" : " disabled") + ">" +
-      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div></div>";
+      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div>" +
+      '<div class="hq-muted hq-small">Có đơn bán và đơn đó có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div>';
+  }
+
+  /** Ô tìm + chip đơn bán. Hiện ở khung lên YCMH và lặp lại ở bước xác nhận (mỗi lúc chỉ một chỗ trên trang,
+      cùng D.saleOrder — chọn ở đâu cũng là một). */
+  function saleOrderPicker() {
+    return '<div class="hq-picker hq-request-so"><label class="hq-sr-only" for="hq-req-so-search">Đơn bán</label>' +
+      '<input type="search" id="hq-req-so-search" class="hq-input w-100" autocomplete="off" ' +
+      'placeholder="Gắn đơn bán (không bắt buộc)…"/>' +
+      '<div id="hq-req-so-results" class="hq-dropdown hq-hidden"></div></div>' +
+      '<div id="hq-req-so-chip" class="hq-chip-row">' + saleOrderChip() + "</div>";
   }
 
   /** Ô gắn đơn bán ở bước xác nhận lên YCMH, cạnh kho nhận / địa điểm giao. */
   function saleOrderField() {
     return '<div class="hq-request-fields"><div class="hq-request-so-field">' +
-      '<label class="hq-label" for="hq-req-so-search">Gắn đơn bán (không bắt buộc)</label>' +
-      '<div class="hq-picker hq-request-so"><input type="search" id="hq-req-so-search" class="hq-input w-100" ' +
-      'autocomplete="off" placeholder="Số đơn bán, tên khách…"/>' +
-      '<div id="hq-req-so-results" class="hq-dropdown hq-hidden"></div></div>' +
-      '<div id="hq-req-so-chip" class="hq-chip-row">' + saleOrderChip() + "</div>" +
+      '<span class="hq-label">Gắn đơn bán (không bắt buộc)</span>' + saleOrderPicker() +
       '<div class="hq-muted hq-small">Đơn bán đã có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div></div>';
   }
 
