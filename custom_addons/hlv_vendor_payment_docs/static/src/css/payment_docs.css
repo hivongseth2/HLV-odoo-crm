@@ -48,10 +48,11 @@
 .pay-viewer-strip .doc-thumb.is-active { border-color: var(--vq-accent); box-shadow: 0 0 0 2px rgba(31, 58, 95, .25); }
 
 /* --- Trang kế toán: chi tiết một đề nghị chi --- */
-.unc-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+/* Hai cột cao bằng nhau, mép trên thẳng hàng (stretch); khoảng cách giữa các khối xếp chồng chỉ áp trong một cột. */
+.unc-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: stretch; }
 @media (max-width: 960px) { .unc-grid { grid-template-columns: 1fr; } }
 .unc-card { background: #fff; border: 1px solid var(--vq-line); border-radius: 10px; padding: 18px 20px; }
-.unc-card + .unc-card { margin-top: 16px; }
+.unc-grid > div > .unc-card + .unc-card { margin-top: 16px; }
 .unc-card-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px;
     font-size: .95rem; font-weight: 700; }
 .unc-amount { margin: 0 0 14px; font-size: 1.6rem; font-weight: 700; color: var(--vq-accent); font-variant-numeric: tabular-nums; }
