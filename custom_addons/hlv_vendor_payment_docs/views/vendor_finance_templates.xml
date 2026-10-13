@@ -39,7 +39,7 @@
               name="Báo giá NCC - đơn mua: đề nghị chi">
         <xpath expr="//dl[hasclass('vq-facts')]" position="inside">
             <t t-set="payment" t-value="order._hlv_payment_summary()"/>
-            <div t-if="payment['requests']"><dt>Đề nghị chi <span class="vq-muted" t-esc="'· ' + payment['label'].lower()"/></dt>
+            <div t-if="payment['requests']"><dt>Đề nghị chi</dt>
                 <dd class="pay-chips">
                     <a t-foreach="payment['requests']" t-as="pr" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
                        t-attf-class="pay-chip #{'vq-pay-paid' if pr._hlv_is_paid() else 'vq-pay-processing'}"
@@ -188,15 +188,6 @@
                             <dd><a t-att-href="'%s/don-mua/%s' % (portal_base, payment.purchase_order_id.id)" t-esc="payment.purchase_order_id.name"/></dd>
                             <dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/>
                             <dt>Hình thức</dt><dd t-esc="'Chuyển khoản' if payment.payment_method == 'bank' else 'Tiền mặt'"/>
-                            <t t-if="payment.vendor_bank_account_number">
-                                <dt>Tài khoản nhận</dt>
-                                <dd><t t-esc="payment.vendor_bank_account_number"/><span class="vq-muted" t-esc="payment.vendor_bank_name"/>
-                                    <span t-if="payment.vendor_account_holder" class="vq-muted" t-esc="payment.vendor_account_holder"/></dd>
-                            </t>
-                            <t t-if="payment.company_bank_account_number">
-                                <dt>Chuyển từ</dt>
-                                <dd><t t-esc="payment.company_bank_account_number"/><span class="vq-muted" t-esc="payment.company_bank_name"/></dd>
-                            </t>
                             <t t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></t>
                         </dl>
                     </section>
