@@ -36,18 +36,20 @@
     </template>
 
     <!-- Bảng kiểu bảng tính (giống bảng báo giá trên phần mềm bán hàng của NCC): mỗi mặt hàng một
-         dòng, ô nhập phủ kín ô bảng nên mọi ô thẳng hàng. NCC chỉ gõ một ô giá "Đơn giá" (đã gồm VAT;
-         bật chiết khấu thì là giá trước CK) + %CK. Server tự tính giá chưa VAT (split_unit_price); JS
-         chỉ hiện giá sau CK, thành tiền, tổng. Enter / dán cột từ Excel: js/vendor_quote_grid.js.
+         dòng, ô nhập phủ kín ô bảng nên mọi ô thẳng hàng. NCC gõ giá chưa VAT hoặc sau VAT (ô kia tự tính —
+         js/vendor_price_pair.js; ô ẩn basis_<id> ghi ô NCC gõ; bật chiết khấu thì là giá trước CK) + %CK. Server
+         tự tính giá chưa VAT lưu (split_unit_price) từ đúng ô đó; JS chỉ hiện giá sau CK, thành tiền, tổng.
+         Enter / dán cột từ Excel: js/vendor_quote_grid.js.
          Cần biến: grid_lines, editable, references, line_choice, post, disc_on; show_quote = bảng theo mặt
          hàng: thêm cột "Phiếu" + "Người hỏi" (cần quote_info), mã hàng gộp vào ô tên cho đủ chỗ;
          error_line_ids = dòng tô đỏ (tuỳ chọn). -->
     <template id="portal_grid" name="Báo giá NCC - bảng giá">
         <p t-if="editable" class="vq-grid-hint">
-            Đơn giá tính cho một đơn vị, đã gồm VAT<span class="vq-disc-only">, chưa trừ chiết khấu</span>.
+            Đơn giá tính cho một đơn vị<span class="vq-disc-only">, chưa trừ chiết khấu</span> — gõ giá chưa VAT
+            hoặc giá sau VAT, ô kia tự tính theo VAT của dòng.
             Ô nền trắng là ô cần điền. Mặt hàng không có: bấm <b>×</b> cạnh mã hàng. Không đủ hàng: sửa số ở cột
             "Sẵn hàng" rồi chọn ngày giao phần còn lại (hoặc "không có thêm"). Bấm <kbd>Enter</kbd> để xuống dòng dưới.
-            Có sẵn bảng giá trong Excel thì copy cả cột, dán vào ô đơn giá đầu tiên.
+            Có sẵn bảng giá trong Excel thì copy cả cột, dán vào ô giá đầu tiên (cột chưa VAT hoặc sau VAT).
         </p>
         <div class="vq-table-scroll">
         <table t-attf-class="vq-table vq-price-table vq-grid #{'vq-grid-board' if show_quote else ''}" data-vq-grid="1">
@@ -61,7 +63,8 @@
                     <th class="vq-num vq-col-qty">SL</th>
                     <th class="vq-num vq-col-have" title="Số lượng có sẵn để giao — không đủ thì sửa số này">Sẵn hàng</th>
                     <th class="vq-col-vat">VAT</th>
-                    <th class="vq-num vq-col-price">Đơn giá</th>
+                    <th class="vq-num vq-col-net">Giá chưa VAT</th>
+                    <th class="vq-num vq-col-price">Giá sau VAT</th>
                     <th class="vq-num vq-col-disc vq-disc-only">%CK</th>
                     <th class="vq-num vq-col-total">Thành tiền</th>
                     <th class="vq-num vq-col-days">Giao</th>
@@ -101,7 +104,7 @@
          < SL hỏi — đa số dòng đủ hàng nên bảng vẫn gọn. Không có data-vq-line: Enter / dán Excel bỏ qua dòng này. -->
     <template id="portal_grid_short" name="Báo giá NCC - dòng thiếu hàng">
         <tr class="vq-short-row" t-att-data-vq-short-for="lid" t-att-hidden="None if short_on else 'hidden'">
-            <td t-att-colspan="13 if show_quote else 12" class="vq-short-cell"><div class="vq-short-box">
+            <td t-att-colspan="14 if show_quote else 13" class="vq-short-cell"><div class="vq-short-box">
                 <span class="vq-short-label">Thiếu <b data-vq-short-qty="1" t-esc="short_text"/>
                     <t t-esc="line.product_uom_id.name"/> — phần còn lại:</span>
                 <label class="vq-short-opt">giao ngày
@@ -134,7 +137,7 @@
         <t t-set="bo_raw" t-value="post.get('bodate_%s' % lid) if post else (line.backorder_date and line.backorder_date.isoformat() or '')"/>
         <t t-set="nomore_on" t-value="('nomore_%s' % lid) in post if post else line.no_more"/>
         <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
-        <tr data-vq-line="1" t-att-data-vq-lid="lid"
+        <tr data-vq-line="1" data-vq-pair="1" t-att-data-vq-lid="lid"
             t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''}"
             t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
             t-att-data-vat="line.vat or ''" t-att-data-na="'1' if na_checked else None">
@@ -194,10 +197,22 @@
             <t t-set="unit_saved" t-value="fmt((line.list_price or line.price_unit) * tax_factor) if line.price_unit else ''"/>
             <!-- Giá cũ có chiết khấu mà phiếu này đang tắt chiết khấu: điền giá sau CK, không phải giá gốc. -->
             <t t-set="unit_ref" t-value="fmt(((ref.list_price if disc_on and ref.list_price else ref.price_unit)) * (1 + ref.tax_rate / 100.0)) if ref else ''"/>
-            <td class="vq-num vq-col-price" data-label="Đơn giá" data-vq-price-cell="1"
+            <t t-set="net_saved" t-value="fmt(line.list_price or line.price_unit) if line.price_unit else ''"/>
+            <t t-set="net_ref" t-value="fmt(ref.list_price if disc_on and ref.list_price else ref.price_unit) if ref else ''"/>
+            <td class="vq-num vq-col-net" data-label="Giá chưa VAT">
+                <t t-if="line_editable">
+                    <input type="text" inputmode="decimal" class="vq-cell-input" data-vq-net="1"
+                           t-att-name="'net_%s' % lid" t-att-aria-label="'Đơn giá chưa VAT — %s' % product_name"
+                           t-att-value="post.get('net_%s' % lid) if post else (net_saved or net_ref)"/>
+                    <input type="hidden" data-vq-basis="1" t-att-name="'basis_%s' % lid"
+                           t-att-value="post.get('basis_%s' % lid) if post else 'gross'"/>
+                </t>
+                <span t-else="" class="vq-cell-text" t-esc="net_saved or '—'"/>
+            </td>
+            <td class="vq-num vq-col-price" data-label="Giá sau VAT" data-vq-price-cell="1"
                 t-att-title="('Chưa VAT %s · VAT %s' % (fmt(line.price_unit), fmt(line.price_unit * line.tax_rate / 100.0))) if line.price_unit else None">
                 <input t-if="line_editable" type="text" inputmode="decimal" class="vq-cell-input" data-vq-unit="1"
-                       t-att-name="'unit_%s' % lid" t-att-aria-label="'Đơn giá — %s' % product_name"
+                       t-att-name="'unit_%s' % lid" t-att-aria-label="'Đơn giá sau VAT — %s' % product_name"
                        t-att-value="post.get('unit_%s' % lid) if post else (unit_saved or unit_ref)"/>
                 <span t-else="" class="vq-cell-text" t-esc="unit_saved or '—'"/>
                 <div class="vq-unit-sub vq-disc-only">sau CK <span data-vq-after-text="1"

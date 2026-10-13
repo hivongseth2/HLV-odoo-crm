@@ -198,7 +198,8 @@
     </template>
 
     <template id="portal_order_line_rows" name="Báo giá NCC - dòng hàng đơn mua">
-        <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line">
+        <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line"
+            data-vq-pair="1" t-att-data-vq-vat-rate="info['revision']['tax_rates'][line.id]">
             <td class="vq-col-no" t-esc="line_index + 1"/>
             <t t-set="pending_hint" t-value="info['revision']['pending_lines'].get(line.id)"/>
             <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/>
@@ -230,9 +231,19 @@
                     <t t-esc="fmt(round(info['revision']['prices'][line.id]))"/>
                     <div class="vq-muted vq-small">chưa VAT <t t-esc="fmt(line.price_unit)"/></div>
                 </span>
-                <input t-if="revise_editable" type="text" inputmode="decimal" size="6" class="vq-input vq-edit vq-edit-num"
-                       t-att-name="'price_%s' % line.id" t-att-value="fmt(round(info['revision']['prices'][line.id]))"
-                       t-att-aria-label="'Đơn giá sau VAT — %s' % line.product_id.display_name"/>
+                <!-- Gõ giá sau VAT hoặc chưa VAT (ô kia tự tính theo VAT của dòng — js/vendor_price_pair.js); pbasis_<id>
+                     ghi ô NCC gõ, server tính từ đúng ô đó. -->
+                <div t-if="revise_editable" class="vq-edit vq-edit-pair">
+                    <label><span class="vq-edit-pair-tag">sau VAT</span>
+                        <input type="text" inputmode="decimal" size="6" class="vq-input vq-edit-num" data-vq-unit="1"
+                               t-att-name="'price_%s' % line.id" t-att-value="fmt(round(info['revision']['prices'][line.id]))"
+                               t-att-aria-label="'Đơn giá sau VAT — %s' % line.product_id.display_name"/></label>
+                    <label><span class="vq-edit-pair-tag">chưa VAT</span>
+                        <input type="text" inputmode="decimal" size="6" class="vq-input vq-edit-num" data-vq-net="1"
+                               t-att-name="'pricenet_%s' % line.id" t-att-value="fmt(line.price_unit)"
+                               t-att-aria-label="'Đơn giá chưa VAT — %s' % line.product_id.display_name"/></label>
+                    <input type="hidden" data-vq-basis="1" t-att-name="'pbasis_%s' % line.id" value="gross"/>
+                </div>
             </td>
             <td class="vq-num vq-col-total" data-label="Thành tiền sau VAT" t-esc="fmt(line.price_total)"/>
             <td t-if="revise_editable" class="vq-col-edit">

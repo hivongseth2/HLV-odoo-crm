@@ -40,7 +40,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.reloadAll();
   }
 
-  /** Bỏ chọn một giá đã nằm trên YCMH là huỷ dòng YCMH đó (thu mua thấy "Sale đã bỏ") — hỏi lại trước. */
+  /** Bỏ chọn một giá đã nằm trên YCMH là huỷ dòng YCMH đó (thu mua thấy dòng tô đỏ, gạch ngang) — hỏi lại trước. */
   function confirmUnchoose(lineId) {
     var d = D.detail;
     var hit = null;
@@ -56,7 +56,7 @@ window.HlvQuote = window.HlvQuote || {};
       return true;
     }
     return window.confirm("Bạn có chắc bỏ \"" + hit.line.name + "\" (" + (hit.vendor ? hit.vendor.name : "NCC") +
-      ") khỏi YCMH " + names.join(", ") + "?\nDòng YCMH sẽ bị huỷ — thu mua thấy dòng ghi \"Sale đã bỏ\".");
+      ") khỏi YCMH " + names.join(", ") + "?\nDòng YCMH sẽ bị huỷ — thu mua thấy dòng tô đỏ, gạch ngang.");
   }
 
   function choose(lineId, on) {
@@ -504,16 +504,20 @@ window.HlvQuote = window.HlvQuote || {};
         '<button type="button" class="hq-btn hq-btn-primary" data-create-request="1">Xác nhận tạo YCMH</button></div></div>';
     }
     return head +
-      '<div class="hq-request-row"><div class="hq-picker hq-request-so">' +
-      '<label class="hq-sr-only" for="hq-req-so-search">Đơn bán</label>' +
-      '<input type="search" id="hq-req-so-search" class="hq-input w-100" autocomplete="off" ' +
-      'placeholder="Gắn đơn bán (không bắt buộc)…"/>' +
+      '<div class="hq-request-row"><button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
+      (d.can_request ? "" : " disabled") + ">" +
+      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div></div>";
+  }
+
+  /** Ô gắn đơn bán ở bước xác nhận lên YCMH, cạnh kho nhận / địa điểm giao. */
+  function saleOrderField() {
+    return '<div class="hq-request-fields"><div class="hq-request-so-field">' +
+      '<label class="hq-label" for="hq-req-so-search">Gắn đơn bán (không bắt buộc)</label>' +
+      '<div class="hq-picker hq-request-so"><input type="search" id="hq-req-so-search" class="hq-input w-100" ' +
+      'autocomplete="off" placeholder="Số đơn bán, tên khách…"/>' +
       '<div id="hq-req-so-results" class="hq-dropdown hq-hidden"></div></div>' +
       '<div id="hq-req-so-chip" class="hq-chip-row">' + saleOrderChip() + "</div>" +
-      '<button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
-      (d.can_request ? "" : " disabled") + ">" +
-      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div>" +
-      '<div class="hq-muted hq-small">Có đơn bán và đơn đó có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div>';
+      '<div class="hq-muted hq-small">Đơn bán đã có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div></div>';
   }
 
   /** Bảng tóm tắt những gì sẽ lên YCMH: từng cặp sản phẩm × NCC, SL mua (sửa được — khách đổi số lượng
@@ -536,11 +540,9 @@ window.HlvQuote = window.HlvQuote || {};
       '<th>Nhà cung cấp</th><th class="hq-num">SL mua</th><th class="hq-num">Đơn giá sau VAT</th>' +
       '<th class="hq-num">Thành tiền</th><th>Ghi chú (lên dòng YCMH)</th></tr></thead><tbody>' + body + "</tbody>" +
       '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b data-req-sum="1">' +
-      HQ.money(total) + "</b></td><td></td></tr></tfoot></table></div>" + HQ.requestFieldsHtml(d) +
+      HQ.money(total) + "</b></td><td></td></tr></tfoot></table></div>" + HQ.requestFieldsHtml(d) + saleOrderField() +
       '<div data-req-short="1">' + shortageBox(d, rows) + "</div>" +
-      '<div data-req-split="1">' + splitChoice(rows) + "</div>" +
-      '<div class="hq-muted hq-small">' + (D.saleOrder ? "Gắn đơn bán <b>" + esc(D.saleOrder.name) +
-        "</b> — đơn đã có YCMH chưa duyệt thì hàng được gộp vào đó." : "Không gắn đơn bán.") + "</div>";
+      '<div data-req-split="1">' + splitChoice(rows) + "</div>";
   }
 
   function saleOrderChip() {

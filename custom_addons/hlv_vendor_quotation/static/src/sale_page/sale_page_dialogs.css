@@ -270,7 +270,8 @@
 .hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }
 
 .hq-request-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .35rem 0; }
-.hq-request-so { flex: 1 1 16rem; max-width: 22rem; }
+/* Gắn đơn bán ở bước xác nhận lên YCMH (cùng hàng kho nhận / địa điểm giao). */
+.hq-request-so-field { display: flex; flex-direction: column; gap: .2rem; flex: 1 1 18rem; max-width: 28rem; }
 /* Người yêu cầu (mã sale) khi lên YCMH — bắt buộc (sale_inquiry_refs.js). */
 .hq-req-code { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: .5rem 0 .25rem; }
 .hq-req-code .hq-input { width: auto; min-width: 12rem; }
