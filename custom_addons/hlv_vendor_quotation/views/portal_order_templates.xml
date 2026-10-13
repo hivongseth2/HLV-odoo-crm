@@ -207,17 +207,17 @@
             <tfoot class="vq-order-foot">
                 <tr>
                     <td t-att-colspan="span" class="vq-num">Tổng trước VAT</td>
-                    <td class="vq-num" data-label="Tổng trước VAT" t-esc="fmt(order.amount_untaxed)"/>
+                    <td class="vq-num" data-label="Tổng trước VAT" data-vq-foot="untaxed" t-esc="fmt(order.amount_untaxed)"/>
                     <td t-if="revise_editable"/>
                 </tr>
                 <tr>
                     <td t-att-colspan="span" class="vq-num">Tiền VAT</td>
-                    <td class="vq-num" data-label="Tiền VAT" t-esc="fmt(order.amount_tax)"/>
+                    <td class="vq-num" data-label="Tiền VAT" data-vq-foot="tax" t-esc="fmt(order.amount_tax)"/>
                     <td t-if="revise_editable"/>
                 </tr>
                 <tr class="vq-order-foot-total">
                     <td t-att-colspan="span" class="vq-num">Tổng cộng sau VAT</td>
-                    <td class="vq-num" data-label="Tổng cộng sau VAT" t-esc="fmt(order.amount_total)"/>
+                    <td class="vq-num" data-label="Tổng cộng sau VAT" data-vq-foot="total" t-esc="fmt(order.amount_total)"/>
                     <td t-if="revise_editable"/>
                 </tr>
             </tfoot>
@@ -226,7 +226,8 @@
 
     <template id="portal_order_line_rows" name="Báo giá NCC - dòng hàng đơn mua">
         <tr t-foreach="order.order_line.filtered(lambda l: not l.display_type)" t-as="line"
-            data-vq-pair="1" t-att-data-vq-vat-rate="info['revision']['tax_rates'][line.id]">
+            data-vq-pair="1" t-att-data-vq-vat-rate="info['revision']['tax_rates'][line.id]"
+            t-att-data-vq-qty="line.product_qty" t-att-data-vq-price="line.price_unit">
             <td class="vq-col-no" t-esc="line_index + 1"/>
             <t t-set="pending_hint" t-value="info['revision']['pending_lines'].get(line.id)"/>
             <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/>
@@ -274,7 +275,7 @@
                        t-att-value="fmt(round(info['revision']['prices'][line.id]))"
                        t-att-aria-label="'Đơn giá sau VAT — %s' % line.product_id.display_name"/>
             </td>
-            <td class="vq-num vq-col-total" data-label="Thành tiền sau VAT" t-esc="fmt(line.price_total)"/>
+            <td class="vq-num vq-col-total" data-label="Thành tiền sau VAT" data-vq-subtotal="1" t-esc="fmt(line.price_total)"/>
             <td t-if="revise_editable" class="vq-col-edit">
                 <!-- Ô tick ẩn + nhãn bút chì: bấm là dòng chuyển sang ô sửa (CSS :has, không cần JS); chỉ dòng có tick mới gửi. -->
                 <input type="checkbox" value="1" class="vq-edit-toggle" t-att-id="'edit_%s' % line.id" t-att-name="'edit_%s' % line.id"/>
@@ -428,11 +429,6 @@
                     </div>
                 </form>
 
-                <dl class="vq-summary vq-summary-inline">
-                    <div><dt>Trước VAT</dt><dd t-esc="fmt(order.amount_untaxed)"/></div>
-                    <div><dt>VAT</dt><dd t-esc="fmt(order.amount_tax)"/></div>
-                    <div class="vq-summary-total"><dt>Tổng cộng</dt><dd t-esc="fmt(order.amount_total)"/></div>
-                </dl>
                 <t t-call="hlv_vendor_quotation.portal_order_revisions"/>
                 <t t-call="hlv_vendor_quotation.portal_chat"/>
             </div>
