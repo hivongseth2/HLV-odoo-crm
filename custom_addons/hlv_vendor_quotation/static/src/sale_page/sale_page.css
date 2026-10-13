@@ -114,6 +114,11 @@ body {
 .hq-tag-ok { background: var(--hq-ok-soft); color: #2C5B3D; }
 .hq-tag-danger { background: var(--hq-danger-soft); color: var(--hq-danger); }
 .hq-tag-mine { background: var(--hq-accent-soft); color: var(--hq-accent-dark); }
+/* Thêm cho tiến độ đơn mua (chip chỉ màu ở bảng phiếu): đã gửi = xanh dương, giao một phần = viền xanh lá,
+   đã hủy = xám gạch ngang. */
+.hq-tag-info { background: #e3ecfb; color: #1e4fa3; }
+.hq-tag-part { background: #fff; color: #2C5B3D; box-shadow: inset 0 0 0 1px #8fbf9f; }
+.hq-tag-void { background: #eef0f3; color: #8a96a3; text-decoration: line-through; }
 
 .hq-code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -253,6 +258,13 @@ body {
 .hq-row-new:hover td { background: #F8E3D8; }
 .hq-ref { font-weight: 600; color: var(--hq-accent); }
 .hq-cell-vendor { max-width: 16rem; }
+.hq-po-cell + .hq-po-cell { margin-top: .3rem; }
+/* Ghi chú kho trên đơn mua (giờ / ngày hàng về thực tế). */
+.hq-po-note { max-width: 12rem; margin-top: .1rem; color: var(--hq-accent-dark); font-size: .75rem; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hq-list-legend { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; padding: .6rem 16px; font-size: .75rem;
+    border-top: 1px solid var(--hq-line-soft); }
+.hq-list-legend .hq-doc { margin: 0 .15rem; }
 #hq-quote-list.is-loading { opacity: .55; transition: opacity .15s; }
 
 .hq-pager { display: flex; justify-content: flex-end; align-items: center; gap: .75rem; padding: .6rem .9rem; border-top: 1px solid var(--hq-line-soft); }

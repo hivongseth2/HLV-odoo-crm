@@ -79,6 +79,7 @@ window.HlvQuote = window.HlvQuote || {};
       renderKpis();
       renderInquiries(res.inquiries || []);
       renderPager();
+      renderLegend();
       HQ.showAlert("hq-alert", "");
     }).catch(function (err) {
       HQ.showAlert("hq-alert", err.message);
@@ -115,12 +116,17 @@ window.HlvQuote = window.HlvQuote || {};
   function renderInquiries(inquiries) {
     var body = HQ.$("hq-quote-list");
     if (!inquiries.length) {
-      body.innerHTML = '<tr><td colspan="7" class="hq-empty">Chưa có phiếu hỏi giá nào. ' +
+      body.innerHTML = '<tr><td colspan="8" class="hq-empty">Chưa có phiếu hỏi giá nào. ' +
         'Bấm "Hỏi giá NCC" để hỏi giá sản phẩm.</td></tr>';
       return;
     }
     body.innerHTML = inquiries.map(function (q) {
-      var docs = q.requests.map(HQ.requestTag).concat(q.orders.map(HQ.orderTag));
+      var requests = q.requests.map(function (r) { return HQ.colorChip(r.name, HQ.REQUEST_STATE_CLASS[r.state], r.label); });
+      var orders = q.orders.map(function (o) {
+        return '<div class="hq-po-cell">' + HQ.colorChip(o.name, HQ.ORDER_PROGRESS_CLASS[o.progress], o.progress_label) +
+          (o.note ? '<div class="hq-po-note" title="Ghi chú odoo (kho)">' + esc(o.note) + "</div>" : "") + "</div>";
+      });
+      var none = '<span class="hq-muted">—</span>';
       // Có tin NCC chưa xem: tô cả dòng + icon tin nhắn nền cam có số — nhìn bảng là biết phiếu nào cần vào xem.
       var chat = HQ.chatIcon(q.chat_count, q.chat_unread);
       return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") + (q.request_rejected ? " hq-row-alert" : "") +
@@ -132,12 +138,27 @@ window.HlvQuote = window.HlvQuote || {};
         (q.sale_order ? '<div class="hq-docs">' + HQ.docChip(q.sale_order) + "</div>" : "") + "</td>" +
         '<td class="hq-nowrap hq-num">' + q.quoted_count + "/" + q.vendor_count + " NCC</td>" +
         '<td class="hq-nowrap hq-num">' + q.chosen_count + "/" + q.line_count + " sản phẩm</td>" +
-        '<td><div class="hq-docs">' + (docs.length ? docs.join("") : '<span class="hq-muted">—</span>') + "</div></td>" +
+        '<td><div class="hq-docs">' + (requests.join("") || none) + "</div></td>" +
+        "<td>" + (orders.join("") || none) + "</td>" +
         '<td class="hq-nowrap hq-num">' + esc(q.deadline || "—") + "</td>" +
         '<td><span class="hq-tag ' + (HQ.SALE_STATUS_CLASS[q.sale_status] || "") + '">' +
         esc(q.sale_status_label) + "</span>" +
         (q.close_reason ? '<div class="hq-muted hq-small">' + esc(q.close_reason) + "</div>" : "") + "</td></tr>";
     }).join("");
+  }
+
+  /** Chú thích màu chip YCMH / đơn mua dưới bảng (chip chỉ có màu, không ghi trạng thái). */
+  function renderLegend() {
+    var legend = HQ.$("hq-list-legend");
+    if (!legend || legend.childElementCount) {
+      return;
+    }
+    var row = function (title, items) {
+      return '<div><span class="hq-muted">' + title + ":</span> " + items.map(function (item) {
+        return '<span class="hq-doc ' + item[0] + '">' + esc(item[1]) + "</span>";
+      }).join(" ") + "</div>";
+    };
+    legend.innerHTML = row("YCMH", HQ.REQUEST_LEGEND) + row("Đơn mua", HQ.ORDER_LEGEND);
   }
 
   function renderPager() {

@@ -45,6 +45,18 @@ def _vendor_progress_label(order):
     return PROGRESS_LABELS.get(progress, "") if progress in VENDOR_PROGRESS_SHOWN else ""
 
 
+def _order_list_payload(order):
+    """Đơn mua ở bảng phiếu: tiến độ (mã → màu chip, nhãn → tooltip) + ghi chú kho (giờ hàng về thực tế)."""
+    progress = order._hlv_vendor_progress()
+    return {
+        "name": order.name,
+        "vendor_status": PROGRESS_LABELS.get(progress, "") if progress in VENDOR_PROGRESS_SHOWN else "",
+        "progress": progress,
+        "progress_label": PROGRESS_LABELS.get(progress, ""),
+        "note": order._hlv_warehouse_note(),
+    }
+
+
 def purchase_order_payload(order):
     order = order.sudo()
     chat_count, chat_unread = chat_stats(order, order.env.user)
@@ -66,6 +78,8 @@ def purchase_order_payload(order):
         "vendor_event_actor": order._hlv_event_actor() if order.hlv_vendor_event else "",
         # NCC gửi CPN / chành: hãng / chành + mã vận đơn / số xe — sale theo hàng giúp khách.
         "vendor_ship": order._hlv_ship_text(),
+        # Ghi chú kho trên đơn (giờ / ngày hàng về thực tế).
+        "warehouse_note": order._hlv_warehouse_note(),
     }
 
 
@@ -125,10 +139,7 @@ def inquiry_summary(inquiry):
         # Trạng thái YCMH / đơn mua hiện thành nhãn ngay ngoài danh sách (từ chối → đỏ).
         "requests": [_request_payload(r) for r in inquiry.request_ids.sudo()],
         "request_rejected": any(r.state == "rejected" for r in inquiry.request_ids.sudo()),
-        "orders": [
-            {"name": o.name, "vendor_status": _vendor_progress_label(o)}
-            for o in inquiry.purchase_order_ids.sudo()
-        ],
+        "orders": [_order_list_payload(o) for o in inquiry.purchase_order_ids.sudo()],
         "purchase_orders": inquiry.purchase_order_ids.sudo().mapped("name"),
         "close_reason": CLOSE_REASON_LABELS.get(inquiry.close_reason, ""),
         "close_note": inquiry.close_note or "",

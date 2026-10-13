@@ -26,6 +26,44 @@ window.HlvQuote = window.HlvQuote || {};
     rejected: "hq-tag-danger",
   };
 
+  /* Tiến độ đơn mua (purchase.order._hlv_vendor_progress) → màu chip ở bảng phiếu. */
+  HQ.ORDER_PROGRESS_CLASS = {
+    rfq: "hq-tag-soft",
+    waiting: "hq-tag-warn",
+    packed: "hq-tag-mine",
+    shipped: "hq-tag-info",
+    partial: "hq-tag-part",
+    delivered: "hq-tag-ok",
+    cancel: "hq-tag-void",
+  };
+
+  /* Chú thích màu dưới bảng phiếu: [lớp màu, nghĩa] — cùng màu với REQUEST_STATE_CLASS / ORDER_PROGRESS_CLASS. */
+  HQ.REQUEST_LEGEND = [
+    ["hq-tag-soft", "Nháp"],
+    ["hq-tag-warn", "Chờ duyệt"],
+    ["hq-tag-mine", "Đã duyệt / đang mua"],
+    ["hq-tag-ok", "Hoàn thành"],
+    ["hq-tag-danger", "Từ chối"],
+  ];
+  HQ.ORDER_LEGEND = [
+    ["hq-tag-soft", "Chờ xác nhận"],
+    ["hq-tag-warn", "Chờ đóng gói"],
+    ["hq-tag-mine", "Đã đóng gói"],
+    ["hq-tag-info", "Đã gửi hàng"],
+    ["hq-tag-part", "Giao một phần"],
+    ["hq-tag-ok", "Đã giao"],
+    ["hq-tag-void", "Đã hủy"],
+  ];
+
+  /**
+   * Chip số chứng từ chỉ có màu (bảng phiếu — chỗ hẹp): trạng thái nằm ở màu + tooltip, không ghi chữ.
+   * name: số; cls: lớp hq-tag-* (trống → xám); label: trạng thái hiện khi rê chuột ("" = không tooltip).
+   */
+  HQ.colorChip = function (name, cls, label) {
+    return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '"' + (label ? ' title="' + HQ.esc(label) + '"' : "") + ">" +
+      HQ.esc(name) + "</span>";
+  };
+
   /**
    * Chip một số chứng từ (YCMH / đơn mua / báo giá / đơn bán) — mọi số chứng từ trên trang hiện bằng chip này.
    * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám).
