@@ -62,6 +62,34 @@ class VendorFinancePortal(VendorQuotePortal):
             "doc_url": lambda doc: f"{access._portal_path()}/{FINANCE}/chung-tu/{doc.id}",
         })
 
+    def _vendor_payment(self, access, request_id):
+        """Đề nghị chi NCC được xem: của đơn mua của chính NCC, trạng thái NCC được thấy. Không có → None."""
+        payment = request.env["amis.payment.request"].sudo().browse(request_id).exists()
+        if (not payment or payment.state not in VENDOR_PAYMENT_STATES
+                or payment.purchase_order_id not in access._vendor_purchase_orders()):
+            return None
+        return payment
+
+    @http.route(f"{PORTAL_ROUTE}/<string:token>/{FINANCE}/<int:request_id>", type="http", auth="public", methods=["GET"])
+    def portal_finance_detail(self, token, request_id, doc=None, **_kw):
+        """Một đề nghị chi: thông tin + chứng từ kế toán gửi, xem lớn ngay trong trang (?doc= chọn chứng từ đang xem)."""
+        access, response = self._finance_access(token)
+        if response:
+            return response
+        payment = self._vendor_payment(access, request_id)
+        if not payment:
+            return self._not_found()
+        documents = payment._hlv_vendor_documents()
+        current = documents.filtered(lambda d: str(d.id) == str(doc))[:1] or documents[:1]
+        return self._render("hlv_vendor_payment_docs.portal_finance_detail", access, {
+            "active_tab": "finance",
+            "payment": payment,
+            "documents": documents,
+            "current": current,
+            "doc_url": lambda document: f"{access._portal_path()}/{FINANCE}/chung-tu/{document.id}",
+            "detail_url": f"{access._portal_path()}/{FINANCE}/{payment.id}",
+        })
+
     @staticmethod
     def _read_filters(form, orders):
         """Bộ lọc từ URL: chữ (số đề nghị / số đơn), trạng thái (da-chi / dang-xu-ly), chứng từ (co / chua), khoảng ngày
@@ -125,8 +153,7 @@ class VendorFinancePortal(VendorQuotePortal):
         if response:
             return response
         document = request.env["hlv.payment.document"].sudo().browse(doc_id).exists()
-        payment = document.payment_request_id
-        if (not document or not document.visible_to_vendor or payment.state not in VENDOR_PAYMENT_STATES
-                or payment.purchase_order_id not in access._vendor_purchase_orders()):
+        if (not document or not document.visible_to_vendor
+                or not self._vendor_payment(access, document.payment_request_id.id)):
             return self._not_found()
         return request.env["ir.binary"]._get_stream_from(document.attachment_id, "raw").get_response(as_attachment=False)

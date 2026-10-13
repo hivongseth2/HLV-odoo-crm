@@ -67,7 +67,8 @@
                         </thead>
                         <tbody>
                             <tr t-foreach="payment['requests']" t-as="pr">
-                                <td data-label="Số đề nghị chi" class="vq-nowrap" t-esc="pr.name"/>
+                                <td data-label="Số đề nghị chi" class="vq-nowrap"><a class="vq-doc-chip" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
+                                       title="Xem đề nghị chi và chứng từ" t-esc="pr.name"/></td>
                                 <td data-label="Ngày" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
                                 <td class="vq-num" data-label="Số tiền"><b t-esc="fmt(round(pr.amount))"/></td>
                                 <td data-label="Trạng thái">
@@ -173,7 +174,8 @@
                         <tbody>
                             <tr t-foreach="requests" t-as="pr">
                                 <td class="vq-col-no" t-esc="pager['offset'] + pr_index + 1"/>
-                                <td data-label="Số đề nghị chi" class="vq-nowrap" t-esc="pr.name"/>
+                                <td data-label="Số đề nghị chi" class="vq-nowrap"><a class="vq-doc-chip" t-att-href="'%s/tai-chinh/%s' % (portal_base, pr.id)"
+                                       title="Xem đề nghị chi và chứng từ" t-esc="pr.name"/></td>
                                 <td data-label="Đơn mua"><a class="vq-doc-chip" t-att-href="'%s/don-mua/%s' % (portal_base, pr.purchase_order_id.id)"
                                        t-esc="pr.purchase_order_id.name"/></td>
                                 <td data-label="Ngày đề nghị chi" class="vq-nowrap" t-esc="fdate(pr.payment_date)"/>
@@ -201,6 +203,77 @@
                         <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="finance_url(page=pager['page'] + 1)" class="vq-btn vq-btn-secondary">Trang sau</a>
                     </nav>
                 </t>
+            </div>
+        </t>
+    </template>
+
+    <!-- Một đề nghị chi phía NCC: trái là thông tin (số tiền, đơn mua, tài khoản), phải là chứng từ kế toán gửi — xem lớn
+         ngay trong trang (ảnh / PDF), ảnh thu nhỏ bên dưới để chuyển chứng từ (?doc=). Word thì tải về. -->
+    <template id="portal_finance_detail" name="Báo giá NCC - tài chính: một đề nghị chi">
+        <t t-call="hlv_vendor_quotation.portal_layout">
+            <t t-set="page_title" t-value="payment.name"/>
+            <t t-set="logged_in" t-value="True"/>
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_quotation.portal_tabs"/>
+                <nav class="vq-breadcrumb">
+                    <a t-att-href="'%s/tai-chinh' % portal_base">Tài chính</a> / <span t-esc="payment.name"/>
+                </nav>
+                <div class="vq-page-head">
+                    <h1 t-esc="payment.name"/>
+                    <span t-attf-class="vq-status #{'vq-pay-paid' if payment._hlv_is_paid() else 'vq-pay-processing'}" t-esc="payment._hlv_vendor_label()"/>
+                </div>
+
+                <div class="unc-grid">
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Đề nghị chi</h2>
+                        <p class="unc-amount"><t t-esc="fmt(round(payment.amount))"/> <small t-esc="payment.currency_id.name"/></p>
+                        <dl class="unc-info">
+                            <dt>Đơn mua hàng</dt>
+                            <dd><a t-att-href="'%s/don-mua/%s' % (portal_base, payment.purchase_order_id.id)" t-esc="payment.purchase_order_id.name"/></dd>
+                            <dt>Ngày đề nghị chi</dt><dd t-esc="fdate(payment.payment_date)"/>
+                            <dt>Hình thức</dt><dd t-esc="'Chuyển khoản' if payment.payment_method == 'bank' else 'Tiền mặt'"/>
+                            <t t-if="payment.vendor_bank_account_number">
+                                <dt>Tài khoản nhận</dt>
+                                <dd><t t-esc="payment.vendor_bank_account_number"/><span class="vq-muted" t-esc="payment.vendor_bank_name"/>
+                                    <span t-if="payment.vendor_account_holder" class="vq-muted" t-esc="payment.vendor_account_holder"/></dd>
+                            </t>
+                            <t t-if="payment.company_bank_account_number">
+                                <dt>Chuyển từ</dt>
+                                <dd><t t-esc="payment.company_bank_account_number"/><span class="vq-muted" t-esc="payment.company_bank_name"/></dd>
+                            </t>
+                            <t t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></t>
+                        </dl>
+                    </section>
+
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Chứng từ chi (UNC)
+                            <a t-if="current" class="vq-btn vq-btn-secondary vq-btn-sm" target="_blank" t-att-href="doc_url(current)">Mở tab mới / tải về</a></h2>
+                        <p t-if="not documents" class="vq-muted">Kế toán chưa gửi chứng từ cho đề nghị chi này.</p>
+                        <t t-else="">
+                            <t t-set="kind" t-value="current._hlv_preview_kind()"/>
+                            <div class="pay-viewer">
+                                <img t-if="kind == 'image'" t-att-src="doc_url(current)" t-att-alt="current.name"/>
+                                <iframe t-elif="kind == 'pdf'" t-att-src="doc_url(current)" t-att-title="current.name"/>
+                                <div t-else="" class="pay-viewer-file">
+                                    <span class="doc-thumb doc-thumb-file" t-esc="current._hlv_badge()"/>
+                                    <span t-esc="current.name"/>
+                                    <a class="vq-btn vq-btn-primary" t-att-href="doc_url(current)" target="_blank">Tải về</a>
+                                </div>
+                            </div>
+                            <p class="pay-viewer-caption"><b t-esc="current.name"/>
+                                <t t-if="current.note"> · <t t-esc="current.note"/></t>
+                                <span class="vq-muted"> · gửi <t t-esc="fdate(current.create_date)"/></span></p>
+                            <div t-if="len(documents) &gt; 1" class="pay-viewer-strip">
+                                <a t-foreach="documents" t-as="doc" t-att-href="'%s?doc=%s' % (detail_url, doc.id)"
+                                   t-attf-class="doc-thumb #{'doc-thumb-' + doc._hlv_preview_kind() if doc._hlv_preview_kind() != 'image' else ''} #{'is-active' if doc == current else ''}"
+                                   t-att-title="doc.name">
+                                    <img t-if="doc._hlv_preview_kind() == 'image'" t-att-src="doc_url(doc)" loading="lazy" alt=""/>
+                                    <t t-else="" t-esc="doc._hlv_badge()"/>
+                                </a>
+                            </div>
+                        </t>
+                    </section>
+                </div>
             </div>
         </t>
     </template>
