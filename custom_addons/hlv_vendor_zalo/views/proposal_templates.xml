@@ -2,14 +2,14 @@
 <odoo>
     <!-- Trang sale duyệt đề xuất AI (controllers/proposal_page.py). Dùng lại CSS trang NCC (bảng, nút, ô nhập).
          Không dùng "%s%%" trong biểu thức (Odoo nạp XML đổi "%%" thành "%"). -->
-    <template id="proposal_page" name="Zalo NCC - duyệt đề xuất AI">
+    <template id="proposal_layout" name="Zalo NCC - khung trang đề xuất AI">
         <t t-out="doctype"/>
         <html lang="vi">
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <meta name="robots" content="noindex, nofollow"/>
-                <title>Đề xuất <t t-esc="proposal.quote_id.name"/> · <t t-esc="company.name"/></title>
+                <title><t t-esc="page_title"/> · <t t-esc="company.name"/></title>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_history.css?v=#{asset_version}"/>
                 <style>
@@ -28,6 +28,9 @@
                     .zp-actions { display: flex; gap: 10px; align-items: center; margin: 16px 0; }
                     .zp-messages { margin-top: 20px; }
                     .zp-messages li { margin: 4px 0; font-size: .85rem; }
+                    .zp-list td { vertical-align: top; }
+                    .zp-list a { color: var(--vq-accent); font-weight: 600; }
+                    .zp-list .zp-said { max-width: 420px; }
                 </style>
             </head>
             <body>
@@ -41,114 +44,161 @@
                         </a>
                         <div class="vq-header-right">
                             <span class="vq-header-vendor" t-esc="request.env.user.name"/>
+                            <a href="/zalo-de-xuat" class="vq-header-link">Đề xuất AI</a>
                             <a href="/hoi-gia-ncc" class="vq-header-link">Trang Hỏi giá NCC</a>
                         </div>
                     </div>
                 </header>
                 <main class="vq-main">
                     <div class="vq-wrap">
-                        <div class="vq-page-head">
-                            <h1><t t-esc="proposal.quote_id.name"/> — <t t-esc="proposal.partner_id.display_name"/></h1>
-                            <span t-attf-class="vq-status #{'vq-status-waiting' if proposal.state == 'draft' else ('vq-status-delivered' if proposal.state == 'applied' else 'vq-status-closed')}"
-                                  t-esc="dict(proposal._fields['state'].selection)[proposal.state]"/>
-                        </div>
-                        <dl class="vq-facts">
-                            <div><dt>Phiếu hỏi giá</dt><dd t-esc="proposal.inquiry_id.name"/></div>
-                            <div><dt>Sale</dt><dd t-esc="proposal.sale_code or '—'"/></div>
-                            <div><dt>Nhóm Zalo</dt><dd t-esc="proposal.group_id.name or '—'"/></div>
-                            <div><dt>AI đọc lúc</dt><dd t-esc="fdate(proposal.ai_run_at, '%H:%M %d/%m/%Y')"/></div>
-                            <div t-if="proposal.decided_by"><dt>Người duyệt</dt>
-                                <dd><t t-esc="proposal.decided_by.name"/> · <t t-esc="fdate(proposal.decided_at, '%H:%M %d/%m/%Y')"/></dd></div>
-                        </dl>
-
-                        <div t-if="saved == 'applied'" class="vq-alert vq-alert-ok">Đã ghi vào báo giá <t t-esc="proposal.quote_id.name"/>
-                            — như NCC tự gửi. Mở phiếu trên trang Hỏi giá NCC để so giá, chọn NCC.</div>
-                        <div t-if="saved == 'rejected'" class="vq-alert">Đã bỏ đề xuất — báo giá không đổi.</div>
-                        <div t-if="errors" class="vq-alert vq-alert-error">
-                            <b>Chưa ghi được:</b>
-                            <div t-foreach="errors" t-as="error" t-esc="error"/>
-                        </div>
-                        <p t-if="proposal.summary" class="zp-summary"><b>AI tóm tắt:</b> <t t-esc="proposal.summary"/></p>
-
-                        <form method="post" t-att-action="'/zalo-de-xuat/%s' % proposal.id">
-                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                            <fieldset t-att-disabled="proposal.state != 'draft' or None" style="border:0;margin:0;padding:0">
-                            <div class="vq-list-scroll">
-                            <table class="vq-table vq-sheet zp-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mặt hàng</th>
-                                        <th class="vq-num">SL hỏi</th>
-                                        <th>NCC nói (AI đọc)</th>
-                                        <th>Hết hàng</th>
-                                        <th class="vq-num">Giá sau VAT</th>
-                                        <th>VAT</th>
-                                        <th class="vq-num">% CK</th>
-                                        <th class="vq-num" title="Trống = có đủ">Sẵn</th>
-                                        <th>Hẹn giao phần thiếu</th>
-                                        <th class="vq-num">Giao (ngày)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr t-foreach="rows" t-as="row">
-                                        <t t-set="line" t-value="row['line']"/>
-                                        <t t-set="ai" t-value="row['ai']"/>
-                                        <t t-set="v" t-value="row['value']"/>
-                                        <td data-label="Mặt hàng"><span t-if="line.product_id.default_code" class="vq-name-code" t-esc="line.product_id.default_code"/>
-                                            <div t-esc="line.name or line.product_id.name"/></td>
-                                        <td class="vq-num vq-nowrap" data-label="SL hỏi"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom_id.name"/></td>
-                                        <td class="zp-said" data-label="NCC nói">
-                                            <t t-if="ai">
-                                                <span t-attf-class="zp-tag zp-#{ai.status}" t-esc="dict(ai._fields['status'].selection)[ai.status]"/>
-                                                <span t-if="ai.price_source == 'reused'" class="zp-tag zp-warn">giá cũ ≤ 7 ngày</span>
-                                                <span t-if="ai.status != 'unavailable' and ai.price_source == 'none'" class="zp-tag zp-warn">chưa có giá</span>
-                                                <span t-if="ai.basis_unknown" class="zp-tag zp-warn">không rõ trước / sau VAT</span>
-                                                <span t-if="ai.vat_assumed and ai.status != 'unavailable'" class="zp-tag zp-warn">VAT tự điền</span>
-                                                <span t-if="ai.confidence == 'low'" class="zp-tag zp-warn">cần xem lại</span>
-                                                <span t-if="ai.evidence" class="zp-evidence" t-esc="'«' + ai.evidence + '»'"/>
-                                                <span t-if="ai.note" class="zp-evidence" t-esc="ai.note"/>
-                                            </t>
-                                            <span t-else="" class="zp-none">NCC chưa nói tới — giá đang có trên báo giá (nếu có)</span>
-                                        </td>
-                                        <td data-label="Hết hàng"><input type="checkbox" t-att-name="'na_%s' % line.id" value="1" t-att-checked="v['unavailable'] or None"/></td>
-                                        <td class="zp-price" data-label="Giá sau VAT"><input type="text" inputmode="decimal" class="vq-input" t-att-name="'price_%s' % line.id" t-att-value="v['price']" placeholder="giá sau VAT"/></td>
-                                        <td data-label="VAT">
-                                            <select class="vq-input" t-att-name="'vat_%s' % line.id">
-                                                <option value="">—</option>
-                                                <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]" t-att-selected="opt[0] == v['vat'] or None" t-esc="opt[1]"/>
-                                            </select>
-                                        </td>
-                                        <td data-label="% CK"><input type="text" inputmode="decimal" class="vq-input" t-att-name="'discount_%s' % line.id" t-att-value="v['discount']"/></td>
-                                        <td data-label="Sẵn"><input type="text" inputmode="decimal" class="vq-input" t-att-name="'available_%s' % line.id" t-att-value="v['available']" placeholder="đủ"/></td>
-                                        <td data-label="Hẹn giao"><input type="date" class="vq-input" t-att-name="'backorder_date_%s' % line.id" t-att-value="v['backorder_date']"/></td>
-                                        <td data-label="Giao (ngày)"><input type="text" inputmode="numeric" class="vq-input" t-att-name="'delivery_days_%s' % line.id" t-att-value="v['delivery_days']"/></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            </div>
-                            <div t-if="proposal.state == 'draft'" class="zp-actions">
-                                <button type="submit" name="action" value="apply" class="vq-btn vq-btn-primary">Ghi vào báo giá</button>
-                                <button type="submit" name="action" value="reject" class="vq-btn vq-btn-secondary" formnovalidate="formnovalidate"
-                                        onclick="return confirm('Bỏ đề xuất này? Báo giá giữ nguyên.');">Bỏ đề xuất</button>
-                                <span class="vq-muted vq-small">Giá sau VAT, trước chiết khấu. Sẵn để trống = có đủ; thiếu thì ghi số có
-                                    và ngày hẹn giao phần còn lại.</span>
-                            </div>
-                            </fieldset>
-                        </form>
-
-                        <details class="zp-messages" t-if="proposal.message_ids">
-                            <summary>Tin nhắn AI đã đọc (<t t-esc="len(proposal.message_ids)"/>)</summary>
-                            <ul>
-                                <li t-foreach="proposal.message_ids.sorted(lambda m: (m.sent_at, m.id))" t-as="msg">
-                                    <span class="vq-muted"><t t-esc="fdate(msg.sent_at, '%H:%M %d/%m')"/> · </span>
-                                    <b t-esc="msg.member_id.name"/>:
-                                    <t t-esc="msg.body or msg.media_title or ''"/>
-                                </li>
-                            </ul>
-                        </details>
+                        <t t-out="0"/>
                     </div>
                 </main>
             </body>
         </html>
+    </template>
+
+    <template id="proposal_page" name="Zalo NCC - duyệt đề xuất AI">
+        <t t-call="hlv_vendor_zalo.proposal_layout">
+            <t t-set="page_title" t-value="'Đề xuất ' + proposal.quote_id.name"/>
+            <div class="vq-page-head">
+                <h1><t t-esc="proposal.quote_id.name"/> — <t t-esc="proposal.partner_id.display_name"/></h1>
+                <span t-attf-class="vq-status #{'vq-status-waiting' if proposal.state == 'draft' else ('vq-status-delivered' if proposal.state == 'applied' else 'vq-status-closed')}"
+                      t-esc="dict(proposal._fields['state'].selection)[proposal.state]"/>
+            </div>
+            <dl class="vq-facts">
+                <div><dt>Phiếu hỏi giá</dt><dd t-esc="proposal.inquiry_id.name"/></div>
+                <div><dt>Sale</dt><dd t-esc="proposal.sale_code or '—'"/></div>
+                <div><dt>Nhóm Zalo</dt><dd t-esc="proposal.group_id.name or '—'"/></div>
+                <div><dt>AI đọc lúc</dt><dd t-esc="fdate(proposal.ai_run_at, '%H:%M %d/%m/%Y')"/></div>
+                <div t-if="proposal.decided_by"><dt>Người duyệt</dt>
+                    <dd><t t-esc="proposal.decided_by.name"/> · <t t-esc="fdate(proposal.decided_at, '%H:%M %d/%m/%Y')"/></dd></div>
+            </dl>
+
+            <div t-if="saved == 'applied'" class="vq-alert vq-alert-ok">Đã ghi vào báo giá <t t-esc="proposal.quote_id.name"/>
+                — như NCC tự gửi. Mở phiếu trên trang Hỏi giá NCC để so giá, chọn NCC.</div>
+            <div t-if="saved == 'rejected'" class="vq-alert">Đã bỏ đề xuất — báo giá không đổi.</div>
+            <div t-if="errors" class="vq-alert vq-alert-error">
+                <b>Chưa ghi được:</b>
+                <div t-foreach="errors" t-as="error" t-esc="error"/>
+            </div>
+            <p t-if="proposal.summary" class="zp-summary"><b>AI tóm tắt:</b> <t t-esc="proposal.summary"/></p>
+
+            <form method="post" t-att-action="'/zalo-de-xuat/%s' % proposal.id">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <fieldset t-att-disabled="proposal.state != 'draft' or None" style="border:0;margin:0;padding:0">
+                <div class="vq-list-scroll">
+                <table class="vq-table vq-sheet zp-table">
+                    <thead>
+                        <tr>
+                            <th>Mặt hàng</th>
+                            <th class="vq-num">SL hỏi</th>
+                            <th>NCC nói (AI đọc)</th>
+                            <th>Hết hàng</th>
+                            <th class="vq-num">Giá sau VAT</th>
+                            <th>VAT</th>
+                            <th class="vq-num">% CK</th>
+                            <th class="vq-num" title="Trống = có đủ">Sẵn</th>
+                            <th>Hẹn giao phần thiếu</th>
+                            <th class="vq-num">Giao (ngày)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="rows" t-as="row">
+                            <t t-set="line" t-value="row['line']"/>
+                            <t t-set="ai" t-value="row['ai']"/>
+                            <t t-set="v" t-value="row['value']"/>
+                            <td data-label="Mặt hàng"><span t-if="line.product_id.default_code" class="vq-name-code" t-esc="line.product_id.default_code"/>
+                                <div t-esc="line.name or line.product_id.name"/></td>
+                            <td class="vq-num vq-nowrap" data-label="SL hỏi"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom_id.name"/></td>
+                            <td class="zp-said" data-label="NCC nói">
+                                <t t-if="ai">
+                                    <span t-attf-class="zp-tag zp-#{ai.status}" t-esc="dict(ai._fields['status'].selection)[ai.status]"/>
+                                    <span t-if="ai.price_source == 'reused'" class="zp-tag zp-warn">giá cũ ≤ 7 ngày</span>
+                                    <span t-if="ai.status != 'unavailable' and ai.price_source == 'none'" class="zp-tag zp-warn">chưa có giá</span>
+                                    <span t-if="ai.basis_unknown" class="zp-tag zp-warn">không rõ trước / sau VAT</span>
+                                    <span t-if="ai.vat_assumed and ai.status != 'unavailable'" class="zp-tag zp-warn">VAT tự điền</span>
+                                    <span t-if="ai.confidence == 'low'" class="zp-tag zp-warn">cần xem lại</span>
+                                    <span t-if="ai.evidence" class="zp-evidence" t-esc="'«' + ai.evidence + '»'"/>
+                                    <span t-if="ai.note" class="zp-evidence" t-esc="ai.note"/>
+                                </t>
+                                <span t-else="" class="zp-none">NCC chưa nói tới — giá đang có trên báo giá (nếu có)</span>
+                            </td>
+                            <td data-label="Hết hàng"><input type="checkbox" t-att-name="'na_%s' % line.id" value="1" t-att-checked="v['unavailable'] or None"/></td>
+                            <td class="zp-price" data-label="Giá sau VAT"><input type="text" inputmode="decimal" class="vq-input" t-att-name="'price_%s' % line.id" t-att-value="v['price']" placeholder="giá sau VAT"/></td>
+                            <td data-label="VAT">
+                                <select class="vq-input" t-att-name="'vat_%s' % line.id">
+                                    <option value="">—</option>
+                                    <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]" t-att-selected="opt[0] == v['vat'] or None" t-esc="opt[1]"/>
+                                </select>
+                            </td>
+                            <td data-label="% CK"><input type="text" inputmode="decimal" class="vq-input" t-att-name="'discount_%s' % line.id" t-att-value="v['discount']"/></td>
+                            <td data-label="Sẵn"><input type="text" inputmode="decimal" class="vq-input" t-att-name="'available_%s' % line.id" t-att-value="v['available']" placeholder="đủ"/></td>
+                            <td data-label="Hẹn giao"><input type="date" class="vq-input" t-att-name="'backorder_date_%s' % line.id" t-att-value="v['backorder_date']"/></td>
+                            <td data-label="Giao (ngày)"><input type="text" inputmode="numeric" class="vq-input" t-att-name="'delivery_days_%s' % line.id" t-att-value="v['delivery_days']"/></td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+                <div t-if="proposal.state == 'draft'" class="zp-actions">
+                    <button type="submit" name="action" value="apply" class="vq-btn vq-btn-primary">Ghi vào báo giá</button>
+                    <button type="submit" name="action" value="reject" class="vq-btn vq-btn-secondary" formnovalidate="formnovalidate"
+                            onclick="return confirm('Bỏ đề xuất này? Báo giá giữ nguyên.');">Bỏ đề xuất</button>
+                    <span class="vq-muted vq-small">Giá sau VAT, trước chiết khấu. Sẵn để trống = có đủ; thiếu thì ghi số có
+                        và ngày hẹn giao phần còn lại.</span>
+                </div>
+                </fieldset>
+            </form>
+
+            <details class="zp-messages" t-if="proposal.message_ids">
+                <summary>Tin nhắn AI đã đọc (<t t-esc="len(proposal.message_ids)"/>)</summary>
+                <ul>
+                    <li t-foreach="proposal.message_ids.sorted(lambda m: (m.sent_at, m.id))" t-as="msg">
+                        <span class="vq-muted"><t t-esc="fdate(msg.sent_at, '%H:%M %d/%m')"/> · </span>
+                        <b t-esc="msg.member_id.name"/>:
+                        <t t-esc="msg.body or msg.media_title or ''"/>
+                    </li>
+                </ul>
+            </details>
+        </t>
+    </template>
+
+    <template id="proposal_list_page" name="Zalo NCC - danh sách đề xuất AI">
+        <t t-call="hlv_vendor_zalo.proposal_layout">
+            <t t-set="page_title" t-value="'Đề xuất AI từ Zalo'"/>
+            <div class="vq-page-head"><h1>Đề xuất AI từ Zalo</h1></div>
+            <p class="vq-muted">AI đọc nhóm Zalo của NCC, soạn giá / tồn kho cho báo giá đang mở. Đề xuất chờ duyệt nằm trên
+                cùng; đã ghi / đã bỏ chỉ hiện <t t-esc="keep_days"/> ngày gần đây. Bấm mã báo giá để xem và duyệt.</p>
+            <div class="vq-list-scroll" t-if="proposals">
+                <table class="vq-table zp-list">
+                    <thead>
+                        <tr>
+                            <th>AI đọc lúc</th>
+                            <th>Báo giá</th>
+                            <th>Phiếu hỏi giá</th>
+                            <th>NCC</th>
+                            <th>Sale</th>
+                            <th>AI tóm tắt</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="proposals" t-as="item">
+                            <td class="vq-nowrap" data-label="AI đọc lúc" t-esc="fdate(item.ai_run_at, '%H:%M %d/%m')"/>
+                            <td data-label="Báo giá"><a t-att-href="'/zalo-de-xuat/' + str(item.id)" t-esc="item.quote_id.name"/></td>
+                            <td data-label="Phiếu hỏi giá" t-esc="item.inquiry_id.name"/>
+                            <td data-label="NCC" t-esc="item.partner_id.display_name"/>
+                            <td data-label="Sale" t-esc="item.sale_code or '—'"/>
+                            <td class="zp-said" data-label="AI tóm tắt" t-esc="item.summary or ''"/>
+                            <td data-label="Trạng thái">
+                                <span t-attf-class="vq-status #{'vq-status-waiting' if item.state == 'draft' else ('vq-status-delivered' if item.state == 'applied' else 'vq-status-closed')}"
+                                      t-esc="states[item.state]"/>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div t-else="" class="vq-alert">Chưa có đề xuất nào cho mã sale của tài khoản này.</div>
+        </t>
     </template>
 </odoo>

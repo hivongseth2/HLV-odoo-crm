@@ -57,6 +57,11 @@ class ZaloProposal(models.Model):
         self.ensure_one()
         return f"{self.get_base_url()}{REVIEW_ROUTE}/{self.id}"
 
+    def action_open_review_page(self):
+        """Form backend chỉ để xem — duyệt / ghi làm trên trang /zalo-de-xuat/<id> (trang đó tự kiểm quyền)."""
+        self.ensure_one()
+        return {"type": "ir.actions.act_url", "url": f"{REVIEW_ROUTE}/{self.id}", "target": "new"}
+
     @api.model
     def _upsert_from_ai(self, group, quote, rows, summary, messages, model):
         """Ghi kết quả AI cho một báo giá: cập nhật đề xuất đang chờ (thay toàn bộ dòng — AI đọc lại cả đoạn hội thoại
