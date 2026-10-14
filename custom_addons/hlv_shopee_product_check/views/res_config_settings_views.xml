@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Khối trong Cài đặt → Bán hàng. sale.res_config_settings_view_form và app name="sale_management"
+         đã đối chiếu source Odoo 18 (sale/wizard/res_config_settings_views.xml). -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.hlv.shopee.product.check</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='sale_management']" position="inside">
+                <block title="Kiểm map nhầm Shopee" name="hlv_shopee_product_check_settings">
+                    <setting id="hlv_shopee_check_auto"
+                             help="Claude so thành phần từng liên kết Sản phẩm Shopee với sản phẩm Odoo. Cặp không đổi so với lần trước dùng lại kết luận cũ, chỉ phần thay đổi tốn tiền AI. Có map nhầm thì báo người có quyền &quot;Sửa / xoá liên kết Shopee từ lần kiểm&quot;.">
+                        <field name="hlv_shopee_check_auto"/>
+                        <div class="content-group" invisible="not hlv_shopee_check_auto">
+                            <div class="row mt8">
+                                <label for="hlv_shopee_check_interval" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_shopee_check_interval"/>
+                            </div>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Danh mục riêng, không nhét vào base.module_category_sales_sales: danh mục đó là ô chọn cấp bậc
+         Bán hàng (Người dùng / Quản lý) — thêm nhóm lẻ vào là ô chọn vỡ thành các ô tick. -->
+    <record id="module_category_shopee_product_check" model="ir.module.category">
+        <field name="name">Kiểm map nhầm Shopee</field>
+        <field name="sequence">60</field>
+    </record>
+
+    <!-- Kiểm (đọc Shopee, AI so thành phần) ai có quyền Quản lý bán hàng cũng chạy được. Hai thao tác ghi
+         thật vào liên kết shopee.item — "Áp dụng" (đổi sản phẩm Odoo) và "Xoá liên kết cũ" — cần thêm nhóm
+         này: đổi liên kết là đổi hàng kho xuất cho đơn Shopee và tồn đẩy lên listing. Không ai có sẵn. -->
+    <record id="group_shopee_link_editor" model="res.groups">
+        <field name="name">Sửa / xoá liên kết Shopee từ lần kiểm</field>
+        <field name="category_id" ref="module_category_shopee_product_check"/>
+        <field name="comment">Được bấm "Áp dụng" (đổi sản phẩm Odoo của liên kết Sản phẩm Shopee) và "Xoá liên kết cũ" trong Kiểm map nhầm. Cần thêm quyền Quản lý bán hàng.</field>
+    </record>
+</odoo>

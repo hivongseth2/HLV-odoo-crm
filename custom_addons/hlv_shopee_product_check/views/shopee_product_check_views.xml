@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_shopee_product_check_form" model="ir.ui.view">
+        <field name="name">hlv.shopee.product.check.form</field>
+        <field name="model">hlv.shopee.product.check</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_start" type="object" string="Bắt đầu kiểm" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_start" type="object" string="Kiểm lại từ đầu"
+                            invisible="state not in ('done', 'failed')"
+                            confirm="Kiểm lại sẽ xoá các dòng của lần kiểm này và lấy lại dữ liệu Shopee. Tiếp tục?"/>
+                    <button name="action_run_ai" type="object" string="Chạy lại AI"
+                            invisible="state not in ('done', 'failed')"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_lines" type="object" class="oe_stat_button" icon="fa-times-circle"
+                                context="{'result_filter': 'mismatch'}" invisible="mismatch_count == 0">
+                            <field name="mismatch_count" widget="statinfo" string="Map nhầm"/>
+                        </button>
+                        <button name="action_open_lines" type="object" class="oe_stat_button" icon="fa-eye"
+                                context="{'result_filter': 'review'}" invisible="review_count == 0">
+                            <field name="review_count" widget="statinfo" string="Cần xem"/>
+                        </button>
+                        <button name="action_open_lines" type="object" class="oe_stat_button" icon="fa-check"
+                                context="{'result_filter': 'ok'}" invisible="ok_count == 0">
+                            <field name="ok_count" widget="statinfo" string="Đúng"/>
+                        </button>
+                        <button name="action_open_lines" type="object" class="oe_stat_button" icon="fa-unlink"
+                                context="{'result_filter': 'stale'}" invisible="stale_count == 0">
+                            <field name="stale_count" widget="statinfo" string="Liên kết cũ"/>
+                        </button>
+                        <button name="action_open_lines" type="object" class="oe_stat_button" icon="fa-list"
+                                invisible="line_count == 0">
+                            <field name="line_count" widget="statinfo" string="Tất cả"/>
+                        </button>
+                    </div>
+                    <div class="alert alert-danger" role="alert" invisible="not error">
+                        <field name="error"/>
+                    </div>
+                    <div class="alert alert-info" role="status" invisible="state != 'running'">
+                        <field name="progress"/> — tải lại trang để xem tiến độ mới.
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="shop_ids" widget="many2many_tags" readonly="state != 'draft'"
+                                   invisible="link_ids" options="{'no_create': True}"/>
+                            <field name="link_ids" widget="many2many_tags" readonly="1" invisible="not link_ids"/>
+                            <field name="ai_model" readonly="state == 'running'"/>
+                        </group>
+                        <group>
+                            <field name="started_at"/>
+                            <field name="finished_at"/>
+                            <field name="pending_count" invisible="pending_count == 0"/>
+                        </group>
+                    </group>
+                    <p class="text-muted">
+                        Tìm liên kết "Sản phẩm Shopee" map nhầm: phân loại Shopee và sản phẩm Odoo không cùng một hàng
+                        thật (vd Shopee bán 1 pin + 1 sạc nhưng Odoo gắn combo 1 máy + 1 pin + 1 sạc). Claude dựng
+                        thành phần từng bên từ tên, phân loại, mô tả Shopee và thành phần combo Odoo rồi so từng món —
+                        không so chữ. Sửa ở cột "Sửa thành" rồi bấm Áp dụng, sau đó Chạy lại AI để kiểm cặp mới.
+                    </p>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_shopee_product_check_list" model="ir.ui.view">
+        <field name="name">hlv.shopee.product.check.list</field>
+        <field name="model">hlv.shopee.product.check</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="is_auto" optional="show"/>
+                <field name="shop_ids" widget="many2many_tags"/>
+                <field name="started_at"/>
+                <field name="mismatch_count" string="Map nhầm"/>
+                <field name="review_count" string="Cần xem"/>
+                <field name="ok_count" string="Đúng"/>
+                <field name="state" widget="badge" decoration-info="state == 'running'"
+                       decoration-success="state == 'done'" decoration-danger="state == 'failed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_shopee_product_check" model="ir.actions.act_window">
+        <field name="name">Kiểm map nhầm Shopee</field>
+        <field name="res_model">hlv.shopee.product.check</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Tìm sản phẩm Shopee map nhầm sang sản phẩm Odoo khác hàng</p>
+            <p>Tạo lần kiểm, chọn shop rồi bấm Bắt đầu kiểm. Hoặc từ danh sách Sản phẩm Shopee: chọn dòng →
+                Hành động → Kiểm map nhầm với AI.</p>
+        </field>
+    </record>
+
+    <!-- Từ danh sách Sản phẩm Shopee (shopee.item của sale_shopee): kiểm ngay các liên kết đang chọn. -->
+    <record id="action_shopee_item_check" model="ir.actions.server">
+        <field name="name">Kiểm map nhầm với AI</field>
+        <field name="model_id" ref="sale_shopee.model_shopee_item"/>
+        <field name="binding_model_id" ref="sale_shopee.model_shopee_item"/>
+        <field name="binding_view_types">list</field>
+        <field name="groups_id" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        <field name="state">code</field>
+        <field name="code">action = env['hlv.shopee.product.check'].action_check_links(records)</field>
+    </record>
+
+    <!-- sale_shopee.root_menu: menu Bán hàng → Cấu hình → Shopee của chính connector (đã đối chiếu source Odoo 18). -->
+    <menuitem id="menu_shopee_product_check" name="Kiểm map nhầm" parent="sale_shopee.root_menu"
+              action="action_shopee_product_check" sequence="30"/>
+</odoo>
