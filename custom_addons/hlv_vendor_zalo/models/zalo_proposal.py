@@ -23,6 +23,7 @@ LINE_STATUSES = [
 ]
 PRICE_SOURCES = [
     ("zalo", "NCC báo trên Zalo"),
+    ("pricelist", "Bảng giá NCC"),
     ("reused", "Giá cũ còn hiệu lực"),
     ("none", "Chưa có giá"),
 ]
@@ -137,8 +138,8 @@ class ZaloProposalLine(models.Model):
 
     @api.model
     def _vals_from_ai(self, row, messages):
-        """Một dòng AI trả (proposal_prompt.clean_line) → giá trị lưu. NCC chỉ báo tồn kho: lấy giá chính NCC này báo
-        gần nhất còn hiệu lực (price_reuse — như chip "giá cũ" trên trang NCC); không có thì để trống cho sale nhập.
+        """Một dòng AI trả (proposal_prompt.clean_line) → giá trị lưu. NCC chỉ báo tồn kho: lấy giá Bảng giá NCC đang
+        hiệu lực, không có thì giá NCC này báo gần nhất còn hiệu lực; không có nữa thì để trống cho sale nhập.
         Tin căn cứ chỉ nhận số # nằm trong đoạn hội thoại đã đưa AI (messages) — AI bịa số thì bỏ."""
         line = self.env["hlv.vendor.quote.line"].browse(row["line_id"])
         vat = row["vat"] or line.vat or DEFAULT_VENDOR_VAT
@@ -153,10 +154,29 @@ class ZaloProposalLine(models.Model):
             vals.update(price_incl=price_incl(row["price"], row["price_basis"], vat_rate(vat)), price_source="zalo",
                         basis_unknown=row["price_basis"] == "unknown")
         elif row["status"] == STATUS_STOCK_ONLY:
-            reference = recent_vendor_price(line)
-            if reference:
-                vals.update(price_incl=round(price_incl_vat(reference.list_price or reference.price_unit,
-                                                            reference.tax_rate)),
-                            discount=reference.discount if reference.list_price else 0.0,
-                            vat=reference.vat or vat, vat_assumed=False, price_source="reused")
+            vals.update(self._listed_price(line, vat) or self._reused_price(line, vat))
         return vals
+
+    def _listed_price(self, line, vat):
+        """Giá Bảng giá NCC đang hiệu lực (file giá NCC gửi, nhập ở hlv_vendor_import) — {} nếu không có. Chiết khấu
+        giữ đúng điều NCC nói trên Zalo (bảng giá là giá niêm yết; CK mỗi lần một khác)."""
+        # hlv_vendor_import không bắt buộc cài: chưa có module đó thì bỏ qua bảng giá.
+        if "hlv.vendor.price" not in self.env:
+            return {}
+        listed = self.env["hlv.vendor.price"].sudo().current_price(
+            line.quote_id.partner_id, line.product_id, line.quote_id._vendor_today())
+        if not listed:
+            return {}
+        listed_vat = listed.vat or vat
+        gross = listed.price_incl if listed.vat or not listed.price else price_incl_vat(listed.price, vat_rate(listed_vat))
+        return {"price_incl": round(gross), "vat": listed_vat, "vat_assumed": not listed.vat, "price_source": "pricelist"}
+
+    @staticmethod
+    def _reused_price(line, vat):
+        """Giá chính NCC này báo gần nhất còn hiệu lực (price_reuse — như chip "giá cũ" trên trang NCC) — {} nếu không."""
+        reference = recent_vendor_price(line)
+        if not reference:
+            return {}
+        return {"price_incl": round(price_incl_vat(reference.list_price or reference.price_unit, reference.tax_rate)),
+                "discount": reference.discount if reference.list_price else 0.0,
+                "vat": reference.vat or vat, "vat_assumed": False, "price_source": "reused"}

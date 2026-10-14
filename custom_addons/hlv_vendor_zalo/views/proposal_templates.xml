@@ -116,6 +116,7 @@
                             <td class="zp-said" data-label="NCC nói">
                                 <t t-if="ai">
                                     <span t-attf-class="zp-tag zp-#{ai.status}" t-esc="dict(ai._fields['status'].selection)[ai.status]"/>
+                                    <span t-if="ai.price_source == 'pricelist'" class="zp-tag zp-stock_only">giá bảng giá NCC</span>
                                     <span t-if="ai.price_source == 'reused'" class="zp-tag zp-warn">giá cũ ≤ 7 ngày</span>
                                     <span t-if="ai.status != 'unavailable' and ai.price_source == 'none'" class="zp-tag zp-warn">chưa có giá</span>
                                     <span t-if="ai.basis_unknown" class="zp-tag zp-warn">không rõ trước / sau VAT</span>
