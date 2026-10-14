@@ -14,6 +14,9 @@ ROLE_NAME = "name"
 ROLE_NAME_ALT = "name_alt"
 ROLE_UOM = "uom"
 ROLE_STOCK = "stock"
+ROLE_PRICE = "price"
+ROLE_PRICE_INCL = "price_incl"
+ROLE_VAT = "vat"
 ROLE_IGNORE = "ignore"
 ROLES = [
     (ROLE_CODE, "Mã hàng NCC"),
@@ -21,15 +24,27 @@ ROLES = [
     (ROLE_NAME_ALT, "Tên phụ / tên gốc"),
     (ROLE_UOM, "Đơn vị tính"),
     (ROLE_STOCK, "Số tồn (một kho)"),
+    (ROLE_PRICE, "Đơn giá chưa VAT"),
+    (ROLE_PRICE_INCL, "Đơn giá sau VAT"),
+    (ROLE_VAT, "% VAT"),
     (ROLE_IGNORE, "Bỏ qua"),
 ]
+PRICE_ROLES = (ROLE_PRICE, ROLE_PRICE_INCL)
 
-# Thứ tự dò quan trọng: "主计量编码" (mã đơn vị tính) chứa cả "编码" (mã) — phải nhận ĐVT trước.
+# Thứ tự dò quan trọng: "主计量编码" (mã đơn vị tính) chứa cả "编码" (mã) — phải nhận ĐVT trước. Cột tồn xét
+# trước cột giá (file tồn cũ có "giá trị tồn" vẫn đọc như trước). Cột giá ghi "chưa VAT" / "sau VAT" — xét giá sau
+# VAT, rồi giá, rồi mới tới cột % VAT. Không ghi gì về VAT thì coi
+# là giá chưa VAT (bảng giá NCC bán buôn hầu hết chưa VAT) — người dùng sửa ở bước xem lại cột nếu khác.
 # Từ tiếng Việt / Anh so theo từ (đã bỏ dấu), từ tiếng Trung so theo chuỗi con.
 _KEYWORDS = [
     (ROLE_UOM, ("dvt", "don vi", "don vi tinh", "unit", "uom"), ("计量", "单位")),
     (ROLE_STOCK, ("ton", "ton kho", "so luong", "sl", "qty", "quantity", "stock", "on hand", "kho"),
      ("结存", "库存", "数量", "仓")),
+    (ROLE_PRICE_INCL, ("sau vat", "gom vat", "co vat", "da vat", "bao gom vat", "incl vat", "including vat"),
+     ("含税",)),
+    (ROLE_PRICE, ("gia", "don gia", "gia ban", "gny", "chua vat", "truoc vat", "price", "unit price", "excl vat"),
+     ("未税", "价")),
+    (ROLE_VAT, ("vat", "thue", "thue suat", "tax"), ("税率", "税")),
     (ROLE_CODE, ("ma", "ma hang", "ma sp", "code", "sku", "part no", "item no", "model"), ("编码", "编号", "型号")),
     (ROLE_NAME, ("ten", "ten hang", "name", "description", "dien giai", "mo ta"), ("名称", "品名", "规格")),
 ]
@@ -39,6 +54,7 @@ _TOTAL_CJK = ("合计", "总计")
 _CJK = re.compile(r"[　-鿿＀-￯]")
 _NOT_CJK_RUN = re.compile(r"[^　-鿿＀-￯]+")
 CANDIDATE_LIMIT = 8
+HEADER_MAX_LENGTH = 80
 MIN_TERM_LENGTH = 4
 
 
@@ -135,12 +151,14 @@ def detect_header(grid, scan=15):
 
     Nhận: lưới (list dòng) đã điền ô gộp. Trả: ``(chỉ số dòng tiêu đề tính từ 0, số tầng 1|2)``.
     Dòng tiêu đề = dòng trong ``scan`` dòng đầu có nhiều tiêu đề khớp từ khoá nhất (hoà thì nhiều ô
-    chữ hơn). Tầng hai khi dòng ngay dưới toàn chữ, không có số, và có ô trùng ô phía trên (gộp dọc)
+    chữ hơn); ô gộp tính một lần, ô dài quá HEADER_MAX_LENGTH ký tự không tính. Tầng hai khi dòng ngay dưới toàn chữ, không có số, và có ô trùng ô phía trên (gộp dọc)
     hoặc phần lớn ô khớp từ khoá. Lưới rỗng → (0, 1).
     """
     best, best_score = 0, (-1, -1)
     for index, row in enumerate(grid[:scan]):
-        texts = [cell for cell in row if isinstance(cell, str)]
+        # Ô gộp (đã điền vào mọi cột) đếm một lần; đoạn chữ dài là tiêu đề thư / ghi chú đầu file, không phải tên cột
+        # — thông báo giá có cả đoạn "... điều chỉnh GIÁ ... mã số thuế" trải hết các cột.
+        texts = {cell for cell in row if isinstance(cell, str) and len(cell) <= HEADER_MAX_LENGTH}
         score = (sum(1 for cell in texts if _keyword_role(cell)), len(texts))
         if score > best_score:
             best, best_score = index, score
@@ -193,7 +211,7 @@ def propose_roles(headers):
     """Đề xuất vai trò cho từng cột.
 
     Nhận: list tiêu đề. Trả: list ``(vai trò, tên kho)`` cùng độ dài — tên kho chỉ có ở cột tồn, còn lại "".
-    Cột tên thứ hai thành "tên phụ"; cột mã / ĐVT thứ hai bị bỏ qua. Không có cột tồn nào khớp từ khoá
+    Cột tên thứ hai thành "tên phụ"; cột mã / ĐVT / giá / VAT thứ hai bị bỏ qua. Không có cột tồn nào khớp từ khoá
     thì giữ nguyên — người dùng chọn tay.
     """
     seen = set()
@@ -202,12 +220,60 @@ def propose_roles(headers):
         role = _keyword_role(header) if header else None
         if role == ROLE_NAME and ROLE_NAME in seen:
             role = ROLE_NAME_ALT if ROLE_NAME_ALT not in seen else ROLE_IGNORE
-        elif role in (ROLE_CODE, ROLE_UOM) and role in seen:
+        elif role in (ROLE_CODE, ROLE_UOM, ROLE_PRICE, ROLE_PRICE_INCL, ROLE_VAT) and role in seen:
             role = ROLE_IGNORE
         role = role or ROLE_IGNORE
         seen.add(role)
         roles.append((role, warehouse_label(header) if role == ROLE_STOCK else ""))
     return roles
+
+
+def file_kinds(roles):
+    """Loại dữ liệu một mẫu file mang: tập con của {"stock", "price"} — theo vai trò các cột.
+
+    Nhận: các vai trò (chuỗi). Trả: frozenset; không có cột tồn lẫn cột giá → rỗng.
+    """
+    roles = set(roles)
+    kinds = set()
+    if ROLE_STOCK in roles:
+        kinds.add("stock")
+    if roles & set(PRICE_ROLES):
+        kinds.add("price")
+    return frozenset(kinds)
+
+
+def read_vat(value, codes):
+    """% VAT từ một ô Excel: 0.08 / 8 / "8%" → ("8", 8.0); "KCT" / "không chịu thuế" → ("kct", 0.0).
+
+    Nhận: giá trị ô; ``codes`` — các mã VAT hợp lệ (vd ("0", "5", "8", "10", "kct")). Trả ``(mã, %)``; ô trống
+    hay ra % không có trong ``codes`` (VAT lạ) → ("", None) — để chỗ dùng tự quyết.
+    """
+    folded = fold(cell_text(value))
+    if folded in ("kct", "khong chiu thue", "khong chiu thue gtgt") and "kct" in codes:
+        return "kct", 0.0
+    number = parse_number(value)
+    if number is None:
+        return "", None
+    if 0 < number < 1:
+        number *= 100
+    code = cell_text(round(number, 2))
+    return (code, round(number, 2)) if code in codes else ("", None)
+
+
+def price_pair(price, price_incl, rate):
+    """Điền đơn giá còn thiếu từ đơn giá kia và % VAT.
+
+    Nhận: đơn giá chưa VAT, đơn giá sau VAT (None / 0 = không có), % VAT (None = không biết).
+    Trả: ``(chưa VAT, sau VAT)`` làm tròn 2 chữ số lẻ — giá không suy ra được (thiếu VAT) trả 0.0; cả hai
+    cùng có thì giữ nguyên như file (NCC đã tính, không tính lại).
+    """
+    price, price_incl = price or 0.0, price_incl or 0.0
+    if rate is not None:
+        if price and not price_incl:
+            price_incl = price * (1 + rate / 100.0)
+        elif price_incl and not price:
+            price = price_incl / (1 + rate / 100.0)
+    return round(price, 2), round(price_incl, 2)
 
 
 def header_signature(headers):
@@ -225,19 +291,24 @@ def extract_rows(grid, first_row, columns):
 
     Nhận: lưới; ``first_row`` — chỉ số dòng dữ liệu đầu tiên (từ 0); ``columns`` — list dict
     ``{"index", "role", "warehouse"}`` (index từ 0).
-    Trả: list dict ``{"row" (số dòng Excel, từ 1), "code", "name", "name_alt", "uom", "stock": {kho: số}}``.
-    Ô tồn trống tính 0 (file NCC để trống nghĩa là hết). Bỏ dòng không có cả mã lẫn tên, và dòng cộng tổng.
+    Trả: list dict ``{"row" (số dòng Excel, từ 1), "code", "name", "name_alt", "uom", "stock": {kho: số},
+    "price", "price_incl" (số hoặc None), "vat" (ô % VAT nguyên văn, None nếu không có)}``.
+    Ô tồn trống tính 0 (file NCC để trống nghĩa là hết); ô giá trống là không có giá (None), không phải giá 0.
+    Bỏ dòng không có cả mã lẫn tên, và dòng cộng tổng.
     """
     rows = []
     for index in range(first_row, len(grid)):
         cells = grid[index]
         values = {ROLE_CODE: "", ROLE_NAME: "", ROLE_NAME_ALT: "", ROLE_UOM: ""}
         stock = {}
+        prices = {ROLE_PRICE: None, ROLE_PRICE_INCL: None, ROLE_VAT: None}
         for column in columns:
             value = cells[column["index"]] if column["index"] < len(cells) else None
             if column["role"] == ROLE_STOCK:
                 label = column["warehouse"] or "Tồn"
                 stock[label] = stock.get(label, 0.0) + (parse_number(value) or 0.0)
+            elif column["role"] in prices and prices[column["role"]] is None:
+                prices[column["role"]] = value if column["role"] == ROLE_VAT else parse_number(value)
             elif column["role"] in values and not values[column["role"]]:
                 values[column["role"]] = cell_text(value)
         if not values[ROLE_CODE] and not values[ROLE_NAME]:
@@ -245,7 +316,8 @@ def extract_rows(grid, first_row, columns):
         if _is_total(values[ROLE_CODE] or values[ROLE_NAME]):
             continue
         rows.append({"row": index + 1, "code": values[ROLE_CODE], "name": values[ROLE_NAME],
-                     "name_alt": values[ROLE_NAME_ALT], "uom": values[ROLE_UOM], "stock": stock})
+                     "name_alt": values[ROLE_NAME_ALT], "uom": values[ROLE_UOM], "stock": stock,
+                     "price": prices[ROLE_PRICE], "price_incl": prices[ROLE_PRICE_INCL], "vat": prices[ROLE_VAT]})
     return rows
 
 

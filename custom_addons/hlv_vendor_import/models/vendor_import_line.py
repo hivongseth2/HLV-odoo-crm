@@ -2,6 +2,7 @@
 """Một dòng hàng trong file NCC: ứng viên dò được, kết luận của AI, và quyết định của người bên mình."""
 
 from odoo import api, fields, models
+from odoo.addons.hlv_vendor_quotation.models.vendor_quote_line import VAT_SELECTION
 from odoo.exceptions import UserError
 from odoo.osv import expression
 
@@ -27,6 +28,9 @@ class HlvVendorImportLine(models.Model):
     stock = fields.Json("Tồn theo kho")
     stock_display = fields.Char("Tồn")
     stock_total = fields.Float("Tổng tồn", digits="Product Unit of Measure")
+    price = fields.Float("Giá chưa VAT", digits=(16, 2))
+    price_incl = fields.Float("Giá sau VAT", digits=(16, 2))
+    vat = fields.Selection(VAT_SELECTION, "VAT")
 
     candidate_ids = fields.Many2many("product.product", "hlv_vendor_import_line_candidate_rel", "line_id",
                                      "product_id", "Ứng viên")

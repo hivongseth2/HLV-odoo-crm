@@ -13,7 +13,10 @@
                 <field name="vendor_name" readonly="1"/>
                 <field name="name_alt" readonly="1" optional="hide"/>
                 <field name="uom_name" readonly="1" optional="show"/>
-                <field name="stock_display" readonly="1"/>
+                <field name="stock_display" readonly="1" optional="show"/>
+                <field name="price" readonly="1" optional="show"/>
+                <field name="price_incl" readonly="1" optional="show"/>
+                <field name="vat" readonly="1" optional="show"/>
                 <field name="ai_verdict" readonly="1" widget="badge"
                        decoration-success="ai_verdict == 'match'"
                        decoration-warning="ai_verdict == 'probable'"

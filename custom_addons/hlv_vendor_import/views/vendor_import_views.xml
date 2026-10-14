@@ -22,8 +22,11 @@
                             invisible="state != 'review' or ai_state in ('queued', 'running')"
                             confirm="Đọc lại file sẽ xoá các dòng và xác nhận hiện có của lần nhập này. Tiếp tục?"/>
                     <button name="action_apply" type="object" string="Áp dụng tồn kho" class="btn-success"
-                            invisible="state != 'review' or ai_state in ('queued', 'running')"
+                            invisible="state != 'review' or ai_state in ('queued', 'running') or not has_stock or has_price"
                             confirm="Thay toàn bộ tồn kho của NCC này bằng file này? Dòng chưa xác nhận vẫn vào bảng tồn theo mã NCC (chưa gắn sản phẩm)."/>
+                    <button name="action_apply" type="object" string="Áp dụng bảng giá" class="btn-success"
+                            invisible="state != 'review' or ai_state in ('queued', 'running') or not has_price"
+                            confirm="Ghi giá các mã trong file từ ngày &quot;Giá áp dụng từ&quot;? Giá cũ của các mã đó dừng ở ngày này (vẫn giữ để tra); mã không có trong file giữ nguyên giá. File có cả cột tồn thì tồn kho NCC cũng được thay bằng file này."/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
@@ -43,6 +46,10 @@
                             <field name="file_name" invisible="1"/>
                             <field name="profile_id" readonly="state != 'draft'" options="{'no_create': True}"
                                    placeholder="Lần đầu của NCC: để trống, Odoo đề xuất"/>
+                            <field name="price_date" invisible="not has_price" readonly="state == 'done'"
+                                   required="has_price and state == 'review'"/>
+                            <field name="has_stock" invisible="1"/>
+                            <field name="has_price" invisible="1"/>
                         </group>
                         <group>
                             <field name="user_id"/>
@@ -76,7 +83,7 @@
 
                     <div invisible="state != 'mapping'">
                         <div class="alert alert-warning" role="alert">
-                            Xem lại mẫu file của NCC này: cột nào là mã / tên / đơn vị tính / tồn từng kho. Sai dòng
+                            Xem lại mẫu file của NCC này: cột nào là mã / tên / đơn vị tính / tồn từng kho / giá. Sai dòng
                             tiêu đề thì sửa rồi bấm "Đề xuất lại cột". Chỉ làm một lần — các file sau của NCC đọc theo mẫu này.
                         </div>
                         <group>
@@ -149,7 +156,7 @@
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_vendor_import_search"/>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">Tải file Excel tồn kho của NCC lên</p>
+            <p class="o_view_nocontent_smiling_face">Tải file Excel tồn kho hoặc bảng giá của NCC lên</p>
             <p>Odoo đọc theo mẫu của từng NCC, Claude ghép mã NCC với sản phẩm bên mình, bạn xác nhận rồi áp dụng.</p>
         </field>
     </record>

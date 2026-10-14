@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_price_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.price.list</field>
+        <field name="model">hlv.vendor.price</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" decoration-muted="date_to and date_to &lt;= current_date"
+                  decoration-info="date_from &gt; current_date">
+                <field name="partner_id"/>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="product_id"/>
+                <field name="uom_name" optional="show"/>
+                <field name="price"/>
+                <field name="price_incl"/>
+                <field name="vat"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="import_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_price_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.price.search</field>
+        <field name="model">hlv.vendor.price</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id"/>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="partner_id"/>
+                <filter name="current" string="Đang hiệu lực"
+                        domain="[('date_from', '&lt;=', context_today().strftime('%Y-%m-%d')), '|', ('date_to', '=', False), ('date_to', '&gt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="upcoming" string="Sắp áp dụng" domain="[('date_from', '&gt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="unmatched" string="Chưa khớp sản phẩm" domain="[('product_id', '=', False)]"/>
+                <group>
+                    <filter name="group_partner" string="Nhà cung cấp" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_date" string="Áp dụng từ" context="{'group_by': 'date_from:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_price" model="ir.actions.act_window">
+        <field name="name">Bảng giá NCC</field>
+        <field name="res_model">hlv.vendor.price</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_vendor_price_search"/>
+        <field name="context">{'search_default_current': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có bảng giá NCC</p>
+            <p>Bảng giá lấy từ file giá NCC gửi, sau khi áp dụng ở "Nhập file NCC". Mỗi mã giữ cả giá cũ (đã hết hiệu
+                lực) và giá sắp áp dụng — lọc "Đang hiệu lực" là giá dùng hôm nay.</p>
+        </field>
+    </record>
+</odoo>

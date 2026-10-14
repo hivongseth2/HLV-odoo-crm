@@ -5,3 +5,4 @@ access_vendor_import_profile_purchase_user,hlv.vendor.import.profile purchase us
 access_vendor_import_column_purchase_user,hlv.vendor.import.column purchase user,model_hlv_vendor_import_column,purchase.group_purchase_user,1,1,1,1
 access_vendor_product_alias_purchase_user,hlv.vendor.product.alias purchase user,model_hlv_vendor_product_alias,purchase.group_purchase_user,1,1,1,1
 access_vendor_stock_purchase_user,hlv.vendor.stock purchase user,model_hlv_vendor_stock,purchase.group_purchase_user,1,1,1,1
+access_vendor_price_purchase_user,hlv.vendor.price purchase user,model_hlv_vendor_price,purchase.group_purchase_user,1,1,1,1

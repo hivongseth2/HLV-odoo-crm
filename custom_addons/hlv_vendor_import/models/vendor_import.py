@@ -3,17 +3,21 @@
 
 Luồng: tải file → đọc theo mẫu của NCC (lần đầu: đề xuất mẫu, người dùng xem lại cột) → mỗi dòng: mã NCC
 đã nhớ thì khớp luôn, chưa nhớ thì dò ứng viên rộng → Claude duyệt ứng viên (chạy nền) → người dùng xác
-nhận → áp dụng: nhớ mã đã xác nhận, thay bảng tồn kho NCC.
+nhận → áp dụng: nhớ mã đã xác nhận; file có cột tồn thì thay bảng tồn kho NCC, có cột giá thì cập nhật bảng giá
+NCC (từng mã, từ ngày áp dụng).
 """
 
 import base64
 
 from odoo import api, fields, models
+from odoo.addons.hlv_vendor_quotation.models.vendor_quote_line import VAT_SELECTION
 from odoo.exceptions import UserError
 
 from ..services.review_payload import VERDICT_MATCH, VERDICT_NONE, VERDICT_PROBABLE
 from ..services.xlsx_grid import GridError, read_grid
-from .import_utils import code_key, extract_rows, split_prefixes, stock_text
+from .import_utils import code_key, extract_rows, fold, price_pair, read_vat, split_prefixes, stock_text
+
+VAT_CODES = tuple(code for code, _label in VAT_SELECTION)
 
 STATES = [
     ("draft", "Mới"),
@@ -53,6 +57,10 @@ class HlvVendorImport(models.Model):
     applied_at = fields.Datetime("Áp dụng lúc", readonly=True, copy=False)
     applied_by = fields.Many2one("res.users", "Người áp dụng", readonly=True, copy=False)
     line_ids = fields.One2many("hlv.vendor.import.line", "import_id", "Dòng", copy=False)
+    # File giá NCC hay ghi "áp dụng từ ngày …" (có khi ở tương lai) — trước ngày đó vẫn dùng giá cũ.
+    price_date = fields.Date("Giá áp dụng từ", default=fields.Date.context_today, copy=False)
+    has_stock = fields.Boolean("File có tồn", compute="_compute_kinds")
+    has_price = fields.Boolean("File có giá", compute="_compute_kinds")
 
     # Sửa mẫu ngay trên lần nhập (bước "Xem lại cột"), khỏi mở mẫu riêng.
     profile_header_row = fields.Integer(related="profile_id.header_row", readonly=False)
@@ -84,6 +92,13 @@ class HlvVendorImport(models.Model):
             record.todo_count = len(lines.filtered(lambda line: line.decision == "pending"))
             record.confirmed_count = len(lines.filtered(lambda line: line.decision == "confirmed"))
 
+    @api.depends("profile_id.column_ids.role")
+    def _compute_kinds(self):
+        for record in self:
+            kinds = record.profile_id.kinds() if record.profile_id else frozenset()
+            record.has_stock = "stock" in kinds
+            record.has_price = "price" in kinds
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -114,10 +129,19 @@ class HlvVendorImport(models.Model):
         if self.state == "done":
             raise UserError("Lần nhập này đã áp dụng. Tạo lần nhập mới cho file mới.")
         grid = self._grid()
+        Profile = self.env["hlv.vendor.import.profile"]
+        if not (self.profile_id and self.profile_id.matches(grid)):
+            matching = Profile.search([("partner_id", "=", self.partner_id.id)]).filtered(lambda p: p.matches(grid))
+            if matching:
+                self.profile_id = matching[0]
+        if self.profile_id and not self.profile_id.matches(grid) \
+                and Profile.proposed_kinds(grid) - self.profile_id.kinds():
+            # File khác loại với mẫu đang chọn (vd mẫu tồn kho, file bảng giá): làm mẫu mới, không đè mẫu cũ.
+            self.profile_id = False
         if not self.profile_id:
-            self.profile_id = self.env["hlv.vendor.import.profile"].propose(self.partner_id, grid)
+            self.profile_id = Profile.propose(self.partner_id, grid)
             self.state = "mapping"
-            self.message_post(body="Lần đầu nhận file của NCC này: đã đề xuất mẫu file, xem lại các cột "
+            self.message_post(body="Chưa có mẫu cho loại file này của NCC: đã đề xuất mẫu file, xem lại các cột "
                                    "rồi bấm \"Đọc theo mẫu này\".")
             return True
         if not self.profile_id.matches(grid):
@@ -164,10 +188,18 @@ class HlvVendorImport(models.Model):
             "stock": row["stock"],
             "stock_display": stock_text(row["stock"]),
             "stock_total": sum(row["stock"].values()),
+            **self._price_values(row),
         } for row in rows])
         self.write({"state": "review", "ai_state": "none", "ai_error": False})
         self._match(lines, prefixes)
         return True
+
+    @staticmethod
+    def _price_values(row):
+        """Giá một dòng file: VAT đọc được thì điền giá còn thiếu (chỉ có giá chưa VAT → tính giá sau VAT)."""
+        vat, rate = read_vat(row["vat"], VAT_CODES)
+        price, price_incl = price_pair(row["price"], row["price_incl"], rate)
+        return {"price": price, "price_incl": price_incl, "vat": vat or False}
 
     def _match(self, lines, prefixes):
         """Mã đã nhớ → khớp luôn; còn lại dò ứng viên; không ứng viên nào → "không có", khỏi hỏi AI."""
@@ -216,15 +248,47 @@ class HlvVendorImport(models.Model):
         return action
 
     def action_apply(self):
-        """Nhớ mã đã xác nhận, thay tồn kho NCC bằng file này. Dòng chưa xác nhận vẫn vào bảng tồn, theo mã NCC."""
+        """Nhớ mã đã xác nhận; file có cột tồn thì thay tồn kho NCC, có cột giá thì cập nhật bảng giá NCC. Dòng chưa
+        xác nhận vẫn vào bảng tồn / bảng giá, theo mã NCC (khớp sản phẩm ở lần nhập sau thì tự gắn)."""
         self.ensure_one()
         if self.state != "review":
             raise UserError("Chỉ áp dụng được lần nhập đang xác nhận.")
         if self.ai_state in ("queued", "running"):
             raise UserError("AI đang duyệt, đợi xong rồi áp dụng.")
+        if self.has_price and not self.price_date:
+            raise UserError("Điền \"Giá áp dụng từ\" (ngày NCC ghi trên thông báo giá).")
         confirmed = self.line_ids.filtered(lambda line: line.decision == "confirmed" and line.product_id)
         self.env["hlv.vendor.product.alias"].remember(self.partner_id, confirmed.filtered("code_key"))
         now = fields.Datetime.now()
+        done = []
+        if self.has_stock:
+            self._apply_stock(confirmed, now)
+            done.append("tồn kho")
+        if self.has_price:
+            priced = self._apply_prices(confirmed)
+            done.append("%s giá từ %s" % (priced, self.price_date.strftime("%d/%m/%Y")))
+        self.write({"state": "done", "applied_at": now, "applied_by": self.env.user.id})
+        self.message_post(body="Đã áp dụng (%s): %s dòng, %s dòng khớp sản phẩm, %s dòng chưa khớp." % (
+            ", ".join(done), len(self.line_ids), len(confirmed), len(self.line_ids) - len(confirmed)))
+        return True
+
+    def _apply_prices(self, confirmed):
+        """Dòng có giá → bảng giá NCC từ ngày price_date. Dòng không có giá (ô trống) bỏ qua. Trả số dòng giá đã ghi."""
+        lines = self.line_ids.filtered(lambda line: line.price or line.price_incl)
+        self.env["hlv.vendor.price"].apply_for(self.partner_id, [{
+            "match_key": line.code_key or fold(line.vendor_name),
+            "product_id": line.product_id.id if line in confirmed else False,
+            "vendor_code": line.vendor_code,
+            "vendor_name": line.vendor_name,
+            "uom_name": line.uom_name,
+            "price": line.price,
+            "price_incl": line.price_incl,
+            "vat": line.vat,
+            "import_id": self.id,
+        } for line in lines if line.code_key or line.vendor_name], self.price_date)
+        return len(lines)
+
+    def _apply_stock(self, confirmed, now):
         self.env["hlv.vendor.stock"].replace_for(self.partner_id, [{
             "product_id": line.product_id.id if line in confirmed else False,
             "vendor_code": line.vendor_code,
@@ -235,7 +299,3 @@ class HlvVendorImport(models.Model):
             "import_id": self.id,
             "date": now,
         } for line in self.line_ids for warehouse, qty in (line.stock or {}).items()])
-        self.write({"state": "done", "applied_at": now, "applied_by": self.env.user.id})
-        self.message_post(body="Đã áp dụng: %s dòng tồn, %s dòng khớp sản phẩm, %s dòng chưa khớp." % (
-            len(self.line_ids), len(confirmed), len(self.line_ids) - len(confirmed)))
-        return True

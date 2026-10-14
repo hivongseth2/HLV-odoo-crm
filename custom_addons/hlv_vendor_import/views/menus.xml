@@ -13,6 +13,12 @@
               action="action_vendor_stock"
               sequence="55"
               groups="purchase.group_purchase_user"/>
+    <menuitem id="menu_vendor_price"
+              name="Bảng giá NCC"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              action="action_vendor_price"
+              sequence="57"
+              groups="purchase.group_purchase_user"/>
     <menuitem id="menu_vendor_import_profile"
               name="Mẫu file NCC"
               parent="hlv_vendor_quotation.menu_vendor_quote_root"

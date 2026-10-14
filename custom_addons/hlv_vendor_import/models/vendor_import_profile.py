@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Mẫu file của một NCC: sheet nào, tiêu đề ở dòng mấy, cột nào là mã / tên / ĐVT / tồn từng kho.
+"""Mẫu file của một NCC: sheet nào, tiêu đề ở dòng mấy, cột nào là mã / tên / ĐVT / tồn từng kho / giá.
 
 Lần đầu nhận file của NCC, mẫu được ĐỀ XUẤT từ chữ trên dòng tiêu đề (import_utils); người bên mình sửa
-lại một lần, các file sau đọc theo đúng mẫu đó. NCC đổi cột (vân tay tiêu đề khác) thì đề xuất lại.
+lại một lần, các file sau đọc theo đúng mẫu đó. NCC đổi cột (vân tay tiêu đề khác) thì đề xuất lại. Một NCC có
+thể có vài mẫu (file tồn và file bảng giá khác khung) — đọc file chọn mẫu khớp tiêu đề.
 """
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 from .import_utils import (
-    ROLE_CODE, ROLE_NAME, ROLE_STOCK, ROLES, cell_text, column_headers, column_letter, detect_header,
+    ROLE_CODE, ROLE_NAME, ROLES, cell_text, column_headers, column_letter, detect_header, file_kinds,
     header_signature, propose_roles,
 )
+
+KIND_NAMES = {"stock": "tồn kho", "price": "bảng giá"}
 
 SAMPLE_ROWS = 3
 
@@ -40,8 +43,10 @@ class HlvVendorImportProfile(models.Model):
     def propose(self, partner, grid, sheet_name=False):
         """Tạo mẫu mới cho NCC partner từ lưới đã đọc (dò dòng tiêu đề + đề xuất vai trò cột)."""
         header_index, header_rows = detect_header(grid)
+        kinds = self.proposed_kinds(grid)
         profile = self.create({
-            "name": partner.display_name,
+            "name": "%s (%s)" % (partner.display_name, ", ".join(KIND_NAMES[k] for k in sorted(kinds)))
+                    if kinds else partner.display_name,
             "partner_id": partner.id,
             "sheet_name": sheet_name or False,
             "header_row": header_index + 1,
@@ -49,6 +54,17 @@ class HlvVendorImportProfile(models.Model):
         })
         profile.refresh_columns(grid)
         return profile
+
+    @api.model
+    def proposed_kinds(self, grid):
+        """File này mang tồn / giá (theo cột đề xuất từ dòng tiêu đề dò được) — để chọn mẫu cũ hay làm mẫu mới."""
+        header_index, header_rows = detect_header(grid)
+        return file_kinds(role for role, _warehouse in propose_roles(column_headers(grid, header_index, header_rows)))
+
+    def kinds(self):
+        """Mẫu này đọc ra tồn / giá: tập con của {"stock", "price"}."""
+        self.ensure_one()
+        return file_kinds(self.column_ids.mapped("role"))
 
     def first_data_index(self):
         """Chỉ số (từ 0) dòng dữ liệu đầu tiên."""
@@ -86,15 +102,16 @@ class HlvVendorImportProfile(models.Model):
         self.write({"column_ids": commands, "header_signature": header_signature(headers)})
 
     def column_specs(self):
-        """Cột đã gán vai trò, dạng import_utils.extract_rows cần. Lỗi khi không có cột mã lẫn cột tên."""
+        """Cột đã gán vai trò, dạng import_utils.extract_rows cần. Lỗi khi không có cột mã lẫn cột tên, hoặc không có
+        cột tồn lẫn cột giá."""
         self.ensure_one()
         specs = [{"index": c.col_index, "role": c.role, "warehouse": (c.warehouse or "").strip()}
                  for c in self.column_ids if c.role != "ignore"]
         roles = {spec["role"] for spec in specs}
         if not roles & {ROLE_CODE, ROLE_NAME}:
             raise UserError("Mẫu \"%s\" chưa có cột Mã hàng NCC hay Tên hàng." % self.name)
-        if ROLE_STOCK not in roles:
-            raise UserError("Mẫu \"%s\" chưa có cột tồn nào." % self.name)
+        if not file_kinds(roles):
+            raise UserError("Mẫu \"%s\" chưa có cột tồn hay cột giá nào." % self.name)
         return specs
 
 
