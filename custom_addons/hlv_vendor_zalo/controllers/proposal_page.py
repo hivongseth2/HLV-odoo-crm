@@ -27,17 +27,9 @@ class ZaloProposalPage(http.Controller):
 
     @staticmethod
     def _can_open(proposal):
-        """Sale của phiếu hoặc quản lý Hỏi giá NCC. Mã sale không thuộc tài khoản → validate_sale_code ném UserError."""
+        """Sale của phiếu hoặc quản lý Hỏi giá NCC (sale_scope.can_handle_sale_code)."""
         env = request.env
-        if not env.user.has_group(USER_GROUP):
-            return False
-        if sale_scope.can_see_all(env):
-            return True
-        try:
-            sale_scope.validate_sale_code(env, proposal.sale_code or "")
-        except UserError:
-            return False
-        return True
+        return env.user.has_group(USER_GROUP) and sale_scope.can_handle_sale_code(env, proposal.sale_code)
 
     def _proposal(self, proposal_id):
         proposal = request.env["hlv.zalo.proposal"].sudo().browse(proposal_id).exists()
