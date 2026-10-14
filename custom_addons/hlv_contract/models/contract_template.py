@@ -15,10 +15,19 @@ from odoo.exceptions import UserError, ValidationError
 
 from ..utils import contract_vars, docx_io, docx_merge, html_blocks
 
-CONTRACT_TYPES = [('sale', 'Hợp đồng mua bán hàng hoá'), ('principle', 'Hợp đồng nguyên tắc')]
+CONTRACT_TYPES = [('sale', 'Hợp đồng mua bán hàng hoá'), ('principle', 'Hợp đồng nguyên tắc'),
+                  ('appendix', 'Phụ lục hợp đồng'), ('payment', 'Giấy đề nghị thanh toán')]
 # Khuôn số mặc định theo loại (xem utils/contract_number): mua bán = ngày soạn + mã khách,
-# nguyên tắc giữ cách đánh số cũ theo năm
-DEFAULT_NUMBER_PATTERNS = {'sale': '{dd}{mm}{yyyy}/HLV-{ma_khach}', 'principle': 'HĐNT-{seq}/{yyyy}'}
+# nguyên tắc giữ cách đánh số cũ theo năm. Mỗi mẫu phụ lục đặt khuôn riêng được (vd theo báo giá:
+# PL-HĐ/HLV-{ma_khach}-{bao_gia}).
+DEFAULT_NUMBER_PATTERNS = {
+    'sale': '{dd}{mm}{yyyy}/HLV-{ma_khach}',
+    'principle': 'HĐNT-{seq}/{yyyy}',
+    'appendix': '{dd}.{mm}/{yyyy}/PLHĐ/{ma_khach}',
+    'payment': '{dd}{mm}{yy}/ĐNTT/HLV-{ma_khach}',
+}
+# Loại văn bản gốc mà mỗi loại được căn cứ vào (models/contract_link.py)
+PARENT_TYPES = {'appendix': ('principle',), 'payment': ('appendix', 'sale')}
 
 
 class ContractTemplate(models.Model):
@@ -27,8 +36,9 @@ class ContractTemplate(models.Model):
     _order = 'contract_type, name'
 
     name = fields.Char(string='Tên mẫu', required=True)
-    contract_type = fields.Selection(CONTRACT_TYPES, string='Loại hợp đồng', required=True, default='sale',
-                                     help='Quyết định dãy số hợp đồng (HĐMB-… / HĐNT-…).')
+    contract_type = fields.Selection(CONTRACT_TYPES, string='Loại văn bản', required=True, default='sale',
+                                     help='Quyết định khuôn số mặc định và văn bản gốc được căn cứ vào '
+                                          '(phụ lục → hợp đồng nguyên tắc; đề nghị thanh toán → phụ lục / hợp đồng mua bán).')
     source = fields.Selection(
         [('docx', 'File Word (.docx)'), ('builder', 'Soạn trên trang')],
         string='Nguồn mẫu', required=True, default='docx')
@@ -44,7 +54,8 @@ class ContractTemplate(models.Model):
         string='Khuôn số hợp đồng',
         default=lambda self: DEFAULT_NUMBER_PATTERNS.get(self.env.context.get('default_contract_type') or 'sale'),
         help='{dd}{mm}{yyyy}{yy}: ngày soạn; {seq}: số thứ tự trong năm; {ma_khach}: mã viết tắt khách '
-             '(Mã đăng ký công ty trên khách hàng, không có thì tự viết tắt tên). Người soạn vẫn sửa tay được.')
+             '(Mã đăng ký công ty trên khách hàng, không có thì tự viết tắt tên); {bao_gia}: số báo giá CRM. '
+             'Người soạn vẫn sửa tay được.')
     has_lines = fields.Boolean(string='Có bảng hàng hoá', readonly=True,
                                help='Mẫu có biến dòng hàng (Ten_Hang_1...) — hợp đồng sẽ có bảng hàng và tổng tiền.')
     system_fields = fields.Char(readonly=True, help='Biến tự điền có trong mẫu, cách nhau dấu phẩy.')

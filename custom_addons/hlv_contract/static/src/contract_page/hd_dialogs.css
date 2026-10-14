@@ -388,3 +388,10 @@ details.hd-step[open] > summary { margin-bottom: .25rem; }
 .hd-style-b { font-weight: 700; }
 .hd-style-i { font-style: italic; }
 .hd-style-u { text-decoration: underline; }
+
+/* Ngăn soạn: văn bản gốc / văn bản liên quan (hd_links.js) */
+.hd-link-chosen { margin-top: .35rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.hd-related { list-style: none; margin: .5rem 0 0; padding: .5rem .75rem; border: 1px solid var(--hd-line-soft);
+  border-radius: var(--hd-radius); background: var(--hd-bg); font-size: 13px; }
+.hd-related li { padding: .15rem 0; }
+#hd-payment-info b { color: var(--hd-ink); font-weight: 600; }

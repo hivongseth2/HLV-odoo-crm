@@ -310,6 +310,14 @@ window.HlvContract = window.HlvContract || {};
     HD.on(panel, "change", "select[data-var-field]", function (el) {
       S.varDefs[+el.dataset.varIndex][el.dataset.varField] = el.value;
     });
+    HD.on(panel, "change", "#hd-tpl-type", function (el) {
+      var patterns = S.config.number_patterns || {};
+      var input = HD.$("hd-tpl-pattern");
+      var isDefault = !input.value.trim() || Object.keys(patterns).some(function (k) { return patterns[k] === input.value.trim(); });
+      if (isDefault) {
+        input.value = patterns[el.value] || "";
+      }
+    });
     HD.on(panel, "click", "[data-var-style]", function (el) {
       var v = S.varDefs[+el.dataset.varStyle];
       var key = el.dataset.styleKey;

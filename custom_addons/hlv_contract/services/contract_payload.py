@@ -29,6 +29,7 @@ def contract_summary(contract):
     return {
         'id': contract.id,
         'name': contract.name,
+        'contract_type': contract.contract_type,
         'template_id': contract.template_id.id,
         'template_name': contract.template_id.name or '',
         'contract_date': _date(contract.contract_date),
@@ -80,7 +81,13 @@ def contract_detail(contract, can_manage):
         'system_fields': _system_fields(contract),
         'doc_custom': contract.doc_custom,
         'template_outdated': contract._template_outdated(),
+        'quote_code': contract.quote_code or '',
+        'payment_no': contract.payment_no,
+        'payment_percent': contract.payment_percent,
+        'payment_amount_manual': contract.payment_amount_manual,
+        'payment': contract._payment_summary() if contract.contract_type == 'payment' else False,
     })
+    detail.update(contract._link_info())
     return detail
 
 
@@ -169,6 +176,8 @@ def variable_library():
             {'title': 'Bảng hàng hoá — dùng trong bảng hàng', 'items': items(
                 ['%s_1' % f for f in contract_vars.LINE_FIELDS])},
             {'title': 'Tổng tiền — tính từ bảng hàng', 'items': items(contract_vars.TOTAL_VARIABLES)},
+            {'title': 'Văn bản gốc — phụ lục / đề nghị thanh toán', 'items': items(contract_vars.LINK_VARIABLES)},
+            {'title': 'Đề nghị thanh toán theo đợt', 'items': items(contract_vars.PAYMENT_VARIABLES)},
         ],
         'types': contract_vars.VARIABLE_TYPES,
         'sections': contract_vars.SECTIONS,

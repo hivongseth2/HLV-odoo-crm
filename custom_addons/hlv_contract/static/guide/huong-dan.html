@@ -264,7 +264,7 @@ h2.part-title::before { content: none; }
       </nav>
       <div class="toc-groups" aria-label="Mục lục">
         <div><h4><a href="#phan-chung">1 · Hướng dẫn chung</a></h4><ol><li><a href="#khai-niem">Mẫu, biến, hợp đồng</a></li><li><a href="#loai-bien">Ba loại biến</a></li><li><a href="#trang-thai">Trạng thái &amp; quyền</a></li><li><a href="#nhat-ky">Nhật ký</a></li></ol></div>
-        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#so-hop-dong">Số hợp đồng &amp; sửa đè</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li><li><a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a></li></ol></div>
+        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#so-hop-dong">Số hợp đồng &amp; sửa đè</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li><li><a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a></li><li><a href="#phu-luc">Phụ lục &amp; đề nghị thanh toán</a></li></ol></div>
         <div><h4><a href="#phan-bang">3 · Bảng dữ liệu &amp; in</a></h4><ol><li><a href="#bang-excel">Bảng kiểu Excel</a></li><li><a href="#xuat-in">Xuất / in hàng loạt</a></li></ol></div>
         <div><h4><a href="#phan-mau">4 · Mẫu hợp đồng</a></h4><ol><li><a href="#tao-mau">Bốn cách tạo mẫu</a></li><li><a href="#soan-mau">Soạn mẫu trên trang</a></li><li><a href="#bien-mau">Biến của mẫu</a></li><li><a href="#ben-ban">Thông tin bên bán</a></li></ol></div>
         <div><h4><a href="#phan-word">5 · Mẫu từ file Word</a></h4><ol><li><a href="#mau-word">Đặt trường trộn trong Word</a></li><li><a href="#ten-bien">Tên biến có sẵn</a></li><li><a href="#bang-hang-word">Bảng hàng trong Word</a></li></ol></div>
@@ -565,6 +565,40 @@ h2.part-title::before { content: none; }
         dòng "Mẫu … đã được sửa sau khi lập hợp đồng này" kèm nút <span class="btn">Áp dụng mẫu mới</span> nếu muốn lấy nội dung mới.</div>
     </section>
 
+    <section id="phu-luc">
+      <h2>Phụ lục &amp; giấy đề nghị thanh toán</h2>
+      <p>Ba loại văn bản nối tiếp nhau, văn bản sau <b>căn cứ</b> vào văn bản trước:</p>
+      <div class="fig">
+        <div class="flow">
+          <div class="node n-tpl"><b>Hợp đồng nguyên tắc</b><small>Ký một lần với khách, ví dụ 24-2026/HDNT/HLV-MTAC.</small></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node n-ct"><b>Phụ lục hợp đồng</b><small>Mỗi đơn một phụ lục: bảng hàng, VAT, giao nhận, thanh toán. Số mặc định
+            <code>14.10/2026/PLHĐ/MTAC</code>.</small></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node n-out"><b>Giấy đề nghị thanh toán</b><small>Một hay nhiều đợt. Số mặc định <code>141026/ĐNTT/HLV-MTAC</code>.
+            Căn cứ phụ lục hoặc hợp đồng mua bán.</small></div>
+        </div>
+      </div>
+      <ol class="steps one">
+        <li><span>Mở hợp đồng nguyên tắc → bấm <span class="btn">+ Phụ lục hợp đồng</span> ở đầu ngăn. Phụ lục mới đã điền sẵn khách, người
+          đại diện, các ô cùng tên, và câu "Căn cứ Hợp đồng nguyên tắc số … ký ngày …". Lấy hàng từ báo giá CRM (<code>BG…</code>) như hợp
+          đồng mua bán; số báo giá được nhớ vào ô <b>Số báo giá CRM</b>.</span></li>
+        <li><span>Mở phụ lục (hoặc hợp đồng mua bán) → <span class="btn">+ Giấy đề nghị thanh toán</span>. Phần <b>Căn cứ &amp; thanh toán</b>
+          có <b>Đợt</b>, <b>Tỷ lệ (%)</b> và <b>Số tiền đề nghị</b>. Để trống số tiền là tính theo tỷ lệ; gõ số tiền là lấy đúng số đó.
+          Dòng dưới cho thấy giá trị văn bản gốc, đã đề nghị các đợt trước, đợt này và còn lại.</span></li>
+        <li><span>Đề nghị đợt sau: bấm lại nút trên văn bản gốc. Đợt tự tăng, tỷ lệ mặc định là phần còn lại.</span></li>
+        <li><span>Cuối ngăn soạn có danh sách <b>Văn bản liên quan</b> (căn cứ và các văn bản con); bấm số để mở.</span></li>
+      </ol>
+      <ul class="rules">
+        <li>Soạn văn bản mới bằng <b>+ Hợp đồng mới</b> rồi chọn mẫu phụ lục / đề nghị thanh toán cũng được: chọn văn bản gốc ở ô
+          <b>Căn cứ</b> (để trống ô tìm là hiện văn bản của khách đang chọn).</li>
+        <li>Giấy đề nghị đã <b>xác nhận</b> giữ nguyên số tiền, kể cả khi phụ lục sửa sau đó hay đợt khác bị huỷ.</li>
+        <li>Mỗi mẫu phụ lục đặt <b>khuôn số</b> riêng. Ví dụ phụ lục theo báo giá: <code>PL-HĐ/HLV-{ma_khach}-{bao_gia}</code> →
+          <code>PL-HĐ/HLV-REMARK-BG302982035</code>.</li>
+        <li>Văn bản gốc do nhân viên khác phụ trách vẫn chọn làm căn cứ được (chỉ thấy số, khách, ngày, giá trị).</li>
+      </ul>
+    </section>
+
     <!-- ================================================================== PHẦN 3 -->
     <div class="part-head" id="phan-bang">
       <p class="part-kicker">Phần 3</p>
@@ -715,7 +749,8 @@ h2.part-title::before { content: none; }
       <p>Menu <b>Thông tin bên bán</b>: tên công ty, MST, địa chỉ, điện thoại, người đại diện, chức vụ, số tài khoản, ngân hàng, toà án
         mặc định và thuế suất VAT mặc định. Các biến <code>Ten_Ben_Ban</code>, <code>Tai_Khoan_Ben_Ban</code>… lấy từ đây, đổi một chỗ
         là mọi mẫu dùng biến đó đổi theo.</p>
-      <div class="note"><b>Lưu ý:</b> hai mẫu Word gốc (mua bán, nguyên tắc) ghi cứng bên bán trong file, nên không đổi theo chỗ này.
+      <div class="note"><b>Lưu ý:</b> hai mẫu Word gốc mua bán và nguyên tắc ghi cứng bên bán trong file, nên không đổi theo chỗ này
+        (mẫu phụ lục và đề nghị thanh toán thì đã dùng trường trộn, đổi theo).
         Muốn đổi được, thay chữ bên bán trong file bằng các trường trộn <code>Ten_Ben_Ban</code>, <code>Dia_Chi_Ben_Ban</code>….</div>
     </section>
 
@@ -773,6 +808,9 @@ h2.part-title::before { content: none; }
             <tr><td><code>Ten_Ben_Ban</code> <code>Dia_Chi_Ben_Ban</code> <code>Ma_So_Thue_Ben_Ban</code> <code>Dien_Thoai_Ben_Ban</code> <code>Nguoi_Dai_Dien_Ben_Ban</code> <code>Chuc_Vu_Ben_Ban</code> <code>Tai_Khoan_Ben_Ban</code> <code>Ngan_Hang_Ben_Ban</code></td><td>Bên bán, lấy từ Thông tin bên bán</td><td><span class="chip c-ok">tự điền</span></td></tr>
             <tr><td><code>Ten_Hang_1</code> <code>DVT_1</code> <code>So_Luong_1</code> <code>Don_Gia_1</code> <code>Thanh_Tien_1</code></td><td>Một dòng hàng (đơn giá, thành tiền chưa VAT)</td><td><span class="chip c-ok">tự điền</span></td></tr>
             <tr><td><code>Tong_Tien_Hang</code> <code>Thue_Suat_VAT</code> <code>Tien_Thue_VAT</code> <code>Tong_Gia_Tri_HD</code> <code>Tong_Gia_Tri_Bang_Chu</code></td><td>Tổng chưa VAT, thuế suất (số, không có %), tiền thuế, tổng sau VAT, tổng bằng chữ</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>So_HD_Goc</code> <code>Ngay_Ky_HD_Goc</code> <code>Gia_Tri_HD_Goc</code> <code>So_Bao_Gia</code></td><td>Văn bản gốc mà văn bản này căn cứ vào (số, ngày ký dd/mm/yyyy, giá trị sau VAT) và số báo giá CRM</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>Dot_Thanh_Toan</code> <code>Ty_Le_Thanh_Toan</code> <code>So_Tien_Thanh_Toan</code> <code>So_Tien_Thanh_Toan_Bang_Chu</code> <code>Da_De_Nghi_Truoc</code> <code>Con_Lai_Sau_Dot</code></td><td>Đề nghị thanh toán: đợt, tỷ lệ (số, không có %), số tiền và bằng chữ, đã đề nghị trước, còn lại</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>Danh_Xung_Ben_Mua</code> <code>Nguoi_Nhan_Hang</code></td><td>Ông/Bà trước tên người đại diện bên mua (mặc định Ông); người nhận hàng</td><td><span class="chip c-info">hay dùng</span></td></tr>
             <tr><td><i>Tên khác bất kỳ</i></td><td>Thành biến nhập riêng của mẫu, nhãn đặt ở tab Biến của mẫu</td><td><span class="chip c-warn">biến nhập</span></td></tr>
           </tbody>
         </table>
@@ -836,7 +874,11 @@ h2.part-title::before { content: none; }
         <p>Số thứ tự cấp khi lưu lần đầu và không lấy lại khi xoá, nên xoá hợp đồng nháp sẽ để lại một số trống. Đếm theo năm, sang năm
           mới quay về 001.</p></details>
       <details class="faq"><summary>PDF trông hơi khác file Word?</summary>
-        <p>PDF dựng lại từ nội dung file Word đã điền, cùng font và bảng nhưng không giữ đầu/chân trang của Word. Cần bản y hệt thì tải Word.</p></details>
+        <p>PDF dựng lại từ nội dung file Word đã điền: cùng font, bảng, header trang đầu (quốc hiệu) và số đề mục tự động ("ĐIỀU 1.",
+          gạch đầu dòng); chân trang (số trang), hình và khung chữ không có. Cần bản y hệt thì tải Word.</p></details>
+      <details class="faq"><summary>File Word mẫu nặng hơn 10 MB?</summary>
+        <p>Thường do Word nhúng font vào file (tuỳ chọn "Embed fonts"). Lúc import trang tự bỏ font nhúng, file 11,7 MB còn vài chục KB.
+          Còn quá 10 MB thì là do ảnh lớn: trong Word chọn ảnh → Compress Pictures rồi tải lại.</p></details>
     </section>
 
     <footer>

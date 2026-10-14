@@ -12,7 +12,7 @@ from odoo.http import content_disposition, request
 from odoo.tools.misc import file_open
 
 from ..models.contract import STATES
-from ..models.contract_template import CONTRACT_TYPES
+from ..models.contract_template import CONTRACT_TYPES, DEFAULT_NUMBER_PATTERNS, PARENT_TYPES
 from ..services import contract_payload as payload
 from ..services.asset_version import asset_version
 from ..services.contract_export import FORMATS, export_contracts
@@ -90,6 +90,8 @@ class ContractPage(ContractPageMixin, http.Controller):
             'is_manager': self._is_manager(),
             'today': fields.Date.to_string(fields.Date.context_today(request.env.user)),
             'types': CONTRACT_TYPES,
+            'parent_types': PARENT_TYPES,
+            'number_patterns': DEFAULT_NUMBER_PATTERNS,
             'states': STATES,
             'templates': [payload.template_summary(t) for t in templates],
             'default_vat': request.env.company.contract_vat_rate,
@@ -140,7 +142,8 @@ class ContractPage(ContractPageMixin, http.Controller):
 
     def _form_vals(self, contract, params):
         """Giá trị ghi từ ngăn soạn (dùng chung cho Lưu và Xem trước). Khoá nào không gửi thì giữ nguyên.
-        params: template_id, contract_date, partner_id, vat_rate, note, values, lines, name, overrides."""
+        params: template_id, contract_date, partner_id, vat_rate, note, values, lines, name, overrides,
+        parent_id, quote_code, payment_no, payment_percent, payment_amount_manual."""
         template = request.env['hlv.contract.template'].browse(
             to_int(params.get('template_id')) or (contract.template_id.id if contract else 0)).exists()
         if not template:
@@ -157,6 +160,13 @@ class ContractPage(ContractPageMixin, http.Controller):
         # Số hợp đồng người dùng sửa tay (để trống = giữ số đang có)
         if (params.get('name') or '').strip() and (not contract or params['name'].strip() != contract.name):
             vals['name'] = params['name'].strip()
+        if params.get('parent_id') is not None:
+            vals['parent_id'] = to_int(params['parent_id']) or False
+        if params.get('quote_code') is not None:
+            vals['quote_code'] = (params['quote_code'] or '').strip()
+        for key in ('payment_no', 'payment_percent', 'payment_amount_manual'):
+            if params.get(key) is not None:
+                vals[key] = float(params[key] or 0) if key != 'payment_no' else max(1, to_int(params[key]) or 1)
         if params.get('overrides') is not None:
             vals['overrides'] = {k: str(v).strip() for k, v in params['overrides'].items() if str(v or '').strip()}
         if params.get('values') is not None:
@@ -261,7 +271,7 @@ class ContractPage(ContractPageMixin, http.Controller):
         return {'html': draft._preview_html(), 'number': number}
 
     @http.route(f'{API}/number_preview', type='json', auth='user', methods=['POST'])
-    def api_number_preview(self, contract_id=None, template_id=None, partner_id=None, **kw):
+    def api_number_preview(self, contract_id=None, template_id=None, partner_id=None, quote_code='', **kw):
         """Số hợp đồng dự kiến theo mẫu + khách đang chọn (chưa lấy số), để hiện trong ô Số hợp đồng.
         Trả {'number': None} khi lưu không làm đổi số đang có."""
         self._check()
@@ -272,6 +282,7 @@ class ContractPage(ContractPageMixin, http.Controller):
         draft = request.env['hlv.contract'].new({
             'template_id': template.id,
             'partner_id': to_int(partner_id) or False,
+            'quote_code': (quote_code or '').strip(),
             'company_id': (contract.company_id if contract else request.env.company).id,
         })
         return {'number': draft._preview_number(contract)}

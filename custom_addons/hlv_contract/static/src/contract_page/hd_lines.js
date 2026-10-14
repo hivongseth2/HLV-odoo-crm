@@ -197,6 +197,9 @@ window.HlvContract = window.HlvContract || {};
     S.lines = S.lines.concat(result.lines.map(function (l) {
       return Object.assign({ price_basis: "excl", subtotal: 0, subtotal_incl: 0 }, l);
     }));
+    if (item.kind === "quote") {
+      S.form.quote_code = item.code;   // số báo giá: in ra (So_Bao_Gia) và dùng được trong khuôn số
+    }
     // Chưa có khách thì lấy khách của báo giá / đơn; ô bên mua đã gõ tay thì giữ nguyên
     if (!S.form.partner_id) {
       S.form.partner_id = result.partner_id || false;

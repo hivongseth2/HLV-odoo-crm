@@ -16,7 +16,9 @@ from ..services.contract_export import FORMATS, safe_filename
 from ..services.template_import import template_vals_from_upload
 from .common import API, PAGE_ROUTE, ContractPageMixin, to_int
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# File Word nhúng font có thể vài chục MB; bỏ font nhúng xong mới giới hạn kích thước mẫu
+# (services/template_import.MAX_TEMPLATE_BYTES)
+MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 
 
 class ContractTemplatePage(ContractPageMixin, http.Controller):
@@ -66,7 +68,7 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
         except (binascii.Error, ValueError):
             raise UserError('Không đọc được file tải lên.')
         if not raw or len(raw) > MAX_UPLOAD_BYTES:
-            raise UserError('File rỗng hoặc lớn hơn 10 MB.')
+            raise UserError('File rỗng hoặc lớn hơn 40 MB.')
         vals = template_vals_from_upload(filename, raw, bool(keep_word_file))
         if to_int(template_id):
             template = self._get_record('hlv.contract.template', template_id)

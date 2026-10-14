@@ -1,5 +1,6 @@
 /* Ngăn soạn một hợp đồng: ô nhập dựng theo bộ biến của mẫu đang chọn, số hợp đồng và phần sửa
-   đè biến tự điền, xem trước, chuyển trạng thái, hộp Xem nhanh. Bảng hàng hoá ở hd_lines.js. */
+   đè biến tự điền, xem trước, chuyển trạng thái, hộp Xem nhanh. Bảng hàng hoá ở hd_lines.js; căn cứ
+   văn bản gốc và thanh toán theo đợt ở hd_links.js. */
 window.HlvContract = window.HlvContract || {};
 
 (function (HD) {
@@ -18,7 +19,7 @@ window.HlvContract = window.HlvContract || {};
   function template() {
     var id = S.form.template_id;
     if (S.contract && S.contract.template_id === id) {
-      return { id: id, variables: S.contract.variables, has_lines: S.contract.has_lines };
+      return { id: id, variables: S.contract.variables, has_lines: S.contract.has_lines, contract_type: S.contract.contract_type };
     }
     return (S.config.templates || []).filter(function (t) { return t.id === id; })[0] ||
       { id: id, variables: [], has_lines: false, name: "" };
@@ -102,7 +103,7 @@ window.HlvContract = window.HlvContract || {};
     if (c && c.doc_custom) {
       tag += ' <span class="hd-tag hd-tag-mine" title="Hợp đồng này đã sửa chữ riêng, khác mẫu gốc">Nội dung sửa riêng</span>';
     }
-    files = bodyEdit + files;
+    files = bodyEdit + files + HD.childButtonsHtml(c);
     return '<header class="hd-drawer-head"><div><h2 class="hd-h2">' + (c ? esc(c.name) : "Hợp đồng mới") + " " + tag + "</h2>" +
       (c ? '<div class="hd-muted hd-small">Phụ trách: ' + esc(c.user) + "</div>" : "") + "</div>" +
       '<div class="hd-push d-flex flex-wrap gap-2">' + toggle + files + "</div>" +
@@ -137,7 +138,7 @@ window.HlvContract = window.HlvContract || {};
         : "Cấp theo khuôn của mẫu khi lưu — gõ vào để đặt số khác";
     }
     if (numberState.number && S.form.name === c.name) {
-      return "Lưu xong số đổi thành " + numberState.number + " theo khách mới — gõ vào để giữ số khác";
+      return "Lưu xong số đổi thành " + numberState.number + " theo khuôn — gõ vào để giữ số khác";
     }
     return c.number_auto ? "Theo khuôn của mẫu — đổi khách thì tự cấp lại; sửa tay được" : "Đã sửa tay";
   }
@@ -151,7 +152,7 @@ window.HlvContract = window.HlvContract || {};
   }
 
   function refreshNumber() {
-    var key = [S.contract ? S.contract.id : 0, S.form.template_id, S.form.partner_id || 0].join("|");
+    var key = [S.contract ? S.contract.id : 0, S.form.template_id, S.form.partner_id || 0, S.form.quote_code].join("|");
     if (key === numberState.key || !S.form.template_id) {
       showNumber();
       return;
@@ -161,6 +162,7 @@ window.HlvContract = window.HlvContract || {};
       contract_id: S.contract ? S.contract.id : null,
       template_id: S.form.template_id,
       partner_id: S.form.partner_id || false,
+      quote_code: S.form.quote_code,
     }).then(function (result) {
       if (numberState.key === key) {
         numberState.number = result.number;
@@ -215,7 +217,7 @@ window.HlvContract = window.HlvContract || {};
       '<select class="hd-input w-100" id="hd-f-template">' + templateOptions() + "</select></div>" +
       '<div class="hd-field"><label class="hd-label" for="hd-f-date">Ngày ký</label>' +
       '<input type="date" class="hd-input w-100" id="hd-f-date" value="' + esc(S.form.contract_date) + '"/></div>' +
-      "</div></section>" +
+      "</div></section>" + HD.linksHtml() +
       sectionsHtml() + HD.linesHtml() + overridesHtml() +
       '<section class="hd-step"><label class="hd-label" for="hd-f-note">Ghi chú nội bộ (không in ra hợp đồng)</label>' +
       '<textarea class="hd-input hd-textarea w-100" id="hd-f-note" rows="2">' + esc(S.form.note) + "</textarea></section>" +
@@ -240,6 +242,7 @@ window.HlvContract = window.HlvContract || {};
       bindPartnerPicker();
     }
     HD.bindLines();
+    HD.bindLinks();
     markDirty(S.dirty);
   }
 
@@ -263,19 +266,7 @@ window.HlvContract = window.HlvContract || {};
       return;
     }
     collectForm();
-    var payload = {
-      contract_id: S.contract ? S.contract.id : null,
-      template_id: S.form.template_id,
-      contract_date: S.form.contract_date,
-      partner_id: S.form.partner_id || false,
-      vat_rate: S.form.vat_rate,
-      name: S.form.name,
-      overrides: S.form.overrides,
-      values: S.form.values,
-    };
-    if (template().has_lines) {
-      payload.lines = S.lines;
-    }
+    var payload = formPayload();
     var token = ++previewToken;
     var target = preview;
     target.setStatus("đang cập nhật…");
@@ -366,6 +357,7 @@ window.HlvContract = window.HlvContract || {};
       form.values[el.dataset.var] = (type === "money" || type === "number") && el.value.trim() !== ""
         ? String(HD.parseNumber(el.value)) : el.value;
     });
+    HD.collectLinks(form);
   }
 
   function loadDetail(detail) {
@@ -381,12 +373,13 @@ window.HlvContract = window.HlvContract || {};
       values: Object.assign({}, detail.values),
       overrides: Object.fromEntries(detail.system_fields.map(function (f) { return [f.name, f.override]; })),
     };
+    Object.assign(S.form, HD.linkFormDefaults(detail));
     S.lines = detail.lines.map(function (l) { return Object.assign({ price_basis: "incl" }, l); });
   }
 
-  function save() {
-    collectForm();
-    var payload = {
+  /** Dữ liệu ngăn soạn gửi server (Lưu và Xem trước dùng chung). */
+  function formPayload() {
+    var payload = Object.assign({
       contract_id: S.contract ? S.contract.id : null,
       template_id: S.form.template_id,
       contract_date: S.form.contract_date,
@@ -396,11 +389,16 @@ window.HlvContract = window.HlvContract || {};
       name: S.form.name,
       overrides: S.form.overrides,
       values: S.form.values,
-    };
+    }, HD.linkPayload());
     if (template().has_lines) {
       payload.lines = S.lines;
     }
-    return HD.api("save", payload).then(function (detail) {
+    return payload;
+  }
+
+  function save() {
+    collectForm();
+    return HD.api("save", formPayload()).then(function (detail) {
       loadDetail(detail);
       markDirty(false);
       render();
@@ -446,8 +444,9 @@ window.HlvContract = window.HlvContract || {};
 
   HD.closeDrawer = closeDrawer;
 
-  /** Mở hợp đồng id; id = null là hợp đồng mới, templateId (tuỳ chọn) chọn sẵn mẫu. */
-  HD.openContract = function (id, templateId) {
+  /** Mở hợp đồng id; id = null là hợp đồng mới, templateId (tuỳ chọn) chọn sẵn mẫu, prepare (tuỳ
+      chọn) điền sẵn S.form của văn bản mới trước khi vẽ (lập phụ lục / đề nghị thanh toán từ văn bản gốc). */
+  HD.openContract = function (id, templateId, prepare) {
     S.dirty = false;
     S.previewOn = HD.previewEnabled();
     var load = id ? HD.api("get", { contract_id: id }) : Promise.resolve(null);
@@ -468,7 +467,12 @@ window.HlvContract = window.HlvContract || {};
           values: {},
           overrides: {},
         };
+        Object.assign(S.form, HD.linkFormDefaults(null));
         S.lines = [];
+        if (prepare) {
+          prepare();
+          S.dirty = true;
+        }
       }
       render();
       HD.show("hd-drawer", true);
@@ -494,6 +498,7 @@ window.HlvContract = window.HlvContract || {};
     markDirty: markDirty,
     collectForm: collectForm,
     fillVariables: fillVariables,
+    saveIfDirty: saveIfDirty,
     render: function () { render(); },
   };
 
@@ -544,6 +549,7 @@ window.HlvContract = window.HlvContract || {};
     HD.on(panel, "change", "#hd-f-template", function (el) {
       collectForm();
       S.form.template_id = +el.value;
+      HD.checkParentType();
       render();
       markDirty(true);
     });

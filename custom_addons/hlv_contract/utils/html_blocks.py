@@ -39,14 +39,17 @@ _GRID_CLASS = 'hlv-grid'
 _NO_BORDER_CLASS = 'hlv-noborder'
 _DEFAULT_AFTER_TWIPS = 60
 _TWIPS_PER_PT = 20
+_SPACES_RE = re.compile(r' {2,}')
 
 
 # ---------- blocks -> HTML ----------
 
 def _text_html(text):
     # Tab giữ dạng ký tự tab trong span white-space:pre để trình duyệt nhảy tới điểm dừng
-    # tab kế tiếp, gần giống cách Word canh "Địa chỉ<tab>: ..." thành cột
-    return escape(text).replace('\t', '<span style="white-space:pre">\t</span>')
+    # tab kế tiếp, gần giống cách Word canh "Địa chỉ<tab>: ..." thành cột. Nhiều dấu cách liền
+    # nhau (file Word hay dùng để canh cột) giữ nguyên độ rộng thay vì bị trình duyệt gộp làm một
+    html = escape(text).replace('\t', '<span style="white-space:pre">\t</span>')
+    return _SPACES_RE.sub(lambda m: ' ' + '&nbsp;' * (len(m.group(0)) - 1), html)
 
 
 def _run_html(run):
@@ -80,8 +83,11 @@ def _para_html(para):
     ]
     if para.get('indent'):
         styles.append('margin-left:%gpt' % (para['indent'] / float(_TWIPS_PER_PT)))
-    if para.get('first'):
-        styles.append('text-indent:%gpt' % (para['first'] / float(_TWIPS_PER_PT)))
+    # Word cho dòng đầu thò ra lề trái (thụt treo lớn hơn lề đoạn); trên trang xem trước phần đó bị
+    # cắt mất chữ, nên không cho dòng đầu ra ngoài lề
+    first = max(para.get('first') or 0, -(para.get('indent') or 0))
+    if first:
+        styles.append('text-indent:%gpt' % (first / float(_TWIPS_PER_PT)))
     return '<p style="%s">%s</p>' % (';'.join(styles), body or '&nbsp;')
 
 
