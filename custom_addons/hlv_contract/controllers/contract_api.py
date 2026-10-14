@@ -12,11 +12,11 @@ from odoo.http import content_disposition, request
 from odoo.tools.misc import file_open
 
 from ..models.contract import STATES
-from ..models.contract_template import CONTRACT_TYPES
+from ..models.contract_template import CONTRACT_TYPES, DEFAULT_NUMBER_PATTERNS, PARENT_TYPES
 from ..services import contract_payload as payload
 from ..services.asset_version import asset_version
 from ..services.contract_export import FORMATS, export_contracts
-from ..utils.contract_vars import compute_totals, line_subtotal, price_excl
+from ..utils.contract_vars import compute_totals, line_prices, line_subtotal
 from .common import API, PAGE_ROUTE, ContractPageMixin, parse_ids, to_int
 
 GUIDE_FILE = 'hlv_contract/static/guide/huong-dan.html'
@@ -36,7 +36,7 @@ _ACTIONS = {
 
 def _line_commands(lines, vat_rate):
     """Ghi lại toàn bộ dòng hàng theo thứ tự trên trang; dòng không có tên hàng bị bỏ.
-    Trang gửi giá SAU VAT (price_incl) vì người dùng quen gõ giá sau thuế; lưu giá chưa VAT."""
+    Người dùng gõ giá sau VAT hoặc chưa VAT (price_basis cho biết ô nào); lưu giá chưa VAT."""
     commands = [(5, 0, 0)]
     for index, line in enumerate(lines or []):
         name = (line.get('product_name') or '').strip()
@@ -48,7 +48,7 @@ def _line_commands(lines, vat_rate):
             'product_name': name,
             'uom': (line.get('uom') or '').strip(),
             'quantity': float(line.get('quantity') or 0),
-            'price_unit': price_excl(line.get('price_incl'), vat_rate),
+            'price_unit': line_prices(line, vat_rate)[0],
         }))
     return commands
 
@@ -90,6 +90,8 @@ class ContractPage(ContractPageMixin, http.Controller):
             'is_manager': self._is_manager(),
             'today': fields.Date.to_string(fields.Date.context_today(request.env.user)),
             'types': CONTRACT_TYPES,
+            'parent_types': PARENT_TYPES,
+            'number_patterns': DEFAULT_NUMBER_PATTERNS,
             'states': STATES,
             'templates': [payload.template_summary(t) for t in templates],
             'default_vat': request.env.company.contract_vat_rate,
@@ -138,38 +140,50 @@ class ContractPage(ContractPageMixin, http.Controller):
         self._check()
         return payload.contract_detail(self._get_record('hlv.contract', contract_id), self._is_manager())
 
-    def _form_vals(self, contract, template_id, contract_date, partner_id, vat_rate, note, values, lines):
-        """Giá trị ghi từ ngăn soạn (dùng chung cho Lưu và Xem trước). Tham số None = giữ nguyên."""
+    def _form_vals(self, contract, params):
+        """Giá trị ghi từ ngăn soạn (dùng chung cho Lưu và Xem trước). Khoá nào không gửi thì giữ nguyên.
+        params: template_id, contract_date, partner_id, vat_rate, note, values, lines, name, overrides,
+        parent_id, quote_code, payment_no, payment_percent, payment_amount_manual."""
         template = request.env['hlv.contract.template'].browse(
-            to_int(template_id) or (contract.template_id.id if contract else 0)).exists()
+            to_int(params.get('template_id')) or (contract.template_id.id if contract else 0)).exists()
         if not template:
             raise UserError('Chọn mẫu hợp đồng.')
         vals = {'template_id': template.id}
-        if contract_date is not None:
-            vals['contract_date'] = contract_date or fields.Date.context_today(request.env.user)
-        if partner_id is not None:
-            vals['partner_id'] = to_int(partner_id) or False
-        if vat_rate is not None:
-            vals['vat_rate'] = float(vat_rate or 0)
-        if note is not None:
-            vals['note'] = note
-        if values is not None:
+        if params.get('contract_date') is not None:
+            vals['contract_date'] = params['contract_date'] or fields.Date.context_today(request.env.user)
+        if params.get('partner_id') is not None:
+            vals['partner_id'] = to_int(params['partner_id']) or False
+        if params.get('vat_rate') is not None:
+            vals['vat_rate'] = float(params['vat_rate'] or 0)
+        if params.get('note') is not None:
+            vals['note'] = params['note']
+        # Số hợp đồng người dùng sửa tay (để trống = giữ số đang có)
+        if (params.get('name') or '').strip() and (not contract or params['name'].strip() != contract.name):
+            vals['name'] = params['name'].strip()
+        if params.get('parent_id') is not None:
+            vals['parent_id'] = to_int(params['parent_id']) or False
+        if params.get('quote_code') is not None:
+            vals['quote_code'] = (params['quote_code'] or '').strip()
+        for key in ('payment_no', 'payment_percent', 'payment_amount_manual'):
+            if params.get(key) is not None:
+                vals[key] = float(params[key] or 0) if key != 'payment_no' else max(1, to_int(params[key]) or 1)
+        if params.get('overrides') is not None:
+            vals['overrides'] = {k: str(v).strip() for k, v in params['overrides'].items() if str(v or '').strip()}
+        if params.get('values') is not None:
             existing = dict(contract.variable_values or {}) if contract else {}
-            vals['variable_values'] = dict(existing, **_clean_values(_var_names(contract, template), values))
-        if lines is not None:
+            vals['variable_values'] = dict(existing, **_clean_values(_var_names(contract, template), params['values']))
+        if params.get('lines') is not None:
             rate = vals['vat_rate'] if 'vat_rate' in vals else (
                 contract.vat_rate if contract else request.env.company.contract_vat_rate)
-            vals['line_ids'] = _line_commands(lines, rate)
+            vals['line_ids'] = _line_commands(params['lines'], rate)
         return template, vals
 
     @http.route(f'{API}/save', type='json', auth='user', methods=['POST'])
-    def api_save(self, contract_id=None, template_id=None, contract_date=None, partner_id=None,
-                 vat_rate=None, note=None, values=None, lines=None, **kw):
-        """Tạo mới (không có contract_id) hoặc ghi lại hợp đồng; trả chi tiết sau khi lưu.
-        Tham số nào không gửi thì giữ nguyên."""
+    def api_save(self, contract_id=None, **params):
+        """Tạo mới (không có contract_id) hoặc ghi lại hợp đồng; trả chi tiết sau khi lưu."""
         self._check()
         contract = self._get_record('hlv.contract', contract_id) if to_int(contract_id) else None
-        template, vals = self._form_vals(contract, template_id, contract_date, partner_id, vat_rate, note, values, lines)
+        template, vals = self._form_vals(contract, params)
         if contract:
             if contract.template_id == template:
                 vals.pop('template_id')
@@ -216,10 +230,11 @@ class ContractPage(ContractPageMixin, http.Controller):
         để JS không giữ bản sao quy tắc tính tiền."""
         self._check()
         lines = lines or []
-        prices = [price_excl(l.get('price_incl'), vat_rate) for l in lines]
-        subtotals = [line_subtotal(l.get('quantity'), p) for l, p in zip(lines, prices)]
-        return dict(compute_totals(subtotals, vat_rate), subtotals=subtotals, prices_excl=prices,
-                    subtotals_incl=[line_subtotal(l.get('quantity'), l.get('price_incl')) for l in lines])
+        prices = [line_prices(l, vat_rate) for l in lines]
+        subtotals = [line_subtotal(l.get('quantity'), p[0]) for l, p in zip(lines, prices)]
+        return dict(compute_totals(subtotals, vat_rate), subtotals=subtotals,
+                    prices_excl=[p[0] for p in prices], prices_incl=[p[1] for p in prices],
+                    subtotals_incl=[line_subtotal(l.get('quantity'), p[1]) for l, p in zip(lines, prices)])
 
     @http.route(f'{API}/preview', type='json', auth='user', methods=['POST'])
     def api_preview(self, contract_id=None, marks=False, **kw):
@@ -231,17 +246,16 @@ class ContractPage(ContractPageMixin, http.Controller):
         return {'name': contract.name, 'html': html}
 
     @http.route(f'{API}/preview_draft', type='json', auth='user', methods=['POST'])
-    def api_preview_draft(self, contract_id=None, template_id=None, contract_date=None, partner_id=None,
-                          vat_rate=None, values=None, lines=None, **kw):
+    def api_preview_draft(self, contract_id=None, **params):
         """Xem trước nội dung đang gõ trên ngăn soạn, chưa lưu gì: dựng hợp đồng tạm trong bộ
         nhớ (new) từ đúng các giá trị sẽ lưu."""
         self._check()
         contract = self._get_record('hlv.contract', contract_id) if to_int(contract_id) else None
-        _template, vals = self._form_vals(contract, template_id, contract_date, partner_id, vat_rate, None,
-                                          values, lines)
+        _template, vals = self._form_vals(contract, dict(params, note=None))
+        manual_number = 'name' in vals
         vals.setdefault('vat_rate', contract.vat_rate if contract else request.env.company.contract_vat_rate)
         vals.setdefault('contract_date', contract.contract_date if contract else fields.Date.context_today(request.env.user))
-        vals['name'] = contract.name if contract else '/'
+        vals.setdefault('name', contract.name if contract else '/')
         vals['company_id'] = (contract.company_id if contract else request.env.company).id
         if contract and contract.template_id == _template:
             # Giữ nguyên mẫu: xem trước theo bản chụp riêng (có thể đã sửa chữ), không theo mẫu hiện tại
@@ -250,7 +264,28 @@ class ContractPage(ContractPageMixin, http.Controller):
                 'doc_variables': contract.doc_variables,
                 'doc_has_lines': contract.doc_has_lines,
             })
-        return {'html': request.env['hlv.contract'].new(vals)._preview_html()}
+        draft = request.env['hlv.contract'].new(vals)
+        number = None if manual_number else draft._preview_number(contract)
+        if number:
+            draft.name = number
+        return {'html': draft._preview_html(), 'number': number}
+
+    @http.route(f'{API}/number_preview', type='json', auth='user', methods=['POST'])
+    def api_number_preview(self, contract_id=None, template_id=None, partner_id=None, quote_code='', **kw):
+        """Số hợp đồng dự kiến theo mẫu + khách đang chọn (chưa lấy số), để hiện trong ô Số hợp đồng.
+        Trả {'number': None} khi lưu không làm đổi số đang có."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id) if to_int(contract_id) else None
+        template = request.env['hlv.contract.template'].browse(to_int(template_id)).exists()
+        if not template:
+            return {'number': None}
+        draft = request.env['hlv.contract'].new({
+            'template_id': template.id,
+            'partner_id': to_int(partner_id) or False,
+            'quote_code': (quote_code or '').strip(),
+            'company_id': (contract.company_id if contract else request.env.company).id,
+        })
+        return {'number': draft._preview_number(contract)}
 
     @http.route(f'{API}/body', type='json', auth='user', methods=['POST'])
     def api_body(self, contract_id=None, **kw):

@@ -2,8 +2,9 @@
 """Hợp đồng điền từ mẫu (xem contract_template).
 
 Giá trị các biến nhập lưu trong variable_values (JSON {tên biến: giá trị}) vì mỗi mẫu có
-bộ biến riêng, giống mỗi sheet Excel cũ có cột riêng. Số hợp đồng lấy từ ir.sequence theo
-loại và năm (HĐMB-001/2026). Tổng tiền và chữ được tính ở đây; mẫu Word chỉ hiển thị.
+bộ biến riêng, giống mỗi sheet Excel cũ có cột riêng. Số hợp đồng theo khuôn số của mẫu
+(utils/contract_number). Tổng tiền và chữ được tính ở đây; mẫu Word chỉ hiển thị. Văn bản căn cứ
+vào văn bản khác (phụ lục, đề nghị thanh toán) ở contract_link.py.
 Giao diện là trang /hop-dong (controllers/), không dùng form backend.
 
 Mỗi hợp đồng giữ BẢN CHỤP nội dung riêng (doc_file + doc_variables) lấy từ mẫu lúc lập: sửa
@@ -12,24 +13,29 @@ mẫu sau đó không làm đổi hợp đồng đã lập. Người soạn còn
 """
 
 import base64
+import re
 
 from odoo import api, fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
-from ..utils import contract_vars, docx_io, docx_merge, html_blocks, preview_marks
+from ..utils import contract_number, contract_vars, docx_io, docx_merge, html_blocks, preview_marks
 from ..utils.audit_diff import diff_lines, diff_values
+from .contract_template import DEFAULT_NUMBER_PATTERNS
 
 _SEQUENCE_CODE = {'sale': 'hlv.contract.sale', 'principle': 'hlv.contract.principle'}
 STATES = [('draft', 'Nháp'), ('confirmed', 'Đã xác nhận'), ('signed', 'Đã ký'), ('cancel', 'Đã huỷ')]
 # Nội dung hợp đồng: khoá với MỌI người khi đã rời trạng thái Nháp (chặn ở server vì import/RPC
 # vẫn ghi được dù giao diện khoá). Muốn sửa thì đưa về Nháp trước. Ghi chú nội bộ luôn sửa được.
-_CONTENT_FIELDS = {'template_id', 'contract_date', 'partner_id', 'variable_values', 'vat_rate', 'line_ids',
-                   'doc_file', 'doc_variables', 'doc_html', 'doc_custom'}
+_CONTENT_FIELDS = {'name', 'template_id', 'contract_date', 'partner_id', 'variable_values', 'vat_rate', 'line_ids',
+                   'doc_file', 'doc_variables', 'doc_html', 'doc_custom', 'overrides', 'parent_id', 'quote_code',
+                   'payment_no', 'payment_percent', 'payment_amount_manual'}
 MANAGER_GROUP = 'hlv_contract.group_contract_manager'
 # Field thường ghi vào nhật ký khi đổi (cùng các ô biến và hàng hoá)
 _AUDIT_FIELDS = [
-    ('template_id', 'Mẫu'), ('contract_date', 'Ngày ký'), ('partner_id', 'Khách hàng'),
+    ('name', 'Số hợp đồng'), ('template_id', 'Mẫu'), ('contract_date', 'Ngày ký'), ('partner_id', 'Khách hàng'),
     ('vat_rate', 'Thuế suất VAT (%)'), ('user_id', 'Phụ trách'), ('note', 'Ghi chú nội bộ'),
+    ('parent_id', 'Căn cứ văn bản'), ('quote_code', 'Số báo giá CRM'), ('payment_no', 'Đợt thanh toán'),
+    ('payment_percent', 'Tỷ lệ đợt này (%)'), ('payment_amount_manual', 'Số tiền đề nghị gõ tay'),
 ]
 # Ghi bằng context này thì write không tự so trước/sau — hàm gọi tự ghi một dòng nhật ký gọn hơn
 _NO_AUDIT = 'hlv_contract_no_audit'
@@ -53,7 +59,7 @@ class Contract(models.Model):
 
     name = fields.Char(string='Số hợp đồng', default='/', copy=False, readonly=True, tracking=True, index=True)
     template_id = fields.Many2one('hlv.contract.template', string='Mẫu', required=True, tracking=True, index=True)
-    contract_type = fields.Selection(related='template_id.contract_type', store=True, string='Loại hợp đồng')
+    contract_type = fields.Selection(related='template_id.contract_type', store=True, string='Loại văn bản')
     state = fields.Selection(STATES, string='Trạng thái', default='draft', required=True, tracking=True, copy=False)
     contract_date = fields.Date(string='Ngày ký', required=True, default=fields.Date.context_today, tracking=True)
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
@@ -84,6 +90,11 @@ class Contract(models.Model):
     doc_html = fields.Html(string='Nội dung sửa riêng', sanitize=False, copy=True)
     doc_custom = fields.Boolean(string='Đã sửa nội dung riêng', copy=True)
     template_version = fields.Integer(string='Phiên bản mẫu đã chụp', copy=True)
+    doc_system_fields = fields.Char(string='Biến tự điền có trong nội dung', copy=True)
+    # Số hợp đồng còn theo khuôn (chưa ai sửa tay): đổi khách thì số tự cấp lại theo mã khách mới
+    number_auto = fields.Boolean(default=True, copy=False)
+    # Người soạn sửa đè chữ của biến tự điền (ngày ký, bên bán, tổng tiền bằng chữ…): {tên biến: chữ}
+    overrides = fields.Json(string='Sửa đè biến tự điền', copy=True)
 
     @api.depends('line_ids.subtotal', 'vat_rate')
     def _compute_amounts(self):
@@ -131,7 +142,11 @@ class Contract(models.Model):
             var_defs = [v._to_dict() for v in template.variable_ids]
             vals['variable_values'] = self._with_defaults(var_defs, vals.get('variable_values'))
             if vals.get('name', '/') in ('/', False):
-                vals['name'] = self._next_contract_number(template, vals.get('contract_date'))
+                partner = self.env['res.partner'].browse(vals.get('partner_id'))
+                vals['name'] = self._next_contract_number(template, partner, vals.get('company_id'),
+                                                          quote=vals.get('quote_code'))
+            else:
+                vals['number_auto'] = False
         records = super().create(vals_list)
         records.filtered(lambda r: not r.doc_file).with_context(**{_NO_AUDIT: True})._snapshot_template()
         for rec in records:
@@ -150,9 +165,13 @@ class Contract(models.Model):
             template = self.env['hlv.contract.template'].browse(vals['template_id'])
             vals['variable_values'] = self._with_defaults(
                 [v._to_dict() for v in template.variable_ids], vals.get('variable_values', self.variable_values))
+        if 'name' in vals and len(self) == 1 and vals['name'] != self.name:
+            vals['number_auto'] = False
         res = super().write(vals)
         if new_template:
             self.with_context(**{_NO_AUDIT: True})._snapshot_template()
+        if ('partner_id' in vals or 'quote_code' in vals or new_template) and 'name' not in vals:
+            self._refresh_auto_number()
         if audit:
             self._log_changes(before)
         return res
@@ -178,8 +197,8 @@ class Contract(models.Model):
         if field.type == 'date':
             return value.strftime('%d/%m/%Y') if value else ''
         if field.type == 'many2one':
-            return value.display_name or ''
-        if field.type == 'float':
+            return value.sudo().display_name or ''
+        if field.type in ('float', 'integer'):
             return contract_vars.format_number(value)
         return value or ''
 
@@ -189,6 +208,7 @@ class Contract(models.Model):
         labels = {v['name']: v['label'] for v in self._doc_variables()}
         shown = {label: self._audit_value(name) for name, label in _AUDIT_FIELDS}
         shown.update({labels.get(k, k): v for k, v in (self.variable_values or {}).items()})
+        shown.update({'Sửa đè ' + contract_vars.SYSTEM_LABELS.get(k, k): v for k, v in (self.overrides or {}).items()})
         return {
             'state': self.state,
             'fields': shown,
@@ -262,6 +282,7 @@ class Contract(models.Model):
                 'doc_file': base64.b64encode(template._docx_bytes()),
                 'doc_variables': [v._to_dict() for v in template.variable_ids],
                 'doc_has_lines': template.has_lines,
+                'doc_system_fields': template.system_fields,
                 'doc_html': False,
                 'doc_custom': False,
                 'template_version': template.content_version,
@@ -303,18 +324,76 @@ class Contract(models.Model):
             'doc_file': base64.b64encode(docx),
             'doc_variables': var_defs,
             'doc_has_lines': any(contract_vars.is_line_variable(n) for n in names),
+            'doc_system_fields': ','.join(n for n in names if contract_vars.is_system_variable(n)),
             'doc_custom': True,
             'variable_values': self._with_defaults(var_defs, self.variable_values),
         })
         self._log('body', 'Sửa chữ trên nội dung hợp đồng (mẫu gốc không đổi)', details)
 
-    def _next_contract_number(self, template, contract_date):
+    def _next_contract_number(self, template, partner, company_id=None, exclude_id=None, peek=False, quote=''):
+        """Số hợp đồng theo khuôn của mẫu, ngày soạn = hôm nay. Chỉ lấy số thứ tự (ir.sequence)
+        khi khuôn có {seq}; peek=True chỉ xem số thứ tự kế tiếp, không lấy (dùng cho xem trước).
+        Trùng số hợp đồng khác thì thêm -2, -3…"""
+        pattern = template.number_pattern or DEFAULT_NUMBER_PATTERNS.get(template.contract_type)
+        today = fields.Date.context_today(self)
+        seq = None
         code = _SEQUENCE_CODE.get(template.contract_type)
-        if not code:
-            return '/'
-        sequence_date = contract_date or fields.Date.context_today(self)
-        return self.env['ir.sequence'].with_context(ir_sequence_date=sequence_date).next_by_code(
-            code, sequence_date=sequence_date)
+        if contract_number.uses_sequence(pattern) and code and peek:
+            seq = self._peek_sequence(code, today, company_id)
+        elif contract_number.uses_sequence(pattern) and code:
+            raw = self.env['ir.sequence'].with_context(ir_sequence_date=today).next_by_code(code, sequence_date=today)
+            # Dãy số cũ có tiền tố/hậu tố (HĐNT-007/2026): lấy cụm số đầu tiên làm số thứ tự
+            match = re.search(r'\d+', raw or '')
+            seq = int(match.group(0)) if match else None
+        company = partner.commercial_partner_id
+        code = contract_number.customer_code(company.company_registry, company.name) if company else ''
+        number = contract_number.build_number(pattern, today, seq, code, quote)
+        domain = [('company_id', '=', company_id or self.env.company.id)]
+        if exclude_id:
+            domain.append(('id', '!=', exclude_id))
+        return contract_number.unique_number(
+            number, lambda n: bool(self.with_context(active_test=False).search_count(domain + [('name', '=', n)])))
+
+    def _peek_sequence(self, code, day, company_id=None):
+        """Số thứ tự kế tiếp của dãy (theo kỳ của ngày day) mà không lấy số. Không có dãy → None."""
+        sequence = self.env['ir.sequence'].sudo().search(
+            [('code', '=', code), ('company_id', 'in', [company_id or self.env.company.id, False])],
+            order='company_id', limit=1)
+        return sequence._get_current_sequence(sequence_date=day).number_next_actual if sequence else None
+
+    def _preview_number(self, origin=None):
+        """Số sẽ có sau khi lưu, để người soạn thấy (và sửa) trước. self: hợp đồng tạm đang soạn;
+        origin: hợp đồng đã lưu (None nếu đang tạo mới). Trả None khi lưu không làm đổi số."""
+        self.ensure_one()
+        if not origin:
+            return self._next_contract_number(self.template_id, self.partner_id, self.company_id.id, peek=True,
+                                              quote=self.quote_code)
+        pattern = self.template_id.number_pattern or ''
+        changed = (origin.partner_id != self.partner_id or origin.template_id != self.template_id
+                   or (origin.quote_code or '') != (self.quote_code or ''))
+        # Cùng điều kiện với _refresh_auto_number
+        if changed and origin.number_auto and origin.state == 'draft' and contract_number.follows_inputs(pattern):
+            return self._next_contract_number(self.template_id, self.partner_id, origin.company_id.id, origin.id,
+                                              quote=self.quote_code)
+        return None
+
+    def _refresh_auto_number(self):
+        """Hợp đồng nháp còn số theo khuôn đổi theo khách / báo giá (không có {seq}): cấp lại số."""
+        for rec in self.filtered(lambda r: r.number_auto and r.state == 'draft'):
+            if contract_number.follows_inputs(rec.template_id.number_pattern):
+                number = rec._next_contract_number(rec.template_id, rec.partner_id, rec.company_id.id, rec.id,
+                                                   quote=rec.quote_code)
+                if number != rec.name:
+                    old = rec.name
+                    # super(): không qua write của hợp đồng để số vẫn được coi là theo khuôn
+                    super(Contract, rec).write({'name': number})
+                    rec._log('update', 'Cấp lại số theo khuôn: %s → %s' % (old, number))
+
+    @api.constrains('name', 'company_id')
+    def _check_unique_number(self):
+        for rec in self.filtered(lambda r: r.name and r.name != '/'):
+            if self.search_count([('id', '!=', rec.id), ('name', '=', rec.name), ('company_id', '=', rec.company_id.id)]):
+                raise ValidationError('Số hợp đồng %s đã có, hãy đặt số khác.' % rec.name)
 
     def set_variable(self, name, value):
         """Ghi một biến nhập (ô trong bảng dữ liệu). Tên phải là biến của mẫu hợp đồng này.
@@ -339,10 +418,16 @@ class Contract(models.Model):
 
     # ---------- dựng file ----------
 
-    def _merge_vars(self):
-        """Dict {tên biến: chữ in ra} cho fill_docx."""
+    def _var_styles(self):
+        """Kiểu chữ đặt cho từng biến (đậm, in hoa...) theo bản chụp của hợp đồng."""
+        return {v['name']: v['style'] for v in self._doc_variables() if v.get('style')}
+
+    def _merge_vars(self, with_overrides=True):
+        """Dict {tên biến: chữ in ra} cho fill_docx. with_overrides=False: giá trị tự tính, chưa áp
+        phần người soạn sửa đè (để hiện làm gợi ý)."""
         self.ensure_one()
-        system = dict(self.company_id._contract_seller_vars(), So_Hop_Dong=self.name, Ngay_Ky=self.contract_date)
+        system = dict(self.company_id._contract_seller_vars(), So_Hop_Dong=self.name, Ngay_Ky=self.contract_date,
+                      **self._link_vars())
         input_types = {var['name']: var['var_type'] for var in self._doc_variables()}
         lines = [{
             'Ten_Hang': line.product_name,
@@ -350,13 +435,25 @@ class Contract(models.Model):
             'So_Luong': line.quantity,
             'Don_Gia': line.price_unit,
         } for line in self.line_ids]
-        return contract_vars.build_vars(system, self.variable_values or {}, input_types, lines, self.vat_rate)
+        values = contract_vars.build_vars(system, self.variable_values or {}, input_types, lines, self.vat_rate)
+        if with_overrides:
+            values.update({k: v for k, v in (self.overrides or {}).items() if v not in (None, '') and k in values})
+        return values
+
+    def _system_fields(self):
+        """Biến tự điền có trong nội dung hợp đồng mà người soạn được sửa đè: bỏ số hợp đồng (sửa ở ô
+        Số hợp đồng), biến dòng hàng (sửa ở bảng hàng) và biến đợt thanh toán (sửa ở phần Thanh toán)."""
+        self.ensure_one()
+        names = (self.doc_system_fields if self._has_snapshot() else self.template_id.system_fields) or ''
+        return [n for n in names.split(',') if n and n != 'So_Hop_Dong' and not contract_vars.is_line_variable(n)
+                and n not in contract_vars.PAYMENT_VARIABLES]
 
     def _render_docx_bytes(self):
         """File .docx của hợp đồng này, đã điền đủ biến."""
         self.ensure_one()
         try:
-            return docx_merge.fill_docx(self._doc_bytes(), self._merge_vars(), line_count=len(self.line_ids))
+            return docx_merge.fill_docx(self._doc_bytes(), self._merge_vars(), line_count=len(self.line_ids),
+                                         styles=self._var_styles())
         except ValueError as err:
             raise UserError('Không điền được mẫu "%s": %s' % (self.template_id.name, err))
 
@@ -369,10 +466,12 @@ class Contract(models.Model):
         for var in self._doc_variables():
             text = values.get(var['name']) or ''
             values[var['name']] = preview_marks.mark(var['name'], text or var['label'], not text)
-        if values.get('So_Hop_Dong') in ('', '/', False):
-            values['So_Hop_Dong'] = preview_marks.mark('So_Hop_Dong', 'số tự cấp khi lưu', True)
+        number = values.get('So_Hop_Dong')
+        has_number = number not in ('', '/', False, None)
+        values['So_Hop_Dong'] = preview_marks.mark('So_Hop_Dong', number if has_number else 'số hợp đồng', not has_number)
         try:
-            docx = docx_merge.fill_docx(self._doc_bytes(), values, line_count=len(self.line_ids))
+            docx = docx_merge.fill_docx(self._doc_bytes(), values, line_count=len(self.line_ids),
+                                        styles=self._var_styles())
         except ValueError as err:
             raise UserError('Không điền được mẫu "%s": %s' % (self.template_id.name, err))
         html = html_blocks.blocks_to_html(docx_io.read_docx(docx, keep_fields=False))

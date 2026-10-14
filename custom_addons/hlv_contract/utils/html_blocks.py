@@ -9,7 +9,7 @@ blocks_to_html(blocks) -> chuỗi HTML (không có <html>/<body>).
 html_to_blocks(html)   -> blocks. Hiểu: p, div, h1-h6, br, strong/b, em/i, u, span,
     ul/ol/li (thêm dấu • ), table/tr/td/th (colspan, <col style="width:..%">, class
     hlv-noborder = bảng không viền, còn lại có viền), căn lề text-align/align, font-size, margin-left,
-    text-indent, margin-bottom (pt hoặc px). Thẻ lạ bị bỏ qua nhưng giữ chữ bên trong.
+    text-indent, margin-bottom, margin-top (pt hoặc px). Thẻ lạ bị bỏ qua nhưng giữ chữ bên trong.
 wrap_html_document(fragment) -> trang HTML đầy đủ cho wkhtmltopdf.
 Trường hợp biên: {{ ten }} có khoảng trắng vẫn nhận; HTML rỗng -> [].
 """
@@ -32,29 +32,36 @@ _BOLD_TAGS = {'strong', 'b'}
 _ITALIC_TAGS = {'em', 'i'}
 _UNDERLINE_TAGS = {'u'}
 _ALIGNS = {'left', 'center', 'right', 'justify'}
-_PLAIN_FLAGS = {'b': False, 'i': False, 'u': False, 'sz': None}
+_PLAIN_FLAGS = {'b': False, 'i': False, 'u': False, 'caps': False, 'sz': None}
 # Viền bảng đi bằng class (CSS ở wrap_html_document và trang /hop-dong), không inline vào ô,
 # để trình soạn mẫu bật/tắt viền cả bảng chỉ bằng đổi class.
 _GRID_CLASS = 'hlv-grid'
 _NO_BORDER_CLASS = 'hlv-noborder'
 _DEFAULT_AFTER_TWIPS = 60
 _TWIPS_PER_PT = 20
+_SPACES_RE = re.compile(r' {2,}')
 
 
 # ---------- blocks -> HTML ----------
 
 def _text_html(text):
     # Tab giữ dạng ký tự tab trong span white-space:pre để trình duyệt nhảy tới điểm dừng
-    # tab kế tiếp, gần giống cách Word canh "Địa chỉ<tab>: ..." thành cột
-    return escape(text).replace('\t', '<span style="white-space:pre">\t</span>')
+    # tab kế tiếp, gần giống cách Word canh "Địa chỉ<tab>: ..." thành cột. Nhiều dấu cách liền
+    # nhau (file Word hay dùng để canh cột) giữ nguyên độ rộng thay vì bị trình duyệt gộp làm một
+    html = escape(text).replace('\t', '<span style="white-space:pre">\t</span>')
+    return _SPACES_RE.sub(lambda m: ' ' + '&nbsp;' * (len(m.group(0)) - 1), html)
 
 
 def _run_html(run):
     if run.get('br'):
         return '<br>'
     if run.get('field'):
-        return '<span class="hlv-var">{{%s}}</span>' % escape(run['field'])
-    html = _text_html(run.get('text') or '')
+        # Ô biến cũng mang định dạng (đậm/nghiêng/in hoa...) để soạn mẫu bôi đậm ô biến được
+        html = '<span class="hlv-var">{{%s}}</span>' % escape(run['field'])
+    else:
+        html = _text_html(run.get('text') or '')
+    if run.get('caps'):
+        html = '<span style="text-transform:uppercase">%s</span>' % html
     if run.get('u'):
         html = '<u>%s</u>' % html
     if run.get('i'):
@@ -71,13 +78,16 @@ def _para_html(para):
     after = para.get('after')
     styles = [
         'text-align:%s' % (para.get('align') if para.get('align') in _ALIGNS else 'left'),
-        'margin-top:0',
+        'margin-top:%gpt' % ((para.get('before') or 0) / float(_TWIPS_PER_PT)),
         'margin-bottom:%gpt' % ((after if after is not None else _DEFAULT_AFTER_TWIPS) / float(_TWIPS_PER_PT)),
     ]
     if para.get('indent'):
         styles.append('margin-left:%gpt' % (para['indent'] / float(_TWIPS_PER_PT)))
-    if para.get('first'):
-        styles.append('text-indent:%gpt' % (para['first'] / float(_TWIPS_PER_PT)))
+    # Word cho dòng đầu thò ra lề trái (thụt treo lớn hơn lề đoạn); trên trang xem trước phần đó bị
+    # cắt mất chữ, nên không cho dòng đầu ra ngoài lề
+    first = max(para.get('first') or 0, -(para.get('indent') or 0))
+    if first:
+        styles.append('text-indent:%gpt' % (first / float(_TWIPS_PER_PT)))
     return '<p style="%s">%s</p>' % (';'.join(styles), body or '&nbsp;')
 
 
@@ -138,6 +148,8 @@ def _flags_for(node, flags):
     size = _style_pt(node, 'font-size')
     if size:
         child_flags['sz'] = int(round(size * 2))
+    if re.search(r'text-transform\s*:\s*uppercase', node.get('style') or '', re.IGNORECASE):
+        child_flags['caps'] = True
     return child_flags
 
 
@@ -146,7 +158,7 @@ def _text_to_runs(text, flags, runs):
     for match in _TOKEN_RE.finditer(text):
         if match.start() > pos:
             runs.append(dict(flags, text=text[pos:match.start()]))
-        runs.append({'field': match.group(1)})
+        runs.append(dict(flags, field=match.group(1)))
         pos = match.end()
     if pos < len(text):
         runs.append(dict(flags, text=text[pos:]))
@@ -174,7 +186,8 @@ def _para_format(node, align=None):
         fmt['align'] = style_align.group(1).lower()
     elif attr_align in _ALIGNS:
         fmt['align'] = attr_align
-    for prop, key in (('margin-left', 'indent'), ('text-indent', 'first'), ('margin-bottom', 'after')):
+    for prop, key in (('margin-left', 'indent'), ('text-indent', 'first'), ('margin-bottom', 'after'),
+                      ('margin-top', 'before')):
         value = _style_pt(node, prop)
         if value is not None:
             fmt[key] = int(round(value * _TWIPS_PER_PT))

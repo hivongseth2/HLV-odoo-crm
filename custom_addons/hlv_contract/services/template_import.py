@@ -13,18 +13,26 @@ from odoo.exceptions import UserError
 
 from ..utils import docx_io, html_blocks
 from ..utils.doc_binary import read_doc_blocks
+from ..utils.docx_fonts import strip_embedded_fonts
+
+MAX_TEMPLATE_BYTES = 10 * 1024 * 1024
 
 
 def template_vals_from_upload(filename, data, keep_word_file):
-    """filename: tên file gốc; data: bytes; keep_word_file: True = giữ nguyên file .docx.
+    """filename: tên file gốc; data: bytes; keep_word_file: True = giữ nguyên file .docx (đã bỏ font
+    nhúng, xem utils/docx_fonts).
     Trả dict vals (source, docx_file/docx_filename hoặc body_html, note).
     Đuôi khác .doc/.docx hoặc file hỏng -> UserError."""
     ext = os.path.splitext(filename or '')[1].lower()
     if ext == '.docx':
         try:
+            data = strip_embedded_fonts(data)
             blocks = docx_io.read_docx(data, keep_fields=True)
         except ValueError as err:
             raise UserError('File .docx không đọc được: %s' % err)
+        if len(data) > MAX_TEMPLATE_BYTES:
+            raise UserError('File mẫu lớn hơn 10 MB kể cả sau khi bỏ font nhúng — thường do ảnh lớn; '
+                            'giảm dung lượng ảnh (Word: Compress Pictures) rồi tải lại.')
         if keep_word_file:
             return {'source': 'docx', 'docx_file': base64.b64encode(data), 'docx_filename': filename}
         return {'source': 'builder', 'body_html': html_blocks.blocks_to_html(blocks)}

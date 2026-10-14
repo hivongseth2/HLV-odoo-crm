@@ -46,7 +46,7 @@ class MisaOpportunity(models.AbstractModel):
         keyword = (keyword or "").strip()
         if not keyword:
             return []
-        rows = self._crm_opportunity_call(self._post_opportunity_grid, keyword, limit)
+        rows = self._crm_read_call(self._post_opportunity_grid, keyword, limit)
         return [
             {
                 "id": row.get("ID"),
@@ -65,7 +65,7 @@ class MisaOpportunity(models.AbstractModel):
         """Hàng của một cơ hội: [{"code", "description", "unit", "qty", "price", "price_after_tax",
         "tax", "is_combo"}] theo thứ tự trên CRM. Bỏ dòng ghi chú và dòng con của combo (combo đã có
         một dòng riêng). UserError khi không gọi được CRM."""
-        rows = self._crm_opportunity_call(self._post_opportunity_lines, int(opportunity_id))
+        rows = self._crm_read_call(self._post_opportunity_lines, int(opportunity_id))
         return [
             {
                 "code": (row.get("ProductIDText") or "").strip(),
@@ -82,18 +82,23 @@ class MisaOpportunity(models.AbstractModel):
         ]
 
     # ------------------------------------------------------------------
-    def _crm_opportunity_call(self, post, *args):
-        """Gọi CRM bằng token đã lưu (đăng nhập lại một lần nếu hết hạn); lỗi → UserError đọc được."""
+    def _crm_read_call(self, post, *args):
+        """Gọi CRM (đọc) bằng token đã lưu (đăng nhập lại một lần nếu hết hạn); lỗi → UserError đọc
+        được. Dùng chung cho cơ hội và báo giá (misa_quote.py)."""
         try:
             return self._with_crm_reauth(post, *args)
         except UserError:
             raise
         except Exception as exc:  # noqa: BLE001 — lỗi mạng / token / CRM trả lỗi đều báo cho người dùng
-            _logger.warning("Gọi MISA CRM (cơ hội) lỗi: %s", exc)
+            _logger.warning("Gọi MISA CRM lỗi: %s", exc)
             raise UserError(f"Không gọi được MISA CRM: {exc}") from exc
 
     def _post_opportunity(self, headers, url, payload):
-        headers = dict(headers, LayoutCode="opportunity")
+        return self._post_crm_read(headers, url, payload, "opportunity")
+
+    def _post_crm_read(self, headers, url, payload, layout_code):
+        """POST một lệnh đọc của CRM với LayoutCode của màn tương ứng; trả Data hoặc ném lỗi."""
+        headers = dict(headers, LayoutCode=layout_code)
         res = self._get_retry_session().post(url, headers=headers, json=payload, timeout=30)
         if res.status_code in (401, 403):
             raise MisaAuthExpired(f"CRM từ chối phiên đăng nhập (HTTP {res.status_code})")

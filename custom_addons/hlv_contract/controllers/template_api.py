@@ -10,12 +10,15 @@ from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import content_disposition, request
 
+from ..models.contract_template import DEFAULT_NUMBER_PATTERNS
 from ..services import contract_payload as payload
 from ..services.contract_export import FORMATS, safe_filename
 from ..services.template_import import template_vals_from_upload
 from .common import API, PAGE_ROUTE, ContractPageMixin, to_int
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# File Word nhúng font có thể vài chục MB; bỏ font nhúng xong mới giới hạn kích thước mẫu
+# (services/template_import.MAX_TEMPLATE_BYTES)
+MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 
 
 class ContractTemplatePage(ContractPageMixin, http.Controller):
@@ -33,7 +36,7 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
 
     @http.route(f'{API}/template/save', type='json', auth='user', methods=['POST'])
     def api_template_save(self, template_id=None, name='', contract_type='sale', body_html=None,
-                          note='', active=True, variables=None, **kw):
+                          note='', active=True, variables=None, number_pattern=None, **kw):
         """Lưu thông tin mẫu; body_html chỉ gửi khi soạn trên trang. Không có template_id thì
         tạo mẫu soạn trên trang mới. variables: nhãn/kiểu/nhóm/mặc định/thứ tự các biến nhập
         người dùng sửa — áp sau khi lưu nội dung (biến mới chèn vào mẫu cũng nhận cấu hình)."""
@@ -42,6 +45,9 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
                 'note': note or '', 'active': bool(active)}
         if body_html is not None:
             vals.update({'source': 'builder', 'body_html': body_html})
+        if number_pattern is not None:
+            # Để trống = khuôn mặc định theo loại hợp đồng
+            vals['number_pattern'] = number_pattern.strip() or DEFAULT_NUMBER_PATTERNS.get(contract_type)
         if to_int(template_id):
             template = self._get_record('hlv.contract.template', template_id)
             template.write(vals)
@@ -62,7 +68,7 @@ class ContractTemplatePage(ContractPageMixin, http.Controller):
         except (binascii.Error, ValueError):
             raise UserError('Không đọc được file tải lên.')
         if not raw or len(raw) > MAX_UPLOAD_BYTES:
-            raise UserError('File rỗng hoặc lớn hơn 10 MB.')
+            raise UserError('File rỗng hoặc lớn hơn 40 MB.')
         vals = template_vals_from_upload(filename, raw, bool(keep_word_file))
         if to_int(template_id):
             template = self._get_record('hlv.contract.template', template_id)

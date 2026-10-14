@@ -1,5 +1,6 @@
-/* Ngăn soạn một hợp đồng: ô nhập dựng theo bộ biến của mẫu đang chọn, bảng hàng (chọn từ
-   sản phẩm / đơn bán hoặc gõ tay), chuyển trạng thái, và hộp Xem nhanh. */
+/* Ngăn soạn một hợp đồng: ô nhập dựng theo bộ biến của mẫu đang chọn, số hợp đồng và phần sửa
+   đè biến tự điền, xem trước, chuyển trạng thái, hộp Xem nhanh. Bảng hàng hoá ở hd_lines.js; căn cứ
+   văn bản gốc và thanh toán theo đợt ở hd_links.js. */
 window.HlvContract = window.HlvContract || {};
 
 (function (HD) {
@@ -18,7 +19,7 @@ window.HlvContract = window.HlvContract || {};
   function template() {
     var id = S.form.template_id;
     if (S.contract && S.contract.template_id === id) {
-      return { id: id, variables: S.contract.variables, has_lines: S.contract.has_lines };
+      return { id: id, variables: S.contract.variables, has_lines: S.contract.has_lines, contract_type: S.contract.contract_type };
     }
     return (S.config.templates || []).filter(function (t) { return t.id === id; })[0] ||
       { id: id, variables: [], has_lines: false, name: "" };
@@ -77,60 +78,6 @@ window.HlvContract = window.HlvContract || {};
     }).join("");
   }
 
-  /* ---------------------------------------------------------- bảng hàng */
-
-  function lineRowHtml(line, index) {
-    var input = function (field, value, cls) {
-      return '<input type="text" class="hd-input hd-line-input ' + (cls || "") + '" data-line="' + index +
-        '" data-line-field="' + field + '" value="' + esc(value) + '" autocomplete="off"/>';
-    };
-    return "<tr>" +
-      '<td class="hd-center hd-muted">' + (index + 1) + "</td>" +
-      '<td class="hd-line-name">' + input("product_name", line.product_name, "") +
-      (line.product_id ? '<span class="hd-linked" title="Đã gắn sản phẩm trong danh mục">●</span>' : "") + "</td>" +
-      "<td>" + input("uom", line.uom, "hd-center") + "</td>" +
-      "<td>" + input("quantity", HD.qty(line.quantity), "hd-right") + "</td>" +
-      "<td>" + input("price_incl", HD.money(line.price_incl), "hd-right") +
-      '<div class="hd-sub-price" data-excl="' + index + '">chưa VAT ' + HD.money(line.price_excl) + "</div></td>" +
-      '<td class="hd-right hd-num"><b data-total-incl="' + index + '">' + HD.money(line.subtotal_incl) + "</b>" +
-      '<div class="hd-sub-price" data-total-excl="' + index + '">chưa VAT ' + HD.money(line.subtotal) + "</div></td>" +
-      '<td class="hd-center"><button type="button" class="hd-icon-btn" data-remove-line="' + index +
-      '" title="Xoá dòng" aria-label="Xoá dòng ' + (index + 1) + '">✕</button></td></tr>';
-  }
-
-  function linesHtml() {
-    if (!template().has_lines) {
-      return "";
-    }
-    var c = S.contract || {};
-    var goodsVars = template().variables.filter(function (v) { return v.section === "goods"; });
-    return '<section class="hd-step"><div class="hd-step-head"><h3 class="hd-h3">Hàng hoá</h3>' +
-      '<span class="hd-muted hd-small">Gõ mã/tên để chọn sản phẩm, hoặc gõ tự do · giá nhập là giá SAU VAT</span>' +
-      '<div class="hd-push d-flex gap-2"><button type="button" class="hd-btn hd-btn-mini" id="hd-paste-toggle">Dán từ Excel</button>' +
-      '<button type="button" class="hd-btn hd-btn-mini" id="hd-add-line">+ Thêm dòng</button></div></div>' +
-      (goodsVars.length ? '<div class="hd-grid">' + goodsVars.map(fieldHtml).join("") + "</div>" : "") +
-      '<div class="hd-picker hd-order-picker"><input type="search" id="hd-order-search" class="hd-input w-100" autocomplete="off" ' +
-      'placeholder="Lấy hàng từ đơn bán: gõ số đơn (S…, DH…) hoặc tên khách"/>' +
-      '<div id="hd-order-results" class="hd-dropdown hd-hidden"></div></div>' +
-      '<div id="hd-paste-box" class="hd-paste hd-hidden">' +
-      '<textarea id="hd-paste-text" rows="4" class="hd-input hd-textarea w-100" ' +
-      'placeholder="Copy các cột Tên hàng | ĐVT | Số lượng | Đơn giá sau VAT từ Excel rồi dán vào đây"></textarea>' +
-      '<div class="d-flex gap-2 mt-2"><button type="button" class="hd-btn hd-btn-primary hd-btn-mini" id="hd-paste-run">Thêm vào bảng</button>' +
-      '<button type="button" class="hd-btn hd-btn-mini" id="hd-paste-cancel">Đóng</button></div></div>' +
-      '<div class="hd-table-wrap hd-lines-wrap"><table class="hd-lines"><thead><tr>' +
-      '<th class="hd-col-stt">STT</th><th>Tên hàng</th><th class="hd-col-uom">ĐVT</th>' +
-      '<th class="hd-col-qty hd-right">Số lượng</th><th class="hd-col-price hd-right">Đơn giá sau VAT</th>' +
-      '<th class="hd-col-price hd-right">Thành tiền sau VAT</th><th class="hd-col-del"></th></tr></thead>' +
-      '<tbody id="hd-lines-body">' + S.lines.map(lineRowHtml).join("") + "</tbody></table></div>" +
-      '<div class="hd-totals">' +
-      '<div class="hd-total-grand"><span>Tổng giá trị (sau VAT)</span><b class="hd-num" id="hd-t-total">' + HD.money(c.amount_total) + "</b></div>" +
-      '<div class="hd-total-words" id="hd-t-words">' + esc(c.amount_words || "") + "</div>" +
-      '<div class="hd-total-sub"><span>Tiền hàng chưa VAT</span><span class="hd-num" id="hd-t-untaxed">' + HD.money(c.amount_untaxed) + "</span></div>" +
-      '<div class="hd-total-sub"><span>Thuế VAT <input type="text" class="hd-input hd-vat-input" id="hd-vat" value="' +
-      esc(HD.qty(S.form.vat_rate)) + '" aria-label="Thuế suất VAT"/> %</span><span class="hd-num" id="hd-t-vat">' + HD.money(c.amount_vat) + "</span></div>" +
-      "</div></section>";
-  }
-
   /* ---------------------------------------------------------- khung ngăn */
 
   function templateOptions() {
@@ -156,7 +103,7 @@ window.HlvContract = window.HlvContract || {};
     if (c && c.doc_custom) {
       tag += ' <span class="hd-tag hd-tag-mine" title="Hợp đồng này đã sửa chữ riêng, khác mẫu gốc">Nội dung sửa riêng</span>';
     }
-    files = bodyEdit + files;
+    files = bodyEdit + files + HD.childButtonsHtml(c);
     return '<header class="hd-drawer-head"><div><h2 class="hd-h2">' + (c ? esc(c.name) : "Hợp đồng mới") + " " + tag + "</h2>" +
       (c ? '<div class="hd-muted hd-small">Phụ trách: ' + esc(c.user) + "</div>" : "") + "</div>" +
       '<div class="hd-push d-flex flex-wrap gap-2">' + toggle + files + "</div>" +
@@ -171,6 +118,75 @@ window.HlvContract = window.HlvContract || {};
     var save = editable() ? '<button type="button" class="hd-btn hd-btn-primary" id="hd-save">Lưu</button>' : "";
     var locked = editable() ? "" : '<span class="hd-muted">Hợp đồng đã chốt nên bị khoá — bấm "Về nháp để sửa" nếu cần sửa.</span>';
     return '<footer class="hd-drawer-foot">' + actions + '<span class="hd-push hd-muted" id="hd-dirty"></span>' + locked + save + "</footer>";
+  }
+
+  /** Ô số hợp đồng: số theo khuôn của mẫu hiện sẵn (chữ mờ) trước khi lưu, người soạn gõ đè được. */
+  function numberFieldHtml() {
+    return '<div class="hd-field"><label class="hd-label" for="hd-f-name">Số hợp đồng</label>' +
+      '<input type="text" class="hd-input w-100" id="hd-f-name" value="' + esc(S.form.name) + '" placeholder="' +
+      esc(numberState.number || "") + '"/>' +
+      '<div class="hd-muted hd-small" id="hd-f-name-hint">' + esc(numberHint()) + "</div></div>";
+  }
+
+  // Số dự kiến theo mẫu + khách đang chọn; chỉ hỏi lại server khi một trong hai đổi
+  var numberState = { key: null, number: null };
+
+  function numberHint() {
+    var c = S.contract;
+    if (!c) {
+      return numberState.number ? "Số dự kiến theo khuôn của mẫu, cấp khi lưu — gõ vào để đặt số khác"
+        : "Cấp theo khuôn của mẫu khi lưu — gõ vào để đặt số khác";
+    }
+    if (numberState.number && S.form.name === c.name) {
+      return "Lưu xong số đổi thành " + numberState.number + " theo khuôn — gõ vào để giữ số khác";
+    }
+    return c.number_auto ? "Theo khuôn của mẫu — đổi khách thì tự cấp lại; sửa tay được" : "Đã sửa tay";
+  }
+
+  function showNumber() {
+    var input = HD.$("hd-f-name");
+    if (input) {
+      input.placeholder = numberState.number || "";
+      HD.$("hd-f-name-hint").textContent = numberHint();
+    }
+  }
+
+  function refreshNumber() {
+    var key = [S.contract ? S.contract.id : 0, S.form.template_id, S.form.partner_id || 0, S.form.quote_code].join("|");
+    if (key === numberState.key || !S.form.template_id) {
+      showNumber();
+      return;
+    }
+    numberState = { key: key, number: null };
+    HD.api("number_preview", {
+      contract_id: S.contract ? S.contract.id : null,
+      template_id: S.form.template_id,
+      partner_id: S.form.partner_id || false,
+      quote_code: S.form.quote_code,
+    }).then(function (result) {
+      if (numberState.key === key) {
+        numberState.number = result.number;
+        showNumber();
+      }
+    }).catch(HD.fail);
+  }
+
+  /** Biến tự điền (ngày ký, bên bán, tổng tiền bằng chữ…): để trống là dùng giá trị tự tính,
+      gõ vào là sửa đè cho riêng hợp đồng này. */
+  function overridesHtml() {
+    var fields = (S.contract && S.contract.template_id === S.form.template_id) ? S.contract.system_fields : [];
+    if (!fields || !fields.length) {
+      return "";
+    }
+    var used = fields.filter(function (f) { return S.form.overrides[f.name]; }).length;
+    return '<details class="hd-step"' + (used ? " open" : "") + '><summary class="hd-h3">Thông tin tự điền — sửa đè nếu cần' +
+      (used ? ' <span class="hd-tag hd-tag-warn">' + used + " ô đang sửa đè</span>" : "") + "</summary>" +
+      '<p class="hd-muted hd-small mt-2">Để trống là dùng giá trị tự tính (chữ mờ trong ô). Gõ vào là thay cho riêng hợp đồng này.</p>' +
+      '<div class="hd-grid">' + fields.map(function (f) {
+        return '<div class="hd-field"><label class="hd-label" for="hd-o-' + f.name + '">' + esc(f.label) + "</label>" +
+          '<input type="text" class="hd-input w-100" id="hd-o-' + f.name + '" data-override="' + esc(f.name) + '" value="' +
+          esc(S.form.overrides[f.name] || "") + '" placeholder="' + esc(f.auto) + '"/></div>';
+      }).join("") + "</div></details>";
   }
 
   /** Thông báo đầu ngăn: mẫu đã được sửa sau khi lập hợp đồng (nháp thì cho áp dụng mẫu mới). */
@@ -196,13 +212,13 @@ window.HlvContract = window.HlvContract || {};
   function render() {
     var body = noticesHtml() +
       '<fieldset id="hd-form"' + (editable() ? "" : " disabled") + ">" +
-      '<section class="hd-step"><h3 class="hd-h3">Hợp đồng</h3><div class="hd-grid">' +
+      '<section class="hd-step"><h3 class="hd-h3">Hợp đồng</h3><div class="hd-grid">' + numberFieldHtml() +
       '<div class="hd-field"><label class="hd-label" for="hd-f-template">Mẫu</label>' +
       '<select class="hd-input w-100" id="hd-f-template">' + templateOptions() + "</select></div>" +
       '<div class="hd-field"><label class="hd-label" for="hd-f-date">Ngày ký</label>' +
       '<input type="date" class="hd-input w-100" id="hd-f-date" value="' + esc(S.form.contract_date) + '"/></div>' +
-      "</div></section>" +
-      sectionsHtml() + linesHtml() +
+      "</div></section>" + HD.linksHtml() +
+      sectionsHtml() + HD.linesHtml() + overridesHtml() +
       '<section class="hd-step"><label class="hd-label" for="hd-f-note">Ghi chú nội bộ (không in ra hợp đồng)</label>' +
       '<textarea class="hd-input hd-textarea w-100" id="hd-f-note" rows="2">' + esc(S.form.note) + "</textarea></section>" +
       "</fieldset>" +
@@ -218,15 +234,15 @@ window.HlvContract = window.HlvContract || {};
       onPick: focusVariable,
     }) : null;
     refreshPreview();
+    refreshNumber();
     if (S.contract) {
       HD.bindContractLogs(HD.$("hd-log-box"), S.contract.id);
     }
     if (HD.$("hd-partner-search")) {
       bindPartnerPicker();
     }
-    if (HD.$("hd-order-search")) {
-      bindOrderPicker();
-    }
+    HD.bindLines();
+    HD.bindLinks();
     markDirty(S.dirty);
   }
 
@@ -238,6 +254,7 @@ window.HlvContract = window.HlvContract || {};
     }
     if (on) {
       refreshPreview();
+      refreshNumber();
     }
   }
 
@@ -249,17 +266,7 @@ window.HlvContract = window.HlvContract || {};
       return;
     }
     collectForm();
-    var payload = {
-      contract_id: S.contract ? S.contract.id : null,
-      template_id: S.form.template_id,
-      contract_date: S.form.contract_date,
-      partner_id: S.form.partner_id || false,
-      vat_rate: S.form.vat_rate,
-      values: S.form.values,
-    };
-    if (template().has_lines) {
-      payload.lines = S.lines;
-    }
+    var payload = formPayload();
     var token = ++previewToken;
     var target = preview;
     target.setStatus("đang cập nhật…");
@@ -277,10 +284,15 @@ window.HlvContract = window.HlvContract || {};
 
   /** Bấm chỗ biến trên bản xem trước: nhảy tới ô nhập của biến đó. */
   function focusVariable(name) {
-    var input = document.querySelector('#hd-form [data-var="' + name + '"]');
+    var input = name === "So_Hop_Dong" ? HD.$("hd-f-name")
+      : document.querySelector('#hd-form [data-var="' + name + '"]') || document.querySelector('#hd-form [data-override="' + name + '"]');
     if (!input) {
-      HD.toast(name === "So_Hop_Dong" ? "Số hợp đồng tự cấp khi lưu" : "Chỗ này tự điền, không cần nhập");
+      HD.toast("Chỗ này tự điền theo bảng hàng");
       return;
+    }
+    var box = input.closest("details");
+    if (box) {
+      box.open = true;
     }
     input.scrollIntoView({ block: "center", behavior: "smooth" });
     input.focus({ preventScroll: true });
@@ -330,115 +342,22 @@ window.HlvContract = window.HlvContract || {};
     }).catch(HD.fail);
   }, 250);
 
-  function bindOrderPicker() {
-    var input = HD.$("hd-order-search");
-    HD.bindPicker(input, HD.$("hd-order-results"), function (term) {
-      return HD.api("sale_orders", { search: term });
-    }, function (o) {
-      return '<span class="hd-strong">' + esc(o.label) + "</span> " + esc(o.partner) +
-        ' <span class="hd-muted">' + HD.money(o.amount_total) + "</span>";
-    }, function (o) {
-      HD.api("sale_order_lines", { order_id: o.id, vat_rate: S.form.vat_rate }).then(function (result) {
-        if (S.lines.length && window.confirm("Thay các dòng hàng đang có bằng hàng của đơn " + o.label + "?\n(Huỷ = thêm vào cuối)")) {
-          S.lines = [];
-        }
-        addLines(result.lines);
-        input.value = "";
-        // Chưa có khách thì lấy khách của đơn; ô bên mua đã gõ tay thì giữ nguyên
-        if (!S.form.partner_id) {
-          collectForm();
-          S.form.partner_id = result.partner_id;
-          S.form.partner_label = result.partner_label;
-          fillVariables(result.partner_values, false);
-          render();
-        }
-        HD.toast("Đã lấy " + result.lines.length + " dòng từ " + o.label);
-      }).catch(HD.fail);
-    });
-  }
-
-  /* ---------------------------------------------------------- chọn sản phẩm trên dòng hàng */
-
-  var searchProducts = HD.debounce(function (input, index) {
-    var term = input.value.trim();
-    if (term.length < 2) {
-      HD.suggest.close();
-      return;
-    }
-    HD.api("products", { search: term, vat_rate: S.form.vat_rate }).then(function (items) {
-      HD.suggest.open(input, items, function (p) {
-        return "<span>" + esc(p.label) + '</span> <span class="hd-muted">' + esc(p.uom) + " · " + HD.money(p.price_incl) + "</span>";
-      }, function (item) { pickProduct(index, item); }, "Chọn sản phẩm, hoặc cứ gõ tiếp để dùng tên tự do");
-    }).catch(HD.fail);
-  }, 250);
-
-  function pickProduct(index, item) {
-    Object.assign(S.lines[index], { product_id: item.id, product_name: item.name, uom: item.uom, price_incl: item.price_incl });
-    redrawLines();
-    markDirty(true);
-    var qty = document.querySelector('[data-line="' + index + '"][data-line-field="quantity"]');
-    if (qty) {
-      qty.focus();
-      qty.select();
-    }
-  }
-
-  /* ---------------------------------------------------------- tổng tiền */
-
-  var refreshTotals = HD.debounce(function () {
-    HD.api("totals", { lines: S.lines, vat_rate: S.form.vat_rate }).then(function (t) {
-      t.subtotals.forEach(function (value, index) {
-        var line = S.lines[index];
-        if (!line) {
-          return;
-        }
-        line.subtotal = value;
-        line.subtotal_incl = t.subtotals_incl[index];
-        line.price_excl = t.prices_excl[index];
-        var set = function (selector, text) {
-          var el = document.querySelector(selector);
-          if (el) {
-            el.textContent = text;
-          }
-        };
-        set('[data-total-incl="' + index + '"]', HD.money(line.subtotal_incl));
-        set('[data-total-excl="' + index + '"]', "chưa VAT " + HD.money(value));
-        set('[data-excl="' + index + '"]', "chưa VAT " + HD.money(line.price_excl));
-      });
-      HD.$("hd-t-untaxed").textContent = HD.money(t.untaxed);
-      HD.$("hd-t-vat").textContent = HD.money(t.vat);
-      HD.$("hd-t-total").textContent = HD.money(t.total);
-      HD.$("hd-t-words").textContent = t.words;
-    }).catch(HD.fail);
-  }, 300);
-
-  function redrawLines() {
-    var body = HD.$("hd-lines-body");
-    if (body) {
-      body.innerHTML = S.lines.map(lineRowHtml).join("");
-      refreshTotals();
-    }
-  }
-
-  function addLines(lines) {
-    S.lines = S.lines.concat(lines.map(function (l) {
-      return Object.assign({ product_id: false, uom: "", quantity: 1, price_incl: 0, subtotal: 0, subtotal_incl: 0, price_excl: 0 }, l);
-    }));
-    redrawLines();
-    markDirty(true);
-  }
-
   /* ---------------------------------------------------------- lưu & thao tác */
 
   function collectForm() {
     var form = S.form;
     form.contract_date = HD.$("hd-f-date").value;
     form.note = HD.$("hd-f-note").value;
+    form.name = HD.$("hd-f-name").value.trim();
+    document.querySelectorAll("#hd-form [data-override]").forEach(function (el) {
+      form.overrides[el.dataset.override] = el.value.trim();
+    });
     document.querySelectorAll("#hd-form [data-var]").forEach(function (el) {
       var type = el.dataset.varType;
       form.values[el.dataset.var] = (type === "money" || type === "number") && el.value.trim() !== ""
         ? String(HD.parseNumber(el.value)) : el.value;
     });
+    HD.collectLinks(form);
   }
 
   function loadDetail(detail) {
@@ -450,26 +369,36 @@ window.HlvContract = window.HlvContract || {};
       partner_label: detail.partner_label,
       vat_rate: detail.vat_rate,
       note: detail.note,
+      name: detail.name,
       values: Object.assign({}, detail.values),
+      overrides: Object.fromEntries(detail.system_fields.map(function (f) { return [f.name, f.override]; })),
     };
-    S.lines = detail.lines.map(function (l) { return Object.assign({ price_excl: l.price_unit }, l); });
+    Object.assign(S.form, HD.linkFormDefaults(detail));
+    S.lines = detail.lines.map(function (l) { return Object.assign({ price_basis: "incl" }, l); });
   }
 
-  function save() {
-    collectForm();
-    var payload = {
+  /** Dữ liệu ngăn soạn gửi server (Lưu và Xem trước dùng chung). */
+  function formPayload() {
+    var payload = Object.assign({
       contract_id: S.contract ? S.contract.id : null,
       template_id: S.form.template_id,
       contract_date: S.form.contract_date,
       partner_id: S.form.partner_id || false,
       vat_rate: S.form.vat_rate,
       note: S.form.note,
+      name: S.form.name,
+      overrides: S.form.overrides,
       values: S.form.values,
-    };
+    }, HD.linkPayload());
     if (template().has_lines) {
       payload.lines = S.lines;
     }
-    return HD.api("save", payload).then(function (detail) {
+    return payload;
+  }
+
+  function save() {
+    collectForm();
+    return HD.api("save", formPayload()).then(function (detail) {
       loadDetail(detail);
       markDirty(false);
       render();
@@ -515,8 +444,9 @@ window.HlvContract = window.HlvContract || {};
 
   HD.closeDrawer = closeDrawer;
 
-  /** Mở hợp đồng id; id = null là hợp đồng mới, templateId (tuỳ chọn) chọn sẵn mẫu. */
-  HD.openContract = function (id, templateId) {
+  /** Mở hợp đồng id; id = null là hợp đồng mới, templateId (tuỳ chọn) chọn sẵn mẫu, prepare (tuỳ
+      chọn) điền sẵn S.form của văn bản mới trước khi vẽ (lập phụ lục / đề nghị thanh toán từ văn bản gốc). */
+  HD.openContract = function (id, templateId, prepare) {
     S.dirty = false;
     S.previewOn = HD.previewEnabled();
     var load = id ? HD.api("get", { contract_id: id }) : Promise.resolve(null);
@@ -533,9 +463,16 @@ window.HlvContract = window.HlvContract || {};
           partner_label: "",
           vat_rate: S.config.default_vat,
           note: "",
+          name: "",
           values: {},
+          overrides: {},
         };
+        Object.assign(S.form, HD.linkFormDefaults(null));
         S.lines = [];
+        if (prepare) {
+          prepare();
+          S.dirty = true;
+        }
       }
       render();
       HD.show("hd-drawer", true);
@@ -555,12 +492,22 @@ window.HlvContract = window.HlvContract || {};
     }).catch(HD.fail);
   };
 
+  HD.form = {
+    template: template,
+    fieldHtml: fieldHtml,
+    markDirty: markDirty,
+    collectForm: collectForm,
+    fillVariables: fillVariables,
+    saveIfDirty: saveIfDirty,
+    render: function () { render(); },
+  };
+
   /* ---------------------------------------------------------- gắn sự kiện */
 
   HD.initForm = function () {
     var panel = HD.$("hd-drawer-panel");
 
-    HD.on(panel, "input", "[data-var], #hd-f-date, #hd-f-note", function () { markDirty(true); });
+    HD.on(panel, "input", "[data-var], [data-override], #hd-f-date, #hd-f-note, #hd-f-name", function () { markDirty(true); });
     HD.on(panel, "focusin", "[data-var]", function (el) {
       if (preview) {
         preview.highlight(el.dataset.var);
@@ -602,57 +549,9 @@ window.HlvContract = window.HlvContract || {};
     HD.on(panel, "change", "#hd-f-template", function (el) {
       collectForm();
       S.form.template_id = +el.value;
+      HD.checkParentType();
       render();
       markDirty(true);
-    });
-    HD.on(panel, "input", "#hd-vat", function (el) {
-      S.form.vat_rate = HD.parseNumber(el.value);
-      markDirty(true);
-      refreshTotals();
-    });
-    HD.on(panel, "input", "[data-line-field]", function (el) {
-      var index = +el.dataset.line;
-      var line = S.lines[index];
-      var field = el.dataset.lineField;
-      markDirty(true);
-      if (field === "product_name") {
-        line.product_name = el.value;
-        line.product_id = false;   // gõ tay thì bỏ gắn sản phẩm cũ
-        searchProducts(el, index);
-        return;
-      }
-      line[field] = field === "uom" ? el.value : HD.parseNumber(el.value);
-      if (field !== "uom") {
-        refreshTotals();
-      }
-    });
-    // Gõ xong định dạng lại "4382640" -> "4.382.640" cho dễ soát
-    HD.on(panel, "focusout", '[data-line-field="price_incl"], [data-line-field="quantity"]', function (el) {
-      var value = S.lines[+el.dataset.line][el.dataset.lineField];
-      el.value = el.dataset.lineField === "price_incl" ? HD.money(value) : HD.qty(value);
-    });
-    HD.on(panel, "click", "[data-remove-line]", function (el) {
-      S.lines.splice(+el.dataset.removeLine, 1);
-      redrawLines();
-      markDirty(true);
-    });
-    HD.on(panel, "click", "#hd-add-line", function () {
-      addLines([{ product_name: "" }]);
-      var inputs = panel.querySelectorAll('[data-line-field="product_name"]');
-      inputs[inputs.length - 1].focus();
-    });
-    HD.on(panel, "click", "#hd-paste-toggle", function () { HD.show("hd-paste-box", true); HD.$("hd-paste-text").focus(); });
-    HD.on(panel, "click", "#hd-paste-cancel", function () { HD.show("hd-paste-box", false); });
-    HD.on(panel, "click", "#hd-paste-run", function () {
-      var lines = HD.parsePastedLines(HD.$("hd-paste-text").value);
-      if (!lines.length) {
-        HD.toast("Không nhận ra dòng hàng nào", "error");
-        return;
-      }
-      addLines(lines);
-      HD.$("hd-paste-text").value = "";
-      HD.show("hd-paste-box", false);
-      HD.toast("Đã thêm " + lines.length + " dòng");
     });
     HD.on(panel, "click", "#hd-save", function () { save().catch(HD.fail); });
     HD.on(panel, "click", "[data-action]", function (el) { runAction(el.dataset.action); });

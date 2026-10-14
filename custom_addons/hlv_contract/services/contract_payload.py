@@ -29,6 +29,7 @@ def contract_summary(contract):
     return {
         'id': contract.id,
         'name': contract.name,
+        'contract_type': contract.contract_type,
         'template_id': contract.template_id.id,
         'template_name': contract.template_id.name or '',
         'contract_date': _date(contract.contract_date),
@@ -52,6 +53,7 @@ def _lines(contract):
         'quantity': line.quantity,
         'price_unit': line.price_unit,
         'price_incl': contract_vars.price_incl(line.price_unit, rate),
+        'price_excl': line.price_unit,
         'subtotal': line.subtotal,
         'subtotal_incl': contract_vars.price_incl(line.subtotal, rate),
     } for line in contract.line_ids]
@@ -75,10 +77,30 @@ def contract_detail(contract, can_manage):
         'actions': _allowed_actions(contract, can_manage),
         # Ô nhập theo bản chụp riêng của hợp đồng, không theo mẫu hiện tại
         'variables': contract._doc_variables(),
+        'number_auto': contract.number_auto,
+        'system_fields': _system_fields(contract),
         'doc_custom': contract.doc_custom,
         'template_outdated': contract._template_outdated(),
+        'quote_code': contract.quote_code or '',
+        'payment_no': contract.payment_no,
+        'payment_percent': contract.payment_percent,
+        'payment_amount_manual': contract.payment_amount_manual,
+        'payment': contract._payment_summary() if contract.contract_type == 'payment' else False,
     })
+    detail.update(contract._link_info())
     return detail
+
+
+def _system_fields(contract):
+    """Biến tự điền người soạn được sửa đè: giá trị tự tính (làm gợi ý) và giá trị đang sửa đè."""
+    auto = contract._merge_vars(with_overrides=False)
+    overrides = contract.overrides or {}
+    return [{
+        'name': name,
+        'label': contract_vars.SYSTEM_LABELS.get(name, name),
+        'auto': auto.get(name, ''),
+        'override': overrides.get(name, ''),
+    } for name in contract._system_fields()]
 
 
 def grid_row(contract, can_manage):
@@ -121,6 +143,7 @@ def template_summary(template):
         'filename': template.docx_filename or '',
         'active': template.active,
         'has_lines': template.has_lines,
+        'number_pattern': template.number_pattern or '',
         'variables': [var._to_dict() for var in template.variable_ids],
     }
 
@@ -153,6 +176,8 @@ def variable_library():
             {'title': 'Bảng hàng hoá — dùng trong bảng hàng', 'items': items(
                 ['%s_1' % f for f in contract_vars.LINE_FIELDS])},
             {'title': 'Tổng tiền — tính từ bảng hàng', 'items': items(contract_vars.TOTAL_VARIABLES)},
+            {'title': 'Văn bản gốc — phụ lục / đề nghị thanh toán', 'items': items(contract_vars.LINK_VARIABLES)},
+            {'title': 'Đề nghị thanh toán theo đợt', 'items': items(contract_vars.PAYMENT_VARIABLES)},
         ],
         'types': contract_vars.VARIABLE_TYPES,
         'sections': contract_vars.SECTIONS,

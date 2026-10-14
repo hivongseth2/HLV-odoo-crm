@@ -8,14 +8,22 @@ window.HlvContract = window.HlvContract || {};
 
   var esc = HD.esc;
   var FONT_SIZES = [11, 12, 13, 14, 16, 18, 20];
+  // Khoảng cách phía trên đoạn (pt): giãn chỗ ký tên… mịn hơn chèn cả dòng trống
+  var SPACE_BEFORE = [0, 6, 12, 18, 24, 36, 48, 60, 72];
+  var PARA_SELECTOR = "p, div, li, h1, h2, h3, h4, h5, h6";
   var DEFAULT_SIZE = 13;
   var ZWSP = "​";
-  // fontSize của execCommand chỉ nhận 1..7; dùng 7 làm dấu tạm rồi đổi sang span cỡ pt thật
+  // fontSize của execCommand chỉ nhận 1..7; dùng 7 làm dấu tạm rồi đổi sang span có kiểu thật
+  // (cỡ pt, IN HOA) — trình duyệt tự lo cắt vùng chọn qua nhiều thẻ
   var FONT_MARKER = "7";
   var BLOCK_TAGS = ["P", "DIV", "LI", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6"];
+  var TEXT_STYLES = ["bold", "italic", "underline"];
+  var SHORTCUTS = { b: "bold", i: "italic", u: "underline" };
+  var CF = HD.chipFormat;
 
   var TOOLBAR = [
-    [["bold", "<b>B</b>", "Đậm (Ctrl+B)"], ["italic", "<i>I</i>", "Nghiêng (Ctrl+I)"], ["underline", "<u>U</u>", "Gạch chân (Ctrl+U)"]],
+    [["bold", "<b>B</b>", "Đậm (Ctrl+B)"], ["italic", "<i>I</i>", "Nghiêng (Ctrl+I)"], ["underline", "<u>U</u>", "Gạch chân (Ctrl+U)"],
+      ["caps", "AA", "IN HOA (bấm lại để bỏ). Bôi đen một ô biến rồi bấm: chỉ chỗ đó in hoa, chỗ khác của cùng biến giữ nguyên"]],
     [["justifyLeft", "⟸", "Căn trái"], ["justifyCenter", "≡", "Căn giữa"], ["justifyRight", "⟹", "Căn phải"], ["justifyFull", "☰", "Căn đều"]],
     [["insertUnorderedList", "• Danh sách", "Gạch đầu dòng"]],
     [["table", "Bảng", "Chèn bảng"], ["goods", "Bảng hàng hoá", "Chèn bảng hàng hoá dựng sẵn (một dòng mẫu + dòng tổng)"],
@@ -34,7 +42,11 @@ window.HlvContract = window.HlvContract || {};
       '<option value="">Cỡ chữ</option>' + FONT_SIZES.map(function (size) {
         return '<option value="' + size + '">' + size + " pt</option>";
       }).join("") + "</select>";
-    return '<div class="hd-toolbar-editor">' + groups.join("") + sizes + "</div>";
+    var spacing = '<select class="hd-input hd-tool-size" data-space-before="1" title="Khoảng cách phía trên đoạn đang chọn">' +
+      '<option value="">Cách trên</option>' + SPACE_BEFORE.map(function (pt) {
+        return '<option value="' + pt + '">' + (pt ? pt + " pt" : "Không cách") + "</option>";
+      }).join("") + "</select>";
+    return '<div class="hd-toolbar-editor">' + groups.join("") + sizes + spacing + "</div>";
   }
 
   /**
@@ -151,18 +163,106 @@ window.HlvContract = window.HlvContract || {};
       return found && editor.contains(found) ? found : null;
     }
 
-    function applyFontSize(size) {
+    /** Bọc vùng chọn trong span, styleSpan(span) đặt kiểu cho span. */
+    function wrapSelection(styleSpan) {
       exec("fontSize", FONT_MARKER);
       editor.querySelectorAll('font[size="' + FONT_MARKER + '"]').forEach(function (font) {
         var span = document.createElement("span");
-        if (+size !== DEFAULT_SIZE) {
-          span.style.fontSize = size + "pt";
-        }
+        styleSpan(span);
         while (font.firstChild) {
           span.appendChild(font.firstChild);
         }
         font.replaceWith(span);
       });
+    }
+
+    function selectedChips() {
+      return CF.chips(editor, savedRange);
+    }
+
+    /** Đậm / nghiêng / gạch chân cho cả chữ lẫn ô biến trong vùng chọn (xem hd_editor_chips.js). */
+    function textStyle(command) {
+      restoreSelection();
+      var chips = selectedChips();
+      var withText = !chips.length || CF.hasText(savedRange);
+      if (withText) {
+        exec(command);
+      }
+      if (chips.length) {
+        var on = withText ? document.queryCommandState(command) : !CF.isOn(editor, chips[0], command);
+        CF.apply(editor, chips, command, on);
+        lockChips();
+      }
+    }
+
+    function applyFontSize(size) {
+      var chips = selectedChips();
+      wrapSelection(function (span) {
+        if (+size !== DEFAULT_SIZE) {
+          span.style.fontSize = size + "pt";
+        }
+      });
+      CF.size(editor, chips, +size !== DEFAULT_SIZE ? size : null);
+    }
+
+    /** Các đoạn nằm trong vùng chọn; ô bảng chưa có đoạn thì bọc chữ của ô thành một đoạn. */
+    function selectedParagraphs() {
+      if (!savedRange) {
+        return [];
+      }
+      var found = Array.from(editor.querySelectorAll(PARA_SELECTOR)).filter(function (el) {
+        return savedRange.intersectsNode(el) && !el.querySelector(PARA_SELECTOR);
+      });
+      if (found.length) {
+        return found;
+      }
+      var node = savedRange.startContainer;
+      var cell = (node.nodeType === 1 ? node : node.parentElement).closest("td, th");
+      if (!cell || !editor.contains(cell)) {
+        return [];
+      }
+      var para = document.createElement("p");
+      while (cell.firstChild) {
+        para.appendChild(cell.firstChild);
+      }
+      cell.appendChild(para);
+      return [para];
+    }
+
+    function applySpaceBefore(pt) {
+      restoreSelection();
+      var paras = selectedParagraphs();
+      if (!paras.length) {
+        HD.toast("Đặt con trỏ vào đoạn cần giãn", "error");
+        return;
+      }
+      paras.forEach(function (para) { para.style.marginTop = pt + "pt"; });
+      rememberSelection();
+    }
+
+    /** IN HOA: đang đứng trong vùng in hoa thì bỏ, không thì bọc vùng chọn. Chỉ bôi ô biến thì bật /
+        tắt IN HOA riêng cho các ô biến đó. */
+    function toggleCaps() {
+      restoreSelection();
+      var chips = selectedChips();
+      if (chips.length && !CF.hasText(savedRange)) {
+        CF.apply(editor, chips, "caps", !CF.isOn(editor, chips[0], "caps"));
+        lockChips();
+        return;
+      }
+      var node = savedRange ? savedRange.startContainer : null;
+      var el = node && (node.nodeType === 1 ? node : node.parentElement);
+      var caps = el ? el.closest('[style*="text-transform"]') : null;
+      if (caps && editor.contains(caps)) {
+        caps.style.textTransform = "";
+        if (!caps.getAttribute("style")) {
+          caps.replaceWith.apply(caps, Array.from(caps.childNodes));
+        }
+        return;
+      }
+      wrapSelection(function (span) { span.style.textTransform = "uppercase"; });
+      CF.apply(editor, chips, "caps", true);
+      lockChips();
     }
 
     function tableCommand(command) {
@@ -260,6 +360,15 @@ window.HlvContract = window.HlvContract || {};
     }
 
     ["keyup", "mouseup", "input"].forEach(function (name) { editor.addEventListener(name, rememberSelection); });
+    // Ctrl+B/I/U mặc định của trình duyệt bỏ qua ô biến: chạy qua textStyle để ô biến cũng nhận
+    editor.addEventListener("keydown", function (event) {
+      var command = (event.ctrlKey || event.metaKey) && !event.altKey && SHORTCUTS[event.key.toLowerCase()];
+      if (command) {
+        event.preventDefault();
+        rememberSelection();
+        textStyle(command);
+      }
+    });
     HD.on(container, "mousedown", "[data-cmd], [data-var], [data-new-var]", function (el, event) {
       event.preventDefault();   // giữ vùng chọn trong trang giấy khi bấm nút
     });
@@ -268,12 +377,22 @@ window.HlvContract = window.HlvContract || {};
       if (["table", "goods", "rowAdd", "rowDel", "border"].indexOf(command) >= 0) {
         restoreSelection();
         tableCommand(command);
+      } else if (command === "caps") {
+        toggleCaps();
+      } else if (TEXT_STYLES.indexOf(command) >= 0) {
+        textStyle(command);
       } else {
         exec(command);
       }
     });
     HD.on(container, "click", "[data-var]", function (el) { insertVariable(el.dataset.var); });
     HD.on(container, "click", "[data-new-var]", newVariable);
+    HD.on(container, "change", "[data-space-before]", function (el) {
+      if (el.value !== "") {
+        applySpaceBefore(+el.value);
+        el.value = "";
+      }
+    });
     HD.on(container, "change", "[data-font-size]", function (el) {
       if (el.value) {
         applyFontSize(el.value);

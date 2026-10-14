@@ -15,4 +15,22 @@
         <field name="docx_file" type="base64" file="hlv_contract/data/templates/Mau_HopDong_NguyenTac.docx"/>
         <field name="docx_filename">Mau_HopDong_NguyenTac.docx</field>
     </record>
+    <!-- Phụ lục theo đơn (căn cứ hợp đồng nguyên tắc) và giấy đề nghị thanh toán, dựng từ file đang dùng.
+         Khuôn số ghi rõ để mẫu không phụ thuộc giá trị mặc định khi tạo record -->
+    <record id="template_appendix_default" model="hlv.contract.template">
+        <field name="name">Phụ lục hợp đồng theo đơn (mẫu gốc)</field>
+        <field name="contract_type">appendix</field>
+        <field name="number_pattern">{dd}.{mm}/{yyyy}/PLHĐ/{ma_khach}</field>
+        <field name="source">docx</field>
+        <field name="docx_file" type="base64" file="hlv_contract/data/templates/Mau_PhuLuc_HopDong.docx"/>
+        <field name="docx_filename">Mau_PhuLuc_HopDong.docx</field>
+    </record>
+    <record id="template_payment_default" model="hlv.contract.template">
+        <field name="name">Giấy đề nghị thanh toán (mẫu gốc)</field>
+        <field name="contract_type">payment</field>
+        <field name="number_pattern">{dd}{mm}{yy}/ĐNTT/HLV-{ma_khach}</field>
+        <field name="source">docx</field>
+        <field name="docx_file" type="base64" file="hlv_contract/data/templates/Mau_DeNghi_ThanhToan.docx"/>
+        <field name="docx_filename">Mau_DeNghi_ThanhToan.docx</field>
+    </record>
 </odoo>

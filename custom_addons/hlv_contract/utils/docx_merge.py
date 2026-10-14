@@ -4,7 +4,11 @@
 Word lưu trường trộn dạng field phức (fldChar begin/separate/end + instrText) hoặc
 fldSimple. Điền ở thân văn bản và đầu/chân trang (word/header*.xml, footer*.xml).
 
-fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True):
+fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True, styles=None):
+    Định dạng chữ của giá trị điền vào: trường không tự mang định dạng (mẫu tạo bằng code / Word
+    không bôi đậm trường) thì lấy theo chữ đứng ngay trước trong cùng đoạn ("Số: «So_Hop_Dong»"
+    nghiêng như "Số:"); styles {tên: {'b','i','u','caps': bool}} bật thêm kiểu cho từng biến
+    (cấu hình "Kiểu chữ" của biến), áp ở mọi chỗ biến xuất hiện.
     values: dict {tên_trường: chuỗi}. Trường có trong file nhưng thiếu khoá trong
     values được giữ nguyên dạng «Tên» để lộ ra khi soát mẫu. Khoá có giá trị '' thì
     xoá sạch chữ trong trường. Giá trị có '\\n' được xuống dòng (w:br).
@@ -53,20 +57,21 @@ def _top_level_fields(element):
             if tag == _q('fldChar'):
                 kind = child.get(_q('fldCharType'))
                 if kind == 'begin':
-                    stack.append({'instr': '', 'stage': 'instr', 'texts': []})
+                    stack.append({'instr': '', 'stage': 'instr', 'texts': [], 'begin': run})
                 elif kind == 'separate' and stack:
                     stack[-1]['stage'] = 'result'
                 elif kind == 'end' and stack:
                     done = stack.pop()
                     if not stack:
-                        fields.append({'name': merge_field_name(done['instr']), 'texts': done['texts']})
+                        fields.append({'name': merge_field_name(done['instr']), 'texts': done['texts'],
+                                       'begin': done['begin']})
             elif tag == _q('instrText') and stack and stack[-1]['stage'] == 'instr':
                 stack[-1]['instr'] += child.text or ''
             elif tag == _q('t') and stack and stack[-1]['stage'] == 'result':
                 stack[-1]['texts'].append(child)
     for simple in element.iter(_q('fldSimple')):
         fields.append({'name': merge_field_name(simple.get(_q('instr'))),
-                       'texts': list(simple.iter(_q('t')))})
+                       'texts': list(simple.iter(_q('t'))), 'begin': simple})
     return [f for f in fields if f['name']]
 
 
@@ -86,11 +91,75 @@ def _set_text(t_element, value):
         anchor = new_t
 
 
-def _fill_element(element, values):
+_STYLE_TAGS = {'b': 'b', 'i': 'i', 'u': 'u', 'caps': 'caps'}
+_LOOK_TAGS = {'b', 'i', 'u', 'caps', 'sz', 'strike', 'color', 'highlight'}
+
+
+def _has_look(rpr):
+    """rPr có định dạng nhìn thấy được (đậm, nghiêng, cỡ chữ...) hay chỉ có font / trống."""
+    return rpr is not None and any(etree.QName(child).localname in _LOOK_TAGS for child in rpr)
+
+
+def _style_source(field):
+    """rPr của chữ đứng ngay trước trường trong cùng đoạn (không tính chữ trống), hoặc None."""
+    begin = field['begin']
+    paragraph = next((a for a in begin.iterancestors() if a.tag == _q('p')), None)
+    if paragraph is None:
+        return None
+    runs = list(paragraph.iter(_q('r')))
+    index = runs.index(begin) if begin in runs else len(runs)
+    for run in reversed(runs[:index]):
+        if any((t.text or '').strip() for t in run.findall(_q('t'))):
+            return run.find(_q('rPr'))
+    return None
+
+
+def _apply_style(rpr, style):
+    """Bật/tắt đậm, nghiêng, gạch chân, in hoa trên rPr theo style {'b','i','u','caps'}."""
+    for key, tag in _STYLE_TAGS.items():
+        if key not in style:
+            continue
+        for old in rpr.findall(_q(tag)):
+            rpr.remove(old)
+        if style[key]:
+            node = etree.SubElement(rpr, _q(tag))
+            if tag == 'u':
+                node.set(_q('val'), 'single')
+
+
+def _style_field(field, style):
+    """Định dạng phần giá trị của trường: kế thừa chữ đứng trước nếu trường không tự có định dạng,
+    rồi áp style của biến. Ghi rPr giống nhau vào mọi run giá trị."""
+    runs = []
+    for t_el in field['texts']:
+        run = t_el.getparent()
+        if run.tag == _q('r') and run not in runs:
+            runs.append(run)
+    if not runs:
+        return
+    rpr = runs[0].find(_q('rPr'))
+    if not _has_look(rpr):
+        source = _style_source(field)
+        if _has_look(source):
+            rpr = copy.deepcopy(source)
+    if style:
+        rpr = copy.deepcopy(rpr) if rpr is not None else etree.Element(_q('rPr'))
+        _apply_style(rpr, style)
+    if rpr is None:
+        return
+    for run in runs:
+        old = run.find(_q('rPr'))
+        if old is not None:
+            run.remove(old)
+        run.insert(0, copy.deepcopy(rpr))
+
+
+def _fill_element(element, values, styles=None):
     for field in _top_level_fields(element):
         name = field['name']
         if name not in values or not field['texts']:
             continue
+        _style_field(field, (styles or {}).get(name))
         for extra in field['texts'][1:]:
             extra.text = ''
         _set_text(field['texts'][0], values[name])
@@ -149,7 +218,7 @@ def _expand_line_rows(root, line_count):
         anchor = clone
 
 
-def fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True):
+def fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True, styles=None):
     """Xem docstring đầu module."""
     parts = read_xml_parts(docx_bytes, _is_fillable_part)
     for name, root in parts.items():
@@ -159,7 +228,7 @@ def fill_docx(docx_bytes, values, line_count=0, prune_empty_rows=True):
                 for row in list(root.iter(_q('tr'))):
                     if _is_empty_line_row(row, values):
                         row.getparent().remove(row)
-        _fill_element(root, values)
+        _fill_element(root, values, styles)
 
     out = BytesIO()
     with zipfile.ZipFile(BytesIO(docx_bytes)) as zin, zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zout:

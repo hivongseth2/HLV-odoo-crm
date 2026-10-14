@@ -3,19 +3,22 @@
 
 Cấu trúc blocks:
   đoạn:  {'type': 'p', 'align': 'left'|'center'|'right'|'justify', 'runs': [run, ...],
-          'indent': twips lề trái, 'first': twips dòng đầu (âm = treo), 'after': twips cách dưới}
+          'indent': twips lề trái, 'first': twips dòng đầu (âm = treo), 'after': twips cách dưới,
+          'before': twips cách trên}
   bảng:  {'type': 'table', 'rows': [[cell, ...], ...], 'borders': bool,
           'widths': [độ rộng tương đối từng cột] hoặc None (chia đều)}
          cell = {'span': int, 'paras': [đoạn, ...]}   (span = số cột gộp)
-  run:   {'text': str, 'b': bool, 'i': bool, 'u': bool, 'sz': nửa-point hoặc None}
-         {'field': 'Ten_Ben_Mua'}   trường MERGEFIELD
+  run:   {'text': str, 'b': bool, 'i': bool, 'u': bool, 'caps': bool, 'sz': nửa-point hoặc None}
+         {'field': 'Ten_Ben_Mua', + các khoá định dạng như run chữ}   trường MERGEFIELD
          {'br': True}               xuống dòng mềm
-  Các khoá indent/first/after/borders/widths/sz đều tuỳ chọn.
+  Các khoá indent/first/after/before/borders/widths/sz đều tuỳ chọn.
 
 build_docx(blocks) -> bytes .docx khổ A4, font Times New Roman 13pt.
 read_docx(docx_bytes, keep_fields=True) -> blocks.
   keep_fields=True : trường MERGEFIELD thành {'field': name} (dùng để soạn mẫu).
   keep_fields=False: lấy chữ hiển thị của trường (dùng cho file đã điền, để xuất PDF).
+  Header của trang đầu (quốc hiệu…) đứng đầu blocks; số thứ tự tự động của Word ("ĐIỀU 1.", "a.",
+  "-") thành chữ đầu đoạn (xem docx_numbering). Footer (số trang) bỏ qua.
 read_xml_parts(docx_bytes, names) -> {tên part: cây lxml}; file hỏng -> ValueError.
 merge_field_name(instr) -> tên trường từ mã field Word, hoặc None.
 Trường hợp biên: đoạn trống vẫn được giữ để giữ khoảng cách; ô bảng rỗng vẫn có một
@@ -29,11 +32,20 @@ from xml.sax.saxutils import escape
 
 from lxml import etree
 
+from .docx_numbering import Labeler
+
 W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 XML_SPACE = '{http://www.w3.org/XML/1998/namespace}space'
 DOCUMENT_PART = 'word/document.xml'
+_NUMBERING_PART = 'word/numbering.xml'
+_STYLES_PART = 'word/styles.xml'
+_DOC_RELS_PART = 'word/_rels/document.xml.rels'
+_REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+_PKG_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships'
+# Word lưu hình/khung chữ hai lần: bản mới (mc:Choice) và bản cho Word cũ (mc:Fallback). Chỉ đọc bản mới
+_MC_FALLBACK = '{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback'
 PAGE_TEXT_WIDTH_TWIPS = 9354
-FORMAT_KEYS = ('b', 'i', 'u', 'sz')
+FORMAT_KEYS = ('b', 'i', 'u', 'caps', 'sz')
 _NBSP = '\xa0'
 _MERGE_RE = re.compile(r'^\s*MERGEFIELD\s+"?([^"\s\\]+)"?', re.IGNORECASE)
 _NO_BORDER = ('nil', 'none')
@@ -116,6 +128,8 @@ def _rpr(run):
         parts.append('<w:i/>')
     if run.get('u'):
         parts.append('<w:u w:val="single"/>')
+    if run.get('caps'):
+        parts.append('<w:caps/>')
     if run.get('sz'):
         parts.append('<w:sz w:val="%d"/><w:szCs w:val="%d"/>' % (run['sz'], run['sz']))
     return '<w:rPr>%s</w:rPr>' % ''.join(parts) if parts else ''
@@ -146,7 +160,8 @@ def _field_runs(name, rpr):
 def _ppr(para):
     jc = _ALIGN_TO_JC.get(para.get('align') or 'left', 'left')
     after = para.get('after')
-    spacing = '<w:spacing w:after="%d"/>' % (after if after is not None else 60)
+    before = ' w:before="%d"' % para['before'] if para.get('before') else ''
+    spacing = '<w:spacing%s w:after="%d"/>' % (before, after if after is not None else 60)
     indent = ''
     if para.get('indent') or para.get('first'):
         first = para.get('first') or 0
@@ -255,6 +270,7 @@ def _run_format(rpr):
         'b': _flag(rpr, 'b'),
         'i': _flag(rpr, 'i'),
         'u': _flag(rpr, 'u'),
+        'caps': _flag(rpr, 'caps'),
         'sz': _int_attr(rpr.find(_q('sz')) if rpr is not None else None, 'val'),
     }
 
@@ -272,17 +288,32 @@ def _para_format(p_el):
         fmt['indent'] = _int_attr(ind, 'left') or _int_attr(ind, 'start') or 0
         hanging = _int_attr(ind, 'hanging')
         fmt['first'] = -hanging if hanging else (_int_attr(ind, 'firstLine') or 0)
-    after = _int_attr(ppr.find(_q('spacing')), 'after')
+    spacing = ppr.find(_q('spacing'))
+    after = _int_attr(spacing, 'after')
     if after is not None:
         fmt['after'] = after
+    before = _int_attr(spacing, 'before')
+    if before:
+        fmt['before'] = before
     return fmt
 
 
-def _read_paragraph(p_el, keep_fields):
+def _in_fallback(run, p_el):
+    for ancestor in run.iterancestors():
+        if ancestor is p_el:
+            return False
+        if ancestor.tag == _MC_FALLBACK:
+            return True
+    return False
+
+
+def _read_paragraph(p_el, keep_fields, labeler=None):
     runs = []
     stack = []  # field phức đang mở: {'instr', 'stage', 'merge'}
     simple_done = set()
     for run in p_el.iter(_q('r')):
+        if _in_fallback(run, p_el):
+            continue
         parent = run.getparent()
         if parent.tag == _q('fldSimple'):
             name = merge_field_name(parent.get(_q('instr')))
@@ -304,7 +335,8 @@ def _read_paragraph(p_el, keep_fields):
                     name = merge_field_name(top['instr'])
                     top['merge'] = bool(keep_fields and name)
                     if top['merge']:
-                        runs.append({'field': name})
+                        # Định dạng của trường lấy theo run chứa dấu tách (Word chép rPr cho mọi run của trường)
+                        runs.append(dict(flags, field=name))
                 elif kind == 'end' and stack:
                     stack.pop()
             elif tag == _q('instrText') and stack and stack[-1]['stage'] == 'instr':
@@ -319,7 +351,22 @@ def _read_paragraph(p_el, keep_fields):
                 runs.append({'br': True})
     para = {'type': 'p', 'runs': clean_runs(runs)}
     para.update(_para_format(p_el))
+    if labeler is not None:
+        _add_list_label(para, *labeler.label(p_el))
     return para
+
+
+def _add_list_label(para, label, indent):
+    """Chèn nhãn danh sách vào đầu đoạn, cùng định dạng chữ đầu đoạn (đề mục đậm thì "ĐIỀU 1." đậm);
+    đoạn không tự khai thụt lề thì lấy thụt lề của mức danh sách."""
+    if not label:
+        return
+    first = next((r for r in para['runs'] if 'text' in r or 'field' in r), {})
+    flags = {k: first.get(k) for k in FORMAT_KEYS if first.get(k)}
+    para['runs'].insert(0, dict(flags, text=label + _NBSP))
+    para['runs'] = clean_runs(para['runs'])
+    if 'indent' not in para and 'first' not in para:
+        para.update({k: v for k, v in indent.items() if v})
 
 
 def clean_runs(runs):
@@ -352,13 +399,13 @@ def _table_has_borders(tbl_el):
     return style is not None and 'grid' in (style.get(_q('val')) or '').lower()
 
 
-def _read_table(tbl_el, keep_fields):
+def _read_table(tbl_el, keep_fields, labeler=None):
     rows = []
     for tr in tbl_el.findall(_q('tr')):
         row = []
         for tc in tr.findall(_q('tc')):
             span = _int_attr(tc.find('%s/%s' % (_q('tcPr'), _q('gridSpan'))), 'val') or 1
-            paras = [_read_paragraph(p, keep_fields) for p in tc.findall(_q('p'))]
+            paras = [_read_paragraph(p, keep_fields, labeler) for p in tc.findall(_q('p'))]
             row.append({'span': span, 'paras': paras or [{'type': 'p', 'align': 'left', 'runs': []}]})
         rows.append(row)
     widths = [_int_attr(col, 'w') or 0 for col in tbl_el.findall('%s/%s' % (_q('tblGrid'), _q('gridCol')))]
@@ -376,14 +423,43 @@ def _body_elements(container):
             yield child
 
 
+def _read_container(container, keep_fields, labeler):
+    blocks = []
+    for child in _body_elements(container if container is not None else []):
+        if child.tag == _q('p'):
+            blocks.append(_read_paragraph(child, keep_fields, labeler))
+        elif child.tag == _q('tbl'):
+            blocks.append(_read_table(child, keep_fields, labeler))
+    return blocks
+
+
+def _first_page_header_part(body, rels):
+    """Tên part header in ở trang đầu: header "first" nếu văn bản bật trang đầu khác (titlePg),
+    không thì header "default". Không có -> None."""
+    sect = body.find(_q('sectPr')) if body is not None else None
+    if sect is None or rels is None:
+        return None
+    wanted = 'first' if sect.find(_q('titlePg')) is not None else 'default'
+    refs = {ref.get(_q('type')): ref.get('{%s}id' % _REL_NS) for ref in sect.findall(_q('headerReference'))}
+    targets = {rel.get('Id'): rel.get('Target') for rel in rels.findall('{%s}Relationship' % _PKG_REL_NS)}
+    target = targets.get(refs.get(wanted))
+    return 'word/' + target.lstrip('/').replace('word/', '', 1) if target else None
+
+
+def _trim_empty(blocks):
+    while blocks and blocks[-1]['type'] == 'p' and not blocks[-1]['runs']:
+        blocks.pop()
+    return blocks
+
+
 def read_docx(docx_bytes, keep_fields=True):
     """Xem docstring đầu module."""
-    root = read_xml_parts(docx_bytes)[DOCUMENT_PART]
-    body = root.find(_q('body'))
+    parts = read_xml_parts(docx_bytes, [DOCUMENT_PART, _NUMBERING_PART, _STYLES_PART, _DOC_RELS_PART])
+    body = parts[DOCUMENT_PART].find(_q('body'))
+    labeler = Labeler(parts.get(_NUMBERING_PART), parts.get(_STYLES_PART))
     blocks = []
-    for child in _body_elements(body if body is not None else []):
-        if child.tag == _q('p'):
-            blocks.append(_read_paragraph(child, keep_fields))
-        elif child.tag == _q('tbl'):
-            blocks.append(_read_table(child, keep_fields))
-    return blocks
+    header_part = _first_page_header_part(body, parts.get(_DOC_RELS_PART))
+    if header_part:
+        header = read_xml_parts(docx_bytes, [header_part]).get(header_part)
+        blocks += _trim_empty(_read_container(header, keep_fields, labeler))
+    return blocks + _read_container(body, keep_fields, labeler)

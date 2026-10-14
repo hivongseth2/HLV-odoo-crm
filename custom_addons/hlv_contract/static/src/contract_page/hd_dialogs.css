@@ -368,3 +368,30 @@
 .hd-log-details li { margin: .1rem 0; }
 .hd-link { border: 0; background: none; padding: 0; color: var(--hd-accent); font: inherit; font-weight: 600; cursor: pointer; }
 .hd-link:hover { text-decoration: underline; }
+
+/* Bảng hàng: ô giá người dùng đang gõ (ô còn lại tự tính) */
+.hd-line-input.is-basis { border-color: var(--hd-accent); background: var(--hd-accent-soft); }
+.hd-line-input:not(.is-basis)[data-line-field^="price_"] { color: var(--hd-muted); }
+
+/* Ngăn soạn: phần sửa đè biến tự điền (gập được) */
+details.hd-step > summary { cursor: pointer; list-style-position: inside; }
+details.hd-step[open] > summary { margin-bottom: .25rem; }
+[data-override]:not(:placeholder-shown) { border-color: var(--hd-warn); background: var(--hd-warn-soft); }
+
+/* Mẫu: khuôn số + nút kiểu chữ của biến */
+.hd-tpl-pattern { width: 230px; font-family: var(--bs-font-monospace, monospace); font-size: 12px; }
+.hd-style-btn {
+  min-width: 28px; height: 28px; margin-right: 2px; padding: 0 4px; border: 1px solid var(--hd-line);
+  border-radius: var(--hd-radius); background: #fff; color: var(--hd-muted); font-size: 12px; cursor: pointer;
+}
+.hd-style-btn.is-on { border-color: var(--hd-accent); background: var(--hd-accent-soft); color: var(--hd-accent); }
+.hd-style-b { font-weight: 700; }
+.hd-style-i { font-style: italic; }
+.hd-style-u { text-decoration: underline; }
+
+/* Ngăn soạn: văn bản gốc / văn bản liên quan (hd_links.js) */
+.hd-link-chosen { margin-top: .35rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.hd-related { list-style: none; margin: .5rem 0 0; padding: .5rem .75rem; border: 1px solid var(--hd-line-soft);
+  border-radius: var(--hd-radius); background: var(--hd-bg); font-size: 13px; }
+.hd-related li { padding: .15rem 0; }
+#hd-payment-info b { color: var(--hd-ink); font-weight: 600; }
