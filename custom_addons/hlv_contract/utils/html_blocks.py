@@ -32,7 +32,7 @@ _BOLD_TAGS = {'strong', 'b'}
 _ITALIC_TAGS = {'em', 'i'}
 _UNDERLINE_TAGS = {'u'}
 _ALIGNS = {'left', 'center', 'right', 'justify'}
-_PLAIN_FLAGS = {'b': False, 'i': False, 'u': False, 'sz': None}
+_PLAIN_FLAGS = {'b': False, 'i': False, 'u': False, 'caps': False, 'sz': None}
 # Viền bảng đi bằng class (CSS ở wrap_html_document và trang /hop-dong), không inline vào ô,
 # để trình soạn mẫu bật/tắt viền cả bảng chỉ bằng đổi class.
 _GRID_CLASS = 'hlv-grid'
@@ -53,8 +53,12 @@ def _run_html(run):
     if run.get('br'):
         return '<br>'
     if run.get('field'):
-        return '<span class="hlv-var">{{%s}}</span>' % escape(run['field'])
-    html = _text_html(run.get('text') or '')
+        # Ô biến cũng mang định dạng (đậm/nghiêng/in hoa...) để soạn mẫu bôi đậm ô biến được
+        html = '<span class="hlv-var">{{%s}}</span>' % escape(run['field'])
+    else:
+        html = _text_html(run.get('text') or '')
+    if run.get('caps'):
+        html = '<span style="text-transform:uppercase">%s</span>' % html
     if run.get('u'):
         html = '<u>%s</u>' % html
     if run.get('i'):
@@ -138,6 +142,8 @@ def _flags_for(node, flags):
     size = _style_pt(node, 'font-size')
     if size:
         child_flags['sz'] = int(round(size * 2))
+    if re.search(r'text-transform\s*:\s*uppercase', node.get('style') or '', re.IGNORECASE):
+        child_flags['caps'] = True
     return child_flags
 
 
@@ -146,7 +152,7 @@ def _text_to_runs(text, flags, runs):
     for match in _TOKEN_RE.finditer(text):
         if match.start() > pos:
             runs.append(dict(flags, text=text[pos:match.start()]))
-        runs.append({'field': match.group(1)})
+        runs.append(dict(flags, field=match.group(1)))
         pos = match.end()
     if pos < len(text):
         runs.append(dict(flags, text=text[pos:]))

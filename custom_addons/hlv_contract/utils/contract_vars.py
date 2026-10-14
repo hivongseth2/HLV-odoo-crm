@@ -140,6 +140,16 @@ def price_incl(price_unit, vat_rate):
     return float(price_unit or 0) * (1 + float(vat_rate or 0) / 100)
 
 
+def line_prices(line, vat_rate):
+    """(giá chưa VAT, giá sau VAT) của một dòng người dùng nhập. line['price_basis'] == 'excl':
+    người dùng gõ giá chưa VAT (line['price_excl']); còn lại gõ giá sau VAT (line['price_incl'])."""
+    if line.get('price_basis') == 'excl':
+        excl = float(line.get('price_excl') or 0)
+        return excl, price_incl(excl, vat_rate)
+    incl = float(line.get('price_incl') or 0)
+    return price_excl(incl, vat_rate), incl
+
+
 def line_subtotal(quantity, price_unit):
     """Thành tiền một dòng = số lượng x đơn giá (chưa VAT); None/'' coi là 0."""
     return float(quantity or 0) * float(price_unit or 0)
@@ -196,6 +206,7 @@ def build_vars(system, inputs, input_types, lines, vat_rate):
 
 
 _TYPE_KEYS = {key for key, _label in VARIABLE_TYPES}
+STYLE_KEYS = ('b', 'i', 'u', 'caps')
 _SECTION_KEYS = {key for key, _label in SECTIONS}
 
 
@@ -213,6 +224,8 @@ def clean_variable_def(definition):
         vals['section'] = definition['section']
     if 'default_value' in definition:
         vals['default_value'] = (definition.get('default_value') or '').strip()
+    if isinstance(definition.get('style'), dict):
+        vals['style'] = {k: True for k in STYLE_KEYS if definition['style'].get(k)}
     return vals
 
 
@@ -223,7 +236,7 @@ def merge_variable_defs(field_names, existing, edits=None):
     existing: list dict biến đang có (giữ cấu hình nhãn/kiểu/nhóm/mặc định).
     edits: list dict người dùng vừa sửa — áp vào biến cùng tên; thứ tự trong edits là thứ tự
     ô nhập. None -> giữ thứ tự cũ, biến mới đứng sau theo thứ tự xuất hiện.
-    Trả list dict {name, label, var_type, section, default_value, sequence}; biến tự điền bị bỏ,
+    Trả list dict {name, label, var_type, section, default_value, style, sequence}; biến tự điền bị bỏ,
     biến không còn trong nội dung bị bỏ, biến mới lấy nhãn/kiểu từ thư viện."""
     inputs = [n for n in field_names if not is_system_variable(n)]
     current = {d['name']: d for d in existing or []}
@@ -243,6 +256,7 @@ def merge_variable_defs(field_names, existing, edits=None):
             'var_type': base.get('var_type') or 'text',
             'section': base.get('section') or 'other',
             'default_value': base.get('default_value') or '',
+            'style': dict(base.get('style') or {}),
         }
         item.update(clean_variable_def(edits_by_name.get(name)))
         item['sequence'] = (index + 1) * 10

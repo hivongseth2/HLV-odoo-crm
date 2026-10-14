@@ -67,6 +67,18 @@ window.HlvContract = window.HlvContract || {};
     }).join("");
   }
 
+  var STYLE_BUTTONS = [["b", "Đ", "In đậm"], ["i", "N", "In nghiêng"], ["u", "G", "Gạch chân"], ["caps", "AA", "IN HOA"]];
+
+  /** Nút bật/tắt kiểu chữ của một biến. Không bật gì = chữ điền vào theo kiểu chữ chỗ đặt biến. */
+  function styleButtons(v, i) {
+    var style = v.style || {};
+    return STYLE_BUTTONS.map(function (b) {
+      return '<button type="button" class="hd-style-btn hd-style-' + b[0] + (style[b[0]] ? " is-on" : "") +
+        '" data-var-style="' + i + '" data-style-key="' + b[0] + '" title="' + b[2] + '" aria-pressed="' +
+        (style[b[0]] ? "true" : "false") + '">' + b[1] + "</button>";
+    }).join("");
+  }
+
   function variablesHtml() {
     var lib = S.config.library;
     var rows = S.varDefs.map(function (v, i) {
@@ -78,7 +90,8 @@ window.HlvContract = window.HlvContract || {};
         '<td><select class="hd-input" data-var-index="' + i + '" data-var-field="var_type">' + options(lib.types, v.var_type) + "</select></td>" +
         '<td><select class="hd-input" data-var-index="' + i + '" data-var-field="section">' + options(lib.sections, v.section) + "</select></td>" +
         '<td><input type="text" class="hd-input w-100" data-var-index="' + i + '" data-var-field="default_value" value="' +
-        esc(v.default_value) + '" placeholder="(trống)"/></td></tr>';
+        esc(v.default_value) + '" placeholder="(trống)"/></td>' +
+        '<td class="hd-nowrap">' + styleButtons(v, i) + "</td></tr>";
     }).join("");
     var system = (S.template.system_fields || []).map(function (f) {
       return '<span class="hlv-var is-system" title="' + esc(f.name) + '">' + esc(f.label) + "</span>";
@@ -87,9 +100,10 @@ window.HlvContract = window.HlvContract || {};
       '<p class="hd-muted">Mỗi biến là một ô người dùng điền trên hợp đồng (và một cột trong bảng dữ liệu). ' +
       "Thêm/bớt biến bằng cách chèn/xoá biến trong nội dung mẫu" +
       (S.template.source === "docx" ? " (với mẫu file Word: sửa trường trộn trong Word rồi thay file)" : "") +
-      ". Ở đây chỉnh nhãn, kiểu ô, nhóm và thứ tự hiện.</p>" +
+      ". Ở đây chỉnh nhãn, kiểu ô, nhóm, thứ tự hiện và kiểu chữ khi in (không bật gì = theo kiểu chữ chỗ đặt biến " +
+      "trong mẫu; bật thì chữ điền vào luôn đậm / nghiêng / gạch chân / IN HOA).</p>" +
       (rows ? '<div class="hd-table-wrap"><table class="hd-table hd-vars-table"><thead><tr><th></th><th>Nhãn hiện cho người điền</th>' +
-        "<th>Tên trong mẫu</th><th>Kiểu ô</th><th>Nhóm</th><th>Giá trị mặc định</th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+        "<th>Tên trong mẫu</th><th>Kiểu ô</th><th>Nhóm</th><th>Giá trị mặc định</th><th>Kiểu chữ khi in</th></tr></thead><tbody>" + rows + "</tbody></table></div>"
         : '<div class="hd-info">Mẫu chưa có biến nào người dùng phải điền.</div>') +
       (system ? '<h3 class="hd-h3 mt-3 mb-2">Biến tự điền có trong mẫu</h3><div class="hd-chip-row">' + system + "</div>" +
         (S.template.has_lines ? '<p class="hd-muted mt-2">Mẫu có bảng hàng hoá — hợp đồng sẽ có phần nhập hàng và tổng tiền.</p>' : "") : "") +
@@ -102,9 +116,12 @@ window.HlvContract = window.HlvContract || {};
     var isNew = !t.id;
     return '<div class="hd-tpl-head">' +
       '<input type="text" class="hd-input hd-tpl-name" id="hd-tpl-name" placeholder="Tên mẫu" value="' + esc(t.name) + '"/>' +
-      '<label class="hd-inline-label" for="hd-tpl-type">Dãy số</label>' +
-      '<select class="hd-input" id="hd-tpl-type" title="Hợp đồng theo mẫu này đánh số HĐMB-… hay HĐNT-…">' +
-      HD.typeOptions(t.contract_type) + "</select>" +
+      '<label class="hd-inline-label" for="hd-tpl-type">Loại</label>' +
+      '<select class="hd-input" id="hd-tpl-type">' + HD.typeOptions(t.contract_type) + "</select>" +
+      '<label class="hd-inline-label" for="hd-tpl-pattern">Khuôn số</label>' +
+      '<input type="text" class="hd-input hd-tpl-pattern" id="hd-tpl-pattern" value="' + esc(t.number_pattern) + '" ' +
+      'placeholder="{dd}{mm}{yyyy}/HLV-{ma_khach}" title="{dd}{mm}{yyyy}{yy}: ngày soạn · {seq}: số thứ tự trong năm · ' +
+      '{ma_khach}: Mã đăng ký công ty của khách (không có thì viết tắt tên). Người soạn vẫn sửa tay được số."/>' +
       '<label class="hd-check-label"><input type="checkbox" id="hd-tpl-active"' + (t.active ? " checked" : "") + "/> Đang dùng</label>" +
       '<div class="hd-push d-flex flex-wrap gap-2">' +
       (isNew ? "" : '<button type="button" class="hd-btn" id="hd-tpl-duplicate" title="Tạo mẫu mới từ mẫu này">Nhân bản</button>') +
@@ -189,6 +206,7 @@ window.HlvContract = window.HlvContract || {};
       template_id: t.id,
       name: HD.$("hd-tpl-name").value,
       contract_type: HD.$("hd-tpl-type").value,
+      number_pattern: HD.$("hd-tpl-pattern").value.trim(),
       active: HD.$("hd-tpl-active").checked,
       note: HD.$("hd-tpl-note").value,
       variables: S.varDefs,
@@ -291,6 +309,17 @@ window.HlvContract = window.HlvContract || {};
     });
     HD.on(panel, "change", "select[data-var-field]", function (el) {
       S.varDefs[+el.dataset.varIndex][el.dataset.varField] = el.value;
+    });
+    HD.on(panel, "click", "[data-var-style]", function (el) {
+      var v = S.varDefs[+el.dataset.varStyle];
+      var key = el.dataset.styleKey;
+      v.style = Object.assign({}, v.style);
+      v.style[key] = !v.style[key];
+      if (!v.style[key]) {
+        delete v.style[key];
+      }
+      el.classList.toggle("is-on", !!v.style[key]);
+      el.setAttribute("aria-pressed", v.style[key] ? "true" : "false");
     });
     HD.on(panel, "click", "[data-move]", function (el) {
       var from = +el.dataset.move;

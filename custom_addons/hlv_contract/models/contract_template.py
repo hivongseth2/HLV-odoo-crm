@@ -16,6 +16,9 @@ from odoo.exceptions import UserError, ValidationError
 from ..utils import contract_vars, docx_io, docx_merge, html_blocks
 
 CONTRACT_TYPES = [('sale', 'Hợp đồng mua bán hàng hoá'), ('principle', 'Hợp đồng nguyên tắc')]
+# Khuôn số mặc định theo loại (xem utils/contract_number): mua bán = ngày soạn + mã khách,
+# nguyên tắc giữ cách đánh số cũ theo năm
+DEFAULT_NUMBER_PATTERNS = {'sale': '{dd}{mm}{yyyy}/HLV-{ma_khach}', 'principle': 'HĐNT-{seq}/{yyyy}'}
 
 
 class ContractTemplate(models.Model):
@@ -37,6 +40,11 @@ class ContractTemplate(models.Model):
     active = fields.Boolean(default=True)
     company_id = fields.Many2one('res.company', string='Công ty', default=lambda self: self.env.company)
     variable_ids = fields.One2many('hlv.contract.template.variable', 'template_id', string='Biến nhập', copy=True)
+    number_pattern = fields.Char(
+        string='Khuôn số hợp đồng',
+        default=lambda self: DEFAULT_NUMBER_PATTERNS.get(self.env.context.get('default_contract_type') or 'sale'),
+        help='{dd}{mm}{yyyy}{yy}: ngày soạn; {seq}: số thứ tự trong năm; {ma_khach}: mã viết tắt khách '
+             '(Mã đăng ký công ty trên khách hàng, không có thì tự viết tắt tên). Người soạn vẫn sửa tay được.')
     has_lines = fields.Boolean(string='Có bảng hàng hoá', readonly=True,
                                help='Mẫu có biến dòng hàng (Ten_Hang_1...) — hợp đồng sẽ có bảng hàng và tổng tiền.')
     system_fields = fields.Char(readonly=True, help='Biến tự điền có trong mẫu, cách nhau dấu phẩy.')

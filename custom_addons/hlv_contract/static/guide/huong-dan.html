@@ -264,7 +264,7 @@ h2.part-title::before { content: none; }
       </nav>
       <div class="toc-groups" aria-label="Mục lục">
         <div><h4><a href="#phan-chung">1 · Hướng dẫn chung</a></h4><ol><li><a href="#khai-niem">Mẫu, biến, hợp đồng</a></li><li><a href="#loai-bien">Ba loại biến</a></li><li><a href="#trang-thai">Trạng thái &amp; quyền</a></li><li><a href="#nhat-ky">Nhật ký</a></li></ol></div>
-        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li><li><a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a></li></ol></div>
+        <div><h4><a href="#phan-soan">2 · Soạn hợp đồng</a></h4><ol><li><a href="#man-hinh">Màn hình chính</a></li><li><a href="#soan-moi">Soạn hợp đồng mới</a></li><li><a href="#so-hop-dong">Số hợp đồng &amp; sửa đè</a></li><li><a href="#ben-mua">Bên mua</a></li><li><a href="#hang-hoa">Hàng hoá</a></li><li><a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a></li></ol></div>
         <div><h4><a href="#phan-bang">3 · Bảng dữ liệu &amp; in</a></h4><ol><li><a href="#bang-excel">Bảng kiểu Excel</a></li><li><a href="#xuat-in">Xuất / in hàng loạt</a></li></ol></div>
         <div><h4><a href="#phan-mau">4 · Mẫu hợp đồng</a></h4><ol><li><a href="#tao-mau">Bốn cách tạo mẫu</a></li><li><a href="#soan-mau">Soạn mẫu trên trang</a></li><li><a href="#bien-mau">Biến của mẫu</a></li><li><a href="#ben-ban">Thông tin bên bán</a></li></ol></div>
         <div><h4><a href="#phan-word">5 · Mẫu từ file Word</a></h4><ol><li><a href="#mau-word">Đặt trường trộn trong Word</a></li><li><a href="#ten-bien">Tên biến có sẵn</a></li><li><a href="#bang-hang-word">Bảng hàng trong Word</a></li></ol></div>
@@ -354,8 +354,8 @@ h2.part-title::before { content: none; }
         <div style="color:var(--ink-3)">12/10/2026 09:45 · <b style="color:var(--ink)">Nguyễn Thị Lan</b></div>
         <div><span class="chip c-warn">Đổi trạng thái</span> Nháp → Đã xác nhận</div>
       </div>
-      <p>Số hợp đồng tự cấp khi lưu lần đầu, theo loại và năm của ngày ký: <code>HĐMB-001/2026</code>, <code>HĐNT-001/2026</code>,
-        sang năm mới quay về 001.</p>
+      <p>Số hợp đồng tự cấp khi lưu lần đầu theo <b>khuôn số</b> của mẫu, và người soạn sửa tay được (xem
+        <a href="#so-hop-dong">Số hợp đồng &amp; sửa đè</a>).</p>
     </section>
 
     <!-- ================================================================== PHẦN 2 -->
@@ -402,6 +402,7 @@ h2.part-title::before { content: none; }
             <div class="compose-form">
               <div class="box"><h5>Hợp đồng</h5>
                 <div class="field"><label><i class="mk">1</i> Mẫu</label><div class="in">Hợp đồng mua bán hàng hoá (mẫu gốc) ▾</div></div>
+                <div class="field"><label>Số hợp đồng</label><div class="in" style="color:var(--ink-3)">Tự cấp khi lưu</div></div>
                 <div class="field"><label>Ngày ký</label><div class="in">11/10/2026</div></div></div>
               <div class="box"><h5>Bên mua</h5>
                 <div class="field"><label><i class="mk">2</i> Tên bên mua <span class="linked">● CÔNG TY TNHH BOSCH VIỆT NAM</span></label>
@@ -438,6 +439,39 @@ h2.part-title::before { content: none; }
         <span class="btn btn-primary">Xác nhận</span> khi nội dung đã chốt. Có thay đổi chưa lưu mà bấm Xem nhanh/Word/PDF thì trang tự lưu trước.</p>
     </section>
 
+    <section id="so-hop-dong">
+      <h2>Số hợp đồng &amp; sửa đè thông tin tự điền</h2>
+      <p>Số hợp đồng tự cấp khi lưu lần đầu theo <b>khuôn số</b> của mẫu (Quản lý đặt ở đầu màn mẫu):</p>
+      <div class="table-wrap">
+        <table class="doc">
+          <thead><tr><th>Mẫu</th><th>Khuôn số mặc định</th><th>Ví dụ</th></tr></thead>
+          <tbody>
+            <tr><td>Mua bán hàng hoá</td><td><code>{dd}{mm}{yyyy}/HLV-{ma_khach}</code></td><td><b>14102026/HLV-SGAT</b>: soạn ngày 14/10/2026, khách mã SGAT</td></tr>
+            <tr><td>Nguyên tắc</td><td><code>HĐNT-{seq}/{yyyy}</code></td><td><b>HĐNT-004/2026</b>: số thứ tự trong năm</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="rules">
+        <li><code>{dd}{mm}{yyyy}</code> (hoặc <code>{yy}</code>) là <b>ngày soạn</b> — ngày lưu lần đầu, không phải ngày ký.</li>
+        <li><code>{ma_khach}</code> lấy ô <b>Mã đăng ký công ty</b> (company registry) trên khách trong Odoo. Khách chưa có mã thì viết
+          tắt tên (bỏ "Công ty TNHH/Cổ phần…"): Công ty TNHH Sài Gòn Ánh Tâm → <code>SGAT</code>. Muốn số đẹp, điền mã cho khách trước.</li>
+        <li>Hai hợp đồng ra trùng số (cùng khách, cùng ngày) thì số sau thêm <code>-2</code>, <code>-3</code>.</li>
+        <li>Số còn theo khuôn mà đổi khách thì số tự cấp lại theo khách mới. Đã sửa tay thì giữ nguyên.</li>
+      </ul>
+      <p><b>Sửa tay:</b> gõ vào ô <b>Số hợp đồng</b> ở khung Hợp đồng (hợp đồng mới thì để trống là tự cấp). Bấm số hợp đồng trên
+        bản xem trước cũng nhảy tới ô này.</p>
+      <h3>Sửa đè thông tin tự điền</h3>
+      <p>Ngày ký, bên bán, tổng tiền bằng chữ… do trang tự tính, nhưng đôi khi cần ghi khác cho một hợp đồng (vd tên bên bán theo
+        chi nhánh, số tiền bằng chữ theo cách khách yêu cầu). Sau khi lưu, cuối ngăn soạn có khung
+        <b>Thông tin tự điền — sửa đè nếu cần</b>:</p>
+      <ul class="rules">
+        <li>Mỗi ô hiện giá trị tự tính bằng chữ mờ. <b>Để trống</b> là dùng giá trị đó; <b>gõ vào</b> là thay cho riêng hợp đồng này
+          (ô có viền cam). Xoá chữ là trở lại giá trị tự tính.</li>
+        <li>Chỉ đổi chữ in trên hợp đồng này; thông tin bên bán và các hợp đồng khác không đổi. Mọi lần sửa đều có trong Nhật ký.</li>
+        <li>Dòng hàng, đơn giá, thành tiền sửa ở bảng Hàng hoá, không có trong khung này.</li>
+      </ul>
+    </section>
+
     <section id="ben-mua">
       <h2>Bên mua: vừa gõ tay, vừa chọn khách có sẵn</h2>
       <div class="fig">
@@ -460,18 +494,18 @@ h2.part-title::before { content: none; }
     </section>
 
     <section id="hang-hoa">
-      <h2>Hàng hoá: chọn sản phẩm, lấy từ đơn bán, dán Excel hoặc gõ tự do</h2>
+      <h2>Hàng hoá: chọn sản phẩm, lấy từ báo giá CRM / đơn bán, dán Excel hoặc gõ tự do</h2>
       <div class="fig">
         <div class="mock" style="padding:10px 12px">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><b style="font-size:13px">Hàng hoá</b>
             <span style="margin-left:auto"></span><i class="mk">4</i><span class="btn">Dán từ Excel</span><span class="btn">+ Thêm dòng</span></div>
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><i class="mk">3</i><span class="mock-input">Lấy hàng từ đơn bán: gõ số đơn (S…, DH…) hoặc tên khách</span></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><i class="mk">3</i><span class="mock-input">Lấy hàng từ báo giá CRM (BG…) hoặc đơn bán (S…, DH…, tên khách)</span></div>
           <div class="scroll-x"><table class="lines">
-            <thead><tr><th>STT</th><th>Tên hàng</th><th>ĐVT</th><th class="r">Số lượng</th><th class="r">Đơn giá sau VAT</th><th class="r">Thành tiền sau VAT</th></tr></thead>
+            <thead><tr><th>STT</th><th>Tên hàng</th><th>ĐVT</th><th class="r">Số lượng</th><th class="r">Đơn giá chưa VAT</th><th class="r">Đơn giá sau VAT</th><th class="r">Thành tiền sau VAT</th></tr></thead>
             <tbody>
               <tr><td>1</td><td><i class="mk">1</i> Máy mài góc M18 FSAGV125XPDB-0X0 MILWAUKEE <span class="linked">●</span></td><td>Cái</td><td class="r">4</td>
-                <td class="r"><i class="mk">2</i> 4.382.640<span class="sub">chưa VAT 4.058.000</span></td><td class="r"><b>17.530.560</b><span class="sub">chưa VAT 16.232.000</span></td></tr>
-              <tr><td>2</td><td>Phí vận chuyển nội thành</td><td>Chuyến</td><td class="r">1</td><td class="r">540.000<span class="sub">chưa VAT 500.000</span></td><td class="r"><b>540.000</b><span class="sub">chưa VAT 500.000</span></td></tr>
+                <td class="r" style="color:var(--ink-3)">4.058.000</td><td class="r"><i class="mk">2</i> <b>4.382.640</b></td><td class="r"><b>17.530.560</b><span class="sub">chưa VAT 16.232.000</span></td></tr>
+              <tr><td>2</td><td>Phí vận chuyển nội thành</td><td>Chuyến</td><td class="r">1</td><td class="r"><b>500.000</b></td><td class="r" style="color:var(--ink-3)">540.000</td><td class="r"><b>540.000</b><span class="sub">chưa VAT 500.000</span></td></tr>
             </tbody>
           </table></div>
           <div style="text-align:right;font-size:12.5px;margin-top:8px"><b>Tổng giá trị (sau VAT) 18.070.560</b><br>
@@ -480,16 +514,20 @@ h2.part-title::before { content: none; }
         </div>
         <ol class="steps">
           <li><span><b>Tên hàng</b>: gõ mã/tên để chọn sản phẩm (điền tên, ĐVT, giá); hoặc gõ tự do như "Phí vận chuyển". Dấu <span class="linked">●</span> là đã gắn sản phẩm.</span></li>
-          <li><span><b>Giá nhập là giá SAU VAT</b>, đúng thói quen. Giá chưa VAT (in trên hợp đồng) hiện dòng nhỏ bên dưới, tự tính.</span></li>
-          <li><span><b>Lấy từ đơn bán</b>: chọn đơn là kéo hết dòng hàng sang. Chưa có bên mua thì lấy luôn khách của đơn.</span></li>
+          <li><span><b>Gõ giá ở ô nào cũng được</b>: <b>chưa VAT</b> hoặc <b>sau VAT</b>. Ô vừa gõ tô xanh và là giá gốc; ô kia tự tính theo thuế suất.</span></li>
+          <li><span><b>Lấy từ báo giá CRM</b>: gõ số báo giá <code>BG…</code>, chọn là kéo hết dòng hàng với đúng giá chưa VAT trên báo giá
+            (đã trừ chiết khấu), thuế suất theo báo giá. Gõ số đơn <code>S…</code>/<code>DH…</code> hoặc tên khách thì lấy từ <b>đơn bán</b> Odoo.
+            Chưa có bên mua thì lấy luôn khách của báo giá/đơn.</span></li>
           <li><span><b>Dán từ Excel</b>: copy các cột Tên hàng · ĐVT · Số lượng · Đơn giá sau VAT, dán vào, bấm Thêm vào bảng.</span></li>
-          <li><span>Đổi <b>thuế suất</b> thì giá sau VAT giữ nguyên, giá chưa VAT tính lại. Tổng và số tiền bằng chữ tự cập nhật.</span></li>
+          <li><span>Đổi <b>thuế suất</b> thì ô giá gốc (ô tô xanh) giữ nguyên, ô kia tính lại. Tổng và số tiền bằng chữ tự cập nhật.</span></li>
         </ol>
       </div>
       <ul class="rules">
         <li><b>Không giới hạn số dòng.</b> Mẫu Word có 10 dòng mà hợp đồng có 25 mặt hàng thì dòng cuối tự nhân bản và đánh số tiếp;
           hợp đồng có 3 mặt hàng thì 7 dòng thừa tự xoá. Không phải xoá tay trong Word như trước.</li>
         <li>Số kiểu Việt: <code>4.058.000</code>, <code>2,5</code>. Gõ <code>4058000</code> cũng được, rời ô là tự thêm dấu chấm.</li>
+        <li>Báo giá CRM: dòng ghi chú và dòng con của combo được bỏ qua. Khách được tìm trong Odoo theo mã khách CRM rồi MST —
+          không tự tạo khách mới; không thấy thì chọn khách ở phần Bên mua.</li>
         <li>Hợp đồng nguyên tắc (mẫu không có bảng hàng) không có phần này; "Mặt hàng chính" nằm ở nhóm <b>Hàng hoá</b>.</li>
       </ul>
     </section>
@@ -599,7 +637,8 @@ h2.part-title::before { content: none; }
           <ul><li>Chỉ lấy được chữ và trường trộn; mất in đậm, căn lề</li><li>Luôn mở trong trình soạn để chỉnh lại</li>
             <li>Tốt hơn: mở bằng Word, Lưu thành .docx rồi import</li></ul></div>
       </div>
-      <p>Mỗi mẫu có <b>Dãy số</b>: hợp đồng theo mẫu đó đánh số <code>HĐMB-…</code> (mua bán) hay <code>HĐNT-…</code> (nguyên tắc).
+      <p>Mỗi mẫu có <b>Loại</b> (mua bán / nguyên tắc) và <b>Khuôn số</b> để cấp số hợp đồng (xem
+        <a href="#so-hop-dong">Số hợp đồng</a>; để trống là khuôn mặc định theo loại).
         Bỏ tick <b>Đang dùng</b> để ẩn mẫu khỏi danh sách chọn mà không mất hợp đồng cũ.</p>
     </section>
 
@@ -607,12 +646,12 @@ h2.part-title::before { content: none; }
       <h2>Soạn mẫu trên trang</h2>
       <div class="fig">
         <div class="mock">
-          <div class="mock-tool"><span class="mock-input" style="color:var(--ink)">Hợp đồng bảo hành</span><span style="font-size:11px;color:var(--ink-3)">Dãy số</span>
-            <span class="btn">HĐMB ▾</span><span class="btn">Nhân bản</span><span class="btn btn-primary">Lưu mẫu</span></div>
+          <div class="mock-tool"><span class="mock-input" style="color:var(--ink)">Hợp đồng bảo hành</span><span style="font-size:11px;color:var(--ink-3)">Khuôn số</span>
+            <span class="btn">{dd}{mm}{yyyy}/HLV-{ma_khach}</span><span class="btn">Nhân bản</span><span class="btn btn-primary">Lưu mẫu</span></div>
           <div class="mock-sheets"><span class="on">Nội dung mẫu</span><span><i class="mk">5</i> Biến của mẫu (3)</span></div>
           <div class="compose" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
             <div style="background:#e9e7e1;padding:10px">
-              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"><span class="btn">B</span><span class="btn">I</span><span class="btn">U</span><span class="btn">≡</span>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"><span class="btn">B</span><span class="btn">I</span><span class="btn">U</span><span class="btn">AA</span><span class="btn">≡</span>
                 <i class="mk">3</i><span class="btn">Bảng hàng hoá</span><span class="btn">+ Dòng</span><span class="btn">Viền bảng</span><span class="btn">Cỡ chữ ▾</span></div>
               <div class="a4">
                 <p class="c"><b>HỢP ĐỒNG BẢO HÀNH</b></p>
@@ -635,7 +674,8 @@ h2.part-title::before { content: none; }
         </div>
         <ol class="steps">
           <li><span>Bảng biến bên phải chia ba nhóm: <b>biến của mẫu này</b>, <b>gợi ý hay dùng</b>, <b>tự điền</b>.</span></li>
-          <li><span>Đặt con trỏ vào chỗ cần điền rồi <b>bấm tên biến</b>: biến chèn đúng chỗ, cùng dòng, hiện dạng ô vàng không sửa nhầm được.</span></li>
+          <li><span>Đặt con trỏ vào chỗ cần điền rồi <b>bấm tên biến</b>: biến chèn đúng chỗ, cùng dòng, hiện dạng ô vàng không sửa nhầm được.
+            Bôi đen biến rồi bấm <b>B</b> / <b>I</b> / <b>U</b> / <b>AA</b> (IN HOA) thì chữ điền vào in theo kiểu đó.</span></li>
           <li><span><b>Bảng hàng hoá</b> chèn sẵn tiêu đề + một dòng hàng + 3 dòng tổng. <b>Viền bảng</b> bật/tắt viền (bảng chữ ký thường không viền).</span></li>
           <li><span><b>+ Biến mới…</b>: gõ nhãn tiếng Việt ("Thời hạn bảo hành"), tên biến tự đặt (<code>Thoi_Han_Bao_Hanh</code>).</span></li>
           <li><span>Tab <b>Biến của mẫu</b>: chỉnh nhãn, kiểu ô, nhóm, mặc định, thứ tự (xem <a href="#bien-mau">Biến của mẫu</a>).</span></li>
@@ -658,6 +698,8 @@ h2.part-title::before { content: none; }
             <tr><td><b>Nhóm</b></td><td>Khung chứa ô trên ngăn soạn: Thông tin chung · Bên mua · Hàng hoá · Điều khoản · Khác</td><td>Mặt hàng chính → Hàng hoá</td></tr>
             <tr><td><b>Mặc định</b></td><td>Điền sẵn khi tạo hợp đồng mới, người soạn sửa được</td><td>Bên Mua thanh toán 100%…</td></tr>
             <tr><td><b>▲ ▼</b></td><td>Thứ tự ô trong nhóm và thứ tự cột</td><td></td></tr>
+            <tr><td><b>Kiểu chữ khi in</b></td><td>Đ (đậm) · N (nghiêng) · G (gạch chân) · AA (IN HOA). Không bật gì: chữ điền vào theo
+              kiểu chữ chỗ đặt biến trong mẫu. Bật: luôn in kiểu đó, kể cả mẫu file Word</td><td>Tên bên mua: Đ + AA → <b>CÔNG TY TNHH…</b></td></tr>
           </tbody>
         </table>
       </div>
@@ -704,7 +746,8 @@ h2.part-title::before { content: none; }
       </div>
       <ul class="rules">
         <li><kbd>Alt</kbd>+<kbd>F9</kbd> bật/tắt hiện mã trường (<code>{ MERGEFIELD Ten_Ben_Mua }</code>) để soát tên.</li>
-        <li>Chỗ cần in đậm/nghiêng: định dạng chính trường đó, giá trị điền vào giữ định dạng.</li>
+        <li>Chỗ cần in đậm/nghiêng/IN HOA: định dạng chính trường đó trong Word (hoặc chữ ngay trước nó), giá trị điền vào giữ định dạng.
+          Hoặc bật ở cột <b>Kiểu chữ khi in</b> trong tab Biến của mẫu, không phải sửa file.</li>
         <li>Trường đặt ở đầu/chân trang cũng được điền (ví dụ số hợp đồng ở chân trang).</li>
         <li>Đã có file Mail Merge cũ dùng với form Excel: import thẳng được, tên cột Excel cũ chính là tên biến.</li>
         <li>Sau khi import, mở tab <b>Biến của mẫu</b> đặt lại nhãn tiếng Việt cho các tên mới.</li>
@@ -717,7 +760,7 @@ h2.part-title::before { content: none; }
         <table class="doc">
           <thead><tr><th>Tên biến</th><th>Nội dung</th><th>Loại</th></tr></thead>
           <tbody>
-            <tr><td><code>So_Hop_Dong</code></td><td>Số hợp đồng, ví dụ HĐMB-001/2026</td><td><span class="chip c-ok">tự điền</span></td></tr>
+            <tr><td><code>So_Hop_Dong</code></td><td>Số hợp đồng theo khuôn số của mẫu, ví dụ 14102026/HLV-SGAT</td><td><span class="chip c-ok">tự điền</span></td></tr>
             <tr><td><code>Ngay_Ky</code> <code>Thang_Ky</code> <code>Nam_Ky</code></td><td>Ngày, tháng, năm ký (ngày 11 tháng 10 năm 2026)</td><td><span class="chip c-ok">tự điền</span></td></tr>
             <tr><td><code>Ten_Ben_Mua</code> <code>Dia_Chi_Ben_Mua</code> <code>Ma_So_Thue_Ben_Mua</code> <code>Dien_Thoai_Ben_Mua</code> <code>Fax_Ben_Mua</code></td><td>Thông tin bên mua</td><td><span class="chip c-info">hay dùng</span> <small>chọn khách là điền</small></td></tr>
             <tr><td><code>Nguoi_Dai_Dien_Ben_Mua</code> <code>Chuc_Vu_Ben_Mua</code></td><td>Người đại diện và chức vụ bên mua</td><td><span class="chip c-info">hay dùng</span></td></tr>
@@ -772,7 +815,8 @@ h2.part-title::before { content: none; }
         <p>Không giới hạn. Dòng hàng cuối của bảng trong mẫu tự nhân bản cho đủ số mặt hàng.</p></details>
       <details class="faq"><summary>Đơn giá trên hợp đồng là trước hay sau VAT?</summary>
         <p>Trên hợp đồng in đơn giá và thành tiền <b>chưa VAT</b>, rồi dòng thuế và tổng sau VAT, đúng mẫu cũ. Trên trang thì nhập giá
-          <b>sau VAT</b>, trang tự tính ngược; tổng sau VAT luôn khớp đúng số đã gõ.</p></details>
+          ở ô <b>chưa VAT</b> hoặc <b>sau VAT</b> đều được; ô kia tự tính. Gõ giá sau VAT thì tổng sau VAT khớp đúng số đã gõ;
+          gõ giá chưa VAT (hoặc lấy từ báo giá CRM) thì giá chưa VAT in đúng như đã gõ.</p></details>
       <details class="faq"><summary>Muốn sửa hợp đồng đã xác nhận?</summary>
         <p>Hợp đồng đã xác nhận bị khoá với mọi người, kể cả Quản lý, để văn bản đã chốt không bị đổi ngầm. Bấm <b>Về nháp để sửa</b>
           (chưa ký thì nhân viên tự làm được), sửa rồi xác nhận lại. Hợp đồng đã ký chỉ Quản lý đưa về nháp được.</p></details>
@@ -781,9 +825,12 @@ h2.part-title::before { content: none; }
           Trên bảng kiểu Excel, ô của biến mà mẫu mới thêm sẽ gạch chéo ở các hợp đồng lập từ mẫu cũ (hợp đồng đó không có ô này).</p></details>
       <details class="faq"><summary>Cần một câu khác mẫu cho riêng một khách?</summary>
         <p>Dùng <b>Sửa nội dung</b> trên hợp đồng đó (xem <a href="#sua-noi-dung">Sửa chữ trên một hợp đồng</a>), không cần tạo mẫu mới.</p></details>
-      <details class="faq"><summary>Số hợp đồng có bị nhảy số không?</summary>
-        <p>Số cấp khi lưu lần đầu và không lấy lại khi xoá, nên xoá hợp đồng nháp sẽ để lại một số trống trong dãy. Số tính theo năm của
-          ngày ký, sang năm mới quay về 001.</p></details>
+      <details class="faq"><summary>Số hợp đồng sai / muốn đặt số khác?</summary>
+        <p>Gõ số mới vào ô <b>Số hợp đồng</b> rồi Lưu (hợp đồng phải đang Nháp). Trang chỉ chặn trùng với hợp đồng khác. Số ra mã khách
+          lạ: điền <b>Mã đăng ký công ty</b> cho khách trong Odoo rồi chọn lại khách — số còn theo khuôn sẽ tự cấp lại.</p></details>
+      <details class="faq"><summary>Khuôn có {seq} thì có bị nhảy số không?</summary>
+        <p>Số thứ tự cấp khi lưu lần đầu và không lấy lại khi xoá, nên xoá hợp đồng nháp sẽ để lại một số trống. Đếm theo năm, sang năm
+          mới quay về 001.</p></details>
       <details class="faq"><summary>PDF trông hơi khác file Word?</summary>
         <p>PDF dựng lại từ nội dung file Word đã điền, cùng font và bảng nhưng không giữ đầu/chân trang của Word. Cần bản y hệt thì tải Word.</p></details>
     </section>

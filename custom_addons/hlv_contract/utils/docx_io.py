@@ -7,8 +7,8 @@ Cấu trúc blocks:
   bảng:  {'type': 'table', 'rows': [[cell, ...], ...], 'borders': bool,
           'widths': [độ rộng tương đối từng cột] hoặc None (chia đều)}
          cell = {'span': int, 'paras': [đoạn, ...]}   (span = số cột gộp)
-  run:   {'text': str, 'b': bool, 'i': bool, 'u': bool, 'sz': nửa-point hoặc None}
-         {'field': 'Ten_Ben_Mua'}   trường MERGEFIELD
+  run:   {'text': str, 'b': bool, 'i': bool, 'u': bool, 'caps': bool, 'sz': nửa-point hoặc None}
+         {'field': 'Ten_Ben_Mua', + các khoá định dạng như run chữ}   trường MERGEFIELD
          {'br': True}               xuống dòng mềm
   Các khoá indent/first/after/borders/widths/sz đều tuỳ chọn.
 
@@ -33,7 +33,7 @@ W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 XML_SPACE = '{http://www.w3.org/XML/1998/namespace}space'
 DOCUMENT_PART = 'word/document.xml'
 PAGE_TEXT_WIDTH_TWIPS = 9354
-FORMAT_KEYS = ('b', 'i', 'u', 'sz')
+FORMAT_KEYS = ('b', 'i', 'u', 'caps', 'sz')
 _NBSP = '\xa0'
 _MERGE_RE = re.compile(r'^\s*MERGEFIELD\s+"?([^"\s\\]+)"?', re.IGNORECASE)
 _NO_BORDER = ('nil', 'none')
@@ -116,6 +116,8 @@ def _rpr(run):
         parts.append('<w:i/>')
     if run.get('u'):
         parts.append('<w:u w:val="single"/>')
+    if run.get('caps'):
+        parts.append('<w:caps/>')
     if run.get('sz'):
         parts.append('<w:sz w:val="%d"/><w:szCs w:val="%d"/>' % (run['sz'], run['sz']))
     return '<w:rPr>%s</w:rPr>' % ''.join(parts) if parts else ''
@@ -255,6 +257,7 @@ def _run_format(rpr):
         'b': _flag(rpr, 'b'),
         'i': _flag(rpr, 'i'),
         'u': _flag(rpr, 'u'),
+        'caps': _flag(rpr, 'caps'),
         'sz': _int_attr(rpr.find(_q('sz')) if rpr is not None else None, 'val'),
     }
 
@@ -304,7 +307,8 @@ def _read_paragraph(p_el, keep_fields):
                     name = merge_field_name(top['instr'])
                     top['merge'] = bool(keep_fields and name)
                     if top['merge']:
-                        runs.append({'field': name})
+                        # Định dạng của trường lấy theo run chứa dấu tách (Word chép rPr cho mọi run của trường)
+                        runs.append(dict(flags, field=name))
                 elif kind == 'end' and stack:
                     stack.pop()
             elif tag == _q('instrText') and stack and stack[-1]['stage'] == 'instr':

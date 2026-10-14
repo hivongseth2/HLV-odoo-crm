@@ -52,6 +52,7 @@ def _lines(contract):
         'quantity': line.quantity,
         'price_unit': line.price_unit,
         'price_incl': contract_vars.price_incl(line.price_unit, rate),
+        'price_excl': line.price_unit,
         'subtotal': line.subtotal,
         'subtotal_incl': contract_vars.price_incl(line.subtotal, rate),
     } for line in contract.line_ids]
@@ -75,10 +76,24 @@ def contract_detail(contract, can_manage):
         'actions': _allowed_actions(contract, can_manage),
         # Ô nhập theo bản chụp riêng của hợp đồng, không theo mẫu hiện tại
         'variables': contract._doc_variables(),
+        'number_auto': contract.number_auto,
+        'system_fields': _system_fields(contract),
         'doc_custom': contract.doc_custom,
         'template_outdated': contract._template_outdated(),
     })
     return detail
+
+
+def _system_fields(contract):
+    """Biến tự điền người soạn được sửa đè: giá trị tự tính (làm gợi ý) và giá trị đang sửa đè."""
+    auto = contract._merge_vars(with_overrides=False)
+    overrides = contract.overrides or {}
+    return [{
+        'name': name,
+        'label': contract_vars.SYSTEM_LABELS.get(name, name),
+        'auto': auto.get(name, ''),
+        'override': overrides.get(name, ''),
+    } for name in contract._system_fields()]
 
 
 def grid_row(contract, can_manage):
@@ -121,6 +136,7 @@ def template_summary(template):
         'filename': template.docx_filename or '',
         'active': template.active,
         'has_lines': template.has_lines,
+        'number_pattern': template.number_pattern or '',
         'variables': [var._to_dict() for var in template.variable_ids],
     }
 

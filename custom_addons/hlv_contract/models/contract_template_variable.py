@@ -24,6 +24,8 @@ class ContractTemplateVariable(models.Model):
     var_type = fields.Selection(VARIABLE_TYPES, string='Kiểu', required=True, default='text')
     section = fields.Selection(SECTIONS, string='Nhóm', required=True, default='other')
     default_value = fields.Char(string='Giá trị mặc định')
+    # {'b','i','u','caps': bool} — kiểu chữ của giá trị khi điền, áp ở mọi chỗ biến xuất hiện
+    style = fields.Json(string='Kiểu chữ')
 
     _sql_constraints = [
         ('name_template_uniq', 'unique(template_id, name)', 'Mỗi biến chỉ khai một lần trong một mẫu.'),
@@ -37,4 +39,5 @@ class ContractTemplateVariable(models.Model):
             'var_type': self.var_type,
             'section': self.section,
             'default_value': self.default_value or '',
+            'style': dict(self.style or {}),
         }

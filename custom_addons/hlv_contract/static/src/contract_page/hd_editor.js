@@ -10,12 +10,14 @@ window.HlvContract = window.HlvContract || {};
   var FONT_SIZES = [11, 12, 13, 14, 16, 18, 20];
   var DEFAULT_SIZE = 13;
   var ZWSP = "​";
-  // fontSize của execCommand chỉ nhận 1..7; dùng 7 làm dấu tạm rồi đổi sang span cỡ pt thật
+  // fontSize của execCommand chỉ nhận 1..7; dùng 7 làm dấu tạm rồi đổi sang span có kiểu thật
+  // (cỡ pt, IN HOA) — trình duyệt tự lo cắt vùng chọn qua nhiều thẻ
   var FONT_MARKER = "7";
   var BLOCK_TAGS = ["P", "DIV", "LI", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6"];
 
   var TOOLBAR = [
-    [["bold", "<b>B</b>", "Đậm (Ctrl+B)"], ["italic", "<i>I</i>", "Nghiêng (Ctrl+I)"], ["underline", "<u>U</u>", "Gạch chân (Ctrl+U)"]],
+    [["bold", "<b>B</b>", "Đậm (Ctrl+B)"], ["italic", "<i>I</i>", "Nghiêng (Ctrl+I)"], ["underline", "<u>U</u>", "Gạch chân (Ctrl+U)"],
+      ["caps", "AA", "IN HOA (bấm lại để bỏ) — biến nằm trong vùng này in ra chữ hoa"]],
     [["justifyLeft", "⟸", "Căn trái"], ["justifyCenter", "≡", "Căn giữa"], ["justifyRight", "⟹", "Căn phải"], ["justifyFull", "☰", "Căn đều"]],
     [["insertUnorderedList", "• Danh sách", "Gạch đầu dòng"]],
     [["table", "Bảng", "Chèn bảng"], ["goods", "Bảng hàng hoá", "Chèn bảng hàng hoá dựng sẵn (một dòng mẫu + dòng tổng)"],
@@ -151,18 +153,41 @@ window.HlvContract = window.HlvContract || {};
       return found && editor.contains(found) ? found : null;
     }
 
-    function applyFontSize(size) {
+    /** Bọc vùng chọn trong span, styleSpan(span) đặt kiểu cho span. */
+    function wrapSelection(styleSpan) {
       exec("fontSize", FONT_MARKER);
       editor.querySelectorAll('font[size="' + FONT_MARKER + '"]').forEach(function (font) {
         var span = document.createElement("span");
-        if (+size !== DEFAULT_SIZE) {
-          span.style.fontSize = size + "pt";
-        }
+        styleSpan(span);
         while (font.firstChild) {
           span.appendChild(font.firstChild);
         }
         font.replaceWith(span);
       });
+    }
+
+    function applyFontSize(size) {
+      wrapSelection(function (span) {
+        if (+size !== DEFAULT_SIZE) {
+          span.style.fontSize = size + "pt";
+        }
+      });
+    }
+
+    /** IN HOA: đang đứng trong vùng in hoa thì bỏ, không thì bọc vùng chọn. */
+    function toggleCaps() {
+      restoreSelection();
+      var node = savedRange ? savedRange.startContainer : null;
+      var el = node && (node.nodeType === 1 ? node : node.parentElement);
+      var caps = el ? el.closest('[style*="text-transform"]') : null;
+      if (caps && editor.contains(caps)) {
+        caps.style.textTransform = "";
+        if (!caps.getAttribute("style")) {
+          caps.replaceWith.apply(caps, Array.from(caps.childNodes));
+        }
+        return;
+      }
+      wrapSelection(function (span) { span.style.textTransform = "uppercase"; });
     }
 
     function tableCommand(command) {
@@ -268,6 +293,8 @@ window.HlvContract = window.HlvContract || {};
       if (["table", "goods", "rowAdd", "rowDel", "border"].indexOf(command) >= 0) {
         restoreSelection();
         tableCommand(command);
+      } else if (command === "caps") {
+        toggleCaps();
       } else {
         exec(command);
       }
