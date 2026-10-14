@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Kiểm map nhầm sản phẩm Shopee ↔ Odoo (AI)",
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "summary": "Claude so thành phần từng liên kết Sản phẩm Shopee với sản phẩm Odoo, tìm cặp map nhầm (vd combo khác món)",
     "description": """
 Liên kết "Sản phẩm Shopee" (shopee.item) quyết định đơn Shopee về Odoo xuất hàng nào, và tồn của sản
@@ -19,8 +19,10 @@ Hành động → Kiểm map nhầm với AI):
   sản phẩm / phân loại không còn trên Shopee.
 - Cặp đã kiểm ở lần trước mà không đổi gì thì dùng lại kết luận, không hỏi lại.
 - Sửa ngay trên dòng: chọn "Sửa thành" → Áp dụng, rồi Chạy lại AI để kiểm cặp mới; xoá liên kết trỏ
-  hàng / phân loại đã xoá trên Shopee. Hai thao tác ghi này cần nhóm "Sửa / xoá liên kết Shopee từ lần
-  kiểm" (không ai có sẵn); chỉ kiểm thì quyền Quản lý bán hàng là đủ.
+  hàng / phân loại đã xoá trên Shopee. Hai thao tác ghi này và sửa prompt cần nhóm "Quản lý kiểm map nhầm Shopee"
+  (không ai có sẵn); chỉ kiểm thì quyền Quản lý bán hàng là đủ.
+- Prompt AI sửa được trên Odoo (Bán hàng → Cấu hình → Shopee → Prompt AI kiểm map nhầm), có lịch sử và
+  nút về bản mặc định — sửa prompt không cần nâng cấp module.
 
 Tự kiểm định kỳ (Cài đặt → Bán hàng → Kiểm map nhầm Shopee, bật / tắt, chu kỳ ngày): có map nhầm thì
 báo người có quyền sửa liên kết, nêu riêng số dòng mới so với lần trước.
@@ -44,9 +46,11 @@ chiếm worker cron lâu.
         "security/security.xml",
         "security/ir.model.access.csv",
         "data/ir_cron.xml",
+        "data/prompt_data.xml",
         "views/shopee_product_check_line_views.xml",
         "views/shopee_product_check_views.xml",
         "views/res_config_settings_views.xml",
+        "views/shopee_check_prompt_views.xml",
     ],
     "installable": True,
     "application": False,

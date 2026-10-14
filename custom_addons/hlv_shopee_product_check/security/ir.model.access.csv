@@ -1,3 +1,8 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_shopee_product_check_manager,hlv.shopee.product.check sale manager,model_hlv_shopee_product_check,sales_team.group_sale_manager,1,1,1,1
 access_shopee_product_check_line_manager,hlv.shopee.product.check.line sale manager,model_hlv_shopee_product_check_line,sales_team.group_sale_manager,1,1,1,1
+access_shopee_check_prompt_manager,hlv.shopee.check.prompt sale manager,model_hlv_shopee_check_prompt,sales_team.group_sale_manager,1,0,0,0
+access_shopee_check_prompt_editor,hlv.shopee.check.prompt editor,model_hlv_shopee_check_prompt,group_shopee_link_editor,1,1,0,0
+access_shopee_check_prompt_system,hlv.shopee.check.prompt system,model_hlv_shopee_check_prompt,base.group_system,1,1,1,1
+access_shopee_check_prompt_revision_manager,hlv.shopee.check.prompt.revision sale manager,model_hlv_shopee_check_prompt_revision,sales_team.group_sale_manager,1,0,0,0
+access_shopee_check_prompt_revision_system,hlv.shopee.check.prompt.revision system,model_hlv_shopee_check_prompt_revision,base.group_system,1,1,1,1

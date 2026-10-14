@@ -10,7 +10,7 @@
             <xpath expr="//app[@name='sale_management']" position="inside">
                 <block title="Kiểm map nhầm Shopee" name="hlv_shopee_product_check_settings">
                     <setting id="hlv_shopee_check_auto"
-                             help="Claude so thành phần từng liên kết Sản phẩm Shopee với sản phẩm Odoo. Cặp không đổi so với lần trước dùng lại kết luận cũ, chỉ phần thay đổi tốn tiền AI. Có map nhầm thì báo người có quyền &quot;Sửa / xoá liên kết Shopee từ lần kiểm&quot;.">
+                             help="Claude so thành phần từng liên kết Sản phẩm Shopee với sản phẩm Odoo. Cặp không đổi so với lần trước dùng lại kết luận cũ, chỉ phần thay đổi tốn tiền AI. Có map nhầm thì báo người có quyền &quot;Quản lý kiểm map nhầm Shopee&quot;.">
                         <field name="hlv_shopee_check_auto"/>
                         <div class="content-group" invisible="not hlv_shopee_check_auto">
                             <div class="row mt8">

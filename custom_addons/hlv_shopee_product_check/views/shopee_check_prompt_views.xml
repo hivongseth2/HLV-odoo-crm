@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_shopee_check_prompt_form" model="ir.ui.view">
+        <field name="name">hlv.shopee.check.prompt.form</field>
+        <field name="model">hlv.shopee.check.prompt</field>
+        <field name="arch" type="xml">
+            <form create="0" delete="0">
+                <header>
+                    <button name="action_reset_default" type="object" string="Về bản mặc định"
+                            groups="hlv_shopee_product_check.group_shopee_link_editor"
+                            confirm="Thay prompt bằng bản mặc định đi kèm module? Bản đang dùng vẫn còn trong Lịch sử sửa."/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <p class="text-muted">
+                        System prompt Claude dùng để so thành phần từng liên kết Shopee ↔ Odoo. Lưu là lần kiểm sau
+                        dùng ngay, không cần nâng cấp module. Sửa prompt là phiên bản mới: lần kiểm sau hỏi lại AI
+                        MỌI cặp (không dùng lại kết luận theo prompt cũ), tốn tiền như lần kiểm đầu.
+                        Khuôn câu trả lời (row, shopee_contents, odoo_contents, verdict, reason) cố định trong code —
+                        prompt chỉ đổi cách AI suy xét, không đổi được các trường đó.
+                    </p>
+                    <group>
+                        <field name="version"/>
+                    </group>
+                    <notebook>
+                        <page string="Nội dung" name="content">
+                            <field name="content" nolabel="1" widget="text" class="font-monospace"
+                                   readonly="not can_edit"/>
+                            <field name="can_edit" invisible="1"/>
+                        </page>
+                        <page string="Lịch sử sửa" name="revisions">
+                            <field name="revision_ids" readonly="1">
+                                <list>
+                                    <field name="create_date" string="Lưu lúc"/>
+                                    <field name="create_uid" string="Người sửa (bản sau đó)"/>
+                                    <field name="content" string="Nội dung bản cũ"/>
+                                    <button name="action_restore" type="object" string="Quay lại bản này" icon="fa-undo"
+                                            groups="hlv_shopee_product_check.group_shopee_link_editor"
+                                            confirm="Quay lại bản này? Bản đang dùng sẽ được lưu vào lịch sử."/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Menu mở thẳng form của bản ghi prompt duy nhất (tạo từ file mặc định nếu chưa có). -->
+    <record id="action_shopee_check_prompt" model="ir.actions.server">
+        <field name="name">Prompt AI kiểm map nhầm</field>
+        <field name="model_id" ref="model_hlv_shopee_check_prompt"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open()</field>
+    </record>
+
+    <menuitem id="menu_shopee_check_prompt" name="Prompt AI kiểm map nhầm" parent="sale_shopee.root_menu"
+              action="action_shopee_check_prompt" sequence="31"/>
+</odoo>

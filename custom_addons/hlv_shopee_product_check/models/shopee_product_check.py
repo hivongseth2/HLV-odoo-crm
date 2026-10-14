@@ -320,10 +320,11 @@ class HlvShopeeProductCheck(models.Model):
 
     def _queue_ai(self, lines):
         """Cặp nào cần AI: có cả hai bên để so. Cặp đã được kết luận ở lần kiểm trước mà không đổi gì
-        (cùng tên, mô tả, thành phần, cùng sản phẩm Odoo) thì dùng lại kết luận, không hỏi lại."""
+        (cùng tên, mô tả, thành phần, cùng sản phẩm Odoo, cùng phiên bản prompt) thì dùng lại kết luận."""
         pairs = lines.filtered(lambda line: line.product_id and line.issue not in ISSUES_WITHOUT_PAIR)
         (lines - pairs).write({"ai_state": "skipped"})
-        fingerprints = {line: line.pair_fingerprint() for line in pairs}
+        _content, version = self.env["hlv.shopee.check.prompt"].current()
+        fingerprints = {line: line.pair_fingerprint(version) for line in pairs}
         previous = {}
         for old in self.env["hlv.shopee.product.check.line"].search(
                 [("fingerprint", "in", list(set(fingerprints.values()))), ("ai_state", "=", "done"),
