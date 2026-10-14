@@ -16,11 +16,11 @@ from .vendor_quote_utils import (
 _logger = logging.getLogger(__name__)
 
 # Tiến độ đơn mua trên trang NCC — thứ tự là thứ tự tiến trình. Trống = đơn mới, NCC chưa báo gì.
-# NCC tự báo "Nhận thông tin" (đã nắm đơn, đang chuẩn bị — bỏ qua được) và "Đã đóng gói"; "Đã gửi hàng" chỉ khi
+# NCC tự báo "Xác nhận đơn hàng" (đã nắm đơn, đang chuẩn bị — bỏ qua được) và "Đã đóng gói"; "Đã gửi hàng" chỉ khi
 # đơn gửi CPN / gửi chành (kèm thông tin gửi); "Đã giao" tự đặt khi kho bên mình nhận đủ hàng
 # (_hlv_mark_delivered_by_receipt), NCC không bấm.
 VENDOR_STATUS = [
-    ("acknowledged", "Nhận thông tin"),
+    ("acknowledged", "Xác nhận đơn hàng"),
     ("packed", "Đã đóng gói"),
     ("shipped", "Đã gửi hàng"),
     ("delivered", "Đã giao"),
@@ -177,7 +177,7 @@ class PurchaseOrder(models.Model):
     def _hlv_vendor_progress(self):
         """Tiến độ hiện trên trang NCC: "cancel" (đơn đã hủy), "rfq" (chưa xác nhận — NCC chỉ xem),
         "delivered" (đã giao — kể cả đơn kho đã nhận đủ từ trước khi có tự chuyển), "shipped",
-        "packed", "acknowledged" (NCC đã nhận thông tin), hoặc "waiting" (đơn mới, NCC chưa báo gì)."""
+        "packed", "acknowledged" (NCC đã xác nhận đơn), hoặc "waiting" (đơn mới, NCC chưa báo gì)."""
         self.ensure_one()
         if self.state == "cancel":
             return "cancel"
@@ -189,7 +189,7 @@ class PurchaseOrder(models.Model):
 
     def _hlv_vendor_stage(self):
         """Tab của đơn trên trang NCC: như _hlv_vendor_progress, gộp "đã gửi hàng" vào tab "Đã đóng gói",
-        "nhận thông tin" vào tab "Chờ đóng gói" (vẫn còn việc đóng gói)."""
+        "xác nhận đơn hàng" vào tab "Chờ đóng gói" (vẫn còn việc đóng gói)."""
         progress = self._hlv_vendor_progress()
         return {"shipped": "packed", "acknowledged": "waiting"}.get(progress, progress)
 
@@ -202,8 +202,8 @@ class PurchaseOrder(models.Model):
         return bool(receipts) and all(p.state == "done" for p in receipts)
 
     def _vendor_set_status(self, status, vendor_partner):
-        """NCC báo "Nhận thông tin" / "Đã đóng gói" từ trang công khai. Chỉ đi tới, không lùi (bấm thẳng "Đã đóng
-        gói" là bỏ qua "Nhận thông tin"); "Đã gửi hàng" đi qua _vendor_mark_shipped (cần thông tin gửi), "Đã giao" tự
+        """NCC báo "Xác nhận đơn hàng" / "Đã đóng gói" từ trang công khai. Chỉ đi tới, không lùi (bấm thẳng "Đã đóng
+        gói" là bỏ qua "Xác nhận đơn hàng"); "Đã gửi hàng" đi qua _vendor_mark_shipped (cần thông tin gửi), "Đã giao" tự
         đặt khi kho nhận hàng."""
         self.ensure_one()
         if status not in VENDOR_BUTTON_STATUSES:

@@ -49,7 +49,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.ORDER_LEGEND = [
     ["hq-tag-soft", "Chờ xác nhận"],
     ["hq-tag-warn", "Đơn mới"],
-    ["hq-tag-ack", "Nhận thông tin"],
+    ["hq-tag-ack", "NCC đã xác nhận"],
     ["hq-tag-mine", "Đã đóng gói"],
     ["hq-tag-info", "Đã gửi hàng"],
     ["hq-tag-part", "Giao một phần"],

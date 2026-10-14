@@ -350,7 +350,8 @@ window.HlvQuote = window.HlvQuote || {};
           if (!offer || offer.withdrawn) {
             return HQ.notAskedCell(line, v, d, offer);
           }
-          return HQ.appendToCell(offerCell(offer, v, d.can_choose && !line.locked, line.uom), HQ.withdrawLink(line, v, d, offer));
+          return HQ.appendToCell(offerCell(offer, v, d.can_choose && !line.locked, line.uom, pricedCount(line) > 1),
+            HQ.withdrawLink(line, v, d, offer));
         }).join("") + "</tr>";
     }).join("");
     return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
@@ -361,7 +362,7 @@ window.HlvQuote = window.HlvQuote || {};
       '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
       HQ.money(d.chosen_total) + " chưa VAT</td></tr></tfoot>" +
       "</table></div>" +
-      '<div class="hq-muted hq-legend">Chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Bấm tên NCC để ' +
+      '<div class="hq-muted hq-legend">★ chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Bấm tên NCC để ' +
       'chọn NCC đó cho mọi mặt hàng. Một sản phẩm chọn được nhiều NCC — sửa "SL mua" dưới giá để chia số lượng.</div>';
   }
 
@@ -437,7 +438,16 @@ window.HlvQuote = window.HlvQuote || {};
         : offer.to_request ? '<span class="hq-partial">chưa lên YCMH</span>' : "") + "</div>";
   }
 
-  function offerCell(offer, vendor, canChoose, uom) {
+  /** Số NCC đã báo giá (có giá, không hết hàng) cho một sản phẩm — chỉ có một giá thì không có gì để so. */
+  function pricedCount(line) {
+    return Object.keys(line.offers).filter(function (key) {
+      var offer = line.offers[key];
+      return offer && !offer.withdrawn && !offer.unavailable && offer.price_unit;
+    }).length;
+  }
+
+  /** compared: từ hai NCC có giá trở lên — giá thấp nhất mới gắn sao (một giá thì không có gì để so). */
+  function offerCell(offer, vendor, canChoose, uom, compared) {
     if (!offer || (!offer.price_unit && !offer.unavailable)) {
       if (offer && offer.reference_price) {
         return '<td class="hq-offer hq-muted">Chờ NCC xác nhận<span class="hq-offer-meta">lần trước ' +
@@ -455,7 +465,9 @@ window.HlvQuote = window.HlvQuote || {};
     var meta = [offer.vat ? "VAT " + offer.vat : "", offer.delivery_days ? offer.delivery_days + " ngày" : ""]
       .filter(Boolean).join(" · ");
     // Giá sau VAT là số chính (bên mình đọc và so theo giá sau VAT); giá chưa VAT ghi phụ.
-    var body = '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' + HQ.money(offer.price_incl) +
+    var body = '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' +
+      (offer.is_best && compared ? '<span class="hq-best-star" title="Giá sau VAT thấp nhất">★</span> ' : "") +
+      HQ.money(offer.price_incl) +
       ' <span class="hq-offer-unit">sau VAT</span></span>' +
       '<span class="hq-offer-incl">' + HQ.money(offer.price_unit) + " chưa VAT</span>" +
       (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
