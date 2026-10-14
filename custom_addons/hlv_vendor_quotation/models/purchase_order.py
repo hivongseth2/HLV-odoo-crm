@@ -10,8 +10,7 @@ from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
 from .delivery_utils import EVENT_SOURCES, event_actor
 from .vendor_quote_utils import (
-    DATE_FMT, DELIVERY_CHANH, DELIVERY_CPN, delivery_mode, format_vn_number, local_date_text, normalize_origin,
-    parse_states,
+    DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin, parse_states,
 )
 
 _logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ VENDOR_BUTTON_STATUSES = ("acknowledged", "packed")
 # Thu mua chọn trên đơn mua — quyết định các bước NCC thấy (_hlv_vendor_steps):
 # - nhận tại kho NCC: Xác nhận đơn → Đã đóng gói → Đã giao (bên mua tự đến lấy, không có bước gửi hàng);
 # - giao hàng / chành: Xác nhận đơn → Đã gửi hàng → Đã giao (không có bước đóng gói).
-# Trống (đơn cũ): như trước — đóng gói, thêm bước gửi hàng khi "Phương thức giao hàng" (Studio) là CPN / chành.
+# Trống (đơn cũ, thu mua chưa chọn): đủ cả ba bước Đã đóng gói → Đã gửi hàng → Đã giao.
 DELIVERY_METHODS = [
     ("pickup", "Nhận tại kho nhà cung cấp"),
     ("ship", "Giao hàng / chành"),
@@ -77,7 +76,7 @@ class PurchaseOrder(models.Model):
     hlv_delivery_method = fields.Selection(
         DELIVERY_METHODS, string="Phương thức giao hàng", tracking=True,
         help="Nhận tại kho NCC: NCC báo xác nhận đơn → đã đóng gói, bên mua đến lấy. Giao hàng / chành: NCC báo xác "
-             "nhận đơn → đã gửi hàng (không có bước đóng gói). Trống: như đơn cũ.",
+             "nhận đơn → đã gửi hàng (không có bước đóng gói). Trống (đơn cũ): đủ cả đóng gói lẫn gửi hàng.",
     )
     hlv_vendor_status_date = fields.Datetime(string="NCC báo lúc", copy=False, readonly=True)
     hlv_vendor_event_source = fields.Selection(
@@ -192,8 +191,8 @@ class PurchaseOrder(models.Model):
         elif self.hlv_delivery_method == "ship":
             middle = (["packed"] if progress == "packed" else []) + ["shipped"]
         else:
-            shipping = self._hlv_delivery_mode() in (DELIVERY_CPN, DELIVERY_CHANH) or progress == "shipped"
-            middle = ["packed"] + (["shipped"] if shipping else [])
+            # Đơn chưa chọn phương thức (đơn cũ): đủ cả đóng gói lẫn gửi hàng — thu mua vào chọn dần từng đơn.
+            middle = ["packed", "shipped"]
         return ["waiting", "acknowledged"] + middle + ["delivered"]
 
     def _hlv_vendor_next_action(self):
