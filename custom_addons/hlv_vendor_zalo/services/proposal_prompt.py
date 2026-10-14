@@ -45,7 +45,7 @@ Mỗi dòng ghi:
 - backorder_date: ngày NCC hẹn giao phần thiếu, dạng YYYY-MM-DD (tính từ ngày của tin: "thứ 5 về", "tuần sau", "3 ngày nữa"). Không có → "".
 - delivery_days: số ngày giao NCC nói ("2 ngày có hàng") — không nói → 0.
 - note: ghi chú ngắn cần cho sale (hàng thay thế, xuất xứ, điều kiện) — không có → "".
-- evidence_msg_ids: số # các tin làm căn cứ. evidence: trích nguyên văn phần tin NCC nói về dòng này (ngắn).
+- evidence_msg_ids: số # các tin làm căn cứ — đọc giá / tồn kho từ ảnh thì PHẢI có số # của tin ảnh đó (sale xem lại ảnh). evidence: trích nguyên văn phần tin NCC nói về dòng này (ngắn).
 - confidence: "high" khi chắc chắn ghép đúng dòng và đọc đúng số; "low" khi phải đoán (mã gần giống, ghép theo thứ tự, số mơ hồ, giá không rõ cho đơn vị nào).
 
 Viết tắt hay gặp: "s" = sợi, "c" = cái, "b" = bộ; "đủ" = có đủ số hỏi; "chưa có mã" = không có hàng. summary: một câu tiếng Việt ngắn tóm tắt NCC đã trả lời gì."""

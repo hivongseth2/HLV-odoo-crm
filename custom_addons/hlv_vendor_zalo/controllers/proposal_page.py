@@ -86,6 +86,22 @@ class ZaloProposalPage(http.Controller):
             vat_options=VAT_SELECTION,
         ))
 
+    @http.route(f"{REVIEW_ROUTE}/<int:proposal_id>/anh/<int:attachment_id>", type="http", auth="user", methods=["GET"])
+    def proposal_image(self, proposal_id, attachment_id):
+        """Ảnh NCC gửi trong nhóm, xem trên trang duyệt. Sale thường không có quyền đọc tin Zalo ở backend nên không dùng
+        /web/image — chỉ trả ảnh thuộc tin của đúng đề xuất người này mở được."""
+        proposal = self._proposal(proposal_id)
+        if not proposal:
+            return request.not_found()
+        messages = proposal.message_ids | proposal.line_ids.evidence_message_ids
+        attachment = messages._image_attachments().filtered(lambda a: a.id == attachment_id)
+        if not attachment:
+            return request.not_found()
+        return request.make_response(attachment.raw, [
+            ("Content-Type", attachment.mimetype), ("Cache-Control", "private, max-age=86400"),
+            ("X-Content-Type-Options", "nosniff"),
+        ])
+
     @staticmethod
     def _rows(proposal, posted):
         """Mỗi dòng báo giá đang mở một hàng: điền sẵn từ đề xuất AI; dòng NCC chưa nói tới điền giá đang có trên báo giá

@@ -3,6 +3,9 @@
 
 from datetime import datetime, timezone
 
+# Ảnh Claude đọc được / trình duyệt hiện được — file khác (PDF, Excel) không đưa vào.
+IMAGE_MIMETYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+
 # Loại tin hiển thị trong Odoo. Zalo đặt msgType dạng "webchat", "chat.photo", "share.file", "chat.voice"…
 # và không công bố danh sách đủ, nên đoán theo chữ trong msgType; lạ thì "other" (vẫn lưu msg_type gốc).
 MESSAGE_KINDS = [
