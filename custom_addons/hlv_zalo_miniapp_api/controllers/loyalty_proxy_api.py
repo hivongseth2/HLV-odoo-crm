@@ -166,14 +166,13 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
             family_partner_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [partner_id]
 
-            normalized_phone = self._normalize_vn_phone(phone or partner.phone or partner.mobile or '')
-            account = False
-            if normalized_phone and 'hlv.loyalty.portal.account' in request.env:
-                account = request.env['hlv.loyalty.portal.account'].sudo().search([
-                    ('partner_id', 'in', family_partner_ids),
-                    ('portal_phone', '=', normalized_phone),
-                    ('active', '=', True),
-                ], limit=1)
+            account = self._auth_portal_account(partner)
+            if not account:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    status=401,
+                )
 
             if account:
                 domain = [
@@ -264,7 +263,13 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("INVALID_PACKAGE", "Gói voucher không tồn tại hoặc đã ngừng áp dụng", status=400)
 
             # Tìm đúng tài khoản portal account theo SĐT hoặc tài khoản mặc định
-            account = self._get_scoped_portal_account(partner, phone)
+            account = self._auth_portal_account(partner)
+            if not account:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    status=401,
+                )
 
             # Kiểm tra điểm khả dụng (đã trừ điểm đang treo ở các yêu cầu chờ duyệt)
             balance = self._reward_balance(account, root)
@@ -378,7 +383,13 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", status=404)
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
-            account = self._get_scoped_portal_account(partner, phone)
+            account = self._auth_portal_account(partner)
+            if not account:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    status=401,
+                )
             balance = self._reward_balance(account, root)
 
             if balance['exchange_points_available'] < points:
@@ -461,7 +472,13 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", status=404)
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
-            account = self._get_scoped_portal_account(partner, phone)
+            account = self._auth_portal_account(partner)
+            if not account:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    status=401,
+                )
             family_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [root.id]
 
             domain = [('partner_id', 'in', family_ids)]
@@ -523,7 +540,13 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", status=404)
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
-            account = self._get_scoped_portal_account(partner, phone)
+            account = self._auth_portal_account(partner)
+            if not account:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    status=401,
+                )
             family_ids = root._get_loyalty_family_partner_ids() if hasattr(root, '_get_loyalty_family_partner_ids') else [root.id]
 
             req = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)

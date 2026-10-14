@@ -413,6 +413,44 @@ class ZaloBaseAPI:
         parsed = self._parse_token(token)
         return parsed[0] if parsed else None
 
+    def _auth_portal_account(self, partner=None):
+        """Tài khoản Portal lấy từ TOKEN, trả recordset rỗng nếu không có.
+
+        Thay cho `_get_scoped_portal_account`: hàm kia dò theo số điện thoại do
+        client gửi lên, và khi không khớp thì lặng lẽ lùi về tài khoản mặc định
+        — nên khách có thể thấy điểm của người thu mua khác, hoặc thấy tổng
+        điểm cả công ty, mà không có dấu hiệu gì báo là đang sai.
+
+        Token được ký ở phía server nên client không tự đổi được `account_id`.
+
+        `partner` (nếu truyền) dùng để chắc chắn tài khoản trong token đúng là
+        của khách đang thao tác — phòng thân, vì token vốn đã do mình phát.
+        """
+        Account = request.env["hlv.loyalty.portal.account"].sudo()
+        account_id = self._auth_account_id()
+        if not account_id:
+            return Account.browse()
+
+        account = Account.browse(account_id)
+        if not account.exists() or not account.active:
+            return Account.browse()
+
+        if partner is not None:
+            root = (
+                partner._get_loyalty_root()
+                if hasattr(partner, "_get_loyalty_root")
+                else partner
+            )
+            family_ids = (
+                root._get_loyalty_family_partner_ids()
+                if hasattr(root, "_get_loyalty_family_partner_ids")
+                else [root.id]
+            )
+            if account.partner_id.id not in family_ids:
+                return Account.browse()
+
+        return account
+
     def _auth_account_id(self):
         """Tài khoản Portal gắn với token đang gửi lên.
 
