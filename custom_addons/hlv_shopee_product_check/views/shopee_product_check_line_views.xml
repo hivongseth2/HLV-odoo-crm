@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_shopee_product_check_line_list" model="ir.ui.view">
+        <field name="name">hlv.shopee.product.check.line.list</field>
+        <field name="model">hlv.shopee.product.check.line</field>
+        <field name="arch" type="xml">
+            <list string="Liên kết Shopee ↔ Odoo" editable="bottom" create="0" delete="0"
+                  decoration-danger="result == 'mismatch'" decoration-warning="result == 'review'"
+                  decoration-muted="result in ('fixed', 'stale')">
+                <field name="shop_id" readonly="1" widget="badge" optional="show"/>
+                <field name="shopee_name" readonly="1"/>
+                <field name="shopee_model_name" readonly="1" optional="show"/>
+                <field name="product_id" readonly="1"/>
+                <field name="ai_shopee_contents" readonly="1"/>
+                <field name="ai_odoo_contents" readonly="1"/>
+                <field name="ai_reason" readonly="1"/>
+                <field name="result" readonly="1" widget="badge"
+                       decoration-success="result in ('ok', 'fixed')" decoration-warning="result == 'review'"
+                       decoration-danger="result == 'mismatch'"/>
+                <field name="issue" readonly="1" widget="badge" optional="show"
+                       decoration-danger="issue not in ('ok', False)" invisible="issue == 'ok'"/>
+                <field name="fix_product_id" readonly="applied" options="{'no_create': True}" groups="hlv_shopee_product_check.group_shopee_link_editor"/>
+                <button name="action_apply_fix" type="object" string="Áp dụng" icon="fa-check"
+                        class="btn-link" invisible="not can_apply" groups="hlv_shopee_product_check.group_shopee_link_editor"/>
+                <field name="shopee_url" widget="url" text="Mở" optional="show"/>
+                <field name="ai_verdict" readonly="1" optional="hide"/>
+                <field name="shopee_sku" readonly="1" optional="hide"/>
+                <field name="odoo_code" optional="hide"/>
+                <field name="shopee_status" readonly="1" optional="hide"/>
+                <field name="shopee_price" readonly="1" optional="hide"/>
+                <field name="shopee_stock" readonly="1" optional="hide"/>
+                <field name="item_identifier" readonly="1" optional="hide"/>
+                <field name="model_identifier" readonly="1" optional="hide"/>
+                <field name="link_id" readonly="1" optional="hide"/>
+                <field name="can_apply" column_invisible="1"/>
+                <field name="applied" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_shopee_product_check_line_form" model="ir.ui.view">
+        <field name="name">hlv.shopee.product.check.line.form</field>
+        <field name="model">hlv.shopee.product.check.line</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <header>
+                    <button name="action_apply_fix" type="object" string="Áp dụng" class="btn-primary"
+                            invisible="not can_apply" groups="hlv_shopee_product_check.group_shopee_link_editor"/>
+                    <field name="result" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group string="AI so thành phần">
+                        <field name="ai_shopee_contents" readonly="1"/>
+                        <field name="ai_odoo_contents" readonly="1"/>
+                        <field name="ai_verdict" readonly="1"/>
+                        <field name="ai_reason" readonly="1"/>
+                        <field name="issue" readonly="1" invisible="issue == 'ok'"/>
+                    </group>
+                    <group>
+                        <group string="Shopee">
+                            <field name="shop_id" readonly="1"/>
+                            <field name="shopee_name" readonly="1"/>
+                            <field name="shopee_model_name" readonly="1"/>
+                            <field name="shopee_sku" readonly="1"/>
+                            <field name="shopee_status" readonly="1"/>
+                            <field name="shopee_price" readonly="1"/>
+                            <field name="shopee_stock" readonly="1"/>
+                            <field name="shopee_url" widget="url"/>
+                        </group>
+                        <group string="Odoo">
+                            <field name="link_id" readonly="1"/>
+                            <field name="product_id" readonly="1"/>
+                            <field name="odoo_code"/>
+                            <field name="fix_product_id" readonly="applied" options="{'no_create': True}" groups="hlv_shopee_product_check.group_shopee_link_editor"/>
+                            <field name="can_apply" invisible="1"/>
+                            <field name="applied" invisible="1"/>
+                        </group>
+                    </group>
+                    <group string="Mô tả Shopee">
+                        <field name="shopee_description" readonly="1" nolabel="1" colspan="2"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_shopee_product_check_line_search" model="ir.ui.view">
+        <field name="name">hlv.shopee.product.check.line.search</field>
+        <field name="model">hlv.shopee.product.check.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="shopee_name"/>
+                <field name="product_id"/>
+                <field name="shopee_sku"/>
+                <field name="shop_id"/>
+                <filter name="result_mismatch" string="Map nhầm" domain="[('result', '=', 'mismatch')]"/>
+                <filter name="result_review" string="Cần xem" domain="[('result', '=', 'review')]"/>
+                <filter name="result_ok" string="Đúng" domain="[('result', 'in', ('ok', 'fixed'))]"/>
+                <filter name="result_stale" string="Liên kết cũ" domain="[('result', '=', 'stale')]"/>
+                <filter name="result_pending" string="Đang kiểm" domain="[('result', '=', 'pending')]"/>
+                <separator/>
+                <filter name="ai_mismatch" string="AI nói khác hàng" domain="[('ai_verdict', '=', 'mismatch')]"/>
+                <filter name="link_issue" string="Lỗi liên kết (SP tạm, một phân loại gắn nhiều SP)"
+                        domain="[('issue', 'in', ('placeholder', 'duplicate'))]"/>
+                <group>
+                    <filter name="group_by_shop" string="Shop" context="{'group_by': 'shop_id'}"/>
+                    <filter name="group_by_result" string="Kết luận" context="{'group_by': 'result'}"/>
+                    <filter name="group_by_issue" string="Lỗi liên kết" context="{'group_by': 'issue'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Chọn nhiều dòng đã điền "Sửa thành" → Hành động → Áp dụng sửa liên kết. -->
+    <record id="action_shopee_product_check_line_apply" model="ir.actions.server">
+        <field name="name">Áp dụng sửa liên kết</field>
+        <field name="model_id" ref="model_hlv_shopee_product_check_line"/>
+        <field name="binding_model_id" ref="model_hlv_shopee_product_check_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="groups_id" eval="[(4, ref('group_shopee_link_editor'))]"/>
+        <field name="code">records.action_apply_fix()</field>
+    </record>
+
+    <!-- Lọc "Liên kết cũ" → chọn dòng → Hành động → Xoá liên kết cũ (hàng / phân loại đã xoá trên Shopee). -->
+    <record id="action_shopee_product_check_line_delete_stale" model="ir.actions.server">
+        <field name="name">Xoá liên kết cũ</field>
+        <field name="model_id" ref="model_hlv_shopee_product_check_line"/>
+        <field name="binding_model_id" ref="model_hlv_shopee_product_check_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="groups_id" eval="[(4, ref('group_shopee_link_editor'))]"/>
+        <field name="code">records.action_delete_stale_links()</field>
+    </record>
+</odoo>
