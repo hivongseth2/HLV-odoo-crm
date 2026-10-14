@@ -7,12 +7,13 @@
         <field name="sequence">60</field>
     </record>
 
-    <!-- Kiểm (đọc Shopee, AI so thành phần) ai có quyền Quản lý bán hàng cũng chạy được. Hai thao tác ghi
-         thật vào liên kết shopee.item — "Áp dụng" (đổi sản phẩm Odoo) và "Xoá liên kết cũ" — cần thêm nhóm
-         này: đổi liên kết là đổi hàng kho xuất cho đơn Shopee và tồn đẩy lên listing. Không ai có sẵn. -->
+    <!-- Kiểm (đọc Shopee, AI so thành phần) ai có quyền Quản lý bán hàng cũng chạy được. Ba việc ảnh hưởng
+         thật cần thêm nhóm này: "Áp dụng" (đổi sản phẩm Odoo của liên kết shopee.item — đổi hàng kho xuất cho
+         đơn Shopee và tồn đẩy lên listing), "Xoá liên kết cũ", và sửa prompt AI (prompt sai là mọi lần kiểm
+         sau kết luận sai). Không ai có sẵn; người trong nhóm cũng là người nhận báo cáo tự kiểm định kỳ. -->
     <record id="group_shopee_link_editor" model="res.groups">
-        <field name="name">Sửa / xoá liên kết Shopee từ lần kiểm</field>
+        <field name="name">Quản lý kiểm map nhầm Shopee</field>
         <field name="category_id" ref="module_category_shopee_product_check"/>
-        <field name="comment">Được bấm "Áp dụng" (đổi sản phẩm Odoo của liên kết Sản phẩm Shopee) và "Xoá liên kết cũ" trong Kiểm map nhầm. Cần thêm quyền Quản lý bán hàng.</field>
+        <field name="comment">Được bấm "Áp dụng" (đổi sản phẩm Odoo của liên kết Sản phẩm Shopee), "Xoá liên kết cũ" và sửa prompt AI trong Kiểm map nhầm; nhận báo cáo tự kiểm định kỳ. Cần thêm quyền Quản lý bán hàng.</field>
     </record>
 </odoo>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tạo prompt từ data/prompt_defaults/match_system_prompt.md nếu chưa có. Đã có (có thể đã sửa trên Odoo)
+         thì giữ nguyên, nên chạy lại mỗi lần nâng cấp là an toàn. -->
+    <function model="hlv.shopee.check.prompt" name="_ensure_default"/>
+</odoo>

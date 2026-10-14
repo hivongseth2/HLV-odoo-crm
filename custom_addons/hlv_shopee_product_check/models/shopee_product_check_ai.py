@@ -13,7 +13,7 @@ from odoo import models
 from odoo.addons.hlv_product_agent.services.claude_api_payload import request_extras
 from odoo.addons.hlv_product_agent.services.claude_client import api_error_message, load_anthropic, make_client
 
-from ..services.match_payload import BATCH_SIZE, MAX_TOKENS, OUTPUT_SCHEMA, SYSTEM_PROMPT, match_message, parse_match
+from ..services.match_payload import BATCH_SIZE, MAX_TOKENS, OUTPUT_SCHEMA, match_message, parse_match
 from ..services.product_rules import VERDICT_PROBABLE
 from .shopee_product_check import CheckFailed
 
@@ -37,23 +37,26 @@ class HlvShopeeProductCheck(models.Model):
         if not api_key:
             raise CheckFailed(NO_KEY_MESSAGE)
         client = make_client(anthropic, api_key, timeout=REQUEST_TIMEOUT_SECONDS)
+        # Prompt sửa trên Odoo (Prompt AI kiểm map nhầm) — đọc một lần cho cả lượt.
+        system_prompt, _version = self.env["hlv.shopee.check.prompt"].current()
         while time.monotonic() < deadline:
             pending = self.line_ids.filtered(lambda line: line.ai_state == "pending")
             if not pending:
                 self.step = "done"
                 return
             shop = pending[0].shop_id
-            self._review_batch(anthropic, client, pending.filtered(lambda line: line.shop_id == shop)[:BATCH_SIZE])
+            self._review_batch(anthropic, client, system_prompt,
+                               pending.filtered(lambda line: line.shop_id == shop)[:BATCH_SIZE])
             self.env.cr.commit()
 
-    def _review_batch(self, anthropic, client, lines):
+    def _review_batch(self, anthropic, client, system_prompt, lines):
         """Một lần gọi Claude cho một lô; câu trả lời bị cắt (max_tokens) thì chia đôi lô."""
         pairs = [line.pair() for line in lines]
-        stop_reason, results = self._ask(anthropic, client, lines[0].shop_id.name, pairs)
+        stop_reason, results = self._ask(anthropic, client, system_prompt, lines[0].shop_id.name, pairs)
         if results is None and stop_reason == "max_tokens" and len(lines) > 1:
             half = len(lines) // 2
-            self._review_batch(anthropic, client, lines[:half])
-            self._review_batch(anthropic, client, lines[half:])
+            self._review_batch(anthropic, client, system_prompt, lines[:half])
+            self._review_batch(anthropic, client, system_prompt, lines[half:])
             return
         if results is None:
             raise CheckFailed("Claude không trả lời trọn vẹn (%s)." % stop_reason)
@@ -64,13 +67,13 @@ class HlvShopeeProductCheck(models.Model):
             line.write({"ai_state": "done", "ai_verdict": result["verdict"], "ai_reason": result["reason"],
                         "ai_shopee_contents": result["shopee_contents"], "ai_odoo_contents": result["odoo_contents"]})
 
-    def _ask(self, anthropic, client, shop_name, pairs):
+    def _ask(self, anthropic, client, system_prompt, shop_name, pairs):
         """Trả (stop_reason, {row: kết quả}); câu trả lời không trọn (max_tokens / refusal) → kết quả None."""
         try:
             response = client.beta.messages.create(
                 model=self.ai_model,
                 max_tokens=MAX_TOKENS,
-                system=SYSTEM_PROMPT,
+                system=system_prompt,
                 messages=[{"role": "user", "content": match_message(shop_name, pairs)}],
                 output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
                 **request_extras(self.ai_model),

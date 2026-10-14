@@ -129,13 +129,14 @@ class HlvShopeeProductCheckLine(models.Model):
             "name": part.with_context(display_default_code=False).display_name,
         } for qty, part in parts]
 
-    def pair_fingerprint(self):
-        return pair_fingerprint(self.pair())
+    def pair_fingerprint(self, version):
+        """Vân tay cặp của dòng theo phiên bản prompt ``version`` (match_payload.pair_fingerprint)."""
+        return pair_fingerprint(self.pair(), version)
 
     def _check_link_editor(self):
         """Ẩn nút trên view chưa đủ: nút gọi được thẳng qua RPC, nên kiểm lại ở đây."""
         if not self.env.user.has_group(LINK_EDITOR_GROUP):
-            raise AccessError(_("Cần quyền \"Sửa / xoá liên kết Shopee từ lần kiểm\" (Thiết lập → Người dùng) "
+            raise AccessError(_("Cần quyền \"Quản lý kiểm map nhầm Shopee\" (Thiết lập → Người dùng) "
                                 "để sửa hoặc xoá liên kết Sản phẩm Shopee."))
 
     def action_apply_fix(self):
