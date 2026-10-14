@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Kiểm map nhầm sản phẩm Shopee ↔ Odoo (AI)",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.1.0",
     "summary": "Claude so thành phần từng liên kết Sản phẩm Shopee với sản phẩm Odoo, tìm cặp map nhầm (vd combo khác món)",
     "description": """
 Liên kết "Sản phẩm Shopee" (shopee.item) quyết định đơn Shopee về Odoo xuất hàng nào, và tồn của sản
@@ -22,7 +22,11 @@ Hành động → Kiểm map nhầm với AI):
   hàng / phân loại đã xoá trên Shopee. Hai thao tác ghi này cần nhóm "Sửa / xoá liên kết Shopee từ lần
   kiểm" (không ai có sẵn); chỉ kiểm thì quyền Quản lý bán hàng là đủ.
 
-Chạy nền bằng cron, không giữ request của người dùng.
+Tự kiểm định kỳ (Cài đặt → Bán hàng → Kiểm map nhầm Shopee, bật / tắt, chu kỳ ngày): có map nhầm thì
+báo người có quyền sửa liên kết, nêu riêng số dòng mới so với lần trước.
+
+Chạy nền bằng cron theo lượt ngắn (~2 phút rồi hẹn lượt sau), không giữ request của người dùng và không
+chiếm worker cron lâu.
 """,
     "author": "HLV",
     "category": "Sales/Sales",
@@ -42,6 +46,7 @@ Chạy nền bằng cron, không giữ request của người dùng.
         "data/ir_cron.xml",
         "views/shopee_product_check_line_views.xml",
         "views/shopee_product_check_views.xml",
+        "views/res_config_settings_views.xml",
     ],
     "installable": True,
     "application": False,

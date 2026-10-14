@@ -2,3 +2,5 @@
 from . import shopee_product_check
 from . import shopee_product_check_ai
 from . import shopee_product_check_line
+from . import shopee_product_check_auto
+from . import res_config_settings

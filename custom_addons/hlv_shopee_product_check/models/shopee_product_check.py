@@ -7,13 +7,15 @@ sản phẩm có phân loại cần thêm một lần get_model_list) cộng và
 request của người bấm nút. Worker khởi động lại giữa chừng thì cron chạy tiếp từ hàng đợi còn lại.
 
 Các bước: links (lấy liên kết shopee.item) → fetch (lấy chi tiết + phân loại Shopee từng lô 50 sản phẩm)
-→ ai (Claude so thành phần từng cặp, shopee_product_check_ai.py) → done.
+→ ai (Claude so thành phần từng cặp, shopee_product_check_ai.py) → done. Tự kiểm định kỳ:
+shopee_product_check_auto.py.
 """
 
 import json
 import logging
 import time
 from collections import Counter
+from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
@@ -27,9 +29,10 @@ from ..services.product_rules import ISSUES_WITHOUT_PAIR, model_key, shopee_unit
 _logger = logging.getLogger(__name__)
 
 CRON_XMLID = "hlv_shopee_product_check.ir_cron_shopee_product_check"
-# Một lượt cron làm việc trong ngần này giây rồi báo tiến độ; Odoo tự gọi lượt tiếp (tối đa 10 lượt
-# liền), nên không chạm giới hạn thời gian của worker cron.
+# Một lượt cron làm việc trong ngần này giây (cộng lần gọi Claude đang dở) rồi trả worker, hẹn lượt sau
+# NEXT_BATCH_MINUTES phút — các cron khác chen vào giữa, không phải chờ cả lần kiểm.
 BATCH_SECONDS = 120
+NEXT_BATCH_MINUTES = 1
 # Map nhầm là xuất nhầm hàng cho khách Shopee và đẩy tồn sai lên listing: dùng model giỏi nhất.
 DEFAULT_AI_MODEL = "claude-opus-5-5"
 
@@ -66,8 +69,10 @@ class HlvShopeeProductCheck(models.Model):
         help="Mở từ danh sách Sản phẩm Shopee (Hành động → Kiểm map nhầm với AI): chỉ kiểm các liên kết đã "
              "chọn. Để trống: kiểm mọi liên kết của các shop đã chọn.")
     ai_model = fields.Selection(MODEL_CHOICES, string="Model AI", default=DEFAULT_AI_MODEL, required=True)
+    is_auto = fields.Boolean("Tự kiểm định kỳ", readonly=True,
+                             help="Lần kiểm do lịch tự kiểm tạo (Cài đặt → Bán hàng → Kiểm map nhầm Shopee).")
 
-    state = fields.Selection(STATES, default="draft", required=True, tracking=True)
+    state =fields.Selection(STATES, default="draft", required=True, tracking=True)
     step = fields.Selection(STEPS, readonly=True)
     item_queue = fields.Text(help="JSON [[shop_id, item_id], ...] — sản phẩm Shopee còn chờ lấy chi tiết.")
     fetch_total = fields.Integer(readonly=True)
@@ -120,17 +125,11 @@ class HlvShopeeProductCheck(models.Model):
         for check in self:
             if not check.shop_ids:
                 raise UserError(_("Chọn ít nhất một shop Shopee."))
-            # sale_shopee/data/neutralize.sql thay khoá bằng "dummy" khi Odoo.sh tạo staging / bản sao:
-            # gọi Shopee sẽ lỗi khó hiểu ở giữa chừng, báo ngay từ đầu cho rõ.
-            if any(shop.account_id.partner_key == "dummy" for shop in check.shop_ids):
-                raise UserError(_("Database này đã bị neutralize (staging): khoá Shopee là giá trị giả, "
-                                  "không đọc được sản phẩm Shopee. Chỉ kiểm được trên production."))
-            # Shop đã lưu trữ thường không còn token (vd shop DEWALT cũ trùng shop_id với shop đang dùng):
-            # sale_shopee sẽ đòi uỷ quyền lại giữa chừng. Báo tên shop ngay để bỏ chọn liên kết của nó.
-            dead = check.shop_ids.filtered(lambda shop: not shop.active or not shop.access_token)
-            if dead:
-                raise UserError(_("Shop %s đã lưu trữ hoặc chưa kết nối Shopee — bỏ các liên kết của shop này rồi kiểm lại.",
-                                  ", ".join("%s (id %s)" % (shop.name, shop.id) for shop in dead)))
+            problems = ["%s (id %s): %s" % (shop.name, shop.id, self._shop_problem(shop))
+                        for shop in check.shop_ids if self._shop_problem(shop)]
+            if problems:
+                raise UserError(_("Không đọc được Shopee cho: %s. Bỏ các liên kết của shop này rồi kiểm lại.",
+                                  "; ".join(problems)))
             check.line_ids.unlink()
             check.write({"state": "running", "step": "links", "error": False, "item_queue": False,
                          "fetch_total": 0, "started_at": fields.Datetime.now(), "finished_at": False})
@@ -177,25 +176,40 @@ class HlvShopeeProductCheck(models.Model):
             "view_mode": "form",
         }
 
-    def _trigger_cron(self):
-        self.env.ref(CRON_XMLID).sudo()._trigger()
+    @api.model
+    def _shop_problem(self, shop):
+        """Vì sao không gọi Shopee được cho shop này (chuỗi để báo người dùng), hoặc False nếu gọi được."""
+        if shop.account_id.partner_key == "dummy":
+            # sale_shopee/data/neutralize.sql thay khoá bằng "dummy" khi Odoo.sh tạo staging / bản sao:
+            # gọi Shopee sẽ lỗi khó hiểu ở giữa chừng, báo ngay từ đầu cho rõ.
+            return _("database đã bị neutralize (staging), chỉ kiểm được trên production")
+        if not shop.active or not shop.access_token:
+            # Shop đã lưu trữ thường không còn token (vd shop DEWALT cũ trùng shop_id với shop đang dùng):
+            # sale_shopee sẽ đòi uỷ quyền lại giữa chừng.
+            return _("shop đã lưu trữ hoặc chưa kết nối Shopee")
+        return False
+
+    def _trigger_cron(self, at=None):
+        self.env.ref(CRON_XMLID).sudo()._trigger(at)
 
     # === Cron === #
 
     @api.model
     def _cron_process(self):
-        """Một lượt: làm tiếp lần kiểm đang chạy trong BATCH_SECONDS, báo còn việc để Odoo gọi lượt sau."""
+        """Một lượt: làm tiếp các lần kiểm đang chạy trong BATCH_SECONDS rồi trả worker.
+
+        Còn việc thì hẹn lượt sau NEXT_BATCH_MINUTES phút chứ không báo _notify_progress: báo tiến độ là Odoo
+        chạy liền tới 10 lượt trên cùng worker (~20-30 phút với lần kiểm cả shop), các cron khác (MISA, đơn
+        Shopee...) phải xếp hàng chờ. Shopee bắt chờ thì không hẹn sớm — đợi lịch 5 phút của cron.
+        """
         deadline = time.monotonic() + BATCH_SECONDS
-        checks = self.search([("state", "=", "running")], order="id")
-        for check in checks:
+        for check in self.search([("state", "=", "running")], order="id"):
             if time.monotonic() >= deadline:
                 break
             if not check._process(deadline):
-                # Shopee bắt chờ: báo hết việc để Odoo không gọi lượt tiếp ngay, đợi lịch cron kế tiếp.
-                self.env["ir.cron"]._notify_progress(done=len(checks), remaining=0)
                 return
-        remaining = self.search_count([("state", "=", "running")])
-        self.env["ir.cron"]._notify_progress(done=len(checks), remaining=remaining)
+        if self.search_count([("state", "=", "running")]):
+            self._trigger_cron(fields.Datetime.now() + timedelta(minutes=NEXT_BATCH_MINUTES))
 
     def _process(self, deadline):
         """Chạy các bước của một lần kiểm tới khi xong hoặc hết giờ. Lỗi → ghi lên lần kiểm, không ném ra.

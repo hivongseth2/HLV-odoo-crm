@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo noupdate="1">
-    <!-- Bấm "Bắt đầu kiểm" là gọi cron này ngay (_trigger); lịch 5 phút chỉ để chạy tiếp lần kiểm bị bỏ dở
-         (worker khởi động lại, Shopee bắt chờ). Không có lần kiểm nào đang chạy thì chỉ là một câu search. -->
+    <!-- Bấm "Bắt đầu kiểm" là gọi cron này ngay (_trigger); mỗi lượt làm ~2 phút rồi tự hẹn lượt sau 1 phút.
+         Lịch 5 phút chỉ để chạy tiếp lần kiểm bị bỏ dở (worker khởi động lại, Shopee bắt chờ). Không có lần
+         kiểm nào đang chạy thì chỉ là một câu search. -->
     <record id="ir_cron_shopee_product_check" model="ir.cron">
         <field name="name">Shopee: kiểm map nhầm sản phẩm Shopee ↔ Odoo</field>
         <field name="model_id" ref="model_hlv_shopee_product_check"/>
@@ -9,6 +10,19 @@
         <field name="code">model._cron_process()</field>
         <field name="interval_number">5</field>
         <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <!-- Tự kiểm định kỳ: chạy mỗi đêm (~2h sáng giờ VN) nhưng chỉ tạo lần kiểm khi cài đặt đang bật và đã đủ
+         số ngày kể từ lần tự kiểm trước (shopee_product_check_auto.py). Tắt trong Cài đặt, không tắt ở đây. -->
+    <record id="ir_cron_shopee_product_check_auto" model="ir.cron">
+        <field name="name">Shopee: tự kiểm map nhầm định kỳ</field>
+        <field name="model_id" ref="model_hlv_shopee_product_check"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_auto_check()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="nextcall" eval="(DateTime.now() + timedelta(days=1)).strftime('%Y-%m-%d 19:00:00')"/>
         <field name="active" eval="True"/>
     </record>
 </odoo>

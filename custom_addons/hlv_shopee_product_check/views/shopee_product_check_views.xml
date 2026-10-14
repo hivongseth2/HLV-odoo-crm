@@ -78,6 +78,7 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name"/>
+                <field name="is_auto" optional="show"/>
                 <field name="shop_ids" widget="many2many_tags"/>
                 <field name="started_at"/>
                 <field name="mismatch_count" string="Map nhầm"/>
