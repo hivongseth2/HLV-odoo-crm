@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Thu mua xem đề xuất AI ở backend (chỉ đọc); sale duyệt trên trang /zalo-de-xuat/<id>. -->
+    <record id="view_zalo_proposal_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.proposal.list</field>
+        <field name="model">hlv.zalo.proposal</field>
+        <field name="arch" type="xml">
+            <list create="false" edit="false" decoration-info="state == 'draft'" decoration-muted="state == 'rejected'">
+                <field name="ai_run_at"/>
+                <field name="quote_id"/>
+                <field name="inquiry_id"/>
+                <field name="partner_id"/>
+                <field name="sale_code"/>
+                <field name="summary"/>
+                <field name="state"/>
+                <field name="decided_by" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zalo_proposal_form" model="ir.ui.view">
+        <field name="name">hlv.zalo.proposal.form</field>
+        <field name="model">hlv.zalo.proposal</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <header>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="quote_id"/>
+                            <field name="inquiry_id"/>
+                            <field name="partner_id"/>
+                            <field name="group_id"/>
+                        </group>
+                        <group>
+                            <field name="ai_run_at"/>
+                            <field name="ai_model"/>
+                            <field name="decided_by"/>
+                            <field name="decided_at"/>
+                        </group>
+                    </group>
+                    <field name="summary" nolabel="1"/>
+                    <field name="line_ids">
+                        <list>
+                            <field name="quote_line_id"/>
+                            <field name="status"/>
+                            <field name="price_incl"/>
+                            <field name="vat"/>
+                            <field name="discount"/>
+                            <field name="price_source"/>
+                            <field name="available_qty"/>
+                            <field name="backorder_date"/>
+                            <field name="evidence"/>
+                            <field name="confidence"/>
+                        </list>
+                    </field>
+                    <field name="message_ids" widget="many2many_tags"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_zalo_proposal" model="ir.actions.act_window">
+        <field name="name">Đề xuất báo giá từ Zalo (AI)</field>
+        <field name="res_model">hlv.zalo.proposal</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có đề xuất nào</p>
+            <p>Bật "AI đọc Zalo soạn giá cho báo giá" trong Cài đặt → Mua hàng → Hỏi giá NCC. NCC trả lời trong nhóm Zalo
+                đang ghi tin thì AI soạn đề xuất ở đây, sale của phiếu duyệt.</p>
+        </field>
+    </record>
+</odoo>

@@ -11,6 +11,11 @@
               parent="menu_zalo_root"
               action="action_zalo_message"
               sequence="10"/>
+    <menuitem id="menu_zalo_proposal"
+              name="Đề xuất AI"
+              parent="menu_zalo_root"
+              action="action_zalo_proposal"
+              sequence="15"/>
     <menuitem id="menu_zalo_group"
               name="Nhóm Zalo"
               parent="menu_zalo_root"

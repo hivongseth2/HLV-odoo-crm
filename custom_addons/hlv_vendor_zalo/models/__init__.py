@@ -5,4 +5,6 @@ from . import zalo_message
 from . import zalo_reaction
 from . import zalo_listener
 from . import vendor_quote
+from . import zalo_proposal
+from . import zalo_ai
 from . import res_config_settings
