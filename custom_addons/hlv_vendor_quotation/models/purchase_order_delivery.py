@@ -111,8 +111,8 @@ class PurchaseOrderDelivery(models.Model):
         log_internal(self, body, self.env.user.partner_id)
         notify_order_status(self)
         self._hlv_notify_vendor(lambda o: _(
-            "Kho đã nhận một phần đơn %(name)s. Còn chờ giao: %(pending)s. Khi chuẩn bị xong đợt sau, bấm \"Đã "
-            "đóng gói\"; đổi được ngày giao dự kiến ngay trên trang đơn mua.", name=o.name, pending=pending,
+            "Kho đã nhận một phần đơn %(name)s. Còn chờ giao: %(pending)s. Chuẩn bị đợt sau, %(next)s; đổi được ngày "
+            "giao dự kiến ngay trên trang đơn mua.", name=o.name, pending=pending, next=o._hlv_vendor_next_hint(),
         ))
 
     # ------------------------------------------------------------------ NCC đổi ngày giao
