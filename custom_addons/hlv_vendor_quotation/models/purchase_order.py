@@ -74,7 +74,7 @@ class PurchaseOrder(models.Model):
         help="Nhà cung cấp tự cập nhật trên trang báo giá của họ.",
     )
     hlv_delivery_method = fields.Selection(
-        DELIVERY_METHODS, string="Phương thức giao hàng", tracking=True,
+        DELIVERY_METHODS, string="Hình thức giao hàng", tracking=True,
         help="Nhận tại kho NCC: NCC báo xác nhận đơn → đã đóng gói, bên mua đến lấy. Giao hàng / chành: NCC báo xác "
              "nhận đơn → đã gửi hàng (không có bước đóng gói). Trống (đơn cũ): đủ cả đóng gói lẫn gửi hàng.",
     )
@@ -177,7 +177,7 @@ class PurchaseOrder(models.Model):
         return delivery_mode(self._hlv_delivery_term())
 
     def _hlv_delivery_method_text(self):
-        """"Phương thức giao hàng" hiện cho NCC: lựa chọn của thu mua; đơn cũ chưa chọn → chữ trường Studio."""
+        """Cách giao hiện cho NCC: "Hình thức giao hàng" thu mua chọn; đơn cũ chưa chọn → chữ "Phương thức giao hàng" (Studio)."""
         self.ensure_one()
         return dict(DELIVERY_METHODS).get(self.hlv_delivery_method) or self._hlv_delivery_term()
 
