@@ -20,8 +20,12 @@ from odoo.tools import float_compare
 
 from ..utils import contract_vars
 from ..utils.amount_words import amount_in_words_vi
-from .contract import _NO_AUDIT
-from .contract_template import PARENT_TYPES
+from .contract import _NO_AUDIT, STATES
+from .contract_template import CONTRACT_TYPES, PARENT_TYPES
+
+# contract_type trên hợp đồng là field related: Odoo 18 giữ selection của nó dạng hàm, không duyệt
+# được như list — nhãn loại văn bản lấy thẳng từ danh sách gốc
+TYPE_LABELS = dict(CONTRACT_TYPES)
 
 _NO_FREEZE = 'hlv_contract_no_payment_freeze'
 
@@ -43,13 +47,12 @@ class ContractLink(models.Model):
 
     @api.constrains('parent_id', 'template_id')
     def _check_parent_type(self):
-        labels = dict(self._fields['contract_type'].selection)
         for rec in self.filtered('parent_id'):
             allowed = PARENT_TYPES.get(rec.contract_type, ())
             parent_type = rec.parent_id.sudo().contract_type
             if rec.parent_id == rec or parent_type not in allowed:
                 raise ValidationError('%s không căn cứ vào %s được.' % (
-                    labels.get(rec.contract_type, 'Văn bản này'), labels.get(parent_type, 'văn bản đã chọn').lower()))
+                    TYPE_LABELS.get(rec.contract_type, 'Văn bản này'), TYPE_LABELS.get(parent_type, 'văn bản đã chọn').lower()))
 
     # ---------- đề nghị thanh toán ----------
 
@@ -168,11 +171,10 @@ class ContractLink(models.Model):
     def _link_info_brief(self):
         """Số, loại, khách, ngày, giá trị của một văn bản — đủ để chọn làm văn bản gốc hoặc liệt kê."""
         self.ensure_one()
-        types = dict(self._fields['contract_type'].selection)
-        return {'id': self.id, 'name': self.name, 'type_label': types.get(self.contract_type, ''),
+        return {'id': self.id, 'name': self.name, 'type_label': TYPE_LABELS.get(self.contract_type, ''),
                 'contract_type': self.contract_type, 'party_name': self.party_name or '',
                 'amount_total': self.amount_total, 'state': self.state,
-                'state_label': dict(self._fields['state'].selection).get(self.state, ''),
+                'state_label': dict(STATES).get(self.state, ''),
                 'contract_date': fields.Date.to_string(self.contract_date) if self.contract_date else '',
                 'payment_no': self.payment_no if self.contract_type == 'payment' else 0}
 
