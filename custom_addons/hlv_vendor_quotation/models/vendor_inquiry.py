@@ -282,7 +282,8 @@ class VendorInquiry(models.Model):
     def action_set_order_ref(self, origin):
         """Sale ghi mã đơn hàng của khách cho cả phiếu — được cả khi YCMH còn chờ duyệt, chưa có đơn mua:
         ghi vào Tài liệu gốc của YCMH (đơn mua thu mua tạo sau lấy origin từ dòng YCMH — wizard Tạo RFQ)
-        và của các đơn mua đã có. Trả các đơn mua đã ghi."""
+        và của các đơn mua đã có. Mã trùng đúng số một đơn bán thì ghi luôn "Đơn bán hàng liên quan" của YCMH +
+        đơn bán của phiếu (_hlv_sale_order_from_origin). Trả các đơn mua đã ghi."""
         self.ensure_one()
         if self.state == "cancel":
             raise UserError(_("Phiếu %s đã huỷ.", self.name))
@@ -290,6 +291,7 @@ class VendorInquiry(models.Model):
         if not requests and not orders:
             raise UserError(_("Phiếu chưa lên YCMH — gắn đơn bán ở bước lên YCMH."))
         origin = normalize_origin(origin)
+        sale_order = self._hlv_sale_order_from_origin(origin)
         author = self.env.user.partner_id
         for purchase_request in requests.filtered(lambda r: (r.origin or "") != origin):
             old = purchase_request.origin or ""
@@ -297,8 +299,33 @@ class VendorInquiry(models.Model):
             post_internal(purchase_request, Markup(_(
                 "Sale cập nhật Tài liệu gốc (mã đơn hàng) từ phiếu hỏi giá %s: <b>%s</b> → <b>%s</b>.")) % (
                 self.name, old or _("(trống)"), origin or _("(trống)")), author)
+        if sale_order:
+            self._hlv_link_sale_order(sale_order, requests, author)
         orders._hlv_set_origin(origin)
         return orders
+
+    def _hlv_sale_order_from_origin(self, origin):
+        """Đơn bán có số trùng ĐÚNG một mã trong origin (đã normalize_origin). Không mã nào là số đơn bán (mã khách tự
+        đặt) → rỗng. Trùng từ hai đơn bán trở lên → UserError: nghiệp vụ một YCMH chỉ gắn một đơn bán."""
+        codes = [code for code in (origin or "").split(", ") if code]
+        sale_orders = self.env["sale.order"].sudo().search([("name", "in", codes)]) if codes else self.env["sale.order"]
+        if len(sale_orders) > 1:
+            raise UserError(_("Một YCMH chỉ gắn một đơn bán — %s là %s đơn bán khác nhau. Chỉ để một số đơn bán.",
+                              ", ".join(sale_orders.mapped("name")), len(sale_orders)))
+        return sale_orders
+
+    def _hlv_link_sale_order(self, sale_order, requests, author):
+        """Ghi đơn bán vào phiếu + "Đơn bán hàng liên quan" của YCMH còn sửa được (YCMH Hoàn thành / Từ chối khoá
+        trường này trên form — không ghi đè từ đây)."""
+        if self.sale_order_id != sale_order:
+            self.sale_order_id = sale_order
+        for purchase_request in requests.filtered(
+                lambda r: r.state not in ("done", "rejected") and r.sale_order_id != sale_order):
+            old = purchase_request.sale_order_id.name or _("(trống)")
+            purchase_request.sale_order_id = sale_order
+            post_internal(purchase_request, Markup(_(
+                "Sale cập nhật Đơn bán hàng liên quan từ phiếu hỏi giá %s: <b>%s</b> → <b>%s</b>.")) % (
+                self.name, old, sale_order.name), author)
 
     def action_set_sale_code(self, code):
         """Đổi mã sale của phiếu; YCMH lập từ trang hỏi giá của phiếu ghi theo làm "Người yêu cầu".
