@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Tab "Đơn mua hàng" trên link của NCC: đơn mua sinh ra từ báo giá của NCC (trạng thái đơn hiện ra
-do admin chọn trong Cài đặt), chia tab theo tiến độ (chờ xác nhận / chờ đóng gói / đã đóng gói / đã
-giao / đã hủy), và NCC báo tiến độ trên đơn đã xác nhận:
-- "Đã đóng gói": NCC bấm;
-- "Đã gửi hàng": chỉ đơn gửi CPN / gửi chành — NCC nhập mã vận đơn hoặc tên chành + số xe;
+do admin chọn trong Cài đặt), chia tab theo tiến độ (chờ xác nhận / cần xử lý / chờ nhận hàng / đã
+giao / đã hủy), và NCC báo tiến độ trên đơn đã xác nhận — các bước theo phương thức giao hàng thu mua chọn
+(PurchaseOrder._hlv_vendor_steps):
+- "Xác nhận đơn hàng": NCC bấm;
+- "Đã đóng gói": NCC bấm — đơn nhận tại kho NCC (và đơn cũ chưa chọn phương thức);
+- "Đã gửi hàng": đơn giao hàng / chành (và đơn cũ gửi CPN / chành) — NCC nhập mã vận đơn hoặc tên chành + số xe;
 - "Đã giao": tự chuyển khi kho bên mua nhận đủ hàng — NCC không phải bấm.
 
 Kế thừa VendorQuotePortal (cơ chế mở rộng controller của Odoo) để dùng chung đăng nhập,
@@ -29,8 +31,9 @@ ORDERS = "don-mua"
 # Tab danh sách đơn mua — khoá trùng PurchaseOrder._hlv_vendor_stage().
 ORDER_TABS = [
     ("rfq", "Chờ xác nhận"),
-    ("waiting", "Chờ đóng gói"),
-    ("packed", "Đã đóng gói"),
+    # Đơn giao hàng / chành không có bước đóng gói — tên tab nói việc, không nói bước.
+    ("waiting", "Cần xử lý"),
+    ("packed", "Chờ nhận hàng"),
     ("delivered", "Đã giao"),
     ("cancel", "Đã hủy"),
     ("all", "Tất cả"),
@@ -62,7 +65,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         counts = {key: sum(1 for value in stages.values() if value == key) for key, _label in ORDER_TABS}
         counts["all"] = len(orders)
         if stage not in counts:
-            # Mở tab chưa chọn: ưu tiên đơn đang chờ NCC đóng gói — việc NCC cần làm.
+            # Mở tab chưa chọn: ưu tiên đơn NCC còn việc phải làm.
             stage = "waiting" if counts["waiting"] else "all"
         # Tab "Chờ xác nhận" chỉ khi Cài đặt cho NCC thấy đơn chưa xác nhận (hoặc đang mở tab đó).
         show_rfq = stage == "rfq" or any(
@@ -119,13 +122,15 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
 
     @staticmethod
     def _order_info(order):
-        """Thông tin một đơn cho trang NCC: tiến độ, phương thức / địa điểm giao hàng, cách giao đoán từ
-        phương thức (CPN / chành → mặc định chọn "Gửi CPN / chành" khi NCC báo đã gửi)."""
-        mode = order._hlv_delivery_mode()
+        """Thông tin một đơn cho trang NCC: tiến độ (các bước + việc NCC cần làm), phương thức / địa điểm giao hàng,
+        cách gửi chọn sẵn khi NCC báo đã gửi (đơn giao hàng / chành, hoặc Studio ghi CPN / chành → "Gửi CPN / chành")."""
+        mode = DELIVERY_CPN if order.hlv_delivery_method == "ship" else order._hlv_delivery_mode()
         return {
             "progress": order._hlv_vendor_progress(),
+            "steps": order._hlv_vendor_steps(),
+            "next_action": order._hlv_vendor_next_action(),
             "state_label": order._hlv_vendor_state_label(),
-            "delivery_term": order._hlv_delivery_term(),
+            "delivery_term": order._hlv_delivery_method_text(),
             "delivery_place": order._hlv_delivery_place(),
             "ship_mode": mode if mode in (DELIVERY_CPN, DELIVERY_CHANH) else "",
             "ship_text": order._hlv_ship_text(),

@@ -10,7 +10,8 @@ from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
 from .delivery_utils import EVENT_SOURCES, event_actor
 from .vendor_quote_utils import (
-    DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin, parse_states,
+    DATE_FMT, DELIVERY_CHANH, DELIVERY_CPN, delivery_mode, format_vn_number, local_date_text, normalize_origin,
+    parse_states,
 )
 
 _logger = logging.getLogger(__name__)
@@ -28,6 +29,14 @@ VENDOR_STATUS = [
 VENDOR_STATUS_ORDER = [key for key, _label in VENDOR_STATUS]
 # Trạng thái NCC tự bấm trên trang của họ (_vendor_set_status).
 VENDOR_BUTTON_STATUSES = ("acknowledged", "packed")
+# Thu mua chọn trên đơn mua — quyết định các bước NCC thấy (_hlv_vendor_steps):
+# - nhận tại kho NCC: Xác nhận đơn → Đã đóng gói → Đã giao (bên mua tự đến lấy, không có bước gửi hàng);
+# - giao hàng / chành: Xác nhận đơn → Đã gửi hàng → Đã giao (không có bước đóng gói).
+# Trống (đơn cũ): như trước — đóng gói, thêm bước gửi hàng khi "Phương thức giao hàng" (Studio) là CPN / chành.
+DELIVERY_METHODS = [
+    ("pickup", "Nhận tại kho nhà cung cấp"),
+    ("ship", "Giao hàng / chành"),
+]
 # NCC báo đã gửi hàng bằng cách nào: gửi CPN / chành (cần mã vận đơn / số xe) hay tự chở tới.
 SHIP_METHODS = [
     ("cpn", "Gửi CPN / chành"),
@@ -64,6 +73,11 @@ class PurchaseOrder(models.Model):
     hlv_vendor_status = fields.Selection(
         VENDOR_STATUS, string="NCC báo", copy=False, tracking=True,
         help="Nhà cung cấp tự cập nhật trên trang báo giá của họ.",
+    )
+    hlv_delivery_method = fields.Selection(
+        DELIVERY_METHODS, string="Phương thức giao hàng", tracking=True,
+        help="Nhận tại kho NCC: NCC báo xác nhận đơn → đã đóng gói, bên mua đến lấy. Giao hàng / chành: NCC báo xác "
+             "nhận đơn → đã gửi hàng (không có bước đóng gói). Trống: như đơn cũ.",
     )
     hlv_vendor_status_date = fields.Datetime(string="NCC báo lúc", copy=False, readonly=True)
     hlv_vendor_event_source = fields.Selection(
@@ -160,8 +174,49 @@ class PurchaseOrder(models.Model):
         return " · ".join(part for part in parts if part)
 
     def _hlv_delivery_mode(self):
-        """Cách giao (vendor_quote_utils.delivery_mode) theo "Phương thức giao hàng" của đơn."""
+        """Cách giao (vendor_quote_utils.delivery_mode) theo "Phương thức giao hàng" (Studio) của đơn."""
         return delivery_mode(self._hlv_delivery_term())
+
+    def _hlv_delivery_method_text(self):
+        """"Phương thức giao hàng" hiện cho NCC: lựa chọn của thu mua; đơn cũ chưa chọn → chữ trường Studio."""
+        self.ensure_one()
+        return dict(DELIVERY_METHODS).get(self.hlv_delivery_method) or self._hlv_delivery_term()
+
+    def _hlv_vendor_steps(self):
+        """Các bước trên thanh tiến độ của NCC, theo phương thức giao hàng (xem DELIVERY_METHODS). Bước NCC đã báo
+        trước khi thu mua đổi phương thức vẫn hiện, để thanh tiến độ không nhảy lùi."""
+        self.ensure_one()
+        progress = self._hlv_vendor_progress()
+        if self.hlv_delivery_method == "pickup":
+            middle = ["packed"] + (["shipped"] if progress == "shipped" else [])
+        elif self.hlv_delivery_method == "ship":
+            middle = (["packed"] if progress == "packed" else []) + ["shipped"]
+        else:
+            shipping = self._hlv_delivery_mode() in (DELIVERY_CPN, DELIVERY_CHANH) or progress == "shipped"
+            middle = ["packed"] + (["shipped"] if shipping else [])
+        return ["waiting", "acknowledged"] + middle + ["delivered"]
+
+    def _hlv_vendor_next_action(self):
+        """Việc NCC cần làm lúc này: "acknowledge" (xác nhận đơn), "pack" (báo đã đóng gói), "ship" (báo / sửa thông
+        tin gửi hàng) hoặc "" (chờ bên mua — đến lấy hàng / nhận hàng, hoặc đơn không còn việc)."""
+        self.ensure_one()
+        progress = self._hlv_vendor_progress()
+        if progress == "waiting":
+            return "acknowledge"
+        if progress in ("acknowledged", "partial"):
+            return "ship" if self.hlv_delivery_method == "ship" else "pack"
+        if progress in ("packed", "shipped") and self.hlv_delivery_method != "pickup":
+            return "ship"
+        return ""
+
+    def _hlv_vendor_next_hint(self):
+        """Câu nhắc NCC việc tiếp theo sau khi chuẩn bị hàng — dùng trong tin báo đơn xác nhận / giao một phần."""
+        self.ensure_one()
+        if self.hlv_delivery_method == "ship":
+            return _("gửi hàng xong bấm \"Báo đã gửi hàng\"")
+        if self.hlv_delivery_method == "pickup":
+            return _("đóng gói xong bấm \"Đã đóng gói\" — bên mua sẽ đến kho quý công ty nhận hàng")
+        return _("bấm \"Đã đóng gói\" khi xong")
 
     @api.model
     def _hlv_vendor_visible_states(self):
@@ -209,6 +264,9 @@ class PurchaseOrder(models.Model):
         if status not in VENDOR_BUTTON_STATUSES:
             raise UserError(_("Trạng thái không hợp lệ."))
         self._hlv_check_vendor_can_update()
+        if status == "packed" and self.hlv_delivery_method == "ship":
+            raise UserError(_("Đơn %s giao hàng / chành — không có bước đóng gói, gửi hàng xong bấm \"Báo đã gửi hàng\".",
+                              self.name))
         return self._hlv_advance_status(status, vendor_partner, Markup(_("NCC báo đơn <b>%s</b>.")) % dict(VENDOR_STATUS)[status])
 
     def _vendor_mark_shipped(self, method, carrier, ref, vendor_partner):
@@ -216,6 +274,8 @@ class PurchaseOrder(models.Model):
         NCC tự vận chuyển (người giao / SĐT / biển số tuỳ). Sửa lại được tới khi kho nhận hàng."""
         self.ensure_one()
         self._hlv_check_vendor_can_update()
+        if self.hlv_delivery_method == "pickup":
+            raise UserError(_("Đơn %s nhận tại kho nhà cung cấp — bên mua đến lấy, không cần báo gửi hàng.", self.name))
         if method not in dict(SHIP_METHODS):
             raise UserError(_("Chọn cách gửi hàng."))
         carrier = " ".join((carrier or "").split())[:SHIP_TEXT_MAX] if method == "cpn" else ""
@@ -278,9 +338,9 @@ class PurchaseOrder(models.Model):
         waiting = self.filtered(lambda o: o.state not in CONFIRMED_STATES)
         result = super().button_approve(force=force)
         waiting.filtered(lambda o: o.state in CONFIRMED_STATES)._hlv_notify_vendor(lambda o: _(
-            "Đơn mua %(name)s đã xác nhận: %(count)s mặt hàng, %(amount)s sau VAT%(eta)s. Vui lòng chuẩn bị hàng "
-            "và bấm \"Đã đóng gói\" khi xong.",
-            name=o.name, count=len(o.order_line.filtered(lambda l: not l.display_type)),
+            "Đơn mua %(name)s đã xác nhận: %(count)s mặt hàng, %(amount)s sau VAT%(eta)s. Vui lòng chuẩn bị hàng, "
+            "%(next)s.",
+            name=o.name, count=len(o.order_line.filtered(lambda l: not l.display_type)), next=o._hlv_vendor_next_hint(),
             amount=format_vn_number(o.amount_total),
             eta=_(", hàng về dự kiến %s", local_date_text(o.date_planned, DATE_FMT)) if o.date_planned else "",
         ))
