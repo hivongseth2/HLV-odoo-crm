@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Quản lý xem / xác nhận mọi gợi ý khớp mã; sale xác nhận trên trang /khop-ma-ncc/<báo giá>. -->
+    <record id="view_vendor_code_suggestion_list" model="ir.ui.view">
+        <field name="name">hlv.vendor.code.suggestion.list</field>
+        <field name="model">hlv.vendor.code.suggestion</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" decoration-success="state == 'confirmed'"
+                  decoration-muted="state in ('rejected', 'none')" decoration-info="state == 'pending'">
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="verdict" widget="badge" decoration-success="verdict == 'match'"
+                       decoration-warning="verdict == 'probable'"/>
+                <field name="reason"/>
+                <field name="quote_id" optional="show"/>
+                <field name="sale_code" optional="show"/>
+                <field name="state"/>
+                <field name="decided_by" optional="hide"/>
+                <button name="action_confirm" type="object" string="Đúng" icon="fa-check" invisible="state != 'pending'"/>
+                <button name="action_reject" type="object" string="Không phải" icon="fa-ban" invisible="state != 'pending'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_vendor_code_suggestion_search" model="ir.ui.view">
+        <field name="name">hlv.vendor.code.suggestion.search</field>
+        <field name="model">hlv.vendor.code.suggestion</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id"/>
+                <field name="vendor_code"/>
+                <field name="partner_id"/>
+                <field name="sale_code"/>
+                <filter name="pending" string="Chờ xác nhận" domain="[('state', '=', 'pending')]"/>
+                <filter name="none" string="AI không thấy mã khớp" domain="[('state', '=', 'none')]"/>
+                <group>
+                    <filter name="group_partner" string="Nhà cung cấp" context="{'group_by': 'partner_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_vendor_code_suggestion" model="ir.actions.act_window">
+        <field name="name">Gợi ý khớp mã NCC</field>
+        <field name="res_model">hlv.vendor.code.suggestion</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_vendor_code_suggestion_search"/>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Không có gợi ý nào chờ xác nhận</p>
+            <p>Sản phẩm đang hỏi giá NCC mà bảng giá NCC chưa gắn sản phẩm đó: AI tìm mã NCC gần giống (15 phút một lần),
+                sale của phiếu hoặc quản lý xác nhận — ở đây hoặc qua link trên trang Hỏi giá NCC.</p>
+        </field>
+    </record>
+</odoo>

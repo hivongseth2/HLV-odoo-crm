@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Nhập file NCC (Excel + AI ghép mã)",
-    "version": "18.0.1.2.0",
+    "version": "18.0.1.3.0",
     "summary": "Thu mua tải file Excel tồn kho / bảng giá của NCC, Claude duyệt ghép mã NCC với sản phẩm bên mình",
     "description": """
 Mỗi NCC gửi một mẫu Excel riêng (tiếng Việt / Anh / Trung, tiêu đề một hoặc hai tầng). Người bên mình
@@ -39,6 +39,8 @@ Một NCC có thể có mẫu file tồn và mẫu file giá riêng — đọc f
         "views/vendor_import_profile_views.xml",
         "views/vendor_stock_views.xml",
         "views/vendor_price_views.xml",
+        "views/vendor_code_suggestion_views.xml",
+        "views/code_suggestion_templates.xml",
         "views/res_config_settings_views.xml",
         "views/menus.xml",
     ],

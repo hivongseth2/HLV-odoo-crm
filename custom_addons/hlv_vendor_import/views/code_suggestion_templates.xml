@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang xác nhận gợi ý khớp mã NCC (controllers/code_suggestion_page.py). Dùng lại CSS trang NCC.
+         Không dùng "%s%%" trong biểu thức (Odoo nạp XML đổi "%%" thành "%"). -->
+    <template id="code_suggestion_page" name="Nhập file NCC - xác nhận khớp mã">
+        <t t-out="doctype"/>
+        <html lang="vi">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <meta name="robots" content="noindex, nofollow"/>
+                <title>Khớp mã NCC · <t t-esc="quote.name"/></title>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
+                <style>
+                    .cs-table td { vertical-align: top; }
+                    .cs-code { display: block; color: var(--vq-muted); font-size: .8rem; }
+                    .cs-reason { display: block; margin-top: 4px; color: var(--vq-muted); font-style: italic; }
+                    .cs-tag { display: inline-block; padding: 0 6px; border-radius: 3px; font-size: .72rem; font-weight: 600; }
+                    .cs-match { background: #f0fdf4; color: #166534; }
+                    .cs-probable { background: #fff7ed; color: #9a3412; }
+                    .cs-actions { display: flex; gap: 8px; }
+                </style>
+            </head>
+            <body>
+                <header class="vq-header">
+                    <div class="vq-wrap vq-header-row">
+                        <a class="vq-brand" href="/hoi-gia-ncc">
+                            <span class="vq-brand-text">
+                                <span class="vq-company" t-esc="company.name"/>
+                                <span class="vq-sub">Xác nhận khớp mã bảng giá NCC</span>
+                            </span>
+                        </a>
+                        <div class="vq-header-right">
+                            <span class="vq-header-vendor" t-esc="request.env.user.name"/>
+                            <a href="/hoi-gia-ncc" class="vq-header-link">Trang Hỏi giá NCC</a>
+                        </div>
+                    </div>
+                </header>
+                <main class="vq-main">
+                    <div class="vq-wrap">
+                        <div class="vq-page-head">
+                            <h1><t t-esc="quote.name"/> — <t t-esc="quote.partner_id.commercial_partner_id.display_name"/></h1>
+                        </div>
+                        <p class="vq-muted">Bảng giá NCC có mã gần giống sản phẩm phiếu <t t-esc="quote.inquiry_id.name"/> đang hỏi
+                            — AI đã xét, cần người xác nhận. Bấm "Đúng" thì bảng giá NCC gắn sản phẩm đó (đề xuất giá từ Zalo
+                            dùng được), lần nhập file sau tự khớp. Không chắc thì bấm "Không phải".</p>
+
+                        <p t-if="not pending" class="vq-empty">Không còn mã nào chờ xác nhận.</p>
+                        <div t-if="pending" class="vq-list-scroll">
+                            <table class="vq-table cs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sản phẩm bên mình</th>
+                                        <th>Mã NCC trong bảng giá</th>
+                                        <th>Giá bảng giá NCC</th>
+                                        <th>AI</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="pending" t-as="item">
+                                        <td data-label="Sản phẩm bên mình"><span class="cs-code" t-esc="item.product_id.default_code or ''"/>
+                                            <t t-esc="item.product_id.name"/></td>
+                                        <td data-label="Mã NCC"><span class="cs-code" t-esc="item.vendor_code or ''"/>
+                                            <t t-esc="item.vendor_name or ''"/></td>
+                                        <td data-label="Giá NCC" t-esc="item._price_text()"/>
+                                        <td data-label="AI">
+                                            <span t-attf-class="cs-tag cs-#{item.verdict}" t-esc="dict(item._fields['verdict'].selection).get(item.verdict, '')"/>
+                                            <span t-if="item.reason" class="cs-reason" t-esc="item.reason"/>
+                                        </td>
+                                        <td>
+                                            <form method="post" class="cs-actions" t-att-action="route + '/' + str(quote.id)">
+                                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                <input type="hidden" name="suggestion" t-att-value="item.id"/>
+                                                <button type="submit" name="action" value="confirm" class="vq-btn vq-btn-primary">Đúng</button>
+                                                <button type="submit" name="action" value="reject" class="vq-btn vq-btn-secondary">Không phải</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <details t-if="decided" class="vq-muted" style="margin-top: 20px">
+                            <summary>Đã xử lý (<t t-esc="len(decided)"/>)</summary>
+                            <ul>
+                                <li t-foreach="decided" t-as="item">
+                                    <t t-esc="item.product_id.default_code or item.product_id.name"/> ↔
+                                    <t t-esc="item.vendor_code or item.vendor_name or ''"/>:
+                                    <b t-esc="dict(item._fields['state'].selection)[item.state]"/>
+                                    <t t-if="item.decided_by"> — <t t-esc="item.decided_by.name"/></t>
+                                </li>
+                            </ul>
+                        </details>
+                    </div>
+                </main>
+            </body>
+        </html>
+    </template>
+</odoo>

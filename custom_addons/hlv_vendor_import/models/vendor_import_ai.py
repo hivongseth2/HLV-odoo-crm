@@ -125,13 +125,29 @@ class HlvVendorImportAi(models.AbstractModel):
     def _review_batch(self, anthropic, client, model, record, lines):
         """Một lần gọi Claude cho một lô dòng; câu trả lời bị cắt (max_tokens) thì chia đôi lô."""
         rows = self.env["hlv.vendor.import.line"].review_rows(lines)
-        message = review_message(record.partner_id.display_name, record.profile_id.brand, rows)
+        stop_reason, results = self._ask_review(anthropic, client, model, record.partner_id.display_name,
+                                                record.profile_id.brand, rows, record.name)
+        if results is None and stop_reason == "max_tokens" and len(lines) > 1:
+            half = len(lines) // 2
+            self._review_batch(anthropic, client, model, record, lines[:half])
+            self._review_batch(anthropic, client, model, record, lines[half:])
+            return
+        if results is None:
+            raise ReviewFailed("Claude không trả lời trọn vẹn (%s) ở dòng %s." % (stop_reason, lines[0].row_no))
+        for line in lines:
+            self._write_result(line, results.get(line.id))
+
+    @api.model
+    def _ask_review(self, anthropic, client, model, vendor, brand, rows, label):
+        """Một lần gọi Claude duyệt các dòng (review_payload.review_message) — dùng cho cả lần nhập file lẫn gợi ý khớp
+        mã (vendor_code_suggest.py). Trả (stop_reason, {row: kết quả}); câu trả lời không trọn (max_tokens / refusal)
+        → kết quả None. Lỗi API / JSON → ReviewFailed. label: ghi log."""
         try:
             response = client.beta.messages.create(
                 model=model,
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": message}],
+                messages=[{"role": "user", "content": review_message(vendor, brand, rows)}],
                 output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
                 **request_extras(model),
             )
@@ -139,23 +155,15 @@ class HlvVendorImportAi(models.AbstractModel):
             _logger.warning("VENDOR_IMPORT Claude API lỗi", exc_info=True)
             raise ReviewFailed(api_error_message(anthropic, error))
         usage = response.usage
-        _logger.info("VENDOR_IMPORT %s %s: %s dòng, in=%s out=%s stop=%s", record.name, response.model, len(lines),
+        _logger.info("VENDOR_IMPORT %s %s: %s dòng, in=%s out=%s stop=%s", label, response.model, len(rows),
                      usage.input_tokens, usage.output_tokens, response.stop_reason)
-        if response.stop_reason == "max_tokens" and len(lines) > 1:
-            half = len(lines) // 2
-            self._review_batch(anthropic, client, model, record, lines[:half])
-            self._review_batch(anthropic, client, model, record, lines[half:])
-            return
         if response.stop_reason in ("max_tokens", "refusal"):
-            raise ReviewFailed("Claude không trả lời trọn vẹn (%s) ở dòng %s."
-                               % (response.stop_reason, lines[0].row_no))
+            return response.stop_reason, None
         text = next((block.text for block in response.content if block.type == "text"), "")
         try:
-            results = parse_review(text, rows)
+            return response.stop_reason, parse_review(text, rows)
         except (ValueError, KeyError, TypeError):
             raise ReviewFailed("Câu trả lời của Claude không đúng dạng JSON.")
-        for line in lines:
-            self._write_result(line, results.get(line.id))
 
     @staticmethod
     def _write_result(line, result):

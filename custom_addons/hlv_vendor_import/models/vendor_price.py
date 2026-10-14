@@ -37,6 +37,8 @@ class HlvVendorPrice(models.Model):
         sau đó (nhập trước một thông báo xa hơn) thì giá mới dừng ở ngày đó. Mã khớp sản phẩm thì gắn sản phẩm cho
         cả các giá cũ cùng mã chưa gắn. Trả các dòng giá vừa tạo."""
         keys = {row["match_key"] for row in rows}
+        # Bảng giá mới có thể có mã AI chưa thấy lần trước: sản phẩm "không có mã nào khớp" được dò lại.
+        self.env["hlv.vendor.code.suggestion"].search([("partner_id", "=", partner.id), ("state", "=", "none")]).unlink()
         existing = self.search([("partner_id", "=", partner.id), ("match_key", "in", list(keys))])
         existing.filtered(lambda price: price.date_from == date_from).unlink()
         existing = existing.exists()

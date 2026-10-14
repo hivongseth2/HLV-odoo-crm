@@ -89,15 +89,23 @@ class HlvVendorCodeMatch(models.AbstractModel):
                 rows.setdefault(record.match_key, [prices.browse(), stocks.browse()])[index] |= record
         return {key: tuple(pair) for key, pair in rows.items()}
 
-    def _link(self, partner, key, product, rows):
+    @api.model
+    def link_key(self, partner, key, product):
+        """Người xác nhận mã NCC key là product (gợi ý khớp mã): gắn mọi dòng giá / tồn chưa khớp của mã + nhớ mã —
+        người quyết thì ghi đè mã đã nhớ."""
+        rows = self._unmatched_rows(partner, {key}).get(key) or (self.env["hlv.vendor.price"], self.env["hlv.vendor.stock"])
+        self._link(partner, key, product, rows, force=True)
+
+    def _link(self, partner, key, product, rows, force=False):
         """Gắn product cho các dòng của khoá + nhớ mã cho lần nhập sau. Khoá đã có người khớp với sản phẩm khác thì
-        giữ theo người (mẫu mã có thể khai chưa đúng), không gắn."""
+        giữ theo người (mẫu mã có thể khai chưa đúng), không gắn — trừ khi force (chính người đang xác nhận)."""
         Alias = self.env["hlv.vendor.product.alias"]
         known = Alias.lookup(partner, {key}).get(key)
-        if known and known != product:
+        if known and known != product and not force:
             return
         prices, stocks = rows
         (prices | stocks).write({"product_id": product.id})
-        sample = prices[:1] or stocks[:1]
+        sample = prices[:1] or stocks[:1] or self.env["hlv.vendor.price"].search(
+            [("partner_id", "=", partner.id), ("match_key", "=", key)], limit=1)
         Alias.link(partner, key, product, sample.vendor_code, sample.vendor_name)
         _logger.info("VENDOR_CODE_MATCH NCC %s: mã %s → sản phẩm %s", partner.id, key, product.default_code)

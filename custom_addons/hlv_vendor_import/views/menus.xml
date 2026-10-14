@@ -19,6 +19,12 @@
               action="action_vendor_price"
               sequence="57"
               groups="purchase.group_purchase_user"/>
+    <menuitem id="menu_vendor_code_suggestion"
+              name="Gợi ý khớp mã"
+              parent="hlv_vendor_quotation.menu_vendor_quote_root"
+              action="action_vendor_code_suggestion"
+              sequence="58"
+              groups="purchase.group_purchase_user"/>
     <menuitem id="menu_vendor_import_profile"
               name="Mẫu file NCC"
               parent="hlv_vendor_quotation.menu_vendor_quote_root"

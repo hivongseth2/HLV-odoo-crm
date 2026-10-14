@@ -11,4 +11,15 @@
         <field name="interval_type">minutes</field>
         <field name="active" eval="True"/>
     </record>
+    <!-- Sản phẩm đang hỏi giá NCC mà bảng giá NCC chưa gắn: AI gợi ý mã NCC gần giống, sale / quản lý xác nhận
+         (vendor_code_suggest.py). Mỗi cặp NCC × sản phẩm chỉ hỏi AI một lần. -->
+    <record id="ir_cron_vendor_code_suggest" model="ir.cron">
+        <field name="name">Bảng giá NCC: AI gợi ý khớp mã cho sản phẩm đang hỏi giá</field>
+        <field name="model_id" ref="model_hlv_vendor_code_suggest"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_suggest()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
 </odoo>
