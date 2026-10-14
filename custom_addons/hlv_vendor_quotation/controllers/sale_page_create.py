@@ -208,6 +208,16 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             "results": [payload.quote_share_result(q) for q in inquiry.quote_ids],
         }
 
+    @http.route(f"{API}/add_products", type="json", auth="user", methods=["POST"])
+    def api_add_products(self, code="", inquiry_id=None, lines=None, ask=None, **kw):
+        """Thêm sản phẩm vào phiếu đã gửi (vendor_inquiry.action_add_products). ask: {id báo giá: [product_id]} —
+        NCC nào hỏi món nào, sale tự tick."""
+        inquiry = self._get_inquiry(inquiry_id, self._check(code))
+        quote_products = {to_int(quote_id): {to_int(p) for p in product_ids or []}
+                          for quote_id, product_ids in (ask or {}).items() if to_int(quote_id)}
+        inquiry.action_add_products(self._line_vals(lines or []), quote_products)
+        return payload.inquiry_detail(inquiry)
+
     def _line_vals(self, raw_lines):
         """Dòng sale gửi lên → dòng phiếu hỏi giá. ĐVT sai nhóm với sản phẩm thì lấy ĐVT mua."""
         env = request.env

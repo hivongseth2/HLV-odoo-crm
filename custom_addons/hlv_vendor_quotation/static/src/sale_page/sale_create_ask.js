@@ -43,6 +43,9 @@ window.HlvQuote = window.HlvQuote || {};
     if (own && own[productId] !== undefined) {
       return own[productId];
     }
+    if (C.addTo) {
+      return false;  // thêm vào phiếu đã gửi: sale tự tick, không đoán theo lịch sử
+    }
     if (C.reuse[productId] === vendorId) {
       return true;
     }
@@ -105,6 +108,12 @@ window.HlvQuote = window.HlvQuote || {};
   /** Phần dưới tên mặt hàng: nút "i", chip gợi ý, dẫn chứng (khi mở), cảnh báo chưa tick NCC nào. */
   HQ.askLineExtras = function (line) {
     var pid = line.product_id;
+    if (C.addTo) {
+      return C.addTo.productIds.indexOf(pid) >= 0
+        ? '<div class="hq-muted hq-small">Đã có trong phiếu — cộng thêm SL vào dòng cũ</div>'
+        : (C.chosen.some(function (v) { return asked(v.id, pid); }) ? ""
+          : '<div class="hq-ask-warn">Chưa tick NCC nào cho mặt hàng này</div>');
+    }
     C.askInfo = C.askInfo || {};
     var hasEvidence = ((picks()[pid] || {}).evidence || []).length;
     var chips = picksOf(pid).map(function (v) {
@@ -127,8 +136,8 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.askHeadCells = function () {
     return C.chosen.map(function (v) {
       return '<th class="hq-ask-col" title="' + esc(v.name) + ' — tick mặt hàng hỏi NCC này"><span class="hq-ask-col-name">' +
-        esc(v.name) + '</span><button type="button" class="hq-chip-x" data-unchoose-vendor="' + v.id +
-        '" title="Bỏ NCC này">×</button></th>';
+        esc(v.name) + "</span>" + (C.addTo ? "" : '<button type="button" class="hq-chip-x" data-unchoose-vendor="' +
+        v.id + '" title="Bỏ NCC này">×</button>') + "</th>";
     }).join("");
   };
 
@@ -161,10 +170,12 @@ window.HlvQuote = window.HlvQuote || {};
     C.chosen.forEach(function (v) {
       ask[v.id] = C.lines.filter(function (l) { return asked(v.id, l.product_id); }).map(function (l) { return l.product_id; });
     });
+    // Thêm vào phiếu: mặt hàng đã có trong phiếu chỉ cộng SL, không bắt hỏi ai; NCC của phiếu không tick gì là bình thường.
     var orphans = C.lines.filter(function (l) {
-      return !C.chosen.some(function (v) { return ask[v.id].indexOf(l.product_id) >= 0; });
+      return !(C.addTo && C.addTo.productIds.indexOf(l.product_id) >= 0) &&
+        !C.chosen.some(function (v) { return ask[v.id].indexOf(l.product_id) >= 0; });
     });
-    var idle = C.chosen.filter(function (v) { return !ask[v.id].length; });
+    var idle = C.addTo ? [] : C.chosen.filter(function (v) { return !ask[v.id].length; });
     var error = orphans.length
       ? "Chưa chọn NCC nào để hỏi: " + orphans.map(function (l) { return l.name || l.product; }).join(", ") + "."
       : idle.length ? "NCC chưa được hỏi mặt hàng nào: " + idle.map(function (v) { return v.name; }).join(", ") +

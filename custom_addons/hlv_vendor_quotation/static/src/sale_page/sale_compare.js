@@ -355,8 +355,11 @@ window.HlvQuote = window.HlvQuote || {};
         }).join("") + "</tr>";
     }).join("");
     return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
+      '<span class="hq-compare-actions">' +
+      (d.can_add_products ? '<button type="button" class="hq-btn hq-btn-mini" data-add-products="1" title="Thêm sản phẩm ' +
+        'vào phiếu này — trùng sản phẩm thì cộng thêm SL">+ Thêm sản phẩm</button> ' : "") +
       (d.can_add_vendor ? '<button type="button" class="hq-btn hq-btn-mini" data-add-toggle="1" title="NCC báo hết hàng / ' +
-        'cần thêm giá để so — gửi sản phẩm cho NCC khác">+ Hỏi thêm NCC</button>' : "") + "</div>" +
+        'cần thêm giá để so — gửi sản phẩm cho NCC khác">+ Hỏi thêm NCC</button>' : "") + "</span></div>" +
       '<div class="hq-table-wrap hq-compare-wrap"><table class="hq-table hq-compare"><thead>' + head +
       "</thead><tbody>" + rows + "</tbody><tfoot><tr><td colspan=\"" + (2 + d.vendors.length) +
       '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +

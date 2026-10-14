@@ -177,6 +177,8 @@ def inquiry_detail(inquiry):
         "can_set_order_ref": inquiry.state != "cancel" and any(inquiry._hlv_order_ref_targets()),
         # Hỏi thêm NCC (NCC đã hỏi báo hết hàng…) — cả khi đã lên YCMH, còn sản phẩm chưa lên đơn mua.
         "can_add_vendor": inquiry.state in ("open", "requested") and not all(inquiry.line_ids.mapped("locked")),
+        # Thêm sản phẩm vào phiếu đã gửi (trùng sản phẩm thì cộng SL) — cả khi đã lên YCMH.
+        "can_add_products": inquiry.state in ("open", "requested"),
         # "Không mua": đóng phiếu, giá NCC vẫn giữ cho phiếu sau dùng lại.
         "can_close": inquiry.state == "open",
         "vendors": [_vendor_column(q) for q in quotes],
