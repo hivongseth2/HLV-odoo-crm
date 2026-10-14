@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zalo_ai_run_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.ai.run.list</field>
+        <field name="model">hlv.zalo.ai.run</field>
+        <field name="arch" type="xml">
+            <list create="false" edit="false" delete="false"
+                  decoration-success="state == 'proposed'" decoration-danger="state == 'error'"
+                  decoration-muted="state in ('nothing', 'no_quote')">
+                <field name="create_date" string="Lúc"/>
+                <field name="group_id"/>
+                <field name="state"/>
+                <field name="manual" optional="hide"/>
+                <field name="new_count"/>
+                <field name="message_count"/>
+                <field name="quote_count"/>
+                <field name="proposal_ids" widget="many2many_tags"/>
+                <field name="summary" optional="show"/>
+                <field name="error" optional="show"/>
+                <field name="input_tokens" optional="hide"/>
+                <field name="output_tokens" optional="hide"/>
+                <field name="duration" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zalo_ai_run_form" model="ir.ui.view">
+        <field name="name">hlv.zalo.ai.run.form</field>
+        <field name="model">hlv.zalo.ai.run</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false" delete="false">
+                <sheet>
+                    <div class="oe_title"><h1><field name="state"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="create_date" string="Lúc"/>
+                            <field name="group_id"/>
+                            <field name="partner_id"/>
+                            <field name="manual"/>
+                        </group>
+                        <group>
+                            <field name="new_count"/>
+                            <field name="message_count"/>
+                            <field name="quote_count"/>
+                            <field name="from_message_id"/>
+                            <field name="to_message_id"/>
+                        </group>
+                    </group>
+                    <group string="AI tóm tắt" invisible="not summary"><field name="summary" nolabel="1" colspan="2"/></group>
+                    <group string="Lỗi" invisible="not error"><field name="error" nolabel="1" colspan="2"/></group>
+                    <group string="Đề xuất" invisible="not proposal_ids">
+                        <field name="proposal_ids" nolabel="1" colspan="2">
+                            <list>
+                                <field name="quote_id"/>
+                                <field name="inquiry_id"/>
+                                <field name="sale_code"/>
+                                <field name="state"/>
+                            </list>
+                        </field>
+                    </group>
+                    <group string="Chi phí">
+                        <field name="model"/>
+                        <field name="input_tokens"/>
+                        <field name="output_tokens"/>
+                        <field name="duration"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_zalo_ai_run_search" model="ir.ui.view">
+        <field name="name">hlv.zalo.ai.run.search</field>
+        <field name="model">hlv.zalo.ai.run</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="group_id"/>
+                <filter name="proposed" string="Có đề xuất" domain="[('state', '=', 'proposed')]"/>
+                <filter name="error" string="Lỗi" domain="[('state', '=', 'error')]"/>
+                <filter name="today" string="Hôm nay" domain="[('create_date', '&gt;=', (context_today()).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="by_group" string="Nhóm" context="{'group_by': 'group_id'}"/>
+                    <filter name="by_state" string="Kết quả" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_zalo_ai_run" model="ir.actions.act_window">
+        <field name="name">Nhật ký AI đọc Zalo</field>
+        <field name="res_model">hlv.zalo.ai.run</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_zalo_ai_run_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">AI chưa đọc lượt nào</p>
+            <p>Bật "AI đọc Zalo soạn giá cho báo giá" trong Cài đặt → Mua hàng → Hỏi giá NCC. Cron 3 phút một lần đọc các
+                nhóm đang ghi tin, có NCC và có tin mới từ phía NCC — mỗi lượt một dòng ở đây. Muốn thử ngay: mở nhóm,
+                bấm "AI đọc ngay".</p>
+        </field>
+    </record>
+</odoo>

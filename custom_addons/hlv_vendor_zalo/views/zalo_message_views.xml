@@ -15,6 +15,7 @@
                 <field name="media_title" optional="show"/>
                 <field name="media_state" optional="hide"/>
                 <field name="partner_id" optional="hide"/>
+                <field name="ai_read" optional="show"/>
                 <field name="is_self" column_invisible="True"/>
             </list>
         </field>
@@ -84,6 +85,7 @@
                 <filter name="from_staff" string="Nhân viên mình gửi" domain="[('member_kind', '=', 'staff')]"/>
                 <filter name="with_media" string="Có ảnh / file" domain="[('media_state', '!=', 'none')]"/>
                 <filter name="media_missing" string="File chưa về" domain="[('media_state', 'in', ('waiting', 'failed'))]"/>
+                <filter name="ai_unread" string="AI chưa đọc" domain="[('ai_read', '=', False)]"/>
                 <separator/>
                 <filter name="today" string="Hôm nay" domain="[('sent_at', '&gt;=', (context_today()).strftime('%Y-%m-%d'))]"/>
                 <group expand="0" string="Nhóm theo">

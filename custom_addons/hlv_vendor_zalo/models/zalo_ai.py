@@ -9,9 +9,11 @@ Mặc định TẮT (Cài đặt → Hỏi giá NCC → AI đọc Zalo) — bậ
 
 import base64
 import logging
+import time
 from datetime import timedelta
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 from odoo.addons.hlv_product_agent.services.claude_api_payload import MODEL_CHOICES, request_extras
 from odoo.addons.hlv_product_agent.services.claude_client import api_error_message, load_anthropic, make_client
 from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn_number, local_date_text, price_incl_vat
@@ -51,15 +53,26 @@ class ZaloAi(models.AbstractModel):
         }
 
     @api.model
+    def _client(self, config):
+        """(module anthropic, client) — hoặc UserError nói thiếu gì."""
+        anthropic = load_anthropic()
+        if not anthropic:
+            raise UserError(_("Odoo chưa cài thư viện anthropic."))
+        if not config["api_key"]:
+            raise UserError(_("Chưa có Anthropic API key (Cài đặt → Tồn kho → Trợ lý tạo mã hàng)."))
+        return anthropic, make_client(anthropic, config["api_key"], timeout=REQUEST_TIMEOUT_SECONDS)
+
+    @api.model
     def _cron_read_groups(self):
         config = self._config()
         if not config["enabled"]:
             return
-        anthropic = load_anthropic()
-        if not anthropic or not config["api_key"]:
-            _logger.warning("ZALO_AI bỏ qua: %s", "chưa cài thư viện anthropic" if not anthropic else "chưa có API key")
+        try:
+            anthropic, client = self._client(config)
+        except UserError as error:
+            _logger.warning("ZALO_AI bỏ qua: %s", error.args[0])
             return
-        client = make_client(anthropic, config["api_key"], timeout=REQUEST_TIMEOUT_SECONDS)
+        self.env["hlv.zalo.ai.run"]._gc()
         groups = self.env["hlv.zalo.group"].search([("enabled", "=", True), ("partner_id", "!=", False)])
         for group in groups:
             try:
@@ -68,30 +81,64 @@ class ZaloAi(models.AbstractModel):
             except Exception:  # noqa: BLE001 — một nhóm lỗi (API, dữ liệu lạ) không chặn các nhóm khác
                 self.env.cr.rollback()
                 _logger.exception("ZALO_AI lỗi khi đọc nhóm %s", group.id)
+                self.env["hlv.zalo.ai.run"].create({"group_id": group.id, "state": "error", "model": config["model"],
+                                                    "error": "Lỗi hệ thống khi đọc nhóm — xem log Odoo (ZALO_AI)."})
+                self.env.cr.commit()
 
-    def _read_group(self, anthropic, client, model, group):
+    @api.model
+    def _read_group_now(self, group):
+        """Nút "AI đọc ngay" trên nhóm: đọc lại cả đoạn hội thoại, kể cả khi không có tin mới (để thử / đọc lại sau khi
+        sửa vai trò thành viên). Vẫn cần bật AI trong Cài đặt — công tắc chặn tốn token ở một chỗ."""
+        config = self._config()
+        if not config["enabled"]:
+            raise UserError(_("Đang tắt AI đọc Zalo — bật trong Cài đặt → Mua hàng → Hỏi giá NCC."))
+        if not group.enabled or not group.partner_id:
+            raise UserError(_("Nhóm phải bật \"Ghi tin\" và gắn NCC thì AI mới đọc."))
+        anthropic, client = self._client(config)
+        return self._read_group(anthropic, client, config["model"], group, force=True)
+
+    def _read_group(self, anthropic, client, model, group, force=False):
+        """Một lượt đọc nhóm. Có tin mới từ phía NCC (hoặc force) mới đọc; mỗi lượt đọc ghi một dòng nhật ký
+        (hlv.zalo.ai.run) — kể cả lượt không có gì / lỗi, để người dùng thấy AI đã nhận tin và đang làm gì."""
         Message = self.env["hlv.zalo.message"]
         last = Message.search([("group_id", "=", group.id)], order="id desc", limit=1)
-        news = Message.search_count([("group_id", "=", group.id), ("id", ">", group.ai_last_message_id),
-                                     ("is_self", "=", False), ("member_id.kind", "!=", "staff")])
-        if not news:
-            return
+        news = Message.search_count(group._ai_pending_domain())
+        if not news and not force:
+            return self.env["hlv.zalo.ai.run"]
+        started = time.monotonic()
+        run = self.env["hlv.zalo.ai.run"].create({
+            "group_id": group.id, "model": model, "new_count": news,
+            "from_message_id": group.ai_last_message_id, "to_message_id": last.id, "manual": force,
+        })
         quotes = self._open_quotes(group.partner_id)
         quote_rows = self._quote_rows(quotes)
-        if quote_rows:
-            since = min(quotes.mapped("create_date")) - timedelta(days=1)
-            messages = Message.search([("group_id", "=", group.id), ("sent_at", ">=", since)],
-                                      order="sent_at desc, id desc", limit=MAX_MESSAGES).sorted(lambda m: (m.sent_at, m.id))
-            answer = self._ask_claude(anthropic, client, model, group, quote_rows, messages)
-            if answer is None:
-                return  # gọi AI lỗi: giữ mốc cũ, lượt sau đọc lại
-            summary, result = answer
-            Proposal = self.env["hlv.zalo.proposal"]
-            for quote in quotes.filtered(lambda q: q.id in result):
-                proposal, changed = Proposal._upsert_from_ai(group, quote, result[quote.id], summary, messages, model)
-                if changed:
-                    proposal._notify_sale()
+        if not quote_rows:
+            # Không có báo giá đang mở cho NCC: không gọi AI (không tốn token), chỉ dời mốc.
+            run.write({"state": "no_quote", "duration": time.monotonic() - started})
+            group.ai_last_message_id = last.id
+            return run
+        since = min(quotes.mapped("create_date")) - timedelta(days=1)
+        messages = Message.search([("group_id", "=", group.id), ("sent_at", ">=", since)],
+                                  order="sent_at desc, id desc", limit=MAX_MESSAGES).sorted(lambda m: (m.sent_at, m.id))
+        answer = self._ask_claude(anthropic, client, model, group, quote_rows, messages)
+        run.write({"message_count": len(messages), "quote_count": len(quote_rows),
+                   "input_tokens": answer["input_tokens"], "output_tokens": answer["output_tokens"],
+                   "duration": time.monotonic() - started})
+        if answer["error"]:
+            run.write({"state": "error", "error": answer["error"]})
+            return run  # gọi AI lỗi: giữ mốc cũ, lượt sau đọc lại
+        Proposal = self.env["hlv.zalo.proposal"]
+        proposals = Proposal
+        for quote in quotes.filtered(lambda q: q.id in answer["result"]):
+            proposal, changed = Proposal._upsert_from_ai(group, quote, answer["result"][quote.id], answer["summary"],
+                                                         messages, model)
+            proposals |= proposal
+            if changed:
+                proposal._notify_sale()
+        run.write({"state": "proposed" if proposals else "nothing", "summary": answer["summary"],
+                   "proposal_ids": [(6, 0, proposals.ids)]})
         group.ai_last_message_id = last.id
+        return run
 
     @api.model
     def _open_quotes(self, partner):
@@ -104,7 +151,9 @@ class ZaloAi(models.AbstractModel):
         return quotes.filtered(lambda q: q._is_open_for_vendor() and not q._fully_ordered())
 
     def _ask_claude(self, anthropic, client, model, group, quote_rows, messages):
-        """Một lần gọi Claude cho cả nhóm. Trả (tóm tắt, {quote_id: [dòng]}); lỗi API / câu trả lời hỏng → None."""
+        """Một lần gọi Claude cho cả nhóm. Trả {"summary", "result" ({quote_id: [dòng]}), "error" ("" = ổn),
+        "input_tokens", "output_tokens"}."""
+        answer = {"summary": "", "result": {}, "error": "", "input_tokens": 0, "output_tokens": 0}
         content = [{"type": "text", "text": user_message(
             group.partner_id.display_name, local_date_text(fields.Datetime.now()), quote_rows,
             self._message_rows(messages))}]
@@ -120,19 +169,20 @@ class ZaloAi(models.AbstractModel):
             )
         except anthropic.APIError as error:
             _logger.warning("ZALO_AI nhóm %s: %s", group.id, api_error_message(anthropic, error))
-            return None
+            return dict(answer, error=api_error_message(anthropic, error))
         usage = response.usage
+        answer.update(input_tokens=usage.input_tokens, output_tokens=usage.output_tokens)
         _logger.info("ZALO_AI nhóm %s %s: %s báo giá, %s tin, in=%s out=%s stop=%s", group.id, response.model,
                      len(quote_rows), len(messages), usage.input_tokens, usage.output_tokens, response.stop_reason)
         if response.stop_reason in ("max_tokens", "refusal"):
-            _logger.warning("ZALO_AI nhóm %s: Claude không trả lời trọn vẹn (%s)", group.id, response.stop_reason)
-            return None
+            return dict(answer, error=f"Claude không trả lời trọn vẹn ({response.stop_reason}).")
         text = next((block.text for block in response.content if block.type == "text"), "")
         try:
-            return parse_result(text, quote_rows)
+            summary, result = parse_result(text, quote_rows)
         except (ValueError, KeyError, TypeError):
             _logger.warning("ZALO_AI nhóm %s: câu trả lời không đúng JSON", group.id)
-            return None
+            return dict(answer, error="Câu trả lời của Claude không đúng dạng JSON.")
+        return dict(answer, summary=summary, result=result)
 
     @staticmethod
     def _quote_rows(quotes):

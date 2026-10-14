@@ -8,4 +8,5 @@ access_zalo_message_purchase_manager,hlv.zalo.message purchase manager,model_hlv
 access_zalo_reaction_purchase_user,hlv.zalo.reaction purchase user,model_hlv_zalo_reaction,purchase.group_purchase_user,1,0,0,0
 access_zalo_listener_purchase_user,hlv.zalo.listener purchase user,model_hlv_zalo_listener,purchase.group_purchase_user,1,0,0,0
 access_zalo_proposal_purchase_user,hlv.zalo.proposal purchase user,model_hlv_zalo_proposal,purchase.group_purchase_user,1,0,0,0
+access_zalo_ai_run_purchase_user,hlv.zalo.ai.run purchase user,model_hlv_zalo_ai_run,purchase.group_purchase_user,1,0,0,0
 access_zalo_proposal_line_purchase_user,hlv.zalo.proposal.line purchase user,model_hlv_zalo_proposal_line,purchase.group_purchase_user,1,0,0,0

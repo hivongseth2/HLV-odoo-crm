@@ -11,6 +11,8 @@
                 <field name="message_count"/>
                 <field name="skipped_count"/>
                 <field name="last_message_at"/>
+                <field name="ai_pending_count" optional="show"/>
+                <field name="ai_last_run_id" optional="show"/>
             </list>
         </field>
     </record>
@@ -24,6 +26,9 @@
                     <div class="oe_button_box" name="button_box">
                         <button name="action_open_messages" type="object" class="oe_stat_button" icon="fa-comments">
                             <field name="message_count" widget="statinfo" string="Tin đã lưu"/>
+                        </button>
+                        <button name="action_open_ai_runs" type="object" class="oe_stat_button" icon="fa-magic">
+                            <field name="ai_pending_count" widget="statinfo" string="Tin chờ AI đọc"/>
                         </button>
                     </div>
                     <div class="oe_title">
@@ -43,6 +48,21 @@
                             <field name="last_message_at"/>
                             <field name="skipped_count"/>
                         </group>
+                    </group>
+                    <group string="AI đọc nhóm" invisible="not enabled or not partner_id">
+                        <group>
+                            <field name="ai_last_message_id"/>
+                            <field name="ai_pending_count"/>
+                            <field name="ai_last_run_id"/>
+                        </group>
+                        <div class="text-muted">
+                            Cron 3 phút một lần: có tin mới phía NCC thì AI đọc hội thoại, soạn đề xuất cho các báo giá đang mở
+                            của NCC. "AI đọc ngay" đọc lại cả đoạn hội thoại ngay bây giờ (cần bật AI trong Cài đặt).
+                            <div class="mt8">
+                                <button name="action_ai_read_now" type="object" string="AI đọc ngay" class="btn-secondary"
+                                        icon="fa-magic" confirm="Gọi AI đọc nhóm này ngay (tốn token). Tiếp tục?"/>
+                            </div>
+                        </div>
                     </group>
                     <field name="note" placeholder="Ghi chú: nhóm này dùng để làm gì, ai phụ trách…"/>
                 </sheet>
