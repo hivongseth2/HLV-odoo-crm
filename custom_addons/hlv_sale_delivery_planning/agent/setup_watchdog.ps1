@@ -148,11 +148,11 @@ Ok 'Chay thu xong, khong loi.'
 
 # --- 6. Tac vu chay ngam --------------------------------------------------------------
 Step "Tac vu '$TaskName'"
-# 10 phut/lan chi de HOI SINH tien trinh neu no chet; nhip that la vong lap 120 giay ben
+# 10 phut/lan chi de HOI SINH tien trinh neu no chet; nhip that la vong lap 60 giay ben
 # trong. Script co mutex chong chay trung nen luot nao thay vong lap con song la tu thoat.
 # /IT = chay trong phien dang nhap => popup canh bao hien duoc cho nguoi ngoi o kho.
 $vbs = Join-Path $Dir 'run_watchdog_hidden.vbs'
-schtasks /Create /TN "$TaskName" /SC MINUTE /MO 10 /RL HIGHEST /IT /F /TR "wscript.exe `"$vbs`" -LoopSeconds 120" | Out-Null
+schtasks /Create /TN "$TaskName" /SC MINUTE /MO 10 /RL HIGHEST /IT /F /TR "wscript.exe `"$vbs`" -LoopSeconds 60" | Out-Null
 if ($LASTEXITCODE -ne 0) { Stop-Here "Khong tao duoc tac vu (ma $LASTEXITCODE)." }
 Ok 'Da tao tac vu.'
 
@@ -195,6 +195,6 @@ Write-Host " Cau hinh : $CfgFile  (co token, chi admin doc/ghi duoc)"
 Write-Host " Go       : schtasks /Delete /TN `"$TaskName`" /F"
 Write-Host ""
 Write-Host " Kiem cuoi: vao Odoo > Kho hang > kho $WhCode > 'Watchdog: lan cuoi nhan tin hieu'"
-Write-Host " phai nhay len gio hien tai trong vong 2 phut."
+Write-Host " phai nhay len gio hien tai trong vong 1 phut."
 Write-Host ""
 Read-Host 'Nhan Enter de dong'

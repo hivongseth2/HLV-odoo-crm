@@ -78,9 +78,9 @@
 -------------------------------------------------------------------------------------
  BƯỚC 2 — CHỌN CÁCH CHẠY (2 chế độ)
 -------------------------------------------------------------------------------------
- A) LIÊN TỤC (dễ nhìn, có người ngồi máy) — cửa sổ mở hoài, tự lặp mỗi 120 giây:
+ A) LIÊN TỤC (dễ nhìn, có người ngồi máy) — cửa sổ mở hoài, tự lặp mỗi 60 giây:
 
-      .\iot_watchdog_windows.ps1 -LoopSeconds 120
+      .\iot_watchdog_windows.ps1 -LoopSeconds 60
 
     Nhược điểm: đóng cửa sổ / khởi động lại máy là DỪNG giám sát. (Không mất trắng: Odoo
     sẽ thấy "im lặng quá N phút" và tự gửi email cảnh báo.)
@@ -88,14 +88,14 @@
  B) CHẠY ẨN 24/7 (khuyến nghị chạy thật) — KHÔNG hiện cửa sổ nào, kể cả nháy 1 giây:
 
     schtasks /Create /TN "HLV IoT Watchdog" /SC MINUTE /MO 10 /RL HIGHEST /IT /F ^
-      /TR "wscript.exe C:\hlv\run_watchdog_hidden.vbs -LoopSeconds 120"
+      /TR "wscript.exe C:\hlv\run_watchdog_hidden.vbs -LoopSeconds 60"
 
-    Cách này chạy 1 tiến trình ẩn duy nhất, tự kiểm tra mỗi 120 giây. Task 10 phút/lần
+    Cách này chạy 1 tiến trình ẩn duy nhất, tự kiểm tra mỗi 60 giây. Task 10 phút/lần
     chỉ để HỒI SINH nếu tiến trình đó chết (mutex trong script chặn chạy trùng nên không
     bao giờ có 2 tiến trình cùng lúc). run_watchdog_hidden.vbs phải nằm cùng thư mục.
 
     Vì sao không gọi thẳng powershell.exe trong task: mỗi lần chạy sẽ nháy 1 cửa sổ
-    console lên màn hình máy kho (2 phút 1 lần) — không làm việc gì khác được.
+    console lên màn hình máy kho (1 phút 1 lần) — không làm việc gì khác được.
 
     Lưu ý về popup: /IT = chạy dưới user đang đăng nhập nên popup cảnh báo hiện được.
     Nếu tạo task chạy dưới SYSTEM (/RU SYSTEM) thì popup KHÔNG hiện lên được (Windows
@@ -164,8 +164,8 @@ param(
     # 127.0.0.1 (đúng bản ghi hộp IoT "MayChu — https://127.0.0.1" thừa ra trong danh sách).
     # Sau đó nó vẫn Running nên watchdog cũ thấy mọi thứ bình thường.
     [int]$ServicePort = 8069,
-    # Bao nhiêu lượt LIÊN TIẾP service không trả lời thì mới restart. Để 2 (≈4 phút ở nhịp
-    # 120 giây): 1 lượt trượt có thể chỉ do service đang bận, restart ngay là cắt ngang việc in.
+    # Bao nhiêu lượt LIÊN TIẾP service không trả lời thì mới restart. Để 2 (≈2 phút ở nhịp
+    # 60 giây): 1 lượt trượt có thể chỉ do service đang bận, restart ngay là cắt ngang việc in.
     # Đặt 0 để tắt hẳn phép thử này.
     [int]$ServiceProbeFails = 2,
     # BẬT ĐƯỜNG IN TRỰC TIẾP: máy này tự hỏi Odoo lấy phiếu cần in rồi in thẳng ra máy in
@@ -192,7 +192,7 @@ param(
     # File cấu hình: chứa OdooUrl/Token/WarehouseCode/... để không phải nhập lại mỗi lần.
     [string]$ConfigFile = "$env:ProgramData\HLV\iot_watchdog.config.json",
     [string]$LogFile = "$env:ProgramData\HLV\iot_watchdog.log",
-    # Nhớ trạng thái giữa các lần chạy để không spam cảnh báo mỗi 2 phút ở chế độ Task Scheduler.
+    # Nhớ trạng thái giữa các lần chạy để không spam cảnh báo mỗi 60 giây ở chế độ Task Scheduler.
     [string]$StateFile = "$env:ProgramData\HLV\iot_watchdog_state.json"
 )
 
@@ -863,16 +863,14 @@ function Invoke-WatchdogCycle {
             #   - số này ĐỨNG  => lệnh in KHÔNG hề tới Windows (đứt ở khâu trình duyệt/hộp IoT),
             #     lúc đó xoá hàng đợi vô ích, phải khởi động lại service Odoo IoT.
             # Ghi vào note nên xem lại được trong Odoo (Kho hàng > Watchdog: ghi chú lần cuối).
-            $printedTotalNow = Get-PrinterPrintedTotal -Printer $PrinterName
-            if ($null -ne $printedTotalNow) {
-                $script:PrintedTotal = $printedTotalNow
-                $noteParts += "da_in_tong=$($script:PrintedTotal)"
-            }
+            # ĐỌC Ở ĐÂY CHỈ LÀ TẠM: lượt nào có in trực tiếp thì phải đọc LẠI sau khi in xong,
+            # xem khối "2b" phía dưới — vì sao thì giải thích đầy đủ ở đó.
+            $script:PrintedTotal = Get-PrinterPrintedTotal -Printer $PrinterName
 
             $nowLocal = Get-Date
             $stuck = @($jobs | Where-Object {
                 # Không đọc được SubmittedTime => coi như KHÔNG treo (an toàn). Xoá oan 1 phiếu
-                # vừa gửi in tệ hơn là bỏ sót 1 job treo — vòng sau (2 phút) vẫn bắt được nó.
+                # vừa gửi in tệ hơn là bỏ sót 1 job treo — vòng sau (1 phút) vẫn bắt được nó.
                 $ageMin = -1
                 if ($_.SubmittedTime) { $ageMin = ($nowLocal - $_.SubmittedTime).TotalMinutes }
                 ($ageMin -ge $StuckJobMinutes) -or ("$($_.JobStatus)" -match 'Error|Blocked|Offline|PaperOut|Paused')
@@ -925,6 +923,22 @@ function Invoke-WatchdogCycle {
             Write-WatchdogLog "Loi khong mong doi khi in truc tiep: $($_.Exception.Message)" 'ERROR'
         }
     }
+
+    # ĐỌC LẠI bộ đếm job đã in — BẮT BUỘC phải sau khi in xong, không được dùng số đọc ở
+    # bước 3.
+    #
+    # Vì sao: Odoo đối chiếu "so lenh da gui" với printed_total trong heartbeat. Gửi số đọc
+    # TRƯỚC khi in thì lượt nào có in, Odoo cũng thấy counter chưa nhúc nhích và kết luận
+    # "đã gửi lệnh in mà máy in không in ra giấy" -> đánh dấu nghi ngờ -> nếu admin bật
+    # iot_auto_requeue_unprinted thì nó TỰ GỬI LẠI, và lượt sau in trùng đúng tờ đó.
+    # Đã xảy ra thật trên MAYCHU 14/10: phiếu DH125524949237932 (hàng chờ #456) in lúc
+    # 10:27:10 (counter 0->1) nhưng heartbeat 10:27:11 báo da_in_tong=0; tới 10:29:37 đúng
+    # phiếu đó bị nhận lại và in lần hai (counter 1->2). Cứ thế lặp, kho ra giấy trùng.
+    if ($PrinterName) {
+        $sauKhiIn = Get-PrinterPrintedTotal -Printer $PrinterName
+        if ($null -ne $sauKhiIn) { $script:PrintedTotal = $sauKhiIn }
+    }
+    if ($null -ne $script:PrintedTotal) { $noteParts += "da_in_tong=$($script:PrintedTotal)" }
 
     # --- 3. Gửi heartbeat về Odoo ---------------------------------------------------
     $note = ($noteParts -join '; ')
@@ -1123,6 +1137,6 @@ $result = Invoke-WatchdogCycle
 # Nói rõ vì sao cửa sổ tắt ngay: đây là chế độ CHẠY 1 LẦN (dành cho Task Scheduler).
 Write-WatchdogLog (
     "Kết thúc (chế độ chạy 1 LẦN, exit=$($result.ExitCode)). Muốn cửa sổ chạy hoài và tự kiểm " +
-    'tra lặp lại thì thêm: -LoopSeconds 120'
+    'tra lặp lại thì thêm: -LoopSeconds 60'
 ) 'INFO'
 exit $result.ExitCode
