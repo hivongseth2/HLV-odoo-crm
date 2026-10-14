@@ -139,7 +139,7 @@
                             </div>
                             <div class="hq-modal-body" id="hq-modal-body">
                                 <section class="hq-step">
-                                    <h3 class="hq-h3">1. Sản phẩm &amp; nhà cung cấp</h3>
+                                    <h3 class="hq-h3" id="hq-create-step1-title">1. Sản phẩm &amp; nhà cung cấp</h3>
                                     <div class="row g-2">
                                         <div class="col-md-6 hq-picker">
                                             <label class="form-label small mb-1" for="hq-prod-search">Thêm sản phẩm</label>
@@ -174,7 +174,7 @@
                                     <div id="hq-opp-chip" class="hq-chip-row hq-opp-chip"></div>
                                     <div id="hq-lines"></div>
                                     <!-- NCC là cột của bảng sản phẩm (sale_create_ask.js): thêm NCC ở đây, bỏ bằng × trên tiêu đề cột. -->
-                                    <div class="hq-vendor-bar">
+                                    <div class="hq-vendor-bar" id="hq-create-vendor-bar">
                                         <div class="hq-picker">
                                             <label class="hq-sr-only" for="hq-partner-search">Thêm nhà cung cấp</label>
                                             <input type="search" id="hq-partner-search" class="hq-input w-100" autocomplete="off"
@@ -185,7 +185,7 @@
                                     </div>
                                 </section>
 
-                                <section class="hq-step">
+                                <section class="hq-step" id="hq-create-step2">
                                     <h3 class="hq-h3">2. Hạn &amp; lời nhắn</h3>
                                     <div class="row g-2">
                                         <!-- Chỉ hiện khi đang xem "Tất cả": phiếu phải gắn một mã sale cụ thể. -->

@@ -225,6 +225,53 @@ class VendorInquiry(models.Model):
         ))
         return quotes
 
+    def action_add_products(self, line_vals, quote_products):
+        """Sale thêm sản phẩm vào phiếu đã gửi (nút "+ Thêm sản phẩm" trong ngăn phiếu).
+
+        line_vals: [{product_id, name, product_qty, product_uom_id}] như lúc lập phiếu. Sản phẩm đã có trong phiếu
+        → cộng dồn SL vào dòng cũ (đổi về ĐVT của dòng), báo giá các NCC đang hỏi món đó tăng SL theo; sản phẩm mới →
+        dòng mới. quote_products: {id báo giá đang mở của phiếu: set(product_id)} — NCC nào hỏi món nào, sale tự tick
+        (không mặc định hỏi ai); sản phẩm mới phải hỏi ít nhất một NCC. Trả các dòng phiếu đã thêm / cộng dồn.
+        """
+        self.ensure_one()
+        if self.state not in ("open", "requested"):
+            raise UserError(_("Phiếu %s đã đóng hoặc đã huỷ — lập phiếu mới để hỏi giá.", self.name))
+        if not line_vals:
+            raise UserError(_("Chọn ít nhất một sản phẩm."))
+        quotes = self.quote_ids.filtered(lambda q: q.state in ("sent", "quoted"))
+        if set(quote_products) - set(quotes.ids):
+            raise UserError(_("Có báo giá NCC đã đóng / huỷ — mở lại phiếu rồi chọn lại NCC."))
+        Line = self.env["hlv.vendor.inquiry.line"]
+        by_product = {line.product_id.id: line for line in self.line_ids}
+        sequence = max(self.line_ids.mapped("sequence") or [0])
+        added = merged = Line
+        for vals in line_vals:
+            line = by_product.get(vals["product_id"])
+            if line:
+                uom = self.env["uom.uom"].browse(vals["product_uom_id"])
+                line._hlv_add_qty(uom._compute_quantity(vals["product_qty"], line.product_uom_id)
+                                  if uom and line.product_uom_id else vals["product_qty"])
+                merged |= line
+            else:
+                sequence += 1
+                line = Line.create(dict(vals, inquiry_id=self.id, sequence=sequence))
+                by_product[line.product_id.id] = line
+                added |= line
+        asked = {product_id for product_ids in quote_products.values() for product_id in product_ids}
+        orphans = added.filtered(lambda l: l.product_id.id not in asked)
+        if orphans:
+            raise UserError(_("Chưa chọn NCC nào để hỏi: %s.", ", ".join(orphans.mapped("name"))))
+        for quote in quotes:
+            open_lines = quote.line_ids.filtered(lambda l: not l.withdrawn).inquiry_line_id
+            lines = (added | merged).filtered(
+                lambda l, q=quote: l.product_id.id in quote_products.get(q.id, ()) and l not in open_lines and not l.locked)
+            if lines:
+                quote.action_add_inquiry_lines(lines)
+        self.message_post(body=Markup(_("Sale thêm sản phẩm vào phiếu: %s.")) % ", ".join(
+            [line.name or line.product_id.display_name for line in added]
+            + [_("%s (cộng thêm SL)", line.name or line.product_id.display_name) for line in merged]))
+        return added | merged
+
     @api.model
     def _hlv_sale_can_edit_deadline(self):
         """Cài đặt có cho sale sửa hạn báo giá trên ngăn phiếu không (SALE_EDIT_DEADLINE_PARAM)."""
@@ -545,6 +592,19 @@ class VendorInquiryLine(models.Model):
         for line in changed:
             line.need_qty = line._hlv_chosen_total()
         return Markup("<p>%s</p><ul>%s</ul>") % (_("Khách chỉ mua chừng này — SL cần mua:"), items)
+
+    def _hlv_add_qty(self, qty):
+        """Cộng thêm qty (ĐVT của dòng) vào SL hỏi + SL cần mua; báo giá NCC đang hỏi món này (chưa lên đơn mua) tăng SL
+        hỏi theo và ghi chú cho NCC biết."""
+        self.ensure_one()
+        before = self.product_qty
+        self.write({"product_qty": before + qty, "need_qty": self.need_qty + qty})
+        for quote_line in self.quote_line_ids.filtered(
+                lambda l: l.quote_id.state in ("sent", "quoted") and not l.withdrawn and not l.vendor_locked).sudo():
+            quote_line.product_qty = self.product_qty
+            post_internal(quote_line.quote_id, Markup(_("Sale tăng SL hỏi <b>%s</b>: %s → %s %s.")) % (
+                self.name or self.product_id.display_name, format_vn_number(before), format_vn_number(self.product_qty),
+                self.product_uom_id.name or ""), self.env.user.partner_id)
 
     def _quote_line_vals(self):
         self.ensure_one()

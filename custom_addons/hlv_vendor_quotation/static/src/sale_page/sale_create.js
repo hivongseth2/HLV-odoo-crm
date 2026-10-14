@@ -51,6 +51,10 @@ window.HlvQuote = window.HlvQuote || {};
   };
 
   HQ.openCreate = function () {
+    C.addTo = null;  // khác null: đang thêm sản phẩm vào phiếu đã gửi (HQ.openAddProducts)
+    HQ.$("hq-create-step1-title").textContent = "1. Sản phẩm & nhà cung cấp";
+    HQ.show("hq-create-vendor-bar", true);
+    HQ.show("hq-create-step2", true);
     C.lines = [];
     var vendor = S.vendors.find(function (v) { return v.id === S.vendorId; });
     C.chosen = vendor ? [{ id: vendor.id, name: vendor.name }] : [];
@@ -74,6 +78,21 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.showAlert("hq-modal-alert", "");
     renderAll();
     HQ.show("hq-modal", true);
+  };
+
+  /** "+ Thêm sản phẩm" trong ngăn phiếu: dùng lại hộp lập phiếu (đủ cách thêm hàng — tìm, dán danh sách, MISA CRM,
+      đơn bán) để thêm sản phẩm vào phiếu d. Cột NCC là các báo giá đang mở của phiếu, để trống cho sale tự tick; sản
+      phẩm đã có trong phiếu thì server cộng dồn SL vào dòng cũ (vendor_inquiry.action_add_products). */
+  HQ.openAddProducts = function (d) {
+    HQ.openCreate();
+    C.addTo = { id: d.id, productIds: d.lines.map(function (l) { return l.product_id; }) };
+    C.chosen = d.vendors.filter(function (v) { return v.state === "sent" || v.state === "quoted"; })
+      .map(function (v) { return { id: v.quote_id, name: v.name }; });
+    HQ.$("hq-modal-title").textContent = "Thêm sản phẩm vào phiếu " + d.name;
+    HQ.$("hq-create-step1-title").textContent = "Sản phẩm thêm & NCC hỏi";
+    HQ.show("hq-create-vendor-bar", false);
+    HQ.show("hq-create-step2", false);
+    renderAll();
   };
 
   /** Đang xem "Tất cả" thì phiếu phải chọn một mã sale cụ thể (hoặc để trống nếu là thu mua). */
@@ -119,15 +138,27 @@ window.HlvQuote = window.HlvQuote || {};
             "<td>" + esc(l.uom) + "</td>" + HQ.askCells(l) +
             '<td><button type="button" class="hq-icon-btn" data-remove-line="' + index +
             '" title="Bỏ dòng">×</button></td></tr>';
-        }).join("") + "</tbody>" + HQ.askFootRow(4, 1) + "</table>" +
-        (C.chosen.length ? '<div class="hq-muted hq-small">Cột NCC: tick mặt hàng hỏi NCC đó — tick sẵn mặt hàng NCC ' +
-          "từng bán; NCC chưa từng bán thì hỏi hết.</div>" : "")
+        }).join("") + "</tbody>" + HQ.askFootRow(4, 1) + "</table>" + linesHint()
       : '<div class="hq-muted">Chưa có sản phẩm. Tìm sản phẩm để thêm, hoặc lấy hàng từ một đơn bán.</div>';
+  }
+
+  function linesHint() {
+    if (C.addTo) {
+      return C.chosen.length
+        ? '<div class="hq-muted hq-small">Cột NCC: tick NCC hỏi mặt hàng mới. Mặt hàng đã có trong phiếu cộng thêm SL ' +
+          "vào dòng cũ — NCC đang hỏi món đó tự cập nhật SL, tick thêm nếu muốn hỏi NCC khác của phiếu.</div>"
+        : '<div class="hq-ask-warn">Phiếu không còn báo giá NCC nào đang mở — dùng "+ Hỏi thêm NCC" trước.</div>';
+    }
+    return C.chosen.length ? '<div class="hq-muted hq-small">Cột NCC: tick mặt hàng hỏi NCC đó — tick sẵn mặt hàng NCC ' +
+      "từng bán; NCC chưa từng bán thì hỏi hết.</div>" : "";
   }
 
   /* ---------------- Nhà cung cấp ---------------- */
 
   var refreshSuggestions = HQ.debounce(function () {
+    if (C.addTo) {
+      return;  // thêm vào phiếu: NCC là NCC của phiếu, không gợi ý / dùng lại giá
+    }
     var productIds = C.lines.map(function (l) { return l.product_id; });
     // Giá đã hỏi (mọi mã sale) hiện dưới từng sản phẩm — để khỏi hỏi trùng.
     HQ.fetchPriceHints(productIds).then(function (hints) {
@@ -200,6 +231,12 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   function renderSummary() {
+    if (C.addTo) {
+      HQ.$("hq-summary").textContent = C.lines.length + " sản phẩm";
+      HQ.$("hq-submit").textContent = "Thêm vào phiếu";
+      HQ.$("hq-submit").disabled = !C.lines.length;
+      return;
+    }
     var reused = C.lines.filter(function (l) { return !!pickedPrice(l); }).length;
     var direct = allReused();
     HQ.$("hq-summary").textContent = C.lines.length + " sản phẩm" + (reused ? " · " + reused + " dùng lại giá" : "") +
@@ -224,8 +261,30 @@ window.HlvQuote = window.HlvQuote || {};
 
   /* ---------------- Gửi ---------------- */
 
+  function submitAdd() {
+    var plan = HQ.askPlan();
+    if (plan.error) {
+      HQ.showAlert("hq-modal-alert", plan.error);
+      return;
+    }
+    HQ.$("hq-submit").disabled = true;
+    HQ.api("add_products", { inquiry_id: C.addTo.id, lines: C.lines, ask: plan.ask }).then(function (detail) {
+      HQ.show("hq-modal", false);
+      HQ.renderInquiry(detail);
+      HQ.reloadAll();
+      HQ.toast("Đã thêm sản phẩm vào phiếu " + detail.name);
+    }).catch(function (err) {
+      HQ.showAlert("hq-modal-alert", err.message);
+      renderSummary();
+    });
+  }
+
   function submit() {
     HQ.showAlert("hq-modal-alert", "");
+    if (C.addTo) {
+      submitAdd();
+      return;
+    }
     // Dùng lại đủ giá là lên YCMH luôn — YCMH bắt buộc có mã sale (người yêu cầu).
     if (allReused() && createCode() === S.config.all_code) {
       HQ.showAlert("hq-modal-alert", "Chọn mã sale của phiếu — phiếu này lên YCMH luôn, YCMH cần người yêu cầu.");
@@ -389,5 +448,8 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.copy(HQ.$("hq-result-" + el.dataset.copyResult).textContent);
     });
     HQ.$("hq-submit").addEventListener("click", submit);
+    HQ.on(HQ.$("hq-drawer-panel"), "click", "[data-add-products]", function () {
+      HQ.openAddProducts(HQ.addVendorDetail);
+    });
   };
 })(window.HlvQuote);
