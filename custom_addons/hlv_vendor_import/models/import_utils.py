@@ -195,6 +195,25 @@ def keys_from_our_code(code, patterns):
     return keys
 
 
+def looks_like_data(row):
+    """Dòng có ô số (hoặc mã có số như "SC97813") không phải chữ Trung — là dòng dữ liệu, không phải dòng tiêu đề.
+
+    Nhận: một dòng của lưới. Trả: bool; dòng rỗng → False.
+    """
+    return any(parse_number(cell) is not None and not _CJK.search(str(cell)) for cell in row if cell is not None)
+
+
+def fix_two_tier(grid, header_row, header_rows):
+    """Dòng tiêu đề hai tầng phải là số dòng của TẦNG TRÊN. Được cho tầng dưới (dòng ngay dưới đã là dữ liệu) thì lùi
+    một dòng.
+
+    Nhận: lưới; header_row (từ 1); header_rows (1|2). Trả: header_row đã sửa. Một tầng / dòng 1 / đúng sẵn → giữ nguyên.
+    """
+    if header_rows == 2 and header_row > 1 and header_row < len(grid) and looks_like_data(grid[header_row]):
+        return header_row - 1
+    return header_row
+
+
 def detect_header(grid, scan=15):
     """Đoán dòng tiêu đề.
 
@@ -215,7 +234,7 @@ def detect_header(grid, scan=15):
         return best, 1
     top, below = grid[best], grid[best + 1]
     cells = [cell for cell in below if cell is not None]
-    if not cells or any(parse_number(cell) is not None and not _CJK.search(str(cell)) for cell in cells):
+    if not cells or looks_like_data(below):
         return best, 1
     same = sum(1 for col, cell in enumerate(below) if cell is not None and col < len(top) and cell == top[col])
     hits = sum(1 for cell in cells if _keyword_role(cell))

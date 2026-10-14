@@ -14,6 +14,7 @@ from odoo.addons.hlv_product_agent.services.claude_api_payload import request_ex
 from odoo.addons.hlv_product_agent.services.claude_client import api_error_message, load_anthropic, make_client
 
 from ..services.template_prompt import MAX_TOKENS, OUTPUT_SCHEMA, SYSTEM_PROMPT, parse_template, template_message
+from .import_utils import fix_two_tier
 
 _logger = logging.getLogger(__name__)
 
@@ -27,26 +28,30 @@ class HlvVendorTemplateAi(models.AbstractModel):
     _description = "Claude đề xuất mẫu file NCC"
 
     @api.model
-    def suggest(self, profile, grid, sheet_names=(), kept_headers=()):
+    def suggest(self, profile, grid, sheet_names=(), kept_headers=(), keep_header=False):
         """Ghi đề xuất của AI vào profile (dòng tiêu đề, vai trò cột, tiền tố, hãng, × 1000, bỏ dòng nhóm, ghi chú).
 
         kept_headers: tiêu đề các cột người đã chọn vai trò ở mẫu cũ (NCC đổi khung) — giữ, không để AI đổi. Tiền tố /
-        hãng đã có (người khai, hoặc lấy từ mẫu khác của NCC) cũng giữ. Trả True nếu đã áp đề xuất của AI."""
+        hãng đã có (người khai, hoặc lấy từ mẫu khác của NCC) cũng giữ. keep_header: người vừa tự chọn dòng tiêu đề —
+        AI chỉ đề xuất cột theo dòng đó. Trả True nếu đã áp đề xuất của AI."""
         config = self.env["hlv.vendor.import.ai"].config()
         anthropic = load_anthropic()
         if not config["api_key"] or not anthropic or not grid:
             return False
-        answer = self._ask(anthropic, config, profile, grid, list(sheet_names))
+        header = (profile.header_row, profile.header_rows) if keep_header else None
+        answer = self._ask(anthropic, config, profile, grid, list(sheet_names), header)
         if not answer:
             return False
+        if header:
+            answer.update(header_row=profile.header_row, header_rows=int(profile.header_rows))
         self._apply(profile, grid, answer, set(kept_headers))
         return True
 
-    def _ask(self, anthropic, config, profile, grid, sheet_names):
+    def _ask(self, anthropic, config, profile, grid, sheet_names, header):
         """Một lần gọi Claude. Trả kết quả parse_template, hoặc None (lỗi API / quá giờ / câu trả lời hỏng — đã log)."""
         client = make_client(anthropic, config["api_key"], timeout=REQUEST_TIMEOUT_SECONDS)
         message = template_message(profile.partner_id.display_name, sheet_names or [profile.sheet_name or "?"],
-                                   profile.sheet_name, grid)
+                                   profile.sheet_name, grid, header)
         try:
             response = client.beta.messages.create(
                 model=config["model"],
@@ -73,7 +78,8 @@ class HlvVendorTemplateAi(models.AbstractModel):
     @staticmethod
     def _apply(profile, grid, answer, kept_headers):
         profile.write({
-            "header_row": answer["header_row"],
+            # AI hay cho dòng tầng dưới của tiêu đề hai tầng — mẫu tính từ tầng trên.
+            "header_row": fix_two_tier(grid, answer["header_row"], answer["header_rows"]),
             "header_rows": str(answer["header_rows"]),
             "code_prefixes": profile.code_prefixes or answer["code_prefixes"] or False,
             "brand": profile.brand or answer["brand"] or False,

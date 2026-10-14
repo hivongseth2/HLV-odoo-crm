@@ -16,13 +16,13 @@ from ..models.import_utils import ROLE_STOCK, ROLES, cell_text, column_letter
 SAMPLE_ROWS = 40
 CELL_MAX = 60
 MAX_TOKENS = 8000
-NOTE_MAX = 300
+NOTE_MAX = 1000
 ROLE_KEYS = [key for key, _label in ROLES]
 
 SYSTEM_PROMPT = """Bạn giúp phòng thu mua của một công ty thương mại dụng cụ / thiết bị đọc file Excel nhà cung cấp (NCC) gửi: file tồn kho hoặc bảng giá, mỗi NCC một khung riêng (tiếng Việt / Anh / Trung, có thể có tiêu đề thư, logo, ghi chú ở đầu file).
 
 Bạn nhận vài chục dòng đầu của một sheet: mỗi dòng ghi số dòng Excel và các ô theo chữ cái cột. Hãy cho biết:
-- header_row: số dòng Excel của dòng tiêu đề cột (dòng ngay trên dữ liệu hàng hoá). header_rows: 2 nếu tiêu đề hai tầng (dòng trên là nhóm — vd tên kho — dòng ngay dưới là cột con), còn lại 1.
+- header_row: số dòng Excel của dòng tiêu đề cột. Tiêu đề hai tầng thì là dòng TẦNG TRÊN (vd dòng 2 ghi "Mã | Tên | KHO BN | KHO BD", dòng 3 ghi "Tồn | Tồn", dữ liệu từ dòng 4 → header_row = 2, header_rows = 2). header_rows: 2 nếu tiêu đề hai tầng (dòng trên là nhóm — vd tên kho — dòng ngay dưới là cột con), còn lại 1.
 - columns: vai trò từng cột có dữ liệu. role là một trong:
   "code" mã hàng của NCC; "name" tên hàng (ưu tiên cột tên tiếng Việt); "name_alt" tên phụ (tên tiếng Trung / Anh, tên gốc); "uom" đơn vị tính; "stock" số tồn của MỘT kho (mỗi kho một cột — warehouse là tên kho ngắn gọn, ưu tiên phần chữ Latin, vd "KHO BN"); "price" đơn giá CHƯA VAT; "price_incl" đơn giá SAU VAT (cột ghi gồm VAT / sau thuế / 含税); "vat" % VAT; "ignore" bỏ qua (STT, thành tiền, ghi chú, quy cách…).
   Chỉ một cột "price" và một cột "price_incl". Nhiều cột giá (giá sỉ / lẻ / đại lý / niêm yết): chọn cột là giá NCC bán cho công ty (giá đại lý / giá sỉ; chỉ có giá niêm yết thì lấy giá niêm yết), các cột giá khác "ignore", và nói rõ trong note. Cột giá không ghi gì về VAT → "price".
@@ -30,7 +30,7 @@ Bạn nhận vài chục dòng đầu của một sheet: mỗi dòng ghi số d�
 - brand: hãng nếu file gần như chỉ một hãng (vd SATA). Nhiều hãng / không rõ → "".
 - price_in_thousands: true nếu giá trong file ghi theo NGHÌN đồng (tiêu đề ghi "nghìn đồng", "x1000", "(1.000đ)", hoặc số quá nhỏ so với mặt hàng — vd 310 cho máy hàn 60W). Không có cột giá → false.
 - skip_group_rows: true nếu vùng dữ liệu có dòng tiêu đề nhóm xen giữa (tên nhóm hàng, không có ĐVT, không có số tồn / giá) cần bỏ qua.
-- note: một hai câu tiếng Việt nói điểm đáng chú ý cho người xem lại (cột giá đã chọn vì sao, giá theo nghìn đồng, dòng nhóm…). Không có gì → "".
+- note: tối đa hai câu tiếng Việt ngắn (dưới 60 từ) nói điểm người xem lại cần biết (cột giá đã chọn vì sao, giá theo nghìn đồng, dòng nhóm…). Không có gì → "".
 Không đoán bừa: không chắc vai trò một cột thì "ignore"."""
 
 OUTPUT_SCHEMA = {
@@ -63,13 +63,16 @@ OUTPUT_SCHEMA = {
 }
 
 
-def template_message(vendor, sheet_names, sheet_name, grid):
+def template_message(vendor, sheet_names, sheet_name, grid, header=None):
     """Tin gửi Claude: tên NCC, các sheet, rồi SAMPLE_ROWS dòng đầu dạng "Dòng 4: A=STT | B=MS | …".
 
-    Nhận: tên NCC; tên các sheet; sheet đang đọc; lưới (xlsx_grid.read_grid). Dòng trống bỏ qua (vẫn giữ số dòng
-    Excel thật); ô dài cắt còn CELL_MAX ký tự. Lưới rỗng → chỉ phần giới thiệu.
+    Nhận: tên NCC; tên các sheet; sheet đang đọc; lưới (xlsx_grid.read_grid); header — (dòng tiêu đề, số tầng) người
+    đã chọn, AI giữ nguyên (None = AI tự tìm). Dòng trống bỏ qua (vẫn giữ số dòng Excel thật); ô dài cắt còn CELL_MAX
+    ký tự. Lưới rỗng → chỉ phần giới thiệu.
     """
     lines = ["NCC: %s." % vendor, "Các sheet: %s. Đang đọc: %s." % (", ".join(sheet_names), sheet_name or sheet_names[0])]
+    if header:
+        lines.append("Người dùng đã chọn dòng tiêu đề %s (%s tầng) — giữ nguyên header_row / header_rows này." % header)
     for index, row in enumerate(grid[:SAMPLE_ROWS]):
         cells = ["%s=%s" % (column_letter(col), _short(value)) for col, value in enumerate(row) if cell_text(value)]
         if cells:
@@ -106,6 +109,7 @@ def parse_template(text, row_count, width):
     header_row = int(data["header_row"])
     if not 1 <= header_row <= row_count:
         raise ValueError("header_row ngoài lưới")
+    header_rows = 2 if data.get("header_rows") == 2 else 1
     roles, seen = {}, set()
     for item in data["columns"]:
         index = column_index(item.get("column"))
@@ -118,7 +122,7 @@ def parse_template(text, row_count, width):
         roles[index] = (role, " ".join(str(item.get("warehouse") or "").split())[:64] if role == ROLE_STOCK else "")
     return {
         "header_row": header_row,
-        "header_rows": 2 if data.get("header_rows") == 2 else 1,
+        "header_rows": header_rows,
         "roles": roles,
         "code_prefixes": " ".join(str(data.get("code_prefixes") or "").split())[:64],
         "brand": " ".join(str(data.get("brand") or "").split())[:64],

@@ -163,20 +163,13 @@ class HlvVendorImport(models.Model):
         return self._load(grid)
 
     def action_refresh_columns(self):
-        """Đổi dòng tiêu đề / sheet xong thì đề xuất lại cột theo chỗ mới."""
+        """Đổi dòng tiêu đề / sheet xong thì đề xuất lại cột theo chỗ mới (giữ dòng tiêu đề người chọn): có API key thì
+        AI đề xuất, không có / AI lỗi thì đoán theo từ khoá."""
         self.ensure_one()
-        self.profile_id.refresh_columns(self._grid())
-        return True
-
-    def action_ai_suggest_columns(self):
-        """Nhờ AI đề xuất lại cả mẫu (dòng tiêu đề, cột…) — người bấm thì AI được đổi cả cột người đã chọn."""
-        self.ensure_one()
-        if not self.env["hlv.vendor.import.ai"].config()["api_key"]:
-            raise UserError("Chưa có Anthropic API key (Cài đặt → Tồn kho → Trợ lý tạo mã hàng) — sửa cột bằng tay.")
         sheet_names, grid = self._sheet()
-        if not self.env["hlv.vendor.import.template.ai"].suggest(self.profile_id, grid, sheet_names):
-            raise UserError("AI chưa đề xuất được (lỗi gọi AI hoặc câu trả lời hỏng — xem log Odoo). Thử lại, hoặc sửa "
-                            "cột bằng tay.")
+        self.profile_id.refresh_columns(grid)
+        if not self.env["hlv.vendor.import.template.ai"].suggest(self.profile_id, grid, sheet_names, keep_header=True):
+            self.profile_id.ai_note = False  # ghi chú cũ của AI không còn đúng với cột vừa đoán lại
         return True
 
     def action_confirm_columns(self):
