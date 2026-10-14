@@ -26,6 +26,8 @@ class ZaloGroup(models.Model):
     message_ids = fields.One2many("hlv.zalo.message", "group_id", string="Tin nhắn")
     message_count = fields.Integer(string="Số tin đã lưu", compute="_compute_message_count")
     last_message_at = fields.Datetime(string="Tin gần nhất", readonly=True)
+    # Mốc AI đã đọc tới (id tin) — cron chỉ gọi AI khi có tin mới từ phía NCC sau mốc này (models/zalo_ai.py).
+    ai_last_message_id = fields.Integer(string="AI đọc tới tin", readonly=True)
     skipped_count = fields.Integer(
         string="Tin bỏ qua", readonly=True,
         help="Số tin tới khi nhóm chưa bật \"Ghi tin\" — không lưu nội dung.",

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Zalo nhóm NCC (đọc tin)",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.1.0",
     "summary": "Nhận tin nhắn các nhóm Zalo có NCC từ máy nghe bên ngoài, lưu theo nhóm / người gửi, xem cạnh báo giá NCC",
     "description": """
 Giai đoạn 1 — CHỈ ĐỌC, chưa có AI:
@@ -14,6 +14,14 @@ Giai đoạn 1 — CHỈ ĐỌC, chưa có AI:
 - Báo giá NCC có nút "Tin Zalo" mở tin nhóm của NCC đó từ ngày tạo báo giá.
 - Trạng thái máy nghe (đang nối / rớt / mã lỗi / lần cuối báo về) để biết máy nghe còn sống.
 
+Giai đoạn 2 — AI soạn giá (bật trong Cài đặt, mặc định tắt):
+
+- Cron vài phút một lần: nhóm có tin mới từ phía NCC → Claude đọc hội thoại + các báo giá đang mở của NCC đó, soạn
+  giá / VAT / chiết khấu / tồn kho / hẹn ngày cho từng dòng NCC đã nói tới, kèm trích tin làm căn cứ. NCC chỉ báo
+  tồn kho thì lấy giá cũ còn hiệu lực (≤ 7 ngày).
+- Sale của phiếu nhận ghi chú + Zalo kèm link /zalo-de-xuat/<id>: xem, sửa, bấm "Ghi vào báo giá" → ghi như NCC tự
+  gửi trên trang báo giá (cùng luật: đủ giá + VAT mọi dòng, hoặc hết hàng).
+
 Không đổi hành vi của hlv_vendor_quotation. Không gửi tin nào vào Zalo.
 """,
     "author": "HLV",
@@ -25,13 +33,18 @@ Không đổi hành vi của hlv_vendor_quotation. Không gửi tin nào vào Za
         "hlv_vendor_quotation",
         # So API key (utils/api_key.py) — dùng chung, không viết lại.
         "misa_fetch_po_button",
+        # AI đọc Zalo: API key + client Claude dùng chung (services/claude_client.py, claude_api_payload.py).
+        "hlv_product_agent",
     ],
     "data": [
         "security/ir.model.access.csv",
+        "data/ir_cron.xml",
         "views/zalo_message_views.xml",
         "views/zalo_group_views.xml",
         "views/zalo_member_views.xml",
         "views/zalo_listener_views.xml",
+        "views/zalo_proposal_views.xml",
+        "views/proposal_templates.xml",
         "views/vendor_quote_views.xml",
         "views/res_config_settings_views.xml",
         "views/menus.xml",

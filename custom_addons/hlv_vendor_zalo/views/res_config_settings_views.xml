@@ -15,6 +15,13 @@
                                 icon="oi-arrow-right" confirm="Khoá cũ sẽ hết hiệu lực ngay — máy nghe phải dán khoá mới. Tiếp tục?"/>
                     </div>
                 </setting>
+                <setting id="hlv_zalo_ai" string="AI đọc Zalo soạn giá cho báo giá"
+                         help="Bật: vài phút một lần, nhóm Zalo đang ghi tin có NCC trả lời mới thì Claude đọc hội thoại và soạn giá / tồn kho cho các báo giá đang mở của NCC đó (NCC chỉ báo tồn kho thì lấy giá cũ còn hiệu lực ≤ 7 ngày). Sale của phiếu nhận ghi chú + Zalo kèm link, duyệt xong mới ghi vào báo giá. Dùng API key của Trợ lý tạo mã hàng (Cài đặt → Tồn kho). Tắt: không gọi AI, không tốn token.">
+                    <field name="hlv_zalo_ai_enabled"/>
+                    <div class="mt8" invisible="not hlv_zalo_ai_enabled">
+                        <field name="hlv_zalo_ai_model"/>
+                    </div>
+                </setting>
             </xpath>
         </field>
     </record>
