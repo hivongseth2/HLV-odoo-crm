@@ -3,14 +3,15 @@
 
 Cấu trúc blocks:
   đoạn:  {'type': 'p', 'align': 'left'|'center'|'right'|'justify', 'runs': [run, ...],
-          'indent': twips lề trái, 'first': twips dòng đầu (âm = treo), 'after': twips cách dưới}
+          'indent': twips lề trái, 'first': twips dòng đầu (âm = treo), 'after': twips cách dưới,
+          'before': twips cách trên}
   bảng:  {'type': 'table', 'rows': [[cell, ...], ...], 'borders': bool,
           'widths': [độ rộng tương đối từng cột] hoặc None (chia đều)}
          cell = {'span': int, 'paras': [đoạn, ...]}   (span = số cột gộp)
   run:   {'text': str, 'b': bool, 'i': bool, 'u': bool, 'caps': bool, 'sz': nửa-point hoặc None}
          {'field': 'Ten_Ben_Mua', + các khoá định dạng như run chữ}   trường MERGEFIELD
          {'br': True}               xuống dòng mềm
-  Các khoá indent/first/after/borders/widths/sz đều tuỳ chọn.
+  Các khoá indent/first/after/before/borders/widths/sz đều tuỳ chọn.
 
 build_docx(blocks) -> bytes .docx khổ A4, font Times New Roman 13pt.
 read_docx(docx_bytes, keep_fields=True) -> blocks.
@@ -148,7 +149,8 @@ def _field_runs(name, rpr):
 def _ppr(para):
     jc = _ALIGN_TO_JC.get(para.get('align') or 'left', 'left')
     after = para.get('after')
-    spacing = '<w:spacing w:after="%d"/>' % (after if after is not None else 60)
+    before = ' w:before="%d"' % para['before'] if para.get('before') else ''
+    spacing = '<w:spacing%s w:after="%d"/>' % (before, after if after is not None else 60)
     indent = ''
     if para.get('indent') or para.get('first'):
         first = para.get('first') or 0
@@ -275,9 +277,13 @@ def _para_format(p_el):
         fmt['indent'] = _int_attr(ind, 'left') or _int_attr(ind, 'start') or 0
         hanging = _int_attr(ind, 'hanging')
         fmt['first'] = -hanging if hanging else (_int_attr(ind, 'firstLine') or 0)
-    after = _int_attr(ppr.find(_q('spacing')), 'after')
+    spacing = ppr.find(_q('spacing'))
+    after = _int_attr(spacing, 'after')
     if after is not None:
         fmt['after'] = after
+    before = _int_attr(spacing, 'before')
+    if before:
+        fmt['before'] = before
     return fmt
 
 

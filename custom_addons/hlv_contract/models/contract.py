@@ -325,15 +325,18 @@ class Contract(models.Model):
         })
         self._log('body', 'Sửa chữ trên nội dung hợp đồng (mẫu gốc không đổi)', details)
 
-    def _next_contract_number(self, template, partner, company_id=None, exclude_id=None):
+    def _next_contract_number(self, template, partner, company_id=None, exclude_id=None, peek=False):
         """Số hợp đồng theo khuôn của mẫu, ngày soạn = hôm nay. Chỉ lấy số thứ tự (ir.sequence)
-        khi khuôn có {seq}. Trùng số hợp đồng khác thì thêm -2, -3…"""
+        khi khuôn có {seq}; peek=True chỉ xem số thứ tự kế tiếp, không lấy (dùng cho xem trước).
+        Trùng số hợp đồng khác thì thêm -2, -3…"""
         pattern = template.number_pattern or DEFAULT_NUMBER_PATTERNS.get(template.contract_type)
         today = fields.Date.context_today(self)
         seq = None
-        if contract_number.uses_sequence(pattern) and _SEQUENCE_CODE.get(template.contract_type):
-            raw = self.env['ir.sequence'].with_context(ir_sequence_date=today).next_by_code(
-                _SEQUENCE_CODE[template.contract_type], sequence_date=today)
+        code = _SEQUENCE_CODE.get(template.contract_type)
+        if contract_number.uses_sequence(pattern) and code and peek:
+            seq = self._peek_sequence(code, today, company_id)
+        elif contract_number.uses_sequence(pattern) and code:
+            raw = self.env['ir.sequence'].with_context(ir_sequence_date=today).next_by_code(code, sequence_date=today)
             # Dãy số cũ có tiền tố/hậu tố (HĐNT-007/2026): lấy cụm số đầu tiên làm số thứ tự
             match = re.search(r'\d+', raw or '')
             seq = int(match.group(0)) if match else None
@@ -345,6 +348,27 @@ class Contract(models.Model):
             domain.append(('id', '!=', exclude_id))
         return contract_number.unique_number(
             number, lambda n: bool(self.with_context(active_test=False).search_count(domain + [('name', '=', n)])))
+
+    def _peek_sequence(self, code, day, company_id=None):
+        """Số thứ tự kế tiếp của dãy (theo kỳ của ngày day) mà không lấy số. Không có dãy → None."""
+        sequence = self.env['ir.sequence'].sudo().search(
+            [('code', '=', code), ('company_id', 'in', [company_id or self.env.company.id, False])],
+            order='company_id', limit=1)
+        return sequence._get_current_sequence(sequence_date=day).number_next_actual if sequence else None
+
+    def _preview_number(self, origin=None):
+        """Số sẽ có sau khi lưu, để người soạn thấy (và sửa) trước. self: hợp đồng tạm đang soạn;
+        origin: hợp đồng đã lưu (None nếu đang tạo mới). Trả None khi lưu không làm đổi số."""
+        self.ensure_one()
+        if not origin:
+            return self._next_contract_number(self.template_id, self.partner_id, self.company_id.id, peek=True)
+        pattern = self.template_id.number_pattern or ''
+        changed = origin.partner_id != self.partner_id or origin.template_id != self.template_id
+        # Cùng điều kiện với _refresh_auto_number: chỉ số còn theo khuôn, có mã khách, không có {seq}
+        if (changed and origin.number_auto and origin.state == 'draft' and contract_number.uses_customer(pattern)
+                and not contract_number.uses_sequence(pattern)):
+            return self._next_contract_number(self.template_id, self.partner_id, origin.company_id.id, origin.id)
+        return None
 
     def _refresh_auto_number(self):
         """Hợp đồng nháp còn số theo khuôn có {ma_khach} (không có {seq}): cấp lại số theo khách hiện tại."""
@@ -433,8 +457,9 @@ class Contract(models.Model):
         for var in self._doc_variables():
             text = values.get(var['name']) or ''
             values[var['name']] = preview_marks.mark(var['name'], text or var['label'], not text)
-        if values.get('So_Hop_Dong') in ('', '/', False):
-            values['So_Hop_Dong'] = preview_marks.mark('So_Hop_Dong', 'số tự cấp khi lưu', True)
+        number = values.get('So_Hop_Dong')
+        has_number = number not in ('', '/', False, None)
+        values['So_Hop_Dong'] = preview_marks.mark('So_Hop_Dong', number if has_number else 'số hợp đồng', not has_number)
         try:
             docx = docx_merge.fill_docx(self._doc_bytes(), values, line_count=len(self.line_ids),
                                         styles=self._var_styles())

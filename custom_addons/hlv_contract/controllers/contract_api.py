@@ -242,6 +242,7 @@ class ContractPage(ContractPageMixin, http.Controller):
         self._check()
         contract = self._get_record('hlv.contract', contract_id) if to_int(contract_id) else None
         _template, vals = self._form_vals(contract, dict(params, note=None))
+        manual_number = 'name' in vals
         vals.setdefault('vat_rate', contract.vat_rate if contract else request.env.company.contract_vat_rate)
         vals.setdefault('contract_date', contract.contract_date if contract else fields.Date.context_today(request.env.user))
         vals.setdefault('name', contract.name if contract else '/')
@@ -253,7 +254,27 @@ class ContractPage(ContractPageMixin, http.Controller):
                 'doc_variables': contract.doc_variables,
                 'doc_has_lines': contract.doc_has_lines,
             })
-        return {'html': request.env['hlv.contract'].new(vals)._preview_html()}
+        draft = request.env['hlv.contract'].new(vals)
+        number = None if manual_number else draft._preview_number(contract)
+        if number:
+            draft.name = number
+        return {'html': draft._preview_html(), 'number': number}
+
+    @http.route(f'{API}/number_preview', type='json', auth='user', methods=['POST'])
+    def api_number_preview(self, contract_id=None, template_id=None, partner_id=None, **kw):
+        """Số hợp đồng dự kiến theo mẫu + khách đang chọn (chưa lấy số), để hiện trong ô Số hợp đồng.
+        Trả {'number': None} khi lưu không làm đổi số đang có."""
+        self._check()
+        contract = self._get_record('hlv.contract', contract_id) if to_int(contract_id) else None
+        template = request.env['hlv.contract.template'].browse(to_int(template_id)).exists()
+        if not template:
+            return {'number': None}
+        draft = request.env['hlv.contract'].new({
+            'template_id': template.id,
+            'partner_id': to_int(partner_id) or False,
+            'company_id': (contract.company_id if contract else request.env.company).id,
+        })
+        return {'number': draft._preview_number(contract)}
 
     @http.route(f'{API}/body', type='json', auth='user', methods=['POST'])
     def api_body(self, contract_id=None, **kw):

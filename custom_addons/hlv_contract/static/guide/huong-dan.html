@@ -402,7 +402,7 @@ h2.part-title::before { content: none; }
             <div class="compose-form">
               <div class="box"><h5>Hợp đồng</h5>
                 <div class="field"><label><i class="mk">1</i> Mẫu</label><div class="in">Hợp đồng mua bán hàng hoá (mẫu gốc) ▾</div></div>
-                <div class="field"><label>Số hợp đồng</label><div class="in" style="color:var(--ink-3)">Tự cấp khi lưu</div></div>
+                <div class="field"><label>Số hợp đồng</label><div class="in" style="color:var(--ink-3)">11102026/HLV-BOSCHVN</div></div>
                 <div class="field"><label>Ngày ký</label><div class="in">11/10/2026</div></div></div>
               <div class="box"><h5>Bên mua</h5>
                 <div class="field"><label><i class="mk">2</i> Tên bên mua <span class="linked">● CÔNG TY TNHH BOSCH VIỆT NAM</span></label>
@@ -417,7 +417,7 @@ h2.part-title::before { content: none; }
               <div class="pv-head"><b>Xem trước</b> <i class="mk">3</i> <span class="pv">đã điền</span> <span class="pv empty">còn trống</span> — bấm để tới ô nhập</div>
               <div class="a4">
                 <p class="c"><b>HỢP ĐỒNG MUA BÁN HÀNG HOÁ</b></p>
-                <p class="c">Số: <span class="pv empty">số tự cấp khi lưu</span></p>
+                <p class="c">Số: <span class="pv">11102026/HLV-BOSCHVN</span></p>
                 <p><b><u>BÊN MUA</u>:</b> <span class="pv focus">CÔNG TY TNHH BOSCH VIỆT NAM</span> <i class="mk">4</i></p>
                 <p>Địa chỉ: <span class="pv">Tầng 14, 33 Lê Duẩn, Bến Nghé, Quận 1, TP.HCM</span></p>
                 <p>Đại diện bởi: <span class="pv empty">Người đại diện bên mua</span></p>
@@ -458,8 +458,10 @@ h2.part-title::before { content: none; }
         <li>Hai hợp đồng ra trùng số (cùng khách, cùng ngày) thì số sau thêm <code>-2</code>, <code>-3</code>.</li>
         <li>Số còn theo khuôn mà đổi khách thì số tự cấp lại theo khách mới. Đã sửa tay thì giữ nguyên.</li>
       </ul>
-      <p><b>Sửa tay:</b> gõ vào ô <b>Số hợp đồng</b> ở khung Hợp đồng (hợp đồng mới thì để trống là tự cấp). Bấm số hợp đồng trên
-        bản xem trước cũng nhảy tới ô này.</p>
+      <p><b>Thấy số trước khi lưu:</b> ngay khi chọn mẫu và khách, ô <b>Số hợp đồng</b> hiện số dự kiến (chữ mờ) và bản xem trước
+        in đúng số đó. Vừa ý thì cứ Lưu; muốn số khác thì gõ đè vào ô — xem trước đổi theo ngay. Bấm số hợp đồng trên bản xem
+        trước cũng nhảy tới ô này. Khuôn có <code>{seq}</code> thì số thứ tự là số kế tiếp lúc đang soạn; nếu người khác lưu
+        trước, số thực nhận có thể lớn hơn 1.</p>
       <h3>Sửa đè thông tin tự điền</h3>
       <p>Ngày ký, bên bán, tổng tiền bằng chữ… do trang tự tính, nhưng đôi khi cần ghi khác cho một hợp đồng (vd tên bên bán theo
         chi nhánh, số tiền bằng chữ theo cách khách yêu cầu). Sau khi lưu, cuối ngăn soạn có khung
@@ -652,7 +654,7 @@ h2.part-title::before { content: none; }
           <div class="compose" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
             <div style="background:#e9e7e1;padding:10px">
               <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"><span class="btn">B</span><span class="btn">I</span><span class="btn">U</span><span class="btn">AA</span><span class="btn">≡</span>
-                <i class="mk">3</i><span class="btn">Bảng hàng hoá</span><span class="btn">+ Dòng</span><span class="btn">Viền bảng</span><span class="btn">Cỡ chữ ▾</span></div>
+                <i class="mk">3</i><span class="btn">Bảng hàng hoá</span><span class="btn">+ Dòng</span><span class="btn">Viền bảng</span><span class="btn">Cỡ chữ ▾</span><span class="btn">Cách trên ▾</span></div>
               <div class="a4">
                 <p class="c"><b>HỢP ĐỒNG BẢO HÀNH</b></p>
                 <p class="c">Số: <span class="pv">{{So_Hop_Dong}}</span></p>
@@ -676,7 +678,9 @@ h2.part-title::before { content: none; }
           <li><span>Bảng biến bên phải chia ba nhóm: <b>biến của mẫu này</b>, <b>gợi ý hay dùng</b>, <b>tự điền</b>.</span></li>
           <li><span>Đặt con trỏ vào chỗ cần điền rồi <b>bấm tên biến</b>: biến chèn đúng chỗ, cùng dòng, hiện dạng ô vàng không sửa nhầm được.
             Bôi đen biến rồi bấm <b>B</b> / <b>I</b> / <b>U</b> / <b>AA</b> (IN HOA) thì chữ điền vào in theo kiểu đó.</span></li>
-          <li><span><b>Bảng hàng hoá</b> chèn sẵn tiêu đề + một dòng hàng + 3 dòng tổng. <b>Viền bảng</b> bật/tắt viền (bảng chữ ký thường không viền).</span></li>
+          <li><span><b>Bảng hàng hoá</b> chèn sẵn tiêu đề + một dòng hàng + 3 dòng tổng. <b>Viền bảng</b> bật/tắt viền (bảng chữ ký thường không viền).
+            <b>Cách trên</b> (6–72 pt) giãn khoảng phía trên đoạn đang đứng — vd chừa chỗ ký: đặt con trỏ vào dòng tên người ký,
+            chọn 48 pt. Mịn hơn chèn dòng trống; tên phải nằm ở dòng riêng (Enter, không phải Shift+Enter).</span></li>
           <li><span><b>+ Biến mới…</b>: gõ nhãn tiếng Việt ("Thời hạn bảo hành"), tên biến tự đặt (<code>Thoi_Han_Bao_Hanh</code>).</span></li>
           <li><span>Tab <b>Biến của mẫu</b>: chỉnh nhãn, kiểu ô, nhóm, mặc định, thứ tự (xem <a href="#bien-mau">Biến của mẫu</a>).</span></li>
         </ol>

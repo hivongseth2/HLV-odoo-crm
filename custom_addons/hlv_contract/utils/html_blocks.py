@@ -9,7 +9,7 @@ blocks_to_html(blocks) -> chuỗi HTML (không có <html>/<body>).
 html_to_blocks(html)   -> blocks. Hiểu: p, div, h1-h6, br, strong/b, em/i, u, span,
     ul/ol/li (thêm dấu • ), table/tr/td/th (colspan, <col style="width:..%">, class
     hlv-noborder = bảng không viền, còn lại có viền), căn lề text-align/align, font-size, margin-left,
-    text-indent, margin-bottom (pt hoặc px). Thẻ lạ bị bỏ qua nhưng giữ chữ bên trong.
+    text-indent, margin-bottom, margin-top (pt hoặc px). Thẻ lạ bị bỏ qua nhưng giữ chữ bên trong.
 wrap_html_document(fragment) -> trang HTML đầy đủ cho wkhtmltopdf.
 Trường hợp biên: {{ ten }} có khoảng trắng vẫn nhận; HTML rỗng -> [].
 """
@@ -75,7 +75,7 @@ def _para_html(para):
     after = para.get('after')
     styles = [
         'text-align:%s' % (para.get('align') if para.get('align') in _ALIGNS else 'left'),
-        'margin-top:0',
+        'margin-top:%gpt' % ((para.get('before') or 0) / float(_TWIPS_PER_PT)),
         'margin-bottom:%gpt' % ((after if after is not None else _DEFAULT_AFTER_TWIPS) / float(_TWIPS_PER_PT)),
     ]
     if para.get('indent'):
@@ -180,7 +180,8 @@ def _para_format(node, align=None):
         fmt['align'] = style_align.group(1).lower()
     elif attr_align in _ALIGNS:
         fmt['align'] = attr_align
-    for prop, key in (('margin-left', 'indent'), ('text-indent', 'first'), ('margin-bottom', 'after')):
+    for prop, key in (('margin-left', 'indent'), ('text-indent', 'first'), ('margin-bottom', 'after'),
+                      ('margin-top', 'before')):
         value = _style_pt(node, prop)
         if value is not None:
             fmt[key] = int(round(value * _TWIPS_PER_PT))

@@ -223,7 +223,7 @@ window.HlvContract = window.HlvContract || {};
       td.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
       startEdit(td);
     } else {
-      HD.toast(name === "So_Hop_Dong" ? "Số hợp đồng tự cấp khi lưu" : "Ô này không sửa được ở đây");
+      HD.toast(name === "So_Hop_Dong" ? "Sửa số hợp đồng trong ngăn soạn (bấm Mở)" : "Ô này không sửa được ở đây");
     }
   }
 

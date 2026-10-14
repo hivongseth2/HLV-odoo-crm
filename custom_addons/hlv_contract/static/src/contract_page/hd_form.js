@@ -119,15 +119,54 @@ window.HlvContract = window.HlvContract || {};
     return '<footer class="hd-drawer-foot">' + actions + '<span class="hd-push hd-muted" id="hd-dirty"></span>' + locked + save + "</footer>";
   }
 
-  /** Ô số hợp đồng: tự cấp theo khuôn của mẫu khi lưu, người soạn sửa tay được. */
+  /** Ô số hợp đồng: số theo khuôn của mẫu hiện sẵn (chữ mờ) trước khi lưu, người soạn gõ đè được. */
   function numberFieldHtml() {
-    var c = S.contract;
-    var hint = !c ? "Để trống: tự cấp khi lưu theo khuôn của mẫu"
-      : c.number_auto ? "Theo khuôn của mẫu — đổi khách thì tự cấp lại; sửa tay được"
-        : "Đã sửa tay";
     return '<div class="hd-field"><label class="hd-label" for="hd-f-name">Số hợp đồng</label>' +
-      '<input type="text" class="hd-input w-100" id="hd-f-name" value="' + esc(S.form.name) + '" placeholder="Tự cấp khi lưu"/>' +
-      '<div class="hd-muted hd-small">' + hint + "</div></div>";
+      '<input type="text" class="hd-input w-100" id="hd-f-name" value="' + esc(S.form.name) + '" placeholder="' +
+      esc(numberState.number || "") + '"/>' +
+      '<div class="hd-muted hd-small" id="hd-f-name-hint">' + esc(numberHint()) + "</div></div>";
+  }
+
+  // Số dự kiến theo mẫu + khách đang chọn; chỉ hỏi lại server khi một trong hai đổi
+  var numberState = { key: null, number: null };
+
+  function numberHint() {
+    var c = S.contract;
+    if (!c) {
+      return numberState.number ? "Số dự kiến theo khuôn của mẫu, cấp khi lưu — gõ vào để đặt số khác"
+        : "Cấp theo khuôn của mẫu khi lưu — gõ vào để đặt số khác";
+    }
+    if (numberState.number && S.form.name === c.name) {
+      return "Lưu xong số đổi thành " + numberState.number + " theo khách mới — gõ vào để giữ số khác";
+    }
+    return c.number_auto ? "Theo khuôn của mẫu — đổi khách thì tự cấp lại; sửa tay được" : "Đã sửa tay";
+  }
+
+  function showNumber() {
+    var input = HD.$("hd-f-name");
+    if (input) {
+      input.placeholder = numberState.number || "";
+      HD.$("hd-f-name-hint").textContent = numberHint();
+    }
+  }
+
+  function refreshNumber() {
+    var key = [S.contract ? S.contract.id : 0, S.form.template_id, S.form.partner_id || 0].join("|");
+    if (key === numberState.key || !S.form.template_id) {
+      showNumber();
+      return;
+    }
+    numberState = { key: key, number: null };
+    HD.api("number_preview", {
+      contract_id: S.contract ? S.contract.id : null,
+      template_id: S.form.template_id,
+      partner_id: S.form.partner_id || false,
+    }).then(function (result) {
+      if (numberState.key === key) {
+        numberState.number = result.number;
+        showNumber();
+      }
+    }).catch(HD.fail);
   }
 
   /** Biến tự điền (ngày ký, bên bán, tổng tiền bằng chữ…): để trống là dùng giá trị tự tính,
@@ -193,6 +232,7 @@ window.HlvContract = window.HlvContract || {};
       onPick: focusVariable,
     }) : null;
     refreshPreview();
+    refreshNumber();
     if (S.contract) {
       HD.bindContractLogs(HD.$("hd-log-box"), S.contract.id);
     }
@@ -211,6 +251,7 @@ window.HlvContract = window.HlvContract || {};
     }
     if (on) {
       refreshPreview();
+      refreshNumber();
     }
   }
 

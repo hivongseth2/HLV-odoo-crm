@@ -8,6 +8,9 @@ window.HlvContract = window.HlvContract || {};
 
   var esc = HD.esc;
   var FONT_SIZES = [11, 12, 13, 14, 16, 18, 20];
+  // Khoảng cách phía trên đoạn (pt): giãn chỗ ký tên… mịn hơn chèn cả dòng trống
+  var SPACE_BEFORE = [0, 6, 12, 18, 24, 36, 48, 60, 72];
+  var PARA_SELECTOR = "p, div, li, h1, h2, h3, h4, h5, h6";
   var DEFAULT_SIZE = 13;
   var ZWSP = "​";
   // fontSize của execCommand chỉ nhận 1..7; dùng 7 làm dấu tạm rồi đổi sang span có kiểu thật
@@ -36,7 +39,11 @@ window.HlvContract = window.HlvContract || {};
       '<option value="">Cỡ chữ</option>' + FONT_SIZES.map(function (size) {
         return '<option value="' + size + '">' + size + " pt</option>";
       }).join("") + "</select>";
-    return '<div class="hd-toolbar-editor">' + groups.join("") + sizes + "</div>";
+    var spacing = '<select class="hd-input hd-tool-size" data-space-before="1" title="Khoảng cách phía trên đoạn đang chọn">' +
+      '<option value="">Cách trên</option>' + SPACE_BEFORE.map(function (pt) {
+        return '<option value="' + pt + '">' + (pt ? pt + " pt" : "Không cách") + "</option>";
+      }).join("") + "</select>";
+    return '<div class="hd-toolbar-editor">' + groups.join("") + sizes + spacing + "</div>";
   }
 
   /**
@@ -174,6 +181,41 @@ window.HlvContract = window.HlvContract || {};
       });
     }
 
+    /** Các đoạn nằm trong vùng chọn; ô bảng chưa có đoạn thì bọc chữ của ô thành một đoạn. */
+    function selectedParagraphs() {
+      if (!savedRange) {
+        return [];
+      }
+      var found = Array.from(editor.querySelectorAll(PARA_SELECTOR)).filter(function (el) {
+        return savedRange.intersectsNode(el) && !el.querySelector(PARA_SELECTOR);
+      });
+      if (found.length) {
+        return found;
+      }
+      var node = savedRange.startContainer;
+      var cell = (node.nodeType === 1 ? node : node.parentElement).closest("td, th");
+      if (!cell || !editor.contains(cell)) {
+        return [];
+      }
+      var para = document.createElement("p");
+      while (cell.firstChild) {
+        para.appendChild(cell.firstChild);
+      }
+      cell.appendChild(para);
+      return [para];
+    }
+
+    function applySpaceBefore(pt) {
+      restoreSelection();
+      var paras = selectedParagraphs();
+      if (!paras.length) {
+        HD.toast("Đặt con trỏ vào đoạn cần giãn", "error");
+        return;
+      }
+      paras.forEach(function (para) { para.style.marginTop = pt + "pt"; });
+      rememberSelection();
+    }
+
     /** IN HOA: đang đứng trong vùng in hoa thì bỏ, không thì bọc vùng chọn. */
     function toggleCaps() {
       restoreSelection();
@@ -301,6 +343,12 @@ window.HlvContract = window.HlvContract || {};
     });
     HD.on(container, "click", "[data-var]", function (el) { insertVariable(el.dataset.var); });
     HD.on(container, "click", "[data-new-var]", newVariable);
+    HD.on(container, "change", "[data-space-before]", function (el) {
+      if (el.value !== "") {
+        applySpaceBefore(+el.value);
+        el.value = "";
+      }
+    });
     HD.on(container, "change", "[data-font-size]", function (el) {
       if (el.value) {
         applyFontSize(el.value);
