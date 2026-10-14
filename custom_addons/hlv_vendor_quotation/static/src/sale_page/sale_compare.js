@@ -576,10 +576,18 @@ window.HlvQuote = window.HlvQuote || {};
           '<td class="hq-num">' + (v.amount_total ? HQ.money(v.amount_total) : "") + "</td>" +
           '<td class="hq-num hq-nowrap">' + chatButton("quote", v.quote_id, v.chat_count, v.chat_unread) + " " +
           (v.share_message ? '<button type="button" class="hq-btn hq-btn-mini" data-copy-msg="' + index +
-            '">Copy tin nhắn</button> ' : "") +
+            '">Copy tin nhắn</button> ' : "") + extraLinks(v.extra_links) +
           (v.portal_url ? '<a class="hq-btn hq-btn-mini" target="_blank" href="' + esc(v.portal_url) +
             '">Mở trang NCC</a>' : "") + "</td></tr>";
       }).join("") + "</tbody></table></div>";
+  }
+
+  /** Link module phụ gắn vào dòng NCC (vendor_quote._hlv_sale_page_links), mở tab mới; highlight = việc chờ sale. */
+  function extraLinks(links) {
+    return (links || []).map(function (link) {
+      return '<a class="hq-btn hq-btn-mini' + (link.highlight ? " hq-btn-soft" : "") + '" target="_blank" href="' +
+        esc(link.url) + '">' + esc(link.label) + "</a> ";
+    }).join("");
   }
 
   /** Nút mở trao đổi với NCC; có tin NCC chưa xem thì làm nổi lên kèm số tin mới. */

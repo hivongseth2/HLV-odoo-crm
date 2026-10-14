@@ -209,6 +209,7 @@ def _vendor_column(quote):
         "vendor_note": quote.vendor_note or "",
         "portal_url": quote.portal_quote_url or "",
         "share_message": share_message(quote) if quote.access_id else "",
+        "extra_links": quote._hlv_sale_page_links(),
     }
 
 
