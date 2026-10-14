@@ -427,8 +427,13 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
-            phone_to_check = partner.phone or partner.mobile or ""
-            account = self._get_scoped_portal_account(partner, phone_to_check)
+            account = self._auth_portal_account(partner)
+            if not account:
+                return self._response_error(
+                    "ACCOUNT_REQUIRED",
+                    "Phien dang nhap cu, vui long dang nhap lai",
+                    401,
+                )
 
             total_points = 0
             exchange_points = 0
@@ -529,11 +534,10 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if not partner.exists() or not partner.active:
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
-            # Tìm tài khoản Portal TRƯỚC khi ghi SĐT mới: việc chọn tài khoản
-            # dựa trên `portal_phone` khớp SĐT hiện tại của khách.
-            account = self._get_scoped_portal_account(
-                partner, partner.phone or partner.mobile or ""
-            )
+            # Tai khoan lay tu token, khong do theo SDT tren ho so: mot cong ty
+            # co nhieu nguoi thu mua, do theo `partner.phone` se ghi buyer_name
+            # vao nham tai khoan cua nguoi khac.
+            account = self._auth_portal_account(partner)
 
             if "buyer_name" in body:
                 if not account:
