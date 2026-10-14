@@ -27,7 +27,11 @@ class ZaloGroup(models.Model):
     message_count = fields.Integer(string="Số tin đã lưu", compute="_compute_message_count")
     last_message_at = fields.Datetime(string="Tin gần nhất", readonly=True)
     # Mốc AI đã đọc tới (id tin) — cron chỉ gọi AI khi có tin mới từ phía NCC sau mốc này (models/zalo_ai.py).
-    ai_last_message_id = fields.Integer(string="AI đọc tới tin", readonly=True)
+    ai_last_message_id = fields.Integer(string="AI đọc tới tin #", readonly=True)
+    ai_pending_count = fields.Integer(string="Tin chờ AI đọc", compute="_compute_ai_status",
+                                      help="Tin phía NCC (không phải nhân viên mình) tới sau lượt AI đọc gần nhất.")
+    ai_last_run_id = fields.Many2one("hlv.zalo.ai.run", string="AI đọc gần nhất", compute="_compute_ai_status")
+    ai_run_ids = fields.One2many("hlv.zalo.ai.run", "group_id", string="Nhật ký AI")
     skipped_count = fields.Integer(
         string="Tin bỏ qua", readonly=True,
         help="Số tin tới khi nhóm chưa bật \"Ghi tin\" — không lưu nội dung.",
@@ -44,6 +48,32 @@ class ZaloGroup(models.Model):
         ))
         for group in self:
             group.message_count = counts.get(group, 0)
+
+    def _ai_pending_domain(self):
+        """Tin phía NCC sau mốc AI đã đọc — có tin như vậy thì cron mới gọi AI cho nhóm."""
+        self.ensure_one()
+        return [("group_id", "=", self.id), ("id", ">", self.ai_last_message_id),
+                ("is_self", "=", False), ("member_id.kind", "!=", "staff")]
+
+    @api.depends("ai_last_message_id", "message_ids", "ai_run_ids")
+    def _compute_ai_status(self):
+        Message = self.env["hlv.zalo.message"]
+        for group in self:
+            group.ai_pending_count = Message.search_count(group._ai_pending_domain()) if group.id else 0
+            group.ai_last_run_id = group.ai_run_ids[:1]
+
+    def action_ai_read_now(self):
+        """AI đọc nhóm ngay (không chờ cron) rồi mở dòng nhật ký của lượt đó."""
+        self.ensure_one()
+        run = self.env["hlv.zalo.ai"]._read_group_now(self)
+        return {"type": "ir.actions.act_window", "res_model": "hlv.zalo.ai.run", "res_id": run.id,
+                "view_mode": "form", "target": "current"}
+
+    def action_open_ai_runs(self):
+        self.ensure_one()
+        action = self.env["ir.actions.act_window"]._for_xml_id("hlv_vendor_zalo.action_zalo_ai_run")
+        action["domain"] = [("group_id", "=", self.id)]
+        return action
 
     @api.model
     def _get_or_create(self, zalo_group_id, name):

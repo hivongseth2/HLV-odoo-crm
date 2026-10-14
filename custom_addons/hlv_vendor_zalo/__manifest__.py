@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Zalo nhóm NCC (đọc tin)",
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "summary": "Nhận tin nhắn các nhóm Zalo có NCC từ máy nghe bên ngoài, lưu theo nhóm / người gửi, xem cạnh báo giá NCC",
     "description": """
 Giai đoạn 1 — CHỈ ĐỌC, chưa có AI:
@@ -44,6 +44,7 @@ Không đổi hành vi của hlv_vendor_quotation. Không gửi tin nào vào Za
         "views/zalo_member_views.xml",
         "views/zalo_listener_views.xml",
         "views/zalo_proposal_views.xml",
+        "views/zalo_ai_run_views.xml",
         "views/proposal_templates.xml",
         "views/vendor_quote_views.xml",
         "views/res_config_settings_views.xml",

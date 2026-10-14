@@ -2,6 +2,7 @@
 import base64
 
 from odoo import api, fields, models
+from odoo.osv import expression
 
 from .zalo_utils import MESSAGE_KINDS, clean_id, clip, message_kind, ts_to_utc
 
@@ -47,10 +48,25 @@ class ZaloMessage(models.Model):
     media_state = fields.Selection(MEDIA_STATES, string="File", default="none", readonly=True)
     attachment_ids = fields.Many2many("ir.attachment", string="Đính kèm", readonly=True)
     reaction_ids = fields.One2many("hlv.zalo.reaction", "message_id", string="Thả cảm xúc")
+    ai_read = fields.Boolean(string="AI đã đọc", compute="_compute_ai_read", search="_search_ai_read",
+                             help="Tin nằm trước mốc AI đã đọc tới của nhóm.")
 
     _sql_constraints = [
         ("msg_id_unique", "unique(msg_id)", "Tin Zalo này đã có."),
     ]
+
+    @api.depends("group_id.ai_last_message_id")
+    def _compute_ai_read(self):
+        for message in self:
+            message.ai_read = bool(message.id) and message.id <= message.group_id.ai_last_message_id
+
+    def _search_ai_read(self, operator, value):
+        # Mốc nằm trên từng nhóm: "đã đọc" = OR theo nhóm (cùng nhóm và id ≤ mốc của nhóm đó).
+        groups = self.env["hlv.zalo.group"].with_context(active_test=False).search([("ai_last_message_id", ">", 0)])
+        read = expression.OR([[("group_id", "=", g.id), ("id", "<=", g.ai_last_message_id)] for g in groups]) \
+            if groups else expression.FALSE_DOMAIN
+        positive = (operator == "=") == bool(value)
+        return read if positive else ["!"] + read
 
     @api.depends("member_id.name", "body", "kind", "media_title")
     def _compute_display_name(self):

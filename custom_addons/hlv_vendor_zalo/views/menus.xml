@@ -16,6 +16,11 @@
               parent="menu_zalo_root"
               action="action_zalo_proposal"
               sequence="15"/>
+    <menuitem id="menu_zalo_ai_run"
+              name="Nhật ký AI"
+              parent="menu_zalo_root"
+              action="action_zalo_ai_run"
+              sequence="17"/>
     <menuitem id="menu_zalo_group"
               name="Nhóm Zalo"
               parent="menu_zalo_root"

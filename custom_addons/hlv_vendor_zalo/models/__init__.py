@@ -7,4 +7,5 @@ from . import zalo_listener
 from . import vendor_quote
 from . import zalo_proposal
 from . import zalo_ai
+from . import zalo_ai_run
 from . import res_config_settings
