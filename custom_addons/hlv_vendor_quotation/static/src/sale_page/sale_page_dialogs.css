@@ -421,6 +421,7 @@
 /* ------------------------------------------------------------ hỏi thêm NCC (ngăn phiếu) */
 
 .hq-compare-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.hq-compare-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
 .hq-add-box { margin-bottom: .75rem; }
 .hq-add-lines { display: flex; flex-direction: column; gap: .2rem; margin-bottom: .6rem; max-height: 220px; overflow-y: auto; }
 .hq-add-line { display: flex; align-items: baseline; gap: .4rem; font-size: .8125rem; cursor: pointer; }
