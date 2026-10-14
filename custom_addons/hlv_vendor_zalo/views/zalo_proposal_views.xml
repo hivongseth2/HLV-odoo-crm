@@ -57,6 +57,7 @@
                             <field name="available_qty"/>
                             <field name="backorder_date"/>
                             <field name="evidence"/>
+                            <field name="evidence_message_ids" widget="many2many_tags" optional="hide"/>
                             <field name="confidence"/>
                         </list>
                     </field>

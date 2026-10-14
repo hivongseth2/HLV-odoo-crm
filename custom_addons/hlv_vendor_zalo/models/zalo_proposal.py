@@ -73,7 +73,8 @@ class ZaloProposal(models.Model):
         vals = {
             "group_id": group.id, "summary": summary, "ai_model": model, "ai_run_at": fields.Datetime.now(),
             "message_ids": [(6, 0, messages.ids)],
-            "line_ids": [(5, 0, 0)] + [(0, 0, self.env["hlv.zalo.proposal.line"]._vals_from_ai(row)) for row in rows],
+            "line_ids": [(5, 0, 0)] + [(0, 0, self.env["hlv.zalo.proposal.line"]._vals_from_ai(row, messages))
+                                       for row in rows],
         }
         if created:
             proposal = self.create(dict(vals, quote_id=quote.id))
@@ -124,6 +125,9 @@ class ZaloProposalLine(models.Model):
     delivery_days = fields.Integer(string="Giao (ngày)")
     note = fields.Char(string="Ghi chú")
     evidence = fields.Text(string="NCC nói")
+    # Bảng riêng: đề xuất cũng có Many2many tới tin (message_ids) — tên bảng mặc định dễ đụng nhau.
+    evidence_message_ids = fields.Many2many("hlv.zalo.message", "hlv_zalo_proposal_line_evidence_rel", "line_id",
+                                            "message_id", string="Tin căn cứ")
     confidence = fields.Selection([("high", "Chắc chắn"), ("low", "Cần xem lại")], string="Độ chắc")
 
     def _signature(self):
@@ -132,9 +136,10 @@ class ZaloProposalLine(models.Model):
                        str(l.backorder_date or "")) for l in self)
 
     @api.model
-    def _vals_from_ai(self, row):
+    def _vals_from_ai(self, row, messages):
         """Một dòng AI trả (proposal_prompt.clean_line) → giá trị lưu. NCC chỉ báo tồn kho: lấy giá chính NCC này báo
-        gần nhất còn hiệu lực (price_reuse — như chip "giá cũ" trên trang NCC); không có thì để trống cho sale nhập."""
+        gần nhất còn hiệu lực (price_reuse — như chip "giá cũ" trên trang NCC); không có thì để trống cho sale nhập.
+        Tin căn cứ chỉ nhận số # nằm trong đoạn hội thoại đã đưa AI (messages) — AI bịa số thì bỏ."""
         line = self.env["hlv.vendor.quote.line"].browse(row["line_id"])
         vat = row["vat"] or line.vat or DEFAULT_VENDOR_VAT
         vals = {
@@ -142,6 +147,7 @@ class ZaloProposalLine(models.Model):
             "available_qty": row["available_qty"], "backorder_date": row["backorder_date"] or False,
             "delivery_days": row["delivery_days"], "note": row["note"], "evidence": row["evidence"],
             "confidence": row["confidence"], "discount": row["discount_pct"],
+            "evidence_message_ids": [(6, 0, [i for i in row["evidence_msg_ids"] if i in messages.ids])],
         }
         if row["status"] == STATUS_OFFERED and row["price"]:
             vals.update(price_incl=price_incl(row["price"], row["price_basis"], vat_rate(vat)), price_source="zalo",

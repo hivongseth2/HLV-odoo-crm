@@ -28,6 +28,8 @@
                     .zp-actions { display: flex; gap: 10px; align-items: center; margin: 16px 0; }
                     .zp-messages { margin-top: 20px; }
                     .zp-messages li { margin: 4px 0; font-size: .85rem; }
+                    .zp-thumb { display: block; max-width: 200px; max-height: 150px; margin-top: 6px; border: 1px solid var(--vq-line); border-radius: 4px; }
+                    .zp-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
                     .zp-list td { vertical-align: top; }
                     .zp-list a { color: var(--vq-accent); font-weight: 600; }
                     .zp-list .zp-said { max-width: 420px; }
@@ -121,6 +123,12 @@
                                     <span t-if="ai.confidence == 'low'" class="zp-tag zp-warn">cần xem lại</span>
                                     <span t-if="ai.evidence" class="zp-evidence" t-esc="'«' + ai.evidence + '»'"/>
                                     <span t-if="ai.note" class="zp-evidence" t-esc="ai.note"/>
+                                    <div class="zp-thumbs" t-if="ai.evidence_message_ids._image_attachments()">
+                                        <a t-foreach="ai.evidence_message_ids._image_attachments()" t-as="image" target="_blank"
+                                           t-att-href="'/zalo-de-xuat/' + str(proposal.id) + '/anh/' + str(image.id)" title="Ảnh NCC gửi — bấm xem cỡ thật">
+                                            <img class="zp-thumb" t-att-src="'/zalo-de-xuat/' + str(proposal.id) + '/anh/' + str(image.id)" alt="Ảnh NCC gửi"/>
+                                        </a>
+                                    </div>
                                 </t>
                                 <span t-else="" class="zp-none">NCC chưa nói tới — giá đang có trên báo giá (nếu có)</span>
                             </td>
@@ -157,6 +165,10 @@
                         <span class="vq-muted"><t t-esc="fdate(msg.sent_at, '%H:%M %d/%m')"/> · </span>
                         <b t-esc="msg.member_id.name"/>:
                         <t t-esc="msg.body or msg.media_title or ''"/>
+                        <a t-foreach="msg._image_attachments()" t-as="image" target="_blank"
+                           t-att-href="'/zalo-de-xuat/' + str(proposal.id) + '/anh/' + str(image.id)">
+                            <img class="zp-thumb" t-att-src="'/zalo-de-xuat/' + str(proposal.id) + '/anh/' + str(image.id)" alt="Ảnh NCC gửi"/>
+                        </a>
                     </li>
                 </ul>
             </details>

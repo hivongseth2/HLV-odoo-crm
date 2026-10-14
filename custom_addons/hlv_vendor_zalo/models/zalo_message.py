@@ -4,7 +4,7 @@ import base64
 from odoo import api, fields, models
 from odoo.osv import expression
 
-from .zalo_utils import MESSAGE_KINDS, clean_id, clip, message_kind, ts_to_utc
+from .zalo_utils import IMAGE_MIMETYPES, MESSAGE_KINDS, clean_id, clip, message_kind, ts_to_utc
 
 TEXT_MAX = 20000
 TITLE_MAX = 255
@@ -67,6 +67,10 @@ class ZaloMessage(models.Model):
             if groups else expression.FALSE_DOMAIN
         positive = (operator == "=") == bool(value)
         return read if positive else ["!"] + read
+
+    def _image_attachments(self):
+        """File ảnh máy nghe đã tải về cho các tin này (ảnh đầu tiên mỗi tin) — rỗng nếu chưa về / không phải ảnh."""
+        return self.mapped(lambda m: m.attachment_ids.filtered(lambda a: a.mimetype in IMAGE_MIMETYPES)[:1])
 
     @api.depends("member_id.name", "body", "kind", "media_title")
     def _compute_display_name(self):

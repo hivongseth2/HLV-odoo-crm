@@ -34,7 +34,6 @@ MAX_MESSAGES = 150
 # Ảnh bảng giá / ảnh sản phẩm NCC gửi: vài ảnh gần nhất, mỗi ảnh ≤ 3,5MB (giới hạn ảnh của API là 5MB sau base64).
 MAX_IMAGES = 4
 IMAGE_MAX_BYTES = 3_500_000
-IMAGE_MIMETYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 ROLES = {"vendor": "NCC", "staff": "NV", "unknown": "?"}
 
 
@@ -217,8 +216,8 @@ class ZaloAi(models.AbstractModel):
         blocks = []
         candidates = messages.filtered(lambda m: m.kind == "image" and m.member_id.kind != "staff")
         for message in candidates.sorted("id", reverse=True):
-            attachment = message.attachment_ids.filtered(
-                lambda a: a.mimetype in IMAGE_MIMETYPES and 0 < (a.file_size or 0) <= IMAGE_MAX_BYTES)[:1]
+            attachment = message._image_attachments().filtered(
+                lambda a: 0 < (a.file_size or 0) <= IMAGE_MAX_BYTES)
             if not attachment:
                 continue
             blocks += [{"type": "text", "text": f"Ảnh trong tin #{message.id}:"},
