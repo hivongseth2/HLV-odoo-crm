@@ -17,10 +17,13 @@ window.HlvContract = window.HlvContract || {};
   // (cỡ pt, IN HOA) — trình duyệt tự lo cắt vùng chọn qua nhiều thẻ
   var FONT_MARKER = "7";
   var BLOCK_TAGS = ["P", "DIV", "LI", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6"];
+  var TEXT_STYLES = ["bold", "italic", "underline"];
+  var SHORTCUTS = { b: "bold", i: "italic", u: "underline" };
+  var CF = HD.chipFormat;
 
   var TOOLBAR = [
     [["bold", "<b>B</b>", "Đậm (Ctrl+B)"], ["italic", "<i>I</i>", "Nghiêng (Ctrl+I)"], ["underline", "<u>U</u>", "Gạch chân (Ctrl+U)"],
-      ["caps", "AA", "IN HOA (bấm lại để bỏ) — biến nằm trong vùng này in ra chữ hoa"]],
+      ["caps", "AA", "IN HOA (bấm lại để bỏ). Bôi đen một ô biến rồi bấm: chỉ chỗ đó in hoa, chỗ khác của cùng biến giữ nguyên"]],
     [["justifyLeft", "⟸", "Căn trái"], ["justifyCenter", "≡", "Căn giữa"], ["justifyRight", "⟹", "Căn phải"], ["justifyFull", "☰", "Căn đều"]],
     [["insertUnorderedList", "• Danh sách", "Gạch đầu dòng"]],
     [["table", "Bảng", "Chèn bảng"], ["goods", "Bảng hàng hoá", "Chèn bảng hàng hoá dựng sẵn (một dòng mẫu + dòng tổng)"],
@@ -173,12 +176,33 @@ window.HlvContract = window.HlvContract || {};
       });
     }
 
+    function selectedChips() {
+      return CF.chips(editor, savedRange);
+    }
+
+    /** Đậm / nghiêng / gạch chân cho cả chữ lẫn ô biến trong vùng chọn (xem hd_editor_chips.js). */
+    function textStyle(command) {
+      restoreSelection();
+      var chips = selectedChips();
+      var withText = !chips.length || CF.hasText(savedRange);
+      if (withText) {
+        exec(command);
+      }
+      if (chips.length) {
+        var on = withText ? document.queryCommandState(command) : !CF.isOn(editor, chips[0], command);
+        CF.apply(editor, chips, command, on);
+        lockChips();
+      }
+    }
+
     function applyFontSize(size) {
+      var chips = selectedChips();
       wrapSelection(function (span) {
         if (+size !== DEFAULT_SIZE) {
           span.style.fontSize = size + "pt";
         }
       });
+      CF.size(editor, chips, +size !== DEFAULT_SIZE ? size : null);
     }
 
     /** Các đoạn nằm trong vùng chọn; ô bảng chưa có đoạn thì bọc chữ của ô thành một đoạn. */
@@ -216,9 +240,16 @@ window.HlvContract = window.HlvContract || {};
       rememberSelection();
     }
 
-    /** IN HOA: đang đứng trong vùng in hoa thì bỏ, không thì bọc vùng chọn. */
+    /** IN HOA: đang đứng trong vùng in hoa thì bỏ, không thì bọc vùng chọn. Chỉ bôi ô biến thì bật /
+        tắt IN HOA riêng cho các ô biến đó. */
     function toggleCaps() {
       restoreSelection();
+      var chips = selectedChips();
+      if (chips.length && !CF.hasText(savedRange)) {
+        CF.apply(editor, chips, "caps", !CF.isOn(editor, chips[0], "caps"));
+        lockChips();
+        return;
+      }
       var node = savedRange ? savedRange.startContainer : null;
       var el = node && (node.nodeType === 1 ? node : node.parentElement);
       var caps = el ? el.closest('[style*="text-transform"]') : null;
@@ -230,6 +261,8 @@ window.HlvContract = window.HlvContract || {};
         return;
       }
       wrapSelection(function (span) { span.style.textTransform = "uppercase"; });
+      CF.apply(editor, chips, "caps", true);
+      lockChips();
     }
 
     function tableCommand(command) {
@@ -327,6 +360,15 @@ window.HlvContract = window.HlvContract || {};
     }
 
     ["keyup", "mouseup", "input"].forEach(function (name) { editor.addEventListener(name, rememberSelection); });
+    // Ctrl+B/I/U mặc định của trình duyệt bỏ qua ô biến: chạy qua textStyle để ô biến cũng nhận
+    editor.addEventListener("keydown", function (event) {
+      var command = (event.ctrlKey || event.metaKey) && !event.altKey && SHORTCUTS[event.key.toLowerCase()];
+      if (command) {
+        event.preventDefault();
+        rememberSelection();
+        textStyle(command);
+      }
+    });
     HD.on(container, "mousedown", "[data-cmd], [data-var], [data-new-var]", function (el, event) {
       event.preventDefault();   // giữ vùng chọn trong trang giấy khi bấm nút
     });
@@ -337,6 +379,8 @@ window.HlvContract = window.HlvContract || {};
         tableCommand(command);
       } else if (command === "caps") {
         toggleCaps();
+      } else if (TEXT_STYLES.indexOf(command) >= 0) {
+        textStyle(command);
       } else {
         exec(command);
       }

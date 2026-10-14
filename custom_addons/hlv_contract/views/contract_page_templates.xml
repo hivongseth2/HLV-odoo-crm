@@ -246,6 +246,7 @@
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_form.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_lines.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_links.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_contract/static/src/contract_page/hd_editor_chips.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_editor.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_templates.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_contract/static/src/contract_page/hd_body.js?v=#{asset_version}"></script>

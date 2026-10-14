@@ -711,7 +711,8 @@ h2.part-title::before { content: none; }
         <ol class="steps">
           <li><span>Bảng biến bên phải chia ba nhóm: <b>biến của mẫu này</b>, <b>gợi ý hay dùng</b>, <b>tự điền</b>.</span></li>
           <li><span>Đặt con trỏ vào chỗ cần điền rồi <b>bấm tên biến</b>: biến chèn đúng chỗ, cùng dòng, hiện dạng ô vàng không sửa nhầm được.
-            Bôi đen biến rồi bấm <b>B</b> / <b>I</b> / <b>U</b> / <b>AA</b> (IN HOA) thì chữ điền vào in theo kiểu đó.</span></li>
+            Bôi đen ô biến rồi bấm <b>B</b> / <b>I</b> / <b>U</b> / <b>AA</b> (IN HOA): chỉ chỗ đó in theo kiểu đó, chỗ khác của cùng
+            biến giữ nguyên (xem <a href="#kieu-chu-tung-cho">kiểu chữ từng chỗ</a>).</span></li>
           <li><span><b>Bảng hàng hoá</b> chèn sẵn tiêu đề + một dòng hàng + 3 dòng tổng. <b>Viền bảng</b> bật/tắt viền (bảng chữ ký thường không viền).
             <b>Cách trên</b> (6–72 pt) giãn khoảng phía trên đoạn đang đứng — vd chừa chỗ ký: đặt con trỏ vào dòng tên người ký,
             chọn 48 pt. Mịn hơn chèn dòng trống; tên phải nằm ở dòng riêng (Enter, không phải Shift+Enter).</span></li>
@@ -737,11 +738,21 @@ h2.part-title::before { content: none; }
             <tr><td><b>Mặc định</b></td><td>Điền sẵn khi tạo hợp đồng mới, người soạn sửa được</td><td>Bên Mua thanh toán 100%…</td></tr>
             <tr><td><b>▲ ▼</b></td><td>Thứ tự ô trong nhóm và thứ tự cột</td><td></td></tr>
             <tr><td><b>Kiểu chữ khi in</b></td><td>Đ (đậm) · N (nghiêng) · G (gạch chân) · AA (IN HOA). Không bật gì: chữ điền vào theo
-              kiểu chữ chỗ đặt biến trong mẫu. Bật: luôn in kiểu đó, kể cả mẫu file Word</td><td>Tên bên mua: Đ + AA → <b>CÔNG TY TNHH…</b></td></tr>
+              kiểu chữ chỗ đặt biến trong mẫu. Bật: <b>mọi chỗ</b> đặt biến đó đều in kiểu đó, kể cả mẫu file Word</td><td>Tên bên mua: Đ + AA → <b>CÔNG TY TNHH…</b></td></tr>
           </tbody>
         </table>
       </div>
       <p>Biến tự điền có trong mẫu được liệt kê riêng bên dưới bảng. Mẫu có biến dòng hàng thì hợp đồng có phần Hàng hoá và tổng tiền.</p>
+      <h3 id="kieu-chu-tung-cho">Cùng một biến, chỗ in hoa chỗ không</h3>
+      <p>Ví dụ <code>Nguoi_Dai_Dien_Ben_Mua</code>: dòng "Người đại diện: Ông Nguyễn Thanh Dũng" in thường, dưới chữ ký in
+        <b>NGUYỄN THANH DŨNG</b>. Kiểu chữ đặt tại từng chỗ trong nội dung, không đặt ở cột Kiểu chữ khi in:</p>
+      <ol class="steps one">
+        <li><span>Tab <b>Biến của mẫu</b>: tắt <b>AA</b> của biến đó (bật ở đây là in hoa mọi chỗ).</span></li>
+        <li><span><b>Mẫu soạn trên trang</b>: trong <b>Nội dung mẫu</b>, bôi đen ô biến ở chỗ ký tên → bấm <b>AA</b> (thêm <b>B</b> nếu cần đậm)
+          → Lưu mẫu. Bấm lại <b>AA</b> trên ô đó là bỏ.</span></li>
+        <li><span><b>Mẫu file Word</b>: mở file bằng Word, bôi đen trường «Nguoi_Dai_Dien_Ben_Mua» ở chỗ ký → <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>
+          (All Caps) → lưu → <b>Thay bằng file Word…</b>. Chỉ cho một hợp đồng: <b>Sửa nội dung</b> trên hợp đồng đó rồi làm như bước 2.</span></li>
+      </ol>
     </section>
 
     <section id="ben-ban">
