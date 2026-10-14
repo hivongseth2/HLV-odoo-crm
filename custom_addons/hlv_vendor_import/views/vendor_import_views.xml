@@ -12,6 +12,9 @@
                             invisible="state != 'mapping'"/>
                     <button name="action_refresh_columns" type="object" string="Đề xuất lại cột"
                             invisible="state != 'mapping'"/>
+                    <button name="action_ai_suggest_columns" type="object" string="AI đề xuất lại" icon="fa-magic"
+                            invisible="state != 'mapping'"
+                            confirm="AI đọc lại đầu file và đề xuất lại cả mẫu (dòng tiêu đề, các cột) — cột đã chọn tay có thể bị đổi. Tiếp tục?"/>
                     <button name="action_open_lines" type="object" string="Xác nhận từng dòng" class="btn-primary"
                             invisible="state != 'review'"/>
                     <button name="action_accept_matches" type="object" string="Nhận hết dòng AI khớp"

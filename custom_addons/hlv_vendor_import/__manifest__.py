@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Nhập file NCC (Excel + AI ghép mã)",
-    "version": "18.0.1.5.0",
+    "version": "18.0.1.6.0",
     "summary": "Thu mua tải file Excel tồn kho / bảng giá của NCC, Claude duyệt ghép mã NCC với sản phẩm bên mình",
     "description": """
 Mỗi NCC gửi một mẫu Excel riêng (tiếng Việt / Anh / Trung, tiêu đề một hoặc hai tầng). Người bên mình
