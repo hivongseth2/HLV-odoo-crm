@@ -355,15 +355,16 @@ window.HlvQuote = window.HlvQuote || {};
         }).join("") + "</tr>";
     }).join("");
     return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
-      '<span class="hq-compare-actions">' +
-      (d.can_add_products ? '<button type="button" class="hq-btn hq-btn-mini" data-add-products="1" title="Thêm sản phẩm ' +
-        'vào phiếu này — trùng sản phẩm thì cộng thêm SL">+ Thêm sản phẩm</button> ' : "") +
       (d.can_add_vendor ? '<button type="button" class="hq-btn hq-btn-mini" data-add-toggle="1" title="NCC báo hết hàng / ' +
-        'cần thêm giá để so — gửi sản phẩm cho NCC khác">+ Hỏi thêm NCC</button>' : "") + "</span></div>" +
+        'cần thêm giá để so — gửi sản phẩm cho NCC khác">+ Hỏi thêm NCC</button>' : "") + "</div>" +
       '<div class="hq-table-wrap hq-compare-wrap"><table class="hq-table hq-compare"><thead>' + head +
       "</thead><tbody>" + rows + "</tbody><tfoot><tr><td colspan=\"" + (2 + d.vendors.length) +
-      '" class="hq-num">Tổng các giá đã chọn: <b>' + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
-      HQ.money(d.chosen_total) + " chưa VAT</td></tr></tfoot>" +
+      '"><div class="hq-compare-foot">' +
+      // Thêm sản phẩm nằm ngay dưới các dòng sản phẩm — chỗ mắt đang nhìn khi thấy thiếu món.
+      (d.can_add_products ? '<button type="button" class="hq-btn hq-btn-mini" data-add-products="1" title="Thêm sản phẩm ' +
+        'vào phiếu này — trùng sản phẩm thì cộng thêm SL">+ Thêm sản phẩm</button>' : "<span></span>") +
+      "<span>Tổng các giá đã chọn: <b>" + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
+      HQ.money(d.chosen_total) + " chưa VAT</span></div></td></tr></tfoot>" +
       "</table></div>" +
       '<div class="hq-muted hq-legend">★ chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Bấm tên NCC để ' +
       'chọn NCC đó cho mọi mặt hàng. Một sản phẩm chọn được nhiều NCC — sửa "SL mua" dưới giá để chia số lượng.</div>';
