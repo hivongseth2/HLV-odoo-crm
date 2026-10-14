@@ -5,6 +5,10 @@
         <field name="model">hlv.vendor.import.profile</field>
         <field name="arch" type="xml">
             <form>
+                <header>
+                    <!-- Sau khi sửa tiền tố / mã bên mình: gắn sản phẩm cho dòng bảng giá / tồn kho chưa khớp của NCC. -->
+                    <button name="action_link_by_code" type="object" string="Khớp lại theo mã" class="btn-secondary"/>
+                </header>
                 <sheet>
                     <widget name="web_ribbon" title="Đã lưu trữ" bg_color="text-bg-danger" invisible="active"/>
                     <group>
@@ -19,6 +23,7 @@
                             <field name="header_rows"/>
                             <field name="code_prefixes"/>
                             <field name="brand"/>
+                            <field name="our_code_patterns" placeholder="vd {ma}-SATA"/>
                         </group>
                     </group>
                     <p class="text-muted">
@@ -48,6 +53,7 @@
                 <field name="header_row"/>
                 <field name="code_prefixes"/>
                 <field name="brand"/>
+                <field name="our_code_patterns"/>
             </list>
         </field>
     </record>

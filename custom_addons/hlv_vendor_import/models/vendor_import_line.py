@@ -43,7 +43,8 @@ class HlvVendorImportLine(models.Model):
     product_id = fields.Many2one("product.product", "Sản phẩm bên mình")
     decision = fields.Selection([("pending", "Chưa xác nhận"), ("confirmed", "Đã xác nhận"),
                                  ("no_product", "Không có bên mình")], "Xác nhận", default="pending", required=True)
-    match_source = fields.Selection([("alias", "Mã đã nhớ"), ("ai", "AI"), ("manual", "Người chọn")], "Khớp theo")
+    match_source = fields.Selection([("alias", "Mã đã nhớ"), ("code", "Trùng mã"), ("ai", "AI"), ("manual", "Người chọn")],
+                                    "Khớp theo")
 
     def write(self, vals):
         # Ghi product_id mà không kèm decision = người dùng chọn tay trên danh sách → coi như xác nhận luôn.

@@ -95,6 +95,7 @@
                             <group>
                                 <field name="profile_code_prefixes" placeholder="vd SC"/>
                                 <field name="profile_brand" placeholder="vd SATA"/>
+                                <field name="profile_our_code_patterns" placeholder="vd {ma}-SATA"/>
                             </group>
                         </group>
                         <field name="profile_column_ids">

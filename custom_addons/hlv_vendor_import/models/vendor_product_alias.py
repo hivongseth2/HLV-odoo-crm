@@ -35,14 +35,17 @@ class HlvVendorProductAlias(models.Model):
     @api.model
     def remember(self, partner, lines):
         """Ghi / cập nhật khoá mã → sản phẩm cho các dòng nhập đã xác nhận có sản phẩm."""
-        existing = {alias.code_key: alias for alias in self.search([
-            ("partner_id", "=", partner.id), ("code_key", "in", lines.mapped("code_key"))])}
         for line in lines:
-            vals = {"vendor_code": line.vendor_code, "vendor_name": line.vendor_name,
-                    "product_id": line.product_id.id, "confirmed_by": self.env.user.id}
-            alias = existing.get(line.code_key)
-            if alias:
-                if alias.product_id != line.product_id:
-                    alias.write(vals)
-            else:
-                existing[line.code_key] = self.create(dict(vals, partner_id=partner.id, code_key=line.code_key))
+            self.link(partner, line.code_key, line.product_id, line.vendor_code, line.vendor_name)
+
+    @api.model
+    def link(self, partner, key, product, vendor_code, vendor_name):
+        """Ghi / cập nhật một khoá mã NCC → sản phẩm."""
+        vals = {"vendor_code": vendor_code, "vendor_name": vendor_name, "product_id": product.id,
+                "confirmed_by": self.env.user.id}
+        alias = self.search([("partner_id", "=", partner.id), ("code_key", "=", key)], limit=1)
+        if not alias:
+            return self.create(dict(vals, partner_id=partner.id, code_key=key))
+        if alias.product_id != product:
+            alias.write(vals)
+        return alias

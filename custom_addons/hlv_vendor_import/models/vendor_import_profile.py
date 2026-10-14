@@ -36,6 +36,12 @@ class HlvVendorImportProfile(models.Model):
         help="Phần NCC tự thêm vào trước mã hãng, cách nhau dấu phẩy. Vd SATA: \"SC\" (SC97813 = 97813). "
              "Bỏ tiền tố để dò sản phẩm bên mình và nhớ mã cho lần sau.")
     brand = fields.Char("Hãng NCC bán", help="Báo cho AI: ứng viên khác hãng là sai dù trùng số model.")
+    our_code_patterns = fields.Char(
+        "Mã bên mình",
+        help="Mã bên mình viết thế nào từ mã NCC (đã bỏ tiền tố) — {ma} là chỗ mã NCC. Nhiều kiểu cách dấu phẩy. "
+             "Vd SATA: NCC ghi SC03200, bên mình 03200-SATA → tiền tố \"SC\", mã bên mình \"{ma}-SATA\". Không phân "
+             "biệt hoa thường, bỏ qua khoảng trắng - _ . /. Trống: {ma}, {ma}-<hãng>, <hãng>-{ma}. Theo mẫu ra đúng "
+             "một sản phẩm thì tự gắn (khi đọc file, khi tạo / đổi mã sản phẩm), không hỏi ai.")
     column_ids = fields.One2many("hlv.vendor.import.column", "profile_id", "Cột")
     header_signature = fields.Char(readonly=True)
 
@@ -44,7 +50,12 @@ class HlvVendorImportProfile(models.Model):
         """Tạo mẫu mới cho NCC partner từ lưới đã đọc (dò dòng tiêu đề + đề xuất vai trò cột)."""
         header_index, header_rows = detect_header(grid)
         kinds = self.proposed_kinds(grid)
+        # Cách đặt mã là của NCC, không của file: mẫu thứ hai (file giá bên cạnh file tồn) lấy lại của mẫu đã có.
+        sibling = self.search([("partner_id", "=", partner.id)], limit=1)
         profile = self.create({
+            "code_prefixes": sibling.code_prefixes,
+            "brand": sibling.brand,
+            "our_code_patterns": sibling.our_code_patterns,
             "name": "%s (%s)" % (partner.display_name, ", ".join(KIND_NAMES[k] for k in sorted(kinds)))
                     if kinds else partner.display_name,
             "partner_id": partner.id,
@@ -65,6 +76,15 @@ class HlvVendorImportProfile(models.Model):
         """Mẫu này đọc ra tồn / giá: tập con của {"stock", "price"}."""
         self.ensure_one()
         return file_kinds(self.column_ids.mapped("role"))
+
+    def action_link_by_code(self):
+        """Gắn sản phẩm cho dòng bảng giá / tồn kho chưa khớp của NCC theo mẫu mã (sau khi sửa tiền tố / mã bên mình)."""
+        self.ensure_one()
+        count = self.env["hlv.vendor.code.match"].link_unmatched(self)
+        return {"type": "ir.actions.client", "tag": "display_notification", "params": {
+            "type": "success" if count else "info", "sticky": False,
+            "message": "Đã khớp thêm %s mã theo mẫu mã." % count if count else "Không có mã nào khớp thêm.",
+        }}
 
     def first_data_index(self):
         """Chỉ số (từ 0) dòng dữ liệu đầu tiên."""

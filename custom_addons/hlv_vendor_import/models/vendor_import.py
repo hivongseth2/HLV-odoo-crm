@@ -68,6 +68,7 @@ class HlvVendorImport(models.Model):
     profile_sheet_name = fields.Char(related="profile_id.sheet_name", readonly=False)
     profile_code_prefixes = fields.Char(related="profile_id.code_prefixes", readonly=False)
     profile_brand = fields.Char(related="profile_id.brand", readonly=False)
+    profile_our_code_patterns = fields.Char(related="profile_id.our_code_patterns", readonly=False)
     profile_column_ids = fields.One2many(related="profile_id.column_ids", readonly=False)
 
     line_count = fields.Integer("Số dòng", compute="_compute_counts")
@@ -202,14 +203,16 @@ class HlvVendorImport(models.Model):
         return {"price": price, "price_incl": price_incl, "vat": vat or False}
 
     def _match(self, lines, prefixes):
-        """Mã đã nhớ → khớp luôn; còn lại dò ứng viên; không ứng viên nào → "không có", khỏi hỏi AI."""
+        """Mã đã nhớ / trùng mã chắc chắn theo mẫu mã của NCC → khớp luôn; còn lại dò ứng viên; không ứng viên nào →
+        "không có", khỏi hỏi AI."""
         keys = {key for key in lines.mapped("code_key") if key}
         known = self.env["hlv.vendor.product.alias"].lookup(self.partner_id, keys)
+        by_code = self.env["hlv.vendor.code.match"].products_for_keys(self.profile_id, keys - set(known))
         for line in lines:
-            product = known.get(line.code_key)
+            product = known.get(line.code_key) or by_code.get(line.code_key)
             if product:
-                line.write({"product_id": product.id, "decision": "confirmed", "match_source": "alias",
-                            "ai_state": "skipped"})
+                line.write({"product_id": product.id, "decision": "confirmed", "ai_state": "skipped",
+                            "match_source": "alias" if line.code_key in known else "code"})
                 continue
             candidates = line.find_candidates(prefixes, self.profile_id.brand)
             if candidates:
@@ -291,6 +294,7 @@ class HlvVendorImport(models.Model):
     def _apply_stock(self, confirmed, now):
         self.env["hlv.vendor.stock"].replace_for(self.partner_id, [{
             "product_id": line.product_id.id if line in confirmed else False,
+            "match_key": line.code_key or fold(line.vendor_name),
             "vendor_code": line.vendor_code,
             "vendor_name": line.vendor_name,
             "uom_name": line.uom_name,

@@ -146,6 +146,55 @@ def code_key(code, prefixes):
     return code
 
 
+CODE_SLOT = "{ma}"
+
+
+def code_patterns(text, brand):
+    """Mẫu mã bên mình của một NCC: mã bên mình viết thế nào từ khoá mã NCC (mã NCC đã bỏ tiền tố).
+
+    Nhận: chữ người dùng khai — nhiều mẫu cách dấu phẩy / xuống dòng, mỗi mẫu có đúng một "{ma}" (vd SATA:
+    "{ma}-SATA"; Makita: "{ma}"); hãng của NCC. Trả: list ``(phần trước, phần sau)`` đã chuẩn hoá như
+    normalize_code (không phân biệt hoa thường, bỏ khoảng trắng - _ . /). Trống → mặc định "{ma}", "{ma}<hãng>",
+    "<hãng>{ma}" (hãng trống thì chỉ "{ma}"). Mẫu không có đúng một "{ma}" bị bỏ.
+    """
+    parts = [part for part in re.split(r"[,\n]", text or "") if part.strip()]
+    if not parts:
+        brand_key = normalize_code(brand)
+        return [("", "")] + ([("", brand_key), (brand_key, "")] if brand_key else [])
+    patterns = []
+    for part in parts:
+        pieces = re.split(re.escape(CODE_SLOT), part, flags=re.IGNORECASE)
+        if len(pieces) != 2:
+            continue
+        pattern = (normalize_code(pieces[0]), normalize_code(pieces[1]))
+        if pattern not in patterns:
+            patterns.append(pattern)
+    return patterns
+
+
+def our_codes(key, patterns):
+    """Các mã bên mình (đã chuẩn hoá) có thể ứng với khoá mã NCC ``key`` theo ``patterns`` (code_patterns).
+
+    "03200" với [("", "SATA")] → ["03200SATA"]. key rỗng → [].
+    """
+    return [before + key + after for before, after in patterns] if key else []
+
+
+def keys_from_our_code(code, patterns):
+    """Ngược our_codes: mã bên mình → các khoá mã NCC có thể, theo ``patterns``.
+
+    "03200-SATA" với [("", "SATA"), ("", "")] → ["03200", "03200SATA"]. Mã trống / không khớp mẫu nào → [].
+    """
+    code = normalize_code(code)
+    keys = []
+    for before, after in patterns:
+        if len(code) > len(before) + len(after) and code.startswith(before) and code.endswith(after):
+            key = code[len(before):len(code) - len(after)]
+            if key not in keys:
+                keys.append(key)
+    return keys
+
+
 def detect_header(grid, scan=15):
     """Đoán dòng tiêu đề.
 

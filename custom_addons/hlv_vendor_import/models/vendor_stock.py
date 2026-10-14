@@ -15,6 +15,8 @@ class HlvVendorStock(models.Model):
 
     partner_id = fields.Many2one("res.partner", "Nhà cung cấp", required=True, index=True, ondelete="cascade")
     product_id = fields.Many2one("product.product", "Sản phẩm", index=True, ondelete="set null")
+    # Khoá mã NCC (bỏ tiền tố; không có mã thì tên đã chuẩn hoá) — như hlv.vendor.price, để tra khi khớp sau.
+    match_key = fields.Char("Khoá", index=True)
     vendor_code = fields.Char("Mã NCC")
     vendor_name = fields.Char("Tên theo NCC")
     uom_name = fields.Char("ĐVT NCC")
