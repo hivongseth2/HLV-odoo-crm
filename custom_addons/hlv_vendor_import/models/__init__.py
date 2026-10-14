@@ -4,6 +4,7 @@ from . import vendor_product_alias
 from . import vendor_import
 from . import vendor_import_line
 from . import vendor_import_ai
+from . import vendor_template_ai
 from . import vendor_stock
 from . import vendor_price
 from . import vendor_code_match

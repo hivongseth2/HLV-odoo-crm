@@ -24,8 +24,13 @@
                             <field name="code_prefixes"/>
                             <field name="brand"/>
                             <field name="our_code_patterns" placeholder="vd {ma}-SATA"/>
+                            <field name="price_in_thousands"/>
+                            <field name="skip_group_rows"/>
                         </group>
                     </group>
+                    <div class="alert alert-info" role="alert" invisible="not ai_note">
+                        <b>AI:</b> <field name="ai_note" class="oe_inline"/>
+                    </div>
                     <p class="text-muted">
                         Đổi dòng tiêu đề thì mở một lần nhập của NCC này và bấm "Đề xuất lại cột" để cột khớp dòng mới.
                     </p>

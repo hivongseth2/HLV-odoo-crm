@@ -69,6 +69,9 @@ class HlvVendorImport(models.Model):
     profile_code_prefixes = fields.Char(related="profile_id.code_prefixes", readonly=False)
     profile_brand = fields.Char(related="profile_id.brand", readonly=False)
     profile_our_code_patterns = fields.Char(related="profile_id.our_code_patterns", readonly=False)
+    profile_price_in_thousands = fields.Boolean(related="profile_id.price_in_thousands", readonly=False)
+    profile_skip_group_rows = fields.Boolean(related="profile_id.skip_group_rows", readonly=False)
+    profile_ai_note = fields.Char(related="profile_id.ai_note")
     profile_column_ids = fields.One2many(related="profile_id.column_ids", readonly=False)
 
     line_count = fields.Integer("Số dòng", compute="_compute_counts")
@@ -116,11 +119,15 @@ class HlvVendorImport(models.Model):
     # Đọc file
     # =========================================================================
     def _grid(self):
+        return self._sheet()[1]
+
+    def _sheet(self):
+        """(tên các sheet, lưới của sheet theo mẫu) của file đã tải."""
         self.ensure_one()
         if not self.file:
             raise UserError("Chưa tải file Excel lên.")
         try:
-            return read_grid(base64.b64decode(self.file), self.profile_id.sheet_name)[1]
+            return read_grid(base64.b64decode(self.file), self.profile_id.sheet_name)
         except GridError as error:
             raise UserError(str(error))
 
@@ -129,7 +136,7 @@ class HlvVendorImport(models.Model):
         self.ensure_one()
         if self.state == "done":
             raise UserError("Lần nhập này đã áp dụng. Tạo lần nhập mới cho file mới.")
-        grid = self._grid()
+        sheet_names, grid = self._sheet()
         Profile = self.env["hlv.vendor.import.profile"]
         if not (self.profile_id and self.profile_id.matches(grid)):
             matching = Profile.search([("partner_id", "=", self.partner_id.id)]).filtered(lambda p: p.matches(grid))
@@ -140,13 +147,16 @@ class HlvVendorImport(models.Model):
             # File khác loại với mẫu đang chọn (vd mẫu tồn kho, file bảng giá): làm mẫu mới, không đè mẫu cũ.
             self.profile_id = False
         if not self.profile_id:
-            self.profile_id = Profile.propose(self.partner_id, grid)
+            self.profile_id = Profile.propose(self.partner_id, grid, sheet_names=sheet_names)
             self.state = "mapping"
             self.message_post(body="Chưa có mẫu cho loại file này của NCC: đã đề xuất mẫu file, xem lại các cột "
                                    "rồi bấm \"Đọc theo mẫu này\".")
             return True
         if not self.profile_id.matches(grid):
+            # NCC đổi khung: cột cũ giữ vai trò người đã chọn, cột mới để AI đề xuất.
+            kept = set(self.profile_id.column_ids.mapped("header"))
             self.profile_id.refresh_columns(grid)
+            self.env["hlv.vendor.import.template.ai"].suggest(self.profile_id, grid, sheet_names, kept_headers=kept)
             self.state = "mapping"
             self.message_post(body="Tiêu đề cột khác lần trước (NCC đổi mẫu?): đã đề xuất lại, xem lại các cột.")
             return True
@@ -173,7 +183,7 @@ class HlvVendorImport(models.Model):
         if self.ai_state in ("queued", "running"):
             raise UserError("AI đang duyệt các dòng cũ, đợi xong rồi đọc lại file.")
         profile = self.profile_id
-        rows = extract_rows(grid, profile.first_data_index(), profile.column_specs())
+        rows = extract_rows(grid, profile.first_data_index(), profile.column_specs(), profile.skip_group_rows)
         if not rows:
             raise UserError("Không đọc được dòng hàng nào dưới dòng tiêu đề %s." % profile.header_row)
         prefixes = split_prefixes(profile.code_prefixes)
@@ -189,17 +199,19 @@ class HlvVendorImport(models.Model):
             "stock": row["stock"],
             "stock_display": stock_text(row["stock"]),
             "stock_total": sum(row["stock"].values()),
-            **self._price_values(row),
+            **self._price_values(row, 1000.0 if profile.price_in_thousands else 1.0),
         } for row in rows])
         self.write({"state": "review", "ai_state": "none", "ai_error": False})
         self._match(lines, prefixes)
         return True
 
     @staticmethod
-    def _price_values(row):
-        """Giá một dòng file: VAT đọc được thì điền giá còn thiếu (chỉ có giá chưa VAT → tính giá sau VAT)."""
+    def _price_values(row, multiplier):
+        """Giá một dòng file (nhân multiplier — file ghi theo nghìn đồng); VAT đọc được thì điền giá còn thiếu (chỉ có giá
+        chưa VAT → tính giá sau VAT)."""
         vat, rate = read_vat(row["vat"], VAT_CODES)
-        price, price_incl = price_pair(row["price"], row["price_incl"], rate)
+        price, price_incl = price_pair(*(value * multiplier if value else value
+                                         for value in (row["price"], row["price_incl"])), rate)
         return {"price": price, "price_incl": price_incl, "vat": vat or False}
 
     def _match(self, lines, prefixes):

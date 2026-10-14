@@ -335,11 +335,12 @@ def _is_total(text):
     return folded.startswith(_TOTAL_PREFIXES) or any(word in text for word in _TOTAL_CJK)
 
 
-def extract_rows(grid, first_row, columns):
+def extract_rows(grid, first_row, columns, skip_group_rows=False):
     """Dòng hàng chuẩn từ lưới.
 
     Nhận: lưới; ``first_row`` — chỉ số dòng dữ liệu đầu tiên (từ 0); ``columns`` — list dict
-    ``{"index", "role", "warehouse"}`` (index từ 0).
+    ``{"index", "role", "warehouse"}`` (index từ 0); ``skip_group_rows`` — bỏ dòng tiêu đề nhóm xen giữa bảng
+    (không có ĐVT, không có số nào ở cột tồn / giá — vd "DỤNG CỤ CẦM TAY").
     Trả: list dict ``{"row" (số dòng Excel, từ 1), "code", "name", "name_alt", "uom", "stock": {kho: số},
     "price", "price_incl" (số hoặc None), "vat" (ô % VAT nguyên văn, None nếu không có)}``.
     Ô tồn trống tính 0 (file NCC để trống nghĩa là hết); ô giá trống là không có giá (None), không phải giá 0.
@@ -351,8 +352,11 @@ def extract_rows(grid, first_row, columns):
         values = {ROLE_CODE: "", ROLE_NAME: "", ROLE_NAME_ALT: "", ROLE_UOM: ""}
         stock = {}
         prices = {ROLE_PRICE: None, ROLE_PRICE_INCL: None, ROLE_VAT: None}
+        has_number = False
         for column in columns:
             value = cells[column["index"]] if column["index"] < len(cells) else None
+            if column["role"] in (ROLE_STOCK, ROLE_PRICE, ROLE_PRICE_INCL) and parse_number(value) is not None:
+                has_number = True
             if column["role"] == ROLE_STOCK:
                 label = column["warehouse"] or "Tồn"
                 stock[label] = stock.get(label, 0.0) + (parse_number(value) or 0.0)
@@ -363,6 +367,8 @@ def extract_rows(grid, first_row, columns):
         if not values[ROLE_CODE] and not values[ROLE_NAME]:
             continue
         if _is_total(values[ROLE_CODE] or values[ROLE_NAME]):
+            continue
+        if skip_group_rows and not values[ROLE_UOM] and not has_number:
             continue
         rows.append({"row": index + 1, "code": values[ROLE_CODE], "name": values[ROLE_NAME],
                      "name_alt": values[ROLE_NAME_ALT], "uom": values[ROLE_UOM], "stock": stock,

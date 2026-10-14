@@ -42,12 +42,19 @@ class HlvVendorImportProfile(models.Model):
              "Vd SATA: NCC ghi SC03200, bên mình 03200-SATA → tiền tố \"SC\", mã bên mình \"{ma}-SATA\". Không phân "
              "biệt hoa thường, bỏ qua khoảng trắng - _ . /. Trống: {ma}, {ma}-<hãng>, <hãng>-{ma}. Theo mẫu ra đúng "
              "một sản phẩm thì tự gắn (khi đọc file, khi tạo / đổi mã sản phẩm), không hỏi ai.")
+    price_in_thousands = fields.Boolean(
+        "Giá ghi theo nghìn đồng (× 1000)", help="File ghi giá theo nghìn đồng (\"310\" = 310.000 đ): nhân 1000 khi đọc.")
+    skip_group_rows = fields.Boolean(
+        "Bỏ dòng tiêu đề nhóm",
+        help="Bỏ các dòng xen giữa bảng không có ĐVT, không có số tồn / giá (tên nhóm hàng như \"DỤNG CỤ CẦM TAY\").")
+    ai_note = fields.Char("AI ghi chú", readonly=True, help="AI nói gì khi đề xuất mẫu — đọc khi xem lại cột.")
     column_ids = fields.One2many("hlv.vendor.import.column", "profile_id", "Cột")
     header_signature = fields.Char(readonly=True)
 
     @api.model
-    def propose(self, partner, grid, sheet_name=False):
-        """Tạo mẫu mới cho NCC partner từ lưới đã đọc (dò dòng tiêu đề + đề xuất vai trò cột)."""
+    def propose(self, partner, grid, sheet_name=False, sheet_names=()):
+        """Tạo mẫu mới cho NCC partner từ lưới đã đọc: dò dòng tiêu đề + đề xuất vai trò cột theo từ khoá, rồi AI đề
+        xuất lại (vendor_template_ai.py — không có API key / AI lỗi thì giữ phần đoán theo từ khoá)."""
         header_index, header_rows = detect_header(grid)
         kinds = self.proposed_kinds(grid)
         # Cách đặt mã là của NCC, không của file: mẫu thứ hai (file giá bên cạnh file tồn) lấy lại của mẫu đã có.
@@ -64,6 +71,7 @@ class HlvVendorImportProfile(models.Model):
             "header_rows": str(header_rows),
         })
         profile.refresh_columns(grid)
+        self.env["hlv.vendor.import.template.ai"].suggest(profile, grid, sheet_names)
         return profile
 
     @api.model
