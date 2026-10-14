@@ -24,6 +24,10 @@
         <field name="arch" type="xml">
             <form create="false" edit="false">
                 <header>
+                    <button name="action_open_review_page" type="object" string="Mở trang duyệt" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_open_review_page" type="object" string="Xem trên trang duyệt"
+                            invisible="state == 'draft'"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>

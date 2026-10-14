@@ -3,6 +3,8 @@
 Quản lý Hỏi giá NCC mở được. "Ghi vào báo giá" gọi đúng hàm NCC dùng khi tự gửi báo giá (_vendor_submit) — cùng luật:
 mọi dòng đang mở phải có giá + VAT, hoặc tick hết hàng."""
 
+from datetime import timedelta
+
 from markupsafe import Markup
 from odoo import fields, http
 from odoo.addons.hlv_vendor_quotation.models.vendor_quote_line import VAT_SELECTION
@@ -13,8 +15,12 @@ from odoo.addons.hlv_vendor_quotation.services.asset_version import asset_versio
 from odoo.exceptions import UserError
 from odoo.http import request
 
-from ..models.zalo_proposal import REVIEW_ROUTE
+from ..models.zalo_proposal import PROPOSAL_STATES, REVIEW_ROUTE
 from ..services.proposal_apply import submit_values
+
+# Danh sách: đề xuất chờ duyệt hiện hết; đã ghi / đã bỏ chỉ giữ chừng này ngày cho đỡ dài.
+LIST_DECIDED_DAYS = 30
+LIST_LIMIT = 300
 
 
 class ZaloProposalPage(http.Controller):
@@ -37,6 +43,27 @@ class ZaloProposalPage(http.Controller):
         proposal = request.env["hlv.zalo.proposal"].sudo().browse(proposal_id).exists()
         return proposal if proposal and self._can_open(proposal) else None
 
+    def _page_values(self):
+        return {
+            "doctype": Markup("<!DOCTYPE html>"),
+            "asset_version": asset_version(),
+            "company": request.env.company.sudo(),
+            "fmt": format_vn_number,
+            "fdate": local_date_text,
+        }
+
+    @http.route(REVIEW_ROUTE, type="http", auth="user", methods=["GET"])
+    def proposal_list(self, **_kw):
+        """Đề xuất tài khoản này duyệt được — lọc bằng đúng luật của trang duyệt (_can_open)."""
+        if not request.env.user.has_group(USER_GROUP):
+            return request.not_found()
+        since = fields.Datetime.now() - timedelta(days=LIST_DECIDED_DAYS)
+        candidates = request.env["hlv.zalo.proposal"].sudo().search(
+            ["|", ("state", "=", "draft"), ("ai_run_at", ">=", since)], limit=LIST_LIMIT)
+        proposals = candidates.filtered(self._can_open).sorted(lambda p: (p.state != "draft", -p.id))
+        return request.render("hlv_vendor_zalo.proposal_list_page", dict(
+            self._page_values(), proposals=proposals, states=dict(PROPOSAL_STATES), keep_days=LIST_DECIDED_DAYS))
+
     @http.route(f"{REVIEW_ROUTE}/<int:proposal_id>", type="http", auth="user", methods=["GET", "POST"])
     def proposal_page(self, proposal_id, action=None, **form):
         proposal = self._proposal(proposal_id)
@@ -50,18 +77,14 @@ class ZaloProposalPage(http.Controller):
             errors = self._apply(proposal, form)
             if not errors:
                 return request.redirect(f"{REVIEW_ROUTE}/{proposal.id}?saved=applied")
-        return request.render("hlv_vendor_zalo.proposal_page", {
-            "doctype": Markup("<!DOCTYPE html>"),
-            "asset_version": asset_version(),
-            "company": request.env.company.sudo(),
-            "proposal": proposal,
-            "rows": self._rows(proposal, form if errors else None),
-            "errors": errors,
-            "saved": form.get("saved") or "",
-            "vat_options": VAT_SELECTION,
-            "fmt": format_vn_number,
-            "fdate": local_date_text,
-        })
+        return request.render("hlv_vendor_zalo.proposal_page", dict(
+            self._page_values(),
+            proposal=proposal,
+            rows=self._rows(proposal, form if errors else None),
+            errors=errors,
+            saved=form.get("saved") or "",
+            vat_options=VAT_SELECTION,
+        ))
 
     @staticmethod
     def _rows(proposal, posted):

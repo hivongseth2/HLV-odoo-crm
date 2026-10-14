@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Zalo nhóm NCC (đọc tin)",
-    "version": "18.0.1.2.0",
+    "version": "18.0.1.3.0",
     "summary": "Nhận tin nhắn các nhóm Zalo có NCC từ máy nghe bên ngoài, lưu theo nhóm / người gửi, xem cạnh báo giá NCC",
     "description": """
 Giai đoạn 1 — CHỈ ĐỌC, chưa có AI:
