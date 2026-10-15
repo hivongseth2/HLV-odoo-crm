@@ -80,6 +80,10 @@ class HlvProductChatSession(models.Model):
     api_input_tokens = fields.Integer("Token vào", readonly=True, copy=False)
     api_cache_read_tokens = fields.Integer("Token đọc cache", readonly=True, copy=False)
     api_output_tokens = fields.Integer("Token ra", readonly=True, copy=False)
+    api_history_date = fields.Datetime(
+        "Lượt API gần nhất", readonly=True, copy=False,
+        help="Nghỉ quá lâu từ lúc này thì lượt sau mở lại lịch sử (cache đã hết hạn).",
+    )
     api_last_prompt_tokens = fields.Integer(
         "Độ dài prompt gần nhất", readonly=True, copy=False,
         help="Token của request gần nhất (system + lịch sử). Quá ngưỡng thì lượt sau mở lại lịch sử.",

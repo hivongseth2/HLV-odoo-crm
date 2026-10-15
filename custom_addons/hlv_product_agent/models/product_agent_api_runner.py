@@ -25,7 +25,7 @@ from odoo.modules.registry import Registry
 
 from ..services.claude_api_payload import (
     DEFAULT_EFFORT, DEFAULT_MODEL, DEFAULT_WORKER_MODEL, EFFORT_CHOICES, MAX_TOKENS, MODEL_CHOICES,
-    build_system, build_tools, context_key, history_content, history_too_long,
+    CACHE_CONTROL, build_system, build_tools, context_key, history_content, history_too_long,
     load_history, request_extras, tool_result, tool_uses, turn_reply, user_content,
 )
 from ..services.claude_client import api_error_message, connection_cause, load_anthropic, make_client
@@ -263,7 +263,8 @@ class HlvProductAgentApiRunner(models.AbstractModel):
         reply, error, history_vals = '', None, {}
         try:
             reply, history, key = self._converse(session, claim_token, config)
-            history_vals = {'api_messages': json.dumps(history, ensure_ascii=False), 'api_context_key': key}
+            history_vals = {'api_messages': json.dumps(history, ensure_ascii=False), 'api_context_key': key,
+                            'api_history_date': fields.Datetime.now()}
         except TurnFailed as failure:
             error = str(failure)
         except Exception as failure:  # noqa: BLE001 — sale phải nhận được câu báo lỗi
@@ -289,7 +290,9 @@ class HlvProductAgentApiRunner(models.AbstractModel):
         prompt_text, prompt_ver = self.env['hlv.product.agent.prompt'].sudo().build_prompt()
         key = context_key(config['model'], prompt_ver)
         history = load_history(session.api_messages) if session.api_context_key == key else []
-        if history and history_too_long(history, session.api_last_prompt_tokens):
+        idle_minutes = ((fields.Datetime.now() - session.api_history_date).total_seconds() / 60
+                        if session.api_history_date else 0)
+        if history and history_too_long(history, session.api_last_prompt_tokens, idle_minutes):
             history = []
         turn = session.api_turn_input()
         try:
@@ -310,7 +313,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             system=build_system(prompt_text), tools=build_tools(model),
             thinking={'type': 'adaptive'}, output_config={'effort': config['effort']},
             # Điểm cache tự động ở cuối hội thoại: lượt sau đọc lại lịch sử với giá cache.
-            cache_control={'type': 'ephemeral'},
+            cache_control=CACHE_CONTROL,
             **request_extras(model),
         )
         started = time.monotonic()

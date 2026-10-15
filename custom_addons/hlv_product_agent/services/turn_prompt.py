@@ -62,7 +62,9 @@ def build_turn_prompt(new_messages, is_admin, history=None, image_note=READ_IMAG
         ]
         body = (
             "(Phiên làm việc trước bị ngắt. Dưới đây là các tin gần nhất để nắm lại ngữ cảnh; "
-            "KHÔNG thực hiện lại bất kỳ lệnh tạo/sửa nào trong đó.)\n"
+            "KHÔNG thực hiện lại lệnh tạo/sửa nào đã xong trong đó. Nếu tin mới là xác nhận "
+            "cho đề xuất cuối cùng của Trợ lý thì làm tiếp như bình thường: quét trùng lại "
+            "rồi tạo/sửa đúng đề xuất đó.)\n"
             + "\n".join(lines)
             + "\n\n(Tin mới của nhân viên:)\n"
             + body
