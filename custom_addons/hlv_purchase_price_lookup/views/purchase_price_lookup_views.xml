@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_purchase_price_lookup_list" model="ir.ui.view">
+        <field name="name">hlv.purchase.price.lookup.list</field>
+        <field name="model">hlv.purchase.price.lookup</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0"
+                  decoration-warning="return_state == 'partial'"
+                  decoration-muted="return_state == 'full'">
+                <field name="currency_id" column_invisible="1"/>
+                <field name="date_order" widget="date"/>
+                <field name="order_ref"/>
+                <field name="order_id" optional="hide" groups="purchase.group_purchase_user"/>
+                <field name="default_code"/>
+                <field name="product_id"/>
+                <field name="vendor_id"/>
+                <field name="price_incl" widget="monetary"/>
+                <field name="price_excl" widget="monetary" optional="hide"/>
+                <field name="product_uom_id" optional="show"/>
+                <field name="qty_ordered"/>
+                <field name="qty_in"/>
+                <field name="qty_returned" optional="show"/>
+                <field name="qty_net" optional="show"/>
+                <field name="date_received" widget="date"/>
+                <field name="date_returned" widget="date" optional="hide"/>
+                <field name="return_state" widget="badge"
+                       decoration-warning="return_state == 'partial'"
+                       decoration-danger="return_state == 'full'"
+                       invisible="return_state == 'none'"/>
+                <field name="company_id" optional="hide" groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_purchase_price_lookup_form" model="ir.ui.view">
+        <field name="name">hlv.purchase.price.lookup.form</field>
+        <field name="model">hlv.purchase.price.lookup</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <h2><field name="product_id"/></h2>
+                    </div>
+                    <group>
+                        <group string="Đơn mua">
+                            <field name="order_ref"/>
+                            <field name="order_id" groups="purchase.group_purchase_user"/>
+                            <field name="vendor_id"/>
+                            <field name="date_order"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Giá">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="price_incl" widget="monetary"/>
+                            <field name="price_excl" widget="monetary"/>
+                            <field name="product_uom_id"/>
+                        </group>
+                        <group string="Số lượng">
+                            <field name="qty_ordered"/>
+                            <field name="qty_in"/>
+                            <field name="qty_returned"/>
+                            <field name="qty_net"/>
+                        </group>
+                        <group string="Nhập / trả">
+                            <field name="date_received"/>
+                            <field name="date_returned" invisible="not date_returned"/>
+                            <field name="return_state"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_hlv_purchase_price_lookup_search" model="ir.ui.view">
+        <field name="name">hlv.purchase.price.lookup.search</field>
+        <field name="model">hlv.purchase.price.lookup</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id" string="Mã / tên hàng"
+                       filter_domain="['|', ('default_code', 'ilike', self), ('product_id', 'ilike', self)]"/>
+                <field name="default_code"/>
+                <field name="vendor_id"/>
+                <field name="order_ref"/>
+                <separator/>
+                <filter name="has_return" string="Có trả NCC" domain="[('return_state', '!=', 'none')]"/>
+                <filter name="not_full_return" string="Bỏ dòng đã trả hết"
+                        domain="[('return_state', '!=', 'full')]"/>
+                <separator/>
+                <filter name="date_order" string="Ngày đơn hàng" date="date_order"/>
+                <filter name="date_received" string="Ngày nhập" date="date_received"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_product" string="Hàng hóa" context="{'group_by': 'product_id'}"/>
+                    <filter name="group_vendor" string="Nhà cung cấp" context="{'group_by': 'vendor_id'}"/>
+                    <filter name="group_month" string="Tháng đặt" context="{'group_by': 'date_order:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_hlv_purchase_price_lookup" model="ir.actions.act_window">
+        <field name="name">Tra giá nhập</field>
+        <field name="res_model">hlv.purchase.price.lookup</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_hlv_purchase_price_lookup_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Gõ mã hàng hoặc tên hàng vào ô tìm kiếm</p>
+            <p>Mỗi dòng là một lần mua đã nhập kho: giá, nhà cung cấp, ngày đặt, ngày nhập và SL đã trả lại NCC.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_hlv_purchase_price_lookup_root"
+              name="Tra giá nhập"
+              web_icon="hlv_purchase_price_lookup,static/description/icon.png"
+              groups="sales_team.group_sale_salesman,purchase.group_purchase_user"
+              sequence="25"/>
+    <menuitem id="menu_hlv_purchase_price_lookup"
+              name="Tra giá nhập"
+              parent="menu_hlv_purchase_price_lookup_root"
+              action="action_hlv_purchase_price_lookup"
+              sequence="10"/>
+</odoo>

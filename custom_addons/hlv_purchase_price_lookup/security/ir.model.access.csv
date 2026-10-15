@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_purchase_price_lookup_sale,hlv.purchase.price.lookup.sale,model_hlv_purchase_price_lookup,sales_team.group_sale_salesman,1,0,0,0
+access_hlv_purchase_price_lookup_purchase,hlv.purchase.price.lookup.purchase,model_hlv_purchase_price_lookup,purchase.group_purchase_user,1,0,0,0
