@@ -52,14 +52,22 @@ def run():
         return
     before = line.product_qty
     old_name = line.name
-    line.write({"product_qty": NEW_QTY, "need_qty": NEW_QTY})
-    quote_lines.write({"product_qty": NEW_QTY})
+    changes = []
+    if line.product_qty != NEW_QTY or line.need_qty != NEW_QTY:
+        line.write({"product_qty": NEW_QTY, "need_qty": NEW_QTY})
+        changes.append("SL hỏi %s → %s" % (before, NEW_QTY))
     if RENAME and old_name != product_name:
         line.name = product_name
-        quote_lines.write({"name": product_name})
-    inquiry.message_post(body="Sửa dữ liệu (script): %s — SL hỏi %s → %s%s." % (
-        PRODUCT_CODE, before, NEW_QTY, "; mô tả \"%s\" → \"%s\"" % (old_name, product_name)
-        if RENAME and old_name != product_name else ""))
+        changes.append("mô tả \"%s\" → \"%s\"" % (old_name, product_name))
+    # Chạy lại được: dòng phiếu đã đúng mà báo giá NCC còn số / mô tả cũ (dòng đang thu hồi lúc sửa) thì sửa nốt.
+    stale = quote_lines.filtered(lambda q: q.product_qty != NEW_QTY or (RENAME and q.name != product_name))
+    if stale:
+        stale.write(dict({"product_qty": NEW_QTY}, **({"name": product_name} if RENAME else {})))
+        changes.append("báo giá NCC %s" % ", ".join(stale.quote_id.mapped("name")))
+    if not changes:
+        print("\nKhông có gì cần sửa.")
+        return
+    inquiry.message_post(body="Sửa dữ liệu (script): %s — %s." % (PRODUCT_CODE, "; ".join(changes)))
     env.cr.commit()
     print("\nĐã sửa và commit.")
 

@@ -12,6 +12,8 @@ SALE_EDIT_DEADLINE_PARAM = "hlv_vendor_quotation.sale_edit_deadline"
 
 # Sai số so SL (ĐVT có số lẻ): chênh dưới mức này coi như bằng.
 QTY_EPSILON = 1e-6
+# Dòng phiếu → dòng báo giá NCC: các trường NCC được hỏi, sửa ở phiếu thì báo giá đổi theo (VendorInquiryLine.write).
+QUOTE_SYNC_FIELDS = ("name", "product_qty", "product_uom_id")
 
 SALE_STATUS = [
     ("waiting", "Chờ NCC báo giá"),
@@ -553,6 +555,20 @@ class VendorInquiryLine(models.Model):
             vals.setdefault("need_qty", vals.get("product_qty", 0.0))
         return super().create(vals_list)
 
+    def write(self, vals):
+        result = super().write(vals)
+        synced = {field: vals[field] for field in QUOTE_SYNC_FIELDS if field in vals}
+        if synced:
+            self._hlv_sync_quote_lines(synced)
+        return result
+
+    def _hlv_sync_quote_lines(self, vals):
+        """Mô tả / SL / ĐVT dòng phiếu là cái NCC được hỏi: sửa ở phiếu thì mọi báo giá NCC của món này đổi theo — kể cả
+        dòng đang thu hồi ("Hỏi lại" bật lại đúng dòng cũ, không được mang mô tả / SL cũ). Trừ báo giá đã đóng / huỷ và
+        dòng đã lên đơn mua (số đã đặt nằm trên YCMH / đơn mua). Sale không có quyền ghi báo giá NCC → sudo."""
+        self.quote_line_ids.filtered(
+            lambda l: l.quote_id.state in ("sent", "quoted") and not l.vendor_locked).sudo().write(vals)
+
     @api.depends("quote_line_ids.request_line_id", "quote_line_ids.backorder_request_line_id")
     def _compute_request_line_ids(self):
         for line in self:
@@ -600,26 +616,22 @@ class VendorInquiryLine(models.Model):
         return Markup("<p>%s</p><ul>%s</ul>") % (_("Khách chỉ mua chừng này — SL cần mua:"), items)
 
     def _hlv_add_qty(self, qty):
-        """Cộng thêm qty (ĐVT của dòng) vào SL hỏi + SL cần mua; báo giá NCC đang hỏi món này (chưa lên đơn mua) tăng SL
-        hỏi theo và ghi chú cho NCC biết."""
+        """Cộng thêm qty (ĐVT của dòng) vào SL hỏi + SL cần mua (báo giá NCC đổi theo — write); báo giá NCC đang hỏi món
+        này ghi chú cho NCC biết."""
         self.ensure_one()
         before = self.product_qty
         self.write({"product_qty": before + qty, "need_qty": self.need_qty + qty})
         for quote_line in self.quote_line_ids.filtered(
                 lambda l: l.quote_id.state in ("sent", "quoted") and not l.withdrawn and not l.vendor_locked).sudo():
-            quote_line.product_qty = self.product_qty
             post_internal(quote_line.quote_id, Markup(_("Sale tăng SL hỏi <b>%s</b>: %s → %s %s.")) % (
                 self.name or self.product_id.display_name, format_vn_number(before), format_vn_number(self.product_qty),
                 self.product_uom_id.name or ""), self.env.user.partner_id)
 
     def _hlv_rename(self, name):
-        """Mô tả dòng (và dòng báo giá NCC đang mở chưa lên đơn mua) đổi thành name — sale vừa chọn lại đúng sản phẩm."""
+        """Mô tả dòng đổi thành name — sale vừa chọn lại đúng sản phẩm (báo giá NCC đổi theo — write)."""
         self.ensure_one()
-        if not name or name == self.name:
-            return
-        self.name = name
-        self.quote_line_ids.filtered(
-            lambda l: l.quote_id.state in ("sent", "quoted") and not l.vendor_locked).sudo().write({"name": name})
+        if name and name != self.name:
+            self.name = name
 
     def _quote_line_vals(self):
         self.ensure_one()
