@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Kiểm map nhầm sản phẩm Shopee ↔ Odoo (AI)",
-    "version": "18.0.1.2.0",
+    "version": "18.0.1.3.0",
     "summary": "Claude so thành phần từng liên kết Sản phẩm Shopee với sản phẩm Odoo, tìm cặp map nhầm (vd combo khác món)",
     "description": """
 Liên kết "Sản phẩm Shopee" (shopee.item) quyết định đơn Shopee về Odoo xuất hàng nào, và tồn của sản

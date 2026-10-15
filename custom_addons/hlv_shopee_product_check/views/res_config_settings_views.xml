@@ -19,6 +19,10 @@
                             </div>
                         </div>
                     </setting>
+                    <setting id="hlv_shopee_check_ai_model"
+                             help="Model Claude cho lần kiểm mới. Opus kỹ nhất (map nhầm là xuất nhầm hàng), Sonnet khoảng nửa giá, Haiku rẻ nhất nhưng dễ bỏ sót khác biệt nhỏ (dòng pin, loại sạc).">
+                        <field name="hlv_shopee_check_ai_model"/>
+                    </setting>
                 </block>
             </xpath>
         </field>

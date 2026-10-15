@@ -33,8 +33,10 @@ CRON_XMLID = "hlv_shopee_product_check.ir_cron_shopee_product_check"
 # NEXT_BATCH_MINUTES phút — các cron khác chen vào giữa, không phải chờ cả lần kiểm.
 BATCH_SECONDS = 120
 NEXT_BATCH_MINUTES = 1
-# Map nhầm là xuất nhầm hàng cho khách Shopee và đẩy tồn sai lên listing: dùng model giỏi nhất.
+# Map nhầm là xuất nhầm hàng cho khách Shopee và đẩy tồn sai lên listing: mặc định model giỏi nhất.
+# Đổi mặc định ở Cài đặt → Bán hàng → Kiểm map nhầm Shopee (PARAM_AI_MODEL).
 DEFAULT_AI_MODEL = "claude-opus-5-5"
+PARAM_AI_MODEL = "hlv_shopee_product_check.ai_model"
 
 STATES = [
     ("draft", "Nháp"),
@@ -68,7 +70,8 @@ class HlvShopeeProductCheck(models.Model):
         "shopee.item", string="Chỉ kiểm các liên kết",
         help="Mở từ danh sách Sản phẩm Shopee (Hành động → Kiểm map nhầm với AI): chỉ kiểm các liên kết đã "
              "chọn. Để trống: kiểm mọi liên kết của các shop đã chọn.")
-    ai_model = fields.Selection(MODEL_CHOICES, string="Model AI", default=DEFAULT_AI_MODEL, required=True)
+    ai_model = fields.Selection(MODEL_CHOICES, string="Model AI", default=lambda self: self._default_ai_model(),
+                                required=True)
     is_auto = fields.Boolean("Tự kiểm định kỳ", readonly=True,
                              help="Lần kiểm do lịch tự kiểm tạo (Cài đặt → Bán hàng → Kiểm map nhầm Shopee).")
 
@@ -88,6 +91,11 @@ class HlvShopeeProductCheck(models.Model):
     stale_count = fields.Integer(compute="_compute_counts")
     pending_count = fields.Integer(compute="_compute_counts")
     progress = fields.Char("Tiến độ", compute="_compute_progress")
+
+    @api.model
+    def _default_ai_model(self):
+        model = self.env["ir.config_parameter"].sudo().get_param(PARAM_AI_MODEL)
+        return model if model in dict(MODEL_CHOICES) else DEFAULT_AI_MODEL
 
     def _default_name(self):
         now = fields.Datetime.context_timestamp(self, fields.Datetime.now())
@@ -125,8 +133,11 @@ class HlvShopeeProductCheck(models.Model):
         for check in self:
             if not check.shop_ids:
                 raise UserError(_("Chọn ít nhất một shop Shopee."))
+            # Shop lấy từ chính các liên kết: ô Shop (many2many) tự ẩn shop đã lưu trữ, nên liên kết của shop
+            # DEWALT cũ (id 1, không token) lọt qua và sale_shopee đòi mã uỷ quyền giữa chừng.
+            shops = check.link_ids.shop_id if check.link_ids else check.shop_ids
             problems = ["%s (id %s): %s" % (shop.name, shop.id, self._shop_problem(shop))
-                        for shop in check.shop_ids if self._shop_problem(shop)]
+                        for shop in shops if self._shop_problem(shop)]
             if problems:
                 raise UserError(_("Không đọc được Shopee cho: %s. Bỏ các liên kết của shop này rồi kiểm lại.",
                                   "; ".join(problems)))
@@ -167,7 +178,18 @@ class HlvShopeeProductCheck(models.Model):
         """Từ danh sách Sản phẩm Shopee: kiểm ngay các liên kết đang chọn, mở lần kiểm vừa tạo."""
         if not links:
             raise UserError(_("Chọn ít nhất một dòng Sản phẩm Shopee."))
+        # Bỏ liên kết của shop không gọi được Shopee (vd shop DEWALT cũ đã lưu trữ) thay vì hỏng cả lần kiểm.
+        skipped = links.filtered(lambda link: self._shop_problem(link.shop_id))
+        links -= skipped
+        if not links:
+            raise UserError(_("Mọi liên kết đã chọn thuộc shop không gọi được Shopee: %s.", ", ".join(
+                "%s (id %s): %s" % (shop.name, shop.id, self._shop_problem(shop)) for shop in skipped.shop_id)))
         check = self.create({"shop_ids": [(6, 0, links.shop_id.ids)], "link_ids": [(6, 0, links.ids)]})
+        if skipped:
+            check.message_post(body=_("Bỏ %(count)s liên kết của shop không gọi được Shopee: %(shops)s.",
+                                      count=len(skipped), shops=", ".join(
+                                          "%s (id %s): %s" % (shop.name, shop.id, self._shop_problem(shop))
+                                          for shop in skipped.shop_id)))
         check.action_start()
         return {
             "type": "ir.actions.act_window",
@@ -183,9 +205,9 @@ class HlvShopeeProductCheck(models.Model):
             # sale_shopee/data/neutralize.sql thay khoá bằng "dummy" khi Odoo.sh tạo staging / bản sao:
             # gọi Shopee sẽ lỗi khó hiểu ở giữa chừng, báo ngay từ đầu cho rõ.
             return _("database đã bị neutralize (staging), chỉ kiểm được trên production")
-        if not shop.active or not shop.access_token:
-            # Shop đã lưu trữ thường không còn token (vd shop DEWALT cũ trùng shop_id với shop đang dùng):
-            # sale_shopee sẽ đòi uỷ quyền lại giữa chừng.
+        if not shop.active or not shop.access_token or not shop.access_token_expiration_date:
+            # Shop đã lưu trữ thường không còn token (vd shop DEWALT cũ trùng shop_id với shop đang dùng);
+            # thiếu token hoặc ngày hết hạn là sale_shopee đòi mã uỷ quyền ngay lần gọi đầu.
             return _("shop đã lưu trữ hoặc chưa kết nối Shopee")
         return False
 
