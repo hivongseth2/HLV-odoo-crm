@@ -585,3 +585,29 @@ def summarize_vendor_prices(purchases, quotes):
                     item["min_" + kind] = row
             item["last_day"] = max(item["last_day"], row["day"] or "")
     return sorted(summary.values(), key=lambda item: item["last_day"], reverse=True)
+
+
+def return_state(qty_in, qty_returned):
+    """Mức trả NCC của một lần mua.
+
+    Nhận: SL đã nhập kho, SL đã trả NCC (cùng ĐVT). Trả "none" (chưa trả / SL trả <= 0),
+    "full" (trả bằng hoặc hơn SL nhập — kể cả SL nhập 0) hoặc "partial".
+    """
+    if (qty_returned or 0) <= 0:
+        return "none"
+    if qty_returned >= (qty_in or 0):
+        return "full"
+    return "partial"
+
+
+def word_search_domain(text, field_names):
+    """Domain tìm theo TỪNG TỪ: mọi từ phải khớp (ilike) ít nhất một field.
+
+    "vòng bi 6212" khớp "Vòng bi SKF 6212" — so cả chuỗi thì không ra vì các từ không liền nhau.
+    Nhận: chuỗi gõ tay, list tên field. Trả: domain Odoo dạng list; chuỗi rỗng / chỉ khoảng trắng → [].
+    """
+    words = str(text or "").split()
+    domain = ["&"] * (len(words) - 1) if words else []
+    for word in words:
+        domain += ["|"] * (len(field_names) - 1) + [(name, "ilike", word) for name in field_names]
+    return domain

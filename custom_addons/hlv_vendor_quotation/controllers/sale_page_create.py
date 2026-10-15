@@ -6,6 +6,7 @@ from odoo.exceptions import UserError
 from odoo.http import request
 from odoo.osv import expression
 
+from ..models.vendor_quote_utils import word_search_domain
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
 from ..services import vendor_from_vat
@@ -31,10 +32,11 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         buyable = [("purchase_ok", "=", True)]
         if "bom_ids" in Product._fields:
             buyable = ["|", ("purchase_ok", "=", True), ("bom_ids.type", "=", "phantom")]
-        products = Product.search(buyable + [
-            "|", "|", ("default_code", "ilike", search), ("name", "ilike", search),
-            ("barcode", "=", search),
-        ], limit=SEARCH_LIMIT)
+        matched = expression.OR([
+            word_search_domain(search, ["default_code", "name"]),
+            [("barcode", "=", search)],
+        ])
+        products = Product.search(expression.AND([buyable, matched]), limit=SEARCH_LIMIT)
         return {"products": [payload.product_payload(p) for p in products]}
 
     @http.route(f"{API}/parse_products", type="json", auth="user", methods=["POST"])

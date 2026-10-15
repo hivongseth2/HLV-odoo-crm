@@ -322,4 +322,10 @@ body {
 #pl-result { display: grid; gap: 1rem; }
 .pl-vendor-row { cursor: pointer; }
 .pl-vendor-row:hover td, .pl-vendor-row.is-active td { background: var(--hq-accent-soft); }
-.pl-quote-old td { color: var(--hq-muted); }
+/* Lần mua đã trả hết NCC / báo giá không dùng lại được: còn để tra nhưng không phải giá đang dùng. */
+.pl-row-void td { color: var(--hq-muted); }
+.pl-head { display: grid; gap: .75rem; }
+.pl-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
+.pl-stat { padding: .6rem .8rem; border: 1px solid var(--hq-line-soft); border-radius: var(--hq-radius); background: #FAF9F6; }
+.pl-stat-value { font-size: 15px; margin: .1rem 0; font-variant-numeric: tabular-nums; }
+.pl-note { margin: .6rem .9rem 0; }
