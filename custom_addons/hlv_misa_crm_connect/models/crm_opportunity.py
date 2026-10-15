@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cơ hội (Opportunity) trên MISA CRM: danh mục của form, tìm, xem hàng, tạo mới.
+"""Cơ hội (Opportunity) trên MISA CRM: danh mục của form, tìm, xem hàng, tạo, sửa.
 
 Tìm và xem hàng dùng lại misa_fetch_po_button (crm_search_opportunities, crm_opportunity_products).
 """
@@ -7,13 +7,16 @@ import logging
 
 from odoo import models
 
+from ..services.misa_form import edit_rows, payload_total, saved_row, subform_request
 from ..services.opportunity_payload import (
-    FORM_LAYOUT_ID, line_amounts, opportunity_create_payload, opportunity_line, stage_history_payload,
+    FORM_LAYOUT_ID, SUBFORM_AGGREGATES, SUBFORM_COLUMNS, TABLE, opportunity_line, opportunity_payload,
+    stage_history_payload,
 )
-from .misa_crm_client import CrmInputError, MisaCrmError
+from .misa_crm_client import MODE_VIEW, CrmInputError, MisaCrmError
 
 _logger = logging.getLogger(__name__)
 
+MODULE = "Opportunity"
 _DICTIONARY_PARAMS = {
     "page": "null", "searchText": "", "isLocationConcat": "false", "isContainFormLayoutName": "true",
     "isProductCustomField": "false", "isView": "true",
@@ -64,34 +67,74 @@ class MisaCrmOpportunity(models.AbstractModel):
         """
         account = self.api_account_get(account_id)
         options = self.api_opportunity_options()
-        stage = self._pick(options["stages"], stage_id, "invalid_stage", "giai đoạn")
-        source = self._pick(options["lead_sources"], lead_source_id, "invalid_lead_source", "nguồn gốc") \
-            if lead_source_id not in (None, "") else None
-
-        rows = [self._opportunity_row(index, line) for index, line in enumerate(lines, start=1)]
-        payload = opportunity_create_payload(
-            {"id": account["id"], "name": account["name"]},
-            {"id": stage["id"], "text": stage["name"], "probability": stage["probability"]},
-            closing_date, rows, name=name,
-            lead_source={"id": source["id"], "text": source["name"]} if source else None,
-            description=description,
-        )
-        opportunity_id = self._crm_data("POST", "Opportunity", payload=payload)
-        if not opportunity_id:
-            raise MisaCrmError("MISA báo tạo xong nhưng không trả ID cơ hội.")
-        result = {"id": opportunity_id, "total": payload["CustomTables"][0]["Summary"]["TotalSummary"]}
+        stage = self._pick_stage(options, stage_id)
+        source = self._pick_source(options, lead_source_id)
+        rows = self._new_lines(lines, _opportunity_row)
+        payload = opportunity_payload({
+            "account": {"id": account["id"], "name": account["name"]}, "stage": stage,
+            "closing_date": closing_date, "name": name, "lead_source": source, "description": description,
+        }, rows)
+        opportunity_id = self._save_opportunity(payload)
+        result = {"id": opportunity_id, "total": payload_total(payload)}
         # Hai bước sau khi tạo đều phụ: lỗi thì vẫn trả ID (cơ hội ĐÃ có trên MISA, gọi lại là tạo trùng).
-        try:
-            self._crm("POST", "Opportunity/stageHistory", payload=stage_history_payload(
-                opportunity_id, {"id": stage["id"], "text": stage["name"], "probability": stage["probability"]},
-                closing_date))
-        except Exception as error:  # noqa: BLE001
-            _logger.warning("Cơ hội %s: không ghi được lịch sử giai đoạn: %s", opportunity_id, error)
-            result["warning"] = "Đã tạo cơ hội nhưng không ghi được lịch sử giai đoạn: %s" % error
+        result.update(self._after_stage_change(opportunity_id, stage, closing_date))
         result["code"] = self._opportunity_code(opportunity_id)
         return result
 
+    def api_opportunity_update(self, opportunity_id, name=None, stage_id=None, closing_date=None,
+                               lead_source_id=None, description=None, lines=None):
+        """Sửa cơ hội như mở form, sửa, bấm Lưu. Trường None = giữ nguyên.
+
+        ``lines`` None = giữ hàng như cũ; có ``lines`` = THAY toàn bộ hàng (dòng cũ bị xoá).
+        Trả {"id", "code", "total", "warning"?}. Người khác vừa sửa cùng cơ hội -> MISA từ chối (502).
+        """
+        current = self._current_record(MODULE, FORM_LAYOUT_ID, opportunity_id, "cơ hội")
+        options = self.api_opportunity_options() if stage_id is not None or lead_source_id is not None else None
+        stage = self._pick_stage(options, stage_id) if stage_id is not None else {
+            "id": current.get("StageID"), "text": current.get("StageIDText"),
+            "probability": current.get("Probability")}
+        if lead_source_id is not None:
+            source = self._pick_source(options, lead_source_id)
+        else:
+            source = {"id": current["LeadSourceID"], "text": current.get("LeadSourceIDText")} \
+                if current.get("LeadSourceID") else None
+        closing = closing_date or current.get("ClosingDate")
+        old_rows = [saved_row(row, TABLE) for row in self._saved_lines(
+            MODULE, opportunity_id, subform_request(TABLE, SUBFORM_COLUMNS, SUBFORM_AGGREGATES))]
+        new_rows = None if lines is None else self._new_lines(lines, _opportunity_row)
+        payload = opportunity_payload({
+            "account": {"id": current.get("AccountID"), "name": current.get("AccountIDText")},
+            "stage": stage, "closing_date": closing,
+            "name": name or current.get("OpportunityName"), "lead_source": source,
+            "description": current.get("Description") if description is None else description,
+            "custom_field13": current.get("CustomField13"),
+        }, edit_rows(old_rows, new_rows), old_rows, {
+            "id": current["ID"], "code": current.get("OpportunityCode"),
+            "modified_date": current.get("ModifiedDate"), "version": current.get("Version"),
+        })
+        saved_id = self._save_opportunity(payload)
+        result = {"id": saved_id, "code": current.get("OpportunityCode"), "total": payload_total(payload)}
+        if stage["id"] != current.get("StageID"):
+            result.update(self._after_stage_change(saved_id, stage, closing))
+        return result
+
     # ------------------------------------------------------------------
+    def _save_opportunity(self, payload):
+        record_id = self._crm_data("POST", MODULE, payload=payload)
+        if not record_id:
+            raise MisaCrmError("MISA báo lưu xong nhưng không trả ID cơ hội.")
+        return record_id
+
+    def _after_stage_change(self, opportunity_id, stage, closing_date):
+        """Ghi lịch sử giai đoạn như form làm sau khi lưu. Lỗi -> {"warning"} (cơ hội đã lưu rồi)."""
+        try:
+            self._crm("POST", "Opportunity/stageHistory",
+                      payload=stage_history_payload(opportunity_id, stage, closing_date))
+            return {}
+        except Exception as error:  # noqa: BLE001
+            _logger.warning("Cơ hội %s: không ghi được lịch sử giai đoạn: %s", opportunity_id, error)
+            return {"warning": "Đã lưu cơ hội nhưng không ghi được lịch sử giai đoạn: %s" % error}
+
     @staticmethod
     def _pick(items, wanted, error, label):
         try:
@@ -104,24 +147,26 @@ class MisaCrmOpportunity(models.AbstractModel):
             raise CrmInputError(400, error, "Không có %s ID %s. Chọn: %s." % (label, wanted, choices))
         return found
 
-    def _opportunity_row(self, index, line):
-        product = self._product_by_code(line["code"])
-        if product["is_combo"]:
-            # Dòng combo trên form kéo theo các dòng con — chưa có request mẫu, không tự đoán.
-            raise CrmInputError(400, "combo_not_supported",
-                                "Mã %s là combo — API chưa hỗ trợ thêm combo vào cơ hội." % line["code"])
-        amounts = line_amounts(line["qty"], product["tax_percent"],
-                               price=line.get("price"), price_after_tax=line.get("price_after_tax"))
-        return opportunity_line(index, product, line["qty"], amounts, line.get("description"))
+    def _pick_stage(self, options, stage_id):
+        stage = self._pick(options["stages"], stage_id, "invalid_stage", "giai đoạn")
+        return {"id": stage["id"], "text": stage["name"], "probability": stage["probability"]}
+
+    def _pick_source(self, options, lead_source_id):
+        """Nguồn gốc đã chọn; None / "" -> None (không gắn nguồn)."""
+        if lead_source_id in (None, ""):
+            return None
+        source = self._pick(options["lead_sources"], lead_source_id, "invalid_lead_source", "nguồn gốc")
+        return {"id": source["id"], "text": source["name"]}
 
     def _opportunity_code(self, opportunity_id):
         """Số cơ hội (CH…) MISA vừa cấp; không đọc được -> None (không làm hỏng kết quả tạo)."""
         try:
-            data = self._crm_data(
-                "POST", "Opportunity/FormDataNew/Opportunity/%d/4" % FORM_LAYOUT_ID,
-                payload={"ID": str(opportunity_id), "MISAEntityState": 2,
-                         "ActiveLayoutCode": None, "CustomDicData": None}) or {}
-            return (data.get("CurrentData") or {}).get("OpportunityCode")
+            return self._current_record(MODULE, FORM_LAYOUT_ID, opportunity_id, "cơ hội",
+                                        mode=MODE_VIEW).get("OpportunityCode")
         except Exception as error:  # noqa: BLE001
             _logger.warning("Cơ hội %s: không đọc được số cơ hội: %s", opportunity_id, error)
             return None
+
+
+def _opportunity_row(index, product, qty, amounts, line):
+    return opportunity_line(index, product, qty, amounts, line.get("description"))

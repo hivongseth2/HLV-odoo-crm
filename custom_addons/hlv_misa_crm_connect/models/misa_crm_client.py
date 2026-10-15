@@ -16,6 +16,8 @@ _logger = logging.getLogger(__name__)
 BASE_URL = "https://amisapp.misa.vn/crm/g1/api/business/"
 # Trang "Thêm Cơ hội" gửi layoutcode=opportunity cho mọi lệnh (kể cả tìm khách / tìm hàng).
 OPPORTUNITY_LAYOUT = "opportunity"
+# Chế độ mở form trong URL của MISA: 2 = sửa, 4 = xem.
+MODE_EDIT, MODE_VIEW = 2, 4
 
 
 class CrmInputError(Exception):
@@ -74,3 +76,24 @@ class MisaCrmConnect(models.AbstractModel):
     def _crm_data(self, method, path, layout=OPPORTUNITY_LAYOUT, payload=None, params=None):
         """Như ``_crm`` nhưng chỉ trả phần ``Data``."""
         return self._crm(method, path, layout, payload, params).get("Data")
+
+    # ── Mở form như người dùng bấm Sửa / Xem ─────────────────────────────
+    def _current_record(self, module, form_layout_id, record_id, label, mode=MODE_EDIT):
+        """Dữ liệu đang lưu của một bản ghi (FormDataNew) — gồm ModifiedDate / Version để sửa.
+
+        ``module``: "Opportunity" / "Quote". Không có bản ghi -> CrmInputError 404.
+        """
+        data = self._crm_data(
+            "POST", "%s/FormDataNew/%s/%d/%d" % (module, module, form_layout_id, mode), module.lower(),
+            payload={"ID": str(record_id), "MISAEntityState": 2, "ActiveLayoutCode": None, "CustomDicData": None},
+        ) or {}
+        current = data.get("CurrentData") or {}
+        if not current.get("ID"):
+            raise CrmInputError(404, "not_found", "Không có %s ID %s trên MISA." % (label, record_id))
+        return current
+
+    def _saved_lines(self, module, record_id, subform_body):
+        """Dòng hàng đang lưu của một bản ghi (GetDataSubFormByID, như khi mở form sửa)."""
+        data = self._crm_data("POST", "%s/GetDataSubFormByID/%d/%d/null" % (module, int(record_id), MODE_EDIT),
+                              module.lower(), payload=subform_body) or []
+        return (data[0].get("DataFieldSubForm") if data else None) or []

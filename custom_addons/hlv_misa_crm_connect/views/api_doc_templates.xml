@@ -49,7 +49,12 @@
 
             <h4 class="mt-4">curl để thử</h4>
             <pre class="bg-dark text-white rounded p-2"><code t-out="curl"/></pre>
-            <p class="text-muted small">Chạy trong bash / Git Bash. Postman: Import → Raw text → dán lệnh curl.</p>
+            <p class="text-muted small">
+                Chạy trong bash / Git Bash. Postman: Import → Raw text → dán lệnh curl.<br/>
+                Windows: curl gửi chữ có dấu gõ trên dòng lệnh sai bảng mã (tiếng Việt thành "?").
+                Payload có tiếng Việt thì lưu JSON ra file UTF-8 rồi thay <code>-d '…'</code> bằng
+                <code>--data-binary @payload.json</code>, hoặc dùng Postman.
+            </p>
 
             <t t-if="doc.notes">
                 <h4 class="mt-4">Lưu ý</h4>

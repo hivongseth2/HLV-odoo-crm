@@ -6,6 +6,7 @@ from odoo.addons.misa_fetch_po_button.utils.crm_product import exact_code_match
 from ..services.crm_payloads import (
     MAX_PAGE_SIZE, product_row, product_search_payload, product_stock_search_payload, stock_row,
 )
+from ..services.misa_form import line_amounts
 from .misa_crm_client import CrmInputError
 
 MAX_CODE_PAGES = 10
@@ -63,6 +64,24 @@ class MisaCrmProduct(models.AbstractModel):
             result["recent_prices"] = self._crm_data(
                 "POST", "Product/getRecentPrice/%d/0/true" % int(account_id), payload=body)
         return result
+
+    def _new_lines(self, lines, make_row):
+        """Dòng hàng mới từ ``lines`` của bên gọi ({"code", "qty", "price_after_tax" | "price", …}).
+
+        Tra từng mã trên MISA (sai mã -> 404, combo -> 400) và tính tiền theo thuế của hàng; dòng
+        dựng bằng ``make_row(thứ_tự, hàng, sl, tiền, line)``. Tra hết TRƯỚC khi ghi gì lên MISA.
+        """
+        rows = []
+        for index, line in enumerate(lines, start=1):
+            product = self._product_by_code(line["code"])
+            if product["is_combo"]:
+                # Dòng combo trên form kéo theo các dòng con — chưa có request mẫu, không tự đoán.
+                raise CrmInputError(400, "combo_not_supported",
+                                    "Mã %s là combo — API chưa hỗ trợ thêm combo." % line["code"])
+            amounts = line_amounts(line["qty"], product["tax_percent"],
+                                   price=line.get("price"), price_after_tax=line.get("price_after_tax"))
+            rows.append(make_row(index, product, line["qty"], amounts, line))
+        return rows
 
     def _product_by_code(self, code):
         """Hàng có mã đúng bằng ``code`` (không phân biệt hoa thường, bỏ khoảng trắng hai đầu).
