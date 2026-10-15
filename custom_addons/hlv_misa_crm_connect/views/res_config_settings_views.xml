@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Đặt ngay dưới khối "MISA CRM" của misa_fetch_po_button (Cài đặt → Tồn kho) — kế thừa view
+         của module trong repo, không kế thừa xmlid core. -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.hlv.misa.crm.connect</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="misa_fetch_po_button.res_config_settings_view_form_misa_crm"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='misa_crm_settings']" position="after">
+                <block title="API MISA CRM cho bên ngoài" name="hlv_misa_crm_connect_settings">
+                    <setting id="hlv_misa_crm_api_enabled"
+                             help="Bật: hệ thống bên ngoài gọi /api/misa-crm/* (tìm khách, tìm hàng, cơ hội, báo giá, đơn hàng) bằng API key bên dưới; Odoo đăng nhập MISA thay họ. Tắt: mọi route trả 503.">
+                        <field name="hlv_misa_crm_api_enabled"/>
+                    </setting>
+                    <setting id="hlv_misa_crm_api_allow_write" invisible="not hlv_misa_crm_api_enabled"
+                             help="Bật: được tạo cơ hội trên MISA qua API (dưới tên tài khoản MISA của Odoo). Tắt: chỉ tra cứu.">
+                        <field name="hlv_misa_crm_api_allow_write"/>
+                    </setting>
+                    <setting id="hlv_misa_crm_api_key" string="API key" invisible="not hlv_misa_crm_api_enabled"
+                             help="Bên gọi gửi key này ở header X-API-Key. Tạo key mới thì key cũ hết hiệu lực ngay. Chưa có key: mọi request bị từ chối.">
+                        <field name="hlv_misa_crm_api_key"/>
+                        <div class="mt8">
+                            <button name="action_hlv_misa_crm_new_key" type="object" string="Tạo key mới"
+                                    class="btn-link" icon="oi-arrow-right"
+                                    confirm="Key cũ sẽ hết hiệu lực ngay — bên gọi phải đổi sang key mới. Tiếp tục?"/>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>
