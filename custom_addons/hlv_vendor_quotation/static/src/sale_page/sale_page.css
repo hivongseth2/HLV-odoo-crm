@@ -315,6 +315,9 @@ body {
 
 /* ------------------------------------------------------------ trang tra giá */
 .pl-page { display: grid; gap: 1rem; max-width: 1400px; }
+/* .hq-panel cắt phần tràn (overflow: hidden) — khung ô tìm phải để tràn, và nổi trên khung kết quả
+   bên dưới, không thì danh sách gợi ý bị cắt / bị đè. */
+.pl-search { overflow: visible; position: relative; z-index: 20; }
 .pl-search .hq-picker { max-width: 640px; }
 .pl-search p { margin: .4rem 0 0; }
 .pl-product { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
