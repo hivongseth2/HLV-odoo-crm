@@ -215,8 +215,8 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         inquiry = self._get_inquiry(inquiry_id, self._check(code))
         quote_products = {to_int(quote_id): {to_int(p) for p in product_ids or []}
                           for quote_id, product_ids in (ask or {}).items() if to_int(quote_id)}
-        inquiry.action_add_products(self._line_vals(lines or []), quote_products)
-        return payload.inquiry_detail(inquiry)
+        result = inquiry.action_add_products(self._line_vals(lines or []), quote_products)
+        return dict(payload.inquiry_detail(inquiry), add_result=payload.add_products_result(result))
 
     def _line_vals(self, raw_lines):
         """Dòng sale gửi lên → dòng phiếu hỏi giá. ĐVT sai nhóm với sản phẩm thì lấy ĐVT mua."""

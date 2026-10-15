@@ -231,7 +231,9 @@ class VendorInquiry(models.Model):
         line_vals: [{product_id, name, product_qty, product_uom_id}] như lúc lập phiếu. Sản phẩm đã có trong phiếu
         → cộng dồn SL vào dòng cũ (đổi về ĐVT của dòng), báo giá các NCC đang hỏi món đó tăng SL theo; sản phẩm mới →
         dòng mới. quote_products: {id báo giá đang mở của phiếu: set(product_id)} — NCC nào hỏi món nào, sale tự tick
-        (không mặc định hỏi ai); sản phẩm mới phải hỏi ít nhất một NCC. Trả các dòng phiếu đã thêm / cộng dồn.
+        (không mặc định hỏi ai); sản phẩm mới phải hỏi ít nhất một NCC. Dòng cộng dồn lấy luôn mô tả mới (tên sản phẩm
+        sale vừa chọn) — mô tả cũ có thể đã lỗi thời, sale nhìn bảng so giá không nhận ra món vừa thêm.
+        Trả {"added": dòng mới, "merged": [(dòng cộng dồn, SL trước khi cộng)]}.
         """
         self.ensure_one()
         if self.state not in ("open", "requested"):
@@ -245,12 +247,15 @@ class VendorInquiry(models.Model):
         by_product = {line.product_id.id: line for line in self.line_ids}
         sequence = max(self.line_ids.mapped("sequence") or [0])
         added = merged = Line
+        before = {}
         for vals in line_vals:
             line = by_product.get(vals["product_id"])
             if line:
                 uom = self.env["uom.uom"].browse(vals["product_uom_id"])
+                before.setdefault(line.id, line.product_qty)
                 line._hlv_add_qty(uom._compute_quantity(vals["product_qty"], line.product_uom_id)
                                   if uom and line.product_uom_id else vals["product_qty"])
+                line._hlv_rename(vals["name"])
                 merged |= line
             else:
                 sequence += 1
@@ -269,8 +274,9 @@ class VendorInquiry(models.Model):
                 quote.action_add_inquiry_lines(lines)
         self.message_post(body=Markup(_("Sale thêm sản phẩm vào phiếu: %s.")) % ", ".join(
             [line.name or line.product_id.display_name for line in added]
-            + [_("%s (cộng thêm SL)", line.name or line.product_id.display_name) for line in merged]))
-        return added | merged
+            + [_("%s (cộng thêm SL %s → %s)", line.name or line.product_id.display_name,
+                 format_vn_number(before[line.id]), format_vn_number(line.product_qty)) for line in merged]))
+        return {"added": added, "merged": [(line, before[line.id]) for line in merged]}
 
     @api.model
     def _hlv_sale_can_edit_deadline(self):
@@ -605,6 +611,15 @@ class VendorInquiryLine(models.Model):
             post_internal(quote_line.quote_id, Markup(_("Sale tăng SL hỏi <b>%s</b>: %s → %s %s.")) % (
                 self.name or self.product_id.display_name, format_vn_number(before), format_vn_number(self.product_qty),
                 self.product_uom_id.name or ""), self.env.user.partner_id)
+
+    def _hlv_rename(self, name):
+        """Mô tả dòng (và dòng báo giá NCC đang mở chưa lên đơn mua) đổi thành name — sale vừa chọn lại đúng sản phẩm."""
+        self.ensure_one()
+        if not name or name == self.name:
+            return
+        self.name = name
+        self.quote_line_ids.filtered(
+            lambda l: l.quote_id.state in ("sent", "quoted") and not l.vendor_locked).sudo().write({"name": name})
 
     def _quote_line_vals(self):
         self.ensure_one()

@@ -321,6 +321,23 @@ def _reask_lines(quotes):
     return items
 
 
+def add_products_result(result):
+    """Kết quả "Thêm sản phẩm" để báo sale (vendor_inquiry.action_add_products): món mới, món cộng dồn (SL trước →
+    sau, NCC đang thu hồi món đó — sale biết món chưa được hỏi lại)."""
+    return {
+        "added": [line.name or line.product_id.display_name for line in result["added"]],
+        "merged": [{
+            "name": line.name or line.product_id.display_name,
+            "before": before,
+            "after": line.product_qty,
+            "uom": line.product_uom_id.name or "",
+            "withdrawn": line.quote_line_ids.filtered(
+                lambda l: l.withdrawn and l.quote_id.state in ("sent", "quoted")
+            ).quote_id.partner_id.commercial_partner_id.mapped("display_name"),
+        } for line, before in result["merged"]],
+    }
+
+
 def share_message(quotes):
     """Tin nhắn Zalo cho các báo giá cùng một NCC: nêu số báo giá, gửi link chung của NCC
     (một link cho mọi báo giá + đơn mua của họ — NCC chỉ cần lưu một link)."""

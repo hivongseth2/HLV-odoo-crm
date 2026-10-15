@@ -109,10 +109,15 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.askLineExtras = function (line) {
     var pid = line.product_id;
     if (C.addTo) {
-      return C.addTo.productIds.indexOf(pid) >= 0
-        ? '<div class="hq-muted hq-small">Đã có trong phiếu — cộng thêm SL vào dòng cũ</div>'
-        : (C.chosen.some(function (v) { return asked(v.id, pid); }) ? ""
-          : '<div class="hq-ask-warn">Chưa tick NCC nào cho mặt hàng này</div>');
+      var old = C.addTo.existing[pid];
+      if (old) {
+        return '<div class="hq-ask-warn">Đã có trong phiếu: <b>' + esc(old.name) + "</b> — " + HQ.qty(old.qty) + " " +
+          esc(old.uom) + " → sau khi thêm " + HQ.qty(old.qty + (+line.qty || 0)) + " " + esc(old.uom) +
+          (old.withdrawn.length ? ". Đang thu hồi với " + esc(old.withdrawn.join(", ")) + " — tick NCC để hỏi lại" : "") +
+          "</div>";
+      }
+      return C.chosen.some(function (v) { return asked(v.id, pid); }) ? ""
+        : '<div class="hq-ask-warn">Chưa tick NCC nào cho mặt hàng này</div>';
     }
     C.askInfo = C.askInfo || {};
     var hasEvidence = ((picks()[pid] || {}).evidence || []).length;
