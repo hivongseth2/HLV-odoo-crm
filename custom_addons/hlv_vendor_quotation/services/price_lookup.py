@@ -39,6 +39,8 @@ def _receipt_facts(line):
         "qty_in": qty_in,
         "qty_returned": qty_returned,
         "received": local_date_text(min(received_at, default=None)),
+        # yyyy-mm-dd để trang tính số ngày từ lúc đặt tới lúc hàng về.
+        "received_day": local_date_text(min(received_at, default=None), "%Y-%m-%d"),
         "returned": local_date_text(max(returned_at, default=None)),
         "return_state": return_state(qty_in, qty_returned),
     }

@@ -315,6 +315,12 @@ body {
 
 /* ------------------------------------------------------------ trang tra giá */
 .pl-page { display: grid; gap: 1rem; max-width: 1400px; }
+/* Cột lưới phải co được (minmax 0): mặc định ô lưới không hẹp hơn nội dung, bảng rộng sẽ đẩy cả
+   trang tràn ngang trên điện thoại. Bảng có bề rộng tối thiểu để cuộn ngang trong khung thay vì
+   bóp cột NCC thành từng chữ. */
+.pl-page, #pl-result { grid-template-columns: minmax(0, 1fr); }
+.pl-table { min-width: 880px; }
+.pl-vendor-cell { min-width: 14rem; }
 /* .hq-panel cắt phần tràn (overflow: hidden) — khung ô tìm phải để tràn, và nổi trên khung kết quả
    bên dưới, không thì danh sách gợi ý bị cắt / bị đè. */
 .pl-search { overflow: visible; position: relative; z-index: 20; }
@@ -329,6 +335,45 @@ body {
 .pl-row-void td { color: var(--hq-muted); }
 .pl-head { display: grid; gap: .75rem; }
 .pl-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
-.pl-stat { padding: .6rem .8rem; border: 1px solid var(--hq-line-soft); border-radius: var(--hq-radius); background: #FAF9F6; }
+.pl-stat { padding: .6rem .8rem; border: 1px solid var(--hq-line-soft); border-left: 3px solid var(--hq-line); border-radius: var(--hq-radius); background: #FAF9F6; }
+.pl-stat-latest { border-left-color: var(--hq-accent); }
+.pl-stat-low { border-left-color: var(--hq-ok); }
+.pl-stat-quote { border-left-color: var(--hq-warn); }
 .pl-stat-value { font-size: 15px; margin: .1rem 0; font-variant-numeric: tabular-nums; }
 .pl-note { margin: .6rem .9rem 0; }
+.pl-note-bottom { margin: .5rem .9rem .75rem; }
+.pl-row-void .pl-dot { opacity: .45; }
+
+/* Mã màu — luôn kèm ký hiệu / chữ (▲ ▼ ✓ "thiếu"), không để màu tự nói.
+   Giá lên là bất lợi khi mua → cam đất; giá xuống / nhập đủ → xanh lá. */
+.pl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .45rem; vertical-align: 1px; }
+.pl-up, .pl-down, .pl-flat { font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.pl-up { color: var(--hq-warn-ink); }
+.pl-down { color: var(--hq-ok); }
+.pl-flat { color: var(--hq-muted); font-weight: 500; }
+.hq-table td.pl-best { background: var(--hq-ok-soft); }
+
+/* Biểu đồ diễn biến giá (sale_price_chart.js) */
+.pl-chart-wrap { display: grid; gap: .35rem; }
+.pl-chart { position: relative; }
+.pl-chart svg { display: block; }
+.pl-chart-grid { stroke: var(--hq-line); stroke-width: 1; }
+.pl-chart-axis { fill: var(--hq-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pl-chart-line { fill: none; stroke: var(--hq-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pl-chart-dot { fill: var(--hq-accent); stroke: #fff; stroke-width: 2; }
+.pl-chart-dot.is-low { fill: var(--hq-ok); }
+.pl-chart-value { fill: var(--hq-ink); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pl-chart-cross { stroke: #c6ccd4; stroke-width: 1; stroke-dasharray: 3 3; }
+.pl-chart-focus { fill: none; stroke: var(--hq-accent); stroke-width: 2; }
+.pl-chart-tip {
+    position: absolute;
+    top: 6px;
+    min-width: 11rem;
+    padding: .4rem .6rem;
+    background: #fff;
+    border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius);
+    box-shadow: 0 4px 14px rgba(28, 32, 36, .12);
+    font-size: .8125rem;
+    pointer-events: none;
+}
