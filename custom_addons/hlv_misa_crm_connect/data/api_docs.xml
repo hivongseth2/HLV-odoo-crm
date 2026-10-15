@@ -139,6 +139,28 @@ Combo chưa hỗ trợ → 400 combo_not_supported. Mã không có → 404 produ
 code (số CH…) = null nếu MISA tạo xong nhưng chưa đọc lại được số.</field>
     </record>
 
+    <record id="doc_opportunity_update" model="hlv.misa.crm.api.doc">
+        <field name="sequence">95</field>
+        <field name="section">opportunity</field>
+        <field name="name">Sửa cơ hội</field>
+        <field name="route">/api/misa-crm/opportunity/update</field>
+        <field name="is_write" eval="True"/>
+        <field name="summary">Sửa cơ hội như mở form, sửa, bấm Lưu. Chỉ gửi trường cần đổi — trường không gửi giữ nguyên trên MISA.
+Gửi "lines" là THAY TOÀN BỘ hàng: dòng cũ bị xoá, dòng mới được thêm (đúng cách form MISA làm khi xoá dòng rồi thêm dòng). Không gửi "lines" = giữ hàng như cũ.</field>
+        <field name="params_spec">id | int | x | ID cơ hội (opportunity/search hoặc opportunity/create).
+name | string | | Tên cơ hội mới.
+stage_id | int | | Giai đoạn mới (opportunity/options). Đổi giai đoạn thì ghi luôn lịch sử giai đoạn như form.
+closing_date | string | | Ngày kỳ vọng kết thúc mới, YYYY-MM-DD.
+lead_source_id | int | | Nguồn gốc mới (opportunity/options).
+description | string | | Mô tả mới. Gửi chuỗi rỗng để xoá mô tả.
+lines | array | | Danh sách hàng MỚI ĐẦY ĐỦ (thay toàn bộ). Mỗi dòng như ở "Tạo cơ hội": code, qty, price_after_tax hoặc price, description.</field>
+        <field name="payload_example">{"id": 51565, "stage_id": 2, "closing_date": "2026-11-20", "description": "Đã check kho", "lines": [{"code": "204606017", "qty": 1, "price": 300000}, {"code": "204606020", "qty": 1, "price": 80000}]}</field>
+        <field name="response_example">{"id": 51565, "code": "CH0042761", "total": 410400.0, "ok": true}</field>
+        <field name="notes">Odoo đọc cơ hội ngay trước khi lưu (như mở form). Người khác sửa đúng lúc đó thì MISA từ chối (502), gọi lại là được.
+Khách hàng của cơ hội không đổi được qua API.
+"warning" trong kết quả = đã lưu nhưng không ghi được lịch sử giai đoạn.</field>
+    </record>
+
     <!-- ── Báo giá ──────────────────────────────────────────────────────── -->
     <record id="doc_quote_search" model="hlv.misa.crm.api.doc">
         <field name="sequence">100</field>
@@ -164,9 +186,106 @@ limit | int | | Số dòng, 1–100. Mặc định 10.</field>
         <field name="notes">price = đơn giá chưa VAT ĐÃ trừ chiết khấu dòng.</field>
     </record>
 
+    <record id="doc_quote_options" model="hlv.misa.crm.api.doc">
+        <field name="sequence">105</field>
+        <field name="section">quote</field>
+        <field name="name">Danh mục tình trạng báo giá</field>
+        <field name="route">/api/misa-crm/quote/options</field>
+        <field name="summary">Tình trạng của báo giá (Bản thảo…) — để chọn stage_id khi tạo / sửa báo giá.</field>
+        <field name="payload_example">{}</field>
+        <field name="response_example">{"stages": [{"id": 1, "name": "Bản thảo"}], "ok": true}</field>
+        <field name="notes">Không gửi stage_id khi tạo thì báo giá ở "Bản thảo" (mặc định của form), không cần gọi route này.</field>
+    </record>
+
+    <record id="doc_quote_create" model="hlv.misa.crm.api.doc">
+        <field name="sequence">120</field>
+        <field name="section">quote</field>
+        <field name="name">Tạo báo giá</field>
+        <field name="route">/api/misa-crm/quote/create</field>
+        <field name="is_write" eval="True"/>
+        <field name="summary">Tạo báo giá kèm hàng như bấm Lưu ở trang "Thêm Báo giá". Địa chỉ và MST lấy theo khách trên MISA. Gắn opportunity_id thì báo giá nằm trong cơ hội đó.
+Ba trường công thức Odoo tự tính như form MISA: Còn phải thu = Tổng tiền − Khách TT trước; Chi phí hoa hồng dự kiến = Thành tiền (chưa VAT) × % hoa hồng; Lãi lỗ tổng đơn = Lãi lỗ dòng − Chi phí giao hàng − Chi phí hoa hồng.</field>
+        <field name="params_spec">account_id | int | x | ID khách MISA (account/search).
+lines | array | x | Dòng hàng, 1–200 dòng.
+lines[].code | string | x | Mã hàng đúng tuyệt đối trên MISA.
+lines[].qty | number | x | Số lượng, lớn hơn 0.
+lines[].price_after_tax | number | | Đơn giá SAU VAT — nên dùng. Gửi đúng MỘT trong hai giá.
+lines[].price | number | | Đơn giá CHƯA VAT.
+lines[].description | string | | Diễn giải dòng. Bỏ trống = tên hàng.
+lines[].customer_item | string | | Cột "Tên khách hàng yêu cầu" — tên hàng theo cách khách gọi.
+shipping_cost | number | x | Chi phí giao hàng dự kiến (MISA bắt buộc). Không có thì gửi 0.
+commission_percent | number | x | % hoa hồng dự kiến (MISA bắt buộc). Không có thì gửi 0.
+opportunity_id | int | | Gắn báo giá vào cơ hội.
+quote_date | string | | Ngày báo giá YYYY-MM-DD. Mặc định hôm nay.
+expired_date | string | | Hiệu lực đến ngày YYYY-MM-DD.
+stage_id | int | | Tình trạng (quote/options). Mặc định 1 = Bản thảo.
+prepaid | number | | Khách thanh toán trước. Mặc định 0.
+validity_days | number | | Số ngày hiệu lực.
+delivery_days | number | | Số ngày giao hàng.
+payment_terms | string | | Điều kiện thanh toán.
+description | string | | Mô tả.</field>
+        <field name="payload_example">{"account_id": 1039, "opportunity_id": 51565, "quote_date": "2026-10-15", "expired_date": "2026-10-25", "shipping_cost": 50000, "commission_percent": 3, "prepaid": 0, "validity_days": 10, "delivery_days": 3, "payment_terms": "Thanh toán 100% khi nhận hàng", "description": "Báo giá theo yêu cầu", "lines": [{"code": "48-22-4530", "qty": 2, "price_after_tax": 380000, "customer_item": "Kéo cắt tôn"}]}</field>
+        <field name="response_example">{"id": 46123, "code": "BG3603960629", "total": 760000.0, "ok": true}</field>
+        <field name="notes">KHÔNG chống trùng: gọi lại sau khi đã tạo xong là thêm một báo giá nữa. Có id trả về là ĐÃ tạo.
+Thuế suất, đơn vị tính lấy theo hàng trên MISA. Combo chưa hỗ trợ (400 combo_not_supported).
+Công thức "Chi phí hoa hồng" của MISA nhân thẳng với số % (không chia 100) — Odoo giữ nguyên để số khớp với form MISA.
+code (số BG…) = null nếu MISA tạo xong nhưng chưa đọc lại được số.</field>
+    </record>
+
+    <record id="doc_quote_create_from_opportunity" model="hlv.misa.crm.api.doc">
+        <field name="sequence">130</field>
+        <field name="section">quote</field>
+        <field name="name">Tạo báo giá từ cơ hội</field>
+        <field name="route">/api/misa-crm/quote/create-from-opportunity</field>
+        <field name="is_write" eval="True"/>
+        <field name="summary">Như bấm "Tạo báo giá" trên một cơ hội: khách và toàn bộ hàng (số lượng, giá, thuế, chiết khấu) chép từ cơ hội, báo giá gắn vào cơ hội đó. Bỏ dòng ghi chú.</field>
+        <field name="params_spec">opportunity_id | int | x | ID cơ hội cần lập báo giá.
+shipping_cost | number | x | Chi phí giao hàng dự kiến (MISA bắt buộc).
+commission_percent | number | x | % hoa hồng dự kiến (MISA bắt buộc).
+quote_date | string | | Ngày báo giá YYYY-MM-DD. Mặc định hôm nay.
+expired_date | string | | Hiệu lực đến ngày YYYY-MM-DD.
+stage_id | int | | Tình trạng (quote/options). Mặc định 1 = Bản thảo.
+prepaid | number | | Khách thanh toán trước.
+validity_days | number | | Số ngày hiệu lực.
+delivery_days | number | | Số ngày giao hàng.
+payment_terms | string | | Điều kiện thanh toán.
+description | string | | Mô tả.</field>
+        <field name="payload_example">{"opportunity_id": 51565, "shipping_cost": 50000, "commission_percent": 4, "validity_days": 10}</field>
+        <field name="response_example">{"id": 46121, "code": "BG3603960627", "total": 410400.0, "ok": true}</field>
+        <field name="notes">Giá lấy đúng như trên cơ hội — dòng cơ hội giá 0 thì báo giá cũng 0. Muốn giá khác: sửa cơ hội trước, hoặc dùng quote/create với opportunity_id và lines tự gửi, hoặc sửa sau bằng quote/update.
+Cơ hội chưa có hàng: 400 no_lines. Cơ hội có combo: 400 combo_not_supported.
+KHÔNG chống trùng: gọi lại là thêm một báo giá nữa.</field>
+    </record>
+
+    <record id="doc_quote_update" model="hlv.misa.crm.api.doc">
+        <field name="sequence">140</field>
+        <field name="section">quote</field>
+        <field name="name">Sửa báo giá</field>
+        <field name="route">/api/misa-crm/quote/update</field>
+        <field name="is_write" eval="True"/>
+        <field name="summary">Sửa báo giá như mở form, sửa, bấm Lưu. Chỉ gửi trường cần đổi — trường không gửi giữ nguyên. Ba trường công thức (còn phải thu, hoa hồng, lãi lỗ) luôn tính lại theo số mới.
+Gửi "lines" là THAY TOÀN BỘ hàng (dòng cũ bị xoá, dòng mới được thêm). Không gửi "lines" = giữ hàng như cũ.</field>
+        <field name="params_spec">id | int | x | ID báo giá (quote/search hoặc quote/create).
+lines | array | | Danh sách hàng MỚI ĐẦY ĐỦ (thay toàn bộ, ít nhất 1 dòng). Mỗi dòng như ở "Tạo báo giá".
+stage_id | int | | Tình trạng mới (quote/options).
+quote_date | string | | Ngày báo giá YYYY-MM-DD.
+expired_date | string | | Hiệu lực đến ngày YYYY-MM-DD.
+shipping_cost | number | | Chi phí giao hàng dự kiến.
+commission_percent | number | | % hoa hồng dự kiến.
+prepaid | number | | Khách thanh toán trước.
+validity_days | number | | Số ngày hiệu lực.
+delivery_days | number | | Số ngày giao hàng.
+payment_terms | string | | Điều kiện thanh toán.
+description | string | | Mô tả.</field>
+        <field name="payload_example">{"id": 46123, "prepaid": 80000, "commission_percent": 5, "delivery_days": 34, "lines": [{"code": "2800-14M-340-BAN", "qty": 1, "price": 55555}, {"code": "0201081", "qty": 1, "price": 44444}]}</field>
+        <field name="response_example">{"id": 46123, "code": "BG3603960629", "total": 104443.4, "ok": true}</field>
+        <field name="notes">Khách hàng và cơ hội gắn với báo giá không đổi được qua API.
+Odoo đọc báo giá ngay trước khi lưu (như mở form). Người khác sửa đúng lúc đó thì MISA từ chối (502), gọi lại là được.</field>
+    </record>
+
     <!-- ── Đơn hàng ─────────────────────────────────────────────────────── -->
     <record id="doc_sale_order_search" model="hlv.misa.crm.api.doc">
-        <field name="sequence">120</field>
+        <field name="sequence">200</field>
         <field name="section">sale_order</field>
         <field name="name">Tìm đơn hàng</field>
         <field name="route">/api/misa-crm/sale-order/search</field>
@@ -179,7 +298,7 @@ limit | int | | Số dòng, 1–100. Mặc định 10.</field>
     </record>
 
     <record id="doc_sale_order_lines" model="hlv.misa.crm.api.doc">
-        <field name="sequence">130</field>
+        <field name="sequence">210</field>
         <field name="section">sale_order</field>
         <field name="name">Xem hàng của đơn hàng</field>
         <field name="route">/api/misa-crm/sale-order/lines</field>

@@ -21,11 +21,22 @@ Mọi route `POST /api/misa-crm/...`, body JSON, header `X-API-Key`.
 | Chung | `ping` |
 | Khách hàng | `account/search`, `account/get` |
 | Hàng hóa | `product/search`, `product/prices` |
-| Cơ hội | `opportunity/options`, `opportunity/search`, `opportunity/lines`, `opportunity/create` (ghi) |
-| Báo giá | `quote/search`, `quote/lines` |
+| Cơ hội | `opportunity/options`, `opportunity/search`, `opportunity/lines`, `opportunity/create` (ghi), `opportunity/update` (ghi) |
+| Báo giá | `quote/options`, `quote/search`, `quote/lines`, `quote/create` (ghi), `quote/create-from-opportunity` (ghi), `quote/update` (ghi) |
 | Đơn hàng | `sale-order/search`, `sale-order/lines` |
+
+Route ghi cần bật "Cho phép tạo dữ liệu trên MISA". Sửa: trường không gửi = giữ nguyên; gửi `lines`
+= thay toàn bộ hàng.
+
+## Code
+
+- `services/`: dựng body MISA (thuần, không gọi mạng). `misa_form.py` là phần chung của form có
+  bảng hàng (tính tiền, dòng, tổng, gộp dòng khi sửa); `opportunity_payload.py`, `quote_payload.py`
+  theo từng form; `crm_payloads.py` cho các lệnh tìm.
+- `models/`: gọi MISA theo nhóm (`crm_*.py`), đăng nhập dùng chung của misa_fetch_po_button.
+- `controllers/`: route (`crm_api.py`), đọc/kiểm body (`body_fields.py`), khóa key + bật/tắt (`api_common.py`).
 
 ## Chưa có
 
-Thêm khách hàng, tạo báo giá, tạo đơn hàng: chưa có request mẫu của MISA nên chưa làm (không đoán
-body ghi dữ liệu thật). Combo trong cơ hội chưa hỗ trợ.
+Thêm khách hàng, tạo đơn hàng, xoá cơ hội / báo giá: chưa có request mẫu của MISA nên chưa làm
+(không đoán body ghi dữ liệu thật). Combo trong cơ hội / báo giá chưa hỗ trợ.
