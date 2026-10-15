@@ -63,23 +63,33 @@ window.HlvQuote = window.HlvQuote || {};
    * note: ghi chú đi kèm chính chứng từ này, hiện TRONG chip sau số ("" = không có) — để không bị đọc nhầm sang
    * chứng từ bên cạnh.
    */
-  HQ.colorChip = function (name, cls, label, note) {
-    return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '"' + (label ? ' title="' + HQ.esc(label) + '"' : "") + ">" +
-      HQ.esc(name) + (note ? '<span class="hq-doc-state hq-doc-note">' + HQ.esc(note) + "</span>" : "") + "</span>";
+  HQ.colorChip = function (name, cls, label, note, url) {
+    return chipOpen(cls, url, label) +
+      HQ.esc(name) + (note ? '<span class="hq-doc-state hq-doc-note">' + HQ.esc(note) + "</span>" : "") + chipClose(url);
   };
 
   /**
    * Chip một số chứng từ (YCMH / đơn mua / báo giá / đơn bán) — mọi số chứng từ trên trang hiện bằng chip này.
-   * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám).
+   * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám);
+   * url: có thì chip là link mở chứng từ trong Odoo ở tab mới ("" = chip thường).
    */
-  HQ.docChip = function (name, state, cls) {
-    return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '">' + HQ.esc(name) +
-      (state ? '<span class="hq-doc-state">' + HQ.esc(state) + "</span>" : "") + "</span>";
+  HQ.docChip = function (name, state, cls, url) {
+    return chipOpen(cls, url, "") + HQ.esc(name) +
+      (state ? '<span class="hq-doc-state">' + HQ.esc(state) + "</span>" : "") + chipClose(url);
   };
 
-  /** Chip YCMH, màu theo trạng thái. r: {name, state, label}. */
+  function chipOpen(cls, url, title) {
+    var attrs = ' class="hq-doc ' + (cls || "hq-tag-soft") + '"' + (title ? ' title="' + HQ.esc(title) + '"' : "");
+    return url ? "<a" + attrs + ' href="' + HQ.esc(url) + '" target="_blank" rel="noopener">' : "<span" + attrs + ">";
+  }
+
+  function chipClose(url) {
+    return url ? "</a>" : "</span>";
+  }
+
+  /** Chip YCMH, màu theo trạng thái, bấm mở YCMH trong Odoo. r: {name, state, label, url}. */
   HQ.requestTag = function (r) {
-    return HQ.docChip(r.name, r.label, HQ.REQUEST_STATE_CLASS[r.state]);
+    return HQ.docChip(r.name, r.label, HQ.REQUEST_STATE_CLASS[r.state], r.url);
   };
 
   /** Chip đơn mua kèm tiến độ NCC báo. o: {name, vendor_status}. */
@@ -193,6 +203,32 @@ window.HlvQuote = window.HlvQuote || {};
     var date = new Date(+parts[0], +parts[1] - 1, +parts[2] + days);
     return date.getFullYear() + "-" + ("0" + (date.getMonth() + 1)).slice(-2) +
       "-" + ("0" + date.getDate()).slice(-2);
+  };
+
+  /**
+   * Ô ngày gõ tay kiểu VN: giữ lại chữ số (tối đa 8), tự chèn "/" → "dd/mm/yyyy" đang gõ dở.
+   * "1510" → "15/10"; "15102026" → "15/10/2026"; không có số → "".
+   */
+  HQ.maskDmy = function (text) {
+    var digits = String(text || "").replace(/\D/g, "").slice(0, 8);
+    return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("/");
+  };
+
+  /** "dd/mm/yyyy" → "YYYY-MM-DD". Thiếu số, sai dạng hoặc ngày không có thật (31/02) → "". */
+  HQ.dmyToIso = function (text) {
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(text || "").trim());
+    if (!m) {
+      return "";
+    }
+    var date = new Date(+m[3], +m[2] - 1, +m[1]);
+    var ok = date.getFullYear() === +m[3] && date.getMonth() === +m[2] - 1 && date.getDate() === +m[1];
+    return ok ? m[3] + "-" + m[2] + "-" + m[1] : "";
+  };
+
+  /** "YYYY-MM-DD" → "dd/mm/yyyy". Rỗng / sai dạng → "". */
+  HQ.isoToDmy = function (iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+    return m ? m[3] + "/" + m[2] + "/" + m[1] : "";
   };
 
   /**
