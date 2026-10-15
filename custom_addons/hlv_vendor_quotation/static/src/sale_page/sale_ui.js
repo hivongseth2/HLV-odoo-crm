@@ -67,14 +67,15 @@ window.HlvQuote = window.HlvQuote || {};
 
   var toastTimer = null;
   /** onClick: thông báo bấm được (vd. mở tin NCC vừa nhắn) — để lâu hơn cho kịp bấm. */
-  HQ.toast = function (message, onClick) {
+  /** ms: thời gian hiện (mặc định 2,5 giây; có onClick thì 10 giây) — câu dài cần đọc thì truyền dài hơn. */
+  HQ.toast = function (message, onClick, ms) {
     var box = HQ.$("hq-toast");
     box.textContent = message;
     box.classList.remove("hq-hidden");
     box.classList.toggle("hq-toast-link", !!onClick);
     box.onclick = onClick ? function () { box.classList.add("hq-hidden"); onClick(); } : null;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { box.classList.add("hq-hidden"); }, onClick ? 10000 : 2500);
+    toastTimer = setTimeout(function () { box.classList.add("hq-hidden"); }, ms || (onClick ? 10000 : 2500));
   };
 
   /** Copy chữ vào clipboard; trình duyệt chặn Clipboard API (http) thì dùng textarea tạm. */

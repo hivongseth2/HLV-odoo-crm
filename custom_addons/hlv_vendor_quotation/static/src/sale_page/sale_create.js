@@ -85,7 +85,17 @@ window.HlvQuote = window.HlvQuote || {};
       phẩm đã có trong phiếu thì server cộng dồn SL vào dòng cũ (vendor_inquiry.action_add_products). */
   HQ.openAddProducts = function (d) {
     HQ.openCreate();
-    C.addTo = { id: d.id, productIds: d.lines.map(function (l) { return l.product_id; }) };
+    C.addTo = { id: d.id, productIds: d.lines.map(function (l) { return l.product_id; }), existing: {} };
+    // Dòng đã có trên phiếu: mô tả, SL, NCC đang thu hồi — hiện ngay dưới mặt hàng trùng để sale biết sẽ cộng vào đâu.
+    d.lines.forEach(function (l) {
+      C.addTo.existing[l.product_id] = {
+        name: l.name, qty: l.qty, uom: l.uom,
+        withdrawn: d.vendors.filter(function (v) {
+          var offer = l.offers[v.quote_id];
+          return offer && offer.withdrawn && (v.state === "sent" || v.state === "quoted");
+        }).map(function (v) { return v.name; }),
+      };
+    });
     C.chosen = d.vendors.filter(function (v) { return v.state === "sent" || v.state === "quoted"; })
       .map(function (v) { return { id: v.quote_id, name: v.name }; });
     HQ.$("hq-modal-title").textContent = "Thêm sản phẩm vào phiếu " + d.name;
@@ -272,11 +282,22 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.show("hq-modal", false);
       HQ.renderInquiry(detail);
       HQ.reloadAll();
-      HQ.toast("Đã thêm sản phẩm vào phiếu " + detail.name);
+      HQ.toast(addResultText(detail), null, 8000);
     }).catch(function (err) {
       HQ.showAlert("hq-modal-alert", err.message);
       renderSummary();
     });
+  }
+
+  /** Câu báo sau khi thêm: món mới, món cộng dồn (SL trước → sau), món vẫn đang thu hồi với NCC nào. */
+  function addResultText(detail) {
+    var r = detail.add_result || { added: [], merged: [] };
+    var parts = r.added.length ? ["Thêm mới: " + r.added.join(", ")] : [];
+    r.merged.forEach(function (m) {
+      parts.push(m.name + ": cộng thêm SL " + HQ.qty(m.before) + " → " + HQ.qty(m.after) + " " + m.uom +
+        (m.withdrawn.length ? " (vẫn đang thu hồi với " + m.withdrawn.join(", ") + " — bấm \"Hỏi lại\" để hỏi giá)" : ""));
+    });
+    return (parts.join(" · ") || "Đã cập nhật phiếu") + " — phiếu " + detail.name;
   }
 
   function submit() {
