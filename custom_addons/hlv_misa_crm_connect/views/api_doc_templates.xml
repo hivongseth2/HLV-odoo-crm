@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang hướng dẫn một endpoint (api_doc.guide_html). Mọi giá trị in bằng t-out = tự thoát HTML. -->
+    <template id="api_doc_guide">
+        <div class="o_hlv_misa_api_doc">
+            <p>
+                <span class="badge text-bg-primary me-2">POST</span>
+                <code t-out="url"/>
+                <span t-if="doc.is_write" class="badge text-bg-warning ms-2">Ghi dữ liệu MISA</span>
+            </p>
+            <p t-if="doc.summary" style="white-space: pre-line" t-out="doc.summary"/>
+
+            <h4 class="mt-4">Header</h4>
+            <table class="table table-sm table-bordered w-auto">
+                <thead><tr><th>Header</th><th>Giá trị</th><th>Ghi chú</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><code>X-API-Key</code></td>
+                        <td><code t-out="api_key or '&lt;API_KEY&gt;'"/></td>
+                        <td>Bắt buộc. Lấy ở MISA CRM API → Cấu hình.<t t-if="not api_key"> Chưa tạo key.</t></td>
+                    </tr>
+                    <tr>
+                        <td><code>Content-Type</code></td>
+                        <td><code>application/json</code></td>
+                        <td>Bắt buộc khi có body.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4 class="mt-4">Tham số (body JSON)</h4>
+            <table t-if="params" class="table table-sm table-bordered">
+                <thead><tr><th>Tên</th><th>Kiểu</th><th>Bắt buộc</th><th>Mô tả</th></tr></thead>
+                <tbody>
+                    <tr t-foreach="params" t-as="param">
+                        <td><code t-out="param['name']"/></td>
+                        <td t-out="param['type']"/>
+                        <td><t t-if="param['required']">✔</t></td>
+                        <td t-out="param['description']"/>
+                    </tr>
+                </tbody>
+            </table>
+            <p t-else="" class="text-muted">Không có tham số — gửi body rỗng hoặc <code>{}</code>.</p>
+
+            <h4 class="mt-4">Payload mẫu</h4>
+            <pre class="bg-light border rounded p-2"><code t-out="payload"/></pre>
+
+            <h4 class="mt-4">Response mẫu (200)</h4>
+            <pre t-if="response" class="bg-light border rounded p-2"><code t-out="response"/></pre>
+
+            <h4 class="mt-4">curl để thử</h4>
+            <pre class="bg-dark text-white rounded p-2"><code t-out="curl"/></pre>
+            <p class="text-muted small">Chạy trong bash / Git Bash. Postman: Import → Raw text → dán lệnh curl.</p>
+
+            <t t-if="doc.notes">
+                <h4 class="mt-4">Lưu ý</h4>
+                <p style="white-space: pre-line" t-out="doc.notes"/>
+            </t>
+
+            <h4 class="mt-4">Lỗi</h4>
+            <p>Lỗi luôn có dạng <code>{"ok": false, "error": "&lt;mã&gt;", "message": "&lt;câu đọc được&gt;"}</code>.</p>
+            <table class="table table-sm table-bordered w-auto">
+                <thead><tr><th>HTTP</th><th>error</th><th>Khi nào</th></tr></thead>
+                <tbody>
+                    <tr><td>400</td><td><code>missing_field</code>, <code>invalid_field</code>, <code>invalid_json</code>…</td><td>Body thiếu / sai</td></tr>
+                    <tr><td>401</td><td><code>missing_key</code></td><td>Không gửi X-API-Key</td></tr>
+                    <tr><td>403</td><td><code>invalid_key</code>, <code>write_disabled</code></td><td>Sai key / route ghi mà chưa cho phép ghi</td></tr>
+                    <tr><td>404</td><td><code>not_found</code>, <code>product_not_found</code></td><td>Không có khách / mã hàng trên MISA</td></tr>
+                    <tr><td>502</td><td><code>misa_error</code></td><td>MISA lỗi hoặc từ chối — xem <code>message</code></td></tr>
+                    <tr><td>503</td><td><code>disabled</code>, <code>not_configured</code></td><td>API đang tắt / chưa tạo key</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </template>
+</odoo>

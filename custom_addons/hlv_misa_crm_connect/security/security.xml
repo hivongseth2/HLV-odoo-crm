@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_misa_crm_api" model="ir.module.category">
+        <field name="name">MISA CRM API</field>
+        <field name="sequence">60</field>
+    </record>
+
+    <!-- Một quyền duy nhất: thấy app, xem hướng dẫn (kèm key), bật/tắt API, tạo key mới. -->
+    <record id="group_misa_crm_api_manager" model="res.groups">
+        <field name="name">Quản lý API MISA CRM</field>
+        <field name="category_id" ref="module_category_misa_crm_api"/>
+        <field name="comment">Mở app MISA CRM API: xem hướng dẫn từng endpoint (kèm API key), bật/tắt API, cho phép tạo dữ liệu, tạo key mới.</field>
+        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+    </record>
+</odoo>
