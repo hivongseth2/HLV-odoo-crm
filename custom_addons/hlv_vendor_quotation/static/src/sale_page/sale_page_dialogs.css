@@ -361,6 +361,9 @@
 .hq-doc-state { font-weight: 500; opacity: .85; }
 .hq-doc-state::before { content: "·"; margin-right: .35rem; }
 .hq-doc-btn { padding: 0; border: 0; background: none; }
+/* Chip là link (YCMH mở trong Odoo): giữ màu chip, gạch chân khi rê chuột để biết bấm được. */
+a.hq-doc { text-decoration: none; cursor: pointer; }
+a.hq-doc:hover { text-decoration: underline; text-underline-offset: 2px; }
 .hq-row-alert td:first-child { box-shadow: inset 3px 0 0 var(--hq-danger); }
 .hq-alert-strong { margin: 0 0 .75rem; font-weight: 500; }
 .hq-close-box { margin-bottom: .75rem; }
@@ -522,3 +525,11 @@
 .hq-request-fields label { display: flex; flex-direction: column; gap: .2rem; min-width: 14rem; }
 .hq-request-fields .hq-grow { flex: 1 1 18rem; }
 .hq-req-note { min-width: 10rem; }
+/* Ô ngày gõ dd/mm/yyyy + nút lịch bên phải; ô date thật ẩn (vẫn có kích thước để showPicker mở lịch ngay dưới nút). */
+.hq-date { position: relative; display: block; }
+.hq-date .hq-input { width: 100%; padding-right: 2.2rem; }
+.hq-date-native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0;
+    pointer-events: none; }
+.hq-date-btn { position: absolute; top: 50%; right: .35rem; transform: translateY(-50%); display: inline-flex; padding: .25rem;
+    border: 0; border-radius: 3px; background: none; color: var(--hq-muted); cursor: pointer; }
+.hq-date-btn:hover { color: inherit; background: rgba(0, 0, 0, .05); }

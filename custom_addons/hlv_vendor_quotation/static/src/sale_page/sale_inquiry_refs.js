@@ -82,7 +82,9 @@ window.HlvQuote = window.HlvQuote || {};
 
   function draft(d) {
     if (!drafts[d.id]) {
-      drafts[d.id] = { delivery: "", pickingType: HQ.S.config.default_picking_type_id || "", dateWanted: "", notes: {} };
+      drafts[d.id] = {
+        delivery: "", pickingType: HQ.S.config.default_picking_type_id || "", dateWanted: "", dateWantedText: "", notes: {},
+      };
     }
     return drafts[d.id];
   }
@@ -93,13 +95,55 @@ window.HlvQuote = window.HlvQuote || {};
       '" value="' + esc(draft(d).notes[quoteLineId] || "") + '" placeholder="Ghi chú dòng…"/></td>';
   };
 
+  /** Ô "Ngày muốn nhận hàng": gõ dd/mm/yyyy (ô date của trình duyệt hiện theo ngôn ngữ máy — máy tiếng Anh ra
+   *  mm/dd/yyyy, không ép được), kèm nút mở lịch bằng một ô date ẩn. Draft giữ ngày dạng YYYY-MM-DD. */
+  function dateWantedHtml(dr) {
+    return '<label><span class="hq-label">Ngày muốn nhận hàng</span><span class="hq-date">' +
+      '<input type="text" class="hq-input" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" required="required" ' +
+      'data-req-date="text" value="' + esc(dr.dateWantedText || HQ.isoToDmy(dr.dateWanted)) + '"/>' +
+      '<input type="date" class="hq-date-native" tabindex="-1" aria-hidden="true" data-req-date="picker" min="' +
+      esc(HQ.S.config.today || "") + '" value="' + esc(dr.dateWanted) + '"/>' +
+      '<button type="button" class="hq-date-btn" data-req-date-open="1" aria-label="Chọn ngày trên lịch">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/>' +
+      '<path d="M16 2v4M8 2v4M3 10h18"/></svg></button></span></label>';
+  }
+
+  /** Gõ tay: tự chèn "/" và ghi ngày vào draft (gõ dở / sai → "" — server báo "Chọn ngày muốn nhận hàng"). */
+  function typeDateWanted(el) {
+    var masked = HQ.maskDmy(el.value);
+    if (masked !== el.value) {
+      el.value = masked;
+    }
+    var dr = draft(HQ.addVendorDetail);
+    dr.dateWantedText = masked;
+    dr.dateWanted = HQ.dmyToIso(masked);
+    el.parentNode.querySelector('[data-req-date="picker"]').value = dr.dateWanted;
+  }
+
+  /** Chọn trên lịch: điền lại ô gõ theo dd/mm/yyyy. */
+  function pickDateWanted(el) {
+    var dr = draft(HQ.addVendorDetail);
+    dr.dateWanted = el.value;
+    dr.dateWantedText = HQ.isoToDmy(el.value);
+    el.parentNode.querySelector('[data-req-date="text"]').value = dr.dateWantedText;
+  }
+
+  function openDatePicker(button) {
+    var picker = button.parentNode.querySelector('[data-req-date="picker"]');
+    if (picker.showPicker) {
+      picker.showPicker();
+    } else {
+      picker.focus();
+    }
+  }
+
   /** Ngày muốn nhận hàng + kho nhận + địa điểm giao của YCMH (bước xác nhận lên YCMH). */
   HQ.requestFieldsHtml = function (d) {
     var dr = draft(d);
     var types = HQ.S.config.picking_types || [];
     return '<div class="hq-request-fields">' +
-      '<label><span class="hq-label">Ngày muốn nhận hàng</span><input type="date" class="hq-input" required="required" ' +
-      'data-req-field="dateWanted" min="' + esc(HQ.S.config.today || "") + '" value="' + esc(dr.dateWanted) + '"/></label>' +
+      dateWantedHtml(dr) +
       '<label><span class="hq-label">Kho nhận hàng</span><select class="hq-input" data-req-field="pickingType">' +
       types.map(function (t) {
         return '<option value="' + t.id + '"' + (String(t.id) === String(dr.pickingType) ? " selected" : "") + ">" +
@@ -163,5 +207,8 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.on(panel, "change", "[data-req-field]", function (el) {
       draft(HQ.addVendorDetail)[el.dataset.reqField] = el.value;
     });
+    HQ.on(panel, "input", '[data-req-date="text"]', typeDateWanted);
+    HQ.on(panel, "change", '[data-req-date="picker"]', pickDateWanted);
+    HQ.on(panel, "click", "[data-req-date-open]", openDatePicker);
   };
 })(window.HlvQuote);

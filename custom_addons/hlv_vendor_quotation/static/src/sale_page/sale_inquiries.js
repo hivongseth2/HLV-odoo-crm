@@ -121,7 +121,9 @@ window.HlvQuote = window.HlvQuote || {};
       return;
     }
     body.innerHTML = inquiries.map(function (q) {
-      var requests = q.requests.map(function (r) { return HQ.colorChip(r.name, HQ.REQUEST_STATE_CLASS[r.state], r.label); });
+      var requests = q.requests.map(function (r) {
+        return HQ.colorChip(r.name, HQ.REQUEST_STATE_CLASS[r.state], r.label, "", r.url);
+      });
       // Ghi chú kho (giờ hàng về) nằm trong chip của đúng đơn đó.
       var orders = q.orders.map(function (o) {
         return HQ.colorChip(o.name, HQ.ORDER_PROGRESS_CLASS[o.progress],

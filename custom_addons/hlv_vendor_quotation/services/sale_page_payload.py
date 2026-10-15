@@ -299,9 +299,10 @@ def _inherited_doc(source_line):
 
 
 def _request_payload(request):
-    """YCMH kèm trạng thái (key để tô màu, nhãn để hiện)."""
+    """YCMH kèm trạng thái (key để tô màu, nhãn để hiện) và link mở form YCMH trong Odoo (sale có quyền đọc)."""
     return {
         "name": request.name,
+        "url": f"/odoo/purchase.request/{request.id}",
         "state": request.state,
         "label": dict(request._fields["state"].selection).get(request.state, ""),
     }

@@ -131,7 +131,11 @@ window.HlvQuote = window.HlvQuote || {};
       S.page = +el.dataset.page;
       HQ.loadInquiries();
     });
-    HQ.on(app, "click", "[data-inquiry]", function (el) {
+    HQ.on(app, "click", "[data-inquiry]", function (el, event) {
+      // Bấm chip YCMH (link mở Odoo ở tab mới) trong dòng: không mở luôn phiếu ở trang này.
+      if (event.target.closest("a[href]")) {
+        return;
+      }
       HQ.openInquiry(+el.dataset.inquiry);
     });
     HQ.on(app, "click", "[data-copy]", function (el) {
