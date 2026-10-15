@@ -23,6 +23,9 @@ class PurchaseRequest(models.Model):
         string="Lập từ trang Hỏi giá NCC", readonly=True, copy=False,
         help="YCMH lập ở Odoo (không đi từ MISA). Chỉ YCMH loại này được gộp thêm hàng.",
     )
+    # Ngày sale cần hàng — sale điền một lần khi lên YCMH ở trang hỏi giá. Không dùng date_required của
+    # purchase_request: đó là ô tự tính (ngày sớm nhất của các dòng), không lưu được ngày riêng cho cả phiếu.
+    hlv_date_wanted = fields.Date(string="Ngày sale muốn nhận hàng", tracking=True, copy=False)
     hlv_inquiry_ids = fields.Many2many(
         "hlv.vendor.inquiry", string="Phiếu hỏi giá", compute="_compute_hlv_inquiry_ids"
     )
@@ -97,7 +100,7 @@ class PurchaseRequest(models.Model):
         khi khách chưa chốt thì sale điền sau (purchase.order._hlv_set_origin). source: tên
         phiếu hỏi giá, chỉ để ghi chatter.
         line_vals: [{product_id, name, product_qty, product_uom_id, actual_*..., misa_note}].
-        request_vals: {delivery_address, picking_type_id} sale chọn lúc lên YCMH (bỏ khoá rỗng) — YCMH mới ghi
+        request_vals: {delivery_address, picking_type_id, hlv_date_wanted} sale chọn lúc lên YCMH (bỏ khoá rỗng) — YCMH mới ghi
         luôn; gộp vào YCMH chưa duyệt thì ghi đè (lựa chọn mới nhất của sale).
         Trả (YCMH, list dòng YCMH ứng với từng phần tử line_vals theo thứ tự, True nếu là gộp).
 
@@ -249,6 +252,13 @@ class PurchaseRequestLine(models.Model):
     # dòng và wizard Tạo RFQ. YCMH đi từ MISA: đồng bộ điền; YCMH lập từ trang hỏi giá: sale ghi lúc lên YCMH (không
     # đồng bộ MISA nên không bị ghi đè). Đổi nhãn "Ghi chú (MISA)" → "Ghi chú" vì không còn chỉ từ MISA.
     misa_note = fields.Char(string="Ghi chú")
+
+    def _hlv_date_wanted(self):
+        """Ngày sale muốn nhận hàng sớm nhất trong các YCMH của các dòng này — đơn mua / wizard Tạo RFQ có thể
+        gộp hàng nhiều YCMH, ngày gấp nhất mới là ngày thu mua cần canh. YCMH chưa có ngày bị bỏ qua; không
+        YCMH nào có → False."""
+        dates = [d for d in self.sudo().request_id.mapped("hlv_date_wanted") if d]
+        return min(dates) if dates else False
 
     def _hlv_remaining_qty(self):
         """Số lượng dòng YCMH còn phải mua: yêu cầu − đã lên đơn mua (purchased_qty của

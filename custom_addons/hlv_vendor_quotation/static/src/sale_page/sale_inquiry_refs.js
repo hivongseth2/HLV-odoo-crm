@@ -82,7 +82,7 @@ window.HlvQuote = window.HlvQuote || {};
 
   function draft(d) {
     if (!drafts[d.id]) {
-      drafts[d.id] = { delivery: "", pickingType: HQ.S.config.default_picking_type_id || "", notes: {} };
+      drafts[d.id] = { delivery: "", pickingType: HQ.S.config.default_picking_type_id || "", dateWanted: "", notes: {} };
     }
     return drafts[d.id];
   }
@@ -93,11 +93,13 @@ window.HlvQuote = window.HlvQuote || {};
       '" value="' + esc(draft(d).notes[quoteLineId] || "") + '" placeholder="Ghi chú dòng…"/></td>';
   };
 
-  /** Địa điểm giao + kho nhận của YCMH (bước xác nhận lên YCMH). */
+  /** Ngày muốn nhận hàng + kho nhận + địa điểm giao của YCMH (bước xác nhận lên YCMH). */
   HQ.requestFieldsHtml = function (d) {
     var dr = draft(d);
     var types = HQ.S.config.picking_types || [];
     return '<div class="hq-request-fields">' +
+      '<label><span class="hq-label">Ngày muốn nhận hàng</span><input type="date" class="hq-input" required="required" ' +
+      'data-req-field="dateWanted" min="' + esc(HQ.S.config.today || "") + '" value="' + esc(dr.dateWanted) + '"/></label>' +
       '<label><span class="hq-label">Kho nhận hàng</span><select class="hq-input" data-req-field="pickingType">' +
       types.map(function (t) {
         return '<option value="' + t.id + '"' + (String(t.id) === String(dr.pickingType) ? " selected" : "") + ">" +
@@ -110,7 +112,10 @@ window.HlvQuote = window.HlvQuote || {};
   /** Thông tin thêm gửi kèm create_request. */
   HQ.requestExtras = function (d) {
     var dr = draft(d);
-    return { delivery_address: dr.delivery, picking_type_id: +dr.pickingType || null, line_notes: dr.notes };
+    return {
+      delivery_address: dr.delivery, picking_type_id: +dr.pickingType || null, date_wanted: dr.dateWanted || null,
+      line_notes: dr.notes,
+    };
   };
 
   HQ.clearRequestDraft = function (d) {

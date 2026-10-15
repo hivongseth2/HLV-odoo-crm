@@ -173,15 +173,29 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         except (TypeError, ValueError):
             raise UserError("Số lượng không hợp lệ.") from None
 
+    @staticmethod
+    def _read_date_wanted(value):
+        """Ngày sale muốn nhận hàng (chuỗi YYYY-MM-DD) → date. Trống, sai dạng hoặc trước hôm nay (giờ VN) → UserError."""
+        try:
+            wanted = fields.Date.to_date(value) if value else None
+        except (TypeError, ValueError):
+            wanted = None
+        if not wanted:
+            raise UserError("Chọn ngày muốn nhận hàng.")
+        if wanted < request.env["hlv.vendor.quote"]._vendor_today():
+            raise UserError("Ngày muốn nhận hàng không được trước hôm nay.")
+        return wanted
+
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
     def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, quantities=None,
                            settle_line_ids=None, separate_backorder=False, requester_code="",
-                           delivery_address="", picking_type_id=None, line_notes=None, **kw):
+                           delivery_address="", picking_type_id=None, line_notes=None, date_wanted=None, **kw):
         """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
         quantities: {id dòng báo giá: SL mua} sale sửa ở bảng tóm tắt; settle_line_ids: dòng phiếu sale
         chốt "khách chỉ mua chừng này" (hết thiếu); requester_code: mã sale làm người yêu cầu (bắt buộc —
         ghi luôn làm mã sale của phiếu); delivery_address, picking_type_id (kho nhận — loại nhập kho):
-        lên YCMH; line_notes: {id dòng báo giá: ghi chú dòng YCMH}."""
+        lên YCMH; line_notes: {id dòng báo giá: ghi chú dòng YCMH}; date_wanted (YYYY-MM-DD, bắt buộc):
+        ngày sale muốn nhận hàng của cả YCMH."""
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
         if requester_code:
@@ -189,7 +203,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         order = request.env["sale.order"].browse(to_int(sale_order_id)).exists()
         qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
         settle = [to_int(line_id) for line_id in settle_line_ids or []]
-        request_vals = {}
+        request_vals = {"hlv_date_wanted": self._read_date_wanted(date_wanted)}
         if (delivery_address or "").strip():
             request_vals["delivery_address"] = delivery_address.strip()[:255]
         if picking_type_id:

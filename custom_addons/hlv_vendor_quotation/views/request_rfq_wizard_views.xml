@@ -8,6 +8,8 @@
         <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_line_make_purchase_order_inherit_misa"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='sync_data_planned']" position="after">
+                <!-- Chỉ để thu mua canh ngày khi chọn NCC / ngày dự kiến — không ghi vào đơn mua. -->
+                <field name="hlv_date_wanted" invisible="not hlv_date_wanted"/>
                 <field name="hlv_has_backorder" invisible="1"/>
                 <field name="hlv_split_backorder" invisible="not hlv_has_backorder"/>
             </xpath>

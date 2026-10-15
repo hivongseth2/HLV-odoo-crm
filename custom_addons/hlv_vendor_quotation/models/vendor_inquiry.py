@@ -427,7 +427,7 @@ class VendorInquiry(models.Model):
         separate_backorder: phần NCC hẹn giao ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn) — ghi
         lên dòng YCMH phần hẹn làm mặc định cho wizard Tạo RFQ, thu mua đổi được.
         line_notes: {id dòng báo giá: ghi chú} → "Ghi chú" (misa_note) của dòng YCMH (cả phần hẹn); request_vals: địa điểm giao,
-        kho nhận của YCMH (purchase_request._add_request_lines).
+        kho nhận, ngày sale muốn nhận hàng của YCMH (purchase_request._add_request_lines).
         """
         self.ensure_one()
         if self.state in ("cancel", "closed"):
