@@ -20,6 +20,13 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
              "mỗi dòng giữ ngày dự kiến riêng. Mặc định theo lựa chọn của sale khi lên YCMH.",
     )
 
+    hlv_date_wanted = fields.Date(string="Ngày sale muốn nhận hàng", compute="_compute_hlv_date_wanted")
+
+    @api.depends("item_ids.line_id.request_id.hlv_date_wanted")
+    def _compute_hlv_date_wanted(self):
+        for wizard in self:
+            wizard.hlv_date_wanted = wizard.item_ids.line_id._hlv_date_wanted()
+
     @api.depends("item_ids.line_id.hlv_backorder")
     def _compute_hlv_has_backorder(self):
         for wizard in self:

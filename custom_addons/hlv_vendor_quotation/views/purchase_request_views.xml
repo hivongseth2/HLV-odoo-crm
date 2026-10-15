@@ -10,6 +10,10 @@
             <xpath expr="//field[@name='line_ids']/list" position="attributes">
                 <attribute name="decoration-danger">cancelled</attribute>
             </xpath>
+            <!-- Ngày sale điền khi lên YCMH (một ngày cho cả phiếu) — cạnh ô tự tính từ các dòng để thu mua so. -->
+            <xpath expr="//field[@name='date_required'][not(ancestor::field)]" position="after">
+                <field name="hlv_date_wanted" readonly="state in ('done', 'rejected')"/>
+            </xpath>
             <xpath expr="//header" position="inside">
                 <button name="action_open_vendor_quote_wizard" type="object" string="Hỏi giá NCC"
                         invisible="state in ('draft', 'done', 'rejected')"/>
@@ -77,6 +81,10 @@
                 <field name="hlv_ship_ref" invisible="not hlv_ship_ref"/>
                 <field name="hlv_vendor_event" invisible="not hlv_vendor_event"/>
                 <field name="hlv_inquiry_ids" widget="many2many_tags" readonly="1" invisible="not hlv_inquiry_ids"/>
+            </xpath>
+            <!-- Cạnh "Hàng về dự kiến" (theo ngày NCC giao được) để thu mua thấy ngay chỗ lệch với ngày sale cần. -->
+            <xpath expr="//div[@name='date_planned_div']" position="after">
+                <field name="hlv_date_wanted" invisible="not hlv_date_wanted"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
                 <field name="hlv_invoice_name" optional="show"/>

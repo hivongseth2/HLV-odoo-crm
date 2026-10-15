@@ -94,6 +94,13 @@ class PurchaseOrder(models.Model):
     hlv_inquiry_ids = fields.Many2many(
         "hlv.vendor.inquiry", string="Phiếu hỏi giá", compute="_compute_hlv_vendor_links"
     )
+    # Chỉ để thu mua thấy, không đổi "Hàng về dự kiến" (vẫn theo ngày NCC giao được).
+    hlv_date_wanted = fields.Date(string="Ngày sale muốn nhận hàng", compute="_compute_hlv_date_wanted")
+
+    @api.depends("order_line.purchase_request_lines.request_id.hlv_date_wanted")
+    def _compute_hlv_date_wanted(self):
+        for order in self:
+            order.hlv_date_wanted = order.order_line.purchase_request_lines._hlv_date_wanted()
 
     @api.depends("order_line.purchase_request_lines", "partner_id")
     def _compute_hlv_vendor_links(self):
