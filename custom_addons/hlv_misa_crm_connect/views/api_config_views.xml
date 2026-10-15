@@ -4,15 +4,14 @@
         <field name="name">hlv.misa.crm.api.config.form</field>
         <field name="model">hlv.misa.crm.api.config</field>
         <field name="arch" type="xml">
-            <form string="Cấu hình API MISA CRM">
-                <header>
-                    <button name="action_save" type="object" string="Lưu" class="btn-primary"/>
-                </header>
+            <!-- Một bản ghi cố định: không tạo / xoá / nhân bản. Sửa ô nào là tự lưu khi rời trang (hoặc bấm ☁). -->
+            <form string="Cấu hình API MISA CRM" create="0" delete="0" duplicate="0">
                 <sheet>
                     <div class="alert alert-info" role="alert">
                         Hệ thống bên ngoài gọi <field name="base_url" class="d-inline fw-bold" nolabel="1"/>…
                         bằng header <code>X-API-Key</code>. Odoo đăng nhập MISA thay họ (tài khoản MISA của Odoo).
                         Hướng dẫn từng endpoint: menu <b>Hướng dẫn API</b>.
+                        <br/>Đổi ô nào thì bấm ☁ (lưu) cạnh tiêu đề — hoặc rời trang, Odoo tự lưu.
                     </div>
                     <group>
                         <group string="Bật / tắt">
@@ -43,6 +42,7 @@
         <field name="name">Cấu hình API MISA CRM</field>
         <field name="res_model">hlv.misa.crm.api.config</field>
         <field name="view_mode">form</field>
+        <field name="res_id" ref="api_config_main"/>
         <field name="target">current</field>
     </record>
 </odoo>
