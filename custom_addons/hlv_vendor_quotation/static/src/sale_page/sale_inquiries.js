@@ -122,7 +122,7 @@ window.HlvQuote = window.HlvQuote || {};
     }
     body.innerHTML = inquiries.map(function (q) {
       var requests = q.requests.map(function (r) {
-        return HQ.colorChip(r.name, HQ.REQUEST_STATE_CLASS[r.state], r.label, "", r.url);
+        return HQ.requestButton(r.id, HQ.colorChip(r.name, HQ.REQUEST_STATE_CLASS[r.state], r.label));
       });
       // Ghi chú kho (giờ hàng về) nằm trong chip của đúng đơn đó.
       var orders = q.orders.map(function (o) {

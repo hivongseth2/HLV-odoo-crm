@@ -361,9 +361,11 @@
 .hq-doc-state { font-weight: 500; opacity: .85; }
 .hq-doc-state::before { content: "·"; margin-right: .35rem; }
 .hq-doc-btn { padding: 0; border: 0; background: none; }
-/* Chip là link (YCMH mở trong Odoo): giữ màu chip, gạch chân khi rê chuột để biết bấm được. */
-a.hq-doc { text-decoration: none; cursor: pointer; }
-a.hq-doc:hover { text-decoration: underline; text-underline-offset: 2px; }
+/* Chip bấm được (YCMH / đơn mua mở hộp xem): gạch chân khi rê chuột để biết bấm được. */
+.hq-doc-btn { cursor: pointer; }
+.hq-doc-btn:hover .hq-doc { text-decoration: underline; text-underline-offset: 2px; }
+/* Hộp xem YCMH: dòng đã huỷ (sale đổi NCC / bỏ chọn) mờ + gạch ngang — như bảng dòng YCMH ở backend. */
+.hq-line-cancelled td { color: var(--hq-muted); text-decoration: line-through; }
 .hq-row-alert td:first-child { box-shadow: inset 3px 0 0 var(--hq-danger); }
 .hq-alert-strong { margin: 0 0 .75rem; font-weight: 500; }
 .hq-close-box { margin-bottom: .75rem; }

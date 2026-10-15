@@ -245,6 +245,18 @@
                         </div>
                     </div>
 
+                    <!-- Xem YCMH (chỉ đọc) — mở khi bấm chip YCMH. Đặt trước hộp đơn mua: bấm đơn mua trong hộp này thì
+                         hộp đơn mua (sau trong DOM) nằm đè lên trên. -->
+                    <div id="hq-pr" class="hq-modal hq-chat-modal hq-hidden">
+                        <div class="hq-modal-box hq-po-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-pr-title">Yêu cầu mua hàng</h2>
+                                <button type="button" class="btn-close" data-close-pr="1" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body" id="hq-pr-body"></div>
+                        </div>
+                    </div>
+
                     <!-- Xem đơn mua (sale chỉ sửa được mã đơn hàng) — mở từ mục "Đơn mua" trong phiếu. -->
                     <div id="hq-po" class="hq-modal hq-chat-modal hq-hidden">
                         <div class="hq-modal-box hq-po-box">
@@ -289,6 +301,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_chat.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_po_origin.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_order_view.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_request_view.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_vendor_info.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_notify.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>

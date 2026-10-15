@@ -327,6 +327,19 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         order = self._chat_record("order", order_id, self._check(code))
         return payload.purchase_order_detail(order)
 
+    @http.route(f"{API}/purchase_request", type="json", auth="user", methods=["POST"])
+    def api_purchase_request(self, code="", request_id=None, **kw):
+        """Xem YCMH lên từ phiếu (chỉ đọc). Chỉ YCMH có hàng của một phiếu trong phạm vi mã sale — không cho xem
+        YCMH của sale khác bằng id."""
+        scope = self._check(code)
+        purchase_request = request.env["purchase.request"].sudo().browse(to_int(request_id)).exists()
+        inquiries = request.env["hlv.vendor.inquiry"].search([
+            ("line_ids.request_line_ids.request_id", "=", purchase_request.id),
+        ]) if purchase_request else request.env["hlv.vendor.inquiry"]
+        if not inquiries.filtered(lambda i: not scope or (i.sale_code or "").upper() == scope.upper()):
+            raise UserError("Không tìm thấy yêu cầu mua hàng.")
+        return payload.purchase_request_detail(purchase_request)
+
     @http.route(f"{API}/vendor_info", type="json", auth="user", methods=["POST"])
     def api_vendor_info(self, code="", quote_id=None, **kw):
         """Thông tin + link / mật khẩu của NCC trên một báo giá trong phạm vi mã sale, kèm giá
