@@ -9,7 +9,9 @@ from ..models.purchase_order import PROGRESS_LABELS
 from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_line import VAT_SELECTION
 from .combo_lines import kit_bom
-from ..models.vendor_quote_utils import DATETIME_FMT, build_share_message, format_vn_number, local_date_text
+from ..models.vendor_quote_utils import (
+    DATETIME_FMT, build_share_message, format_vn_number, local_date_text, price_incl_vat,
+)
 from .sale_code import sale_code
 from .chat_read import chat_stats, seen_markers
 from .price_reuse import recent_vendor_price, reference_prices
@@ -115,6 +117,42 @@ def purchase_order_detail(order):
             for line in order.order_line.filtered(lambda l: not l.display_type)
         ],
     })
+
+
+def purchase_request_detail(request):
+    """YCMH để sale XEM ngay trên trang (chỉ đọc): đã lên hàng gì, của NCC nào, giá nào, đã ra đơn mua chưa.
+    Giá sau VAT là số chính (thói quen đọc giá của hai bên), chưa VAT đi kèm."""
+    request = request.sudo()
+    state_labels = dict(request._fields["state"].selection)
+    lines = request.line_ids.sorted("id")
+    return {
+        "id": request.id,
+        "name": request.name,
+        "state": request.state,
+        "state_label": state_labels.get(request.state, ""),
+        "requester": request.x_misa_requested_by or "",
+        "origin": request.origin or "",
+        "date_start": _date_text(request.date_start),
+        "date_wanted": _date_text(request.hlv_date_wanted),
+        "picking_type": request.picking_type_id.display_name or "",
+        "delivery_address": request.delivery_address or "",
+        "lines": [
+            {
+                "name": line.name or line.product_id.display_name,
+                "qty": line.product_qty,
+                "uom": line.product_uom_id.name or "",
+                "vendor": line.actual_supplier_id.commercial_partner_id.display_name or "",
+                "price_net": line.actual_price_unit,
+                "price": price_incl_vat(line.actual_price_unit, line.actual_tax_rate),
+                "date_required": _date_text(line.date_required),
+                "backorder": line.hlv_backorder,
+                "note": line.misa_note or "",
+                "cancelled": line.cancelled,
+                "orders": [{"id": o.id, "name": o.name} for o in line.purchase_lines.order_id],
+            }
+            for line in lines
+        ],
+    }
 
 
 def inquiry_summary(inquiry):
@@ -300,10 +338,10 @@ def _inherited_doc(source_line):
 
 
 def _request_payload(request):
-    """YCMH kèm trạng thái (key để tô màu, nhãn để hiện) và link mở form YCMH trong Odoo (sale có quyền đọc)."""
+    """YCMH kèm trạng thái (key để tô màu, nhãn để hiện); id để mở hộp xem YCMH (purchase_request_detail)."""
     return {
+        "id": request.id,
         "name": request.name,
-        "url": f"/odoo/purchase.request/{request.id}",
         "state": request.state,
         "label": dict(request._fields["state"].selection).get(request.state, ""),
     }

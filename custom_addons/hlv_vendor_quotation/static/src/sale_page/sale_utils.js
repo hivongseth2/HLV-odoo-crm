@@ -63,33 +63,28 @@ window.HlvQuote = window.HlvQuote || {};
    * note: ghi chú đi kèm chính chứng từ này, hiện TRONG chip sau số ("" = không có) — để không bị đọc nhầm sang
    * chứng từ bên cạnh.
    */
-  HQ.colorChip = function (name, cls, label, note, url) {
-    return chipOpen(cls, url, label) +
-      HQ.esc(name) + (note ? '<span class="hq-doc-state hq-doc-note">' + HQ.esc(note) + "</span>" : "") + chipClose(url);
+  HQ.colorChip = function (name, cls, label, note) {
+    return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '"' + (label ? ' title="' + HQ.esc(label) + '"' : "") + ">" +
+      HQ.esc(name) + (note ? '<span class="hq-doc-state hq-doc-note">' + HQ.esc(note) + "</span>" : "") + "</span>";
   };
 
   /**
    * Chip một số chứng từ (YCMH / đơn mua / báo giá / đơn bán) — mọi số chứng từ trên trang hiện bằng chip này.
-   * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám);
-   * url: có thì chip là link mở chứng từ trong Odoo ở tab mới ("" = chip thường).
+   * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám).
    */
-  HQ.docChip = function (name, state, cls, url) {
-    return chipOpen(cls, url, "") + HQ.esc(name) +
-      (state ? '<span class="hq-doc-state">' + HQ.esc(state) + "</span>" : "") + chipClose(url);
+  HQ.docChip = function (name, state, cls) {
+    return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '">' + HQ.esc(name) +
+      (state ? '<span class="hq-doc-state">' + HQ.esc(state) + "</span>" : "") + "</span>";
   };
 
-  function chipOpen(cls, url, title) {
-    var attrs = ' class="hq-doc ' + (cls || "hq-tag-soft") + '"' + (title ? ' title="' + HQ.esc(title) + '"' : "");
-    return url ? "<a" + attrs + ' href="' + HQ.esc(url) + '" target="_blank" rel="noopener">' : "<span" + attrs + ">";
-  }
+  /** Bọc chip thành nút mở hộp xem YCMH (sale_request_view.js). id: id YCMH; chip: HTML chip. */
+  HQ.requestButton = function (id, chip) {
+    return '<button type="button" class="hq-doc-btn" data-pr="' + id + '" title="Xem yêu cầu mua hàng">' + chip + "</button>";
+  };
 
-  function chipClose(url) {
-    return url ? "</a>" : "</span>";
-  }
-
-  /** Chip YCMH, màu theo trạng thái, bấm mở YCMH trong Odoo. r: {name, state, label, url}. */
+  /** Chip YCMH, màu theo trạng thái, bấm mở hộp xem YCMH. r: {id, name, state, label}. */
   HQ.requestTag = function (r) {
-    return HQ.docChip(r.name, r.label, HQ.REQUEST_STATE_CLASS[r.state], r.url);
+    return HQ.requestButton(r.id, HQ.docChip(r.name, r.label, HQ.REQUEST_STATE_CLASS[r.state]));
   };
 
   /** Chip đơn mua kèm tiến độ NCC báo. o: {name, vendor_status}. */

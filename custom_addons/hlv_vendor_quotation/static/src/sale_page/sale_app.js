@@ -1,6 +1,6 @@
 /* Khởi động trang /hoi-gia-ncc. Phải nạp SAU các file feature vì gọi HQ.loadVendors,
    HQ.loadInquiries, HQ.openInquiry, HQ.openCreate, HQ.bindCreateEvents, HQ.bindCompareEvents,
-   HQ.bindChatEvents, HQ.bindOrderViewEvents, HQ.bindOriginEvents, HQ.bindVendorInfoEvents,
+   HQ.bindChatEvents, HQ.bindOrderViewEvents, HQ.bindRequestViewEvents, HQ.bindOriginEvents, HQ.bindVendorInfoEvents,
    HQ.bindCloseEvents, HQ.bindBellEvents, HQ.loadBell, HQ.bindAddVendorEvents, HQ.bindPriceHistoryEvents, HQ.bindPasteEvents, HQ.bindCrmEvents,
    HQ.listenBus.
 
@@ -132,8 +132,8 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.loadInquiries();
     });
     HQ.on(app, "click", "[data-inquiry]", function (el, event) {
-      // Bấm chip YCMH (link mở Odoo ở tab mới) trong dòng: không mở luôn phiếu ở trang này.
-      if (event.target.closest("a[href]")) {
+      // Bấm chip YCMH trong dòng: chỉ mở hộp xem YCMH, không mở luôn phiếu.
+      if (event.target.closest("[data-pr]")) {
         return;
       }
       HQ.openInquiry(+el.dataset.inquiry);
@@ -188,6 +188,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindCompareAskEvents();
     HQ.bindChatEvents();
     HQ.bindOrderViewEvents();
+    HQ.bindRequestViewEvents();
     HQ.bindOriginEvents();
     HQ.bindVendorInfoEvents();
     HQ.bindCloseEvents();
