@@ -12,7 +12,7 @@ from odoo.exceptions import UserError
 from odoo.http import request
 
 from ..models.misa_crm_client import CrmInputError, MisaCrmError
-from ..models.res_config_settings import PARAM_ALLOW_WRITE, PARAM_ENABLED, PARAM_KEY
+from ..models.api_config import PARAM_ALLOW_WRITE, PARAM_ENABLED, PARAM_KEY
 
 _logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def _guard(write):
     """Raise ApiError nếu API đang tắt / key thiếu, sai / route ghi mà chưa cho ghi. Không log key."""
     params = request.env["ir.config_parameter"].sudo()
     if not params.get_param(PARAM_ENABLED):
-        raise ApiError(503, "disabled", "API MISA CRM đang tắt (Cài đặt → Tồn kho → API MISA CRM).")
+        raise ApiError(503, "disabled", "API MISA CRM đang tắt (app MISA CRM API → Cấu hình).")
     expected = params.get_param(PARAM_KEY)
     if not (expected or "").strip():
         raise ApiError(503, "not_configured", "Odoo chưa tạo API key cho API MISA CRM.")

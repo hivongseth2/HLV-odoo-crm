@@ -12,8 +12,10 @@ gọi /api/misa-crm/* bằng một API key riêng, không bao giờ cầm token 
 - Cơ hội: danh mục giai đoạn + nguồn gốc, tìm, xem hàng, TẠO cơ hội kèm hàng.
 - Báo giá, đơn hàng: tìm, xem hàng.
 
-Bật/tắt, cho phép ghi, API key: Cài đặt → Tồn kho → "API MISA CRM cho bên ngoài".
-Mặc định TẮT. Danh sách route và body: README.md.
+App riêng "MISA CRM API", chỉ người có quyền "Quản lý API MISA CRM" thấy:
+- Hướng dẫn API: từng endpoint có header, tham số, payload mẫu, response mẫu, lệnh curl điền
+  sẵn URL + key để chạy thử.
+- Cấu hình: bật/tắt API (mặc định TẮT), cho phép tạo dữ liệu, tạo API key.
 """,
     "author": "HLV",
     "category": "Sales",
@@ -23,8 +25,14 @@ Mặc định TẮT. Danh sách route và body: README.md.
         "misa_fetch_po_button",
     ],
     "data": [
-        "views/res_config_settings_views.xml",
+        "security/security.xml",
+        "security/ir.model.access.csv",
+        "views/api_doc_templates.xml",
+        "views/api_doc_views.xml",
+        "views/api_config_views.xml",
+        "views/menus.xml",
+        "data/api_docs.xml",
     ],
     "installable": True,
-    "application": False,
+    "application": True,
 }

@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Hướng dẫn từng endpoint (app MISA CRM API → Hướng dẫn API). Không noupdate: nâng cấp module là
+         cập nhật theo code. Tham số: mỗi dòng "tên | kiểu | x nếu bắt buộc | mô tả".
+         Response mẫu dựng từ dữ liệu MISA thật (10/2026), tên / MST khách đã thay bằng khách giả. -->
+
+    <!-- ── Chung ─────────────────────────────────────────────────────────── -->
+    <record id="doc_ping" model="hlv.misa.crm.api.doc">
+        <field name="sequence">10</field>
+        <field name="section">general</field>
+        <field name="name">Thử key</field>
+        <field name="route">/api/misa-crm/ping</field>
+        <field name="summary">Kiểm key và trạng thái API, KHÔNG gọi MISA. Dùng để thử kết nối trước khi gọi thật.</field>
+        <field name="payload_example">{}</field>
+        <field name="response_example">{"write_enabled": false, "ok": true}</field>
+    </record>
+
+    <!-- ── Khách hàng ────────────────────────────────────────────────────── -->
+    <record id="doc_account_search" model="hlv.misa.crm.api.doc">
+        <field name="sequence">20</field>
+        <field name="section">account</field>
+        <field name="name">Tìm khách hàng</field>
+        <field name="route">/api/misa-crm/account/search</field>
+        <field name="summary">Tìm khách như ô "Khách hàng" trên form Cơ hội: khớp tên, MST, mã KH, SĐT hoặc địa chỉ (kiểu "chứa").</field>
+        <field name="params_spec">keyword | string | | Từ khoá. Bỏ trống = khách sửa gần nhất.
+page | int | | Trang, từ 1. Mặc định 1.
+limit | int | | Số dòng mỗi trang, 1–100. Mặc định 10.</field>
+        <field name="payload_example">{"keyword": "vi du", "page": 1, "limit": 10}</field>
+        <field name="response_example">{"items": [{"id": 4371, "name": "CÔNG TY TNHH VÍ DỤ", "code": "VIDU", "tax_code": "0312345678", "phone": "0281234567", "email": null, "billing_address": "Tầng 14, Số 33 Lê Duẩn, Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh, Việt Nam", "shipping_address": null, "owner_id": 12, "debt": null, "debt_limit": null}], "page": 1, "ok": true}</field>
+        <field name="notes">id dùng cho account/get, product/prices và opportunity/create (account_id).</field>
+    </record>
+
+    <record id="doc_account_get" model="hlv.misa.crm.api.doc">
+        <field name="sequence">30</field>
+        <field name="section">account</field>
+        <field name="name">Xem một khách hàng</field>
+        <field name="route">/api/misa-crm/account/get</field>
+        <field name="summary">Thông tin một khách theo ID MISA.</field>
+        <field name="params_spec">id | int | x | ID khách trên MISA (lấy từ account/search).</field>
+        <field name="payload_example">{"id": 4371}</field>
+        <field name="response_example">{"account": {"id": 4371, "name": "CÔNG TY TNHH VÍ DỤ", "code": "VIDU", "tax_code": "0312345678", "phone": "0281234567", "email": null, "billing_address": "Tầng 14, Số 33 Lê Duẩn, Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh, Việt Nam", "shipping_address": null, "owner_id": 12, "debt": null, "debt_limit": null}, "ok": true}</field>
+        <field name="notes">Không có khách → 404 not_found.</field>
+    </record>
+
+    <!-- ── Hàng hóa ─────────────────────────────────────────────────────── -->
+    <record id="doc_product_search" model="hlv.misa.crm.api.doc">
+        <field name="sequence">40</field>
+        <field name="section">product</field>
+        <field name="name">Tìm hàng hóa</field>
+        <field name="route">/api/misa-crm/product/search</field>
+        <field name="summary">Tìm hàng theo mã / tên (kiểu "chứa").
+in_stock_only = true: như popup "Chọn hàng hóa" — chỉ hàng CÒN TỒN, không combo, không ngừng dùng, có số tồn (stock_qty) và tổng số dòng (total).
+in_stock_only = false: như ô mã hàng trên dòng — mọi hàng, kể cả hết tồn và combo; total = null.</field>
+        <field name="params_spec">keyword | string | | Mã hoặc tên hàng. Bỏ trống = không lọc.
+page | int | | Trang, từ 1. Mặc định 1.
+limit | int | | Số dòng mỗi trang, 1–100. Mặc định 10.
+in_stock_only | bool | | true = chỉ hàng còn tồn. Mặc định false.</field>
+        <field name="payload_example">{"keyword": "4530", "page": 1, "limit": 10, "in_stock_only": true}</field>
+        <field name="response_example">{"items": [{"id": 61213, "code": "48-22-4530", "name": "Kéo cắt tôn 48-22-4530 MILWAUKEE", "unit_id": 4, "unit": "Cái", "tax_id": "5", "tax": "8%", "tax_percent": 8.0, "price": 0, "is_combo": false, "category": "Dụng cụ cầm tay MILWAUKEE", "description": "Kéo cắt tôn 48-22-4530 MILWAUKEE", "stock": "HLV", "owner_id": 5, "stock_qty": 3}], "page": 1, "total": 2, "ok": true}</field>
+        <field name="notes">tax_percent = null khi hàng không chịu thuế (KCT) / chưa gắn thuế.
+id dùng cho product/prices.</field>
+    </record>
+
+    <record id="doc_product_prices" model="hlv.misa.crm.api.doc">
+        <field name="sequence">50</field>
+        <field name="section">product</field>
+        <field name="name">Chọn hàng — chi tiết và giá cho khách</field>
+        <field name="route">/api/misa-crm/product/prices</field>
+        <field name="summary">Đúng ba lệnh form Cơ hội gọi khi chọn hàng: chi tiết hàng (đơn vị, thuế), bảng giá của khách, giá đã bán gần nhất cho khách.</field>
+        <field name="params_spec">product_ids | int[] | x | ID hàng MISA (lấy từ product/search).
+account_id | int | | ID khách. Bỏ trống = không lấy phần giá (price_book, recent_prices = null).</field>
+        <field name="payload_example">{"product_ids": [61213], "account_id": 4371}</field>
+        <field name="response_example">{"products": [{"id": 61213, "code": "48-22-4530", "name": "Kéo cắt tôn 48-22-4530 MILWAUKEE", "unit_id": 4, "unit": "Cái", "tax_id": "5", "description": "Kéo cắt tôn 48-22-4530 MILWAUKEE"}], "price_book": {}, "recent_prices": [], "ok": true}</field>
+        <field name="notes">price_book và recent_prices để NGUYÊN như MISA trả — lúc ghi request mẫu khách chưa có bảng giá / chưa mua nên chỉ thấy giá trị rỗng, chưa rõ cấu trúc khi có dữ liệu.
+Đơn giá MISA không trả ở đây: giá do người bán nhập.</field>
+    </record>
+
+    <!-- ── Cơ hội ───────────────────────────────────────────────────────── -->
+    <record id="doc_opportunity_options" model="hlv.misa.crm.api.doc">
+        <field name="sequence">60</field>
+        <field name="section">opportunity</field>
+        <field name="name">Danh mục giai đoạn và nguồn gốc</field>
+        <field name="route">/api/misa-crm/opportunity/options</field>
+        <field name="summary">Giai đoạn (kèm % thành công) và nguồn gốc của form Cơ hội — để chọn stage_id / lead_source_id khi tạo cơ hội.</field>
+        <field name="payload_example">{}</field>
+        <field name="response_example">{"stages": [{"id": 1, "name": "Nhận yêu cầu mua hàng", "probability": 10}, {"id": 7, "name": "Kết thúc cơ hội", "probability": 0}, {"id": 2, "name": "Check kho và hàng hóa từ nhà cung cấp", "probability": 30}, {"id": 3, "name": "Cân đối giá từ nhà cung cấp", "probability": 50}, {"id": 4, "name": "Soạn báo giá và gửi cho khách hàng", "probability": 70}, {"id": 5, "name": "Khách mua hàng", "probability": 100}, {"id": 6, "name": "Khách không mua hàng", "probability": 0}], "lead_sources": [{"id": 1, "name": "Nhân viên kinh doanh tự tìm kiếm"}, {"id": 2, "name": "Khách hàng hoặc đối tác giới thiệu"}, {"id": 3, "name": "Khách hàng website"}, {"id": 4, "name": "Khách hàng tự tìm đến"}, {"id": 6, "name": "Khách hàng cũ"}], "ok": true}</field>
+        <field name="notes">Danh mục đọc trực tiếp từ MISA mỗi lần gọi — MISA thêm / sửa giai đoạn là thấy ngay.</field>
+    </record>
+
+    <record id="doc_opportunity_search" model="hlv.misa.crm.api.doc">
+        <field name="sequence">70</field>
+        <field name="section">opportunity</field>
+        <field name="name">Tìm cơ hội</field>
+        <field name="route">/api/misa-crm/opportunity/search</field>
+        <field name="summary">Tìm cơ hội như ô tìm của trang danh sách Cơ hội: số cơ hội (CH…), tên, khách…</field>
+        <field name="params_spec">keyword | string | x | Từ khoá.
+limit | int | | Số dòng, 1–100. Mặc định 10.</field>
+        <field name="payload_example">{"keyword": "CH0042751", "limit": 10}</field>
+        <field name="response_example">{"items": [{"id": 51543, "code": "CH0042751", "name": "Bán hàng cho CÔNG TY TNHH VÍ DỤ", "account": "CÔNG TY TNHH VÍ DỤ", "owner": "NGUYỄN THÀNH LUÂN (NGUYENTHANHLUAN)", "stage": "Nhận yêu cầu mua hàng", "closing_date": "2026-11-01", "products": "48-22-4530;AK-3572"}], "ok": true}</field>
+    </record>
+
+    <record id="doc_opportunity_lines" model="hlv.misa.crm.api.doc">
+        <field name="sequence">80</field>
+        <field name="section">opportunity</field>
+        <field name="name">Xem hàng của cơ hội</field>
+        <field name="route">/api/misa-crm/opportunity/lines</field>
+        <field name="summary">Các dòng hàng của một cơ hội, theo thứ tự trên MISA. Bỏ dòng ghi chú và dòng con của combo.</field>
+        <field name="params_spec">id | int | x | ID cơ hội (lấy từ opportunity/search hoặc opportunity/create).</field>
+        <field name="payload_example">{"id": 51543}</field>
+        <field name="response_example">{"items": [{"code": "48-22-4530", "description": "Kéo cắt tôn 48-22-4530 MILWAUKEE", "unit": "Cái", "qty": 2.0, "price": 351851.85, "price_after_tax": 380000.0, "tax": "8%", "is_combo": false}, {"code": "AK-3572", "description": "Bộ mũi khoan INOX làm từ thép HSS 25pc AK-3572 (1-13mm) ASAKI", "unit": "Bộ", "qty": 1.0, "price": 833333.33, "price_after_tax": 900000.0, "tax": "8%", "is_combo": false}], "ok": true}</field>
+        <field name="notes">price = đơn giá chưa VAT, price_after_tax = đơn giá sau VAT.</field>
+    </record>
+
+    <record id="doc_opportunity_create" model="hlv.misa.crm.api.doc">
+        <field name="sequence">90</field>
+        <field name="section">opportunity</field>
+        <field name="name">Tạo cơ hội</field>
+        <field name="route">/api/misa-crm/opportunity/create</field>
+        <field name="is_write" eval="True"/>
+        <field name="summary">Tạo cơ hội kèm hàng như bấm Lưu ở trang "Thêm Cơ hội". Odoo tra khách, giai đoạn, nguồn gốc, từng mã hàng trên MISA TRƯỚC khi tạo — sai một cái là không tạo gì. Thuế suất và đơn vị tính lấy theo hàng trên MISA; tiền từng dòng và tổng Odoo tự tính như form MISA.</field>
+        <field name="params_spec">account_id | int | x | ID khách MISA (account/search).
+closing_date | string | x | Ngày kỳ vọng kết thúc, dạng YYYY-MM-DD.
+lines | array | | Dòng hàng, tối đa 200. Bỏ trống = cơ hội chưa có hàng.
+lines[].code | string | x | Mã hàng đúng tuyệt đối trên MISA (không phân biệt hoa thường).
+lines[].qty | number | x | Số lượng, lớn hơn 0.
+lines[].price_after_tax | number | | Đơn giá SAU VAT — nên dùng. Gửi đúng MỘT trong hai giá.
+lines[].price | number | | Đơn giá CHƯA VAT.
+lines[].description | string | | Diễn giải dòng. Bỏ trống = tên hàng.
+stage_id | int | | Giai đoạn (opportunity/options). Mặc định 1 = Nhận yêu cầu mua hàng.
+lead_source_id | int | | Nguồn gốc (opportunity/options).
+name | string | | Tên cơ hội. Mặc định "Bán hàng cho &lt;tên khách&gt;".
+description | string | | Mô tả.</field>
+        <field name="payload_example">{"account_id": 4371, "closing_date": "2026-11-01", "stage_id": 1, "lead_source_id": 6, "name": "Bán hàng cho CÔNG TY TNHH VÍ DỤ", "description": "Khách hỏi qua Zalo", "lines": [{"code": "48-22-4530", "qty": 2, "price_after_tax": 380000}, {"code": "AK-3572", "qty": 1, "price": 833333.33, "description": "Giao trước 20/11"}]}</field>
+        <field name="response_example">{"id": 51543, "total": 1660000.0, "code": "CH0042751", "ok": true}</field>
+        <field name="notes">Cần bật "Cho phép tạo dữ liệu trên MISA" ở Cấu hình, không thì 403 write_disabled.
+KHÔNG chống trùng: gọi lại sau khi đã tạo xong là thêm một cơ hội nữa. Có id trả về là ĐÃ tạo, kể cả khi kèm "warning" (bước phụ sau khi tạo bị lỗi).
+Người phụ trách = tài khoản MISA mà Odoo đăng nhập.
+Combo chưa hỗ trợ → 400 combo_not_supported. Mã không có → 404 product_not_found.
+code (số CH…) = null nếu MISA tạo xong nhưng chưa đọc lại được số.</field>
+    </record>
+
+    <!-- ── Báo giá ──────────────────────────────────────────────────────── -->
+    <record id="doc_quote_search" model="hlv.misa.crm.api.doc">
+        <field name="sequence">100</field>
+        <field name="section">quote</field>
+        <field name="name">Tìm báo giá</field>
+        <field name="route">/api/misa-crm/quote/search</field>
+        <field name="summary">Tìm báo giá như ô tìm của trang danh sách Báo giá: số báo giá (BG…), tên khách…</field>
+        <field name="params_spec">keyword | string | x | Từ khoá.
+limit | int | | Số dòng, 1–100. Mặc định 10.</field>
+        <field name="payload_example">{"keyword": "BG0012345", "limit": 10}</field>
+        <field name="response_example">{"items": [{"id": 9876, "code": "BG0012345", "date": "2026-10-14", "account_id": 4371, "account": "CÔNG TY TNHH VÍ DỤ", "total": 1660000.0, "stage": "Đã gửi khách hàng", "owner": "NGUYỄN THÀNH LUÂN (NGUYENTHANHLUAN)"}], "ok": true}</field>
+    </record>
+
+    <record id="doc_quote_lines" model="hlv.misa.crm.api.doc">
+        <field name="sequence">110</field>
+        <field name="section">quote</field>
+        <field name="name">Xem hàng của báo giá</field>
+        <field name="route">/api/misa-crm/quote/lines</field>
+        <field name="summary">Các dòng hàng của một báo giá. Bỏ dòng ghi chú và dòng con của combo.</field>
+        <field name="params_spec">id | int | x | ID báo giá (lấy từ quote/search).</field>
+        <field name="payload_example">{"id": 9876}</field>
+        <field name="response_example">{"items": [{"code": "48-22-4530", "name": "Kéo cắt tôn 48-22-4530 MILWAUKEE", "note": "", "unit": "Cái", "qty": 2.0, "price": 351851.85, "tax_percent": 8.0, "is_combo": false}], "ok": true}</field>
+        <field name="notes">price = đơn giá chưa VAT ĐÃ trừ chiết khấu dòng.</field>
+    </record>
+
+    <!-- ── Đơn hàng ─────────────────────────────────────────────────────── -->
+    <record id="doc_sale_order_search" model="hlv.misa.crm.api.doc">
+        <field name="sequence">120</field>
+        <field name="section">sale_order</field>
+        <field name="name">Tìm đơn hàng</field>
+        <field name="route">/api/misa-crm/sale-order/search</field>
+        <field name="summary">Tìm đơn hàng như ô tìm của trang danh sách Đơn hàng: số đơn, tên khách…</field>
+        <field name="params_spec">keyword | string | x | Từ khoá.
+limit | int | | Số dòng, 1–100. Mặc định 10.</field>
+        <field name="payload_example">{"keyword": "DH115524948215998", "limit": 10}</field>
+        <field name="response_example">{"items": [{"id": 31234, "code": "DH115524948215998", "name": "Đơn hàng CÔNG TY TNHH VÍ DỤ", "date": "2026-10-14", "amount": 1660000.0, "account_id": 4371, "account": "CÔNG TY TNHH VÍ DỤ", "owner": "NGUYỄN THÀNH LUÂN (NGUYENTHANHLUAN)", "revenue_status": "Chưa ghi doanh số", "delivery_status": "Chưa giao", "pay_status": "Chưa thanh toán", "quote": "BG0012345", "opportunity": "CH0042751"}], "ok": true}</field>
+        <field name="notes">Từ khoá rỗng → items rỗng.</field>
+    </record>
+
+    <record id="doc_sale_order_lines" model="hlv.misa.crm.api.doc">
+        <field name="sequence">130</field>
+        <field name="section">sale_order</field>
+        <field name="name">Xem hàng của đơn hàng</field>
+        <field name="route">/api/misa-crm/sale-order/lines</field>
+        <field name="summary">Các dòng hàng của một đơn. Bỏ dòng ghi chú và dòng con của combo.</field>
+        <field name="params_spec">id | int | x | ID đơn hàng (lấy từ sale-order/search).</field>
+        <field name="payload_example">{"id": 31234}</field>
+        <field name="response_example">{"items": [{"code": "48-22-4530", "description": "Kéo cắt tôn 48-22-4530 MILWAUKEE", "unit": "Cái", "qty": 2.0, "price": 351851.85, "price_after_tax": 380000.0, "tax_percent": 8.0, "discount": 0.0, "total": 760000.0, "is_combo": false}], "ok": true}</field>
+    </record>
+</odoo>

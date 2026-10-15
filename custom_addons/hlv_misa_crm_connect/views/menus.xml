@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_root" name="MISA CRM API" sequence="60"
+              web_icon="hlv_misa_crm_connect,static/description/icon.png"
+              groups="group_misa_crm_api_manager"/>
+    <menuitem id="menu_api_doc" name="Hướng dẫn API" parent="menu_root" action="action_api_doc" sequence="10"/>
+    <menuitem id="menu_api_config" name="Cấu hình" parent="menu_root" action="action_api_config" sequence="20"/>
+</odoo>

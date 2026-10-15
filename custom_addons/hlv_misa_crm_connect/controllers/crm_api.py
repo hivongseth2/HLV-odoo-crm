@@ -2,7 +2,7 @@
 """API MISA CRM cho hệ thống bên ngoài — Odoo giữ tài khoản MISA, bên ngoài chỉ cầm API key.
 
 Mọi route: POST, body JSON (route không tham số gửi body rỗng cũng được), header ``X-API-Key``.
-Bật/tắt và key ở Cài đặt → Tồn kho → "API MISA CRM cho bên ngoài". Chi tiết từng route: README.md.
+Bật/tắt và key: app MISA CRM API → Cấu hình. Hướng dẫn từng route: app MISA CRM API → Hướng dẫn API.
 
 Mã HTTP: 200 xong · 400 thiếu/sai dữ liệu · 401 thiếu key · 403 sai key / chưa cho ghi ·
 404 không thấy khách/hàng · 502 MISA lỗi · 503 API tắt / chưa có key.
@@ -12,7 +12,7 @@ from datetime import date
 from odoo import http
 from odoo.addons.misa_fetch_po_button.controllers.misa_product_api import ApiError, _number, _text
 
-from ..models.res_config_settings import PARAM_ALLOW_WRITE
+from ..models.api_config import PARAM_ALLOW_WRITE
 from ..services.crm_payloads import page_size
 from .api_common import handle, int_field
 

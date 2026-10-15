@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_misa_crm_api_doc_manager,hlv.misa.crm.api.doc manager,model_hlv_misa_crm_api_doc,group_misa_crm_api_manager,1,0,0,0
+access_hlv_misa_crm_api_config_manager,hlv.misa.crm.api.config manager,model_hlv_misa_crm_api_config,group_misa_crm_api_manager,1,1,1,0
