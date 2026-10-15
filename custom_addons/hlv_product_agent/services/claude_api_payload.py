@@ -46,11 +46,19 @@ _FALLBACK_BETA = 'server-side-fallback-2026-07-01'
 _NO_FALLBACK_PREFIXES = ('claude-haiku',)
 
 # Lịch sử API lưu nguyên khối (kể cả kết quả tool, thinking) để lượt sau Claude nhớ kết quả
-# tra cứu như Claude Code --resume. Quá ngưỡng thì mở lại từ tóm tắt chữ.
-# Ngưỡng token dưới mốc 100K: Haiku 5.5 tính giá gấp 5 cho cả request khi prompt vượt mốc
-# đó, và prompt dài cũng làm mọi model chậm và tốn hơn.
-MAX_PROMPT_TOKENS = 90000
-MAX_HISTORY_TURNS = 40
+# tra cứu như Claude Code --resume. Quá ngưỡng thì mở lại từ 12 tin chữ gần nhất.
+# Giữ NGẮN: sale để một cuộc chat chạy cả tuần (hàng trăm tin), mỗi món hàng là một việc
+# riêng — nhớ kết quả tra MISA của món từ hai chục tin trước không giúp gì, nhưng mỗi lần
+# gọi API (4-6 lần một lượt) phải gửi lại hết, vừa chậm vừa tốn.
+MAX_PROMPT_TOKENS = 40000
+MAX_HISTORY_TURNS = 12
+# Nghỉ lâu hơn ngần này thì cache đã hết hạn: gửi lại lịch sử là trả giá ghi cache cho cả
+# lịch sử, đắt hơn mở lại từ tin chữ.
+HISTORY_IDLE_MINUTES = 60
+# Cache 1 giờ thay vì 5 phút: sale trả lời sau vài phút tới nửa tiếng là chuyện thường, cache
+# 5 phút thì lượt nào cũng ghi lại cả prompt. System prompt + tool giống nhau cho mọi cuộc
+# nên cache 1 giờ còn dùng chung giữa các sale.
+CACHE_CONTROL = {'type': 'ephemeral', 'ttl': '1h'}
 
 
 def client_tools():
@@ -83,7 +91,7 @@ def build_system(prompt_text):
     return [{
         'type': 'text',
         'text': (prompt_text or '').rstrip() + "\n\n" + API_MODE_NOTE + "\n",
-        'cache_control': {'type': 'ephemeral'},
+        'cache_control': CACHE_CONTROL,
     }]
 
 
@@ -165,13 +173,17 @@ def load_history(raw):
     return history if isinstance(history, list) else []
 
 
-def history_too_long(history, last_prompt_tokens=0):
-    """Lịch sử đã quá dài để gửi lại mỗi lượt (tốn token, chậm).
+def history_too_long(history, last_prompt_tokens=0, idle_minutes=0):
+    """Có nên bỏ lịch sử, mở lại từ tin chữ gần nhất không.
 
-    Nhận: lịch sử, số token prompt của request gần nhất (API báo về; 0 nếu chưa biết).
+    Nhận: lịch sử, số token prompt của request gần nhất (API báo về; 0 nếu chưa biết), số
+    phút từ lượt API trước (0 nếu chưa biết).
+    Trả True khi quá số lượt, quá dài, hoặc nghỉ quá lâu.
     """
     turns = sum(1 for msg in history if msg.get('role') == 'user' and _is_sale_turn(msg))
-    return turns >= MAX_HISTORY_TURNS or (last_prompt_tokens or 0) > MAX_PROMPT_TOKENS
+    return (turns >= MAX_HISTORY_TURNS
+            or (last_prompt_tokens or 0) > MAX_PROMPT_TOKENS
+            or (idle_minutes or 0) > HISTORY_IDLE_MINUTES)
 
 
 def _is_sale_turn(message):
