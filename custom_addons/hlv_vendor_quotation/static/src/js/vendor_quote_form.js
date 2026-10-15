@@ -87,6 +87,7 @@
             setText(line, "[data-vq-subtotal]", unavailable ? "Không có hàng"
                 : after == null ? "—" : formatVnNumber(Math.round(after * qty)));
             setText(line, "[data-vq-after-text]", after == null ? "—" : formatVnNumber(after));
+            setText(line, "[data-vq-net-after-text]", after == null ? "—" : formatVnNumber(prices.net));
             const cell = line.querySelector("[data-vq-price-cell]");
             if (cell && line.querySelector("[data-vq-unit]")) {
                 cell.title = after == null ? "" : `Chưa VAT ${formatVnNumber(prices.net)} · VAT ` +

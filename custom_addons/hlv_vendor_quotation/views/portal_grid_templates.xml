@@ -208,6 +208,9 @@
                            t-att-value="post.get('basis_%s' % lid) if post else 'gross'"/>
                 </t>
                 <span t-else="" class="vq-cell-text" t-esc="net_saved or '—'"/>
+                <!-- Bật chiết khấu: ô là giá chưa VAT trước CK, dòng nhỏ dưới là giá chưa VAT sau CK (giá bên mua lưu, đem so). -->
+                <div class="vq-unit-sub vq-disc-only">sau CK <span data-vq-net-after-text="1"
+                     t-esc="fmt(line.price_unit) if line.price_unit else '—'"/></div>
             </td>
             <td class="vq-num vq-col-price" data-label="Giá sau VAT" data-vq-price-cell="1"
                 t-att-title="('Chưa VAT %s · VAT %s' % (fmt(line.price_unit), fmt(line.price_unit * line.tax_rate / 100.0))) if line.price_unit else None">
