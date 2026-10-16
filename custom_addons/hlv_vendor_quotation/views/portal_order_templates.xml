@@ -233,15 +233,15 @@
             <td class="vq-col-product"><div class="vq-line-name" t-esc="line.name"/>
                 <div t-if="line.hlv_invoice_name" class="vq-muted vq-small">Tên xuất HĐ: <t t-esc="line.hlv_invoice_name"/></div>
                 <div t-if="pending_hint" class="vq-pending-hint">Chờ duyệt — <t t-esc="pending_hint"/></div></td>
-            <td class="vq-num vq-cell-edit" data-label="Số lượng">
+            <td class="vq-num vq-cell-edit vq-oc-qty" data-label="Số lượng">
                 <span class="vq-view"><t t-esc="fmt(line.product_qty)"/> <t t-esc="line.product_uom.name"/></span>
                 <input t-if="revise_editable" type="text" inputmode="decimal" size="6" class="vq-input vq-edit vq-edit-num"
                        t-att-name="'qty_%s' % line.id" t-att-value="fmt(line.product_qty)"
                        t-att-aria-label="'Số lượng — %s (hết hàng thì để 0)' % line.product_id.display_name"/>
             </td>
-            <td class="vq-num" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
+            <td class="vq-num vq-oc-recv" data-label="Đã nhận" t-esc="fmt(line.qty_received)"/>
             <t t-set="due" t-value="info['due'].get(line.id)"/>
-            <td class="vq-due-cell vq-cell-edit" data-label="Ngày giao dự kiến">
+            <td class="vq-due-cell vq-cell-edit vq-oc-due" data-label="Ngày giao dự kiến">
                 <span class="vq-view">
                     <t t-if="due">
                         <span t-attf-class="vq-due-text #{'is-late' if due['late'] else ''}" t-esc="due['due_text'] or '—'"/>
@@ -257,7 +257,7 @@
             <!-- Sửa: gõ giá trước VAT hoặc sau VAT (ô kia tự tính theo % VAT của dòng — js/vendor_price_pair.js);
                  pbasis_<id> ghi ô NCC gõ, server tính từ đúng ô đó. -->
             <t t-set="tax_rate" t-value="info['revision']['tax_rates'][line.id]"/>
-            <td class="vq-num vq-cell-edit" data-label="Đơn giá trước VAT">
+            <td class="vq-num vq-cell-edit vq-oc-net" data-label="Đơn giá trước VAT">
                 <span class="vq-view" t-esc="fmt(line.price_unit)"/>
                 <t t-if="revise_editable">
                     <input type="text" inputmode="decimal" size="6" class="vq-input vq-edit vq-edit-num" data-vq-net="1"
@@ -268,7 +268,7 @@
             </td>
             <td class="vq-num vq-col-vat-rate" data-label="VAT"
                 t-esc="(fmt(tax_rate) + '%') if line.taxes_id else '—'"/>
-            <td class="vq-num vq-cell-edit" data-label="Đơn giá sau VAT">
+            <td class="vq-num vq-cell-edit vq-oc-gross" data-label="Đơn giá sau VAT">
                 <span class="vq-view" t-esc="fmt(round(info['revision']['prices'][line.id]))"/>
                 <input t-if="revise_editable" type="text" inputmode="decimal" size="6" class="vq-input vq-edit vq-edit-num"
                        data-vq-unit="1" t-att-name="'price_%s' % line.id"
@@ -408,7 +408,7 @@
                     <!-- Datetime lưu UTC — fdate đổi sang giờ VN (00:00 ngày 08 giờ VN không bị in thành ngày 07). -->
                     <div t-if="order.date_planned"><dt>Hàng về dự kiến</dt><dd t-esc="fdate(order.date_planned)"/></div>
                     <div t-if="info['delivery_term']"><dt>Phương thức giao hàng</dt><dd t-esc="info['delivery_term']"/></div>
-                    <div t-if="info['delivery_place']"><dt>Địa điểm giao hàng</dt><dd class="vq-pre" t-esc="info['delivery_place']"/></div>
+                    <div t-if="info['delivery_place']" class="vq-fact-wide"><dt>Địa điểm giao hàng</dt><dd class="vq-pre" t-esc="info['delivery_place']"/></div>
                     <div t-if="quotes"><dt>Từ báo giá</dt>
                         <dd><a t-foreach="quotes" t-as="quote" class="vq-block-link"
                                t-att-href="'%s/%s' % (portal_base, quote.id)" t-esc="quote.name"/></dd></div>
