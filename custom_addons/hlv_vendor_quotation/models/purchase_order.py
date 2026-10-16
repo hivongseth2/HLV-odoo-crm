@@ -79,6 +79,13 @@ class PurchaseOrder(models.Model):
         help="Nhận tại kho NCC: NCC báo xác nhận đơn → đã đóng gói, bên mua đến lấy. Giao hàng / chành: NCC báo xác "
              "nhận đơn → đã gửi hàng (không có bước đóng gói). Trống (đơn cũ): đủ cả đóng gói lẫn gửi hàng.",
     )
+    # Đọc thẳng từ link NCC mỗi lần xem (không lưu): mật khẩu đổi trên link thì đơn mua hiện ngay mật khẩu mới. Lấy theo
+    # NCC của đơn — không đi qua phiếu hỏi giá (phiếu hỏi nhiều NCC, đi qua đó dễ lấy nhầm mật khẩu NCC khác).
+    hlv_vendor_portal_password = fields.Char(
+        string="Mật khẩu trang NCC", compute="_compute_hlv_vendor_portal_password",
+        groups="purchase.group_purchase_user",
+        help="Mật khẩu link báo giá của NCC của đơn — mỗi công ty NCC một link, một mật khẩu, dùng cho mọi báo giá / đơn mua.",
+    )
     hlv_vendor_status_date = fields.Datetime(string="NCC báo lúc", copy=False, readonly=True)
     hlv_vendor_event_source = fields.Selection(
         EVENT_SOURCES, string="Ai báo", copy=False, readonly=True,
@@ -141,6 +148,15 @@ class PurchaseOrder(models.Model):
             order.hlv_vendor_quote_ids = quote_lines.quote_id.filtered(
                 lambda q: q.state != "cancel" and q.partner_id.commercial_partner_id == vendor
             )
+
+    @api.depends("partner_id")
+    def _compute_hlv_vendor_portal_password(self):
+        vendors = self.partner_id.commercial_partner_id
+        links = self.env["hlv.vendor.quote.access"].sudo().with_context(active_test=False).search(
+            [("partner_id", "in", vendors.ids)])
+        passwords = {link.partner_id.id: link.password for link in links}
+        for order in self:
+            order.hlv_vendor_portal_password = passwords.get(order.partner_id.commercial_partner_id.id, False)
 
     def write(self, vals):
         result = super().write(vals)
