@@ -57,7 +57,7 @@ window.HlvQuote = window.HlvQuote || {};
       shown = products;
       box.classList.toggle("hq-hidden", !products.length);
       box.innerHTML = '<div class="hq-panel-head"><h2 class="hq-h3">Giá NCC đã báo khớp “' + esc(search) +
-        '”</h2><span class="hq-muted hq-small">theo mã, tên sản phẩm hoặc số cơ hội · mọi mã sale · mới nhất trước</span></div>' +
+        "”</h2></div>" +
         '<div class="hq-table-wrap"><table class="hq-table hq-price-table"><thead><tr><th>NCC</th>' +
         '<th class="hq-num">Sau VAT</th><th class="hq-num">Chưa VAT</th><th class="hq-num">Giao</th><th>Ngày báo</th>' +
         "<th>Phiếu · mã sale</th></tr></thead>" +

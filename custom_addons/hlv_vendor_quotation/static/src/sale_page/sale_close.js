@@ -17,8 +17,7 @@ window.HlvQuote = window.HlvQuote || {};
       return '<option value="' + esc(r[0]) + '">' + esc(r[1]) + "</option>";
     }).join("");
     return '<div class="hq-close-box hq-hidden" id="hq-close-box">' +
-      '<div class="hq-share-head"><b>Không mua — đóng phiếu</b>' +
-      '<span class="hq-muted">Giá NCC đã báo vẫn được giữ tới ngày hiệu lực để lần sau dùng lại.</span></div>' +
+      '<div class="hq-share-head"><b>Không mua — đóng phiếu</b></div>' +
       '<div class="hq-close-row"><label class="hq-sr-only" for="hq-close-reason">Lý do</label>' +
       '<select id="hq-close-reason" class="hq-input">' + reasons + "</select>" +
       '<label class="hq-sr-only" for="hq-close-note">Ghi chú</label>' +
@@ -27,15 +26,13 @@ window.HlvQuote = window.HlvQuote || {};
       '<button type="button" class="hq-btn" data-close-toggle="1">Thôi</button></div></div>';
   };
 
-  /** Phiếu đã đóng: lý do + nhắc giá vẫn dùng lại được. */
+  /** Phiếu đã đóng: lý do + ghi chú. */
   HQ.closedBanner = function (d) {
     if (d.sale_status !== "closed") {
       return "";
     }
     return '<div class="hq-share hq-closed-note"><b>Không mua' + (d.close_reason ? " — " + esc(d.close_reason) : "") +
-      "</b>" + (d.close_note ? '<div class="hq-muted">' + esc(d.close_note) + "</div>" : "") +
-      '<div class="hq-muted">Giá NCC trong phiếu vẫn giữ tới ngày hiệu lực: lập phiếu mới với cùng NCC, cùng sản phẩm ' +
-      "là giá được điền sẵn, không phải hỏi lại.</div></div>";
+      "</b>" + (d.close_note ? '<div class="hq-muted">' + esc(d.close_note) + "</div>" : "") + "</div>";
   };
 
   function confirmClose(button) {

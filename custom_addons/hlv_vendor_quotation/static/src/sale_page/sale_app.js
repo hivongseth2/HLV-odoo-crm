@@ -98,8 +98,6 @@ window.HlvQuote = window.HlvQuote || {};
 
   function chooseCode() {
     showGate('<h2 class="hq-h2">Bạn là sale nào?</h2>' +
-      '<p class="hq-muted">Tài khoản này dùng chung cho nhiều mã sale. Chọn mã của bạn — máy này sẽ nhớ cho ' +
-      "lần sau. Mở link riêng của mình (có ?t=…) thì vào thẳng, khỏi chọn.</p>" +
       '<div class="hq-code-choices">' + (S.config.codes || []).map(function (c) {
         return '<button type="button" class="hq-btn" data-pick-code="' + HQ.esc(c.code) + '">' + HQ.esc(HQ.saleLabel(c.code)) + "</button>";
       }).join("") + "</div>");

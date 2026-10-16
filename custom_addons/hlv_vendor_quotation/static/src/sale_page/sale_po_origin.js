@@ -43,10 +43,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<div id="' + inputId(key) + '-results" class="hq-dropdown hq-hidden"></div></div>' +
       '<button type="button" class="hq-btn hq-btn-primary" data-save-origin="' + key + '" data-order-ids="' +
       orderIds.join(",") + '"' + (inquiryId ? ' data-inquiry-id="' + inquiryId + '"' : "") + ">" +
-      esc(buttonLabel) + "</button></div>" +
-      '<p class="hq-muted hq-small">Khách chốt mua thì điền mã đơn hàng để thu mua và MISA khớp đơn mua với đơn bán.' +
-      (inquiryId ? " Chưa có đơn mua thì mã ghi vào YCMH — đơn mua thu mua tạo sau tự lấy mã này." : "") + "</p>" +
-      "</div>";
+      esc(buttonLabel) + "</button></div></div>";
   };
 
   /** Gắn gợi ý đơn bán cho ô vừa vẽ (gọi sau mỗi lần vẽ lại). */

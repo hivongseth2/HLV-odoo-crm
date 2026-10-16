@@ -152,15 +152,10 @@ window.HlvQuote = window.HlvQuote || {};
       : '<div class="hq-muted">Chưa có sản phẩm. Tìm sản phẩm để thêm, hoặc lấy hàng từ một đơn bán.</div>';
   }
 
+  /** Thêm vào phiếu mà phiếu không còn báo giá NCC nào đang mở: không có cột NCC để tick. */
   function linesHint() {
-    if (C.addTo) {
-      return C.chosen.length
-        ? '<div class="hq-muted hq-small">Cột NCC: tick NCC hỏi mặt hàng mới. Mặt hàng đã có trong phiếu cộng thêm SL ' +
-          "vào dòng cũ — NCC đang hỏi món đó tự cập nhật SL, tick thêm nếu muốn hỏi NCC khác của phiếu.</div>"
-        : '<div class="hq-ask-warn">Phiếu không còn báo giá NCC nào đang mở — dùng "+ Hỏi thêm NCC" trước.</div>';
-    }
-    return C.chosen.length ? '<div class="hq-muted hq-small">Cột NCC: tick mặt hàng hỏi NCC đó — tick sẵn mặt hàng NCC ' +
-      "từng bán; NCC chưa từng bán thì hỏi hết.</div>" : "";
+    return C.addTo && !C.chosen.length
+      ? '<div class="hq-ask-warn">Phiếu không còn báo giá NCC nào đang mở — dùng "+ Hỏi thêm NCC" trước.</div>' : "";
   }
 
   /* ---------------- Nhà cung cấp ---------------- */
@@ -365,11 +360,7 @@ window.HlvQuote = window.HlvQuote || {};
     var missing = (res.reuse_missing || []).length
       ? '<div class="hq-alert">Không dùng lại được giá cho: ' + res.reuse_missing.map(esc).join(", ") +
         " (vừa hết hiệu lực hoặc có phiếu khác giữ) — NCC sẽ báo giá như bình thường.</div>" : "";
-    box.innerHTML = missing + (res.request
-      ? '<p class="hq-muted">Thu mua duyệt YCMH rồi tạo đơn mua với đúng NCC và giá đã dùng lại. Mở phiếu ' +
-        esc(res.inquiry.name) + " để theo dõi.</p>"
-      : '<p class="hq-muted">Copy tin nhắn dưới đây gửi Zalo cho từng NCC. ' +
-        "NCC báo giá xong, mở phiếu để so giá và chọn NCC cho từng sản phẩm.</p>") +
+    box.innerHTML = missing +
       results.map(function (r, index) {
         return '<div class="hq-result"><div class="hq-share-head"><b>' + esc(r.vendor_name) + "</b>" +
           '<span class="hq-muted">' + esc(r.name) + "</span>" +

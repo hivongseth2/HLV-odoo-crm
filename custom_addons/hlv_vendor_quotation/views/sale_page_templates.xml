@@ -158,8 +158,6 @@
                                     <div id="hq-crm-results" class="hq-share hq-crm-box hq-hidden"></div>
                                     <div class="hq-paste-toggle">
                                         <button type="button" class="hq-btn hq-btn-mini" id="hq-paste-open">Dán danh sách (Zalo, Excel)</button>
-                                        <span class="hq-muted hq-small">mỗi dòng một mặt hàng — VD "Vòng bi 6212-ZZCM NSK: 2 cái",
-                                            "2608595053:  6". Dán nhiều dòng vào ô "Thêm sản phẩm" cũng được.</span>
                                     </div>
                                     <div id="hq-paste-box" class="hq-paste hq-hidden">
                                         <label class="hq-sr-only" for="hq-paste-text">Danh sách hàng</label>

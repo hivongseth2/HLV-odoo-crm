@@ -39,8 +39,6 @@
                                    placeholder="VD M9200B, 2608595053, vòng bi 6212…"/>
                             <div id="pl-results" class="hq-dropdown hq-hidden"></div>
                         </div>
-                        <p class="hq-muted hq-small">Giá đã mua (lần đã nhập kho, kể cả lần trả NCC) và giá NCC từng báo — của
-                            mọi sale. Giá sau VAT, theo ĐVT ghi trên từng dòng. Gõ nhiều từ được, VD "chà nhám makita".</p>
                     </section>
                     <div id="pl-result" aria-live="polite"></div>
                     <div id="hq-toast" class="hq-toast hq-hidden"></div>

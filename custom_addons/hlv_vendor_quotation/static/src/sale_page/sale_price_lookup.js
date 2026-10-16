@@ -112,7 +112,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (HQ.chartablePrices(keptPurchases()).length < 2) {
       return "";
     }
-    return '<div class="pl-chart-wrap"><div class="hq-muted hq-small">Diễn biến giá mua (sau VAT) · rê chuột để xem từng lần</div>' +
+    return '<div class="pl-chart-wrap"><div class="hq-muted hq-small">Diễn biến giá mua (sau VAT)</div>' +
       '<div id="pl-chart" class="pl-chart"></div></div>';
   }
 
@@ -146,7 +146,7 @@ window.HlvQuote = window.HlvQuote || {};
     var bestQuote = lowest(rows.map(function (v) { return v.min_quote; }).filter(Boolean));
     var multi = rows.length > 1;
     return '<div class="hq-table-wrap"><table class="hq-table pl-table pl-vendors"><thead><tr><th>NCC <span class="hq-muted hq-small">' +
-      "(giá sau VAT · bấm để xem riêng)</span></th>" +
+      "(giá sau VAT)</span></th>" +
       '<th class="hq-num">Mua gần nhất</th><th class="hq-num">Mua thấp nhất</th><th class="hq-num">Số lần mua</th>' +
       '<th class="hq-num">Báo gần nhất</th><th class="hq-num">Báo thấp nhất</th><th class="hq-num">Số lần báo</th></tr></thead><tbody>' +
       rows.map(function (v) {

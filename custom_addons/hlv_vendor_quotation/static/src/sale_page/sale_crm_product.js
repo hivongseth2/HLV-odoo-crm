@@ -99,25 +99,22 @@ window.HlvQuote = window.HlvQuote || {};
     }).catch(function (err) { HQ.toast(err.message); });
   }
 
-  /** Ô lấy hàng: mã CH… tìm cơ hội trên CRM, DH… / S… tìm đơn bán Odoo, còn lại nhắc cách gõ. */
+  /** Ô lấy hàng: mã CH… tìm cơ hội trên CRM, DH… / S… tìm đơn bán Odoo, còn lại không có gì để chọn. */
   function searchSource(term) {
     var kind = HQ.sourceKind(term);
     var tag = function (item) { return Object.assign({ kind: kind }, item); };
     if (kind === "crm") {
       // Mỗi lần tìm là một lần gọi CRM — đợi gõ đủ vài ký tự.
-      return term.length < OPP_MIN_SEARCH ? Promise.resolve([{ kind: "hint", term: term }])
+      return term.length < OPP_MIN_SEARCH ? Promise.resolve([])
         : HQ.rpc("/api/hoi-gia-ncc/crm_opportunities", { search: term }).then(function (r) { return r.opportunities.map(tag); });
     }
     if (kind === "order") {
       return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term }).then(function (r) { return r.orders.map(tag); });
     }
-    return Promise.resolve([{ kind: "hint", term: term }]);
+    return Promise.resolve([]);
   }
 
   function sourceItemHtml(item) {
-    if (item.kind === "hint") {
-      return '<span class="hq-muted">Gõ số cơ hội (CH…) để lấy từ MISA CRM, hoặc số đơn bán (DH…, S…)</span>';
-    }
     if (item.kind === "order") {
       return '<span class="hq-strong">' + esc(item.name) + "</span> " + esc(item.partner) +
         '<div class="hq-muted hq-small">Đơn bán · ' + esc([HQ.saleName(item.sale_code), item.date].filter(Boolean).join(" · ")) + "</div>";
@@ -127,9 +124,6 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   function pickSource(item) {
-    if (item.kind === "hint") {
-      return item.term;  // giữ chữ đang gõ trong ô
-    }
     if (item.kind === "order") {
       pickSaleOrder(item);
     } else {

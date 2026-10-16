@@ -90,7 +90,6 @@ window.HlvQuote = window.HlvQuote || {};
         '<button type="button" class="hq-btn hq-btn-primary hq-btn-mini" data-vat-act="use">Chọn NCC này</button>';
     } else if (found && found.active && found.root_company) {
       body = "<div>MST thuộc <b>" + esc(found.name) + "</b> — có trong danh bạ nhưng chưa là NCC.</div>" +
-        '<div class="hq-muted">Dùng làm NCC: liên hệ được đánh dấu nhà cung cấp và đồng bộ sang MISA.</div>' +
         '<button type="button" class="hq-btn hq-btn-primary hq-btn-mini" data-vat-act="create">Dùng làm NCC</button>';
     } else if (found) {
       body = '<div class="hq-vat-error">MST đang gắn trên "' + esc(found.name) + '"' +
@@ -100,7 +99,6 @@ window.HlvQuote = window.HlvQuote || {};
       body = "<div><b>" + esc(b.name) + "</b></div>" +
         (b.street ? '<div class="hq-muted">' + esc(b.street) + "</div>" : "") +
         (b.status ? '<div class="hq-muted">Tình trạng: ' + esc(b.status) + "</div>" : "") +
-        '<div class="hq-muted">Thông tin từ VietQR. Tạo xong Odoo tự đồng bộ NCC sang MISA.</div>' +
         '<button type="button" class="hq-btn hq-btn-primary hq-btn-mini" data-vat-act="create">Tạo NCC</button>';
     }
     box.innerHTML = head(res.vat) + '<div class="hq-vat-body">' + body + "</div>";

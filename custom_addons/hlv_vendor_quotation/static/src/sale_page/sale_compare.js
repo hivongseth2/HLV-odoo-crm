@@ -153,7 +153,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<label><input type="radio" name="hq-split" value="0"' + (D.separate ? "" : " checked") + "/> Gộp chung đơn mua " +
       "với hàng có sẵn (mỗi dòng giữ ngày riêng)</label>" +
       '<label><input type="radio" name="hq-split" value="1"' + (D.separate ? " checked" : "") + "/> Tạo đơn mua riêng " +
-      '(phiếu nhập riêng)</label><span class="hq-muted hq-small">Thu mua đổi được khi tạo đơn mua.</span></div>';
+      "(phiếu nhập riêng)</label></div>";
   }
 
   /** Sản phẩm còn thiếu SL, tính cả SL đang sửa ở bảng tóm tắt: [{line, shortage}]. */
@@ -365,9 +365,7 @@ window.HlvQuote = window.HlvQuote || {};
         'vào phiếu này — trùng sản phẩm thì cộng thêm SL">+ Thêm sản phẩm</button>' : "<span></span>") +
       "<span>Tổng các giá đã chọn: <b>" + HQ.money(d.chosen_total_incl) + "</b> sau VAT · " +
       HQ.money(d.chosen_total) + " chưa VAT</span></div></td></tr></tfoot>" +
-      "</table></div>" +
-      '<div class="hq-muted hq-legend">★ chữ xanh đậm = giá sau VAT thấp nhất · nền xanh = giá đã chọn. Bấm tên NCC để ' +
-      'chọn NCC đó cho mọi mặt hàng. Một sản phẩm chọn được nhiều NCC — sửa "SL mua" dưới giá để chia số lượng.</div>';
+      "</table></div>";
   }
 
   /** Ô giá của NCC (quoteId) chọn thêm được: có giá, không hết hàng, chưa chọn, mặt hàng chưa khoá. [{line, offer}] */
@@ -523,8 +521,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-request-row"><div class="hq-request-so-field">' + saleOrderPicker() + "</div>" +
       '<button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
       (d.can_request ? "" : " disabled") + ">" +
-      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div>" +
-      '<div class="hq-muted hq-small">Có đơn bán và đơn đó có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div>';
+      (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div></div>";
   }
 
   /** Ô tìm + chip đơn bán. Hiện ở khung lên YCMH và lặp lại ở bước xác nhận (mỗi lúc chỉ một chỗ trên trang,
@@ -540,8 +537,7 @@ window.HlvQuote = window.HlvQuote || {};
   /** Ô gắn đơn bán ở bước xác nhận lên YCMH, cạnh kho nhận / địa điểm giao. */
   function saleOrderField() {
     return '<div class="hq-request-fields"><div class="hq-request-so-field">' +
-      '<span class="hq-label">Gắn đơn bán (không bắt buộc)</span>' + saleOrderPicker() +
-      '<div class="hq-muted hq-small">Đơn bán đã có YCMH chưa duyệt thì hàng được gộp vào YCMH đó.</div></div></div>';
+      '<span class="hq-label">Gắn đơn bán (không bắt buộc)</span>' + saleOrderPicker() + "</div></div>";
   }
 
   /** Bảng tóm tắt những gì sẽ lên YCMH: từng cặp sản phẩm × NCC, SL mua (sửa được — khách đổi số lượng
@@ -578,8 +574,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (!d.vendors.length) {
       return "";
     }
-    return '<h3 class="hq-h3 hq-section-title">Nhà cung cấp đã hỏi ' +
-      '<span class="hq-muted hq-small">— bấm tên NCC để xem thông tin, link và mật khẩu</span></h3>' +
+    return '<h3 class="hq-h3 hq-section-title">Nhà cung cấp đã hỏi</h3>' +
       '<div class="hq-table-wrap"><table class="hq-table"><tbody>' +
       d.vendors.map(function (v, index) {
         return '<tr><td><button type="button" class="hq-link-btn" data-vendor-info="' + v.quote_id +
