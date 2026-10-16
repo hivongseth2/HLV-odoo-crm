@@ -30,6 +30,11 @@
                             invisible="state != 'confirmed' or transaction_type != 'earn' or point_type != 'exchange'"
                             groups="hlv_loyalty.group_loyalty_admin"
                             confirm="Thu hồi điểm đổi thưởng của bản ghi này? Điểm sẽ bị trừ khỏi số dư khách hàng."/>
+                    <!-- Thấy 1 đơn quên nhập tiền repay thường kéo theo câu hỏi "khách này
+                         còn đơn nào nữa" — truy vết ngay tại đây, khỏi dựng lại bộ lọc. -->
+                    <button name="action_trace_loyalty_repay_missing"
+                            string="Đơn quên nhập tiền repay của khách"
+                            type="object" class="btn-secondary" icon="fa-search"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="pending,confirmed"/>
                 </header>
@@ -117,6 +122,11 @@
                   decoration-warning="state == 'pending'"
                   decoration-success="point_amount &gt; 0 and state == 'confirmed'"
                   decoration-danger="point_amount &lt; 0 and state == 'confirmed'">
+                <!-- Chạy trên các dòng đang tích chọn: chọn 1 dòng bất kỳ của khách rồi bấm. -->
+                <header>
+                    <button name="action_trace_loyalty_repay_missing" type="object"
+                            string="Truy vết đơn quên nhập tiền repay"/>
+                </header>
                 <field name="date"/>
                 <field name="partner_id"/>
                 <field name="account_id" optional="show"/>
@@ -221,6 +231,9 @@
                 <filter string="Trừ điểm" name="filter_negative"
                         domain="[('point_amount', '&lt;', 0)]"/>
                 <separator/>
+                <filter string="Quên nhập tiền repay" name="filter_repay_missing"
+                        domain="[('loyalty_repay_missing', '=', True)]"/>
+                <separator/>
                 <group expand="0" string="Nhóm theo">
                     <filter string="Khách hàng" name="group_partner"
                             context="{'group_by': 'partner_id'}"/>
@@ -228,6 +241,8 @@
                             context="{'group_by': 'account_id'}"/>
                     <filter string="Loại giao dịch" name="group_type"
                             context="{'group_by': 'transaction_type'}"/>
+                    <filter string="Đơn bán hàng" name="group_sale_order"
+                            context="{'group_by': 'sale_order_id'}"/>
                     <filter string="Chi nhánh" name="group_company"
                             context="{'group_by': 'company_id'}"/>
                     <filter string="Tháng" name="group_date"

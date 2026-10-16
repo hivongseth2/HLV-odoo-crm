@@ -2,6 +2,7 @@
 import logging
 from odoo import models, fields, api
 from odoo.exceptions import UserError
+from odoo.osv import expression
 
 _logger = logging.getLogger(__name__)
 
@@ -105,6 +106,66 @@ class HlvLoyaltyHistory(models.Model):
             label = type_labels.get(rec.transaction_type, '')
             sign = '+' if rec.point_amount >= 0 else ''
             rec.display_name = f"{label}: {sign}{rec.point_amount} điểm - {rec.partner_id.name or ''}"
+
+    loyalty_repay_missing = fields.Boolean(
+        string='Thiếu tiền repay',
+        compute='_compute_loyalty_repay_missing',
+        search='_search_loyalty_repay_missing',
+        help='Giao dịch tích điểm của đơn bán mà bảng "Tài khoản cộng điểm Loyalty" không '
+             'có dòng nào nhập Số tiền cộng điểm > 0 — đơn chỉ được điểm xếp hạng, khách '
+             'mất điểm đổi thưởng. Thường do sale quên nhập lúc lên đơn.',
+    )
+
+    @api.model
+    def _loyalty_repay_missing_domain(self):
+        """Domain DUY NHẤT định nghĩa "đơn quên nhập tiền repay" — compute lẫn search đều đi
+        qua đây để bộ lọc và giá trị field không bao giờ lệch nhau.
+
+        Chỉ xét giao dịch tích điểm còn hiệu lực có gắn đơn bán: đổi thưởng/chuyển điểm/điều
+        chỉnh tay không đi qua bảng phân bổ nên không có "quên nhập" để mà bắt.
+        """
+        return [
+            ('transaction_type', '=', 'earn'),
+            ('state', '!=', 'cancelled'),
+            ('sale_order_id', '!=', False),
+            '!', ('sale_order_id.loyalty_account_line_ids.earning_amount', '>', 0),
+        ]
+
+    @api.depends(
+        'transaction_type', 'state',
+        'sale_order_id.loyalty_account_line_ids.earning_amount',
+    )
+    def _compute_loyalty_repay_missing(self):
+        # sudo: người xem lịch sử điểm không nhất thiết đọc được đơn bán của chi nhánh khác.
+        missing = self.sudo().filtered_domain(self._loyalty_repay_missing_domain())
+        for rec in self:
+            rec.loyalty_repay_missing = rec in missing
+
+    def _search_loyalty_repay_missing(self, operator, value):
+        if operator not in ('=', '!=') or not isinstance(value, bool):
+            raise UserError('Bộ lọc "Thiếu tiền repay" chỉ hỗ trợ so sánh đúng/sai.')
+        domain = self._loyalty_repay_missing_domain()
+        return domain if (operator == '=') == value else ['!'] + expression.normalize_domain(domain)
+
+    def action_trace_loyalty_repay_missing(self):
+        """Mở các giao dịch tích điểm "thiếu tiền repay" của (các) khách đang chọn, gom theo
+        đơn bán — để biết đơn nào sale quên nhập Số tiền cộng điểm, nhập bổ sung trên đơn rồi
+        bấm "Tạo bù điểm Loyalty".
+        """
+        partners = self.mapped('partner_id')
+        if not partners:
+            raise UserError('Chọn ít nhất 1 giao dịch điểm có khách hàng để truy vết.')
+        name = 'Đơn quên nhập tiền repay'
+        if len(partners) == 1:
+            name = '%s — %s' % (name, partners.display_name)
+        return {
+            'type': 'ir.actions.act_window',
+            'name': name,
+            'res_model': self._name,
+            'view_mode': 'list,form',
+            'domain': [('partner_id', 'in', partners.ids), ('loyalty_repay_missing', '=', True)],
+            'context': {'group_by': ['sale_order_id'], 'create': False},
+        }
 
     def action_confirm(self):
         """Nhân viên xác nhận điểm đổi thưởng đang chờ."""
