@@ -20,6 +20,8 @@ SHORT_CODE_LENGTH = 10
 MAX_LOGIN_ATTEMPTS = 5
 LOCK_MINUTES = 15
 PORTAL_ROUTE = "/bao-gia"
+# Đoạn đường dẫn tab "Đơn mua hàng" trên trang NCC: <link NCC>/don-mua/<id đơn>.
+PORTAL_ORDERS = "don-mua"
 # Trang quản lý của sale (controllers/sale_page.py); ?ncc=<id> mở sẵn NCC đó.
 SALE_PAGE_ROUTE = "/hoi-gia-ncc"
 # Bật trong Cài đặt → Mua hàng → Hỏi giá NCC. Mặc định tắt: tin Zalo gửi link kèm mật khẩu

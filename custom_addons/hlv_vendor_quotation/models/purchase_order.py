@@ -9,6 +9,7 @@ from ..services.chat_bus import notify_order_status
 from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
 from .delivery_utils import EVENT_SOURCES, event_actor
+from .vendor_quote_access import PORTAL_ORDERS
 from .vendor_quote_utils import (
     DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin, parse_states,
 )
@@ -101,6 +102,21 @@ class PurchaseOrder(models.Model):
     def _compute_hlv_date_wanted(self):
         for order in self:
             order.hlv_date_wanted = order.order_line.purchase_request_lines._hlv_date_wanted()
+
+    # Link thẳng vào đơn này trên trang NCC — thu mua mở xem / copy gửi NCC.
+    hlv_vendor_portal_url = fields.Char(string="Link đơn trên trang NCC", compute="_compute_hlv_vendor_portal_url")
+
+    @api.depends("hlv_vendor_quote_ids.access_id.portal_url", "state", "date_approve")
+    def _compute_hlv_vendor_portal_url(self):
+        """Chỉ có link khi NCC thật sự thấy đơn trên trang của họ — cùng luật lọc với tab "Đơn mua hàng" của NCC
+        (vendor_quote._vendor_purchase_orders, theo Cài đặt "Đơn mua hiện trên trang NCC"). Không thì thu mua gửi
+        link cho NCC mà NCC mở ra "Link không còn hiệu lực"."""
+        for order in self:
+            quotes = order.hlv_vendor_quote_ids.filtered("access_id")
+            visible = order.id and quotes and order in quotes._vendor_purchase_orders()
+            order.hlv_vendor_portal_url = (
+                f"{quotes[0].access_id.portal_url}/{PORTAL_ORDERS}/{order.id}" if visible else False
+            )
 
     @api.depends("order_line.purchase_request_lines", "partner_id")
     def _compute_hlv_vendor_links(self):
