@@ -75,7 +75,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-paste-actions"><button type="button" class="hq-btn hq-btn-primary" id="hq-paste-add"' +
       (count ? "" : " disabled") + ">Thêm " + count + " sản phẩm vào phiếu</button>" +
       (missing ? '<button type="button" class="hq-btn" id="hq-paste-crm">Tìm ' + missing + " dòng không thấy trên MISA CRM</button>" : "") +
-      '<span class="hq-muted hq-small">Dòng vàng: chọn đúng mã rồi tick. Dòng xám: tìm trên MISA CRM hoặc tìm tay ở ô "Thêm sản phẩm".</span></div>';
+      "</div>";
   }
 
   function run(text) {

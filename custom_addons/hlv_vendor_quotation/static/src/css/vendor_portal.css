@@ -250,7 +250,6 @@ a { color: var(--vq-accent); }
 }
 
 /* --- Kết quả chọn giá của sale trên từng dòng báo giá --- */
-.vq-choice-legend { margin: 6px 0 0; color: var(--vq-muted); }
 .vq-price-table tr.vq-line-chosen td { background: #ecfdf3; }
 @media (max-width: 760px) {
     .vq-price-table tr.vq-line-chosen { background: #ecfdf3; border-color: #86efac; }
@@ -404,9 +403,6 @@ a { color: var(--vq-accent); }
 .vq-price-table td { padding: 5px 8px; font-size: .82rem; line-height: 1.35; }
 .vq-cell-value { display: block; text-align: right; font-variant-numeric: tabular-nums; }
 
-.vq-grid-hint { margin: 0 0 8px; font-size: .8rem; color: var(--vq-muted); }
-.vq-grid-hint kbd { padding: 0 5px; border: 1px solid var(--vq-line-strong); border-bottom-width: 2px; border-radius: 4px;
-    background: #fff; font: inherit; font-size: .74rem; }
 .vq-grid { min-width: 1240px; border-collapse: collapse; }
 .vq-disc-on .vq-grid { min-width: 1300px; }
 .vq-grid th, .vq-grid td { border: 1px solid var(--vq-line); white-space: nowrap; }
@@ -493,7 +489,6 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
 .vq-valid-field .vq-input { max-width: 200px; }
 
 /* --- Giá lần trước (hỏi lại trong 7 ngày) --- */
-.vq-ref-legend { margin: 6px 0 0; color: #8a5a00; }
 
 /* --- Chiết khấu (tuỳ chọn): cột "Đơn giá trước CK" + "% CK" chỉ hiện khi bật --- */
 .vq-quote-form:not(.vq-disc-on) .vq-disc-only { display: none; }

@@ -5,13 +5,6 @@
          đọc bằng cùng _read_quote_form. -->
 
     <!-- Chú thích ngắn, chỉ hiện khi có trường hợp đó — chi tiết xem bằng cách rê chuột lên chip. -->
-    <template id="portal_grid_legend" name="Báo giá NCC - chú thích bảng giá">
-        <p t-if="any(line_choice.values())" class="vq-small vq-choice-legend">
-            Dòng nền xanh: <t t-esc="company.name"/> đã chọn giá của quý công ty.</p>
-        <p t-if="references" class="vq-small vq-ref-legend">Chip "giá cũ": đã điền sẵn giá quý công ty báo
-            trong <t t-esc="reference_days"/> ngày qua — đúng giá, còn hàng thì cứ gửi.</p>
-    </template>
-
     <!-- Công cụ trên đầu bảng: bật chiết khấu, %CK / VAT cho tất cả dòng. Cần biến disc_on. -->
     <template id="portal_grid_tools" name="Báo giá NCC - công cụ bảng giá">
         <div class="vq-head-tools">
@@ -44,13 +37,6 @@
          hàng: thêm cột "Phiếu" + "Người hỏi" (cần quote_info), mã hàng gộp vào ô tên cho đủ chỗ;
          error_line_ids = dòng tô đỏ (tuỳ chọn). -->
     <template id="portal_grid" name="Báo giá NCC - bảng giá">
-        <p t-if="editable" class="vq-grid-hint">
-            Đơn giá tính cho một đơn vị<span class="vq-disc-only">, chưa trừ chiết khấu</span> — gõ giá chưa VAT
-            hoặc giá sau VAT, ô kia tự tính theo VAT của dòng.
-            Ô nền trắng là ô cần điền. Mặt hàng không có: bấm <b>×</b> cạnh mã hàng. Không đủ hàng: sửa số ở cột
-            "Sẵn hàng" rồi chọn ngày giao phần còn lại (hoặc "không có thêm"). Bấm <kbd>Enter</kbd> để xuống dòng dưới.
-            Có sẵn bảng giá trong Excel thì copy cả cột, dán vào ô giá đầu tiên (cột chưa VAT hoặc sau VAT).
-        </p>
         <div class="vq-table-scroll">
         <table t-attf-class="vq-table vq-price-table vq-grid #{'vq-grid-board' if show_quote else ''}" data-vq-grid="1">
             <thead>

@@ -268,7 +268,6 @@
 .hq-offer-short { display: block; font-size: .78rem; font-weight: 600; color: #b45309; }
 .hq-offer-unit { font-weight: 400; font-size: .7rem; color: var(--hq-muted); }
 .hq-offer-incl { display: block; font-size: .75rem; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
-.hq-legend { margin: .35rem 0 .75rem; font-size: .75rem; }
 
 .hq-request-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .35rem 0; }
 /* Gắn đơn bán ở bước xác nhận lên YCMH (cùng hàng kho nhận / địa điểm giao). */

@@ -12,11 +12,6 @@
                 <div class="vq-page-head">
                     <h1>Đơn mua hàng</h1>
                 </div>
-                <p class="vq-muted">Đơn mua của <t t-esc="company.name"/> lên từ các báo giá quý công ty đã gửi. Đơn
-                    "Chờ xác nhận" để quý công ty xem trước — bên mua xác nhận rồi mới chuẩn bị hàng. Nắm đơn thì bấm
-                    "Xác nhận đơn hàng"; đơn nhận tại kho nhà cung cấp: đóng gói xong bấm "Đã đóng gói", bên mua đến lấy;
-                    đơn giao hàng / chành: gửi hàng xong bấm "Báo đã gửi hàng". Kho <t t-esc="company.name"/>
-                    nhận hàng xong, đơn tự chuyển "Đã giao".</p>
                 <div t-if="saved_order" class="vq-alert vq-alert-ok">Đã cập nhật tiến độ đơn <t t-esc="saved_order"/>.</div>
 
                 <nav class="vq-tabs">
@@ -323,11 +318,9 @@
                     <input t-if="from_quote" type="hidden" name="from" t-att-value="from_quote.id"/>
                     <t t-if="action == 'acknowledge'">
                         <button type="submit" name="status" value="acknowledged" class="vq-btn vq-btn-primary">Xác nhận đơn hàng</button>
-                        <span class="vq-muted vq-small">Bấm khi đã nắm đơn và bắt đầu chuẩn bị hàng.</span>
                     </t>
                     <t t-else="">
                         <button type="submit" name="status" value="packed" class="vq-btn vq-btn-primary">Đã đóng gói</button>
-                        <span class="vq-muted vq-small">Bấm khi hàng đã đóng gói xong.</span>
                     </t>
                 </form>
                 <p t-elif="progress == 'delivered'" class="vq-progress-note">Kho <t t-esc="company.name"/> đã nhận hàng —
@@ -452,8 +445,6 @@
                                   placeholder="Ghi chú cho bên mua (VD: mặt hàng tạm hết, giá nhà máy tăng)"/>
                         <div class="vq-revise-actions">
                             <button type="submit" name="revise" value="1" class="vq-btn vq-btn-primary">Gửi thay đổi</button>
-                            <span class="vq-muted vq-small">Đổi số lượng / đơn giá: bên mua duyệt rồi mới áp vào đơn.
-                                Chỉ đổi ngày giao: cập nhật ngay.</span>
                         </div>
                     </div>
                 </form>

@@ -180,8 +180,6 @@
                 <span class="vq-sr-only">Mở / đóng khung trao đổi</span>
             </summary>
             <div class="vq-chat-list" data-live="chat-list">
-                <p t-if="not chat" class="vq-muted vq-small">Cần hỏi thêm về quy cách, số lượng, thời gian
-                    giao… quý công ty nhắn tại đây.</p>
                 <div t-foreach="chat" t-as="msg" t-attf-class="vq-msg #{'vq-msg-mine' if msg['from_vendor'] else ''}">
                     <div class="vq-msg-head">
                         <b t-esc="msg['author']"/>
@@ -402,7 +400,6 @@
                     <div class="vq-section-head">
                         <div>
                             <h2>Mặt hàng cần báo giá</h2>
-                            <t t-call="hlv_vendor_quotation.portal_grid_legend"/>
                         </div>
                         <t t-if="editable" t-call="hlv_vendor_quotation.portal_grid_tools"/>
                     </div>
@@ -418,8 +415,6 @@
                             <input t-if="editable" type="date" name="price_valid_until" class="vq-input" t-att-min="today_iso"
                                    t-att-value="post.get('price_valid_until') if post else (quote.price_valid_until.isoformat() if quote.price_valid_until else default_valid_iso)"/>
                             <span t-else="" t-esc="fdate(quote.price_valid_until) or '—'"/>
-                            <span class="vq-muted vq-small">Mặc định 7 ngày. Trong thời hạn này bên mua có thể đặt theo giá
-                                quý công ty đã báo mà không hỏi lại.</span>
                         </label>
                         <label class="vq-general-note">
                             <span class="vq-label">Ghi chú chung</span>

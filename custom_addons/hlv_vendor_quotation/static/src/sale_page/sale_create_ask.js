@@ -101,8 +101,7 @@ window.HlvQuote = window.HlvQuote || {};
             : '<span class="hq-muted">chưa có giá</span>') + "</td><td>" + esc(e.last_order) + " · " + esc(e.last_date) +
           "</td><td>" + (e.received_count ? e.received_count + " đơn, gần nhất " + esc(e.last_received)
             : '<span class="hq-muted">chưa nhận hàng</span>') + "</td></tr>";
-      }).join("") + '</tbody></table><div class="hq-muted hq-small">Từ đơn mua đã xác nhận: giá lần mua gần nhất của ' +
-      "mỗi NCC (đã trừ chiết khấu), quy về ĐVT sản phẩm; xếp theo giá chưa VAT.</div></div>";
+      }).join("") + "</tbody></table></div>";
   }
 
   /** Phần dưới tên mặt hàng: nút "i", chip gợi ý, dẫn chứng (khi mở), cảnh báo chưa tick NCC nào. */

@@ -51,8 +51,7 @@ window.HlvQuote = window.HlvQuote || {};
       return "";
     }
     return '<div class="hq-share hq-add-box' + (A.open ? "" : " hq-hidden") + '" id="hq-add-box">' +
-      '<div class="hq-share-head"><b>Hỏi thêm nhà cung cấp</b><span class="hq-muted">Gửi các sản phẩm đã tích cho ' +
-      "NCC mới. NCC đã hỏi giữ nguyên; giá NCC mới báo về hiện thêm cột trong bảng so giá.</span></div>" +
+      '<div class="hq-share-head"><b>Hỏi thêm nhà cung cấp</b></div>' +
       '<div id="hq-add-done">' + renderResults() + "</div>" +
       '<div id="hq-add-lines" class="hq-add-lines">' + renderLines(d) + "</div>" +
       '<div class="hq-add-vendors"><div class="hq-picker">' +

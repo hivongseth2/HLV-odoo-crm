@@ -45,9 +45,6 @@
                     <div class="vq-section-head">
                         <div>
                             <h2><t t-esc="len(lines)"/> mặt hàng · <t t-esc="len(quote_info)"/> yêu cầu báo giá</h2>
-                            <p class="vq-small vq-muted">Điền giá những mặt hàng có thể báo rồi bấm Gửi. Yêu cầu nào
-                                chưa điền thì để trống, báo sau. Bấm số phiếu để mở riêng phiếu đó.</p>
-                            <t t-call="hlv_vendor_quotation.portal_grid_legend"/>
                         </div>
                         <t t-call="hlv_vendor_quotation.portal_grid_tools"/>
                     </div>
@@ -63,8 +60,6 @@
                             <span class="vq-label">Giá có hiệu lực đến</span>
                             <input type="date" name="price_valid_until" class="vq-input" t-att-min="today_iso"
                                    t-att-value="post.get('price_valid_until') if post else default_valid_iso"/>
-                            <span class="vq-muted vq-small">Áp dụng cho các yêu cầu gửi lần này. Mặc định 7 ngày —
-                                trong thời hạn này bên mua có thể đặt theo giá quý công ty đã báo mà không hỏi lại.</span>
                         </label>
                         </div>
                     </div>
