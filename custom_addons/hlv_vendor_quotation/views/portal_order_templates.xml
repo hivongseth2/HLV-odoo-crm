@@ -396,8 +396,8 @@
                     <a t-else="" t-att-href="'%s/don-mua' % portal_base">Đơn mua hàng</a><t t-if="not from_quote"> /</t>
                     <span t-esc="order.name"/>
                 </nav>
+                <!-- Số đơn đã có ở breadcrumb — đầu trang chỉ còn tiến độ + nút in. -->
                 <div class="vq-page-head">
-                    <h1 t-esc="order.name"/>
                     <span t-attf-class="vq-status vq-status-#{info['progress']}" t-esc="progress_labels[info['progress']]"/>
                     <a class="vq-btn vq-btn-secondary vq-push" target="_blank" t-att-href="'%s/in' % order_url">In đơn mua hàng</a>
                 </div>
