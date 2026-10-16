@@ -111,32 +111,48 @@ class HlvLoyaltyHistory(models.Model):
         string='Thiếu tiền repay',
         compute='_compute_loyalty_repay_missing',
         search='_search_loyalty_repay_missing',
-        help='Giao dịch tích điểm của đơn bán mà bảng "Tài khoản cộng điểm Loyalty" không '
-             'có dòng nào nhập Số tiền cộng điểm > 0 — đơn chỉ được điểm xếp hạng, khách '
-             'mất điểm đổi thưởng. Thường do sale quên nhập lúc lên đơn.',
+        help='Điểm xếp hạng của 1 phiếu kho mà phiếu đó KHÔNG có điểm đổi thưởng nào còn '
+             'hiệu lực — đơn chưa nhập Số tiền cộng điểm (tiền repay) trên bảng "Tài khoản '
+             'cộng điểm Loyalty", thường do sale quên nhập lúc lên đơn.',
     )
 
     @api.model
     def _loyalty_repay_missing_domain(self):
-        """Domain DUY NHẤT định nghĩa "đơn quên nhập tiền repay" — compute lẫn search đều đi
+        """Domain DUY NHẤT định nghĩa "phiếu quên nhập tiền repay" — compute lẫn search đều đi
         qua đây để bộ lọc và giá trị field không bao giờ lệch nhau.
 
-        Chỉ xét giao dịch tích điểm còn hiệu lực có gắn đơn bán: đổi thưởng/chuyển điểm/điều
-        chỉnh tay không đi qua bảng phân bổ nên không có "quên nhập" để mà bắt.
+        Xét theo chính lịch sử điểm (phiếu có điểm xếp hạng nhưng không có điểm đổi thưởng)
+        chứ KHÔNG theo bảng phân bổ trên đơn bán: tra qua sale_order_id thì ORM áp quy tắc
+        quyền của người đang xem lên sale.order — đơn chi nhánh khác/đơn của sale khác bị coi
+        như "không có tiền repay" và hiện ra oan. Chỉ lấy dòng điểm xếp hạng để mỗi phiếu
+        chỉ hiện 1 dòng.
         """
         return [
             ('transaction_type', '=', 'earn'),
+            ('point_type', '=', 'ranking'),
             ('state', '!=', 'cancelled'),
-            ('sale_order_id', '!=', False),
-            '!', ('sale_order_id.loyalty_account_line_ids.earning_amount', '>', 0),
+            ('picking_id', '!=', False),
+            ('picking_id', 'not in', self._loyalty_picking_ids_with_exchange_points()),
         ]
 
-    @api.depends(
-        'transaction_type', 'state',
-        'sale_order_id.loyalty_account_line_ids.earning_amount',
-    )
+    @api.model
+    def _loyalty_picking_ids_with_exchange_points(self):
+        """Id các phiếu kho đã có điểm đổi thưởng còn hiệu lực (chờ xác nhận cũng tính —
+        tiền repay đã được nhập, chỉ là chưa duyệt).
+
+        sudo: phải thấy điểm của mọi chi nhánh, nếu không phiếu bị coi là thiếu repay oan.
+        """
+        groups = self.sudo()._read_group([
+            ('transaction_type', '=', 'earn'),
+            ('point_type', '=', 'exchange'),
+            ('state', '!=', 'cancelled'),
+            ('point_amount', '>', 0),
+            ('picking_id', '!=', False),
+        ], ['picking_id'])
+        return [picking.id for picking, in groups]
+
+    @api.depends('transaction_type', 'point_type', 'state', 'picking_id')
     def _compute_loyalty_repay_missing(self):
-        # sudo: người xem lịch sử điểm không nhất thiết đọc được đơn bán của chi nhánh khác.
         missing = self.sudo().filtered_domain(self._loyalty_repay_missing_domain())
         for rec in self:
             rec.loyalty_repay_missing = rec in missing
