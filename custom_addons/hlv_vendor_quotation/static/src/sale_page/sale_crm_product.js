@@ -160,8 +160,7 @@ window.HlvQuote = window.HlvQuote || {};
   };
 
   function render(term) {
-    var head = '<div class="hq-share-head"><b>Trên MISA CRM</b><span class="hq-muted">"' + esc(term) +
-      '" — chưa có trong Odoo thì bấm Thêm để tạo sản phẩm (tên, ĐVT, giá, thuế theo CRM).</span>' +
+    var head = '<div class="hq-share-head"><b>Trên MISA CRM</b><span class="hq-muted">"' + esc(term) + '"</span>' +
       '<span class="hq-spacer"></span><button type="button" class="hq-btn hq-btn-mini" data-crm-close="1">Đóng</button></div>';
     if (!found.length) {
       HQ.$("hq-crm-results").innerHTML = head + '<div class="hq-muted">MISA CRM cũng không có hàng này.</div>';
