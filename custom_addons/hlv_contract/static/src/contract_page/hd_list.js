@@ -10,7 +10,8 @@ window.HlvContract = window.HlvContract || {};
   var esc = HD.esc;
 
   HD.stateTag = function (row) {
-    return '<span class="hd-tag ' + (HD.STATE_CLASS[row.state] || "") + '">' + esc(row.state_label) + "</span>";
+    return '<span class="hd-tag ' + (HD.STATE_CLASS[row.state] || "") + '">' + esc(row.state_label) + "</span>" +
+      (row.has_signed ? ' <span class="hd-tag hd-tag-ok" title="Đã lưu bản scan đã ký">📄 Bản ký</span>' : "");
   };
 
   HD.checkCell = function (row) {

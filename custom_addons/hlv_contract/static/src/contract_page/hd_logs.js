@@ -13,6 +13,7 @@ window.HlvContract = window.HlvContract || {};
     template: "hd-tag-mine",
     state: "hd-tag-warn",
     export: "hd-tag-muted",
+    signed: "hd-tag-ok",
     delete: "hd-tag-danger",
   };
   var all = { search: "", action: "", page: 1 };

@@ -221,7 +221,7 @@ window.HlvContract = window.HlvContract || {};
       sectionsHtml() + HD.linesHtml() + overridesHtml() +
       '<section class="hd-step"><label class="hd-label" for="hd-f-note">Ghi chú nội bộ (không in ra hợp đồng)</label>' +
       '<textarea class="hd-input hd-textarea w-100" id="hd-f-note" rows="2">' + esc(S.form.note) + "</textarea></section>" +
-      "</fieldset>" +
+      "</fieldset>" + HD.signedHtml() +
       (S.contract ? '<details class="hd-step hd-log-box" id="hd-log-box"><summary class="hd-h3">Nhật ký — ai tạo, sửa, đổi trạng thái, xuất file</summary>' +
         '<div class="hd-log-list"></div></details>' : "");
     var panel = HD.$("hd-drawer-panel");
