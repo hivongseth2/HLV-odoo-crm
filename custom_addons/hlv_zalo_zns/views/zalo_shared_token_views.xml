@@ -7,11 +7,12 @@
         <field name="arch" type="xml">
             <form string="Zalo Shared Token Manager">
                 <header>
+                    <!-- Luôn hiện: refresh_token chết vẫn còn giá trị trong field, ẩn nút
+                         theo refresh_token thì không còn đường authorize lại -->
                     <button name="action_open_oauth"
                         string="Authorize with Zalo"
                         type="object"
-                        class="oe_highlight"
-                        invisible="refresh_token != False" />
+                        class="oe_highlight" />
                     <button name="action_test_token" 
                         string="Test Token" 
                         type="object" 
@@ -51,6 +52,9 @@
                             <field name="token_expires_at" readonly="1"/>
                             <field name="last_refresh_date" readonly="1"/>
                             <field name="refresh_count" readonly="1"/>
+                            <field name="last_refresh_error" readonly="1"
+                                   class="text-danger"
+                                   invisible="not last_refresh_error"/>
                         </group>
                     </group>
                     

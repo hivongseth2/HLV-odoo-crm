@@ -1,7 +1,8 @@
 # models/zalo_shared_token.py
 import logging
+import psycopg2
 import requests
-from datetime import datetime, timedelta
+from datetime import timedelta
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
@@ -65,6 +66,10 @@ class ZaloSharedToken(models.Model):
     # Statistics
     last_refresh_date = fields.Datetime('Last Refresh Date', readonly=True)
     refresh_count = fields.Integer('Refresh Count', readonly=True, default=0)
+    last_refresh_error = fields.Text(
+        'Last Refresh Error', readonly=True,
+        help='Lỗi của lần refresh gần nhất (cron chạy ngầm nên lỗi không hiện lên màn hình)'
+    )
     
     _sql_constraints = [
         ('app_id_unique', 'unique(app_id)', 'App ID must be unique!'),
@@ -145,6 +150,7 @@ class ZaloSharedToken(models.Model):
                 'token_expires_at': fields.Datetime.now() + timedelta(seconds=expires_in - 60),
                 'last_refresh_date': fields.Datetime.now(),
                 'refresh_count': self.refresh_count + 1,
+                'last_refresh_error': False,
             })
             
             _logger.info("Zalo Shared Token: Tokens obtained successfully (expires_in=%s)", expires_in)
@@ -165,129 +171,149 @@ class ZaloSharedToken(models.Model):
         # Thêm buffer 60s để tránh token hết hạn giữa chừng
         return fields.Datetime.now() >= (self.token_expires_at - timedelta(seconds=60))
 
-    def _get_advisory_lock_id(self):
-        """Tạo advisory lock ID cho bản ghi này"""
+    def _request_refreshed_tokens(self):
+        """Gọi Zalo đổi refresh_token hiện tại lấy cặp token mới.
+
+        :return: (dict kết quả Zalo, None) khi thành công,
+                 (None, chuỗi lỗi kèm mã lỗi Zalo) khi Zalo từ chối hoặc lỗi mạng
+        """
         self.ensure_one()
-        return hash(('hlv.zalo.shared.token', self.id)) & 0x7FFFFFFF
+        try:
+            response = requests.post(
+                'https://oauth.zaloapp.com/v4/oa/access_token',
+                data={
+                    'grant_type': 'refresh_token',
+                    'app_id': self.app_id,
+                    'refresh_token': self.refresh_token,
+                },
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'secret_key': self.secret_key,
+                },
+                timeout=15,
+            )
+            result = response.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            return None, _("Lỗi kết nối Zalo: %s") % e
+
+        if result.get('access_token'):
+            return result, None
+        # Zalo trả HTTP 200 kèm {"error": -14014, "error_name": ..., "error_description": ...}
+        detail = (result.get('error_description') or result.get('error_reason')
+                  or result.get('message') or result.get('error_name') or 'Unknown error')
+        return None, "[%s] %s" % (result.get('error', response.status_code), detail)
+
+    def _refresh_in_own_transaction(self, force=False):
+        """Đổi refresh_token lấy token mới và COMMIT ngay trên một cursor riêng.
+
+        Vì sao cursor riêng: Zalo xoay vòng refresh_token — gọi refresh xong là token
+        cũ chết ngay. Trước đây token mới được ghi trong transaction của nghiệp vụ đang
+        chạy (validate phiếu kho, webhook đơn...). Transaction đó rollback (lỗi phía sau,
+        serialization retry) là token mới mất, DB giữ token cũ đã chết → mọi lần refresh
+        sau đều hỏng cho tới khi authorize lại.
+
+        Transaction ngoài chạy REPEATABLE READ nên không thấy giá trị vừa commit ở đây;
+        người gọi phải dùng access_token được trả về, đừng đọc lại field.
+
+        :param force: True để refresh kể cả khi token chưa tới hạn (nút bấm, Zalo báo
+                      token sai). False thì bỏ qua nếu tiến trình khác vừa refresh xong.
+        :return: access_token mới (hoặc token còn hạn nếu không cần refresh)
+        :raise UserError: Zalo từ chối, lỗi mạng, chưa có refresh_token, hoặc dòng đang bị khoá
+        """
+        self.ensure_one()
+        error = None
+        try:
+            with self.env.registry.cursor() as cr:
+                # Khoá dòng để hai tiến trình không cùng tiêu một refresh_token. Có hạn chờ
+                # vì nếu chính request ngoài đang giữ dòng (form vừa sửa rồi bấm Refresh)
+                # thì chờ vô hạn sẽ treo cả hai.
+                cr.execute("SET LOCAL lock_timeout = '20s'")
+                cr.execute("SELECT id FROM hlv_zalo_shared_token WHERE id = %s FOR UPDATE", (self.id,))
+                rec = self.with_env(self.env(cr=cr))
+                if not force and not rec._is_token_expired():
+                    return rec.access_token
+
+                if not rec.refresh_token:
+                    error = _("Chưa có refresh token, cần Authorize with Zalo")
+                else:
+                    _logger.info("Zalo Shared Token %s: refreshing access token...", rec.id)
+                    result, error = rec._request_refreshed_tokens()
+
+                if error:
+                    rec.write({'last_refresh_error': "%s — %s" % (fields.Datetime.now(), error)})
+                else:
+                    expires_in = int(result.get('expires_in', 3600))
+                    rec.write({
+                        'access_token': result['access_token'],
+                        'refresh_token': result.get('refresh_token', rec.refresh_token),
+                        'token_expires_at': fields.Datetime.now() + timedelta(seconds=expires_in - 60),
+                        'last_refresh_date': fields.Datetime.now(),
+                        'refresh_count': rec.refresh_count + 1,
+                        'last_refresh_error': False,
+                    })
+                    _logger.info("Zalo Shared Token %s: refreshed (expires_in=%s)", rec.id, expires_in)
+                    return result['access_token']
+        except psycopg2.errors.LockNotAvailable:
+            raise UserError(_("Token đang được refresh ở nơi khác hoặc form có thay đổi chưa lưu. "
+                              "Lưu form rồi thử lại."))
+
+        _logger.error("Zalo Shared Token %s: refresh failed: %s", self.id, error)
+        raise UserError(_("Không refresh được Zalo token: %s") % error)
 
     def ensure_valid_token(self):
-        """
-        On-demand token refresh với advisory lock
-        
-        :return: True nếu token hợp lệ, False nếu có lỗi
+        """Refresh on-demand nếu token đã hết hạn.
+
+        :return: access_token dùng được; nếu refresh lỗi thì trả token hiện có (có thể đã
+                 hết hạn) để người gọi vẫn thử gửi như trước, lỗi đã được log và ghi lại
         """
         self.ensure_one()
-        
         if not self._is_token_expired():
-            return True
-        
+            return self.access_token
         _logger.warning("Zalo Shared Token %s: token expired, attempting on-demand refresh", self.id)
-        
         try:
-            lock_id = self._get_advisory_lock_id()
-            
-            self.env.cr.execute("SELECT pg_try_advisory_lock(%s)", (lock_id,))
-            lock_acquired = self.env.cr.fetchone()[0]
-            
-            if not lock_acquired:
-                _logger.warning(
-                    "Zalo Shared Token %s: could not acquire lock, skipping on-demand refresh",
-                    self.id
-                )
-                return False
-            
-            try:
-                _logger.info("Zalo Shared Token %s: acquired lock, starting on-demand refresh", self.id)
-                self.refresh_access_token()
-                _logger.info("Zalo Shared Token %s: on-demand refresh completed successfully", self.id)
-                return True
-                
-            finally:
-                self.env.cr.execute("SELECT pg_advisory_unlock(%s)", (lock_id,))
-        
-        except Exception as e:
-            _logger.exception("Zalo Shared Token %s: error during on-demand refresh: %s", self.id, e)
-            return False
+            return self._refresh_in_own_transaction()
+        except UserError:
+            return self.access_token
 
     def refresh_access_token(self):
-        """Refresh access token using refresh_token"""
+        """Refresh bắt buộc, bỏ qua hạn token. Dùng cho cron, nút bấm, và khi Zalo báo
+        access token không hợp lệ.
+
+        :return: access_token mới của bản ghi cuối (thực tế chỉ có 1 bản ghi active)
+        :raise UserError: khi refresh thất bại
+        """
+        access_token = False
         for rec in self:
-            if not rec.refresh_token:
-                _logger.warning("Zalo Shared Token %s: No refresh token", rec.id)
-                continue
-            try:
-                endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
-                data = {
-                    'grant_type': 'refresh_token',
-                    'app_id': rec.app_id,
-                    'refresh_token': rec.refresh_token,
-                }
-                headers = {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'secret_key': rec.secret_key,
-                }
-                
-                _logger.info("Zalo Shared Token %s: Refreshing access token...", rec.id)
-                response = requests.post(endpoint, data=data, headers=headers, timeout=15)
-                response.raise_for_status()
-                result = response.json()
-                
-                access_token = result.get('access_token')
-                if not access_token:
-                    error_msg = result.get('error_description', result.get('message', 'Unknown error'))
-                    _logger.error("Zalo Shared Token %s: Failed to refresh token: %s", rec.id, error_msg)
-                    continue
-                
-                expires_in = int(result.get('expires_in', 3600))
-                rec.write({
-                    'access_token': access_token,
-                    'refresh_token': result.get('refresh_token', rec.refresh_token),
-                    'token_expires_at': fields.Datetime.now() + timedelta(seconds=expires_in - 60),
-                    'last_refresh_date': fields.Datetime.now(),
-                    'refresh_count': rec.refresh_count + 1,
-                })
-                _logger.info("Zalo Shared Token %s: Access token refreshed successfully", rec.id)
-                
-            except Exception as e:
-                _logger.exception("Zalo Shared Token %s: Failed to refresh access token: %s", rec.id, e)
+            access_token = rec._refresh_in_own_transaction(force=True)
+        return access_token
 
     @api.model
     def _get_shared_token(self):
         """
-        Lấy shared token manager đang active
-        Tự động refresh nếu token hết hạn
-        
-        :return: access_token (string) hoặc False nếu không có
+        Lấy access token của shared token manager đang active, tự refresh nếu hết hạn.
+
+        :return: access_token (string) hoặc False nếu không có bản ghi active
         """
         token_manager = self.search([('active', '=', True)], limit=1)
-        
         if not token_manager:
             _logger.error("No active Zalo Shared Token found")
             return False
-        
-        # On-demand refresh nếu cần
-        if token_manager._is_token_expired():
-            token_manager.ensure_valid_token()
-        
-        return token_manager.access_token
+        return token_manager.ensure_valid_token()
 
     def action_refresh_token(self):
         """Action button để manually refresh token"""
         self.ensure_one()
-        try:
-            self.refresh_access_token()
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Refresh Token'),
-                    'message': _('Đã refresh access token thành công'),
-                    'type': 'success',
-                    'sticky': False,
-                }
+        self.refresh_access_token()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Refresh Token'),
+                'message': _('Đã refresh access token thành công'),
+                'type': 'success',
+                'sticky': False,
             }
-        except Exception as e:
-            raise UserError(_("Lỗi khi refresh token: %s") % str(e))
+        }
 
     def action_test_token(self):
         """Action button để test token"""
