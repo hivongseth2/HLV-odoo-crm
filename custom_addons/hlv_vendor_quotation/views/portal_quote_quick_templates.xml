@@ -20,8 +20,6 @@
                 <span t-if="quote.amount_untaxed" class="vq-quick-total">
                     Sau VAT <b t-esc="fmt(quote.amount_total)"/> · chưa VAT <t t-esc="fmt(quote.amount_untaxed)"/>
                 </span>
-                <a t-att-href="quote_url" class="vq-btn vq-btn-secondary"
-                   t-esc="'Điền giá →' if quote_status[1] == 'waiting' else 'Mở báo giá →'"/>
             </div>
         </div>
     </template>
