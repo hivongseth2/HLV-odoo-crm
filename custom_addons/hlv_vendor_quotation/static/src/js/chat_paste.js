@@ -6,7 +6,8 @@
  * Ảnh chụp màn hình dán vào luôn tên "image.png" — đổi thành anh-dan-<giờ>.png cho khỏi
  * trùng tên khi dán nhiều ảnh.
  *
- * Dùng: HlvChatPaste.bind(textarea, fileInput)
+ * Dùng: HlvChatPaste.bind(textarea, fileInput); HlvChatPaste.addFiles(fileInput, files) cho kéo thả
+ * (js/ship_files.js).
  */
 (function () {
     "use strict";
@@ -26,23 +27,33 @@
         return new File([file], name, { type: file.type });
     }
 
-    function bind(textarea, fileInput) {
-        if (!textarea || !fileInput || !window.DataTransfer) {
+    /** Cộng thêm tệp (dán / kéo thả) vào ô chọn tệp rồi phát "change". Trả false nếu trình duyệt không hỗ trợ. */
+    function addFiles(fileInput, files) {
+        if (!window.DataTransfer) {
+            return false;
+        }
+        var transfer = new DataTransfer();
+        Array.prototype.forEach.call(fileInput.files, function (file) { transfer.items.add(file); });
+        Array.prototype.forEach.call(files, function (file, index) { transfer.items.add(rename(file, index)); });
+        fileInput.files = transfer.files;
+        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+    }
+
+    /** Ctrl+V trên `target` (ô nhập hoặc vùng bất kỳ): clipboard có tệp thì thêm vào fileInput. */
+    function bind(target, fileInput) {
+        if (!target || !fileInput || !window.DataTransfer) {
             return;
         }
-        textarea.addEventListener("paste", function (event) {
+        target.addEventListener("paste", function (event) {
             var pasted = event.clipboardData && event.clipboardData.files;
             if (!pasted || !pasted.length) {
                 return;
             }
             event.preventDefault();
-            var transfer = new DataTransfer();
-            Array.prototype.forEach.call(fileInput.files, function (file) { transfer.items.add(file); });
-            Array.prototype.forEach.call(pasted, function (file, index) { transfer.items.add(rename(file, index)); });
-            fileInput.files = transfer.files;
-            fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+            addFiles(fileInput, pasted);
         });
     }
 
-    window.HlvChatPaste = { bind: bind };
+    window.HlvChatPaste = { bind: bind, addFiles: addFiles };
 })();
