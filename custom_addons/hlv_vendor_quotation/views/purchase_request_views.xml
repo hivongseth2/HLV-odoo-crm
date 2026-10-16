@@ -74,6 +74,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_ref']" position="after">
                 <field name="hlv_delivery_method"/>
+                <field name="hlv_vendor_portal_password" invisible="not hlv_vendor_portal_password"/>
                 <field name="hlv_vendor_status" readonly="1" invisible="not hlv_vendor_status"/>
                 <field name="hlv_vendor_status_date" invisible="not hlv_vendor_status_date"/>
                 <field name="hlv_ship_method" invisible="not hlv_ship_method"/>
