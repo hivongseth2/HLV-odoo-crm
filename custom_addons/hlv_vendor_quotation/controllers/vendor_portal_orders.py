@@ -20,14 +20,12 @@ from odoo.http import request
 
 from ..models.purchase_order import CONFIRMED_STATES, PROGRESS_LABELS
 from ..models.purchase_order_revision import tax_rate_of
-from ..models.vendor_quote_access import PORTAL_ROUTE
+from ..models.vendor_quote_access import PORTAL_ORDERS as ORDERS, PORTAL_ROUTE
 from ..models.vendor_quote_utils import DELIVERY_CHANH, DELIVERY_CPN, parse_vn_number, price_incl_vat
-from ..services.chat_read import mark_seen
 from ..services.vendor_chat import chat_messages, post_chat
 from ..services.vendor_feed import row_marks
 from .vendor_portal import VendorQuotePortal
 
-ORDERS = "don-mua"
 # Tab danh sách đơn mua — khoá trùng PurchaseOrder._hlv_vendor_stage().
 ORDER_TABS = [
     ("rfq", "Chờ xác nhận"),
@@ -157,7 +155,7 @@ class VendorPurchaseOrderPortal(VendorQuotePortal):
         if not order:
             return self._not_found()
         from_quote = self._from_quote(access, kw.get("from"))
-        mark_seen([order], access)
+        self._mark_vendor_seen([order], access)
         error = ""
         saved = "1"
         if request.httprequest.method == "POST" and (status or ship or revise or withdraw):

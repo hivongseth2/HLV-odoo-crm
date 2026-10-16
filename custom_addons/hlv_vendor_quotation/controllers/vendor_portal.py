@@ -114,7 +114,7 @@ class VendorQuotePortal(http.Controller):
         if not access or not self._is_logged_in(access):
             return self._not_found()
         quotes = access.quote_ids.filtered(lambda q: q.state in VENDOR_VISIBLE_STATES)
-        mark_seen(list(quotes) + list(access._vendor_purchase_orders()), access)
+        self._mark_vendor_seen(list(quotes) + list(access._vendor_purchase_orders()), access)
         return request.redirect(self._safe_next(access, next_url))
 
     @http.route(f"{PORTAL_ROUTE}/<string:token>/logout", type="http", auth="public", methods=["GET"])
@@ -143,7 +143,7 @@ class VendorQuotePortal(http.Controller):
         if not quote:
             return self._not_found()
         # Mở trang là đã xem báo giá + mọi tin hiện có (trước _render để thông báo tính đúng).
-        mark_seen([quote], access)
+        self._mark_vendor_seen([quote], access)
 
         values = {"quote": quote, "saved": bool(post.get("saved"))}
         if request.httprequest.method == "POST":
@@ -325,9 +325,20 @@ class VendorQuotePortal(http.Controller):
                 return next_url
         return access._portal_path()
 
+    @staticmethod
+    def _is_internal_viewer():
+        """Đang đăng nhập Odoo bằng tài khoản nội bộ (thu mua / sale mở link NCC từ backend, VD link trên đơn mua)."""
+        return request.env.user._is_internal()
+
+    def _mark_vendor_seen(self, records, access):
+        """Mở trang = NCC đã xem. Người nội bộ mở link NCC thì KHÔNG tính — không thì chấm "Mới / chưa xem" bên NCC
+        mất trước khi NCC kịp mở."""
+        if not self._is_internal_viewer():
+            mark_seen(records, access)
+
     def _is_logged_in(self, access):
-        if not access._password_required():
-            return True  # đang tắt mật khẩu: có link là vào
+        if not access._password_required() or self._is_internal_viewer():
+            return True  # tắt mật khẩu: có link là vào; người nội bộ không cần mật khẩu của NCC
         saved = (request.session.get(SESSION_KEY) or {}).get(str(access.id), "")
         return hmac.compare_digest(saved.encode(), access._session_key().encode())
 

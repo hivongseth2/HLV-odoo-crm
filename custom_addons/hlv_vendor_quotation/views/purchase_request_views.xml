@@ -81,6 +81,8 @@
                 <field name="hlv_ship_ref" invisible="not hlv_ship_ref"/>
                 <field name="hlv_vendor_event" invisible="not hlv_vendor_event"/>
                 <field name="hlv_inquiry_ids" widget="many2many_tags" readonly="1" invisible="not hlv_inquiry_ids"/>
+                <!-- Chỉ hiện khi NCC xem được đơn (Cài đặt "Đơn mua hiện trên trang NCC") — xem _compute_hlv_vendor_portal_url. -->
+                <field name="hlv_vendor_portal_url" widget="url" readonly="1" invisible="not hlv_vendor_portal_url"/>
             </xpath>
             <!-- Cạnh "Hàng về dự kiến" (theo ngày NCC giao được) để thu mua thấy ngay chỗ lệch với ngày sale cần. -->
             <xpath expr="//div[@name='date_planned_div']" position="after">
