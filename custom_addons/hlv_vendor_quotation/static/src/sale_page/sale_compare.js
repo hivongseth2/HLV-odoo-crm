@@ -175,8 +175,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (!list.length) {
       return "";
     }
-    return '<div class="hq-alert hq-alert-strong hq-short-box"><div>Còn thiếu — vẫn lên YCMH phần đã có, phần ' +
-      'thiếu bấm "Hỏi thêm NCC" sau. Khách chỉ mua chừng này thì tick:</div>' + list.map(function (s) {
+    return '<div class="hq-alert hq-alert-strong hq-short-box"><div>Còn thiếu:</div>' + list.map(function (s) {
         return '<label class="hq-short-item"><input type="checkbox" data-settle-line="' + s.line.id + '"' +
           (D.settle[s.line.id] ? " checked" : "") + "/> " + esc(s.line.name) + ": thiếu <b>" + HQ.qty(s.shortage) +
           " " + esc(s.line.uom) + "</b> (cần " + HQ.qty(s.line.need_qty) + ") — khách chỉ mua chừng này</label>";
@@ -319,8 +318,7 @@ window.HlvQuote = window.HlvQuote || {};
       return "";
     }
     return '<div class="hq-alert hq-alert-strong">' + rejected.map(HQ.requestTag).join("") +
-      " bị thu mua <b>từ chối</b>. Hỏi thu mua lý do (nút Trao đổi trên đơn mua, hoặc chatter YCMH), chọn lại NCC " +
-      "nếu cần rồi lên YCMH mới.</div>";
+      " bị thu mua <b>từ chối</b>.</div>";
   }
 
   /** Bảng sản phẩm (dòng) × NCC (cột). Ô có giá bấm được để chọn khi phiếu còn mở. */
@@ -354,7 +352,7 @@ window.HlvQuote = window.HlvQuote || {};
             HQ.withdrawLink(line, v, d, offer));
         }).join("") + "</tr>";
     }).join("");
-    return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá — bấm vào giá để chọn NCC</h3>' +
+    return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá</h3>' +
       (d.can_add_vendor ? '<button type="button" class="hq-btn hq-btn-mini" data-add-toggle="1" title="NCC báo hết hàng / ' +
         'cần thêm giá để so — gửi sản phẩm cho NCC khác">+ Hỏi thêm NCC</button>' : "") + "</div>" +
       '<div class="hq-table-wrap hq-compare-wrap"><table class="hq-table hq-compare"><thead>' + head +
@@ -416,7 +414,7 @@ window.HlvQuote = window.HlvQuote || {};
     }
     if (line.request_rejected) {
       parts.push(docChips(line.rejected_names, "hq-tag-danger") +
-        '<span class="hq-expired"> bị từ chối — chọn lại NCC rồi lên YCMH mới</span>');
+        '<span class="hq-expired"> bị từ chối</span>');
     } else if ((line.request_names || []).length) {
       parts.push(docChips(line.request_names));
     }
@@ -501,12 +499,10 @@ window.HlvQuote = window.HlvQuote || {};
     var live = d.requests.filter(function (r) { return r.state !== "rejected"; });
     var redo = d.lines.some(function (l) { return l.to_request && l.request_rejected; });
     var done = live.length
-      ? '<div class="hq-muted">Đã lên ' + live.map(HQ.requestTag).join("") +
-        ". Thu mua duyệt YCMH rồi tạo đơn mua theo NCC và giá đã chọn. Đổi SL mua dưới giá — YCMH tự " +
-        "cập nhật; còn thiếu thì chọn thêm NCC rồi bổ sung vào YCMH.</div>"
+      ? '<div class="hq-muted">Đã lên ' + live.map(HQ.requestTag).join("") + "</div>"
       : "";
     if (live.length && !d.pending_count) {
-      return '<div class="hq-share"><b>Đã lên yêu cầu mua hàng</b>' + done + "</div>";
+      return '<div class="hq-share"><b>Yêu cầu mua hàng</b>' + done + "</div>";
     }
     var title = redo ? "Lên lại yêu cầu mua hàng" : live.length ? "Bổ sung vào yêu cầu mua hàng" : "Lên yêu cầu mua hàng";
     var head = '<div class="hq-share"><div class="hq-share-head"><b>' + title + "</b>" +

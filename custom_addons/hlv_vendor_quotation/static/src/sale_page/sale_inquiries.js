@@ -116,8 +116,7 @@ window.HlvQuote = window.HlvQuote || {};
   function renderInquiries(inquiries) {
     var body = HQ.$("hq-quote-list");
     if (!inquiries.length) {
-      body.innerHTML = '<tr><td colspan="8" class="hq-empty">Chưa có phiếu hỏi giá nào. ' +
-        'Bấm "Hỏi giá NCC" để hỏi giá sản phẩm.</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" class="hq-empty">Chưa có phiếu hỏi giá nào.</td></tr>';
       return;
     }
     body.innerHTML = inquiries.map(function (q) {
