@@ -14,12 +14,12 @@
                 Có chiết khấu
             </label>
             <label class="vq-inline-field vq-disc-only">
-                <span>% CK cho tất cả dòng</span>
+                <span><span class="vq-label-long">% CK cho tất cả dòng</span><span class="vq-label-short">%CK</span></span>
                 <input type="text" inputmode="decimal" class="vq-input vq-input-disc" data-vq-disc-all="1"
                        placeholder="VD 13"/>
             </label>
             <label class="vq-inline-field">
-                <span>VAT cho tất cả dòng</span>
+                <span><span class="vq-label-long">VAT cho tất cả dòng</span><span class="vq-label-short">VAT</span></span>
                 <select class="vq-input" data-vq-vat-all="1">
                     <option value="">Chọn</option>
                     <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]" t-esc="opt[1]"/>
@@ -153,7 +153,7 @@
                 </td>
             </t>
             <td t-if="not show_quote" class="vq-col-code" data-label="Mã hàng">
-                <t t-call="hlv_vendor_quotation.portal_grid_na"/><t t-esc="code or '—'"/>
+                <t t-call="hlv_vendor_quotation.portal_grid_na"/><span class="vq-code-text" t-esc="code or '—'"/>
             </td>
             <td class="vq-col-name" t-att-title="('%s · %s' % (code, product_name)) if show_quote and code else product_name">
                 <div class="vq-name-cell">
