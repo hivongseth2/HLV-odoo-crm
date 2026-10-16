@@ -395,3 +395,8 @@ details.hd-step[open] > summary { margin-bottom: .25rem; }
   border-radius: var(--hd-radius); background: var(--hd-bg); font-size: 13px; }
 .hd-related li { padding: .15rem 0; }
 #hd-payment-info b { color: var(--hd-ink); font-weight: 600; }
+
+/* Ngăn soạn: bản scan đã ký (hd_signed.js) */
+.hd-signed-row { display: flex; align-items: center; gap: .5rem .75rem; flex-wrap: wrap; }
+.hd-signed-file { font-weight: 600; color: var(--hd-accent); text-decoration: none; word-break: break-all; }
+.hd-signed-file:hover { text-decoration: underline; }

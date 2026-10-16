@@ -65,6 +65,7 @@ window.HlvContract = window.HlvContract || {};
       HD.initForm();
       HD.initLines();
       HD.initLinks();
+      HD.initSigned();
       HD.initTemplates();
       HD.initBody();
       HD.initLogs();

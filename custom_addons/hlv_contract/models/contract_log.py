@@ -14,6 +14,7 @@ ACTIONS = [
     ('template', 'Áp dụng mẫu'),
     ('state', 'Đổi trạng thái'),
     ('export', 'Xuất file'),
+    ('signed', 'Bản đã ký'),
     ('delete', 'Xoá'),
 ]
 

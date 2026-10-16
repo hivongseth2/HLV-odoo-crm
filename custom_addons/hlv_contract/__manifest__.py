@@ -22,7 +22,7 @@ Quản lý hợp đồng theo mẫu Word có trường trộn (MERGEFIELD), thay
 """,
     'author': 'HLV',
     'category': 'Sales',
-    'version': '18.0.3.4.0',
+    'version': '18.0.3.5.0',
     'license': 'LGPL-3',
     # sale: chọn hàng từ danh mục sản phẩm và lấy dòng hàng từ đơn bán
     'depends': ['base', 'mail', 'web', 'sale'],
