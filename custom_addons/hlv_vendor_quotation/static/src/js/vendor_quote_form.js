@@ -105,6 +105,7 @@
         setText(form, "[data-vq-total-untaxed]", formatVnNumber(Math.round(untaxed)));
         setText(form, "[data-vq-total-tax]", formatVnNumber(Math.round(total) - Math.round(untaxed)));
         setText(form, "[data-vq-total]", formatVnNumber(Math.round(total)));
+        setText(form, "[data-vq-total-bar]", formatVnNumber(Math.round(total)));
         setText(form, "[data-vq-progress]", `Đã điền ${done}/${lines.length} mặt hàng`);
     }
 
@@ -166,6 +167,16 @@
         const row = ev.target.matches("[data-vq-nomore]") && ev.target.closest("[data-vq-short-for]");
         return row ? form.querySelector(`[data-vq-lid="${row.dataset.vqShortFor}"]`) : null;
     }
+
+    // Điện thoại: "Thêm chi tiết" mở / thu giao (ngày), tên xuất HĐ, ghi chú của một dòng (máy tính luôn hiện thành cột).
+    form.addEventListener("click", (ev) => {
+        const button = ev.target.closest("[data-vq-more]");
+        if (!button) {
+            return;
+        }
+        const open = button.closest("[data-vq-line]").classList.toggle("vq-more-open");
+        button.textContent = open ? "Ẩn chi tiết ▴" : "Thêm chi tiết ▾";
+    });
 
     for (const type of ["input", "change"]) {
         form.addEventListener(type, (ev) => {

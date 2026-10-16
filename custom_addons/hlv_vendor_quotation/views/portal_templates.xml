@@ -11,6 +11,7 @@
                 <meta name="robots" content="noindex, nofollow"/>
                 <title><t t-esc="page_title or 'Báo giá'"/> · <t t-esc="company.name"/></title>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_chat.css?v=#{asset_version}"/>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_history.css?v=#{asset_version}"/>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_files.css?v=#{asset_version}"/>
             </head>
@@ -421,7 +422,8 @@
 
                     <div t-if="editable" class="vq-submit-bar">
                         <div class="vq-wrap vq-submit-row">
-                            <span class="vq-muted" data-vq-progress="1"></span>
+                            <span class="vq-submit-info"><span class="vq-muted" data-vq-progress="1"></span>
+                                <span class="vq-submit-total">Tổng <b data-vq-total-bar="1">—</b> sau VAT</span></span>
                             <button type="submit" class="vq-btn vq-btn-primary vq-btn-lg">
                                 <t t-esc="'Gửi lại báo giá' if quote.state == 'quoted' else 'Gửi báo giá'"/>
                             </button>

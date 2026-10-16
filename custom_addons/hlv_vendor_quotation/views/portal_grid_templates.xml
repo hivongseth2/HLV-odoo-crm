@@ -123,8 +123,13 @@
         <t t-set="bo_raw" t-value="post.get('bodate_%s' % lid) if post else (line.backorder_date and line.backorder_date.isoformat() or '')"/>
         <t t-set="nomore_on" t-value="('nomore_%s' % lid) in post if post else line.no_more"/>
         <t t-set="vat_value" t-value="post.get('vat_%s' % lid) if post else (line.vat or (ref and ref.vat) or default_vat)"/>
+        <t t-set="days_raw" t-value="post.get('days_%s' % lid) if post else (line.delivery_days or (ref and ref.delivery_days) or '')"/>
+        <t t-set="inv_raw" t-value="post.get('inv_%s' % lid) if post else (line.invoice_name or (ref and ref.invoice_name) or '')"/>
+        <t t-set="note_raw" t-value="post.get('note_%s' % lid) if post else saved_note"/>
+        <!-- Điện thoại: giao (ngày) / tên xuất HĐ / ghi chú thu gọn sau "Thêm chi tiết"; dòng đã có số liệu ở đó thì mở sẵn. -->
+        <t t-set="more_open" t-value="line_editable and (days_raw or inv_raw or note_raw)"/>
         <tr data-vq-line="1" data-vq-pair="1" t-att-data-vq-lid="lid"
-            t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''}"
+            t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''} #{'vq-more-open' if more_open else ''}"
             t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
             t-att-data-vat="line.vat or ''" t-att-data-na="'1' if na_checked else None">
             <td class="vq-col-no" t-esc="line_index + 1"/>
@@ -216,23 +221,30 @@
             <!-- Tính sẵn ở server cho bảng chỉ đọc (xem nhanh ở danh sách); trang nhập giá thì JS tính lại khi gõ. -->
             <td class="vq-num vq-col-total vq-cell-calc" data-label="Thành tiền" data-vq-subtotal="1"
                 t-esc="'Không có hàng' if na_checked else (fmt(round(line.price_total)) if line.price_unit else '—')"/>
-            <td class="vq-num vq-col-days" data-label="Giao (ngày)">
+            <!-- vq-more-only: điện thoại thu gọn sau "Thêm chi tiết"; vq-empty: chỉ xem mà trống thì điện thoại ẩn hẳn. -->
+            <td t-attf-class="vq-num vq-col-days #{'vq-more-only' if line_editable else ('' if line.delivery_days else 'vq-empty')}"
+                data-label="Giao (ngày)">
                 <input t-if="line_editable" type="text" inputmode="numeric" class="vq-cell-input"
-                       t-att-name="'days_%s' % lid" placeholder="ngày"
-                       t-att-value="post.get('days_%s' % lid) if post else (line.delivery_days or (ref and ref.delivery_days) or '')"/>
+                       t-att-name="'days_%s' % lid" placeholder="ngày" t-att-value="days_raw"/>
                 <span t-else="" class="vq-cell-text" t-esc="line.delivery_days or '—'"/>
             </td>
-            <td class="vq-col-text" data-label="Tên xuất HĐ">
+            <td t-attf-class="vq-col-text vq-col-inv #{'vq-more-only' if line_editable else ('' if line.invoice_name else 'vq-empty')}"
+                data-label="Tên xuất HĐ">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
-                       t-att-name="'inv_%s' % lid" placeholder="nếu khác tên hàng"
-                       t-att-value="post.get('inv_%s' % lid) if post else (line.invoice_name or (ref and ref.invoice_name) or '')"/>
+                       t-att-name="'inv_%s' % lid" placeholder="nếu khác tên hàng" t-att-value="inv_raw"/>
                 <span t-else="" class="vq-cell-text" t-esc="line.invoice_name or ''"/>
             </td>
-            <td class="vq-col-text" data-label="Ghi chú">
+            <t t-set="note_shown" t-value="stock_note_parts(line.vendor_note)[1]"/>
+            <td t-attf-class="vq-col-text vq-col-note #{'vq-more-only' if line_editable else ('' if note_shown else 'vq-empty')}"
+                data-label="Ghi chú">
                 <input t-if="line_editable" type="text" class="vq-cell-input" maxlength="255"
-                       t-att-name="'note_%s' % lid" placeholder="hãng, xuất xứ…"
-                       t-att-value="post.get('note_%s' % lid) if post else saved_note"/>
-                <span t-else="" class="vq-cell-text" t-esc="stock_note_parts(line.vendor_note)[1]"/>
+                       t-att-name="'note_%s' % lid" placeholder="hãng, xuất xứ…" t-att-value="note_raw"/>
+                <span t-else="" class="vq-cell-text" t-esc="note_shown"/>
+            </td>
+            <!-- Chỉ điện thoại thấy (máy tính: các ô trên luôn hiện thành cột) — bấm mở / thu chi tiết phụ của dòng. -->
+            <td t-if="line_editable" class="vq-col-more">
+                <button type="button" class="vq-more-btn" data-vq-more="1"
+                        t-esc="'Ẩn chi tiết ▴' if more_open else 'Thêm chi tiết ▾'"/>
             </td>
         </tr>
         <t t-if="line_editable" t-call="hlv_vendor_quotation.portal_grid_short"/>
