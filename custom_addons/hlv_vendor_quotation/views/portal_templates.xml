@@ -12,6 +12,7 @@
                 <title><t t-esc="page_title or 'Báo giá'"/> · <t t-esc="company.name"/></title>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_portal.css?v=#{asset_version}"/>
                 <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_history.css?v=#{asset_version}"/>
+                <link rel="stylesheet" t-attf-href="/hlv_vendor_quotation/static/src/css/vendor_files.css?v=#{asset_version}"/>
             </head>
             <body t-att-data-bus-channel="bus_channel if logged_in else None"
                   t-att-data-bus-version="bus_version if logged_in else None"
@@ -54,6 +55,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/odoo_bus.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_alert.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/chat_paste.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/js/ship_files.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/js/vendor_live.js?v=#{asset_version}"></script>
             </body>
         </html>

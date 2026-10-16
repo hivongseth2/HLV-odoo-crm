@@ -716,8 +716,6 @@ tr:has(.vq-edit-toggle:checked) .vq-edit { display: block; }
 .vq-ship-grid > .vq-btn { align-self: end; }
 .vq-ship-field { display: grid; gap: 4px; min-width: 0; }
 .vq-ship-field .vq-input { width: 100%; }
-.vq-file { width: 100%; padding: 8px 10px; border: 1px dashed var(--vq-line-strong); border-radius: 6px; background: #fff;
-    font-size: .82rem; color: var(--vq-muted); }
 .vq-quick-progress { padding: 14px 16px; border-top: 1px solid var(--vq-line); }
 .vq-quick-progress .vq-track { max-width: 560px; }
 @media (max-width: 760px) {
