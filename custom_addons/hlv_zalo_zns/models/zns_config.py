@@ -211,8 +211,12 @@ class ZaloZNSConfig(models.Model):
                 # Refresh Shared Token
                 token_manager = self.env['hlv.zalo.shared.token'].search([('active', '=', True)], limit=1)
                 if token_manager:
-                    token_manager.refresh_access_token()
-                    access_token = token_manager.access_token
+                    # Lấy token từ giá trị trả về: refresh commit ở cursor riêng, đọc lại
+                    # field trong transaction này vẫn ra token cũ.
+                    try:
+                        access_token = token_manager.refresh_access_token()
+                    except UserError as e:
+                        _logger.error("ZNS: shared token refresh failed: %s", e)
             else:
                 # Refresh own token
                 self.refresh_access_token()
