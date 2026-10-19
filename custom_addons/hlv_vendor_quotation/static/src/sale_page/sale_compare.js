@@ -221,7 +221,7 @@ window.HlvQuote = window.HlvQuote || {};
     keepOrigin();
     // Phiếu đã có YCMH / đơn mua thì mã đơn hàng sửa ở khung riêng (HQ.orderRefBox), không gửi ở đây.
     HQ.api("create_request", Object.assign(HQ.requestExtras(d),
-      d.can_set_order_ref ? {} : HQ.originDraft(REQ_ORIGIN, D.origin.text), {
+      d.can_set_order_ref ? {} : { origin: D.origin.text }, {
       inquiry_id: d.id,
       requester_code: HQ.requestCode(d),
       quantities: quantities,

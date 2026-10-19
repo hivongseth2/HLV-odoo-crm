@@ -115,21 +115,31 @@ window.HlvQuote = window.HlvQuote || {};
     });
   };
 
-  /** Nối ô tìm + danh sách thả xuống: gõ → gọi fetchItems(term) → vẽ bằng renderItem. */
-  HQ.bindPicker = function (inputId, listId, fetchItems, renderItem, onPick) {
+  /** Nối ô tìm + danh sách thả xuống: gõ → gọi fetchItems(term) → vẽ bằng renderItem.
+      opts.enter: chỉ tìm khi bấm Enter hoặc ngừng gõ opts.delay ms (ô tìm chậm — VD hỏi tiếp MISA CRM), không tìm
+      theo từng phím. Mặc định tìm sau 250 ms ngừng gõ. */
+  HQ.bindPicker = function (inputId, listId, fetchItems, renderItem, onPick, opts) {
+    opts = opts || {};
     var input = HQ.$(inputId);
     var list = HQ.$(listId);
     var items = [];
+    var timer = null;
     // Lượt tìm mới nhất — kết quả của lượt cũ về muộn (CRM chậm) không được đè lên.
     var seq = 0;
-    var run = HQ.debounce(function () {
+    function showLoading() {
+      items = [];
+      list.innerHTML = '<div class="hq-dropdown-empty">Đang tìm…</div>';
+      list.classList.remove("hq-hidden");
+    }
+    function search() {
+      clearTimeout(timer);
       var term = input.value.trim();
+      var mine = ++seq;
       if (!term) {
-        seq++;
         list.classList.add("hq-hidden");
         return;
       }
-      var mine = ++seq;
+      showLoading();
       fetchItems(term).then(function (result) {
         if (mine !== seq) {
           return;
@@ -148,16 +158,27 @@ window.HlvQuote = window.HlvQuote || {};
           HQ.toast(err.message);
         }
       });
-    }, 250);
+    }
     input.addEventListener("input", function () {
-      // Hiện "Đang tìm…" ngay khi gõ — chờ kết quả không bị nhầm thành "Không tìm thấy".
-      if (input.value.trim()) {
-        items = [];
-        list.innerHTML = '<div class="hq-dropdown-empty">Đang tìm…</div>';
-        list.classList.remove("hq-hidden");
+      if (opts.enter) {
+        // Đang gõ: bỏ kết quả cũ, chờ Enter / ngừng gõ.
+        seq++;
+        list.classList.add("hq-hidden");
+      } else if (input.value.trim()) {
+        // Hiện "Đang tìm…" ngay khi gõ — chờ kết quả không bị nhầm thành "Không tìm thấy".
+        showLoading();
       }
-      run();
+      clearTimeout(timer);
+      timer = setTimeout(search, opts.delay || 250);
     });
+    if (opts.enter) {
+      input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          search();
+        }
+      });
+    }
     input.addEventListener("blur", function () {
       setTimeout(function () { list.classList.add("hq-hidden"); }, 150);
     });

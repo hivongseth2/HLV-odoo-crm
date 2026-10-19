@@ -11,10 +11,11 @@ window.HlvQuote = window.HlvQuote || {};
 
   var esc = HQ.esc;
   var after = {};  // key → việc làm sau khi lưu (tải lại ngăn phiếu / hộp đơn mua)
-  var crmPicked = {};  // key → {số đơn: ID CRM} đơn MISA CRM chưa về Odoo đã chọn ở ô (nguồn gợi ý = CRM)
+  // Tìm khi Enter hoặc ngừng gõ 3 giây: không thấy trong Odoo thì server hỏi tiếp MISA CRM (chậm).
+  var SEARCH_DELAY = 3000;
 
   // Một ô cho cả "đơn bán" và "mã đơn hàng": trùng số đơn bán thì server gắn luôn đơn bán (action_set_order_ref_crm).
-  HQ.ORIGIN_LABEL = "Mã đơn hàng của khách (Tài liệu gốc đơn mua)";
+  HQ.ORIGIN_LABEL = "Mã đơn hàng của khách (Tài liệu gốc đơn mua) — số đơn DH… / S…, gõ xong bấm Enter để tìm";
   var ORIGIN_LABEL = HQ.ORIGIN_LABEL;
 
   function inputId(key) {
@@ -48,17 +49,12 @@ window.HlvQuote = window.HlvQuote || {};
       esc(buttonLabel) + "</button></div></div>";
   };
 
-  /** Chỉ ô nhập + gợi ý, không nút lưu — ô ở bước lên YCMH gửi kèm create_request (HQ.originDraft). */
+  /** Chỉ ô nhập + gợi ý, không nút lưu — ô ở bước lên YCMH gửi kèm create_request (origin). */
   HQ.originInput = function (key, value) {
     return '<div class="hq-picker hq-origin-picker">' +
       '<input type="text" id="' + inputId(key) + '" class="hq-input" autocomplete="off" maxlength="250" ' +
       'value="' + esc(value) + '" placeholder="VD DH125524949237215 — nhiều mã cách nhau dấu phẩy"/>' +
       '<div id="' + inputId(key) + '-results" class="hq-dropdown hq-hidden"></div></div>';
-  };
-
-  /** Giá trị ô để gửi server: {origin, crm_orders} (crm_orders: đơn CRM chưa về Odoo đã chọn, còn trong ô). */
-  HQ.originDraft = function (key, origin) {
-    return { origin: origin, crm_orders: pickedCrmOrders(key, origin) };
   };
 
   /** Gắn gợi ý đơn bán cho ô vừa vẽ (gọi sau mỗi lần vẽ lại). */
@@ -78,29 +74,9 @@ window.HlvQuote = window.HlvQuote || {};
         '<span class="hq-muted">' + esc([o.partner, o.owner || HQ.saleName(o.sale_code), o.date,
           o.crm_id && !o.id ? HQ.CRM_ORDER_WAITING : ""].filter(Boolean).join(" · ")) + "</span>";
     }, function (order) {
-      if (order.crm_id && !order.id) {
-        (crmPicked[key] = crmPicked[key] || {})[order.name] = order.crm_id;
-      }
       return replaceLastCode(input.value, order.name);
-    });
-    input.addEventListener("keydown", function (event) {
-      var button = document.querySelector('[data-save-origin="' + key + '"]');
-      if (event.key === "Enter") {
-        event.preventDefault();
-        if (button) {
-          save(button);
-        }
-      }
-    });
+    }, { enter: true, delay: SEARCH_DELAY });
   };
-
-  /** Đơn CRM đã chọn mà còn nằm trong ô: [{crm_id, code}] — server giữ để tự gắn khi đơn về Odoo. */
-  function pickedCrmOrders(key, origin) {
-    var picked = crmPicked[key] || {};
-    var codes = origin.split(",").map(function (c) { return c.trim(); });
-    return Object.keys(picked).filter(function (code) { return codes.indexOf(code) >= 0; })
-      .map(function (code) { return { crm_id: picked[code], code: code }; });
-  }
 
   function save(button) {
     var key = button.dataset.saveOrigin;
@@ -108,7 +84,7 @@ window.HlvQuote = window.HlvQuote || {};
     var inquiryId = +button.dataset.inquiryId;
     button.disabled = true;
     var call = inquiryId
-      ? HQ.api("set_order_ref", Object.assign({ inquiry_id: inquiryId }, HQ.originDraft(key, origin)))
+      ? HQ.api("set_order_ref", { inquiry_id: inquiryId, origin: origin })
       : HQ.api("po_origin", { order_ids: button.dataset.orderIds.split(",").map(Number), origin: origin });
     call.then(function (res) {
       HQ.toast(inquiryId

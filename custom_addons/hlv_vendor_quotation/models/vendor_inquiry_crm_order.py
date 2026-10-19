@@ -8,20 +8,15 @@
 from markupsafe import Markup
 
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
+from ..services.crm_sale_order import search_crm_sale_orders
 from .vendor_quote_utils import normalize_origin
 
 SALE_ORDER_SOURCE_PARAM = "hlv_vendor_quotation.sale_order_source"
-SALE_ORDER_SOURCES = [("odoo", "Đơn bán trong Odoo"), ("crm", "Đơn hàng trên MISA CRM")]
+SALE_ORDER_SOURCES = [("odoo", "Chỉ đơn bán trong Odoo"), ("crm", "Odoo, không thấy thì tìm MISA CRM")]
 # Đơn api_resync_by_misa vừa tạo mang tên tạm tới khi nạp xong dữ liệu CRM — gắn ở bước sau, khi đã có số đơn thật.
 BOOTSTRAP_PREFIX = "TMP-MISA-"
-
-
-def _single_pick(origin, crm_picks):
-    """(ID CRM, số đơn) khi đúng một đơn CRM đã chọn còn nằm trong origin (đã normalize_origin); không thì None."""
-    codes = set((origin or "").split(", "))
-    picks = [pick for pick in crm_picks or () if pick[1] in codes]
-    return picks[0] if len(picks) == 1 else None
 
 
 class VendorInquiryCrmOrder(models.Model):
@@ -36,31 +31,47 @@ class VendorInquiryCrmOrder(models.Model):
         source = self.env["ir.config_parameter"].sudo().get_param(SALE_ORDER_SOURCE_PARAM)
         return source if source in dict(SALE_ORDER_SOURCES) else "odoo"
 
-    def _hlv_order_from_ref(self, origin, crm_picks):
-        """Đơn bán Odoo ứng với mã đơn hàng sale nhập: số đơn trùng một mã trong origin, không thì đơn CRM sale chọn
-        mà đã đồng bộ về (misa_id — có thể vừa về giữa lúc tìm và lúc bấm). Không có → rỗng."""
+    @api.model
+    def _hlv_check_order_ref(self, origin):
+        """Kiểm mã đơn hàng sale nhập ở trang hỏi giá — ô này chỉ ghi số đơn bán của mình (DH… / S…), chặn gõ sai.
+        Mỗi mã phải là một đơn bán trong Odoo, hoặc (nguồn MISA CRM) một đơn trên CRM đúng số đó. Mã sai → UserError.
+        Trả {"origin": đã normalize_origin, "order": đơn bán Odoo để gắn (trùng số, hoặc đơn CRM đã đồng bộ về theo
+        misa_id) hoặc rỗng, "crm": (ID CRM, số đơn) khi đúng một đơn CRM chưa về Odoo, không thì None}."""
         origin = normalize_origin(origin)
+        codes = [code for code in origin.split(", ") if code]
         order = self._hlv_sale_order_from_origin(origin)
-        pick = _single_pick(origin, crm_picks)
-        if not order and pick:
-            order = self.env["sale.order"].sudo().search([("misa_id", "=", pick[0])], limit=1)
-        return order
+        known = set(self.env["sale.order"].sudo().search([("name", "in", codes)]).mapped("name")) if codes else set()
+        missing = [code for code in codes if code not in known]
+        on_crm = {}
+        if missing and self._hlv_sale_order_source() == "crm":
+            misa = self.env["misa.api.utils"].sudo()
+            for code in missing:
+                exact = [row for row in search_crm_sale_orders(misa, code, limit=5) if row["code"] == code]
+                if exact:
+                    on_crm[code] = exact[0]["crm_id"]
+        wrong = [code for code in missing if code not in on_crm]
+        if wrong:
+            raise UserError(_("Không thấy đơn bán %(codes)s trong Odoo%(crm)s. Ô này chỉ ghi số đơn bán của mình "
+                              "(DH… / S…) — kiểm tra lại mã.", codes=", ".join(wrong),
+                              crm=_(" và MISA CRM") if self._hlv_sale_order_source() == "crm" else ""))
+        crm = next(iter(on_crm.items())) if len(on_crm) == 1 else None
+        if not order and crm:
+            # Đơn tách theo kho về Odoo mang số DH…-xx — tìm theo ID CRM.
+            order = self.env["sale.order"].sudo().search([("misa_id", "=", crm[1])], limit=1)
+        return {"origin": origin, "order": order, "crm": (crm[1], crm[0]) if crm and not order else None}
 
-    def action_set_order_ref_crm(self, origin, crm_picks=()):
-        """action_set_order_ref + đơn MISA CRM chưa về Odoo. crm_picks: [(ID CRM, số đơn)] sale chọn ở ô mã đơn hàng
-        (nguồn gợi ý = MISA CRM). Đúng một đơn còn trong origin và phiếu chưa có đơn bán → gắn ngay nếu đơn đã
-        về, chưa về thì phiếu giữ lại (_hlv_link_crm_sale_order khi đồng bộ). Mã đang chờ bị xoá khỏi ô → bỏ chờ."""
+    def action_set_order_ref_crm(self, origin, checked=None):
+        """action_set_order_ref sau khi kiểm mã (_hlv_check_order_ref — truyền sẵn checked để khỏi gọi CRM lại).
+        Phiếu chưa có đơn bán: gắn đơn bán Odoo ứng với mã, hoặc giữ đơn CRM chưa về Odoo để tự gắn khi đồng bộ
+        (_hlv_link_crm_sale_order). Mã đang chờ bị xoá khỏi ô → bỏ chờ."""
         self.ensure_one()
-        orders = self.action_set_order_ref(origin)
-        origin = normalize_origin(origin)
-        pick = _single_pick(origin, crm_picks)
-        if pick and not self.sale_order_id:
-            synced = self._hlv_order_from_ref(origin, crm_picks)
-            if synced:
-                self._hlv_link_sale_order(synced, self._hlv_live_requests(), self.env.user.partner_id)
-            else:
-                self.write({"crm_sale_order_id": pick[0], "crm_sale_order_code": pick[1]})
-        if self.crm_sale_order_code and (self.sale_order_id or self.crm_sale_order_code not in origin.split(", ")):
+        checked = checked or self._hlv_check_order_ref(origin)
+        orders = self.action_set_order_ref(checked["origin"])
+        if not self.sale_order_id and checked["order"]:
+            self._hlv_link_sale_order(checked["order"], self._hlv_live_requests(), self.env.user.partner_id)
+        elif not self.sale_order_id and checked["crm"]:
+            self.write({"crm_sale_order_id": checked["crm"][0], "crm_sale_order_code": checked["crm"][1]})
+        if self.crm_sale_order_code and (self.sale_order_id or self.crm_sale_order_code not in checked["origin"].split(", ")):
             self.write({"crm_sale_order_id": False, "crm_sale_order_code": False})
         return orders
 
