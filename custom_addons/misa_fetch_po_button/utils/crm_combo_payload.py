@@ -109,6 +109,9 @@ def build_combo_create_payload(combo, components):
         "UsageUnitID": combo["unit_id"],
         "UsageUnitIDText": combo["unit_name"],
         "MinimumStock": 0,
+        # Trường MISA thêm khoảng 10/2026, thiếu là CRM văng 500 (xem _create_product_misa_raw).
+        "DefaultUnitOfMeasure": 1,
+        "DefaultUnitOfMeasureText": "Đơn vị tính chính",
         "ProductName": combo["name"],
         "SaleDescription": combo.get("sale_description"),
         "BrandID": None,

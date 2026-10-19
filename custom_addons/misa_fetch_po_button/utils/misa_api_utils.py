@@ -2162,6 +2162,12 @@ class MisaApiUtils(models.AbstractModel):
             "Fields": [], "FieldsCustom": [], 
             "DefaultStockID": "29", 
             "DefaultStockIDText": "HLV",
+            # Trường MISA thêm khoảng 10/2026 ("Đơn vị tính ngầm định"): thiếu là CRM văng
+            # lỗi 500 không kèm lý do. 1 = đơn vị tính chính, đúng như form web gửi.
+            "DefaultUnitOfMeasure": 1,
+            "DefaultUnitOfMeasureText": "Đơn vị tính chính",
+            "MinimumStock": 0,
+            "MappingDatas": [],
             "DataCustom": {
                 "CustomField13": None,
                 "CustomField13Text": "",
@@ -2194,7 +2200,8 @@ class MisaApiUtils(models.AbstractModel):
         }
 
         # 3. Gửi Request & LOG
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
+        # Form web tạo hàng mới gửi vào g1 (bắt lại 19/10/2026); sửa / combo vẫn đi g2.
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product"
         _logger.info(f"📤 [MISA RAW REQUEST] Code: {code}")
 
         session = self._get_retry_session()
