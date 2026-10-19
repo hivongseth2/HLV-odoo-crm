@@ -12,7 +12,7 @@ window.HlvQuote = window.HlvQuote || {};
   var esc = HQ.esc;
   var after = {};  // key → việc làm sau khi lưu (tải lại ngăn phiếu / hộp đơn mua)
   // Tìm khi Enter hoặc ngừng gõ 3 giây: không thấy trong Odoo thì server hỏi tiếp MISA CRM (chậm).
-  var SEARCH_DELAY = 3000;
+  var SEARCH_DELAY = 2000;
 
   // Một ô cho cả "đơn bán" và "mã đơn hàng": trùng số đơn bán thì server gắn luôn đơn bán (action_set_order_ref_crm).
   HQ.ORIGIN_LABEL = "Mã đơn hàng của khách (Tài liệu gốc đơn mua) — số đơn DH… / S…, gõ xong bấm Enter để tìm";
