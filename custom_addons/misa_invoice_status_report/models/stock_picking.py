@@ -479,26 +479,27 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # này cho phiếu ĐANG 'missing' (đã lọc ở trên) nên không tốn thêm API cho phần lớn
             # phiếu đã khớp sạch qua refno trong map.
             if status['state'] == 'missing' and not picking.misa_invoice_manual_refno:
+                siblings = picking._misa_invoice_sibling_pickings()
                 for order_name in picking.misa_invoice_sale_order_ids.mapped('name'):
                     if not order_name or order_name == refno or order_name in claimed_order_refnos:
                         continue
+                    # Bỏ đề nghị mang tên / đang thuộc phiếu KHÁC cùng đơn — đó là HĐ của đợt
+                    # khác (case KBC/OUT/14143 ăn HĐ 00004909 của KBC/OUT/11995). Đề nghị đó có
+                    # thật sự phủ thêm phiếu này không thì để phiếu đó khớp theo dòng hàng.
                     try:
-                        order_status = misa_utils.get_invoice_status_for_refno(order_name)
+                        order_status, skipped = misa_utils.get_invoice_status_for_order(
+                            order_name, skip_refnos=set(siblings.mapped('name')),
+                            skip_refids={r for r in siblings.mapped('misa_invoice_request_refid') if r},
+                        )
                     except Exception:
                         _logger.exception(
                             "❌ [MISA INVOICE STATUS] Lỗi thử lại theo mã đơn %s cho phiếu %s",
                             order_name, picking.name,
                         )
                         continue
-                    owner = picking._misa_invoice_sibling_request_owner(order_status)
-                    if owner:
-                        # Đề nghị mang tên 1 phiếu KHÁC cùng đơn = đề nghị của phiếu đó. Nhận vào
-                        # đây là phiếu giao đợt sau báo "Đã xuất HĐ" bằng HĐ của đợt trước (case
-                        # KBC/OUT/14143 ăn HĐ 00004909 của KBC/OUT/11995). Đề nghị có thật sự phủ
-                        # thêm phiếu này hay không thì để phiếu đó khớp theo dòng hàng.
-                        if owner.misa_invoice_state == 'invoiced':
-                            owners_to_rediscover |= owner
-                        continue
+                    owners_to_rediscover |= siblings.filtered(
+                        lambda s: s.name in skipped and s.misa_invoice_state == 'invoiced'
+                    )
                     if order_status['state'] != 'missing':
                         status = order_status
                         refno = order_name
@@ -2106,25 +2107,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if net_qty <= 0:
                 continue
             qty_by_picking[move.picking_id] = qty_by_picking.get(move.picking_id, 0.0) + net_qty
-        reserved_qty = 0.0
-        if owner_picking_id:
-            owner = self.browse(owner_picking_id)
-            # SL phiếu đại diện chỉ trừ 1 LẦN cho mọi dòng cùng đơn + mã hàng của đề nghị: sale hay
-            # tách mỗi đợt 1 dòng (8 cái của phiếu đại diện + 8 cái của phiếu sau) — trừ trọn ở mỗi
-            # dòng thì cả 2 dòng đều về 0, phiếu sau bị gỡ nhầm (staging 19/10: KBC/OUT/09479).
-            # Dòng id nhỏ trước dùng phần trừ trước.
-            earlier_qty = sum(self.env[line._name].sudo().search([
-                ('master_picking_id', '=', line.master_picking_id.id),
-                ('sale_order_id', '=', line.sale_order_id.id),
-                ('inventory_item_code', '=ilike', item_code),
-                ('id', '<', line.id),
-            ]).mapped('quantity'))
-            owner_qty = qty_by_picking.pop(owner, 0.0)
-            reserved_qty = min(max(owner_qty - earlier_qty, 0.0), remaining)
-            remaining -= reserved_qty
-            if remaining <= 0.01:
-                line.match_note = "Số lượng dòng này là của chính phiếu đại diện %s." % owner.name
-                return False
         if not qty_by_picking:
             line.match_note = (
                 "Có phiếu xuất kho cho mã hàng này nhưng toàn bộ số lượng đã bị khách trả lại — "
@@ -2145,6 +2127,27 @@ class StockPickingMisaInvoiceStatus(models.Model):
             picking: qty - allocated_elsewhere.get(picking.id, 0.0)
             for picking, qty in qty_by_picking.items()
         }
+        reserved_qty = 0.0
+        if owner_picking_id:
+            owner = self.browse(owner_picking_id)
+            # Phiếu đại diện chỉ giữ phần SL CHƯA có dòng khác phủ (allocated_elsewhere đã trừ ở
+            # trên): đề nghị khác đã nhận 1 phần hàng của nó thì phần đó trên dòng này là của phiếu
+            # sau (staging 19/10: 06012281K1 của KBC/OUT/09332 — 2/4 cái đã do đề nghị 09359 phủ).
+            # Và chỉ trừ 1 LẦN cho mọi dòng cùng đơn + mã hàng của đề nghị: sale hay tách mỗi đợt 1
+            # dòng (8 cái của phiếu đại diện + 8 cái của phiếu sau) — trừ trọn ở mỗi dòng thì cả 2
+            # dòng đều về 0. Dòng id nhỏ trước dùng phần trừ trước.
+            earlier_qty = sum(self.env[line._name].sudo().search([
+                ('master_picking_id', '=', line.master_picking_id.id),
+                ('sale_order_id', '=', line.sale_order_id.id),
+                ('inventory_item_code', '=ilike', item_code),
+                ('id', '<', line.id),
+            ]).mapped('quantity'))
+            owner_qty = available_by_picking.pop(owner, 0.0)
+            reserved_qty = min(max(owner_qty - earlier_qty, 0.0), remaining)
+            remaining -= reserved_qty
+            if remaining <= 0.01:
+                line.match_note = "Số lượng dòng này là của chính phiếu đại diện %s." % owner.name
+                return False
         available_by_picking = {p: q for p, q in available_by_picking.items() if q > 0.01}
         if not available_by_picking:
             line.match_note = (

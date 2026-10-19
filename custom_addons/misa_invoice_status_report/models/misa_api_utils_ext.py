@@ -245,6 +245,34 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             return _empty_invoice_status()
         return self._misa_invoice_result_from_request(_pick_request_for_refno(page_data_req, refno))
 
+    def get_invoice_status_for_order(self, order_code, skip_refnos=(), skip_refids=()):
+        """Như get_invoice_status_for_refno(order_code) nhưng BỎ QUA đề nghị có refno trong
+        skip_refnos hoặc refid trong skip_refids, lấy đề nghị đầu tiên còn lại.
+
+        Vì sao: tìm theo mã đơn ra MỌI đề nghị của đơn, mới nhất trước. Đơn giao nhiều đợt thì đề
+        nghị đứng đầu thường là của 1 phiếu KHÁC cùng đơn (mang tên phiếu đó) — lấy nó là phiếu
+        này ăn HĐ của đợt khác (case KBC/OUT/14143 ăn HĐ của KBC/OUT/11995), trong khi đề nghị
+        thật của phiếu này đặt theo mã khác nằm phía sau (case KBC/OUT/08016 — DN0016002).
+
+        Nhận: order_code; skip_refnos — tên các phiếu khác cùng đơn; skip_refids — refid đề nghị
+        các phiếu đó đang giữ. Trả (status như get_invoice_status_for_refno, list refno đã bỏ qua
+        vì nằm trong skip_refnos). Không còn đề nghị nào thì status 'missing'."""
+        url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
+        payload_req = self.env['misa.config'].get_invoice_request_payload(order_code)
+        data_req = self._fetch_misa_json_with_session_retry(
+            url_req, payload_req, "sa_invoice_request (search theo order)",
+        )
+        skipped = []
+        for row in data_req.get("Data", {}).get("PageData", []) or []:
+            row_refno = (row.get("refno") or "").strip()
+            if row_refno in skip_refnos:
+                skipped.append(row_refno)
+                continue
+            if row.get("refid") in skip_refids:
+                continue
+            return self._misa_invoice_result_from_request(row), skipped
+        return _empty_invoice_status(), skipped
+
     def get_invoice_requests_for_order(self, order_code):
         """Tìm TẤT CẢ 'Đề nghị xuất hóa đơn' có nhắc tới order_code này (không chỉ lấy đề nghị
         ĐẦU TIÊN như get_invoice_status_for_refno) — get_invoice_request_payload vốn đã search
