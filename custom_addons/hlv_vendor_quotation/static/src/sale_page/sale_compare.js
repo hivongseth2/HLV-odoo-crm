@@ -25,7 +25,8 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-loading">Đang tải…</div>';
     }
     return HQ.api("inquiry", { inquiry_id: inquiryId }).then(function (detail) {
-      D.saleOrder = detail.sale_order_id ? { id: detail.sale_order_id, name: detail.sale_order } : null;
+      D.saleOrder = detail.sale_order_id ? { id: detail.sale_order_id, name: detail.sale_order }
+        : detail.crm_sale_order_id ? { id: false, crm_id: detail.crm_sale_order_id, name: detail.crm_sale_order } : null;
       render(detail);
     }).catch(function (err) {
       HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-alert">' + esc(err.message) + "</div>";
@@ -215,7 +216,9 @@ window.HlvQuote = window.HlvQuote || {};
       .map(function (s) { return s.line.id; });
     HQ.api("create_request", Object.assign(HQ.requestExtras(d), {
       inquiry_id: d.id,
-      sale_order_id: D.saleOrder ? D.saleOrder.id : null,
+      sale_order_id: D.saleOrder && D.saleOrder.id || null,
+      // Đơn MISA CRM chưa về Odoo: phiếu giữ lại, tự gắn khi đơn đồng bộ về.
+      crm_sale_order: D.saleOrder && !D.saleOrder.id ? { crm_id: D.saleOrder.crm_id, code: D.saleOrder.name } : null,
       requester_code: HQ.requestCode(d),
       quantities: quantities,
       settle_line_ids: settle,
@@ -282,7 +285,8 @@ window.HlvQuote = window.HlvQuote || {};
     return '<div class="hq-facts">' +
       HQ.saleCodeFact(d) +
       opportunityFact(d) +
-      fact("Đơn bán", d.sale_order ? HQ.docChip(d.sale_order) : "") +
+      fact("Đơn bán", d.sale_order ? HQ.docChip(d.sale_order)
+        : d.crm_sale_order ? HQ.docChip(d.crm_sale_order, HQ.CRM_ORDER_WAITING) : "") +
       HQ.deadlineFact(d) +
       fact("Yêu cầu mua hàng", d.requests.map(HQ.requestTag).join("")) +
       fact("Đơn mua", orders) +
@@ -563,6 +567,7 @@ window.HlvQuote = window.HlvQuote || {};
 
   function saleOrderChip() {
     return D.saleOrder ? '<span class="hq-chip hq-chip-blue">Đơn bán ' + esc(D.saleOrder.name) +
+      (D.saleOrder.id ? "" : " (" + HQ.CRM_ORDER_WAITING + ")") +
       '<button type="button" class="hq-chip-x" data-clear-so="1" title="Bỏ đơn bán">×</button></span>' : "";
   }
 
@@ -623,12 +628,14 @@ window.HlvQuote = window.HlvQuote || {};
       return;
     }
     HQ.bindPicker("hq-req-so-search", "hq-req-so-results", function (term) {
-      return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term }).then(function (r) { return r.orders; });
+      // link: tìm theo nguồn trong Cài đặt — Odoo hoặc MISA CRM (đơn CRM chưa về Odoo có id = false).
+      return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term, link: true }).then(function (r) { return r.orders; });
     }, function (o) {
       return '<span class="hq-strong">' + esc(o.name) + "</span> " +
-        '<span class="hq-muted">' + esc([o.partner, HQ.saleName(o.sale_code), o.date].filter(Boolean).join(" · ")) + "</span>";
+        '<span class="hq-muted">' + esc([o.partner, o.owner || HQ.saleName(o.sale_code), o.date,
+          o.crm_id && !o.id ? HQ.CRM_ORDER_WAITING : ""].filter(Boolean).join(" · ")) + "</span>";
     }, function (order) {
-      D.saleOrder = { id: order.id, name: order.name };
+      D.saleOrder = { id: order.id, crm_id: order.crm_id, name: order.name };
       HQ.$("hq-req-so-chip").innerHTML = saleOrderChip();
     });
   }

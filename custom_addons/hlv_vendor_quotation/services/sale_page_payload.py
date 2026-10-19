@@ -174,6 +174,8 @@ def inquiry_summary(inquiry):
         # Đơn bán / YCMH / đơn mua có thể thuộc sale khác hoặc sale chỉ có quyền đọc hạn
         # chế — ở đây chỉ hiện số chứng từ nên đọc bằng sudo.
         "sale_order": inquiry.sale_order_id.sudo().name or "",
+        # Đơn hàng CRM sale đã gắn nhưng chưa về Odoo — tự gắn khi đồng bộ (vendor_inquiry_crm_order).
+        "crm_sale_order": inquiry.crm_sale_order_code or "",
         # Trạng thái YCMH / đơn mua hiện thành nhãn ngay ngoài danh sách (từ chối → đỏ).
         "requests": [_request_payload(r) for r in inquiry.request_ids.sudo()],
         "request_rejected": any(r.state == "rejected" for r in inquiry.request_ids.sudo()),
@@ -198,6 +200,7 @@ def inquiry_detail(inquiry):
     data.update({
         "note": inquiry.note or "",
         "sale_order_id": inquiry.sale_order_id.id or False,
+        "crm_sale_order_id": inquiry.crm_sale_order_id or False,
         "purchase_orders": [purchase_order_payload(o) for o in inquiry.purchase_order_ids],
         # Đã lên YCMH vẫn chọn thêm / đổi được (VD NCC báo hết hàng, mua phần còn thiếu) — trừ phần đã lên đơn mua.
         "can_choose": inquiry.state not in ("cancel", "closed"),
@@ -461,6 +464,21 @@ def sale_order_summary(order):
         "date": _date_text(order.date_order),
         "sale_code": sale_code(order.sudo()),
     }
+
+
+def crm_sale_orders_payload(env, rows):
+    """rows: services/crm_sale_order.search_crm_sale_orders. Mỗi đơn CRM như sale_order_summary, kèm "crm_id";
+    "id" = đơn Odoo đã đồng bộ (misa_id) hoặc False khi đơn chưa về Odoo. Tra đơn Odoo bằng sudo: chỉ lấy id để gắn."""
+    synced = env["sale.order"].sudo().search([("misa_id", "in", [row["crm_id"] for row in rows])]) if rows else []
+    by_crm = {order.misa_id: order for order in synced}
+    return [{
+        "id": by_crm[row["crm_id"]].id if row["crm_id"] in by_crm else False,
+        "crm_id": row["crm_id"],
+        "name": by_crm[row["crm_id"]].name if row["crm_id"] in by_crm else row["code"],
+        "partner": row["partner"],
+        "date": row["date"],
+        "owner": row["owner"],
+    } for row in rows]
 
 
 def sale_line_payload(line):

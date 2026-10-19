@@ -13,6 +13,7 @@ from ..services import vendor_from_vat
 from ..services.price_history import quoted_prices
 from ..services.product_paste import match_pasted
 from ..services.combo_lines import kit_bom, kit_components
+from ..services.crm_sale_order import search_crm_sale_orders
 from ..services.sale_code import SALE_CODE_FIELD, has_sale_code
 from .sale_page_common import API, SEARCH_LIMIT, SalePageMixin, to_int
 
@@ -120,12 +121,16 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
         }
 
     @http.route(f"{API}/sale_orders", type="json", auth="user", methods=["POST"])
-    def api_sale_orders(self, search="", **kw):
-        """Đơn bán để lấy sẵn hàng / gắn vào phiếu. Không sudo: sale chỉ thấy đơn mình được xem."""
+    def api_sale_orders(self, search="", link=False, **kw):
+        """Đơn bán để lấy sẵn hàng / gắn vào phiếu. Không sudo: sale chỉ thấy đơn mình được xem.
+        link: ô "Gắn đơn bán" — tìm theo nguồn trong Cài đặt (MISA CRM: link_crm_orders)."""
         self._check()
         search = (search or "").strip()
         if not search:
             return {"orders": []}
+        if link and request.env["hlv.vendor.inquiry"]._hlv_sale_order_source() == "crm":
+            return {"orders": payload.crm_sale_orders_payload(
+                request.env, search_crm_sale_orders(request.env["misa.api.utils"].sudo(), search[:100]))}
         domains = [
             [("name", "ilike", search)],
             [("client_order_ref", "ilike", search)],

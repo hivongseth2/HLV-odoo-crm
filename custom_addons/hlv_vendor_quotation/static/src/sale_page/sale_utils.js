@@ -72,6 +72,9 @@ window.HlvQuote = window.HlvQuote || {};
    * Chip một số chứng từ (YCMH / đơn mua / báo giá / đơn bán) — mọi số chứng từ trên trang hiện bằng chip này.
    * name: số; state: chữ trạng thái kèm trong chip ("" = không có); cls: màu (lớp hq-tag-*, mặc định xám).
    */
+  /** Nhãn đơn hàng MISA CRM đã gắn vào phiếu mà chưa đồng bộ về Odoo (tự gắn khi về). */
+  HQ.CRM_ORDER_WAITING = "CRM, chờ về Odoo";
+
   HQ.docChip = function (name, state, cls) {
     return '<span class="hq-doc ' + (cls || "hq-tag-soft") + '">' + HQ.esc(name) +
       (state ? '<span class="hq-doc-state">' + HQ.esc(state) + "</span>" : "") + "</span>";
