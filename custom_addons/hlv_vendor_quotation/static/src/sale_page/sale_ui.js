@@ -120,13 +120,20 @@ window.HlvQuote = window.HlvQuote || {};
     var input = HQ.$(inputId);
     var list = HQ.$(listId);
     var items = [];
+    // Lượt tìm mới nhất — kết quả của lượt cũ về muộn (CRM chậm) không được đè lên.
+    var seq = 0;
     var run = HQ.debounce(function () {
       var term = input.value.trim();
       if (!term) {
+        seq++;
         list.classList.add("hq-hidden");
         return;
       }
+      var mine = ++seq;
       fetchItems(term).then(function (result) {
+        if (mine !== seq) {
+          return;
+        }
         items = result;
         list.innerHTML = items.length
           ? items.map(function (item, index) {
@@ -135,9 +142,22 @@ window.HlvQuote = window.HlvQuote || {};
           }).join("")
           : '<div class="hq-dropdown-empty">Không tìm thấy</div>';
         list.classList.remove("hq-hidden");
-      }).catch(function (err) { HQ.toast(err.message); });
+      }).catch(function (err) {
+        if (mine === seq) {
+          list.classList.add("hq-hidden");
+          HQ.toast(err.message);
+        }
+      });
     }, 250);
-    input.addEventListener("input", run);
+    input.addEventListener("input", function () {
+      // Hiện "Đang tìm…" ngay khi gõ — chờ kết quả không bị nhầm thành "Không tìm thấy".
+      if (input.value.trim()) {
+        items = [];
+        list.innerHTML = '<div class="hq-dropdown-empty">Đang tìm…</div>';
+        list.classList.remove("hq-hidden");
+      }
+      run();
+    });
     input.addEventListener("blur", function () {
       setTimeout(function () { list.classList.add("hq-hidden"); }, 150);
     });
