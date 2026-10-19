@@ -22,20 +22,16 @@ class StockPickingGroupedRepair(models.Model):
     """
     _inherit = 'stock.picking'
 
-    def _misa_invoice_sibling_request_owner(self, status):
-        """Phiếu xuất KHÁC cùng đơn mà đề nghị trong `status` mang tên — tức đề nghị đó là của
-        phiếu kia, không phải của phiếu này. Trả recordset rỗng nếu đề nghị không mang tên phiếu
-        nào (VD đặt theo mã đơn / DN00…) hoặc phiếu mang tên đó không chung đơn với phiếu này."""
+    def _misa_invoice_sibling_pickings(self):
+        """Phiếu xuất KHÁC (chưa hủy) cùng đơn bán với phiếu này — đề nghị mang tên / đang thuộc
+        các phiếu này là HĐ của đợt giao khác. Không có đơn bán thì trả rỗng."""
         self.ensure_one()
-        refno = (status.get('master_refno') or '').strip()
-        if not refno or refno == self.name:
+        if not self.misa_invoice_sale_order_ids:
             return self.browse()
-        owner = self.sudo().search([
-            ('name', '=', refno), ('picking_type_id.code', '=', 'outgoing'), ('id', '!=', self.id),
-        ], limit=1)
-        if owner and owner.misa_invoice_sale_order_ids & self.misa_invoice_sale_order_ids:
-            return owner
-        return self.browse()
+        return self.sudo().search([
+            ('misa_invoice_sale_order_ids', 'in', self.misa_invoice_sale_order_ids.ids),
+            ('picking_type_id.code', '=', 'outgoing'), ('state', '!=', 'cancel'), ('id', '!=', self.id),
+        ])
 
     @api.model
     def _misa_invoice_own_order_matched_lines(self, domain=()):
