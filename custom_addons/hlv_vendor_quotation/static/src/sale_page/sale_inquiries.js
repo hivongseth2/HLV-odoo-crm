@@ -137,7 +137,8 @@ window.HlvQuote = window.HlvQuote || {};
         (q.opportunity_ref ? '<div class="hq-muted" title="Số cơ hội">' + esc(q.opportunity_ref) + "</div>" : "") +
         (q.sale_code ? '<div class="hq-muted">' + esc(HQ.saleName(q.sale_code)) + "</div>" : "") + "</td>" +
         '<td class="hq-cell-vendor"><span class="hq-ellipsis">' + esc(q.products) + "</span>" +
-        (q.sale_order ? '<div class="hq-docs">' + HQ.docChip(q.sale_order) + "</div>" : "") + "</td>" +
+        (q.sale_order || q.crm_sale_order ? '<div class="hq-docs">' + HQ.docChip(q.sale_order || q.crm_sale_order,
+          q.sale_order ? "" : HQ.CRM_ORDER_WAITING) + "</div>" : "") + "</td>" +
         '<td class="hq-nowrap hq-num">' + q.quoted_count + "/" + q.vendor_count + " NCC</td>" +
         '<td class="hq-nowrap hq-num">' + q.chosen_count + "/" + q.line_count + " sản phẩm</td>" +
         '<td><div class="hq-docs">' + (requests.join("") || none) + "</div></td>" +

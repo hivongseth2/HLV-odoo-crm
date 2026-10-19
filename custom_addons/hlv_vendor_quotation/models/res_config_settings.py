@@ -6,6 +6,7 @@ from ..services.sale_zalo import ZALO_PARAM
 from .purchase_order import VENDOR_ORDER_STATES_PARAM
 from .purchase_order_revision import NO_REVISION_STATES, REVISION_STATES_PARAM
 from .vendor_inquiry import SALE_EDIT_DEADLINE_PARAM
+from .vendor_inquiry_crm_order import SALE_ORDER_SOURCE_PARAM, SALE_ORDER_SOURCES
 from .vendor_quote import VENDOR_LATE_EDIT_PARAM
 from .vendor_quote_access import REQUIRE_PASSWORD_PARAM
 from .vendor_quote_line_choice import REQUEST_PRICE_FOLLOW_PARAM
@@ -45,6 +46,12 @@ class ResConfigSettings(models.TransientModel):
         string="NCC sửa giá món đã lên YCMH",
         default="warn",
         config_parameter=REQUEST_PRICE_FOLLOW_PARAM,
+    )
+    hlv_vq_sale_order_source = fields.Selection(
+        SALE_ORDER_SOURCES,
+        string="Ô \"Gắn đơn bán\" tìm ở",
+        default="odoo",
+        config_parameter=SALE_ORDER_SOURCE_PARAM,
     )
     # Đơn ở trạng thái nào hiện trên trang NCC (VENDOR_ORDER_STATES_PARAM).
     hlv_vq_order_state_draft = fields.Boolean(string="Nháp")

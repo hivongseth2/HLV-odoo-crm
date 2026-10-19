@@ -42,6 +42,7 @@
                             <field name="sale_code"/>
                             <field name="opportunity_ref"/>
                             <field name="sale_order_id"/>
+                            <field name="crm_sale_order_code" invisible="not crm_sale_order_code"/>
                             <field name="request_id"/>
                         </group>
                         <group>
