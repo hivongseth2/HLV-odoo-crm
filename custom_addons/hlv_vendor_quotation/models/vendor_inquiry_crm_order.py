@@ -28,10 +28,15 @@ class VendorInquiryCrmOrder(models.Model):
         return source if source in dict(SALE_ORDER_SOURCES) else "odoo"
 
     def _hlv_wait_crm_sale_order(self, crm_id, code):
-        """Ghi đơn CRM chưa về Odoo lên phiếu để gắn sau (_hlv_link_crm_sale_order)."""
+        """Ghi đơn CRM chưa về Odoo lên phiếu để gắn sau (_hlv_link_crm_sale_order). Có số đơn mà YCMH / đơn mua
+        của phiếu chưa có mã đơn hàng thì ghi luôn số đơn vào Tài liệu nguồn — thu mua thấy đơn của khách ngay,
+        không phải chờ đơn về Odoo."""
         self.ensure_one()
         if (self.crm_sale_order_id, self.crm_sale_order_code) != (crm_id, code):
             self.write({"crm_sale_order_id": crm_id, "crm_sale_order_code": code})
+        requests, orders = self._hlv_order_ref_targets()
+        if code and (requests or orders) and not any(r.origin for r in requests) and not any(o.origin for o in orders):
+            self.action_set_order_ref(code)
 
     def _hlv_link_crm_sale_order(self, sale_order):
         """Đơn CRM đã về Odoo: gắn vào phiếu + YCMH còn sửa được của phiếu, bỏ dấu chờ."""

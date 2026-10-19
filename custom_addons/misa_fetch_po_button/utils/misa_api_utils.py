@@ -2206,10 +2206,12 @@ class MisaApiUtils(models.AbstractModel):
 
         res_json = res.json()
         if not res_json.get("Success"):
-            err_msg = res_json.get("UserMessage")
-            val_info = res_json.get("ValidateInfo", [])
-            if val_info:
-                err_msg = ", ".join([v.get("ErrorMessage", "") for v in val_info])
+            val_info = res_json.get("ValidateInfo") or []
+            # CRM có lúc từ chối mà không ghi UserMessage / ValidateInfo: khi đó lý do chỉ
+            # nằm trong body (SystemMessage, Code...), báo "None" là không ai sửa được.
+            err_msg = (", ".join(v.get("ErrorMessage") or "" for v in val_info if isinstance(v, dict)).strip(", ")
+                       or res_json.get("UserMessage") or res_json.get("SystemMessage")
+                       or res.text[:300])
             raise Exception(f"MISA Refused: {err_msg}")
 
         misa_id = self._parse_misa_id(res_json, code, headers)
