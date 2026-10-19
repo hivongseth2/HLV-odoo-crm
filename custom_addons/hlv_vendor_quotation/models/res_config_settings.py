@@ -49,7 +49,7 @@ class ResConfigSettings(models.TransientModel):
     )
     hlv_vq_sale_order_source = fields.Selection(
         SALE_ORDER_SOURCES,
-        string="Ô \"Gắn đơn bán\" tìm ở",
+        string="Gợi ý mã đơn hàng / đơn bán từ",
         default="odoo",
         config_parameter=SALE_ORDER_SOURCE_PARAM,
     )
