@@ -123,14 +123,11 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
     @http.route(f"{API}/sale_orders", type="json", auth="user", methods=["POST"])
     def api_sale_orders(self, search="", link=False, **kw):
         """Đơn bán để lấy sẵn hàng / gắn vào phiếu. Không sudo: sale chỉ thấy đơn mình được xem.
-        link: ô mã đơn hàng của khách — tìm theo nguồn trong Cài đặt (Odoo hoặc MISA CRM)."""
+        link: ô mã đơn hàng của khách — Odoo không ra mà Cài đặt bật MISA CRM thì tìm tiếp trên CRM (đơn chưa về Odoo)."""
         self._check()
         search = (search or "").strip()
         if not search:
             return {"orders": []}
-        if link and request.env["hlv.vendor.inquiry"]._hlv_sale_order_source() == "crm":
-            return {"orders": payload.crm_sale_orders_payload(
-                request.env, search_crm_sale_orders(request.env["misa.api.utils"].sudo(), search[:100]))}
         domains = [
             [("name", "ilike", search)],
             [("client_order_ref", "ilike", search)],
@@ -142,6 +139,9 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
             expression.AND([[("state", "!=", "cancel")], expression.OR(domains)]),
             order="id desc", limit=SEARCH_LIMIT,
         )
+        if not orders and link and request.env["hlv.vendor.inquiry"]._hlv_sale_order_source() == "crm":
+            return {"orders": payload.crm_sale_orders_payload(
+                request.env, search_crm_sale_orders(request.env["misa.api.utils"].sudo(), search[:100]))}
         return {"orders": [payload.sale_order_summary(o) for o in orders]}
 
     @http.route(f"{API}/sale_order_lines", type="json", auth="user", methods=["POST"])

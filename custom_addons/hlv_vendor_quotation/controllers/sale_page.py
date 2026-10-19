@@ -187,7 +187,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         return wanted
 
     @http.route(f"{API}/create_request", type="json", auth="user", methods=["POST"])
-    def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, origin=None, crm_orders=None, quantities=None,
+    def api_create_request(self, code="", inquiry_id=None, sale_order_id=None, origin=None, quantities=None,
                            settle_line_ids=None, separate_backorder=False, requester_code="",
                            delivery_address="", picking_type_id=None, line_notes=None, date_wanted=None, **kw):
         """Lên YCMH từ các NCC đã chọn. Đơn bán tuỳ chọn — có thì gộp vào YCMH chưa duyệt của đơn.
@@ -196,15 +196,14 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         ghi luôn làm mã sale của phiếu); delivery_address, picking_type_id (kho nhận — loại nhập kho):
         lên YCMH; line_notes: {id dòng báo giá: ghi chú dòng YCMH}; date_wanted (YYYY-MM-DD, bắt buộc):
         ngày sale muốn nhận hàng của cả YCMH. origin: mã đơn hàng của khách (ô lên YCMH khi phiếu chưa có YCMH) —
-        trùng số đơn bán thì gắn đơn bán; crm_orders: [{"crm_id", "code"}] đơn MISA CRM sale chọn ở ô đó
-        (action_set_order_ref_crm)."""
+        kiểm mã + gắn đơn bán như action_set_order_ref_crm."""
         scope = self._check(code)
         inquiry = self._get_inquiry(inquiry_id, scope)
         if requester_code:
             inquiry.action_set_sale_code(self._concrete_sale_code(requester_code))
-        crm_picks = self._read_crm_picks(crm_orders)
-        order = request.env["sale.order"].browse(to_int(sale_order_id)).exists() or (
-            inquiry._hlv_order_from_ref(origin, crm_picks) if origin else None)
+        # Kiểm mã trước khi lên YCMH: mã sai thì báo, chưa tạo gì.
+        checked = inquiry._hlv_check_order_ref(origin) if origin is not None else None
+        order = request.env["sale.order"].browse(to_int(sale_order_id)).exists() or (checked or {}).get("order")
         qtys = {to_int(line_id): qty for line_id, qty in (quantities or {}).items()}
         settle = [to_int(line_id) for line_id in settle_line_ids or []]
         request_vals = {"hlv_date_wanted": self._read_date_wanted(date_wanted)}
@@ -218,22 +217,11 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         notes = {to_int(line_id): str(text)[:255] for line_id, text in (line_notes or {}).items() if to_int(line_id)}
         request_record, merged = inquiry.action_create_request(
             order or None, qtys, settle, bool(separate_backorder), line_notes=notes, request_vals=request_vals)
-        if origin is not None:
-            inquiry.action_set_order_ref_crm(origin, crm_picks)
+        if checked:
+            inquiry.action_set_order_ref_crm(origin, checked)
         return dict(payload.inquiry_detail(inquiry), request_result={
             "name": request_record.sudo().name, "merged": merged,
         })
-
-    @staticmethod
-    def _read_crm_picks(values):
-        """[{"crm_id", "code"}] từ trang → [(ID CRM, số đơn)], bỏ mục thiếu một trong hai."""
-        picks = []
-        for value in values if isinstance(values, list) else []:
-            value = value if isinstance(value, dict) else {}
-            crm_id, code = str(value.get("crm_id") or "").strip()[:64], str(value.get("code") or "").strip()[:64]
-            if crm_id and code:
-                picks.append((crm_id, code))
-        return picks
 
     @http.route(f"{API}/add_quote_lines", type="json", auth="user", methods=["POST"])
     def api_add_quote_lines(self, code="", inquiry_id=None, quote_id=None, line_ids=None, **kw):
@@ -308,11 +296,11 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         return payload.inquiry_detail(inquiry)
 
     @http.route(f"{API}/set_order_ref", type="json", auth="user", methods=["POST"])
-    def api_set_order_ref(self, code="", inquiry_id=None, origin="", crm_orders=None, **kw):
+    def api_set_order_ref(self, code="", inquiry_id=None, origin="", **kw):
         """Mã đơn hàng của khách cho cả phiếu: Tài liệu gốc của YCMH + các đơn mua (kể cả khi chưa có đơn mua).
-        crm_orders: [{"crm_id", "code"}] đơn MISA CRM sale chọn ở ô (action_set_order_ref_crm)."""
+        Mã phải là số đơn bán (Odoo / MISA CRM) — action_set_order_ref_crm."""
         inquiry = self._get_inquiry(inquiry_id, self._check(code))
-        orders = inquiry.action_set_order_ref_crm(origin, self._read_crm_picks(crm_orders))
+        orders = inquiry.action_set_order_ref_crm(origin)
         return dict(payload.inquiry_detail(inquiry), order_ref_result={"orders": len(orders)})
 
     @http.route(f"{API}/set_deadline", type="json", auth="user", methods=["POST"])
@@ -381,6 +369,7 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         orders = [self._chat_record("order", order_id, scope) for order_id in (order_ids or [])]
         if not orders:
             raise UserError("Chưa chọn đơn mua.")
+        origin = request.env["hlv.vendor.inquiry"]._hlv_check_order_ref(origin)["origin"]
         for order in orders:
             order._hlv_set_origin(origin)
         return {"orders": [payload.purchase_order_payload(order) for order in orders]}

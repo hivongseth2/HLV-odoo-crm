@@ -36,7 +36,7 @@
                         <field name="hlv_vq_request_price_follow" widget="radio"/>
                     </setting>
                     <setting id="hlv_vq_sale_order_source"
-                             help="Gợi ý ở ô &quot;Mã đơn hàng của khách&quot; trên trang Hỏi giá NCC (lúc lên YCMH và sau đó). Mã trùng số đơn bán trong Odoo thì phiếu + YCMH gắn luôn đơn bán. Odoo: gợi ý đơn bán đã có trong Odoo. MISA CRM: gợi ý đơn hàng trên CRM — đơn chưa về Odoo thì phiếu nhớ lại và tự gắn đơn bán khi đơn đồng bộ về.">
+                             help="Ô &quot;Mã đơn hàng của khách&quot; trên trang Hỏi giá NCC chỉ nhận số đơn bán của mình (DH… / S…) — mã không tìm thấy thì không cho lưu, tránh gõ sai. Tìm khi bấm Enter hoặc ngừng gõ 3 giây. Mã trùng đơn bán thì phiếu + YCMH gắn luôn đơn bán. Odoo, không thấy thì tìm MISA CRM: đơn chưa về Odoo vẫn nhận, phiếu nhớ lại và tự gắn đơn bán khi đơn đồng bộ về.">
                         <field name="hlv_vq_sale_order_source" widget="radio"/>
                     </setting>
                     <setting id="hlv_vq_zalo_notify_sale"
