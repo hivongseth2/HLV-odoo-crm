@@ -38,19 +38,39 @@ class StockPickingGroupedRepair(models.Model):
         return self.browse()
 
     @api.model
-    def repair_misa_invoice_own_order_overmatch(self, dry_run=True):
-        """Khớp lại các dòng xuất HĐ chung thuộc CHÍNH đơn của phiếu đại diện theo luật mới (trừ SL
-        phiếu đại diện đã xuất trước). Phiếu ăn theo không còn được phủ đủ thì gỡ ăn theo, trả về
+    def _misa_invoice_own_order_matched_lines(self, domain=()):
+        """Dòng xuất HĐ chung thuộc CHÍNH đơn của phiếu đại diện, có lượt khớp tự động — những dòng
+        luật khớp cũ (loại hẳn phiếu đại diện) có thể đã chia nhầm SL. `domain` lọc thêm."""
+        return self.env['misa.invoice.grouped.line'].sudo().search(
+            [('match_ids', '!=', False), *domain],
+        ).filtered(
+            lambda l: l.sale_order_id in l.master_picking_id.misa_invoice_sale_order_ids
+            and not all(l.match_ids.mapped('is_manual'))
+        )
+
+    @api.model
+    def misa_invoice_own_order_overmatch_master_ids(self):
+        """Id phiếu đại diện cần khớp lại — để script chạy từng phiếu, mỗi phiếu 1 giao dịch ngắn."""
+        return self._misa_invoice_own_order_matched_lines().mapped('master_picking_id').ids
+
+    @api.model
+    def repair_misa_invoice_own_order_overmatch(self, master_id, dry_run=True):
+        """Khớp lại các dòng xuất HĐ chung thuộc CHÍNH đơn của 1 phiếu đại diện theo luật mới (trừ
+        SL phiếu đại diện đã xuất trước). Phiếu ăn theo không còn được phủ đủ thì gỡ ăn theo, trả về
         'Chưa kiểm tra' rồi kiểm tra lại MISA (dry_run=False).
+
+        Từng phiếu đại diện một, trong savepoint riêng: chạy cả trăm phiếu trong 1 giao dịch là giữ
+        khóa các dòng gộp cả mấy phút, cron kiểm tra MISA chạy cùng lúc thì deadlock (staging
+        19/10/2026). Rollback savepoint nhả khóa ngay.
 
         Trả list dict {picking, master, item, before, after, released} — before/after là SL dòng
         khớp sang phiếu đó trước/sau khi khớp lại. dry_run=True: tính trong savepoint rồi
-        rollback, không gọi MISA, không ghi gì."""
+        rollback, không gọi MISA, không ghi gì. Không commit — script gọi tự commit."""
         report = []
         released_ids = []
         try:
             with self.env.cr.savepoint():
-                report, released_ids = self._misa_invoice_rematch_own_order_lines()
+                report, released_ids = self.sudo().browse(master_id)._misa_invoice_rematch_own_order_lines()
                 if dry_run:
                     raise _DryRun()
         except _DryRun:
@@ -61,12 +81,10 @@ class StockPickingGroupedRepair(models.Model):
         return report
 
     def _misa_invoice_rematch_own_order_lines(self):
-        """Phần ghi của repair_misa_invoice_own_order_overmatch. Trả (report, id phiếu đã gỡ)."""
-        GroupedLine = self.env['misa.invoice.grouped.line'].sudo()
-        lines = GroupedLine.search([('match_ids', '!=', False)]).filtered(
-            lambda l: l.sale_order_id in l.master_picking_id.misa_invoice_sale_order_ids
-            and not all(l.match_ids.mapped('is_manual'))
-        )
+        """Phần ghi của repair_misa_invoice_own_order_overmatch cho phiếu đại diện self. Trả
+        (report, id phiếu đã gỡ)."""
+        self.ensure_one()
+        lines = self._misa_invoice_own_order_matched_lines([('master_picking_id', '=', self.id)])
         report = []
         touched = self.browse()
         for line in lines:
