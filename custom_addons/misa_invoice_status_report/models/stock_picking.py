@@ -442,6 +442,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # tính 0 đ tới khi cron (20 đơn/lượt, 1 lần/ngày) lượt tới (30/09/2026: 9 đơn tháng 08 như
         # vậy, VD DH125524949235547 — HĐ 00005877 đã có, đơn vẫn báo 0 đ).
         stale_orders = self.env['sale.order']
+        owners_to_rediscover = self.browse()
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
@@ -488,6 +489,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
                             "❌ [MISA INVOICE STATUS] Lỗi thử lại theo mã đơn %s cho phiếu %s",
                             order_name, picking.name,
                         )
+                        continue
+                    owner = picking._misa_invoice_sibling_request_owner(order_status)
+                    if owner:
+                        # Đề nghị mang tên 1 phiếu KHÁC cùng đơn = đề nghị của phiếu đó. Nhận vào
+                        # đây là phiếu giao đợt sau báo "Đã xuất HĐ" bằng HĐ của đợt trước (case
+                        # KBC/OUT/14143 ăn HĐ 00004909 của KBC/OUT/11995). Đề nghị có thật sự phủ
+                        # thêm phiếu này hay không thì để phiếu đó khớp theo dòng hàng.
+                        if owner.misa_invoice_state == 'invoiced':
+                            owners_to_rediscover |= owner
                         continue
                     if order_status['state'] != 'missing':
                         status = order_status
@@ -669,6 +679,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
             })
         if extra_masters_to_check:
             results += extra_masters_to_check.action_check_misa_invoice_status(request_map=request_map)
+        for owner in owners_to_rediscover:
+            # Quét lại dòng hàng đề nghị của phiếu đó: nếu đề nghị ghi dư SL cho phiếu giao sau
+            # thì phiếu giao sau được khớp đúng phần đó (_misa_invoice_discover_grouped_orders).
+            owner.misa_invoice_group_checked = False
+            try:
+                owner._misa_invoice_discover_grouped_orders()
+            except Exception:
+                _logger.exception("❌ [MISA GROUP DISCOVER] Lỗi quét lại phiếu đại diện %s", owner.name)
         (self | extra_masters_to_check)._misa_invoice_dedupe_request_refid_groups()
         if stale_orders:
             # Lỗi soát theo đơn không được làm hỏng kết quả kiểm tra phiếu vừa ghi — đơn nào lỗi
@@ -842,10 +860,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         đơn DH...233409) — trước đây các dòng hàng có order_code TRÙNG với đơn của chính phiếu
         này bị BỎ QUA hoàn toàn (giả định sai: 1 đơn = 1 phiếu), khiến phiếu còn lại (10466)
         không bao giờ được xét dù đã 'done' và cùng nằm trong hóa đơn. Giờ xử lý y hệt 1 đơn
-        "gộp chung" bình thường, chỉ khác 1 điểm: khi khớp dòng hàng, PHẢI loại (exclude) chính
-        phiếu đại diện khỏi tập ứng viên nhận số lượng khớp (exclude_picking_ids=[self.id]) —
-        vì phiếu đại diện đã có tiền hóa đơn riêng qua misa_invoice_amount rồi, không được để
-        thuật toán "khớp lại" số lượng của chính nó.
+        "gộp chung" bình thường, chỉ khác 1 điểm: khi khớp dòng hàng, SL chính phiếu đại diện đã
+        xuất được trừ khỏi dòng trước (owner_picking_id=self.id), chỉ phần dư mới chia cho phiếu
+        khác — xem _misa_invoice_reconcile_line_match.
 
         Chỉ đọc get_invoice_request_lines 1 LẦN cho mỗi phiếu (misa_invoice_group_checked) —
         tránh gọi thêm 1 API MISA mỗi lần phiếu được kiểm tra lại, kể cả khi không tìm thấy gì
@@ -997,13 +1014,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'fetched_at': fields.Datetime.now(),
                 })
             # Đơn CHÍNH của phiếu đại diện (is_own_order) được xuất kho thêm ở (các) phiếu KHÁC
-            # — phiếu đại diện ĐÃ có tiền hóa đơn riêng qua misa_invoice_amount rồi, phải loại
-            # chính nó khỏi tập ứng viên nhận số lượng khớp, nếu không thuật toán FIFO có thể
-            # "khớp lại" nhầm số lượng của chính phiếu đại diện (case KBC/OUT/10559/10466).
-            exclude_ids = [self.id] if is_own_order else None
+            # — SL phiếu đại diện đã xuất thuộc về chính nó (đã có tiền HĐ riêng), chỉ phần dư
+            # của dòng mới chia cho phiếu khác (case KBC/OUT/10559/10466, KBC/OUT/11995/14143).
+            owner_id = self.id if is_own_order else None
             for gline in created_lines:
                 try:
-                    self._misa_invoice_grouped_try_match(gline, exclude_picking_ids=exclude_ids)
+                    self._misa_invoice_grouped_try_match(gline, owner_picking_id=owner_id)
                 except Exception:
                     _logger.exception(
                         "❌ [MISA GROUP DISCOVER] Lỗi khớp dòng hàng xuất HĐ chung (%s / %s) cho phiếu %s",
@@ -2010,7 +2026,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             )
         return products
 
-    def _misa_invoice_reconcile_line_match(self, line, match_model_name, apply_to_picking=None, exclude_picking_ids=None):
+    def _misa_invoice_reconcile_line_match(self, line, match_model_name, apply_to_picking=None, owner_picking_id=None):
         """Thuật toán khớp DÙNG CHUNG cho mọi model dạng "dòng hàng cần đối soát với phiếu xuất
         kho" (misa.invoice.customs.line — hàng hải quan; misa.invoice.grouped.line — hàng xuất
         HĐ chung qua đề nghị của phiếu khác). `line` phải có sale_order_id, inventory_item_code,
@@ -2028,11 +2044,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
         được gọi ngay sau khi tạo 1 lượt khớp mới cho phiếu đó (dùng cho hàng hải quan để ghi
         nhận "đã xuất HĐ" ngay; hàng xuất HĐ chung KHÔNG dùng callback này, xem
         _misa_invoice_discover_grouped_orders — quyết định gán "ăn theo" sau khi khớp XONG cả
-        đơn, dựa vào misa_invoice_grouped_matched_amount cộng dồn). `exclude_picking_ids` — nếu
-        truyền vào — loại hẳn những phiếu đó khỏi tập ứng viên nhận số lượng khớp: dùng khi
-        khớp dòng hàng của CHÍNH đơn hàng phiếu đại diện (case KBC/OUT/10559: cùng 1 đơn hàng
-        được xuất làm 2 đợt/2 phiếu, phiếu đại diện đã tự có tiền HĐ riêng qua misa_invoice_amount
-        rồi — không được để thuật toán này "cướp" số lượng của chính nó qua match record."""
+        đơn, dựa vào misa_invoice_grouped_matched_amount cộng dồn). `owner_picking_id` — nếu
+        truyền vào — là phiếu đại diện khi khớp dòng hàng của CHÍNH đơn hàng của nó: phiếu đó đã
+        có tiền HĐ riêng qua misa_invoice_amount nên không nhận match record (case KBC/OUT/10559),
+        nhưng SL nó đã xuất được TRỪ khỏi dòng trước, chỉ phần dư mới chia cho phiếu khác. Loại hẳn
+        phiếu đại diện mà không trừ SL là để SL của nó chạy sang đợt xuất sau — case thật
+        DH125524949235092: đề nghị KBC/OUT/11995 ghi 8 cái đúng bằng 11995 đã xuất, 2 cái giao sau
+        ở KBC/OUT/14143 bị khớp vào dòng 8 cái đó và báo "Đã xuất HĐ" dù chưa lập đề nghị."""
         line.ensure_one()
         if line.match_state == 'matched':
             return True
@@ -2059,8 +2077,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
         ]
         if already_picking_ids:
             domain.append(('picking_id', 'not in', already_picking_ids))
-        if exclude_picking_ids:
-            domain.append(('picking_id', 'not in', exclude_picking_ids))
         moves = self.env['stock.move'].sudo().search(domain)
         if not moves:
             if line.matched_qty > 0.01:
@@ -2090,6 +2106,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if net_qty <= 0:
                 continue
             qty_by_picking[move.picking_id] = qty_by_picking.get(move.picking_id, 0.0) + net_qty
+        reserved_qty = 0.0
+        if owner_picking_id:
+            owner = self.browse(owner_picking_id)
+            reserved_qty = qty_by_picking.pop(owner, 0.0)
+            remaining -= reserved_qty
+            if remaining <= 0.01:
+                line.match_note = "Số lượng dòng này là của chính phiếu đại diện %s." % owner.name
+                return False
         if not qty_by_picking:
             line.match_note = (
                 "Có phiếu xuất kho cho mã hàng này nhưng toàn bộ số lượng đã bị khách trả lại — "
@@ -2138,7 +2162,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if apply_to_picking:
                 apply_to_picking(picking)
             remaining -= take_qty
-        new_remaining = line.remaining_qty()
+        new_remaining = line.remaining_qty() - reserved_qty
         if new_remaining <= 0.01:
             line.write({'match_state': 'matched', 'matched_at': fields.Datetime.now(), 'match_note': False})
             return True
@@ -2158,14 +2182,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
             line, 'misa.invoice.customs.match', apply_to_picking=self._misa_invoice_customs_apply_to_picking,
         )
 
-    def _misa_invoice_grouped_try_match(self, line, exclude_picking_ids=None):
+    def _misa_invoice_grouped_try_match(self, line, owner_picking_id=None):
         """Khớp 1 dòng hàng xuất HĐ CHUNG (misa.invoice.grouped.line) — xem
         _misa_invoice_reconcile_line_match. KHÔNG tự ghi nhận "đã xuất HĐ" ngay khi khớp (dù
         chỉ 1 phần) — chỉ cộng dồn misa_invoice_grouped_matched_amount (compute tự động qua
         misa_invoice_grouped_match_ids); _misa_invoice_discover_grouped_orders tự quyết định
         gán "ăn theo" hay không SAU KHI khớp xong toàn bộ dòng hàng của cả đơn."""
         return self._misa_invoice_reconcile_line_match(
-            line, 'misa.invoice.grouped.match', exclude_picking_ids=exclude_picking_ids,
+            line, 'misa.invoice.grouped.match', owner_picking_id=owner_picking_id,
         )
 
     def _misa_invoice_customs_apply_to_picking(self, picking):
@@ -3509,7 +3533,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if p.id == representative.id:
                 # Phiếu đại diện: không có misa_invoice_grouped_matched_amount cho CHÍNH nó
                 # (cơ chế khớp dòng hàng luôn loại trừ chính phiếu đại diện khỏi việc "tự khớp
-                # mình" — xem exclude_picking_ids trong _misa_invoice_discover_grouped_orders),
+                # mình" — xem owner_picking_id trong _misa_invoice_reconcile_line_match),
                 # nên phải tự đối chiếu dòng hàng của CHÍNH đề nghị đang xem cho phần của nó.
                 own_lines = [
                     line for code in p.misa_invoice_sale_order_ids.mapped('name')

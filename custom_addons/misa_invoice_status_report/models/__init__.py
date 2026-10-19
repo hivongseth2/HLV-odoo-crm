@@ -8,6 +8,7 @@ from . import misa_invoice_customs_line
 from . import misa_invoice_customs_match
 from . import misa_invoice_grouped_line
 from . import misa_invoice_grouped_match
+from . import misa_invoice_grouped_repair
 from . import misa_invoice_allocation
 from . import misa_invoice_export
 from . import misa_invoice_reminder
