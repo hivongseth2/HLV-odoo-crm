@@ -2109,7 +2109,18 @@ class StockPickingMisaInvoiceStatus(models.Model):
         reserved_qty = 0.0
         if owner_picking_id:
             owner = self.browse(owner_picking_id)
-            reserved_qty = qty_by_picking.pop(owner, 0.0)
+            # SL phiếu đại diện chỉ trừ 1 LẦN cho mọi dòng cùng đơn + mã hàng của đề nghị: sale hay
+            # tách mỗi đợt 1 dòng (8 cái của phiếu đại diện + 8 cái của phiếu sau) — trừ trọn ở mỗi
+            # dòng thì cả 2 dòng đều về 0, phiếu sau bị gỡ nhầm (staging 19/10: KBC/OUT/09479).
+            # Dòng id nhỏ trước dùng phần trừ trước.
+            earlier_qty = sum(self.env[line._name].sudo().search([
+                ('master_picking_id', '=', line.master_picking_id.id),
+                ('sale_order_id', '=', line.sale_order_id.id),
+                ('inventory_item_code', '=ilike', item_code),
+                ('id', '<', line.id),
+            ]).mapped('quantity'))
+            owner_qty = qty_by_picking.pop(owner, 0.0)
+            reserved_qty = min(max(owner_qty - earlier_qty, 0.0), remaining)
             remaining -= reserved_qty
             if remaining <= 0.01:
                 line.match_note = "Số lượng dòng này là của chính phiếu đại diện %s." % owner.name
