@@ -1315,13 +1315,11 @@ class MisaApiUtils(models.AbstractModel):
         }
 
         # --- F. GỬI REQUEST ---
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
         _logger.info(f"📤 Payload: Tax={tax_text}({tax_id}) | Unit={unit_text}({unit_id})")
 
-        session = self._get_retry_session()
         try:
-            res = session.post(url, headers=headers, json=payload, timeout=30)
-            res_json = res.json()
+            res, res_json = self._crm_post("Product", payload, headers)
+            res_json = res_json or {}
 
             if not res_json.get("Success"):
                 # Parse lỗi chi tiết nếu có
@@ -1944,24 +1942,14 @@ class MisaApiUtils(models.AbstractModel):
         Token hết hạn (401/403) thì lấy token mới và gửi lại đúng một lần. CRM từ chối thì
         raise kèm thông báo lỗi CRM trả về (ValidateInfo / UserMessage).
         """
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
-        session = self._get_retry_session()
-
-        def _post(request_headers):
-            return session.post(url, headers=request_headers, json=payload, timeout=30)
-
-        response = _post(headers)
+        response, response_data = self._crm_post("Product", payload, headers)
         if response.status_code in (401, 403):
             headers = self._get_cached_crm_headers(force_refresh=True)
             headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
-            response = _post(headers)
+            response, response_data = self._crm_post("Product", payload, headers)
 
-        try:
-            response_data = response.json()
-        except Exception as exc:
-            raise Exception(
-                f"MISA CRM trả về dữ liệu không hợp lệ (HTTP {response.status_code})"
-            ) from exc
+        if response_data is None:
+            raise Exception(f"MISA CRM trả về dữ liệu không hợp lệ (HTTP {response.status_code})")
         if not response.ok or not response_data.get("Success"):
             validation_messages = [
                 str(item.get("ErrorMessage") or "").strip()
@@ -2200,18 +2188,16 @@ class MisaApiUtils(models.AbstractModel):
         }
 
         # 3. Gửi Request & LOG
-        # Form web tạo hàng mới gửi vào g1 (bắt lại 19/10/2026); sửa / combo vẫn đi g2.
-        url = "https://amisapp.misa.vn/crm/g1/api/business/Product"
+        # Cổng g1 / g2 tự đổi khi một cổng lỗi máy chủ (misa_crm_gateway).
         _logger.info(f"📤 [MISA RAW REQUEST] Code: {code}")
 
-        session = self._get_retry_session()
-        res = session.post(url, headers=headers, json=payload, timeout=30)
+        res, res_json = self._crm_post("Product", payload, headers)
         if res.status_code in (401, 403):
             raise MisaAuthExpired(f"CRM từ chối phiên đăng nhập (HTTP {res.status_code})")
         
         _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code} | Body: {res.text}")
 
-        res_json = res.json()
+        res_json = res_json or {}
         if not res_json.get("Success"):
             val_info = res_json.get("ValidateInfo") or []
             # CRM có lúc từ chối mà không ghi UserMessage / ValidateInfo: khi đó lý do chỉ

@@ -17,7 +17,6 @@ from .crm_combo_payload import build_combo_update_payload, diff_combo_rows
 
 _logger = logging.getLogger(__name__)
 
-_CRM = "https://amisapp.misa.vn/crm/g2/api/business/Product"
 _COMBO_LAYOUT_ID = 128
 # Đúng body màn hình CRM gửi khi mở combo để sửa; thiếu cột ID / AsyncID là không lưu được.
 _SUBFORM_BODY = [{
@@ -33,18 +32,18 @@ _SUBFORM_BODY = [{
 class MisaCrmCombo(models.AbstractModel):
     _inherit = 'misa.api.utils'
 
-    def _crm_read(self, url, body, headers, what):
-        """POST đọc dữ liệu CRM, đổi token một lần nếu hết hạn. Trả ``Data``, raise nếu lỗi."""
-        session = self._get_retry_session()
-        response = session.post(url, headers=headers, json=body, timeout=30)
+    def _crm_read(self, path, body, headers, what):
+        """POST đọc dữ liệu CRM, đổi token một lần nếu hết hạn. Trả ``Data``, raise nếu lỗi.
+
+        path: đường dẫn sau ``api/business/``; cổng g1 / g2 do _crm_post chọn.
+        """
+        response, data = self._crm_post(path, body, headers)
         if response.status_code in (401, 403):
             headers.update(self._get_cached_crm_headers(force_refresh=True))
             headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
-            response = session.post(url, headers=headers, json=body, timeout=30)
-        try:
-            data = response.json()
-        except Exception as exc:
-            raise Exception(f"MISA CRM trả dữ liệu lạ khi đọc {what} (HTTP {response.status_code})") from exc
+            response, data = self._crm_post(path, body, headers)
+        if data is None:
+            raise Exception(f"MISA CRM trả dữ liệu lạ khi đọc {what} (HTTP {response.status_code})")
         if not response.ok or not data.get("Success"):
             raise Exception(f"Không đọc được {what}: {data.get('UserMessage') or response.text[:300]}")
         return data.get("Data")
@@ -52,7 +51,7 @@ class MisaCrmCombo(models.AbstractModel):
     def _get_crm_combo_form(self, misa_id, headers):
         """Phần đầu combo (CurrentData của FormDataNew). Raise nếu CRM không trả."""
         data = self._crm_read(
-            f"{_CRM}/FormDataNew/Product/{_COMBO_LAYOUT_ID}/4",
+            f"Product/FormDataNew/Product/{_COMBO_LAYOUT_ID}/4",
             {"ID": str(misa_id), "MISAEntityState": 2, "ActiveLayoutCode": None, "CustomDicData": None},
             headers, f"combo MISA ID {misa_id}",
         ) or {}
@@ -64,7 +63,7 @@ class MisaCrmCombo(models.AbstractModel):
     def _get_crm_combo_rows(self, misa_id, headers):
         """Các dòng con hiện tại của combo (có ID, AsyncID từng dòng)."""
         data = self._crm_read(
-            f"{_CRM}/GetDataSubFormByID/{misa_id}/2/null", _SUBFORM_BODY,
+            f"Product/GetDataSubFormByID/{misa_id}/2/null", _SUBFORM_BODY,
             headers, f"thành phần combo MISA ID {misa_id}",
         ) or []
         table = next((t for t in data if isinstance(t, dict) and t.get("TableName") == "set_product"), {})
