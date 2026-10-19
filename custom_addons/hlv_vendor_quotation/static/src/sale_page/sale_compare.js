@@ -13,8 +13,9 @@ window.HlvQuote = window.HlvQuote || {};
   // qty: SL mua sale sửa ở bảng tóm tắt {id dòng báo giá: SL}; settle: sản phẩm còn thiếu mà sale chốt
   // "khách chỉ mua chừng này" {id dòng phiếu: true}.
   // separate: phần NCC hẹn giao ra đơn mua riêng (mặc định gộp chung đơn với hàng có sẵn).
-  var D = { detail: null, saleOrder: null, confirming: false, qty: {}, settle: {}, separate: false };
+  var D = { detail: null, origin: null, confirming: false, qty: {}, settle: {}, separate: false };
   var EPS = 1e-9;
+  var REQ_ORIGIN = "request";  // khoá ô mã đơn hàng ở bước lên YCMH (sale_po_origin.js)
 
   /** quiet: tải lại ngầm phiếu đang mở (có tin mới) — không nháy "Đang tải…". */
   HQ.openInquiry = function (inquiryId, quiet) {
@@ -25,8 +26,10 @@ window.HlvQuote = window.HlvQuote || {};
       HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-loading">Đang tải…</div>';
     }
     return HQ.api("inquiry", { inquiry_id: inquiryId }).then(function (detail) {
-      D.saleOrder = detail.sale_order_id ? { id: detail.sale_order_id, name: detail.sale_order }
-        : detail.crm_sale_order_id ? { id: false, crm_id: detail.crm_sale_order_id, name: detail.crm_sale_order } : null;
+      // Ô mã đơn hàng ở bước lên YCMH: giữ chữ sale đang gõ khi phiếu tự tải lại; mở phiếu khác thì lấy theo phiếu.
+      if (!quiet || !D.origin || D.origin.id !== inquiryId) {
+        D.origin = { id: inquiryId, text: detail.order_ref || detail.sale_order || detail.crm_sale_order || "" };
+      }
       render(detail);
     }).catch(function (err) {
       HQ.$("hq-drawer-panel").innerHTML = '<div class="hq-alert">' + esc(err.message) + "</div>";
@@ -82,6 +85,7 @@ window.HlvQuote = window.HlvQuote || {};
 
   /** Bước 1: hiện bảng tóm tắt (sản phẩm × NCC, SL, giá sẽ lên YCMH) để sale soát trước khi tạo. */
   function reviewRequest(on) {
+    keepOrigin();
     if (on && !HQ.requestCode(D.detail)) {
       HQ.toast("Chọn mã sale ở ô \"Sale\" đầu phiếu (người yêu cầu) trước khi lên YCMH");
       return;
@@ -214,11 +218,11 @@ window.HlvQuote = window.HlvQuote || {};
     rows.forEach(function (row) { quantities[row.offer.line_id] = row.qty; });
     var settle = shortages(d, rows).filter(function (s) { return D.settle[s.line.id]; })
       .map(function (s) { return s.line.id; });
-    HQ.api("create_request", Object.assign(HQ.requestExtras(d), {
+    keepOrigin();
+    // Phiếu đã có YCMH / đơn mua thì mã đơn hàng sửa ở khung riêng (HQ.orderRefBox), không gửi ở đây.
+    HQ.api("create_request", Object.assign(HQ.requestExtras(d),
+      d.can_set_order_ref ? {} : HQ.originDraft(REQ_ORIGIN, D.origin.text), {
       inquiry_id: d.id,
-      sale_order_id: D.saleOrder && D.saleOrder.id || null,
-      // Đơn MISA CRM chưa về Odoo: phiếu giữ lại, tự gắn khi đơn đồng bộ về.
-      crm_sale_order: D.saleOrder && !D.saleOrder.id ? { crm_id: D.saleOrder.crm_id, code: D.saleOrder.name } : null,
       requester_code: HQ.requestCode(d),
       quantities: quantities,
       settle_line_ids: settle,
@@ -270,7 +274,7 @@ window.HlvQuote = window.HlvQuote || {};
           'vẫn giữ để lần sau dùng lại">Không mua</button>' : "") +
         (d.can_cancel ? '<button type="button" class="hq-btn hq-btn-danger" data-cancel-inquiry="1" title="Hỏi nhầm / ' +
           'lập sai — bỏ luôn giá">Huỷ phiếu</button>' : "") + "</div>" : "");
-    bindSaleOrderPicker();
+    HQ.bindOriginPicker(REQ_ORIGIN);
     HQ.bindOriginPicker("inquiry");
     HQ.bindAddVendorPicker();
   }
@@ -518,26 +522,32 @@ window.HlvQuote = window.HlvQuote || {};
         '<button type="button" class="hq-btn hq-btn-primary" data-create-request="1">Xác nhận tạo YCMH</button></div></div>';
     }
     return head +
-      '<div class="hq-request-row"><div class="hq-request-so-field">' + saleOrderPicker() + "</div>" +
+      '<div class="hq-request-row">' + (d.can_set_order_ref ? "" : '<div class="hq-request-so-field">' +
+        originInput() + "</div>") +
       '<button type="button" class="hq-btn hq-btn-primary hq-push" data-review-request="1"' +
       (d.can_request ? "" : " disabled") + ">" +
       (redo ? "Tạo YCMH mới" : live.length ? "Bổ sung vào YCMH" : "Tạo yêu cầu mua hàng") + "</button></div></div>";
   }
 
-  /** Ô tìm + chip đơn bán. Hiện ở khung lên YCMH và lặp lại ở bước xác nhận (mỗi lúc chỉ một chỗ trên trang,
-      cùng D.saleOrder — chọn ở đâu cũng là một). */
-  function saleOrderPicker() {
-    return '<div class="hq-picker hq-request-so"><label class="hq-sr-only" for="hq-req-so-search">Đơn bán</label>' +
-      '<input type="search" id="hq-req-so-search" class="hq-input w-100" autocomplete="off" ' +
-      'placeholder="Gắn đơn bán (không bắt buộc)…"/>' +
-      '<div id="hq-req-so-results" class="hq-dropdown hq-hidden"></div></div>' +
-      '<div id="hq-req-so-chip" class="hq-chip-row">' + saleOrderChip() + "</div>";
+  /** Ô mã đơn hàng của khách ở bước lên YCMH (phiếu chưa có YCMH / đơn mua): trùng số đơn bán thì gắn luôn đơn bán,
+      đơn MISA CRM chưa về Odoo thì tự gắn khi về. Hiện ở khung lên YCMH và lặp lại ở bước xác nhận (mỗi lúc một chỗ,
+      cùng D.origin). */
+  function originInput() {
+    return HQ.originInput(REQ_ORIGIN, D.origin ? D.origin.text : "");
   }
 
-  /** Ô gắn đơn bán ở bước xác nhận lên YCMH, cạnh kho nhận / địa điểm giao. */
-  function saleOrderField() {
-    return '<div class="hq-request-fields"><div class="hq-request-so-field">' +
-      '<span class="hq-label">Gắn đơn bán (không bắt buộc)</span>' + saleOrderPicker() + "</div></div>";
+  /** Ô ở bước xác nhận lên YCMH, cạnh kho nhận / địa điểm giao. */
+  function originField(d) {
+    return d.can_set_order_ref ? "" : '<div class="hq-request-fields"><div class="hq-request-so-field">' +
+      '<span class="hq-label">' + esc(HQ.ORIGIN_LABEL) + "</span>" + originInput() + "</div></div>";
+  }
+
+  /** Chữ đang có trong ô (chọn gợi ý ghi thẳng vào ô, không qua sự kiện input) → D.origin trước khi vẽ lại / gửi. */
+  function keepOrigin() {
+    var input = HQ.$("hq-origin-" + REQ_ORIGIN);
+    if (input && D.origin) {
+      D.origin.text = input.value;
+    }
   }
 
   /** Bảng tóm tắt những gì sẽ lên YCMH: từng cặp sản phẩm × NCC, SL mua (sửa được — khách đổi số lượng
@@ -560,15 +570,9 @@ window.HlvQuote = window.HlvQuote || {};
       '<th>Nhà cung cấp</th><th class="hq-num">SL mua</th><th class="hq-num">Đơn giá sau VAT</th>' +
       '<th class="hq-num">Thành tiền</th><th>Ghi chú (lên dòng YCMH)</th></tr></thead><tbody>' + body + "</tbody>" +
       '<tfoot><tr><td colspan="4" class="hq-num">Tổng sau VAT</td><td class="hq-num"><b data-req-sum="1">' +
-      HQ.money(total) + "</b></td><td></td></tr></tfoot></table></div>" + HQ.requestFieldsHtml(d) + saleOrderField() +
+      HQ.money(total) + "</b></td><td></td></tr></tfoot></table></div>" + HQ.requestFieldsHtml(d) + originField(d) +
       '<div data-req-short="1">' + shortageBox(d, rows) + "</div>" +
       '<div data-req-split="1">' + splitChoice(rows) + "</div>";
-  }
-
-  function saleOrderChip() {
-    return D.saleOrder ? '<span class="hq-chip hq-chip-blue">Đơn bán ' + esc(D.saleOrder.name) +
-      (D.saleOrder.id ? "" : " (" + HQ.CRM_ORDER_WAITING + ")") +
-      '<button type="button" class="hq-chip-x" data-clear-so="1" title="Bỏ đơn bán">×</button></span>' : "";
   }
 
   function renderVendors(d) {
@@ -631,23 +635,6 @@ window.HlvQuote = window.HlvQuote || {};
       }).join("") + "</tbody></table></div>";
   }
 
-  function bindSaleOrderPicker() {
-    if (!HQ.$("hq-req-so-search")) {
-      return;
-    }
-    HQ.bindPicker("hq-req-so-search", "hq-req-so-results", function (term) {
-      // link: tìm theo nguồn trong Cài đặt — Odoo hoặc MISA CRM (đơn CRM chưa về Odoo có id = false).
-      return HQ.rpc("/api/hoi-gia-ncc/sale_orders", { search: term, link: true }).then(function (r) { return r.orders; });
-    }, function (o) {
-      return '<span class="hq-strong">' + esc(o.name) + "</span> " +
-        '<span class="hq-muted">' + esc([o.partner, o.owner || HQ.saleName(o.sale_code), o.date,
-          o.crm_id && !o.id ? HQ.CRM_ORDER_WAITING : ""].filter(Boolean).join(" · ")) + "</span>";
-    }, function (order) {
-      D.saleOrder = { id: order.id, crm_id: order.crm_id, name: order.name };
-      HQ.$("hq-req-so-chip").innerHTML = saleOrderChip();
-    });
-  }
-
   /* ---------------- sự kiện ---------------- */
 
   HQ.bindCompareEvents = function () {
@@ -674,10 +661,6 @@ window.HlvQuote = window.HlvQuote || {};
         event.preventDefault();
         saveOpportunity(panel.querySelector("[data-save-opp]"));
       }
-    });
-    HQ.on(panel, "click", "[data-clear-so]", function () {
-      D.saleOrder = null;
-      HQ.$("hq-req-so-chip").innerHTML = "";
     });
     HQ.on(panel, "click", "[data-copy-msg]", function (el) {
       HQ.copy(D.detail.vendors[+el.dataset.copyMsg].share_message);

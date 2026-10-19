@@ -123,7 +123,7 @@ class VendorQuoteSalePageCreate(SalePageMixin, http.Controller):
     @http.route(f"{API}/sale_orders", type="json", auth="user", methods=["POST"])
     def api_sale_orders(self, search="", link=False, **kw):
         """Đơn bán để lấy sẵn hàng / gắn vào phiếu. Không sudo: sale chỉ thấy đơn mình được xem.
-        link: ô "Gắn đơn bán" — tìm theo nguồn trong Cài đặt (MISA CRM: link_crm_orders)."""
+        link: ô mã đơn hàng của khách — tìm theo nguồn trong Cài đặt (Odoo hoặc MISA CRM)."""
         self._check()
         search = (search or "").strip()
         if not search:

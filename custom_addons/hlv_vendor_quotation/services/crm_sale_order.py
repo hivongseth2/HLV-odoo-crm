@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tìm đơn hàng trên MISA CRM cho ô "Gắn đơn bán" của trang /hoi-gia-ncc (Cài đặt chọn nguồn MISA CRM).
+"""Tìm đơn hàng trên MISA CRM cho ô "Mã đơn hàng của khách" của trang /hoi-gia-ncc (Cài đặt chọn nguồn MISA CRM).
 
 Gọi CRM bằng token chung của misa_fetch_po_button (misa.api.utils._crm_read_call: hết hạn thì đăng nhập
 lại một lần, lỗi → UserError đọc được), cùng cách tìm cơ hội / báo giá. Chỉ đọc.

@@ -200,7 +200,6 @@ def inquiry_detail(inquiry):
     data.update({
         "note": inquiry.note or "",
         "sale_order_id": inquiry.sale_order_id.id or False,
-        "crm_sale_order_id": inquiry.crm_sale_order_id or False,
         "purchase_orders": [purchase_order_payload(o) for o in inquiry.purchase_order_ids],
         # Đã lên YCMH vẫn chọn thêm / đổi được (VD NCC báo hết hàng, mua phần còn thiếu) — trừ phần đã lên đơn mua.
         "can_choose": inquiry.state not in ("cancel", "closed"),
