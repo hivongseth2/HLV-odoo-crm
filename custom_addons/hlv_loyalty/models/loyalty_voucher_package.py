@@ -51,7 +51,30 @@ class HlvLoyaltyVoucherPackage(models.Model):
         help='Sản phẩm được tặng khi đổi theo chương trình quà tặng kèm',
     )
     gift_qty = fields.Float(
-        string='Số lượng quà tặng', default=1,
+        string='Số lượng mỗi lần đổi', default=1,
+        help='Số món khách nhận trong MỘT lần đổi. Không giới hạn số lần đổi — '
+             'muốn giới hạn thì đặt "Số suất".',
+    )
+
+    # Giới hạn ai / bao nhiêu lần được đổi
+    quota = fields.Integer(
+        string='Số suất', default=0,
+        help='Tổng số lần gói này được đổi (mọi khách cộng lại). 0 = không giới hạn. '
+             'Voucher bị hủy sẽ trả lại suất.',
+    )
+    allowed_account_ids = fields.Many2many(
+        'hlv.loyalty.portal.account', string='Chỉ dành cho tài khoản',
+        help='Để trống = mọi tài khoản đều thấy và đổi được. '
+             'Chọn tài khoản = chỉ các tài khoản này thấy và đổi được gói.',
+    )
+    voucher_ids = fields.One2many('hlv.loyalty.voucher', 'package_id', string='Voucher đã phát')
+    # Stored để mỗi lần phát voucher là một lệnh UPDATE lên dòng gói: hai giao dịch
+    # đổi cùng lúc sẽ đụng nhau ở dòng này, giao dịch sau bị Postgres bắt chạy lại và
+    # lúc đó mới thấy suất đã hết. Chỉ SELECT FOR UPDATE thì không đủ vì Odoo chạy
+    # REPEATABLE READ — giao dịch sau vẫn đọc snapshot cũ, chưa thấy voucher mới.
+    redeemed_count = fields.Integer(
+        string='Đã đổi', compute='_compute_redeemed_count', store=True,
+        help='Số voucher đã phát từ gói, không tính voucher đã hủy.',
     )
 
     validity_days = fields.Integer(
@@ -79,6 +102,8 @@ class HlvLoyaltyVoucherPackage(models.Model):
          'Số điểm yêu cầu phải lớn hơn 0!'),
         ('discount_value_non_negative', 'CHECK(discount_value >= 0)',
          'Giá trị giảm giá không được nhỏ hơn 0!'),
+        ('quota_non_negative', 'CHECK(quota >= 0)',
+         'Số suất không được nhỏ hơn 0!'),
     ]
 
     @api.constrains('reward_type', 'discount_type', 'discount_value', 'max_discount_amount', 'gift_product_id', 'gift_qty')
@@ -99,6 +124,30 @@ class HlvLoyaltyVoucherPackage(models.Model):
                     raise ValidationError('Vui lòng chọn sản phẩm quà tặng!')
                 if rec.gift_qty <= 0:
                     raise ValidationError('Số lượng quà tặng phải lớn hơn 0!')
+
+    @api.depends('voucher_ids.state')
+    def _compute_redeemed_count(self):
+        for rec in self:
+            rec.redeemed_count = len(rec.voucher_ids.filtered(lambda v: v.state != 'cancelled'))
+
+    def _get_unavailable_reason(self, account=None):
+        """Lý do tài khoản không đổi được gói này, '' nếu đổi được.
+
+        account=None là các đường đổi cũ theo công ty (API, Zalo mini app) — không
+        biết tài khoản nào đổi nên không được đổi gói đã chỉ định tài khoản.
+        """
+        self.ensure_one()
+        if not self.active:
+            return 'Gói quà không tồn tại hoặc đã ngừng.'
+        if self.allowed_account_ids and (not account or account not in self.allowed_account_ids):
+            return 'Gói quà này không dành cho tài khoản của bạn.'
+        if self.quota and self.redeemed_count >= self.quota:
+            return 'Gói quà này đã hết suất.'
+        return ''
+
+    def _filter_available_for_account(self, account=None):
+        """Các gói tài khoản này thấy và đổi được (dùng cho danh sách gói)."""
+        return self.filtered(lambda pkg: not pkg._get_unavailable_reason(account))
 
     def _get_validity_days(self):
         """Lấy thời hạn Voucher: ưu tiên gói > chương trình."""

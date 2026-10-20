@@ -359,7 +359,7 @@ class LoyaltyPublicPortal(http.Controller):
         )
         packages = request.env['hlv.loyalty.voucher.package'].sudo().search([
             ('active', '=', True),
-        ], order='points_required asc')
+        ], order='points_required asc')._filter_available_for_account(account)
         my_requests = _filter_visible_reward_requests(request.env['hlv.loyalty.reward.request'].sudo().search(
             _account_or_legacy_domain(account, root), order='date_request desc', limit=200,
         ))[:50]
@@ -396,8 +396,11 @@ class LoyaltyPublicPortal(http.Controller):
 
         root = account.partner_id._get_loyalty_root()
         pkg = request.env['hlv.loyalty.voucher.package'].sudo().browse(pkg_id)
-        if not pkg.exists() or not pkg.active:
+        if not pkg.exists():
             return request.redirect('/loyalty/redeem?tab=gift')
+        reason = pkg._get_unavailable_reason(account)
+        if reason:
+            return request.redirect(f'/loyalty/redeem?tab=gift&error_msg={reason}')
 
         balance = account.loyalty_exchange_points
         avail = account.loyalty_exchange_available_points
@@ -478,7 +481,7 @@ class LoyaltyPublicPortal(http.Controller):
             )
             packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
                 [('active', '=', True)], order='points_required asc'
-            )
+            )._filter_available_for_account(account)
             my_requests = _filter_visible_reward_requests(request.env['hlv.loyalty.reward.request'].sudo().search(
                 _account_or_legacy_domain(account, root), order='date_request desc', limit=200,
             ))[:50]

@@ -112,9 +112,12 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             return opt
 
         try:
+            # Có token thì lọc theo tài khoản (gói có thể chỉ dành cho vài tài khoản);
+            # không có thì chỉ thấy gói mở cho mọi người. Không cache public nữa vì
+            # kết quả khác nhau theo tài khoản và theo số suất còn lại.
             packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
                 [('active', '=', True)], order='points_required asc'
-            )
+            )._filter_available_for_account(self._auth_portal_account() or None)
             data = [{
                 'id': p.id,
                 'name': p.name,
@@ -128,7 +131,7 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 'gift_product_name': p.gift_product_id.name if p.gift_product_id else '',
                 'gift_qty': p.gift_qty,
             } for p in packages]
-            return self._response_success_cached(data, max_age=300)
+            return self._response_success(data)
         except Exception as e:
             _logger.exception("zalo_redeem_packages error: %s", e)
             return self._response_error("LOYALTY_ERROR", str(e), status=500)
@@ -158,7 +161,6 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
         try:
             body = self._request_json()
-            phone = kwargs.get('phone') or body.get('phone') or ''
             partner = request.env['res.partner'].sudo().browse(partner_id)
             if not partner.exists():
                 return self._response_success([])
@@ -240,7 +242,6 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         body = self._request_json()
         partner_id = body.get('partner_id') or kwargs.get('partner_id')
         package_id = body.get('package_id') or kwargs.get('package_id')
-        phone = body.get('phone') or kwargs.get('phone') or ''
 
         if not partner_id:
             return self._response_error("MISSING_PARTNER_ID", "Thiếu partner_id", status=400)
@@ -259,10 +260,9 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
             root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
             package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
-            if not package.exists() or not package.active:
+            if not package.exists():
                 return self._response_error("INVALID_PACKAGE", "Gói voucher không tồn tại hoặc đã ngừng áp dụng", status=400)
 
-            # Tìm đúng tài khoản portal account theo SĐT hoặc tài khoản mặc định
             account = self._auth_portal_account(partner)
             if not account:
                 return self._response_error(
@@ -270,6 +270,9 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                     "Phien dang nhap cu, vui long dang nhap lai",
                     status=401,
                 )
+            reason = package._get_unavailable_reason(account)
+            if reason:
+                return self._response_error("PACKAGE_UNAVAILABLE", reason, status=400)
 
             # Kiểm tra điểm khả dụng (đã trừ điểm đang treo ở các yêu cầu chờ duyệt)
             balance = self._reward_balance(account, root)
@@ -354,7 +357,6 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
         body = self._request_json()
         partner_id = body.get('partner_id') or kwargs.get('partner_id')
-        phone = body.get('phone') or kwargs.get('phone') or ''
         points = self._parse_int(body.get('points_to_redeem') or kwargs.get('points_to_redeem'), 0)
         bank_name = (body.get('bank_name') or '').strip()
         account_number = (body.get('account_number') or '').strip()
@@ -463,7 +465,6 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
 
         try:
             body = self._request_json()
-            phone = kwargs.get('phone') or body.get('phone') or ''
             state = kwargs.get('state') or body.get('state') or 'all'
             limit = min(max(self._parse_int(kwargs.get('limit') or body.get('limit'), 50), 1), 100)
 
@@ -522,7 +523,6 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
         body = self._request_json()
         partner_id = body.get('partner_id') or kwargs.get('partner_id')
         request_id = self._parse_int(body.get('request_id') or kwargs.get('request_id'), 0)
-        phone = body.get('phone') or kwargs.get('phone') or ''
 
         if not partner_id:
             return self._response_error("MISSING_PARTNER_ID", "Thiếu partner_id", status=400)

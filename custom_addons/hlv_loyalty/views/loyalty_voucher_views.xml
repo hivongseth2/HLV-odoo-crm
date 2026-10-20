@@ -77,6 +77,10 @@
         <field name="arch" type="xml">
             <form string="Voucher Loyalty">
                 <header>
+                    <button name="action_cancel_voucher" type="object" string="Hủy voucher"
+                            invisible="state != 'active'"
+                            groups="hlv_loyalty.group_loyalty_operator"
+                            confirm="Hủy voucher này? Gói được trả lại 1 suất. Điểm KHÔNG tự hoàn — cần hoàn thì điều chỉnh điểm trên khách hàng."/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="active,used,expired"/>
                 </header>

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV - Zalo Mini App API",
-    "version": "18.0.1.0.2",
+    "version": "18.0.1.0.3",
     "category": "Sales",
     "author": "HLV",
     "summary": "REST API endpoints for Zalo Mini App integration",
