@@ -122,10 +122,61 @@ class HlvLoyaltyVoucher(models.Model):
         return vouchers
 
     def action_cancel_voucher(self):
-        """Hủy voucher chưa dùng — trả lại suất cho gói. Không tự hoàn điểm."""
+        """Hủy voucher chưa dùng — trả lại suất cho gói.
+
+        Hoàn điểm hay không theo Cài đặt Loyalty "Hủy voucher thì hoàn điểm".
+        """
         if self.filtered(lambda v: v.state != 'active'):
             raise UserError('Chỉ hủy được voucher đang Khả dụng.')
+        refund = self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_loyalty.voucher_cancel_refund_points'
+        )
         self.write({'state': 'cancelled'})
+        for voucher in self:
+            if not refund:
+                voucher.message_post(body='Hủy voucher, không hoàn điểm (theo Cài đặt Loyalty).')
+                continue
+            redeem = voucher._get_redeem_history()
+            if not redeem:
+                voucher.message_post(body='Hủy voucher. Không tìm thấy giao dịch trừ điểm nên không hoàn.')
+                continue
+            voucher._refund_redeem_history(redeem)
+
+    def _get_redeem_history(self):
+        """Giao dịch trừ điểm đã đổi ra voucher này (rỗng nếu không tìm thấy).
+
+        Đổi qua wizard / API cũ thì giao dịch gắn thẳng voucher_id; đổi qua yêu cầu
+        đổi thưởng (portal, mini app) thì giao dịch nằm ở history_id của yêu cầu.
+        """
+        self.ensure_one()
+        history = self.env['hlv.loyalty.history'].sudo().search([
+            ('voucher_id', '=', self.id),
+            ('transaction_type', '=', 'redeem'),
+            ('point_amount', '<', 0),
+            ('state', '=', 'confirmed'),
+        ], limit=1)
+        if history:
+            return history
+        return self.env['hlv.loyalty.reward.request'].sudo().search([
+            ('voucher_id', '=', self.id),
+        ], limit=1).history_id.filtered(lambda h: h.state == 'confirmed' and h.point_amount < 0)
+
+    def _refund_redeem_history(self, redeem):
+        """Cộng lại đúng số điểm của giao dịch `redeem` vào đúng tài khoản đã bị trừ."""
+        self.ensure_one()
+        points = -redeem.point_amount
+        self.env['hlv.loyalty.history'].sudo().create({
+            'partner_id': redeem.partner_id.id,
+            'account_id': redeem.account_id.id,
+            'point_amount': points,
+            'point_type': 'exchange',
+            'transaction_type': 'redeem',
+            'state': 'confirmed',
+            'description': f'Hoàn điểm do hủy Voucher {self.code}',
+            'voucher_id': self.id,
+            'company_id': redeem.company_id.id,
+        })
+        self.message_post(body=f'Hủy voucher, đã hoàn {points:,} điểm đổi thưởng.')
 
     @api.model
     def _generate_voucher_code(self):
