@@ -50,6 +50,11 @@
                             <field name="program_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                             <field name="active" widget="boolean_toggle"/>
+                            <field name="quota"/>
+                            <field name="redeemed_count" invisible="not quota"/>
+                            <field name="allowed_account_ids" widget="many2many_tags"
+                                   placeholder="Để trống = mọi tài khoản"
+                                   groups="hlv_loyalty.group_loyalty_user"/>
                         </group>
                         <group string="Giá trị quy đổi">
                             <field name="points_required"/>
@@ -101,6 +106,10 @@
                 <field name="max_discount_amount" optional="show"/>
                   <field name="gift_product_id" optional="show"/>
                   <field name="gift_qty" optional="hide"/>
+                <field name="quota" optional="show"/>
+                <field name="redeemed_count" optional="show"/>
+                <field name="allowed_account_ids" widget="many2many_tags" optional="hide"
+                       groups="hlv_loyalty.group_loyalty_user"/>
                 <field name="min_order_amount" string="Đơn tối thiểu"/>
                 <field name="validity_days" string="Hiệu lực (ngày)"/>
                 <field name="active" widget="boolean_toggle"/>

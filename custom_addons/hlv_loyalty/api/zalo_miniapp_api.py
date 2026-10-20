@@ -1141,7 +1141,7 @@ class ZaloMiniAppAPI(http.Controller):
     def loyalty_voucher_packages(self, **kwargs):
         packages = request.env["hlv.loyalty.voucher.package"].sudo().search([
             ("active", "=", True),
-        ], order="points_required asc")
+        ], order="points_required asc")._filter_available_for_account()
         return self._response_success({
             "packages": [{
                 "id": p.id,
@@ -1172,8 +1172,11 @@ class ZaloMiniAppAPI(http.Controller):
             return self._response_error("INVALID_INPUT", "package_id is required", status=400)
 
         package = request.env["hlv.loyalty.voucher.package"].sudo().browse(package_id)
-        if not package.exists() or not package.active:
+        if not package.exists():
             return self._response_error("INVALID_PACKAGE", "Voucher package not found or inactive", status=404)
+        reason = package._get_unavailable_reason()
+        if reason:
+            return self._response_error("PACKAGE_UNAVAILABLE", reason, status=400)
 
         available_points = root.loyalty_exchange_available_points
         if available_points < package.points_required:

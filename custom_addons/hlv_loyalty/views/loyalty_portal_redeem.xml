@@ -127,6 +127,7 @@
                                             Voucher giảm <strong><t t-out="pkg.discount_value"/>%</strong>
                                             <t t-if="pkg.max_discount_amount > 0"><br/><span style="font-size:.75rem">Tối đa <t t-out="'{:,.0f}'.format(pkg.max_discount_amount)"/>đ</span></t>
                                         </t>
+                                        <t t-if="pkg.quota"><br/><span style="font-size:.75rem">Còn <t t-out="pkg.quota - pkg.redeemed_count"/> suất</span></t>
                                     </div>
                                     <div class="sr-pkg-divider"/>
                                     <t t-if="can_redeem">

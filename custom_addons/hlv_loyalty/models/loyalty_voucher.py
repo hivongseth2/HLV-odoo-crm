@@ -3,6 +3,7 @@ import logging
 import random
 import string
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -96,6 +97,35 @@ class HlvLoyaltyVoucher(models.Model):
     _sql_constraints = [
         ('code_unique', 'UNIQUE(code)', 'Mã Voucher phải là duy nhất!'),
     ]
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Chốt ở đây vì mọi đường đổi (portal, API, Zalo, wizard nhân viên) đều tạo
+        # voucher, nhưng mỗi đường tự kiểm điểm theo kiểu riêng.
+        packages = self.env['hlv.loyalty.voucher.package'].sudo()
+        accounts = self.env['hlv.loyalty.portal.account'].sudo()
+        for vals in vals_list:
+            package = packages.browse(vals.get('package_id'))
+            account = accounts.browse(vals.get('account_id') or []) or None
+            reason = package._get_unavailable_reason(account)
+            if reason:
+                raise UserError(reason)
+        vouchers = super().create(vals_list)
+        limited = vouchers.package_id.filtered('quota').sudo()
+        if limited:
+            # Kiểm lại sau khi tạo: hai lần đổi cùng lúc đều qua được bước trên.
+            # Ghi redeemed_count xuống DB rồi mới đếm — xem chú thích ở field.
+            limited.flush_recordset(['redeemed_count'])
+            full = limited.filtered(lambda pkg: pkg.redeemed_count > pkg.quota)
+            if full:
+                raise UserError(f'Gói quà "{full[0].name}" đã hết suất.')
+        return vouchers
+
+    def action_cancel_voucher(self):
+        """Hủy voucher chưa dùng — trả lại suất cho gói. Không tự hoàn điểm."""
+        if self.filtered(lambda v: v.state != 'active'):
+            raise UserError('Chỉ hủy được voucher đang Khả dụng.')
+        self.write({'state': 'cancelled'})
 
     @api.model
     def _generate_voucher_code(self):

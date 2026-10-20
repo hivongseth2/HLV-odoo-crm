@@ -201,8 +201,11 @@ class LoyaltyAPIController(http.Controller):
             return error
 
         package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
-        if not package.exists() or not package.active:
+        if not package.exists():
             return {'error': 'Gói Voucher không tồn tại hoặc đã ngừng'}
+        reason = package._get_unavailable_reason()
+        if reason:
+            return {'error': reason}
 
         available_points = root.loyalty_exchange_available_points
         if available_points < package.points_required:
@@ -1085,7 +1088,7 @@ class LoyaltyExternalAPI(http.Controller):
             return Response(status=200, headers=self._cors_headers())
         packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
             [('active', '=', True)], order='points_required asc'
-        )
+        )._filter_available_for_account()
         return self._json_ok([{
             'id': p.id,
             'name': p.name,
@@ -1198,8 +1201,11 @@ class LoyaltyExternalAPI(http.Controller):
             if not package_id:
                 return {'error': 'Thiếu package_id cho đổi quà'}
             package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
-            if not package.exists() or not package.active:
+            if not package.exists():
                 return {'error': 'Gói quà không tồn tại hoặc đã ngừng'}
+            reason = package._get_unavailable_reason()
+            if reason:
+                return {'error': reason}
             if avail_exchange < package.points_required:
                 return {
                     'error': f'Không đủ điểm khả dụng. '
