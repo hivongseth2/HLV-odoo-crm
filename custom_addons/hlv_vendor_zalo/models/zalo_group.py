@@ -63,9 +63,11 @@ class ZaloGroup(models.Model):
             group.ai_last_run_id = group.ai_run_ids[:1]
 
     def action_ai_read_now(self):
-        """AI đọc nhóm ngay (không chờ cron) rồi mở dòng nhật ký của lượt đó."""
+        """AI đọc nhóm ngay (không chờ cron) rồi mở dòng nhật ký của lượt đó. Người bấm chỉ cần sửa được nhóm (thu
+        mua); nhật ký / đề xuất là dữ liệu hệ thống ghi — không nhóm quyền nào được tạo tay — nên chạy sudo như cron."""
         self.ensure_one()
-        run = self.env["hlv.zalo.ai"]._read_group_now(self)
+        self.check_access("write")
+        run = self.env["hlv.zalo.ai"].sudo()._read_group_now(self.sudo())
         return {"type": "ir.actions.act_window", "res_model": "hlv.zalo.ai.run", "res_id": run.id,
                 "view_mode": "form", "target": "current"}
 

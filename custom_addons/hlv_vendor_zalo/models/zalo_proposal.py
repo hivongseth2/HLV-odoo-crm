@@ -74,15 +74,23 @@ class ZaloProposal(models.Model):
     def _upsert_from_ai(self, group, quote, rows, summary, messages, model):
         """Ghi kết quả AI cho một báo giá: cập nhật đề xuất đang chờ (thay toàn bộ dòng — AI đọc lại cả đoạn hội thoại
         nên kết quả mới đã gồm cái cũ) hoặc tạo mới. Trả (đề xuất, có gì mới để báo sale không — mới tạo, hoặc NCC nói
-        khác lần đọc trước)."""
+        khác lần đọc trước).
+
+        AI đọc lại CẢ đoạn hội thoại mỗi lượt, nên tin NCC đã ghi vào báo giá vẫn ra lại ở lượt sau (có ai nhắn thêm
+        "ok ạ" là đọc lại). Dòng báo giá đã đúng như AI đọc thì bỏ; không còn dòng nào mới → không tạo đề xuất
+        (trả đề xuất rỗng) — tránh đề xuất trùng cái vừa ghi."""
+        Line = self.env["hlv.zalo.proposal.line"]
+        line_vals = [vals for vals in (Line._vals_from_ai(row, messages) for row in rows)
+                     if not Line._already_on_quote(vals)]
         proposal = self.search([("quote_id", "=", quote.id), ("state", "=", "draft")], limit=1)
+        if not line_vals:
+            return self, False
         created = not proposal
         before = proposal.line_ids._signature() if proposal else None
         vals = {
             "group_id": group.id, "summary": summary, "ai_model": model, "ai_run_at": fields.Datetime.now(),
             "message_ids": [(6, 0, messages.ids)],
-            "line_ids": [(5, 0, 0)] + [(0, 0, self.env["hlv.zalo.proposal.line"]._vals_from_ai(row, messages))
-                                       for row in rows],
+            "line_ids": [(5, 0, 0)] + [(0, 0, line) for line in line_vals],
         }
         if created:
             proposal = self.create(dict(vals, quote_id=quote.id))
@@ -253,6 +261,23 @@ class ZaloProposalLine(models.Model):
         elif row["status"] == STATUS_STOCK_ONLY:
             vals.update(self._listed_price(line, vat) or self._reused_price(line, vat))
         return vals
+
+    @api.model
+    def _already_on_quote(self, vals):
+        """Dòng báo giá đã đúng như AI đọc (vals: _vals_from_ai) — đã ghi từ lượt trước hoặc NCC tự nhập — thì không
+        cần đề xuất lại. So: hết hàng; giá sau VAT trước CK (lệch ≤ 1đ do làm tròn) + VAT + % CK. NCC chỉ báo "còn
+        hàng" cho dòng đã có giá cũng không có gì mới. Dòng chưa có giá bao giờ cũng là mới."""
+        line = self.env["hlv.vendor.quote.line"].browse(vals["quote_line_id"])
+        if vals["status"] == STATUS_UNAVAILABLE:
+            return line.unavailable
+        if line.unavailable or not line.price_unit:
+            return False
+        if vals["status"] == STATUS_STOCK_ONLY:
+            return vals["available_qty"] < 0 and not vals["backorder_date"]
+        gross = (line.list_price or line.price_unit) * (1 + line.tax_rate / 100.0)
+        discount = line.discount if line.list_price else 0.0
+        return (abs(gross - (vals.get("price_incl") or 0.0)) <= 1 and line.vat == vals["vat"]
+                and abs(discount - (vals["discount"] or 0.0)) < 0.01)
 
     def _listed_price(self, line, vat):
         """Giá Bảng giá NCC đang hiệu lực (file giá NCC gửi, nhập ở hlv_vendor_import) — {} nếu không có. Chiết khấu
