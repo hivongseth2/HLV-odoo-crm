@@ -392,6 +392,12 @@ class PurchaseOrder(models.Model):
         )
         return result
 
+    def print_quotation(self):
+        # Core ghi state='sent' vô điều kiện: bấm "In RFQ" ở form cũ (tab chưa tải lại, vẫn thấy RFQ) kéo đơn
+        # đã xác nhận về "RFQ đã gửi" rồi xác nhận lại là NCC nhận tin xác nhận lần hai (DMH24079, 20/10/2026).
+        self.filtered(lambda o: o.state == "draft").write({"state": "sent"})
+        return self.env.ref("purchase.report_purchase_quotation").report_action(self)
+
     def _hlv_mark_delivered_by_receipt(self):
         """Kho bên mình nhận xong hàng (phiếu nhập đã xác nhận) → đơn tự chuyển "Đã giao" trên trang
         NCC, NCC khỏi bấm. Gọi sau khi xác nhận phiếu nhập (stock.picking._action_done)."""
