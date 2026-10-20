@@ -42,6 +42,18 @@ def validate_sale_code(env, code):
     return env["stock.picking"]._misa_invoice_validate_public_saler_code(code)
 
 
+def can_handle_sale_code(env, code):
+    """Tài khoản đang đăng nhập xử lý được việc của một phiếu mã sale ``code`` không (duyệt đề xuất, xác nhận khớp mã…):
+    quản lý Hỏi giá NCC → mọi mã; còn lại phải là mã thuộc tài khoản. Mã trống → chỉ quản lý."""
+    if can_see_all(env):
+        return True
+    try:
+        validate_sale_code(env, code or "")
+    except UserError:
+        return False
+    return True
+
+
 def scope_domain(code, field="sale_code"):
     """Domain lọc theo mã đã kiểm (False = mọi mã). So không phân biệt hoa thường như MISA."""
     return [(field, "=ilike", code)] if code else []

@@ -494,6 +494,12 @@ class VendorQuote(models.Model):
         self.ensure_one()
         return bool(self.line_ids) and all(line.inherited_from_id for line in self.line_ids)
 
+    def _hlv_sale_page_links(self):
+        """Link module khác gắn vào dòng NCC ở trang sale (/hoi-gia-ncc): [{"label", "url", "highlight"}].
+        Module này không có link nào — chỉ là chỗ móc để module phụ (VD đề xuất AI đọc Zalo) không phải sửa trang."""
+        self.ensure_one()
+        return []
+
     def _fully_ordered(self):
         """Mọi mặt hàng đều đã lên đơn mua — báo giá khoá hẳn với NCC."""
         self.ensure_one()
