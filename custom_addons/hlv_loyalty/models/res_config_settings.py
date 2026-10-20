@@ -18,6 +18,12 @@ class ResConfigSettings(models.TransientModel):
         string='Zalo Phone Relay Key',
         config_parameter='hlv_loyalty.zalo_phone_relay_key',
     )
+    loyalty_voucher_cancel_refund_points = fields.Boolean(
+        string='Hủy voucher thì hoàn điểm',
+        config_parameter='hlv_loyalty.voucher_cancel_refund_points',
+        help='Bật: bấm "Hủy voucher" sẽ cộng lại số điểm đã trừ khi đổi voucher đó. '
+             'Tắt: chỉ trả lại suất cho gói, điểm không hoàn.',
+    )
     loyalty_bulk_default_discount = fields.Float(
         string='% chiết khấu mặc định mới',
         digits=(5, 4),
