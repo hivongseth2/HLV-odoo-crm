@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Trang sale duyệt đề xuất AI đọc từ Zalo: /zalo-de-xuat/<id>. Chỉ sale của phiếu (mã sale thuộc tài khoản) hoặc nhóm
-Quản lý Hỏi giá NCC mở được. "Ghi vào báo giá" gọi đúng hàm NCC dùng khi tự gửi báo giá (_vendor_submit) — cùng luật:
+Quản lý Hỏi giá NCC mở được. "Ghi vào báo giá" (zalo_proposal._apply_form) gọi đúng hàm NCC dùng khi tự gửi báo giá (_vendor_submit) — cùng luật:
 mọi dòng đang mở phải có giá + VAT, hoặc tick hết hàng."""
 
 from datetime import timedelta
@@ -12,11 +12,9 @@ from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn
 from odoo.addons.hlv_vendor_quotation.services import sale_scope
 from odoo.addons.hlv_vendor_quotation.services.access_setup import USER_GROUP
 from odoo.addons.hlv_vendor_quotation.services.asset_version import asset_version
-from odoo.exceptions import UserError
 from odoo.http import request
 
 from ..models.zalo_proposal import PROPOSAL_STATES, REVIEW_ROUTE
-from ..services.proposal_apply import submit_values
 
 # Danh sách: đề xuất chờ duyệt hiện hết; đã ghi / đã bỏ chỉ giữ chừng này ngày cho đỡ dài.
 LIST_DECIDED_DAYS = 30
@@ -66,8 +64,9 @@ class ZaloProposalPage(http.Controller):
             if action == "reject":
                 proposal._mark("rejected")
                 return request.redirect(f"{REVIEW_ROUTE}/{proposal.id}?saved=rejected")
-            errors = self._apply(proposal, form)
+            errors = proposal._apply_form(form)
             if not errors:
+                proposal._log_applied()
                 return request.redirect(f"{REVIEW_ROUTE}/{proposal.id}?saved=applied")
         return request.render("hlv_vendor_zalo.proposal_page", dict(
             self._page_values(),
@@ -100,17 +99,11 @@ class ZaloProposalPage(http.Controller):
         (nếu có); vừa bấm Ghi mà lỗi thì giữ đúng chữ sale đã gõ."""
         by_line = {l.quote_line_id.id: l for l in proposal.line_ids}
         rows = []
-        for line in proposal.quote_id._vendor_lines().filtered(lambda l: not l.vendor_locked):
+        for line in proposal._open_lines():
             ai = by_line.get(line.id)
             if ai:
-                prefill = {
-                    "unavailable": ai.status == "unavailable",
-                    "price": format_vn_number(ai.price_incl) if ai.price_incl else "",
-                    "vat": ai.vat or "", "discount": format_vn_number(ai.discount) if ai.discount else "",
-                    "available": format_vn_number(ai.available_qty) if ai.available_qty >= 0 else "",
-                    "backorder_date": ai.backorder_date.isoformat() if ai.backorder_date else "",
-                    "delivery_days": str(ai.delivery_days or ""),
-                }
+                prefill = ai._form_values()
+                prefill["unavailable"] = prefill.pop("na")
             else:
                 current = line.list_price or line.price_unit
                 prefill = {
@@ -129,38 +122,3 @@ class ZaloProposalPage(http.Controller):
                 }
             rows.append({"line": line, "ai": ai, "value": prefill})
         return rows
-
-    @staticmethod
-    def _apply(proposal, form):
-        """Ghi vào báo giá. Trả danh sách lỗi ([] = đã ghi)."""
-        quote = proposal.quote_id
-        today = quote._vendor_today()
-        values, errors = {}, []
-        for line in quote._vendor_lines().filtered(lambda l: not l.vendor_locked):
-            raw_date = (form.get(f"backorder_date_{line.id}") or "").strip()
-            try:
-                backorder = fields.Date.to_date(raw_date) if raw_date else None
-            except ValueError:
-                errors.append(f"{line.name}: ngày hẹn \"{raw_date}\" không đọc được")
-                continue
-            line_values, error = submit_values(line.product_qty, {
-                "unavailable": bool(form.get(f"na_{line.id}")), "price": form.get(f"price_{line.id}"),
-                "vat": form.get(f"vat_{line.id}"), "discount": form.get(f"discount_{line.id}"),
-                "available": form.get(f"available_{line.id}"), "backorder_date": backorder,
-                "delivery_days": form.get(f"delivery_days_{line.id}"),
-            }, today, {"vendor_note": line.vendor_note, "invoice_name": line.invoice_name})
-            if error:
-                errors.append(f"{line.product_id.default_code or line.name}: {error}")
-            else:
-                values[line.id] = line_values
-        if errors:
-            return errors
-        # Hiệu lực giá cũ đã qua thì để trống — _vendor_submit tự đặt 7 ngày (ngày đã qua là lỗi).
-        valid_until = quote.price_valid_until if quote.price_valid_until and quote.price_valid_until >= today else False
-        try:
-            quote._vendor_submit(values, quote.vendor_note or "", valid_until)
-        except UserError as exc:
-            return [exc.args[0]]
-        proposal._mark("applied")
-        proposal._log_applied()
-        return []

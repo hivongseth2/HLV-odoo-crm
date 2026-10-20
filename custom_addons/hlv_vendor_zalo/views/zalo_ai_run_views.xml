@@ -93,7 +93,7 @@
         <field name="search_view_id" ref="view_zalo_ai_run_search"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">AI chưa đọc lượt nào</p>
-            <p>Bật "AI đọc Zalo soạn giá cho báo giá" trong Cài đặt → Mua hàng → Hỏi giá NCC. Cron 3 phút một lần đọc các
+            <p>Bật "AI đọc Zalo soạn giá cho báo giá" trong Cài đặt → Mua hàng → Hỏi giá NCC. Cron mỗi phút một lần đọc các
                 nhóm đang ghi tin, có NCC và có tin mới từ phía NCC — mỗi lượt một dòng ở đây. Muốn thử ngay: mở nhóm,
                 bấm "AI đọc ngay".</p>
         </field>

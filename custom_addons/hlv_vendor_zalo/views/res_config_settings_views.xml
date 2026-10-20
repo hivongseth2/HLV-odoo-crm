@@ -16,11 +16,15 @@
                     </div>
                 </setting>
                 <setting id="hlv_zalo_ai" string="AI đọc Zalo soạn giá cho báo giá"
-                         help="Bật: vài phút một lần, nhóm Zalo đang ghi tin có NCC trả lời mới thì Claude đọc hội thoại và soạn giá / tồn kho cho các báo giá đang mở của NCC đó (NCC chỉ báo tồn kho thì lấy giá cũ còn hiệu lực ≤ 7 ngày). Sale của phiếu nhận ghi chú + Zalo kèm link, duyệt xong mới ghi vào báo giá. Dùng API key của Trợ lý tạo mã hàng (Cài đặt → Tồn kho). Tắt: không gọi AI, không tốn token.">
+                         help="Bật: mỗi phút một lần, nhóm Zalo đang ghi tin có NCC trả lời mới thì Claude đọc hội thoại và soạn giá / tồn kho cho các báo giá đang mở của NCC đó (NCC chỉ báo tồn kho thì lấy giá cũ còn hiệu lực ≤ 7 ngày). Sale của phiếu nhận ghi chú + Zalo kèm link, duyệt xong mới ghi vào báo giá. Dùng API key của Trợ lý tạo mã hàng (Cài đặt → Tồn kho). Tắt: không gọi AI, không tốn token.">
                     <field name="hlv_zalo_ai_enabled"/>
                     <div class="mt8" invisible="not hlv_zalo_ai_enabled">
                         <field name="hlv_zalo_ai_model"/>
                     </div>
+                </setting>
+                <setting id="hlv_zalo_ai_auto_apply" invisible="not hlv_zalo_ai_enabled"
+                         help="Bật khi đã kiểm chứng AI đọc đúng một thời gian. AI ghi thẳng vào báo giá (như NCC tự gửi), sale nhận tin &quot;AI đã tự ghi&quot; kèm link xem lại — CHỈ khi: báo giá còn chờ NCC báo (chưa có giá nào ghi), AI có câu trả lời cho mọi dòng, dòng nào cũng chắc chắn, giá + VAT do NCC nói thẳng trên Zalo (hoặc NCC báo hết hàng). Thiếu một điều (giá suy ra từ bảng giá / giá cũ, VAT tự điền, không rõ trước / sau VAT, mã gần giống…) thì vẫn chờ sale duyệt như khi tắt.">
+                    <field name="hlv_zalo_ai_auto_apply"/>
                 </setting>
             </xpath>
         </field>
