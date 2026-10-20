@@ -24,8 +24,8 @@ _logger = logging.getLogger(__name__)
 
 PARAM_ENABLED = "hlv_vendor_zalo.ai_enabled"
 PARAM_MODEL = "hlv_vendor_zalo.ai_model"
-# Ghép nhầm là đưa giá hàng này sang hàng khác: model giỏi nhất. Chỉ gọi khi NCC có tin mới nên số lần gọi ít.
-DEFAULT_MODEL = "claude-opus-5-5"
+# Rẻ nhất; ghép nhầm không vào thẳng báo giá: sale duyệt, hoặc AI chỉ tự ghi khi mọi dòng chắc chắn (_auto_apply).
+DEFAULT_MODEL = "claude-haiku-5-5"
 EFFORT = "medium"
 REQUEST_TIMEOUT_SECONDS = 240
 # Báo giá cũ hơn chừng này không đưa vào (NCC trả lời muộn hơn thế thì sale tự xử lý).
@@ -132,7 +132,8 @@ class ZaloAi(models.AbstractModel):
             proposal, changed = Proposal._upsert_from_ai(group, quote, answer["result"][quote.id], answer["summary"],
                                                          messages, model)
             proposals |= proposal
-            if changed:
+            # Tự ghi được (Cài đặt bật + đủ chắc) thì _auto_apply tự báo sale "đã ghi"; không thì sale duyệt như cũ.
+            if changed and not proposal._auto_apply():
                 proposal._notify_sale()
         run.write({"state": "proposed" if proposals else "nothing", "summary": answer["summary"],
                    "proposal_ids": [(6, 0, proposals.ids)]})

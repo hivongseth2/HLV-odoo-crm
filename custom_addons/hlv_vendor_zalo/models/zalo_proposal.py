@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 from markupsafe import Markup
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 from odoo.addons.hlv_vendor_quotation.models.vendor_quote_line import DEFAULT_VENDOR_VAT, VAT_SELECTION
-from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import price_incl_vat
+from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn_number, price_incl_vat
 from odoo.addons.hlv_vendor_quotation.services.notify import post_internal
 from odoo.addons.hlv_vendor_quotation.services.price_reuse import recent_vendor_price
 # Gửi Zalo OA cho sale: dùng lại đúng đường gửi của trang hỏi giá (cấu hình + mapping mã sale, công tắc trong Cài đặt).
 from odoo.addons.hlv_vendor_quotation.services.sale_zalo import _send as send_sale_zalo
 
-from ..services.proposal_apply import vat_rate
+from ..services.proposal_apply import submit_values, vat_rate
 from ..services.proposal_prompt import STATUS_OFFERED, STATUS_STOCK_ONLY, STATUS_UNAVAILABLE, price_incl
 
 PROPOSAL_STATES = [
@@ -28,6 +29,12 @@ PRICE_SOURCES = [
     ("none", "Chưa có giá"),
 ]
 REVIEW_ROUTE = "/zalo-de-xuat"
+# AI tự ghi đề xuất đủ chắc vào báo giá, không chờ sale duyệt (_auto_apply). Mặc định tắt.
+AUTO_APPLY_PARAM = "hlv_vendor_zalo.ai_auto_apply"
+
+
+class _ApplyFailed(Exception):
+    """Tự ghi lỗi giữa chừng — chỉ để thoát savepoint (huỷ phần đã ghi), không ra khỏi _auto_apply."""
 
 
 class ZaloProposal(models.Model):
@@ -83,24 +90,102 @@ class ZaloProposal(models.Model):
             proposal.write(vals)
         return proposal, created or proposal.line_ids._signature() != before
 
-    def _notify_sale(self):
-        """Báo sale của phiếu có đề xuất mới: ghi chú nội bộ trên phiếu + Zalo OA (nếu đang bật báo Zalo cho sale)."""
+    def _notify_sale(self, applied=False):
+        """Báo sale của phiếu có đề xuất mới (applied: AI đã tự ghi vào báo giá): ghi chú nội bộ trên phiếu + Zalo OA
+        (nếu đang bật báo Zalo cho sale)."""
         for proposal in self:
             url = proposal._review_url()
-            text = f"🤖 AI đọc Zalo nhóm {proposal.group_id.name}: NCC {proposal.partner_id.display_name} đã trả lời " \
-                   f"cho {proposal.quote_id.name} — {proposal.summary or 'xem đề xuất'}"
-            post_internal(proposal.inquiry_id, Markup("<p>%s</p><p><a href='%s'>Duyệt đề xuất</a></p>") % (text, url))
-            send_sale_zalo(proposal.quote_id, [proposal.sale_code], f"{text}\nDuyệt: {url}")
+            action = "— AI đã tự ghi giá vào" if applied else "đã trả lời cho"
+            text = f"🤖 AI đọc Zalo nhóm {proposal.group_id.name}: NCC {proposal.partner_id.display_name} {action} " \
+                   f"{proposal.quote_id.name} — {proposal.summary or 'xem đề xuất'}"
+            link = "Xem lại" if applied else "Duyệt đề xuất"
+            post_internal(proposal.inquiry_id, Markup("<p>%s</p><p><a href='%s'>%s</a></p>") % (text, url, link))
+            send_sale_zalo(proposal.quote_id, [proposal.sale_code], f"{text}\n{link}: {url}")
+
+    def _open_lines(self):
+        """Dòng báo giá còn ghi được (chưa lên đơn mua) — đúng các dòng trang duyệt hiện và _vendor_submit nhận."""
+        self.ensure_one()
+        return self.quote_id._vendor_lines().filtered(lambda l: not l.vendor_locked)
+
+    def _apply_form(self, form):
+        """Ghi vào báo giá bằng đúng hàm NCC dùng khi tự gửi (_vendor_submit — cùng luật: mọi dòng đang mở phải có giá +
+        VAT, hoặc hết hàng). form: ô trang duyệt theo dòng ("price_<id>", "vat_<id>", "discount_<id>", "available_<id>",
+        "backorder_date_<id>", "delivery_days_<id>", "na_<id>"). Trả danh sách lỗi ([] = đã ghi)."""
+        self.ensure_one()
+        quote = self.quote_id
+        today = quote._vendor_today()
+        values, errors = {}, []
+        for line in self._open_lines():
+            raw_date = (form.get(f"backorder_date_{line.id}") or "").strip()
+            try:
+                backorder = fields.Date.to_date(raw_date) if raw_date else None
+            except ValueError:
+                errors.append(f"{line.name}: ngày hẹn \"{raw_date}\" không đọc được")
+                continue
+            line_values, error = submit_values(line.product_qty, {
+                "unavailable": bool(form.get(f"na_{line.id}")), "price": form.get(f"price_{line.id}"),
+                "vat": form.get(f"vat_{line.id}"), "discount": form.get(f"discount_{line.id}"),
+                "available": form.get(f"available_{line.id}"), "backorder_date": backorder,
+                "delivery_days": form.get(f"delivery_days_{line.id}"),
+            }, today, {"vendor_note": line.vendor_note, "invoice_name": line.invoice_name})
+            if error:
+                errors.append(f"{line.product_id.default_code or line.name}: {error}")
+            else:
+                values[line.id] = line_values
+        if errors:
+            return errors
+        # Hiệu lực giá cũ đã qua thì để trống — _vendor_submit tự đặt 7 ngày (ngày đã qua là lỗi).
+        valid_until = quote.price_valid_until if quote.price_valid_until and quote.price_valid_until >= today else False
+        try:
+            quote._vendor_submit(values, quote.vendor_note or "", valid_until)
+        except UserError as exc:
+            return [exc.args[0]]
+        self._mark("applied")
+        return []
+
+    def _auto_apply(self):
+        """Cài đặt bật "AI tự ghi" và đề xuất đủ chắc (_is_sure) thì ghi thẳng vào báo giá, báo sale "đã tự ghi". Trả
+        True khi đã ghi; False → để sale duyệt như thường (người gọi tự báo sale)."""
+        self.ensure_one()
+        if self.env["ir.config_parameter"].sudo().get_param(AUTO_APPLY_PARAM) != "True" or not self._is_sure():
+            return False
+        form = {}
+        for line in self.line_ids:
+            form.update({f"{key}_{line.quote_line_id.id}": value for key, value in line._form_values().items()})
+        try:
+            # Ghi lỗi (VD báo giá vừa đóng) thì huỷ hết phần đã ghi — đề xuất nguyên trạng chờ sale duyệt.
+            with self.env.cr.savepoint():
+                if self._apply_form(form):
+                    raise _ApplyFailed()
+        except _ApplyFailed:
+            return False
+        self._log_applied(auto=True)
+        self._notify_sale(applied=True)
+        return True
+
+    def _is_sure(self):
+        """Đủ chắc để AI tự ghi: báo giá còn chờ NCC báo (chưa có giá đã ghi — không ghi đè), đề xuất phủ MỌI dòng còn
+        mở, dòng nào cũng "chắc chắn" và là điều NCC nói thẳng: giá NCC báo trên Zalo, VAT NCC nói, rõ trước / sau VAT —
+        hoặc NCC báo hết hàng. Giá suy ra (bảng giá, giá cũ khi NCC chỉ báo tồn kho) luôn để sale duyệt."""
+        self.ensure_one()
+        if self.quote_id.state != "sent" or set(self._open_lines().ids) != set(self.line_ids.quote_line_id.ids):
+            return False
+        return all(
+            line.confidence == "high" and (
+                line.status == STATUS_UNAVAILABLE
+                or (line.status == STATUS_OFFERED and line.price_source == "zalo" and line.price_incl
+                    and not line.vat_assumed and not line.basis_unknown))
+            for line in self.line_ids)
 
     def _mark(self, state):
         self.write({"state": state, "decided_by": self.env.user.id, "decided_at": fields.Datetime.now()})
 
-    def _log_applied(self):
-        """Ghi lên báo giá: giá / tồn kho lấy từ Zalo, ai duyệt — để sau này tra được nguồn."""
+    def _log_applied(self, auto=False):
+        """Ghi lên báo giá: giá / tồn kho lấy từ Zalo, ai duyệt (auto: AI tự ghi) — để sau này tra được nguồn."""
         self.ensure_one()
+        who = "AI tự ghi (mọi dòng chắc chắn)" if auto else f"AI đề xuất, {self.env.user.name} duyệt"
         post_internal(self.quote_id, Markup("<p>%s</p>") % (
-            f"Giá / tồn kho ghi từ Zalo nhóm {self.group_id.name or '?'} — AI đề xuất, {self.env.user.name} duyệt "
-            f"({len(self.message_ids)} tin căn cứ)."))
+            f"Giá / tồn kho ghi từ Zalo nhóm {self.group_id.name or '?'} — {who} ({len(self.message_ids)} tin căn cứ)."))
 
 
 class ZaloProposalLine(models.Model):
@@ -130,6 +215,18 @@ class ZaloProposalLine(models.Model):
     evidence_message_ids = fields.Many2many("hlv.zalo.message", "hlv_zalo_proposal_line_evidence_rel", "line_id",
                                             "message_id", string="Tin căn cứ")
     confidence = fields.Selection([("high", "Chắc chắn"), ("low", "Cần xem lại")], string="Độ chắc")
+
+    def _form_values(self):
+        """Điều AI đọc được → giá trị ô trang duyệt (chuỗi như sale gõ): trang điền sẵn, AI tự ghi dùng thẳng."""
+        self.ensure_one()
+        return {
+            "na": self.status == STATUS_UNAVAILABLE,
+            "price": format_vn_number(self.price_incl) if self.price_incl else "",
+            "vat": self.vat or "", "discount": format_vn_number(self.discount) if self.discount else "",
+            "available": format_vn_number(self.available_qty) if self.available_qty >= 0 else "",
+            "backorder_date": self.backorder_date.isoformat() if self.backorder_date else "",
+            "delivery_days": str(self.delivery_days or ""),
+        }
 
     def _signature(self):
         """Điều NCC nói, gọn để so hai lần AI đọc — giống nhau thì không báo sale lần nữa."""

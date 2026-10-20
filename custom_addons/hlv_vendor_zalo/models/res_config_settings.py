@@ -5,6 +5,7 @@ from odoo import fields, models
 from odoo.addons.hlv_product_agent.services.claude_api_payload import MODEL_CHOICES
 
 from .zalo_ai import DEFAULT_MODEL, PARAM_ENABLED, PARAM_MODEL
+from .zalo_proposal import AUTO_APPLY_PARAM
 
 # Khoá máy nghe dùng gọi /api/zalo-listener/* (header X-API-Key). Trống = cửa đóng, không nhận gì.
 INGEST_KEY_PARAM = "hlv_vendor_zalo.ingest_key"
@@ -17,6 +18,7 @@ class ResConfigSettings(models.TransientModel):
     hlv_zalo_ai_enabled = fields.Boolean(string="AI đọc Zalo soạn giá cho báo giá", config_parameter=PARAM_ENABLED)
     hlv_zalo_ai_model = fields.Selection(MODEL_CHOICES, string="Model AI đọc Zalo", default=DEFAULT_MODEL,
                                          config_parameter=PARAM_MODEL)
+    hlv_zalo_ai_auto_apply = fields.Boolean(string="AI tự ghi vào báo giá khi chắc chắn", config_parameter=AUTO_APPLY_PARAM)
 
     def action_hlv_zalo_new_key(self):
         """Tạo khoá mới — khoá cũ hết hiệu lực ngay, phải dán khoá mới vào file .env của máy nghe."""

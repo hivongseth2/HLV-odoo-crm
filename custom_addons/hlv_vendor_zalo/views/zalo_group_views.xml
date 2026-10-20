@@ -56,7 +56,7 @@
                             <field name="ai_last_run_id"/>
                         </group>
                         <div class="text-muted">
-                            Cron 3 phút một lần: có tin mới phía NCC thì AI đọc hội thoại, soạn đề xuất cho các báo giá đang mở
+                            Cron mỗi phút một lần: có tin mới phía NCC thì AI đọc hội thoại, soạn đề xuất cho các báo giá đang mở
                             của NCC. "AI đọc ngay" đọc lại cả đoạn hội thoại ngay bây giờ (cần bật AI trong Cài đặt).
                             <div class="mt8">
                                 <button name="action_ai_read_now" type="object" string="AI đọc ngay" class="btn-secondary"
