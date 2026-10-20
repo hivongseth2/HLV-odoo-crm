@@ -1246,9 +1246,12 @@ class LoyaltyExternalAPI(http.Controller):
             })
 
         try:
-            req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
-            if request_type == 'gift':
-                req.action_done()
+            # Savepoint: action_done lỗi sau khi đã trừ điểm thì phải rollback cả
+            # yêu cầu lẫn giao dịch trừ — except bên dưới không ném lại lỗi.
+            with request.env.cr.savepoint():
+                req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+                if request_type == 'gift':
+                    req.action_done()
         except UserError as exc:
             return {
                 'error': str(exc),

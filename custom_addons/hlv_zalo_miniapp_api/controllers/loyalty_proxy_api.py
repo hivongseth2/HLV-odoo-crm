@@ -296,8 +296,12 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
             if account:
                 vals['account_id'] = account.id
 
-            req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
-            req.action_done()
+            # Savepoint: lỗi giữa action_done (đã trừ điểm, chưa ra voucher) bị
+            # except bên dưới nuốt rồi transaction vẫn commit — khách mất điểm không
+            # nhận voucher. Rollback về đây thì không còn dấu vết dở dang.
+            with request.env.cr.savepoint():
+                req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+                req.action_done()
 
             # Lấy điểm còn lại sau khi trừ
             remaining_points = 0
