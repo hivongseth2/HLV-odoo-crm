@@ -9,7 +9,7 @@ from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
 from .misa_invoice_amount_utils import invoice_vat_ratio, split_by_weights, voucher_line_amount_with_vat
-from .misa_invoice_reassign_utils import name_key
+from .misa_invoice_reassign_utils import item_key, name_key
 
 _logger = logging.getLogger(__name__)
 
@@ -480,6 +480,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # phiếu đã khớp sạch qua refno trong map.
             if status['state'] == 'missing' and not picking.misa_invoice_manual_refno:
                 siblings = picking._misa_invoice_sibling_pickings()
+                shipped_items = {
+                    item_key(m.product_id.default_code)
+                    for m in picking.move_ids_without_package if m.state == 'done'
+                } - {''}
                 for order_name in picking.misa_invoice_sale_order_ids.mapped('name'):
                     if not order_name or order_name == refno or order_name in claimed_order_refnos:
                         continue
@@ -490,6 +494,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         order_status, skipped = misa_utils.get_invoice_status_for_order(
                             order_name, skip_refnos=set(siblings.mapped('name')),
                             skip_refids={r for r in siblings.mapped('misa_invoice_request_refid') if r},
+                            items=shipped_items,
                         )
                     except Exception:
                         _logger.exception(

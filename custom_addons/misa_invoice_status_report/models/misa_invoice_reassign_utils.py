@@ -10,6 +10,20 @@ def item_key(code):
     return (code or '').strip().upper()
 
 
+def request_has_items(lines, order_name, items):
+    """Đề nghị (dòng hàng `lines` của get_invoice_request_lines) có dòng nào ghi đơn `order_name`
+    (hoặc bỏ trống mã đơn) với mã hàng thuộc `items` (tập item_key) không.
+
+    Trả True/False; `items` rỗng trả True (không có gì để đối chiếu thì không chặn)."""
+    if not items:
+        return True
+    return any(
+        (line.get('order_code') or '').strip() in (order_name, '')
+        and item_key(line.get('inventory_item_code')) in items
+        for line in lines
+    )
+
+
 def name_key(name):
     """Tên hàng chuẩn hóa để so tên trên HĐ MISA với tên sản phẩm Odoo: gộp khoảng trắng, không
     phân biệt hoa/thường. None/False → ''."""

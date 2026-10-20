@@ -4,6 +4,8 @@ from markupsafe import Markup
 
 from odoo import api, models
 
+from .stock_picking import MISA_INVOICE_AMOUNT_TOLERANCE
+
 _logger = logging.getLogger(__name__)
 
 
@@ -106,13 +108,7 @@ class StockPickingGroupedRepair(models.Model):
             # hàng) — ở đây phiếu vừa MẤT hết dòng khớp nên phải xét riêng.
             if not master or (picking.misa_invoice_grouped_match_ids and picking._misa_invoice_request_covers_fully()):
                 continue
-            picking.write({
-                'misa_invoice_master_picking_id': False, 'misa_invoice_state': 'not_checked',
-                'misa_invoice_amount': 0.0, 'misa_invoice_no': False, 'misa_invoice_date': False,
-                'misa_invoice_request_refid': False, 'misa_invoice_request_refno': False,
-                'misa_invoice_group_checked': False,
-            })
-            picking.message_post(body=Markup(
+            picking._misa_invoice_reset_for_recheck(Markup(
                 "<b>🔧 Gỡ 'ăn theo' %s:</b> dòng hàng đề nghị của phiếu đó chỉ đủ cho chính nó, phiếu này "
                 "bị khớp nhầm phần SL của phiếu đó — trả về 'Chưa kiểm tra' để kiểm tra lại MISA."
             ) % master.name)
@@ -122,3 +118,54 @@ class StockPickingGroupedRepair(models.Model):
                     row['released'] = True
         _logger.info("[MISA GROUP REPAIR] khớp lại %s dòng, gỡ ăn theo %s phiếu", len(lines), len(released))
         return report, released.ids
+
+    def _misa_invoice_reset_for_recheck(self, note):
+        """Xóa kết quả đối soát của phiếu (trạng thái, HĐ, đề nghị, ăn theo) về 'Chưa kiểm tra' và
+        ghi `note` vào chatter — để action_check_misa_invoice_status tính lại từ đầu. Bắt buộc về
+        'Chưa kiểm tra' trước: phiếu đang 'Đã xuất HĐ' mà lần kiểm mới không ra đề nghị thì hàm
+        kiểm tra GIỮ NGUYÊN dữ liệu cũ (chống mất dữ liệu), không bao giờ tự hạ."""
+        self.write({
+            'misa_invoice_master_picking_id': False, 'misa_invoice_state': 'not_checked',
+            'misa_invoice_amount': 0.0, 'misa_invoice_no': False, 'misa_invoice_date': False,
+            'misa_invoice_request_refid': False, 'misa_invoice_request_refno': False,
+            'misa_invoice_group_checked': False,
+        })
+        for picking in self:
+            picking.message_post(body=note)
+
+    @api.model
+    def misa_invoice_unallocated_invoiced_ids(self):
+        """Phiếu báo 'Đã xuất HĐ' mà số theo đơn KHÔNG quy đồng HĐ nào về phiếu (thực xuất > dung
+        sai, HĐ quy về ≈ 0), không gắn tay và không có đề nghị mang tên chính nó.
+
+        Đây là dấu vết của tìm theo mã đơn nhận nhầm đề nghị của đợt / đơn khác rồi bị gộp dự
+        phòng theo refid (covers_fully coi "chưa khớp dòng nào" là phủ đủ) — case thật 20/10/2026:
+        KBC/OUT/14107, 14255 (DH…237496), 14113 (DH…235907) báo 'Đã xuất HĐ' mà HĐ chia 0 đ."""
+        domain = self._misa_invoice_dashboard_base_domain() + [
+            ('misa_invoice_state', '=', 'invoiced'), ('misa_invoice_order_allocation_ok', '=', True),
+            ('misa_invoice_manual_refno', '=', False),
+        ]
+        return self.sudo().search(domain).filtered(
+            lambda p: (p.misa_invoice_net_actual_amount or 0.0) > MISA_INVOICE_AMOUNT_TOLERANCE
+            and abs(p.misa_invoice_allocated_amount or 0.0) <= MISA_INVOICE_AMOUNT_TOLERANCE
+            and p.misa_invoice_request_refno != p.name
+        ).ids
+
+    @api.model
+    def recheck_misa_invoice_from_scratch(self, picking_id):
+        """Về 'Chưa kiểm tra' rồi kiểm tra lại MISA bằng luật hiện tại cho 1 phiếu. Trả
+        {name, before, after} — before/after dạng 'trạng thái | đề nghị | HĐ'. Không commit."""
+        picking = self.sudo().browse(picking_id)
+
+        def describe():
+            return '%s | %s | %s' % (picking.misa_invoice_state, picking.misa_invoice_request_refno or '—',
+                                     picking.misa_invoice_no or '—')
+
+        before = describe()
+        picking._misa_invoice_reset_for_recheck(Markup(
+            "<b>🔧 Kiểm tra lại từ đầu:</b> phiếu báo 'Đã xuất HĐ' (%s) nhưng số theo đơn không quy đồng "
+            "HĐ nào về phiếu — trạng thái cũ do tìm theo mã đơn nhận nhầm đề nghị của đợt/đơn khác."
+        ) % before)
+        picking.action_check_misa_invoice_status()
+        picking.invalidate_recordset()
+        return {'name': picking.name, 'before': before, 'after': describe()}

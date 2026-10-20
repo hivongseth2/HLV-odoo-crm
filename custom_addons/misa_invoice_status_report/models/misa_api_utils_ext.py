@@ -4,6 +4,8 @@ from datetime import datetime
 
 from odoo import models
 
+from .misa_invoice_reassign_utils import request_has_items
+
 _logger = logging.getLogger(__name__)
 
 MISA_ACT_TOKEN_PARAM = 'misa.act.cached_token'
@@ -272,9 +274,16 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
             return _empty_invoice_status()
         return self._misa_invoice_result_from_request(_pick_request_for_refno(page_data_req, refno))
 
-    def get_invoice_status_for_order(self, order_code, skip_refnos=(), skip_refids=()):
+    def get_invoice_status_for_order(self, order_code, skip_refnos=(), skip_refids=(), items=()):
         """Như get_invoice_status_for_refno(order_code) nhưng BỎ QUA đề nghị có refno trong
-        skip_refnos hoặc refid trong skip_refids, lấy đề nghị đầu tiên còn lại.
+        skip_refnos hoặc refid trong skip_refids, hoặc không có dòng nào ghi đơn này với mã hàng
+        thuộc `items` (mã hàng phiếu đang kiểm đã xuất), lấy đề nghị đầu tiên còn lại.
+
+        Vì sao đối chiếu mã hàng: MISA tìm theo kiểu CHỨA trên nhiều cột, ra cả đề nghị chỉ có
+        dòng của đơn khác (case KBC/OUT/14255 nhận đề nghị KBC/OUT/14084 toàn dòng của
+        DH…237743), hoặc đề nghị của đơn nhưng là hàng đợt khác (KBC/OUT/14113 giao NSD3.4/NSD2.1
+        nhận DN125524949235008 chỉ có S-P35T/BP3P50A5KA đã giao ở 12663). Tốn thêm 1 lệnh đọc dòng
+        hàng cho mỗi đề nghị ứng viên — chỉ chạy cho phiếu chưa tìm ra đề nghị theo tên.
 
         Vì sao: tìm theo mã đơn ra MỌI đề nghị của đơn, mới nhất trước. Đơn giao nhiều đợt thì đề
         nghị đứng đầu thường là của 1 phiếu KHÁC cùng đơn (mang tên phiếu đó) — lấy nó là phiếu
@@ -296,6 +305,8 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
                 skipped.append(row_refno)
                 continue
             if row.get("refid") in skip_refids:
+                continue
+            if items and not request_has_items(self.get_invoice_request_lines(row.get("refid")), order_code, items):
                 continue
             return self._misa_invoice_result_from_request(row), skipped
         return _empty_invoice_status(), skipped
