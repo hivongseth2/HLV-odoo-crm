@@ -529,8 +529,11 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             if not package_id:
                 return {'error': 'Thiếu package_id cho đổi quà'}
             package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
-            if not package.exists() or not package.active:
+            if not package.exists():
                 return {'error': 'Gói quà không tồn tại hoặc đã ngừng'}
+            reason = package._get_unavailable_reason(account or None)
+            if reason:
+                return {'error': reason}
             if avail_exchange < package.points_required:
                 return {
                     'error': f'Không đủ điểm khả dụng. '
@@ -571,9 +574,12 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
             })
 
         try:
-            req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
-            if request_type == 'gift':
-                req.action_done()
+            # Savepoint: action_done lỗi sau khi đã trừ điểm thì phải rollback cả
+            # yêu cầu lẫn giao dịch trừ — except bên dưới không ném lại lỗi.
+            with request.env.cr.savepoint():
+                req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+                if request_type == 'gift':
+                    req.action_done()
         except UserError as exc:
             return {
                 'error': str(exc),
@@ -703,9 +709,10 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
         """GET/POST /api/v1/loyalty/redeem/packages"""
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200, headers=self._cors_headers())
+        # Không biết ai đang xem nên chỉ trả gói mở cho mọi người và còn suất.
         packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
             [('active', '=', True)], order='points_required asc'
-        )
+        )._filter_available_for_account()
         return self._json_ok([{
             'id': p.id,
             'name': p.name,
