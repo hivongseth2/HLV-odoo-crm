@@ -986,12 +986,12 @@
                        + '<i class="fa fa-lock"></i> Đã giữ: ' + fmt(r.held_qty) + '</div>';
               }
 
-              // Tóm tắt số dự báo "NK:+400, BH:−4, CK:−5" (CK = nhận − chuyển đi), bỏ phần bằng 0
+              // Tóm tắt số dự báo "MH:+400, BH:−4, CK:−5" (CK = nhận − chuyển đi), bỏ phần bằng 0
               function buildForecastNote(r) {
                   if (!r) return '';
                   var ck = (r.qty_transfer_in || 0) - (r.qty_transfer_out || 0);
                   var parts = [];
-                  if (r.qty_po) parts.push('<span style="color:#16a34a;">NK:+' + fmt(r.qty_po) + '</span>');
+                  if (r.qty_po) parts.push('<span style="color:#16a34a;">MH:+' + fmt(r.qty_po) + '</span>');
                   if (r.qty_so) parts.push('<span style="color:#dc2626;">BH:−' + fmt(r.qty_so) + '</span>');
                   if (ck) parts.push('<span style="color:' + (ck > 0 ? '#0d9488' : '#d97706') + ';">CK:' + (ck > 0 ? '+' : '−') + fmt(Math.abs(ck)) + '</span>');
                   if (!parts.length) return '';
