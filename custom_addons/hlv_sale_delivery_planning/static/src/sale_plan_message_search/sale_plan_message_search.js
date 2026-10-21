@@ -1,7 +1,9 @@
-/* Panel "Tìm tin nhắn" trên trang /sale_plan: sale tìm lại trao đổi cũ theo nội
- * dung, mã đơn / khách, người gửi, alias được nhắc (@Hân BC...) và thời gian.
+/* Ô "Tìm tin nhắn" trong panel Thông báo (#mention-noti-panel) của trang /sale_plan:
+ * sale tìm lại trao đổi cũ theo nội dung, mã đơn / khách, người gửi, alias được
+ * nhắc (@Hân BC...) và thời gian. Có bộ lọc thì danh sách thông báo tạm ẩn, thay
+ * bằng kết quả tìm; xoá lọc là thông báo hiện lại.
  *
- * Toàn bộ UI nằm trong file này (CSS, nút navbar, panel, gọi API) — cùng kiểu với
+ * Toàn bộ UI nằm trong file này (CSS, khối tìm, gọi API) — cùng kiểu với
  * sale_plan_out_picking.js. Trang gốc chạy trong IIFE nên mở đơn bằng CustomEvent
  * 'sale_plan:open_order' (trang gốc nghe và gọi openOrderFromNotification).
  * Gỡ tính năng = xoá file này + thẻ <script src> + listener đó + controller cùng tên.
@@ -25,7 +27,6 @@ var PERIODS = [
 ];
 
 var st = {
-    open: false,
     search: '',
     aliases: [],          // alias đã chọn (đã chuẩn hoá chữ thường)
     aliasRows: null,      // null = chưa nạp
@@ -77,33 +78,29 @@ function el(id) {
 function injectStyles() {
     if (el('spms-styles')) return;
     var css = ''
-        + '#spms-button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:6px;padding:6px 10px;font-size:.78rem;font-weight:700;line-height:1;display:inline-flex;align-items:center;gap:7px}'
-        + '#spms-button.active{background:#4f46e5;border-color:#818cf8}'
-        + '#spms-panel{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:100vw;background:#fff;z-index:1060;box-shadow:-8px 0 24px rgba(15,23,42,.18);display:none;flex-direction:column}'
-        + '#spms-panel.open{display:flex}'
-        + '.spms-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#4f46e5;color:#fff;font-weight:700}'
-        + '.spms-head button{background:none;border:0;color:#fff;font-size:1.1rem;line-height:1}'
-        + '.spms-filters{padding:10px;border-bottom:1px solid #e2e8f0}'
+        // Dính đầu panel khi cuộn danh sách thông báo / kết quả bên dưới.
+        + '#spms-box{position:sticky;top:0;z-index:2;background:#fff;padding:8px 10px;border-bottom:1px solid #e2e8f0}'
         + '.spms-row{display:flex;gap:6px;align-items:center;margin-top:6px}'
-        + '.spms-chip{display:inline-flex;align-items:center;gap:4px;background:#4f46e5;color:#fff;border-radius:999px;padding:1px 8px;font-size:.72rem}'
+        + '.spms-chip{display:inline-flex;align-items:center;gap:4px;background:#4f46e5;color:#fff;border-radius:999px;padding:1px 8px;font-size:.72rem;font-weight:700}'
         + '.spms-chip i{cursor:pointer}'
         + '.spms-status{font-size:.72rem;color:#64748b;margin-top:6px;display:flex;justify-content:space-between}'
         + '.spms-status a{color:#64748b;text-decoration:none;cursor:pointer}'
-        + '#spms-list{flex:1 1 auto;min-height:0;overflow:auto;background:#f8fafc}'
-        + '.spms-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:#fff;padding:10px 12px}'
-        + '.spms-item:hover{background:#eef2ff}'
-        + '.spms-so{font-weight:700;color:#1d4ed8}'
-        + '.spms-meta{font-size:.75rem;color:#64748b;margin:2px 0}'
-        + '.spms-body{font-size:.8rem;color:#0f172a;white-space:normal;word-break:break-word;line-height:1.35}'
+        + '.spms-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #f1f5f9;background:#fff;padding:10px 12px;font-size:.8rem}'
+        + '.spms-item:hover{background:#f8fafc}'
+        + '.spms-so{font-weight:800;color:#1d4ed8}'
+        + '.spms-meta{font-size:.74rem;color:#64748b;margin:2px 0}'
+        + '.spms-body{color:#475569;white-space:normal;word-break:break-word;line-height:1.4}'
         + '.spms-body mark{padding:0 1px;background:#fde68a}'
-        + '.spms-empty{padding:28px 12px;text-align:center;color:#94a3b8;font-size:.85rem}';
+        // Không dùng .mention-noti-more của trang: trang gốc bắt click theo class đó.
+        + '.spms-more{width:calc(100% - 20px);margin:8px 10px 10px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:6px;padding:7px 10px;font-size:.76rem;font-weight:800}'
+        + '.spms-empty{padding:18px 12px;text-align:center;color:#94a3b8;font-size:.8rem}';
     var style = document.createElement('style');
     style.id = 'spms-styles';
     style.textContent = css;
     document.head.appendChild(style);
 }
 
-/* ── Khung panel + nút navbar ─────────────────────────────────────────────── */
+/* ── Khối tìm, chèn ngay dưới tiêu đề panel Thông báo ─────────────────────── */
 
 function periodOptionsHtml() {
     return PERIODS.map(function (p) {
@@ -111,48 +108,39 @@ function periodOptionsHtml() {
     }).join('');
 }
 
-function buildPanel() {
-    var panel = document.createElement('div');
-    panel.id = 'spms-panel';
-    panel.innerHTML = ''
-        + '<div class="spms-head"><span><i class="fa fa-comments me-2"></i>Tìm tin nhắn</span>'
-        + '<button type="button" id="spms-close" title="Đóng">&times;</button></div>'
-        + '<div class="spms-filters">'
-        + '  <div class="input-group input-group-sm">'
-        + '    <span class="input-group-text bg-white"><i class="fa fa-search text-muted"></i></span>'
-        + '    <input id="spms-q" type="text" class="form-control" placeholder="Nội dung tin, mã đơn, khách, người gửi..."/>'
-        + '  </div>'
-        + '  <div class="spms-row">'
-        + '    <select id="spms-alias" class="form-select form-select-sm" style="flex:1 1 0;min-width:0" title="Lọc tin có nhắc tên (@alias)">'
-        + '      <option value="">@ Nhắc tên...</option></select>'
-        + '    <select id="spms-period" class="form-select form-select-sm" style="flex:0 0 auto;width:auto" title="Thời gian tin nhắn">'
-        +        periodOptionsHtml() + '</select>'
-        + '  </div>'
-        + '  <div class="spms-row" id="spms-dates" style="display:none">'
-        + '    <input id="spms-from" type="date" class="form-control form-control-sm" title="Từ ngày"/>'
-        + '    <span class="text-muted">–</span>'
-        + '    <input id="spms-to" type="date" class="form-control form-control-sm" title="Đến ngày"/>'
-        + '  </div>'
-        + '  <div class="spms-row flex-wrap" id="spms-chips" style="display:none"></div>'
-        + '  <div class="spms-status"><span id="spms-count"></span><a id="spms-clear" style="display:none"><i class="fa fa-times me-1"></i>Xóa lọc</a></div>'
+/** Trả false nếu trang không có panel Thông báo (navbar đổi cấu trúc). */
+function buildSearchBox() {
+    var panel = el('mention-noti-panel');
+    var notiList = el('mention-noti-list');
+    if (!panel || !notiList) return false;
+    var box = document.createElement('div');
+    box.id = 'spms-box';
+    box.innerHTML = ''
+        + '<div class="input-group input-group-sm">'
+        + '  <span class="input-group-text bg-white"><i class="fa fa-search text-muted"></i></span>'
+        + '  <input id="spms-q" type="text" class="form-control" placeholder="Tìm tin nhắn: nội dung, mã đơn, khách, người gửi..."/>'
         + '</div>'
-        + '<div id="spms-list"></div>';
-    document.body.appendChild(panel);
-}
-
-/** Chèn nút cạnh chuông thông báo; navbar đổi cấu trúc thì gắn cuối navbar. */
-function buildButton() {
-    var li = document.createElement('li');
-    li.className = 'nav-item ms-lg-2 d-flex align-items-center';
-    li.innerHTML = '<button id="spms-button" type="button" title="Tìm trong tin nhắn các đơn">'
-        + '<i class="fa fa-comments"></i><span>Tìm tin nhắn</span></button>';
-    var bellItem = document.querySelector('.mention-noti-wrap');
-    if (bellItem && bellItem.parentNode) {
-        bellItem.parentNode.insertBefore(li, bellItem);
-        return;
-    }
-    var nav = document.querySelector('#nav1 .navbar-nav');
-    if (nav) nav.appendChild(li);
+        + '<div class="spms-row">'
+        + '  <select id="spms-alias" class="form-select form-select-sm" style="flex:1 1 0;min-width:0" title="Lọc tin có nhắc tên (@alias)">'
+        + '    <option value="">@ Nhắc tên...</option></select>'
+        + '  <select id="spms-period" class="form-select form-select-sm" style="flex:0 0 auto;width:auto" title="Thời gian tin nhắn">'
+        +      periodOptionsHtml() + '</select>'
+        + '</div>'
+        + '<div class="spms-row" id="spms-dates" style="display:none">'
+        + '  <input id="spms-from" type="date" class="form-control form-control-sm" title="Từ ngày"/>'
+        + '  <span class="text-muted">–</span>'
+        + '  <input id="spms-to" type="date" class="form-control form-control-sm" title="Đến ngày"/>'
+        + '</div>'
+        + '<div class="spms-row flex-wrap" id="spms-chips" style="display:none"></div>'
+        + '<div class="spms-status" id="spms-status" style="display:none"><span id="spms-count"></span>'
+        + '  <a id="spms-clear"><i class="fa fa-times me-1"></i>Xóa lọc, xem thông báo</a></div>';
+    var head = panel.querySelector('.mention-noti-head');
+    panel.insertBefore(box, head ? head.nextSibling : panel.firstChild);
+    var list = document.createElement('div');
+    list.id = 'spms-list';
+    list.style.display = 'none';
+    notiList.parentNode.insertBefore(list, notiList.nextSibling);
+    return true;
 }
 
 /* ── Render ───────────────────────────────────────────────────────────────── */
@@ -197,15 +185,14 @@ function hasFilters() {
     return !!(st.search.trim() || st.aliases.length || periodParams().period);
 }
 
+/** Không lọc → trả lại danh sách thông báo gốc; có lọc → hiện kết quả tìm. */
 function renderList() {
+    var searching = hasFilters();
     var list = el('spms-list');
-    el('spms-clear').style.display = hasFilters() ? '' : 'none';
-    if (!hasFilters()) {
-        el('spms-count').textContent = '';
-        list.innerHTML = '<div class="spms-empty"><i class="fa fa-comments fa-2x mb-2 d-block"></i>'
-            + 'Gõ từ khoá, chọn @nhắc tên hoặc thời gian để tìm trong mọi tin nhắn của đơn.</div>';
-        return;
-    }
+    el('mention-noti-list').style.display = searching ? 'none' : '';
+    list.style.display = searching ? '' : 'none';
+    el('spms-status').style.display = searching ? '' : 'none';
+    if (!searching) return;
     if (st.loading && !st.results.length) {
         el('spms-count').textContent = 'Đang tìm...';
         list.innerHTML = '<div class="spms-empty"><i class="fa fa-spinner fa-spin fa-2x"></i></div>';
@@ -228,10 +215,9 @@ function renderList() {
             + '</button>';
     }).join('');
     if (st.hasMore) {
-        html += '<div class="p-2 text-center"><button type="button" id="spms-more" class="btn btn-sm btn-outline-secondary"'
-            + (st.loading ? ' disabled' : '') + '>'
+        html += '<button type="button" id="spms-more" class="spms-more"' + (st.loading ? ' disabled' : '') + '>'
             + (st.loading ? '<i class="fa fa-spinner fa-spin me-1"></i>Đang tải...' : 'Tải thêm tin cũ hơn')
-            + '</button></div>';
+            + '</button>';
     }
     list.innerHTML = html;
 }
@@ -245,13 +231,14 @@ function loadAliases() {
         st.aliasRows = res.status === 'success' ? (res.aliases || []) : [];
         renderAliasControls();
     }).catch(function () {
-        st.aliasRows = null;  // cho phép thử lại ở lần mở panel sau
+        st.aliasRows = null;  // cho phép thử lại ở lần bấm sau
     });
 }
 
 /** reset = true: tìm lại từ đầu; false: nối trang kế (offset do backend trả). */
 function runSearch(reset) {
     if (!hasFilters()) {
+        st.seq += 1;  // bỏ kết quả của lần tìm đang chạy dở
         st.results = [];
         st.hasMore = false;
         st.loading = false;
@@ -274,33 +261,19 @@ function runSearch(reset) {
         st.results = st.results.concat(res.messages || []);
         st.hasMore = !!res.has_more;
         st.nextOffset = res.next_offset || 0;
+        st.loading = false;
+        renderList();
     }).catch(function (err) {
         if (seq !== st.seq) return;
         console.warn('sale_plan search_messages failed', err);
         st.hasMore = false;
+        st.loading = false;
+        el('spms-count').textContent = '';
         el('spms-list').innerHTML = '<div class="spms-empty text-danger">Không tìm được tin nhắn, thử lại sau.</div>';
-        st.loading = false;
-        return 'failed';
-    }).then(function (failed) {
-        if (seq !== st.seq || failed) return;
-        st.loading = false;
-        renderList();
     });
 }
 
 /* ── Sự kiện ──────────────────────────────────────────────────────────────── */
-
-function setOpen(open) {
-    st.open = open;
-    el('spms-panel').classList.toggle('open', open);
-    el('spms-button').classList.toggle('active', open);
-    if (open) {
-        loadAliases();
-        renderAliasControls();
-        renderList();
-        el('spms-q').focus();
-    }
-}
 
 function toggleAlias(alias) {
     var idx = st.aliases.indexOf(alias);
@@ -325,8 +298,8 @@ function clearFilters() {
 }
 
 function bindEvents() {
-    el('spms-button').addEventListener('click', function () { setOpen(!st.open); });
-    el('spms-close').addEventListener('click', function () { setOpen(false); });
+    // Alias chỉ cần khi người dùng đụng tới ô tìm — khỏi gọi API mỗi lần tải trang.
+    el('spms-box').addEventListener('focusin', loadAliases);
     el('spms-q').addEventListener('input', function (ev) {
         st.search = ev.target.value;
         clearTimeout(st.debounce);
@@ -361,21 +334,17 @@ function bindEvents() {
         }
         var item = ev.target.closest('.spms-item');
         if (!item) return;
-        setOpen(false);
+        el('mention-noti-panel').classList.remove('open');
         document.dispatchEvent(new CustomEvent('sale_plan:open_order', {
             detail: { so_id: item.getAttribute('data-so-id'), so_name: item.getAttribute('data-so-name') },
         }));
     });
-    document.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Escape' && st.open) setOpen(false);
-    });
 }
 
 function init() {
+    if (!buildSearchBox()) return;
     injectStyles();
-    buildPanel();
-    buildButton();
-    if (!el('spms-button')) return;
+    renderAliasControls();
     bindEvents();
 }
 
