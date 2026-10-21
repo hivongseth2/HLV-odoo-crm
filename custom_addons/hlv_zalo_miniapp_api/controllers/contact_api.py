@@ -132,6 +132,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         )
         partner = portal_account.partner_id if portal_account else None
 
+        # Tai khoan da bi vo hieu hoa: bao thang, khong tao tai khoan moi (se
+        # trung username zalo_<sdt> cua chinh tai khoan do -> loi he thong).
+        username = f"zalo_{normalized}"
+        if not portal_account and PortalAccount.find_disabled_account(normalized, [username]):
+            return self._response_error(
+                "ACCOUNT_DISABLED",
+                "Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ cửa hàng để được hỗ trợ.",
+                403,
+            )
+
         # ② Chua co tai khoan Portal -> do res.partner theo so dien thoai.
         if not partner:
             partner = self._search_partner_by_phone(normalized)
@@ -156,7 +166,7 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         if not portal_account:
             portal_account = PortalAccount.create({
                 "partner_id": partner.id,
-                "username": f"zalo_{normalized}",
+                "username": username,
                 "portal_phone": normalized,
             })
 
