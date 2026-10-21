@@ -100,6 +100,10 @@ class LoyaltyAppRegisterAPI(http.Controller):
         # 1. Không cho đăng ký trùng SĐT đã có tài khoản Loyalty.
         if Account.search([("portal_phone", "=", phone), ("active", "=", True)], limit=1):
             return self._json_err("Số điện thoại đã có tài khoản Loyalty", status=409, code="PHONE_EXISTS")
+        # Tài khoản cũ đã bị vô hiệu hoá: tạo mới sẽ trùng username = SĐT.
+        if Account.find_disabled_account(phone, [phone]):
+            return self._json_err("Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ cửa hàng để được hỗ trợ.",
+                                  status=403, code="ACCOUNT_DISABLED")
 
         # 2. Tìm res.partner sẵn có theo SĐT (không bắt buộc is_company).
         partner = None

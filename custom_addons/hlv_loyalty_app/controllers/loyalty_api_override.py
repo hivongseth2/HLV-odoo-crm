@@ -159,6 +159,9 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
 
         existing_accounts = PortalAccount.search(domain, limit=1)
         if not existing_accounts:
+            if PortalAccount.find_disabled_account(phone_normalized, [login_input]):
+                return self._json_err('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ cửa hàng để được hỗ trợ.',
+                                      status=403, code='ACCOUNT_DISABLED')
             return self._json_err('Số điện thoại chưa đăng ký tài khoản loyalty', status=404, code='NOT_REGISTERED')
 
         account = PortalAccount.authenticate(login_input, password)
