@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Số phiếu thanh toán công nợ NCC (hlv.vendor.debt.payment). -->
+    <record id="seq_vendor_debt_payment" model="ir.sequence">
+        <field name="name">Thanh toán công nợ NCC</field>
+        <field name="code">hlv.vendor.debt.payment</field>
+        <field name="prefix">CNNCC/%(year)s/</field>
+        <field name="padding">5</field>
+    </record>
+</odoo>

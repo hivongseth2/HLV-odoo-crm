@@ -3,3 +3,7 @@ access_payment_document_accountant,hlv.payment.document accountant,model_hlv_pay
 access_payment_document_purchase_user,hlv.payment.document purchase user,model_hlv_payment_document,purchase.group_purchase_user,1,0,0,0
 access_amis_payment_request_doc_accountant,amis.payment.request doc accountant,amis_callback.model_amis_payment_request,group_payment_doc_accountant,1,0,0,0
 access_purchase_order_doc_accountant,purchase.order doc accountant,purchase.model_purchase_order,group_payment_doc_accountant,1,0,0,0
+access_vendor_debt_payment_accountant,hlv.vendor.debt.payment accountant,model_hlv_vendor_debt_payment,group_payment_doc_accountant,1,1,1,0
+access_vendor_debt_payment_line_accountant,hlv.vendor.debt.payment.line accountant,model_hlv_vendor_debt_payment_line,group_payment_doc_accountant,1,1,1,0
+access_vendor_debt_payment_purchase_user,hlv.vendor.debt.payment purchase user,model_hlv_vendor_debt_payment,purchase.group_purchase_user,1,0,0,0
+access_vendor_debt_payment_line_purchase_user,hlv.vendor.debt.payment.line purchase user,model_hlv_vendor_debt_payment_line,purchase.group_purchase_user,1,0,0,0

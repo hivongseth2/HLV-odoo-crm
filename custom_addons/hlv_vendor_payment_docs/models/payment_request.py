@@ -35,3 +35,8 @@ class AmisPaymentRequest(models.Model):
         """Chứng từ NCC được xem (kế toán không ẩn)."""
         self.ensure_one()
         return self.hlv_document_ids.filtered("visible_to_vendor")
+
+    def _hlv_orders(self):
+        """Đơn mua đề nghị chi này trả (một đơn) — cùng tên hàm với phiếu công nợ để trang NCC đọc chung."""
+        self.ensure_one()
+        return self.purchase_order_id

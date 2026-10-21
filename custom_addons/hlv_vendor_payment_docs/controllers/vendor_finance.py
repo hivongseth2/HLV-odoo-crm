@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Tab "Tài chính" trên link báo giá của NCC: đã chi / đang xử lý / còn lại, các đề nghị chi của đơn mua của NCC kèm
-chứng từ kế toán tải lên. Lọc theo số đề nghị / số đơn, trạng thái, có chứng từ, khoảng ngày, một đơn mua; phân trang —
+"""Tab "Tài chính" trên link báo giá của NCC: đã chi / đang xử lý / còn lại, các đề nghị chi của đơn mua của NCC và các
+phiếu thanh toán công nợ (một khoản trả nhiều đơn) kèm chứng từ kế toán tải lên. Lọc theo số đề nghị / số đơn, trạng thái, có chứng từ, khoảng ngày, một đơn mua; phân trang —
 form GET, chạy không cần JS. Kế thừa VendorQuotePortal để dùng chung đăng nhập, khung trang, tab."""
 
 from urllib.parse import urlencode
@@ -15,6 +15,7 @@ from odoo.http import request
 from ..models.payment_request import VENDOR_PAYMENT_STATES
 
 FINANCE = "tai-chinh"
+DEBT = "cong-no"
 PER_PAGE = 30
 SEARCH_MAX = 64
 PAID_STATES_FILTER = {"da-chi": True, "dang-xu-ly": False}
@@ -38,19 +39,25 @@ class VendorFinancePortal(VendorQuotePortal):
             return response
         orders = access._vendor_purchase_orders()
         all_requests = request.env["amis.payment.request"].sudo().search(
-            [("purchase_order_id", "in", orders.ids), ("state", "in", VENDOR_PAYMENT_STATES)],
-            order="payment_date desc, id desc")
+            [("purchase_order_id", "in", orders.ids), ("state", "in", VENDOR_PAYMENT_STATES)])
+        debts = self._vendor_debts(access)
+        # Hai loại phiếu chung một danh sách — cùng các hàm _hlv_is_paid / _hlv_orders / _hlv_vendor_documents.
+        entries = sorted([*all_requests, *debts], key=lambda r: (r.payment_date, r.create_date), reverse=True)
         filters = self._read_filters(kw, orders)
-        shown = all_requests.filtered(lambda r: self._match(r, filters))
+        shown = [entry for entry in entries if self._match(entry, filters)]
         pager = paginate(len(shown), page, PER_PAGE)
-        paid = sum(r.amount for r in all_requests if r._hlv_is_paid())
+        # Phiếu công nợ chỉ tính phần trả vào đơn NCC thấy trên trang (+ trả trước) — khớp với "giá trị đơn" bên cạnh.
+        paid = (sum(r.amount for r in all_requests if r._hlv_is_paid())
+                + sum(debt._hlv_amount_for_orders(orders) for debt in debts))
         confirmed_total = sum(orders.filtered(lambda o: o.state in CONFIRMED_STATES).mapped("amount_total"))
         return self._render("hlv_vendor_payment_docs.portal_finance", access, {
             "active_tab": "finance",
             "requests": shown[pager["offset"]:pager["offset"] + pager["limit"]],
             "result_count": len(shown),
             "filters": filters,
-            "order_options": all_requests.purchase_order_id.sorted("name", reverse=True),
+            "order_options": ((all_requests.purchase_order_id | debts.line_ids.purchase_order_id) & orders).sorted(
+                "name", reverse=True),
+            "visible_orders": orders,
             "kpi": {
                 "paid": paid,
                 "processing": sum(r.amount for r in all_requests if not r._hlv_is_paid()),
@@ -60,7 +67,29 @@ class VendorFinancePortal(VendorQuotePortal):
             "pager": pager,
             "finance_url": lambda **changes: self._finance_url(access, filters, **changes),
             "doc_url": lambda doc: f"{access._portal_path()}/{FINANCE}/chung-tu/{doc.id}",
+            "entry_url": lambda entry: self._entry_url(access, entry),
         })
+
+    @staticmethod
+    def _entry_url(access, entry):
+        """Trang NCC của một đề nghị chi / phiếu công nợ."""
+        if entry._name == "hlv.vendor.debt.payment":
+            return f"{access._portal_path()}/{FINANCE}/{DEBT}/{entry.id}"
+        return f"{access._portal_path()}/{FINANCE}/{entry.id}"
+
+    @staticmethod
+    def _vendor_debts(access):
+        """Phiếu thanh toán công nợ còn hiệu lực của chính NCC này (đọc bằng sudo)."""
+        return request.env["hlv.vendor.debt.payment"].sudo().search(
+            [("partner_id", "=", access.partner_id.commercial_partner_id.id), ("state", "=", "done")])
+
+    def _vendor_debt(self, access, payment_id):
+        """Phiếu công nợ NCC được xem: của chính NCC, còn hiệu lực. Không có → None."""
+        payment = request.env["hlv.vendor.debt.payment"].sudo().browse(payment_id).exists()
+        if (not payment or payment.state != "done"
+                or payment.partner_id != access.partner_id.commercial_partner_id):
+            return None
+        return payment
 
     def _vendor_payment(self, access, request_id):
         """Đề nghị chi NCC được xem: của đơn mua của chính NCC, trạng thái NCC được thấy. Không có → None."""
@@ -90,6 +119,27 @@ class VendorFinancePortal(VendorQuotePortal):
             "detail_url": f"{access._portal_path()}/{FINANCE}/{payment.id}",
         })
 
+    @http.route(f"{PORTAL_ROUTE}/<string:token>/{FINANCE}/{DEBT}/<int:payment_id>", type="http", auth="public",
+                methods=["GET"])
+    def portal_finance_debt_detail(self, token, payment_id, doc=None, **_kw):
+        """Một phiếu thanh toán công nợ: số tiền, các đơn được trả, chứng từ kế toán gửi (xem lớn như đề nghị chi)."""
+        access, response = self._finance_access(token)
+        if response:
+            return response
+        payment = self._vendor_debt(access, payment_id)
+        if not payment:
+            return self._not_found()
+        documents = payment._hlv_vendor_documents()
+        return self._render("hlv_vendor_payment_docs.portal_finance_debt_detail", access, {
+            "active_tab": "finance",
+            "payment": payment,
+            "visible_orders": access._vendor_purchase_orders(),
+            "documents": documents,
+            "current": documents.filtered(lambda d: str(d.id) == str(doc))[:1] or documents[:1],
+            "doc_url": lambda document: f"{access._portal_path()}/{FINANCE}/chung-tu/{document.id}",
+            "detail_url": self._entry_url(access, payment),
+        })
+
     @staticmethod
     def _read_filters(form, orders):
         """Bộ lọc từ URL: chữ (số đề nghị / số đơn), trạng thái (da-chi / dang-xu-ly), chứng từ (co / chua), khoảng ngày
@@ -115,9 +165,11 @@ class VendorFinancePortal(VendorQuotePortal):
 
     @staticmethod
     def _match(payment, filters):
-        """Đề nghị chi khớp bộ lọc không (lọc trên tập đã giới hạn theo NCC — không đủ lớn để cần domain)."""
+        """Đề nghị chi / phiếu công nợ khớp bộ lọc không (lọc trên tập đã giới hạn theo NCC — không đủ lớn để cần
+        domain)."""
         q = filters["q"].lower()
-        if q and q not in (payment.name or "").lower() and q not in (payment.purchase_order_id.name or "").lower():
+        names = [payment.name or "", *payment._hlv_orders().mapped("name")]
+        if q and not any(q in name.lower() for name in names):
             return False
         if filters["status"] and payment._hlv_is_paid() != PAID_STATES_FILTER[filters["status"]]:
             return False
@@ -128,7 +180,7 @@ class VendorFinancePortal(VendorQuotePortal):
             return False
         if filters["date_to"] and payment.payment_date > filters["date_to"]:
             return False
-        return not filters["order"] or payment.purchase_order_id.id == filters["order"]
+        return not filters["order"] or filters["order"] in payment._hlv_orders().ids
 
     @staticmethod
     def _finance_url(access, filters, **changes):
@@ -148,12 +200,17 @@ class VendorFinancePortal(VendorQuotePortal):
     @http.route(f"{PORTAL_ROUTE}/<string:token>/{FINANCE}/chung-tu/<int:doc_id>", type="http", auth="public",
                 methods=["GET"])
     def portal_finance_document(self, token, doc_id, **_kw):
-        """Mở chứng từ chi — chỉ của đơn mua của chính NCC này, đề nghị chi NCC được thấy, kế toán không ẩn."""
+        """Mở chứng từ chi — chỉ của đề nghị chi / phiếu công nợ NCC này được thấy, kế toán không ẩn."""
         access, response = self._finance_access(token)
         if response:
             return response
         document = request.env["hlv.payment.document"].sudo().browse(doc_id).exists()
-        if (not document or not document.visible_to_vendor
-                or not self._vendor_payment(access, document.payment_request_id.id)):
+        if not document or not document.visible_to_vendor:
+            return self._not_found()
+        if document.debt_payment_id:
+            owner = self._vendor_debt(access, document.debt_payment_id.id)
+        else:
+            owner = self._vendor_payment(access, document.payment_request_id.id)
+        if not owner:
             return self._not_found()
         return request.env["ir.binary"]._get_stream_from(document.attachment_id, "raw").get_response(as_attachment=False)

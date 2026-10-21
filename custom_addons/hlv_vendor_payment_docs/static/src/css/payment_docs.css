@@ -96,3 +96,25 @@
     font-size: .72rem; font-weight: 600; }
 .unc-paid { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
 .unc-wait { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+
+/* --- Trang kế toán: trả công nợ nhiều đơn (/unc-ncc/cong-no) --- */
+.debt-form { display: grid; gap: 16px; }
+.debt-orders td:first-child { width: 32px; }
+.debt-orders input[type="checkbox"] { width: 18px; height: 18px; }
+.debt-orders tr.is-off td:not(:first-child) { opacity: .5; }
+.debt-alloc { width: 150px; text-align: right; font-variant-numeric: tabular-nums; }
+.debt-flag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; background: #fff7ed; color: #9a3412;
+    font-size: .72rem; font-weight: 600; white-space: nowrap; }
+.debt-grid { align-items: start; }
+.debt-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.debt-fields .debt-wide { grid-column: 1 / -1; }
+.debt-amount { font-variant-numeric: tabular-nums; font-weight: 600; }
+.debt-summary { margin: 12px 0 0; font-size: .88rem; color: var(--vq-muted); font-variant-numeric: tabular-nums; }
+.debt-summary:empty { display: none; }
+.debt-summary.is-off-balance { color: #9a3412; font-weight: 600; }
+.debt-issues { margin: 6px 0 0; padding-left: 20px; }
+.debt-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.debt-lines { margin-top: 16px; }
+.debt-cancel { margin-top: 16px; }
+.pay-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; background: #eef2f7; color: #1f3a5f;
+    font-size: .72rem; font-weight: 600; white-space: nowrap; }

@@ -3,6 +3,8 @@
 
 import os
 
+from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn_number
+
 # Trạng thái thanh toán của một đơn mua theo số đã chi.
 PAYMENT_STATUS_LABELS = {
     "paid": "Đã thanh toán",
@@ -60,3 +62,44 @@ def document_error(filename, size):
     if size > MAX_DOCUMENT_BYTES:
         return f"{filename}: quá {MAX_DOCUMENT_BYTES // (1024 * 1024)}MB"
     return ""
+
+
+def debt_allocation_issues(amount, rows):
+    """Kiểm một phiếu thanh toán công nợ trước khi lưu.
+
+    Nhận: amount — số tiền phiếu (None khi không đọc được số); rows — các đơn được chọn, mỗi đơn
+    {"name": số đơn, "open": còn nợ trước phiếu này, "allocated": số trả vào đơn (None khi không đọc được),
+    "processing": đề nghị chi của đơn đang chờ duyệt}.
+    Trả: (errors, warnings) — hai list chuỗi. errors khác rỗng → không được lưu. warnings → kế toán phải xác nhận
+    mới lưu (trả một phần đơn, còn dư chưa phân bổ, đơn đang có đề nghị chi chờ duyệt). Không chọn đơn nào → lỗi.
+    """
+    errors, warnings = [], []
+    if amount is None or amount <= PAID_TOLERANCE:
+        errors.append("Số tiền phiếu phải lớn hơn 0.")
+    if not rows:
+        errors.append("Chọn ít nhất một đơn mua.")
+    allocated_total = 0.0
+    for row in rows:
+        allocated, open_amount = row["allocated"], row["open"]
+        if allocated is None or allocated <= PAID_TOLERANCE:
+            errors.append(f"{row['name']}: số trả vào đơn phải lớn hơn 0.")
+            continue
+        allocated_total += allocated
+        if allocated > open_amount + PAID_TOLERANCE:
+            errors.append(f"{row['name']}: trả {format_vn_number(round(allocated))} vượt số còn nợ "
+                          f"{format_vn_number(round(open_amount))}.")
+        elif allocated < open_amount - PAID_TOLERANCE:
+            warnings.append(f"{row['name']}: chỉ trả {format_vn_number(round(allocated))} / còn nợ "
+                            f"{format_vn_number(round(open_amount))} — đơn vẫn còn nợ "
+                            f"{format_vn_number(round(open_amount - allocated))}.")
+        if row["processing"] > PAID_TOLERANCE:
+            warnings.append(f"{row['name']}: đang có đề nghị chi chờ duyệt {format_vn_number(round(row['processing']))}"
+                            " — kiểm kẻo trả hai lần.")
+    if amount is not None and amount > PAID_TOLERANCE:
+        if allocated_total > amount + PAID_TOLERANCE:
+            errors.append(f"Tổng trả vào các đơn {format_vn_number(round(allocated_total))} vượt số tiền phiếu "
+                          f"{format_vn_number(round(amount))}.")
+        elif amount > allocated_total + PAID_TOLERANCE:
+            warnings.append(f"Còn {format_vn_number(round(amount - allocated_total))} chưa trả vào đơn nào "
+                            "(ghi nhận là trả trước).")
+    return errors, warnings
