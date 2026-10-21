@@ -11,3 +11,4 @@ from . import res_config_settings
 from . import loyalty_tier
 from . import loyalty_portal_account
 from . import loyalty_reward_request
+from . import loyalty_rate_limit

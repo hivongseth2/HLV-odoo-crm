@@ -348,6 +348,24 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json',
                         headers=LoyaltyExternalAPI._cors_headers())
 
+    # Tra cứu theo SĐT là đường dò ra partner_id của khách, nên giới hạn theo IP.
+    LOOKUP_RATE_LIMIT = 20
+    LOOKUP_RATE_WINDOW = 600
+
+    def _lookup_rate_limited(self):
+        """Trả response 429 nếu IP gọi lookup quá giới hạn, ngược lại None.
+
+        remote_addr là IP thật khi Odoo chạy proxy_mode (Odoo.sh); không đọc
+        X-Forwarded-For trực tiếp vì client tự đặt được header đó.
+        """
+        ip = request.httprequest.remote_addr or 'unknown'
+        allowed = request.env['hlv.loyalty.rate.limit.hit'].sudo().consume(
+            f'partner_lookup:{ip}', self.LOOKUP_RATE_LIMIT, self.LOOKUP_RATE_WINDOW)
+        if allowed:
+            return None
+        return self._json_err('Tra cứu quá nhiều lần, vui lòng thử lại sau ít phút',
+                              status=429, code='RATE_LIMITED')
+
     @staticmethod
     def _request_json():
         raw = request.httprequest.data or b'{}'
@@ -546,6 +564,9 @@ class LoyaltyExternalAPI(http.Controller):
         """
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200, headers=self._cors_headers())
+        limited = self._lookup_rate_limited()
+        if limited:
+            return limited
         body = self._request_json()
         phone = self._normalize_vn_phone(kwargs.get('phone') or body.get('phone') or '')
         email = (kwargs.get('email') or body.get('email') or '').strip().lower()
