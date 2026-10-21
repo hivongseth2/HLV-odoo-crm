@@ -17,6 +17,7 @@ from ..models.payment_utils import ALLOWED_EXTENSIONS, MAX_DOCUMENT_BYTES, docum
 
 ROUTE = "/unc-ncc"
 DEBT_ROUTE = f"{ROUTE}/cong-no"
+ALL_ROUTE = f"{ROUTE}/tat-ca"
 GROUP = "hlv_vendor_payment_docs.group_payment_doc_accountant"
 PER_PAGE = 30
 SEARCH_MAX = 64
@@ -50,6 +51,7 @@ class AccountantPaymentPage(http.Controller):
             "accept": ",".join(ALLOWED_EXTENSIONS),
             "max_mb": MAX_DOCUMENT_BYTES // (1024 * 1024),
             "debt_route": DEBT_ROUTE,
+            "all_route": ALL_ROUTE,
             "section": "requests",
         }
         context.update(values)
@@ -183,11 +185,11 @@ class AccountantPaymentPage(http.Controller):
         return f"{detail_url}?{urlencode(params)}"
 
     @staticmethod
-    def _owner_url(document):
-        """Trang kế toán của đề nghị chi / phiếu công nợ chứa chứng từ."""
-        if document.debt_payment_id:
-            return f"{DEBT_ROUTE}/{document.debt_payment_id.id}"
-        return f"{ROUTE}/{document.payment_request_id.id}"
+    def _entry_url(entry):
+        """Trang kế toán của một đề nghị chi / phiếu công nợ."""
+        if entry._name == "hlv.vendor.debt.payment":
+            return f"{DEBT_ROUTE}/{entry.id}"
+        return f"{ROUTE}/{entry.id}"
 
     @http.route(f"{ROUTE}/chung-tu/<int:doc_id>", type="http", auth="user", methods=["POST"])
     def document_action(self, doc_id, action="", **_kw):
@@ -197,7 +199,7 @@ class AccountantPaymentPage(http.Controller):
         document = request.env["hlv.payment.document"].sudo().browse(doc_id).exists()
         if not document:
             return request.not_found()
-        owner_url = self._owner_url(document)
+        owner_url = self._entry_url(document._hlv_owner())
         if action == "delete":
             document.unlink()
             saved = "deleted"

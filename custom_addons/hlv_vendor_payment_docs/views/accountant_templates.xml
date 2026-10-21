@@ -36,19 +36,22 @@
                     </div>
                 </header>
                 <main class="vq-main">
-                    <!-- section: "requests" (đề nghị chi) / "debt" (thanh toán công nợ) — controller đặt. -->
-                    <div class="vq-wrap">
-                        <nav class="vq-section-tabs">
-                            <a t-att-href="route" t-attf-class="vq-section-tab #{'vq-section-tab-active' if section == 'requests' else ''}">
-                                Đề nghị chi đơn mua</a>
-                            <a t-att-href="debt_route" t-attf-class="vq-section-tab #{'vq-section-tab-active' if section == 'debt' else ''}">
-                                Thanh toán công nợ</a>
-                        </nav>
-                    </div>
                     <t t-out="0"/>
                 </main>
             </body>
         </html>
+    </template>
+
+    <!-- Tab đầu mỗi trang kế toán. section: "all" / "requests" / "debt" — controller đặt. -->
+    <template id="accountant_tabs" name="Chứng từ chi NCC - tab">
+        <nav class="vq-section-tabs">
+            <a t-att-href="all_route" t-attf-class="vq-section-tab #{'vq-section-tab-active' if section == 'all' else ''}">
+                Tất cả</a>
+            <a t-att-href="route" t-attf-class="vq-section-tab #{'vq-section-tab-active' if section == 'requests' else ''}">
+                Đề nghị chi đơn mua</a>
+            <a t-att-href="debt_route" t-attf-class="vq-section-tab #{'vq-section-tab-active' if section == 'debt' else ''}">
+                Thanh toán công nợ</a>
+        </nav>
     </template>
 
     <!-- Trạng thái MISA của đề nghị chi, tô màu đã chi / chưa. Biến: pr. -->
@@ -60,6 +63,7 @@
     <template id="accountant_list" name="Chứng từ chi NCC - danh sách">
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <div class="vq-page-head"><h1>Đề nghị chi đơn mua</h1></div>
                 <form method="get" class="vq-history-filter" t-att-action="route">
                     <label class="vq-filter-field vq-filter-search">
@@ -196,6 +200,7 @@
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <t t-set="pr" t-value="payment"/>
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <nav class="vq-breadcrumb"><a t-att-href="route">Đề nghị chi đơn mua</a> / <span t-esc="payment.name"/></nav>
                 <div class="vq-page-head">
                     <h1 t-esc="payment.name"/>
@@ -243,6 +248,7 @@
     <template id="accountant_order" name="Chứng từ chi NCC - xem đơn mua">
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <nav class="vq-breadcrumb"><a t-att-href="route">Đề nghị chi đơn mua</a> / <span t-esc="order.name"/></nav>
                 <div class="vq-page-head">
                     <h1 t-esc="order.name"/>
