@@ -740,7 +740,7 @@
                          aria-label="Close" t-on-click="closeMessageDrawer"></button>
              </div>
              
-             <!-- Tìm kiếm + lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...) -->
+             <!-- Tìm kiếm + lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...) + thời gian -->
              <div class="p-2 border-bottom bg-white">
                  <div class="input-group input-group-sm">
                      <span class="input-group-text bg-white"><i class="fa fa-search text-muted"/></span>
@@ -754,31 +754,53 @@
                          <i class="fa fa-times"/>
                      </button>
                  </div>
-                 <div class="d-flex align-items-center gap-2 mt-2">
+                 <!-- Alias + thời gian + chưa đọc gom 1 hàng: alias chọn bằng dropdown thay
+                      cho bức tường chip (20+ alias chiếm nửa drawer). -->
+                 <div class="d-flex align-items-center gap-1 mt-2">
+                     <select class="form-select form-select-sm" style="flex:1 1 0; min-width:0;"
+                             title="Lọc tin có nhắc tên (@alias) — chọn nhiều lần để thêm alias"
+                             t-on-change="onMessageAliasSelect">
+                         <option value="">@ Nhắc tên...</option>
+                         <t t-foreach="this.messageDrawerAliasOptions" t-as="alias" t-key="alias.alias">
+                             <option t-att-value="alias.alias">
+                                 <t t-esc="this.isMessageAliasSelected(alias.alias) ? '✓ ' : ''"/>@<t t-esc="alias.display_alias"/><t t-if="alias.user_name"> — <t t-esc="alias.user_name"/></t>
+                             </option>
+                         </t>
+                     </select>
+                     <select class="form-select form-select-sm" style="flex:0 0 auto; width:auto;"
+                             title="Thời gian tin nhắn"
+                             t-on-change="onMessagePeriodChange">
+                         <t t-foreach="this.messageDrawerPeriodOptions" t-as="opt" t-key="opt.value">
+                             <option t-att-value="opt.value" t-att-selected="opt.value === (state.messageDrawerPeriod || '')">
+                                 <t t-esc="opt.label"/>
+                             </option>
+                         </t>
+                     </select>
                      <button type="button"
-                             class="btn btn-sm py-0 px-2 rounded-pill"
-                             style="font-size:.72rem"
+                             class="btn btn-sm text-nowrap"
                              t-att-class="state.messageDrawerUnreadOnly ? 'btn-danger' : 'btn-outline-secondary'"
                              title="Chỉ hiện tin của đơn mình chưa đọc"
                              t-on-click="toggleMessageUnreadOnly">
-                         <i class="fa me-1" t-att-class="state.messageDrawerUnreadOnly ? 'fa-check-square-o' : 'fa-square-o'"/>
-                         Chỉ chưa đọc
-                         <span t-if="this.unreadMessageCount" class="ms-1 opacity-75">
-                             (<t t-esc="this.unreadMessageCount"/>)
-                         </span>
+                         <i class="fa me-1" t-att-class="state.messageDrawerUnreadOnly ? 'fa-check-square-o' : 'fa-square-o'"/>Chưa đọc<t t-if="this.unreadMessageCount"> (<t t-esc="this.unreadMessageCount"/>)</t>
                      </button>
                  </div>
-                 <div t-if="this.messageDrawerAliasOptions.length"
-                      class="d-flex flex-wrap gap-1 mt-2 overflow-auto" style="max-height: 92px;">
-                     <t t-foreach="this.messageDrawerAliasOptions" t-as="alias" t-key="alias.alias">
-                         <button type="button"
-                                 class="btn btn-sm py-0 px-2 rounded-pill"
-                                 style="font-size:.72rem"
-                                 t-att-class="this.isMessageAliasSelected(alias.alias) ? 'btn-danger' : 'btn-outline-secondary'"
-                                 t-att-title="alias.user_name"
-                                 t-on-click="() => this.toggleMessageAliasFilter(alias.alias)">
+                 <div t-if="state.messageDrawerPeriod === 'custom'" class="d-flex align-items-center gap-1 mt-1">
+                     <input type="date" class="form-control form-control-sm" title="Từ ngày"
+                            t-att-value="state.messageDrawerDateFrom"
+                            t-on-change="(ev) => this.onMessageDateChange('messageDrawerDateFrom', ev)"/>
+                     <span class="text-muted">–</span>
+                     <input type="date" class="form-control form-control-sm" title="Đến ngày"
+                            t-att-value="state.messageDrawerDateTo"
+                            t-on-change="(ev) => this.onMessageDateChange('messageDrawerDateTo', ev)"/>
+                 </div>
+                 <div t-if="this.selectedMessageAliases.length" class="d-flex flex-wrap gap-1 mt-1">
+                     <t t-foreach="this.selectedMessageAliases" t-as="alias" t-key="alias.alias">
+                         <span class="badge rounded-pill text-bg-danger fw-normal" style="font-size:.72rem"
+                               t-att-title="alias.user_name">
                              @<t t-esc="alias.display_alias"/>
-                         </button>
+                             <i class="fa fa-times ms-1" role="button" title="Bỏ alias này"
+                                t-on-click="() => this.toggleMessageAliasFilter(alias.alias)"/>
+                         </span>
                      </t>
                  </div>
                  <div t-if="this.messageDrawerHasFilters"
@@ -819,7 +841,7 @@
                  </div>
              </div>
 
-             <!-- flex:1 thay cho height cố định — thanh lọc phía trên co giãn theo số chip alias. -->
+             <!-- flex:1 thay cho height cố định — thanh lọc phía trên co giãn (ô ngày, chip alias đang chọn). -->
              <div class="offcanvas-body p-0 bg-light overflow-auto" style="flex: 1 1 auto; min-height: 0;">
 
                  <!-- ── Chế độ TÌM KIẾM: kết quả từ backend, mỗi dòng là 1 tin nhắn

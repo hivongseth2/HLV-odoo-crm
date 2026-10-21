@@ -21,6 +21,7 @@ import { DeliveryPlannerPrintingMixin } from "./delivery_planner_printing_mixin"
 import { DeliveryPlannerDisplayMixin } from "./delivery_planner_display_mixin";
 import { DeliveryPlannerDisplayHelpersMixin } from "./delivery_planner_display_helpers_mixin";
 import { DeliveryPlannerDrawerMessagesMixin } from "./delivery_planner_drawer_messages_mixin";
+import { DeliveryPlannerMessageSearchMixin } from "./delivery_planner_message_search_mixin";
 import { DeliveryPlannerTransferMixin } from "./delivery_planner_transfer_mixin";
 import { DeliveryPlannerRelocationMixin } from "./delivery_planner_relocation_mixin";
 import { DeliveryPlannerIotPrintMixin } from "./delivery_planner_iot_print_mixin";
@@ -121,13 +122,17 @@ export class DeliveryPlannerDashboard extends Component {
             isMessageDrawerOpen: false,
             globalUnreadOrders: [],
             globalUnreadOrdersLoading: false,
-            // Bộ lọc trong drawer tin nhắn: tìm theo nội dung/đơn/người gửi và
-            // lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...). Khi có bộ lọc,
+            // Bộ lọc trong drawer tin nhắn: tìm theo nội dung/đơn/người gửi,
+            // lọc theo alias được nhắc (@Nhàn BC, @Hạnh BC, ...) và thời gian
+            // (xem delivery_planner_message_search_mixin.js). Khi có bộ lọc,
             // drawer chuyển sang kết quả tìm dưới backend (search_plan_messages)
             // — quét MỌI tin nhắn của đơn, không chỉ tin cuối như polling.
             messageDrawerSearch: '',
             messageDrawerAliasFilter: [],
             messageDrawerUnreadOnly: false,
+            messageDrawerPeriod: '',
+            messageDrawerDateFrom: '',
+            messageDrawerDateTo: '',
             messageSearchResults: [],
             messageSearchLoading: false,
             messageSearchHasMore: false,
@@ -383,6 +388,7 @@ function applyPlannerMixin(mixinClass) {
     DeliveryPlannerDisplayMixin,
     DeliveryPlannerDisplayHelpersMixin,
     DeliveryPlannerDrawerMessagesMixin,
+    DeliveryPlannerMessageSearchMixin,
     DeliveryPlannerTransferMixin,
     DeliveryPlannerRelocationMixin,
     DeliveryPlannerIotPrintMixin,

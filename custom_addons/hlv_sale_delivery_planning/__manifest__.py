@@ -1,11 +1,11 @@
 {
     'name': 'HLV Sale Delivery Planning',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.0.2',
     'summary': 'Điều phối giao hàng: Bán hàng -> Mua hàng',
     'description': 'Dashboard trực quan bằng OWL quản lý kế hoạch giao hàng từ đơn bán và tiến độ hàng từ đơn mua.',
     'category': 'Sales',
     'author': 'HLV',
-    'depends': ['sale_management', 'purchase_stock', 'bus', 'iot', 'mail'],
+    'depends': ['sale_management', 'purchase_stock', 'bus', 'iot', 'mail', 'deltatech_picking_transit'],
     'external_dependencies': {
         'python': ['bs4'],
     },
@@ -54,6 +54,7 @@
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_display_mixin.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_display_helpers_mixin.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_drawer_messages_mixin.js',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_message_search_mixin.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_transfer_mixin.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_relocation_mixin.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_iot_print_mixin.js',
