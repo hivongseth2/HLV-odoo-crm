@@ -71,9 +71,10 @@ class LoyaltyAppRegisterAPI(http.Controller):
             "name" : "Nguyen Van A"   // (tùy chọn) khi phải tạo partner mới
         }
 
-        - Nếu SĐT đã có res.partner trong CRM → gắn tài khoản vào partner sẵn có
-          (giữ nguyên điểm/hạng).
-        - Nếu chưa có res.partner → tạo partner mới (không bắt buộc is_company).
+        - Luôn tạo partner mới cho tài khoản. KHÔNG dò res.partner theo SĐT để
+          gắn vào khách có sẵn: SĐT trên hồ sơ công ty không chứng minh người
+          đăng ký được hưởng điểm/hạng của công ty đó. Muốn gắn vào công ty có
+          sẵn thì cửa hàng tạo tài khoản Portal trên Odoo.
         - Trả về partner_summary định dạng giống /auth/login để App tự đăng nhập.
         """
         if request.httprequest.method == "OPTIONS":
@@ -110,27 +111,14 @@ class LoyaltyAppRegisterAPI(http.Controller):
             return self._json_err("Số điện thoại này đang gắn với một tài khoản khác. Vui lòng liên hệ cửa hàng để được hỗ trợ.",
                                   status=409, code="PHONE_CONFLICT")
 
-        # 2. Tìm res.partner sẵn có theo SĐT (không bắt buộc is_company).
-        partner = None
-        candidates = Partner.search([("phone", "=", phone), ("active", "=", True)], limit=20)
-        for cand in candidates:
-            root = cand._get_loyalty_root()
-            has_acc = Account.search([("partner_id", "=", root.id), ("active", "=", True)], limit=1)
-            if not has_acc:
-                partner = root
-                break
-        if not partner and candidates:
-            partner = candidates[0]._get_loyalty_root()
+        # 2. Tạo partner mới cho tài khoản.
+        partner = Partner.create({
+            "name": name or f"Khách hàng {phone}",
+            "phone": phone,
+            "is_company": False,
+        })
 
-        # 3. Chưa có partner → tạo mới.
-        if not partner:
-            partner = Partner.create({
-                "name": name or f"Khách hàng {phone}",
-                "phone": phone,
-                "is_company": False,
-            })
-
-        # 4. Tạo tài khoản Loyalty và gán mật khẩu người dùng đặt.
+        # 3. Tạo tài khoản Loyalty và gán mật khẩu người dùng đặt.
         try:
             account = Account.create({
                 "partner_id": partner.id,
@@ -143,7 +131,7 @@ class LoyaltyAppRegisterAPI(http.Controller):
             return self._json_err("Không thể tạo tài khoản Loyalty. Vui lòng thử lại.",
                                   status=400, code="REGISTER_FAILED")
 
-        # 5. Trả summary giống /auth/login (App tự đăng nhập ngay).
+        # 4. Trả summary giống /auth/login (App tự đăng nhập ngay).
         summary = LoyaltyExternalAPI._partner_summary(partner)
         summary["phone"] = account.portal_phone or phone
         summary["account_id"] = account.id
