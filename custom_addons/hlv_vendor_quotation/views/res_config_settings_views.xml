@@ -23,6 +23,10 @@
                             <div><field name="hlv_vq_order_state_done" class="oe_inline"/><label for="hlv_vq_order_state_done"/></div>
                         </div>
                     </setting>
+                    <setting id="hlv_vq_direct_orders_from" string="Đơn mua không lên từ trang hỏi giá"
+                             help="Đặt ngày: NCC thấy cả đơn mua tạo thẳng (không qua phiếu hỏi giá) xác nhận từ ngày này, cùng trạng thái như trên; xác nhận đơn tự tạo link cho NCC chưa có link, tự nhắn NCC khi xác nhận / hủy / nhận hàng / trễ hẹn. Đơn này không có phiếu hỏi giá nên sale không nhận chuông / Zalo, chỉ người mua của đơn. Để trống: chỉ đơn lên từ báo giá NCC.">
+                        <field name="hlv_vq_direct_orders_from"/>
+                    </setting>
                     <setting id="hlv_vq_sale_edit_deadline"
                              help="Bật: sale sửa được &quot;Hạn báo giá&quot; ở đầu ngăn phiếu trên trang Hỏi giá NCC — hạn mới áp cho phiếu và các báo giá NCC còn mở (dời hạn báo giá đã quá hạn là mở lại cho NCC). Tắt: hạn chỉ đặt lúc lập phiếu / hỏi thêm NCC.">
                         <field name="hlv_vq_sale_edit_deadline"/>

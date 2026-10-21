@@ -4,11 +4,12 @@ import logging
 from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.osv import expression
 
 from ..services.chat_bus import notify_order_status
 from ..services.notify import log_internal, post_internal
 from ..services.vendor_chat import post_chat
-from .delivery_utils import EVENT_SOURCES, event_actor
+from .delivery_utils import EVENT_SOURCES, event_actor, local_day_start_utc
 from .vendor_quote_access import PORTAL_ORDERS
 from .vendor_quote_utils import (
     DATE_FMT, delivery_mode, format_vn_number, local_date_text, normalize_origin, parse_states,
@@ -53,6 +54,9 @@ VENDOR_ORDER_STATES = [
 ]
 VENDOR_ORDER_STATE_LABELS = dict(VENDOR_ORDER_STATES, cancel="Đã hủy")
 VENDOR_ORDER_STATES_PARAM = "hlv_vendor_quotation.vendor_order_states"
+# Ngày (YYYY-MM-DD) từ đó đơn mua thường — không lên từ trang hỏi giá — cũng hiện trên trang NCC. Trống = tắt: đơn cũ
+# (MISA, đơn tạo tay từ nhiều năm trước) không đổ hết lên trang NCC lâu năm.
+DIRECT_ORDERS_FROM_PARAM = "hlv_vendor_quotation.direct_orders_from"
 # Đơn đã xác nhận: NCC mới đóng gói / gửi hàng được. Cũng là mặc định hiện trên trang NCC.
 CONFIRMED_STATES = ("purchase", "done")
 # Nhãn tiến độ trên trang NCC (_hlv_vendor_progress): trạng thái NCC báo + chờ xác nhận / chờ đóng gói / đã hủy
@@ -113,17 +117,18 @@ class PurchaseOrder(models.Model):
     # Link thẳng vào đơn này trên trang NCC — thu mua mở xem / copy gửi NCC.
     hlv_vendor_portal_url = fields.Char(string="Link đơn trên trang NCC", compute="_compute_hlv_vendor_portal_url")
 
-    @api.depends("hlv_vendor_quote_ids.access_id.portal_url", "state", "date_approve")
+    @api.depends("hlv_vendor_quote_ids", "partner_id", "state", "date_approve", "date_order")
     def _compute_hlv_vendor_portal_url(self):
         """Chỉ có link khi NCC thật sự thấy đơn trên trang của họ — cùng luật lọc với tab "Đơn mua hàng" của NCC
-        (vendor_quote._vendor_purchase_orders, theo Cài đặt "Đơn mua hiện trên trang NCC"). Không thì thu mua gửi
-        link cho NCC mà NCC mở ra "Link không còn hiệu lực"."""
+        (_hlv_vendor_portal_orders). Không thì thu mua gửi link cho NCC mà NCC mở ra "Link không còn hiệu lực".
+        Link lấy theo NCC của đơn như mật khẩu: đơn mua thường không có báo giá để đi qua."""
+        links = self.env["hlv.vendor.quote.access"].sudo().search(
+            [("partner_id", "in", self.partner_id.commercial_partner_id.ids)])
+        urls = {link.partner_id.id: link.portal_url for link in links}
+        shown = self.filtered("id")._hlv_vendor_portal_orders()
         for order in self:
-            quotes = order.hlv_vendor_quote_ids.filtered("access_id")
-            visible = order.id and quotes and order in quotes._vendor_purchase_orders()
-            order.hlv_vendor_portal_url = (
-                f"{quotes[0].access_id.portal_url}/{PORTAL_ORDERS}/{order.id}" if visible else False
-            )
+            url = order in shown and urls.get(order.partner_id.commercial_partner_id.id)
+            order.hlv_vendor_portal_url = f"{url}/{PORTAL_ORDERS}/{order.id}" if url else False
 
     @api.depends("order_line.purchase_request_lines", "partner_id")
     def _compute_hlv_vendor_links(self):
@@ -262,6 +267,36 @@ class PurchaseOrder(models.Model):
         param = self.env["ir.config_parameter"].sudo().get_param(VENDOR_ORDER_STATES_PARAM)
         return parse_states(param, [state for state, _label in VENDOR_ORDER_STATES], CONFIRMED_STATES)
 
+    @api.model
+    def _hlv_vendor_visible_domain(self):
+        """Domain đơn NCC được thấy theo trạng thái: trạng thái trong Cài đặt, hoặc đã hủy SAU khi xác nhận (còn
+        date_approve — NCC cần biết để khỏi giao). Đơn hủy từ lúc còn nháp NCC chưa từng thấy, không hiện."""
+        return ["|", ("state", "in", list(self._hlv_vendor_visible_states())),
+                "&", ("state", "=", "cancel"), ("date_approve", "!=", False)]
+
+    @api.model
+    def _hlv_direct_orders_domain(self):
+        """Domain đơn mua thường (không lên từ trang hỏi giá) NCC vẫn thấy: trạng thái được hiện + xác nhận từ ngày
+        trong Cài đặt (đơn chưa xác nhận tính theo ngày đặt hàng). Chưa đặt ngày → [] = tắt, chỉ đơn từ báo giá."""
+        since = self.env["ir.config_parameter"].sudo().get_param(DIRECT_ORDERS_FROM_PARAM)
+        if not since:
+            return []
+        start = local_day_start_utc(fields.Date.to_date(since))
+        return expression.AND([self._hlv_vendor_visible_domain(), [
+            "|", ("date_approve", ">=", start), "&", ("date_approve", "=", False), ("date_order", ">=", start),
+        ]])
+
+    def _hlv_vendor_portal_orders(self):
+        """Các đơn trong self mà NCC của đơn thấy trên trang NCC — cùng luật với tab "Đơn mua hàng" của NCC
+        (hlv.vendor.quote.access._vendor_purchase_orders): lên từ báo giá NCC, hoặc đơn mua thường thoả
+        _hlv_direct_orders_domain. Không đơn nào → recordset rỗng."""
+        orders = self.sudo()
+        shown = orders.hlv_vendor_quote_ids._vendor_purchase_orders()
+        direct = self._hlv_direct_orders_domain()
+        if direct:
+            shown |= orders.filtered_domain(direct)
+        return self & shown
+
     def _hlv_vendor_state_label(self):
         """Trạng thái đơn hiện cho NCC: Nháp / RFQ đã gửi / Chờ duyệt / Đơn mua hàng / Đã khóa / Đã hủy."""
         self.ensure_one()
@@ -365,7 +400,7 @@ class PurchaseOrder(models.Model):
     # nếu báo lỗi: chỉ ghi log.
     # ------------------------------------------------------------------
     def _hlv_notify_vendor(self, text):
-        for order in self.sudo().filtered("hlv_vendor_quote_ids"):
+        for order in self.sudo()._hlv_vendor_portal_orders():
             try:
                 with self.env.cr.savepoint():
                     post_chat(order, text(order), order.company_id.partner_id, from_vendor=False)
@@ -375,7 +410,10 @@ class PurchaseOrder(models.Model):
     def button_approve(self, force=False):
         waiting = self.filtered(lambda o: o.state not in CONFIRMED_STATES)
         result = super().button_approve(force=force)
-        waiting.filtered(lambda o: o.state in CONFIRMED_STATES)._hlv_notify_vendor(lambda o: _(
+        approved = waiting.filtered(lambda o: o.state in CONFIRMED_STATES)
+        # Đơn mua thường của NCC chưa từng được hỏi giá: chưa có link thì NCC không mở được đơn vừa báo.
+        self.env["hlv.vendor.quote.access"]._ensure_for_partners(approved._hlv_vendor_portal_orders().partner_id)
+        approved._hlv_notify_vendor(lambda o: _(
             "Đơn mua %(name)s đã xác nhận: %(count)s mặt hàng, %(amount)s sau VAT%(eta)s. Vui lòng chuẩn bị hàng, "
             "%(next)s.",
             name=o.name, count=len(o.order_line.filtered(lambda l: not l.display_type)), next=o._hlv_vendor_next_hint(),

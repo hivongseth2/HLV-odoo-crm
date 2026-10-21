@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Giao hàng từng đợt của đơn mua lên từ báo giá NCC (NCC thiếu hàng / hẹn giao phần còn lại):
+"""Giao hàng từng đợt của đơn mua hiện trên trang NCC (NCC thiếu hàng / hẹn giao phần còn lại):
 
 - Kho nhận một phần → đơn "Đã giao một phần", mở đợt mới: tiến độ NCC về chờ đóng gói, thông tin gửi
   của đợt trước ghi vào chatter; báo NCC phần còn lại + báo sale.
@@ -89,9 +89,9 @@ class PurchaseOrderDelivery(models.Model):
     # ------------------------------------------------------------------ kho nhận một phần → đợt mới
     def _hlv_mark_delivered_by_receipt(self):
         super()._hlv_mark_delivered_by_receipt()
-        # Chỉ đơn lên từ báo giá NCC — đơn mua thường (MISA…) nhận thiếu thì để nguyên như cũ.
+        # Chỉ đơn NCC thấy trên trang NCC (_hlv_vendor_portal_orders) — đơn khác nhận thiếu thì để nguyên như cũ.
         for order in self.sudo().filtered(lambda o: o.state in CONFIRMED_STATES and not o._hlv_receipts_done()):
-            if order._hlv_partly_received() and order.hlv_vendor_quote_ids:
+            if order._hlv_partly_received() and order._hlv_vendor_portal_orders():
                 order._hlv_start_next_batch()
 
     def _hlv_start_next_batch(self):
@@ -182,8 +182,8 @@ class PurchaseOrderDelivery(models.Model):
                 lambda l: is_late(local_day(l.date_planned), today, remaining_qty(l.product_qty, l.qty_received))
                 and l.hlv_late_notified != today
             )
-            # Lọc dòng trễ trước, tra liên kết báo giá sau (tốn truy vấn hơn) — chỉ đơn lên từ báo giá NCC.
-            if late and order.hlv_vendor_quote_ids:
+            # Lọc dòng trễ trước, tra đơn có trên trang NCC sau (tốn truy vấn hơn).
+            if late and order._hlv_vendor_portal_orders():
                 order._hlv_report_late(late, today)
 
     def _hlv_buyer_activity(self, summary, note):

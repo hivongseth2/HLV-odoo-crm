@@ -48,6 +48,15 @@ def local_day(value_utc, tz_name=LOCAL_TZ):
     return pytz.utc.localize(value_utc).astimezone(pytz.timezone(tz_name)).date()
 
 
+def local_day_start_utc(day, tz_name=LOCAL_TZ):
+    """Datetime naive UTC của 00:00 giờ địa phương ngày day (date) — mốc so với datetime Odoo lưu (UTC).
+    day trống → None."""
+    if not day:
+        return None
+    tz = pytz.timezone(tz_name)
+    return tz.localize(datetime.combine(day, time())).astimezone(pytz.utc).replace(tzinfo=None)
+
+
 def pending_text(parts):
     """Một dòng liệt kê hàng còn chờ giao: parts = [(tên, SL còn, ĐVT, ngày hẹn date | None)].
 

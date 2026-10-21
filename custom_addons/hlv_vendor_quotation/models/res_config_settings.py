@@ -3,7 +3,7 @@ from odoo import _, fields, models
 from odoo.exceptions import UserError
 
 from ..services.sale_zalo import ZALO_PARAM
-from .purchase_order import VENDOR_ORDER_STATES_PARAM
+from .purchase_order import DIRECT_ORDERS_FROM_PARAM, VENDOR_ORDER_STATES_PARAM
 from .purchase_order_revision import NO_REVISION_STATES, REVISION_STATES_PARAM
 from .vendor_inquiry import SALE_EDIT_DEADLINE_PARAM
 from .vendor_inquiry_crm_order import SALE_ORDER_SOURCE_PARAM, SALE_ORDER_SOURCES
@@ -59,6 +59,8 @@ class ResConfigSettings(models.TransientModel):
     hlv_vq_order_state_to_approve = fields.Boolean(string="Chờ duyệt")
     hlv_vq_order_state_purchase = fields.Boolean(string="Đơn mua hàng")
     hlv_vq_order_state_done = fields.Boolean(string="Đã khóa")
+    # Không dùng config_parameter: res.config.settings không đổi Date sang chuỗi khi lưu — tự đọc / ghi ở get/set_values.
+    hlv_vq_direct_orders_from = fields.Date(string="Hiện cả đơn mua không lên từ trang hỏi giá, từ ngày")
     # NCC đổi SL / giá trên đơn ở trạng thái nào thì tạo phiên bản chờ thu mua duyệt (REVISION_STATES_PARAM).
     hlv_vq_revision_state_draft = fields.Boolean(string="Nháp", default=True)
     hlv_vq_revision_state_sent = fields.Boolean(string="RFQ đã gửi", default=True)
@@ -72,6 +74,8 @@ class ResConfigSettings(models.TransientModel):
         for prefix, (_param, reader, _error) in STATE_GROUPS.items():
             current = getattr(Order, reader)()
             res.update({prefix + suffix: state in current for suffix, state in STATE_SUFFIXES.items()})
+        since = self.env["ir.config_parameter"].sudo().get_param(DIRECT_ORDERS_FROM_PARAM)
+        res["hlv_vq_direct_orders_from"] = fields.Date.to_date(since) if since else False
         return res
 
     def set_values(self):
@@ -83,3 +87,5 @@ class ResConfigSettings(models.TransientModel):
                 raise UserError(_(error))
             # Lưu rỗng thì Odoo xoá tham số và quay về mặc định — bỏ tick hết (được phép) lưu dấu "none".
             params.set_param(param, ",".join(states) or NO_REVISION_STATES)
+        # Xoá ngày → set_param(False) xoá tham số = tắt, chỉ hiện đơn lên từ báo giá NCC.
+        params.set_param(DIRECT_ORDERS_FROM_PARAM, fields.Date.to_string(self.hlv_vq_direct_orders_from) or False)

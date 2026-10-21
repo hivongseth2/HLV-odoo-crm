@@ -225,9 +225,25 @@ class VendorQuoteAccess(models.Model):
         return action
 
     def _vendor_purchase_orders(self):
-        """Đơn mua đã xác nhận sinh ra từ các báo giá của NCC này (xem hlv.vendor.quote)."""
+        """Đơn mua NCC này thấy ở tab "Đơn mua hàng": đơn lên từ báo giá của NCC (hlv.vendor.quote) + đơn mua
+        thường của NCC từ ngày đặt trong Cài đặt (purchase.order._hlv_direct_orders_domain). Đọc bằng sudo."""
         self.ensure_one()
-        return self.quote_ids._vendor_purchase_orders()
+        orders = self.quote_ids._vendor_purchase_orders()
+        Order = self.env["purchase.order"].sudo()
+        direct = Order._hlv_direct_orders_domain()
+        if direct:
+            orders |= Order.search(expression.AND([direct, [("partner_id", "child_of", self.partner_id.id)]]))
+        return orders
+
+    @api.model
+    def _ensure_for_partners(self, partners):
+        """Tạo link cho công ty NCC (commercial partner) của partners nếu chưa có link nào. Link đã lưu trữ
+        thì để nguyên — có người cố ý tắt link đó, không tự mở lại."""
+        vendors = partners.commercial_partner_id
+        Access = self.sudo().with_context(active_test=False)
+        linked = Access.search([("partner_id", "in", vendors.ids)]).partner_id
+        for vendor in vendors - linked:
+            Access.create({"partner_id": vendor.id})
 
     @api.model
     def _password_required(self):
