@@ -29,7 +29,7 @@
         <xpath expr="//a[contains(@t-att-href, 'don-mua')]" position="after">
             <a t-att-href="'%s/tai-chinh' % portal_base"
                t-attf-class="vq-section-tab #{'vq-section-tab-active' if active_tab == 'finance' else ''}">
-                Tài chính</a>
+                Tài chính <span class="vq-tab-count">(<t t-esc="access._hlv_finance_count()"/>)</span></a>
         </xpath>
     </template>
 
