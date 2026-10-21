@@ -262,6 +262,13 @@ class WooCommerceAPI:
         return None
 
 
+def _purge_batch_pages(config, response):
+    """Xoá cache Cloudflare các trang đã cập nhật trong một lượt Batch API (item lỗi bỏ qua)."""
+    config._purge_cdn([
+        item.get('permalink') for item in response['update'] if 'error' not in item
+    ])
+
+
 # ===========================================
 # SYNC SERVICE
 # ===========================================
@@ -386,6 +393,7 @@ class PriceSyncService:
 
             # Purge cache
             self.api.purge_cache(self.config.cache_purge_url, sku)
+            self.config._purge_cdn([wc_product.get('permalink')])
 
             _logger.info(f"Synced {product.name} (SKU: {sku}) to WordPress")
         else:
@@ -485,12 +493,11 @@ class PriceSyncService:
                             else:
                                 results[product.id]['success'] = True
                                 results[product.id]['message'] = 'Cập nhật thành công (Batch)'
-                                # Purge cache (optional, might spam if done here. 
-                                # Better to use bulk purge if available or skip for speed)
                         else:
                             # Item in payload but not in response?
                             # Could be an error that caused it to be dropped
                             pass
+                _purge_batch_pages(self.config, response)
             else:
                 # Whole batch failed
                 error_msg = 'Batch request failed'
@@ -660,6 +667,7 @@ class StockSyncService:
 
             # Purge cache
             self.api.purge_cache(self.config.cache_purge_url, sku)
+            self.config._purge_cdn([wc_product.get('permalink')])
 
             _logger.info(f"Synced stock status for {product.name} (SKU: {sku}) → {stock_status}")
         else:
@@ -744,6 +752,7 @@ class StockSyncService:
                             else:
                                 results[product.id]['success'] = True
                                 results[product.id]['message'] = 'Cập nhật stock thành công (Batch)'
+                _purge_batch_pages(self.config, response)
             else:
                 error_msg = 'Batch request failed'
                 for pid in results:

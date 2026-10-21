@@ -1,6 +1,6 @@
 {
     'name': 'WordPress Price & Stock Synchronization',
-    'version': '18.0.2.0.0',
+    'version': '18.0.2.0.1',
     'summary': 'Đồng bộ giá và tình trạng kho sản phẩm từ Odoo lên WordPress/WooCommerce',
     'description': '''
         Module đồng bộ giá và stock status sản phẩm từ Odoo lên WordPress/WooCommerce:

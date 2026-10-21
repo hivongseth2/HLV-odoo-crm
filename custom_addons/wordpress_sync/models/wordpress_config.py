@@ -3,6 +3,9 @@ from odoo import models, fields, api
 from odoo.exceptions import ValidationError
 import logging
 
+from .cloudflare_api import CloudflareAPI
+from .wordpress_sync_utils import page_urls_to_purge
+
 _logger = logging.getLogger(__name__)
 
 
@@ -51,6 +54,18 @@ class WordPressConfig(models.Model):
         string='Cache Purge URL',
         help='LiteSpeed cache purge endpoint (tùy chọn)',
         default='/wp-json/litespeed/v1/purge?type=product&sku='
+    )
+
+    cf_zone_id = fields.Char(
+        string='Cloudflare Zone ID',
+        help='Cloudflare → domain → Overview → cột phải, mục API. Trống = không xoá cache Cloudflare.'
+    )
+
+    cf_api_token = fields.Char(
+        string='Cloudflare API Token',
+        compute='_compute_credentials',
+        inverse='_inverse_cf_api_token',
+        help='Token chỉ cần quyền Zone → Cache Purge → Purge cho đúng domain này'
     )
 
     sync_log_days = fields.Integer(
@@ -162,9 +177,11 @@ class WordPressConfig(models.Model):
             if record.id:
                 record.wc_key = ICP.get_param(f'wordpress_sync.config_{record.id}.wc_key', '')
                 record.wc_secret = ICP.get_param(f'wordpress_sync.config_{record.id}.wc_secret', '')
+                record.cf_api_token = ICP.get_param(f'wordpress_sync.config_{record.id}.cf_api_token', '')
             else:
                 record.wc_key = ''
                 record.wc_secret = ''
+                record.cf_api_token = ''
 
     def _inverse_wc_key(self):
         """Lưu wc_key vào System Parameters"""
@@ -179,6 +196,13 @@ class WordPressConfig(models.Model):
         for record in self:
             if record.id and record.wc_secret:
                 ICP.set_param(f'wordpress_sync.config_{record.id}.wc_secret', record.wc_secret)
+
+    def _inverse_cf_api_token(self):
+        """Lưu cf_api_token vào System Parameters"""
+        ICP = self.env['ir.config_parameter'].sudo()
+        for record in self:
+            if record.id and record.cf_api_token:
+                ICP.set_param(f'wordpress_sync.config_{record.id}.cf_api_token', record.cf_api_token)
 
     def _inverse_combo_cron_interval(self):
         """Cập nhật thời gian chạy cron khi thay đổi"""
@@ -215,6 +239,42 @@ class WordPressConfig(models.Model):
         wc_key = ICP.get_param(f'wordpress_sync.config_{self.id}.wc_key', '')
         wc_secret = ICP.get_param(f'wordpress_sync.config_{self.id}.wc_secret', '')
         return wc_key, wc_secret
+
+    def _cloudflare_client(self):
+        """CloudflareAPI của web này; None nếu chưa khai đủ Zone ID và token."""
+        self.ensure_one()
+        token = self.env['ir.config_parameter'].sudo().get_param(
+            f'wordpress_sync.config_{self.id}.cf_api_token', ''
+        )
+        if not (self.cf_zone_id and token):
+            return None
+        return CloudflareAPI(self.cf_zone_id.strip(), token)
+
+    def _purge_cdn(self, permalinks):
+        """
+        Xoá cache Cloudflare các trang sản phẩm vừa đổi giá/tồn kho.
+
+        Lỗi chỉ ghi log, không làm hỏng job đồng bộ: giá đã lên web rồi, trang cũ trên CDN
+        cùng lắm tồn tại tới hết Edge TTL.
+        """
+        self.ensure_one()
+        client = self._cloudflare_client()
+        urls = page_urls_to_purge(permalinks)
+        if not client or not urls:
+            return
+        for error in client.purge_urls(urls):
+            _logger.warning(f"Cloudflare purge failed ({self.name}): {error}")
+
+    def action_test_cloudflare(self):
+        """Thử token bằng cách xoá cache trang chủ — vô hại, trang chủ tự cache lại ở lượt sau."""
+        self.ensure_one()
+        client = self._cloudflare_client()
+        if not client:
+            return self._notify('Thiếu cấu hình', 'Nhập Cloudflare Zone ID và API Token rồi lưu lại', 'warning')
+        errors = client.purge_urls([f'{self.wc_domain}/'])
+        if errors:
+            return self._notify('Cloudflare từ chối', errors[0], 'danger')
+        return self._notify('Cloudflare OK', 'Token xoá cache được cho domain này', 'success')
 
     def test_connection(self):
         """Test kết nối WordPress API"""
