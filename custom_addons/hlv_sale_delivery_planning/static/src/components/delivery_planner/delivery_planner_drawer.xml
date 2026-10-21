@@ -746,6 +746,7 @@
                      <span class="input-group-text bg-white"><i class="fa fa-search text-muted"/></span>
                      <input type="text" class="form-control"
                             placeholder="Tìm trong tất cả tin nhắn, mã đơn, khách, người gửi..."
+                            title="Nhiều từ = tin phải có đủ mọi từ. Gõ có dấu thì khớp đúng dấu, không dấu thì khớp mọi dấu."
                             t-att-value="state.messageDrawerSearch"
                             t-on-input="onMessageDrawerSearchInput"/>
                      <button t-if="state.messageDrawerSearch" type="button"
@@ -758,7 +759,7 @@
                       cho bức tường chip (20+ alias chiếm nửa drawer). -->
                  <div class="d-flex align-items-center gap-1 mt-2">
                      <select class="form-select form-select-sm" style="flex:1 1 0; min-width:0;"
-                             title="Lọc tin có nhắc tên (@alias) — chọn nhiều lần để thêm alias"
+                             title="Lọc tin có nhắc tên (@alias) — chọn nhiều alias thì tin phải nhắc đủ tất cả"
                              t-on-change="onMessageAliasSelect">
                          <option value="">@ Nhắc tên...</option>
                          <t t-foreach="this.messageDrawerAliasOptions" t-as="alias" t-key="alias.alias">

@@ -2844,7 +2844,7 @@ load(false);
      Đổi ?v= khi sửa file để trình duyệt không dùng bản cache cũ. -->
 <script src="/hlv_sale_delivery_planning/static/src/sale_plan_out_picking/sale_plan_out_picking.js?v=3"></script>
 <!-- TÌM TIN NHẮN: tính năng rời, xoá thẻ script này là gỡ xong phần UI. -->
-<script src="/hlv_sale_delivery_planning/static/src/sale_plan_message_search/sale_plan_message_search.js?v=2"></script>
+<script src="/hlv_sale_delivery_planning/static/src/sale_plan_message_search/sale_plan_message_search.js?v=3"></script>
 </body></html>"""
 
 
