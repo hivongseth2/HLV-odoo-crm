@@ -523,7 +523,8 @@ class PublicInventory(http.Controller):
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
             fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
-            qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
+            fc_ok = isinstance(fc, dict) and fc.get("ok")
+            qf = fc.get("qty_forecast", qt - qr) if fc_ok else (qt - qr)
             held_qty, held_by = _hold_summary(holds_by_wid.get(wh.id, empty_holds))
             so_qty, so_details = so_res_map.get((pid, wh.id), (0.0, []))
             held_qty += so_qty
@@ -532,6 +533,9 @@ class PublicInventory(http.Controller):
                 "warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr,
                 "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf,
                 "held_qty": held_qty, "held_by": held_by,
+                # Cùng số "Nhập CK"/"Xuất CK" trong popup dự báo
+                "qty_transfer_in": fc.get("total_internal_in", 0.0) if fc_ok else 0.0,
+                "qty_transfer_out": fc.get("total_internal_out", 0.0) if fc_ok else 0.0,
             })
         return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
