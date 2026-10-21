@@ -25,7 +25,7 @@ B. Bước 2 chưa xong (Transit → kho nhận), gom theo phiếu bước 1 (so
 C. Bước 1 đã xong nhưng chưa có phiếu bước 2: hàng nằm ở Transit, script không đụng, in ra.
 D. Tồn còn sót ở Transit (kể cả âm): in ra để kiểm kê/chuyển tay.
 """
-DRY_RUN = True
+DRY_RUN = False  # staging test: ghi thật. Đặt lại True để chỉ xem báo cáo
 
 Picking = env["stock.picking"]
 Move = env["stock.move"]
