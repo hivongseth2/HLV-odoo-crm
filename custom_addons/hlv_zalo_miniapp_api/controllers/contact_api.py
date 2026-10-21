@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-import hashlib
-import hmac
 import logging
 import re
 import time
 import requests
 
-from odoo import fields, http
+from odoo import http
 from odoo.http import request, Response
 from odoo.exceptions import UserError
 
@@ -112,94 +110,9 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
 
 
     # =========================================================================
-    # Debug: Verify Token (GUARDED by config)
-    # =========================================================================
-    @http.route("/api/v1/zalo/debug/verify-token", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
-    def debug_verify_token(self, **params):
-        """Debug: Verify một token và hiển thị chi tiết từng bước.
-        Chỉ hoạt động khi config parameter 'zalo_api_debug_enabled' = True."""
-        if request.httprequest.method == "OPTIONS":
-            return self._response_options()
-        import json as _json
-
-        # Guard: chỉ cho phép khi debug mode được bật
-        Param = request.env["ir.config_parameter"].sudo()
-        debug_enabled = Param.get_param("zalo_api_debug_enabled", "False").lower() in ("true", "1", "yes")
-        if not debug_enabled:
-            return self._response_error("FORBIDDEN", "Debug endpoint không được kích hoạt", 403)
-
-        try:
-            body = _json.loads(request.httprequest.data.decode("utf-8")) if request.httprequest.data else {}
-        except Exception:
-            body = {}
-        token = (body.get("token") or "").strip()
-
-        if not token:
-            return self._response_error("INVALID_INPUT", "Thiếu token")
-
-        parts = token.split(".")
-        debug = {
-            "token_parts": len(parts),
-            "token_format_ok": len(parts) == 3,
-        }
-
-        if len(parts) != 3:
-            debug["error"] = "Token phải có 3 phần (partner_id.timestamp.signature)"
-            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
-
-        try:
-            debug["partner_id"] = int(parts[0])
-            debug["timestamp"] = int(parts[1])
-            debug["signature"] = parts[2]
-        except ValueError:
-            debug["error"] = "partner_id hoặc timestamp không phải số"
-            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
-
-        # Kiểm tra secret key
-        secret = ZaloContactAPI._get_secret_key()
-        debug["secret_key"] = secret[:5] + "..." if secret else "EMPTY"
-        debug["secret_key_length"] = len(secret)
-
-        if not secret:
-            debug["error"] = "Secret key trống"
-            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
-
-        # Kiểm tra partner
-        partner = request.env["res.partner"].sudo().browse(debug["partner_id"])
-        debug["partner_exists"] = partner.exists()
-        if not partner.exists():
-            debug["error"] = "Partner không tồn tại"
-            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
-
-        # Kiểm tra phone
-        phone = partner.phone or partner.mobile or ""
-        debug["partner_phone_raw"] = phone
-        debug["partner_phone_normalized"] = ZaloContactAPI._normalize_vn_phone(phone)
-
-        # Kiểm tra expiry
-        now = time.time()
-        age = now - debug["timestamp"]
-        debug["age_seconds"] = int(age)
-        debug["expired"] = age > 30 * 24 * 3600
-
-        # Tính signature kỳ vọng
-        expected_payload = f"{debug['partner_id']}:{debug['partner_phone_normalized']}:{debug['timestamp']}"
-        debug["expected_payload"] = expected_payload
-        debug["expected_signature"] = hmac.new(secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
-        debug["signature_match"] = hmac.compare_digest(debug["signature"], debug["expected_signature"])
-        debug["signature_match_lowercase"] = debug["signature"].lower() == debug["expected_signature"].lower()
-
-        if not debug["signature_match"]:
-            debug["error"] = "Chữ ký không khớp"
-        elif debug["expired"]:
-            debug["error"] = "Token đã hết hạn (quá 30 ngày)"
-        else:
-            debug["valid"] = True
-
-        return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
-
-    # =========================================================================
-    # POST /api/v1/zalo/contacts/auth
+    # Phát token sau khi SĐT đã được Zalo xác minh (/contacts/auth/zalo-phone).
+    # Không còn route nào phát token chỉ từ SĐT client gửi: trước đây
+    # /contacts/auth làm vậy, ai biết SĐT là đăng nhập được vào khách đó.
     # =========================================================================
     def _do_auth_for_phone(self, phone):
         normalized = self._normalize_vn_phone(phone)
@@ -263,21 +176,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             "token": token,
             "is_new": is_new,
         })
-
-    @http.route("/api/v1/zalo/contacts/auth", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
-    def contact_auth(self, **params):
-        """Body: {"phone": "090xxxxxxxx"}"""
-        if request.httprequest.method == "OPTIONS":
-            return self._response_options()
-        try:
-            body = self._request_json()
-            phone = (body.get("phone") or "").strip()
-            if not phone:
-                return self._response_error("INVALID_INPUT", "Số điện thoại không được để trống")
-            return self._do_auth_for_phone(phone)
-        except Exception as e:
-            _logger.exception("contact_auth error")
-            return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
     # POST /api/v1/zalo/contacts/auth/zalo-phone
@@ -368,39 +266,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", f"Lỗi kết nối Zalo: {str(e)}", 502)
         except Exception as e:
             _logger.exception("contact_auth_zalo_phone error: %s", e)
-            return self._response_error("SERVER_ERROR", str(e), 500)
-
-    # =========================================================================
-    # POST /api/v1/zalo/contacts/list
-    # =========================================================================
-    @http.route("/api/v1/zalo/contacts/list", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
-    def contact_list(self, **params):
-        """Body: {"limit": 20, "offset": 0}"""
-        if request.httprequest.method == "OPTIONS":
-            return self._response_options()
-        try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
-            body = self._request_json()
-            limit = self._parse_int(body.get("limit"), 20)
-            offset = self._parse_int(body.get("offset"), 0)
-            limit = min(max(limit, 1), 100)
-
-            domain = [("x_is_zalo_account", "=", True), ("active", "=", True)]
-            partners = request.env["res.partner"].sudo().search(domain, limit=limit, offset=offset, order="id desc")
-            total = request.env["res.partner"].sudo().search_count(domain)
-
-            data = [{
-                "id": p.id, "name": p.name, "phone": p.phone or "",
-                "mobile": p.mobile or "", "email": p.email or "",
-                "street": p.street or "", "city": p.city or "",
-            } for p in partners]
-
-            return self._response_success({"total": total, "limit": limit, "offset": offset, "contacts": data})
-        except Exception as e:
-            _logger.exception("contact_list error")
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
