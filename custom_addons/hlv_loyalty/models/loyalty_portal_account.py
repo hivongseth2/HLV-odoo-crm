@@ -235,6 +235,25 @@ class HlvLoyaltyPortalAccount(models.Model):
     # ── Authentication ────────────────────────────────────────────────────────
 
     @api.model
+    def find_disabled_account(self, phone, usernames=()):
+        """Tài khoản ĐÃ VÔ HIỆU HOÁ trùng SĐT (hoặc một trong `usernames`), nếu có.
+
+        Các luồng đăng nhập / đăng ký chỉ tìm tài khoản active; không thấy thì
+        tạo mới — và vấp UNIQUE(username) của chính tài khoản đã vô hiệu hoá
+        (vd. `zalo_<sđt>`), khách chỉ thấy lỗi hệ thống. Gọi hàm này trước khi
+        tạo để báo đúng "tài khoản đã bị vô hiệu hoá".
+        """
+        phone = _normalize_phone(phone or '')
+        clauses = [('portal_phone', '=', phone)] if phone else []
+        clauses += [('username', '=', u) for u in usernames if u]
+        if not clauses:
+            return self.browse()
+        domain = ['|'] * (len(clauses) - 1) + clauses
+        return self.sudo().with_context(active_test=False).search(
+            [('active', '=', False)] + domain, limit=1
+        )
+
+    @api.model
     def authenticate(self, login: str, plain_password: str):
         """
         Return the account record if credentials are valid, else False.
