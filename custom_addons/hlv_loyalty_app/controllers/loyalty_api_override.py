@@ -181,6 +181,9 @@ class LoyaltyAppLoyaltyAPI(LoyaltyExternalAPI):
         """GET/POST /api/v1/loyalty/partner/lookup?phone=0901234567"""
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200, headers=self._cors_headers())
+        limited = self._lookup_rate_limited()
+        if limited:
+            return limited
         body = self._request_json()
         phone = self._normalize_vn_phone(kwargs.get('phone') or body.get('phone') or '')
         email = (kwargs.get('email') or body.get('email') or '').strip().lower()
