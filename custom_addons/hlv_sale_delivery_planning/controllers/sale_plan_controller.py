@@ -517,7 +517,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .mention-webpush-help{display:none;margin:8px 10px 0;padding:8px 10px;border:1px solid #fed7aa;background:#fff7ed;color:#7c2d12;border-radius:6px;font-size:.74rem;line-height:1.35}
 .mention-webpush-help.open{display:block}
 #mention-noti-count,#print-queue-count{min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;padding:0 5px}
-#mention-noti-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:3150;width:min(390px,calc(100vw - 32px));max-height:420px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 18px 40px rgba(15,23,42,.22);display:none;color:#0f172a}
+#mention-noti-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:3150;width:min(560px,calc(100vw - 32px));max-height:min(78vh,720px);overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 18px 40px rgba(15,23,42,.22);display:none;color:#0f172a}
 #mention-noti-panel.open{display:block}
 .mention-noti-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:.78rem;font-weight:800;color:#0f172a}
 .mention-noti-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -2844,7 +2844,7 @@ load(false);
      Đổi ?v= khi sửa file để trình duyệt không dùng bản cache cũ. -->
 <script src="/hlv_sale_delivery_planning/static/src/sale_plan_out_picking/sale_plan_out_picking.js?v=3"></script>
 <!-- TÌM TIN NHẮN: tính năng rời, xoá thẻ script này là gỡ xong phần UI. -->
-<script src="/hlv_sale_delivery_planning/static/src/sale_plan_message_search/sale_plan_message_search.js?v=1"></script>
+<script src="/hlv_sale_delivery_planning/static/src/sale_plan_message_search/sale_plan_message_search.js?v=2"></script>
 </body></html>"""
 
 
