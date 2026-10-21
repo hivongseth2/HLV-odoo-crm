@@ -31,6 +31,7 @@
         "views/accountant_templates.xml",
         "views/vendor_finance_templates.xml",
         "views/debt_payment_templates.xml",
+        "views/all_payments_templates.xml",
         "views/menus.xml",
     ],
     "installable": True,

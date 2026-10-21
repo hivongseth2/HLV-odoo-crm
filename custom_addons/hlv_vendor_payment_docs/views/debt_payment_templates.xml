@@ -7,6 +7,7 @@
     <template id="accountant_debt_list" name="Chứng từ chi NCC - thanh toán công nợ: danh sách">
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <div class="vq-page-head">
                     <h1>Thanh toán công nợ</h1>
                     <a class="vq-btn vq-btn-primary" t-att-href="'%s/moi' % debt_route">Trả công nợ NCC</a>
@@ -99,6 +100,7 @@
     <template id="accountant_debt_pick_vendor" name="Chứng từ chi NCC - trả công nợ: chọn NCC">
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> / <span>Trả công nợ NCC</span></nav>
                 <div class="vq-page-head"><h1>Trả công nợ — chọn nhà cung cấp</h1></div>
                 <form method="get" class="vq-history-filter" t-att-action="'%s/moi' % debt_route">
@@ -135,6 +137,7 @@
     <template id="accountant_debt_new" name="Chứng từ chi NCC - trả công nợ: nhập phiếu">
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> /
                     <a t-att-href="'%s/moi' % debt_route">Chọn NCC</a> / <span t-esc="vendor.name"/></nav>
                 <div class="vq-page-head">
@@ -207,9 +210,9 @@
                             <h2 class="unc-card-title">Phiếu chi</h2>
                             <div class="debt-fields">
                                 <label>
-                                    <span class="vq-label">Số tiền đã chi <span class="vq-muted">(sau VAT, như trên UNC)</span></span>
+                                    <span class="vq-label">Số tiền đã chi</span>
                                     <input type="text" inputmode="decimal" name="amount" class="vq-input debt-amount" data-debt-amount="1"
-                                           required="required" t-att-value="entry['amount_text']" placeholder="VD: 125.000.000"/>
+                                           required="required" t-att-value="entry['amount_text']" placeholder="Sau VAT, như trên UNC"/>
                                 </label>
                                 <label>
                                     <span class="vq-label">Ngày chi</span>
@@ -263,6 +266,7 @@
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
             <t t-set="debt" t-value="payment"/>
             <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> / <span t-esc="payment.name"/></nav>
                 <div class="vq-page-head">
                     <h1 t-esc="payment.name"/>
