@@ -103,8 +103,14 @@
 
 /* --- Trang kế toán: trả công nợ nhiều đơn (/unc-ncc/cong-no) --- */
 .debt-form { display: grid; gap: 16px; }
-.debt-orders td:first-child { width: 32px; }
-.debt-orders input[type="checkbox"] { width: 18px; height: 18px; }
+.debt-orders td:first-child, .debt-orders th:first-child { width: 36px; }
+.debt-order-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+.debt-order-tools input[type="search"] { flex: 0 1 320px; }
+.debt-only-picked { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; cursor: pointer; }
+/* NCC nhiều đơn: bảng cuộn trong khung; tiêu đề đã dính sẵn (.vq-sheet), dòng tổng dính đáy. */
+.debt-orders-scroll { max-height: 62vh; overflow: auto; }
+.debt-orders tfoot td { position: sticky; bottom: 0; background: var(--vq-paper, #fff); }
+.debt-orders input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
 .debt-orders tr.is-off td:not(:first-child) { opacity: .5; }
 .debt-alloc { width: 150px; text-align: right; font-variant-numeric: tabular-nums; }
 .debt-flag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; background: #fff7ed; color: #9a3412;
@@ -124,5 +130,9 @@
 .debt-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .debt-lines { margin-top: 16px; }
 .debt-cancel { margin-top: 16px; }
-.pay-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; background: #eef2f7; color: #1f3a5f;
-    font-size: .72rem; font-weight: 600; white-space: nowrap; }
+/* Nhãn loại khoản chi: "Công nợ" (xanh) / "Đề nghị chi" (xám) — một dòng, cùng cỡ. */
+.pay-kind { display: inline-block; padding: 1px 8px; border: 1px solid #c7d4e5; border-radius: 999px; background: #eef2f7;
+    color: #1f3a5f; font-size: .74rem; font-weight: 600; line-height: 1.5; white-space: nowrap; vertical-align: middle; }
+.pay-kind-dnc { border-color: #e5e7eb; background: #f3f4f6; color: #4b5563; }
+.vq-doc-chip + .pay-kind { margin-left: 6px; }
+.debt-orders [hidden], .debt-order-tools[hidden] { display: none !important; }

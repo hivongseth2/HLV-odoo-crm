@@ -113,7 +113,7 @@
                         <button type="submit" class="vq-btn vq-btn-primary">Tìm</button>
                     </div>
                 </form>
-                <p t-if="not vendors" class="vq-empty">Không có NCC nào có đơn mua đã xác nhận khớp chữ tìm.</p>
+                <p t-if="not vendors" class="vq-empty">Không có NCC nào khớp chữ tìm (chỉ tìm NCC có mã số thuế và đã có đơn mua).</p>
                 <div t-else="" class="vq-list-scroll">
                     <table class="vq-table vq-sheet">
                         <thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th><span class="vq-sr-only">Chọn</span></th></tr></thead>
@@ -143,16 +143,6 @@
                 <div class="vq-page-head">
                     <h1>Trả công nợ <t t-esc="vendor.name"/></h1>
                 </div>
-                <div data-debt-issues="1">
-                    <div t-if="errors" class="vq-alert vq-alert-error">
-                        <b>Chưa lưu được:</b>
-                        <ul class="debt-issues"><li t-foreach="errors" t-as="msg" t-esc="msg"/></ul>
-                    </div>
-                    <div t-if="warnings and not errors" class="vq-alert">
-                        <b>Cần xác nhận trước khi lưu:</b>
-                        <ul class="debt-issues"><li t-foreach="warnings" t-as="msg" t-esc="msg"/></ul>
-                    </div>
-                </div>
                 <div t-if="files_dropped" class="vq-alert">File chứng từ đã chọn chưa được lưu — chọn lại file trước khi bấm lưu.</div>
 
                 <p t-if="not orders" class="vq-empty">NCC này không còn đơn mua đã xác nhận nào đang nợ.</p>
@@ -163,11 +153,18 @@
 
                     <section class="unc-card">
                         <h2 class="unc-card-title">Đơn còn nợ <span class="vq-muted">tick đơn được trả, sửa số trả nếu chỉ trả một phần</span></h2>
-                        <div class="vq-list-scroll">
+                        <!-- Lọc tại chỗ (js/debt_allocation.js) — đơn bị ẩn vẫn giữ tick, vẫn gửi đi. Không JS thì ẩn. -->
+                        <div class="debt-order-tools" data-debt-tools="1" hidden="hidden">
+                            <input type="search" class="vq-input" data-debt-search="1"
+                                   placeholder="Tìm số đơn, ngày hoặc số tiền" aria-label="Tìm đơn mua"/>
+                            <label class="debt-only-picked"><input type="checkbox" data-debt-only-picked="1"/> Chỉ đơn đã chọn</label>
+                            <span class="vq-muted" data-debt-count="1"/>
+                        </div>
+                        <div class="vq-list-scroll debt-orders-scroll">
                         <table class="vq-table vq-sheet debt-orders">
                             <thead>
                                 <tr>
-                                    <th><span class="vq-sr-only">Chọn</span></th>
+                                    <th><input type="checkbox" data-debt-pick-all="1" aria-label="Chọn tất cả đơn đang hiện"/></th>
                                     <th>Đơn mua</th>
                                     <th>Ngày xác nhận</th>
                                     <th class="vq-num">Giá trị đơn</th>
@@ -196,6 +193,9 @@
                                                t-att-value="entry['alloc'].get(order.id) or fmt(round(row['open']))"/>
                                     </td>
                                 </tr>
+                            </tbody>
+                            <tbody data-debt-no-match="1" hidden="hidden">
+                                <tr><td colspan="7" class="vq-muted">Không có đơn nào khớp chữ tìm.</td></tr>
                             </tbody>
                             <tfoot>
                                 <tr><td colspan="6" class="vq-num"><b>Tổng trả vào các đơn đã chọn</b></td>
@@ -251,6 +251,17 @@
                         </section>
                     </div>
 
+                    <!-- Lỗi / cảnh báo: server vẽ khi lưu không qua JS; JS cập nhật ngay khi tick / gõ số. -->
+                    <div data-debt-issues="1" aria-live="polite">
+                        <div t-if="errors" class="vq-alert vq-alert-error">
+                            <b>Chưa lưu được:</b>
+                            <ul class="debt-issues"><li t-foreach="errors" t-as="msg" t-esc="msg"/></ul>
+                        </div>
+                        <div t-if="warnings and not errors" class="vq-alert">
+                            <b>Cần xác nhận trước khi lưu:</b>
+                            <ul class="debt-issues"><li t-foreach="warnings" t-as="msg" t-esc="msg"/></ul>
+                        </div>
+                    </div>
                     <div class="debt-actions">
                         <button type="submit" class="vq-btn vq-btn-primary">Lưu phiếu trả công nợ</button>
                         <button t-if="warnings and not errors" type="submit" name="confirmed" value="1" class="vq-btn vq-btn-secondary">
