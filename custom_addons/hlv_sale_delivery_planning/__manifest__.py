@@ -1,6 +1,6 @@
 {
     'name': 'HLV Sale Delivery Planning',
-    'version': '18.0.1.0.2',
+    'version': '18.0.1.0.3',
     'summary': 'Điều phối giao hàng: Bán hàng -> Mua hàng',
     'description': 'Dashboard trực quan bằng OWL quản lý kế hoạch giao hàng từ đơn bán và tiến độ hàng từ đơn mua.',
     'category': 'Sales',
