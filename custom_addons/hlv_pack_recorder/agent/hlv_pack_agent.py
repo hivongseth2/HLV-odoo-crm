@@ -31,7 +31,7 @@ import time
 import requests
 import yaml
 
-AGENT_VERSION = '2.5.0'
+AGENT_VERSION = '2.6.0'
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -649,6 +649,11 @@ class Agent:
             return
 
         now = time.time()
+        # Doan roi cua nhung ban ghi dang do khi agent chet: ten dang _<id>.segNN
+        # nen KHONG khop mau file cuoi ben duoi. Truoc day chung nam chet tren dia
+        # — video co that ma phieu van bi danh Hong, dung kieu mat bang chung im
+        # lang ma he thong nay sinh ra de tranh.
+        seg_newest = {}
         for name in names:
             if name.endswith(RESUME_SUFFIX):
                 continue  # file ghi chu phien, khong phai video
@@ -656,6 +661,14 @@ class Agent:
                 continue
             match = re.search(r'_(\d+)\.(?:mp4|mkv)$', name)
             if not match:
+                seg = re.search(r'_(\d+)\.seg\d+\.(?:mp4|mkv)$', name)
+                if seg:
+                    try:
+                        mtime = os.path.getmtime(os.path.join(self.work_dir, name))
+                    except OSError:
+                        continue
+                    key = int(seg.group(1))
+                    seg_newest[key] = max(seg_newest.get(key, 0), mtime)
                 continue
             recording_id = int(match.group(1))
             if recording_id in self.active:
@@ -672,6 +685,16 @@ class Agent:
             if self.enqueue_upload(recording_id, path):
                 log.info("xếp lại vào hàng đợi gửi: rec=%s (%.1fMB)",
                          recording_id, size_mb)
+
+        for recording_id, newest in sorted(seg_newest.items()):
+            if recording_id in self.active:
+                continue  # dang quay, ffmpeg con dang ghi vao doan moi nhat
+            if now - newest < RETRY_MIN_AGE_SECONDS:
+                continue  # vua ghi xong, de yen cho chac
+            path = self._find_leftover_file(recording_id)   # ghep cac doan lai
+            if path and self.enqueue_upload(recording_id, path):
+                log.info("cứu được bản ghi dang dở sau khi agent chết: rec=%s",
+                         recording_id)
 
     def sweep_finished(self):
         """ffmpeg chạm trần -t hoặc chết giữa chừng thì tự dọn, không chờ lệnh stop."""
