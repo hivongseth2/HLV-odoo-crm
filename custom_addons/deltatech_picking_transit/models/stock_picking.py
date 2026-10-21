@@ -124,8 +124,8 @@ class StockPicking(models.Model):
                 SELECT sp.source_transfer_id, sp.location_id, sp_src.location_dest_id
                 FROM stock_picking sp
                 LEFT JOIN stock_picking sp_src ON sp.source_transfer_id = sp_src.id
-                WHERE sp.id = %s
-            """, (picking.id,))
+                WHERE sp.id = %s AND sp.state NOT IN ('done', 'cancel')
+            """, (picking.id,))  # phiếu đã xong/hủy: không sửa lịch sử dịch chuyển
             db_row = self.env.cr.fetchone()
             
             if db_row and db_row[0]:  # Có source_transfer_id

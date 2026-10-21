@@ -533,7 +533,9 @@ class PublicInventory(http.Controller):
                 "warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr,
                 "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf,
                 "held_qty": held_qty, "held_by": held_by,
-                # Cùng số "Nhập CK"/"Xuất CK" trong popup dự báo
+                # Cùng số "Nhập ĐMH"/"Xuất ĐBH"/"Nhập CK"/"Xuất CK" trong popup dự báo
+                "qty_po": fc.get("total_po", 0.0) if fc_ok else 0.0,
+                "qty_so": fc.get("total_so", 0.0) if fc_ok else 0.0,
                 "qty_transfer_in": fc.get("total_internal_in", 0.0) if fc_ok else 0.0,
                 "qty_transfer_out": fc.get("total_internal_out", 0.0) if fc_ok else 0.0,
             })
