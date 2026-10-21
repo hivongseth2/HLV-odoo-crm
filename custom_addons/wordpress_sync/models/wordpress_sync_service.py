@@ -93,6 +93,7 @@ class _WebSyncService:
         result['success'] = True
         result['message'] = success_message
         self.api.purge_cache(self.config.cache_purge_url, product.default_code)
+        self.config._purge_cdn(links.mapped('wc_url'))
         return result
 
 
@@ -226,6 +227,11 @@ class PriceSyncService(_WebSyncService):
                 for product_id, error in self._batch_errors(response, chunk).items():
                     results[product_id].update(success=False, message=error)
 
+        self.config._purge_cdn([
+            url
+            for product_id, result in results.items() if result['success']
+            for url in links_by_product[product_id].mapped('wc_url')
+        ])
         return results
 
     def _batch_errors(self, response, chunk):

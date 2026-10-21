@@ -75,6 +75,17 @@
                         </group>
                     </group>
 
+                    <group string="Cloudflare (xoá cache trang sau khi đẩy giá/tồn kho)">
+                        <group>
+                            <field name="cf_zone_id"/>
+                            <field name="cf_api_token" password="True"/>
+                            <div colspan="2">
+                                <button name="action_test_cloudflare" type="object" string="Thử xoá cache Cloudflare"
+                                        class="btn-secondary" icon="fa-cloud"/>
+                            </div>
+                        </group>
+                    </group>
+
                     <group string="Mẫu lỗi không retry">
                         <field name="no_retry_patterns" nolabel="1" placeholder="Mỗi dòng 1 pattern (plain text hoặc regex)&#10;VD: Không tìm thấy product trên WordPress&#10;Product không có SKU"/>
                     </group>
