@@ -35,39 +35,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         return "+84 " + " ".join(parts)
 
     @staticmethod
-    def _search_partner_by_phone(normalized):
-        """Tim khach hang theo so dien thoai.
-
-        Loai tru dia chi con (`parent_id = False`): dia chi giao hang cung la
-        res.partner va cung luu `phone`, khong loc thi mot dia chi co the bi
-        nhan nham lam tai khoan dang nhap.
-
-        Khi nhieu khach trung so, uu tien contact da tung dang nhap Zalo roi
-        moi den ban ghi cu nhat (`id asc`) - de cung mot so luon vao cung mot
-        khach, thay vi phu thuoc thu tu sap xep mac dinh theo ten.
-        """
-        Partner = request.env["res.partner"].sudo()
-        digits = re.sub(r"\D", "", normalized)
-        suffix = digits[1:] if digits.startswith("0") else digits
-        formats = [
-            digits,
-            "+84" + suffix,
-            "+84 " + suffix,
-            "+84 " + " ".join(suffix[i:i+3] for i in range(0, len(suffix), 3)),
-        ]
-        domain = [
-            ("parent_id", "=", False),
-            "|", ("phone", "in", formats), ("mobile", "in", formats),
-        ]
-        # Tach thanh 2 lan search thay vi order theo x_is_zalo_account: cot
-        # boolean co the con NULL o du lieu cu, ma Postgres xep NULL len dau
-        # khi ORDER BY ... DESC -> uu tien sai.
-        zalo_partner = Partner.search(
-            domain + [("x_is_zalo_account", "=", True)], order="id asc", limit=1
-        )
-        return zalo_partner or Partner.search(domain, order="id asc", limit=1)
-
-    @staticmethod
     def _is_default_address(a):
         try:
             if hasattr(a, "x_is_default_delivery") and "x_is_default_delivery" in a._fields:
@@ -159,11 +126,12 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                     409,
                 )
 
-        # ② Chua co tai khoan Portal -> do res.partner theo so dien thoai.
-        if not partner:
-            partner = self._search_partner_by_phone(normalized)
-
-        # ③ Van khong tim thay -> tao khach moi.
+        # ② Chua co tai khoan Portal -> khach moi: tao partner + tai khoan rieng.
+        #    KHONG do res.partner theo phone/mobile: SDT tren ho so cong ty (ke
+        #    toan, giam doc, so cu...) khong chung minh nguoi cam so do duoc vao
+        #    diem / don / voucher cua cong ty. Chi dang nhap bang tai khoan Portal
+        #    (portal_phone / username); muon gan vao cong ty co san thi cua hang
+        #    tao tai khoan Portal cho ho tren Odoo.
         if not partner:
             intl_phone = self._intl_phone(normalized)
             partner = request.env["res.partner"].sudo().create({

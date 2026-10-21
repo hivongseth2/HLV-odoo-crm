@@ -395,10 +395,11 @@ class ZaloBaseAPI:
         endpoint này nhưng bị chặn ở nhóm kia — khách đang dùng thì bị đá ra
         giữa chừng. Đừng tạo lại bản sao.
 
-        Ba định dạng được chấp nhận:
+        Hai định dạng được chấp nhận:
           partner_id.account_id.timestamp.chữ_ký  — bản hiện tại
           partner_id.timestamp.chữ_ký             — bản trước, chưa mang account
-          (cùng 3 phần, chữ ký tính kèm SĐT)      — bản cũ nhất
+        (Bản cũ nhất ký kèm `res.partner.phone` đã bỏ: ngừng phát từ 19/09/2026,
+        token sống 30 ngày nên không còn token hợp lệ nào dạng đó.)
 
         `account_id` cho biết khách đăng nhập vào TÀI KHOẢN PORTAL nào. Một
         công ty có nhiều người thu mua, mỗi người một tài khoản điểm và một
@@ -433,18 +434,7 @@ class ZaloBaseAPI:
                 return None
 
             if not hmac.compare_digest(signature, self._token_signature(secret, payload)):
-                # Token cũ nhất còn nhét SĐT vào payload. Vẫn chấp nhận để
-                # người đang đăng nhập không bị văng ra; sau 30 ngày tự hết hạn.
-                if len(parts) != 3:
-                    return None
-                legacy_phone = self._normalize_vn_phone(
-                    partner.phone or partner.mobile or ""
-                )
-                legacy_sig = self._token_signature(
-                    secret, f"{partner_id}:{legacy_phone}:{timestamp}"
-                )
-                if not hmac.compare_digest(signature, legacy_sig):
-                    return None
+                return None
 
             # Kiểm tra hết hạn: 30 ngày
             if time.time() - timestamp > 30 * 24 * 3600:
