@@ -9,6 +9,8 @@ from markupsafe import Markup
 import re
 import pytz
 
+from .message_period_utils import local_days_to_utc_range, message_period_bounds
+
 _SKIP_MSG_RE = re.compile(
     r'Lệnh chuyển hàng được tạo'
     r'|lệnh chuyển hàng đã được tạo ra từ'
@@ -210,7 +212,29 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
-    def _plan_message_search_domain(self, search='', aliases=None, days=365, unread_only=False):
+    def _plan_message_user_tz(self):
+        try:
+            return pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        except Exception:
+            return pytz.UTC
+
+    @api.model
+    def _plan_message_period_domain(self, period='', date_from='', date_to=''):
+        """Domain lọc mail.message.date theo lựa chọn "Thời gian"; [] nếu không lọc."""
+        tz = self._plan_message_user_tz()
+        today = datetime.now(pytz.UTC).astimezone(tz).date()
+        from_day, to_day = message_period_bounds(period or '', today, date_from, date_to)
+        start_utc, end_utc = local_days_to_utc_range(from_day, to_day, tz)
+        domain = []
+        if start_utc:
+            domain.append(('date', '>=', fields.Datetime.to_string(start_utc)))
+        if end_utc:
+            domain.append(('date', '<', fields.Datetime.to_string(end_utc)))
+        return domain
+
+    @api.model
+    def _plan_message_search_domain(self, search='', aliases=None, days=365, unread_only=False,
+                                    period='', date_from='', date_to=''):
         """Domain chung cho tìm kiếm tin nhắn ở drawer điều phối.
 
         Dùng lại nguyên vẹn cho cả search_plan_messages lẫn mark_plan_messages_read
@@ -220,6 +244,9 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         - search: khớp nội dung tin, mã đơn / tên khách, hoặc tên người gửi.
         - aliases: khớp khi body chứa '@alias' (backend render mention thành
           <strong class="sale-plan-mention">@alias</strong>).
+        - period/date_from/date_to: khoảng thời gian của tin (xem
+          message_period_bounds). Có khoảng thời gian thì bỏ mốc trần `days` —
+          người dùng chọn ngày cụ thể có thể cũ hơn 1 năm.
         - unread_only: chỉ đơn mà user hiện tại chưa đọc. Trạng thái đọc lưu theo
           ĐƠN (hlv.sale.plan.message) nên đây là lọc theo đơn chưa đọc, mọi tin
           trong đơn đó đều được coi là chưa đọc.
@@ -228,8 +255,10 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
             ('model', '=', 'sale.order'),
             ('message_type', 'in', ('comment', 'email')),
         ]
+        period_domain = self._plan_message_period_domain(period, date_from, date_to)
+        domain += period_domain
         days = int(days or 0)
-        if days > 0:
+        if days > 0 and not period_domain:
             floor_dt = fields.Datetime.now() - timedelta(days=days)
             domain.append(('date', '>=', fields.Datetime.to_string(floor_dt)))
 
@@ -267,7 +296,8 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return search, [alias for alias in aliases if alias]
 
     @api.model
-    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365, unread_only=False):
+    def search_plan_messages(self, search='', aliases=None, limit=50, offset=0, days=365, unread_only=False,
+                             period='', date_from='', date_to=''):
         """Tìm trên TOÀN BỘ tin nhắn của đơn bán (mail.message).
 
         Khác với hlv.sale.plan.message (mỗi đơn 1 dòng, chỉ giữ tin CUỐI), hàm này
@@ -275,7 +305,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         kiếm + chip alias ở drawer tin nhắn của trang điều phối giao hàng.
         """
         search, aliases = self._normalize_plan_message_filters(search, aliases)
-        if not search and not aliases and not unread_only:
+        if not search and not aliases and not unread_only and not period:
             return {'messages': [], 'has_more': False, 'next_offset': 0}
 
         limit = max(1, min(int(limit or 50), 200))
@@ -283,6 +313,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
 
         domain = self._plan_message_search_domain(
             search=search, aliases=aliases, days=days, unread_only=unread_only,
+            period=period, date_from=date_from, date_to=date_to,
         )
 
         Message = self.env['mail.message'].sudo()
@@ -297,10 +328,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         if not records:
             return {'messages': [], 'has_more': False, 'next_offset': next_offset}
 
-        try:
-            user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
-        except Exception:
-            user_tz = pytz.UTC
+        user_tz = self._plan_message_user_tz()
 
         so_ids = list({rec.res_id for rec in records if rec.res_id})
         name_by_so = {
@@ -367,7 +395,8 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         }
 
     @api.model
-    def mark_plan_messages_read(self, search='', aliases=None, days=365, max_orders=5000, unread_only=False):
+    def mark_plan_messages_read(self, search='', aliases=None, days=365, max_orders=5000, unread_only=False,
+                                period='', date_from='', date_to=''):
         """Đánh dấu đã đọc MỌI đơn có tin khớp bộ lọc hiện tại của drawer.
 
         Phủ cả tin chưa kéo về màn hình: domain lấy nguyên từ
@@ -378,11 +407,12 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         đánh dấu cả đơn — không có cách nào đánh dấu riêng 1 tin trong đơn.
         """
         search, aliases = self._normalize_plan_message_filters(search, aliases)
-        if not search and not aliases and not unread_only:
+        if not search and not aliases and not unread_only and not period:
             return {'marked': 0, 'sale_order_ids': [], 'truncated': False}
 
         domain = self._plan_message_search_domain(
             search=search, aliases=aliases, days=days, unread_only=unread_only,
+            period=period, date_from=date_from, date_to=date_to,
         )
         max_orders = max(1, min(int(max_orders or 5000), 20000))
         groups = self.env['mail.message'].sudo()._read_group(
