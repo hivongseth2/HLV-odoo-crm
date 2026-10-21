@@ -2,11 +2,9 @@
 import base64
 import json
 import logging
-import re
 import requests
 from datetime import timedelta, timezone
 from odoo import fields as odoo_fields, http
-from odoo.exceptions import UserError
 from odoo.http import request, Response
 
 _logger = logging.getLogger(__name__)
@@ -348,22 +346,23 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json',
                         headers=LoyaltyExternalAPI._cors_headers())
 
-    # Tra cứu theo SĐT là đường dò ra partner_id của khách, nên giới hạn theo IP.
-    LOOKUP_RATE_LIMIT = 20
-    LOOKUP_RATE_WINDOW = 600
+    # Tài khoản mới dùng chung một mật khẩu mặc định, nên đăng nhập là chỗ dò
+    # mật khẩu theo từng SĐT. Giới hạn theo IP.
+    LOGIN_RATE_LIMIT = 10
+    LOGIN_RATE_WINDOW = 600
 
-    def _lookup_rate_limited(self):
-        """Trả response 429 nếu IP gọi lookup quá giới hạn, ngược lại None.
+    def _login_rate_limited(self):
+        """Trả response 429 nếu IP đăng nhập quá giới hạn, ngược lại None.
 
         remote_addr là IP thật khi Odoo chạy proxy_mode (Odoo.sh); không đọc
         X-Forwarded-For trực tiếp vì client tự đặt được header đó.
         """
         ip = request.httprequest.remote_addr or 'unknown'
         allowed = request.env['hlv.loyalty.rate.limit.hit'].sudo().consume(
-            f'partner_lookup:{ip}', self.LOOKUP_RATE_LIMIT, self.LOOKUP_RATE_WINDOW)
+            f'loyalty_login:{ip}', self.LOGIN_RATE_LIMIT, self.LOGIN_RATE_WINDOW)
         if allowed:
             return None
-        return self._json_err('Tra cứu quá nhiều lần, vui lòng thử lại sau ít phút',
+        return self._json_err('Đăng nhập sai quá nhiều lần, vui lòng thử lại sau ít phút',
                               status=429, code='RATE_LIMITED')
 
     @staticmethod
@@ -392,27 +391,6 @@ class LoyaltyExternalAPI(http.Controller):
             digits = '0' + digits[2:]
         return digits
 
-    def _partner_from_portal_phone(self, partner_id, phone):
-        try:
-            partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        except Exception:
-            return None, '', self._json_err('Invalid partner_id', status=400, code='INVALID_PARTNER_ID')
-        if not partner.exists():
-            return None, '', self._json_err('Khach hang khong ton tai', status=404, code='PARTNER_NOT_FOUND')
-
-        normalized = self._normalize_vn_phone(phone)
-        if not normalized:
-            return None, '', self._json_err('Missing phone', status=401, code='MISSING_PHONE')
-
-        root = partner._get_loyalty_root()
-        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
-            ('portal_phone', '=', normalized),
-            ('active', '=', True),
-        ])
-        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
-        if not account:
-            return None, normalized, self._json_err('Missing or invalid partner_id/phone', status=401, code='UNAUTHORIZED')
-        return root, normalized, None
 
     def _partner_from_portal_phone_rpc(self, partner_id, phone):
         try:
@@ -516,16 +494,6 @@ class LoyaltyExternalAPI(http.Controller):
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
 
-    @staticmethod
-    def _account_for_root(root, phone=None):
-        """Tìm tài khoản loyalty của root partner (ưu tiên khớp phone)."""
-        Account = request.env['hlv.loyalty.portal.account'].sudo()
-        if phone:
-            acc = Account.search([('portal_phone', '=', phone), ('active', '=', True)], limit=1)
-            if acc:
-                return acc[0]
-        acc = Account.search([('partner_id', '=', root.id), ('active', '=', True)], limit=1)
-        return acc[0] if acc else None
 
     @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def tier_image(self, tier_id, **kwargs):
@@ -554,68 +522,6 @@ class LoyaltyExternalAPI(http.Controller):
         tiers = request.env['hlv.loyalty.tier'].sudo().search([], order='min_points asc')
         return self._json_ok([self._tier_dict(t) for t in tiers])
 
-    @http.route('/api/v1/loyalty/partner/lookup', type='http',
-                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
-    def lookup_partner(self, **kwargs):
-        """GET/POST /api/v1/loyalty/partner/lookup?phone=0901234567
-           GET/POST /api/v1/loyalty/partner/lookup?email=abc@example.com
-
-        Tìm khách hàng theo SĐT hoặc email, trả về điểm + hạng.
-        """
-        if request.httprequest.method == 'OPTIONS':
-            return Response(status=200, headers=self._cors_headers())
-        limited = self._lookup_rate_limited()
-        if limited:
-            return limited
-        body = self._request_json()
-        phone = self._normalize_vn_phone(kwargs.get('phone') or body.get('phone') or '')
-        email = (kwargs.get('email') or body.get('email') or '').strip().lower()
-
-        if not phone and not email:
-            return self._json_err('Cần truyền phone hoặc email')
-
-        partner_ids = set()
-
-        if phone:
-            # Chỉ tìm qua portal_phone (đã chuẩn hóa)
-            accounts = request.env['hlv.loyalty.portal.account'].sudo().search(
-                [('portal_phone', '=', phone), ('active', '=', True)], limit=5
-            )
-            for acc in accounts:
-                partner_ids.add(acc.partner_id.id)
-        elif email:
-            partners_by_email = request.env['res.partner'].sudo().search(
-                [('email', '=ilike', email)], limit=5
-            )
-            for p in partners_by_email:
-                partner_ids.add(p.id)
-
-        if not partner_ids:
-            return self._json_err('Không tìm thấy khách hàng', status=404)
-
-        partners = request.env['res.partner'].sudo().browse(list(partner_ids))
-        # Ưu tiên commercial_partner_id (root)
-        results = []
-        seen = set()
-        for p in partners:
-            root = p._get_loyalty_root()
-            if root.id not in seen:
-                seen.add(root.id)
-                summary = self._partner_summary(root)
-                if phone:
-                    summary['phone'] = phone
-                # Bổ sung thông tin tài khoản để app phân luồng đăng nhập
-                account = self._account_for_root(root, phone)
-                if account:
-                    summary['account_id'] = account.id
-                    summary['username'] = account.username
-                    summary['has_password'] = bool(account.password_hash)
-                    summary['is_default_password'] = account._verify_password('hlv@2026', account.password_hash)
-                results.append(summary)
-
-        if not results:
-            return self._json_err('Không tìm thấy khách hàng', status=404)
-        return self._json_ok(results if len(results) > 1 else results[0])
 
     @http.route('/api/v1/loyalty/auth/login', type='http',
                 auth='public', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
@@ -627,6 +533,9 @@ class LoyaltyExternalAPI(http.Controller):
         """
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200, headers=self._cors_headers())
+        limited = self._login_rate_limited()
+        if limited:
+            return limited
 
         body = self._request_json()
         login_input = (kwargs.get('login') or kwargs.get('phone') or body.get('login') or body.get('phone') or '').strip()
@@ -822,215 +731,6 @@ class LoyaltyExternalAPI(http.Controller):
             'number': raw_number,
         })
 
-    @http.route('/api/v1/loyalty/partner/<int:partner_id>', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
-    def get_partner(self, partner_id, **kwargs):
-        """GET /api/v1/loyalty/partner/<id>
-        Lấy thông tin điểm + hạng + voucher đang có.
-        """
-        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-        summary = self._partner_summary(root)
-        summary['phone'] = portal_phone
-
-        # Voucher active
-        vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
-            ('partner_id', '=', root.id), ('state', '=', 'active'),
-        ], order='date_expiry asc')
-        summary['active_vouchers'] = [{
-            'id': v.id,
-            'code': v.code,
-            'discount_type': v.discount_type,
-            'discount_value': v.discount_value,
-            'date_expiry': _vn_datetime(v.date_expiry),
-        } for v in vouchers]
-
-        # Lịch sử 10 gần nhất
-        family_ids = root._get_loyalty_family_partner_ids()
-        history = request.env['hlv.loyalty.history'].sudo().search([
-            ('partner_id', 'in', family_ids),
-        ], limit=10, order='date desc')
-        summary['recent_history'] = [{
-            'id': h.id,
-            'date': _vn_datetime(h.date),
-            'point_amount': h.point_amount,
-            'point_type': h.point_type or 'ranking',
-            'transaction_type': h.transaction_type,
-            'state': h.state,
-            'description': h.description or '',
-        } for h in history]
-
-        return self._json_ok(summary)
-
-    @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
-    def get_partner_history(self, partner_id, **kwargs):
-        """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0
-
-        Optional filters:
-        - pt / point_type: all | ranking | exchange
-        - st / state: all | pending | confirmed | cancelled
-        - tt / transaction_type: all | earn | redeem | return | manual
-        - date_from / date_to: YYYY-MM-DD
-        """
-        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-
-        limit = min(int(kwargs.get('limit', 20)), 100)
-        offset = int(kwargs.get('offset', 0))
-        family_ids = root._get_loyalty_family_partner_ids()
-        active_pt = kwargs.get('pt') or kwargs.get('point_type') or 'all'
-        active_st = kwargs.get('st') or kwargs.get('state') or 'all'
-        active_tt = kwargs.get('tt') or kwargs.get('transaction_type') or 'all'
-
-        if active_pt not in ('all', 'ranking', 'exchange'):
-            active_pt = 'all'
-        if active_st not in ('all', 'pending', 'confirmed', 'cancelled'):
-            active_st = 'all'
-        if active_tt not in ('all', 'earn', 'redeem', 'return', 'manual'):
-            active_tt = 'all'
-
-        domain = [('partner_id', 'in', family_ids)]
-        if active_pt != 'all':
-            domain.append(('point_type', '=', active_pt))
-        if active_st != 'all':
-            domain.append(('state', '=', active_st))
-        if active_tt != 'all':
-            domain.append(('transaction_type', '=', active_tt))
-
-        date_from = (kwargs.get('date_from') or '').strip()
-        date_to = (kwargs.get('date_to') or '').strip()
-        try:
-            if date_from:
-                from_dt = odoo_fields.Datetime.to_datetime(
-                    date_from if len(date_from) > 10 else f'{date_from} 00:00:00'
-                )
-                domain.append(('date', '>=', from_dt))
-            if date_to:
-                to_dt = odoo_fields.Datetime.to_datetime(
-                    date_to if len(date_to) > 10 else f'{date_to} 23:59:59'
-                )
-                domain.append(('date', '<=', to_dt))
-        except Exception:
-            return self._json_err('Khoảng ngày không hợp lệ', status=400)
-
-        history = request.env['hlv.loyalty.history'].sudo().search(
-            domain,
-            limit=limit, offset=offset, order='date desc',
-        )
-        total = request.env['hlv.loyalty.history'].sudo().search_count(
-            domain
-        )
-        return self._json_ok({
-            'partner_id': root.id,
-            'phone': portal_phone,
-            'total_points': root.loyalty_total_points,
-            'exchange_points': root.loyalty_exchange_points,
-            'pending_reward_points': root.loyalty_reward_pending_points,
-            'exchange_points_available': root.loyalty_exchange_available_points,
-            'total_records': total,
-            'limit': limit,
-            'offset': offset,
-            'filters': {
-                'point_type': active_pt,
-                'state': active_st,
-                'transaction_type': active_tt,
-                'date_from': date_from,
-                'date_to': date_to,
-            },
-            'records': [{
-                'id': h.id,
-                'date': _vn_datetime(h.date),
-                'point_amount': h.point_amount,
-                'point_type': h.point_type or 'ranking',
-                'transaction_type': h.transaction_type,
-                'state': h.state,
-                'description': h.description or '',
-            } for h in history],
-        })
-
-    @http.route('/api/v1/loyalty/points/add', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def add_points(self, **kwargs):
-        """POST /api/v1/loyalty/points/add
-        Cộng/trừ điểm thủ công.
-
-        Body (JSON):
-        {
-            "partner_id": 42,
-            "points": 100,             // âm để trừ điểm
-            "description": "Cộng điểm ưu đãi sinh nhật"
-        }
-        """
-        points = kwargs.get('points')
-        description = kwargs.get('description', 'Cộng điểm thủ công (API)')
-
-        if points is None:
-            return {'error': 'Thiếu trường points'}
-        points = int(points)
-        if points == 0:
-            return {'error': 'points không được bằng 0'}
-
-        partner_id = kwargs.get('partner_id')
-        if not partner_id:
-            return {'error': 'Thiếu partner_id'}
-        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-
-        if points < 0 and root.loyalty_total_points + points < 0:
-            return {'error': f'Không đủ điểm. Hiện có {root.loyalty_total_points}'}
-
-        request.env['hlv.loyalty.history'].sudo().create({
-            'partner_id': root.id,
-            'point_amount': points,
-            'transaction_type': 'manual',
-            'description': description,
-            'company_id': request.env.company.id,
-        })
-
-        return {
-            'success': True,
-            'partner_id': root.id,
-            'partner_name': root.name,
-            'points_added': points,
-            'total_points': root.loyalty_total_points,
-            'tier': self._tier_dict(root.loyalty_tier_id),
-        }
-
-    @http.route('/api/v1/loyalty/vouchers/<int:partner_id>', type='http',
-                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
-    def get_partner_vouchers(self, partner_id, **kwargs):
-        """GET/POST /api/v1/loyalty/vouchers/<id>?state=active"""
-        if request.httprequest.method == 'OPTIONS':
-            return Response(status=200, headers=self._cors_headers())
-        body = self._request_json()
-        phone = kwargs.get('phone') or body.get('phone')
-        state = kwargs.get('state') or body.get('state')
-        root, portal_phone, error = self._partner_from_portal_phone(partner_id, phone)
-        if error:
-            return error
-
-        domain = [('partner_id', '=', root.id)]
-        if state:
-            domain.append(('state', '=', state))
-
-        vouchers = request.env['hlv.loyalty.voucher'].sudo().search(
-            domain, order='create_date desc')
-        return self._json_ok([{
-            'id': v.id,
-            'code': v.code,
-            'state': v.state,
-            'discount_type': v.discount_type,
-            'discount_value': v.discount_value,
-            'max_discount_amount': v.max_discount_amount,
-            'date_issued': _vn_datetime(v.date_issued),
-            'date_expiry': _vn_datetime(v.date_expiry),
-            'package_name': v.package_id.name or '',
-            'reward_type': v.reward_type or 'discount',
-        } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
                 auth='public', methods=['POST'], csrf=False, cors='*')
@@ -1124,227 +824,6 @@ class LoyaltyExternalAPI(http.Controller):
             'gift_qty': p.gift_qty,
         } for p in packages])
 
-    @staticmethod
-    def _reward_request_dict(req):
-        return {
-            'id': req.id,
-            'name': req.name,
-            'request_type': req.request_type,
-            'points_required': req.points_required,
-            'cash_value': req.cash_value,
-            'voucher_id': req.voucher_id.id if req.voucher_id else None,
-            'voucher_code': req.voucher_id.code if req.voucher_id else '',
-            'package_name': req.package_id.name if req.package_id else '',
-            'state': req.state,
-            'date_request': _vn_datetime(req.date_request),
-            'customer_note': req.customer_note or '',
-        }
-
-    @http.route('/api/v1/loyalty/redeem/requests', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
-    def list_redeem_requests(self, **kwargs):
-        """GET /api/v1/loyalty/redeem/requests?partner_id=42&state=all"""
-        partner_id = kwargs.get('partner_id')
-        if not partner_id:
-            return self._json_err('Thiếu partner_id', status=400, code='MISSING_PARTNER_ID')
-
-        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-        domain = [('partner_id', 'in', root._get_loyalty_family_partner_ids())]
-        state = kwargs.get('state') or 'all'
-        if state in ('pending', 'done', 'cancelled'):
-            domain.append(('state', '=', state))
-
-        requests = request.env['hlv.loyalty.reward.request'].sudo().search(
-            domain, order='date_request desc, id desc'
-        )
-        return self._json_ok({
-            'success': True,
-            'data': {
-                'requests': [self._reward_request_dict(req) for req in requests],
-                'exchange_points': root.loyalty_exchange_points,
-                'pending_reward_points': root.loyalty_reward_pending_points,
-                'exchange_points_available': root.loyalty_exchange_available_points,
-                'phone': portal_phone,
-            },
-        })
-
-    @http.route('/api/v1/loyalty/redeem/submit', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def submit_redeem(self, **kwargs):
-        """POST /api/v1/loyalty/redeem/submit
-        Tạo yêu cầu đổi thưởng (quà hoặc Refund).
-
-        Body — đổi quà:
-        {
-            "partner_id": 42,
-            "request_type": "gift",
-            "package_id": 3
-        }
-
-        Body — Refund:
-        {
-            "partner_id": 42,
-            "request_type": "cash",
-            "points_to_redeem": 500,
-            "bank_name": "Vietcombank",
-            "account_number": "1234567890",
-            "account_name": "NGUYEN VAN A",
-            "customer_note": "..."
-        }
-        """
-        partner_id = kwargs.get('partner_id')
-        request_type = kwargs.get('request_type', 'gift')
-
-        if not partner_id:
-            return {'error': 'Thiếu partner_id'}
-        if request_type not in ('gift', 'cash'):
-            return {'error': 'request_type phải là gift hoặc cash'}
-
-        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-        balance_exchange = root.loyalty_exchange_points
-        avail_exchange = root.loyalty_exchange_available_points
-        pending_reward_points = root.loyalty_reward_pending_points
-        insufficient_code = 'PENDING_REWARD_POINTS' if pending_reward_points else 'INSUFFICIENT_POINTS'
-
-        vals = {
-            'partner_id': root.id,
-            'request_type': request_type,
-            'balance_at_request': balance_exchange,
-            'company_id': request.env.company.id,
-        }
-
-        if request_type == 'gift':
-            package_id = kwargs.get('package_id')
-            if not package_id:
-                return {'error': 'Thiếu package_id cho đổi quà'}
-            package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
-            if not package.exists():
-                return {'error': 'Gói quà không tồn tại hoặc đã ngừng'}
-            reason = package._get_unavailable_reason()
-            if reason:
-                return {'error': reason}
-            if avail_exchange < package.points_required:
-                return {
-                    'error': f'Không đủ điểm khả dụng. '
-                             f'Cần {package.points_required:,} điểm, bạn còn {avail_exchange:,} điểm. '
-                             f'Đang treo {pending_reward_points:,} điểm trong yêu cầu chờ xử lý.',
-                    'code': insufficient_code,
-                    'exchange_points': balance_exchange,
-                    'pending_reward_points': pending_reward_points,
-                    'exchange_points_available': avail_exchange,
-                }
-            vals['package_id'] = package.id
-
-        elif request_type == 'cash':
-            points_to_redeem = int(kwargs.get('points_to_redeem') or 0)
-            if points_to_redeem <= 0:
-                return {'error': 'points_to_redeem phải lớn hơn 0'}
-            if avail_exchange < points_to_redeem:
-                return {
-                    'error': f'Không đủ điểm khả dụng. '
-                             f'Cần {points_to_redeem:,} điểm, bạn còn {avail_exchange:,} điểm. '
-                             f'Đang treo {pending_reward_points:,} điểm trong yêu cầu chờ xử lý.',
-                    'code': insufficient_code,
-                    'exchange_points': balance_exchange,
-                    'pending_reward_points': pending_reward_points,
-                    'exchange_points_available': avail_exchange,
-                }
-            bank_name = (kwargs.get('bank_name') or '').strip()
-            account_number = (kwargs.get('account_number') or '').strip()
-            account_name = (kwargs.get('account_name') or '').strip()
-            if not bank_name or not account_number or not account_name:
-                return {'error': 'Cần điền đầy đủ thông tin ngân hàng (bank_name, account_number, account_name)'}
-            vals.update({
-                'points_to_redeem': points_to_redeem,
-                'bank_name': bank_name,
-                'account_number': account_number,
-                'account_name': account_name,
-                'customer_note': kwargs.get('customer_note') or '',
-            })
-
-        try:
-            # Savepoint: action_done lỗi sau khi đã trừ điểm thì phải rollback cả
-            # yêu cầu lẫn giao dịch trừ — except bên dưới không ném lại lỗi.
-            with request.env.cr.savepoint():
-                req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
-                if request_type == 'gift':
-                    req.action_done()
-        except UserError as exc:
-            return {
-                'error': str(exc),
-                'code': 'PENDING_REWARD_POINTS',
-                'exchange_points': balance_exchange,
-                'pending_reward_points': pending_reward_points,
-                'exchange_points_available': avail_exchange,
-            }
-
-        message = 'Gift redeemed successfully.' if req.request_type == 'gift' else 'Reward request submitted successfully. Please wait for approval.'
-
-        return {
-            'success': True,
-            'request_id': req.id,
-            'request_name': req.name,
-            'request_type': req.request_type,
-            'state': req.state,
-            'points_required': req.points_required,
-            'cash_value': req.cash_value,
-            'voucher_id': req.voucher_id.id if req.voucher_id else None,
-            'voucher_code': req.voucher_id.code if req.voucher_id else '',
-            'exchange_points': root.loyalty_exchange_points,
-            'pending_reward_points': root.loyalty_reward_pending_points,
-            'exchange_points_available': root.loyalty_exchange_available_points,
-            'exchange_points_remaining': max(avail_exchange - req.points_required, 0),
-            'message': message,
-        }
-
-    @http.route([
-        '/api/v1/loyalty/redeem/cancel',
-        '/api/v1/loyalty/redeem/requests/<int:request_id>/cancel',
-    ], type='json', auth='public', methods=['POST'], csrf=False, cors='*')
-    def cancel_redeem_request(self, request_id=None, **kwargs):
-        """POST /api/v1/loyalty/redeem/cancel
-        Body: {"partner_id": 42, "request_id": 123}
-        """
-        partner_id = kwargs.get('partner_id')
-        request_id = request_id or kwargs.get('request_id')
-        if not partner_id:
-            return {'error': 'Thiếu partner_id'}
-        if not request_id:
-            return {'error': 'Thiếu request_id'}
-
-        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-
-        req = request.env['hlv.loyalty.reward.request'].sudo().browse(int(request_id))
-        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
-            return {'error': 'Yêu cầu đổi thưởng không tồn tại', 'code': 'REQUEST_NOT_FOUND'}
-        if req.state != 'pending':
-            return {
-                'error': 'Chỉ hủy được yêu cầu đang chờ xử lý',
-                'code': 'REQUEST_NOT_PENDING',
-                'state': req.state,
-            }
-
-        try:
-            req.action_cancel()
-        except UserError as exc:
-            return {'error': str(exc), 'code': 'CANCEL_FAILED'}
-
-        return {
-            'success': True,
-            'request_id': req.id,
-            'request_name': req.name,
-            'state': req.state,
-            'exchange_points': root.loyalty_exchange_points,
-            'pending_reward_points': root.loyalty_reward_pending_points,
-            'exchange_points_available': root.loyalty_exchange_available_points,
-            'message': 'Yêu cầu đổi thưởng đã được hủy.',
-        }
 
     # ── Account management (đổi mật khẩu / đổi SĐT) ─────────────────────────
 
@@ -1371,70 +850,4 @@ class LoyaltyExternalAPI(http.Controller):
             return None, {'error': 'Missing or invalid partner_id/phone', 'code': 'UNAUTHORIZED'}
         return account, None
 
-    @http.route('/api/v1/loyalty/account/change-password', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def change_password(self, **kwargs):
-        """POST /api/v1/loyalty/account/change-password
-        Body: {"partner_id": 42, "phone": "0901234567",
-               "old_password": "...", "new_password": "...", "confirm_password": "..."}
-        """
-        partner_id = kwargs.get('partner_id')
-        if not partner_id:
-            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
 
-        account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-
-        old_password = (kwargs.get('old_password') or '').strip()
-        new_password = (kwargs.get('new_password') or '').strip()
-        confirm_password = (kwargs.get('confirm_password') or '').strip()
-
-        if not old_password or not new_password or not confirm_password:
-            return {'error': 'Vui lòng điền đầy đủ thông tin', 'code': 'MISSING_FIELDS'}
-        if not account._verify_password(old_password, account.password_hash):
-            return {'error': 'Mật khẩu hiện tại không đúng', 'code': 'INVALID_OLD_PASSWORD'}
-        if new_password != confirm_password:
-            return {'error': 'Mật khẩu mới và xác nhận không khớp', 'code': 'PASSWORD_MISMATCH'}
-        if len(new_password) < 6:
-            return {'error': 'Mật khẩu mới phải có ít nhất 6 ký tự', 'code': 'PASSWORD_TOO_SHORT'}
-
-        try:
-            account.sudo().set_password(new_password)
-        except UserError as exc:
-            return {'error': str(exc), 'code': 'CHANGE_PASSWORD_FAILED'}
-
-        return {'success': True, 'message': 'Đổi mật khẩu thành công.'}
-
-    @http.route('/api/v1/loyalty/account/change-phone', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def change_phone(self, **kwargs):
-        """POST /api/v1/loyalty/account/change-phone
-        Body: {"partner_id": 42, "phone": "0901234567", "new_phone": "0909999999"}
-        """
-        partner_id = kwargs.get('partner_id')
-        if not partner_id:
-            return {'error': 'Thiếu partner_id', 'code': 'MISSING_PARTNER_ID'}
-
-        account, error = self._account_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
-        if error:
-            return error
-
-        new_phone = (kwargs.get('new_phone') or '').strip()
-        if not new_phone:
-            return {'error': 'Số điện thoại mới không được để trống', 'code': 'MISSING_NEW_PHONE'}
-        if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
-            return {'error': 'Số điện thoại không hợp lệ', 'code': 'INVALID_PHONE'}
-
-        normalized = self._normalize_vn_phone(new_phone)
-        duplicate = request.env['hlv.loyalty.portal.account'].sudo().search([
-            ('portal_phone', '=', normalized),
-            ('active', '=', True),
-            ('id', '!=', account.id),
-        ], limit=1)
-        if duplicate:
-            return {'error': 'Số điện thoại đã được sử dụng bởi tài khoản khác', 'code': 'PHONE_EXISTS'}
-
-        account.sudo().write({'portal_phone': new_phone})
-
-        return {'success': True, 'message': 'Đổi số điện thoại thành công.', 'new_phone': normalized}
