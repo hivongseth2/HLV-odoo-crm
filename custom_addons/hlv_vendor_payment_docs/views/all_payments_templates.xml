@@ -67,7 +67,7 @@
                                 <t t-set="is_debt" t-value="entry._name == 'hlv.vendor.debt.payment'"/>
                                 <t t-set="doc_count" t-value="len(entry.hlv_document_ids)"/>
                                 <td data-label="Số phiếu" class="vq-nowrap"><a t-att-href="entry_url(entry)" t-esc="entry.name"/></td>
-                                <td data-label="Loại"><span t-if="is_debt" class="pay-kind">Công nợ</span><span t-else="" class="vq-muted">Đề nghị chi</span></td>
+                                <td data-label="Loại"><span t-if="is_debt" class="pay-kind">Công nợ</span><span t-else="" class="pay-kind pay-kind-dnc">Đề nghị chi</span></td>
                                 <td data-label="Đơn mua">
                                     <span class="pay-chips">
                                         <a t-foreach="entry._hlv_orders()" t-as="po" t-att-href="'%s/don-mua/%s' % (route, po.id)"

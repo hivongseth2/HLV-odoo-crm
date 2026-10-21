@@ -77,17 +77,16 @@ class DebtPaymentPage(AccountantPaymentPage):
 
     @staticmethod
     def _find_vendors(text):
-        """NCC có đơn mua đã xác nhận, khớp chữ tìm (tên / MST / mã) — tối đa SUPPLIER_LIMIT, theo tên."""
-        domain = [("state", "in", CONFIRMED_STATES)]
+        """NCC trả công nợ được: có mã số thuế, VÀ có đơn mua đã xác nhận hoặc supplier_rank > 1 (đã mua nhiều lần —
+        loại liên hệ chỉ lỡ tạo một đơn nháp). Khớp chữ tìm (tên / MST / mã) — tối đa SUPPLIER_LIMIT, theo tên."""
+        groups = request.env["purchase.order"].sudo()._read_group(
+            [("state", "in", CONFIRMED_STATES)], ["partner_id"], ["__count"])
+        ordered_ids = list({partner.commercial_partner_id.id for partner, _count in groups})
+        domain = [("vat", "!=", False), ("vat", "!=", ""),
+                  "|", ("supplier_rank", ">", 1), ("id", "in", ordered_ids)]
         if text:
-            domain += ["|", "|", ("partner_id.commercial_partner_id.name", "ilike", text),
-                       ("partner_id.commercial_partner_id.vat", "ilike", text),
-                       ("partner_id.commercial_partner_id.ref", "ilike", text)]
-        groups = request.env["purchase.order"].sudo()._read_group(domain, ["partner_id"], ["__count"])
-        vendors = request.env["res.partner"].sudo()
-        for partner, _count in groups:
-            vendors |= partner.commercial_partner_id
-        return vendors.sorted("name")[:SUPPLIER_LIMIT]
+            domain += ["|", "|", ("name", "ilike", text), ("vat", "ilike", text), ("ref", "ilike", text)]
+        return request.env["res.partner"].sudo().search(domain, order="name", limit=SUPPLIER_LIMIT)
 
     @http.route(f"{DEBT_ROUTE}/moi", type="http", auth="user", methods=["GET"])
     def debt_new(self, partner=None, ncc="", **_kw):
