@@ -11,3 +11,7 @@ CLAUDE.md
 plan/
 # Cấu hình agent trên máy (chứa token Odoo) — chỉ commit bản .example.yaml.
 custom_addons/*/agent/agent.yaml
+
+# Du lieu khach / dump API: khong commit
+exports/
+misa_response.json
