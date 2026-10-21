@@ -985,6 +985,18 @@
                   return '<div class="small" style="color:#b45309;font-weight:600;" title="' + names + '">'
                        + '<i class="fa fa-lock"></i> Đã giữ: ' + fmt(r.held_qty) + '</div>';
               }
+
+              // Tóm tắt số dự báo "NK:+400, BH:−4, CK:−5" (CK = nhận − chuyển đi), bỏ phần bằng 0
+              function buildForecastNote(r) {
+                  if (!r) return '';
+                  var ck = (r.qty_transfer_in || 0) - (r.qty_transfer_out || 0);
+                  var parts = [];
+                  if (r.qty_po) parts.push('<span style="color:#16a34a;">NK:+' + fmt(r.qty_po) + '</span>');
+                  if (r.qty_so) parts.push('<span style="color:#dc2626;">BH:−' + fmt(r.qty_so) + '</span>');
+                  if (ck) parts.push('<span style="color:' + (ck > 0 ? '#0d9488' : '#d97706') + ';">CK:' + (ck > 0 ? '+' : '−') + fmt(Math.abs(ck)) + '</span>');
+                  if (!parts.length) return '';
+                  return '<div style="font-size:.7rem;font-weight:600;white-space:nowrap;">' + parts.join(', ') + '</div>';
+              }
               
               function buildDetailTable(data) {
                   var html = '';
@@ -1034,7 +1046,7 @@
                            var locationButton = '<button type="button" class="btn btn-sm btn-light text-primary btn-view-location border py-0 px-2" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + '"><i class="fa fa-map-marker"></i></button>';
                            var holdButton = '<button type="button" class="btn btn-sm btn-outline-success py-0 px-2 btn-hold-request" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-pname="' + (data.product_name || '') + '" data-wname="' + r.warehouse_name + '" data-available="' + r.qty_available + '"' + (r.qty_available <= 0 ? ' disabled="disabled"' : '') + '><i class="fa fa-lock"></i> Giữ hàng</button>';
                            var heldNote = buildHeldNote(r);
-                           html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + buildTransferCell(r) + '</td><td class="text-end">' + fmt(r.qty_reserved) + heldNote + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td><td class="text-center">' + locationButton + ' ' + holdButton + '</td></tr>';
+                           html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + buildTransferCell(r) + '</td><td class="text-end">' + fmt(r.qty_reserved) + heldNote + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + buildForecastNote(r) + '</td><td class="text-center">' + locationButton + ' ' + holdButton + '</td></tr>';
                        });
                       html += '</tbody></table></div>';
 
@@ -1050,7 +1062,7 @@
                            html += '    <div class="wh-stat-col"><div class="wh-label">Chuyển kho</div><div class="wh-val">' + buildTransferCell(r) + '</div></div>';
                            html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div>' + buildHeldNote(r) + '</div>';
                            html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
-                           html += '    <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val">' + fcLink + '</div></div>';
+                           html += '    <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val">' + fcLink + '</div>' + buildForecastNote(r) + '</div>';
                            html += '  </div>';
                            html += '  <div class="mt-2 text-end">' + holdButtonMobile + '</div>';
                            html += '</div>';
