@@ -288,8 +288,13 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not partner.exists():
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
+            shipping = self._owned_address(partner, address_id)
+            if not shipping:
+                return self._response_error("FORBIDDEN", "Địa chỉ giao hàng không hợp lệ", 403)
+
             # Validate và build order line values
             Product = request.env["product.product"].sudo()
+            pricelist = self._zalo_pricelist()
             order_line_vals = []
             for item in items:
                 product_id = self._parse_int(item.get("product_id"), 0)
@@ -305,9 +310,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     return self._response_error("OUT_OF_STOCK",
                         f"Sản phẩm '{product.display_name}' chỉ còn {product.free_qty} {product.uom_id.name}", 400)
 
-                # Ưu tiên dùng price_unit từ frontend (giá Zalo đã bao gồm VAT)
-                # Nếu frontend không gửi, fallback về x_zalo_price hoặc list_price
-                price = item.get("price_unit") or product.x_zalo_price or product.list_price
+                # Giá Zalo đã gồm VAT; price_unit client gửi lên bị bỏ qua.
+                price = self._zalo_unit_price(product, pricelist)
+                if price <= 0:
+                    return self._response_error("NO_PRICE",
+                        f"Sản phẩm '{product.display_name}' chưa có giá, vui lòng liên hệ", 400)
                 order_line_vals.append((0, 0, {
                     "product_id": product_id,
                     "product_uom_qty": quantity,
@@ -319,20 +326,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not order_line_vals:
                 return self._response_error("INVALID_INPUT", "Không có sản phẩm hợp lệ để tạo đơn", 400)
 
-            # Gán pricelist trước khi tạo order
-            pricelist_id = False
-            try:
-                pricelist = request.env["product.pricelist"].sudo().search([("active", "=", True)], limit=1, order="id")
-                if pricelist:
-                    pricelist_id = pricelist.id
-            except Exception:
-                pass
-
             # Tạo sale.order mới
             order_vals = {
                 "partner_id": contact_id,
-                "partner_invoice_id": address_id or contact_id,
-                "partner_shipping_id": address_id or contact_id,
+                "partner_invoice_id": shipping.id,
+                "partner_shipping_id": shipping.id,
                 "state": "draft",
                 "order_line": order_line_vals,
             }
@@ -342,8 +340,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             order_account_id = self._auth_account_id()
             if order_account_id:
                 order_vals["x_zalo_portal_account_id"] = order_account_id
-            if pricelist_id:
-                order_vals["pricelist_id"] = pricelist_id
+            if pricelist:
+                order_vals["pricelist_id"] = pricelist.id
             if note:
                 order_vals["note"] = note
 

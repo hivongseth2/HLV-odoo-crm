@@ -11,6 +11,8 @@ from odoo import fields
 from odoo.http import request, Response
 from odoo.exceptions import UserError
 
+from ..models.zalo_miniapp_utils import effective_zalo_price
+
 _logger = logging.getLogger(__name__)
 
 
@@ -251,6 +253,50 @@ class ZaloBaseAPI:
             return float(value)
         except (ValueError, TypeError):
             return default
+
+    # =========================================================================
+    # Giá & địa chỉ khi đặt hàng
+    # =========================================================================
+    @staticmethod
+    def _zalo_pricelist():
+        """Bảng giá Mini App dùng: bảng giá active đầu tiên (giống products/list)."""
+        return request.env["product.pricelist"].sudo().search(
+            [("active", "=", True)], limit=1, order="id"
+        )
+
+    @staticmethod
+    def _zalo_unit_price(product, pricelist):
+        """Đơn giá tính ở SERVER cho một dòng đơn.
+
+        Không bao giờ lấy giá client gửi lên: trước đây `price_unit` trong body
+        được dùng thẳng, gửi 1 đ là đơn được xác nhận và kho xuất hàng.
+        """
+        pricelist_price = 0.0
+        if pricelist:
+            try:
+                pricelist_price = pricelist._get_product_price(product, quantity=1.0)
+            except Exception:
+                _logger.warning("Pricelist price error for product %s", product.id, exc_info=True)
+        return effective_zalo_price(product.x_zalo_price, pricelist_price, product.list_price)
+
+    @staticmethod
+    def _owned_address(partner, address_id):
+        """Địa chỉ giao hàng `address_id` nếu thuộc `partner`, ngược lại None.
+
+        Không truyền `address_id` thì giao về chính `partner`. Thuộc = chính
+        partner hoặc địa chỉ con trực tiếp (`parent_id`), cùng quy tắc với các
+        route sửa/xoá địa chỉ. Trước đây nhận id bất kỳ: đọc được tên, SĐT,
+        địa chỉ của mọi res.partner qua response và giao hàng tới đó.
+        """
+        address_id = ZaloBaseAPI._parse_int(address_id, 0)
+        if not address_id:
+            return partner
+        address = request.env["res.partner"].sudo().browse(address_id)
+        if not address.exists():
+            return None
+        if address.id == partner.id or address.parent_id.id == partner.id:
+            return address
+        return None
 
     @staticmethod
     def _get_record_timestamp(record):
