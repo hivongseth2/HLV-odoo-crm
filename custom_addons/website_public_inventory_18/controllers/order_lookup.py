@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
 import math
-import time
-from collections import defaultdict
 from odoo import http
 from odoo.http import request
 
@@ -10,45 +8,6 @@ _logger = logging.getLogger(__name__)
 
 # ===== CONFIGURATION =====
 PAGE_SIZE = 20
-RATE_LIMIT_REQUESTS = 30
-RATE_LIMIT_WINDOW = 300  # 5 minutes in seconds
-
-# In-memory rate limiting (simple fallback; for production use Redis or ir.cache)
-# TODO: Replace with Redis or Odoo caching for multi-worker environments
-_rate_limit_store = defaultdict(list)
-
-
-# ===== RATE LIMITING =====
-def _rate_limit_check(ip):
-    """
-    Simple in-memory rate limiter.
-    Allow RATE_LIMIT_REQUESTS requests per RATE_LIMIT_WINDOW seconds per IP.
-    Returns True if allowed, False if rate limit exceeded.
-    """
-    global _rate_limit_store
-    now = time.time()
-    
-    # Clean old entries
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < RATE_LIMIT_WINDOW]
-    
-    # Check limit
-    if len(_rate_limit_store[ip]) >= RATE_LIMIT_REQUESTS:
-        _logger.warning("Rate limit exceeded for IP: %s (masked)", _mask_ip_for_log(ip))
-        return False
-    
-    # Add current request
-    _rate_limit_store[ip].append(now)
-    return True
-
-
-def _mask_ip_for_log(ip):
-    """Mask IP address for logging to avoid PII leakage."""
-    if not ip:
-        return "unknown"
-    parts = str(ip).split('.')
-    if len(parts) == 4:
-        return f"{parts[0]}.{parts[1]}.***.**"
-    return "***"
 
 
 # ===== PII MASKING HELPERS =====
@@ -443,7 +402,8 @@ def _get_order_lines(order):
 # ===== CONTROLLER =====
 class OrderLookupController(http.Controller):
     
-    @http.route(['/saleorder-lookup'], type='http', auth='public', website=True, csrf=False, sitemap=True)
+    # Nội bộ: trang trả dòng hàng + giá bán + tên khách, mở public thì dò id là cào được mọi đơn.
+    @http.route(['/saleorder-lookup'], type='http', auth='user', website=True, csrf=False, sitemap=False)
     def order_lookup(self, order_code="", phone="", email="", page=1, **kw):
         """
         Public sales order lookup page.
@@ -456,14 +416,9 @@ class OrderLookupController(http.Controller):
         - email: Customer email
         - page: Page number
         """
-        # Rate limiting
-        # ip = request.httprequest.environ.get('REMOTE_ADDR', 'unknown')
-        # if not _rate_limit_check(ip):
-        #     return request.render('website_public_inventory_18.order_lookup_page', {
-        #         'error': 'rate_limit',
-        #         'error_message': 'Bạn đã vượt quá giới hạn số lần tra cứu. Vui lòng thử lại sau 5 phút.',
-        #     })
-        
+        if request.env.user.share:
+            return request.not_found()
+
         # Sanitize inputs
         order_code = (order_code or "").strip()
         phone = (phone or "").strip()
@@ -601,7 +556,7 @@ class OrderLookupController(http.Controller):
             'search_warning': total > 1 and order_code,  # Warning if multiple results from order code search
         })
     
-    @http.route(['/saleorder-lookup/<int:order_id>'], type='http', auth='public', website=True, csrf=False)
+    @http.route(['/saleorder-lookup/<int:order_id>'], type='http', auth='user', website=True, csrf=False, sitemap=False)
     def order_detail(self, order_id, **kw):
         """
         Public sales order detail page.
@@ -610,7 +565,9 @@ class OrderLookupController(http.Controller):
         Parameters:
         - order_id: Sale order ID
         """
-        # Get order
+        if request.env.user.share:
+            return request.not_found()
+
         SaleOrder = request.env['sale.order'].sudo()
         order = SaleOrder.browse(order_id)
         
