@@ -142,6 +142,23 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 403,
             )
 
+        # Username zalo_<sdt> da thuoc mot tai khoan active nhung SDT dang nhap
+        # cua tai khoan do da khac (bi sua tay / doi SDT). KHONG tu gan nguoi cam
+        # SDT nay vao tai khoan do - co the khong con la cua ho - va cung khong
+        # tao moi duoc (trung username). Bao ro de cua hang sua du lieu.
+        if not portal_account:
+            taken = PortalAccount.search([("username", "=", username)], limit=1)
+            if taken:
+                _logger.warning(
+                    "Zalo auth %s: username %s thuoc tai khoan #%s co portal_phone=%r",
+                    normalized, username, taken.id, taken.portal_phone,
+                )
+                return self._response_error(
+                    "PHONE_CONFLICT",
+                    "Số điện thoại này đang gắn với một tài khoản khác. Vui lòng liên hệ cửa hàng để được hỗ trợ.",
+                    409,
+                )
+
         # ② Chua co tai khoan Portal -> do res.partner theo so dien thoai.
         if not partner:
             partner = self._search_partner_by_phone(normalized)
