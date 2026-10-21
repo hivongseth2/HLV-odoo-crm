@@ -52,6 +52,26 @@ def _file_path(upload_id):
     return os.path.join(STREAM_DIR, f'{upload_id}.webm')
 
 
+# ====== Video quay bổ sung cho phiếu PACK đã xong ======
+# Quay sau khi phiếu đã đóng (thiếu cảnh, niêm phong lại...). Phải đánh dấu riêng
+# trên tên file và ghi chú: người xử lý khiếu nại cần biết đâu là video lúc đóng
+# gói thật, và đối soát thiếu video không được coi video bổ sung là video gốc.
+EXTRA_VIDEO_PURPOSE = 'extra'
+EXTRA_VIDEO_LABEL = 'quay bổ sung'
+
+
+def video_purpose_upload_kwargs(purpose):
+    """Tham số đặt tên / ghi chú cho _bg_upload_to_drive theo mục đích quay.
+
+    purpose: chuỗi lưu trong meta phiên upload ('extra' hoặc rỗng/None).
+    Trả về dict {name_suffix, note_label} cho video bổ sung; dict rỗng cho video
+        đóng gói thường. Biên: giá trị lạ cũng trả dict rỗng (coi như video thường).
+    """
+    if purpose == EXTRA_VIDEO_PURPOSE:
+        return {'name_suffix': 'BOSUNG', 'note_label': EXTRA_VIDEO_LABEL}
+    return {}
+
+
 # ====== Google OAuth settings helpers ======
 G_AUTH_URI   = "https://accounts.google.com/o/oauth2/v2/auth"
 G_TOKEN_URI  = "https://oauth2.googleapis.com/token"
@@ -114,6 +134,46 @@ def get_ml_demand(ml):
 def get_pack_lines(picking):
     """Các stock.move hiển thị thành dòng trên màn hình đóng gói."""
     return picking.move_ids_without_package.filtered(lambda m: m.product_id)
+
+
+def find_origin_pick(env, picking):
+    """Phiếu PICK cùng nhóm cung ứng với phiếu PACK. Rỗng nếu không có."""
+    return env['stock.picking'].sudo().search([
+        ('group_id', '=', picking.group_id.id),
+        ('picking_type_id.sequence_code', 'like', 'PICK'),
+        ('id', '!=', picking.id),
+    ], limit=1)
+
+
+def _param_is_on(value):
+    return str(value).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def recording_page_flags(env):
+    """Cờ cấu hình mà trang có quay video (recording.js) cần nhận từ server.
+
+    Trả về dict pack_cam_gate_blocking, pack_video_bitrate, pack_browser_recording.
+    Biên: bitrate cấu hình sai -> 0 (để trình duyệt tự chọn).
+    """
+    ICP = env['ir.config_parameter'].sudo()
+    try:
+        # 0 = để trình duyệt tự chọn theo độ phân giải thật sự nhận được.
+        video_bitrate = int(ICP.get_param('pack_scan.video_bitrate', '0'))
+    except (TypeError, ValueError):
+        video_bitrate = 0
+    return {
+        # Chặn đóng gói khi camera chết là mặc định: đóng gói không có video thì
+        # đằng nào cũng vô giá trị. Đặt về 'false' để chỉ cảnh báo, dùng khi một
+        # kho nào đó đang trục trặc OBS mà vẫn phải chạy hàng.
+        'pack_cam_gate_blocking': _param_is_on(
+            ICP.get_param('pack_scan.camera_gate_blocking', 'true')),
+        'pack_video_bitrate': video_bitrate,
+        # Công tắc tắt hẳn luồng quay bằng trình duyệt. Cần khi agent ghi hình
+        # phía server dùng chung một webcam USB: DirectShow chỉ cho một ứng dụng
+        # giữ thiết bị, nên hai bên tranh nhau là bên nào cũng hỏng.
+        'pack_browser_recording': _param_is_on(
+            ICP.get_param('pack_scan.browser_recording', 'true')),
+    }
 
 
 def get_pack_snapshot(picking):
@@ -296,13 +356,9 @@ def drive_file_title(env, picking, ext, name_suffix=''):
     if not order_name:
         order_name = (picking.origin or picking.group_id.name or '')
 
-    origin_pick = env['stock.picking'].sudo().search([
-        ('group_id', '=', picking.group_id.id),
-        ('picking_type_id.sequence_code', 'like', 'PICK'),
-        ('id', '!=', picking.id),
-    ], limit=1)
+    origin_pick = find_origin_pick(env, picking)
 
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    ts =datetime.now().strftime('%Y%m%d_%H%M%S')
     suffix = '_%s' % _san_name(name_suffix) if name_suffix else ''
     return '%s_%s_%s%s_%s%s' % (
         _san_name(order_name), _san_name(origin_pick.name or ''),

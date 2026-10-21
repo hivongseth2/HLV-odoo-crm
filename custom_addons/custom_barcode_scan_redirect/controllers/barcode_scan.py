@@ -24,6 +24,16 @@ class BarcodeScanController(http.Controller):
             return {'type': 'ir.actions.client','tag': 'display_notification','params': {
                 'message': f"Không tìm thấy phiếu với mã: {barcode}", 'type': 'danger','sticky': False}}
 
+        # Quét đúng mã một phiếu PACK đã xong = muốn quay thêm video cho phiếu đó.
+        # Phải đứng trước nhánh dưới: nhánh đó coi phiếu xong là PICK và đi tìm
+        # PACK kế tiếp, sẽ đưa nhầm sang phiếu PACK khác cùng đơn.
+        if picking.state == 'done' and 'PACK' in (picking.picking_type_id.sequence_code or ''):
+            return {
+                'type': 'ir.actions.act_url',
+                'url': f"/custom_barcode_scan/pack_video_extra/{picking.id}",
+                'target': 'self',
+            }
+
         if picking.state == 'done' and picking.group_id:
 
             # Lấy tất cả PACK còn xử lý được
