@@ -51,3 +51,4 @@ Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_t
 ## 5. Mở rộng
 - Thêm kho mới: chạy nâng cấp module hoặc gọi `_hlv_get_transfer_location()` (tự tạo khi thiếu).
 - Cho thêm loại phiếu được dùng CHUYENKHO: sửa `_check_hlv_transfer_location`.
+- `scripts/migrate_transit_to_chuyenkho.py` (**dự trù, chưa chạy**, không nằm trong module): chuyển phiếu bước 1/bước 2 chưa xong từ Transit cũ sang CHUYENKHO, chạy bằng `odoo-bin shell`, mặc định `DRY_RUN = True`.
