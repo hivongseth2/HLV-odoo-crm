@@ -351,6 +351,9 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 return self._response_error("INVALID_STATE", "Token chuẩn bị không hợp lệ hoặc đã được sử dụng", 400)
             if prepare.partner_id.id != token_partner_id:
                 return self._response_error("FORBIDDEN", "Không có quyền xác nhận đơn hàng này", 403)
+            # Một giao dịch Zalo chỉ gắn với một đơn: callback tìm đơn theo orderId.
+            if self._find_zalo_order(zalo_order_id):
+                return self._response_error("INVALID_STATE", "Mã giao dịch Zalo đã được dùng cho đơn khác", 409)
 
             # Rebuild order lines từ items đã được chuẩn bị (chống client bịa số tiền)
             items = json.loads(prepare.items or '[]')
@@ -497,274 +500,198 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             _logger.exception("Lỗi xác nhận đơn hàng Checkout SDK: %s", str(e))
             return self._response_error("SERVER_ERROR", f"Lỗi hệ thống: {str(e)}", 500)
 
+    # =========================================================================
+    # Webhook thanh toán từ Zalo Checkout SDK Server
+    # =========================================================================
+    def _valid_checkout_mac(self, raw, req_mac):
+        """True nếu `req_mac` đúng HMAC-SHA256(private_key, raw).
+
+        Chưa cấu hình private key thì luôn False: trước đây thiếu key là bỏ qua
+        kiểm chữ ký, ai cũng đánh dấu được đơn đã thanh toán.
+        """
+        private_key = self._get_private_key()
+        if not private_key or not req_mac:
+            return False
+        calc = hmac.new(private_key.encode('utf-8'), raw.encode('utf-8'), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(calc.lower(), str(req_mac).lower())
+
+    def _valid_payment_mac(self, data, req_mac):
+        """Kiểm MAC kết quả thanh toán theo công thức Zalo Checkout:
+        appId&amount&description&orderId&message&resultCode&transId."""
+        raw = (
+            f"appId={data.get('appId', '')}&amount={data.get('amount')}"
+            f"&description={data.get('description', '')}&orderId={data.get('orderId', '')}"
+            f"&message={data.get('message', '')}&resultCode={data.get('resultCode')}"
+            f"&transId={data.get('transId', '')}"
+        )
+        return self._valid_checkout_mac(raw, req_mac)
+
+    def _app_id_matches(self, app_id):
+        configured = self._get_app_id()
+        return not configured or str(app_id) == configured
+
+    @staticmethod
+    def _find_zalo_order(order_id):
+        """Đơn theo orderId Zalo. Không lùi về tìm theo sale.order.name: orderId
+        Zalo không bao giờ trùng tên đơn S0xxxx, nhánh đó chỉ giúp kẻ giả mạo
+        nhắm vào đơn bất kỳ bằng tên dễ đoán."""
+        if not order_id:
+            return request.env['sale.order'].sudo().browse()
+        return request.env['sale.order'].sudo().search([('x_zalo_order_id', '=', order_id)], limit=1)
+
+    @staticmethod
+    def _expected_payment_amount(sale_order):
+        """Số tiền Zalo phải thu cho đơn: đúng số đã ký MAC ở bước prepare;
+        không còn bản prepare (dữ liệu cũ) thì lấy tổng đơn."""
+        prepare = request.env['zalo.miniapp.checkout.prepare'].sudo().search(
+            [('order_name', '=', sale_order.name)], limit=1
+        )
+        return int(round(prepare.amount if prepare else sale_order.amount_total))
+
+    def _apply_payment_result(self, sale_order, success, trans_id, method):
+        if success:
+            try:
+                if sale_order.state == 'draft':
+                    sale_order.action_confirm()
+            except Exception:
+                _logger.warning("Không thể tự động action_confirm cho %s", sale_order.name, exc_info=True)
+            sale_order.write({
+                'x_zalo_payment_status': 'paid',
+                'x_zalo_trans_id': trans_id,
+                'x_zalo_payment_method': method,
+                'x_zalo_trans_time': fields.Datetime.now(),
+            })
+        else:
+            sale_order.write({
+                'x_zalo_payment_status': 'failed',
+                'x_zalo_trans_id': trans_id,
+                'x_zalo_payment_method': method,
+            })
+
+    def _check_payment_notification(self, data, req_mac):
+        """Kiểm một thông báo kết quả thanh toán; trả (sale_order, lỗi).
+
+        Ngoài chữ ký còn so appId và SỐ TIỀN: chữ ký đúng chỉ chứng minh Zalo
+        đã thu `amount` cho `orderId`, không chứng minh đó là số tiền của đơn
+        (khách có thể gắn orderId của một giao dịch rẻ vào đơn đắt ở /confirm).
+        """
+        if not self._valid_payment_mac(data, req_mac):
+            _logger.warning("Zalo Checkout: sai chữ ký cho orderId=%s", data.get('orderId'))
+            return None, 'Invalid MAC signature'
+        if not self._app_id_matches(data.get('appId', '')):
+            return None, 'Invalid appId'
+        sale_order = self._find_zalo_order(str(data.get('orderId', '')))
+        if not sale_order:
+            return None, 'Order not found'
+        if data.get('resultCode') == 1:
+            expected = self._expected_payment_amount(sale_order)
+            if self._parse_int(data.get('amount'), -1) != expected:
+                _logger.warning(
+                    "Zalo Checkout: số tiền lệch cho %s (Zalo %s, đơn %s)",
+                    sale_order.name, data.get('amount'), expected,
+                )
+                return None, 'Amount mismatch'
+        return sale_order, None
+
     @http.route('/api/zalo/checkout/callback', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def zalo_checkout_callback(self, **post):
         """
         Webhook nhận kết quả thanh toán từ Zalo Checkout SDK Server.
-        Zalo Server sẽ POST payload JSON dạng:
-        {
-            "data": {
-                "appId": "...",
-                "orderId": "...",
-                "transId": "TRANS123",
-                "method": "ZALOPAY_SANDBOX",
-                "transTime": 1710832784000,
-                "amount": 50000,
-                "description": "...",
-                "resultCode": 1,
-                "message": "Payment successful"
-            },
-            "mac": "...",
-            "overallMac": "..."
-        }
+        Payload: {"data": {"appId", "orderId", "transId", "method", "transTime",
+                           "amount", "description", "resultCode", "message"},
+                  "mac": "...", "overallMac": "..."}
         """
         if request.httprequest.method == 'OPTIONS':
             return self._response_options()
         try:
             body = self._request_json()
-            data = body.get('data', {})
-            req_mac = body.get('mac', '')
-            req_overall_mac = body.get('overallMac', '')
-
+            data = body.get('data') or {}
             if not data:
                 return {'returnCode': -1, 'returnMessage': 'Missing data payload'}
 
-            app_id = str(data.get('appId', ''))
-            order_id = str(data.get('orderId', ''))
-            trans_id = str(data.get('transId', ''))
-            amount = data.get('amount')
-            description = str(data.get('description', ''))
-            result_code = data.get('resultCode')
-            message = str(data.get('message', ''))
-            method = str(data.get('method', ''))
+            sale_order, error = self._check_payment_notification(data, body.get('mac', ''))
+            if error:
+                return {'returnCode': -1, 'returnMessage': error}
 
-            private_key = self._get_private_key()
-
-            # 1. Kiểm tra chữ ký MAC
-            # Formula: appId={appId}&amount={amount}&description={description}&orderId={orderId}&message={message}&resultCode={resultCode}&transId={transId}
-            if private_key:
-                raw_mac_str = f"appId={app_id}&amount={amount}&description={description}&orderId={order_id}&message={message}&resultCode={result_code}&transId={trans_id}"
-                calc_mac = hmac.new(
-                    private_key.encode('utf-8'),
-                    raw_mac_str.encode('utf-8'),
-                    hashlib.sha256,
-                ).hexdigest()
-
-                if calc_mac.lower() != req_mac.lower():
-                    _logger.warning("Zalo Checkout Callback MAC mismatch! Expected: %s, Received: %s", calc_mac, req_mac)
-                    return {'returnCode': -1, 'returnMessage': 'Invalid MAC signature'}
-
-            # 2. Tìm đơn hàng Odoo theo zalo_order_id (fallback theo sale.order.name cho dữ liệu cũ)
-            SaleOrder = request.env['sale.order'].sudo()
-            sale_order = SaleOrder.search([('x_zalo_order_id', '=', order_id)], limit=1) or SaleOrder.search([('name', '=', order_id)], limit=1)
-            if not sale_order:
-                _logger.warning("Zalo Checkout Callback: Sale Order %s không tồn tại", order_id)
-                return {'returnCode': -1, 'returnMessage': 'Order not found'}
-
-            # 3. Kiểm tra tính trùng lặp đơn hàng đã thanh toán thành công trước đó
             if sale_order.x_zalo_payment_status == 'paid':
-                _logger.info("Zalo Checkout Callback: Order %s đã thanh toán trước đó", order_id)
                 return {'returnCode': 2, 'returnMessage': 'Order already processed'}
 
-            # 4. Xử lý cập nhật trạng thái đơn hàng
-            if result_code == 1:
-                # Thanh toán thành công -> Xác nhận đơn hàng & Cập nhật trạng thái
-                try:
-                    if sale_order.state == 'draft':
-                        sale_order.action_confirm()
-                except Exception as cf_err:
-                    _logger.warning("Không thể tự động action_confirm cho %s: %s", order_id, str(cf_err))
-
-                sale_order.write({
-                    'x_zalo_payment_status': 'paid',
-                    'x_zalo_trans_id': trans_id,
-                    'x_zalo_payment_method': method,
-                    'x_zalo_trans_time': fields.Datetime.now(),
-                })
-                _logger.info("Zalo Checkout Callback THÀNH CÔNG cho đơn hàng %s (TransID: %s)", order_id, trans_id)
+            success = data.get('resultCode') == 1
+            self._apply_payment_result(
+                sale_order, success, str(data.get('transId', '')), str(data.get('method', '')),
+            )
+            if success:
+                _logger.info("Zalo Checkout Callback THÀNH CÔNG cho đơn %s", sale_order.name)
                 return {'returnCode': 1, 'returnMessage': 'Success'}
-            else:
-                # Thanh toán thất bại
-                sale_order.write({
-                    'x_zalo_payment_status': 'failed',
-                    'x_zalo_trans_id': trans_id,
-                    'x_zalo_payment_method': method,
-                })
-                _logger.warning("Zalo Checkout Callback THẤT BẠI cho đơn hàng %s: %s", order_id, message)
-                return {'returnCode': 1, 'returnMessage': 'Failure recorded'}
+            _logger.warning("Zalo Checkout Callback THẤT BẠI cho đơn %s: %s", sale_order.name, data.get('message'))
+            return {'returnCode': 1, 'returnMessage': 'Failure recorded'}
+        except Exception:
+            _logger.exception("Lỗi khi xử lý Callback Zalo Checkout SDK")
+            return {'returnCode': -1, 'returnMessage': 'Internal Server Error'}
 
-        except Exception as e:
-            _logger.exception("Lỗi khi xử lý Callback Zalo Checkout SDK: %s", str(e))
-            return {'returnCode': -1, 'returnMessage': f'Internal Server Error: {str(e)}'}
     @http.route('/api/zalo/checkout/notify', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def zalo_checkout_notify(self, **post):
         """
         Webhook nhận thông báo khi người dùng chọn phương thức COD hoặc Bank Transfer.
-        Payload:
-        {
-            "data": {
-                "appId": "...",
-                "orderId": "...",
-                "method": "COD"
-            },
-            "mac": "..."
-        }
+        Payload: {"data": {"appId", "orderId", "method"}, "mac": "..."}
         """
         if request.httprequest.method == 'OPTIONS':
             return self._response_options()
         try:
             body = self._request_json()
-            data = body.get('data', {})
-            req_mac = body.get('mac', '')
-
+            data = body.get('data') or {}
             app_id = str(data.get('appId', ''))
             order_id = str(data.get('orderId', ''))
             method = str(data.get('method', ''))
 
-            private_key = self._get_private_key()
+            raw = f"appId={app_id}&orderId={order_id}&method={method}"
+            if not self._valid_checkout_mac(raw, body.get('mac', '')) or not self._app_id_matches(app_id):
+                return {'returnCode': -1, 'returnMessage': 'Invalid MAC signature'}
 
-            # Verify MAC: appId={appId}&orderId={orderId}&method={method}
-            if private_key:
-                raw_mac = f"appId={app_id}&orderId={order_id}&method={method}"
-                calc_mac = hmac.new(
-                    private_key.encode('utf-8'),
-                    raw_mac.encode('utf-8'),
-                    hashlib.sha256,
-                ).hexdigest()
-
-                if calc_mac.lower() != req_mac.lower():
-                    return {'returnCode': -1, 'returnMessage': 'Invalid MAC signature'}
-
-            SaleOrder = request.env['sale.order'].sudo()
-            sale_order = SaleOrder.search([('x_zalo_order_id', '=', order_id)], limit=1) or SaleOrder.search([('name', '=', order_id)], limit=1)
+            sale_order = self._find_zalo_order(order_id)
             if sale_order:
-                sale_order.write({
-                    'x_zalo_payment_method': method,
-                })
-                _logger.info("Zalo Checkout Notify: Đơn %s ghi nhận phương thức %s", order_id, method)
+                sale_order.write({'x_zalo_payment_method': method})
+                _logger.info("Zalo Checkout Notify: Đơn %s ghi nhận phương thức %s", sale_order.name, method)
 
             return {'returnCode': 1, 'returnMessage': 'Success'}
-        except Exception as e:
-            _logger.exception("Lỗi khi xử lý Notify Zalo Checkout: %s", str(e))
-            return {'returnCode': -1, 'returnMessage': str(e)}
-
-    @http.route('/api/v1/zalo_checkout/get_status', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
-    def query_zalo_order_status(self, **post):
-        """
-        API Server-to-Server chủ động tra cứu trạng thái giao dịch từ Zalo Checkout SDK Server.
-        Endpoint: POST https://payment-mini.zalo.me/api/transaction/get-status
-
-        Body:
-        {
-            "zalo_order_id": "154153230724310053847738335_1786506836347"
-        }
-        """
-        if request.httprequest.method == 'OPTIONS':
-            return self._response_options()
-        try:
-            import requests
-
-            body = self._request_json()
-            order_id = (body.get('zalo_order_id') or body.get('orderId') or '').strip()
-            if not order_id:
-                return self._response_error("INVALID_INPUT", "Thiếu zalo_order_id")
-
-            app_id = self._get_app_id()
-            private_key = self._get_private_key()
-
-            if not app_id or not private_key:
-                return self._response_error("CONFIG_ERROR", "Chưa cấu hình Zalo App ID hoặc Private Key")
-
-            # MAC formula: appId={appId}&orderId={orderId}&privateKey={privateKey}
-            raw_mac = f"appId={app_id}&orderId={order_id}&privateKey={private_key}"
-            mac = hmac.new(
-                private_key.encode('utf-8'),
-                raw_mac.encode('utf-8'),
-                hashlib.sha256,
-            ).hexdigest()
-
-            target_url = "https://payment-mini.zalo.me/api/transaction/get-status"
-            params = {
-                "appId": app_id,
-                "orderId": order_id,
-                "mac": mac,
-            }
-            headers = {"Content-Type": "application/json"}
-
-            _logger.info("Gọi Zalo getOrderStatus (GET) cho orderId=%s...", order_id)
-            resp = requests.get(target_url, params=params, headers=headers, timeout=10)
-            if resp.status_code != 200 or not resp.text or not resp.text.strip():
-                resp = requests.post(target_url, json=params, headers=headers, timeout=10)
-
-            res_data = {}
-            if resp.text and resp.text.strip():
-                try:
-                    res_data = resp.json()
-                except Exception:
-                    res_data = {"raw_text": resp.text}
-
-            _logger.info("Zalo getOrderStatus Response: HTTP %s - Body: %s", resp.status_code, resp.text)
-
-            return self._response_success({
-                "status_code": resp.status_code,
-                "zalo_response": res_data,
-            })
-        except Exception as e:
-            _logger.exception("Lỗi tra cứu trạng thái giao dịch Zalo: %s", str(e))
-            return self._response_error("SERVER_ERROR", f"Lỗi hệ thống: {str(e)}", 500)
+        except Exception:
+            _logger.exception("Lỗi khi xử lý Notify Zalo Checkout")
+            return {'returnCode': -1, 'returnMessage': 'Internal Server Error'}
 
     @http.route('/api/zalo/checkout/vnpay_ipn', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def zalo_checkout_vnpay_ipn(self, **post):
         """
-        Webhook IPN riêng nhận thông báo giao dịch VNPay tích hợp qua Zalo Checkout SDK.
+        IPN cho giao dịch VNPay qua Zalo Checkout SDK.
+
+        Trước đây không kiểm gì: gửi {"orderId": <tên đơn>, "vnp_ResponseCode": "00"}
+        là đơn bị đánh dấu đã thanh toán. Giờ bắt buộc cùng chữ ký / appId /
+        số tiền như /callback (thông báo thật từ Zalo Checkout đều ký theo
+        công thức đó); thông báo không có chữ ký Zalo bị từ chối.
         """
         if request.httprequest.method == 'OPTIONS':
             return self._response_options()
         try:
             body = self._request_json()
-            data = body.get('data', {})
-            order_id = str(data.get('orderId', ''))
-            vnp_response_code = str(data.get('vnp_ResponseCode', data.get('resultCode', '')))
-            trans_id = str(data.get('transId', data.get('vnp_TransactionNo', '')))
-
-            _logger.info("Nhận VNPay IPN Webhook cho orderId=%s (vnp_ResponseCode=%s)", order_id, vnp_response_code)
-
-            if not order_id:
+            data = body.get('data') or {}
+            if not data.get('orderId'):
                 return {'RspCode': '99', 'Message': 'Invalid OrderId'}
 
-            SaleOrder = request.env['sale.order'].sudo()
-            sale_order = SaleOrder.search([('x_zalo_order_id', '=', order_id)], limit=1) or SaleOrder.search([('name', '=', order_id)], limit=1)
-
-            if not sale_order:
-                return {'RspCode': '01', 'Message': 'Order not found'}
+            sale_order, error = self._check_payment_notification(data, body.get('mac', ''))
+            if error == 'Order not found':
+                return {'RspCode': '01', 'Message': error}
+            if error == 'Amount mismatch':
+                return {'RspCode': '04', 'Message': 'Invalid Amount'}
+            if error:
+                return {'RspCode': '97', 'Message': 'Invalid Signature'}
 
             if sale_order.x_zalo_payment_status == 'paid':
                 return {'RspCode': '02', 'Message': 'Order already confirmed'}
 
-            if vnp_response_code in ('00', '1'):
-                try:
-                    if sale_order.state == 'draft':
-                        sale_order.action_confirm()
-                except Exception:
-                    pass
-
-                sale_order.write({
-                    'x_zalo_payment_status': 'paid',
-                    'x_zalo_trans_id': trans_id,
-                    'x_zalo_payment_method': 'VNPAY',
-                    'x_zalo_trans_time': fields.Datetime.now(),
-                })
+            success = data.get('resultCode') == 1
+            self._apply_payment_result(sale_order, success, str(data.get('transId', '')), 'VNPAY')
+            if success:
                 return {'RspCode': '00', 'Message': 'Confirm Success'}
-            else:
-                sale_order.write({
-                    'x_zalo_payment_status': 'failed',
-                    'x_zalo_trans_id': trans_id,
-                    'x_zalo_payment_method': 'VNPAY',
-                })
-                return {'RspCode': '00', 'Message': 'Transaction Failed Recorded'}
-        except Exception as e:
-            _logger.exception("Lỗi khi xử lý VNPay IPN Webhook: %s", str(e))
-            return {'RspCode': '99', 'Message': f'Uncertain Error: {str(e)}'}
-
-
-
+            return {'RspCode': '00', 'Message': 'Transaction Failed Recorded'}
+        except Exception:
+            _logger.exception("Lỗi khi xử lý VNPay IPN Webhook")
+            return {'RspCode': '99', 'Message': 'Unknown error'}
