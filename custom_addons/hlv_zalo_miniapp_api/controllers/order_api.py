@@ -23,6 +23,17 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         """Return current datetime in GMT+7 as string."""
         return fields.Datetime.now().astimezone(GMT7).strftime("%Y-%m-%d %H:%M:%S")
 
+    def _is_own_order(self, order):
+        """Đơn do chính tài khoản Portal trong token đặt.
+
+        Pháp nhân (`partner_id`) là công ty dùng chung cho nhiều người thu mua,
+        nên chỉ so partner là chưa đủ: đồng nghiệp sẽ xem / huỷ / đòi trả được
+        đơn của nhau, kể cả đơn nhập tay trên Odoo không liên quan Mini App.
+        Token cũ chưa mang account_id thì coi như không có quyền.
+        """
+        account_id = self._auth_account_id()
+        return bool(account_id) and order.x_zalo_portal_account_id.id == account_id
+
     def _order_to_dict(self, order):
         lines = []
         voucher_discount_total = 0.0
@@ -240,13 +251,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            # Kiem tra them theo tai khoan Portal: `_auth_and_verify_owner` chi
-            # xac nhan don thuoc dung PHAP NHAN trong token, ma phap nhan la
-            # cong ty dung chung cho nhieu nguoi thu mua. Khong chan o day thi
-            # chi can biet order_id la doc duoc don cua dong nghiep, hoac don
-            # nhap tay tren Odoo von khong lien quan Mini App.
-            account_id = self._auth_account_id()
-            if not account_id or order.x_zalo_portal_account_id.id != account_id:
+            if not self._is_own_order(order):
                 return self._response_error("FORBIDDEN", "Don hang khong thuoc ve ban", 403)
 
             return self._response_success(self._order_to_dict(order))
@@ -480,12 +485,17 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
-            # Ownership check: order phải thuộc về partner từ token
-            if order.partner_id.id != token_partner_id:
+            # Ownership check: order phải thuộc về partner VÀ tài khoản Portal trong token
+            if order.partner_id.id != token_partner_id or not self._is_own_order(order):
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
             if order.state in ("done", "cancel"):
                 return self._response_error("INVALID_STATE", "Đơn hàng đã hoàn thành hoặc đã hủy", 400)
+
+            # Đã xuất kho thì không huỷ được nữa (trước đây vẫn ép state='cancel'
+            # trong khi hàng đã đi) — khách dùng Đổi/Trả.
+            if order.picking_ids.filtered(lambda p: p.picking_type_id.code == "outgoing" and p.state == "done"):
+                return self._response_error("INVALID_STATE", "Đơn hàng đã giao, vui lòng gửi yêu cầu Đổi/Trả", 400)
 
             if reason:
                 order.write({"note": (order.note or "") + f"\nLý do hủy: {reason}"})
@@ -590,8 +600,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
-            # Ownership check: order phải thuộc về partner từ token
-            if order.partner_id.id != token_partner_id:
+            # Ownership check: order phải thuộc về partner VÀ tài khoản Portal trong token
+            if order.partner_id.id != token_partner_id or not self._is_own_order(order):
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
             title = "Xác nhận đã nhận được hàng" if action_type == "received" else "Đề nghị Đổi/Trả hàng"
