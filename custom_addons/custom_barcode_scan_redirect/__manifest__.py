@@ -1,6 +1,6 @@
 {
     "name": "Custom Barcode Pack Scan",
-    "version": "1.2",
+    "version": "1.3",
     "depends": ["stock", "stock_barcode", "hlv_pack_sequence"],
     "author": "Anh Yêu",
     "category": "Warehouse",
@@ -9,6 +9,7 @@
         "data/pack_video_stream_cron.xml",
         "data/pack_video_audit_cron.xml",
         "views/pack_scan_template.xml",
+        "views/pack_video_extra_template.xml",
         "views/menu.xml",
         "views/scan_ui_template.xml",
         "views/res_config_settings_views.xml",

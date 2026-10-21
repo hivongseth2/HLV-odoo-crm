@@ -7,7 +7,9 @@ import time
 
 from odoo import models
 
-from ..controllers._shared import STREAM_DIR, _uploading_meta_path, _bg_upload_to_drive
+from ..controllers._shared import (
+    STREAM_DIR, _uploading_meta_path, _bg_upload_to_drive, video_purpose_upload_kwargs,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -70,7 +72,8 @@ class PackVideoStreamCron(models.AbstractModel):
                 "STALE_UPLOAD auto-finalizing abandoned session id=%s pick=%s "
                 "(idle %.0fs)", upload_id, picking_id, now - mtime,
             )
-            _bg_upload_to_drive(dbname, picking_id, filepath, mimetype)
+            _bg_upload_to_drive(dbname, picking_id, filepath, mimetype,
+                                **video_purpose_upload_kwargs(meta.get('purpose')))
             try:
                 os.remove(claimed_meta_file)
             except Exception:

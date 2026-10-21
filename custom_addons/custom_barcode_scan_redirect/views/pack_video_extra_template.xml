@@ -1,0 +1,68 @@
+<odoo>
+  <!-- Quay video bổ sung cho phiếu PACK đã xong: mở trang là quay, bấm Xong là
+       gửi. Dùng lại nguyên recording.js của màn hình đóng gói, chỉ khác cờ
+       packVideoPurpose để file và ghi chú được đánh dấu "bổ sung". -->
+  <template id="pack_video_extra_template" name="Pack Extra Video">
+    <t t-call="web.layout">
+      <link rel="stylesheet" type="text/css" href="/custom_barcode_scan_redirect/static/src/css/scan_pack.css"/>
+      <link rel="stylesheet" type="text/css" href="/custom_barcode_scan_redirect/static/src/css/pack_video_extra.css"/>
+
+      <div class="oe_structure pack-screen">
+        <div class="pack-topbar">
+          <div class="left">
+            <h2>Quay bổ sung: <span class="hl" t-esc="picking.name"/></h2>
+            <div class="sub">
+              <span t-if="order_name">Đơn <strong class="text-brand" t-esc="order_name"/></span>
+              <span t-if="origin_pick_name"> · Pick <strong t-esc="origin_pick_name"/></span>
+              <span t-if="picking.date_done"> · Đóng xong <t t-esc="picking.date_done" t-options="{'widget': 'datetime'}"/></span>
+            </div>
+          </div>
+          <div class="right">
+            <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>
+            <span t-if="not drive_connected" class="badge badge-warn">Chưa kết nối Drive</span>
+            <a href="/custom_barcode_scan/ui" class="extra-back-link">← Màn quét</a>
+          </div>
+        </div>
+
+        <div class="extra-video-grid">
+          <div class="recording-pane card extra-video-pane">
+            <div class="rec-header">
+              <span id="recStatus" class="rec-dot">●</span>
+              <span id="recText">Đang chuẩn bị camera...</span>
+              <span id="recCountdown" class="rec-countdown" title="Tự dừng sau 25 phút">25:00</span>
+            </div>
+            <video id="recPreview" autoplay="autoplay" muted="muted" playsinline="playsinline"></video>
+            <div class="actions">
+              <button id="extra_video_done_btn" type="button">Xong — gửi video</button>
+            </div>
+          </div>
+
+          <div class="card extra-video-items">
+            <div class="extra-video-items-title">Hàng trong phiếu (chỉ xem)</div>
+            <ul>
+              <li t-foreach="done_moves" t-as="move">
+                <span t-esc="move.product_id.display_name"/>
+                <strong><t t-esc="move.quantity"/> <t t-esc="move.product_uom.name"/></strong>
+              </li>
+            </ul>
+            <p class="rec-hint">Video này được ghi là "quay bổ sung", không thay video lúc đóng gói.</p>
+          </div>
+        </div>
+
+        <script>
+          const pickingId = <t t-esc="picking.id"/>;
+          const packCamGateBlocking = <t t-esc="1 if pack_cam_gate_blocking else 0"/>;
+          const packVideoBitrate = <t t-esc="pack_video_bitrate"/>;
+          const packBrowserRecording = <t t-esc="1 if pack_browser_recording else 0"/>;
+          const packVideoPurpose = "<t t-esc="video_purpose"/>";
+        </script>
+        <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+
+        <script src="/custom_barcode_scan_redirect/static/src/js/toast.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/camera_health.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/recording.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/pack_video_extra.js"></script>
+      </div>
+    </t>
+  </template>
+</odoo>

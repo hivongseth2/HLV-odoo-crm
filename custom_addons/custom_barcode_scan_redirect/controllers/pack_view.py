@@ -5,7 +5,10 @@ from odoo.http import request
 import json
 import logging
 
-from ._shared import get_pack_lines, get_pack_snapshot, move_package_quants_to_loose
+from ._shared import (
+    find_origin_pick, get_pack_lines, get_pack_snapshot, move_package_quants_to_loose,
+    recording_page_flags,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -19,6 +22,15 @@ class PackViewController(http.Controller):
         if not picking.exists():
             _logger.error("❌ Không tìm thấy phiếu pack!")
             return request.not_found()
+
+        # Kiểm trước mark_pack_actual_started: hàm đó ghi người đóng gói lên phiếu,
+        # mở lại một phiếu đã xong mà gọi nó là đổi mất người đóng thật.
+        # Cố ý KHÔNG chuyển phiếu đã xong sang trang quay bổ sung: bấm Back sau
+        # Hoàn tất là rơi vào đây, tự bật camera lúc đó chỉ đẻ ra video rác.
+        # Muốn quay bổ sung thì quét mã phiếu ở màn quét.
+        if picking.state in ('done', 'cancel'):
+            _logger.warning(f"[PACK_VIEW] Blocked: picking {picking.name} is {picking.state}")
+            return request.redirect('/custom_barcode_scan/ui')
 
         try:
             picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
@@ -114,11 +126,6 @@ class PackViewController(http.Controller):
                 headers=[('Content-Type', 'text/html; charset=utf-8')],
             )
 
-        # Block truy cập phiếu đã hoàn tất hoặc đã hủy
-        if picking.state in ('done', 'cancel'):
-            _logger.warning(f"[PACK_VIEW] Blocked: picking {picking.name} is {picking.state}")
-            return request.redirect('/custom_barcode_scan/ui')
-
         picking.lock_pack_against_merge()
 
         # Auto-assign: Nếu phiếu PACK chưa được assign, tự động gọi action_assign
@@ -138,11 +145,7 @@ class PackViewController(http.Controller):
         lines = get_pack_lines(picking)
 
         # Tìm PICK gốc để hiển thị
-        origin_pick = request.env['stock.picking'].sudo().search([
-            ('group_id', '=', picking.group_id.id),
-            ('picking_type_id.sequence_code', 'like', 'PICK'),
-            ('id', '!=', picking.id)
-        ], limit=1)
+        origin_pick = find_origin_pick(request.env, picking)
 
         drive_connected = bool(request.env['ir.config_parameter'].sudo().get_param('gdrive.user_credentials_json'))
 
@@ -194,33 +197,12 @@ class PackViewController(http.Controller):
         ))
         is_repack = has_source_packages and not has_packed_lines
 
-        # Chặn đóng gói khi camera chết là mặc định: đóng gói không có video thì
-        # đằng nào cũng vô giá trị. Đặt tham số này về 'false' để chỉ cảnh báo,
-        # dùng khi một kho nào đó đang trục trặc OBS mà vẫn phải chạy hàng.
-        ICP = request.env['ir.config_parameter'].sudo()
-        gate_param = ICP.get_param('pack_scan.camera_gate_blocking', 'true')
-        pack_cam_gate_blocking = str(gate_param).strip().lower() not in ('0', 'false', 'no', 'off')
-
-        try:
-            # 0 = để trình duyệt tự chọn theo độ phân giải thật sự nhận được.
-            video_bitrate = int(ICP.get_param('pack_scan.video_bitrate', '0'))
-        except (TypeError, ValueError):
-            video_bitrate = 0
-
-        # Công tắc tắt hẳn luồng quay bằng trình duyệt. Cần khi agent ghi hình
-        # phía server dùng chung một webcam USB: DirectShow chỉ cho một ứng dụng
-        # giữ thiết bị, nên hai bên tranh nhau là bên nào cũng hỏng.
-        browser_rec = ICP.get_param('pack_scan.browser_recording', 'true')
-        pack_browser_recording = str(browser_rec).strip().lower() not in ('0', 'false', 'no', 'off')
-
         response = request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
             'origin_pick_name': origin_pick.name if origin_pick else '',
             'drive_connected': drive_connected,
-            'pack_cam_gate_blocking': pack_cam_gate_blocking,
-            'pack_video_bitrate': video_bitrate,
-            'pack_browser_recording': pack_browser_recording,
+            **recording_page_flags(request.env),
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,

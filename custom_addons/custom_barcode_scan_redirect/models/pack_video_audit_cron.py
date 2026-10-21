@@ -7,6 +7,8 @@ from markupsafe import Markup
 
 from odoo import fields, models
 
+from ..controllers._shared import EXTRA_VIDEO_LABEL
+
 _logger = logging.getLogger(__name__)
 
 # Ghi chú video do _bg_upload_to_drive đăng lên chatter luôn chứa chuỗi này.
@@ -44,8 +46,11 @@ class PackVideoAuditCron(models.AbstractModel):
         messages = self.env['mail.message'].sudo().search([
             ('model', '=', 'stock.picking'),
             ('res_id', 'in', pickings.ids),
+            # Video bổ sung quay sau khi phiếu đã xong, không thay được video lúc
+            # đóng gói: phiếu chỉ có video bổ sung vẫn là thiếu bằng chứng.
             '|',
-            ('body', 'ilike', VIDEO_NOTE_MARKER),
+            '&', ('body', 'ilike', VIDEO_NOTE_MARKER),
+            ('body', 'not ilike', EXTRA_VIDEO_LABEL),
             ('body', 'ilike', AUDIT_NOTE_MARKER),
         ])
         already_handled = set(messages.mapped('res_id'))

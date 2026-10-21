@@ -38,10 +38,17 @@ async function startServerUploadSession() {
   const _pickingId = (typeof pickingId !== 'undefined' && pickingId > 0)
     ? pickingId
     : parseInt(window.location.pathname.split('/').filter(Boolean).pop()) || 0;
+  // 'extra' trên trang quay bổ sung, không khai ở màn hình đóng gói thường.
+  const purpose = (typeof packVideoPurpose !== 'undefined') ? packVideoPurpose : '';
   const resp = await fetch('/pack_scan/start_upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    body: JSON.stringify({ picking_id: _pickingId, ext: 'webm', mimetype: 'video/webm' })
+    // Phải bọc trong params: route type='json' chỉ đọc kw từ đó, gửi trần thì
+    // server nhận rỗng (trước đây picking_id ở bước này luôn về 0).
+    body: JSON.stringify({
+      jsonrpc: '2.0', method: 'call',
+      params: { picking_id: _pickingId, ext: 'webm', mimetype: 'video/webm', purpose },
+    })
   }).then(r => r.json());
   const r = resp.result || resp;
   if (!r || !r.upload_id) throw new Error('Không khởi tạo phiên upload được');

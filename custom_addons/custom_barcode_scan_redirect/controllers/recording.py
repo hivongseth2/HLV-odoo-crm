@@ -16,6 +16,7 @@ import threading
 from ._shared import (
     ALLOWED_MIME, MAX_UPLOAD_MB, STREAM_DIR,
     _meta_path, _uploading_meta_path, _file_path, _bg_upload_to_drive,
+    EXTRA_VIDEO_PURPOSE, video_purpose_upload_kwargs,
 )
 
 _logger = logging.getLogger(__name__)
@@ -65,10 +66,22 @@ class RecordingController(http.Controller):
     @http.route('/pack_scan/start_upload', type='json', auth='user', csrf=False)
     def start_upload(self, **kw):
         picking_id = int(kw.get('picking_id') or 0)
-        if picking_id:
-            picking = request.env['stock.picking'].sudo().browse(picking_id).exists()
-            if picking:
-                picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
+        picking = request.env['stock.picking'].sudo().browse(picking_id).exists() if picking_id else None
+        # Chỉ nhận cờ bổ sung khi phiếu thật sự đã xong, để một trình duyệt gửi
+        # cờ sai không làm video đóng gói gốc bị dán nhãn "bổ sung".
+        purpose = kw.get('purpose') or ''
+        if purpose != EXTRA_VIDEO_PURPOSE or not picking or picking.state != 'done':
+            purpose = ''
+        # Quay bổ sung không phải lần đóng gói mới: đừng ghi đè người/giờ đóng gói.
+        # Lỗi ghi số liệu không được chặn việc quay: video là bằng chứng, số liệu
+        # thì pack_view đã ghi lúc mở phiếu rồi.
+        if picking and not purpose:
+            try:
+                with request.env.cr.savepoint():
+                    picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
+            except Exception:
+                _logger.warning("START_UPLOAD không ghi được giờ bắt đầu đóng gói %s",
+                                picking.name, exc_info=True)
         ext = (kw.get('ext') or 'webm').strip('.')
         mimetype = kw.get('mimetype') or 'video/webm'
         upload_id = uuid.uuid4().hex
@@ -79,6 +92,7 @@ class RecordingController(http.Controller):
             'created': int(time.time()),
             'last_index': -1,
             'path': _file_path(upload_id),
+            'purpose': purpose,
         }
         with open(_meta_path(upload_id), 'w', encoding='utf-8') as f:
             json.dump(meta, f)
@@ -175,7 +189,8 @@ class RecordingController(http.Controller):
 
         t = threading.Thread(target=_bg_upload_to_drive,
                             args=(request.db, picking_id, filepath, mimetype),
-                            kwargs={'feed_issue': feed_issue},
+                            kwargs={'feed_issue': feed_issue,
+                                    **video_purpose_upload_kwargs(meta.get('purpose'))},
                             daemon=True)
         t.start()
 
