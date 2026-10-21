@@ -104,6 +104,11 @@ class LoyaltyAppRegisterAPI(http.Controller):
         if Account.find_disabled_account(phone, [phone]):
             return self._json_err("Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ cửa hàng để được hỗ trợ.",
                                   status=403, code="ACCOUNT_DISABLED")
+        # Username = SĐT đã thuộc tài khoản active có SĐT đăng nhập khác (bị đổi số):
+        # tạo mới sẽ trùng username.
+        if Account.search([("username", "=", phone)], limit=1):
+            return self._json_err("Số điện thoại này đang gắn với một tài khoản khác. Vui lòng liên hệ cửa hàng để được hỗ trợ.",
+                                  status=409, code="PHONE_CONFLICT")
 
         # 2. Tìm res.partner sẵn có theo SĐT (không bắt buộc is_company).
         partner = None
