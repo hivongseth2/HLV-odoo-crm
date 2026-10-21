@@ -17,7 +17,11 @@
         <field name="drive_link" widget="url" string="Link Drive"/>
         <field name="last_heartbeat" string="Màn hình báo lần cuối" optional="hide"/>
         <field name="started_at" optional="hide"/>
-        <field name="error_note" optional="hide"/>
+        <!-- Hien MAC DINH: mot dong Hong ma khong noi vi sao thi phai mo tung
+             ban ghi ra moi biet, nen thuc te khong ai doc. Cot nay la thu duy
+             nhat phan biet duoc "camera het suat", "agent chet giua chung" va
+             "chua kip bat dau" - ba nguyen nhan sua khac han nhau. -->
+        <field name="error_note" string="Lý do hỏng" optional="show"/>
       </list>
     </field>
   </record>
