@@ -38,9 +38,7 @@ class VendorFinancePortal(VendorQuotePortal):
         if response:
             return response
         orders = access._vendor_purchase_orders()
-        all_requests = request.env["amis.payment.request"].sudo().search(
-            [("purchase_order_id", "in", orders.ids), ("state", "in", VENDOR_PAYMENT_STATES)])
-        debts = self._vendor_debts(access)
+        all_requests, debts = access._hlv_finance_records(orders)
         # Hai loại phiếu chung một danh sách — cùng các hàm _hlv_is_paid / _hlv_orders / _hlv_vendor_documents.
         entries = sorted([*all_requests, *debts], key=lambda r: (r.payment_date, r.create_date), reverse=True)
         filters = self._read_filters(kw, orders)
@@ -76,12 +74,6 @@ class VendorFinancePortal(VendorQuotePortal):
         if entry._name == "hlv.vendor.debt.payment":
             return f"{access._portal_path()}/{FINANCE}/{DEBT}/{entry.id}"
         return f"{access._portal_path()}/{FINANCE}/{entry.id}"
-
-    @staticmethod
-    def _vendor_debts(access):
-        """Phiếu thanh toán công nợ còn hiệu lực của chính NCC này (đọc bằng sudo)."""
-        return request.env["hlv.vendor.debt.payment"].sudo().search(
-            [("partner_id", "=", access.partner_id.commercial_partner_id.id), ("state", "=", "done")])
 
     def _vendor_debt(self, access, payment_id):
         """Phiếu công nợ NCC được xem: của chính NCC, còn hiệu lực. Không có → None."""
