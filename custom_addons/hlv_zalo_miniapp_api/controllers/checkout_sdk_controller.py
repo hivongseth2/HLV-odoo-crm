@@ -4,7 +4,6 @@ import hashlib
 import json
 import logging
 import re
-import time
 import uuid
 from markupsafe import Markup
 
@@ -108,27 +107,33 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         if not partner.exists():
             raise _CheckoutError("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
-        # 1. Map địa chỉ nhận hàng
-        addr_domain = [('id', '=', int(address_id))] if address_id else [('id', '=', partner.id)]
-        delivery_partner = request.env['res.partner'].sudo().search(addr_domain, limit=1) or partner
+        # 1. Map địa chỉ nhận hàng (chỉ địa chỉ của chính khách)
+        delivery_partner = self._owned_address(partner, address_id)
+        if not delivery_partner:
+            raise _CheckoutError("FORBIDDEN", "Địa chỉ giao hàng không hợp lệ", 403)
 
-        # 2. Chuẩn bị danh sách sản phẩm & tính tổng tiền
+        # 2. Chuẩn bị danh sách sản phẩm & tính tổng tiền.
+        # Giá tính ở server; price_unit client gửi bị bỏ qua. Số lượng <= 0 bị
+        # từ chối: một dòng âm từng kéo tổng tiền (và MAC Zalo) xuống tuỳ ý.
+        pricelist = self._zalo_pricelist()
         order_lines = []
         sdk_items = []
         total_amount = 0
         item_refs = []
 
         for it in items:
-            product_id = int(it.get('product_id'))
-            qty = int(it.get('quantity', 1))
-            price = float(it.get('price_unit', 0))
+            product_id = self._parse_int(it.get('product_id'), 0)
+            qty = self._parse_int(it.get('quantity'), 0)
+            if qty <= 0:
+                raise _CheckoutError("INVALID_INPUT", "Số lượng sản phẩm không hợp lệ")
 
             product = request.env['product.product'].sudo().browse(product_id)
-            if not product.exists():
+            if not product.exists() or not product.active or not product.x_active_zalo:
                 continue
 
+            price = self._zalo_unit_price(product, pricelist)
             if price <= 0:
-                price = product.x_zalo_price or product.lst_price or product.list_price
+                raise _CheckoutError("NO_PRICE", f"Sản phẩm '{product.display_name}' chưa có giá, vui lòng liên hệ")
 
             line_subtotal = round(price * qty)
             total_amount += line_subtotal
@@ -230,8 +235,6 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             'method_str': method_str,
             'mac': mac_str,
         }
-
-        return mac
 
     @http.route('/api/v1/zalo_checkout/prepare', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def prepare_checkout_order(self, **post):
@@ -355,12 +358,11 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             for it in items:
                 product_id = int(it.get('product_id'))
                 qty = it.get('quantity', 1)
+                # Giá đã được server tính và lưu ở bước prepare (cùng số tiền đã ký MAC).
                 price_unit = float(it.get('price_unit', 0))
                 product = request.env['product.product'].sudo().browse(product_id)
-                if not product.exists():
+                if not product.exists() or price_unit <= 0:
                     continue
-                if price_unit <= 0:
-                    price_unit = product.x_zalo_price or product.lst_price or product.list_price
                 order_lines.append((0, 0, {
                     'product_id': product.id,
                     'product_uom_qty': qty,
@@ -372,20 +374,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             if not order_lines:
                 return self._response_error("INVALID_INPUT", "Không có sản phẩm hợp lệ để tạo đơn")
 
-            delivery_partner = prepare.partner_id
-            if prepare.address_id:
-                addr = request.env['res.partner'].sudo().browse(int(prepare.address_id))
-                if addr.exists():
-                    delivery_partner = addr
-
-            # Gán pricelist như flow order_api để tránh thiếu field bắt buộc khi tạo sale.order
-            pricelist_id = False
-            try:
-                pricelist = request.env["product.pricelist"].sudo().search([("active", "=", True)], limit=1, order="id")
-                if pricelist:
-                    pricelist_id = pricelist.id
-            except Exception:
-                pass
+            delivery_partner = self._owned_address(prepare.partner_id, prepare.address_id) or prepare.partner_id
+            pricelist = self._zalo_pricelist()
 
             order_vals = {
                 'name': prepare.order_name or request.env['ir.sequence'].sudo().next_by_code('sale.order'),
@@ -397,8 +387,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 'x_zalo_payment_status': 'pending',
                 'x_zalo_order_id': zalo_order_id,
             }
-            if pricelist_id:
-                order_vals['pricelist_id'] = pricelist_id
+            if pricelist:
+                order_vals['pricelist_id'] = pricelist.id
 
             sale_order = request.env['sale.order'].sudo().create(order_vals)
 
