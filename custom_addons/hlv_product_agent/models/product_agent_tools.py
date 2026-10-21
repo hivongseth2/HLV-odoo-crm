@@ -11,6 +11,7 @@ from odoo import fields, models
 from odoo.addons.misa_fetch_po_button.utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
 from ..services import combo_change_summary, missing_from_proposal, odoo_combo_text
+from ..services.search_ranking import summarize_search
 
 _logger = logging.getLogger(__name__)
 
@@ -18,6 +19,11 @@ _logger = logging.getLogger(__name__)
 FALLBACK_CATEGORY_ID = 2
 # Hàng vừa tạo trong khoảng này được coi là "vừa có" dù MISA chưa trả trong tìm kiếm.
 RECENT_CREATION_MINUTES = 30
+# Tìm hàng: xin MISA nhiều để tự xếp lại (MISA xếp theo ngày sửa, combo chen hết trang
+# đầu), nhưng chỉ đưa Claude số vừa đọc.
+SEARCH_FETCH_LIMIT = 50
+SEARCH_SHOWN = 12
+SEARCH_ODOO_LIMIT = 8
 # Chặn combo phình bất thường (Claude lặp dòng, dán nhầm cả bảng giá).
 MAX_COMBO_COMPONENTS = 50
 
@@ -61,25 +67,52 @@ class HlvProductAgentTools(models.AbstractModel):
             return {'status': 'error', 'message': "Cần truyền name hoặc code để tìm."}
         try:
             products = self._misa_utils().search_product_by_name(
-                name=name or None, code=code or None, limit=5,
+                name=name or None, code=code or None, limit=SEARCH_FETCH_LIMIT,
             )
         except Exception as error:
             _logger.exception("PRODUCT_AGENT MISA search error")
             return {'status': 'error', 'message': str(error)}
+        odoo_matches = self._search_odoo_products(code or name)
 
-        if not products:
+        if not products and not odoo_matches:
             return {
                 'status': 'not_found',
-                'message': "Không tìm thấy trong MISA. MISA tìm theo kiểu chứa nguyên cụm, "
+                'message': "Không tìm thấy trong MISA lẫn Odoo. MISA tìm theo kiểu chứa nguyên cụm, "
                            "nên từ khóa ngắn hơn (chỉ mã model, hoặc 2-3 từ chính) có thể ra kết quả.",
             }
+        summary = summarize_search(products, code, name, SEARCH_SHOWN, SEARCH_FETCH_LIMIT)
+        instruction = ("Kết quả đã xếp: hàng lẻ khớp mã lên đầu, combo (kind=combo) và hàng ngưng "
+                       "(kind=ngung) xuống cuối. Combo CHỨA model không phải là hàng lẻ của model đó. "
+                       "So sánh kỹ loại, hãng và thông số cốt lõi — kể cả phần mô tả — trước khi kết luận.")
+        if summary['truncated']:
+            instruction += (" CÒN KẾT QUẢ CHƯA HIỆN (đếm: %s): CHƯA được kết luận 'không trùng' — tìm lại "
+                            "bằng từ khoá cụ thể hơn (mã đầy đủ kèm tiền tố dòng máy, hoặc tên hàng lẻ)."
+                            % summary['counts'])
+        if odoo_matches:
+            instruction += (" Odoo cũng có sản phẩm khớp (odoo_matches) — mã Odoo trùng mã MISA, có ở "
+                            "Odoo là hàng ĐÃ CÓ, phải tìm lại trên MISA đúng mã đó trước khi đề xuất tạo.")
         return {
             'status': 'found',
-            'count': len(products),
-            'data': products,
-            'instruction': "So sánh kỹ loại, hãng và thông số cốt lõi — kể cả phần mô tả — "
-                           "trước khi kết luận trùng.",
+            'count': summary['total_fetched'],
+            'counts': summary['counts'],
+            'truncated': summary['truncated'],
+            'data': summary['data'],
+            'odoo_matches': odoo_matches,
+            'instruction': instruction,
         }
+
+    def _search_odoo_products(self, query):
+        """Sản phẩm Odoo (đang dùng) có mã / tên chứa từ khoá: ``[{'code', 'name'}]``.
+
+        Nguồn thứ hai cho quét trùng: mã Odoo đặt theo mã MISA, và Odoo tìm không bị combo
+        chen trang đầu như MISA. Từ khoá dưới 3 ký tự thì bỏ (khớp quá nhiều, vô nghĩa).
+        """
+        query = (query or '').strip()
+        if len(query) < 3:
+            return []
+        products = self.env['product.product'].sudo().search(
+            ['|', ('default_code', 'ilike', query), ('name', 'ilike', query)], limit=SEARCH_ODOO_LIMIT)
+        return [{'code': product.default_code or '', 'name': product.name} for product in products]
 
     def _get_category_info(self, session, args):
         cat_id = args.get('category_id')
