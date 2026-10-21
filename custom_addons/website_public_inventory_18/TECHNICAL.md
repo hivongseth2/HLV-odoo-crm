@@ -21,7 +21,7 @@ website_public_inventory_18/
 |---|---|
 | Số dự báo + Nhập/Xuất ĐMH, ĐBH, chuyển kho (CK) | `controllers/main.py` `forecast_details` |
 | Dòng theo kho khi mở rộng sản phẩm (tồn, giữ, sẵn sàng, dự báo, chuyển kho `qty_transfer_in/out`) | `controllers/main.py` `product_breakdown` — lấy số CK từ `forecast_details`, không tự tính lại |
-| Render bảng kho (desktop + mobile), cột "Chuyển kho", dòng tóm tắt dưới Dự báo (`NK/BH/CK` từ `qty_po/qty_so/qty_transfer_*`) | `views/templates.xml` JS: `buildTransferCell`, `buildHeldNote`, `buildForecastNote` |
+| Render bảng kho (desktop + mobile), cột "Chuyển kho", dòng tóm tắt dưới Dự báo (`MH/BH/CK` từ `qty_po/qty_so/qty_transfer_*`) | `views/templates.xml` JS: `buildTransferCell`, `buildHeldNote`, `buildForecastNote` |
 
 ## 4. Luồng chính
 1. Bấm mở rộng sản phẩm → POST `/search_stock/product_breakdown` → mỗi kho gọi `forecast_details` → trả rows.
