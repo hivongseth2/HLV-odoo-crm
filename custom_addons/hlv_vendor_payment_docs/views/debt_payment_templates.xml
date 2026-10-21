@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang /unc-ncc/cong-no của kế toán (controllers/debt_payment_page.py): một khoản trả công nợ cho nhiều đơn mua
+         của một NCC, đã làm trên MISA — Odoo chỉ ghi nhận. Khung trang, tải chứng từ dùng chung với đề nghị chi
+         (accountant_templates.xml). Không dùng "%s%%" trong biểu thức (Odoo nạp XML đổi "%%" thành "%"). -->
+
+    <template id="accountant_debt_list" name="Chứng từ chi NCC - thanh toán công nợ: danh sách">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <div class="vq-wrap">
+                <div class="vq-page-head">
+                    <h1>Thanh toán công nợ</h1>
+                    <a class="vq-btn vq-btn-primary" t-att-href="'%s/moi' % debt_route">Trả công nợ NCC</a>
+                </div>
+                <form method="get" class="vq-history-filter" t-att-action="debt_route">
+                    <label class="vq-filter-field vq-filter-search">
+                        <span class="vq-label">Tìm</span>
+                        <input type="search" name="q" class="vq-input" t-att-value="filters['q']" placeholder="Số phiếu, NCC hoặc số đơn mua"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Trạng thái</span>
+                        <select name="state" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option t-foreach="state_options" t-as="opt" t-att-value="opt[0]"
+                                    t-att-selected="opt[0] == filters['state']" t-esc="opt[1]"/>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Chứng từ</span>
+                        <select name="docs" class="vq-input">
+                            <option value="">Tất cả</option>
+                            <option value="chua" t-att-selected="filters['docs'] == 'chua'">Chưa có chứng từ</option>
+                            <option value="co" t-att-selected="filters['docs'] == 'co'">Đã có chứng từ</option>
+                        </select>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Từ ngày</span>
+                        <input type="date" name="date_from" class="vq-input" t-att-value="filters['date_from'] and filters['date_from'].isoformat() or ''"/>
+                    </label>
+                    <label class="vq-filter-field">
+                        <span class="vq-label">Đến ngày</span>
+                        <input type="date" name="date_to" class="vq-input" t-att-value="filters['date_to'] and filters['date_to'].isoformat() or ''"/>
+                    </label>
+                    <div class="vq-filter-actions">
+                        <button type="submit" class="vq-btn vq-btn-primary">Lọc</button>
+                        <a class="vq-btn vq-btn-secondary" t-att-href="debt_route">Xoá lọc</a>
+                    </div>
+                </form>
+
+                <p t-if="not payments" class="vq-empty">Chưa có phiếu thanh toán công nợ nào khớp bộ lọc.</p>
+                <t t-else="">
+                    <div class="vq-list-scroll">
+                    <table class="vq-table vq-sheet">
+                        <thead>
+                            <tr>
+                                <th>Số phiếu</th>
+                                <th>NCC</th>
+                                <th>Đơn mua được trả</th>
+                                <th>Ngày chi</th>
+                                <th class="vq-num">Số tiền</th>
+                                <th>Trạng thái</th>
+                                <th class="vq-num">Chứng từ</th>
+                                <th><span class="vq-sr-only">Mở</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="payments" t-as="debt">
+                                <td data-label="Số phiếu" class="vq-nowrap"><a t-att-href="'%s/%s' % (debt_route, debt.id)" t-esc="debt.name"/></td>
+                                <td data-label="NCC" t-esc="debt.partner_id.display_name"/>
+                                <td data-label="Đơn mua được trả" t-esc="', '.join(debt.line_ids.purchase_order_id.mapped('name'))"/>
+                                <td data-label="Ngày chi" class="vq-nowrap" t-esc="fdate(debt.payment_date)"/>
+                                <td class="vq-num" data-label="Số tiền" t-esc="fmt(round(debt.amount))"/>
+                                <td data-label="Trạng thái"><t t-call="hlv_vendor_payment_docs.accountant_debt_state"/></td>
+                                <td class="vq-num" data-label="Chứng từ" t-esc="len(debt.hlv_document_ids) or '—'"/>
+                                <td class="vq-sheet-action">
+                                    <a t-attf-class="vq-btn vq-btn-sm #{'vq-btn-primary' if not debt.hlv_document_ids else 'vq-btn-secondary'}"
+                                       t-att-href="'%s/%s' % (debt_route, debt.id)" t-esc="'Tải chứng từ' if not debt.hlv_document_ids else 'Xem'"/>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <nav t-if="pager['page_count'] &gt; 1" class="vq-pager">
+                        <a t-if="pager['page'] &gt; 1" t-att-href="list_url(page=pager['page'] - 1)" class="vq-btn vq-btn-secondary">Trang trước</a>
+                        <span class="vq-muted">Trang <t t-esc="pager['page']"/> / <t t-esc="pager['page_count']"/></span>
+                        <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="list_url(page=pager['page'] + 1)" class="vq-btn vq-btn-secondary">Trang sau</a>
+                    </nav>
+                </t>
+            </div>
+        </t>
+    </template>
+
+    <!-- Trạng thái phiếu công nợ. Biến: debt. -->
+    <template id="accountant_debt_state" name="Chứng từ chi NCC - trạng thái phiếu công nợ">
+        <span t-attf-class="vq-status #{'unc-paid' if debt.state == 'done' else 'vq-pay-unpaid'}"
+              t-esc="dict(debt._fields['state'].selection).get(debt.state)"/>
+    </template>
+
+    <!-- Bước 1: chọn NCC. -->
+    <template id="accountant_debt_pick_vendor" name="Chứng từ chi NCC - trả công nợ: chọn NCC">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <div class="vq-wrap">
+                <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> / <span>Trả công nợ NCC</span></nav>
+                <div class="vq-page-head"><h1>Trả công nợ — chọn nhà cung cấp</h1></div>
+                <form method="get" class="vq-history-filter" t-att-action="'%s/moi' % debt_route">
+                    <label class="vq-filter-field vq-filter-search">
+                        <span class="vq-label">Nhà cung cấp</span>
+                        <input type="search" name="ncc" class="vq-input" t-att-value="ncc" autofocus="autofocus"
+                               placeholder="Tên, mã số thuế hoặc mã NCC"/>
+                    </label>
+                    <div class="vq-filter-actions">
+                        <button type="submit" class="vq-btn vq-btn-primary">Tìm</button>
+                    </div>
+                </form>
+                <p t-if="not vendors" class="vq-empty">Không có NCC nào có đơn mua đã xác nhận khớp chữ tìm.</p>
+                <div t-else="" class="vq-list-scroll">
+                    <table class="vq-table vq-sheet">
+                        <thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th><span class="vq-sr-only">Chọn</span></th></tr></thead>
+                        <tbody>
+                            <tr t-foreach="vendors" t-as="vendor">
+                                <td data-label="Nhà cung cấp"><a t-att-href="'%s/moi?partner=%s' % (debt_route, vendor.id)" t-esc="vendor.name"/></td>
+                                <td data-label="Mã số thuế" t-esc="vendor.vat or '—'"/>
+                                <td class="vq-sheet-action">
+                                    <a class="vq-btn vq-btn-sm vq-btn-primary" t-att-href="'%s/moi?partner=%s' % (debt_route, vendor.id)">Chọn</a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Bước 2: tick các đơn còn nợ, sửa số trả vào từng đơn, nhập phiếu + UNC. js/debt_allocation.js cộng tổng và hỏi
+         xác nhận cảnh báo trước khi gửi; không có JS thì server vẽ lại form kèm cảnh báo + nút "Vẫn lưu". -->
+    <template id="accountant_debt_new" name="Chứng từ chi NCC - trả công nợ: nhập phiếu">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <div class="vq-wrap">
+                <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> /
+                    <a t-att-href="'%s/moi' % debt_route">Chọn NCC</a> / <span t-esc="vendor.name"/></nav>
+                <div class="vq-page-head">
+                    <h1>Trả công nợ <t t-esc="vendor.name"/></h1>
+                </div>
+                <div data-debt-issues="1">
+                    <div t-if="errors" class="vq-alert vq-alert-error">
+                        <b>Chưa lưu được:</b>
+                        <ul class="debt-issues"><li t-foreach="errors" t-as="msg" t-esc="msg"/></ul>
+                    </div>
+                    <div t-if="warnings and not errors" class="vq-alert">
+                        <b>Cần xác nhận trước khi lưu:</b>
+                        <ul class="debt-issues"><li t-foreach="warnings" t-as="msg" t-esc="msg"/></ul>
+                    </div>
+                </div>
+                <div t-if="files_dropped" class="vq-alert">File chứng từ đã chọn chưa được lưu — chọn lại file trước khi bấm lưu.</div>
+
+                <p t-if="not orders" class="vq-empty">NCC này không còn đơn mua đã xác nhận nào đang nợ.</p>
+                <form t-else="" method="post" enctype="multipart/form-data" class="debt-form" data-debt-form="1"
+                      t-att-action="'%s/moi' % debt_route" t-att-data-check-url="'%s/kiem-tra' % debt_route">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="hidden" name="partner" t-att-value="vendor.id"/>
+
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Đơn còn nợ <span class="vq-muted">tick đơn được trả, sửa số trả nếu chỉ trả một phần</span></h2>
+                        <div class="vq-list-scroll">
+                        <table class="vq-table vq-sheet debt-orders">
+                            <thead>
+                                <tr>
+                                    <th><span class="vq-sr-only">Chọn</span></th>
+                                    <th>Đơn mua</th>
+                                    <th>Ngày xác nhận</th>
+                                    <th class="vq-num">Giá trị đơn</th>
+                                    <th class="vq-num">Đã chi</th>
+                                    <th class="vq-num">Còn nợ</th>
+                                    <th class="vq-num">Trả vào đơn</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="orders" t-as="row" data-debt-row="1">
+                                    <t t-set="order" t-value="row['order']"/>
+                                    <td><input type="checkbox" name="order_ids" t-att-value="order.id" data-debt-pick="1"
+                                               t-att-checked="order.id in entry['selected']" t-att-aria-label="'Trả đơn ' + order.name"/></td>
+                                    <td data-label="Đơn mua">
+                                        <a t-att-href="'%s/don-mua/%s' % (route, order.id)" target="_blank" t-esc="order.name"/>
+                                        <span t-if="row['processing']" class="debt-flag"
+                                              t-att-title="'Đề nghị chi đang chờ duyệt: ' + fmt(round(row['processing']))">có ĐNC chờ duyệt</span>
+                                    </td>
+                                    <td data-label="Ngày xác nhận" class="vq-nowrap" t-esc="fdate(order.date_approve or order.date_order)"/>
+                                    <td class="vq-num" data-label="Giá trị đơn" t-esc="fmt(round(order.amount_total))"/>
+                                    <td class="vq-num" data-label="Đã chi" t-esc="fmt(round(row['paid'])) if row['paid'] else '—'"/>
+                                    <td class="vq-num" data-label="Còn nợ" t-esc="fmt(round(row['open']))"/>
+                                    <td class="vq-num" data-label="Trả vào đơn">
+                                        <input type="text" inputmode="decimal" class="vq-input debt-alloc" data-debt-alloc="1"
+                                               t-att-name="'alloc_%s' % order.id"
+                                               t-att-value="entry['alloc'].get(order.id) or fmt(round(row['open']))"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr><td colspan="6" class="vq-num"><b>Tổng trả vào các đơn đã chọn</b></td>
+                                    <td class="vq-num"><b data-debt-total="1">—</b></td></tr>
+                            </tfoot>
+                        </table>
+                        </div>
+                    </section>
+
+                    <div class="unc-grid debt-grid">
+                        <section class="unc-card">
+                            <h2 class="unc-card-title">Phiếu chi</h2>
+                            <div class="debt-fields">
+                                <label>
+                                    <span class="vq-label">Số tiền đã chi <span class="vq-muted">(sau VAT, như trên UNC)</span></span>
+                                    <input type="text" inputmode="decimal" name="amount" class="vq-input debt-amount" data-debt-amount="1"
+                                           required="required" t-att-value="entry['amount_text']" placeholder="VD: 125.000.000"/>
+                                </label>
+                                <label>
+                                    <span class="vq-label">Ngày chi</span>
+                                    <input type="date" name="payment_date" class="vq-input" required="required"
+                                           t-att-value="entry['payment_date'].isoformat()"/>
+                                </label>
+                                <label>
+                                    <span class="vq-label">Hình thức</span>
+                                    <select name="payment_method" class="vq-input">
+                                        <option value="bank" t-att-selected="entry['payment_method'] == 'bank'">Chuyển khoản</option>
+                                        <option value="cash" t-att-selected="entry['payment_method'] == 'cash'">Tiền mặt</option>
+                                    </select>
+                                </label>
+                                <label class="debt-wide">
+                                    <span class="vq-label">Diễn giải <span class="vq-muted">(NCC thấy — để trống thì tự ghi các đơn được trả)</span></span>
+                                    <textarea name="memo" rows="2" class="vq-input" maxlength="2000" t-esc="entry['memo']"/>
+                                </label>
+                            </div>
+                            <p class="debt-summary" data-debt-summary="1" aria-live="polite"/>
+                        </section>
+
+                        <section class="unc-card">
+                            <h2 class="unc-card-title">Chứng từ chi (UNC) <span class="vq-muted">tuỳ chọn — tải sau cũng được</span></h2>
+                            <div class="unc-upload">
+                                <label class="unc-drop">
+                                    <input type="file" name="files" multiple="multiple" t-att-accept="accept"/>
+                                    <span class="unc-drop-title">Kéo thả file vào đây hoặc bấm để chọn</span>
+                                    <span class="unc-drop-hint">Ảnh, PDF, Word · chọn được nhiều file · tối đa <t t-esc="max_mb"/>MB mỗi file</span>
+                                </label>
+                                <ul class="unc-picked" data-picked="1"/>
+                                <label>
+                                    <span class="vq-label">Ghi chú chứng từ <span class="vq-muted">(tuỳ chọn — NCC thấy)</span></span>
+                                    <input type="text" name="note" class="vq-input" maxlength="255" t-att-value="entry['note']"/>
+                                </label>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="debt-actions">
+                        <button type="submit" class="vq-btn vq-btn-primary">Lưu phiếu trả công nợ</button>
+                        <button t-if="warnings and not errors" type="submit" name="confirmed" value="1" class="vq-btn vq-btn-secondary">
+                            Vẫn lưu (đã xem cảnh báo)</button>
+                        <a class="vq-btn vq-btn-secondary" t-att-href="debt_route">Huỷ</a>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <template id="accountant_debt_detail" name="Chứng từ chi NCC - một phiếu thanh toán công nợ">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <t t-set="debt" t-value="payment"/>
+            <div class="vq-wrap">
+                <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> / <span t-esc="payment.name"/></nav>
+                <div class="vq-page-head">
+                    <h1 t-esc="payment.name"/>
+                    <t t-call="hlv_vendor_payment_docs.accountant_debt_state"/>
+                </div>
+                <div t-if="saved" class="vq-alert vq-alert-ok" t-esc="saved"/>
+                <div t-if="error" class="vq-alert vq-alert-error" t-esc="error"/>
+
+                <div class="unc-grid">
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Thanh toán công nợ</h2>
+                        <p class="unc-amount"><t t-esc="fmt(round(payment.amount))"/> <small t-esc="payment.currency_id.name"/></p>
+                        <dl class="unc-info">
+                            <dt>Nhà cung cấp</dt><dd t-esc="payment.partner_id.display_name"/>
+                            <dt>Ngày chi</dt><dd t-esc="fdate(payment.payment_date)"/>
+                            <dt>Hình thức</dt><dd t-esc="dict(payment._fields['payment_method'].selection).get(payment.payment_method)"/>
+                            <t t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></t>
+                            <dt>Người ghi nhận</dt><dd><t t-esc="payment.create_uid.name"/><span class="vq-muted" t-esc="fdate(payment.create_date)"/></dd>
+                        </dl>
+                        <table class="vq-table debt-lines">
+                            <thead><tr><th>Đơn mua được trả</th><th class="vq-num">Số tiền</th></tr></thead>
+                            <tbody>
+                                <tr t-foreach="payment.line_ids" t-as="line">
+                                    <td><a t-att-href="'%s/don-mua/%s' % (route, line.purchase_order_id.id)" target="_blank"
+                                           t-esc="line.purchase_order_id.name"/></td>
+                                    <td class="vq-num" t-esc="fmt(round(line.amount))"/>
+                                </tr>
+                            </tbody>
+                            <tfoot t-if="round(payment.unallocated_amount)">
+                                <tr><td>Chưa trả vào đơn nào (trả trước)</td><td class="vq-num" t-esc="fmt(round(payment.unallocated_amount))"/></tr>
+                            </tfoot>
+                        </table>
+                        <form t-if="payment.state == 'done'" method="post" class="debt-cancel" t-att-action="'%s/%s/huy' % (debt_route, payment.id)">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <button type="submit" class="vq-btn vq-btn-secondary"
+                                    onclick="return confirm('Huỷ phiếu này? Số tiền sẽ không còn tính vào đã chi của các đơn. Muốn sửa thì huỷ rồi tạo phiếu mới.');">
+                                Huỷ phiếu</button>
+                        </form>
+                    </section>
+
+                    <t t-call="hlv_vendor_payment_docs.accountant_documents">
+                        <t t-set="upload_url" t-value="'%s/%s/tai-len' % (debt_route, payment.id)"/>
+                        <t t-set="documents" t-value="payment.hlv_document_ids"/>
+                    </t>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>
