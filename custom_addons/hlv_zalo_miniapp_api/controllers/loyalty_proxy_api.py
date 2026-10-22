@@ -130,6 +130,9 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 'validity_days': p.validity_days,
                 'gift_product_name': p.gift_product_id.name if p.gift_product_id else '',
                 'gift_qty': p.gift_qty,
+                # Để app khoá nút "Đổi quà" ngay khi suất cuối vừa được đổi, không
+                # phải chờ lần bấm sau mới bị server từ chối. None = không giới hạn.
+                'remaining_quota': max(p.quota - p.redeemed_count, 0) if p.quota else None,
             } for p in packages]
             return self._response_success(data)
         except Exception as e:
