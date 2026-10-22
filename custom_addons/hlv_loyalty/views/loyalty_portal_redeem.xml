@@ -117,7 +117,7 @@
                                     <div class="sr-pkg-desc">
                                         <t t-if="pkg.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
                                         <t t-elif="pkg.reward_type == 'gift'">
-                                            Quà tặng kèm<t t-if="pkg.gift_product_id">: <t t-out="pkg.gift_product_id.name"/></t>
+                                            Quà tặng<t t-if="pkg.gift_product_id">: <t t-out="pkg.gift_product_id.name"/></t>
                                         </t>
                                         <t t-elif="pkg.discount_type == 'fixed'">
                                             Voucher giảm <strong><t t-out="'{:,.0f}'.format(pkg.discount_value)"/>đ</strong>

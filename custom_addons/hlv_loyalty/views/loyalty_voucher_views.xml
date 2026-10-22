@@ -43,7 +43,7 @@
                                     Miễn phí vận chuyển
                                 </t>
                                 <t t-elif="record.reward_type.raw_value == 'gift'">
-                                    Quà tặng kèm
+                                    Quà tặng
                                 </t>
                                 <t t-elif="record.discount_type.raw_value == 'fixed'">
                                     <field name="discount_value"/> đ

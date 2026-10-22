@@ -11,17 +11,18 @@
                 <label for="loyalty_voucher_code" string="Mã Voucher"/>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <field name="loyalty_voucher_code" placeholder="Nhập mã Voucher..."
-                           class="oe_inline" invisible="loyalty_voucher_id"/>
+                           class="oe_inline"
+                           invisible="loyalty_voucher_id or state not in ['draft', 'sent']"/>
                     <field name="loyalty_voucher_id" readonly="1" class="oe_inline"
                            invisible="not loyalty_voucher_id" options="{'no_open': False}"/>
                     <button name="action_apply_loyalty_voucher" type="object"
                             string="Áp dụng" class="btn btn-primary"
                             icon="fa-check"
-                            invisible="loyalty_voucher_id"/>
+                            invisible="loyalty_voucher_id or state not in ['draft', 'sent']"/>
                     <button name="action_remove_loyalty_voucher" type="object"
                             string="Xóa Voucher" class="btn btn-secondary"
                             icon="fa-times"
-                            invisible="not loyalty_voucher_id"
+                            invisible="not loyalty_voucher_id or state not in ['draft', 'sent']"
                             confirm="Bạn có chắc muốn xóa Voucher khỏi đơn hàng?"/>
                 </div>
                 <div invisible="state not in ['sale', 'done']">

@@ -13,6 +13,7 @@ from . import payment_request_wizard
 from . import stock_picking_sync
 from . import res_partner_sync
 from . import amis_sync_job
+from . import loyalty_gift_sync
 from . import amis_catalog_sync_job
 from . import sale_order_sync
 from . import sale_order_webhook

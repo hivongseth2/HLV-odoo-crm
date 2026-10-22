@@ -35,6 +35,7 @@ class AmisSyncJob(models.Model):
         ('incoming', 'Nhập kho (InwardVoucher)'),
         ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
         ('sa_invoice', 'Hóa đơn bán hàng (SAInvoice)'),
+        ('loyalty_gift', 'Đơn quà tặng Loyalty (SAVoucher khuyến mại)'),
     ], string='Loại đồng bộ', required=True)
     status = fields.Selection([
         ('pending', 'Chờ xử lý'),
@@ -145,6 +146,8 @@ class AmisSyncJob(models.Model):
                 pick._sync_incoming_po_to_misa()
             elif self.direction == 'outgoing':
                 pick._sync_outgoing_so_to_misa()
+            elif self.direction == 'loyalty_gift':
+                pick._sync_loyalty_gift_to_misa()
             elif self.direction == 'sa_invoice':
                 if so:
                     so._sync_sa_invoice_to_misa()
