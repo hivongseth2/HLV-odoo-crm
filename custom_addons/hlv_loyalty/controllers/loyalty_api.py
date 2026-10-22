@@ -778,6 +778,7 @@ class LoyaltyExternalAPI(http.Controller):
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
                 'estimated_discount': discount,
+                'reward_type': voucher.reward_type,
                 'date_expiry': _vn_datetime(voucher.date_expiry),
                 'partner_id': voucher.partner_id.id,
                 'partner_name': voucher.partner_id.name,

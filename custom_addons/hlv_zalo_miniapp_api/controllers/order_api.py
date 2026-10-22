@@ -8,6 +8,7 @@ from odoo import _, fields, http
 from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
+from .voucher_apply import voucher_apply_error
 
 _logger = logging.getLogger(__name__)
 
@@ -34,14 +35,20 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         account_id = self._auth_account_id()
         return bool(account_id) and order.x_zalo_portal_account_id.id == account_id
 
-    def _order_to_dict(self, order):
+    @staticmethod
+    def _order_to_dict(order):
         lines = []
         voucher_discount_total = 0.0
         for line in order.order_line:
             is_voucher_line = False
             code = (line.product_id.default_code or "").upper() if line.product_id else ""
             name = (line.name or "").lower()
-            if code in ("LOYALTY_VOUCHER_DISCOUNT", "VOUCHER_DISCOUNT") or "voucher" in name or "giảm giá" in name:
+            # Món quà tặng 0đ tên "Quà tặng từ Voucher [...]" — là hàng thật, phải hiện
+            # ra chứ không cộng vào giảm giá như các dòng có chữ "voucher" khác.
+            is_gift_line = bool(getattr(line, "is_loyalty_reward_line", False)) and line.price_unit == 0
+            if is_gift_line:
+                pass
+            elif code in ("LOYALTY_VOUCHER_DISCOUNT", "VOUCHER_DISCOUNT") or "voucher" in name or "giảm giá" in name:
                 is_voucher_line = True
             elif line.price_subtotal < 0 or line.price_unit < 0:
                 is_voucher_line = True
@@ -58,6 +65,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     "price_unit": line.price_unit,
                     "subtotal": line.price_subtotal,
                     "discount": line.discount or 0.0,
+                    "is_gift": is_gift_line,
                 }
                 if hasattr(line, "loyalty_discount_pct"):
                     line_dict["loyalty_discount_pct"] = getattr(line, "loyalty_discount_pct", 0.0) or 0.0
@@ -353,42 +361,20 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             SaleOrder = request.env["sale.order"].sudo()
             order = SaleOrder.create(order_vals)
 
-            # Tính tổng tiền cho voucher
+            # Áp voucher trước khi xác nhận. Không áp được thì bỏ đơn và báo lỗi về
+            # app, để khách không thấy "đã áp dụng mã" mà đơn không có ưu đãi.
             voucher_info = None
             if voucher_code:
                 order_total = sum(l.price_subtotal for l in order.order_line)
                 voucher_result = self._verify_voucher_code(voucher_code, contact_id, order_total)
-                if not voucher_result["valid"]:
+                voucher_error = (
+                    voucher_result.get("error") if not voucher_result["valid"]
+                    else voucher_apply_error(order, voucher_code)
+                )
+                if voucher_error:
                     order.unlink()
-                    return self._response_error("VOUCHER_ERROR", voucher_result["error"], 400)
-                voucher_applied = False
-                try:
-                    order.loyalty_voucher_code = voucher_code
-                    if hasattr(order, 'action_apply_loyalty_voucher'):
-                        order.action_apply_loyalty_voucher()
-                        voucher_applied = True
-                except Exception as ve:
-                    _logger.warning("Voucher apply error on %s: %s", order.name, ve)
-
-                if not voucher_applied:
-                    try:
-                        disc_amt = voucher_info.get("estimated_discount", 0)
-                        if disc_amt > 0:
-                            discount_product = order._get_voucher_discount_product() if hasattr(order, '_get_voucher_discount_product') else False
-                            if not discount_product:
-                                discount_product = request.env['product.product'].sudo().search([('default_code', '=', 'LOYALTY_VOUCHER_DISCOUNT')], limit=1)
-                            if discount_product:
-                                request.env['sale.order.line'].sudo().create({
-                                    'order_id': order.id,
-                                    'product_id': discount_product.id,
-                                    'name': f"Giảm giá Voucher [{voucher_code}]",
-                                    'product_uom_qty': 1,
-                                    'price_unit': -disc_amt,
-                                    'tax_id': [(5, 0, 0)],
-                                    'is_loyalty_reward_line': True,
-                                })
-                    except Exception as fe:
-                        _logger.warning("Fallback discount line error on %s: %s", order.name, fe)
+                    return self._response_error("VOUCHER_ERROR", voucher_error, 400)
+                voucher_info = voucher_result
 
             # Luôn confirm đơn hàng ngay sau khi tạo (COD: user đã xác nhận, ZaloPay: đã thanh toán thành công)
             try:

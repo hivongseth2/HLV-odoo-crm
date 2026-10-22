@@ -11,6 +11,7 @@ from odoo import http, fields
 from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
+from .voucher_apply import voucher_apply_error, voucher_dry_run_error
 
 _logger = logging.getLogger(__name__)
 
@@ -181,12 +182,20 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         voucher_code = (body.get('voucher_code') or '').strip()
         discount_amount = 0.0
         if voucher_code:
+            # Bước này là lần cuối còn từ chối được: sau createOrder khách đã trả tiền.
+            # Trước đây mã lỗi bị bỏ lặng lẽ và khách trả đủ tiền mà không biết.
             voucher_res = self._verify_voucher_code(voucher_code, partner.id, total_amount)
-            if voucher_res.get('valid'):
-                discount_amount = float(voucher_res.get('estimated_discount', 0))
-            else:
-                _logger.warning("Prepare checkout invalid voucher %s: %s", voucher_code, voucher_res.get('error'))
-                voucher_code = ''
+            if not voucher_res.get('valid'):
+                raise _CheckoutError("VOUCHER_ERROR", voucher_res.get('error') or 'Mã ưu đãi không hợp lệ')
+            voucher_error = voucher_dry_run_error(request.env, {
+                'partner_id': partner.id,
+                'partner_shipping_id': delivery_partner.id,
+                'order_line': order_lines,
+                **({'pricelist_id': pricelist.id} if pricelist else {}),
+            }, voucher_code)
+            if voucher_error:
+                raise _CheckoutError("VOUCHER_ERROR", voucher_error)
+            discount_amount = float(voucher_res.get('estimated_discount', 0))
 
         extradata_obj = {
             'contact_id': partner.id,
@@ -395,36 +404,33 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
             sale_order = request.env['sale.order'].sudo().create(order_vals)
 
-            # 1. Áp dụng Voucher (nếu có)
-            voucher_applied = False
+            # 1. Áp dụng Voucher (nếu có). Prepare đã áp thử nên chỉ lỗi khi mã vừa bị
+            # dùng ở nơi khác giữa hai bước. Khách đã trả số tiền sau giảm nên không
+            # bỏ đơn được: giữ dòng giảm giá cho khớp tiền và báo nhân viên kiểm tra.
+            voucher_error = ''
             if prepare.voucher_code:
-                try:
-                    sale_order.loyalty_voucher_code = prepare.voucher_code
-                    if hasattr(sale_order, 'action_apply_loyalty_voucher'):
-                        sale_order.action_apply_loyalty_voucher()
-                        voucher_applied = True
-                except Exception as ve:
-                    _logger.warning("Checkout SDK Voucher apply error on %s: %s", sale_order.name, ve)
-
-                # Fallback: nếu action_apply_loyalty_voucher không tạo dòng giảm giá
-                if not voucher_applied and prepare.discount_amount > 0:
-                    try:
-                        discount_product = sale_order._get_voucher_discount_product() if hasattr(sale_order, '_get_voucher_discount_product') else False
-                        if not discount_product:
-                            discount_product = request.env['product.product'].sudo().search([('default_code', '=', 'LOYALTY_VOUCHER_DISCOUNT')], limit=1)
-                        if discount_product:
-                            request.env['sale.order.line'].sudo().create({
-                                'order_id': sale_order.id,
-                                'product_id': discount_product.id,
-                                'name': f"Giảm giá Voucher [{prepare.voucher_code}]",
-                                'product_uom_qty': 1,
-                                'price_unit': -prepare.discount_amount,
-                                'tax_id': [(5, 0, 0)],
-                                'is_loyalty_reward_line': True,
-                            })
-                            voucher_applied = True
-                    except Exception as fe:
-                        _logger.warning("Fallback discount line error on %s: %s", sale_order.name, fe)
+                voucher_error = voucher_apply_error(sale_order, prepare.voucher_code)
+                if voucher_error:
+                    _logger.warning("Checkout SDK voucher %s không áp được vào %s: %s",
+                                    prepare.voucher_code, sale_order.name, voucher_error)
+                    if prepare.discount_amount > 0:
+                        request.env['sale.order.line'].sudo().create({
+                            'order_id': sale_order.id,
+                            'product_id': sale_order._get_voucher_discount_product().id,
+                            'name': f"Giảm giá Voucher [{prepare.voucher_code}]",
+                            'product_uom_qty': 1,
+                            'price_unit': -prepare.discount_amount,
+                            'tax_id': [(5, 0, 0)],
+                            'is_loyalty_reward_line': True,
+                        })
+                    sale_order.message_post(
+                        body=Markup(
+                            "<b>⚠ Voucher %s không áp được sau khi khách đã thanh toán:</b> %s<br/>"
+                            "Đã giữ giảm giá %s ₫ cho khớp số tiền khách trả. Voucher chưa bị "
+                            "đánh dấu đã dùng — cần kiểm tra."
+                        ) % (prepare.voucher_code, voucher_error, f"{prepare.discount_amount:,.0f}"),
+                        message_type="comment", subtype_xmlid="mail.mt_note",
+                    )
 
             # 2. Tự động xác nhận đơn hàng (chuyển từ Báo giá 'draft' sang Đơn bán hàng 'sale')
             try:
@@ -495,6 +501,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 'order_name': sale_order.name,
                 'amount': prepare.amount,
                 'status': 'confirmed',
+                **({'voucher_warning': voucher_error} if voucher_error else {}),
             })
         except Exception as e:
             _logger.exception("Lỗi xác nhận đơn hàng Checkout SDK: %s", str(e))
