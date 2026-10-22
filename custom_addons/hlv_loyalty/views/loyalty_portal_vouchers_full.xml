@@ -63,7 +63,7 @@
                                     <div class="sr-v-desc">
                                         <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
                                         <t t-elif="v.reward_type == 'gift'">
-                                            Quà tặng kèm
+                                            Quà tặng
                                             <t t-if="v.gift_product_id">
                                                 (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
                                             </t>
@@ -132,7 +132,7 @@
                                     </div>
                                     <div class="sr-v-desc">
                                         <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
-                                        <t t-elif="v.reward_type == 'gift'">Quà tặng kèm</t>
+                                        <t t-elif="v.reward_type == 'gift'">Quà tặng</t>
                                         <t t-elif="v.discount_type == 'fixed'">Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ</t>
                                         <t t-else="">Giảm <t t-out="v.discount_value"/>%</t>
                                     </div>

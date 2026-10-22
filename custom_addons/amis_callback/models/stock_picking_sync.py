@@ -354,18 +354,7 @@ class StockPickingAmisSync(models.Model):
 
         # Kiểm tra sản phẩm chưa map MISA — bỏ qua đơn và raise lỗi rõ ràng
         moves_to_sync = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
-        unmapped = [
-            m.product_id.display_name
-            for m in moves_to_sync
-            if not (m.product_id.misa_inventory_item_id or '').strip()
-        ]
-        if unmapped:
-            raise UserError(
-                'Đơn hàng "%s" có sản phẩm chưa map với MISA, bỏ qua đồng bộ:\n%s\n\n'
-                'Hệ thống sẽ tự động map lại sau 30 phút. '
-                'Hoặc bấm "Đồng bộ sản phẩm mới" trong Cấu hình AMIS rồi retry job này.'
-                % (sales_order.name, '\n'.join('• ' + n for n in unmapped))
-            )
+        self._misa_check_products_mapped(moves_to_sync, sales_order.name)
 
         voucher_payload = self._prepare_misa_sa_voucher_payload(config, sales_order)
         org_refid = voucher_payload.get('org_refid', '')
@@ -553,69 +542,28 @@ class StockPickingAmisSync(models.Model):
 
         # Build in_outward_detail: dùng giá vốn (move.price_unit = standard cost)
         outward_detail = []
+        account_object = (account_object_id, account_object_code, account_object_name)
         for idx, move in enumerate(
             self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1
         ):
-            product = move.product_id
             qty_done = float(move.quantity)
-            cost_price = float(move.price_unit or 0.0)  # giá vốn (standard/average cost)
-            if cost_price == 0.0:
-                cost_price = float(move.product_id.standard_price or 0.0)
-            cost_amount = qty_done * cost_price
+            vals = self._misa_outward_detail_vals(
+                move, outward_refid, idx, stock_id, account_object, debit_account='632',
+            )
 
             # Giá bán từ sale line
             sale_line = move.sale_line_id
             sale_price_unit = float(sale_line.price_unit) if sale_line else 0.0
             sale_discount = float(sale_line.discount or 0.0) if sale_line else 0.0
-            sale_amount_line = qty_done * sale_price_unit * (1.0 - sale_discount / 100.0)
-
-            inventory_item_id = (product.misa_inventory_item_id or '').strip()
-            unit_id = (move.product_uom.misa_unit_id or '').strip()
-
-            ref_outward_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward_detail|%d|%d' % (self.id, move.id)))
             # Link về dòng chi tiết SAVoucher tương ứng
             sa_v_ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_v_detail|%d|%d' % (self.id, move.id)))
-
-            outward_detail.append({
-                'ref_detail_id': ref_outward_detail_id,
-                'refid': outward_refid,
-                'inventory_item_id': inventory_item_id,
-                'unit_id': unit_id,
-                'main_unit_id': unit_id,
-                'stock_id': stock_id,
-                'sort_order': idx,
-                'quantity': qty_done,
-                'unit_price_finance': cost_price,
-                'unit_price_management': cost_price,
-                'main_unit_price_finance': cost_price,
-                'amount_finance': cost_amount,
-                'amount_management': cost_amount,
+            vals.update({
                 'sale_price': sale_price_unit,
-                'sale_amount': sale_amount_line,
-                'main_convert_rate': 1.0,
-                'main_quantity': qty_done,
-                'debit_account': '632',
-                'credit_account': '1561',
-                'exchange_rate_operator': '*',
-                'inventory_item_code': product.default_code or str(product.id),
-                'inventory_item_name': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
-                'unit_name': move.product_uom.name,
-                'main_unit_name': move.product_uom.name,
-                'stock_code': 'HLV',
-                'stock_name': 'HLV',
-                'description': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
-                'account_object_id': account_object_id,
-                'account_object_code': account_object_code,
-                'account_object_name': account_object_name,
+                'sale_amount': qty_done * sale_price_unit * (1.0 - sale_discount / 100.0),
                 'sa_voucher_refid': sa_voucher_refid,
                 'sa_voucher_ref_detail_id': sa_v_ref_detail_id,
-                'is_promotion': False,
-                'is_un_update_outward_price': False,
-                'inventory_resale_type_id': 0,
-                'un_resonable_cost': False,
-                'is_description': False,
-                'state': 0,
             })
+            outward_detail.append(vals)
 
         total_cost = sum(d.get('amount_finance', 0.0) for d in outward_detail)
 
@@ -723,6 +671,75 @@ class StockPickingAmisSync(models.Model):
             'in_outward': in_outward,
         }
         return voucher
+
+    def _misa_outward_detail_vals(self, move, outward_refid, sort_order, stock_id, account_object, debit_account):
+        """Một dòng chi tiết phiếu xuất kho MISA (in_outward detail) tính theo giá vốn.
+
+        account_object là bộ (id, code, name) từ config.resolve_misa_account_object.
+        Tài khoản Có luôn là 1561; tài khoản Nợ do loại xuất quyết định (632 bán hàng,
+        6422 quà tặng khuyến mãi).
+        """
+        self.ensure_one()
+        product = move.product_id
+        qty_done = float(move.quantity)
+        cost_price = float(move.price_unit or 0.0)  # giá vốn (standard/average cost)
+        if cost_price == 0.0:
+            cost_price = float(product.standard_price or 0.0)
+        cost_amount = qty_done * cost_price
+        unit_id = (move.product_uom.misa_unit_id or '').strip()
+        item_name = re.sub(r'^\[.*?\]\s*', '', product.name or '')
+        account_object_id, account_object_code, account_object_name = account_object
+        return {
+            'ref_detail_id': str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward_detail|%d|%d' % (self.id, move.id))),
+            'refid': outward_refid,
+            'inventory_item_id': (product.misa_inventory_item_id or '').strip(),
+            'unit_id': unit_id,
+            'main_unit_id': unit_id,
+            'stock_id': stock_id,
+            'sort_order': sort_order,
+            'quantity': qty_done,
+            'unit_price_finance': cost_price,
+            'unit_price_management': cost_price,
+            'main_unit_price_finance': cost_price,
+            'amount_finance': cost_amount,
+            'amount_management': cost_amount,
+            'main_convert_rate': 1.0,
+            'main_quantity': qty_done,
+            'debit_account': debit_account,
+            'credit_account': '1561',
+            'exchange_rate_operator': '*',
+            'inventory_item_code': product.default_code or str(product.id),
+            'inventory_item_name': item_name,
+            'unit_name': move.product_uom.name,
+            'main_unit_name': move.product_uom.name,
+            'stock_code': 'HLV',
+            'stock_name': 'HLV',
+            'description': item_name,
+            'account_object_id': account_object_id,
+            'account_object_code': account_object_code,
+            'account_object_name': account_object_name,
+            'is_promotion': False,
+            'is_un_update_outward_price': False,
+            'inventory_resale_type_id': 0,
+            'un_resonable_cost': False,
+            'is_description': False,
+            'state': 0,
+        }
+
+    def _misa_check_products_mapped(self, moves, order_name):
+        """Raise UserError liệt kê sản phẩm trong `moves` chưa có misa_inventory_item_id."""
+        unmapped = [
+            m.product_id.display_name
+            for m in moves
+            if not (m.product_id.misa_inventory_item_id or '').strip()
+        ]
+        if unmapped:
+            raise UserError(
+                'Đơn hàng "%s" có sản phẩm chưa map với MISA, bỏ qua đồng bộ:\n%s\n\n'
+                'Hệ thống sẽ tự động map lại sau 30 phút. '
+                'Hoặc bấm "Đồng bộ sản phẩm mới" trong Cấu hình AMIS rồi retry job này.'
+                % (order_name, '\n'.join('• ' + n for n in unmapped))
+            )
 
     def _get_related_sales_order(self):
         self.ensure_one()

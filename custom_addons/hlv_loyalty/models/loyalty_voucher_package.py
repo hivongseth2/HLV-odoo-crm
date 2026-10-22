@@ -30,8 +30,12 @@ class HlvLoyaltyVoucherPackage(models.Model):
     reward_type = fields.Selection([
         ('discount', 'Đổi giảm giá'),
         ('free_shipping', 'Đổi miễn phí vận chuyển'),
-        ('gift', 'Đổi quà tặng kèm'),
-    ], string='Chương trình đổi thưởng', required=True, default='discount')
+        ('gift', 'Quà tặng'),
+    ], string='Chương trình đổi thưởng', required=True, default='discount',
+        help='Quà tặng: khách không mua kèm gì — voucher được nhập vào một đơn riêng '
+             'chỉ chứa hàng tặng 0đ, và đơn đó được đẩy sang MISA thành chứng từ bán '
+             'hàng khuyến mại để kế toán lập hoá đơn (các đơn bán khác đã đi CRM → MISA '
+             'nên không đẩy).')
 
     discount_type = fields.Selection([
         ('fixed', 'Giảm giá cố định (VNĐ)'),
@@ -48,7 +52,7 @@ class HlvLoyaltyVoucherPackage(models.Model):
     )
     gift_product_id = fields.Many2one(
         'product.product', string='Sản phẩm quà tặng',
-        help='Sản phẩm được tặng khi đổi theo chương trình quà tặng kèm',
+        help='Sản phẩm được tặng khi đổi theo chương trình Quà tặng',
     )
     gift_qty = fields.Float(
         string='Số lượng mỗi lần đổi', default=1,

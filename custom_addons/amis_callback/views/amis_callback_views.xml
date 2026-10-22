@@ -175,6 +175,11 @@
                             <field name="sync_outgoing_so_enabled"/>
                             <field name="sync_shopee_only"/>
                         </group>
+                        <group string="Quà tặng Loyalty">
+                            <field name="sync_loyalty_gift_enabled"/>
+                            <field name="loyalty_gift_debit_account"
+                                   invisible="not sync_loyalty_gift_enabled"/>
+                        </group>
                     </group>
                     <group string="Tài khoản chi mặc định theo mục đích">
                         <field name="payment_bank_config_ids" colspan="2" nolabel="1">
@@ -508,11 +513,13 @@
                         </field>
                     </page>
                     <page string="MISA" name="misa_info"
-                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced and not misa_meinvoice_synced">
+                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced and not misa_meinvoice_synced and not misa_gift_state">
                         <group>
                             <group string="SAVoucher (Bán hàng)">
                                 <field name="misa_sa_voucher_synced" readonly="1"/>
                                 <field name="misa_sa_voucher_org_refid" readonly="1"/>
+                                <field name="misa_gift_state" invisible="not misa_gift_state"/>
+                                <field name="misa_gift_error" invisible="not misa_gift_error"/>
                             </group>
                             <group string="SAInvoice (Hóa đơn - ACT)">
                                 <field name="misa_sa_invoice_synced" readonly="1"/>

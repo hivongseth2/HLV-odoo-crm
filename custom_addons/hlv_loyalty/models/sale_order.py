@@ -39,6 +39,10 @@ class SaleOrder(models.Model):
     def action_apply_loyalty_voucher(self):
         """Áp dụng mã Voucher vào đơn hàng."""
         self.ensure_one()
+        # Voucher chỉ được đánh dấu "đã dùng" trong action_confirm, và dòng của đơn đã
+        # xác nhận không xoá được — áp mã sau xác nhận là voucher dùng lại được mãi.
+        if self.state not in ('draft', 'sent'):
+            raise UserError('Chỉ áp dụng được Voucher trên đơn chưa xác nhận (báo giá).')
         code = (self.loyalty_voucher_code or '').strip().upper()
         if not code:
             raise UserError('Vui lòng nhập mã Voucher!')
@@ -156,6 +160,7 @@ class SaleOrder(models.Model):
         self.ensure_one()
         if not voucher.gift_product_id:
             raise UserError('Voucher quà tặng chưa được cấu hình sản phẩm quà tặng!')
+        self._check_loyalty_gift_order_has_no_goods()
 
         self.env['sale.order.line'].create({
             'order_id': self.id,
@@ -167,6 +172,32 @@ class SaleOrder(models.Model):
             'is_loyalty_reward_line': True,
             'loyalty_reward_voucher_id': voucher.id,
         })
+
+    def _is_loyalty_gift_order(self):
+        """Đơn quà tặng: đơn riêng chỉ chứa hàng tặng 0đ từ voucher Quà tặng.
+
+        Đây là loại đơn duy nhất sinh ra trong Odoo mà MISA chưa biết — các đơn
+        bán khác đi từ CRM sang MISA trước rồi mới về Odoo.
+        """
+        self.ensure_one()
+        return self.loyalty_voucher_id.reward_type == 'gift'
+
+    def _check_loyalty_gift_order_has_no_goods(self):
+        """Chặn đơn quà tặng có hàng bán kèm.
+
+        Cả đơn được hạch toán là chi phí khuyến mãi bên MISA, nên một dòng hàng bán
+        lẫn vào sẽ bị xuất kho 0đ thay vì ghi doanh thu.
+        """
+        self.ensure_one()
+        goods = self.order_line.filtered(
+            lambda l: not l.display_type and not l.is_loyalty_reward_line
+        )
+        if goods:
+            raise UserError(
+                'Voucher Quà tặng phải dùng trên một đơn riêng, không có hàng bán kèm. '
+                'Đơn %s đang có: %s.\nTạo đơn mới cho khách rồi nhập mã Voucher.'
+                % (self.name, ', '.join(goods.mapped('product_id.display_name')))
+            )
 
     def _validate_voucher(self, voucher):
         """Kiểm tra hợp lệ Voucher."""
@@ -197,6 +228,10 @@ class SaleOrder(models.Model):
                 f'Voucher {voucher.code} thuộc sở hữu của {voucher.partner_id.name}, '
                 f'không thể dùng cho khách hàng {self.partner_id.name}!'
             )
+
+        # Đơn quà tặng không có hàng bán nên điều kiện giá trị/danh mục không áp dụng
+        if voucher.reward_type == 'gift':
+            return
 
         # Kiểm tra giá trị đơn hàng tối thiểu
         if voucher.min_order_amount > 0 and self.amount_untaxed < voucher.min_order_amount:
@@ -324,6 +359,9 @@ class SaleOrder(models.Model):
 
     def action_confirm(self):
         """Override: Đánh dấu Voucher đã sử dụng khi xác nhận đơn hàng."""
+        # Kiểm lại lúc xác nhận: sau khi áp mã nhân viên vẫn thêm được dòng hàng.
+        for order in self.filtered(lambda o: o._is_loyalty_gift_order()):
+            order._check_loyalty_gift_order_has_no_goods()
         res = super().action_confirm()
         for order in self:
             if order.loyalty_voucher_id and order.loyalty_voucher_id.state == 'active':

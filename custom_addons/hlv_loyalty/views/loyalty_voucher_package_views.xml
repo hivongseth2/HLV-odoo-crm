@@ -74,7 +74,7 @@
                             <field name="validity_days"/>
                         </group>
                     </group>
-                    <group string="Phạm vi áp dụng">
+                    <group string="Phạm vi áp dụng" invisible="reward_type == 'gift'">
                         <field name="apply_on" widget="radio"/>
                         <field name="product_category_ids" widget="many2many_tags"
                                invisible="apply_on != 'category'"/>
