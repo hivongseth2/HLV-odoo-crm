@@ -44,10 +44,12 @@ class VendorFinancePortal(VendorQuotePortal):
         filters = self._read_filters(kw, orders)
         shown = [entry for entry in entries if self._match(entry, filters)]
         pager = paginate(len(shown), page, PER_PAGE)
-        # Phiếu công nợ chỉ tính phần trả vào đơn NCC thấy trên trang (+ trả trước) — khớp với "giá trị đơn" bên cạnh.
-        paid = (sum(r.amount for r in all_requests if r._hlv_is_paid())
-                + sum(debt._hlv_amount_for_orders(orders) for debt in debts))
-        confirmed_total = sum(orders.filtered(lambda o: o.state in CONFIRMED_STATES).mapped("amount_total"))
+        # Đơn được phiếu công nợ trả đã nằm trong tab "Đơn mua hàng" (vendor_quote_access.py) — trừ khi trạng thái của
+        # nó không thuộc trạng thái NCC được thấy (Cài đặt). Vẫn tính vào "giá trị đơn" để "đã chi" cộng đủ tiền phiếu
+        # mà "còn lại" không bị trừ oan.
+        kpi_orders = (orders | debts.line_ids.purchase_order_id).filtered(lambda o: o.state in CONFIRMED_STATES)
+        paid = (sum(r.amount for r in all_requests if r._hlv_is_paid()) + sum(debts.mapped("amount")))
+        confirmed_total = sum(kpi_orders.mapped("amount_total"))
         return self._render("hlv_vendor_payment_docs.portal_finance", access, {
             "active_tab": "finance",
             "requests": shown[pager["offset"]:pager["offset"] + pager["limit"]],

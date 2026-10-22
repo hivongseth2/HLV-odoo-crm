@@ -80,9 +80,3 @@ class VendorDebtPayment(models.Model):
         self.ensure_one()
         return self.line_ids.purchase_order_id
 
-    def _hlv_amount_for_orders(self, orders):
-        """Phần của phiếu tính vào "đã chi" khi chỉ xét các đơn `orders` (trang NCC chỉ thấy một phần đơn mua): phân
-        bổ vào các đơn đó + phần chưa phân bổ (trả trước — vẫn là tiền NCC đã nhận)."""
-        self.ensure_one()
-        return sum(self.line_ids.filtered(lambda l: l.purchase_order_id in orders).mapped("amount")) + max(
-            self.unallocated_amount, 0.0)
