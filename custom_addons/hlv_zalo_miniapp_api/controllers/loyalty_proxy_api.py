@@ -207,6 +207,10 @@ class ZaloLoyaltyProxyAPI(ZaloBaseAPI, http.Controller):
                 'date_expiry': str(v.date_expiry) if v.date_expiry else '',
                 'expiry_date': str(v.date_expiry) if v.date_expiry else '',
                 'gift_product_name': (v.gift_product_id.name if v.gift_product_id else ''),
+                'gift_product_image': (
+                    self._get_image_url('product.product', v.gift_product_id.id, 'image_256')
+                    if v.gift_product_id else ''
+                ),
                 'gift_qty': v.gift_qty or 0,
             } for v in vouchers]
             return self._response_success(data)

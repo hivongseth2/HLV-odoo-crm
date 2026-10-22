@@ -199,6 +199,36 @@ class SaleOrder(models.Model):
                 % (self.name, ', '.join(goods.mapped('product_id.display_name')))
             )
 
+    def _find_other_order_holding_voucher(self, voucher):
+        """Đơn khác (chưa hủy) đang mang voucher này, rỗng nếu không có."""
+        self.ensure_one()
+        return self.sudo().search([
+            ('loyalty_voucher_id', '=', voucher.id),
+            ('id', '!=', self.id),
+            ('state', '!=', 'cancel'),
+        ], limit=1)
+
+    def _check_loyalty_voucher_still_usable(self):
+        """Chặn xác nhận đơn mang voucher đã bị đơn khác dùng mất.
+
+        Hai báo giá có thể cùng mang một voucher (dữ liệu cũ, hoặc áp cùng lúc). Ghi
+        state='used' ngay sau đó trong cùng giao dịch nên hai lần xác nhận đồng thời
+        đụng nhau ở dòng voucher, lần sau chạy lại sẽ thấy 'used' và dừng ở đây.
+        """
+        self.ensure_one()
+        voucher = self.loyalty_voucher_id.sudo()
+        if voucher.state == 'active':
+            return
+        if voucher.state == 'used' and voucher.used_sale_order_id == self:
+            return
+        state_labels = dict(voucher._fields['state'].selection)
+        used_on = f' trên đơn {voucher.used_sale_order_id.name}' if voucher.used_sale_order_id else ''
+        raise UserError(
+            f'Không xác nhận được đơn {self.name}: Voucher {voucher.code} đang ở trạng thái '
+            f'"{state_labels.get(voucher.state, voucher.state)}"{used_on}. '
+            f'Gỡ voucher khỏi đơn rồi xác nhận lại.'
+        )
+
     def _validate_voucher(self, voucher):
         """Kiểm tra hợp lệ Voucher."""
         if voucher.state != 'active':
@@ -210,6 +240,15 @@ class SaleOrder(models.Model):
         # Kiểm tra hết hạn
         if voucher.date_expiry and voucher.date_expiry < fields.Datetime.now():
             raise UserError(f'Voucher {voucher.code} đã hết hạn!')
+
+        # Voucher chỉ thành "đã dùng" lúc xác nhận đơn, nên trong lúc chờ phải chặn
+        # bằng việc nó đang nằm trên báo giá khác.
+        other_order = self._find_other_order_holding_voucher(voucher)
+        if other_order:
+            raise UserError(
+                f'Voucher {voucher.code} đang được áp trên đơn {other_order.name}. '
+                f'Gỡ voucher khỏi đơn đó (hoặc hủy đơn) rồi mới áp sang đơn này.'
+            )
 
         # Kiểm tra khách hàng sở hữu:
         # Cho phép nếu order partner là chính chủ voucher, hoặc là công ty con
@@ -359,9 +398,12 @@ class SaleOrder(models.Model):
 
     def action_confirm(self):
         """Override: Đánh dấu Voucher đã sử dụng khi xác nhận đơn hàng."""
-        # Kiểm lại lúc xác nhận: sau khi áp mã nhân viên vẫn thêm được dòng hàng.
-        for order in self.filtered(lambda o: o._is_loyalty_gift_order()):
-            order._check_loyalty_gift_order_has_no_goods()
+        # Kiểm lại lúc xác nhận: voucher có thể đã bị đơn khác dùng mất, và đơn quà
+        # tặng vẫn thêm được dòng hàng sau khi áp mã.
+        for order in self.filtered('loyalty_voucher_id'):
+            order._check_loyalty_voucher_still_usable()
+            if order._is_loyalty_gift_order():
+                order._check_loyalty_gift_order_has_no_goods()
         res = super().action_confirm()
         for order in self:
             if order.loyalty_voucher_id and order.loyalty_voucher_id.state == 'active':

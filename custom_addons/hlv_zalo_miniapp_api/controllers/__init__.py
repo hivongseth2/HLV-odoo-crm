@@ -10,4 +10,5 @@ from . import config_api
 from . import sync_api
 from . import checkout_sdk_controller
 from . import loyalty_proxy_api
+from . import gift_order_api
 
