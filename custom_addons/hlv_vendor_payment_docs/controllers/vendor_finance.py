@@ -66,7 +66,9 @@ class VendorFinancePortal(VendorQuotePortal):
                 "paid": paid,
                 "processing": sum(r.amount for r in kpi_requests if not r._hlv_is_paid()),
                 "orders_total": confirmed_total,
-                "remaining": max(confirmed_total - paid, 0.0),
+                # Theo từng đơn (bỏ lệch làm tròn — _hlv_open_amount), trừ tiền trả trước chưa vào đơn nào.
+                "remaining": max(sum(o._hlv_open_amount() for o in kpi_orders)
+                                 - sum(max(d.unallocated_amount, 0.0) for d in debts), 0.0),
                 "since": request.env["purchase.order"]._hlv_debt_cutoff(),
             },
             "pager": pager,

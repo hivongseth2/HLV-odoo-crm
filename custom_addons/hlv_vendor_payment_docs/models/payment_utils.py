@@ -11,21 +11,25 @@ PAYMENT_STATUS_LABELS = {
     "partial": "Thanh toán một phần",
     "unpaid": "Chưa thanh toán",
 }
-# Chênh dưới chừng này đồng coi như trả đủ (làm tròn giữa MISA và Odoo).
+# Chênh dưới chừng này đồng coi như bằng nhau (sai số số thực khi cộng tiền).
 PAID_TOLERANCE = 1.0
+# Lệch làm tròn chấp nhận giữa hoá đơn NCC (MISA) và giá trị đơn mua trong Odoo: hai bên làm tròn VAT khác nhau (theo
+# dòng / theo tổng) nên lệch vài chục – vài trăm đồng mỗi đơn (case thật: 54, 151, 216đ). Đơn còn nợ không quá chừng
+# này coi như đã trả xong; hoá đơn lớn hơn đơn trong chừng này là "lệch làm tròn", không phải tiền trả qua đường khác.
+ROUNDING_TOLERANCE = 1000.0
 # File kế toán được tải lên: ảnh chụp / PDF / Word (UNC, phiếu chi, sao kê).
 ALLOWED_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".pdf", ".doc", ".docx")
 MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 
 
 def payment_status(order_total, paid_amount):
-    """Trạng thái thanh toán của đơn: "paid" (đã chi ≥ giá trị đơn, lệch ≤ PAID_TOLERANCE), "partial" (đã chi một
+    """Trạng thái thanh toán của đơn: "paid" (đã chi đủ, thiếu không quá ROUNDING_TOLERANCE), "partial" (đã chi một
     phần), "unpaid" (chưa chi đồng nào). Đơn giá trị 0 mà có chi → "paid". Số None coi như 0."""
     total = order_total or 0.0
     paid = paid_amount or 0.0
     if paid <= PAID_TOLERANCE:
         return "unpaid"
-    if paid >= total - PAID_TOLERANCE:
+    if paid >= total - ROUNDING_TOLERANCE:
         return "paid"
     return "partial"
 
@@ -103,3 +107,19 @@ def debt_allocation_issues(amount, rows):
             warnings.append(f"Còn {format_vn_number(round(amount - allocated_total))} chưa trả vào đơn nào "
                             "(ghi nhận là trả trước).")
     return errors, warnings
+
+
+def split_invoice_excess(excess, paid_before):
+    """Chia phần tiền hoá đơn trả vào một đơn VƯỢT số đơn còn nợ.
+
+    Nhận: excess — tiền đơn trên hoá đơn trừ phần ghi công nợ; paid_before — đã chi cho đơn trước hoá đơn này (đề
+    nghị chi, phiếu công nợ khác). Số âm / None coi như 0.
+    Trả: (đã trả qua đề nghị chi / phiếu khác, lệch làm tròn, hoá đơn lớn hơn đơn). Phần không giải thích được bằng
+    tiền đã chi: ≤ ROUNDING_TOLERANCE là lệch làm tròn, lớn hơn là hoá đơn lớn hơn đơn (kế toán xem).
+    """
+    excess = max(excess or 0.0, 0.0)
+    covered = min(excess, max(paid_before or 0.0, 0.0))
+    rest = excess - covered
+    if rest <= ROUNDING_TOLERANCE:
+        return covered, rest, 0.0
+    return covered, 0.0, rest

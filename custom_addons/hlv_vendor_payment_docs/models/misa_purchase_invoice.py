@@ -8,7 +8,7 @@ from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn
 from ..services.misa_client import MisaCallError, MisaClient
 from .misa_invoice_utils import (DETAIL_URL, LIST_URL, MAX_PAGES, amounts_by_order, debt_share, detail_payload,
                                  is_last_page, list_payload, normalize_tax_code, parse_invoice_row)
-from .payment_utils import PAID_TOLERANCE
+from .payment_utils import PAID_TOLERANCE, split_invoice_excess
 
 # Lúc bắt đầu lượt lấy hoá đơn MISA cho mọi NCC (UTC) — NCC lấy xong trước lúc này coi như chưa lấy trong lượt.
 ROUND_START_PARAM = "hlv_vendor_payment_docs.misa_round_start"
@@ -39,6 +39,10 @@ class MisaPurchaseInvoice(models.Model):
     debt_amount = fields.Monetary(string="Ghi công nợ", readonly=True)
     covered_amount = fields.Monetary(string="Đã trả qua ĐNC / phiếu khác", readonly=True)
     unmatched_amount = fields.Monetary(string="Không khớp đơn", readonly=True)
+    rounding_amount = fields.Monetary(string="Lệch làm tròn", readonly=True,
+                                      help="Hoá đơn lớn hơn đơn mua trong ngưỡng làm tròn VAT (payment_utils.ROUNDING_TOLERANCE)")
+    over_amount = fields.Monetary(string="HĐ lớn hơn đơn", readonly=True,
+                                  help="Hoá đơn lớn hơn đơn mua quá ngưỡng làm tròn, không giải thích được bằng tiền đã chi")
     state = fields.Selection([
         ("imported", "Đã ghi công nợ"),
         ("covered", "Đã trả qua đề nghị chi"),
@@ -145,7 +149,8 @@ class MisaPurchaseInvoice(models.Model):
         orders = {order.name: order for order in Order.search([
             ("name", "in", [refno for refno in per_order if refno]),
             ("partner_id", "child_of", vendor.id), ("state", "in", CONFIRMED_STATES)])}
-        debt_lines, covered, unmatched, notes = [], 0.0, 0.0, []
+        debt_lines, notes = [], []
+        covered = unmatched = rounding = over = 0.0
         for refno, amount in sorted(per_order.items()):
             order = orders.get(refno)
             if not order or not order._hlv_debt_tracked():
@@ -155,12 +160,18 @@ class MisaPurchaseInvoice(models.Model):
                 notes.append(f"{refno or '—'}: {format_vn_number(round(amount))} — {reason}")
                 continue
             share = debt_share(amount, order._hlv_open_amount())
-            covered += amount - share
+            part_covered, part_rounding, part_over = split_invoice_excess(amount - share, order._hlv_paid_amount())
+            covered += part_covered
+            rounding += part_rounding
+            over += part_over
             if share > PAID_TOLERANCE:
                 debt_lines.append(Command.create({"purchase_order_id": order.id, "amount": share}))
-            notes.append(f"{refno}: {format_vn_number(round(amount))} — ghi công nợ {format_vn_number(share)}"
-                         + (f", đã trả qua ĐNC / phiếu khác {format_vn_number(round(amount - share))}"
-                            if amount - share > PAID_TOLERANCE else ""))
+            parts = [f"ghi công nợ {format_vn_number(share)}"]
+            for label, value in (("đã trả qua ĐNC / phiếu khác", part_covered), ("lệch làm tròn", part_rounding),
+                                 ("HĐ lớn hơn đơn", part_over)):
+                if value > PAID_TOLERANCE:
+                    parts.append(f"{label} {format_vn_number(round(value))}")
+            notes.append(f"{refno}: {format_vn_number(round(amount))} — " + ", ".join(parts))
         payment = self.env["hlv.vendor.debt.payment"]
         if debt_lines:
             payment = payment.sudo().create({
@@ -187,6 +198,8 @@ class MisaPurchaseInvoice(models.Model):
             "debt_amount": payment.amount if payment else 0.0,
             "covered_amount": covered,
             "unmatched_amount": unmatched,
+            "rounding_amount": rounding,
+            "over_amount": over,
             "state": state,
             "debt_payment_id": payment.id or False,
             "note": "\n".join(notes),

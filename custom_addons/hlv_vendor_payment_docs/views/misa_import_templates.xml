@@ -68,6 +68,7 @@
                                     <th class="vq-num">Ghi công nợ</th>
                                     <th class="vq-num">Đã trả qua ĐNC</th>
                                     <th class="vq-num">Không khớp đơn</th>
+                                    <th class="vq-num" title="Hoá đơn lớn hơn đơn mua: làm tròn (≤ 1.000đ / đơn, xám) hoặc lệch thật (cam)">Lệch</th>
                                     <th>Kết quả</th>
                                     <th>Phiếu</th>
                                 </tr>
@@ -82,6 +83,13 @@
                                     <td class="vq-num" data-label="Ghi công nợ" t-esc="fmt(round(inv.debt_amount)) if inv.debt_amount else '—'"/>
                                     <td class="vq-num" data-label="Đã trả qua ĐNC" t-esc="fmt(round(inv.covered_amount)) if round(inv.covered_amount) else '—'"/>
                                     <td class="vq-num" data-label="Không khớp đơn" t-esc="fmt(round(inv.unmatched_amount)) if round(inv.unmatched_amount) else '—'"/>
+                                    <td class="vq-num" data-label="Lệch">
+                                        <span t-if="round(inv.over_amount)" class="misa-over" title="HĐ lớn hơn đơn — kế toán xem"
+                                              t-esc="fmt(round(inv.over_amount))"/>
+                                        <span t-elif="round(inv.rounding_amount)" class="vq-muted" title="Lệch làm tròn"
+                                              t-esc="fmt(round(inv.rounding_amount))"/>
+                                        <t t-else="">—</t>
+                                    </td>
                                     <td data-label="Kết quả">
                                         <span t-attf-class="vq-status misa-state-#{inv.state}" t-att-title="inv.note"
                                               t-esc="dict(inv._fields['state'].selection).get(inv.state)"/></td>
