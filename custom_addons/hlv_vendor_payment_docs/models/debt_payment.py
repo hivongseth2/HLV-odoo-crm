@@ -30,6 +30,10 @@ class VendorDebtPayment(models.Model):
     allocated_amount = fields.Monetary(string="Đã phân bổ", compute="_compute_allocation")
     unallocated_amount = fields.Monetary(string="Chưa phân bổ", compute="_compute_allocation")
     hlv_document_ids = fields.One2many("hlv.payment.document", "debt_payment_id", string="Chứng từ chi")
+    # "misa": tự ghi từ hoá đơn đã thanh toán trên MISA (hlv.misa.purchase.invoice) — kế toán không nhập tay.
+    source = fields.Selection([("manual", "Nhập tay"), ("misa", "Hoá đơn MISA")], string="Nguồn", required=True,
+                              default="manual", index=True)
+    hlv_misa_invoice_ids = fields.One2many("hlv.misa.purchase.invoice", "debt_payment_id", string="Hoá đơn MISA")
 
     _sql_constraints = [
         ("amount_positive", "CHECK(amount > 0)", "Số tiền phiếu thanh toán công nợ phải lớn hơn 0."),

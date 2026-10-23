@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard lập đề nghị chi (amis_callback — module của repo, xmlid ổn định): báo đơn đã được trả công nợ. -->
+    <record id="view_amis_payment_request_wizard_form_debt_warning" model="ir.ui.view">
+        <field name="name">amis.payment.request.wizard.form.debt.warning</field>
+        <field name="model">amis.payment.request.wizard</field>
+        <field name="inherit_id" ref="amis_callback.view_amis_payment_request_wizard_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning mb-0" role="alert" invisible="not hlv_debt_warning">
+                    <field name="hlv_debt_warning" readonly="1"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

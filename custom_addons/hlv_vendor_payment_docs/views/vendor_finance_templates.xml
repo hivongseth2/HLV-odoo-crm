@@ -71,7 +71,7 @@
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['paid']))"/><span class="vq-kpi-label">đã chi</span></div>
                     <div class="vq-kpi" title="Uỷ nhiệm chi đã gửi kế toán, chưa duyệt chi">
                         <span class="vq-kpi-num" t-esc="fmt(round(kpi['processing']))"/><span class="vq-kpi-label">đang xử lý</span></div>
-                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['orders_total']))"/><span class="vq-kpi-label">giá trị đơn mua đã xác nhận</span></div>
+                    <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['orders_total']))"/><span class="vq-kpi-label">giá trị đơn mua xác nhận từ <t t-esc="fdate(kpi['since'])"/></span></div>
                     <div class="vq-kpi"><span class="vq-kpi-num" t-esc="fmt(round(kpi['remaining']))"/><span class="vq-kpi-label">còn lại (chưa chi)</span></div>
                 </div>
 

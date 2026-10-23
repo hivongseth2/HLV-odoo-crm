@@ -261,7 +261,10 @@
                     <div t-if="order.origin"><dt>Chứng từ gốc</dt><dd t-esc="order.origin"/></div>
                     <t t-set="paid" t-value="order._hlv_paid_amount()"/>
                     <div><dt>Đã chi / còn nợ</dt>
-                        <dd><t t-esc="fmt(round(paid))"/> / <t t-esc="fmt(round(order._hlv_open_amount()))"/></dd></div>
+                        <dd><t t-esc="fmt(round(paid))"/> / <t t-esc="fmt(round(order._hlv_open_amount()))"/>
+                            <span t-if="not order._hlv_debt_tracked()" class="debt-flag" title="Xác nhận trước mốc công nợ — coi như đã chi xong">trước mốc công nợ</span>
+                            <span t-if="order._hlv_overpaid_amount()" class="debt-flag debt-flag-danger"
+                                  t-att-title="'Đề nghị chi + công nợ cùng trả — vượt ' + fmt(round(order._hlv_overpaid_amount()))">trả vượt <t t-esc="fmt(round(order._hlv_overpaid_amount()))"/></span></dd></div>
                     <div t-if="order.misa_payment_request_ids"><dt>Đề nghị chi</dt>
                         <dd class="pay-chips">
                             <a t-foreach="order.misa_payment_request_ids" t-as="pr" t-att-href="'%s/%s' % (route, pr.id)"

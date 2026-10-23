@@ -136,3 +136,18 @@
 .pay-kind-dnc { border-color: #e5e7eb; background: #f3f4f6; color: #4b5563; }
 .vq-doc-chip + .pay-kind { margin-left: 6px; }
 .debt-orders [hidden], .debt-order-tools[hidden] { display: none !important; }
+
+/* --- Lấy hoá đơn đã thanh toán từ MISA (/unc-ncc/cong-no/misa) --- */
+.misa-grid { margin-bottom: 16px; align-items: start; }
+.misa-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
+.misa-inline .vq-input { width: auto; }
+.misa-tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.misa-sync-form { margin: 0; }
+.misa-note summary { cursor: pointer; font-size: .82rem; color: var(--vq-muted); }
+.misa-note .vq-pre { margin-top: 4px; font-size: .8rem; white-space: pre-line; }
+.misa-state-imported { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.misa-state-covered, .misa-state-no_order { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
+.misa-state-unpaid_again { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.pay-kind-misa { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.debt-flag-danger { background: #fef2f2; color: #991b1b; }
+.debt-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }

@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang /unc-ncc/cong-no/misa (controllers/misa_import_page.py): mốc công nợ, lấy hoá đơn đã thanh toán từ MISA
+         cho một NCC / mọi NCC, sổ hoá đơn đã lấy. Không dùng "%s%%" trong biểu thức (Odoo nạp XML đổi "%%" thành "%"). -->
+
+    <!-- Nút lấy hoá đơn MISA cho một NCC — dùng ở trang này và trang trả công nợ. Biến: vendor. -->
+    <template id="misa_sync_vendor_button" name="Chứng từ chi NCC - nút lấy hoá đơn MISA cho NCC">
+        <form method="post" class="misa-sync-form" t-att-action="'%s/misa/ncc/%s' % (debt_route, vendor.id)">
+            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+            <button type="submit" class="vq-btn vq-btn-secondary"
+                    onclick="this.disabled = true; this.textContent = 'Đang lấy từ MISA…'; this.form.submit();">
+                Lấy hoá đơn đã thanh toán từ MISA</button>
+        </form>
+    </template>
+
+    <template id="accountant_misa_import" name="Chứng từ chi NCC - lấy hoá đơn MISA">
+        <t t-call="hlv_vendor_payment_docs.accountant_layout">
+            <div class="vq-wrap">
+                <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
+                <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> / <span>Lấy từ MISA</span></nav>
+                <div class="vq-page-head"><h1>Lấy hoá đơn đã thanh toán từ MISA</h1></div>
+                <div t-if="msg" class="vq-alert vq-alert-ok" t-esc="msg"/>
+                <div t-if="error" class="vq-alert vq-alert-error" t-esc="error"/>
+                <div t-if="unpaid_again_count" class="vq-alert">
+                    <t t-esc="unpaid_again_count"/> hoá đơn đã ghi công nợ nhưng MISA đã bỏ thanh toán —
+                    <a t-att-href="page_url(state='unpaid_again', page=None)">xem</a> và huỷ phiếu công nợ nếu đúng.
+                </div>
+
+                <div class="unc-grid misa-grid">
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Mốc công nợ</h2>
+                        <p class="vq-muted">Đơn mua xác nhận <b>trước</b> ngày này coi như đã chi xong: không còn nợ, không lấy
+                            hoá đơn về, không tính vào số công nợ của NCC.</p>
+                        <form method="post" class="misa-inline" t-att-action="'%s/moc' % misa_route">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input type="date" name="cutoff" class="vq-input" required="required" t-att-value="cutoff.isoformat()"/>
+                            <button type="submit" class="vq-btn vq-btn-secondary"
+                                    onclick="return confirm('Đổi mốc công nợ? Số còn nợ của mọi đơn tính lại theo mốc mới.');">Lưu mốc</button>
+                        </form>
+                    </section>
+
+                    <section class="unc-card">
+                        <h2 class="unc-card-title">Lấy cho mọi NCC có tài khoản vendor</h2>
+                        <p>
+                            <b t-esc="round_total - round_pending"/> / <t t-esc="round_total"/> NCC đã lấy
+                            <span class="vq-muted" t-if="round_start">(lượt bắt đầu <t t-esc="fdate(round_start)"/>)</span>
+                        </p>
+                        <p class="vq-muted">Mỗi lần bấm chạy khoảng 40 giây rồi dừng — bấm tiếp tới khi hết. NCC không có mã số
+                            thuế không lấy được (khoá hoá đơn là MST + số HĐ).</p>
+                        <form method="post" class="misa-inline" t-att-action="'%s/lay-tat-ca' % misa_route">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <button t-if="round_pending" type="submit" class="vq-btn vq-btn-primary"
+                                    onclick="this.disabled = true; this.textContent = 'Đang lấy từ MISA…'; this.form.submit();">
+                                Lấy tiếp (<t t-esc="round_pending"/> NCC)</button>
+                            <button type="submit" name="moi" value="1" class="vq-btn vq-btn-secondary"
+                                    onclick="return confirm('Bắt đầu lượt mới — lấy lại cho mọi NCC (hoá đơn đã có không ghi trùng)?');">
+                                Bắt đầu lượt mới</button>
+                        </form>
+                    </section>
+                </div>
+
+                <section class="unc-card">
+                    <h2 class="unc-card-title">Sổ hoá đơn đã lấy
+                        <span t-if="vendor" class="vq-muted">· <t t-esc="vendor.name"/></span></h2>
+                    <div class="misa-tools">
+                        <form method="get" class="misa-inline" t-att-action="misa_route">
+                            <input t-if="vendor" type="hidden" name="ncc" t-att-value="vendor.id"/>
+                            <select name="state" class="vq-input" onchange="this.form.submit()">
+                                <option value="">Mọi kết quả</option>
+                                <option t-foreach="state_options" t-as="opt" t-att-value="opt[0]"
+                                        t-att-selected="opt[0] == state" t-esc="opt[1]"/>
+                            </select>
+                            <a t-if="vendor" class="vq-btn vq-btn-secondary" t-att-href="misa_route">Mọi NCC</a>
+                        </form>
+                        <t t-if="vendor" t-call="hlv_vendor_payment_docs.misa_sync_vendor_button"/>
+                    </div>
+                    <p t-if="not invoices" class="vq-empty">Chưa có hoá đơn nào.</p>
+                    <div t-else="" class="vq-list-scroll">
+                        <table class="vq-table vq-sheet">
+                            <thead>
+                                <tr>
+                                    <th>Số HĐ</th>
+                                    <th>NCC</th>
+                                    <th>Ngày HĐ</th>
+                                    <th class="vq-num">Tổng HĐ</th>
+                                    <th class="vq-num">Ghi công nợ</th>
+                                    <th class="vq-num">Đã trả qua ĐNC</th>
+                                    <th class="vq-num">Không khớp đơn</th>
+                                    <th>Kết quả</th>
+                                    <th>Phiếu / chi tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="invoices" t-as="inv">
+                                    <td data-label="Số HĐ" class="vq-nowrap" t-esc="inv.inv_no"/>
+                                    <td data-label="NCC"><a t-att-href="page_url(ncc=inv.partner_id.id, page=None)" t-esc="inv.partner_id.name"/>
+                                        <span class="vq-muted" t-esc="inv.tax_code"/></td>
+                                    <td data-label="Ngày HĐ" class="vq-nowrap" t-esc="fdate(inv.inv_date)"/>
+                                    <td class="vq-num" data-label="Tổng HĐ" t-esc="fmt(round(inv.amount))"/>
+                                    <td class="vq-num" data-label="Ghi công nợ" t-esc="fmt(round(inv.debt_amount)) if inv.debt_amount else '—'"/>
+                                    <td class="vq-num" data-label="Đã trả qua ĐNC" t-esc="fmt(round(inv.covered_amount)) if round(inv.covered_amount) else '—'"/>
+                                    <td class="vq-num" data-label="Không khớp đơn" t-esc="fmt(round(inv.unmatched_amount)) if round(inv.unmatched_amount) else '—'"/>
+                                    <td data-label="Kết quả">
+                                        <span t-attf-class="vq-status misa-state-#{inv.state}"
+                                              t-esc="dict(inv._fields['state'].selection).get(inv.state)"/></td>
+                                    <td data-label="Phiếu / chi tiết">
+                                        <a t-if="inv.debt_payment_id" class="vq-doc-chip" t-att-href="'%s/%s' % (debt_route, inv.debt_payment_id.id)"
+                                           t-esc="inv.debt_payment_id.name"/>
+                                        <details t-if="inv.note" class="misa-note"><summary>Theo đơn</summary>
+                                            <div class="vq-pre" t-esc="inv.note"/></details>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <nav t-if="pager['page_count'] &gt; 1" class="vq-pager">
+                        <a t-if="pager['page'] &gt; 1" t-att-href="page_url(page=pager['page'] - 1)" class="vq-btn vq-btn-secondary">Trang trước</a>
+                        <span class="vq-muted">Trang <t t-esc="pager['page']"/> / <t t-esc="pager['page_count']"/></span>
+                        <a t-if="pager['page'] &lt; pager['page_count']" t-att-href="page_url(page=pager['page'] + 1)" class="vq-btn vq-btn-secondary">Trang sau</a>
+                    </nav>
+                </section>
+            </div>
+        </t>
+    </template>
+</odoo>
