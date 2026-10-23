@@ -151,3 +151,11 @@
 .pay-kind-misa { border-color: #fde68a; background: #fffbeb; color: #92400e; }
 .debt-flag-danger { background: #fef2f2; color: #991b1b; }
 .debt-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.misa-step { margin-bottom: 16px; }
+.misa-vendor { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.misa-vendor .vq-muted { margin-left: 8px; }
+.misa-change { margin-left: 12px; font-size: .88rem; }
+.misa-admin { margin-bottom: 16px; border: 1px dashed var(--vq-line-strong); border-radius: 10px; padding: 12px 16px; }
+.misa-admin summary { cursor: pointer; font-weight: 600; }
+.misa-admin[open] summary { margin-bottom: 14px; }
+.misa-admin .misa-grid { margin-bottom: 0; }

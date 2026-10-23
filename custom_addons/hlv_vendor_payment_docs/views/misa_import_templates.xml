@@ -26,38 +26,69 @@
                     <a t-att-href="page_url(state='unpaid_again', page=None)">xem</a> và huỷ phiếu công nợ nếu đúng.
                 </div>
 
-                <div class="unc-grid misa-grid">
-                    <section class="unc-card">
-                        <h2 class="unc-card-title">Mốc công nợ</h2>
-                        <p class="vq-muted">Đơn mua xác nhận <b>trước</b> ngày này coi như đã chi xong: không còn nợ, không lấy
-                            hoá đơn về, không tính vào số công nợ của NCC.</p>
-                        <form method="post" class="misa-inline" t-att-action="'%s/moc' % misa_route">
-                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                            <input type="date" name="cutoff" class="vq-input" required="required" t-att-value="cutoff.isoformat()"/>
-                            <button type="submit" class="vq-btn vq-btn-secondary"
-                                    onclick="return confirm('Đổi mốc công nợ? Số còn nợ của mọi đơn tính lại theo mốc mới.');">Lưu mốc</button>
-                        </form>
-                    </section>
+                <!-- Kế toán: chọn NCC → bấm lấy. -->
+                <section class="unc-card misa-step">
+                    <t t-if="vendor">
+                        <h2 class="unc-card-title">Nhà cung cấp</h2>
+                        <div class="misa-vendor">
+                            <div>
+                                <b t-esc="vendor.name"/>
+                                <span class="vq-muted">MST <t t-esc="vendor.vat or '—'"/></span>
+                                <a class="misa-change" t-att-href="misa_route">Đổi NCC</a>
+                            </div>
+                            <t t-call="hlv_vendor_payment_docs.misa_sync_vendor_button"/>
+                        </div>
+                        <p class="vq-muted">Lấy hoá đơn mua vào của NCC này đã thanh toán trên MISA (từ mốc công nợ
+                            <t t-esc="fdate(cutoff)"/>) — Odoo tự ghi công nợ vào các đơn mua; phần đã trả qua đề nghị chi không đếm lại.</p>
+                    </t>
+                    <t t-else="">
+                        <h2 class="unc-card-title">Chọn nhà cung cấp</h2>
+                        <t t-call="hlv_vendor_payment_docs.vendor_picker">
+                            <t t-set="search_action" t-value="misa_route"/>
+                            <t t-set="search_name" t-value="'tim'"/>
+                            <t t-set="search_value" t-value="tim"/>
+                            <t t-set="pick_base" t-value="misa_route"/>
+                            <t t-set="pick_param" t-value="'ncc'"/>
+                        </t>
+                    </t>
+                </section>
 
-                    <section class="unc-card">
-                        <h2 class="unc-card-title">Lấy cho mọi NCC có tài khoản vendor</h2>
-                        <p>
-                            <b t-esc="round_total - round_pending"/> / <t t-esc="round_total"/> NCC đã lấy
-                            <span class="vq-muted" t-if="round_start">(lượt bắt đầu <t t-esc="fdate(round_start)"/>)</span>
-                        </p>
-                        <p class="vq-muted">Mỗi lần bấm chạy khoảng 40 giây rồi dừng — bấm tiếp tới khi hết. NCC không có mã số
-                            thuế không lấy được (khoá hoá đơn là MST + số HĐ).</p>
-                        <form method="post" class="misa-inline" t-att-action="'%s/lay-tat-ca' % misa_route">
-                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                            <button t-if="round_pending" type="submit" class="vq-btn vq-btn-primary"
-                                    onclick="this.disabled = true; this.textContent = 'Đang lấy từ MISA…'; this.form.submit();">
-                                Lấy tiếp (<t t-esc="round_pending"/> NCC)</button>
-                            <button type="submit" name="moi" value="1" class="vq-btn vq-btn-secondary"
-                                    onclick="return confirm('Bắt đầu lượt mới — lấy lại cho mọi NCC (hoá đơn đã có không ghi trùng)?');">
-                                Bắt đầu lượt mới</button>
-                        </form>
-                    </section>
-                </div>
+                <!-- Admin: mốc công nợ + lấy cho mọi NCC. Gập / mở được (mặc định gập). -->
+                <details t-if="is_admin" class="misa-admin" t-att-open="admin_open or None">
+                    <summary>Quản trị — mốc công nợ, lấy cho mọi NCC <span class="vq-muted">(chỉ admin thấy)</span></summary>
+                    <div class="unc-grid misa-grid">
+                        <section class="unc-card">
+                            <h2 class="unc-card-title">Mốc công nợ</h2>
+                            <p class="vq-muted">Đơn mua xác nhận <b>trước</b> ngày này coi như đã chi xong: không còn nợ, không lấy
+                                hoá đơn về, không tính vào số công nợ của NCC.</p>
+                            <form method="post" class="misa-inline" t-att-action="'%s/moc' % misa_route">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <input type="date" name="cutoff" class="vq-input" required="required" t-att-value="cutoff.isoformat()"/>
+                                <button type="submit" class="vq-btn vq-btn-secondary"
+                                        onclick="return confirm('Đổi mốc công nợ? Số còn nợ của mọi đơn tính lại theo mốc mới.');">Lưu mốc</button>
+                            </form>
+                        </section>
+
+                        <section class="unc-card">
+                            <h2 class="unc-card-title">Lấy cho mọi NCC có tài khoản vendor</h2>
+                            <p>
+                                <b t-esc="round_total - round_pending"/> / <t t-esc="round_total"/> NCC đã lấy
+                                <span class="vq-muted" t-if="round_start">(lượt bắt đầu <t t-esc="fdate(round_start)"/>)</span>
+                            </p>
+                            <p class="vq-muted">Mỗi lần bấm chạy khoảng 40 giây rồi dừng — bấm tiếp tới khi hết. NCC không có mã số
+                                thuế không lấy được (khoá hoá đơn là MST + số HĐ).</p>
+                            <form method="post" class="misa-inline" t-att-action="'%s/lay-tat-ca' % misa_route">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <button t-if="round_pending" type="submit" class="vq-btn vq-btn-primary"
+                                        onclick="this.disabled = true; this.textContent = 'Đang lấy từ MISA…'; this.form.submit();">
+                                    Lấy tiếp (<t t-esc="round_pending"/> NCC)</button>
+                                <button type="submit" name="moi" value="1" class="vq-btn vq-btn-secondary"
+                                        onclick="return confirm('Bắt đầu lượt mới — lấy lại cho mọi NCC (hoá đơn đã có không ghi trùng)?');">
+                                    Bắt đầu lượt mới</button>
+                            </form>
+                        </section>
+                    </div>
+                </details>
 
                 <section class="unc-card">
                     <h2 class="unc-card-title">Sổ hoá đơn đã lấy
@@ -72,7 +103,6 @@
                             </select>
                             <a t-if="vendor" class="vq-btn vq-btn-secondary" t-att-href="misa_route">Mọi NCC</a>
                         </form>
-                        <t t-if="vendor" t-call="hlv_vendor_payment_docs.misa_sync_vendor_button"/>
                     </div>
                     <p t-if="not invoices" class="vq-empty">Chưa có hoá đơn nào.</p>
                     <div t-else="" class="vq-list-scroll">
