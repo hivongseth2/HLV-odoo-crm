@@ -27,6 +27,9 @@ MISA_ROUTE = f"{DEBT_ROUTE}/misa"
 TIME_BUDGET = 40
 MISA_STATES = ("imported", "covered", "no_order", "unpaid_again")
 ADMIN_GROUP = "base.group_system"
+# Bật / tắt khung Quản trị (mốc công nợ, lấy cho mọi NCC) — Cài đặt > Kỹ thuật > Tham số hệ thống; "0" / "False" = tắt,
+# chưa có tham số = bật. Tắt thì admin cũng không thấy và không gọi được hai việc đó.
+ADMIN_PANEL_PARAM = "hlv_vendor_payment_docs.misa_admin_panel"
 
 
 class MisaImportPage(AllPaymentsPage):
@@ -35,13 +38,18 @@ class MisaImportPage(AllPaymentsPage):
     def _is_admin():
         return request.env.user.has_group(ADMIN_GROUP)
 
+    def _admin_panel(self):
+        """Admin và khung Quản trị đang bật."""
+        value = request.env["ir.config_parameter"].sudo().get_param(ADMIN_PANEL_PARAM, "1")
+        return self._is_admin() and value.strip().lower() not in ("0", "false", "no", "off")
+
     def _misa_allowed(self):
         """Trang lấy MISA: kế toán chứng từ chi NCC, hoặc admin (có thể không thuộc nhóm kế toán)."""
         return self._allowed() or self._is_admin()
 
     @staticmethod
     def _admin_only():
-        return request.make_response("Chỉ quản trị hệ thống làm được việc này.",
+        return request.make_response("Chỉ quản trị hệ thống làm được việc này (và khung Quản trị đang bật).",
                                      headers=[("Content-Type", "text/plain; charset=utf-8")], status=403)
 
     @http.route(MISA_ROUTE, type="http", auth="user", methods=["GET"])
@@ -52,9 +60,10 @@ class MisaImportPage(AllPaymentsPage):
         vendor = self._vendor(ncc)
         state = state if state in MISA_STATES else ""
         domain = ([("partner_id", "=", vendor.id)] if vendor else []) + ([("state", "=", state)] if state else [])
-        pager = paginate(Invoice.search_count(domain), page, PER_PAGE)
-        is_admin = self._is_admin()
-        round_vendors, pending = Invoice._hlv_round_vendors() if is_admin else ((), ())
+        invoice_count = Invoice.search_count(domain)
+        pager = paginate(invoice_count, page, PER_PAGE)
+        show_admin = self._admin_panel()
+        round_vendors, pending = Invoice._hlv_round_vendors() if show_admin else ((), ())
         tim = (tim or "").strip()[:64]
         return self._render("hlv_vendor_payment_docs.accountant_misa_import", {
             "page_title": "Lấy hoá đơn đã thanh toán từ MISA",
@@ -64,7 +73,8 @@ class MisaImportPage(AllPaymentsPage):
             "vendor": vendor,
             "tim": tim,
             "vendors": self._find_vendors(tim) if not vendor else (),
-            "is_admin": is_admin,
+            "show_admin": show_admin,
+            "invoice_count": invoice_count,
             # Vừa làm việc quản trị (lưu mốc / lấy cho mọi NCC) → mở sẵn khung quản trị để thấy kết quả.
             "admin_open": quan_tri == "1",
             "state": state,
@@ -91,7 +101,7 @@ class MisaImportPage(AllPaymentsPage):
 
     @http.route(f"{MISA_ROUTE}/moc", type="http", auth="user", methods=["POST"])
     def misa_cutoff(self, cutoff="", **_kw):
-        if not self._is_admin():
+        if not self._admin_panel():
             return self._admin_only()
         try:
             day = fields.Date.to_date((cutoff or "").strip())
@@ -139,7 +149,7 @@ class MisaImportPage(AllPaymentsPage):
 
     @http.route(f"{MISA_ROUTE}/lay-tat-ca", type="http", auth="user", methods=["POST"])
     def misa_sync_round(self, moi=None, **_kw):
-        if not self._is_admin():
+        if not self._admin_panel():
             return self._admin_only()
         Invoice = request.env["hlv.misa.purchase.invoice"].sudo()
         if moi == "1":

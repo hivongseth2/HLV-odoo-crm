@@ -118,7 +118,6 @@ class DebtPaymentPage(AccountantPaymentPage):
             "errors": list(errors),
             "warnings": list(warnings),
             "files_dropped": files_dropped,
-            "cutoff": request.env["purchase.order"]._hlv_debt_cutoff(),
         })
 
     @staticmethod
