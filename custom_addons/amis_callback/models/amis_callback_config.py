@@ -463,6 +463,12 @@ class AmisCallbackConfig(models.Model):
         def _is_uuid(s):
             return bool(_uuid_re.match(s or ''))
 
+        # Khách MISA là công ty của đơn, không phải địa chỉ giao hàng / người liên hệ:
+        # contact con có MST chép từ công ty nhưng không có Tham chiếu, nên trước đây
+        # bỏ qua bước so mã và rơi xuống dò MST — trùng MST là lấy nhầm khách MISA.
+        if partner:
+            partner = partner.commercial_partner_id
+
         account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
         account_object_code = (partner.ref or (partner.name if partner else '')) if partner else ''
         account_object_name = partner.display_name if partner else ''
