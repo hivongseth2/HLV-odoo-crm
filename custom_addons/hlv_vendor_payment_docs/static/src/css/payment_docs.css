@@ -138,24 +138,23 @@
 .debt-orders [hidden], .debt-order-tools[hidden] { display: none !important; }
 
 /* --- Lấy hoá đơn đã thanh toán từ MISA (/unc-ncc/cong-no/misa) --- */
-.misa-grid { margin-bottom: 16px; align-items: start; }
+.misa-bar { margin-bottom: 16px; }
+.misa-vendor { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.misa-vendor-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.misa-vendor-name a { font-size: .88rem; }
+.misa-bar .vq-history-filter { margin-bottom: 12px; }
+.misa-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.misa-tools .unc-card-title { margin: 0; }
 .misa-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
 .misa-inline .vq-input { width: auto; }
-.misa-tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.misa-inline .vq-label { margin: 0; }
 .misa-sync-form { margin: 0; }
-.misa-note summary { cursor: pointer; font-size: .82rem; color: var(--vq-muted); }
-.misa-note .vq-pre { margin-top: 4px; font-size: .8rem; white-space: pre-line; }
 .misa-state-imported { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
 .misa-state-covered, .misa-state-no_order { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
 .misa-state-unpaid_again { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.misa-admin { margin-top: 16px; border: 1px dashed var(--vq-line-strong); border-radius: 10px; padding: 10px 16px; }
+.misa-admin summary { cursor: pointer; font-weight: 600; color: var(--vq-muted); }
+.misa-admin-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; margin-top: 12px; }
 .pay-kind-misa { border-color: #fde68a; background: #fffbeb; color: #92400e; }
 .debt-flag-danger { background: #fef2f2; color: #991b1b; }
 .debt-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.misa-step { margin-bottom: 16px; }
-.misa-vendor { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
-.misa-vendor .vq-muted { margin-left: 8px; }
-.misa-change { margin-left: 12px; font-size: .88rem; }
-.misa-admin { margin-bottom: 16px; border: 1px dashed var(--vq-line-strong); border-radius: 10px; padding: 12px 16px; }
-.misa-admin summary { cursor: pointer; font-weight: 600; }
-.misa-admin[open] summary { margin-bottom: 14px; }
-.misa-admin .misa-grid { margin-bottom: 0; }

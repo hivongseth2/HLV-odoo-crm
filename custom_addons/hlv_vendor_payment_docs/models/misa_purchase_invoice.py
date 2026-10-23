@@ -70,11 +70,14 @@ class MisaPurchaseInvoice(models.Model):
     @api.model
     def _hlv_vendor_invoices(self, vendor, date_from, date_to):
         """Hoá đơn mua vào của NCC trên MISA trong khoảng ngày (đã parse_invoice_row), chỉ đúng MST của NCC.
-        Tìm theo MST trước; không ra dòng nào đúng MST thì tìm thêm theo tên (ô tìm nhanh MISA tìm kiểu CHỨA, không rõ
-        có tìm MST) — rồi vẫn lọc lại đúng MST."""
+        Ô tìm nhanh MISA tìm kiểu CHỨA trên chuỗi MISA lưu: gửi MST NGUYÊN DẠNG (MST chi nhánh "0107338930-001" — bỏ
+        gạch đi thì không khớp), rồi phần MST chính trước gạch, rồi tên; dừng ở lần đầu ra hoá đơn đúng MST. Kết quả
+        luôn lọc lại đúng MST (đã chuẩn hoá) — tìm rộng không lẫn NCC khác."""
         tax = normalize_tax_code(vendor.vat)
+        raw_vat = (vendor.vat or "").strip()
+        searches = list(dict.fromkeys(term for term in (raw_vat, raw_vat.split("-")[0].strip(), vendor.name) if term))
         found = {}
-        for search in (tax, vendor.name):
+        for search in searches:
             rows = self._hlv_misa_pages(
                 LIST_URL, lambda page, s=search: list_payload(date_from, date_to, s, page),
                 "pu_invoice %s" % search)

@@ -160,8 +160,6 @@
                     <h1>Trả công nợ <t t-esc="vendor.name"/></h1>
                     <t t-call="hlv_vendor_payment_docs.misa_sync_vendor_button"/>
                 </div>
-                <p class="vq-muted">Đã trả trên MISA kế toán? Bấm "Lấy hoá đơn đã thanh toán từ MISA" — Odoo tự ghi công nợ
-                    theo hoá đơn, khỏi nhập tay. Chỉ hiện đơn xác nhận từ mốc công nợ <t t-esc="fdate(cutoff)"/>.</p>
                 <div t-if="files_dropped" class="vq-alert">File chứng từ đã chọn chưa được lưu — chọn lại file trước khi bấm lưu.</div>
 
                 <p t-if="not orders" class="vq-empty">NCC này không còn đơn mua đã xác nhận nào đang nợ.</p>
