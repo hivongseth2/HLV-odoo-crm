@@ -11,7 +11,7 @@
                 <div class="vq-page-head">
                     <h1>Thanh toán công nợ</h1>
                     <div class="debt-head-actions">
-                        <a class="vq-btn vq-btn-secondary" t-att-href="'%s/misa' % debt_route">Lấy từ MISA</a>
+                        <a class="vq-btn vq-btn-secondary" t-att-href="'%s/misa' % debt_route">Lấy hoá đơn từ MISA</a>
                         <a class="vq-btn vq-btn-primary" t-att-href="'%s/moi' % debt_route">Trả công nợ NCC</a>
                     </div>
                 </div>
@@ -100,6 +100,36 @@
               t-esc="dict(debt._fields['state'].selection).get(debt.state)"/>
     </template>
 
+    <!-- Tìm + chọn NCC (NCC có MST và đã có đơn mua — DebtPaymentPage._find_vendors). Biến: vendors, search_action,
+         search_name (tên ô tìm trên URL), search_value, pick_base + pick_param (link chọn: pick_base?pick_param=<id>). -->
+    <template id="vendor_picker" name="Chứng từ chi NCC - chọn NCC">
+        <form method="get" class="vq-history-filter" t-att-action="search_action">
+            <label class="vq-filter-field vq-filter-search">
+                <span class="vq-label">Nhà cung cấp</span>
+                <input type="search" t-att-name="search_name" class="vq-input" t-att-value="search_value" autofocus="autofocus"
+                       placeholder="Tên, mã số thuế hoặc mã NCC"/>
+            </label>
+            <div class="vq-filter-actions">
+                <button type="submit" class="vq-btn vq-btn-primary">Tìm</button>
+            </div>
+        </form>
+        <p t-if="not vendors" class="vq-empty">Không có NCC nào khớp chữ tìm (chỉ tìm NCC có mã số thuế và đã có đơn mua).</p>
+        <div t-else="" class="vq-list-scroll">
+            <table class="vq-table vq-sheet">
+                <thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th><span class="vq-sr-only">Chọn</span></th></tr></thead>
+                <tbody>
+                    <tr t-foreach="vendors" t-as="vendor">
+                        <td data-label="Nhà cung cấp"><a t-att-href="'%s?%s=%s' % (pick_base, pick_param, vendor.id)" t-esc="vendor.name"/></td>
+                        <td data-label="Mã số thuế" t-esc="vendor.vat or '—'"/>
+                        <td class="vq-sheet-action">
+                            <a class="vq-btn vq-btn-sm vq-btn-primary" t-att-href="'%s?%s=%s' % (pick_base, pick_param, vendor.id)">Chọn</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </template>
+
     <!-- Bước 1: chọn NCC. -->
     <template id="accountant_debt_pick_vendor" name="Chứng từ chi NCC - trả công nợ: chọn NCC">
         <t t-call="hlv_vendor_payment_docs.accountant_layout">
@@ -107,31 +137,13 @@
                 <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <nav class="vq-breadcrumb"><a t-att-href="debt_route">Thanh toán công nợ</a> / <span>Trả công nợ NCC</span></nav>
                 <div class="vq-page-head"><h1>Trả công nợ — chọn nhà cung cấp</h1></div>
-                <form method="get" class="vq-history-filter" t-att-action="'%s/moi' % debt_route">
-                    <label class="vq-filter-field vq-filter-search">
-                        <span class="vq-label">Nhà cung cấp</span>
-                        <input type="search" name="ncc" class="vq-input" t-att-value="ncc" autofocus="autofocus"
-                               placeholder="Tên, mã số thuế hoặc mã NCC"/>
-                    </label>
-                    <div class="vq-filter-actions">
-                        <button type="submit" class="vq-btn vq-btn-primary">Tìm</button>
-                    </div>
-                </form>
-                <p t-if="not vendors" class="vq-empty">Không có NCC nào khớp chữ tìm (chỉ tìm NCC có mã số thuế và đã có đơn mua).</p>
-                <div t-else="" class="vq-list-scroll">
-                    <table class="vq-table vq-sheet">
-                        <thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th><span class="vq-sr-only">Chọn</span></th></tr></thead>
-                        <tbody>
-                            <tr t-foreach="vendors" t-as="vendor">
-                                <td data-label="Nhà cung cấp"><a t-att-href="'%s/moi?partner=%s' % (debt_route, vendor.id)" t-esc="vendor.name"/></td>
-                                <td data-label="Mã số thuế" t-esc="vendor.vat or '—'"/>
-                                <td class="vq-sheet-action">
-                                    <a class="vq-btn vq-btn-sm vq-btn-primary" t-att-href="'%s/moi?partner=%s' % (debt_route, vendor.id)">Chọn</a>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <t t-call="hlv_vendor_payment_docs.vendor_picker">
+                    <t t-set="search_action" t-value="'%s/moi' % debt_route"/>
+                    <t t-set="search_name" t-value="'ncc'"/>
+                    <t t-set="search_value" t-value="ncc"/>
+                    <t t-set="pick_base" t-value="'%s/moi' % debt_route"/>
+                    <t t-set="pick_param" t-value="'partner'"/>
+                </t>
             </div>
         </t>
     </template>
