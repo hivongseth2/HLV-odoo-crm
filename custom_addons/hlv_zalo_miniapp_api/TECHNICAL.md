@@ -188,6 +188,7 @@ Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (
 - Khi đơn hàng bị hủy từ Zalo Mini App (`/api/v1/zalo/orders/cancel`), hệ thống tự động bật cờ `x_plan_need_cancel = True` ("Cần hủy") trên `sale.order` để bộ phận kho/sales dễ dàng nhận biết và lọc đơn cần hủy.
 - Giao diện danh sách "Đơn hàng Zalo Mini App" (`view_order_zalo_tree`) được tối ưu với đầy đủ các cột trạng thái: **Cần hủy**, **Số báo giá**, **Ngày đặt hàng**, **Ngày giao hàng**, **Khách hàng**, **Chuyên viên sales**, **Hoạt động**, **Tổng**, **Trạng thái đơn hàng**, **Trạng thái giao hàng**, **Trạng thái hóa đơn**, và **Thẻ**.
 - Menu "Đơn hàng Zalo" (`action_zalo_sale_order`) lọc `x_zalo_portal_account_id != False` — chỉ đơn đặt qua Mini App. KHÔNG lọc theo `partner_id.x_is_zalo_account` / `x_is_zalo_order` vì sẽ kéo cả đơn cũ nhập tay/MISA của khách Zalo.
+- Form `sale.order`: nút "Xác nhận đã thu tiền Zalo/COD", "Đồng bộ hủy Zalo", "Kiểm tra TT Zalo", smart button "Đổi trả Zalo" và tab "Zalo Checkout & Đổi trả" chỉ hiện khi `x_zalo_portal_account_id` có giá trị (cùng lý do trên).
 
 ### Quản lý Đổi/Trả Hàng Zalo Mini App (`stock.picking`)
 - **Tận dụng logic trả hàng Odoo tiêu chuẩn**: Mở rộng trực tiếp model `stock.picking` ở bước xuất kho (`outgoing`) để quản lý các trường đổi/trả (`x_zalo_return_requested`, `x_zalo_return_state`, `x_zalo_return_type`, `x_zalo_return_refund_amount`, `x_zalo_return_note`...).

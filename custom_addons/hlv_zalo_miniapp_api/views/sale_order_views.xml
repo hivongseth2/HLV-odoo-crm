@@ -71,27 +71,30 @@
                 <button name="action_mark_zalo_paid" type="object"
                         string="Xác nhận đã thu tiền Zalo/COD"
                         class="btn-success"
-                        invisible="not x_is_zalo_order or x_zalo_payment_status == 'paid' or state == 'cancel'"/>
+                        invisible="not x_zalo_portal_account_id or x_zalo_payment_status == 'paid' or state == 'cancel'"/>
                 <button name="action_mark_zalo_cancelled" type="object"
                         string="Đồng bộ hủy Zalo"
                         class="btn-secondary"
-                        invisible="not x_is_zalo_order or not x_zalo_order_id or x_zalo_payment_status == 'cancelled' or state != 'cancel'"/>
+                        invisible="not x_zalo_portal_account_id or not x_zalo_order_id or x_zalo_payment_status == 'cancelled' or state != 'cancel'"/>
                 <button name="action_query_zalo_order_status" type="object"
                         string="Kiểm tra TT Zalo"
                         class="btn-info"
-                        invisible="not x_is_zalo_order or not x_zalo_order_id"/>
+                        invisible="not x_zalo_portal_account_id or not x_zalo_order_id"/>
             </xpath>
 
             <!-- Field x_is_zalo_order để OWL view đọc trực tiếp -->
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="x_is_zalo_order" invisible="1"/>
+                <!-- Dấu đơn đặt qua Mini App; dùng để ẩn/hiện các phần Zalo.
+                     KHÔNG dùng x_is_zalo_order (ăn theo khách, đơn cũ cũng True). -->
+                <field name="x_zalo_portal_account_id" invisible="1"/>
             </xpath>
 
             <!-- Smart Button xem danh sách phiếu kho Đổi/Trả Zalo -->
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_zalo_return_pickings" type="object"
                         class="oe_stat_button" icon="fa-retweet"
-                        invisible="not x_is_zalo_order or x_return_picking_count == 0">
+                        invisible="not x_zalo_portal_account_id or x_return_picking_count == 0">
                     <field name="x_return_picking_count" widget="statinfo" string="Đổi trả Zalo"/>
                 </button>
             </xpath>
@@ -99,7 +102,7 @@
             <!-- Tab Zalo Checkout & Đổi/Trả trong notebook -->
             <xpath expr="//notebook" position="inside">
                 <page string="Zalo Checkout &amp; Đổi trả" name="zalo_info"
-                      invisible="not x_is_zalo_order">
+                      invisible="not x_zalo_portal_account_id">
                     <group string="Thông tin thanh toán Zalo Checkout SDK" colspan="4" col="2">
                         <field name="x_zalo_order_id" string="Mã đơn Zalo SDK" readonly="1"/>
                         <field name="x_zalo_payment_method" string="Phương thức thanh toán" readonly="1"/>
