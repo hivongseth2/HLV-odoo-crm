@@ -47,8 +47,12 @@ class VendorFinancePortal(VendorQuotePortal):
         # Đơn được phiếu công nợ trả đã nằm trong tab "Đơn mua hàng" (vendor_quote_access.py) — trừ khi trạng thái của
         # nó không thuộc trạng thái NCC được thấy (Cài đặt). Vẫn tính vào "giá trị đơn" để "đã chi" cộng đủ tiền phiếu
         # mà "còn lại" không bị trừ oan.
-        kpi_orders = (orders | debts.line_ids.purchase_order_id).filtered(lambda o: o.state in CONFIRMED_STATES)
-        paid = (sum(r.amount for r in all_requests if r._hlv_is_paid()) + sum(debts.mapped("amount")))
+        # Số công nợ chỉ tính đơn từ mốc công nợ (đơn cũ hơn coi như đã chi xong) — đề nghị chi cũng chỉ của các đơn đó,
+        # để "đã chi" và "giá trị đơn" cùng một phạm vi.
+        kpi_orders = (orders | debts.line_ids.purchase_order_id).filtered(
+            lambda o: o.state in CONFIRMED_STATES and o._hlv_debt_tracked())
+        kpi_requests = all_requests.filtered(lambda r: r.purchase_order_id in kpi_orders)
+        paid = sum(r.amount for r in kpi_requests if r._hlv_is_paid()) + sum(debts.mapped("amount"))
         confirmed_total = sum(kpi_orders.mapped("amount_total"))
         return self._render("hlv_vendor_payment_docs.portal_finance", access, {
             "active_tab": "finance",
@@ -60,9 +64,10 @@ class VendorFinancePortal(VendorQuotePortal):
             "visible_orders": orders,
             "kpi": {
                 "paid": paid,
-                "processing": sum(r.amount for r in all_requests if not r._hlv_is_paid()),
+                "processing": sum(r.amount for r in kpi_requests if not r._hlv_is_paid()),
                 "orders_total": confirmed_total,
                 "remaining": max(confirmed_total - paid, 0.0),
+                "since": request.env["purchase.order"]._hlv_debt_cutoff(),
             },
             "pager": pager,
             "finance_url": lambda **changes: self._finance_url(access, filters, **changes),

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Mốc công nợ NCC (models/purchase_order.py DEBT_CUTOFF_PARAM): đơn xác nhận trước ngày này coi như đã chi xong.
+         Kế toán đổi trên trang /unc-ncc/cong-no/misa. -->
+    <record id="param_debt_cutoff_date" model="ir.config_parameter">
+        <field name="key">hlv_vendor_payment_docs.debt_cutoff_date</field>
+        <field name="value">2026-05-01</field>
+    </record>
+</odoo>

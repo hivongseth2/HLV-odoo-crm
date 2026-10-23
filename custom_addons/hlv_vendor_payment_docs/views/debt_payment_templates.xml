@@ -10,7 +10,10 @@
                 <t t-call="hlv_vendor_payment_docs.accountant_tabs"/>
                 <div class="vq-page-head">
                     <h1>Thanh toán công nợ</h1>
-                    <a class="vq-btn vq-btn-primary" t-att-href="'%s/moi' % debt_route">Trả công nợ NCC</a>
+                    <div class="debt-head-actions">
+                        <a class="vq-btn vq-btn-secondary" t-att-href="'%s/misa' % debt_route">Lấy từ MISA</a>
+                        <a class="vq-btn vq-btn-primary" t-att-href="'%s/moi' % debt_route">Trả công nợ NCC</a>
+                    </div>
                 </div>
                 <form method="get" class="vq-history-filter" t-att-action="debt_route">
                     <label class="vq-filter-field vq-filter-search">
@@ -65,7 +68,8 @@
                         </thead>
                         <tbody>
                             <tr t-foreach="payments" t-as="debt">
-                                <td data-label="Số phiếu" class="vq-nowrap"><a t-att-href="'%s/%s' % (debt_route, debt.id)" t-esc="debt.name"/></td>
+                                <td data-label="Số phiếu" class="vq-nowrap"><a t-att-href="'%s/%s' % (debt_route, debt.id)" t-esc="debt.name"/>
+                                    <span t-if="debt.source == 'misa'" class="pay-kind pay-kind-misa" title="Tự ghi từ hoá đơn đã thanh toán trên MISA">MISA</span></td>
                                 <td data-label="NCC" t-esc="debt.partner_id.display_name"/>
                                 <td data-label="Đơn mua được trả" t-esc="', '.join(debt.line_ids.purchase_order_id.mapped('name'))"/>
                                 <td data-label="Ngày chi" class="vq-nowrap" t-esc="fdate(debt.payment_date)"/>
@@ -142,7 +146,10 @@
                     <a t-att-href="'%s/moi' % debt_route">Chọn NCC</a> / <span t-esc="vendor.name"/></nav>
                 <div class="vq-page-head">
                     <h1>Trả công nợ <t t-esc="vendor.name"/></h1>
+                    <t t-call="hlv_vendor_payment_docs.misa_sync_vendor_button"/>
                 </div>
+                <p class="vq-muted">Đã trả trên MISA kế toán? Bấm "Lấy hoá đơn đã thanh toán từ MISA" — Odoo tự ghi công nợ
+                    theo hoá đơn, khỏi nhập tay. Chỉ hiện đơn xác nhận từ mốc công nợ <t t-esc="fdate(cutoff)"/>.</p>
                 <div t-if="files_dropped" class="vq-alert">File chứng từ đã chọn chưa được lưu — chọn lại file trước khi bấm lưu.</div>
 
                 <p t-if="not orders" class="vq-empty">NCC này không còn đơn mua đã xác nhận nào đang nợ.</p>
@@ -295,6 +302,14 @@
                             <dt>Ngày chi</dt><dd t-esc="fdate(payment.payment_date)"/>
                             <dt>Hình thức</dt><dd t-esc="dict(payment._fields['payment_method'].selection).get(payment.payment_method)"/>
                             <t t-if="payment.memo"><dt>Diễn giải</dt><dd class="vq-pre" t-esc="payment.memo"/></t>
+                            <t t-set="misa_invoice" t-value="payment.hlv_misa_invoice_ids[:1]"/>
+                            <t t-if="misa_invoice"><dt>Nguồn</dt>
+                                <dd>Hoá đơn MISA số <b t-esc="misa_invoice.inv_no"/> ngày <t t-esc="fdate(misa_invoice.inv_date)"/>
+                                    <span class="vq-muted">tổng HĐ <t t-esc="fmt(round(misa_invoice.amount))"/>
+                                        <t t-if="round(misa_invoice.covered_amount)"> · đã trả qua ĐNC <t t-esc="fmt(round(misa_invoice.covered_amount))"/></t>
+                                        <t t-if="round(misa_invoice.unmatched_amount)"> · không khớp đơn <t t-esc="fmt(round(misa_invoice.unmatched_amount))"/></t>
+                                    </span>
+                                    <span t-if="misa_invoice.state == 'unpaid_again'" class="debt-flag">MISA đã bỏ thanh toán</span></dd></t>
                             <dt>Người ghi nhận</dt><dd><t t-esc="payment.create_uid.name"/><span class="vq-muted" t-esc="fdate(payment.create_date)"/></dd>
                         </dl>
                         <table class="vq-table debt-lines">

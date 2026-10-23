@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
-from odoo import models
+from odoo import fields, models
 
 from .payment_request import VENDOR_PAYMENT_STATES
 
 
 class VendorQuoteAccess(models.Model):
     _inherit = "hlv.vendor.quote.access"
+
+    # Lần cuối lấy hoá đơn đã thanh toán từ MISA cho NCC này (lượt lấy cho mọi NCC — trang /unc-ncc/cong-no/misa).
+    hlv_misa_synced_at = fields.Datetime(string="Lấy hoá đơn MISA lúc", readonly=True, copy=False)
 
     def _vendor_purchase_orders(self):
         """Thêm vào tab "Đơn mua hàng" các đơn của NCC đã được trả bằng phiếu thanh toán công nợ (kể cả đơn không lên

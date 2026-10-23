@@ -7,3 +7,5 @@ access_vendor_debt_payment_accountant,hlv.vendor.debt.payment accountant,model_h
 access_vendor_debt_payment_line_accountant,hlv.vendor.debt.payment.line accountant,model_hlv_vendor_debt_payment_line,group_payment_doc_accountant,1,1,1,0
 access_vendor_debt_payment_purchase_user,hlv.vendor.debt.payment purchase user,model_hlv_vendor_debt_payment,purchase.group_purchase_user,1,0,0,0
 access_vendor_debt_payment_line_purchase_user,hlv.vendor.debt.payment.line purchase user,model_hlv_vendor_debt_payment_line,purchase.group_purchase_user,1,0,0,0
+access_misa_purchase_invoice_accountant,hlv.misa.purchase.invoice accountant,model_hlv_misa_purchase_invoice,group_payment_doc_accountant,1,1,1,0
+access_misa_purchase_invoice_purchase_user,hlv.misa.purchase.invoice purchase user,model_hlv_misa_purchase_invoice,purchase.group_purchase_user,1,0,0,0
