@@ -5,6 +5,7 @@ from odoo import Command, api, fields, models
 from odoo.addons.hlv_vendor_quotation.models.purchase_order import CONFIRMED_STATES
 from odoo.addons.hlv_vendor_quotation.models.vendor_quote_utils import format_vn_number
 
+from ..services.misa_client import MisaCallError, MisaClient
 from .misa_invoice_utils import (DETAIL_URL, LIST_URL, MAX_PAGES, amounts_by_order, debt_share, detail_payload,
                                  is_last_page, list_payload, normalize_tax_code, parse_invoice_row)
 from .payment_utils import PAID_TOLERANCE
@@ -54,13 +55,12 @@ class MisaPurchaseInvoice(models.Model):
 
     # ------------------------------------------------------------------ gọi MISA
     @api.model
-    def _hlv_misa_pages(self, url, make_payload, context):
-        """Mọi dòng của một lệnh tìm MISA, lật trang tới khi hết. make_payload(page) → body. Lỗi phiên / MISA trả
-        Success=false → raise (không coi là "không có dữ liệu")."""
-        utils = self.env["misa.api.utils"]
+    def _hlv_misa_pages(self, client, url, make_payload, context):
+        """Mọi dòng của một lệnh tìm MISA, lật trang tới khi hết. make_payload(page) → body. Không lấy được (mất kết
+        nối, hết phiên, MISA trả Success=false) → MisaCallError — không coi là "không có dữ liệu"."""
         rows = []
         for page in range(1, MAX_PAGES + 1):
-            data = utils._fetch_misa_json_with_session_retry(url, make_payload(page), context)
+            data = client.post_json(url, make_payload(page), context)
             page_rows = ((data or {}).get("Data") or {}).get("PageData") or []
             rows.extend(page_rows)
             if is_last_page(page_rows):
@@ -68,7 +68,7 @@ class MisaPurchaseInvoice(models.Model):
         return rows
 
     @api.model
-    def _hlv_vendor_invoices(self, vendor, date_from, date_to):
+    def _hlv_vendor_invoices(self, client, vendor, date_from, date_to):
         """Hoá đơn mua vào của NCC trên MISA trong khoảng ngày (đã parse_invoice_row), chỉ đúng MST của NCC.
         Ô tìm nhanh MISA tìm kiểu CHỨA trên chuỗi MISA lưu: gửi MST NGUYÊN DẠNG (MST chi nhánh "0107338930-001" — bỏ
         gạch đi thì không khớp), rồi phần MST chính trước gạch, rồi tên; dừng ở lần đầu ra hoá đơn đúng MST. Kết quả
@@ -79,7 +79,7 @@ class MisaPurchaseInvoice(models.Model):
         found = {}
         for search in searches:
             rows = self._hlv_misa_pages(
-                LIST_URL, lambda page, s=search: list_payload(date_from, date_to, s, page),
+                client, LIST_URL, lambda page, s=search: list_payload(date_from, date_to, s, page),
                 "pu_invoice %s" % search)
             for invoice in map(parse_invoice_row, rows):
                 if invoice["tax_code"] == tax and invoice["key"]:
@@ -90,15 +90,23 @@ class MisaPurchaseInvoice(models.Model):
 
     # ------------------------------------------------------------------ ghi nhận
     @api.model
-    def _hlv_sync_vendor(self, vendor, deadline):
+    def _hlv_sync_vendor(self, client, vendor, deadline):
         """Lấy hoá đơn của NCC từ mốc công nợ tới hôm nay, ghi nhận hoá đơn đã thanh toán chưa có trong sổ, đánh dấu
         hoá đơn đã ghi mà MISA bỏ thanh toán. deadline: time.monotonic() phải dừng đọc chi tiết (giới hạn thời gian một
         lần bấm) — hoá đơn chưa kịp đọc để lần sau.
-        Trả dict: found (hoá đơn của NCC), paid, new, debt (tiền ghi công nợ), unpaid_again, pending (chưa kịp)."""
+        MISA lỗi giữa chừng: dừng, GIỮ các hoá đơn đã ghi (mỗi hoá đơn ghi trọn trong savepoint riêng), báo trong
+        "error" — lần bấm sau bỏ qua hoá đơn đã có, lấy tiếp phần còn lại.
+        Trả dict: found (hoá đơn của NCC), paid, new, debt (tiền ghi công nợ), unpaid_again, pending (chưa kịp),
+        error ("" nếu không lỗi)."""
+        stats = {"found": 0, "paid": 0, "new": 0, "debt": 0.0, "unpaid_again": 0, "pending": 0, "error": ""}
         cutoff = self.env["purchase.order"]._hlv_debt_cutoff()
-        invoices = self._hlv_vendor_invoices(vendor, cutoff, fields.Date.context_today(self))
+        try:
+            invoices = self._hlv_vendor_invoices(client, vendor, cutoff, fields.Date.context_today(self))
+        except MisaCallError as exc:
+            stats["error"] = str(exc)
+            return stats
         existing = {rec.key: rec for rec in self.search([("key", "in", [inv["key"] for inv in invoices])])}
-        stats = {"found": len(invoices), "paid": 0, "new": 0, "debt": 0.0, "unpaid_again": 0, "pending": 0}
+        stats["found"] = len(invoices)
         for invoice in invoices:
             record = existing.get(invoice["key"])
             if not invoice["is_paid"]:
@@ -111,12 +119,19 @@ class MisaPurchaseInvoice(models.Model):
                 if record.state == "unpaid_again":
                     record.state = "imported"  # MISA thanh toán lại — phiếu cũ vẫn đúng
                 continue
-            if time.monotonic() > deadline:
+            if time.monotonic() > deadline or stats["error"]:
                 stats["pending"] += 1
                 continue
-            lines = self._hlv_misa_pages(DETAIL_URL, lambda page, r=invoice["refid"]: detail_payload(r, page),
-                                         "pu_invoice detail %s" % invoice["inv_no"])
-            record = self._hlv_record_invoice(vendor, invoice, lines)
+            try:
+                lines = self._hlv_misa_pages(client, DETAIL_URL,
+                                             lambda page, r=invoice["refid"]: detail_payload(r, page),
+                                             "pu_invoice detail %s" % invoice["inv_no"])
+            except MisaCallError as exc:
+                stats["error"] = str(exc)
+                stats["pending"] += 1
+                continue
+            with self.env.cr.savepoint():
+                record = self._hlv_record_invoice(vendor, invoice, lines)
             stats["new"] += 1
             stats["debt"] += record.debt_amount
         return stats
@@ -205,23 +220,34 @@ class MisaPurchaseInvoice(models.Model):
             {"hlv_misa_synced_at": fields.Datetime.now()})
 
     @api.model
-    def _hlv_sync_one(self, vendor, deadline):
-        """Lấy cho một NCC; xong hết (không còn hoá đơn chờ đọc) thì đánh dấu đã lấy trong lượt. Trả stats."""
-        stats = self._hlv_sync_vendor(vendor, deadline)
-        if not stats["pending"]:
+    def _hlv_sync_one(self, client, vendor, deadline):
+        """Lấy cho một NCC; xong hết (không lỗi, không còn hoá đơn chờ đọc) thì đánh dấu đã lấy trong lượt."""
+        stats = self._hlv_sync_vendor(client, vendor, deadline)
+        if not stats["pending"] and not stats["error"]:
             self._hlv_mark_synced(vendor)
         return stats
 
     @api.model
+    def _hlv_sync_vendor_now(self, vendor, deadline):
+        """Kế toán bấm lấy cho một NCC. Trả stats (_hlv_sync_vendor)."""
+        with MisaClient(self.env, deadline) as client:
+            return self._hlv_sync_one(client, vendor, deadline)
+
+    @api.model
     def _hlv_sync_round(self, deadline):
-        """Lấy tiếp các NCC chưa lấy trong lượt, tới khi hết giờ. Trả {vendors, new, debt, unpaid_again}."""
+        """Lấy tiếp các NCC chưa lấy trong lượt, tới khi hết giờ hoặc MISA lỗi (giữ phần đã lấy). Trả {vendors, new,
+        debt, unpaid_again, error}."""
         _vendors, pending = self._hlv_round_vendors()
-        totals = {"vendors": 0, "new": 0, "debt": 0.0, "unpaid_again": 0}
-        for vendor in pending.sorted("name"):
-            if time.monotonic() > deadline:
-                break
-            stats = self._hlv_sync_one(vendor, deadline)
-            totals["vendors"] += 0 if stats["pending"] else 1
-            for key in ("new", "debt", "unpaid_again"):
-                totals[key] += stats[key]
+        totals = {"vendors": 0, "new": 0, "debt": 0.0, "unpaid_again": 0, "error": ""}
+        with MisaClient(self.env, deadline) as client:
+            for vendor in pending.sorted("name"):
+                if time.monotonic() > deadline:
+                    break
+                stats = self._hlv_sync_one(client, vendor, deadline)
+                totals["vendors"] += 0 if stats["pending"] or stats["error"] else 1
+                for key in ("new", "debt", "unpaid_again"):
+                    totals[key] += stats[key]
+                if stats["error"]:
+                    totals["error"] = "%s: %s" % (vendor.name, stats["error"])
+                    break
         return totals

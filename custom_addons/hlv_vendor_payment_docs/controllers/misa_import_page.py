@@ -113,16 +113,23 @@ class MisaImportPage(AllPaymentsPage):
         return request.redirect(self._misa_url(None, "", quan_tri=1, msg=f"Đã đặt mốc công nợ {day.strftime('%d/%m/%Y')}."))
 
     def _run_misa(self, work, vendor):
-        """Chạy một lần lấy MISA trong savepoint: MISA / mạng lỗi thì bỏ phần đang dở, báo lỗi rõ — không để kế toán
-        tưởng "NCC không có hoá đơn nào"."""
+        """Chạy một lần lấy MISA. Lỗi MISA / mạng đã được model bắt (giữ phần đã lấy, báo trong kết quả "error"); ở đây
+        chỉ còn lỗi ngoài dự kiến — savepoint bỏ phần dở, báo lỗi thay vì trang 500."""
         deadline = time.monotonic() + TIME_BUDGET
         try:
             with request.env.cr.savepoint():
                 return work(deadline), None
-        except Exception as exc:  # MISA trả lỗi / hết phiên / mạng — báo cho kế toán, không 500
+        except Exception as exc:
             _logger.exception("Lấy hoá đơn MISA lỗi (NCC %s)", vendor.display_name if vendor else "mọi NCC")
-            return None, ("Không lấy được dữ liệu MISA: %s — nếu lỗi về phiên đăng nhập thì cookie MISA trong "
-                          "misa_fetch_po_button/utils/misa_config.py đã hết hạn, cần chụp lại." % str(exc)[:400])
+            return None, "Lỗi khi lấy hoá đơn MISA: %s" % str(exc)[:400]
+
+    @staticmethod
+    def _misa_error_text(error):
+        """Lỗi MISA cho người đọc: phần đã lấy được giữ, bấm lại để lấy tiếp; MISA trả lỗi (không phải mất kết nối) thì
+        nhắc khả năng hết phiên."""
+        hint = (" Nếu lặp lại: cookie MISA trong misa_fetch_po_button/utils/misa_config.py có thể đã hết hạn."
+                if error.startswith("MISA trả lỗi") else "")
+        return "%s — phần đã lấy được vẫn giữ, bấm lấy lại để lấy tiếp.%s" % (error[:500], hint)
 
     @http.route(f"{MISA_ROUTE}/ncc/<int:partner_id>", type="http", auth="user", methods=["POST"])
     def misa_sync_vendor(self, partner_id, **_kw):
@@ -132,10 +139,11 @@ class MisaImportPage(AllPaymentsPage):
         if not vendor:
             return request.not_found()
         Invoice = request.env["hlv.misa.purchase.invoice"].sudo()
-        stats, error = self._run_misa(lambda deadline: Invoice._hlv_sync_one(vendor, deadline), vendor)
+        stats, error = self._run_misa(lambda deadline: Invoice._hlv_sync_vendor_now(vendor, deadline), vendor)
         if error:
             return request.redirect(self._misa_url(vendor, "", error=error))
-        return request.redirect(self._misa_url(vendor, "", msg=self._vendor_message(vendor, stats)))
+        return request.redirect(self._misa_url(vendor, "", msg=self._vendor_message(vendor, stats),
+                                               error=self._misa_error_text(stats["error"]) if stats["error"] else None))
 
     @staticmethod
     def _vendor_message(vendor, stats):
@@ -143,7 +151,7 @@ class MisaImportPage(AllPaymentsPage):
                  f"ghi mới {stats['new']} hoá đơn ({format_vn_number(round(stats['debt']))} công nợ)"]
         if stats["unpaid_again"]:
             parts.append(f"{stats['unpaid_again']} hoá đơn MISA đã bỏ thanh toán — xem và huỷ phiếu nếu đúng")
-        if stats["pending"]:
+        if stats["pending"] and not stats["error"]:
             parts.append(f"còn {stats['pending']} hoá đơn chưa kịp đọc — bấm lấy lần nữa")
         return "; ".join(parts) + "."
 
@@ -162,4 +170,5 @@ class MisaImportPage(AllPaymentsPage):
                f"({format_vn_number(round(totals['debt']))} công nợ)"
                + (f", {totals['unpaid_again']} hoá đơn MISA bỏ thanh toán" if totals["unpaid_again"] else "")
                + (f". Còn {len(pending)} NCC — bấm \"Lấy tiếp\"." if pending else ". Đã lấy hết mọi NCC."))
-        return request.redirect(self._misa_url(None, "", quan_tri=1, msg=msg))
+        error = self._misa_error_text(totals["error"]) if totals["error"] else None
+        return request.redirect(self._misa_url(None, "", quan_tri=1, msg=msg, error=error))
