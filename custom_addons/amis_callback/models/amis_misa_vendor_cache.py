@@ -3,6 +3,7 @@ import json
 import re
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class AmisMisaVendorCache(models.Model):
@@ -373,9 +374,19 @@ class AmisMisaVendorCache(models.Model):
                 ('config_id', '=', config.id),
                 ('company_tax_code', '=', tax),
             ], order='is_deleted asc, misa_inactive asc, write_date desc', limit=5)
-            active = by_tax.filtered(lambda rec: not rec.is_deleted and not rec.misa_inactive)[:1]
+            active = by_tax.filtered(lambda rec: not rec.is_deleted and not rec.misa_inactive)
+            # Một MST có thể ứng với nhiều khách MISA (mở nhiều mã cho cùng công ty).
+            # Không đoán theo bản ghi sửa gần nhất: đẩy nhầm khách là sai công nợ.
+            if len(set(active.mapped('account_object_id'))) > 1:
+                raise UserError(
+                    'MST %s của "%s" trùng ở nhiều khách MISA: %s. Điền ô Tham chiếu của '
+                    'khách trên Odoo đúng bằng mã khách MISA cần dùng rồi chạy lại.' % (
+                        tax, partner.display_name,
+                        ', '.join(active.mapped('account_object_code')),
+                    )
+                )
             if active:
-                return active, stale
+                return active[:1], stale
             if not stale and by_tax:
                 stale = by_tax[0]
 
