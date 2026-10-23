@@ -1,0 +1,44 @@
+# Bảng đồng bộ mỗi 5 phút theo write_date. Bảng khác chỉ mới theo lần chép đêm.
+# Tên BẢNG (model đổi "." thành "_"). Bảng không có trên prd thì script bỏ qua và ghi log.
+
+# Bán
+sale_order
+sale_order_line
+
+# Mua
+purchase_order
+purchase_order_line
+purchase_request
+purchase_request_line
+purchase_request_allocation
+
+# Kho
+stock_picking
+stock_move
+stock_move_line
+stock_quant
+stock_quant_package
+
+# Sản phẩm, đối tác
+product_template
+product_product
+product_supplierinfo
+res_partner
+
+# Kế toán (hoá đơn tự sinh từ đơn, ít)
+account_move
+account_move_line
+
+# MISA và module tự viết
+misa_sale_payment_line
+misa_invoice_grouped_line
+misa_invoice_grouped_match
+hlv_misa_purchase_invoice
+hlv_vendor_debt_payment
+hlv_vendor_debt_payment_line
+hlv_delivery_planner_snapshot
+hlv_loyalty_history
+hlv_vendor_quote
+hlv_vendor_quote_line
+hlv_vendor_inquiry
+hlv_vendor_inquiry_line
