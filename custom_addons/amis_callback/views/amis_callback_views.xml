@@ -541,8 +541,14 @@
                             <group string="SAVoucher (Bán hàng)">
                                 <field name="misa_sa_voucher_synced" readonly="1"/>
                                 <field name="misa_sa_voucher_org_refid" readonly="1"/>
-                                <field name="misa_gift_state" invisible="not misa_gift_state"/>
+                            </group>
+                            <group string="Quà tặng Loyalty (Xuất kho khác)" invisible="not misa_gift_state">
+                                <field name="misa_gift_state"/>
                                 <field name="misa_gift_error" invisible="not misa_gift_error"/>
+                                <button name="action_misa_gift_resend" type="object"
+                                        string="Gửi lại sang MISA" class="btn-secondary" icon="fa-refresh"
+                                        invisible="misa_gift_state == 'posted'"
+                                        confirm="Gửi lại phiếu xuất quà tặng sang MISA? Đề nghị cũ còn trên MISA sẽ được sửa theo dữ liệu hiện tại."/>
                             </group>
                             <group string="SAInvoice (Hóa đơn - ACT)">
                                 <field name="misa_sa_invoice_synced" readonly="1"/>

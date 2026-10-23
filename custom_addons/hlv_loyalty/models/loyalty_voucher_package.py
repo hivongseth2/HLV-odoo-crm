@@ -33,9 +33,9 @@ class HlvLoyaltyVoucherPackage(models.Model):
         ('gift', 'Quà tặng'),
     ], string='Chương trình đổi thưởng', required=True, default='discount',
         help='Quà tặng: khách không mua kèm gì — voucher được nhập vào một đơn riêng '
-             'chỉ chứa hàng tặng 0đ, và đơn đó được đẩy sang MISA thành chứng từ bán '
-             'hàng khuyến mại để kế toán lập hoá đơn (các đơn bán khác đã đi CRM → MISA '
-             'nên không đẩy).')
+             'chỉ chứa hàng tặng 0đ; giao xong thì đẩy sang MISA thành phiếu xuất kho '
+             'khác để kế toán lập hoá đơn (các đơn bán khác đã đi CRM → MISA nên không '
+             'đẩy).')
 
     discount_type = fields.Selection([
         ('fixed', 'Giảm giá cố định (VNĐ)'),
