@@ -40,10 +40,10 @@
                            t-att-checked="state.showZero" t-on-change="onShowZeroChange"/>
                     Hiện SP hết hàng
                 </label>
-                <label style="display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; color:#fd7e14; white-space:nowrap;" title="Hiện số lượng SP đang ở khu vực đóng gói và khu xuất hàng">
+                <label style="display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; color:#fd7e14; white-space:nowrap;" title="Hiện số lượng SP đang ở khu vực đóng gói, khu xuất hàng và CHUYENKHO (đang chuyển sang kho khác)">
                     <input type="checkbox" style="width:14px; height:14px; cursor:pointer;"
                            t-att-checked="state.includeOutgoing" t-on-change="onIncludeOutgoingChange"/>
-                    Hiện đóng gói/out
+                    Hiện đóng gói/out/chuyển kho
                 </label>
                 <!-- Chon cot -->
                 <div style="display:flex; align-items:center; gap:6px; position:relative;">
@@ -86,7 +86,7 @@
                         <div style="background:#1a2639; color:#fff; border-radius:8px; padding:7px 16px; font-size:14px; font-weight:700; white-space:nowrap;">
                             Tổng tồn: <t t-esc="formatQty(state.total)"/>
                             <t t-if="state.includeOutgoing and state.outgoingTotal > 0">
-                                <span style="color:#ffcc80; font-size:12px;"> (+<t t-esc="formatQty(state.outgoingTotal)"/> sắp giao)</span>
+                                <span style="color:#ffcc80; font-size:12px;"> (+<t t-esc="formatQty(state.outgoingTotal)"/> sắp giao/chuyển kho)</span>
                             </t>
                         </div>
                     </t>
@@ -422,7 +422,7 @@
                                                                                         <t t-esc="loc.location"/>
                                                                                         <t t-if="loc.outgoing">
                                                                                             <span style="display:inline-block; margin-left:8px; background:#fd7e14; color:#fff; border-radius:10px; padding:1px 8px; font-size:10px; font-weight:700; font-family:sans-serif; vertical-align:middle; white-space:nowrap;">
-                                                                                                Khu vực giao hàng
+                                                                                                <t t-esc="loc.transfer ? 'Đang chuyển kho' : 'Khu vực giao hàng'"/>
                                                                                             </span>
                                                                                         </t>
                                                                                     </td>

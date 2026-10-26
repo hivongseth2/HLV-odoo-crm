@@ -1,7 +1,7 @@
 # models/stock_picking.py
 import logging
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -16,6 +16,15 @@ class StockPicking(models.Model):
     source_transfer_id = fields.Many2one("stock.picking", copy=False)  # Không copy khi nhân bản
 
    
+    # CHUYENKHO chỉ được chọn trên phiếu chuyển nội bộ (ràng buộc phía server ở _check_hlv_transfer_location)
+    hlv_allow_transfer_location = fields.Boolean(compute="_compute_hlv_allow_transfer_location")
+    location_id = fields.Many2one(
+        domain="[] if hlv_allow_transfer_location else [('hlv_is_transfer_location', '=', False)]"
+    )
+    location_dest_id = fields.Many2one(
+        domain="[] if hlv_allow_transfer_location else [('hlv_is_transfer_location', '=', False)]"
+    )
+
     create_second_transfer_automatically = fields.Boolean(
         string="Tự động tạo phiếu bước 2",
         related="picking_type_id.auto_second_transfer",
@@ -73,12 +82,12 @@ class StockPicking(models.Model):
                 current_location = picking.location_id
                 new_location_id = vals.get('location_id')
                 
-                # Nếu location hiện tại là transit và đang bị thay đổi
-                if current_location and current_location.usage == 'transit':
+                # Nếu location hiện tại là transit/CHUYENKHO và đang bị thay đổi
+                if current_location and self._is_inter_warehouse_transit(current_location):
                     new_location = self.env['stock.location'].browse(new_location_id) if new_location_id else False
-                    
-                    # Nếu location mới KHÔNG phải transit, ngăn việc thay đổi
-                    if new_location and new_location.usage != 'transit':
+
+                    # Nếu location mới KHÔNG phải transit/CHUYENKHO, ngăn việc thay đổi
+                    if new_location and not self._is_inter_warehouse_transit(new_location):
                         _logger.warning(f"WRITE PROTECTION: Ngăn thay đổi location_id từ Transit ({current_location.id}) sang {new_location.id}")
                         # Xóa location_id khỏi vals để không ghi đè
                         vals = dict(vals)  # Copy để không ảnh hưởng original
@@ -115,8 +124,8 @@ class StockPicking(models.Model):
                 SELECT sp.source_transfer_id, sp.location_id, sp_src.location_dest_id
                 FROM stock_picking sp
                 LEFT JOIN stock_picking sp_src ON sp.source_transfer_id = sp_src.id
-                WHERE sp.id = %s
-            """, (picking.id,))
+                WHERE sp.id = %s AND sp.state NOT IN ('done', 'cancel')
+            """, (picking.id,))  # phiếu đã xong/hủy: không sửa lịch sử dịch chuyển
             db_row = self.env.cr.fetchone()
             
             if db_row and db_row[0]:  # Có source_transfer_id
@@ -156,7 +165,9 @@ class StockPicking(models.Model):
         """
         if not location:
             return False
-        
+        if location.hlv_is_transfer_location:
+            return True
+
         complete_name = (location.complete_name or "").strip().lower()
         
         # Danh sách các tên được chấp nhận (mapping Việt - Anh)
@@ -169,6 +180,86 @@ class StockPicking(models.Model):
         name_ok = any(complete_name.endswith(name) or complete_name == name for name in accepted_names)
         
         return name_ok or (location.usage == "transit" and ("inter-warehouse transit" in complete_name or "trung chuyển liên kho" in complete_name or "kho trung gian" in complete_name))
+
+    @api.depends("picking_type_id")
+    def _compute_hlv_allow_transfer_location(self):
+        for picking in self:
+            picking_type = picking.picking_type_id
+            warehouse = picking_type.warehouse_id
+            picking.hlv_allow_transfer_location = picking_type.code == "internal" and picking_type not in (
+                warehouse.pick_type_id | warehouse.pack_type_id
+            )
+
+    def _compute_location_id(self):
+        """Form backend: chọn Liên hệ là kho khác thì đích tự là CHUYENKHO của kho nguồn;
+        phiếu bước 2 luôn lấy nguồn = đích của phiếu bước 1."""
+        super()._compute_location_id()
+        for picking in self:
+            if picking.state in ("cancel", "done") or picking.return_id:
+                continue
+            if picking.source_transfer_id:
+                picking.location_id = picking.source_transfer_id.location_dest_id
+                continue
+            src_wh = picking.picking_type_id.warehouse_id
+            dest_wh = self.env["stock.warehouse"].search([("partner_id", "=", picking.partner_id.id)], limit=1) if picking.partner_id else False
+            if picking.hlv_allow_transfer_location and src_wh and dest_wh and dest_wh != src_wh:
+                picking.location_dest_id = src_wh._hlv_get_transfer_location()
+
+    def _hlv_check_transfer_route(self):
+        """Chặn xác nhận khi vị trí nguồn/đích không khớp kho của loại hoạt động.
+        Bước 1: nguồn thuộc kho của loại phiếu, đích thuộc kho đó (CHUYENKHO) — muốn sang kho khác phải qua CHUYENKHO.
+        Bước 2: nguồn đúng là đích của bước 1, đích thuộc kho nhận (kho của loại phiếu)."""
+        def wh_name(loc):
+            return loc.warehouse_id.name or _("không thuộc kho nào")
+
+        for picking in self:
+            if picking.state in ("cancel", "done") or picking.return_id or not picking.hlv_allow_transfer_location:
+                continue
+            warehouse = picking.picking_type_id.warehouse_id
+            if not warehouse:
+                continue
+            lines = picking.move_line_ids
+            sources = picking.location_id | lines.location_id
+            dests = picking.location_dest_id | lines.location_dest_id
+            if picking.source_transfer_id:
+                hub = picking.source_transfer_id.location_dest_id
+                for loc in sources - hub:
+                    raise UserError(_(
+                        "Phiếu bước 2 %(picking)s phải lấy hàng từ %(hub)s (đích của phiếu bước 1 %(src)s), "
+                        "không được lấy từ %(loc)s."
+                    ) % {"picking": picking.name, "hub": hub.display_name, "src": picking.source_transfer_id.name, "loc": loc.display_name})
+                for loc in dests.filtered(lambda l: l.warehouse_id != warehouse):
+                    raise UserError(_(
+                        "Phiếu bước 2 %(picking)s nhập vào kho %(wh)s nhưng vị trí đích %(loc)s thuộc %(loc_wh)s. "
+                        "Hãy chọn vị trí đích trong kho %(wh)s."
+                    ) % {"picking": picking.name, "wh": warehouse.name, "loc": loc.display_name, "loc_wh": wh_name(loc)})
+                continue
+            # Transit cũ: còn phiếu bước 1 mở đi vào / phiếu dọn hàng lấy ra — vẫn cho qua
+            for loc in sources.filtered(lambda l: l.warehouse_id != warehouse and l.usage != "transit"):
+                raise UserError(_(
+                    "Phiếu %(picking)s dùng loại hoạt động %(type)s nhưng vị trí nguồn %(loc)s thuộc %(loc_wh)s. "
+                    "Hãy lấy hàng từ vị trí của kho %(wh)s hoặc đổi loại hoạt động cho đúng kho nguồn."
+                ) % {"picking": picking.name, "type": picking.picking_type_id.display_name, "loc": loc.display_name,
+                     "loc_wh": wh_name(loc), "wh": warehouse.name})
+            for loc in dests.filtered(lambda l: l.warehouse_id != warehouse and l.usage != "transit"):
+                raise UserError(_(
+                    "Phiếu %(picking)s dùng loại hoạt động %(type)s nhưng vị trí đích %(loc)s thuộc %(loc_wh)s. "
+                    "Chuyển sang kho khác phải đi vào %(hub)s (bước 1) và chọn Liên hệ là kho nhận; "
+                    "phiếu bước 2 sẽ tự nhập vào kho nhận."
+                ) % {"picking": picking.name, "type": picking.picking_type_id.display_name, "loc": loc.display_name,
+                     "loc_wh": wh_name(loc), "hub": warehouse._hlv_get_transfer_location().display_name})
+
+    @api.constrains("location_id", "location_dest_id", "picking_type_id")
+    def _check_hlv_transfer_location(self):
+        """CHUYENKHO chỉ làm đích bước 1 / nguồn bước 2 của phiếu chuyển nội bộ."""
+        for picking in self:
+            locations = (picking.location_id | picking.location_dest_id).filtered("hlv_is_transfer_location")
+            if locations and not picking.hlv_allow_transfer_location:
+                picking_type = picking.picking_type_id
+                raise ValidationError(
+                    _("Vị trí %(location)s chỉ dùng cho phiếu chuyển kho nội bộ, không dùng cho loại phiếu %(type)s.")
+                    % {"location": locations[0].display_name, "type": picking_type.display_name}
+                )
 
     # -------------- Wizard mở tay --------------
     def open_transfer_wizard(self):
@@ -307,6 +398,9 @@ class StockPicking(models.Model):
                 # ========= FINAL FIX: SQL UPDATE Ở CUỐI CÙNG =========
                 # Đặt SAU tất cả write operations để tránh bị onchange ghi đè
                 _logger.warning(f"FINAL SQL UPDATE với transit_location.id = {transit_location.id}")
+                # Ghi hết các compute đang chờ (location_id tính lại theo partner/loại phiếu) TRƯỚC khi SQL,
+                # nếu không lần flush sau sẽ ghi đè nguồn thành vị trí mặc định của loại phiếu
+                self.env.flush_all()
                 self.env.cr.execute("""
                     UPDATE stock_picking SET location_id = %s WHERE id = %s
                 """, (transit_location.id, new_picking.id))
@@ -316,7 +410,10 @@ class StockPicking(models.Model):
                 self.env.cr.execute("""
                     UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
                 """, (transit_location.id, new_picking.id))
-                
+                new_picking.invalidate_recordset(["location_id"])
+                new_picking.move_ids.invalidate_recordset(["location_id"])
+                new_picking.move_line_ids.invalidate_recordset(["location_id"])
+
                 # Verify in DB
                 self.env.cr.execute("SELECT location_id FROM stock_picking WHERE id = %s", (new_picking.id,))
                 db_check = self.env.cr.fetchone()
@@ -398,6 +495,7 @@ class StockPicking(models.Model):
     def button_validate(self):
         # Lưu thông tin để tạo phiếu bước 2 SAU khi đã validate và tách kiện
         pickings_need_second_transfer = []
+        self._hlv_check_transfer_route()
 
         for picking in self:
             # Auto chỉ khi: Internal + chưa tạo lần nào + không phải phiếu con + ĐÍCH là transit
@@ -424,6 +522,8 @@ class StockPicking(models.Model):
                 ops = self.env["stock.picking.type"].search(
                     [("warehouse_id", "=", warehouse.id), ("code", "=", "internal")]
                 )
+                # Bước 2 xuất phát từ CHUYENKHO, không được là phiếu lấy hàng / đóng gói
+                ops -= warehouse.pick_type_id | warehouse.pack_type_id
                 next_operation = ops.filtered(lambda r: r.two_step_transfer_use == "reception")[:1] or ops[:1]
                 if not next_operation:
                     raise UserError(_("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name)

@@ -174,24 +174,13 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
         if not wh_product_map:
             return {'warehouses': [], 'all_partners': []}
 
-        # Tìm vị trí luân chuyển (transit location)
-        transit_location = self.env['stock.location'].search([
-            ('usage', '=', 'transit'),
-            ('active', '=', True),
-        ], limit=1)
-        if not transit_location:
-            transit_location = self.env['stock.location'].search([
-                ('complete_name', 'ilike', 'transit'),
-                ('active', '=', True),
-            ], limit=1)
-        transit_location_id = transit_location.id if transit_location else False
-        transit_location_name = transit_location.complete_name if transit_location else 'Inter-warehouse transit'
-
         warehouses_data = []
         for from_wh_id, products_map in wh_product_map.items():
             wh = self.env['stock.warehouse'].browse(from_wh_id)
             if not wh.exists():
                 continue
+            # Bước 1 đi vào CHUYENKHO của kho nguồn
+            transit_location = wh._hlv_get_transfer_location()
 
             # Ưu tiên "Lệnh chuyển hàng nội bộ" — tránh chọn "Lưu kho"
             picking_type = self.env['stock.picking.type'].search([
@@ -232,8 +221,8 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 'lot_stock_name': wh.lot_stock_id.complete_name if wh.lot_stock_id else '',
                 'picking_type_id': picking_type.id if picking_type else False,
                 'picking_type_name': picking_type.name if picking_type else f'Lệnh chuyển hàng nội bộ từ {wh.name}',
-                'transit_location_id': transit_location_id,
-                'transit_location_name': transit_location_name,
+                'transit_location_id': transit_location.id,
+                'transit_location_name': transit_location.complete_name,
                 # Partner áp dụng cứng từ địa chỉ kho, không cần người dùng chọn
                 'partner_id': default_partner.id if default_partner else False,
                 'partner_name': default_partner.name if default_partner else '',
@@ -275,10 +264,7 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 location_dest_id = sel.get('transit_location_id')
 
                 if not location_dest_id:
-                    transit = self.env['stock.location'].search(
-                        [('usage', '=', 'transit'), ('active', '=', True)], limit=1
-                    )
-                    location_dest_id = transit.id if transit else False
+                    location_dest_id = wh._hlv_get_transfer_location().id
 
                 partner_id = sel.get('partner_id') or False
 

@@ -888,6 +888,22 @@ def _same_warehouse_one_step_enabled():
     )
     return str(param).strip().lower() in ['true', '1']
 
+def _transfer_location_for(source_loc):
+    """Vị trí CHUYENKHO của kho nguồn: đích bước 1 khi chuyển kho 2 bước."""
+    warehouse = source_loc.warehouse_id or request.env['stock.warehouse'].sudo().search(
+        [('view_location_id', 'parent_of', source_loc.id)], limit=1)
+    if not warehouse:
+        return request.env['stock.location']
+    return warehouse.sudo()._hlv_get_transfer_location()
+
+def _transfer_location_error(source_loc, dest_location_id=False):
+    """CHUYENKHO chỉ để xem tồn trên app; không làm nguồn/đích khi chuyển (chỉ đi qua phiếu bước 1/bước 2)."""
+    locations = source_loc | request.env['stock.location'].sudo().browse(int(dest_location_id or 0)).exists()
+    location = locations.filtered('hlv_is_transfer_location')[:1]
+    if location:
+        return {'error': _('%s là vị trí chuyển kho, không chọn làm nguồn/đích. Hàng ở đây được nhập qua phiếu bước 2.', location.display_name)}
+    return False
+
 def _pick_assignment_error(picking):
     try:
         picking._check_hlv_mobile_pick_assignment_access(user=request.env.user)
@@ -1057,7 +1073,7 @@ class HLVMobileBarcodeController(http.Controller):
             is_putaway = picking.location_dest_id.usage == 'internal'
         elif picking.source_transfer_id:
             is_putaway = True
-        elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
+        elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit' or picking.location_id.hlv_is_transfer_location:
             is_putaway = True
 
         is_pick_picking = _is_pick_picking(picking) and not is_return_picking
@@ -1418,13 +1434,12 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Không xác định được vị trí nguồn')}
             
         company_id = request.env.company.id
-        transit_loc = request.env['stock.location'].search([
-            ('usage', '=', 'transit'), 
-            ('company_id', 'in', [False, company_id])
-        ], limit=1)
-        
+        transit_loc = _transfer_location_for(source_loc)
         if not transit_loc:
-            return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
+            return {'error': _('Không tìm thấy vị trí chuyển kho (CHUYENKHO) của kho nguồn')}
+        hub_error = _transfer_location_error(source_loc, dest_location_id)
+        if hub_error:
+            return hub_error
             
         picking_type_int = request.env['stock.picking.type'].search([
             ('code', '=', 'internal'),
@@ -1469,7 +1484,7 @@ class HLVMobileBarcodeController(http.Controller):
                     # Same warehouse -> direct 1 step move
                     target_location_dest_id = dest_loc.id
                 else:
-                    # Different warehouse, or same warehouse with 1-step disabled -> use transit and override step 2.
+                    # Different warehouse, or same warehouse with 1-step disabled -> go via source CHUYENKHO and override step 2.
                     override_dest_loc_id = dest_loc.id
                     if dest_loc.warehouse_id and dest_loc.warehouse_id.partner_id:
                         partner_id = dest_loc.warehouse_id.partner_id.id
@@ -1554,7 +1569,7 @@ class HLVMobileBarcodeController(http.Controller):
             is_putaway = picking.location_dest_id.usage == 'internal'
         elif picking.source_transfer_id:
             is_putaway = True
-        elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
+        elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit' or picking.location_id.hlv_is_transfer_location:
             is_putaway = True
         else:
             is_putaway = False
@@ -1570,7 +1585,7 @@ class HLVMobileBarcodeController(http.Controller):
         uses_qty_scanned = _uses_qty_scanned_progress(picking)
         
         # 1. Try to find location first
-        location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
+        location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode), ('hlv_is_transfer_location', '=', False)], limit=1)
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
             if is_putaway and (preferred_move_line_id or last_move_line_id):
@@ -3236,7 +3251,7 @@ class HLVMobileBarcodeController(http.Controller):
                 picking.picking_type_id.code == 'internal'
                 and not picking.source_transfer_id
                 and not _is_return_picking(picking)
-                and picking.location_dest_id.usage == 'transit'
+                and (picking.location_dest_id.usage == 'transit' or picking.location_dest_id.hlv_is_transfer_location)
             )
             if is_dynamic_int_step1:
                 for move in picking.sudo().move_ids.filtered(
@@ -3492,7 +3507,11 @@ class HLVMobileBarcodeController(http.Controller):
                     location = q.location_id
             if location:
                 warehouse_code = location.warehouse_id.code or 'HLV'
-            can_process_whole_package = bool(quants and location and len(quant_locations) == 1)
+            # Kiện ở CHUYENKHO đang chờ phiếu bước 2: chỉ xem, không tháo/chuyển
+            in_transfer_location = any(quant_locations.mapped('hlv_is_transfer_location'))
+            can_process_whole_package = bool(
+                quants and location and len(quant_locations) == 1 and not in_transfer_location
+            )
             return {
                 'title': title,
                 'results': results,
@@ -3502,7 +3521,7 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_id': location.id if location else False,
                 'location_barcode': (location.barcode or location.name) if location else '',
                 'location_name': location.display_name if location else '',
-                'can_unpack_package': bool(quants),
+                'can_unpack_package': bool(quants) and not in_transfer_location,
                 'can_move_package': can_process_whole_package,
             }
                 
@@ -3517,6 +3536,10 @@ class HLVMobileBarcodeController(http.Controller):
             source_location = _single_package_location(package)
         except UserError:
             source_location = package.location_id
+
+        hub_error = _transfer_location_error(source_location or request.env['stock.location'])
+        if hub_error:
+            return hub_error
 
         warehouse = source_location.warehouse_id if source_location else False
         if source_location and not warehouse:
@@ -3546,9 +3569,9 @@ class HLVMobileBarcodeController(http.Controller):
         if not barcode:
             return {'error': _('Mã vạch không hợp lệ')}
         barcode = barcode.strip()
-        location = request.env['stock.location'].sudo().search([('barcode', '=', barcode)], limit=1)
+        location = request.env['stock.location'].sudo().search([('barcode', '=', barcode), ('hlv_is_transfer_location', '=', False)], limit=1)
         if not location:
-            location = request.env['stock.location'].sudo().search([('name', '=', barcode)], limit=1)
+            location = request.env['stock.location'].sudo().search([('name', '=', barcode), ('hlv_is_transfer_location', '=', False)], limit=1)
         
         if location:
             return {'success': True, 'location_name': location.display_name, 'location_barcode': location.barcode or location.name}
@@ -3576,14 +3599,13 @@ class HLVMobileBarcodeController(http.Controller):
             
         company_id = request.env.company.id
         
-        # Get Transit Location
-        transit_loc = request.env['stock.location'].sudo().search([
-            ('usage', '=', 'transit'), 
-            ('company_id', 'in', [False, company_id])
-        ], limit=1)
-        
+        # Vị trí CHUYENKHO của kho nguồn (đích bước 1)
+        transit_loc = _transfer_location_for(source_loc)
         if not transit_loc:
-            return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
+            return {'error': _('Không tìm thấy vị trí chuyển kho (CHUYENKHO) của kho nguồn')}
+        hub_error = _transfer_location_error(source_loc, dest_location_id)
+        if hub_error:
+            return hub_error
             
         # Determine warehouse using parent_of logic if warehouse_id is missing
         warehouse = source_loc.warehouse_id
@@ -3794,14 +3816,13 @@ class HLVMobileBarcodeController(http.Controller):
             
         company_id = request.env.company.id
         
-        # Get Transit Location
-        transit_loc = request.env['stock.location'].sudo().search([
-            ('usage', '=', 'transit'), 
-            ('company_id', 'in', [False, company_id])
-        ], limit=1)
-        
+        # Vị trí CHUYENKHO của kho nguồn (đích bước 1)
+        transit_loc = _transfer_location_for(source_loc)
         if not transit_loc:
-            return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
+            return {'error': _('Không tìm thấy vị trí chuyển kho (CHUYENKHO) của kho nguồn')}
+        hub_error = _transfer_location_error(source_loc)
+        if hub_error:
+            return hub_error
             
         warehouse = source_loc.warehouse_id
         if warehouse and warehouse.int_type_id and warehouse.in_type_id:

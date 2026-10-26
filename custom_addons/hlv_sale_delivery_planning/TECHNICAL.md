@@ -52,6 +52,7 @@ Tất cả XML files phải được đăng ký trong `__manifest__.py` → `web
 - **Nguyên tắc DRY**: 
   - Các hàm tiện ích để parse Data (build Path, render status Text) nằm gọn trong `delivery_planner_service.py` dưới dạng các protected methods `_build_xxx()`.
   - Bên UI JS, các hàm Translating và formatting CSS Classes được thiết kế thuần tủy dưới dạng Object Helper.
+- **Vị trí CHUYENKHO** (module `deltatech_picking_transit`): tồn khả dụng theo kho (`_get_loc_to_wh_map`, `delivery_planner_stock_helpers`, kit trong `delivery_planner_formatter`) loại `hlv_is_transfer_location` vì đơn bán không lấy được hàng ở đó. Phiếu luân chuyển (`delivery_planner_transfer.py`) đi kho nguồn → CHUYENKHO của kho nguồn qua `wh._hlv_get_transfer_location()`; không tự search `usage='transit'`.
 - **Truy cập CSDL**: Luôn áp dụng phân trang (Pagination) ở cấp độ Backend Server thay vì tải All và chẻ page ở Client.
 
 ## 4. Luồng xử lý chính
