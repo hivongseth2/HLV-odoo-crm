@@ -35,7 +35,7 @@ class AmisSyncJob(models.Model):
         ('incoming', 'Nhập kho (InwardVoucher)'),
         ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
         ('sa_invoice', 'Hóa đơn bán hàng (SAInvoice)'),
-        ('loyalty_gift', 'Đơn quà tặng Loyalty (SAVoucher khuyến mại)'),
+        ('loyalty_gift', 'Xuất kho quà tặng Loyalty (Xuất kho khác)'),
     ], string='Loại đồng bộ', required=True)
     status = fields.Selection([
         ('pending', 'Chờ xử lý'),

@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Đẩy đơn quà tặng Loyalty sang MISA dưới dạng chứng từ bán hàng hàng khuyến mại.
+"""Đẩy đơn quà tặng Loyalty sang MISA dưới dạng phiếu xuất kho khác.
 
 Đơn bán thường đi CRM → MISA → Odoo nên MISA đã có chứng từ. Riêng đơn quà tặng
-sinh ra trong Odoo (nhân viên nhập mã voucher Quà tặng) nên MISA không biết món
-quà đã ra khỏi kho. Đẩy SAVoucher kiêm phiếu xuất (không phải phiếu xuất kho đứng
-riêng) vì kế toán phải lập hoá đơn 0đ cho hàng khuyến mại từ chứng từ bán hàng
-trên MISA; giá vốn ghi vào chi phí (6422) thay vì 632.
+sinh ra trong Odoo (nhập mã voucher Quà tặng) nên MISA không biết món quà đã ra
+khỏi kho. Chỉ đẩy phiếu xuất kho loại "Khác" (reftype 2022), giá vốn ghi chi phí
+khuyến mãi (6422) — không đẩy chứng từ bán hàng vì đơn quà không có doanh thu;
+kế toán lập hoá đơn 0đ cho hàng khuyến mại từ phiếu xuất này trên MISA.
 """
 import logging
+import uuid
+from datetime import datetime
 
 from odoo import fields, models
 from odoo.exceptions import UserError
@@ -15,6 +17,12 @@ from odoo.exceptions import UserError
 from .amis_callback_utils import misa_error_means_voucher_created
 
 _logger = logging.getLogger(__name__)
+
+# reftype "Xuất kho khác" trong danh sách loại chứng từ AMIS kế toán (ACT Open API);
+# trên MISA là phiếu xuất kho loại "4. Khác (Xuất sử dụng, góp vốn, ...)".
+MISA_REFTYPE_OUTWARD_OTHER = 2022
+# Đã có đề nghị/chứng từ trên MISA: không gửi lại, tránh trùng
+MISA_GIFT_STATES_IN_FLIGHT = ('requested', 'created', 'posted')
 
 
 class AmisCallbackConfigLoyaltyGift(models.Model):
@@ -24,8 +32,8 @@ class AmisCallbackConfigLoyaltyGift(models.Model):
         string='Đẩy đơn quà tặng Loyalty',
         default=False,
         help='Bật để khi giao xong đơn quà tặng Loyalty (đơn riêng 0đ, nhập mã voucher '
-             'Quà tặng trong Odoo) thì đẩy chứng từ bán hàng khuyến mại kiêm phiếu xuất '
-             'lên MISA. Kế toán lập hoá đơn từ chứng từ đó trên MISA.',
+             'Quà tặng trong Odoo) thì đẩy phiếu xuất kho khác (hàng khuyến mại) lên '
+             'MISA. Kế toán lập hoá đơn 0đ từ phiếu xuất đó trên MISA.',
     )
     loyalty_gift_debit_account = fields.Char(
         string='TK chi phí quà tặng',
@@ -47,6 +55,43 @@ class SaleOrderLoyaltyGiftMisa(models.Model):
         ('error', 'Lỗi'),
     ], string='Trạng thái MISA đơn quà tặng', copy=False, readonly=True)
     misa_gift_error = fields.Text(string='Lỗi MISA đơn quà tặng', copy=False, readonly=True)
+
+    def action_misa_gift_resend(self):
+        """Gửi lại phiếu xuất quà tặng sang MISA.
+
+        Dùng khi kế toán đã xoá đề nghị trên MISA (MISA không báo về), đề nghị sai
+        khách, hoặc đơn bị lỗi. Gửi cùng mã phiếu nên đề nghị còn trên MISA sẽ được
+        sửa chứ không thêm bản mới; đã sinh chứng từ rồi thì MISA từ chối và đơn
+        chỉ chuyển sang "Đã sinh chứng từ".
+        """
+        jobs = self.env['amis.sync.job'].sudo()
+        for order in self:
+            if not order._is_loyalty_gift_order():
+                raise UserError('Đơn %s không phải đơn quà tặng Loyalty.' % order.name)
+            if order.misa_gift_state == 'posted':
+                raise UserError('Đơn %s đã ghi sổ trên MISA, không gửi lại.' % order.name)
+            picking = order.picking_ids.filtered(
+                lambda p: p.state == 'done' and p.picking_type_code == 'outgoing'
+            )[:1]
+            if not picking:
+                raise UserError('Đơn %s chưa có phiếu xuất kho đã giao.' % order.name)
+            order.write({'misa_gift_state': False, 'misa_gift_error': False})
+            jobs.create({
+                'picking_id': picking.id,
+                'sale_order_id': order.id,
+                'direction': 'loyalty_gift',
+                'status': 'pending',
+            })
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Đã đưa vào hàng đợi',
+                'message': 'Phiếu xuất quà tặng sẽ được gửi lại sang MISA trong ít phút.',
+                'type': 'success',
+                'sticky': False,
+            },
+        }
 
 
 class StockPickingLoyaltyGiftSync(models.Model):
@@ -83,7 +128,7 @@ class StockPickingLoyaltyGiftSync(models.Model):
         _logger.info('AMIS loyalty gift job enqueued for picking %s (SO %s)', self.name, sale_order.name)
 
     def _sync_loyalty_gift_to_misa(self):
-        """Được gọi bởi amis.sync.job — push SAVoucher hàng khuyến mại lên MISA."""
+        """Được gọi bởi amis.sync.job — push phiếu xuất kho khác của quà lên MISA."""
         self.ensure_one()
         if self.state != 'done' or self.picking_type_code != 'outgoing':
             return
@@ -91,8 +136,9 @@ class StockPickingLoyaltyGiftSync(models.Model):
         sale_order = self._get_related_sales_order()
         if not sale_order or not sale_order._is_loyalty_gift_order():
             raise UserError('Phiếu %s không thuộc đơn quà tặng Loyalty.' % self.name)
-        if sale_order.misa_sa_voucher_synced:
-            _logger.info('Skip loyalty gift sync for %s: đơn %s đã đẩy MISA.', self.name, sale_order.name)
+        if sale_order.misa_gift_state in MISA_GIFT_STATES_IN_FLIGHT:
+            _logger.info('Skip loyalty gift sync for %s: đơn %s đã có đề nghị trên MISA.',
+                         self.name, sale_order.name)
             return
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
@@ -103,47 +149,88 @@ class StockPickingLoyaltyGiftSync(models.Model):
             return
         self._misa_check_products_mapped(moves, sale_order.name)
 
-        payload = self._prepare_misa_gift_sa_voucher_payload(config, sale_order)
-        config.push_sa_voucher(payload)
-        sale_order.sudo().write({
-            'misa_sa_voucher_synced': True,
-            'misa_sa_voucher_org_refid': payload['org_refid'],
-            'misa_gift_state': 'requested',
-            'misa_gift_error': False,
-        })
+        payload = self._prepare_misa_gift_outward_payload(config, sale_order, moves)
+        config.push_outgoing_voucher(payload)
+        sale_order.sudo().write({'misa_gift_state': 'requested', 'misa_gift_error': False})
         _logger.info(
-            'Loyalty gift SAVoucher pushed for picking %s (SO %s), org_refid=%s',
+            'Loyalty gift outward pushed for picking %s (SO %s), org_refid=%s',
             self.name, sale_order.name, payload['org_refid'],
         )
 
-    def _prepare_misa_gift_sa_voucher_payload(self, config, sale_order):
-        """SAVoucher bán hàng kiêm xuất kho, mọi dòng là hàng khuyến mại 0đ.
-
-        Dựng từ payload SAVoucher chung rồi chỉnh những chỗ khác của quà tặng.
-        """
+    def _prepare_misa_gift_outward_payload(self, config, sale_order, moves):
+        """Phiếu xuất kho (voucher_type=8) loại Xuất kho khác, đứng riêng không gắn
+        chứng từ bán hàng. Mọi dòng là hàng khuyến mại, tính theo giá vốn."""
         self.ensure_one()
-        voucher = self._prepare_misa_sa_voucher_payload(config, sale_order)
-        debit_account = (config.loyalty_gift_debit_account or '').strip() or '6422'
-        voucher_code = sale_order.loyalty_voucher_id.code or ''
+        branch_id = (config.misa_branch_id or '').strip()
+        stock_id = (config.misa_stock_id or '').strip()
+        if not branch_id or not stock_id:
+            raise UserError('Thiếu MISA Branch ID hoặc Stock ID trong cấu hình.')
 
-        # Chưa lập hoá đơn: kế toán tự lập hoá đơn 0đ trên MISA. Bỏ sa_invoice_refid
-        # để MISA không tìm hoá đơn kèm theo không tồn tại.
-        voucher.pop('sa_invoice_refid', None)
-        voucher['include_invoice'] = 0
-        voucher['journal_memo'] = 'Xuat qua tang Loyalty %s - voucher %s (Odoo: %s)' % (
-            sale_order.name, voucher_code, self.name,
-        )
-        for line in voucher['detail']:
-            line.update({
-                'is_promotion': True,
-                'cost_account': debit_account,
-                'stock_account': '1561',
-            })
-        outward = voucher['in_outward']
-        outward['journal_memo'] = voucher['journal_memo']
-        for line in outward['detail']:
-            line.update({'is_promotion': True, 'debit_account': debit_account})
-        return voucher
+        partner = sale_order.partner_id.commercial_partner_id
+        account_object = config.resolve_misa_account_object(partner, sale_order=sale_order)
+        account_object_id, account_object_code, account_object_name = account_object
+
+        # Giữ refid qua các lần gửi lại để MISA sửa đúng đề nghị cũ thay vì tạo thêm
+        refid = (self.misa_outward_org_refid or '').strip()
+        if not refid:
+            refid = str(uuid.uuid4())
+            self.sudo().write({'misa_outward_org_refid': refid})
+
+        debit_account = (config.loyalty_gift_debit_account or '').strip() or '6422'
+        detail = [
+            dict(
+                self._misa_outward_detail_vals(
+                    move, refid, idx, stock_id, account_object, debit_account=debit_account,
+                ),
+                is_promotion=True,  # in_outward_detail/is_promotion: "Là hàng khuyến mại"
+            )
+            for idx, move in enumerate(moves, start=1)
+        ]
+        total_cost = sum(d['amount_finance'] for d in detail)
+        refdate = self._to_misa_date(self.date_done)
+        receiver = self.partner_id or sale_order.partner_shipping_id
+
+        return {
+            'voucher_type': 8,
+            'is_get_new_id': False,
+            'org_refid': refid,
+            'org_refno': self.name,
+            'org_reftype': MISA_REFTYPE_OUTWARD_OTHER,
+            'refid': refid,
+            'reftype': MISA_REFTYPE_OUTWARD_OTHER,
+            'reftype_name': 'Xuất kho khác',
+            'is_allow_group': False,
+            'act_voucher_type': 0,
+            'branch_id': branch_id,
+            'from_stock_id': stock_id,
+            'account_object_id': account_object_id,
+            'account_object_code': account_object_code,
+            'account_object_name': account_object_name,
+            'account_object_address': partner.contact_address_complete or '',
+            'account_object_tax_code': partner.vat or '',
+            'contact_name': receiver.name or '',
+            'display_on_book': 0,
+            'reforder': int(datetime.utcnow().timestamp() * 1000),
+            'refdate': refdate,
+            'posted_date': refdate,
+            'is_posted_finance': False,
+            'is_posted_management': False,
+            'is_posted_inventory_book_finance': False,
+            'is_posted_inventory_book_management': False,
+            'is_branch_issued': False,
+            'is_sale_with_outward': False,
+            'is_invoice_replace': False,
+            'total_amount_finance': total_cost,
+            'total_amount_management': total_cost,
+            'refno_finance': '',
+            'refno_management': '',
+            'journal_memo': 'Xuat qua tang Loyalty %s - voucher %s (Odoo: %s)' % (
+                sale_order.name, sale_order.loyalty_voucher_id.code or '', self.name,
+            ),
+            'auto_refno': False,
+            'state': 0,
+            'detail': detail,
+        }
 
 
 class AmisCallbackLogLineLoyaltyGift(models.Model):
@@ -154,21 +241,23 @@ class AmisCallbackLogLineLoyaltyGift(models.Model):
 
     def _apply_sync_result(self):
         res = super()._apply_sync_result()
-        orders = self.env['sale.order'].sudo()
+        pickings = self.env['stock.picking'].sudo()
         jobs = self.env['amis.sync.job'].sudo()
         for line in self:
             org_refid = (line.org_refid or '').strip()
             if not org_refid:
                 continue
-            order = orders.search([('misa_sa_voucher_org_refid', '=', org_refid)], limit=1)
-            if not order:
+            picking = pickings.search([('misa_outward_org_refid', '=', org_refid)], limit=1)
+            if not picking:
                 continue
+            # misa_outward_org_refid cũng là phiếu xuất kèm SAVoucher của đơn thường —
+            # chỉ xử lý phiếu đã có job quà tặng.
             job = jobs.search([
-                ('sale_order_id', '=', order.id),
+                ('picking_id', '=', picking.id),
                 ('direction', '=', 'loyalty_gift'),
             ], order='id desc', limit=1)
-            if job:  # không có job là SAVoucher của đơn thường, không phải quà tặng
-                line._apply_loyalty_gift_result(order, job)
+            if job and job.sale_order_id:
+                line._apply_loyalty_gift_result(job.sale_order_id, job)
         return res
 
     def _apply_loyalty_gift_result(self, order, job):
@@ -184,11 +273,9 @@ class AmisCallbackLogLineLoyaltyGift(models.Model):
                 model_state = 0
             state = self._GIFT_STATE_BY_MODEL_STATE.get(model_state)
             if state:
-                vals = {'misa_gift_state': state, 'misa_gift_error': False}
-                if state == 'deleted':
-                    # Mở lại để bấm chạy lại job nếu kế toán xóa nhầm; không tự gửi lại.
-                    vals['misa_sa_voucher_synced'] = False
-                order.write(vals)
+                # 'deleted' nằm ngoài MISA_GIFT_STATES_IN_FLIGHT nên bấm "Thử lại" trên
+                # job là gửi lại được nếu kế toán xoá nhầm; không tự gửi lại.
+                order.write({'misa_gift_state': state, 'misa_gift_error': False})
             return
 
         is_request = self._misa_callback_is_request_callback(
@@ -204,10 +291,6 @@ class AmisCallbackLogLineLoyaltyGift(models.Model):
             # Gửi lại đề nghị cho đơn mà kế toán đã sinh chứng từ: không phải lỗi.
             order.write({'misa_gift_state': 'created', 'misa_gift_error': False})
             return
-        order.write({
-            'misa_sa_voucher_synced': False,
-            'misa_gift_state': 'error',
-            'misa_gift_error': error_message,
-        })
+        order.write({'misa_gift_state': 'error', 'misa_gift_error': error_message})
         if is_request and data_type in (1, 3):
             job._schedule_retry_after_callback_error(error_message)

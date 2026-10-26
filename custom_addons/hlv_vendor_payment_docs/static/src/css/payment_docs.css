@@ -158,3 +158,4 @@
 .pay-kind-misa { border-color: #fde68a; background: #fffbeb; color: #92400e; }
 .debt-flag-danger { background: #fef2f2; color: #991b1b; }
 .debt-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.misa-over { color: #9a3412; font-weight: 600; }

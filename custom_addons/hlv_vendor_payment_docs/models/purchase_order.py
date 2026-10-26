@@ -5,7 +5,7 @@ from odoo.addons.hlv_vendor_quotation.models.purchase_order import CONFIRMED_STA
 from odoo.addons.hlv_vendor_quotation.models.delivery_utils import local_day_start_utc
 
 from .payment_request import VENDOR_PAYMENT_STATES
-from .payment_utils import PAID_TOLERANCE, PAYMENT_STATUS_LABELS, payment_status
+from .payment_utils import PAID_TOLERANCE, PAYMENT_STATUS_LABELS, ROUNDING_TOLERANCE, payment_status
 
 # Mốc công nợ NCC (ngày, yyyy-mm-dd): đơn xác nhận TRƯỚC mốc coi như đã chi xong — không còn nợ, không vào số công nợ
 # của trang NCC / trang kế toán. Công nợ cũ hơn mốc đã thanh toán trên MISA từ trước khi có tính năng này, kéo về
@@ -63,17 +63,19 @@ class PurchaseOrder(models.Model):
         return sum(r.amount for r in self._hlv_vendor_payment_requests() if not r._hlv_is_paid())
 
     def _hlv_open_amount(self):
-        """Còn nợ NCC của đơn (không âm). Đơn trước mốc công nợ → 0 (coi như đã chi xong)."""
+        """Còn nợ NCC của đơn. Đơn trước mốc công nợ → 0 (coi như đã chi xong); còn không quá ROUNDING_TOLERANCE
+        → 0 (lệch làm tròn giữa hoá đơn MISA và đơn Odoo, không phải nợ)."""
         self.ensure_one()
         if not self._hlv_debt_tracked():
             return 0.0
-        return max(self.amount_total - self._hlv_paid_amount(), 0.0)
+        remaining = self.amount_total - self._hlv_paid_amount()
+        return remaining if remaining > ROUNDING_TOLERANCE else 0.0
 
     def _hlv_overpaid_amount(self):
         """Đã chi vượt giá trị đơn (đề nghị chi + công nợ cùng trả một khoản) — 0 nếu không vượt."""
         self.ensure_one()
         over = self._hlv_paid_amount() - self.amount_total
-        return over if over > PAID_TOLERANCE else 0.0
+        return over if over > ROUNDING_TOLERANCE else 0.0
 
     @api.model
     def _hlv_open_orders_of(self, vendor):
