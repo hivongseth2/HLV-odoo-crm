@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 incremental_sync.py — chép phần thay đổi của các bảng nóng (hot_tables.txt) từ prd sang RAW_DB.
-Chạy mỗi 5 phút bằng cron. Cần RAW_DB đã được dựng bởi full_refresh.sh.
+Chạy mỗi 5 phút bằng cron. Cần RAW_DB đã được dựng bởi load_backup.sh hoặc full_refresh.sh.
 
 Mỗi bảng: lấy dòng có write_date >= (mốc lần trước - OVERLAP_MINUTES) bằng COPY qua SSH, rồi upsert
 theo id. Chỉ chạm Postgres của prd, không qua worker Odoo.
@@ -10,11 +10,14 @@ Danh sách cột đọc lại từ prd mỗi lần, không cố định: prd dep
 bỏ cột thì cột đó đứng yên ở DB thô. Bảng thiếu ở một bên thì bỏ qua và ghi log — bản chép đêm sẽ
 đưa cấu trúc về khớp prd.
 
+Cột có tên khớp secret_columns.txt (token, password…) không chép — DB thô giữ chúng NULL.
+
 Không bắt được: dòng bị xoá (chép đêm dọn) và thay đổi bằng SQL thô không cập nhật write_date
 (xem README).
 """
 import fcntl
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -43,6 +46,13 @@ def read_table_list(path):
     """Đọc danh sách tên bảng, mỗi dòng một bảng; bỏ dòng trống và comment. Trả list giữ thứ tự."""
     with open(path, encoding='utf-8') as fh:
         return [s for s in (line.split('#', 1)[0].strip() for line in fh) if s]
+
+
+def read_secret_regex(path):
+    """Regex tên cột bí mật: dòng không phải comment đầu tiên của file, không phân biệt hoa thường."""
+    with open(path, encoding='utf-8') as fh:
+        pattern = next(s for s in (line.strip() for line in fh) if s and not s.startswith('#'))
+    return re.compile(pattern, re.IGNORECASE)
 
 
 def log(msg):
@@ -138,6 +148,7 @@ def sync_table(conn, prd, table, rcols, since):
 def main():
     cfg = load_env(os.path.join(HERE, 'raw_db.env'))
     tables = read_table_list(os.path.join(HERE, 'hot_tables.txt'))
+    secret = read_secret_regex(os.path.join(HERE, 'secret_columns.txt'))
     overlap = timedelta(minutes=int(cfg.get('OVERLAP_MINUTES', '10')))
 
     lock = open(os.path.join(cfg['WORK_DIR'], 'sync.lock'), 'w')
@@ -178,7 +189,9 @@ def main():
         try:
             with conn.cursor() as cur:
                 align_columns(cur, table, rcols, lcols)
-            n = sync_table(conn, prd, table, rcols, since)
+            # Cột bí mật vẫn được tạo ở DB thô (align_columns) nhưng không bao giờ chép giá trị.
+            copy_cols = [(c, t) for c, t in rcols if not secret.search(c)]
+            n = sync_table(conn, prd, table, copy_cols, since)
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO sync.state (table_name, mark, rows_last, synced_at) VALUES (%s, %s, %s, now())

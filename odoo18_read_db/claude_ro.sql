@@ -7,6 +7,13 @@ GRANT CONNECT ON DATABASE :"dbname" TO claude_ro;
 GRANT USAGE ON SCHEMA public TO claude_ro;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO claude_ro;
 
+-- Schema phụ của extension (Odoo.sh để unaccent trong unaccent_schema): index trên res_partner…
+-- dùng hàm này, thiếu quyền USAGE thì cả câu SELECT thường cũng lỗi "permission denied for schema".
+-- Chỉ cho gọi hàm, không mở thêm bảng (bảng vẫn chỉ được SELECT trong public).
+SELECT format('GRANT USAGE ON SCHEMA %I TO claude_ro', nspname)
+FROM pg_namespace
+WHERE nspname NOT LIKE 'pg\_%' AND nspname NOT IN ('information_schema', 'public', 'sync') \gexec
+
 -- Dữ liệu các bảng này đã bị bỏ lúc dump; thu quyền thêm cho chắc nếu sau này có ai đổi danh sách.
 DO $$
 DECLARE
