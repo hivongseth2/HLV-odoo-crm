@@ -21,6 +21,7 @@ deltatech_picking_transit/
 ├── data/transfer_location_data.xml   ← <function> tạo CHUYENKHO cho mọi kho mỗi lần nâng cấp
 ├── models/
 │   ├── stock_location.py             ← field hlv_is_transfer_location; stock.warehouse._hlv_get_transfer_location()
+│   ├── stock_move_line.py            ← chặn sửa tay Transit / đích sai CHUYENKHO trên từng dòng
 │   ├── stock_picking.py              ← tạo bước 2, nhận diện transit/CHUYENKHO, ràng buộc, domain chọn vị trí
 │   └── stock_picking_type.py         ← two_step_transfer_use, auto_second_transfer
 ├── views/                            ← nút "Tạo phiếu bước 2", "Phân bổ lại vị trí"
@@ -33,6 +34,8 @@ deltatech_picking_transit/
 | Lấy/tạo CHUYENKHO của một kho | `stock.warehouse._hlv_get_transfer_location()` |
 | Vị trí có phải trung chuyển (CHUYENKHO hoặc Transit cũ) | `stock.picking._is_inter_warehouse_transit(location)` |
 | Chặn CHUYENKHO trên phiếu không phải chuyển nội bộ | `stock.picking._check_hlv_transfer_location` + domain field `location_id/location_dest_id` |
+| Chặn Transit (nguồn/đích) trên phiếu chuyển nội bộ đang mở, trừ nguồn bước 2 = đích Transit của bước 1 cũ | `stock.picking._hlv_check_no_transit` (gọi từ `_check_hlv_transfer_location` và `stock.move.line._check_hlv_no_transit`) |
+| Chuyển sang kho khác (Liên hệ là kho khác / đích ngoài kho nguồn / đích là CHUYENKHO): đích phiếu + từng dòng bắt buộc = CHUYENKHO của kho nguồn; cùng kho bỏ qua | `stock.picking._hlv_check_inter_warehouse_dest` (gọi từ 2 ràng buộc trên) |
 | Sinh phiếu bước 2 | `stock.picking.button_validate` → `create_second_transfer_wizard` |
 | Tự chọn đích CHUYENKHO khi Liên hệ là kho khác; nguồn bước 2 = đích bước 1 | `stock.picking._compute_location_id` (override) |
 | Chặn xác nhận khi nguồn/đích không khớp kho của loại phiếu | `stock.picking._hlv_check_transfer_route` (gọi đầu `button_validate`) |

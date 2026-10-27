@@ -249,7 +249,7 @@ class StockPicking(models.Model):
                 ) % {"picking": picking.name, "type": picking.picking_type_id.display_name, "loc": loc.display_name,
                      "loc_wh": wh_name(loc), "hub": warehouse._hlv_get_transfer_location().display_name})
 
-    @api.constrains("location_id", "location_dest_id", "picking_type_id")
+    @api.constrains("location_id", "location_dest_id", "picking_type_id", "partner_id")
     def _check_hlv_transfer_location(self):
         """CHUYENKHO chỉ làm đích bước 1 / nguồn bước 2 của phiếu chuyển nội bộ."""
         for picking in self:
@@ -260,6 +260,47 @@ class StockPicking(models.Model):
                     _("Vị trí %(location)s chỉ dùng cho phiếu chuyển kho nội bộ, không dùng cho loại phiếu %(type)s.")
                     % {"location": locations[0].display_name, "type": picking_type.display_name}
                 )
+            picking._hlv_check_no_transit(picking.location_id | picking.location_dest_id)
+            picking._hlv_check_inter_warehouse_dest(picking.location_dest_id)
+
+    def _hlv_check_no_transit(self, locations):
+        """Chuyển kho đã thay Transit bằng CHUYENKHO: chặn chọn lại Transit trên phiếu chuyển nội bộ đang mở.
+        Chỉ cho phép nguồn bước 2 = đích Transit của phiếu bước 1 cũ (hệ thống tự sinh)."""
+        self.ensure_one()
+        if not self.hlv_allow_transfer_location or self.state in ("cancel", "done") or self.return_id:
+            return
+        allowed = self.source_transfer_id.location_dest_id
+        for loc in locations.filtered(lambda l: l.usage == "transit") - allowed:
+            warehouse = self.picking_type_id.warehouse_id
+            hub = allowed or (warehouse and warehouse._hlv_get_transfer_location())
+            raise ValidationError(
+                _("Phiếu %(picking)s: không dùng %(transit)s làm vị trí trung gian chuyển kho nữa. "
+                  "Hãy chọn %(hub)s (chọn Liên hệ là kho nhận để tự điền).")
+                % {"picking": self.name, "transit": loc.display_name, "hub": hub.display_name if hub else "CHUYENKHO"}
+            )
+
+    def _hlv_check_inter_warehouse_dest(self, dests):
+        """Chuyển sang kho khác (Liên hệ là kho khác / đích ngoài kho nguồn / đích đã là CHUYENKHO):
+        đích bước 1 bắt buộc là CHUYENKHO của kho nguồn. Chuyển cùng kho không kiểm tra."""
+        self.ensure_one()
+        if (not self.hlv_allow_transfer_location or self.state in ("cancel", "done") or self.return_id
+                or self.source_transfer_id or self.location_dest_id.usage == "transit"):
+            return  # đích Transit = phiếu cũ chờ script chuyển, ràng buộc Transit đã chặn khi sửa
+        src_wh = self.location_id.warehouse_id or self.picking_type_id.warehouse_id
+        if not src_wh:
+            return
+        hub = src_wh._hlv_get_transfer_location()
+        partner_wh = self.env["stock.warehouse"].search([("partner_id", "=", self.partner_id.id)], limit=1) if self.partner_id else False
+        all_dests = self.location_dest_id | dests
+        if not ((partner_wh and partner_wh != src_wh) or hub in all_dests
+                or all_dests.filtered(lambda l: l.warehouse_id != src_wh)):
+            return
+        for loc in dests - hub:
+            raise ValidationError(
+                _("Phiếu %(picking)s chuyển từ kho %(wh)s sang kho khác: vị trí đích phải là %(hub)s, "
+                  "không được chọn %(loc)s. Phiếu bước 2 sẽ tự nhập vào kho nhận.")
+                % {"picking": self.name, "wh": src_wh.name, "hub": hub.display_name, "loc": loc.display_name}
+            )
 
     # -------------- Wizard mở tay --------------
     def open_transfer_wizard(self):
