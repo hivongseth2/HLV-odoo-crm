@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- email_to do Python truyền vào (danh sách admin), không khai ở đây. -->
+        <record id="mail_template_device_request" model="mail.template">
+            <field name="name">Duyệt đăng nhập: thiết bị mới</field>
+            <field name="model_id" ref="model_hlv_login_device"/>
+            <field name="subject">[Duyệt đăng nhập] {{ object.user_id.name }} đăng nhập từ thiết bị mới</field>
+            <field name="email_from">{{ object.user_id.company_id.email_formatted or user.email_formatted }}</field>
+            <field name="description">Gửi admin khi user nội bộ đăng nhập từ thiết bị chưa được duyệt</field>
+            <field name="auto_delete" eval="True"/>
+            <field name="body_html" type="html">
+<div style="font-family: Verdana, Arial, sans-serif; font-size: 13px; color: #454748;">
+    <p><strong t-out="object.user_id.name or ''">Nguyễn Văn A</strong>
+        (<t t-out="object.user_id.login or ''">nva@example.com</t>)
+        vừa đăng nhập đúng mật khẩu từ một thiết bị chưa được duyệt.</p>
+    <table style="border-collapse: collapse;">
+        <tr><td style="padding: 2px 12px 2px 0;">Thời điểm</td>
+            <td t-out="format_datetime(object.request_date, tz='Asia/Ho_Chi_Minh', dt_format='dd/MM/yyyy HH:mm')">27/10/2026 08:00</td></tr>
+        <tr><td style="padding: 2px 12px 2px 0;">IP</td>
+            <td t-out="object.ip_address or ''">1.2.3.4</td></tr>
+        <tr><td style="padding: 2px 12px 2px 0;">Vị trí (theo IP)</td>
+            <td t-out="', '.join(filter(None, [object.city, object.country])) or 'Không rõ'">Ho Chi Minh City, Vietnam</td></tr>
+        <tr><td style="padding: 2px 12px 2px 0;">Thiết bị</td>
+            <td t-out="' / '.join(filter(None, [object.platform, object.browser])) or 'Không rõ'">windows / chrome</td></tr>
+    </table>
+    <p style="margin-top: 16px;">
+        <a t-attf-href="{{ object.get_base_url() }}/odoo/action-hlv_login_approval.action_hlv_login_device/{{ object.id }}"
+           style="background-color: #875A7B; padding: 8px 16px; color: #FFFFFF; text-decoration: none; border-radius: 5px;">
+            Mở yêu cầu để Duyệt / Từ chối
+        </a>
+    </p>
+    <p style="color: #888888;">Không nhận ra người đăng nhập này? Bấm Từ chối và đổi mật khẩu tài khoản.</p>
+</div>
+            </field>
+        </record>
+    </data>
+</odoo>
