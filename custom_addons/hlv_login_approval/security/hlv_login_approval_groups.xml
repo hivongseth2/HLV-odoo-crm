@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Người duyệt tách khỏi nhóm Settings: có quyền Settings không có nghĩa là được duyệt.
+         Thêm người khác vào nhóm qua Thiết lập > Người dùng & Công ty > Nhóm. -->
+    <record id="group_login_approver" model="res.groups">
+        <field name="name">Người duyệt thiết bị đăng nhập</field>
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+    </record>
+</odoo>

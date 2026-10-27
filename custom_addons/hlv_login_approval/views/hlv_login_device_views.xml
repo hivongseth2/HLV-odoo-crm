@@ -19,8 +19,10 @@
                 <field name="approved_until"/>
                 <field name="last_login_date" optional="show"/>
                 <button name="action_approve" type="object" string="Duyệt" icon="fa-check"
-                        invisible="state == 'approved'"/>
+                        groups="hlv_login_approval.group_login_approver"
+                        invisible="state == 'approved' or user_id == uid"/>
                 <button name="action_reject" type="object" string="Từ chối" icon="fa-ban"
+                        groups="hlv_login_approval.group_login_approver"
                         invisible="state == 'rejected'"/>
             </list>
         </field>
@@ -33,8 +35,10 @@
             <form create="0">
                 <header>
                     <button name="action_approve" type="object" string="Duyệt" class="btn-primary"
-                            invisible="state == 'approved'"/>
+                            groups="hlv_login_approval.group_login_approver"
+                            invisible="state == 'approved' or user_id == uid"/>
                     <button name="action_reject" type="object" string="Từ chối"
+                            groups="hlv_login_approval.group_login_approver"
                             invisible="state == 'rejected'"
                             confirm="Từ chối thiết bị này? User sẽ không đăng nhập được từ thiết bị này cho tới khi được duyệt lại."/>
                     <field name="state" widget="statusbar"/>
@@ -109,6 +113,6 @@
               name="Duyệt thiết bị đăng nhập"
               parent="base.menu_users"
               action="action_hlv_login_device"
-              groups="base.group_system"
+              groups="base.group_system,hlv_login_approval.group_login_approver"
               sequence="30"/>
 </odoo>
