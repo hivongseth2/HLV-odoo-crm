@@ -1,3 +1,4 @@
+import logging
 import secrets
 
 from odoo import fields, models
@@ -5,6 +6,8 @@ from odoo.exceptions import AccessDenied
 from odoo.http import request
 
 from .login_approval_utils import hash_device_token
+
+_logger = logging.getLogger(__name__)
 
 DEVICE_COOKIE = 'hlv_device'
 # Cookie sống lâu; hạn duyệt do bản ghi hlv.login.device quyết định, không phải cookie.
@@ -58,6 +61,8 @@ class ResUsers(models.Model):
                 user.id, token_hash, request.httprequest.remote_addr,
                 user_agent.platform, user_agent.browser,
             )
+        # Core chỉ log "Login failed" giống hệt sai mật khẩu; dòng này để phân biệt.
+        _logger.info("hlv_login_approval: chặn %s từ thiết bị chưa duyệt (state=%s)", user.login, state)
         if state == 'rejected':
             raise AccessDenied(self.env._(
                 "Quản trị viên đã từ chối đăng nhập từ thiết bị này. Liên hệ quản trị viên nếu cần."))
