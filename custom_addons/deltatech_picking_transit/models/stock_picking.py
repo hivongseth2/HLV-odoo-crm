@@ -260,6 +260,23 @@ class StockPicking(models.Model):
                     _("Vị trí %(location)s chỉ dùng cho phiếu chuyển kho nội bộ, không dùng cho loại phiếu %(type)s.")
                     % {"location": locations[0].display_name, "type": picking_type.display_name}
                 )
+            picking._hlv_check_no_transit(picking.location_id | picking.location_dest_id)
+
+    def _hlv_check_no_transit(self, locations):
+        """Chuyển kho đã thay Transit bằng CHUYENKHO: chặn chọn lại Transit trên phiếu chuyển nội bộ đang mở.
+        Chỉ cho phép nguồn bước 2 = đích Transit của phiếu bước 1 cũ (hệ thống tự sinh)."""
+        self.ensure_one()
+        if not self.hlv_allow_transfer_location or self.state in ("cancel", "done") or self.return_id:
+            return
+        allowed = self.source_transfer_id.location_dest_id
+        for loc in locations.filtered(lambda l: l.usage == "transit") - allowed:
+            warehouse = self.picking_type_id.warehouse_id
+            hub = allowed or (warehouse and warehouse._hlv_get_transfer_location())
+            raise ValidationError(
+                _("Phiếu %(picking)s: không dùng %(transit)s làm vị trí trung gian chuyển kho nữa. "
+                  "Hãy chọn %(hub)s (chọn Liên hệ là kho nhận để tự điền).")
+                % {"picking": self.name, "transit": loc.display_name, "hub": hub.display_name if hub else "CHUYENKHO"}
+            )
 
     # -------------- Wizard mở tay --------------
     def open_transfer_wizard(self):
