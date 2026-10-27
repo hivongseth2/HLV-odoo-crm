@@ -241,7 +241,8 @@ class StockPicking(models.Model):
                     "Hãy lấy hàng từ vị trí của kho %(wh)s hoặc đổi loại hoạt động cho đúng kho nguồn."
                 ) % {"picking": picking.name, "type": picking.picking_type_id.display_name, "loc": loc.display_name,
                      "loc_wh": wh_name(loc), "wh": warehouse.name})
-            for loc in dests.filtered(lambda l: l.warehouse_id != warehouse and l.usage != "transit"):
+            # Chỉ vị trí tồn của kho khác mới là chuyển kho; vị trí ảo (SUDUNG-*, hao hụt...) là xuất khỏi tồn
+            for loc in dests.filtered(lambda l: l.usage == "internal" and l.warehouse_id != warehouse):
                 raise UserError(_(
                     "Phiếu %(picking)s dùng loại hoạt động %(type)s nhưng vị trí đích %(loc)s thuộc %(loc_wh)s. "
                     "Chuyển sang kho khác phải đi vào %(hub)s (bước 1) và chọn Liên hệ là kho nhận; "
@@ -280,8 +281,9 @@ class StockPicking(models.Model):
             )
 
     def _hlv_check_inter_warehouse_dest(self, dests):
-        """Chuyển sang kho khác (Liên hệ là kho khác / đích ngoài kho nguồn / đích đã là CHUYENKHO):
-        đích bước 1 bắt buộc là CHUYENKHO của kho nguồn. Chuyển cùng kho không kiểm tra."""
+        """Chuyển sang kho khác (Liên hệ là kho khác / đích là vị trí tồn của kho khác / đích đã là CHUYENKHO):
+        đích bước 1 bắt buộc là CHUYENKHO của kho nguồn. Chuyển cùng kho, hoặc ra vị trí ảo ngoài kho
+        (Xuất kho sử dụng → SUDUNG-*), không kiểm tra."""
         self.ensure_one()
         if (not self.hlv_allow_transfer_location or self.state in ("cancel", "done") or self.return_id
                 or self.source_transfer_id or self.location_dest_id.usage == "transit"):
@@ -293,7 +295,7 @@ class StockPicking(models.Model):
         partner_wh = self.env["stock.warehouse"].search([("partner_id", "=", self.partner_id.id)], limit=1) if self.partner_id else False
         all_dests = self.location_dest_id | dests
         if not ((partner_wh and partner_wh != src_wh) or hub in all_dests
-                or all_dests.filtered(lambda l: l.warehouse_id != src_wh)):
+                or all_dests.filtered(lambda l: l.usage == "internal" and l.warehouse_id != src_wh)):
             return
         for loc in dests - hub:
             raise ValidationError(
@@ -565,6 +567,8 @@ class StockPicking(models.Model):
                 )
                 # Bước 2 xuất phát từ CHUYENKHO, không được là phiếu lấy hàng / đóng gói
                 ops -= warehouse.pick_type_id | warehouse.pack_type_id
+                # Bỏ loại nội bộ đi ra vị trí ảo (Xuất kho sử dụng): rơi vào đó thì hàng chuyển kho mất khỏi tồn
+                ops = ops.filtered(lambda r: r.default_location_dest_id.usage == "internal")
                 next_operation = ops.filtered(lambda r: r.two_step_transfer_use == "reception")[:1] or ops[:1]
                 if not next_operation:
                     raise UserError(_("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name)

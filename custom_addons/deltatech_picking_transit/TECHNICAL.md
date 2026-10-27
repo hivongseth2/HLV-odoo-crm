@@ -35,7 +35,7 @@ deltatech_picking_transit/
 | Vị trí có phải trung chuyển (CHUYENKHO hoặc Transit cũ) | `stock.picking._is_inter_warehouse_transit(location)` |
 | Chặn CHUYENKHO trên phiếu không phải chuyển nội bộ | `stock.picking._check_hlv_transfer_location` + domain field `location_id/location_dest_id` |
 | Chặn Transit (nguồn/đích) trên phiếu chuyển nội bộ đang mở, trừ nguồn bước 2 = đích Transit của bước 1 cũ | `stock.picking._hlv_check_no_transit` (gọi từ `_check_hlv_transfer_location` và `stock.move.line._check_hlv_no_transit`) |
-| Chuyển sang kho khác (Liên hệ là kho khác / đích ngoài kho nguồn / đích là CHUYENKHO): đích phiếu + từng dòng bắt buộc = CHUYENKHO của kho nguồn; cùng kho bỏ qua | `stock.picking._hlv_check_inter_warehouse_dest` (gọi từ 2 ràng buộc trên) |
+| Chuyển sang kho khác (Liên hệ là kho khác / đích là vị trí tồn của kho khác / đích là CHUYENKHO): đích phiếu + từng dòng bắt buộc = CHUYENKHO của kho nguồn; cùng kho hoặc ra vị trí ảo ngoài kho (Xuất kho sử dụng → SUDUNG-*) bỏ qua | `stock.picking._hlv_check_inter_warehouse_dest` (gọi từ 2 ràng buộc trên) |
 | Sinh phiếu bước 2 | `stock.picking.button_validate` → `create_second_transfer_wizard` |
 | Tự chọn đích CHUYENKHO khi Liên hệ là kho khác; nguồn bước 2 = đích bước 1 | `stock.picking._compute_location_id` (override) |
 | Chặn xác nhận khi nguồn/đích không khớp kho của loại phiếu | `stock.picking._hlv_check_transfer_route` (gọi đầu `button_validate`) |
@@ -44,10 +44,10 @@ Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_t
 
 ## 4. Luồng chính
 1. Phiếu INT có đích là CHUYENKHO/Transit → bắt buộc có **Liên hệ** = địa chỉ kho nhận.
-2. `button_validate`: tìm kho nhận theo Liên hệ, chọn loại phiếu internal của kho nhận (ưu tiên `two_step_transfer_use='reception'`, loại PICK/PACK), lấy `default_location_dest_id` làm đích.
+2. `button_validate`: tìm kho nhận theo Liên hệ, chọn loại phiếu internal của kho nhận (ưu tiên `two_step_transfer_use='reception'`, loại PICK/PACK và loại có đích mặc định ngoài tồn như Xuất kho sử dụng), lấy `default_location_dest_id` làm đích.
 3. Sau khi validate xong: `create_second_transfer_wizard` tạo phiếu bước 2 nguồn = đích bước 1, copy move line (kể cả kiện), confirm, ghi chatter 2 chiều.
 4. Kiểm tra trước khi xác nhận (`_hlv_check_transfer_route`, bỏ qua phiếu trả hàng và PICK/PACK):
-   - Bước 1: nguồn (header + move line) thuộc kho của loại phiếu; đích thuộc kho đó (CHUYENKHO). Đi thẳng sang kho khác bị chặn. Transit cũ vẫn cho qua.
+   - Bước 1: nguồn (header + move line) thuộc kho của loại phiếu; đích thuộc kho đó (CHUYENKHO). Đi thẳng vào vị trí tồn kho khác bị chặn; ra vị trí ảo ngoài kho (SUDUNG-*) cho qua. Transit cũ vẫn cho qua.
    - Bước 2: nguồn đúng bằng đích của bước 1; đích thuộc kho của loại phiếu (kho nhận).
 5. `write`/`read`/`_onchange_picking_type` giữ nguyên `location_id` của phiếu bước 2 = vị trí trung chuyển.
 
