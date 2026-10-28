@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from odoo import _, fields, models
 
-from ..services.claude_api_payload import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORT_CHOICES, MODEL_CHOICES
+from ..services.claude_api_payload import (
+    DEFAULT_EFFORT, DEFAULT_MODEL, DEFAULT_WORKER_MODEL, EFFORT_CHOICES, MODEL_CHOICES,
+)
 from .product_agent_api_runner import (
     CRON_XMLID, DEFAULT_PARALLEL, MAX_PARALLEL, MODE_API, MODE_LOCAL, PARAM_API_KEY,
-    PARAM_EFFORT, PARAM_MODE, PARAM_MODEL, PARAM_PARALLEL, TurnFailed,
+    PARAM_EFFORT, PARAM_MODE, PARAM_MODEL, PARAM_PARALLEL, PARAM_WORKER_MODEL, TurnFailed,
 )
 
 
@@ -27,6 +29,12 @@ class ResConfigSettings(models.TransientModel):
     )
     hlv_product_agent_api_model = fields.Selection(
         MODEL_CHOICES, string="Model", default=DEFAULT_MODEL, config_parameter=PARAM_MODEL,
+    )
+    hlv_product_agent_api_worker_model = fields.Selection(
+        MODEL_CHOICES, string="Model phụ đi tra cứu", default=DEFAULT_WORKER_MODEL,
+        config_parameter=PARAM_WORKER_MODEL,
+        help="Model chính giao việc tra cứu dài (lịch sử xuất nhập, lịch sử giá bán, ai đang giữ...) "
+             "cho model này đọc rồi tóm tắt. Haiku: rẻ, đủ cho việc đọc số liệu.",
     )
     hlv_product_agent_api_effort = fields.Selection(
         EFFORT_CHOICES, string="Mức suy nghĩ", default=DEFAULT_EFFORT, config_parameter=PARAM_EFFORT,

@@ -89,8 +89,8 @@ def _get_so_reservation_map(env, product_ids, warehouse_ids=None):
         result[key] = (total, details)
     return result
 
-def _get_allowed_warehouses():
-    env = request.env
+def _get_allowed_warehouses(env=None):
+    env = env or request.env
     param_val = env["ir.config_parameter"].sudo().get_param(
         "website_public_inventory_18.allowed_warehouse_ids", default=""
     )
@@ -98,13 +98,13 @@ def _get_allowed_warehouses():
     Wh = env["stock.warehouse"].sudo()
     return Wh.browse(ids).exists() if ids else Wh.search([])
 
-def _companies_for_context(warehouse_id):
-    env = request.env
+def _companies_for_context(warehouse_id, env=None):
+    env = env or request.env
     Wh = env["stock.warehouse"].sudo()
     if warehouse_id:
         wh = Wh.browse(int(warehouse_id)).exists()
         return wh.company_id.ids if wh else []
-    allowed = _get_allowed_warehouses()
+    allowed = _get_allowed_warehouses(env)
     return allowed.mapped("company_id").ids
 
 def _as_int_or_none(v):
@@ -179,7 +179,7 @@ class PublicInventory(http.Controller):
         is_combo = _is_combo_product(env, tmpl)
 
         if warehouse_id: wh = Warehouse.browse(int(warehouse_id)).exists(); warehouses = wh if wh else Warehouse.browse([])
-        else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+        else: warehouses = _get_allowed_warehouses(env) or Warehouse.search([])
 
         if is_combo:
             lines = []
@@ -198,7 +198,7 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _get_qty(child.id, wh)
-                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
+                    fc = self._forecast_details_data(env, product_id=child.id, warehouse_id=wh.id)
                     qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                     wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
 
@@ -216,7 +216,7 @@ class PublicInventory(http.Controller):
             rows = []
             for wh in warehouses:
                 qt, qr = _get_qty(product.id, wh)
-                fc = self.forecast_details(product_id=product.id, warehouse_id=wh.id)
+                fc = self._forecast_details_data(env, product_id=product.id, warehouse_id=wh.id)
                 qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                 rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
             return {"mode": "warehouses", "rows": rows}
@@ -446,7 +446,15 @@ class PublicInventory(http.Controller):
 
     @http.route(["/search_stock/product_breakdown"], type="json", auth="user", methods=["POST"])
     def product_breakdown(self, product_id=None, warehouse_id=None, detail_mode=None):
-        env = request.env
+        params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
+        if params:
+            if warehouse_id is None: warehouse_id = params.get("warehouse_id")
+            if detail_mode is None: detail_mode = params.get("detail_mode")
+        
+        return self._product_breakdown_data(request.env, product_id, warehouse_id)
+
+    def _product_breakdown_data(self, env, product_id, warehouse_id):
+        """Thân route, nhận env: gọi được cả ngoài HTTP request (vd trợ lý Claude)."""
         pid = _as_int_or_none(product_id)
         if not pid: return {"ok": False, "error": "invalid_product_id", "rows": []}
         
@@ -459,13 +467,8 @@ class PublicInventory(http.Controller):
                 return _rg_sum(g, "quantity"), _rg_sum(g, "reserved_quantity")
             return 0.0, 0.0
 
-        params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
-        if params:
-            if warehouse_id is None: warehouse_id = params.get("warehouse_id")
-            if detail_mode is None: detail_mode = params.get("detail_mode")
-        
         wid = _as_int_or_none(warehouse_id)
-        company_ids = _companies_for_context(wid)
+        company_ids = _companies_for_context(wid, env)
         if not company_ids: company_ids = env.companies.ids
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
@@ -480,7 +483,7 @@ class PublicInventory(http.Controller):
 
         if is_combo:
             if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
-            else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+            else: warehouses = _get_allowed_warehouses(env) or Warehouse.search([])
             
             lines = []
             bom = env['mrp.bom'].sudo().search([
@@ -498,7 +501,7 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _sum_for_product_in_wh(Quant, child.id, wh)
-                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
+                    fc = self._forecast_details_data(env, product_id=child.id, warehouse_id=wh.id)
                     qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                     wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 rows.append({
@@ -509,7 +512,7 @@ class PublicInventory(http.Controller):
             return {"ok": True, "mode": "components_by_warehouse", "rows": rows, "product_id": pid, "product_name": product.display_name}
 
         if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
-        else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+        else: warehouses = _get_allowed_warehouses(env) or Warehouse.search([])
 
         holds_for_product = _get_active_holds(env, [pid], warehouses.ids)
         empty_holds = env["stock.hold.request"].sudo().browse([])
@@ -522,7 +525,7 @@ class PublicInventory(http.Controller):
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
-            fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
+            fc = self._forecast_details_data(env, product_id=pid, warehouse_id=wh.id)
             fc_ok = isinstance(fc, dict) and fc.get("ok")
             qf = fc.get("qty_forecast", qt - qr) if fc_ok else (qt - qr)
             held_qty, held_by = _hold_summary(holds_by_wid.get(wh.id, empty_holds))
@@ -543,18 +546,21 @@ class PublicInventory(http.Controller):
     
     @http.route(["/search_stock/location_details"], type="json", auth="user", methods=["POST"])
     def location_details(self, product_id=None, warehouse_id=None):
-        env = request.env
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
         if params:
             if product_id is None: product_id = params.get("product_id")
             if warehouse_id is None: warehouse_id = params.get("warehouse_id")
+        return self._location_details_data(request.env, product_id, warehouse_id)
+
+    def _location_details_data(self, env, product_id, warehouse_id):
+        """Thân route, nhận env: gọi được cả ngoài HTTP request (vd trợ lý Claude)."""
             
         pid = _as_int_or_none(product_id)
         wid = _as_int_or_none(warehouse_id)
         
         if not pid: return {"ok": False, "error": "invalid_product_id", "locations": []}
         
-        company_ids = _companies_for_context(wid)
+        company_ids = _companies_for_context(wid, env)
         if not company_ids: company_ids = env.companies.ids
         
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
@@ -575,7 +581,7 @@ class PublicInventory(http.Controller):
             if wh:
                 domain.append(("location_id", "child_of", wh.view_location_id.id))
         else:
-            allowed_whs = _get_allowed_warehouses()
+            allowed_whs = _get_allowed_warehouses(env)
             if allowed_whs:
                 domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
                 
@@ -682,18 +688,21 @@ class PublicInventory(http.Controller):
     @http.route(["/search_stock/forecast_details"], type="json", auth="user", methods=["POST"])
     def forecast_details(self, product_id=None, warehouse_id=None):
         """Trả về chi tiết cấu thành số dự báo: phiếu nhập từ ĐMH + phiếu xuất từ ĐBH."""
-        env = request.env
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
         if params:
             if product_id is None: product_id = params.get("product_id")
             if warehouse_id is None: warehouse_id = params.get("warehouse_id")
+        return self._forecast_details_data(request.env, product_id, warehouse_id)
+
+    def _forecast_details_data(self, env, product_id, warehouse_id):
+        """Thân route, nhận env: gọi được cả ngoài HTTP request (vd trợ lý Claude)."""
 
         pid = _as_int_or_none(product_id)
         wid = _as_int_or_none(warehouse_id)
         if not pid:
             return {"ok": False, "error": "invalid_product_id"}
 
-        company_ids = _companies_for_context(wid)
+        company_ids = _companies_for_context(wid, env)
         if not company_ids:
             company_ids = env.companies.ids
 
@@ -713,7 +722,7 @@ class PublicInventory(http.Controller):
             if wh:
                 quant_domain.append(("location_id", "child_of", wh.view_location_id.id))
         else:
-            allowed_whs = _get_allowed_warehouses()
+            allowed_whs = _get_allowed_warehouses(env)
             if allowed_whs:
                 quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
         quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
@@ -732,7 +741,7 @@ class PublicInventory(http.Controller):
                 if wh:
                     domain_list.append(("location_dest_id", "child_of", wh.view_location_id.id))
             else:
-                allowed_whs = _get_allowed_warehouses()
+                allowed_whs = _get_allowed_warehouses(env)
                 if allowed_whs:
                     domain_list.append(("location_dest_id", "child_of", allowed_whs.mapped('view_location_id').ids))
             return domain_list
@@ -744,7 +753,7 @@ class PublicInventory(http.Controller):
                 if wh:
                     domain_list.append(("location_id", "child_of", wh.view_location_id.id))
             else:
-                allowed_whs = _get_allowed_warehouses()
+                allowed_whs = _get_allowed_warehouses(env)
                 if allowed_whs:
                     domain_list.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
             return domain_list
@@ -819,7 +828,7 @@ class PublicInventory(http.Controller):
                     "!", ("location_id", "child_of", wh.view_location_id.id),
                 ])
         else:
-            allowed_whs = _get_allowed_warehouses()
+            allowed_whs = _get_allowed_warehouses(env)
             if allowed_whs:
                 wh_loc_ids = allowed_whs.mapped('view_location_id').ids
                 internal_in_domain.extend([
@@ -916,7 +925,7 @@ class PublicInventory(http.Controller):
                     "!", ("location_dest_id", "child_of", wh.view_location_id.id),
                 ])
         else:
-            allowed_whs = _get_allowed_warehouses()
+            allowed_whs = _get_allowed_warehouses(env)
             if allowed_whs:
                 wh_loc_ids = allowed_whs.mapped('view_location_id').ids
                 internal_out_domain.extend([

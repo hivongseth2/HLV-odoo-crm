@@ -5,6 +5,20 @@
             <button type="button" class="hlv-pa-toggle" title="Trợ lý">
                 <i class="fa fa-comments"/> <span>Trợ lý</span>
             </button>
+            <!-- Bảng trợ lý vẽ (show_panel): nổi trên trang, kéo / phóng to / đóng được. HTML
+                 của Claude nằm trong iframe sandbox: không chạy script, không cùng nguồn với trang. -->
+            <div class="hlv-pa-board" data-open="0">
+                <div class="hlv-pa-board-head" title="Kéo để di chuyển">
+                    <span class="hlv-pa-board-title"/>
+                    <button type="button" class="hlv-pa-board-max" title="Phóng to / thu nhỏ">
+                        <i class="fa fa-expand"/>
+                    </button>
+                    <button type="button" class="hlv-pa-board-close" title="Đóng bảng">
+                        <i class="fa fa-times"/>
+                    </button>
+                </div>
+                <iframe class="hlv-pa-board-frame" sandbox="" title="Bảng của trợ lý"/>
+            </div>
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
                 <div class="hlv-pa-header">

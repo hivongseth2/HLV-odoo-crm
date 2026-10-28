@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Khai báo các tool MISA mà Claude được dùng.
+"""Khai báo các tool Claude được dùng: MISA, tra cứu Odoo (chỉ đọc), bảng trình bày.
 
 Chỉ là schema: tool thật chạy trên Odoo (nơi giữ tài khoản MISA). MCP server nhận
 lệnh gọi từ Claude rồi chuyển nguyên tên + tham số lên Odoo.
@@ -249,5 +249,129 @@ TOOLS = [
         },
     },
 ]
+
+
+# =============================================================================
+# Tra cứu Odoo (chỉ đọc) + bảng trình bày
+# =============================================================================
+_CODE_ARG = {"type": "string", "description": "Mã hàng (ưu tiên, đúng như Odoo / kết quả search) hoặc tên"}
+_WAREHOUSE_ARG = {"type": "string", "description": "Mã hoặc tên kho để lọc; chuỗi rỗng = mọi kho"}
+
+
+def _query_tool(name, description, properties=None, required=("code",)):
+    props = {"code": _CODE_ARG}
+    props.update(properties or {})
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {
+            "type": "object", "properties": props,
+            "required": list(required), "additionalProperties": False,
+        },
+    }
+
+
+QUERY_TOOLS = [
+    _query_tool(
+        "xem_ton_kho",
+        "Tồn kho hiện tại của một mã theo từng kho: thực tế, khả dụng, đang giữ (ai giữ), dự báo, "
+        "SL đặt mua / đặt bán chưa về / chưa xuất. Combo: tồn theo từng mã con. Đúng số trang tra tồn.",
+        {"warehouse": _WAREHOUSE_ARG}, ("code", "warehouse"),
+    ),
+    _query_tool(
+        "xem_gia",
+        "Giá hiện tại của một mã: giá bán, giá web, giá TMĐT, giá niêm yết, giá thương mại, giá vốn.",
+    ),
+    _query_tool(
+        "xem_thanh_phan_combo",
+        "Combo gồm những mã con nào, mỗi bộ cần bao nhiêu, tồn từng mã con và ráp được mấy bộ.",
+    ),
+    _query_tool(
+        "xem_du_bao",
+        "Chi tiết số dự báo: phiếu nhập từ đơn mua đang về (PO, NCC, ngày về), phiếu xuất cho đơn "
+        "bán chưa giao (SO, khách), chuyển kho nội bộ đang chạy.",
+        {"warehouse": _WAREHOUSE_ARG}, ("code", "warehouse"),
+    ),
+    _query_tool(
+        "xem_vi_tri",
+        "Tồn theo từng vị trí / kệ trong kho của một mã.",
+        {"warehouse": _WAREHOUSE_ARG}, ("code", "warehouse"),
+    ),
+    _query_tool(
+        "xem_dang_giu",
+        "Ai đang giữ hàng của một mã: phiếu giữ hàng đã duyệt (sale, khách, dự án, hạn giữ, kho) và "
+        "đơn bán đang giữ chỗ hàng trong kho.",
+    ),
+    _query_tool(
+        "xem_lich_su_xuat_nhap",
+        "Lịch sử xuất nhập (phiếu kho đã xong) của một mã trong khoảng ngày: tồn đầu / cuối kỳ, nhập "
+        "mua, bán, chuyển kho, theo từng kho.",
+        {
+            "date_from": {"type": "string", "description": "Từ ngày YYYY-MM-DD"},
+            "date_to": {"type": "string", "description": "Đến ngày YYYY-MM-DD; rỗng = hôm nay"},
+        },
+        ("code", "date_from", "date_to"),
+    ),
+    _query_tool(
+        "xem_lich_su_gia_ban",
+        "Lịch sử giá bán thực tế: các dòng đơn bán gần nhất của mã (ngày, số đơn, khách, sale, SL, "
+        "đơn giá, chiết khấu), mới nhất trước.",
+        {"limit": {"type": "integer", "description": "Số dòng, 1-50 (mặc định 20)"}},
+        ("code", "limit"),
+    ),
+    _query_tool(
+        "xem_gia_nhap",
+        "Giá nhập theo từng NCC: các lần đã mua (đơn mua đã xác nhận) và báo giá NCC gần nhất.",
+    ),
+]
+QUERY_TOOL_NAMES = frozenset(tool["name"] for tool in QUERY_TOOLS)
+# Kết quả ngắn: gọi thẳng rẻ hơn giao người khác đọc. Còn lại kết quả dài — ở chế độ Claude
+# API giao model rẻ (giao_viec_tra_cuu) đọc rồi tóm tắt, model chính chỉ đọc bản tóm tắt.
+LIGHT_QUERY_TOOLS = frozenset({"xem_ton_kho", "xem_gia", "xem_thanh_phan_combo"})
+HEAVY_QUERY_TOOLS = QUERY_TOOL_NAMES - LIGHT_QUERY_TOOLS
+READ_ONLY_TOOLS = READ_ONLY_TOOLS | QUERY_TOOL_NAMES
+
+PANEL_TOOL = {
+    "name": "show_panel",
+    "description": (
+        "Hiện một BẢNG nổi trên trang của người dùng (đè lên bảng tra tồn, họ kéo đi / đóng được) "
+        "với HTML em tự dựng: bảng so sánh, thẻ số liệu, biểu đồ cột vẽ bằng SVG... Dùng khi dữ "
+        "liệu nhiều dòng / nhiều cột, đọc trong khung chat bất tiện. Chỉ HTML + CSS inline, KHÔNG "
+        "script (bị chặn), không ảnh ngoài. Gọi lại là thay nội dung bảng. Vẫn tóm tắt kết luận "
+        "bằng chữ trong câu trả lời."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "Tiêu đề ngắn của bảng"},
+            "html": {"type": "string", "description": "Nội dung HTML (phần thân, có thể kèm <style>)"},
+        },
+        "required": ["title", "html"],
+        "additionalProperties": False,
+    },
+}
+
+TOOLS = TOOLS + [PANEL_TOOL] + QUERY_TOOLS
+
+# Chỉ có ở chế độ Claude API (Odoo tự chạy vòng model phụ); máy agent không thấy tool này.
+DELEGATE_TOOL = {
+    "name": "giao_viec_tra_cuu",
+    "description": (
+        "Giao một việc TRA CỨU cho trợ lý phụ (model nhanh, rẻ). Trợ lý phụ có các tool "
+        + ", ".join(sorted(QUERY_TOOL_NAMES)) + " — tự gọi bao nhiêu cũng được — rồi trả bản tóm "
+        "tắt kèm số liệu chính. Dùng cho câu hỏi cần lịch sử / nhiều truy vấn / kết quả dài (lịch sử "
+        "xuất nhập, lịch sử giá bán, ai đang giữ, hàng đang về, vị trí, giá nhập). Câu hỏi tồn kho "
+        "/ giá hiện tại / thành phần combo thì tự gọi tool trực tiếp, nhanh hơn. Viết nhiệm vụ rõ: "
+        "mã hàng, khoảng ngày, cần số liệu gì, có cần dạng bảng không."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "nhiem_vu": {"type": "string", "description": "Việc cần tra, đủ mã / ngày / yêu cầu đầu ra"},
+        },
+        "required": ["nhiem_vu"],
+        "additionalProperties": False,
+    },
+}
 
 TOOL_NAMES = frozenset(tool["name"] for tool in TOOLS)

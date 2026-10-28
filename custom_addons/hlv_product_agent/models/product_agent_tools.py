@@ -11,6 +11,7 @@ from odoo import fields, models
 from odoo.addons.misa_fetch_po_button.utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
 from ..services import combo_change_summary, missing_from_proposal, odoo_combo_text
+from ..agent.misa_tools import QUERY_TOOL_NAMES
 from ..services.search_ranking import summarize_search
 
 _logger = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ SEARCH_SHOWN = 12
 SEARCH_ODOO_LIMIT = 8
 # Từ khoá cho trang tra tồn: mã hoặc vài từ, không phải cả đoạn mô tả.
 SEARCH_PAGE_QUERY_MAX = 100
+# Bảng HTML Claude dựng: đủ cho vài chục dòng có style, chặn lỡ tay dán cả trang web.
+PANEL_HTML_MAX = 60000
+PANEL_TITLE_MAX = 80
 # Chặn combo phình bất thường (Claude lặp dòng, dán nhầm cả bảng giá).
 MAX_COMBO_COMPONENTS = 50
 
@@ -50,7 +54,10 @@ class HlvProductAgentTools(models.AbstractModel):
             'get_category_info': self._get_category_info,
             'search_category_misa': self._search_category,
             'show_in_search_page': self._show_in_search_page,
+            'show_panel': self._show_panel,
         }.get(name)
+        if not handler and name in QUERY_TOOL_NAMES:
+            return self.env['hlv.product.agent.queries'].run(name, args)
         if not handler:
             return {'status': 'error', 'message': "Tool %s chưa được hỗ trợ." % name}
         if not isinstance(args, dict):
@@ -126,6 +133,18 @@ class HlvProductAgentTools(models.AbstractModel):
             return {'status': 'error', 'message': "query quá dài, chỉ truyền mã hoặc vài từ chính."}
         session.post_client_action("Trợ lý mở trang tra tồn: %s" % query, {'type': 'search', 'q': query})
         return {'status': 'success', 'message': "Trang tra tồn của người dùng đang tìm '%s'." % query}
+
+    def _show_panel(self, session, args):
+        """Đẩy một bảng HTML lên trang của sale. Khung chat vẽ trong iframe khoá script."""
+        title = ' '.join((args.get('title') or '').split())[:PANEL_TITLE_MAX] or "Trợ lý"
+        html = args.get('html') or ''
+        if not html.strip():
+            return {'status': 'error', 'message': "Thiếu html cho bảng."}
+        if len(html) > PANEL_HTML_MAX:
+            return {'status': 'error', 'message': "Bảng quá lớn (%s ký tự, tối đa %s): rút gọn bớt dòng."
+                    % (len(html), PANEL_HTML_MAX)}
+        session.post_client_action("Trợ lý mở bảng: %s" % title, {'type': 'panel', 'title': title, 'html': html})
+        return {'status': 'success', 'message': "Đã hiện bảng '%s' cho người dùng." % title}
 
     def _get_category_info(self, session, args):
         cat_id = args.get('category_id')

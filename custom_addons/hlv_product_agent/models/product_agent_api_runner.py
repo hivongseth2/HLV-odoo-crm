@@ -23,7 +23,7 @@ from odoo import SUPERUSER_ID, api, fields, models
 from odoo.modules.registry import Registry
 
 from ..services.claude_api_payload import (
-    DEFAULT_EFFORT, DEFAULT_MODEL, EFFORT_CHOICES, MAX_TOKENS, MODEL_CHOICES,
+    DEFAULT_EFFORT, DEFAULT_MODEL, DEFAULT_WORKER_MODEL, EFFORT_CHOICES, MAX_TOKENS, MODEL_CHOICES,
     CACHE_CONTROL, build_system, build_tools, context_key, history_content, history_too_long,
     load_history, reply_text, request_extras, tool_result, tool_uses, user_content,
 )
@@ -36,6 +36,8 @@ PARAM_API_KEY = 'hlv_product_agent.anthropic_api_key'
 PARAM_MODEL = 'hlv_product_agent.api_model'
 PARAM_EFFORT = 'hlv_product_agent.api_effort'
 PARAM_PARALLEL = 'hlv_product_agent.api_parallel'
+PARAM_WORKER_MODEL = 'hlv_product_agent.api_worker_model'
+DELEGATE_TOOL_NAME = 'giao_viec_tra_cuu'
 MODE_LOCAL = 'local'
 MODE_API = 'api'
 CRON_XMLID = 'hlv_product_agent.ir_cron_product_agent_api'
@@ -89,12 +91,14 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             parallel = DEFAULT_PARALLEL
         model = get(PARAM_MODEL) or DEFAULT_MODEL
         effort = get(PARAM_EFFORT) or DEFAULT_EFFORT
+        worker_model = get(PARAM_WORKER_MODEL) or DEFAULT_WORKER_MODEL
         return {
             'mode': get(PARAM_MODE) or MODE_LOCAL,
             'api_key': (get(PARAM_API_KEY) or '').strip(),
             'model': model if model in dict(MODEL_CHOICES) else DEFAULT_MODEL,
             'effort': effort if effort in dict(EFFORT_CHOICES) else DEFAULT_EFFORT,
             'parallel': min(max(parallel, 1), MAX_PARALLEL),
+            'worker_model': worker_model if worker_model in dict(MODEL_CHOICES) else DEFAULT_WORKER_MODEL,
         }
 
     @api.model
@@ -283,7 +287,8 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             calls = tool_uses(content)
             if response.stop_reason == 'tool_use' and calls:
                 messages.append({'role': 'user', 'content': [
-                    tool_result(call['id'], self._call_tool(claim_token, call)) for call in calls
+                    tool_result(call['id'], self._dispatch_tool(claim_token, call, config, anthropic, client))
+                    for call in calls
                 ]})
                 continue
             if response.stop_reason == 'max_tokens':
@@ -306,6 +311,19 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             raise TurnFailed(api_error_message(anthropic, error))
         except anthropic.APIStatusError as error:
             raise TurnFailed(api_error_message(anthropic, error))
+
+    def _dispatch_tool(self, claim_token, call, config, anthropic, client):
+        """giao_viec_tra_cuu chạy model phụ (cần client / cấu hình); tool khác đi _call_tool."""
+        if call.get('name') != DELEGATE_TOOL_NAME:
+            return self._call_tool(claim_token, call)
+        session = self.env['hlv.product.chat.session'].sudo().from_claim(claim_token)
+        if not session:
+            return {'status': 'error', 'message': 'Lượt xử lý đã đóng, không chạy tool nữa.'}
+        result = self.env['hlv.product.agent.delegate'].run_task(
+            session, (call.get('input') or {}).get('nhiem_vu'), config, anthropic, client)
+        # Số token model phụ vừa ghi lên cuộc chat: commit như mọi tool khác.
+        self.env.cr.commit()
+        return result
 
     def _call_tool(self, claim_token, call):
         """Chạy một tool MISA và commit ngay, như mỗi lần agent gọi /product_agent/agent/tool.

@@ -55,10 +55,11 @@ def render_special_rules(rules):
                     intro + "\n\n" + "\n\n".join(blocks))
 
 
-def build_system_prompt(core, naming, category, special_rules_text=""):
-    """Ghép luật lõi + tài liệu A + quy tắc riêng + tài liệu B thành một khối.
+def build_system_prompt(core, naming, category, special_rules_text="", assist=""):
+    """Ghép luật lõi + tài liệu A + quy tắc riêng + tài liệu B + tra cứu thành một khối.
 
-    Quy tắc riêng đứng ngay sau tài liệu A để Claude đọc ngoại lệ sát với luật chung.
+    Quy tắc riêng đứng ngay sau tài liệu A để Claude đọc ngoại lệ sát với luật chung. Phần
+    tra cứu đứng cuối: là năng lực thêm, không được lấn quy trình tạo mã ở trên.
     Biên: phần nào rỗng thì bỏ phần đó (kể cả tiêu đề).
     """
     parts = [(core or "").strip()]
@@ -68,6 +69,8 @@ def build_system_prompt(core, naming, category, special_rules_text=""):
         parts.append(special_rules_text)
     if (category or "").strip():
         parts.append(_section("TÀI LIỆU B — QUY TẮC PHÂN NHÓM HÀNG HÓA HLV", category))
+    if (assist or "").strip():
+        parts.append(_section("TRA CỨU & TƯƠNG TÁC VỚI SALE", assist))
     return "\n\n".join(part for part in parts if part) + "\n"
 
 
