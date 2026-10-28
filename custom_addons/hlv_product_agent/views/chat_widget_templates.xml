@@ -6,6 +6,7 @@
                 <i class="fa fa-plus-square"/> <span>Tạo mã hàng</span>
             </button>
             <div class="hlv-pa-panel">
+                <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
                 <div class="hlv-pa-header">
                     <div class="hlv-pa-title">
                         <span class="hlv-pa-dot"/> Trợ lý tạo mã hàng

@@ -65,12 +65,36 @@
 .hlv-pa-panel {
   display: none;
   flex-direction: column;
+  position: relative;
   height: 100%;
   width: var(--pa-drawer-width);
   background: var(--pa-bg);
-  border-right: 4px solid var(--pa-yellow);
-  box-shadow: 4px 0 18px rgba(0, 0, 0, 0.12);
+  border-right: 1px solid var(--pa-border);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+}
+
+/* Mép phải ngăn kéo: kéo chuột để đổi độ rộng (product_chat.js lưu lại theo trình duyệt). */
+.hlv-pa-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.hlv-pa-resize:hover,
+body.hlv-pa-resizing .hlv-pa-resize {
+  background: var(--pa-accent-soft);
+  box-shadow: inset -2px 0 0 var(--pa-accent);
+}
+
+body.hlv-pa-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .hlv-pa-chat[data-open="1"] .hlv-pa-panel {
@@ -86,6 +110,16 @@
 
   body.hlv-pa-drawer-open #wrap {
     font-size: 0.86rem;
+  }
+
+  /* Trang tra tồn đặt nội dung trong container-fluid có max-width 1550px viết thẳng trên
+     thẻ, căn giữa: dồn trang mà giữ max-width là lộ khoảng nền trống hai bên. Cho giãn hết
+     phần còn lại (!important vì phải thắng style inline). */
+  body.hlv-pa-drawer-open #wrap .container,
+  body.hlv-pa-drawer-open #wrap .container-fluid {
+    max-width: none !important;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   body.hlv-pa-drawer-open #inv-table {
@@ -113,7 +147,6 @@
   justify-content: space-between;
   padding: 11px 12px;
   background: linear-gradient(90deg, var(--pa-accent-dark), var(--pa-accent));
-  border-bottom: 3px solid var(--pa-yellow);
   color: #fff;
 }
 
@@ -299,7 +332,6 @@
 .hlv-pa-msg-event .hlv-pa-text {
   background: var(--pa-yellow-soft);
   color: var(--pa-accent-dark);
-  border: 1px solid #f3dd8a;
   font-size: 12.5px;
   text-align: center;
 }

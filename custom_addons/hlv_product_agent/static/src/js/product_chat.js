@@ -51,6 +51,47 @@ function saveSaleKey(key) {
 const DRAWER_CLOSED_STORAGE = "hlv_pa_drawer_closed";
 const DESKTOP_QUERY = "(min-width: 992px)";
 
+// Độ rộng ngăn kéo kéo bằng chuột, nhớ theo trình duyệt. Chặn hai đầu để không kéo mất
+// ngăn kéo hay che hết bảng tra tồn.
+const DRAWER_WIDTH_STORAGE = "hlv_pa_drawer_width";
+const DRAWER_MIN_WIDTH = 300;
+const DRAWER_MAX_RATIO = 0.6;
+
+/**
+ * Độ rộng hợp lệ (px). Nhận số bất kỳ; biên: không phải số -> null.
+ */
+function clampDrawerWidth(width) {
+    const value = Number(width);
+    if (!Number.isFinite(value) || value <= 0) {
+        return null;
+    }
+    return Math.round(Math.min(Math.max(value, DRAWER_MIN_WIDTH), window.innerWidth * DRAWER_MAX_RATIO));
+}
+
+function applyDrawerWidth(width) {
+    const value = clampDrawerWidth(width);
+    if (value) {
+        document.documentElement.style.setProperty("--pa-drawer-width", value + "px");
+    }
+    return value;
+}
+
+function loadDrawerWidth() {
+    try {
+        return window.localStorage.getItem(DRAWER_WIDTH_STORAGE);
+    } catch {
+        return null;
+    }
+}
+
+function saveDrawerWidth(width) {
+    try {
+        window.localStorage.setItem(DRAWER_WIDTH_STORAGE, String(width));
+    } catch {
+        // Không lưu được: lần sau về độ rộng mặc định.
+    }
+}
+
 function shouldOpenDrawer() {
     if (!window.matchMedia(DESKTOP_QUERY).matches) {
         return false;
@@ -122,6 +163,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         "change input[type=file]": "_onPickFiles",
         "click .hlv-pa-switch": "_onSwitchPerson",
         "click .hlv-pa-pick": "_onPickPerson",
+        "pointerdown .hlv-pa-resize": "_onResizeStart",
     },
 
     start() {
@@ -138,6 +180,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this.previewsEl = this.el.querySelector(".hlv-pa-previews");
         this.textarea = this.el.querySelector("textarea");
         this.sendBtn = this.el.querySelector(".hlv-pa-send");
+        applyDrawerWidth(loadDrawerWidth());
         if (shouldOpenDrawer()) {
             this._setOpen(true);
         }
@@ -366,6 +409,30 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         if (this.isOpen) {
             this.textarea.focus();
         }
+    },
+
+    _onResizeStart(ev) {
+        ev.preventDefault();
+        const handle = ev.currentTarget;
+        const left = this.el.querySelector(".hlv-pa-panel").getBoundingClientRect().left;
+        let width = null;
+        handle.setPointerCapture(ev.pointerId);
+        document.body.classList.add("hlv-pa-resizing");
+        const onMove = (moveEv) => {
+            width = applyDrawerWidth(moveEv.clientX - left) || width;
+        };
+        const onUp = () => {
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+            handle.removeEventListener("pointercancel", onUp);
+            document.body.classList.remove("hlv-pa-resizing");
+            if (width) {
+                saveDrawerWidth(width);
+            }
+        };
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
     },
 
     _setOpen(open) {
