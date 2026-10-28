@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Nạp RAW_DB từ file backup tải tay ở tab BACKUPS của Odoo.sh — dùng cho lần đầu, khi chưa có SSH.
-# Từ đó về sau incremental_sync.py (mỗi 5 phút) và full_refresh.sh (mỗi đêm) đi qua SSH.
+# Từ đó về sau incremental_sync.py (mỗi 5 phút) và full_refresh.py (mỗi đêm) đi qua SSH.
 #
 #   load_backup.sh /var/lib/odoo18-read-db/<backup>.zip     # file .zip của Odoo.sh (bên trong có dump.sql)
 #   load_backup.sh /var/lib/odoo18-read-db/dump.sql         # hoặc dump.sql đã giải nén

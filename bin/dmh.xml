@@ -1,0 +1,841 @@
+<t t-name="purchase.report_purchaseorder_document">
+    <t t-call="web.basic_layout">
+
+        <t t-set="o" t-value="o.with_context(lang='vi_VN')"/>
+        <t t-set="company" t-value="o.company_id"/>
+        <t t-set="partner" t-value="o.partner_id"/>
+        <t t-set="document_date" t-value="o.date_approve or o.date_order"/>
+
+        <!-- Giữ node này để các view kế thừa không lỗi -->
+        <t t-set="address">
+            <div>
+                <strong>
+                    <span t-field="o.partner_id.name"/>
+                </strong>
+
+                <div t-if="o.partner_id.street">
+                  <span t-if="o.partner_id.street" t-out="o.partner_id.street + ', Việt Nam'"/>
+                </div>
+
+                <div t-if="o.partner_id.phone or o.partner_id.mobile">
+                    <span t-out="o.partner_id.phone or o.partner_id.mobile or ''"/>
+                </div>
+            </div>
+        </t>
+
+        <!-- View 1402 đang tìm đúng node này, không được xóa -->
+        <t t-if="o.dest_address_id">
+            <t t-set="information_block">
+                <strong class="d-block mt-3">
+                    Địa chỉ giao hàng
+                </strong>
+
+                <div t-if="o.dest_address_id">
+                    <span t-out="o.dest_address_id.street or ''"/>
+                </div>
+            </t>
+        </t>
+
+        <div class="page" t-att-data-oe-model="o._name" t-att-data-oe-id="o.id" t-att-data-oe-lang="o.env.context.get('lang')">
+
+            <style>
+                .hlv-po,
+                .hlv-po * {
+                    box-sizing: border-box;
+                }
+
+                .hlv-po {
+                    font-family: "DejaVu Serif", "Times New Roman", serif;
+                    font-size: 11.5px;
+                    line-height: 1.25;
+                    color: #111111;
+                }
+
+                /* =====================================================
+                   CÁC KHỐI DÀN TRANG BẰNG DIV
+                   KHÔNG DÙNG TAG TABLE
+                ====================================================== */
+
+                .hlv-display-table {
+                    display: table;
+                    width: 100%;
+                    table-layout: fixed;
+                }
+
+                .hlv-display-row {
+                    display: table-row;
+                }
+
+                .hlv-display-cell {
+                    display: table-cell;
+                    vertical-align: top;
+                }
+
+                /* =====================================================
+                   HEADER CÔNG TY
+                ====================================================== */
+
+                .hlv-header {
+                    width: 100%;
+                    margin-bottom: 3px;
+                }
+
+                .hlv-logo-cell {
+                    width: 20%;
+                    vertical-align: middle;
+                    text-align: center;
+                    padding-right: 8px;
+                }
+
+                .hlv-logo {
+                    display: block;
+                    max-width: 125px;
+                    max-height: 68px;
+                    margin: 0 auto;
+                }
+
+                .hlv-company-cell {
+                    width: 80%;
+                    vertical-align: middle;
+                }
+
+                .hlv-company-name {
+                    color: #1f4e79;
+                    font-size: 15px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    margin-bottom: 2px;
+                }
+
+                .hlv-company-line {
+                    display: table;
+                    width: 100%;
+                    margin: 0;
+                }
+
+                .hlv-company-label {
+                    display: table-cell;
+                    width: 68px;
+                    white-space: nowrap;
+                    vertical-align: top;
+                }
+
+                .hlv-company-value {
+                    display: table-cell;
+                    vertical-align: top;
+                }
+
+                .hlv-company-half {
+                    display: table-cell;
+                    width: 50%;
+                    vertical-align: top;
+                }
+
+                .hlv-inline-label {
+                    display: inline-block;
+                    min-width: 68px;
+                }
+
+                /* =====================================================
+                   TIÊU ĐỀ
+                ====================================================== */
+
+                .hlv-title {
+                    margin-top: 2px;
+                    text-align: center;
+                    font-size: 16px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+
+                .hlv-order-reference {
+                    text-align: center;
+                    font-size: 11.5px;
+                    font-style: italic;
+                    margin-top: 1px;
+                    margin-bottom: 9px;
+                }
+
+                .hlv-cancelled {
+                    color: #c00000;
+                    text-align: center;
+                    font-size: 18px;
+                    font-weight: bold;
+                    margin: 4px 0;
+                }
+
+                /* =====================================================
+                   NHÀ CUNG CẤP
+                ====================================================== */
+
+                .hlv-dear {
+                    font-weight: bold;
+                    margin-bottom: 4px;
+                }
+
+                .hlv-vendor-box {
+                    width: 100%;
+                    background: #f0f0f0;
+                    padding: 4px 8px;
+                    margin-bottom: 2px;
+                }
+
+                .hlv-vendor-line {
+                    display: table;
+                    width: 100%;
+                    margin: 0;
+                }
+
+                .hlv-vendor-label {
+                    display: table-cell;
+                    width: 105px;
+                    font-weight: bold;
+                    white-space: nowrap;
+                    vertical-align: top;
+                }
+
+                .hlv-vendor-value {
+                    display: table-cell;
+                    vertical-align: top;
+                }
+
+                .hlv-intro {
+                    margin: 2px 0 1px 0;
+                    font-style: italic;
+                    font-weight: bold;
+                }
+
+                /* =====================================================
+                   CHỈ BẢNG HÀNG HÓA DÙNG TAG TABLE
+                ====================================================== */
+
+                .hlv-order-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    border-spacing: 0;
+                    table-layout: fixed;
+                    margin: 0;
+                }
+
+                .hlv-order-table thead {
+                    display: table-header-group;
+                }
+
+                .hlv-order-table tr {
+                    page-break-inside: avoid;
+                }
+
+                .hlv-order-table th,
+                .hlv-order-table td {
+                    border: 1px solid #444444 !important;
+                    padding: 3px 4px;
+                    vertical-align: middle;
+                }
+
+                .hlv-order-table th {
+                    background: #eeeeee;
+                    text-align: center;
+                    font-weight: bold;
+                    line-height: 1.1;
+                }
+
+                .hlv-col-stt {
+                    width: 5%;
+                }
+
+                .hlv-col-product {
+                    width: 25%;
+                }
+
+                .hlv-col-uom {
+                    width: 7%;
+                }
+
+                .hlv-col-qty {
+                    width: 8%;
+                }
+
+                .hlv-col-price {
+                    width: 13%;
+                }
+
+                .hlv-col-tax-rate {
+                    width: 8%;
+                }
+
+                .hlv-col-tax {
+                    width: 11%;
+                }
+
+                .hlv-col-subtotal {
+                    width: 14%;
+                }
+
+                .hlv-col-note {
+                    width: 9%;
+                }
+
+                .hlv-text-left {
+                    text-align: left;
+                }
+
+                .hlv-text-center {
+                    text-align: center;
+                }
+
+                .hlv-text-right {
+                    text-align: right;
+                }
+
+                .hlv-section-row td {
+                    background: #eeeeee;
+                    font-weight: bold;
+                }
+
+                .hlv-note-row td {
+                    font-style: italic;
+                }
+
+                .hlv-total-empty {
+                    background: #ffffff;
+                }
+
+                .hlv-total-label {
+                    background: #f5f5f5;
+                    text-align: center;
+                    font-weight: bold;
+                }
+
+                .hlv-total-value {
+                    background: #f5f5f5;
+                    text-align: right;
+                    font-weight: bold;
+                }
+
+                .hlv-amount-words {
+                    padding: 5px 7px !important;
+                    text-align: center;
+                    font-weight: bold;
+                }
+
+                /* =====================================================
+                   GHI CHÚ
+                ====================================================== */
+
+                .hlv-information {
+                    margin-top: 7px;
+                }
+
+                .hlv-information-title {
+                    font-weight: bold;
+                    margin-bottom: 7px;
+                }
+
+                .hlv-information-line {
+                    margin: 0 0 7px 0;
+                }
+
+                .hlv-information-label,
+                .hlv-information-value {
+                    font-style: italic;
+                }
+
+                /* =====================================================
+                   CHỮ KÝ BẰNG DIV
+                ====================================================== */
+
+                .hlv-signature {
+                    display: table;
+                    width: 100%;
+                    table-layout: fixed;
+                    margin-top: 8px;
+                    page-break-inside: avoid;
+                }
+
+                .hlv-signature-cell {
+                    display: table-cell;
+                    width: 50%;
+                    text-align: center;
+                    vertical-align: top;
+                    padding: 0 15px;
+                }
+
+                .hlv-signature-title {
+                    font-weight: bold;
+                }
+
+                .hlv-signature-space {
+                    height: 145px;
+                }
+
+                .hlv-signature-name {
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+
+                .hlv-hidden {
+                    display: none !important;
+                }
+            </style>
+
+            <div class="hlv-po">
+
+                <!-- =====================================================
+                     HEADER CÔNG TY — KHÔNG DÙNG TABLE
+                ====================================================== -->
+
+                <div class="hlv-header hlv-display-table">
+                    <div class="hlv-display-row">
+
+                        <div class="hlv-display-cell hlv-logo-cell">
+                            <img t-if="company.logo" class="hlv-logo" t-att-src="image_data_uri(company.logo)" alt="Logo"/>
+                        </div>
+
+                        <div class="hlv-display-cell hlv-company-cell">
+                            <div class="hlv-company-name">
+                                <span t-field="company.name"/>
+                            </div>
+
+                            <div class="hlv-company-line">
+                                <div class="hlv-company-label">
+                                    Địa chỉ
+                                </div>
+
+                                <div class="hlv-company-value">
+                                    :
+                                    <span t-out="company.partner_id.street or ''"/>
+                                </div>
+                            </div>
+
+                            <div class="hlv-company-line">
+                                <div class="hlv-company-half">
+                                    <span class="hlv-inline-label">
+                                        Mã số thuế
+                                    </span>
+
+                                    :
+                                    <span t-out="company.vat or ''"/>
+                                </div>
+
+                                <div class="hlv-company-half">
+                                    <span class="hlv-inline-label">
+                                        Điện thoại
+                                    </span>
+
+                                    :
+                                    <span> 0933670070</span>
+                                </div>
+                            </div>
+
+                            <div class="hlv-company-line">
+                                <div class="hlv-company-half">
+                                    <span class="hlv-inline-label">
+                                        Email
+                                    </span>
+
+                                    :
+                                    <span t-out="company.email or ''"/>
+                                </div>
+
+                                <div class="hlv-company-half">
+                                    <span class="hlv-inline-label">
+                                        Website
+                                    </span>
+
+                                    :
+                                    <span t-out="company.website or ''"/>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- =====================================================
+                     TIÊU ĐỀ
+                ====================================================== -->
+
+                <div class="hlv-title">
+                    Đơn đặt hàng nhà cung cấp
+                </div>
+
+                <div class="hlv-order-reference">
+                    (
+                    Số đơn ĐH:
+                    <span t-field="o.name"/>
+
+                    <t t-if="document_date">
+                        ;
+                        <span t-out="document_date" t-options="{                                   'widget': 'date',                                   'format': 'dd/MM/yyyy'                               }"/>
+                    </t>
+                    )
+                </div>
+
+                <div t-if="o.state == 'cancel'" class="hlv-cancelled">
+                    ĐÃ HỦY
+                </div>
+
+                <!-- Giữ node informations tương thích -->
+                <div id="informations" class="hlv-hidden">
+                    <div t-if="o.user_id">
+                        <span t-field="o.user_id"/>
+                    </div>
+
+                    <div t-if="o.partner_ref">
+                        <span t-field="o.partner_ref"/>
+                    </div>
+
+                    <div t-if="o.date_order">
+                        <span t-field="o.date_order"/>
+                    </div>
+
+                    <div t-if="o.date_planned">
+                        <span t-field="o.date_planned"/>
+                    </div>
+                </div>
+
+                <!-- =====================================================
+                     NHÀ CUNG CẤP — KHÔNG DÙNG TABLE
+                ====================================================== -->
+
+                <div class="hlv-dear">
+                    Kính gửi:
+                </div>
+
+                <div class="hlv-vendor-box">
+
+                    <div class="hlv-vendor-line">
+                        <div class="hlv-vendor-label">
+                            Nhà cung cấp
+                        </div>
+
+                        <div class="hlv-vendor-value">
+                            :
+                            <strong>
+                                <span t-field="partner.name"/>
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="hlv-vendor-line">
+                        <div class="hlv-vendor-label">
+                            Địa chỉ
+                        </div>
+
+                        <div class="hlv-vendor-value">
+                            :
+                            <span t-out="partner.street or ''"/>
+                        </div>
+                    </div>
+
+                    <div class="hlv-vendor-line">
+                        <div class="hlv-vendor-label">
+                            SĐT liên hệ
+                        </div>
+
+                        <div class="hlv-vendor-value">
+                            :
+                            <span t-out="partner.phone or partner.mobile or ''"/>
+                        </div>
+                    </div>
+
+                    <div t-if="o.partner_ref" class="hlv-vendor-line">
+                        <div class="hlv-vendor-label">
+                            Mã tham chiếu
+                        </div>
+
+                        <div class="hlv-vendor-value">
+                            :
+                            <span t-field="o.partner_ref"/>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="hlv-intro">
+                    Cảm ơn sự hợp tác của quý nhà cung cấp, chúng tôi gửi đơn đặt hàng sau:
+                </div>
+
+                <!-- =====================================================
+                     BẢNG HÀNG HÓA — TABLE DUY NHẤT
+                ====================================================== -->
+
+                <table class="hlv-order-table">
+                    <thead>
+                        <tr>
+                            <th class="hlv-col-stt">
+                                STT
+                            </th>
+
+                            <th name="th_description" class="hlv-col-product">
+                                Tên hàng
+                            </th>
+
+                            <th class="hlv-col-uom">
+                                ĐVT
+                            </th>
+
+                            <th name="th_quantity" class="hlv-col-qty">
+                                SL
+                            </th>
+
+                            <th name="th_price_unit" class="hlv-col-price">
+                                Đơn giá
+                            </th>
+
+                            <th name="th_taxes" class="hlv-col-tax-rate">
+                                VAT (%)
+                            </th>
+
+                            <th class="hlv-col-tax">
+                                VAT
+                            </th>
+
+                            <th name="th_subtotal" class="hlv-col-subtotal">
+                                Thành tiền
+                            </th>
+
+                            <th class="hlv-col-note">
+                                Ghi chú
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <t t-set="stt" t-value="0"/>
+
+                        <t t-foreach="o.order_line" t-as="line">
+
+                            <t t-if="not line.display_type">
+                                <t t-set="stt" t-value="stt + 1"/>
+
+                                <t t-set="percentage_taxes" t-value="line.taxes_id.filtered(lambda tax: tax.amount_type == 'percent')"/>
+
+                                <t t-set="tax_percentage" t-value="sum(percentage_taxes.mapped('amount'))"/>
+
+                                <tr>
+                                    <td class="hlv-text-center">
+                                        <span t-out="stt"/>
+                                    </td>
+
+                                <t t-set="ten_hang" t-value="(line.name or '').strip()"/>
+                                    <t t-set="ten_hang" t-value="ten_hang.split(']', 1)[1].strip() if ten_hang[:1] == '[' and ']' in ten_hang else ten_hang"/>
+                                    <td class="hlv-text-left"><span t-out="ten_hang" style="white-space: pre-line;"/></td>
+                                    
+
+
+
+
+                                    <td class="hlv-text-center">
+                                        <span t-field="line.product_uom.name"/>
+                                    </td>
+
+                                    <td class="hlv-text-right">
+                                        <span t-field="line.product_qty"/>
+                                    </td>
+
+                                   <td class="hlv-text-right">
+                                            <span t-out="'{:,.0f}'.format(                                                 round(line.price_unit)                                             ).replace(',', '.')"/>
+                                        </td>
+                                        
+                                        <td class="hlv-text-center">
+                                            <span t-out="'{:g}'.format(tax_percentage)"/>
+                                            <span>%</span>
+                                        </td>
+                                        
+                                        <td class="hlv-text-right">
+                                            <span t-out="'{:,.0f}'.format(                                                 round(line.price_total - line.price_subtotal)                                             ).replace(',', '.')"/>
+                                        </td>
+                                        
+                                        <td class="hlv-text-right">
+                                            <span t-out="'{:,.0f}'.format(                                                 round(line.price_subtotal)                                             ).replace(',', '.')"/>
+                                        </td>
+
+                                    <td class="hlv-text-left">
+                                        <span t-if="line.x_studio_ghi_ch" t-field="line.x_studio_ghi_ch" style="white-space: pre-line;"/>
+                                    </td>
+                                </tr>
+                            </t>
+
+                            <t t-elif="line.display_type == 'line_section'">
+                                <tr class="hlv-section-row">
+                                    <td colspan="9">
+                                        <span t-field="line.name"/>
+                                    </td>
+                                </tr>
+                            </t>
+
+                            <t t-elif="line.display_type == 'line_note'">
+                                <tr class="hlv-note-row">
+                                    <td colspan="9">
+                                        <span t-field="line.name"/>
+                                    </td>
+                                </tr>
+                            </t>
+
+                        </t>
+
+                      <tr>
+                                <td colspan="3" rowspan="3" class="hlv-total-empty"/>
+                            
+                                <td colspan="3" class="hlv-total-label">
+                                    Tổng tiền hàng
+                                    (<span t-out="o.currency_id.name"/>)
+                                </td>
+                            
+                                <td colspan="3" class="hlv-total-value">
+                                    <span t-out="'{:,.0f}'.format(round(o.amount_untaxed)).replace(',', '.')"/>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td colspan="3" class="hlv-total-label">
+                                    Tổng thuế VAT
+                                    (<span t-out="o.currency_id.name"/>)
+                                </td>
+                            
+                                <td colspan="3" class="hlv-total-value">
+                                    <span t-out="'{:,.0f}'.format(round(o.amount_tax)).replace(',', '.')"/>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td colspan="3" class="hlv-total-label">
+                                    Tổng tiền
+                                    (<span t-out="o.currency_id.name"/>)
+                                </td>
+                            
+                                <td colspan="3" class="hlv-total-value">
+                                    <span t-out="'{:,.0f}'.format(round(o.amount_total)).replace(',', '.')"/>
+                                </td>
+                            </tr>
+<tr>
+    <td colspan="9" class="hlv-amount-words">
+        <t t-set="amount_rounded" t-value="int(round(o.amount_total))"/>
+
+        <t t-set="amount_in_words" t-value="o.currency_id.with_context(lang='vi_VN').amount_to_text(amount_rounded)"/>
+
+        <t t-set="amount_in_words" t-value="amount_in_words                .replace(' False', '')                .replace(' false', '')                .replace(' và Không xu', '')                .replace(' và không xu', '')                .replace(' Không xu', '')                .replace(' không xu', '')"/>
+
+        Thành tiền (Bằng chữ):
+        <span t-out="amount_in_words"/>
+    </td>
+</tr>
+                    </tbody>
+                </table>
+
+                <!-- Giữ node total, nhưng không dùng table -->
+                <div id="total" class="hlv-hidden">
+                    <span t-field="o.amount_untaxed"/>
+                    <span t-field="o.amount_tax"/>
+                    <span t-field="o.amount_total"/>
+                </div>
+
+                <!-- =====================================================
+                     GHI CHÚ
+                ====================================================== -->
+
+                <div class="hlv-information">
+                    <div class="hlv-information-title">
+                        Lưu ý:
+                    </div>
+
+                    <p class="hlv-information-line">
+                        <span class="hlv-information-label">
+                            Điều kiện hàng hóa:
+                        </span>
+
+                        <span class="hlv-information-value">
+                            Hàng hóa phải đảm bảo mới 100% và chính hãng.
+                        </span>
+                    </p>
+
+                    <p class="hlv-information-line">
+                        <span class="hlv-information-label">
+                            Điều kiện thanh toán:
+                        </span>
+
+                        <span t-if="o.x_studio_iu_kin_thanh_ton" class="hlv-information-value">
+                            <span t-field="o.x_studio_iu_kin_thanh_ton"/>
+                        </span>
+                    </p>
+
+                    <p class="hlv-information-line">
+                        <span class="hlv-information-label">
+                            Thời gian giao hàng:
+                        </span>
+
+                        <span t-if="o.date_planned" class="hlv-information-value">
+                            <span t-field="o.date_planned" t-options="{                                       'widget': 'date',                                       'format': 'dd/MM/yyyy'                                   }"/>
+                        </span>
+                    </p>
+
+                    <p class="hlv-information-line">
+                        <span class="hlv-information-label">
+                            Phương thức giao hàng:
+                        </span>
+
+                       <span t-if="o.x_studio_delivery_term" class="hlv-information-value">
+                            <span t-field="o.x_studio_delivery_term"/>
+                        </span>
+                    </p>
+
+                    <p class="hlv-information-line">
+                        <span class="hlv-information-label">
+                            Địa điểm giao hàng:
+                        </span>
+                    
+                        <span t-if="o.x_studio_ddgh" class="hlv-information-value">
+                            <span t-field="o.x_studio_ddgh"/>
+                        </span>
+                    </p>
+
+                    <div t-if="o.notes" class="hlv-information-line">
+                        <span class="hlv-information-label">
+                            Ghi chú khác:
+                        </span>
+
+                        <div t-field="o.notes" class="hlv-information-value"/>
+                    </div>
+                </div>
+
+                <!-- =====================================================
+                     CHỮ KÝ — KHÔNG DÙNG TABLE
+                ====================================================== -->
+
+                <div class="hlv-signature">
+
+                    <div class="hlv-signature-cell">
+                        <div class="hlv-signature-title">
+                            Xác nhận nhà cung cấp
+                        </div>
+
+                        <div class="hlv-signature-space"/>
+                    </div>
+
+                  <div class="hlv-signature-cell">
+                        <div class="hlv-signature-title">
+                            Người lập phiếu
+                        </div>
+                    
+                        <div class="hlv-signature-subtitle">
+                            Ký, ghi rõ họ tên
+                        </div>
+                    
+                     <div class="hlv-signature-space">
+                    <img src="https://www.hoanglongvu-erp.com/web/image/81?filename=signature.png&amp;model=documents.document" style="display:block; margin-left:125px;  width:auto; height:145px; max-width:280px;"/>
+
+                </div>
+                    
+                        <div t-if="o.user_id" class="hlv-signature-name">
+                            <span>Đinh Trần Thị Kim Quyến</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="oe_structure"/>
+
+            </div>
+        </div>
+    </t>
+</t>

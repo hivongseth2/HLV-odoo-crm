@@ -1,9 +1,12 @@
--- Cấp quyền đọc cho role claude_ro trên DB vừa restore (full_refresh.sh gọi mỗi lần chép,
+-- Cấp quyền đọc cho role claude_ro trên DB vừa nạp (load_backup.sh gọi mỗi lần nạp,
 -- vì DB mới không mang quyền của DB cũ). Bản thân role tạo một lần bằng superuser — xem README.
 --   psql -v dbname=<db> -f claude_ro.sql
 \set ON_ERROR_STOP on
 
 GRANT CONNECT ON DATABASE :"dbname" TO claude_ro;
+-- Quyền mặc định của dump có thể cho mọi role tạo bảng trong public; MCP Postgres lách được
+-- giao dịch read-only bằng nhiều câu lệnh, nên chặn ở mức quyền chứ không chỉ dựa vào read-only.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO claude_ro;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO claude_ro;
 

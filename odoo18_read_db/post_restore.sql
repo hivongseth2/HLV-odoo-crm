@@ -22,7 +22,7 @@ WHERE i.indisunique AND NOT i.indisprimary
   AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid) \gexec
 
 -- 3) Bí mật còn sót trong bảng có giữ dữ liệu: cột chữ có tên khớp secret_columns.txt → NULL.
---    (Bảng chuyên chứa bí mật đã bị bỏ dữ liệu — EXCLUDE_DATA trong lib.sh.) Chỉ bảng thật, không view.
+--    (Bảng chuyên chứa bí mật đã bị bỏ dữ liệu — excluded_tables.txt.) Chỉ bảng thật, không view.
 CREATE TEMP VIEW secret_columns AS
 SELECT c.table_name, c.column_name, c.is_nullable
 FROM information_schema.columns c

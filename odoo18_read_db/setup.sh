@@ -33,7 +33,7 @@ rsync -a --delete --exclude raw_db.env "$SRC/" "$APP/scripts/"
 [ -f "$APP/scripts/raw_db.env" ] || cp "$SRC/raw_db.env.example" "$APP/scripts/raw_db.env"
 chown -R odoo18read:odoo18read "$APP/scripts"
 chmod 700 "$APP/scripts"
-chmod +x "$APP/scripts/full_refresh.sh" "$APP/scripts/load_backup.sh" "$APP/scripts/incremental_sync.py"
+chmod +x "$APP/scripts/full_refresh.py" "$APP/scripts/load_backup.sh" "$APP/scripts/incremental_sync.py"
 
 log "Role Postgres odoo18read (dựng/đồng bộ DB) và claude_ro (chỉ đọc)"
 if [ ! -f "$CLAUDE_PASS_FILE" ]; then

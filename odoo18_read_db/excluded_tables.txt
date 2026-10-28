@@ -1,0 +1,27 @@
+# Bảng chỉ giữ cấu trúc, KHÔNG chép dữ liệu: log, hàng đợi, phiên, file đính kèm, embedding,
+# và bảng chuyên chứa bí mật. Mẫu kiểu shell (* = chuỗi bất kỳ), mỗi dòng một mẫu.
+# load_backup.sh xoá dữ liệu các bảng này sau khi nạp; full_refresh.py bỏ qua chúng.
+
+bus_bus
+bus_presence
+ir_logging
+ir_attachment
+mail_mail
+res_device_log
+res_users_log
+amis_*log*
+amis_*sync_job*
+amis_webhook_queue
+misa_sync_queue
+wordpress_sync_queue
+llm_knowledge_chunk_embedding
+
+ir_config_parameter
+res_users_apikeys
+auth_totp_device
+auth_totp_rate_limit_log
+ir_mail_server
+fetchmail_server
+iap_account
+payment_provider
+payment_token

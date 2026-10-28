@@ -1,8 +1,8 @@
-# Phần dùng chung của full_refresh.sh (kéo qua SSH) và load_backup.sh (nạp file backup tải tay):
-# cấu hình, khoá, và bước hoàn tất một DB vừa nạp rồi đổi tên nó thành RAW_DB.
-# File này được source, không chạy riêng.
+# Phần hỗ trợ của load_backup.sh (nạp file backup tải tay): cấu hình, khoá, và bước hoàn tất một DB
+# vừa nạp rồi đổi tên nó thành RAW_DB. File này được source, không chạy riêng.
+# (Đồng bộ định kỳ là incremental_sync.py / full_refresh.py — phần chung của chúng ở odoo_sync.py.)
 
-umask 077   # dump / backup chứa dữ liệu khách hàng — chỉ user đồng bộ đọc được
+umask 077   # backup chứa dữ liệu khách hàng — chỉ user đồng bộ đọc được
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -12,15 +12,8 @@ mkdir -p -m 700 "$WORK_DIR"
 NEW_DB="${RAW_DB}_new"
 OLD_DB="${RAW_DB}_old"
 
-# Bảng chỉ giữ cấu trúc, bỏ dữ liệu: log, hàng đợi, phiên, file đính kèm, embedding, bảng chứa bí mật.
-# Mẫu theo cú pháp pg_dump (* = chuỗi bất kỳ).
-EXCLUDE_DATA=(
-    bus_bus bus_presence ir_logging ir_attachment mail_mail res_device_log res_users_log
-    'amis_*log*' 'amis_*sync_job*' amis_webhook_queue misa_sync_queue wordpress_sync_queue
-    ir_config_parameter res_users_apikeys auth_totp_device auth_totp_rate_limit_log
-    ir_mail_server fetchmail_server iap_account payment_provider payment_token
-    llm_knowledge_chunk_embedding
-)
+# Bảng chỉ giữ cấu trúc, bỏ dữ liệu — khai một chỗ ở excluded_tables.txt (full_refresh.py cũng đọc).
+mapfile -t EXCLUDE_DATA < <(sed 's/#.*//' "$HERE/excluded_tables.txt" | xargs -n1)
 
 log() { echo "$(date '+%F %T') $*"; }
 
@@ -57,8 +50,8 @@ finish_new_db() {
 
     local_psql -d "$NEW_DB" -v secret_re="$(secret_regex)" -f "$HERE/post_restore.sql"
 
-    # Bản kéo bằng pg_dump đã bỏ sẵn dữ liệu các bảng này; file backup tải tay thì chưa.
-    # Đổi mẫu pg_dump sang LIKE: "_" là ký tự đại diện của LIKE nên phải escape.
+    # File backup tải tay còn nguyên dữ liệu các bảng này — xoá đi.
+    # Đổi mẫu kiểu shell sang LIKE: "_" là ký tự đại diện của LIKE nên phải escape.
     patterns=$(printf '%s\n' "${EXCLUDE_DATA[@]}" | sed 's/_/\\_/g; s/\*/%/g' | paste -sd' ')
     local_psql -d "$NEW_DB" -v patterns="$patterns" <<'SQL'
 SELECT format('TRUNCATE %I', c.relname)

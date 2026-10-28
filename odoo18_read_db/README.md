@@ -4,8 +4,9 @@ Bản sao Postgres "thô" của DB prd (Odoo.sh), đặt trên server riêng, đ
 SQL thoải mái mà không chiếm worker Odoo của prd.
 
 - **Lần đầu** — `load_backup.sh`: nạp file backup tải tay từ Odoo.sh.
-- **Mỗi đêm** — `full_refresh.sh`: `pg_dump` prd qua SSH → restore vào DB tạm → đổi tên thành `odoo18_read`.
-  Đồng bộ luôn cấu trúc (prd deploy thêm/bỏ field) và dòng bị xoá.
+- **Mỗi đêm** — `full_refresh.py`: chép lại từng bảng của prd bằng `COPY` qua SSH (xoá rồi chép trong
+  một giao dịch). Bù dòng bị xoá, bảng ngoài nhóm nóng, bảng mới/cột mới sau deploy. Không dùng
+  `pg_dump` — Odoo.sh chặn quyền đọc `pg_settings` mà `pg_dump` ≥ 16.4 cần.
 - **Mỗi 5 phút** — `incremental_sync.py`: các bảng trong `hot_tables.txt`, lấy dòng có
   `write_date` mới bằng `COPY` qua SSH, upsert theo `id`. Chỉ chạm Postgres prd (vài truy vấn nhỏ).
 - Agent đọc bằng role `claude_ro`: chỉ đọc, giới hạn thời gian mỗi câu, không thấy bảng bí mật.
@@ -60,10 +61,22 @@ Thử một lượt `incremental_sync.py` bằng tay trước. Cron của `odoo1
 
 ```
 */5 * * * * /opt/odoo18-read-db/scripts/incremental_sync.py >> /var/log/odoo18-read-db/incremental.log 2>&1
-30 2 * * *  /opt/odoo18-read-db/scripts/full_refresh.sh     >> /var/log/odoo18-read-db/full.log 2>&1
+30 2 * * *  /opt/odoo18-read-db/scripts/full_refresh.py     >> /var/log/odoo18-read-db/full.log 2>&1
 ```
 
 Hai script dùng chung khoá `WORK_DIR/sync.lock`: lúc chép đêm, lượt 5 phút tự bỏ qua.
+
+## Claude Desktop đọc DB (MCP qua SSH)
+
+Máy chạy Claude Desktop không cần mở đường hầm hay giữ mật khẩu DB: Claude Desktop tự `ssh` vào user
+`dbmcp`, và key của máy đó chỉ chạy được `mcp_ssh.sh` (MCP Postgres trên stdio, role `claude_ro`).
+
+1. Trên máy đó tạo key: `ssh-keygen -t ed25519`, gửi dòng trong `~/.ssh/id_ed25519.pub`.
+2. Trên server (root): `bash add_mcp_user.sh '<dòng ssh-ed25519 …>' <ten-may>` — script in ra đoạn cấu hình.
+3. Dán đoạn đó vào `claude_desktop_config.json` của máy đó (Windows: `%APPDATA%\Claude\`,
+   macOS: `~/Library/Application Support/Claude/`), tắt hẳn rồi mở lại Claude Desktop.
+
+Chặn một máy: xoá dòng có `<ten-may>` trong `/home/dbmcp/.ssh/authorized_keys`.
 
 ## Giới hạn đã biết
 
