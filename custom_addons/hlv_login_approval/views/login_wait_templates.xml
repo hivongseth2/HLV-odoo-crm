@@ -8,11 +8,19 @@
                  t-att-data-channel="device.bus_channel"
                  t-att-data-status-url="'/web/login/approval/status'"
                  t-att-data-continue-url="continue_url">
-                <t t-if="device.state == 'rejected'">
+                <t t-if="waiting_state == 'rejected'">
                     <h5 class="card-title text-danger">Đăng nhập bị từ chối</h5>
                     <p class="text-muted">
                         Người duyệt đã từ chối đăng nhập từ thiết bị này. Liên hệ quản trị viên nếu cần.
                     </p>
+                </t>
+                <t t-elif="waiting_state == 'expired'">
+                    <h5 class="card-title text-warning">Yêu cầu duyệt đã hết hạn</h5>
+                    <p class="text-muted">
+                        Chưa có ai duyệt trong <t t-out="request_minutes"/> phút.
+                        Đăng nhập lại để gửi yêu cầu mới tới người duyệt.
+                    </p>
+                    <a class="btn btn-primary w-100" href="/web/session/logout?redirect=/web/login">Đăng nhập lại</a>
                 </t>
                 <t t-else="">
                     <h5 class="card-title">Đang chờ duyệt thiết bị</h5>
@@ -22,6 +30,7 @@
                     <p class="text-muted">
                         Đây là lần đầu bạn đăng nhập từ thiết bị này. Yêu cầu đã gửi tới người duyệt;
                         khi được duyệt trang sẽ tự vào hệ thống, không cần nhập lại mật khẩu.
+                        Yêu cầu chờ tối đa <t t-out="request_minutes"/> phút.
                     </p>
                     <p class="small text-muted mb-0">
                         Thiết bị: <t t-out="' / '.join(filter(None, [device.platform, device.browser])) or 'Không rõ'"/><br/>

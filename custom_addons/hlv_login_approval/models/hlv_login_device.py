@@ -4,12 +4,15 @@ import secrets
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 from odoo.http import GeoIP
+from odoo.addons.base.models.res_users import check_identity
 
-from .login_approval_utils import approval_expiry, is_approval_valid, parse_positive_int
+from .login_approval_utils import (
+    approval_expiry, is_approval_valid, is_request_open, parse_positive_int, request_expiry)
 
 _logger = logging.getLogger(__name__)
 
 DEFAULT_VALID_DAYS = 30
+DEFAULT_REQUEST_MINUTES = 30
 BUS_NOTIFICATION = 'hlv_login_approval/update'
 
 
@@ -26,6 +29,7 @@ class HlvLoginDevice(models.Model):
         ('pending', 'Chờ duyệt'),
         ('approved', 'Đã duyệt'),
         ('rejected', 'Từ chối'),
+        ('expired', 'Hết hạn'),
     ], string='Trạng thái', default='pending', required=True, readonly=True)
     # Cùng tên và cách lấy với res.device.log để admin so được với danh sách phiên của user.
     ip_address = fields.Char(string='IP', readonly=True)
@@ -34,6 +38,9 @@ class HlvLoginDevice(models.Model):
     country = fields.Char(string='Quốc gia', readonly=True)
     city = fields.Char(string='Thành phố', readonly=True)
     request_date = fields.Datetime(string='Yêu cầu lúc', default=fields.Datetime.now, readonly=True)
+    # Yêu cầu chỉ chờ trong thời gian ngắn: duyệt một yêu cầu cũ là mở cửa cho trình duyệt
+    # có thể đã không còn trong tay người dùng.
+    request_until = fields.Datetime(string='Yêu cầu hết hạn lúc', readonly=True)
     approved_by_id = fields.Many2one('res.users', string='Người duyệt', readonly=True)
     approved_date = fields.Datetime(string='Duyệt lúc', readonly=True)
     approved_until = fields.Datetime(string='Hiệu lực đến', readonly=True)
@@ -57,6 +64,9 @@ class HlvLoginDevice(models.Model):
         if self.filtered(lambda d: d.user_id == self.env.user):
             raise UserError(self.env._(
                 "Không được tự duyệt thiết bị của chính mình, nhờ người duyệt khác."))
+        if self.filtered(lambda d: d.state in ('pending', 'expired') and not d._is_request_open()):
+            raise UserError(self.env._(
+                "Yêu cầu đã hết hạn. Người dùng đăng nhập lại sẽ tạo yêu cầu mới để duyệt."))
         self.write(self._approval_vals(self.env.user))
         self._notify_waiting_browser()
 
@@ -70,6 +80,26 @@ class HlvLoginDevice(models.Model):
         for user in users_to_logout:
             user.sudo()._action_revoke_all_devices()
         self._notify_waiting_browser()
+
+    @check_identity
+    def action_revoke_user_sessions(self):
+        # Đóng mọi phiên mà không từ chối thiết bị: dùng khi nghi lộ phiên nhưng máy vẫn đúng chủ.
+        # sudo như action_reject vì người duyệt có thể không phải admin.
+        for user in self.user_id:
+            user.sudo()._action_revoke_all_devices()
+
+    def action_open_user_sessions(self):
+        action = self.env['ir.actions.act_window']._for_xml_id('hlv_login_approval.action_hlv_login_sessions')
+        action['domain'] = [('user_id', 'in', self.user_id.ids)]
+        action['context'] = {}
+        return action
+
+    @api.model
+    def _cron_expire_requests(self):
+        stale = self.search([('state', '=', 'pending'), '|',
+                             ('request_until', '=', False), ('request_until', '<=', fields.Datetime.now())])
+        stale.write({'state': 'expired'})
+        stale._notify_waiting_browser()
 
     @api.model
     def _approval_vals(self, approver):
@@ -86,22 +116,41 @@ class HlvLoginDevice(models.Model):
         value = self.env['ir.config_parameter'].sudo().get_param('hlv_login_approval.valid_days')
         return parse_positive_int(value, DEFAULT_VALID_DAYS)
 
+    @api.model
+    def _request_minutes(self):
+        value = self.env['ir.config_parameter'].sudo().get_param('hlv_login_approval.request_minutes')
+        return parse_positive_int(value, DEFAULT_REQUEST_MINUTES)
+
     def _is_valid_now(self):
         self.ensure_one()
         return is_approval_valid(self.state, self.approved_until, fields.Datetime.now())
+
+    def _is_request_open(self):
+        self.ensure_one()
+        return is_request_open(self.state, self.request_until, fields.Datetime.now())
+
+    def _waiting_state(self):
+        """Trạng thái hiển thị cho trang chờ: tính hạn ngay, không đợi cron đổi state."""
+        self.ensure_one()
+        if self._is_valid_now():
+            return 'approved'
+        if self.state in ('pending', 'expired') and not self._is_request_open():
+            return 'expired'
+        return self.state
 
     @api.model
     def _register_attempt(self, user_id, token_hash, ip_address, platform, browser, auto_approve=False):
         """Ghi nhận lần đăng nhập từ thiết bị chưa hợp lệ, trả bản ghi thiết bị.
 
-        Thiết bị đã duyệt nhưng hết hạn quay về 'pending' và báo người duyệt lại.
+        Thiết bị hết hạn duyệt hoặc yêu cầu cũ hết hạn chờ thì mở yêu cầu mới và báo người duyệt lại.
         auto_approve (tài khoản cứu hộ): duyệt luôn, email chỉ để người duyệt biết.
         """
         device = self.search([('user_id', '=', user_id), ('token_hash', '=', token_hash)], limit=1)
-        if device.state in ('pending', 'rejected') and not auto_approve:
+        if device and not auto_approve and (device.state == 'rejected' or device._is_request_open()):
             # Không gửi lại email mỗi lần user bấm đăng nhập, tránh dội hộp thư admin.
             return device
         geoip = GeoIP(ip_address)
+        now = fields.Datetime.now()
         vals = {
             'state': 'pending',
             'ip_address': ip_address,
@@ -109,7 +158,8 @@ class HlvLoginDevice(models.Model):
             'browser': browser,
             'country': geoip.get('country_name'),
             'city': geoip.get('city'),
-            'request_date': fields.Datetime.now(),
+            'request_date': now,
+            'request_until': request_expiry(now, self._request_minutes()),
             'approved_until': False,
             'bus_channel': f"hlv_login_approval_{secrets.token_urlsafe(24)}",
         }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Core chỉ cho user nội bộ đọc phiên của chính mình (admin đọc hết). Người duyệt không phải
+         admin cần thấy phiên của user đang xin duyệt trên form thiết bị, nếu không form báo lỗi quyền.
+         Chỉ cấp đọc; thu hồi phiên đi qua nút của core (có hỏi lại mật khẩu). -->
+    <record id="rule_res_device_approver" model="ir.rule">
+        <field name="name">Người duyệt đăng nhập đọc mọi phiên</field>
+        <field name="model_id" ref="base.model_res_device"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('hlv_login_approval.group_login_approver'))]"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_res_device_log_approver" model="ir.rule">
+        <field name="name">Người duyệt đăng nhập đọc mọi nhật ký phiên</field>
+        <field name="model_id" ref="base.model_res_device_log"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('hlv_login_approval.group_login_approver'))]"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+</odoo>

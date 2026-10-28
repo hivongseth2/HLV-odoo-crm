@@ -21,6 +21,8 @@ class LoginApprovalHome(Home):
         device = user._login_device_in_session()
         return request.render('hlv_login_approval.login_wait', {
             'device': device,
+            'waiting_state': device._waiting_state(),
+            'request_minutes': device._request_minutes(),
             'continue_url': self._hlv_continue_url(redirect),
         })
 
@@ -28,10 +30,7 @@ class LoginApprovalHome(Home):
     def hlv_login_approval_status(self, **kw):
         user = self._hlv_pre_login_user()
         device = user._login_device_in_session() if user else None
-        if not device:
-            state = 'none'
-        else:
-            state = 'approved' if device._is_valid_now() else device.state
+        state = device._waiting_state() if device else 'none'
         return request.make_json_response({'state': state})
 
     @http.route(WAIT_URL + '/continue', type='http', auth='public', sitemap=False, website=True, multilang=False)
