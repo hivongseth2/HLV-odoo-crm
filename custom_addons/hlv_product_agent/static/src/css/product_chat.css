@@ -1,8 +1,15 @@
-/* Khung chat "Tạo mã hàng" — neo góc TRÁI dưới để không đè lên chatbot tra tồn
-   (website_public_inventory_18) đang neo góc phải. */
+/* Ngăn kéo "Tạo mã hàng" — neo mép TRÁI, cao hết màn hình (chatbot tra tồn của
+   website_public_inventory_18 và nút gọi đang neo góc phải). Màu theo logo Hoàng Long Vũ. */
+:root {
+  --pa-drawer-width: 380px;
+}
+
 .hlv-pa-chat {
-  --pa-accent: #0f6e5a;
-  --pa-accent-soft: #e6f2ef;
+  --pa-accent: #1565b3;
+  --pa-accent-dark: #0d4c8c;
+  --pa-accent-soft: #e8f1fb;
+  --pa-yellow: #f8c20a;
+  --pa-yellow-soft: #fff6d6;
   --pa-bg: #ffffff;
   --pa-border: #d9dee3;
   --pa-text: #1f2933;
@@ -13,39 +20,56 @@
   --pa-error-text: #9b1c1c;
 
   position: fixed;
-  left: 20px;
-  bottom: 20px;
+  top: 0;
+  left: 0;
+  bottom: 0;
   z-index: 2147482000;
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--pa-text);
+  pointer-events: none;
 }
 
+.hlv-pa-chat > * {
+  pointer-events: auto;
+}
+
+/* Đóng: còn một tab dọc ở mép trái để mở lại. */
 .hlv-pa-toggle {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+  padding: 16px 9px;
   border: 0;
-  border-radius: 999px;
-  background: var(--pa-accent);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  border-radius: 0 10px 10px 0;
+  background: var(--pa-yellow);
+  color: var(--pa-accent-dark);
+  font-weight: 700;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.18);
   cursor: pointer;
+}
+
+.hlv-pa-toggle .fa {
+  rotate: 90deg;
+}
+
+.hlv-pa-chat[data-open="1"] .hlv-pa-toggle {
+  display: none;
 }
 
 .hlv-pa-panel {
   display: none;
   flex-direction: column;
-  position: absolute;
-  left: 0;
-  bottom: 56px;
-  width: 400px;
-  height: min(620px, calc(100vh - 110px));
+  height: 100%;
+  width: var(--pa-drawer-width);
   background: var(--pa-bg);
-  border: 1px solid var(--pa-border);
-  border-radius: 12px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.2);
+  border-right: 4px solid var(--pa-yellow);
+  box-shadow: 4px 0 18px rgba(0, 0, 0, 0.12);
   overflow: hidden;
 }
 
@@ -53,12 +77,43 @@
   display: flex;
 }
 
+/* Mở ngăn kéo trên máy tính: dồn cả trang sang phải và thu nhỏ chữ bảng tra tồn, để
+   bảng không bị ngăn kéo che mất cột. */
+@media (min-width: 992px) {
+  body.hlv-pa-drawer-open {
+    padding-left: var(--pa-drawer-width);
+  }
+
+  body.hlv-pa-drawer-open #wrap {
+    font-size: 0.86rem;
+  }
+
+  body.hlv-pa-drawer-open #inv-table {
+    font-size: 0.82rem;
+  }
+
+  body.hlv-pa-drawer-open #inv-table th,
+  body.hlv-pa-drawer-open #inv-table td {
+    padding: 0.35rem 0.4rem;
+  }
+
+  body.hlv-pa-drawer-open #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+    font-size: 0.88rem;
+  }
+
+  body.hlv-pa-drawer-open #inv-table img {
+    max-width: 56px;
+    max-height: 56px;
+  }
+}
+
 .hlv-pa-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  background: var(--pa-accent);
+  padding: 11px 12px;
+  background: linear-gradient(90deg, var(--pa-accent-dark), var(--pa-accent));
+  border-bottom: 3px solid var(--pa-yellow);
   color: #fff;
 }
 
@@ -242,8 +297,9 @@
 }
 
 .hlv-pa-msg-event .hlv-pa-text {
-  background: var(--pa-accent-soft);
-  color: var(--pa-accent);
+  background: var(--pa-yellow-soft);
+  color: var(--pa-accent-dark);
+  border: 1px solid #f3dd8a;
   font-size: 12.5px;
   text-align: center;
 }
@@ -328,7 +384,7 @@
   border: 1px solid var(--pa-border);
   border-radius: 8px;
   padding: 7px 9px;
-  font-size: 14px;
+  font-size: 13.5px;
   max-height: 120px;
 }
 
@@ -343,28 +399,20 @@
   cursor: pointer;
 }
 
+.hlv-pa-input textarea:focus {
+  outline: 0;
+  border-color: var(--pa-accent);
+  box-shadow: 0 0 0 2px var(--pa-yellow-soft);
+}
+
 .hlv-pa-send:disabled {
   opacity: 0.4;
   cursor: wait;
 }
 
-@media (max-width: 480px) {
-  .hlv-pa-chat {
-    left: 12px;
-    bottom: 12px;
-  }
-
-  .hlv-pa-toggle span {
-    display: none;
-  }
-
+/* Điện thoại / máy nhỏ: ngăn kéo phủ lên trang (không dồn trang), rộng gần hết màn. */
+@media (max-width: 991.98px) {
   .hlv-pa-panel {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: auto;
-    height: 85vh;
-    border-radius: 12px 12px 0 0;
+    width: min(var(--pa-drawer-width), 92vw);
   }
 }
