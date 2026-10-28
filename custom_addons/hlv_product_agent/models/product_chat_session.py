@@ -11,6 +11,7 @@ poll về (Claude Code), hoặc cron của chính Odoo gọi Claude API bằng A
 """
 import base64
 import binascii
+import json
 import logging
 import uuid
 from datetime import timedelta
@@ -355,6 +356,13 @@ class HlvProductChatSession(models.Model):
         """Ghi chú hệ thống (đã tạo/sửa MISA...) — sale thấy, Claude không nhận."""
         self.ensure_one()
         return self._post('event', text)
+
+    def post_client_action(self, text, action):
+        """Ghi chú hệ thống kèm lệnh cho trang của sale (dict, vd ``{'type': 'search', 'q': ...}``)."""
+        self.ensure_one()
+        message = self._post('event', text)
+        message.client_action = json.dumps(action, ensure_ascii=False)
+        return message
 
     def _post(self, role, text):
         return self.env['hlv.product.chat.message'].sudo().create({

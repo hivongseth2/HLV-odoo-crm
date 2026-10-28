@@ -376,6 +376,22 @@ body.hlv-pa-resizing {
   text-align: center;
 }
 
+/* Nút trong dòng hệ thống: mở lại trang tra tồn với từ khoá trợ lý đã tìm. */
+.hlv-pa-action {
+  align-self: center;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--pa-accent);
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none !important;
+}
+
+.hlv-pa-action:hover {
+  background: var(--pa-accent-dark);
+}
+
 .hlv-pa-msg img {
   max-width: 160px;
   max-height: 160px;

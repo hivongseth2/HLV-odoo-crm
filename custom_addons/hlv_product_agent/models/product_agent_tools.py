@@ -24,6 +24,8 @@ RECENT_CREATION_MINUTES = 30
 SEARCH_FETCH_LIMIT = 50
 SEARCH_SHOWN = 12
 SEARCH_ODOO_LIMIT = 8
+# Từ khoá cho trang tra tồn: mã hoặc vài từ, không phải cả đoạn mô tả.
+SEARCH_PAGE_QUERY_MAX = 100
 # Chặn combo phình bất thường (Claude lặp dòng, dán nhầm cả bảng giá).
 MAX_COMBO_COMPONENTS = 50
 
@@ -47,6 +49,7 @@ class HlvProductAgentTools(models.AbstractModel):
             'update_product_misa': self._update_product,
             'get_category_info': self._get_category_info,
             'search_category_misa': self._search_category,
+            'show_in_search_page': self._show_in_search_page,
         }.get(name)
         if not handler:
             return {'status': 'error', 'message': "Tool %s chưa được hỗ trợ." % name}
@@ -113,6 +116,16 @@ class HlvProductAgentTools(models.AbstractModel):
         products = self.env['product.product'].sudo().search(
             ['|', ('default_code', 'ilike', query), ('name', 'ilike', query)], limit=SEARCH_ODOO_LIMIT)
         return [{'code': product.default_code or '', 'name': product.name} for product in products]
+
+    def _show_in_search_page(self, session, args):
+        """Cho trang tra tồn của sale tìm đúng từ khoá (thường là mã hàng đã có)."""
+        query = ' '.join((args.get('query') or '').split())
+        if not query:
+            return {'status': 'error', 'message': "Cần truyền query (mã hoặc tên hàng)."}
+        if len(query) > SEARCH_PAGE_QUERY_MAX:
+            return {'status': 'error', 'message': "query quá dài, chỉ truyền mã hoặc vài từ chính."}
+        session.post_client_action("Trợ lý mở trang tra tồn: %s" % query, {'type': 'search', 'q': query})
+        return {'status': 'success', 'message': "Trang tra tồn của người dùng đang tìm '%s'." % query}
 
     def _get_category_info(self, session, args):
         cat_id = args.get('category_id')

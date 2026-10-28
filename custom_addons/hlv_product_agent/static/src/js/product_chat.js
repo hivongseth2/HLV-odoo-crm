@@ -116,6 +116,20 @@ function rememberDrawerClosed(closed) {
 }
 
 /**
+ * URL trang tra tồn tìm đúng từ khoá, giữ nguyên trang đang mở (vd /en/search_stock).
+ * Nhận: lệnh {type: 'search', q}. Biên: lệnh lạ / thiếu q -> null.
+ */
+function searchUrl(action) {
+    if (!action || action.type !== "search" || !action.q) {
+        return null;
+    }
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("q", action.q);
+    return url.toString();
+}
+
+/**
  * Dòng báo trạng thái chờ dưới tin cuối.
  * Nhận: state từ server. Trả: chuỗi, hoặc "" khi không chờ gì.
  */
@@ -238,11 +252,20 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
                 return;
             }
         }
+        // Lần đầu nạp một cuộc là lịch sử: chỉ vẽ, không chạy lệnh cũ (tải lại trang mà
+        // chạy lại là trang tự nhảy lung tung). Từ lần sau mới là tin vừa tới.
+        const live = this.loadedSessionId === state.session_id;
+        let pendingUrl = null;
         for (const message of state.messages) {
             if (message.id > this.lastId) {
                 this._appendMessage(message);
                 this.lastId = message.id;
+                pendingUrl = (live && searchUrl(message.action)) || pendingUrl;
             }
+        }
+        this.loadedSessionId = state.session_id;
+        if (pendingUrl) {
+            window.location.href = pendingUrl;
         }
         this.busy = Boolean(state.busy);
         this.waiting = waitingText(state);
@@ -270,6 +293,14 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
             // textContent chứ không innerHTML: nội dung là chữ của sale và của Claude.
             text.textContent = message.content;
             item.appendChild(text);
+        }
+        const url = searchUrl(message.action);
+        if (url) {
+            const link = document.createElement("a");
+            link.className = "hlv-pa-action";
+            link.href = url;
+            link.textContent = "Xem trên trang tra tồn";
+            item.appendChild(link);
         }
         for (const imageId of message.image_ids || []) {
             const link = document.createElement("a");

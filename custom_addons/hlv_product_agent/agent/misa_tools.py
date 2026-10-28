@@ -12,6 +12,8 @@ READ_ONLY_TOOLS = frozenset({
     "get_combo_misa",
     "search_category_misa",
     "get_category_info",
+    # Không ghi gì vào MISA; gọi lại cùng từ khoá trong một lượt thì khỏi mở trang lần nữa.
+    "show_in_search_page",
 })
 
 TOOLS = [
@@ -223,6 +225,23 @@ TOOLS = [
                 "name": {"type": "string", "description": "Tên nhóm cần tìm (VD: Bảo hộ lao động)"},
             },
             "required": ["name"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "show_in_search_page",
+        "description": (
+            "Mở trang tra tồn mà người dùng đang xem, tìm đúng từ khoá này, để họ thấy ngay tồn kho "
+            "và giá. Dùng khi hàng người dùng hỏi / muốn tạo ĐÃ CÓ sẵn (kết luận trùng), hoặc khi "
+            "họ hỏi hàng có sẵn không: truyền MÃ hàng đã có (đúng như kết quả search). Không tạo / "
+            "sửa gì. Vẫn trả lời bằng chữ như bình thường; gọi tối đa một lần mỗi lượt."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Mã hàng (ưu tiên) hoặc vài từ khoá chính"},
+            },
+            "required": ["query"],
             "additionalProperties": False,
         },
     },
