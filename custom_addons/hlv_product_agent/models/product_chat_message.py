@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import base64
+import json
 import logging
 
 from odoo import fields, models
@@ -38,6 +39,9 @@ class HlvProductChatMessage(models.Model):
         "Chờ gửi cho Claude", default=False, index=True,
         help="Tin của sale chưa được đưa vào ngữ cảnh Claude.",
     )
+    # Lệnh cho trang đang mở (vd mở tra tồn đúng mã), JSON. Khung chat chỉ chạy với tin
+    # MỚI tới, không chạy lại khi tải lại trang — xem product_chat.js.
+    client_action = fields.Char(copy=False)
     claim_token = fields.Char(
         copy=False, index=True,
         help="Mã lượt xử lý đang cầm tin này. Tin tới trong lúc Claude đang chạy thì chưa "
@@ -53,6 +57,7 @@ class HlvProductChatMessage(models.Model):
             'content': self.content or '',
             'image_ids': self.attachment_ids.ids,
             'date': fields.Datetime.to_string(self.create_date),
+            'action': json.loads(self.client_action) if self.client_action else None,
         }
 
     def to_prompt_dict(self):

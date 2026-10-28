@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="product_chat_widget" name="Khung chat tạo mã hàng">
+    <template id="product_chat_widget" name="Khung chat trợ lý">
         <div class="hlv-pa-chat" data-open="0">
-            <button type="button" class="hlv-pa-toggle" title="Trợ lý tạo mã hàng">
-                <i class="fa fa-plus-square"/> <span>Tạo mã hàng</span>
+            <button type="button" class="hlv-pa-toggle" title="Trợ lý">
+                <i class="fa fa-comments"/> <span>Trợ lý</span>
             </button>
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
                 <div class="hlv-pa-header">
                     <div class="hlv-pa-title">
-                        <span class="hlv-pa-dot"/> Trợ lý tạo mã hàng
+                        <span class="hlv-pa-dot"/> Trợ lý
                     </div>
                     <div class="hlv-pa-actions">
                         <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc mới">
