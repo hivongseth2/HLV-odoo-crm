@@ -1,6 +1,6 @@
 /** @odoo-module **/
 /*
- * Khung chat "Tạo mã hàng" trên /search_stock.
+ * Ngăn kéo chat "Tạo mã hàng" trên /search_stock (mép trái, mở sẵn trên máy tính).
  *
  * Trình duyệt không nói chuyện với Claude: nó chỉ ghi tin vào Odoo rồi hỏi định kỳ
  * xem có câu trả lời chưa. Agent trên máy văn phòng mới là bên lấy tin và trả lời,
@@ -43,6 +43,34 @@ function saveSaleKey(key) {
         }
     } catch {
         // Không lưu được: lần sau mở trang hỏi lại, chấp nhận được.
+    }
+}
+
+// Ngăn kéo mở sẵn trên máy tính; ai bấm đóng thì nhớ theo trình duyệt, lần sau không tự
+// mở nữa. Màn nhỏ (ngăn kéo phủ lên trang) thì mặc định đóng.
+const DRAWER_CLOSED_STORAGE = "hlv_pa_drawer_closed";
+const DESKTOP_QUERY = "(min-width: 992px)";
+
+function shouldOpenDrawer() {
+    if (!window.matchMedia(DESKTOP_QUERY).matches) {
+        return false;
+    }
+    try {
+        return window.localStorage.getItem(DRAWER_CLOSED_STORAGE) !== "1";
+    } catch {
+        return true;
+    }
+}
+
+function rememberDrawerClosed(closed) {
+    try {
+        if (closed) {
+            window.localStorage.setItem(DRAWER_CLOSED_STORAGE, "1");
+        } else {
+            window.localStorage.removeItem(DRAWER_CLOSED_STORAGE);
+        }
+    } catch {
+        // Không lưu được: lần sau vẫn mở sẵn, chấp nhận được.
     }
 }
 
@@ -110,11 +138,15 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this.previewsEl = this.el.querySelector(".hlv-pa-previews");
         this.textarea = this.el.querySelector("textarea");
         this.sendBtn = this.el.querySelector(".hlv-pa-send");
+        if (shouldOpenDrawer()) {
+            this._setOpen(true);
+        }
         return this._super(...arguments);
     },
 
     destroy() {
         clearTimeout(this.pollTimer);
+        document.body.classList.remove("hlv-pa-drawer-open");
         this._super(...arguments);
     },
 
@@ -329,11 +361,20 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     // Sự kiện
     // ------------------------------------------------------------------
     _onToggle() {
-        this.isOpen = !this.isOpen;
-        this.el.dataset.open = this.isOpen ? "1" : "0";
+        this._setOpen(!this.isOpen);
+        rememberDrawerClosed(!this.isOpen);
         if (this.isOpen) {
-            this._refresh();
             this.textarea.focus();
+        }
+    },
+
+    _setOpen(open) {
+        this.isOpen = open;
+        this.el.dataset.open = open ? "1" : "0";
+        // Lớp trên body để CSS dồn trang sang phải, chừa chỗ cho ngăn kéo.
+        document.body.classList.toggle("hlv-pa-drawer-open", open);
+        if (open) {
+            this._refresh();
         } else {
             clearTimeout(this.pollTimer);
         }
