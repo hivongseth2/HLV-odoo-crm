@@ -115,6 +115,18 @@ function rememberDrawerClosed(closed) {
     }
 }
 
+// Khung HTML cho bảng trợ lý: style nền tảng để bảng Claude dựng nhìn gọn dù nó quên style.
+const BOARD_BASE_CSS =
+    "body{margin:0;padding:14px;font:13px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;" +
+    "color:#1f2933;background:#fff}table{border-collapse:collapse;width:100%;margin:6px 0}" +
+    "th,td{border:1px solid #d9dee3;padding:5px 8px;vertical-align:top}" +
+    "th{background:#e8f1fb;color:#0d4c8c;text-align:left}h1,h2,h3{color:#0d4c8c;margin:8px 0}";
+
+function boardDocument(html) {
+    return `<!doctype html><html><head><meta charset="utf-8"><style>${BOARD_BASE_CSS}</style>` +
+        `</head><body>${html}</body></html>`;
+}
+
 /**
  * URL trang tra tồn tìm đúng từ khoá, giữ nguyên trang đang mở (vd /en/search_stock).
  * Nhận: lệnh {type: 'search', q}. Biên: lệnh lạ / thiếu q -> null.
@@ -178,6 +190,9 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         "click .hlv-pa-switch": "_onSwitchPerson",
         "click .hlv-pa-pick": "_onPickPerson",
         "pointerdown .hlv-pa-resize": "_onResizeStart",
+        "click .hlv-pa-board-close": "_onBoardClose",
+        "click .hlv-pa-board-max": "_onBoardMax",
+        "pointerdown .hlv-pa-board-head": "_onBoardDragStart",
     },
 
     start() {
@@ -261,6 +276,9 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
                 this._appendMessage(message);
                 this.lastId = message.id;
                 pendingUrl = (live && searchUrl(message.action)) || pendingUrl;
+                if (live && message.action && message.action.type === "panel") {
+                    this._showBoard(message.action);
+                }
             }
         }
         this.loadedSessionId = state.session_id;
@@ -293,6 +311,14 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
             // textContent chứ không innerHTML: nội dung là chữ của sale và của Claude.
             text.textContent = message.content;
             item.appendChild(text);
+        }
+        if (message.action && message.action.type === "panel") {
+            const reopen = document.createElement("button");
+            reopen.type = "button";
+            reopen.className = "hlv-pa-action";
+            reopen.textContent = "Mở lại bảng";
+            reopen.addEventListener("click", () => this._showBoard(message.action));
+            item.appendChild(reopen);
         }
         const url = searchUrl(message.action);
         if (url) {
@@ -464,6 +490,56 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         handle.addEventListener("pointermove", onMove);
         handle.addEventListener("pointerup", onUp);
         handle.addEventListener("pointercancel", onUp);
+    },
+
+    // ------------------------------------------------------------------
+    // Bảng trợ lý (show_panel)
+    // ------------------------------------------------------------------
+    _showBoard(action) {
+        const board = this.el.querySelector(".hlv-pa-board");
+        board.querySelector(".hlv-pa-board-title").textContent = action.title || "Trợ lý";
+        board.querySelector(".hlv-pa-board-frame").srcdoc = boardDocument(action.html || "");
+        board.dataset.open = "1";
+    },
+
+    _onBoardClose() {
+        this.el.querySelector(".hlv-pa-board").dataset.open = "0";
+    },
+
+    _onBoardMax() {
+        const board = this.el.querySelector(".hlv-pa-board");
+        board.dataset.max = board.dataset.max === "1" ? "0" : "1";
+    },
+
+    _onBoardDragStart(ev) {
+        if (ev.target.closest("button")) {
+            return;
+        }
+        ev.preventDefault();
+        const board = this.el.querySelector(".hlv-pa-board");
+        const head = ev.currentTarget;
+        const rect = board.getBoundingClientRect();
+        const offsetX = ev.clientX - rect.left;
+        const offsetY = ev.clientY - rect.top;
+        head.setPointerCapture(ev.pointerId);
+        // Iframe nuốt sự kiện chuột khi con trỏ lướt qua: tắt tạm trong lúc kéo.
+        board.classList.add("hlv-pa-board-dragging");
+        const onMove = (moveEv) => {
+            const left = Math.min(Math.max(moveEv.clientX - offsetX, 0), window.innerWidth - 120);
+            const top = Math.min(Math.max(moveEv.clientY - offsetY, 0), window.innerHeight - 40);
+            board.style.left = left + "px";
+            board.style.top = top + "px";
+            board.style.right = "auto";
+        };
+        const onUp = () => {
+            head.removeEventListener("pointermove", onMove);
+            head.removeEventListener("pointerup", onUp);
+            head.removeEventListener("pointercancel", onUp);
+            board.classList.remove("hlv-pa-board-dragging");
+        };
+        head.addEventListener("pointermove", onMove);
+        head.addEventListener("pointerup", onUp);
+        head.addEventListener("pointercancel", onUp);
     },
 
     _setOpen(open) {

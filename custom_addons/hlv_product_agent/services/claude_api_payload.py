@@ -6,7 +6,7 @@ Util thuần: vào dict / chuỗi, ra dict / chuỗi. Không đụng ``self.env`
 import hashlib
 import json
 
-from ..agent.misa_tools import TOOLS as MISA_TOOLS
+from ..agent.misa_tools import DELEGATE_TOOL, HEAVY_QUERY_TOOLS, QUERY_TOOLS, TOOLS as MISA_TOOLS
 
 MODEL_CHOICES = [
     ('claude-haiku-5-5', "Claude Haiku 5.5 (nhanh, rẻ nhất, $0.10/$0.50 mỗi triệu token)"),
@@ -18,6 +18,20 @@ MODEL_CHOICES = [
 DEFAULT_MODEL = 'claude-haiku-5-5'
 EFFORT_CHOICES = [('low', "Thấp"), ('medium', "Vừa"), ('high', "Cao")]
 DEFAULT_EFFORT = 'medium'
+# Model phụ đi tra cứu (giao_viec_tra_cuu): đọc kết quả dài rồi tóm tắt — việc của model rẻ.
+DEFAULT_WORKER_MODEL = 'claude-haiku-5-5'
+WORKER_MAX_TOKENS = 8000
+WORKER_EFFORT = 'low'
+WORKER_SYSTEM = """Em là trợ lý TRA CỨU kho của công ty Hoàng Long Vũ, làm việc cho trợ lý chính.
+
+Nhận một nhiệm vụ tra cứu, dùng các tool tra cứu Odoo (chỉ đọc) để lấy đủ số liệu, rồi trả lời
+trợ lý chính bằng tiếng Việt, NGẮN và ĐỦ SỐ:
+- Chỉ nói số liệu tool trả về; không đoán, không bịa. Tool lỗi / không có dữ liệu thì nói rõ.
+- Tool báo 'ambiguous' (nhiều mã khớp): chọn mã khớp nhiệm vụ nhất và gọi lại; không chắc thì
+  liệt kê các mã ứng viên để trợ lý chính hỏi người dùng.
+- Gom thành ý chính + bảng số liệu dạng dòng (mỗi dòng một kho / một phiếu / một đơn), ghi rõ
+  đơn vị và ngày. Danh sách dài thì giữ các dòng quan trọng nhất và ghi tổng còn lại.
+- Không chào hỏi, không giải thích cách em tra."""
 
 # Đủ chỗ cho phần suy nghĩ + câu trả lời: suy nghĩ cũng tính vào max_tokens.
 MAX_TOKENS = 16000
@@ -53,12 +67,24 @@ MAX_PROMPT_TOKENS = 90000
 MAX_HISTORY_TURNS = 40
 
 
+def _api_tool(tool):
+    """Một tool theo định dạng Messages API (input_schema thay cho inputSchema của MCP)."""
+    return {'name': tool['name'], 'description': tool['description'], 'input_schema': tool['inputSchema']}
+
+
 def client_tools():
-    """Tool MISA theo định dạng Messages API (input_schema thay cho inputSchema của MCP)."""
-    return [
-        {'name': tool['name'], 'description': tool['description'], 'input_schema': tool['inputSchema']}
-        for tool in MISA_TOOLS
-    ]
+    """Tool của model chính: như máy agent, trừ tra cứu nặng (giao model phụ) + tool giao việc.
+
+    Tra cứu nặng trả kết quả dài: model chính đọc trực tiếp thì tính token giá model chính,
+    giao model phụ đọc rồi tóm tắt thì rẻ hơn nhiều lần.
+    """
+    return ([_api_tool(tool) for tool in MISA_TOOLS if tool['name'] not in HEAVY_QUERY_TOOLS]
+            + [_api_tool(DELEGATE_TOOL)])
+
+
+def worker_tools():
+    """Tool của model phụ (giao_viec_tra_cuu): chỉ các tra cứu Odoo chỉ đọc."""
+    return [_api_tool(tool) for tool in QUERY_TOOLS]
 
 
 def server_tools(model):

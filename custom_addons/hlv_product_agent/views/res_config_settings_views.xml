@@ -27,6 +27,10 @@
                                 <field name="hlv_product_agent_api_model"/>
                             </div>
                             <div class="row">
+                                <label for="hlv_product_agent_api_worker_model" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_product_agent_api_worker_model"/>
+                            </div>
+                            <div class="row">
                                 <label for="hlv_product_agent_api_effort" class="col-lg-4 o_light_label"/>
                                 <field name="hlv_product_agent_api_effort"/>
                             </div>

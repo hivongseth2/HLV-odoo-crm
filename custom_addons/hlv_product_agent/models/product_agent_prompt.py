@@ -16,11 +16,13 @@ PARTS = [
     ('core', "Luật lõi"),
     ('naming', "Tài liệu A — Đặt tên và mã hàng"),
     ('category', "Tài liệu B — Phân nhóm hàng"),
+    ('assist', "Tra cứu & tương tác"),
 ]
 DEFAULT_FILES = {
     'core': 'hlv_product_agent/data/prompt_defaults/system_prompt.md',
     'naming': 'hlv_product_agent/data/prompt_defaults/product_naming_rules.md',
     'category': 'hlv_product_agent/data/prompt_defaults/product_category_rules.md',
+    'assist': 'hlv_product_agent/data/prompt_defaults/assistant_tools.md',
 }
 
 
@@ -61,6 +63,7 @@ class HlvProductAgentPrompt(models.Model):
         text = build_system_prompt(
             contents.get('core'), contents.get('naming'), contents.get('category'),
             render_special_rules([rule.to_prompt_dict() for rule in rules]),
+            contents.get('assist'),
         )
         return text, prompt_version(text)
 

@@ -376,9 +376,81 @@ body.hlv-pa-resizing {
   text-align: center;
 }
 
+/* Bảng trợ lý (show_panel): nổi trên bảng tra tồn, kéo được bằng thanh tiêu đề. */
+.hlv-pa-board {
+  display: none;
+  position: fixed;
+  top: 90px;
+  right: 24px;
+  width: min(760px, 62vw);
+  height: min(560px, 75vh);
+  flex-direction: column;
+  background: var(--pa-bg);
+  border: 1px solid var(--pa-border);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(13, 76, 140, 0.28);
+  overflow: hidden;
+  resize: both;
+  min-width: 320px;
+  min-height: 200px;
+}
+
+.hlv-pa-board[data-open="1"] {
+  display: flex;
+}
+
+.hlv-pa-board[data-max="1"] {
+  top: 12px !important;
+  left: auto !important;
+  right: 12px !important;
+  width: min(1200px, calc(100vw - var(--pa-drawer-width) - 36px));
+  height: calc(100vh - 24px);
+}
+
+.hlv-pa-board-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 8px 14px;
+  background: linear-gradient(90deg, var(--pa-accent-dark), var(--pa-accent));
+  color: #fff;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.hlv-pa-board-title {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hlv-pa-board-head button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.hlv-pa-board-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.hlv-pa-board-dragging .hlv-pa-board-frame {
+  pointer-events: none;
+}
+
 /* Nút trong dòng hệ thống: mở lại trang tra tồn với từ khoá trợ lý đã tìm. */
 .hlv-pa-action {
   align-self: center;
+  border: 0;
+  cursor: pointer;
   padding: 3px 12px;
   border-radius: 999px;
   background: var(--pa-accent);
