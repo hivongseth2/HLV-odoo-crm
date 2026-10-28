@@ -115,6 +115,18 @@ body.hlv-pa-resizing {
   /* Trang tra tồn đặt nội dung trong container-fluid có max-width 1550px viết thẳng trên
      thẻ, căn giữa: dồn trang mà giữ max-width là lộ khoảng nền trống hai bên. Cho giãn hết
      phần còn lại (!important vì phải thắng style inline). */
+  /* Website đang để bố cục "Boxed": Odoo cho #wrapwrap lề hai bên và ép mọi khối con
+     (header, main, footer) về max-width của container, căn giữa (website.scss). Gỡ cả
+     hai, không thì vẫn lộ nền hai bên và bảng bị cắt. */
+  body.hlv-pa-drawer-open #wrapwrap {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  body.hlv-pa-drawer-open #wrapwrap > * {
+    max-width: none !important;
+  }
+
   body.hlv-pa-drawer-open #wrap .container,
   body.hlv-pa-drawer-open #wrap .container-fluid {
     max-width: none !important;
