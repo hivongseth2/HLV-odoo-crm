@@ -1,6 +1,9 @@
+import logging
+
 from odoo import http
 from odoo.http import request
-import logging
+
+from .access import internal_only
 
 _logger = logging.getLogger(__name__)
 
@@ -80,6 +83,7 @@ class MisaPurchaseLookupController(http.Controller):
         }
 
     @http.route(['/misa/purchase/lookup', '/misa/purchase/lookup/page/<int:page>'], type='http', auth='user', website=True)
+    @internal_only
     def misa_purchase_lookup(self, page=1, **kwargs):
         """Trang tra cứu chứng từ mua hàng MISA (có phân trang).
 

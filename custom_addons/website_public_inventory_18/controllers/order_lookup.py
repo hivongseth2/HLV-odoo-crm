@@ -4,6 +4,8 @@ import math
 from odoo import http
 from odoo.http import request
 
+from .access import internal_only
+
 _logger = logging.getLogger(__name__)
 
 # ===== CONFIGURATION =====
@@ -404,6 +406,7 @@ class OrderLookupController(http.Controller):
     
     # Nội bộ: trang trả dòng hàng + giá bán + tên khách, mở public thì dò id là cào được mọi đơn.
     @http.route(['/saleorder-lookup'], type='http', auth='user', website=True, csrf=False, sitemap=False)
+    @internal_only
     def order_lookup(self, order_code="", phone="", email="", page=1, **kw):
         """
         Public sales order lookup page.
@@ -557,6 +560,7 @@ class OrderLookupController(http.Controller):
         })
     
     @http.route(['/saleorder-lookup/<int:order_id>'], type='http', auth='user', website=True, csrf=False, sitemap=False)
+    @internal_only
     def order_detail(self, order_id, **kw):
         """
         Public sales order detail page.

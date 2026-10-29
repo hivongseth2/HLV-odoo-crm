@@ -1,7 +1,7 @@
 # website_public_inventory_18 — Technical
 
 ## 1. Mục đích
-Trang tra tồn `/search_stock` cho nhân viên (tồn / giữ / sẵn sàng / dự báo theo kho, giữ hàng), cùng các trang tra đơn, tra PO MISA, chatbot.
+Trang tra tồn `/search_stock` cho nhân viên (tồn / giữ / sẵn sàng / dự báo theo kho, giữ hàng), cùng các trang tra đơn, tra PO MISA. Mọi route chỉ cho nhân viên nội bộ (`controllers/access.py` → `internal_only`): `auth="user"` thôi thì tài khoản portal tự đăng ký cũng vào được.
 
 ## 2. Cấu trúc
 ```
@@ -10,7 +10,7 @@ website_public_inventory_18/
 │   ├── main.py                ← /search_stock và các endpoint JSON (breakdown, forecast_details, location_details, hold/*)
 │   ├── order_lookup.py        ← tra đơn hàng
 │   ├── misa_purchase_lookup.py← tra PO MISA
-│   └── chatbot.py
+│   └── access.py              ← internal_only: chặn tài khoản không phải nhân viên nội bộ
 ├── models/                    ← stock.hold.request (giữ hàng), kế thừa quant/picking/warehouse
 ├── views/templates.xml        ← QWeb trang + JS (jQuery inline) render bảng kho khi bấm mở rộng
 └── data/, security/, migrations/

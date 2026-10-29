@@ -10,6 +10,8 @@ from odoo.osv import expression
 from odoo.tools.mimetypes import guess_mimetype
 from odoo.exceptions import UserError
 
+from .access import internal_only
+
 PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
 
@@ -150,6 +152,7 @@ class PublicInventory(http.Controller):
     
     # --- CẬP NHẬT: Route ảnh có fallback mặc định ---
     @http.route(["/search_stock/image/<int:product_id>"], type="http", auth="user")
+    @internal_only
     def stock_image(self, product_id):
         record = request.env['product.product'].sudo().browse(product_id).exists()
         
@@ -222,6 +225,7 @@ class PublicInventory(http.Controller):
             return {"mode": "warehouses", "rows": rows}
 
     @http.route(["/search_stock"], type="http", auth="user", website=True, sitemap=True)
+    @internal_only
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
         # 2. PREPARE
         env = request.env
@@ -440,11 +444,13 @@ class PublicInventory(http.Controller):
         return float(max(0, min(possible_sets))) if possible_sets else 0.0
 
     @http.route(["/search_stock/json"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def inventory_json(self, q="", warehouse_id=None, page=1):
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
 
     @http.route(["/search_stock/product_breakdown"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def product_breakdown(self, product_id=None, warehouse_id=None, detail_mode=None):
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
         if params:
@@ -545,6 +551,7 @@ class PublicInventory(http.Controller):
         return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
     @http.route(["/search_stock/location_details"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def location_details(self, product_id=None, warehouse_id=None):
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
         if params:
@@ -614,6 +621,7 @@ class PublicInventory(http.Controller):
         }
 
     @http.route(["/search_stock/suggest"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def search_suggest(self, q="", combo_search=False):
         env = request.env
         q = (q or "").strip()
@@ -686,6 +694,7 @@ class PublicInventory(http.Controller):
         return {"ok": True, "products": results}
 
     @http.route(["/search_stock/forecast_details"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def forecast_details(self, product_id=None, warehouse_id=None):
         """Trả về chi tiết cấu thành số dự báo: phiếu nhập từ ĐMH + phiếu xuất từ ĐBH."""
         params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
@@ -992,6 +1001,7 @@ class PublicInventory(http.Controller):
 
     # --- YÊU CẦU GIỮ HÀNG ---
     @http.route(["/search_stock/hold/customer_suggest"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def hold_customer_suggest(self, q=""):
         """Autocomplete chọn khách hàng khi tạo yêu cầu giữ hàng — để hệ thống biết ưu tiên tìm
         đơn của đúng khách này khi hàng giữ được nhả ra sau này. Chỉ tìm khách hàng GỐC
@@ -1016,6 +1026,7 @@ class PublicInventory(http.Controller):
         return {"ok": True, "customers": customers}
 
     @http.route(["/search_stock/hold/create"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def hold_request_create(self, product_id=None, warehouse_id=None, quantity=None,
                              hold_until_date=None, project_name=None, sale_name=None,
                              partner_id=None, description=None):
@@ -1073,6 +1084,7 @@ class PublicInventory(http.Controller):
         return {"ok": True, "name": hold.name, "state": hold.state}
 
     @http.route(["/search_stock/hold/cancel"], type="json", auth="user", methods=["POST"])
+    @internal_only
     def hold_request_cancel(self, hold_id=None):
         hid = _as_int_or_none(hold_id)
         if not hid:
@@ -1089,6 +1101,7 @@ class PublicInventory(http.Controller):
         return {"ok": True}
 
     @http.route(["/search_stock/my_holds"], type="http", auth="user", website=True, sitemap=False)
+    @internal_only
     def my_holds_page(self, state=None, warehouse_id=None, sale_name=None, **kw):
         env = request.env
         HoldRequest = env["stock.hold.request"]
