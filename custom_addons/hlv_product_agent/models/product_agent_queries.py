@@ -40,6 +40,8 @@ FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang'})
 # Hàng thay thế: số ứng viên còn tồn đưa Claude xét (nhiều hơn thì Claude lọc thêm từ khoá).
 SUBSTITUTE_CANDIDATES = 40
 SUBSTITUTE_DESCRIPTION_CHARS = 300
+# "Hay bán" = số lượng đã bán trong khoảng này: đủ dài để mã bán đều không lép vế mã vừa có một đơn lớn.
+SOLD_WINDOW_DAYS = 180
 # NCC theo dòng hàng: đọc các dòng mua gần nhất cùng nhóm / có đủ từ khoá.
 VENDOR_LINE_LIMIT = 500
 # Mức khớp, mạnh nhất trước: NCC xếp theo mức khớp tốt nhất của các lần mua.
@@ -294,11 +296,13 @@ class HlvProductAgentQueries(models.AbstractModel):
     # Tư vấn khi hàng hết / không có: mã tương tự còn tồn, NCC hay bán dòng hàng
     # =========================================================================
     def _q_tim_hang_tuong_tu(self, args):
-        """Ứng viên CÒN TỒN để AI tự xét có thay được món gốc không — tool không chấm điểm.
+        """Ứng viên CÒN TỒN để AI tự xét thay món gốc, hoặc để tư vấn khi sale hỏi chung một loại
+        hàng (không có món gốc) — tool không chấm điểm.
 
-        Giống nhau hay không phải xét bằng thông số (công năng, điện áp, kích thước lắp...), việc
-        đó Claude làm (đọc mô tả, tìm web), không đoán theo chữ trong tên. Tool chỉ khoanh vùng:
-        cùng nhóm hàng với món gốc (hoặc nhóm Claude chỉ định), lọc thêm bằng từ khoá Claude đặt.
+        Giống nhau / hợp nhu cầu hay không phải xét bằng thông số (công năng, điện áp, kích thước
+        lắp...), việc đó Claude làm (đọc mô tả, tìm web), không đoán theo chữ trong tên. Tool chỉ
+        khoanh vùng: cùng nhóm hàng với món gốc (hoặc nhóm Claude chỉ định), lọc thêm bằng từ khoá
+        Claude đặt; xếp mã bán chạy lên trước để khi tư vấn ưu tiên mã hay bán.
         """
         base = None
         if args.get('code') or args.get('product_id'):
@@ -316,16 +320,28 @@ class HlvProductAgentQueries(models.AbstractModel):
         if words:
             products = products.filtered(lambda product: words <= name_tokens(
                 '%s %s %s' % (product.name, product.default_code or '', product.description_sale or '')))
-        products = products.sorted(lambda product: -stock[product.id][0])
+        sold = self._sold_qty(products)
+        products = products.sorted(lambda product: (-sold.get(product.id, 0.0), -stock[product.id][0]))
         return {
             'mon_goc': self._product_brief(base) if base else None,
             'tieu_chi': {'nhom_hang': category.complete_name if category else None,
                          'tu_khoa': args.get('tu_khoa') or None},
             'tong_ung_vien': len(products),
             'ung_vien': [dict(self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
-                              gia_ban=product.list_price)
+                              gia_ban=product.list_price, da_ban_180_ngay=sold.get(product.id, 0.0))
                          for product in products[:SUBSTITUTE_CANDIDATES]],
         }
+
+    def _sold_qty(self, products):
+        """{product_id: số lượng đã bán (đơn đã xác nhận) trong SOLD_WINDOW_DAYS ngày}; mã chưa bán thì không có."""
+        if not products:
+            return {}
+        groups = self.env['sale.order.line'].sudo().read_group([
+            ('product_id', 'in', products.ids),
+            ('order_id.state', 'in', ('sale', 'done')),
+            ('order_id.date_order', '>=', fields.Date.to_string(date.today() - timedelta(days=SOLD_WINDOW_DAYS))),
+        ], ['product_id', 'product_uom_qty:sum'], ['product_id'], lazy=False)
+        return {group['product_id'][0]: _rg_sum(group, 'product_uom_qty') for group in groups if group.get('product_id')}
 
     def _stock_by_product(self, category=None):
         """{product_id: (tồn, khả dụng)} của các sản phẩm đang có hàng trong kho nội bộ (có thể lọc nhóm)."""

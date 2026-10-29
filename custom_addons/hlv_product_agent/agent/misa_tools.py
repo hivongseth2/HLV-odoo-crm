@@ -333,11 +333,12 @@ QUERY_TOOLS += [
     {
         "name": "tim_hang_tuong_tu",
         "description": (
-            "Lấy danh sách ỨNG VIÊN CÒN TỒN để em tự xét thay thế món gốc: mã, tên, nhóm, mô tả bán "
-            "hàng, tồn, khả dụng, giá. Tool KHÔNG chấm độ giống — em phải xét bằng THÔNG SỐ (công "
-            "năng, nguồn điện / điện áp, kích thước lắp, tải, chuẩn...): tìm web thông số món gốc "
-            "trước, ứng viên chưa rõ thì tìm web theo mã. Mặc định cùng nhóm hàng với món gốc; nhóm "
-            "quá rộng / sai thì truyền nhom khác hoặc tu_khoa loại hàng để khoanh lại."
+            "Lấy danh sách hàng CÒN TỒN: mã, tên, nhóm, mô tả bán hàng, tồn, khả dụng, giá, số đã bán "
+            "180 ngày (xếp mã bán chạy trước). Dùng để (1) tìm mã THAY THẾ món gốc, (2) TƯ VẤN khi sale "
+            "hỏi chung một loại hàng — code rỗng, tu_khoa = loại hàng + hãng (vd 'may siet bu long "
+            "bosch'). Tool KHÔNG chấm độ giống / độ hợp — em phải xét bằng THÔNG SỐ (công năng, nguồn "
+            "điện / điện áp, kích thước lắp, tải, chuẩn...), chưa rõ thì tìm web theo mã. Mặc định cùng "
+            "nhóm hàng với món gốc; nhóm quá rộng / sai thì truyền nhom khác hoặc tu_khoa để khoanh lại."
         ),
         "inputSchema": {
             "type": "object",
