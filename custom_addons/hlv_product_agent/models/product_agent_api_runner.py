@@ -18,8 +18,9 @@ import json
 import logging
 import threading
 import time
+from datetime import timedelta
 
-from odoo import SUPERUSER_ID, api, models
+from odoo import SUPERUSER_ID, api, fields, models
 from odoo.modules.registry import Registry
 
 from ..services.claude_api_payload import (
@@ -50,6 +51,12 @@ CLAIM_WINDOW_SECONDS = 90
 # Khoá chung khi đếm + cầm việc: nhiều worker HTTP / cron cùng cầm thì vẫn không vượt quá
 # số cuộc song song đã cấu hình.
 CLAIM_LOCK_KEY = 'hlv_product_agent.api_claim'
+# Lượt đang chạy giữ khoá advisory (khoá này + id phiên) trên kết nối DB của luồng chạy nó: tiến
+# trình chết là kết nối đóng, khoá tự mất — cron nhờ đó biết lượt đã mồ côi (_release_dead_turns).
+TURN_LOCK_KEY = 'hlv_product_agent.api_turn'
+# Từ lúc cầm việc tới lúc luồng kịp giữ khoá chỉ vài mili giây; chừa rộng để cron không thả nhầm.
+TURN_LOCK_SETTLE_SECONDS = 30
+DEAD_TURN_ERROR = "lượt trả lời bị ngắt giữa chừng do máy chủ khởi động lại"
 # Một lượt: tối đa ngần ấy lần gọi API và ngần ấy giây — dưới CLAIM_TIMEOUT_MINUTES
 # của hội thoại để lượt không bị thả oan khi đang chạy.
 MAX_STEPS = 15
@@ -152,6 +159,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
         config = self.config()
         if config['mode'] != MODE_API:
             return
+        self._release_dead_turns()
         self.env['hlv.product.chat.session'].sudo().release_stale()
         self.env.cr.commit()
         if not config['api_key']:
@@ -164,6 +172,29 @@ class HlvProductAgentApiRunner(models.AbstractModel):
         ]
         for thread in threads:
             thread.join()
+
+    @api.model
+    def _release_dead_turns(self):
+        """Thả ngay các lượt mà luồng chạy nó đã chết theo tiến trình worker.
+
+        Luồng chạy lượt nằm trong tiến trình worker HTTP: Odoo.sh khởi động lại khi build, hay
+        worker bị thay (đủ số request / quá RAM, quá limit_time_real là bị giết), là luồng chết
+        theo. Không gỡ thì phiên kẹt "đang xử lý" tới CLAIM_TIMEOUT_MINUTES, khung chat hỏi
+        trạng thái 2 giây một lần suốt 12 phút. Lấy được khoá của lượt = không còn ai giữ.
+        Không tự chạy lại (xem release_stale): báo sale gửi lại.
+        """
+        cr = self.env.cr
+        settled = fields.Datetime.now() - timedelta(seconds=TURN_LOCK_SETTLE_SECONDS)
+        sessions = self.env['hlv.product.chat.session'].sudo().search([
+            ('state', '=', 'processing'), ('claim_date', '<', settled),
+        ])
+        for session in sessions:
+            cr.execute("SELECT pg_try_advisory_lock(hashtext(%s), %s)", [TURN_LOCK_KEY, session.id])
+            if not cr.fetchone()[0]:
+                continue
+            cr.execute("SELECT pg_advisory_unlock(hashtext(%s), %s)", [TURN_LOCK_KEY, session.id])
+            _logger.warning("PRODUCT_AGENT phiên %s: luồng chạy lượt đã chết, thả lượt", session.id)
+            session.deliver_reply('', error=DEAD_TURN_ERROR)
 
     @api.model
     def _waiting_count(self):
@@ -210,6 +241,20 @@ class HlvProductAgentApiRunner(models.AbstractModel):
     # =========================================================================
     @api.model
     def _run_turn(self, session_id, claim_token, config):
+        """Chạy trọn một lượt, giữ khoá của lượt suốt thời gian chạy (xem _release_dead_turns)."""
+        cr = self.env.cr
+        cr.execute("SELECT pg_try_advisory_lock(hashtext(%s), %s)", [TURN_LOCK_KEY, session_id])
+        try:
+            self._play_turn(claim_token, config)
+        finally:
+            # Khoá cấp kết nối: commit / rollback không thả, kết nối về pool mà còn khoá thì cron
+            # tưởng phiên này vẫn có người chạy. Rollback trước vì lỗi lọt ra có thể để
+            # transaction hỏng, không chạy thêm lệnh nào được.
+            cr.rollback()
+            cr.execute("SELECT pg_advisory_unlock(hashtext(%s), %s)", [TURN_LOCK_KEY, session_id])
+
+    @api.model
+    def _play_turn(self, claim_token, config):
         """Chạy trọn một lượt rồi chốt bằng deliver_reply. Chạy trong luồng riêng."""
         Session = self.env['hlv.product.chat.session'].sudo()
         session = Session.from_claim(claim_token)
