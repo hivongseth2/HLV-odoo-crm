@@ -57,8 +57,7 @@
 
     <!-- Khai view riêng kế thừa trang tra tồn của module HLV (xmlid ổn định do ta tự đặt).
          Khung chat là cột phải NẰM TRONG container của trang (product_chat.css chia lưới hai
-         cột qua class hlv-pa-host, product_chat.js gắn lên container lúc chạy — portal không
-         có khung chat thì trang giữ nguyên). Chỉ nhân viên nội bộ thấy: portal không được dùng tool MISA. -->
+         cột khi container có khung chat — portal không có khung chat thì trang giữ nguyên). Chỉ nhân viên nội bộ thấy: portal không được dùng tool MISA. -->
     <template id="inventory_page_product_chat" inherit_id="website_public_inventory_18.inventory_page">
         <xpath expr="(//div[hasclass('container-fluid')])[1]" position="inside">
             <t t-if="not request.env.user.share">

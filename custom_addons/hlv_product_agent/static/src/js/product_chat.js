@@ -67,10 +67,6 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this.textarea = this.el.querySelector("textarea");
         this.sendBtn = this.el.querySelector(".hlv-pa-send");
         applyDrawerWidth(loadDrawerWidth());
-        // Khung chat luôn mở, là cột phải trong container của trang tra tồn: gắn class để
-        // product_chat.css chia lưới hai cột (portal không có khung chat thì trang giữ nguyên).
-        this.el.parentElement.classList.add("hlv-pa-host");
-        document.body.classList.add("hlv-pa-embedded");
         // Khung chat dính khi cuộn: chiều cao tính lại theo vị trí thật để luôn vừa khít tới đáy
         // màn hình — cao cố định thì lúc chưa cuộn tràn khỏi màn, cuộn rồi lại hở dưới đáy.
         this._fitHeight = () => {
@@ -91,7 +87,6 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
 
     destroy() {
         clearTimeout(this.pollTimer);
-        document.body.classList.remove("hlv-pa-embedded");
         window.removeEventListener("scroll", this._fitHeight);
         window.removeEventListener("resize", this._fitHeight);
         if (this.table) {

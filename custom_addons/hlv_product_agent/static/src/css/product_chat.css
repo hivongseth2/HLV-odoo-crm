@@ -60,22 +60,25 @@ body.hlv-pa-resizing {
 }
 
 /* Máy tính: container trang tra tồn chia hai cột — nội dung trang bên trái, khung chat bên
-   phải. Không dời DOM của trang: lưới CSS đặt mọi khối cũ vào cột 1, khung chat vào cột 2. */
+   phải. Không dời DOM của trang: lưới CSS đặt mọi khối cũ vào cột 1, khung chat vào cột 2.
+   Nhận ra "trang có khung chat" bằng :has() thay vì để JS gắn class: khung chat do server vẽ
+   sẵn nên bố cục đúng ngay lần vẽ đầu, không còn cảnh trang gốc hiện ra rồi mới giật sang hai
+   cột. Portal không có khung chat thì không khớp, trang giữ nguyên. */
 @media (min-width: 992px) {
   /* Website để bố cục "Boxed": Odoo cho #wrapwrap lề hai bên và ép mọi khối con (header,
      main, footer) về max-width của container, căn giữa (website.scss). Gỡ cả hai để trang
      có đủ chỗ cho cả bảng lẫn khung chat. */
-  body.hlv-pa-embedded #wrapwrap {
+  #wrapwrap:has(.hlv-pa-chat) {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
 
-  body.hlv-pa-embedded #wrapwrap > * {
+  #wrapwrap:has(.hlv-pa-chat) > * {
     max-width: none !important;
   }
 
   /* Container của trang tra tồn có max-width 1550px viết thẳng trên thẻ (!important để thắng). */
-  .hlv-pa-host {
+  .container-fluid:has(> .hlv-pa-chat) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--pa-drawer-width);
     column-gap: 16px;
@@ -88,14 +91,14 @@ body.hlv-pa-resizing {
     margin-top: 0 !important;
   }
 
-  .hlv-pa-host > :first-child:not(.hlv-pa-chat) {
+  .container-fluid:has(> .hlv-pa-chat) > :first-child:not(.hlv-pa-chat) {
     margin-top: 16px;
   }
 
   /* Trang tra tồn thu nhỏ còn 70% (khung chat giữ cỡ chữ thật): sale khỏi phải zoom trình duyệt
      xuống 67% mới thấy đủ bảng lẫn khung chat. Modal của trang nằm ngoài container nên không
      bị thu theo. */
-  .hlv-pa-host > :not(.hlv-pa-chat) {
+  .container-fluid:has(> .hlv-pa-chat) > :not(.hlv-pa-chat) {
     grid-column: 1;
     min-width: 0;
     zoom: var(--pa-page-zoom, 0.7);
@@ -103,11 +106,11 @@ body.hlv-pa-resizing {
 
   /* Trang tra tồn tắt cuộn ngang của khung bảng (để tiêu đề bảng dính khi cuộn dọc): ở cột
      hẹp bảng sẽ tràn đè lên khung chat. Cho bảng cuộn ngang trong cột của nó. */
-  .hlv-pa-host .table-responsive {
+  .container-fluid:has(> .hlv-pa-chat) .table-responsive {
     overflow-x: auto !important;
   }
 
-  .hlv-pa-host > .hlv-pa-chat {
+  .container-fluid:has(> .hlv-pa-chat) > .hlv-pa-chat {
     grid-column: 2;
     grid-row: 1 / span 40;
     position: sticky;
@@ -121,26 +124,26 @@ body.hlv-pa-resizing {
 
   /* Bảng co được hẹp hơn: trang tra tồn ghim cột tên tối thiểu 200px và ô ảnh 50px bằng
      style inline (nên cần !important). */
-  body.hlv-pa-embedded #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+  .container-fluid:has(> .hlv-pa-chat) #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
     min-width: 150px !important;
     margin-right: 0 !important;
   }
 
-  body.hlv-pa-embedded #inv-table tbody tr.main-row td:nth-child(2) .position-relative {
+  .container-fluid:has(> .hlv-pa-chat) #inv-table tbody tr.main-row td:nth-child(2) .position-relative {
     width: 40px !important;
     height: 40px !important;
   }
 
-  body.hlv-pa-embedded #inv-table thead th:nth-child(2) {
+  .container-fluid:has(> .hlv-pa-chat) #inv-table thead th:nth-child(2) {
     width: 50px !important;
   }
 
-  body.hlv-pa-embedded #inv-table th,
-  body.hlv-pa-embedded #inv-table td {
+  .container-fluid:has(> .hlv-pa-chat) #inv-table th,
+  .container-fluid:has(> .hlv-pa-chat) #inv-table td {
     padding: 0.35rem 0.4rem;
   }
 
-  body.hlv-pa-embedded #inv-table img {
+  .container-fluid:has(> .hlv-pa-chat) #inv-table img {
     max-width: 56px;
     max-height: 56px;
   }
