@@ -20,10 +20,13 @@ OP_CODE = "internal"           # internal = Dịch chuyển nội bộ; outgoing
 SEQUENCE_CODE = "TT"           # số phiếu thành <mã kho>/TT/00001
 BARCODE_SUFFIX = "TT"          # mã vạch loại hoạt động = <mã kho> + TT (như TSNIN của Phiếu nhập kho)
 MAPPING = {                    # mã kho → tên / tên đầy đủ / mã vạch của vị trí thất thoát
-    "TSN": "TSN_LOSS",
+    "KDN": "KDN_LOSS",
     "KBC": "KBC_LOSS",
+    "KHD": "KHD_LOSS",
+    "TSN": "TSN_LOSS",
+    "TSNSR": "TSNSR_LOSS",
 }
-DRY_RUN = True
+DRY_RUN = False
 # ─────────────────────────────────────────────────────────────────────────────
 
 COPIED_FROM_DELIVERY = ("reservation_method", "reservation_days_before", "reservation_days_before_priority",

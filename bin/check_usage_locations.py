@@ -14,6 +14,7 @@ MAPPING = {                    # mã kho → tên / tên đầy đủ / mã vạ
     "KBC": "SUDUNG-KBC",
     "KHD": "SUDUNG-KHD",
     "TSN": "SUDUNG-TSN",
+    "TSNSR": "SUDUNG-TSNSR",
 }
 SEARCH_TEXT = "sudung"         # quét thêm vị trí lạ có chữ này mà không nằm trong MAPPING
 # ─────────────────────────────────────────────────────────────────────────────

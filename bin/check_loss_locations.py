@@ -11,12 +11,15 @@
 exec(r'''
 # ── CẤU HÌNH ─────────────────────────────────────────────────────────────────
 MAPPING = {                    # mã kho → (tên vị trí, mã vạch)
-    "TSN": ("TSN_LOSS", "TSNLOSS"),
+    "KDN": ("KDN_LOSS", "KDNLOSS"),
     "KBC": ("KBC_LOSS", "KBCLOSS"),
+    "KHD": ("KHD_LOSS", "KHDLOSS"),
+    "TSN": ("TSN_LOSS", "TSNLOSS"),
+    "TSNSR": ("TSNSR_LOSS", "TSNSRLOSS"),
 }
 NEW_LOCATION_USAGE = "inventory"
 SEARCH_TEXT = "loss"           # quét thêm vị trí lạ có chữ này mà không nằm trong MAPPING
-DRY_RUN = True
+DRY_RUN = False
 # ─────────────────────────────────────────────────────────────────────────────
 
 
