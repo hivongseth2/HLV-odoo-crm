@@ -32,7 +32,7 @@ export function saveSaleKey(key) {
 // ngăn kéo hay che hết bảng tra tồn.
 const DRAWER_WIDTH_STORAGE = "hlv_pa_drawer_width";
 const DRAWER_MIN_WIDTH = 300;
-const DRAWER_MAX_RATIO = 0.45;
+const DRAWER_MAX_RATIO = 0.38;
 
 /**
  * Độ rộng hợp lệ (px). Nhận số bất kỳ; biên: không phải số -> null.

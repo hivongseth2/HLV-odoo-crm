@@ -83,15 +83,22 @@ body.hlv-pa-resizing {
     max-width: none !important;
     padding-left: 12px;
     padding-right: 0;
+    /* Bỏ lề trên mt-3 của container: khung chat là cột sát mép như Claude desktop, lề đó để
+       lộ một dải trống phía trên khung chat. Khoảng thở chuyển sang khối đầu của cột trái. */
+    margin-top: 0 !important;
   }
 
-  /* Trang tra tồn thu nhỏ còn 80% (khung chat giữ cỡ chữ thật): sale khỏi phải zoom trình duyệt
+  .hlv-pa-host > :first-child:not(.hlv-pa-chat) {
+    margin-top: 16px;
+  }
+
+  /* Trang tra tồn thu nhỏ còn 70% (khung chat giữ cỡ chữ thật): sale khỏi phải zoom trình duyệt
      xuống 67% mới thấy đủ bảng lẫn khung chat. Modal của trang nằm ngoài container nên không
      bị thu theo. */
   .hlv-pa-host > :not(.hlv-pa-chat) {
     grid-column: 1;
     min-width: 0;
-    zoom: var(--pa-page-zoom, 0.8);
+    zoom: var(--pa-page-zoom, 0.7);
   }
 
   /* Trang tra tồn tắt cuộn ngang của khung bảng (để tiêu đề bảng dính khi cuộn dọc): ở cột
@@ -104,7 +111,7 @@ body.hlv-pa-resizing {
     grid-column: 2;
     grid-row: 1 / span 40;
     position: sticky;
-    top: 12px;
+    top: 0;
     /* Chiều cao thật do product_chat.js tính theo vị trí khung khi cuộn / đổi cỡ (vừa khít tới
        đáy màn hình); số này chỉ là mặc định trước khi JS chạy. */
     height: calc(100vh - 110px);
