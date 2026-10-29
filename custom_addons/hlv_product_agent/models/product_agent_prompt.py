@@ -34,6 +34,7 @@ OLD_DEFAULT_VERSIONS = {
         'e695c20e95f58db3',  # 18.0.1.13.0: tạo mã mơ hồ chưa dặn tìm trước, "ai giữ" bỏ phiếu chuyển kho
         '465717d24c8a2bee',  # 18.0.1.14.0: tư vấn chưa dò các cách gọi khác của cùng loại máy
         '4d327e8098f509ef',  # 18.0.1.15.0: hết lượt tìm web thì tưởng bị chặn luôn ở các lượt sau
+        '5533442db2fe2ad4',  # 18.0.1.16.1: hãng hết hàng chưa đưa hãng khác, mời tạo mã chưa tra MISA
     },
 }
 DEFAULT_FILES = {
