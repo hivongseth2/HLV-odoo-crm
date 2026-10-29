@@ -26,6 +26,7 @@ OLD_DEFAULT_VERSIONS = {
         'a8e4693930aa1257',  # 18.0.1.5.0: tim_ncc_dong_hang chỉ theo từ khoá
         'e35043ee76354515',  # 18.0.1.6.0: chưa có định dạng chữ / ảnh, chưa dặn chủ động tìm web
         '35043f5c0fb79a58',  # 18.0.1.7.0: trả lời dài, chưa có nút lựa chọn [[...]]
+        '79f0f9e068dff22a',  # 18.0.1.8.0: bộ lựa chọn mẫu cố định, Claude chép y nguyên
     },
 }
 DEFAULT_FILES = {

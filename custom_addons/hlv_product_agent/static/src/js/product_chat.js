@@ -9,8 +9,8 @@
 import publicWidget from "@web/legacy/js/public/public_widget";
 import { rpc } from "@web/core/network/rpc";
 import {
-    boardDocument, buildOptions, formatDateTime, formatTime, paneNote, readFileAsBase64, renderRich, searchUrl,
-    waitingText,
+    addRowAskButtons, boardDocument, buildOptions, buildWelcome, formatDateTime, formatTime, paneNote,
+    readFileAsBase64, renderRich, searchUrl, waitingText,
 } from "@hlv_product_agent/js/chat_render";
 import { splitOptions } from "@hlv_product_agent/js/rich_text";
 import {
@@ -24,9 +24,6 @@ const POLL_MS_IDLE = 8000;
 const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-const WELCOME_TEXT =
-    "Gửi tên hàng, mã model, hãng, thông số (kèm ảnh tem nhãn nếu có). " +
-    "Trợ lý sẽ kiểm trùng trên MISA rồi đề xuất tên, mã, nhóm để anh/chị xác nhận trước khi tạo.";
 const OFFLINE_TEXT =
     "Máy trợ lý đang tắt. Tin vẫn được giữ lại, máy bật lên sẽ trả lời.";
 
@@ -87,6 +84,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         window.addEventListener("scroll", this._fitHeight, { passive: true });
         window.addEventListener("resize", this._fitHeight);
         this._fitHeight();
+        this._addRowAskButtons();
         this._refresh();
         return this._super(...arguments);
     },
@@ -96,6 +94,9 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         document.body.classList.remove("hlv-pa-embedded");
         window.removeEventListener("scroll", this._fitHeight);
         window.removeEventListener("resize", this._fitHeight);
+        if (this.table) {
+            this.table.removeEventListener("click", this._onRowAsk);
+        }
         this._super(...arguments);
     },
 
@@ -260,7 +261,10 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     // Tab: Trò chuyện / Lịch sử / Hàng đã tạo
     // ------------------------------------------------------------------
     _onTab(ev) {
-        const tab = ev.currentTarget.dataset.tab;
+        this._switchTab(ev.currentTarget.dataset.tab);
+    },
+
+    _switchTab(tab) {
         this.el.dataset.tab = tab;
         for (const button of this.el.querySelectorAll(".hlv-pa-tab")) {
             button.classList.toggle("active", button.dataset.tab === tab);
@@ -356,10 +360,8 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         if (hasMessages && existing) {
             existing.remove();
         } else if (!hasMessages && !existing) {
-            const welcome = document.createElement("div");
-            welcome.className = "hlv-pa-welcome";
-            welcome.textContent = WELCOME_TEXT;
-            this.messagesEl.appendChild(welcome);
+            const query = document.getElementById("real-search-q");
+            this.messagesEl.appendChild(buildWelcome(query ? query.value : ""));
         }
     },
 
@@ -548,11 +550,43 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
 
     _onOption(ev) {
         // Bấm lựa chọn = gửi đúng chữ trên nút như sale tự gõ.
+        this._sendText(ev.currentTarget.dataset.option || "");
+    },
+
+    _sendText(text) {
         if (this.sending) {
             return;
         }
-        this.textarea.value = ev.currentTarget.dataset.option || "";
+        this.textarea.value = text;
         this._onSend();
+    },
+
+    /**
+     * Nút ✦ trên từng dòng bảng tra tồn: sale đang nhìn mã nào thì hỏi trợ lý về đúng mã đó, khỏi
+     * gõ lại mã. Bảng do website_public_inventory_18 dựng sẵn khi tải trang nên gắn một lần là đủ.
+     */
+    _addRowAskButtons() {
+        this.table = document.getElementById("inv-table");
+        if (!this.table) {
+            return;
+        }
+        addRowAskButtons(this.table);
+        this._onRowAsk = (ev) => {
+            const button = ev.target.closest(".hlv-pa-row-ask");
+            if (button) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                this._askAboutCode(button.dataset.code);
+            }
+        };
+        this.table.addEventListener("click", this._onRowAsk);
+    },
+
+    _askAboutCode(code) {
+        // Chỉ gửi mã: trợ lý tra tình trạng mã đó rồi tự đưa lựa chọn hợp tình huống (hết hàng thì
+        // mã thay thế / NCC, còn hàng thì ai đang giữ...), thay vì một danh sách việc cố định.
+        this._switchTab("chat");
+        this._sendText(`Mã ${code}`);
     },
 
     async _onSend() {
