@@ -1,0 +1,38 @@
+/* Lối vào nhanh cho sale: màn chào của cuộc trống và nút ✦ trên bảng tra tồn.
+   Biến màu --pa-* khai ở .hlv-pa-chat (product_chat.css). */
+.hlv-pa-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.hlv-pa-welcome-intro {
+  color: var(--pa-muted);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+/* Nút ✦ cạnh mã trên bảng tra tồn — nằm ngoài khung chat nên không dùng biến --pa-*. */
+.hlv-pa-row-ask {
+  border: 0;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 22px;
+  vertical-align: middle;
+  color: #1565b3;
+  background: #e8f1fb;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+#inv-table tr.main-row:hover .hlv-pa-row-ask,
+.hlv-pa-row-ask:focus-visible {
+  opacity: 1;
+  background: #f8c20a;
+  color: #0d2a52;
+}

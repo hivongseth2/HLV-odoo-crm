@@ -85,13 +85,13 @@ body.hlv-pa-resizing {
     padding-right: 0;
   }
 
-  /* Trang tra tồn thu nhỏ còn 85% (khung chat giữ cỡ chữ thật): sale khỏi phải zoom trình duyệt
+  /* Trang tra tồn thu nhỏ còn 80% (khung chat giữ cỡ chữ thật): sale khỏi phải zoom trình duyệt
      xuống 67% mới thấy đủ bảng lẫn khung chat. Modal của trang nằm ngoài container nên không
      bị thu theo. */
   .hlv-pa-host > :not(.hlv-pa-chat) {
     grid-column: 1;
     min-width: 0;
-    zoom: var(--pa-page-zoom, 0.85);
+    zoom: var(--pa-page-zoom, 0.8);
   }
 
   /* Trang tra tồn tắt cuộn ngang của khung bảng (để tiêu đề bảng dính khi cuộn dọc): ở cột
@@ -242,13 +242,6 @@ body.hlv-pa-resizing {
   flex-direction: column;
   gap: 18px;
   background: var(--pa-surface);
-}
-
-.hlv-pa-welcome {
-  color: var(--pa-muted);
-  font-size: 13px;
-  text-align: center;
-  padding: 24px 12px;
 }
 
 .hlv-pa-msg {

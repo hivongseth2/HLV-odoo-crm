@@ -88,6 +88,48 @@ export function buildOptions(options) {
     return box;
 }
 
+/**
+ * Màn chào của cuộc chat trống. Không bày sẵn danh sách việc: việc nên làm tuỳ từng mã nên để
+ * trợ lý tra rồi tự đưa lựa chọn. Chỉ có một nút hỏi về từ khoá sale đang tìm trên trang.
+ * Nhận: từ khoá đang tìm (có thể rỗng). Biên: rỗng / toàn khoảng trắng -> không có nút.
+ */
+export function buildWelcome(query) {
+    const welcome = document.createElement("div");
+    welcome.className = "hlv-pa-welcome";
+    const intro = document.createElement("div");
+    intro.className = "hlv-pa-welcome-intro";
+    intro.textContent =
+        "Hỏi tồn kho, ai đang giữ, giá, mã thay thế, NCC, tạo / sửa mã hàng... " +
+        "Hoặc bấm ✦ cạnh mã trong bảng để hỏi nhanh về mã đó.";
+    welcome.appendChild(intro);
+    const q = (query || "").trim();
+    if (q) {
+        welcome.appendChild(buildOptions([`Hỏi về "${q}"`]));
+    }
+    return welcome;
+}
+
+/**
+ * Gắn nút ✦ vào ô mã của từng dòng bảng tra tồn; nút mang sẵn mã (data-code) để khung chat gửi
+ * hỏi về đúng mã đó. Biên: dòng không có mã thì bỏ qua.
+ */
+export function addRowAskButtons(table) {
+    for (const row of table.querySelectorAll("tr.main-row")) {
+        const codeCell = row.cells[2];
+        const code = codeCell ? codeCell.textContent.trim() : "";
+        if (!code) {
+            continue;
+        }
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "hlv-pa-row-ask";
+        button.title = "Hỏi trợ lý về mã này";
+        button.textContent = "✦";
+        button.dataset.code = code;
+        codeCell.appendChild(button);
+    }
+}
+
 export function paneNote(text) {
     const note = document.createElement("div");
     note.className = "hlv-pa-pane-note";
