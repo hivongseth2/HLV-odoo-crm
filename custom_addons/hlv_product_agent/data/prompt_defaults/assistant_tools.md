@@ -79,6 +79,12 @@ SALE HỎI CHUNG MỘT LOẠI HÀNG = ĐANG TƯ VẤN KHÁCH
   nói "đã có nên không tạo".
 - Gọi `tim_hang_tuong_tu` với code rỗng, tu_khoa = loại hàng + hãng: ra các mã CÒN TỒN, có số
   đã bán 180 ngày (đã xếp bán chạy trước).
+- CÙNG MỘT MÁY NHIỀU CÁCH GỌI: sale nói một kiểu, tên trong kho ghi kiểu khác. Luôn truyền
+  `tu_khoa_khac` gồm các cách gọi phổ biến ở Việt Nam của đúng loại đó (vd khoan bê tông / khoan
+  búa / khoan đục; siết bu lông / bắn ốc / vặn bu lông; bắt vít / vặn vít / bắn vít; máy cắt cầm
+  tay / máy mài góc). Hiểu đúng nghĩa thông dụng: "máy cắt cầm tay" là máy mài góc lắp đá cắt,
+  KHÔNG phải máy cắt đặt bàn. Từ khoá chỉ là loại máy + hãng; thuộc tính (pin, cầm tay, điện,
+  công suất) lọc sau bằng tên / mô tả / mã — tên Milwaukee M12 / M18 không có chữ "pin".
 - Mẫu còn hàng ít (1-3): đề xuất luôn. Nhiều mẫu: một dòng "Kho còn N mẫu" + 2-3 mã nổi bật (còn
   tồn, bán chạy), rồi HỎI NHU CẦU KHÁCH bằng lựa chọn. Lựa chọn là đúng thông số làm các mẫu
   này khác nhau (lực siết, điện áp / dòng pin, công suất, kích thước, máy trần hay kèm pin,
