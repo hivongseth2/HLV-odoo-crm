@@ -498,7 +498,15 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     _showBoard(action) {
         const board = this.el.querySelector(".hlv-pa-board");
         board.querySelector(".hlv-pa-board-title").textContent = action.title || "Trợ lý";
-        board.querySelector(".hlv-pa-board-frame").srcdoc = boardDocument(action.html || "");
+        // Mỗi lần mở một iframe mới, đặt sandbox + nội dung TRƯỚC khi gắn vào trang: gán lại
+        // srcdoc vào khung cũ (nhất là cùng nội dung khi "Mở lại bảng") có lúc không vẽ lại,
+        // khung đứng ở about:blank và trắng trơn.
+        const frame = document.createElement("iframe");
+        frame.className = "hlv-pa-board-frame";
+        frame.title = "Bảng của trợ lý";
+        frame.setAttribute("sandbox", "");
+        frame.srcdoc = boardDocument(action.html || "");
+        board.querySelector(".hlv-pa-board-frame").replaceWith(frame);
         board.dataset.open = "1";
     },
 
