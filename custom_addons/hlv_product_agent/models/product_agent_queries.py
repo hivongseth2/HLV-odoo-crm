@@ -162,7 +162,10 @@ class HlvProductAgentQueries(models.AbstractModel):
 
     @staticmethod
     def _product_label(product):
-        return {'product_id': product.id, 'code': product.default_code or '', 'name': product.name}
+        label = {'product_id': product.id, 'code': product.default_code or '', 'name': product.name}
+        if product.image_128:  # xem _product_brief: chỉ đưa ảnh khi sản phẩm có ảnh thật
+            label['anh'] = '/search_stock/image/%s' % product.id
+        return label
 
     def _warehouse_id(self, text):
         """ID kho theo mã / tên; None khi để trống hoặc không khớp đúng một kho (= mọi kho)."""
@@ -311,12 +314,19 @@ class HlvProductAgentQueries(models.AbstractModel):
 
     @staticmethod
     def _product_brief(product):
-        """Thông tin để Claude xét thông số: mã, tên, nhóm, mô tả bán hàng (cắt ngắn)."""
-        return {
+        """Thông tin để Claude xét thông số: mã, tên, nhóm, mô tả bán hàng (cắt ngắn), ảnh nếu có.
+
+        'anh' chỉ có khi sản phẩm CÓ ảnh trong Odoo — phần lớn chưa có, đưa link ảnh trống là
+        Claude chèn khung ảnh rỗng; không có thì Claude lấy ảnh chính hãng trên web.
+        """
+        brief = {
             'product_id': product.id, 'code': product.default_code or '', 'name': product.name,
             'nhom': product.categ_id.complete_name,
             'mo_ta': (product.description_sale or '')[:SUBSTITUTE_DESCRIPTION_CHARS],
         }
+        if product.image_128:
+            brief['anh'] = '/search_stock/image/%s' % product.id
+        return brief
 
     def _q_tim_ncc_dong_hang(self, args):
         """NCC đã bán cho mình dòng hàng này: khớp từ khoá + cùng nhóm hàng > cùng nhóm > chỉ từ khoá.

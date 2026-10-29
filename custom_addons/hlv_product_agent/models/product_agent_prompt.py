@@ -25,6 +25,7 @@ OLD_DEFAULT_VERSIONS = {
         '2c0a2969651238a1',  # 18.0.1.4.0: còn hướng dẫn vẽ bảng show_panel
         'a8e4693930aa1257',  # 18.0.1.5.0: tim_ncc_dong_hang chỉ theo từ khoá
         'e35043ee76354515',  # 18.0.1.6.0: chưa có định dạng chữ / ảnh, chưa dặn chủ động tìm web
+        '35043f5c0fb79a58',  # 18.0.1.7.0: trả lời dài, chưa có nút lựa chọn [[...]]
     },
 }
 DEFAULT_FILES = {
