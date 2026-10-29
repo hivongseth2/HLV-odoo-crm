@@ -1,0 +1,150 @@
+/* Khung chat trợ lý — thanh tab (Trò chuyện / Lịch sử / Hàng đã tạo) và nội dung hai tab phụ.
+   Tách khỏi product_chat.css cho file dưới giới hạn độ dài; biến màu --pa-* khai ở .hlv-pa-chat. */
+/* Thanh tab trên đầu cột chat, kiểu Claude desktop: chữ, tab đang mở có gạch dưới. */
+.hlv-pa-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 14px 0;
+  border-bottom: 1px solid var(--pa-border);
+}
+
+.hlv-pa-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--pa-muted);
+  font-size: 13px;
+  padding: 6px 10px 8px;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.hlv-pa-tab:hover {
+  color: var(--pa-text);
+}
+
+.hlv-pa-tab.active {
+  color: var(--pa-text);
+  font-weight: 600;
+  border-bottom-color: var(--pa-accent);
+}
+
+.hlv-pa-who {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--pa-muted);
+}
+
+.hlv-pa-chat[data-shared="1"]:not([data-picking="1"]) .hlv-pa-who {
+  display: flex;
+}
+
+/* Tab Lịch sử / Hàng đã tạo thay chỗ khung tin nhắn; ô nhập ẩn đi khi không ở tab chat. */
+.hlv-pa-pane {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+.hlv-pa-chat[data-tab="history"] .hlv-pa-pane-history,
+.hlv-pa-chat[data-tab="created"] .hlv-pa-pane-created {
+  display: flex;
+}
+
+.hlv-pa-chat:not([data-tab="chat"]) .hlv-pa-messages,
+.hlv-pa-chat:not([data-tab="chat"]) .hlv-pa-previews,
+.hlv-pa-chat:not([data-tab="chat"]) .hlv-pa-input,
+.hlv-pa-chat:not([data-tab="chat"]) .hlv-pa-status {
+  display: none;
+}
+
+.hlv-pa-pane-note {
+  color: var(--pa-muted);
+  font-size: 13px;
+  padding: 16px 6px;
+}
+
+.hlv-pa-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.hlv-pa-history-item:hover {
+  background: var(--pa-user-bubble);
+}
+
+.hlv-pa-history-title {
+  color: var(--pa-text);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.hlv-pa-history-meta {
+  color: var(--pa-muted);
+  font-size: 11.5px;
+}
+
+.hlv-pa-history-back {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--pa-accent);
+  font-size: 13px;
+  padding: 2px 4px 10px;
+  cursor: pointer;
+}
+
+.hlv-pa-pane-history .hlv-pa-msg {
+  margin-bottom: 12px;
+}
+
+.hlv-pa-created-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--pa-border);
+}
+
+.hlv-pa-created-badge {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hlv-pa-created-create {
+  background: #e3f1e6;
+  color: #23733a;
+}
+
+.hlv-pa-created-update {
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-dark);
+}
+
+.hlv-pa-created-code {
+  font-weight: 600;
+  color: var(--pa-text) !important;
+}
+
+.hlv-pa-created-detail {
+  font-size: 13px;
+  margin: 2px 0;
+}

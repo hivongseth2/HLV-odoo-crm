@@ -8,6 +8,10 @@
  */
 import publicWidget from "@web/legacy/js/public/public_widget";
 import { rpc } from "@web/core/network/rpc";
+import {
+    boardDocument, formatDateTime, formatTime, paneNote, readFileAsBase64, renderRich, searchUrl,
+    waitingText,
+} from "@hlv_product_agent/js/chat_render";
 
 // Đang chờ Claude thì hỏi dày để câu trả lời hiện ra ngay; rảnh thì thưa lại.
 const POLL_MS_BUSY = 2000;
@@ -87,67 +91,6 @@ function saveDrawerWidth(width) {
     }
 }
 
-// Khung HTML cho bảng trợ lý: style nền tảng để bảng Claude dựng nhìn gọn dù nó quên style.
-const BOARD_BASE_CSS =
-    "body{margin:0;padding:14px;font:13px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;" +
-    "color:#1f2933;background:#fff}table{border-collapse:collapse;width:100%;margin:6px 0}" +
-    "th,td{border:1px solid #d9dee3;padding:5px 8px;vertical-align:top}" +
-    "th{background:#e8f1fb;color:#0d4c8c;text-align:left}h1,h2,h3{color:#0d4c8c;margin:8px 0}";
-
-function boardDocument(html) {
-    return `<!doctype html><html><head><meta charset="utf-8"><style>${BOARD_BASE_CSS}</style>` +
-        `</head><body>${html}</body></html>`;
-}
-
-/**
- * URL trang tra tồn tìm đúng từ khoá, giữ nguyên trang đang mở (vd /en/search_stock).
- * Nhận: lệnh {type: 'search', q}. Biên: lệnh lạ / thiếu q -> null.
- */
-function searchUrl(action) {
-    if (!action || action.type !== "search" || !action.q) {
-        return null;
-    }
-    const url = new URL(window.location.href);
-    url.search = "";
-    url.searchParams.set("q", action.q);
-    return url.toString();
-}
-
-/**
- * Dòng báo trạng thái chờ dưới tin cuối.
- * Nhận: state từ server. Trả: chuỗi, hoặc "" khi không chờ gì.
- */
-function waitingText(state) {
-    if (state.processing) {
-        return "Trợ lý đang kiểm tra...";
-    }
-    if (!state.busy) {
-        return "";
-    }
-    if (state.queue_ahead) {
-        return `Đang xếp hàng: trước anh/chị còn ${state.queue_ahead} cuộc chat.`;
-    }
-    return "Đang chờ trợ lý nhận tin...";
-}
-
-function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",", 2)[1] || "");
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-    });
-}
-
-function formatTime(utcString) {
-    if (!utcString) {
-        return "";
-    }
-    // Odoo trả "YYYY-MM-DD HH:MM:SS" theo UTC, không kèm múi giờ.
-    const date = new Date(utcString.replace(" ", "T") + "Z");
-    return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-}
-
 publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     selector: ".hlv-pa-chat",
     events: {
@@ -163,6 +106,9 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         "click .hlv-pa-board-close": "_onBoardClose",
         "click .hlv-pa-board-max": "_onBoardMax",
         "pointerdown .hlv-pa-board-head": "_onBoardDragStart",
+        "click .hlv-pa-tab": "_onTab",
+        "click .hlv-pa-history-item": "_onViewSession",
+        "click .hlv-pa-history-back": "_onHistoryBack",
     },
 
     start() {
@@ -218,19 +164,16 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this._renderIdentity(state);
         if (state.identity_required) {
             // Chưa biết ai đang chat: không hiện cuộc nào, bắt chọn người trước.
-            this.sessionId = false;
-            this.lastId = 0;
+            this._resetConversation();
             this.busy = false;
-            this.messagesEl.replaceChildren();
             this._renderStatus(state.agent_online ? "" : OFFLINE_TEXT, state.agent_online ? "" : "warning");
             return;
         }
         if (state.session_id !== this.sessionId) {
             // Cuộc hội thoại đã đổi (bấm "Cuộc mới", hoặc ở tab khác): vẽ lại từ đầu.
             const hadOld = this.sessionId !== false && this.lastId > 0;
+            this._resetConversation();
             this.sessionId = state.session_id;
-            this.lastId = 0;
-            this.messagesEl.replaceChildren();
             if (hadOld) {
                 this._refresh();
                 return;
@@ -270,15 +213,35 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     // ------------------------------------------------------------------
     // Vẽ giao diện
     // ------------------------------------------------------------------
+    /**
+     * Khung tin nhắn về trạng thái trống. Xoá luôn mốc "đã nạp cuộc nào": giữ mốc cũ thì khi chọn
+     * lại đúng người / cuộc cũ, cả lịch sử bị coi là tin mới và lệnh cũ (mở trang, mở bảng) chạy lại.
+     */
+    _resetConversation() {
+        this.sessionId = false;
+        this.lastId = 0;
+        this.loadedSessionId = false;
+        this.messagesEl.replaceChildren();
+    },
+
     _appendMessage(message) {
+        this.messagesEl.appendChild(this._buildMessage(message));
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    },
+
+    _buildMessage(message) {
         const item = document.createElement("div");
         item.className = `hlv-pa-msg hlv-pa-msg-${message.role}`;
 
         if (message.content) {
             const text = document.createElement("div");
             text.className = "hlv-pa-text";
-            // textContent chứ không innerHTML: nội dung là chữ của sale và của Claude.
-            text.textContent = message.content;
+            if (message.role === "assistant") {
+                text.appendChild(renderRich(message.content));
+            } else {
+                // textContent chứ không innerHTML: chữ sale gõ và ghi chú hệ thống để nguyên.
+                text.textContent = message.content;
+            }
             item.appendChild(text);
         }
         if (message.action && message.action.type === "panel") {
@@ -311,9 +274,101 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         time.className = "hlv-pa-time";
         time.textContent = formatTime(message.date);
         item.appendChild(time);
+        return item;
+    },
 
-        this.messagesEl.appendChild(item);
-        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    // ------------------------------------------------------------------
+    // Tab: Trò chuyện / Lịch sử / Hàng đã tạo
+    // ------------------------------------------------------------------
+    _onTab(ev) {
+        const tab = ev.currentTarget.dataset.tab;
+        this.el.dataset.tab = tab;
+        for (const button of this.el.querySelectorAll(".hlv-pa-tab")) {
+            button.classList.toggle("active", button.dataset.tab === tab);
+        }
+        if (tab === "history") {
+            this._loadHistory();
+        } else if (tab === "created") {
+            this._loadCreated();
+        }
+    },
+
+    async _loadHistory() {
+        const pane = this.el.querySelector(".hlv-pa-pane-history");
+        pane.replaceChildren(paneNote("Đang tải..."));
+        const result = await rpc("/product_agent/chat/history", { sale_key: this.saleKey });
+        pane.replaceChildren();
+        if (!result.sessions.length) {
+            pane.appendChild(paneNote("Chưa có cuộc chat nào."));
+        }
+        for (const session of result.sessions) {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "hlv-pa-history-item";
+            item.dataset.id = session.id;
+            const title = document.createElement("span");
+            title.className = "hlv-pa-history-title";
+            title.textContent = session.name;
+            const meta = document.createElement("span");
+            meta.className = "hlv-pa-history-meta";
+            meta.textContent = formatDateTime(session.date) + (session.open ? " · đang mở" : "");
+            item.append(title, meta);
+            pane.appendChild(item);
+        }
+    },
+
+    async _onViewSession(ev) {
+        const pane = this.el.querySelector(".hlv-pa-pane-history");
+        const result = await rpc("/product_agent/chat/view", {
+            session_id: Number(ev.currentTarget.dataset.id), sale_key: this.saleKey,
+        });
+        pane.replaceChildren();
+        const back = document.createElement("button");
+        back.type = "button";
+        back.className = "hlv-pa-history-back";
+        back.textContent = "← " + (result.name || "Lịch sử");
+        pane.appendChild(back);
+        // Chỉ xem lại: dựng tin như khung chat nhưng không chạy lệnh nào trong đó.
+        for (const message of result.messages) {
+            pane.appendChild(this._buildMessage(message));
+        }
+    },
+
+    _onHistoryBack() {
+        this._loadHistory();
+    },
+
+    async _loadCreated() {
+        const pane = this.el.querySelector(".hlv-pa-pane-created");
+        pane.replaceChildren(paneNote("Đang tải..."));
+        const result = await rpc("/product_agent/chat/created", { sale_key: this.saleKey });
+        pane.replaceChildren();
+        if (!result.items.length) {
+            pane.appendChild(paneNote("Trợ lý chưa tạo / sửa mã nào cho anh/chị."));
+        }
+        for (const entry of result.items) {
+            const item = document.createElement("div");
+            item.className = "hlv-pa-created-item";
+            const head = document.createElement("div");
+            const badge = document.createElement("span");
+            badge.className = `hlv-pa-created-badge hlv-pa-created-${entry.action}`;
+            badge.textContent = entry.action === "create" ? "Tạo" : "Sửa";
+            const code = document.createElement("a");
+            code.className = "hlv-pa-created-code";
+            code.href = searchUrl({ type: "search", q: entry.code || entry.new }) || "#";
+            code.textContent = entry.code || entry.new || "?";
+            head.append(badge, code);
+            const detail = document.createElement("div");
+            detail.className = "hlv-pa-created-detail";
+            detail.textContent = entry.action === "create"
+                ? entry.name
+                : `${entry.field}: ${entry.old} → ${entry.new}`;
+            const meta = document.createElement("div");
+            meta.className = "hlv-pa-history-meta";
+            meta.textContent = formatDateTime(entry.date);
+            item.append(head, detail, meta);
+            pane.appendChild(item);
+        }
     },
 
     _renderWelcome() {
@@ -555,9 +610,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     _onPickPerson(ev) {
         this.saleKey = ev.currentTarget.dataset.key || "";
         saveSaleKey(this.saleKey);
-        this.sessionId = false;
-        this.lastId = 0;
-        this.messagesEl.replaceChildren();
+        this._resetConversation();
         this._refresh();
     },
 
@@ -565,6 +618,8 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         // Chỉ bỏ lựa chọn trên máy này; cuộc chat của người cũ vẫn giữ nguyên trên Odoo.
         this.saleKey = "";
         saveSaleKey("");
+        this._resetConversation();
+        this._onBoardClose();
         this._refresh();
     },
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="product_chat_widget" name="Khung chat trợ lý">
-        <div class="hlv-pa-chat" data-open="1">
+        <div class="hlv-pa-chat" data-open="1" data-tab="chat">
             <!-- Bảng trợ lý vẽ (show_panel): nổi trên trang, kéo / phóng to / đóng được. HTML
                  của Claude nằm trong iframe sandbox: không chạy script, không cùng nguồn với trang. -->
             <div class="hlv-pa-board" data-open="0">
@@ -18,9 +18,14 @@
             </div>
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
-                <!-- Tài khoản dùng chung nhiều sale: tên người đang chat, bấm vào để đổi người. -->
-                <div class="hlv-pa-who">
-                    <button type="button" class="hlv-pa-switch hlv-pa-who-name" title="Bấm để đổi người"/>
+                <div class="hlv-pa-tabs">
+                    <button type="button" class="hlv-pa-tab active" data-tab="chat">Trò chuyện</button>
+                    <button type="button" class="hlv-pa-tab" data-tab="history">Lịch sử</button>
+                    <button type="button" class="hlv-pa-tab" data-tab="created">Hàng đã tạo</button>
+                    <!-- Tài khoản dùng chung nhiều sale: tên người đang chat, bấm vào để đổi người. -->
+                    <div class="hlv-pa-who">
+                        <button type="button" class="hlv-pa-switch hlv-pa-who-name" title="Bấm để đổi người"/>
+                    </div>
                 </div>
                 <div class="hlv-pa-status"/>
                 <div class="hlv-pa-picker">
@@ -29,6 +34,8 @@
                     <div class="hlv-pa-picker-list"/>
                 </div>
                 <div class="hlv-pa-messages"/>
+                <div class="hlv-pa-pane hlv-pa-pane-history"/>
+                <div class="hlv-pa-pane hlv-pa-pane-created"/>
                 <div class="hlv-pa-previews"/>
                 <div class="hlv-pa-input">
                     <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc mới">

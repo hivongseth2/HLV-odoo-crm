@@ -71,6 +71,33 @@ class ProductChatApi(http.Controller):
             return payload
         return _state(session, identity, choices, after_id)
 
+    @http.route('/product_agent/chat/history', type='json', auth='user', methods=['POST'])
+    def history(self, sale_key=None, **kw):
+        """Tab "Lịch sử": các cuộc chat của người đang chat."""
+        identity, _choices = _who(sale_key)
+        if identity is None:
+            return {'sessions': []}
+        return {'sessions': request.env['hlv.product.chat.session'].history_for_user(identity)}
+
+    @http.route('/product_agent/chat/view', type='json', auth='user', methods=['POST'])
+    def view(self, session_id=0, sale_key=None, **kw):
+        """Xem lại (chỉ đọc) một cuộc cũ của chính người đang chat."""
+        identity, _choices = _who(sale_key)
+        Session = request.env['hlv.product.chat.session']
+        session = Session.owned_by(session_id, identity) if identity is not None else Session
+        if not session:
+            return {'ok': False, 'messages': []}
+        return {'ok': True, 'name': session.name,
+                'messages': [message.to_client_dict() for message in session.message_ids]}
+
+    @http.route('/product_agent/chat/created', type='json', auth='user', methods=['POST'])
+    def created(self, sale_key=None, **kw):
+        """Tab "Hàng đã tạo": hàng trợ lý đã tạo / sửa cho người đang chat."""
+        identity, _choices = _who(sale_key)
+        if identity is None:
+            return {'items': []}
+        return {'items': request.env['hlv.product.chat.session'].created_for_user(identity)}
+
     @http.route('/product_agent/chat/new', type='json', auth='user', methods=['POST'])
     def new(self, sale_key=None, **kw):
         """Kết thúc cuộc đang mở của người này, bắt đầu cuộc mới (Claude không nhớ cuộc cũ)."""

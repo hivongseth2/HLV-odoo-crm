@@ -12,10 +12,10 @@ from datetime import date, timedelta
 
 from odoo import fields, models
 from odoo.addons.website_public_inventory_18.controllers.main import (
-    PublicInventory, _get_active_holds, _get_so_reservation_map,
+    PublicInventory, _get_active_holds, _get_so_reservation_map, _rg_sum,
 )
 
-from ..services.query_format import clamp_int, fit_result, name_tokens, similarity
+from ..services.query_format import clamp_int, fit_result, name_tokens
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
 _logger = logging.getLogger(__name__)
@@ -35,12 +35,9 @@ RESOLVE_SEARCH_LIMIT = 80
 DEFAULT_HISTORY_DAYS = 90
 # Tool tra theo mô tả tự do, không cần (và có thể không có) đúng một mã trong Odoo.
 FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang'})
-# Hàng tương tự: lấy rộng theo từ khoá + cùng nhóm, rồi chấm điểm giống tên.
-SIMILAR_KEYWORDS = 4
-SIMILAR_CANDIDATES = 300
-SIMILAR_MIN_SCORE = 0.3
-SAME_CATEGORY_BONUS = 0.15
-SIMILAR_RESULTS = 10
+# Hàng thay thế: số ứng viên còn tồn đưa Claude xét (nhiều hơn thì Claude lọc thêm từ khoá).
+SUBSTITUTE_CANDIDATES = 40
+SUBSTITUTE_DESCRIPTION_CHARS = 300
 # NCC theo dòng hàng: đọc các dòng mua gần nhất cùng nhóm / có đủ từ khoá.
 VENDOR_LINE_LIMIT = 500
 # Mức khớp, mạnh nhất trước: NCC xếp theo mức khớp tốt nhất của các lần mua.
@@ -260,36 +257,65 @@ class HlvProductAgentQueries(models.AbstractModel):
     # Tư vấn khi hàng hết / không có: mã tương tự còn tồn, NCC hay bán dòng hàng
     # =========================================================================
     def _q_tim_hang_tuong_tu(self, args):
-        """Mã còn tồn giống món sale hỏi nhất. Món gốc lấy theo mã (nếu Odoo có) hoặc theo mô tả."""
-        base, _problem, _note = self._resolve_product(args.get('code'), args.get('product_id'))
-        text = ' '.join(filter(None, [base.name if base else '', args.get('mo_ta') or '', args.get('code') or '']))
-        base_tokens = name_tokens(text)
-        if not base_tokens:
-            return {'status': 'error', 'message': "Cần code hoặc mo_ta đủ chữ để tìm hàng tương tự."}
-        Product = self.env['product.product'].sudo()
-        domain = [('sale_ok', '=', True), ('id', '!=', base.id if base else 0)]
-        # Mọi món có chung từ đặc trưng (ưu tiên từ có số: M18, 6204...) + cùng nhóm với món gốc.
-        keywords = sorted(base_tokens, key=lambda word: (not any(ch.isdigit() for ch in word), -len(word)))
-        keywords = keywords[:SIMILAR_KEYWORDS]
-        name_domain = ['|'] * (len(keywords) - 1) + [('name', 'ilike', word) for word in keywords]
-        candidates = Product.search(domain + name_domain, limit=SIMILAR_CANDIDATES)
-        if base and base.categ_id:
-            candidates |= Product.search(domain + [('categ_id', '=', base.categ_id.id)], limit=SIMILAR_CANDIDATES)
-        rows = []
-        for product in candidates:
-            stock = product.qty_available
-            if stock <= 0:
-                continue
-            score = similarity(base_tokens, name_tokens(product.name + ' ' + (product.default_code or '')))
-            if base and product.categ_id == base.categ_id:
-                score += SAME_CATEGORY_BONUS
-            if score >= SIMILAR_MIN_SCORE:
-                rows.append({'code': product.default_code or '', 'name': product.name, 'ton': stock,
-                             'gia_ban': product.list_price, 'do_giong': round(score, 2)})
-        rows.sort(key=lambda row: (-row['do_giong'], -row['ton']))
+        """Ứng viên CÒN TỒN để AI tự xét có thay được món gốc không — tool không chấm điểm.
+
+        Giống nhau hay không phải xét bằng thông số (công năng, điện áp, kích thước lắp...), việc
+        đó Claude làm (đọc mô tả, tìm web), không đoán theo chữ trong tên. Tool chỉ khoanh vùng:
+        cùng nhóm hàng với món gốc (hoặc nhóm Claude chỉ định), lọc thêm bằng từ khoá Claude đặt.
+        """
+        base = None
+        if args.get('code') or args.get('product_id'):
+            base, _problem, _note = self._resolve_product(args.get('code'), args.get('product_id'))
+        category = self._find_category(args.get('nhom')) if args.get('nhom') else None
+        if not category and base and args.get('cung_nhom', True):
+            category = base.categ_id
+        words = name_tokens(args.get('tu_khoa'))
+        if not category and not words:
+            return {'status': 'error', 'message': "Cần code của món gốc (để lấy nhóm hàng), nhom, hoặc tu_khoa "
+                                                  "loại hàng để khoanh vùng ứng viên."}
+        stock = self._stock_by_product(category)
+        products = self.env['product.product'].sudo().browse(list(stock)).filtered(
+            lambda product: product.sale_ok and product != base)
+        if words:
+            products = products.filtered(lambda product: words <= name_tokens(
+                '%s %s %s' % (product.name, product.default_code or '', product.description_sale or '')))
+        products = products.sorted(lambda product: -stock[product.id][0])
         return {
-            'mon_goc': self._product_label(base) if base else {'mo_ta': args.get('mo_ta') or args.get('code')},
-            'goi_y_con_ton': rows[:SIMILAR_RESULTS],
+            'mon_goc': self._product_brief(base) if base else None,
+            'tieu_chi': {'nhom_hang': category.complete_name if category else None,
+                         'tu_khoa': args.get('tu_khoa') or None},
+            'tong_ung_vien': len(products),
+            'ung_vien': [dict(self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
+                              gia_ban=product.list_price)
+                         for product in products[:SUBSTITUTE_CANDIDATES]],
+        }
+
+    def _stock_by_product(self, category=None):
+        """{product_id: (tồn, khả dụng)} của các sản phẩm đang có hàng trong kho nội bộ (có thể lọc nhóm)."""
+        domain = [('location_id.usage', '=', 'internal'), ('quantity', '>', 0)]
+        if category:
+            domain.append(('product_id.categ_id', 'child_of', category.id))
+        groups = self.env['stock.quant'].sudo().read_group(
+            domain, ['product_id', 'quantity:sum', 'reserved_quantity:sum'], ['product_id'], lazy=False)
+        return {group['product_id'][0]: (_rg_sum(group, 'quantity'),
+                                         _rg_sum(group, 'quantity') - _rg_sum(group, 'reserved_quantity'))
+                for group in groups if group.get('product_id')}
+
+    def _find_category(self, name):
+        """Nhóm hàng Odoo theo tên (khớp đúng trước, rồi "chứa"). None nếu không ra đúng một nhóm."""
+        Category = self.env['product.category'].sudo()
+        found = Category.search([('name', '=ilike', name.strip())], limit=2)
+        if len(found) != 1:
+            found = Category.search([('complete_name', 'ilike', name.strip())], limit=2)
+        return found if len(found) == 1 else None
+
+    @staticmethod
+    def _product_brief(product):
+        """Thông tin để Claude xét thông số: mã, tên, nhóm, mô tả bán hàng (cắt ngắn)."""
+        return {
+            'product_id': product.id, 'code': product.default_code or '', 'name': product.name,
+            'nhom': product.categ_id.complete_name,
+            'mo_ta': (product.description_sale or '')[:SUBSTITUTE_DESCRIPTION_CHARS],
         }
 
     def _q_tim_ncc_dong_hang(self, args):

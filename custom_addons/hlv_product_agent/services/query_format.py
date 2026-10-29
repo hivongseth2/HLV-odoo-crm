@@ -87,19 +87,3 @@ def name_tokens(text):
     """
     words = re.findall(r"[a-z0-9]+(?:[-.][a-z0-9]+)*", _plain(text))
     return frozenset(word for word in words if len(word) >= 2 and word not in _GENERIC_WORDS)
-
-
-def similarity(base_tokens, other_tokens):
-    """Độ giống 0..1: tỉ lệ từ của món gốc có mặt ở món kia (từ chứa số tính gấp đôi).
-
-    Biên: món gốc không có từ nào -> 0.
-    """
-    if not base_tokens:
-        return 0.0
-
-    def weight(word):
-        return 2.0 if any(ch.isdigit() for ch in word) else 1.0
-
-    total = sum(weight(word) for word in base_tokens)
-    return round(sum(weight(word) for word in base_tokens & other_tokens) / total, 3)
-

@@ -1,0 +1,76 @@
+/** @odoo-module **/
+/*
+ * Đọc chữ trả lời của trợ lý thành các đoạn có định dạng: đậm, tô vàng, mã, link, ảnh.
+ *
+ * Util thuần: vào chuỗi, ra mảng dữ liệu — không đụng DOM. Khung chat tự dựng phần tử từ kết
+ * quả bằng textContent / createElement, nên chữ Claude viết không bao giờ thành HTML chạy được.
+ */
+
+// **đậm**, ==tô vàng==, `mã`, ![ảnh](url), [link](url), link trần https://...
+const INLINE = /\*\*([^*\n]+)\*\*|==([^=\n]+)==|`([^`\n]+)`|!\[([^\]\n]*)\]\(([^)\s]+)\)|\[([^\]\n]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]+)/g;
+// Ảnh / link nội bộ được phép: ảnh sản phẩm của trang tra tồn và ảnh Odoo.
+const LOCAL_PATHS = ["/search_stock/image/", "/web/image/", "/search_stock?"];
+
+/**
+ * URL dùng được cho ảnh / link, hoặc null.
+ * Nhận: chuỗi. Trả: URL nguyên văn nếu là https:// / http:// hoặc đường dẫn nội bộ cho phép.
+ * Biên: javascript:, data:, đường dẫn lạ -> null (hiện như chữ thường).
+ */
+export function safeUrl(url) {
+    const value = (url || "").trim();
+    if (/^https?:\/\//i.test(value)) {
+        return value;
+    }
+    return LOCAL_PATHS.some((path) => value.startsWith(path)) ? value : null;
+}
+
+/**
+ * Các đoạn của một dòng.
+ * Trả: mảng {type: 'text'|'bold'|'mark'|'code'|'image'|'link', text, url?}.
+ * Biên: URL không an toàn -> đoạn 'text' giữ nguyên chữ gốc.
+ */
+function parseInline(line) {
+    const parts = [];
+    let last = 0;
+    for (const match of line.matchAll(INLINE)) {
+        if (match.index > last) {
+            parts.push({ type: "text", text: line.slice(last, match.index) });
+        }
+        const [raw, bold, mark, code, alt, imageUrl, label, linkUrl, bare] = match;
+        if (bold) {
+            parts.push({ type: "bold", text: bold });
+        } else if (mark) {
+            parts.push({ type: "mark", text: mark });
+        } else if (code) {
+            parts.push({ type: "code", text: code });
+        } else if (imageUrl !== undefined) {
+            const url = safeUrl(imageUrl);
+            parts.push(url ? { type: "image", text: alt, url } : { type: "text", text: raw });
+        } else if (linkUrl !== undefined) {
+            const url = safeUrl(linkUrl);
+            parts.push(url ? { type: "link", text: label, url } : { type: "text", text: raw });
+        } else {
+            parts.push({ type: "link", text: bare, url: bare });
+        }
+        last = match.index + raw.length;
+    }
+    if (last < line.length) {
+        parts.push({ type: "text", text: line.slice(last) });
+    }
+    return parts;
+}
+
+/**
+ * Cả câu trả lời thành các dòng.
+ * Nhận: chuỗi nhiều dòng. Trả: mảng {bullet: bool, parts: [...]}; dòng "- " / "• " là gạch đầu dòng.
+ * Biên: chuỗi rỗng -> [].
+ */
+export function parseRich(text) {
+    if (!text) {
+        return [];
+    }
+    return text.split("\n").map((line) => {
+        const bullet = /^\s*[-•]\s+/.test(line);
+        return { bullet, parts: parseInline(bullet ? line.replace(/^\s*[-•]\s+/, "") : line) };
+    });
+}

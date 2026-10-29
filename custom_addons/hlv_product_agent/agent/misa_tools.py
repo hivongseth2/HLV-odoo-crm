@@ -332,18 +332,22 @@ QUERY_TOOLS += [
     {
         "name": "tim_hang_tuong_tu",
         "description": (
-            "Tìm trong kho các mã CÒN TỒN giống món sale hỏi (cùng nhóm, trùng dòng / model / thông "
-            "số), có điểm độ giống, tồn và giá bán. Dùng khi món sale hỏi hết hàng, ngưng bán, hoặc "
-            "Odoo không có: đề xuất mã thay thế để sale chào khách."
+            "Lấy danh sách ỨNG VIÊN CÒN TỒN để em tự xét thay thế món gốc: mã, tên, nhóm, mô tả bán "
+            "hàng, tồn, khả dụng, giá. Tool KHÔNG chấm độ giống — em phải xét bằng THÔNG SỐ (công "
+            "năng, nguồn điện / điện áp, kích thước lắp, tải, chuẩn...): tìm web thông số món gốc "
+            "trước, ứng viên chưa rõ thì tìm web theo mã. Mặc định cùng nhóm hàng với món gốc; nhóm "
+            "quá rộng / sai thì truyền nhom khác hoặc tu_khoa loại hàng để khoanh lại."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "code": {"type": "string", "description": "Mã món gốc nếu có; chuỗi rỗng nếu chỉ có mô tả"},
+                "code": {"type": "string", "description": "Mã món gốc nếu Odoo có; chuỗi rỗng nếu không"},
                 "product_id": _PRODUCT_ID_ARG,
-                "mo_ta": {"type": "string", "description": "Tên / loại / hãng / thông số chính của món cần thay"},
+                "nhom": {"type": "string", "description": "Tên nhóm hàng Odoo để tìm (thay nhóm của món gốc); rỗng = dùng nhóm món gốc"},
+                "tu_khoa": {"type": "string", "description": "Từ khoá loại hàng em chọn để khoanh vùng (so không dấu, mọi từ phải có); rỗng = không lọc"},
+                "cung_nhom": {"type": "boolean", "description": "Giới hạn trong nhóm hàng của món gốc (mặc định true)"},
             },
-            "required": ["code", "mo_ta"],
+            "required": ["code", "tu_khoa"],
             "additionalProperties": False,
         },
     },
