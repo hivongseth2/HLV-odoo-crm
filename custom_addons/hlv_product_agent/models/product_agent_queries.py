@@ -44,6 +44,7 @@ FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang'})
 # Hàng thay thế: số ứng viên còn tồn đưa Claude xét (nhiều hơn thì Claude lọc thêm từ khoá).
 SUBSTITUTE_CANDIDATES = 40
 SUBSTITUTE_DESCRIPTION_CHARS = 300
+MAX_KEYWORD_VARIANTS = 6
 # "Hay bán" = số lượng đã bán trong khoảng này: đủ dài để mã bán đều không lép vế mã vừa có một đơn lớn.
 SOLD_WINDOW_DAYS = 180
 # NCC theo dòng hàng: đọc các dòng mua gần nhất cùng nhóm / có đủ từ khoá.
@@ -317,22 +318,26 @@ class HlvProductAgentQueries(models.AbstractModel):
         category = self._find_category(args.get('nhom')) if args.get('nhom') else None
         if not category and base and args.get('cung_nhom', True):
             category = base.categ_id
-        words = name_tokens(args.get('tu_khoa'))
-        if not category and not words:
+        # Một loại máy nhiều cách gọi ("khoan bê tông" / "khoan búa"): khớp MỘT cách gọi là lấy.
+        variants = [args.get('tu_khoa') or ''] + [text for text in (args.get('tu_khoa_khac') or [])
+                                                  if isinstance(text, str)][:MAX_KEYWORD_VARIANTS]
+        word_sets = [words for words in map(name_tokens, variants) if words]
+        if not category and not word_sets:
             return {'status': 'error', 'message': "Cần code của món gốc (để lấy nhóm hàng), nhom, hoặc tu_khoa "
                                                   "loại hàng để khoanh vùng ứng viên."}
         stock = self._stock_by_product(category)
         products = self.env['product.product'].sudo().browse(list(stock)).filtered(
             lambda product: product.sale_ok and product != base)
-        if words:
-            products = products.filtered(lambda product: has_all_words(
-                words, '%s %s %s' % (product.name, product.default_code or '', product.description_sale or '')))
+        if word_sets:
+            products = products.filtered(lambda product: any(has_all_words(
+                words, '%s %s %s' % (product.name, product.default_code or '', product.description_sale or ''))
+                for words in word_sets))
         sold = self._sold_qty(products)
         products = products.sorted(lambda product: (-sold.get(product.id, 0.0), -stock[product.id][0]))
         return {
             'mon_goc': self._product_brief(base) if base else None,
             'tieu_chi': {'nhom_hang': category.complete_name if category else None,
-                         'tu_khoa': args.get('tu_khoa') or None},
+                         'tu_khoa': [text for text in variants if text] or None},
             'tong_ung_vien': len(products),
             'ung_vien': [dict(self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
                               gia_ban=product.list_price, da_ban_180_ngay=sold.get(product.id, 0.0))

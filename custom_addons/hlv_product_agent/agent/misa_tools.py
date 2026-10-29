@@ -394,7 +394,8 @@ QUERY_TOOLS += [
             "Lấy danh sách hàng CÒN TỒN: mã, tên, nhóm, mô tả bán hàng, tồn, khả dụng, giá, số đã bán "
             "180 ngày (xếp mã bán chạy trước). Dùng để (1) tìm mã THAY THẾ món gốc, (2) TƯ VẤN khi sale "
             "hỏi chung một loại hàng — code rỗng, tu_khoa = loại hàng + hãng (vd 'may siet bu long "
-            "bosch'). Tool KHÔNG chấm độ giống / độ hợp — em phải xét bằng THÔNG SỐ (công năng, nguồn "
+            "bosch'), tu_khoa_khac = các cách gọi khác của cùng loại máy (sale và tên trong kho hay gọi "
+            "khác nhau). Tool KHÔNG chấm độ giống / độ hợp — em phải xét bằng THÔNG SỐ (công năng, nguồn "
             "điện / điện áp, kích thước lắp, tải, chuẩn...), chưa rõ thì tìm web theo mã. Mặc định cùng "
             "nhóm hàng với món gốc; nhóm quá rộng / sai thì truyền nhom khác hoặc tu_khoa để khoanh lại."
         ),
@@ -404,7 +405,9 @@ QUERY_TOOLS += [
                 "code": {"type": "string", "description": "Mã món gốc nếu Odoo có; chuỗi rỗng nếu không"},
                 "product_id": _PRODUCT_ID_ARG,
                 "nhom": {"type": "string", "description": "Tên nhóm hàng Odoo để tìm (thay nhóm của món gốc); rỗng = dùng nhóm món gốc"},
-                "tu_khoa": {"type": "string", "description": "Từ khoá loại hàng em chọn để khoanh vùng (so không dấu, mọi từ phải có); rỗng = không lọc"},
+                "tu_khoa": {"type": "string", "description": "Từ khoá loại hàng + hãng (so không dấu, mọi từ phải có; KHÔNG đưa thuộc tính như 'pin', 'cầm tay' — tên hàng hay không ghi); rỗng = không lọc"},
+                "tu_khoa_khac": {"type": "array", "items": {"type": "string"}, "maxItems": 6,
+                                 "description": "Các cách gọi khác của cùng loại hàng (vd 'khoan bua bosch' cho 'khoan be tong bosch'); khớp tu_khoa HOẶC một cách gọi là lấy"},
                 "cung_nhom": {"type": "boolean", "description": "Giới hạn trong nhóm hàng của món gốc (mặc định true)"},
             },
             "required": ["code", "tu_khoa"],
