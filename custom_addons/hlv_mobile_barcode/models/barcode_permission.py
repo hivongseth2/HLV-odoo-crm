@@ -7,7 +7,13 @@ PICKING_TYPE_CODES = [
     ('PICK', 'Phiếu lấy hàng (PICK)'),
     ('PACK', 'Phiếu đóng gói (PACK)'),
     ('STO', 'Phiếu lưu kho (STO)'),
+    ('CKD', 'Phiếu chuyển kho đi (CKD)'),
+    ('CKN', 'Phiếu nhận chuyển kho (CKN)'),
+    ('SD', 'Phiếu xuất kho sử dụng (SD)'),
+    ('TT', 'Phiếu xuất kho thất thoát (TT)'),
 ]
+# Mã mới (tách khỏi INT) — migration 18.0.1.0.2 chép quyền INT sẵn có của từng người sang các mã này.
+CODES_SPLIT_FROM_INT = ('CKD', 'CKN', 'SD', 'TT')
 
 
 class HlvBarcodeUserPermission(models.Model):

@@ -9,10 +9,13 @@ import { PickingScanner } from "../picking_scanner/picking_scanner";
 import { InventoryLookup } from "../inventory_lookup/inventory_lookup";
 import { LocationMove } from "../location_move/location_move";
 import { BatchLocationMove } from "../batch_location_move/batch_location_move";
+import { isTransferPickingName } from "../../utils/transfer_picking";
 
 export class BarcodeApp extends Component {
     static template = "hlv_mobile_barcode.BarcodeApp";
     static components = { PickingScanner, InventoryLookup, LocationMove, BatchLocationMove };
+
+    isTransferPickingName = isTransferPickingName;
 
     setup() {
         this.notification = useService("notification");

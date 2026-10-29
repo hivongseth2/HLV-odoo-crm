@@ -1,4 +1,5 @@
 from odoo import models, fields, _
+from odoo.exceptions import UserError
 import logging
 import json
 from datetime import datetime, timedelta
@@ -13,22 +14,18 @@ class MisaTransferFetch(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to   = fields.Date(string="Đến ngày", required=True)
 
-    # ===== Helper: kho chứa location nguồn -> picking type internal =====
+    # ===== Helper: kho chứa location nguồn -> loại phiếu bước 1 chuyển kho (CKD, kho chưa có thì INT) =====
     def _get_internal_picking_type_for_location(self, from_location):
         if not from_location:
             return False
         wh = self.env['stock.warehouse'].search([
             ('view_location_id', 'parent_of', from_location.id)
         ], limit=1)
-        if wh and wh.int_type_id:
-            return wh.int_type_id
-        # fallback theo prefix code (TSN/Stock -> TSN)
-        wh_code = (from_location.complete_name or "").split('/')[0].strip() if from_location.complete_name else False
-        if wh_code:
-            wh2 = self.env['stock.warehouse'].search([('code', '=', wh_code)], limit=1)
-            if wh2 and wh2.int_type_id:
-                return wh2.int_type_id
-        return False
+        if not wh:
+            # fallback theo prefix code (TSN/Stock -> TSN)
+            wh_code = (from_location.complete_name or "").split('/')[0].strip() if from_location.complete_name else False
+            wh = self.env['stock.warehouse'].search([('code', '=', wh_code)], limit=1) if wh_code else wh
+        return wh._hlv_transfer_out_type() if wh else False
 
     # ===== Helper: đích phiếu 1 =====
     def _get_transit_location(self, from_loc):
@@ -204,7 +201,8 @@ class MisaTransferFetch(models.TransientModel):
                     # PHIẾU 1: từ kho nguồn -> CHUYENKHO của kho nguồn (KHÔNG đổ thẳng kho đích)
                     picking = self.env['stock.picking'].search([
                         ('name', '=', ref_info.get('refno_finance', '')),
-                        ('picking_type_id', '=', picking_type.id),
+                        # theo mã loại, không theo đúng loại: phiếu đã lấy trước khi tách là INT, nay là CKD
+                        ('picking_type_id.code', '=', 'internal'),
                         ('location_id', '=', from_id),
                         # không lọc theo đích: phiếu cũ đi Transit, phiếu mới đi CHUYENKHO
                     ], limit=1)

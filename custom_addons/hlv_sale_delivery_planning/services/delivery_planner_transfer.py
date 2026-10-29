@@ -182,26 +182,7 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
             # Bước 1 đi vào CHUYENKHO của kho nguồn
             transit_location = wh._hlv_get_transfer_location()
 
-            # Ưu tiên "Lệnh chuyển hàng nội bộ" — tránh chọn "Lưu kho"
-            picking_type = self.env['stock.picking.type'].search([
-                ('warehouse_id', '=', from_wh_id),
-                ('code', '=', 'internal'),
-                ('name', 'ilike', 'nội bộ'),
-            ], limit=1)
-            if not picking_type:
-                picking_type = self.env['stock.picking.type'].search([
-                    ('warehouse_id', '=', from_wh_id),
-                    ('code', '=', 'internal'),
-                    ('name', 'ilike', 'chuyển'),
-                ], limit=1)
-            if not picking_type:
-                # Fallback: internal nhưng loại trừ "lưu kho" và "nhập kho"
-                picking_type = self.env['stock.picking.type'].search([
-                    ('warehouse_id', '=', from_wh_id),
-                    ('code', '=', 'internal'),
-                    ('name', 'not ilike', 'lưu'),
-                    ('name', 'not ilike', 'nhập'),
-                ], limit=1)
+            picking_type = wh._hlv_transfer_out_type()
 
             # Partner = địa chỉ của kho ĐÍCH (nơi nhận hàng), không phải kho nguồn
             dest_wh_id = wh_dest_map.get(from_wh_id)
@@ -258,7 +239,7 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                     sel.get('picking_type_id') or 0
                 )
                 if not picking_type.exists():
-                    picking_type = None
+                    picking_type = wh._hlv_transfer_out_type()
 
                 location_id = sel.get('lot_stock_id') or (wh.lot_stock_id.id if wh.lot_stock_id else False)
                 location_dest_id = sel.get('transit_location_id')
@@ -461,18 +442,8 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
 
                 # --- 2. Tạo phiếu chuyển vị trí ---
                 wh = so.warehouse_id
-                picking_type = self.env['stock.picking.type'].search([
-                    ('warehouse_id', '=', wh.id),
-                    ('code', '=', 'internal'),
-                    ('name', 'ilike', 'nội bộ'),
-                ], limit=1)
-                if not picking_type:
-                    picking_type = self.env['stock.picking.type'].search([
-                        ('warehouse_id', '=', wh.id),
-                        ('code', '=', 'internal'),
-                        ('name', 'not ilike', 'lưu'),
-                        ('name', 'not ilike', 'nhập'),
-                    ], limit=1)
+                # Chuyển vị trí trong cùng kho: Lệnh chuyển nội bộ (INT), không phải loại chuyển kho / xuất sử dụng
+                picking_type = wh.int_type_id
 
                 source_location_id = wh.lot_stock_id.id
 

@@ -8,6 +8,10 @@ SEQUENCE_CODE_LABEL = {
     'PICK': 'phiếu lấy hàng',
     'PACK': 'phiếu đóng gói',
     'STO': 'phiếu lưu kho',
+    'CKD': 'phiếu chuyển kho đi',
+    'CKN': 'phiếu nhận chuyển kho',
+    'SD': 'phiếu xuất kho sử dụng',
+    'TT': 'phiếu xuất kho thất thoát',
 }
 
 # Đổi các field này là đổi phiếu sang kho khác -> phải kiểm lại quyền.

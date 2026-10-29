@@ -4,9 +4,14 @@
 Chuyển hàng giữa hai kho theo 2 bước:
 
 ```
-Bước 1 (INT kho nguồn):   KBC/Tồn kho      → KBC/CHUYENKHO
-Bước 2 (phiếu kho nhận):  KBC/CHUYENKHO    → TSN/Stock   (tự sinh khi xác nhận bước 1)
+Bước 1 (CKD kho nguồn):   KBC/Tồn kho      → KBC/CHUYENKHO
+Bước 2 (CKN kho nhận):    KBC/CHUYENKHO    → TSN/Stock   (tự sinh khi xác nhận bước 1)
 ```
+
+Loại phiếu: mỗi kho có **Chuyển kho đi** (CKD, `two_step_transfer_use='delivery'`) và **Nhận chuyển kho** (CKN,
+`'reception'`), tạo bằng `bin/create_picking_type_chuyen_kho.py`. Kho chưa có thì bước 1/bước 2 vẫn là INT như trước
+khi tách. Phiếu INT cũ (đang dở) chạy bình thường: mọi logic nhận diện chuyển kho theo vị trí CHUYENKHO và
+`source_transfer_id`, không theo loại phiếu.
 
 `CHUYENKHO` là vị trí **internal nằm ngang Tồn kho** (con trực tiếp của vị trí view của kho):
 - tính vào tồn của kho nguồn cho tới khi bước 2 được xác nhận;
@@ -32,6 +37,8 @@ deltatech_picking_transit/
 | Logic | Nơi duy nhất |
 |---|---|
 | Lấy/tạo CHUYENKHO của một kho | `stock.warehouse._hlv_get_transfer_location()` |
+| Loại phiếu bước 1 của kho (CKD, chưa có thì INT) | `stock.warehouse._hlv_transfer_out_type()` |
+| Loại phiếu bước 2 ở kho nhận (CKN, chưa có thì loại nội bộ đi vào tồn, ưu tiên INT) | `stock.warehouse._hlv_transfer_in_type()` |
 | Vị trí có phải trung chuyển (CHUYENKHO hoặc Transit cũ) | `stock.picking._is_inter_warehouse_transit(location)` |
 | Chặn CHUYENKHO trên phiếu không phải chuyển nội bộ | `stock.picking._check_hlv_transfer_location` + domain field `location_id/location_dest_id` |
 | Chặn Transit (nguồn/đích) trên phiếu chuyển nội bộ đang mở, trừ nguồn bước 2 = đích Transit của bước 1 cũ | `stock.picking._hlv_check_no_transit` (gọi từ `_check_hlv_transfer_location` và `stock.move.line._check_hlv_no_transit`) |
@@ -40,11 +47,11 @@ deltatech_picking_transit/
 | Tự chọn đích CHUYENKHO khi Liên hệ là kho khác; nguồn bước 2 = đích bước 1 | `stock.picking._compute_location_id` (override) |
 | Chặn xác nhận khi nguồn/đích không khớp kho của loại phiếu | `stock.picking._hlv_check_transfer_route` (gọi đầu `button_validate`) |
 
-Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_transfer_location_for`), `hlv_sale_delivery_planning` (phiếu luân chuyển + loại khỏi tồn khả dụng), `misa_fetch_po_button` (`_get_transit_location(from_loc)`), `hlv_stock_origin_audit` (cảnh báo tồn đọng), `hlv_inventory_group_report` (cột sắp giao/chuyển kho).
+Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_transfer_location_for`, `_transfer_picking_type` → `_hlv_transfer_out_type`), `hlv_sale_delivery_planning` (phiếu luân chuyển → `_hlv_transfer_out_type` + loại khỏi tồn khả dụng), `misa_fetch_po_button` (`_get_transit_location(from_loc)`, loại phiếu → `_hlv_transfer_out_type`), `hlv_stock_origin_audit` (cảnh báo tồn đọng), `hlv_inventory_group_report` (cột sắp giao/chuyển kho).
 
 ## 4. Luồng chính
-1. Phiếu INT có đích là CHUYENKHO/Transit → bắt buộc có **Liên hệ** = địa chỉ kho nhận.
-2. `button_validate`: tìm kho nhận theo Liên hệ, chọn loại phiếu internal của kho nhận (ưu tiên `two_step_transfer_use='reception'`, loại PICK/PACK và loại có đích mặc định ngoài tồn như Xuất kho sử dụng), lấy `default_location_dest_id` làm đích.
+1. Phiếu nội bộ (CKD, hoặc INT cũ) có đích là CHUYENKHO/Transit → bắt buộc có **Liên hệ** = địa chỉ kho nhận.
+2. `button_validate`: tìm kho nhận theo Liên hệ, lấy loại phiếu `warehouse._hlv_transfer_in_type()` của kho nhận (CKN; chưa có thì loại nội bộ đi vào tồn — loại PICK/PACK, CKD và loại đi ra vị trí ảo như Xuất kho sử dụng), lấy `default_location_dest_id` làm đích.
 3. Sau khi validate xong: `create_second_transfer_wizard` tạo phiếu bước 2 nguồn = đích bước 1, copy move line (kể cả kiện), confirm, ghi chatter 2 chiều.
 4. Kiểm tra trước khi xác nhận (`_hlv_check_transfer_route`, bỏ qua phiếu trả hàng và PICK/PACK):
    - Bước 1: nguồn (header + move line) thuộc kho của loại phiếu; đích thuộc kho đó (CHUYENKHO). Đi thẳng vào vị trí tồn kho khác bị chặn; ra vị trí ảo ngoài kho (SUDUNG-*) cho qua. Transit cũ vẫn cho qua.
@@ -54,4 +61,5 @@ Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_t
 ## 5. Mở rộng
 - Thêm kho mới: chạy nâng cấp module hoặc gọi `_hlv_get_transfer_location()` (tự tạo khi thiếu).
 - Cho thêm loại phiếu được dùng CHUYENKHO: sửa `_check_hlv_transfer_location`.
+- Mã trình tự CKD/CKN gắn với quyền kho (`hlv_warehouse_permission`, `hlv_mobile_barcode` tra quyền theo `sequence_code`) và với `stock_quantity_validation` (bỏ kiểm vượt SL như INT). Đổi mã thì sửa cả các chỗ đó.
 - `scripts/migrate_transit_to_chuyenkho.py` (**dự trù, chưa chạy**, không nằm trong module): chuyển phiếu bước 1/bước 2 chưa xong từ Transit cũ sang CHUYENKHO, chạy bằng `odoo-bin shell`, mặc định `DRY_RUN = True`.
