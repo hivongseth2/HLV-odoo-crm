@@ -18,10 +18,9 @@
             </div>
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
-                <!-- Tài khoản dùng chung nhiều sale: hiện người đang chat + nút đổi. -->
+                <!-- Tài khoản dùng chung nhiều sale: tên người đang chat, bấm vào để đổi người. -->
                 <div class="hlv-pa-who">
-                    Đang chat: <b class="hlv-pa-who-name"/>
-                    <button type="button" class="hlv-pa-switch">Đổi người</button>
+                    <button type="button" class="hlv-pa-switch hlv-pa-who-name" title="Bấm để đổi người"/>
                 </div>
                 <div class="hlv-pa-status"/>
                 <div class="hlv-pa-picker">
@@ -40,7 +39,7 @@
                         <input type="file" accept="image/*" multiple="multiple" class="d-none"/>
                     </label>
                     <textarea rows="2" maxlength="4000"
-                              placeholder="Tên hàng, mã model, thông số... (Enter để gửi, Shift+Enter xuống dòng)"/>
+                              placeholder="Hỏi trợ lý: tồn kho, giá, tạo mã hàng..." title="Enter để gửi, Shift+Enter xuống dòng"/>
                     <button type="button" class="hlv-pa-send" title="Gửi">
                         <i class="fa fa-paper-plane"/>
                     </button>

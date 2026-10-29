@@ -354,15 +354,19 @@ QUERY_TOOLS += [
         "name": "tim_ncc_dong_hang",
         "description": (
             "Tìm NCC đã từng bán cho mình dòng hàng này (theo đơn mua đã xác nhận): số lần mua, lần "
-            "mua cuối, vài mặt hàng mẫu. Dùng khi hàng không có trong kho lẫn MISA: tư vấn sale nên "
-            "hỏi giá NCC nào. Từ khoá ngắn: hãng + dòng / loại hàng (vd 'MILWAUKEE M18', 'phốt viton')."
+            "mua cuối, vài mặt hàng mẫu, mức khớp (tu_khoa_va_nhom > cung_nhom > tu_khoa). Dùng khi "
+            "hàng không có trong kho lẫn MISA: tư vấn sale nên hỏi giá NCC nào. Truyền code của một món "
+            "CÙNG DÒNG đã có (vd mã tương tự vừa tìm) để lấy đúng nhóm hàng, kèm từ khoá ngắn: hãng + "
+            "dòng / loại hàng (vd 'MILWAUKEE M18', 'phốt viton')."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "tu_khoa": {"type": "string", "description": "2-4 từ khoá, mọi từ phải có trong tên hàng đã mua"},
+                "tu_khoa": {"type": "string", "description": "2-4 từ khoá (so không dấu); rỗng nếu chỉ dùng code"},
+                "code": {"type": "string", "description": "Mã một món cùng dòng để lấy nhóm hàng; rỗng nếu không có"},
+                "product_id": _PRODUCT_ID_ARG,
             },
-            "required": ["tu_khoa"],
+            "required": ["tu_khoa", "code"],
             "additionalProperties": False,
         },
     },
