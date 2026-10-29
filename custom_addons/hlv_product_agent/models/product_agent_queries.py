@@ -16,6 +16,7 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
 )
 
 from ..services.query_format import clamp_int, fit_result
+from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
 _logger = logging.getLogger(__name__)
 
@@ -28,7 +29,9 @@ PRICE_FIELDS = [
     ('x_studio_gi_bn_thng_mi', "Giá thương mại"),
     ('standard_price', "Giá vốn"),
 ]
-PRODUCT_CANDIDATES = 6
+PRODUCT_CANDIDATES = 10
+# Tìm "chứa" lấy rộng rồi tự xếp: một model hay bán khớp hàng chục combo.
+RESOLVE_SEARCH_LIMIT = 80
 DEFAULT_HISTORY_DAYS = 90
 
 
@@ -43,7 +46,7 @@ class HlvProductAgentQueries(models.AbstractModel):
             return {'status': 'error', 'message': "Tool tra cứu %s chưa có." % name}
         if not isinstance(args, dict):
             return {'status': 'error', 'message': "Tham số phải là object JSON."}
-        product, problem = self._resolve_product(args.get('code'))
+        product, problem, note = self._resolve_product(args.get('code'), args.get('product_id'))
         if problem:
             return problem
         try:
@@ -51,35 +54,88 @@ class HlvProductAgentQueries(models.AbstractModel):
         except Exception as error:  # noqa: BLE001 — Claude phải nhận được lỗi, không làm chết lượt
             _logger.exception("PRODUCT_AGENT tra cứu %s lỗi", name)
             return {'status': 'error', 'message': "Tra cứu lỗi: %s" % error}
-        return dict({'status': 'found', 'product': self._product_label(product)}, **fit_result(data))
+        result = dict({'status': 'found', 'product': self._product_label(product)}, **fit_result(data))
+        if note:
+            result['luu_y'] = note
+        return result
 
     # =========================================================================
     # Tìm sản phẩm / kho từ chữ Claude đưa
     # =========================================================================
-    def _resolve_product(self, code):
-        """(product, None) nếu ra đúng một mã; (None, dict lỗi / danh sách để chọn) nếu không."""
+    def _resolve_product(self, code, product_id=None):
+        """``(product, None, ghi chú)`` khi chọn được một sản phẩm; ``(None, dict lỗi / ứng viên, None)`` nếu không.
+
+        Thứ tự: product_id (Claude chọn từ danh sách ứng viên) -> trùng MÃ khi bỏ khoảng trắng /
+        dấu gạch -> tìm "chứa" trong mã + tên. Bước cuối lấy rộng rồi tự xếp: tìm "chứa" theo
+        thứ tự mã thì combo "CB-..." đứng trước, máy lẻ đúng mã bị đẩy khỏi danh sách.
+        Nhiều sản phẩm khớp mà chỉ MỘT hàng lẻ (không BOM kit): lấy hàng lẻ — sale không nói
+        "combo" là hỏi hàng lẻ; các combo cùng mã nằm trong ghi chú để chọn lại nếu cần.
+        """
+        Product = self.env['product.product'].sudo()
+        if product_id:
+            product = Product.browse(clamp_int(product_id, 0, 0, 2 ** 31 - 1)).exists()
+            if product:
+                return product, None, None
         code = (code or '').strip()
         if not code:
-            return None, {'status': 'error', 'message': "Thiếu code (mã hoặc tên hàng)."}
-        Product = self.env['product.product'].sudo()
-        exact = Product.search([('default_code', '=ilike', code)], limit=2)
-        if len(exact) == 1:
-            return exact, None
-        found = exact or Product.search(
-            ['|', ('default_code', 'ilike', code), ('name', 'ilike', code)], limit=PRODUCT_CANDIDATES)
+            return None, {'status': 'error', 'message': "Thiếu code (mã hoặc tên hàng)."}, None
+        same_code = self._products_with_code(code)
+        if len(same_code) == 1:
+            return same_code, None, None
+        found = same_code | Product.search(
+            ['|', ('default_code', 'ilike', code), ('name', 'ilike', code)], limit=RESOLVE_SEARCH_LIMIT)
         if len(found) == 1:
-            return found, None
+            return found, None, None
         if not found:
-            return None, {'status': 'not_found', 'message': "Odoo không có sản phẩm khớp '%s'." % code}
+            return None, {'status': 'not_found', 'message': "Odoo không có sản phẩm khớp '%s'." % code}, None
+        rows = rank_products(self._candidate_rows(found), code)
+        single, combos = single_non_combo(rows, code)
+        if single:
+            note = None
+            if combos:
+                note = {
+                    'message': "Đang tra HÀNG LẺ. Có %s combo chứa mã này; sale hỏi combo thì gọi lại với "
+                               "product_id của combo." % len(combos),
+                    'combo_cung_ma': [{key: row[key] for key in ('product_id', 'code', 'name')}
+                                      for row in combos[:PRODUCT_CANDIDATES]],
+                }
+            return Product.browse(single['product_id']), None, note
         return None, {
             'status': 'ambiguous',
-            'message': "Nhiều sản phẩm khớp '%s' — gọi lại với đúng một mã trong danh sách." % code,
-            'candidates': [self._product_label(product) for product in found],
-        }
+            'message': "Nhiều sản phẩm khớp '%s' (hàng lẻ đúng mã xếp đầu, combo xếp cuối) — gọi lại "
+                       "với product_id của đúng sản phẩm." % code,
+            'candidates': rows[:PRODUCT_CANDIDATES],
+        }, None
+
+    def _products_with_code(self, code):
+        """Sản phẩm đang dùng có mã trùng `code` khi bỏ khoảng trắng / - _ . / và không phân biệt hoa thường.
+
+        So bằng SQL trên cả bảng: mã nhập tay hay lệch khoảng trắng ("M18 FPD3-0X " / "M18FPD3-0X"),
+        so =ilike thì trượt mất đúng sản phẩm cần tìm.
+        """
+        key = normalize_code(code)
+        if not key:
+            return self.env['product.product'].sudo()
+        self.env.cr.execute("""
+            SELECT id FROM product_product
+             WHERE active AND regexp_replace(upper(coalesce(default_code, '')), '[[:space:]_./-]+', '', 'g') = %s
+             LIMIT 5
+        """, [key])
+        return self.env['product.product'].sudo().browse([row[0] for row in self.env.cr.fetchall()])
+
+    def _candidate_rows(self, products):
+        """Dòng ứng viên cho Claude chọn: id, mã, tên, có phải combo (BOM kit) không."""
+        combo_templates = set(self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', products.product_tmpl_id.ids), ('active', '=', True), ('type', '=', 'phantom'),
+        ]).product_tmpl_id.ids)
+        return [{
+            'product_id': product.id, 'code': product.default_code or '', 'name': product.name,
+            'is_combo': product.product_tmpl_id.id in combo_templates,
+        } for product in products]
 
     @staticmethod
     def _product_label(product):
-        return {'code': product.default_code or '', 'name': product.name}
+        return {'product_id': product.id, 'code': product.default_code or '', 'name': product.name}
 
     def _warehouse_id(self, text):
         """ID kho theo mã / tên; None khi để trống hoặc không khớp đúng một kho (= mọi kho)."""

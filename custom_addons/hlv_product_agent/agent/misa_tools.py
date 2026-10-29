@@ -258,8 +258,15 @@ _CODE_ARG = {"type": "string", "description": "Mã hàng (ưu tiên, đúng như
 _WAREHOUSE_ARG = {"type": "string", "description": "Mã hoặc tên kho để lọc; chuỗi rỗng = mọi kho"}
 
 
+_PRODUCT_ID_ARG = {
+    "type": "integer",
+    "description": "ID sản phẩm Odoo lấy từ danh sách 'candidates' khi tool báo ambiguous; "
+                   "có product_id thì code chỉ để đọc cho dễ, không dùng để tìm.",
+}
+
+
 def _query_tool(name, description, properties=None, required=("code",)):
-    props = {"code": _CODE_ARG}
+    props = {"code": _CODE_ARG, "product_id": _PRODUCT_ID_ARG}
     props.update(properties or {})
     return {
         "name": name,
