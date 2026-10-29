@@ -516,6 +516,42 @@ class HlvProductAgentTools(models.AbstractModel):
             product_code=new_value if field == 'code' else False,
             product_name=new_value if field == 'name' else False,
         )
-        session.post_event("Đã sửa trên MISA (ID %s): %s «%s» → «%s»" % (
-            misa_id, field, old_value, new_value))
-        return {'status': 'success', 'message': "Đã cập nhật %s thành %s" % (field, new_value)}
+        odoo_note = None
+        if field == 'name':
+            odoo_note = self._rename_in_odoo(misa_id, (args.get('code') or '').strip(), old_value, new_value)
+        session.post_event("Đã sửa trên MISA (ID %s): %s «%s» → «%s»%s" % (
+            misa_id, field, old_value, new_value, (". " + odoo_note) if odoo_note else ""))
+        result = {'status': 'success', 'message': "Đã cập nhật %s thành %s" % (field, new_value)}
+        if odoo_note:
+            result['odoo'] = odoo_note
+        return result
+
+    def _rename_in_odoo(self, misa_id, code, old_name, new_name):
+        """Đổi tên sản phẩm Odoo theo tên vừa sửa trên MISA. Trả câu báo kết quả phía Odoo.
+
+        Tìm theo MISA ID đã lưu -> mã hàng -> tên cũ (chỉ khi đúng MỘT sản phẩm mang tên đó).
+        Không tìm thấy / lỗi thì không raise: MISA đã sửa rồi, chỉ báo để sửa tay.
+        Không trông vào AMIS callback: sửa trên CRM không chắc sang kế toán để có webhook.
+        """
+        Template = self.env['product.template'].sudo().with_context(active_test=False)
+        template = Template.search([('misa_product_id', '=', str(misa_id))], limit=1) if misa_id else Template
+        if not template and code:
+            template = Template.search([('default_code', '=', code)], limit=1)
+        if not template and old_name:
+            same_name = Template.search([('name', '=', old_name)], limit=2)
+            template = same_name if len(same_name) == 1 else Template
+        if not template:
+            return "Odoo không có sản phẩm khớp: chỉ sửa trên MISA, sửa tay tên Odoo nếu cần."
+        old_odoo_name = template.name
+        try:
+            with self.env.cr.savepoint():
+                # sudo + misa_skip_crm_sync: MISA vừa sửa rồi, không đẩy ngược lên lần nữa.
+                template.with_context(misa_skip_crm_sync=True).write({'name': new_name})
+        except Exception as error:
+            _logger.exception("PRODUCT_AGENT đổi tên Odoo %s lỗi", template.default_code)
+            return "MISA đã sửa nhưng Odoo lỗi (%s): sửa tay tên Odoo." % error
+        template.message_post(
+            body="Trợ lý tạo mã đổi tên theo MISA (ID %s): «%s» → «%s»." % (misa_id, old_odoo_name, new_name),
+            message_type='comment', subtype_xmlid='mail.mt_note',
+        )
+        return "Đã đổi cả tên Odoo [%s]." % (template.default_code or template.id)

@@ -78,6 +78,18 @@ def _plain(text):
     return "".join(ch for ch in unicodedata.normalize("NFD", text) if unicodedata.category(ch) != "Mn")
 
 
+def has_all_words(words, text):
+    """Văn bản có chứa đủ mọi từ khoá không, bỏ qua dấu / khoảng trắng / gạch nối.
+
+    Nhận: words (tập từ, thường từ name_tokens), text (tên / mã / mô tả). Trả: bool.
+    So trên chuỗi đã bỏ mọi ký tự không phải chữ / số: tên hàng trong Odoo viết dính / tách không
+    thống nhất ("bulong" / "bu lông", "18V-350" / "18v350"), so nguyên từ là trượt mất hàng.
+    Biên: words rỗng -> True.
+    """
+    compact = re.sub(r"[^a-z0-9]", "", _plain(text))
+    return all(re.sub(r"[^a-z0-9]", "", _plain(word)) in compact for word in words)
+
+
 def name_tokens(text):
     """Tập từ đặc trưng của một tên hàng để so độ giống.
 

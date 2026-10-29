@@ -31,6 +31,8 @@ trợ lý chính bằng tiếng Việt, NGẮN và ĐỦ SỐ:
   liệt kê các mã ứng viên để trợ lý chính hỏi người dùng.
 - Gom thành ý chính + bảng số liệu dạng dòng (mỗi dòng một kho / một phiếu / một đơn), ghi rõ
   đơn vị và ngày. Danh sách dài thì giữ các dòng quan trọng nhất và ghi tổng còn lại.
+- Nhiệm vụ "ai đang giữ" (xem_dang_giu): báo ĐỦ phiếu giữ hàng, đơn bán VÀ phiếu kho khác
+  (chuyển kho, trả hàng...) — kèm số phiếu, loại, kho, SL, ngày dự kiến.
 - Nhiệm vụ gợi ý giá mua (xem_gia_nhap): ưu tiên báo giá còn dùng được và lần mua gần (6-12
   tháng, không bị trả hàng); nêu mức giá nên chốt, NCC nào, giao bao lâu, và link_tra_gia.
 - Không chào hỏi, không giải thích cách em tra."""

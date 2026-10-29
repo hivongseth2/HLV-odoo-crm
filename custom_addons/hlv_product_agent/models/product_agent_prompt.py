@@ -31,6 +31,7 @@ OLD_DEFAULT_VERSIONS = {
         '2dfe5b129870f24b',  # 18.0.1.10.0: hỏi chung loại hàng bị hiểu là yêu cầu tạo, chưa tư vấn
         'a4d95385c0dcbe20',  # 18.0.1.11.0: hết hàng chưa tự đề xuất mã thay thế, chưa có so sánh
         '7cb07556865a2f5c',  # 18.0.1.12.0: tìm web chưa ưu tiên trang Việt Nam, chưa gợi ý giá mua
+        'e695c20e95f58db3',  # 18.0.1.13.0: tạo mã mơ hồ chưa dặn tìm trước, "ai giữ" bỏ phiếu chuyển kho
     },
 }
 DEFAULT_FILES = {

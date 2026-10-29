@@ -181,7 +181,9 @@ TOOLS = [
     {
         "name": "update_product_misa",
         "description": (
-            "Sửa một trường (tên/mã/mô tả) của hàng ĐÃ CÓ trên MISA. Cần người dùng xác nhận "
+            "Sửa một trường (tên/mã/mô tả) của hàng ĐÃ CÓ trên MISA. Sửa TÊN thì hệ thống đổi "
+            "luôn tên sản phẩm Odoo cùng hàng (truyền code = mã hàng từ kết quả search để tìm "
+            "đúng sản phẩm Odoo); kết quả có 'odoo' cho biết phía Odoo đã đổi hay chưa. Cần người dùng xác nhận "
             "như tạo mới: new_value phải có nguyên văn trong đề xuất ở câu trả lời trước, không "
             "thì trả 'need_confirmation'. misa_id và old_value lấy từ kết quả search_product_misa. "
             "Đổi MÃ (field=code): hệ thống đổi CẢ MISA lẫn sản phẩm Odoo cùng mã và ghi lịch sử "
@@ -200,6 +202,7 @@ TOOLS = [
                 },
                 "new_value": {"type": "string", "description": "Giá trị mới"},
                 "old_value": {"type": "string", "description": "Giá trị cũ, lấy từ kết quả search"},
+                "code": {"type": "string", "description": "Mã hàng hiện tại (từ kết quả search), để sửa cả Odoo"},
             },
             "required": ["misa_id", "field", "new_value", "old_value"],
             "additionalProperties": False,
