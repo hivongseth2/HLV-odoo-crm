@@ -69,3 +69,21 @@ def summarize_search(products, code="", name="", shown=12, fetched_limit=None):
         "counts": counts,
         "truncated": more_on_misa or len(ranked) > shown,
     }
+
+
+def single_non_combo(rows, code=""):
+    """Hàng lẻ duy nhất trong các ứng viên — sale không nói "combo" thì hiểu là hàng lẻ.
+
+    Nhận: list dict có 'code', 'is_combo'; mã sale hỏi. Hàng lẻ trùng hẳn mã (bỏ khoảng trắng /
+    dấu gạch) được ưu tiên: hỏi FPD3-0X thì không vướng FPD3-502X.
+    Trả: ``(dict hàng lẻ, [các dict combo])`` khi chọn được đúng một hàng lẻ; ``(None, [])``
+    khi không có hoặc còn từ hai hàng lẻ trở lên (phải hỏi lại).
+    """
+    singles = [row for row in rows if not row.get("is_combo")]
+    key = normalize_code(code)
+    exact = [row for row in singles if key and normalize_code(row.get("code")) == key]
+    if len(exact) == 1:
+        singles = exact
+    if len(singles) != 1:
+        return None, []
+    return singles[0], [row for row in rows if row.get("is_combo")]
