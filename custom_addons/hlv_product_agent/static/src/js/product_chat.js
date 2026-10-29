@@ -17,8 +17,11 @@ import {
     applyDrawerWidth, loadDrawerWidth, loadSaleKey, saveDrawerWidth, saveSaleKey,
 } from "@hlv_product_agent/js/chat_storage";
 
-// Đang chờ Claude thì hỏi dày để câu trả lời hiện ra ngay; rảnh thì thưa lại.
+// Đang chờ Claude thì hỏi dày để câu trả lời hiện ra ngay; rảnh thì thưa lại. Chờ quá
+// POLL_FAST_WINDOW_MS (lượt dài: tìm web, nhiều tool) thì thưa dần, đỡ dội request lên máy chủ.
 const POLL_MS_BUSY = 2000;
+const POLL_MS_BUSY_SLOW = 5000;
+const POLL_FAST_WINDOW_MS = 30000;
 const POLL_MS_IDLE = 8000;
 // Khớp giới hạn phía server (MAX_IMAGES_PER_MESSAGE, MAX_IMAGE_BYTES).
 const MAX_IMAGES = 3;
@@ -113,7 +116,11 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
 
     _schedulePoll() {
         clearTimeout(this.pollTimer);
-        this.pollTimer = setTimeout(() => this._refresh(), this.busy ? POLL_MS_BUSY : POLL_MS_IDLE);
+        let delay = POLL_MS_IDLE;
+        if (this.busy) {
+            delay = Date.now() - this.busySince < POLL_FAST_WINDOW_MS ? POLL_MS_BUSY : POLL_MS_BUSY_SLOW;
+        }
+        this.pollTimer = setTimeout(() => this._refresh(), delay);
     },
 
     _applyState(state) {
@@ -152,6 +159,9 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this.loadedSessionId = state.session_id;
         if (pendingUrl) {
             window.location.href = pendingUrl;
+        }
+        if (state.busy && !this.busy) {
+            this.busySince = Date.now();
         }
         this.busy = Boolean(state.busy);
         this.waiting = waitingText(state);
