@@ -1,6 +1,6 @@
 {
     'name': 'HLV - Phân Quyền Kho',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.0.1',
     'summary': 'Phân quyền chi tiết theo kho cho từng người dùng',
     'description': """
         Phân quyền kho hàng theo người dùng:

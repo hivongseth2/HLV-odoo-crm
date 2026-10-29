@@ -561,15 +561,7 @@ class StockPicking(models.Model):
                 if not warehouse:
                     raise UserError(_("Không tìm thấy kho tương ứng với Liên hệ %s") % picking.partner_id.name)
 
-                # Tìm loại hoạt động nội bộ của kho đích (ưu tiên 'reception'; nếu không có thì lấy bất kỳ 'internal')
-                ops = self.env["stock.picking.type"].search(
-                    [("warehouse_id", "=", warehouse.id), ("code", "=", "internal")]
-                )
-                # Bước 2 xuất phát từ CHUYENKHO, không được là phiếu lấy hàng / đóng gói
-                ops -= warehouse.pick_type_id | warehouse.pack_type_id
-                # Bỏ loại nội bộ đi ra vị trí ảo (Xuất kho sử dụng): rơi vào đó thì hàng chuyển kho mất khỏi tồn
-                ops = ops.filtered(lambda r: r.default_location_dest_id.usage == "internal")
-                next_operation = ops.filtered(lambda r: r.two_step_transfer_use == "reception")[:1] or ops[:1]
+                next_operation = warehouse._hlv_transfer_in_type()
                 if not next_operation:
                     raise UserError(_("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name)
 

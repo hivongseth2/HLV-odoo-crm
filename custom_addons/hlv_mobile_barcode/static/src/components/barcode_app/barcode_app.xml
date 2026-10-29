@@ -13,7 +13,7 @@
                         </button>
                     </div>
                     <div class="header-title" style="flex: 1; margin: 0;">
-                        <t t-if="state.pickingName and state.pickingName.includes('INT') and state.pickingLocationName">
+                        <t t-if="isTransferPickingName(state.pickingName) and state.pickingLocationName">
                             <span style="font-size: 0.85em; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;">
                                 <span style="color: var(--success-color); font-weight: 700;"><t t-esc="(!state.pickingIsPutaway and state.scannedLocationName) ? state.scannedLocationName : state.pickingLocationName"/></span> 
                                 <i class="fa fa-arrow-right" style="margin: 0 4px; font-size: 0.85em; color: var(--text-muted);"></i> 

@@ -10,6 +10,18 @@ from odoo.tools.float_utils import float_compare
 
 _logger = logging.getLogger(__name__)
 
+# Loại phiếu chuyển kho 2 bước tách từ INT: phiếu bước 1 tạo từ app quét có SL yêu cầu = 0 (quét tới đâu ghi tới đó)
+# như INT cũ, nên cũng không kiểm vượt SL. Xuất sử dụng / thất thoát (SD, TT) lập trên web có SL yêu cầu — vẫn kiểm.
+TRANSFER_SEQUENCE_CODES = ('CKD', 'CKN')
+
+
+def _skips_qty_check(picking):
+    """Phiếu chuyển nội bộ không kiểm SL vượt yêu cầu: số phiếu có 'INT' hoặc loại CKD/CKN.
+    Nhận một stock.picking (có thể rỗng); trả False khi rỗng."""
+    return bool(picking) and (
+        'INT' in (picking.name or '') or picking.picking_type_id.sequence_code in TRANSFER_SEQUENCE_CODES
+    )
+
 
 def _hlv_quantities_by_keys(env, keys):
     """Read exact quant quantities in one query-sized ORM fetch."""
@@ -42,12 +54,11 @@ class StockPicking(models.Model):
     def _check_qty_validation_before_validate(self):
         """
         Kiểm tra quantity không được vượt quá product_uom_qty trên picking.
-        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
+        Bỏ qua phiếu chuyển hàng nội bộ (INT / CKD / CKN) vì demand luôn = 0.
         """
         self.ensure_one()
 
-        # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
-        if self.name and 'INT' in self.name:
+        if _skips_qty_check(self):
             return
 
         # Danh sách các move vi phạm (qty_done > product_uom_qty)
@@ -599,7 +610,7 @@ class StockMoveLine(models.Model):
         product_uom_qty của stock.move tương ứng.
 
         Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
-        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
+        Bỏ qua phiếu chuyển hàng nội bộ (INT / CKD / CKN) vì demand luôn = 0.
         """
         # Bypass validation nếu được gọi từ packaging context
         if self.env.context.get('skip_qty_validation'):
@@ -616,8 +627,7 @@ class StockMoveLine(models.Model):
             if line.picking_id and line.picking_id.state == 'done':
                 continue
 
-            # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
-            if not line.picking_id or (line.picking_id.name and 'INT' in line.picking_id.name):
+            if not line.picking_id or _skips_qty_check(line.picking_id):
                 continue
 
             move = line.move_id

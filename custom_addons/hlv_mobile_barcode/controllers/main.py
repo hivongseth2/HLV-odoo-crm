@@ -904,6 +904,22 @@ def _transfer_location_error(source_loc, dest_location_id=False):
         return {'error': _('%s là vị trí chuyển kho, không chọn làm nguồn/đích. Hàng ở đây được nhập qua phiếu bước 2.', location.display_name)}
     return False
 
+def _transfer_picking_type(warehouse, company_id, via_transfer_location):
+    """Loại phiếu cho phiếu chuyển tạo từ app: đi vào CHUYENKHO → loại bước 1 của kho (CKD, kho chưa có thì INT);
+    chuyển thẳng trong kho → INT. Không rõ kho thì lấy loại nội bộ đi vào vị trí tồn của công ty — tránh rơi vào
+    Xuất kho sử dụng / thất thoát (đích là vị trí ảo)."""
+    if warehouse:
+        warehouse = warehouse.sudo()
+        picking_type = warehouse._hlv_transfer_out_type() if via_transfer_location else warehouse.int_type_id
+        if picking_type:
+            return picking_type
+    return request.env['stock.picking.type'].sudo().search([
+        ('code', '=', 'internal'),
+        ('company_id', '=', company_id),
+        ('default_location_dest_id.usage', '=', 'internal'),
+        ('two_step_transfer_use', '=', False),
+    ], limit=1)
+
 def _pick_assignment_error(picking):
     try:
         picking._check_hlv_mobile_pick_assignment_access(user=request.env.user)
@@ -1440,37 +1456,6 @@ class HLVMobileBarcodeController(http.Controller):
         hub_error = _transfer_location_error(source_loc, dest_location_id)
         if hub_error:
             return hub_error
-            
-        picking_type_int = request.env['stock.picking.type'].search([
-            ('code', '=', 'internal'),
-            ('sequence_code', '=', 'INT'),
-            ('company_id', '=', company_id),
-            ('warehouse_id', '=', warehouse.id if warehouse else False)
-        ], limit=1)
-        
-        if not picking_type_int and warehouse and warehouse.int_type_id:
-            picking_type_int = warehouse.int_type_id
-            
-        if not picking_type_int:
-            picking_type_int = request.env['stock.picking.type'].search([
-                ('code', '=', 'internal'), 
-                ('company_id', '=', company_id),
-                ('warehouse_id', '=', warehouse.id if warehouse else False)
-            ], limit=1)
-            if not picking_type_int:
-                picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            
-        if not picking_type_int:
-            return {'error': _('Chưa cấu hình Operation Types (INT)')}
-
-        if package:
-            permission_error = _barcode_operation_error(
-                warehouse,
-                picking_type_int.sequence_code or 'INT',
-                'can_edit',
-            )
-            if permission_error:
-                return permission_error
 
         partner_id = False
         target_location_dest_id = transit_loc.id
@@ -1496,6 +1481,19 @@ class HLVMobileBarcodeController(http.Controller):
                 
         if not partner_id and warehouse and warehouse.partner_id:
             partner_id = warehouse.partner_id.id
+
+        picking_type_int = _transfer_picking_type(warehouse, company_id, target_location_dest_id == transit_loc.id)
+        if not picking_type_int:
+            return {'error': _('Chưa cấu hình Operation Types (INT)')}
+
+        if package:
+            permission_error = _barcode_operation_error(
+                warehouse,
+                picking_type_int.sequence_code or 'INT',
+                'can_edit',
+            )
+            if permission_error:
+                return permission_error
 
         picking_vals = {
             'picking_type_id': picking_type_int.id,
@@ -3611,23 +3609,13 @@ class HLVMobileBarcodeController(http.Controller):
         warehouse = source_loc.warehouse_id
         if not warehouse:
             warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
-            
-        if warehouse and warehouse.int_type_id and warehouse.in_type_id:
-            picking_type_int = warehouse.int_type_id
-            picking_type_in = warehouse.in_type_id
-        else:
-            picking_type_int = request.env['stock.picking.type'].sudo().search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            picking_type_in = request.env['stock.picking.type'].sudo().search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
-        
-        if not picking_type_int or not picking_type_in:
-            return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
         # 1. Create and Validate INT picking (Source -> Transit or Dest)
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
         same_warehouse_one_step = _same_warehouse_one_step_enabled()
-        
+
         if dest_location_id:
             dest_loc = request.env['stock.location'].sudo().browse(dest_location_id)
             if dest_loc.exists():
@@ -3638,7 +3626,11 @@ class HLVMobileBarcodeController(http.Controller):
                     override_dest_loc_id = dest_loc.id
                     if dest_loc.warehouse_id and dest_loc.warehouse_id.partner_id:
                         partner_id = dest_loc.warehouse_id.partner_id.id
-                        
+
+        picking_type_int = _transfer_picking_type(warehouse, company_id, target_location_dest_id == transit_loc.id)
+        if not picking_type_int:
+            return {'error': _('Chưa cấu hình Operation Types (INT)')}
+
         if not partner_id and dest_warehouse_id:
             dest_warehouse = request.env['stock.warehouse'].browse(dest_warehouse_id)
             if dest_warehouse.exists() and dest_warehouse.partner_id:
@@ -3825,15 +3817,10 @@ class HLVMobileBarcodeController(http.Controller):
             return hub_error
             
         warehouse = source_loc.warehouse_id
-        if warehouse and warehouse.int_type_id and warehouse.in_type_id:
-            picking_type_int = warehouse.int_type_id
-            picking_type_in = warehouse.in_type_id
-        else:
-            picking_type_int = request.env['stock.picking.type'].sudo().search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            picking_type_in = request.env['stock.picking.type'].sudo().search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
-        
-        if not picking_type_int or not picking_type_in:
-            return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
+        # Chuyển hàng loạt luôn đi vào CHUYENKHO (bước 1)
+        picking_type_int = _transfer_picking_type(warehouse, company_id, True)
+        if not picking_type_int:
+            return {'error': _('Chưa cấu hình Operation Types (INT)')}
 
         try:
             # === 3b. Idempotency check ===

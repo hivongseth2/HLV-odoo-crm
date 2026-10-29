@@ -7,7 +7,13 @@ PICKING_TYPE_CODES = [
     ('PICK', 'Phiếu lấy hàng'),
     ('PACK', 'Phiếu đóng gói'),
     ('STO', 'Phiếu lưu kho'),
+    ('CKD', 'Phiếu chuyển kho đi'),
+    ('CKN', 'Phiếu nhận chuyển kho'),
+    ('SD', 'Phiếu xuất kho sử dụng'),
+    ('TT', 'Phiếu xuất kho thất thoát'),
 ]
+# Mã mới (tách khỏi INT) — migration 18.0.1.0.1 chép quyền INT sẵn có của từng người sang các mã này.
+CODES_SPLIT_FROM_INT = ('CKD', 'CKN', 'SD', 'TT')
 
 
 class WarehouseUserPermission(models.Model):

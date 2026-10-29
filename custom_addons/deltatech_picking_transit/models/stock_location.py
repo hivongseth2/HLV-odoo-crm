@@ -39,6 +39,30 @@ class StockWarehouse(models.Model):
             "hlv_is_transfer_location": True,
         })
 
+    def _hlv_transfer_out_type(self):
+        """Loại phiếu bước 1 (Tồn kho → CHUYENKHO) của kho: loại đánh dấu "Xuất kho" chuyển kho 2 bước (CKD);
+        kho chưa có thì Lệnh chuyển nội bộ (INT) như trước khi tách."""
+        self.ensure_one()
+        return self.env["stock.picking.type"].search([
+            ("warehouse_id", "=", self.id), ("code", "=", "internal"), ("two_step_transfer_use", "=", "delivery"),
+        ], limit=1) or self.int_type_id
+
+    def _hlv_transfer_in_type(self):
+        """Loại phiếu bước 2 (CHUYENKHO kho gửi → kho này): loại đánh dấu "Nhập kho" (CKN); kho chưa có thì loại
+        nội bộ đi vào vị trí tồn, ưu tiên INT. Loại trừ PICK/PACK, loại bước 1 (đích CHUYENKHO) và loại đi ra vị
+        trí ảo (Xuất kho sử dụng / thất thoát) — rơi vào đó thì hàng chuyển kho nhập sai chỗ hoặc mất khỏi tồn."""
+        self.ensure_one()
+        types = self.env["stock.picking.type"].search([("warehouse_id", "=", self.id), ("code", "=", "internal")])
+        reception = types.filtered(lambda t: t.two_step_transfer_use == "reception")[:1]
+        if reception:
+            return reception
+        types = (types - self.pick_type_id - self.pack_type_id).filtered(lambda t: (
+            t.two_step_transfer_use != "delivery"
+            and t.default_location_dest_id.usage == "internal"
+            and not t.default_location_dest_id.hlv_is_transfer_location
+        ))
+        return self.int_type_id if self.int_type_id in types else types[:1]
+
     @api.model
     def _hlv_ensure_transfer_locations(self):
         """Gọi khi nâng cấp module: tạo CHUYENKHO cho mọi kho."""
