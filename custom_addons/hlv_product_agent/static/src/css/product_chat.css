@@ -127,6 +127,31 @@ body.hlv-pa-resizing {
     margin-top: 0;
   }
 
+  /* Cột trái chỉ còn ~1/3 màn hình mà form tìm dùng col-md-* (chia theo bề ngang CỬA SỔ, không
+     theo cột chứa) nên vẫn ép 4 khối trên một hàng, đè lên nhau. Xếp lại: ô tìm một hàng, kho +
+     nút Tìm một hàng, hai công tắc xuống cuối. */
+  .container-fluid:has(> .hlv-pa-chat) #search-form > [class*="col-md-"] {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .container-fluid:has(> .hlv-pa-chat) #search-form > .col-md-2:has(select) {
+    width: 58%;
+  }
+
+  .container-fluid:has(> .hlv-pa-chat) #search-form > .col-md-2:has(button[type="submit"]) {
+    width: 42%;
+  }
+
+  .container-fluid:has(> .hlv-pa-chat) #search-form > .col-md-3 {
+    order: 3;
+    justify-content: flex-start !important;
+  }
+
+  .container-fluid:has(> .hlv-pa-chat) .nav-pills .nav-link {
+    padding: 0.3rem 0.6rem !important;
+  }
+
   /* Bảng co được hẹp hơn: trang tra tồn ghim cột tên tối thiểu 200px và ô ảnh 50px bằng
      style inline (nên cần !important). */
   .container-fluid:has(> .hlv-pa-chat) #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
