@@ -82,12 +82,16 @@ body.hlv-pa-resizing {
     align-items: start;
     max-width: none !important;
     padding-left: 12px;
-    padding-right: 12px;
+    padding-right: 0;
   }
 
+  /* Trang tra tồn thu nhỏ còn 85% (khung chat giữ cỡ chữ thật): sale khỏi phải zoom trình duyệt
+     xuống 67% mới thấy đủ bảng lẫn khung chat. Modal của trang nằm ngoài container nên không
+     bị thu theo. */
   .hlv-pa-host > :not(.hlv-pa-chat) {
     grid-column: 1;
     min-width: 0;
+    zoom: var(--pa-page-zoom, 0.85);
   }
 
   /* Trang tra tồn tắt cuộn ngang của khung bảng (để tiêu đề bảng dính khi cuộn dọc): ở cột
@@ -101,19 +105,11 @@ body.hlv-pa-resizing {
     grid-row: 1 / span 40;
     position: sticky;
     top: 12px;
-    /* Chừa chỗ cho header website: lúc chưa cuộn, khung chat bắt đầu dưới header mà vẫn phải
-       thấy ô nhập ở mép dưới màn hình. */
+    /* Chiều cao thật do product_chat.js tính theo vị trí khung khi cuộn / đổi cỡ (vừa khít tới
+       đáy màn hình); số này chỉ là mặc định trước khi JS chạy. */
     height: calc(100vh - 110px);
     min-height: 420px;
     margin-top: 0;
-  }
-
-  body.hlv-pa-embedded #wrap {
-    font-size: 0.86rem;
-  }
-
-  body.hlv-pa-embedded #inv-table {
-    font-size: 0.8rem;
   }
 
   /* Bảng co được hẹp hơn: trang tra tồn ghim cột tên tối thiểu 200px và ô ảnh 50px bằng
@@ -121,7 +117,6 @@ body.hlv-pa-resizing {
   body.hlv-pa-embedded #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
     min-width: 150px !important;
     margin-right: 0 !important;
-    font-size: 0.88rem;
   }
 
   body.hlv-pa-embedded #inv-table tbody tr.main-row td:nth-child(2) .position-relative {
@@ -144,7 +139,6 @@ body.hlv-pa-resizing {
   }
 }
 
-/* Người đang chat — chỉ hiện với tài khoản dùng chung nhiều sale. */
 /* Tên người đang chat, bấm vào để đổi người. */
 .hlv-pa-switch {
   border: 0;
@@ -427,6 +421,31 @@ body.hlv-pa-resizing {
 
 .hlv-pa-board-dragging .hlv-pa-board-frame {
   pointer-events: none;
+}
+
+/* Nút lựa chọn trợ lý gợi ý ([[...]] cuối câu trả lời): bấm = gửi đúng chữ trên nút. */
+.hlv-pa-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hlv-pa-option {
+  border: 1px solid var(--pa-border);
+  border-radius: 999px;
+  background: var(--pa-bg);
+  color: var(--pa-text);
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.hlv-pa-option:hover {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-dark);
 }
 
 /* Nút trong dòng hệ thống: mở lại trang tra tồn với từ khoá trợ lý đã tìm. */

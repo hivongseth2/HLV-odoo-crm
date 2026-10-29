@@ -74,3 +74,32 @@ export function parseRich(text) {
         return { bullet, parts: parseInline(bullet ? line.replace(/^\s*[-•]\s+/, "") : line) };
     });
 }
+
+// Dòng chỉ gồm các lựa chọn [[...]] — trợ lý gợi ý bước tiếp theo cho sale bấm thay vì gõ.
+const OPTION_LINE = /^\s*(\[\[[^\]\n]+\]\]\s*)+$/;
+const OPTION = /\[\[([^\]\n]+)\]\]/g;
+const MAX_OPTIONS = 6;
+
+/**
+ * Tách các lựa chọn khỏi câu trả lời.
+ * Nhận: chuỗi. Trả: {body: chuỗi còn lại, options: [chữ lựa chọn]} — lựa chọn lấy từ các dòng chỉ
+ * gồm [[...]], bỏ trùng, tối đa MAX_OPTIONS. [[...]] nằm giữa câu thì để nguyên trong body.
+ * Biên: chuỗi rỗng -> {body: "", options: []}.
+ */
+export function splitOptions(text) {
+    const options = [];
+    const kept = [];
+    for (const line of (text || "").split("\n")) {
+        if (!OPTION_LINE.test(line)) {
+            kept.push(line);
+            continue;
+        }
+        for (const match of line.matchAll(OPTION)) {
+            const option = match[1].trim();
+            if (option && !options.includes(option) && options.length < MAX_OPTIONS) {
+                options.push(option);
+            }
+        }
+    }
+    return { body: kept.join("\n").trim(), options };
+}

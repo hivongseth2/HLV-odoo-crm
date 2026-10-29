@@ -71,6 +71,23 @@ function renderPart(part) {
     return node;
 }
 
+/**
+ * Hàng nút lựa chọn dưới câu trả lời của trợ lý; bấm nút = gửi đúng chữ trên nút.
+ */
+export function buildOptions(options) {
+    const box = document.createElement("div");
+    box.className = "hlv-pa-options";
+    for (const option of options) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "hlv-pa-option";
+        button.dataset.option = option;
+        button.textContent = option;
+        box.appendChild(button);
+    }
+    return box;
+}
+
 export function paneNote(text) {
     const note = document.createElement("div");
     note.className = "hlv-pa-pane-note";

@@ -9,9 +9,13 @@
 import publicWidget from "@web/legacy/js/public/public_widget";
 import { rpc } from "@web/core/network/rpc";
 import {
-    boardDocument, formatDateTime, formatTime, paneNote, readFileAsBase64, renderRich, searchUrl,
+    boardDocument, buildOptions, formatDateTime, formatTime, paneNote, readFileAsBase64, renderRich, searchUrl,
     waitingText,
 } from "@hlv_product_agent/js/chat_render";
+import { splitOptions } from "@hlv_product_agent/js/rich_text";
+import {
+    applyDrawerWidth, loadDrawerWidth, loadSaleKey, saveDrawerWidth, saveSaleKey,
+} from "@hlv_product_agent/js/chat_storage";
 
 // Đang chờ Claude thì hỏi dày để câu trả lời hiện ra ngay; rảnh thì thưa lại.
 const POLL_MS_BUSY = 2000;
@@ -26,70 +30,10 @@ const WELCOME_TEXT =
 const OFFLINE_TEXT =
     "Máy trợ lý đang tắt. Tin vẫn được giữ lại, máy bật lên sẽ trả lời.";
 
-// Người đang chat trên tài khoản dùng chung. Nhớ theo trình duyệt vì mỗi sale ngồi một
-// máy; storage có thể bị chặn (chế độ ẩn danh) -> không nhớ được thì hỏi lại, không lỗi.
-const SALE_KEY_STORAGE = "hlv_pa_sale_key";
-
-function loadSaleKey() {
-    try {
-        return window.localStorage.getItem(SALE_KEY_STORAGE) || "";
-    } catch {
-        return "";
-    }
-}
-
-function saveSaleKey(key) {
-    try {
-        if (key) {
-            window.localStorage.setItem(SALE_KEY_STORAGE, key);
-        } else {
-            window.localStorage.removeItem(SALE_KEY_STORAGE);
-        }
-    } catch {
-        // Không lưu được: lần sau mở trang hỏi lại, chấp nhận được.
-    }
-}
-
-// Độ rộng khung chat kéo bằng chuột, nhớ theo trình duyệt. Chặn hai đầu để không kéo mất
-// ngăn kéo hay che hết bảng tra tồn.
-const DRAWER_WIDTH_STORAGE = "hlv_pa_drawer_width";
-const DRAWER_MIN_WIDTH = 300;
-const DRAWER_MAX_RATIO = 0.45;
-
-/**
- * Độ rộng hợp lệ (px). Nhận số bất kỳ; biên: không phải số -> null.
- */
-function clampDrawerWidth(width) {
-    const value = Number(width);
-    if (!Number.isFinite(value) || value <= 0) {
-        return null;
-    }
-    return Math.round(Math.min(Math.max(value, DRAWER_MIN_WIDTH), window.innerWidth * DRAWER_MAX_RATIO));
-}
-
-function applyDrawerWidth(width) {
-    const value = clampDrawerWidth(width);
-    if (value) {
-        document.documentElement.style.setProperty("--pa-drawer-width", value + "px");
-    }
-    return value;
-}
-
-function loadDrawerWidth() {
-    try {
-        return window.localStorage.getItem(DRAWER_WIDTH_STORAGE);
-    } catch {
-        return null;
-    }
-}
-
-function saveDrawerWidth(width) {
-    try {
-        window.localStorage.setItem(DRAWER_WIDTH_STORAGE, String(width));
-    } catch {
-        // Không lưu được: lần sau về độ rộng mặc định.
-    }
-}
+// Khung chat dính cách mép trên STICKY_TOP px (khớp product_chat.css); chỉ máy tính mới dính.
+const DESKTOP_QUERY = "(min-width: 992px)";
+const STICKY_TOP = 12;
+const MIN_CHAT_HEIGHT = 420;
 
 publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     selector: ".hlv-pa-chat",
@@ -107,6 +51,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         "click .hlv-pa-board-max": "_onBoardMax",
         "pointerdown .hlv-pa-board-head": "_onBoardDragStart",
         "click .hlv-pa-tab": "_onTab",
+        "click .hlv-pa-option": "_onOption",
         "click .hlv-pa-history-item": "_onViewSession",
         "click .hlv-pa-history-back": "_onHistoryBack",
     },
@@ -129,6 +74,19 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         // product_chat.css chia lưới hai cột (portal không có khung chat thì trang giữ nguyên).
         this.el.parentElement.classList.add("hlv-pa-host");
         document.body.classList.add("hlv-pa-embedded");
+        // Khung chat dính khi cuộn: chiều cao tính lại theo vị trí thật để luôn vừa khít tới đáy
+        // màn hình — cao cố định thì lúc chưa cuộn tràn khỏi màn, cuộn rồi lại hở dưới đáy.
+        this._fitHeight = () => {
+            if (!window.matchMedia(DESKTOP_QUERY).matches) {
+                this.el.style.height = "";
+                return;
+            }
+            const top = Math.max(this.el.getBoundingClientRect().top, STICKY_TOP);
+            this.el.style.height = Math.max(window.innerHeight - top - STICKY_TOP, MIN_CHAT_HEIGHT) + "px";
+        };
+        window.addEventListener("scroll", this._fitHeight, { passive: true });
+        window.addEventListener("resize", this._fitHeight);
+        this._fitHeight();
         this._refresh();
         return this._super(...arguments);
     },
@@ -136,6 +94,8 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     destroy() {
         clearTimeout(this.pollTimer);
         document.body.classList.remove("hlv-pa-embedded");
+        window.removeEventListener("scroll", this._fitHeight);
+        window.removeEventListener("resize", this._fitHeight);
         this._super(...arguments);
     },
 
@@ -225,24 +185,43 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     },
 
     _appendMessage(message) {
-        this.messagesEl.appendChild(this._buildMessage(message));
+        if (message.role === "assistant") {
+            // Chỉ câu trả lời mới nhất còn nút lựa chọn: nút cũ bấm lại là trả lời câu hỏi đã qua.
+            this._clearOptions();
+        }
+        this.messagesEl.appendChild(this._buildMessage(message, { options: true }));
         this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     },
 
-    _buildMessage(message) {
+    _clearOptions() {
+        for (const box of this.messagesEl.querySelectorAll(".hlv-pa-options")) {
+            box.remove();
+        }
+    },
+
+    /**
+     * Một tin nhắn. options: có dựng nút lựa chọn [[...]] của trợ lý không (xem lại lịch sử thì không).
+     */
+    _buildMessage(message, { options = false } = {}) {
         const item = document.createElement("div");
         item.className = `hlv-pa-msg hlv-pa-msg-${message.role}`;
 
         if (message.content) {
             const text = document.createElement("div");
             text.className = "hlv-pa-text";
+            let choices = [];
             if (message.role === "assistant") {
-                text.appendChild(renderRich(message.content));
+                const parsed = splitOptions(message.content);
+                text.appendChild(renderRich(parsed.body));
+                choices = options ? parsed.options : [];
             } else {
                 // textContent chứ không innerHTML: chữ sale gõ và ghi chú hệ thống để nguyên.
                 text.textContent = message.content;
             }
             item.appendChild(text);
+            if (choices.length) {
+                item.appendChild(buildOptions(choices));
+            }
         }
         if (message.action && message.action.type === "panel") {
             const reopen = document.createElement("button");
@@ -567,6 +546,15 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         head.addEventListener("pointercancel", onUp);
     },
 
+    _onOption(ev) {
+        // Bấm lựa chọn = gửi đúng chữ trên nút như sale tự gõ.
+        if (this.sending) {
+            return;
+        }
+        this.textarea.value = ev.currentTarget.dataset.option || "";
+        this._onSend();
+    },
+
     async _onSend() {
         const text = this.textarea.value.trim();
         if (this.sending || (!text && !this.pendingImages.length)) {
@@ -585,6 +573,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
                 // Chỉ xoá ô nhập khi server đã nhận: gửi hỏng thì sale không mất chữ.
                 this.textarea.value = "";
                 this._clearPendingImages();
+                this._clearOptions();
             }
             this._applyState(state);
         } catch {
