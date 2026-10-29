@@ -41,12 +41,8 @@ MAX_TOKENS = 16000
 WEB_SEARCH_MAX_USES = 5
 WEB_FETCH_MAX_USES = 4
 WEB_FETCH_MAX_CONTENT_TOKENS = 20000
-# Không đặt vị trí thì máy tìm kiếm trả kết quả kiểu Mỹ (Amazon...), trong khi sale cần giá / hàng
-# bán ở Việt Nam. Chỉ là ưu tiên, không chặn trang ngoài (trang chính hãng vẫn tìm được).
-WEB_SEARCH_LOCATION = {
-    'type': 'approximate', 'country': 'VN', 'city': 'Ho Chi Minh City',
-    'region': 'Ho Chi Minh City', 'timezone': 'Asia/Ho_Chi_Minh',
-}
+# Không đặt user_location: web_search từ chối mã quốc gia VN (lỗi 400, hỏng mọi lượt). Ưu tiên
+# trang Việt Nam nằm ở prompt (truy vấn tiếng Việt + danh sách trang bán dụng cụ trong nước).
 
 # Prompt sửa trên Odoo viết cho Claude Code (tool WebFetch / WebSearch / Read). Ở chế độ
 # API các tool đó mang tên khác và ảnh nằm ngay trong tin, nên nói rõ thay vì bắt người
@@ -108,7 +104,7 @@ def server_tools(model):
     basic = (model or '').startswith(_BASIC_WEB_TOOL_PREFIXES)
     return [
         {'type': 'web_search_20250305' if basic else 'web_search_20260209',
-         'name': 'web_search', 'max_uses': WEB_SEARCH_MAX_USES, 'user_location': WEB_SEARCH_LOCATION},
+         'name': 'web_search', 'max_uses': WEB_SEARCH_MAX_USES},
         {'type': 'web_fetch_20250910' if basic else 'web_fetch_20260209',
          'name': 'web_fetch', 'max_uses': WEB_FETCH_MAX_USES,
          'max_content_tokens': WEB_FETCH_MAX_CONTENT_TOKENS},
