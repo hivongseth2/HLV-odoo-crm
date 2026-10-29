@@ -1,5 +1,5 @@
-/* Ngăn kéo "Tạo mã hàng" — neo mép TRÁI, cao hết màn hình (chatbot tra tồn của
-   website_public_inventory_18 và nút gọi đang neo góc phải). Màu theo logo Hoàng Long Vũ. */
+/* Khung chat "Trợ lý" — cột PHẢI nằm trong khung trang tra tồn (cùng container với bảng),
+   dính theo khi cuộn, không đóng được. Màu theo logo Hoàng Long Vũ. */
 :root {
   --pa-drawer-width: 380px;
 }
@@ -19,71 +19,29 @@
   --pa-error-bg: #fde8e8;
   --pa-error-text: #9b1c1c;
 
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 2147482000;
+  height: 72vh;
+  margin-top: 16px;
   font-size: 13.5px;
   color: var(--pa-text);
-  pointer-events: none;
-}
-
-.hlv-pa-chat > * {
-  pointer-events: auto;
-}
-
-/* Đóng: còn một nút ngang ở góc trái dưới để mở lại. */
-.hlv-pa-toggle {
-  position: absolute;
-  left: 16px;
-  bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px 10px 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--pa-accent);
-  color: #fff;
-  font-weight: 600;
-  white-space: nowrap;
-  box-shadow: 0 4px 14px rgba(13, 76, 140, 0.35);
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.hlv-pa-toggle:hover {
-  background: var(--pa-accent-dark);
-  transform: translateY(-1px);
-}
-
-.hlv-pa-toggle .fa {
-  color: var(--pa-yellow);
-  font-size: 16px;
-}
-
-.hlv-pa-chat[data-open="1"] .hlv-pa-toggle {
-  display: none;
 }
 
 .hlv-pa-panel {
-  display: none;
+  display: flex;
   flex-direction: column;
   position: relative;
   height: 100%;
-  width: var(--pa-drawer-width);
   background: var(--pa-bg);
-  border-right: 1px solid var(--pa-border);
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--pa-border);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(13, 76, 140, 0.08);
   overflow: hidden;
 }
 
-/* Mép phải ngăn kéo: kéo chuột để đổi độ rộng (product_chat.js lưu lại theo trình duyệt). */
+/* Mép TRÁI khung chat: kéo chuột để đổi độ rộng cột (product_chat.js lưu theo trình duyệt). */
 .hlv-pa-resize {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   width: 7px;
   height: 100%;
   cursor: col-resize;
@@ -94,7 +52,7 @@
 .hlv-pa-resize:hover,
 body.hlv-pa-resizing .hlv-pa-resize {
   background: var(--pa-accent-soft);
-  box-shadow: inset -2px 0 0 var(--pa-accent);
+  box-shadow: inset 2px 0 0 var(--pa-accent);
 }
 
 body.hlv-pa-resizing {
@@ -102,118 +60,89 @@ body.hlv-pa-resizing {
   user-select: none;
 }
 
-.hlv-pa-chat[data-open="1"] .hlv-pa-panel {
-  display: flex;
-}
-
-/* Mở ngăn kéo trên máy tính: dồn cả trang sang phải và thu nhỏ chữ bảng tra tồn, để
-   bảng không bị ngăn kéo che mất cột. */
+/* Máy tính: container trang tra tồn chia hai cột — nội dung trang bên trái, khung chat bên
+   phải. Không dời DOM của trang: lưới CSS đặt mọi khối cũ vào cột 1, khung chat vào cột 2. */
 @media (min-width: 992px) {
-  body.hlv-pa-drawer-open {
-    padding-left: var(--pa-drawer-width);
-  }
-
-  body.hlv-pa-drawer-open #wrap {
-    font-size: 0.86rem;
-  }
-
-  /* Trang tra tồn đặt nội dung trong container-fluid có max-width 1550px viết thẳng trên
-     thẻ, căn giữa: dồn trang mà giữ max-width là lộ khoảng nền trống hai bên. Cho giãn hết
-     phần còn lại (!important vì phải thắng style inline). */
-  /* Website đang để bố cục "Boxed": Odoo cho #wrapwrap lề hai bên và ép mọi khối con
-     (header, main, footer) về max-width của container, căn giữa (website.scss). Gỡ cả
-     hai, không thì vẫn lộ nền hai bên và bảng bị cắt. */
-  body.hlv-pa-drawer-open #wrapwrap {
+  /* Website để bố cục "Boxed": Odoo cho #wrapwrap lề hai bên và ép mọi khối con (header,
+     main, footer) về max-width của container, căn giữa (website.scss). Gỡ cả hai để trang
+     có đủ chỗ cho cả bảng lẫn khung chat. */
+  body.hlv-pa-embedded #wrapwrap {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
 
-  body.hlv-pa-drawer-open #wrapwrap > * {
+  body.hlv-pa-embedded #wrapwrap > * {
     max-width: none !important;
   }
 
-  /* Màn hẹp + ngăn kéo: bảng tra tồn có thể vẫn rộng hơn phần còn lại. Trang tra tồn tắt
-     cuộn ngang của khung bảng (giữ tiêu đề bảng dính khi cuộn dọc), nên bảng tràn ra
-     ngoài main, đè lên nền Boxed. Cho main nới theo bảng: cuộn ngang cả trang, nền liền. */
-  body.hlv-pa-drawer-open #wrapwrap > main {
-    min-width: fit-content;
-  }
-
-  body.hlv-pa-drawer-open #wrap .container,
-  body.hlv-pa-drawer-open #wrap .container-fluid {
+  /* Container của trang tra tồn có max-width 1550px viết thẳng trên thẻ (!important để thắng). */
+  .hlv-pa-host {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--pa-drawer-width);
+    column-gap: 16px;
+    align-items: start;
     max-width: none !important;
     padding-left: 12px;
     padding-right: 12px;
   }
 
-  body.hlv-pa-drawer-open #inv-table {
+  .hlv-pa-host > :not(.hlv-pa-chat) {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  /* Trang tra tồn tắt cuộn ngang của khung bảng (để tiêu đề bảng dính khi cuộn dọc): ở cột
+     hẹp bảng sẽ tràn đè lên khung chat. Cho bảng cuộn ngang trong cột của nó. */
+  .hlv-pa-host .table-responsive {
+    overflow-x: auto !important;
+  }
+
+  .hlv-pa-host > .hlv-pa-chat {
+    grid-column: 2;
+    grid-row: 1 / span 40;
+    position: sticky;
+    top: 12px;
+    /* Chừa chỗ cho header website: lúc chưa cuộn, khung chat bắt đầu dưới header mà vẫn phải
+       thấy ô nhập ở mép dưới màn hình. */
+    height: calc(100vh - 110px);
+    min-height: 420px;
+    margin-top: 0;
+  }
+
+  body.hlv-pa-embedded #wrap {
+    font-size: 0.86rem;
+  }
+
+  body.hlv-pa-embedded #inv-table {
     font-size: 0.8rem;
   }
 
   /* Bảng co được hẹp hơn: trang tra tồn ghim cột tên tối thiểu 200px và ô ảnh 50px bằng
      style inline (nên cần !important). */
-  body.hlv-pa-drawer-open #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+  body.hlv-pa-embedded #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
     min-width: 150px !important;
     margin-right: 0 !important;
+    font-size: 0.88rem;
   }
 
-  body.hlv-pa-drawer-open #inv-table tbody tr.main-row td:nth-child(2) .position-relative {
+  body.hlv-pa-embedded #inv-table tbody tr.main-row td:nth-child(2) .position-relative {
     width: 40px !important;
     height: 40px !important;
   }
 
-  body.hlv-pa-drawer-open #inv-table thead th:nth-child(2) {
+  body.hlv-pa-embedded #inv-table thead th:nth-child(2) {
     width: 50px !important;
   }
 
-  body.hlv-pa-drawer-open #inv-table th,
-  body.hlv-pa-drawer-open #inv-table td {
+  body.hlv-pa-embedded #inv-table th,
+  body.hlv-pa-embedded #inv-table td {
     padding: 0.35rem 0.4rem;
   }
 
-  body.hlv-pa-drawer-open #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
-    font-size: 0.88rem;
-  }
-
-  body.hlv-pa-drawer-open #inv-table img {
+  body.hlv-pa-embedded #inv-table img {
     max-width: 56px;
     max-height: 56px;
   }
-}
-
-.hlv-pa-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 12px;
-  background: linear-gradient(90deg, var(--pa-accent-dark), var(--pa-accent));
-  color: #fff;
-}
-
-.hlv-pa-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.hlv-pa-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #7ee2a8;
-}
-
-.hlv-pa-chat[data-agent-offline="1"] .hlv-pa-dot {
-  background: #f5b041;
-}
-
-.hlv-pa-actions button {
-  border: 0;
-  background: transparent;
-  color: #fff;
-  padding: 4px 8px;
-  cursor: pointer;
 }
 
 /* Người đang chat — chỉ hiện với tài khoản dùng chung nhiều sale. */
@@ -548,6 +477,7 @@ body.hlv-pa-resizing {
   max-height: 120px;
 }
 
+.hlv-pa-new,
 .hlv-pa-attach,
 .hlv-pa-send {
   border: 0;
@@ -568,11 +498,4 @@ body.hlv-pa-resizing {
 .hlv-pa-send:disabled {
   opacity: 0.4;
   cursor: wait;
-}
-
-/* Điện thoại / máy nhỏ: ngăn kéo phủ lên trang (không dồn trang), rộng gần hết màn. */
-@media (max-width: 991.98px) {
-  .hlv-pa-panel {
-    width: min(var(--pa-drawer-width), 92vw);
-  }
 }

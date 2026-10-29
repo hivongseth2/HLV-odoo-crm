@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="product_chat_widget" name="Khung chat trợ lý">
-        <div class="hlv-pa-chat" data-open="0">
-            <button type="button" class="hlv-pa-toggle" title="Trợ lý">
-                <i class="fa fa-comments"/> <span>Trợ lý</span>
-            </button>
+        <div class="hlv-pa-chat" data-open="1">
             <!-- Bảng trợ lý vẽ (show_panel): nổi trên trang, kéo / phóng to / đóng được. HTML
                  của Claude nằm trong iframe sandbox: không chạy script, không cùng nguồn với trang. -->
             <div class="hlv-pa-board" data-open="0">
@@ -21,19 +18,6 @@
             </div>
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
-                <div class="hlv-pa-header">
-                    <div class="hlv-pa-title">
-                        <span class="hlv-pa-dot"/> Trợ lý
-                    </div>
-                    <div class="hlv-pa-actions">
-                        <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc mới">
-                            <i class="fa fa-refresh"/>
-                        </button>
-                        <button type="button" class="hlv-pa-close" title="Đóng">
-                            <i class="fa fa-times"/>
-                        </button>
-                    </div>
-                </div>
                 <!-- Tài khoản dùng chung nhiều sale: hiện người đang chat + nút đổi. -->
                 <div class="hlv-pa-who">
                     Đang chat: <b class="hlv-pa-who-name"/>
@@ -48,6 +32,9 @@
                 <div class="hlv-pa-messages"/>
                 <div class="hlv-pa-previews"/>
                 <div class="hlv-pa-input">
+                    <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc mới">
+                        <i class="fa fa-refresh"/>
+                    </button>
                     <label class="hlv-pa-attach" title="Đính kèm ảnh (hoặc dán ảnh vào ô chat)">
                         <i class="fa fa-camera"/>
                         <input type="file" accept="image/*" multiple="multiple" class="d-none"/>
@@ -63,9 +50,11 @@
     </template>
 
     <!-- Khai view riêng kế thừa trang tra tồn của module HLV (xmlid ổn định do ta tự đặt).
-         Chỉ nhân viên nội bộ thấy: tài khoản portal không được dùng tool MISA. -->
+         Khung chat là cột phải NẰM TRONG container của trang (product_chat.css chia lưới hai
+         cột qua class hlv-pa-host, product_chat.js gắn lên container lúc chạy — portal không
+         có khung chat thì trang giữ nguyên). Chỉ nhân viên nội bộ thấy: portal không được dùng tool MISA. -->
     <template id="inventory_page_product_chat" inherit_id="website_public_inventory_18.inventory_page">
-        <xpath expr="//main[@id='wrap']" position="inside">
+        <xpath expr="(//div[hasclass('container-fluid')])[1]" position="inside">
             <t t-if="not request.env.user.share">
                 <t t-call="hlv_product_agent.product_chat_widget"/>
             </t>
