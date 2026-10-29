@@ -112,6 +112,51 @@ class HlvProductChatSession(models.Model):
         ], limit=1)
 
     @api.model
+    def history_for_user(self, identity=None, limit=30):
+        """Các cuộc chat của đúng người đang chat, mới nhất trước — cho tab "Lịch sử"."""
+        sessions = self.search([
+            ('user_id', '=', self.env.uid), ('sale_key', '=', self._key_of(identity)),
+        ], limit=limit)
+        return [{
+            'id': session.id,
+            'name': session.name,
+            'date': fields.Datetime.to_string(session.last_activity),
+            'open': not session.closed,
+        } for session in sessions]
+
+    @api.model
+    def owned_by(self, session_id, identity=None):
+        """Cuộc chat session_id nếu thuộc đúng tài khoản + người đang chat; rỗng nếu không."""
+        try:
+            session_id = int(session_id or 0)
+        except (TypeError, ValueError):
+            return self.browse()
+        return self.search([
+            ('id', '=', session_id), ('user_id', '=', self.env.uid),
+            ('sale_key', '=', self._key_of(identity)),
+        ], limit=1)
+
+    @api.model
+    def created_for_user(self, identity=None, limit=40):
+        """Hàng trợ lý đã tạo / sửa trong các cuộc của đúng người đang chat — cho tab "Hàng đã tạo".
+
+        Đọc nhật ký bằng sudo (nhân viên không có quyền model nhật ký) nhưng chỉ trong các cuộc
+        của chính mình.
+        """
+        sessions = self.search([('user_id', '=', self.env.uid), ('sale_key', '=', self._key_of(identity))])
+        logs = self.env['hlv.product.agent.log'].sudo().search(
+            [('session_id', 'in', sessions.ids)], limit=limit)
+        return [{
+            'action': log.action,
+            'code': log.product_code or '',
+            'name': log.product_name or '',
+            'field': log.updated_field or '',
+            'old': log.old_value or '',
+            'new': log.new_value or '',
+            'date': fields.Datetime.to_string(log.create_date),
+        } for log in logs]
+
+    @api.model
     def create_for_user(self, identity=None):
         return self.create({
             'user_id': self.env.uid,

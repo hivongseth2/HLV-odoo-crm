@@ -123,7 +123,8 @@ class HlvProductAgentTools(models.AbstractModel):
             return []
         products = self.env['product.product'].sudo().search(
             ['|', ('default_code', 'ilike', query), ('name', 'ilike', query)], limit=SEARCH_ODOO_LIMIT)
-        return [{'code': product.default_code or '', 'name': product.name} for product in products]
+        return [{'product_id': product.id, 'code': product.default_code or '', 'name': product.name}
+                for product in products]
 
     def _show_in_search_page(self, session, args):
         """Cho trang tra tồn của sale tìm đúng từ khoá (thường là mã hàng đã có)."""
