@@ -14,6 +14,7 @@ READ_ONLY_TOOLS = frozenset({
     "get_category_info",
     # Không ghi gì vào MISA; gọi lại cùng từ khoá trong một lượt thì khỏi mở trang lần nữa.
     "show_in_search_page",
+    "so_sanh_thong_so",
 })
 
 TOOLS = [
@@ -242,6 +243,57 @@ TOOLS = [
                 "query": {"type": "string", "description": "Mã hàng (ưu tiên) hoặc vài từ khoá chính"},
             },
             "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "so_sanh_thong_so",
+        "description": (
+            "Hiện BẢNG SO SÁNH THÔNG SỐ 2-5 mã trong khung nổi trên trang của người dùng (món gốc + "
+            "mã thay thế, hoặc các mẫu đang tư vấn). Em tự tìm thông số trước (mô tả Odoo / MISA, "
+            "TÌM WEB trang chính hãng / nhà phân phối), rồi đưa DỮ LIỆU — hệ thống tự dựng bảng, tô "
+            "các dòng khác nhau. Chọn 5-12 thông số quyết định việc chọn mua (công suất, lực, điện "
+            "áp / pin, tốc độ, kích thước, trọng lượng, phụ kiện kèm, bảo hành...). Không chắc giá trị "
+            "thì ghi '—', đừng đoán. Gọi lại là thay bảng. Câu trả lời trong chat vẫn chỉ ý chính."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tieu_de": {"type": "string", "description": "Tiêu đề ngắn, vd 'GDS 18V-350 và mã thay thế'"},
+                "san_pham": {
+                    "type": "array", "minItems": 2, "maxItems": 5,
+                    "description": "Các mã, món gốc đứng đầu",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "ten": {"type": "string", "description": "Tên / model ngắn"},
+                            "ma": {"type": "string", "description": "Mã hàng (rỗng nếu chưa có)"},
+                            "gia": {"type": "number", "description": "Giá bán (đồng); 0 nếu chưa biết"},
+                            "ton": {"type": "number", "description": "Tồn khả dụng; -1 nếu không áp dụng"},
+                            "anh": {"type": "string", "description": "Link ảnh https (rỗng nếu không có)"},
+                            "nguon": {"type": "string", "description": "Link trang lấy thông số (rỗng nếu không có)"},
+                            "ghi_chu": {"type": "string", "description": "Nhãn ngắn: 'món gốc', 'rẻ hơn 300k'..."},
+                        },
+                        "required": ["ten"],
+                        "additionalProperties": False,
+                    },
+                },
+                "thong_so": {
+                    "type": "array", "minItems": 1, "maxItems": 25,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "ten": {"type": "string", "description": "Tên thông số, kèm đơn vị"},
+                            "gia_tri": {"type": "array", "items": {"type": "string"},
+                                        "description": "Giá trị theo đúng thứ tự san_pham"},
+                        },
+                        "required": ["ten", "gia_tri"],
+                        "additionalProperties": False,
+                    },
+                },
+                "ket_luan": {"type": "string", "description": "1-2 câu: chọn mã nào khi nào (có thể rỗng)"},
+            },
+            "required": ["tieu_de", "san_pham", "thong_so"],
             "additionalProperties": False,
         },
     },

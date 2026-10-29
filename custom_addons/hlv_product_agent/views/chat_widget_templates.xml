@@ -14,7 +14,7 @@
                         <i class="fa fa-times"/>
                     </button>
                 </div>
-                <iframe class="hlv-pa-board-frame" sandbox="" title="Bảng của trợ lý"/>
+                <iframe class="hlv-pa-board-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" title="Bảng của trợ lý"/>
             </div>
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
