@@ -27,9 +27,9 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const OFFLINE_TEXT =
     "Máy trợ lý đang tắt. Tin vẫn được giữ lại, máy bật lên sẽ trả lời.";
 
-// Khung chat dính cách mép trên STICKY_TOP px (khớp product_chat.css); chỉ máy tính mới dính.
+// Khung chat dính sát mép trên (STICKY_TOP khớp product_chat.css); chỉ máy tính mới dính.
 const DESKTOP_QUERY = "(min-width: 992px)";
-const STICKY_TOP = 12;
+const STICKY_TOP = 0;
 const MIN_CHAT_HEIGHT = 420;
 
 publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
