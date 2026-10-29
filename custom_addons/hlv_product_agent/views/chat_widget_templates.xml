@@ -19,6 +19,9 @@
             <div class="hlv-pa-panel">
                 <div class="hlv-pa-resize" title="Kéo để đổi độ rộng"/>
                 <div class="hlv-pa-tabs">
+                    <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc trò chuyện mới">
+                        <i class="fa fa-plus"/> Cuộc mới
+                    </button>
                     <button type="button" class="hlv-pa-tab active" data-tab="chat">Trò chuyện</button>
                     <button type="button" class="hlv-pa-tab" data-tab="history">Lịch sử</button>
                     <button type="button" class="hlv-pa-tab" data-tab="created">Hàng đã tạo</button>
@@ -38,9 +41,6 @@
                 <div class="hlv-pa-pane hlv-pa-pane-created"/>
                 <div class="hlv-pa-previews"/>
                 <div class="hlv-pa-input">
-                    <button type="button" class="hlv-pa-new" title="Bắt đầu cuộc mới">
-                        <i class="fa fa-refresh"/>
-                    </button>
                     <label class="hlv-pa-attach" title="Đính kèm ảnh (hoặc dán ảnh vào ô chat)">
                         <i class="fa fa-camera"/>
                         <input type="file" accept="image/*" multiple="multiple" class="d-none"/>

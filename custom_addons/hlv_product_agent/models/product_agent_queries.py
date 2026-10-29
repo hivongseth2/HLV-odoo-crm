@@ -33,6 +33,8 @@ PRODUCT_CANDIDATES = 10
 # Tìm "chứa" lấy rộng rồi tự xếp: một model hay bán khớp hàng chục combo.
 RESOLVE_SEARCH_LIMIT = 80
 DEFAULT_HISTORY_DAYS = 90
+# Dòng giữ chỗ của phiếu không phải đơn bán: đủ cho một mã, chặn trường hợp lỗi dữ liệu dồn hàng nghìn dòng.
+OTHER_RESERVATION_LIMIT = 200
 # Tool tra theo mô tả tự do, không cần (và có thể không có) đúng một mã trong Odoo.
 FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang'})
 # Hàng thay thế: số ứng viên còn tồn đưa Claude xét (nhiều hơn thì Claude lọc thêm từ khoá).
@@ -231,7 +233,39 @@ class HlvProductAgentQueries(models.AbstractModel):
             'don_ban_dang_giu': [{
                 'kho': Warehouse.browse(warehouse_id).name, 'tong': total, 'chi_tiet': details,
             } for (_pid, warehouse_id), (total, details) in reservations.items()],
+            'phieu_khac_dang_giu': self._other_reservations(product),
         }
+
+    def _other_reservations(self, product):
+        """Hàng bị giữ chỗ bởi phiếu KHÔNG phải đơn bán (chuyển kho, trả NCC, phiếu tay...).
+
+        Cột "Giữ" trên trang tra tồn là reserved_quantity của quant, gồm cả các phiếu này, còn
+        _get_so_reservation_map chỉ đếm phiếu có đơn bán: thiếu phần này thì trợ lý thấy "Giữ: 2"
+        mà không chỉ ra được phiếu nào giữ. Phiếu của tính năng Giữ hàng đã nằm ở phieu_giu_hang.
+        """
+        lines = self.env['stock.move.line'].sudo().search([
+            ('product_id', '=', product.id),
+            ('state', 'not in', ('done', 'cancel')),
+            ('location_id.usage', '=', 'internal'),
+            ('quantity', '>', 0),
+        ], limit=OTHER_RESERVATION_LIMIT)
+        rows = {}
+        for line in lines:
+            picking, move = line.picking_id, line.move_id
+            # Lọc ở Python: domain qua picking_id.* không chắc giữ lại dòng không có phiếu.
+            if picking.sale_id or getattr(picking, 'is_stock_hold_picking', False):
+                continue
+            row = rows.setdefault((line.location_id.warehouse_id.id, picking.id or move.id), {
+                'kho': line.location_id.warehouse_id.name or line.location_id.display_name,
+                'phieu': picking.name or move.reference or '',
+                'loai': (picking.picking_type_id or move.picking_type_id).name or '',
+                'doi_tac': picking.partner_id.display_name or '',
+                'nguon': picking.origin or move.origin or '',
+                'ngay_du_kien': fields.Datetime.to_string(picking.scheduled_date or move.date),
+                'so_luong': 0.0,
+            })
+            row['so_luong'] += line.quantity
+        return list(rows.values())
 
     def _q_xem_lich_su_xuat_nhap(self, product, args):
         if 'stock.trace' not in self.env:

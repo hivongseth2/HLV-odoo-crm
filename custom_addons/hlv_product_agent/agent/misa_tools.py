@@ -303,8 +303,9 @@ QUERY_TOOLS = [
     ),
     _query_tool(
         "xem_dang_giu",
-        "Ai đang giữ hàng của một mã: phiếu giữ hàng đã duyệt (sale, khách, dự án, hạn giữ, kho) và "
-        "đơn bán đang giữ chỗ hàng trong kho.",
+        "Ai đang giữ hàng của một mã: phiếu giữ hàng đã duyệt (sale, khách, dự án, hạn giữ, kho), "
+        "đơn bán đang giữ chỗ, và phiếu kho khác đang giữ chỗ (chuyển kho, trả hàng, phiếu tay: số "
+        "phiếu, loại, đối tác, nguồn). Cột 'Giữ' trên trang tra tồn là tổng của cả ba.",
     ),
     _query_tool(
         "xem_lich_su_xuat_nhap",
