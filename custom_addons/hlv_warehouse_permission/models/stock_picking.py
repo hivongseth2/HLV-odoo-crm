@@ -34,7 +34,22 @@ class StockPicking(models.Model):
             | self.move_ids.location_id | self.move_ids.location_dest_id
             | self.move_line_ids.location_id | self.move_line_ids.location_dest_id
         )
+        # Phiếu bước 2 lấy hàng từ CHUYENKHO của kho GỬI: việc đưa hàng ra kho đó người gửi đã được duyệt ở bước 1,
+        # và deltatech_picking_transit ép nguồn bước 2 đúng bằng đích bước 1 — không kiểm quyền người nhận ở kho gửi.
+        locations -= self._hlv_transfer_hub()
         return self.picking_type_id.warehouse_id | locations.warehouse_id
+
+    def _hlv_is_transfer_receipt(self):
+        """Phiếu bước 2 của chuyển kho 2 bước (có phiếu nguồn bước 1). False khi chưa cài deltatech_picking_transit."""
+        self.ensure_one()
+        return 'source_transfer_id' in self._fields and bool(self.source_transfer_id)
+
+    def _hlv_transfer_hub(self):
+        """Vị trí trung chuyển phiếu bước 2 lấy hàng ra (đích phiếu bước 1); rỗng nếu không phải phiếu bước 2."""
+        self.ensure_one()
+        if not self._hlv_is_transfer_receipt():
+            return self.env['stock.location']
+        return self.source_transfer_id.location_dest_id
 
     def _find_blocked_operation(self, operation_field):
         """Trả về (nhãn loại phiếu, kho bị chặn) đầu tiên, hoặc None nếu được phép."""
@@ -95,7 +110,9 @@ class StockPicking(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
-        records._raise_if_blocked('can_create', _('tạo'))
+        # Phiếu bước 2 do hệ thống sinh khi xác nhận phiếu bước 1 (bằng tài khoản người gửi) — người gửi không cần
+        # quyền tạo phiếu nhận ở kho nhận; người nhận vẫn bị kiểm quyền khi xử lý / xác nhận.
+        records.filtered(lambda p: not p._hlv_is_transfer_receipt())._raise_if_blocked('can_create', _('tạo'))
         return records
 
     def write(self, vals):

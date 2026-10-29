@@ -467,6 +467,25 @@ class StockPicking(models.Model):
                 
                 return new_picking
 
+    def _create_backorder_picking(self):
+        """Phần còn lại của phiếu bước 2 vẫn là phiếu bước 2: giữ phiếu nguồn (field copy=False nên Odoo bỏ đi).
+        Mất liên kết thì phiếu còn lại bị coi là chuyển kho thường — chặn vì nguồn là CHUYENKHO kho khác, và bị
+        kiểm quyền người nhận ở kho gửi. App mobile đã tự gán lại khi tách; đây là đường tách trên web.
+        Gán ngay trong copy (giá trị mặc định chép từ bản gốc Odoo 18) chứ không ghi sau: kiểm quyền "tạo"
+        (hlv_warehouse_permission) chạy lúc tạo và cần biết đây là phiếu bước 2. Nguồn (location_id là field
+        compute, copy không chép) được _compute_location_id tính lại = đích phiếu bước 1 nhờ có source_transfer_id."""
+        self.ensure_one()
+        if not self.source_transfer_id:
+            return super()._create_backorder_picking()
+        return self.copy({
+            'name': '/',
+            'move_ids': [],
+            'move_line_ids': [],
+            'backorder_id': self.id,
+            'return_id': self.return_id.id,
+            'source_transfer_id': self.source_transfer_id.id,
+        })
+
     def copy_move_lines(self, source_picking, target_picking):
         """Sao chép move và move lines (bao gồm kiện hàng) sang phiếu mới."""
         for move in source_picking.move_ids:
