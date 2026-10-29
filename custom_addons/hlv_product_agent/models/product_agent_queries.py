@@ -16,7 +16,7 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
 )
 
 from ..services.price_summary import compact_prices
-from ..services.query_format import clamp_int, fit_result, name_tokens
+from ..services.query_format import clamp_int, fit_result, has_all_words, name_tokens
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
 _logger = logging.getLogger(__name__)
@@ -240,6 +240,9 @@ class HlvProductAgentQueries(models.AbstractModel):
                 'kho': Warehouse.browse(warehouse_id).name, 'tong': total, 'chi_tiet': details,
             } for (_pid, warehouse_id), (total, details) in reservations.items()],
             'phieu_khac_dang_giu': self._other_reservations(product),
+            # Model tóm tắt hay bỏ nguồn thứ ba (chuyển kho...) vì nghĩ "ai giữ" là người: nói thẳng.
+            'ghi_chu': "Cột 'Giữ' trên trang tra tồn = phieu_giu_hang + don_ban_dang_giu + phieu_khac_dang_giu; "
+                       "báo đủ cả ba, phiếu có ngay_du_kien đã qua lâu là phiếu treo cần hỏi kho.",
         }
 
     def _other_reservations(self, product):
@@ -322,8 +325,8 @@ class HlvProductAgentQueries(models.AbstractModel):
         products = self.env['product.product'].sudo().browse(list(stock)).filtered(
             lambda product: product.sale_ok and product != base)
         if words:
-            products = products.filtered(lambda product: words <= name_tokens(
-                '%s %s %s' % (product.name, product.default_code or '', product.description_sale or '')))
+            products = products.filtered(lambda product: has_all_words(
+                words, '%s %s %s' % (product.name, product.default_code or '', product.description_sale or '')))
         sold = self._sold_qty(products)
         products = products.sorted(lambda product: (-sold.get(product.id, 0.0), -stock[product.id][0]))
         return {
@@ -410,7 +413,7 @@ class HlvProductAgentQueries(models.AbstractModel):
         vendors = {}
         for line in lines.sorted('id', reverse=True):
             same_group = bool(category) and line.product_id.categ_id == category
-            has_words = bool(words) and words <= self._line_tokens(line)
+            has_words = bool(words) and has_all_words(words, self._line_text(line))
             if not (same_group or has_words):
                 continue  # dòng lấy về nhờ lọc thô nhưng không đủ từ khoá khi so không dấu
             if has_words and same_group:
@@ -449,7 +452,7 @@ class HlvProductAgentQueries(models.AbstractModel):
             self._keyword_prefilter(keyword_text, field='name'), limit=VENDOR_CATEGORY_SAMPLE)
         counts = {}
         for product in products:
-            if words <= name_tokens('%s %s' % (product.name, product.default_code or '')):
+            if has_all_words(words, '%s %s' % (product.name, product.default_code or '')):
                 counts[product.categ_id] = counts.get(product.categ_id, 0) + 1
         if not counts:
             return None
@@ -465,9 +468,8 @@ class HlvProductAgentQueries(models.AbstractModel):
         return [(field, 'ilike', word) for word in (ascii_words or raw[:1])]
 
     @staticmethod
-    def _line_tokens(line):
-        return name_tokens('%s %s %s' % (line.product_id.name or '', line.product_id.default_code or '',
-                                          line.name or ''))
+    def _line_text(line):
+        return '%s %s %s' % (line.product_id.name or '', line.product_id.default_code or '', line.name or '')
 
     def _q_xem_gia_nhap(self, product, args):
         try:
