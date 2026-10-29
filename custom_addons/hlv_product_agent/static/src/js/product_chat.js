@@ -84,6 +84,13 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         window.addEventListener("resize", this._fitHeight);
         this._fitHeight();
         this._addRowAskButtons();
+        // Esc đóng bảng nổi: lỡ bảng nằm chỗ khuất nút đóng thì vẫn có đường thoát.
+        this._onEscape = (ev) => {
+            if (ev.key === "Escape") {
+                this._onBoardClose();
+            }
+        };
+        document.addEventListener("keydown", this._onEscape);
         this._refresh();
         return this._super(...arguments);
     },
@@ -95,6 +102,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         if (this.table) {
             this.table.removeEventListener("click", this._onRowAsk);
         }
+        document.removeEventListener("keydown", this._onEscape);
         this._super(...arguments);
     },
 

@@ -39,9 +39,11 @@ trợ lý chính bằng tiếng Việt, NGẮN và ĐỦ SỐ:
 
 # Đủ chỗ cho phần suy nghĩ + câu trả lời: suy nghĩ cũng tính vào max_tokens.
 MAX_TOKENS = 16000
-# Chặn chi phí đọc web trong một lượt: trang sản phẩm lạ có thể rất dài.
-WEB_SEARCH_MAX_USES = 5
-WEB_FETCH_MAX_USES = 4
+# Chặn chi phí đọc web trong một request: trang sản phẩm lạ có thể rất dài. So sánh / tư vấn nhiều
+# mã cần tra từng mã (tài liệu Anthropic: so nhiều món thường 10 lần tìm trở lên) — 5 lần là hết
+# giữa chừng, bảng so sánh toàn "—". Mỗi lần tìm 0,01 USD; kết quả đã được lọc gọn (dynamic filtering).
+WEB_SEARCH_MAX_USES = 12
+WEB_FETCH_MAX_USES = 6
 WEB_FETCH_MAX_CONTENT_TOKENS = 20000
 # Không đặt user_location: web_search từ chối mã quốc gia VN (lỗi 400, hỏng mọi lượt). Ưu tiên
 # trang Việt Nam nằm ở prompt (truy vấn tiếng Việt + danh sách trang bán dụng cụ trong nước).

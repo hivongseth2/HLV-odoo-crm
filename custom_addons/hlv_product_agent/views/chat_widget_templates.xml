@@ -10,7 +10,7 @@
                     <button type="button" class="hlv-pa-board-max" title="Phóng to / thu nhỏ">
                         <i class="fa fa-expand"/>
                     </button>
-                    <button type="button" class="hlv-pa-board-close" title="Đóng bảng">
+                    <button type="button" class="hlv-pa-board-close" title="Đóng bảng (Esc)">
                         <i class="fa fa-times"/>
                     </button>
                 </div>

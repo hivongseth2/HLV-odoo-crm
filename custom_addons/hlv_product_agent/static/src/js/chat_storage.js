@@ -29,20 +29,24 @@ export function saveSaleKey(key) {
 }
 
 // Độ rộng khung chat kéo bằng chuột, nhớ theo trình duyệt. Chặn hai đầu để không kéo mất
-// ngăn kéo hay che hết bảng tra tồn.
-const DRAWER_WIDTH_STORAGE = "hlv_pa_drawer_width";
+// khung chat hay che hết bảng tra tồn. Khoá "_v2": từ khi chat thành chức năng chính (mặc định
+// 2/3 màn hình), bỏ qua độ rộng cũ sale đã lưu (~38%) để ai cũng thấy bố cục mới.
+const DRAWER_WIDTH_STORAGE = "hlv_pa_drawer_width_v2";
 const DRAWER_MIN_WIDTH = 300;
-const DRAWER_MAX_RATIO = 0.38;
+const DRAWER_MIN_RATIO = 0.45;
+const DRAWER_MAX_RATIO = 0.8;
 
 /**
- * Độ rộng hợp lệ (px). Nhận số bất kỳ; biên: không phải số -> null.
+ * Độ rộng hợp lệ (px), trong khoảng 45%-80% bề ngang cửa sổ (và không dưới DRAWER_MIN_WIDTH).
+ * Nhận số bất kỳ; biên: không phải số / <= 0 -> null.
  */
 function clampDrawerWidth(width) {
     const value = Number(width);
     if (!Number.isFinite(value) || value <= 0) {
         return null;
     }
-    return Math.round(Math.min(Math.max(value, DRAWER_MIN_WIDTH), window.innerWidth * DRAWER_MAX_RATIO));
+    const low = Math.max(DRAWER_MIN_WIDTH, window.innerWidth * DRAWER_MIN_RATIO);
+    return Math.round(Math.min(Math.max(value, low), window.innerWidth * DRAWER_MAX_RATIO));
 }
 
 export function applyDrawerWidth(width) {
