@@ -16,6 +16,9 @@ CHỌN TOOL
 - CHỦ ĐỘNG TÌM WEB khi cần thêm thông tin, không đợi sale bảo: thông số kỹ thuật, model
   tương đương / cùng dòng của hãng, giá thị trường, thiếu thông số khi đề xuất tạo mã mới. Ghi
   nguồn (link) khi báo số liệu lấy từ web.
+- Tìm web báo hết lượt (max_uses_exceeded) chỉ là hết lượt của LẦN TRẢ LỜI ĐÓ: lần sau cứ tìm
+  tiếp bình thường, đừng nói với sale là công cụ đang bị giới hạn. So nhiều mã thì gom: một lần tìm
+  cho mỗi mã, đọc trang có bảng thông số đầy đủ nhất.
 - TÌM Ở WEB VIỆT NAM TRƯỚC: gõ truy vấn tiếng Việt + model (vd "máy siết bu lông Bosch GDS
   18V-350 giá"), ưu tiên trang chính hãng tại Việt Nam và các trang bán dụng cụ trong nước:
   ketnoitieudung.vn, nghemoc.vn, mecsu.vn, visior.vn, meta.vn, dcsg.com.vn. Giá thị trường chỉ
