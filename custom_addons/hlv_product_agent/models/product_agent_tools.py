@@ -12,6 +12,7 @@ from odoo.addons.misa_fetch_po_button.utils.misa_product_code import ProductCode
 
 from ..services import combo_change_summary, missing_from_proposal, odoo_combo_text
 from ..agent.misa_tools import QUERY_TOOL_NAMES
+from ..services.compare_table import compare_table_html, compare_table_problems
 from ..services.panel_html import panel_html_problems
 from ..services.search_ranking import summarize_search
 
@@ -56,6 +57,7 @@ class HlvProductAgentTools(models.AbstractModel):
             'search_category_misa': self._search_category,
             'show_in_search_page': self._show_in_search_page,
             'show_panel': self._show_panel,
+            'so_sanh_thong_so': self._compare_specs,
         }.get(name)
         if not handler and name in QUERY_TOOL_NAMES:
             return self.env['hlv.product.agent.queries'].run(name, args)
@@ -154,6 +156,23 @@ class HlvProductAgentTools(models.AbstractModel):
             ) % ", ".join(problems)}
         session.post_client_action("Trợ lý mở bảng: %s" % title, {'type': 'panel', 'title': title, 'html': html})
         return {'status': 'success', 'message': "Đã hiện bảng '%s' cho người dùng." % title}
+
+    def _compare_specs(self, session, args):
+        """Bảng so sánh thông số: Claude đưa dữ liệu, services.compare_table dựng HTML đã escape."""
+        products, specs = args.get('san_pham'), args.get('thong_so')
+        problems = compare_table_problems(products, specs)
+        if problems:
+            return {'status': 'error', 'message': "Bảng CHƯA hiện: %s Sửa rồi gọi lại." % " ".join(problems)}
+        # Schema dùng số "không biết" (gia 0, ton -1) cho dễ điền; bảng thì để trống ô đó.
+        for product in products:
+            if not product.get('gia'):
+                product.pop('gia', None)
+            if (product.get('ton') or 0) < 0:
+                product.pop('ton', None)
+        title = ' '.join((args.get('tieu_de') or '').split())[:PANEL_TITLE_MAX] or "So sánh thông số"
+        html = compare_table_html(products, specs, args.get('ket_luan') or '')
+        session.post_client_action("Trợ lý mở bảng so sánh: %s" % title, {'type': 'panel', 'title': title, 'html': html})
+        return {'status': 'success', 'message': "Đã hiện bảng so sánh '%s' cho người dùng." % title}
 
     def _get_category_info(self, session, args):
         cat_id = args.get('category_id')

@@ -29,6 +29,7 @@ OLD_DEFAULT_VERSIONS = {
         '79f0f9e068dff22a',  # 18.0.1.8.0: bộ lựa chọn mẫu cố định, Claude chép y nguyên
         '225ec1aa51313458',  # 18.0.1.9.0: chưa hỏi bằng ảnh khi tạo mã mà chưa rõ hàng
         '2dfe5b129870f24b',  # 18.0.1.10.0: hỏi chung loại hàng bị hiểu là yêu cầu tạo, chưa tư vấn
+        'a4d95385c0dcbe20',  # 18.0.1.11.0: hết hàng chưa tự đề xuất mã thay thế, chưa có so sánh
     },
 }
 DEFAULT_FILES = {

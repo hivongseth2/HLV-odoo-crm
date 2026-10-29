@@ -507,7 +507,8 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         const frame = document.createElement("iframe");
         frame.className = "hlv-pa-board-frame";
         frame.title = "Bảng của trợ lý";
-        frame.setAttribute("sandbox", "");
+        // Không cho script; chỉ cho link (nguồn thông số) mở tab mới, tab đó thoát hẳn sandbox.
+        frame.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
         frame.srcdoc = boardDocument(action.html || "");
         board.querySelector(".hlv-pa-board-frame").replaceWith(frame);
         board.dataset.open = "1";
