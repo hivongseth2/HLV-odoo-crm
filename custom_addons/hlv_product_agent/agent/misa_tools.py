@@ -328,10 +328,48 @@ QUERY_TOOLS = [
         "Giá nhập theo từng NCC: các lần đã mua (đơn mua đã xác nhận) và báo giá NCC gần nhất.",
     ),
 ]
+QUERY_TOOLS += [
+    {
+        "name": "tim_hang_tuong_tu",
+        "description": (
+            "Tìm trong kho các mã CÒN TỒN giống món sale hỏi (cùng nhóm, trùng dòng / model / thông "
+            "số), có điểm độ giống, tồn và giá bán. Dùng khi món sale hỏi hết hàng, ngưng bán, hoặc "
+            "Odoo không có: đề xuất mã thay thế để sale chào khách."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Mã món gốc nếu có; chuỗi rỗng nếu chỉ có mô tả"},
+                "product_id": _PRODUCT_ID_ARG,
+                "mo_ta": {"type": "string", "description": "Tên / loại / hãng / thông số chính của món cần thay"},
+            },
+            "required": ["code", "mo_ta"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "tim_ncc_dong_hang",
+        "description": (
+            "Tìm NCC đã từng bán cho mình dòng hàng này (theo đơn mua đã xác nhận): số lần mua, lần "
+            "mua cuối, vài mặt hàng mẫu. Dùng khi hàng không có trong kho lẫn MISA: tư vấn sale nên "
+            "hỏi giá NCC nào. Từ khoá ngắn: hãng + dòng / loại hàng (vd 'MILWAUKEE M18', 'phốt viton')."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tu_khoa": {"type": "string", "description": "2-4 từ khoá, mọi từ phải có trong tên hàng đã mua"},
+            },
+            "required": ["tu_khoa"],
+            "additionalProperties": False,
+        },
+    },
+]
 QUERY_TOOL_NAMES = frozenset(tool["name"] for tool in QUERY_TOOLS)
 # Kết quả ngắn: gọi thẳng rẻ hơn giao người khác đọc. Còn lại kết quả dài — ở chế độ Claude
 # API giao model rẻ (giao_viec_tra_cuu) đọc rồi tóm tắt, model chính chỉ đọc bản tóm tắt.
-LIGHT_QUERY_TOOLS = frozenset({"xem_ton_kho", "xem_gia", "xem_thanh_phan_combo"})
+LIGHT_QUERY_TOOLS = frozenset({
+    "xem_ton_kho", "xem_gia", "xem_thanh_phan_combo", "tim_hang_tuong_tu", "tim_ncc_dong_hang",
+})
 HEAVY_QUERY_TOOLS = QUERY_TOOL_NAMES - LIGHT_QUERY_TOOLS
 READ_ONLY_TOOLS = READ_ONLY_TOOLS | QUERY_TOOL_NAMES
 
@@ -356,7 +394,10 @@ PANEL_TOOL = {
     },
 }
 
-TOOLS = TOOLS + [PANEL_TOOL] + QUERY_TOOLS
+# Tạm tắt vẽ bảng (10/2026): trợ lý chỉ trả lời bằng chữ. Bật lại: đổi True — handler, khung
+# hiện bảng trên trang và kiểm HTML (panel_html) vẫn giữ nguyên.
+PANEL_ENABLED = False
+TOOLS = TOOLS + ([PANEL_TOOL] if PANEL_ENABLED else []) + QUERY_TOOLS
 
 # Chỉ có ở chế độ Claude API (Odoo tự chạy vòng model phụ); máy agent không thấy tool này.
 DELEGATE_TOOL = {

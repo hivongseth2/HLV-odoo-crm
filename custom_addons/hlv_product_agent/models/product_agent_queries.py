@@ -15,7 +15,7 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
     PublicInventory, _get_active_holds, _get_so_reservation_map,
 )
 
-from ..services.query_format import clamp_int, fit_result
+from ..services.query_format import clamp_int, fit_result, name_tokens, similarity
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
 _logger = logging.getLogger(__name__)
@@ -33,6 +33,19 @@ PRODUCT_CANDIDATES = 10
 # Tìm "chứa" lấy rộng rồi tự xếp: một model hay bán khớp hàng chục combo.
 RESOLVE_SEARCH_LIMIT = 80
 DEFAULT_HISTORY_DAYS = 90
+# Tool tra theo mô tả tự do, không cần (và có thể không có) đúng một mã trong Odoo.
+FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang'})
+# Hàng tương tự: lấy rộng theo từ khoá + cùng nhóm, rồi chấm điểm giống tên.
+SIMILAR_KEYWORDS = 4
+SIMILAR_CANDIDATES = 300
+SIMILAR_MIN_SCORE = 0.3
+SAME_CATEGORY_BONUS = 0.15
+SIMILAR_RESULTS = 10
+# NCC theo dòng hàng: đọc các dòng mua gần nhất có đủ từ khoá.
+VENDOR_KEYWORDS = 5
+VENDOR_LINE_LIMIT = 500
+VENDOR_SAMPLE_ITEMS = 3
+VENDOR_RESULTS = 10
 
 
 class HlvProductAgentQueries(models.AbstractModel):
@@ -46,6 +59,9 @@ class HlvProductAgentQueries(models.AbstractModel):
             return {'status': 'error', 'message': "Tool tra cứu %s chưa có." % name}
         if not isinstance(args, dict):
             return {'status': 'error', 'message': "Tham số phải là object JSON."}
+        if name in FREE_TEXT_QUERIES:
+            # Hàng có thể chưa có trong Odoo: tra theo mô tả, không bắt phải ra đúng một mã.
+            return self._run_free_text(name, handler, args)
         product, problem, note = self._resolve_product(args.get('code'), args.get('product_id'))
         if problem:
             return problem
@@ -58,6 +74,16 @@ class HlvProductAgentQueries(models.AbstractModel):
         if note:
             result['luu_y'] = note
         return result
+
+    def _run_free_text(self, name, handler, args):
+        try:
+            data = handler(args)
+        except Exception as error:  # noqa: BLE001 — Claude phải nhận được lỗi, không làm chết lượt
+            _logger.exception("PRODUCT_AGENT tra cứu %s lỗi", name)
+            return {'status': 'error', 'message': "Tra cứu lỗi: %s" % error}
+        if data.get('status'):
+            return data
+        return dict({'status': 'found'}, **fit_result(data))
 
     # =========================================================================
     # Tìm sản phẩm / kho từ chữ Claude đưa
@@ -225,6 +251,65 @@ class HlvProductAgentQueries(models.AbstractModel):
             'don_gia': line.price_unit,
             'chiet_khau_pct': line.discount,
         } for line in lines]}
+
+    # =========================================================================
+    # Tư vấn khi hàng hết / không có: mã tương tự còn tồn, NCC hay bán dòng hàng
+    # =========================================================================
+    def _q_tim_hang_tuong_tu(self, args):
+        """Mã còn tồn giống món sale hỏi nhất. Món gốc lấy theo mã (nếu Odoo có) hoặc theo mô tả."""
+        base, _problem, _note = self._resolve_product(args.get('code'), args.get('product_id'))
+        text = ' '.join(filter(None, [base.name if base else '', args.get('mo_ta') or '', args.get('code') or '']))
+        base_tokens = name_tokens(text)
+        if not base_tokens:
+            return {'status': 'error', 'message': "Cần code hoặc mo_ta đủ chữ để tìm hàng tương tự."}
+        Product = self.env['product.product'].sudo()
+        domain = [('sale_ok', '=', True), ('id', '!=', base.id if base else 0)]
+        # Mọi món có chung từ đặc trưng (ưu tiên từ có số: M18, 6204...) + cùng nhóm với món gốc.
+        keywords = sorted(base_tokens, key=lambda word: (not any(ch.isdigit() for ch in word), -len(word)))
+        keywords = keywords[:SIMILAR_KEYWORDS]
+        name_domain = ['|'] * (len(keywords) - 1) + [('name', 'ilike', word) for word in keywords]
+        candidates = Product.search(domain + name_domain, limit=SIMILAR_CANDIDATES)
+        if base and base.categ_id:
+            candidates |= Product.search(domain + [('categ_id', '=', base.categ_id.id)], limit=SIMILAR_CANDIDATES)
+        rows = []
+        for product in candidates:
+            stock = product.qty_available
+            if stock <= 0:
+                continue
+            score = similarity(base_tokens, name_tokens(product.name + ' ' + (product.default_code or '')))
+            if base and product.categ_id == base.categ_id:
+                score += SAME_CATEGORY_BONUS
+            if score >= SIMILAR_MIN_SCORE:
+                rows.append({'code': product.default_code or '', 'name': product.name, 'ton': stock,
+                             'gia_ban': product.list_price, 'do_giong': round(score, 2)})
+        rows.sort(key=lambda row: (-row['do_giong'], -row['ton']))
+        return {
+            'mon_goc': self._product_label(base) if base else {'mo_ta': args.get('mo_ta') or args.get('code')},
+            'goi_y_con_ton': rows[:SIMILAR_RESULTS],
+        }
+
+    def _q_tim_ncc_dong_hang(self, args):
+        """NCC đã bán cho mình những món chứa đủ các từ khoá (hãng, dòng, loại hàng), mới nhất trước."""
+        words = [word for word in (args.get('tu_khoa') or '').split() if len(word) >= 2][:VENDOR_KEYWORDS]
+        if not words:
+            return {'status': 'error', 'message': "Cần tu_khoa (vd: 'MILWAUKEE M18', 'phốt dầu viton')."}
+        lines = self.env['purchase.order.line'].sudo().search(
+            [('order_id.state', 'in', ('purchase', 'done'))] + [('name', 'ilike', word) for word in words],
+            order='id desc', limit=VENDOR_LINE_LIMIT)
+        vendors = {}
+        for line in lines:
+            partner = line.order_id.partner_id.commercial_partner_id
+            entry = vendors.setdefault(partner.id, {
+                'ncc': partner.display_name, 'so_lan_mua': 0, 'lan_mua_cuoi': '', 'mat_hang': [],
+            })
+            entry['so_lan_mua'] += 1
+            if not entry['lan_mua_cuoi']:
+                entry['lan_mua_cuoi'] = fields.Date.to_string(line.order_id.date_order)
+            label = '%s — %s' % (line.product_id.default_code or '', line.product_id.name or line.name)
+            if label not in entry['mat_hang'] and len(entry['mat_hang']) < VENDOR_SAMPLE_ITEMS:
+                entry['mat_hang'].append(label)
+        ranked = sorted(vendors.values(), key=lambda entry: (-entry['so_lan_mua'], entry['ncc']))
+        return {'tu_khoa': ' '.join(words), 'so_dong_mua': len(lines), 'ncc': ranked[:VENDOR_RESULTS]}
 
     def _q_xem_gia_nhap(self, product, args):
         try:

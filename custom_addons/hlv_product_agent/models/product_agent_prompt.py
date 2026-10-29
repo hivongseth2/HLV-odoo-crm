@@ -18,6 +18,11 @@ PARTS = [
     ('category', "Tài liệu B — Phân nhóm hàng"),
     ('assist', "Tra cứu & tương tác"),
 ]
+# Vân tay (prompt_version) các bản mặc định đã phát hành trước. Phần trong DB còn đúng một bản
+# này = chưa ai sửa, nâng cấp module thì thay bằng bản mặc định hiện tại.
+OLD_DEFAULT_VERSIONS = {
+    'assist': {'2c0a2969651238a1'},  # 18.0.1.4.0: còn hướng dẫn vẽ bảng show_panel
+}
 DEFAULT_FILES = {
     'core': 'hlv_product_agent/data/prompt_defaults/system_prompt.md',
     'naming': 'hlv_product_agent/data/prompt_defaults/product_naming_rules.md',
@@ -79,17 +84,22 @@ class HlvProductAgentPrompt(models.Model):
 
     @api.model
     def _ensure_defaults(self):
-        """Tạo phần nào còn thiếu từ file mặc định. Không đụng phần đã có (đã có thể bị sửa).
+        """Tạo phần nào còn thiếu từ file mặc định; phần còn nguyên bản mặc định CŨ thì lên bản mới.
 
-        Gọi từ data XML mỗi lần cài / nâng cấp module.
+        Phần đã bị sửa tay (vân tay khác mọi bản mặc định cũ) thì không đụng. Gọi từ data XML
+        mỗi lần cài / nâng cấp module.
         """
-        existing = set(self.sudo().search([]).mapped('code'))
+        parts = {part.code: part for part in self.sudo().search([])}
         for sequence, (code, label) in enumerate(PARTS, start=1):
-            if code not in existing:
+            part = parts.get(code)
+            if not part:
                 self.sudo().create({
                     'code': code, 'name': label, 'sequence': sequence * 10,
                     'content': self._default_content(code),
                 })
+            elif prompt_version((part.content or '').strip() + "\n") in OLD_DEFAULT_VERSIONS.get(code, ()):
+                # Ghi qua write(): bản cũ vẫn vào lịch sử, quay lại được.
+                part.content = self._default_content(code)
 
     def action_reset_default(self):
         """Đưa phần này về bản mặc định đi kèm module (bản hiện tại vẫn còn trong lịch sử)."""

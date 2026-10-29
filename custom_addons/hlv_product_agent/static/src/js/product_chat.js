@@ -1,6 +1,6 @@
 /** @odoo-module **/
 /*
- * Ngăn kéo chat "Tạo mã hàng" trên /search_stock (mép trái, mở sẵn trên máy tính).
+ * Khung chat "Trợ lý" trên /search_stock: cột phải trong container của trang, luôn mở.
  *
  * Trình duyệt không nói chuyện với Claude: nó chỉ ghi tin vào Odoo rồi hỏi định kỳ
  * xem có câu trả lời chưa. Agent trên máy văn phòng mới là bên lấy tin và trả lời,
@@ -46,12 +46,7 @@ function saveSaleKey(key) {
     }
 }
 
-// Ngăn kéo mở sẵn trên máy tính; ai bấm đóng thì nhớ theo trình duyệt, lần sau không tự
-// mở nữa. Màn nhỏ (ngăn kéo phủ lên trang) thì mặc định đóng.
-const DRAWER_CLOSED_STORAGE = "hlv_pa_drawer_closed";
-const DESKTOP_QUERY = "(min-width: 992px)";
-
-// Độ rộng ngăn kéo kéo bằng chuột, nhớ theo trình duyệt. Chặn hai đầu để không kéo mất
+// Độ rộng khung chat kéo bằng chuột, nhớ theo trình duyệt. Chặn hai đầu để không kéo mất
 // ngăn kéo hay che hết bảng tra tồn.
 const DRAWER_WIDTH_STORAGE = "hlv_pa_drawer_width";
 const DRAWER_MIN_WIDTH = 300;
@@ -89,29 +84,6 @@ function saveDrawerWidth(width) {
         window.localStorage.setItem(DRAWER_WIDTH_STORAGE, String(width));
     } catch {
         // Không lưu được: lần sau về độ rộng mặc định.
-    }
-}
-
-function shouldOpenDrawer() {
-    if (!window.matchMedia(DESKTOP_QUERY).matches) {
-        return false;
-    }
-    try {
-        return window.localStorage.getItem(DRAWER_CLOSED_STORAGE) !== "1";
-    } catch {
-        return true;
-    }
-}
-
-function rememberDrawerClosed(closed) {
-    try {
-        if (closed) {
-            window.localStorage.setItem(DRAWER_CLOSED_STORAGE, "1");
-        } else {
-            window.localStorage.removeItem(DRAWER_CLOSED_STORAGE);
-        }
-    } catch {
-        // Không lưu được: lần sau vẫn mở sẵn, chấp nhận được.
     }
 }
 
@@ -179,8 +151,6 @@ function formatTime(utcString) {
 publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     selector: ".hlv-pa-chat",
     events: {
-        "click .hlv-pa-toggle": "_onToggle",
-        "click .hlv-pa-close": "_onToggle",
         "click .hlv-pa-send": "_onSend",
         "click .hlv-pa-new": "_onNew",
         "click .hlv-pa-preview-remove": "_onRemovePreview",
@@ -196,7 +166,6 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     },
 
     start() {
-        this.isOpen = false;
         this.sessionId = false;
         this.lastId = 0;
         this.busy = false;
@@ -210,15 +179,17 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         this.textarea = this.el.querySelector("textarea");
         this.sendBtn = this.el.querySelector(".hlv-pa-send");
         applyDrawerWidth(loadDrawerWidth());
-        if (shouldOpenDrawer()) {
-            this._setOpen(true);
-        }
+        // Khung chat luôn mở, là cột phải trong container của trang tra tồn: gắn class để
+        // product_chat.css chia lưới hai cột (portal không có khung chat thì trang giữ nguyên).
+        this.el.parentElement.classList.add("hlv-pa-host");
+        document.body.classList.add("hlv-pa-embedded");
+        this._refresh();
         return this._super(...arguments);
     },
 
     destroy() {
         clearTimeout(this.pollTimer);
-        document.body.classList.remove("hlv-pa-drawer-open");
+        document.body.classList.remove("hlv-pa-embedded");
         this._super(...arguments);
     },
 
@@ -240,9 +211,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
 
     _schedulePoll() {
         clearTimeout(this.pollTimer);
-        if (this.isOpen) {
-            this.pollTimer = setTimeout(() => this._refresh(), this.busy ? POLL_MS_BUSY : POLL_MS_IDLE);
-        }
+        this.pollTimer = setTimeout(() => this._refresh(), this.busy ? POLL_MS_BUSY : POLL_MS_IDLE);
     },
 
     _applyState(state) {
@@ -460,23 +429,16 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     // ------------------------------------------------------------------
     // Sự kiện
     // ------------------------------------------------------------------
-    _onToggle() {
-        this._setOpen(!this.isOpen);
-        rememberDrawerClosed(!this.isOpen);
-        if (this.isOpen) {
-            this.textarea.focus();
-        }
-    },
-
     _onResizeStart(ev) {
         ev.preventDefault();
         const handle = ev.currentTarget;
-        const left = this.el.querySelector(".hlv-pa-panel").getBoundingClientRect().left;
+        // Khung chat ở cột phải: mép trái kéo sang trái là rộng ra.
+        const right = this.el.querySelector(".hlv-pa-panel").getBoundingClientRect().right;
         let width = null;
         handle.setPointerCapture(ev.pointerId);
         document.body.classList.add("hlv-pa-resizing");
         const onMove = (moveEv) => {
-            width = applyDrawerWidth(moveEv.clientX - left) || width;
+            width = applyDrawerWidth(right - moveEv.clientX) || width;
         };
         const onUp = () => {
             handle.removeEventListener("pointermove", onMove);
@@ -548,18 +510,6 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         head.addEventListener("pointermove", onMove);
         head.addEventListener("pointerup", onUp);
         head.addEventListener("pointercancel", onUp);
-    },
-
-    _setOpen(open) {
-        this.isOpen = open;
-        this.el.dataset.open = open ? "1" : "0";
-        // Lớp trên body để CSS dồn trang sang phải, chừa chỗ cho ngăn kéo.
-        document.body.classList.toggle("hlv-pa-drawer-open", open);
-        if (open) {
-            this._refresh();
-        } else {
-            clearTimeout(this.pollTimer);
-        }
     },
 
     async _onSend() {

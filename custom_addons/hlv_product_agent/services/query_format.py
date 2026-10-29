@@ -6,6 +6,8 @@ Mỗi lần Claude đọc kết quả là tính token; một mã bán nhiều c�
 Util thuần: vào dict / list, ra dict / list. Không đụng ``self.env``.
 """
 import json
+import re
+import unicodedata
 
 # Trường chỉ phục vụ giao diện trang tra tồn, Claude không cần.
 DROPPED_KEYS = frozenset({"image_url", "warehouse_id", "child_product_id", "location_id", "ok"})
@@ -62,3 +64,42 @@ def clamp_int(value, default, low, high):
     except (TypeError, ValueError):
         return default
     return min(max(number, low), high)
+
+
+# Từ quá chung, khớp nhau không nói lên hai món giống nhau.
+_GENERIC_WORDS = frozenset({
+    "cai", "bo", "cay", "chiec", "hop", "loai", "may", "hang", "va", "cho", "co", "dung", "x", "mm", "cm",
+})
+
+
+def _plain(text):
+    """Chữ thường, bỏ dấu tiếng Việt (đ -> d) để so từ."""
+    text = (text or "").lower().replace("đ", "d")
+    return "".join(ch for ch in unicodedata.normalize("NFD", text) if unicodedata.category(ch) != "Mn")
+
+
+def name_tokens(text):
+    """Tập từ đặc trưng của một tên hàng để so độ giống.
+
+    Nhận: tên / mô tả. Trả: frozenset từ (chữ thường, không dấu) dài >= 2, bỏ từ chung chung.
+    Giữ nguyên cụm có số (M18, FPD3, 6204) — đó thường là thứ phân biệt dòng hàng.
+    Biên: rỗng / None -> frozenset().
+    """
+    words = re.findall(r"[a-z0-9]+(?:[-.][a-z0-9]+)*", _plain(text))
+    return frozenset(word for word in words if len(word) >= 2 and word not in _GENERIC_WORDS)
+
+
+def similarity(base_tokens, other_tokens):
+    """Độ giống 0..1: tỉ lệ từ của món gốc có mặt ở món kia (từ chứa số tính gấp đôi).
+
+    Biên: món gốc không có từ nào -> 0.
+    """
+    if not base_tokens:
+        return 0.0
+
+    def weight(word):
+        return 2.0 if any(ch.isdigit() for ch in word) else 1.0
+
+    total = sum(weight(word) for word in base_tokens)
+    return round(sum(weight(word) for word in base_tokens & other_tokens) / total, 3)
+

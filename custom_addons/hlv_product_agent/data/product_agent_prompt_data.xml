@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Tạo phần prompt nào còn thiếu từ data/prompt_defaults/*.md. Phần đã có (có thể
+    <!-- Tạo phần prompt nào còn thiếu từ data/prompt_defaults/*.md; phần còn nguyên bản mặc định cũ thì lên bản mới. Phần đã sửa (có thể
          đã được sửa trên Odoo) giữ nguyên, nên chạy lại mỗi lần nâng cấp là an toàn. -->
     <function model="hlv.product.agent.prompt" name="_ensure_defaults"/>
 
