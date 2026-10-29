@@ -28,6 +28,7 @@ OLD_DEFAULT_VERSIONS = {
         '35043f5c0fb79a58',  # 18.0.1.7.0: trả lời dài, chưa có nút lựa chọn [[...]]
         '79f0f9e068dff22a',  # 18.0.1.8.0: bộ lựa chọn mẫu cố định, Claude chép y nguyên
         '225ec1aa51313458',  # 18.0.1.9.0: chưa hỏi bằng ảnh khi tạo mã mà chưa rõ hàng
+        '2dfe5b129870f24b',  # 18.0.1.10.0: hỏi chung loại hàng bị hiểu là yêu cầu tạo, chưa tư vấn
     },
 }
 DEFAULT_FILES = {
