@@ -110,7 +110,10 @@ body.hlv-pa-resizing {
     overflow-x: auto !important;
   }
 
+  /* Cột chat dính (sticky) nên là một lớp xếp chồng riêng: không nâng thì tiêu đề bảng tra tồn
+     (sticky, z-index 1020) đè lên cả cột lẫn khung nổi bên trong. Dưới modal của trang (1060). */
   .container-fluid:has(> .hlv-pa-chat) > .hlv-pa-chat {
+    z-index: 1030;
     grid-column: 2;
     grid-row: 1 / span 40;
     position: sticky;
@@ -439,8 +442,9 @@ body.hlv-pa-resizing {
   border-radius: 999px;
   background: var(--pa-bg);
   color: var(--pa-text);
-  font-size: 13px;
-  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 3px 10px;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }

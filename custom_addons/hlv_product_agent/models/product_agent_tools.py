@@ -60,7 +60,7 @@ class HlvProductAgentTools(models.AbstractModel):
             'so_sanh_thong_so': self._compare_specs,
         }.get(name)
         if not handler and name in QUERY_TOOL_NAMES:
-            return self.env['hlv.product.agent.queries'].run(name, args)
+            return self.env['hlv.product.agent.queries'].with_context(chat_user_id=session.user_id.id).run(name, args)
         if not handler:
             return {'status': 'error', 'message': "Tool %s chưa được hỗ trợ." % name}
         if not isinstance(args, dict):

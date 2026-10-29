@@ -31,6 +31,8 @@ trợ lý chính bằng tiếng Việt, NGẮN và ĐỦ SỐ:
   liệt kê các mã ứng viên để trợ lý chính hỏi người dùng.
 - Gom thành ý chính + bảng số liệu dạng dòng (mỗi dòng một kho / một phiếu / một đơn), ghi rõ
   đơn vị và ngày. Danh sách dài thì giữ các dòng quan trọng nhất và ghi tổng còn lại.
+- Nhiệm vụ gợi ý giá mua (xem_gia_nhap): ưu tiên báo giá còn dùng được và lần mua gần (6-12
+  tháng, không bị trả hàng); nêu mức giá nên chốt, NCC nào, giao bao lâu, và link_tra_gia.
 - Không chào hỏi, không giải thích cách em tra."""
 
 # Đủ chỗ cho phần suy nghĩ + câu trả lời: suy nghĩ cũng tính vào max_tokens.
@@ -39,6 +41,12 @@ MAX_TOKENS = 16000
 WEB_SEARCH_MAX_USES = 5
 WEB_FETCH_MAX_USES = 4
 WEB_FETCH_MAX_CONTENT_TOKENS = 20000
+# Không đặt vị trí thì máy tìm kiếm trả kết quả kiểu Mỹ (Amazon...), trong khi sale cần giá / hàng
+# bán ở Việt Nam. Chỉ là ưu tiên, không chặn trang ngoài (trang chính hãng vẫn tìm được).
+WEB_SEARCH_LOCATION = {
+    'type': 'approximate', 'country': 'VN', 'city': 'Ho Chi Minh City',
+    'region': 'Ho Chi Minh City', 'timezone': 'Asia/Ho_Chi_Minh',
+}
 
 # Prompt sửa trên Odoo viết cho Claude Code (tool WebFetch / WebSearch / Read). Ở chế độ
 # API các tool đó mang tên khác và ảnh nằm ngay trong tin, nên nói rõ thay vì bắt người
@@ -92,7 +100,7 @@ def server_tools(model):
     basic = (model or '').startswith(_BASIC_WEB_TOOL_PREFIXES)
     return [
         {'type': 'web_search_20250305' if basic else 'web_search_20260209',
-         'name': 'web_search', 'max_uses': WEB_SEARCH_MAX_USES},
+         'name': 'web_search', 'max_uses': WEB_SEARCH_MAX_USES, 'user_location': WEB_SEARCH_LOCATION},
         {'type': 'web_fetch_20250910' if basic else 'web_fetch_20260209',
          'name': 'web_fetch', 'max_uses': WEB_FETCH_MAX_USES,
          'max_content_tokens': WEB_FETCH_MAX_CONTENT_TOKENS},

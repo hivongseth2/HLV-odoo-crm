@@ -378,7 +378,10 @@ QUERY_TOOLS = [
     ),
     _query_tool(
         "xem_gia_nhap",
-        "Giá nhập theo từng NCC: các lần đã mua (đơn mua đã xác nhận) và báo giá NCC gần nhất.",
+        "Dữ liệu trang hỏi / tra giá NCC của một mã: tóm tắt theo NCC (mua gần nhất / thấp nhất, "
+        "báo giá gần nhất / thấp nhất), các lần mua đã nhập kho và báo giá NCC gần nhất (giá SAU VAT, "
+        "thời gian giao, còn hiệu lực không), kèm link_tra_gia. Dùng để GỢI Ý GIÁ MUA khi cần mua "
+        "hàng / hỏi NCC. Tài khoản chưa có quyền hỏi giá NCC thì tool từ chối.",
     ),
 ]
 QUERY_TOOLS += [
