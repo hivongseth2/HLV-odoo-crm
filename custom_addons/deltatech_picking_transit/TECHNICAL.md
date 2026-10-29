@@ -44,6 +44,7 @@ deltatech_picking_transit/
 | Chặn Transit (nguồn/đích) trên phiếu chuyển nội bộ đang mở, trừ nguồn bước 2 = đích Transit của bước 1 cũ | `stock.picking._hlv_check_no_transit` (gọi từ `_check_hlv_transfer_location` và `stock.move.line._check_hlv_no_transit`) |
 | Chuyển sang kho khác (Liên hệ là kho khác / đích là vị trí tồn của kho khác / đích là CHUYENKHO): đích phiếu + từng dòng bắt buộc = CHUYENKHO của kho nguồn; cùng kho hoặc ra vị trí ảo ngoài kho (Xuất kho sử dụng → SUDUNG-*) bỏ qua | `stock.picking._hlv_check_inter_warehouse_dest` (gọi từ 2 ràng buộc trên) |
 | Sinh phiếu bước 2 | `stock.picking.button_validate` → `create_second_transfer_wizard` |
+| Phần còn lại (backorder) của phiếu bước 2 giữ `source_transfer_id` khi tách trên web | `stock.picking._create_backorder_picking` (override) |
 | Tự chọn đích CHUYENKHO khi Liên hệ là kho khác; nguồn bước 2 = đích bước 1 | `stock.picking._compute_location_id` (override) |
 | Chặn xác nhận khi nguồn/đích không khớp kho của loại phiếu | `stock.picking._hlv_check_transfer_route` (gọi đầu `button_validate`) |
 
@@ -61,5 +62,6 @@ Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_t
 ## 5. Mở rộng
 - Thêm kho mới: chạy nâng cấp module hoặc gọi `_hlv_get_transfer_location()` (tự tạo khi thiếu).
 - Cho thêm loại phiếu được dùng CHUYENKHO: sửa `_check_hlv_transfer_location`.
+- Quyền kho (`hlv_warehouse_permission`) nhận diện phiếu bước 2 qua `source_transfer_id`: bỏ CHUYENKHO kho gửi khỏi các kho bị kiểm, không kiểm quyền "tạo" phiếu bước 2 hệ thống sinh. Người nhận chỉ cần CKN ở kho nhận, người gửi chỉ cần CKD ở kho gửi.
 - Mã trình tự CKD/CKN gắn với quyền kho (`hlv_warehouse_permission`, `hlv_mobile_barcode` tra quyền theo `sequence_code`) và với `stock_quantity_validation` (bỏ kiểm vượt SL như INT). Đổi mã thì sửa cả các chỗ đó.
 - `scripts/migrate_transit_to_chuyenkho.py` (**dự trù, chưa chạy**, không nằm trong module): chuyển phiếu bước 1/bước 2 chưa xong từ Transit cũ sang CHUYENKHO, chạy bằng `odoo-bin shell`, mặc định `DRY_RUN = True`.
