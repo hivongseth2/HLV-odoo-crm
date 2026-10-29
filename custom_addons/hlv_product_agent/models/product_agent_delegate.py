@@ -37,7 +37,7 @@ class HlvProductAgentDelegate(models.AbstractModel):
         if not task:
             return {'status': 'error', 'message': "Thiếu nhiem_vu."}
         Runner = self.env['hlv.product.agent.api.runner']
-        Queries = self.env['hlv.product.agent.queries']
+        Queries = self.env['hlv.product.agent.queries'].with_context(chat_user_id=session.user_id.id)
         model = config['worker_model']
         params = dict(
             model=model, max_tokens=WORKER_MAX_TOKENS, system=WORKER_SYSTEM, tools=worker_tools(),

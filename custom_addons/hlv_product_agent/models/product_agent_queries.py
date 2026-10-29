@@ -15,6 +15,7 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
     PublicInventory, _get_active_holds, _get_so_reservation_map, _rg_sum,
 )
 
+from ..services.price_summary import compact_prices
 from ..services.query_format import clamp_int, fit_result, name_tokens
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
@@ -33,6 +34,9 @@ PRODUCT_CANDIDATES = 10
 # Tìm "chứa" lấy rộng rồi tự xếp: một model hay bán khớp hàng chục combo.
 RESOLVE_SEARCH_LIMIT = 80
 DEFAULT_HISTORY_DAYS = 90
+# Nhóm quyền của trang hỏi / tra giá NCC: trợ lý chỉ đưa giá mua cho đúng người trang đó cho xem.
+PRICE_PAGE_GROUP = 'hlv_vendor_quotation.group_vendor_quote_user'
+PRICE_PAGE_LINK = '/hoi-gia-ncc/tra-gia?p=%s'
 # Dòng giữ chỗ của phiếu không phải đơn bán: đủ cho một mã, chặn trường hợp lỗi dữ liệu dồn hàng nghìn dòng.
 OTHER_RESERVATION_LIMIT = 200
 # Tool tra theo mô tả tự do, không cần (và có thể không có) đúng một mã trong Odoo.
@@ -470,6 +474,11 @@ class HlvProductAgentQueries(models.AbstractModel):
             from odoo.addons.hlv_vendor_quotation.services.price_lookup import product_prices
         except ImportError:
             return {'message': "Odoo chưa cài module hỏi giá NCC (hlv_vendor_quotation)."}
+        # Tool chạy dưới quyền quản trị (luồng nền / agent): kiểm quyền theo tài khoản đang chat,
+        # không thì sale không được vào trang tra giá vẫn hỏi ra giá mua qua trợ lý.
+        user = self.env['res.users'].browse(self.env.context.get('chat_user_id')).exists()
+        if not user or not user.has_group(PRICE_PAGE_GROUP):
+            return {'status': 'error', 'message': "Tài khoản đang chat chưa được cấp quyền hỏi giá NCC nên "
+                                                  "không xem được giá mua / báo giá NCC."}
         prices = product_prices(self.env(su=True), product)
-        return {'theo_ncc': prices.get('vendors'), 'lan_mua': prices.get('purchases'),
-                'bao_gia': prices.get('quotes')}
+        return compact_prices(prices, PRICE_PAGE_LINK % product.id)

@@ -8,8 +8,8 @@
 
 // **đậm**, ==tô vàng==, `mã`, ![ảnh](url), [link](url), link trần https://...
 const INLINE = /\*\*([^*\n]+)\*\*|==([^=\n]+)==|`([^`\n]+)`|!\[([^\]\n]*)\]\(([^)\s]+)\)|\[([^\]\n]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]+)/g;
-// Ảnh / link nội bộ được phép: ảnh sản phẩm của trang tra tồn và ảnh Odoo.
-const LOCAL_PATHS = ["/search_stock/image/", "/web/image/", "/search_stock?"];
+// Ảnh / link nội bộ được phép: ảnh sản phẩm của trang tra tồn, ảnh Odoo, trang hỏi / tra giá NCC.
+const LOCAL_PATHS = ["/search_stock/image/", "/web/image/", "/search_stock?", "/hoi-gia-ncc"];
 
 /**
  * URL dùng được cho ảnh / link, hoặc null.
