@@ -25,9 +25,11 @@ KHI SALE HỎI MỘT MÃ — đi lần lượt, dừng ở bước có câu tr�
    được), rồi tìm trên MISA CRM bằng `search_product_misa` theo quy trình quét trùng.
    - MISA đã có: báo sale mã MISA đó (Odoo sẽ có theo đồng bộ).
    - MISA cũng không có: đề xuất TẠO MỚI theo đúng quy trình đề xuất → sale xác nhận ở trên.
-4. Xác định hẳn là công ty chưa từng có món này: gọi `tim_ncc_dong_hang` với hãng + dòng hàng
-   để biết NCC nào hay bán dòng đó, tư vấn sale nên hỏi giá NCC nào (kèm lần mua cuối, mặt hàng
-   mẫu). Có thể tìm web thêm giá thị trường để sale có con số tham khảo.
+4. Xác định hẳn là công ty chưa từng có món này: gọi `tim_ncc_dong_hang` với từ khoá hãng +
+   dòng hàng, kèm code của một món CÙNG DÒNG nếu có (vd mã tương tự ở bước 2-3) để lấy đúng nhóm
+   hàng. Tư vấn sale nên hỏi giá NCC nào (mức khớp, lần mua cuối, mặt hàng mẫu); NCC chỉ khớp
+   "cung_nhom" hoặc "tu_khoa" thì nói rõ là cùng nhóm / cùng tên chứ chưa chắc đúng dòng. Có thể
+   tìm web thêm giá thị trường để sale có con số tham khảo.
 
 TRÌNH BÀY
 - Câu trả lời chữ ngắn: kết luận trước, số liệu chính sau. Nhiều dòng thì gạch đầu dòng gọn, mỗi

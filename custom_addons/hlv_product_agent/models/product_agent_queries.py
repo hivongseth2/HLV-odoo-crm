@@ -41,9 +41,13 @@ SIMILAR_CANDIDATES = 300
 SIMILAR_MIN_SCORE = 0.3
 SAME_CATEGORY_BONUS = 0.15
 SIMILAR_RESULTS = 10
-# NCC theo dòng hàng: đọc các dòng mua gần nhất có đủ từ khoá.
-VENDOR_KEYWORDS = 5
+# NCC theo dòng hàng: đọc các dòng mua gần nhất cùng nhóm / có đủ từ khoá.
 VENDOR_LINE_LIMIT = 500
+# Mức khớp, mạnh nhất trước: NCC xếp theo mức khớp tốt nhất của các lần mua.
+VENDOR_TIERS = ['tu_khoa_va_nhom', 'cung_nhom', 'tu_khoa']
+# Đoán nhóm hàng từ từ khoá: nhóm phải chiếm ít nhất ngần này phần các món khớp.
+VENDOR_CATEGORY_SAMPLE = 200
+VENDOR_CATEGORY_SHARE = 0.4
 VENDOR_SAMPLE_ITEMS = 3
 VENDOR_RESULTS = 10
 
@@ -289,27 +293,91 @@ class HlvProductAgentQueries(models.AbstractModel):
         }
 
     def _q_tim_ncc_dong_hang(self, args):
-        """NCC đã bán cho mình những món chứa đủ các từ khoá (hãng, dòng, loại hàng), mới nhất trước."""
-        words = [word for word in (args.get('tu_khoa') or '').split() if len(word) >= 2][:VENDOR_KEYWORDS]
-        if not words:
-            return {'status': 'error', 'message': "Cần tu_khoa (vd: 'MILWAUKEE M18', 'phốt dầu viton')."}
-        lines = self.env['purchase.order.line'].sudo().search(
-            [('order_id.state', 'in', ('purchase', 'done'))] + [('name', 'ilike', word) for word in words],
-            order='id desc', limit=VENDOR_LINE_LIMIT)
+        """NCC đã bán cho mình dòng hàng này: khớp từ khoá + cùng nhóm hàng > cùng nhóm > chỉ từ khoá.
+
+        Nhóm hàng lấy từ món tham chiếu (code / product_id), không có thì lấy nhóm chiếm đa số
+        trong các sản phẩm khớp từ khoá. Từ khoá so KHÔNG DẤU bằng Python: tìm "chứa" của SQL
+        phân biệt dấu, "phot viton" sẽ trượt "Phốt dầu VITON".
+        """
+        keyword_text = args.get('tu_khoa') or ''
+        words = name_tokens(keyword_text)
+        base = None
+        if args.get('code') or args.get('product_id'):
+            base, _problem, _note = self._resolve_product(args.get('code'), args.get('product_id'))
+        category = base.categ_id if base else self._dominant_category(keyword_text, words)
+        if not words and not category:
+            return {'status': 'error', 'message': "Cần tu_khoa (hãng + dòng / loại hàng) hoặc code của một "
+                                                  "món cùng dòng để biết nhóm hàng."}
+        Line = self.env['purchase.order.line'].sudo()
+        bought = [('order_id.state', 'in', ('purchase', 'done')), ('product_id', '!=', False)]
+        lines = Line.browse()
+        if category:
+            lines |= Line.search(bought + [('product_id.categ_id', '=', category.id)],
+                                 order='id desc', limit=VENDOR_LINE_LIMIT)
+        if words:
+            lines |= Line.search(bought + self._keyword_prefilter(keyword_text),
+                                 order='id desc', limit=VENDOR_LINE_LIMIT)
         vendors = {}
-        for line in lines:
+        for line in lines.sorted('id', reverse=True):
+            same_group = bool(category) and line.product_id.categ_id == category
+            has_words = bool(words) and words <= self._line_tokens(line)
+            if not (same_group or has_words):
+                continue  # dòng lấy về nhờ lọc thô nhưng không đủ từ khoá khi so không dấu
+            if has_words and same_group:
+                tier = VENDOR_TIERS[0]
+            else:
+                tier = VENDOR_TIERS[1] if same_group else VENDOR_TIERS[2]
             partner = line.order_id.partner_id.commercial_partner_id
             entry = vendors.setdefault(partner.id, {
-                'ncc': partner.display_name, 'so_lan_mua': 0, 'lan_mua_cuoi': '', 'mat_hang': [],
+                'ncc': partner.display_name, 'khop': tier, 'so_lan_mua': 0, 'lan_mua_cuoi': '', 'mat_hang': [],
             })
+            if VENDOR_TIERS.index(tier) < VENDOR_TIERS.index(entry['khop']):
+                entry['khop'] = tier
             entry['so_lan_mua'] += 1
             if not entry['lan_mua_cuoi']:
                 entry['lan_mua_cuoi'] = fields.Date.to_string(line.order_id.date_order)
             label = '%s — %s' % (line.product_id.default_code or '', line.product_id.name or line.name)
             if label not in entry['mat_hang'] and len(entry['mat_hang']) < VENDOR_SAMPLE_ITEMS:
                 entry['mat_hang'].append(label)
-        ranked = sorted(vendors.values(), key=lambda entry: (-entry['so_lan_mua'], entry['ncc']))
-        return {'tu_khoa': ' '.join(words), 'so_dong_mua': len(lines), 'ncc': ranked[:VENDOR_RESULTS]}
+        ranked = sorted(vendors.values(),
+                        key=lambda entry: (VENDOR_TIERS.index(entry['khop']), -entry['so_lan_mua'], entry['ncc']))
+        return {
+            'tieu_chi': {
+                'tu_khoa': keyword_text or None,
+                'nhom_hang': category.complete_name if category else None,
+                'nhom_lay_tu': ('mã ' + (base.default_code or base.name)) if base else (
+                    'nhóm chiếm đa số trong các món khớp từ khoá' if category else None),
+            },
+            'ncc': ranked[:VENDOR_RESULTS],
+        }
+
+    def _dominant_category(self, keyword_text, words):
+        """Nhóm hàng của đa số sản phẩm có đủ từ khoá (so không dấu). None nếu không rõ ràng."""
+        if not words:
+            return None
+        products = self.env['product.product'].sudo().search(
+            self._keyword_prefilter(keyword_text, field='name'), limit=VENDOR_CATEGORY_SAMPLE)
+        counts = {}
+        for product in products:
+            if words <= name_tokens('%s %s' % (product.name, product.default_code or '')):
+                counts[product.categ_id] = counts.get(product.categ_id, 0) + 1
+        if not counts:
+            return None
+        category, count = max(counts.items(), key=lambda item: item[1])
+        return category if category and count / sum(counts.values()) >= VENDOR_CATEGORY_SHARE else None
+
+    @staticmethod
+    def _keyword_prefilter(keyword_text, field='name'):
+        """Lọc thô bằng SQL trước khi so không dấu: từ ASCII (hãng, model) so thẳng được; không
+        có từ ASCII nào thì lọc theo từ đầu tiên đúng như gõ (có dấu)."""
+        raw = [word for word in keyword_text.split() if len(word) >= 2]
+        ascii_words = [word for word in raw if word.isascii()]
+        return [(field, 'ilike', word) for word in (ascii_words or raw[:1])]
+
+    @staticmethod
+    def _line_tokens(line):
+        return name_tokens('%s %s %s' % (line.product_id.name or '', line.product_id.default_code or '',
+                                          line.name or ''))
 
     def _q_xem_gia_nhap(self, product, args):
         try:

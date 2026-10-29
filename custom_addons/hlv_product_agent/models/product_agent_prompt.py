@@ -21,7 +21,10 @@ PARTS = [
 # Vân tay (prompt_version) các bản mặc định đã phát hành trước. Phần trong DB còn đúng một bản
 # này = chưa ai sửa, nâng cấp module thì thay bằng bản mặc định hiện tại.
 OLD_DEFAULT_VERSIONS = {
-    'assist': {'2c0a2969651238a1'},  # 18.0.1.4.0: còn hướng dẫn vẽ bảng show_panel
+    'assist': {
+        '2c0a2969651238a1',  # 18.0.1.4.0: còn hướng dẫn vẽ bảng show_panel
+        'a8e4693930aa1257',  # 18.0.1.5.0: tim_ncc_dong_hang chỉ theo từ khoá
+    },
 }
 DEFAULT_FILES = {
     'core': 'hlv_product_agent/data/prompt_defaults/system_prompt.md',

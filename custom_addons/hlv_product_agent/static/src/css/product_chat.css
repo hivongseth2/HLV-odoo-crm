@@ -1,7 +1,7 @@
 /* Khung chat "Trợ lý" — cột PHẢI nằm trong khung trang tra tồn (cùng container với bảng),
    dính theo khi cuộn, không đóng được. Màu theo logo Hoàng Long Vũ. */
 :root {
-  --pa-drawer-width: 380px;
+  --pa-drawer-width: 420px;
 }
 
 .hlv-pa-chat {
@@ -11,9 +11,11 @@
   --pa-yellow: #f8c20a;
   --pa-yellow-soft: #fff6d6;
   --pa-bg: #ffffff;
-  --pa-border: #d9dee3;
-  --pa-text: #1f2933;
-  --pa-muted: #6b7785;
+  --pa-surface: #faf9f5;
+  --pa-user-bubble: #efece4;
+  --pa-border: #e3e0d8;
+  --pa-text: #2b2a27;
+  --pa-muted: #8a877f;
   --pa-warn-bg: #fff4d6;
   --pa-warn-text: #7a5a00;
   --pa-error-bg: #fde8e8;
@@ -21,7 +23,7 @@
 
   height: 72vh;
   margin-top: 16px;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--pa-text);
 }
 
@@ -30,10 +32,8 @@
   flex-direction: column;
   position: relative;
   height: 100%;
-  background: var(--pa-bg);
-  border: 1px solid var(--pa-border);
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(13, 76, 140, 0.08);
+  background: var(--pa-surface);
+  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -150,25 +150,37 @@ body.hlv-pa-resizing {
   display: none;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  background: var(--pa-accent-soft);
-  color: var(--pa-accent);
+  padding: 10px 20px 4px;
+  font-size: 12.5px;
+  color: var(--pa-muted);
 }
 
 .hlv-pa-chat[data-shared="1"]:not([data-picking="1"]) .hlv-pa-who {
   display: flex;
 }
 
+/* Tên người đang chat, bấm vào để đổi người. */
 .hlv-pa-switch {
-  margin-left: auto;
-  border: 1px solid var(--pa-accent);
+  border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--pa-accent);
-  font-size: 12px;
-  padding: 2px 8px;
+  color: var(--pa-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 2px 6px;
+  margin-left: -6px;
   cursor: pointer;
+}
+
+.hlv-pa-switch::after {
+  content: " ▾";
+  color: var(--pa-muted);
+  font-weight: 400;
+}
+
+.hlv-pa-switch:hover {
+  background: var(--pa-user-bubble);
+  color: var(--pa-text);
 }
 
 /* Chọn người: che hẳn phần chat để không ai gõ nhầm vào cuộc của người khác. */
@@ -245,11 +257,11 @@ body.hlv-pa-resizing {
 .hlv-pa-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: #f7f9fa;
+  gap: 18px;
+  background: var(--pa-surface);
 }
 
 .hlv-pa-welcome {
@@ -260,7 +272,7 @@ body.hlv-pa-resizing {
 }
 
 .hlv-pa-msg {
-  max-width: 88%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -270,39 +282,45 @@ body.hlv-pa-resizing {
   /* Claude trả chữ thuần có xuống dòng; giữ nguyên xuống dòng thay vì dựng HTML. */
   white-space: pre-wrap;
   word-break: break-word;
-  padding: 8px 11px;
-  border-radius: 10px;
-  line-height: 1.45;
+  line-height: 1.6;
 }
 
 .hlv-pa-msg-user {
   align-self: flex-end;
+  max-width: 85%;
 }
 
 .hlv-pa-msg-user .hlv-pa-text {
-  background: var(--pa-accent);
-  color: #fff;
+  padding: 9px 14px;
+  border-radius: 16px;
+  background: var(--pa-user-bubble);
 }
 
 .hlv-pa-msg-assistant {
-  align-self: flex-start;
-}
-
-.hlv-pa-msg-assistant .hlv-pa-text {
-  background: var(--pa-bg);
-  border: 1px solid var(--pa-border);
+  align-self: stretch;
 }
 
 .hlv-pa-msg-event {
-  align-self: center;
-  max-width: 96%;
+  align-self: stretch;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .hlv-pa-msg-event .hlv-pa-text {
-  background: var(--pa-yellow-soft);
-  color: var(--pa-accent-dark);
+  color: var(--pa-muted);
   font-size: 12.5px;
-  text-align: center;
+  line-height: 1.45;
+}
+
+.hlv-pa-msg-event .hlv-pa-text::before {
+  content: "✓ ";
+  color: var(--pa-accent);
+}
+
+.hlv-pa-msg-event .hlv-pa-time {
+  display: none;
 }
 
 /* Bảng trợ lý (show_panel): nổi trên bảng tra tồn, kéo được bằng thanh tiêu đề. */
@@ -377,20 +395,17 @@ body.hlv-pa-resizing {
 
 /* Nút trong dòng hệ thống: mở lại trang tra tồn với từ khoá trợ lý đã tìm. */
 .hlv-pa-action {
-  align-self: center;
   border: 0;
   cursor: pointer;
-  padding: 3px 12px;
-  border-radius: 999px;
-  background: var(--pa-accent);
-  color: #fff !important;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 0;
+  background: transparent;
+  color: var(--pa-accent) !important;
+  font-size: 12.5px;
   text-decoration: none !important;
 }
 
 .hlv-pa-action:hover {
-  background: var(--pa-accent-dark);
+  text-decoration: underline !important;
 }
 
 .hlv-pa-msg img {
@@ -407,6 +422,13 @@ body.hlv-pa-resizing {
 .hlv-pa-time {
   font-size: 11px;
   color: var(--pa-muted);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Giờ gửi chỉ hiện khi rê chuột vào tin, như Claude desktop: bớt rối mắt. */
+.hlv-pa-msg:hover .hlv-pa-time {
+  opacity: 1;
 }
 
 .hlv-pa-msg-user .hlv-pa-time {
@@ -427,8 +449,7 @@ body.hlv-pa-resizing {
 .hlv-pa-previews {
   display: flex;
   gap: 8px;
-  padding: 8px 12px 0;
-  border-top: 1px solid var(--pa-border);
+  padding: 8px 20px 0;
 }
 
 .hlv-pa-preview {
@@ -461,20 +482,32 @@ body.hlv-pa-resizing {
 
 .hlv-pa-input {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--pa-border);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 4px 14px 14px;
+  padding: 10px 10px 8px 14px;
+  background: var(--pa-bg);
+  border: 1px solid var(--pa-border);
+  border-radius: 18px;
+  box-shadow: 0 2px 10px rgba(43, 42, 39, 0.06);
+}
+
+.hlv-pa-input:focus-within {
+  border-color: #cfcabe;
+  box-shadow: 0 2px 14px rgba(43, 42, 39, 0.1);
 }
 
 .hlv-pa-input textarea {
-  flex: 1;
+  order: -1;
+  flex: 1 1 100%;
   resize: none;
-  border: 1px solid var(--pa-border);
-  border-radius: 8px;
-  padding: 7px 9px;
-  font-size: 13.5px;
-  max-height: 120px;
+  border: 0;
+  padding: 0 0 6px;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.5;
+  max-height: 160px;
 }
 
 .hlv-pa-new,
@@ -482,17 +515,37 @@ body.hlv-pa-resizing {
 .hlv-pa-send {
   border: 0;
   background: transparent;
-  color: var(--pa-accent);
-  font-size: 18px;
-  padding: 6px;
+  color: var(--pa-muted);
+  font-size: 15px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   margin: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+}
+
+.hlv-pa-new:hover,
+.hlv-pa-attach:hover {
+  background: var(--pa-user-bubble);
+  color: var(--pa-text);
+}
+
+.hlv-pa-send {
+  margin-left: auto;
+  background: var(--pa-accent);
+  color: #fff;
+}
+
+.hlv-pa-send:hover {
+  background: var(--pa-accent-dark);
 }
 
 .hlv-pa-input textarea:focus {
   outline: 0;
-  border-color: var(--pa-accent);
-  box-shadow: 0 0 0 2px var(--pa-yellow-soft);
 }
 
 .hlv-pa-send:disabled {
