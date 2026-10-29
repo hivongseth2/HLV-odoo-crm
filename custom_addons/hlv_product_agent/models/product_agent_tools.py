@@ -12,6 +12,7 @@ from odoo.addons.misa_fetch_po_button.utils.misa_product_code import ProductCode
 
 from ..services import combo_change_summary, missing_from_proposal, odoo_combo_text
 from ..agent.misa_tools import QUERY_TOOL_NAMES
+from ..services.panel_html import panel_html_problems
 from ..services.search_ranking import summarize_search
 
 _logger = logging.getLogger(__name__)
@@ -143,6 +144,13 @@ class HlvProductAgentTools(models.AbstractModel):
         if len(html) > PANEL_HTML_MAX:
             return {'status': 'error', 'message': "Bảng quá lớn (%s ký tự, tối đa %s): rút gọn bớt dòng."
                     % (len(html), PANEL_HTML_MAX)}
+        problems = panel_html_problems(html)
+        if problems:
+            return {'status': 'error', 'message': (
+                "Bảng CHƯA hiện: bảng chạy trong khung khoá script nên %s sẽ không chạy, người dùng chỉ "
+                "thấy trang trắng. Dựng lại CHỈ bằng HTML + CSS inline; biểu đồ vẽ bằng SVG tĩnh (tính "
+                "sẵn toạ độ: <rect> cho cột, <path>/<circle> cho tròn, <text> cho nhãn) rồi gọi lại."
+            ) % ", ".join(problems)}
         session.post_client_action("Trợ lý mở bảng: %s" % title, {'type': 'panel', 'title': title, 'html': html})
         return {'status': 'success', 'message': "Đã hiện bảng '%s' cho người dùng." % title}
 

@@ -343,9 +343,10 @@ PANEL_TOOL = {
     "description": (
         "Hiện một BẢNG nổi trên trang của người dùng (đè lên bảng tra tồn, họ kéo đi / đóng được) "
         "với HTML em tự dựng: bảng so sánh, thẻ số liệu, biểu đồ cột vẽ bằng SVG... Dùng khi dữ "
-        "liệu nhiều dòng / nhiều cột, đọc trong khung chat bất tiện. Chỉ HTML + CSS inline, KHÔNG "
-        "script (bị chặn), không ảnh ngoài. Gọi lại là thay nội dung bảng. Vẫn tóm tắt kết luận "
-        "bằng chữ trong câu trả lời."
+        "liệu nhiều dòng / nhiều cột, đọc trong khung chat bất tiện. Chỉ HTML + CSS inline. KHÔNG "
+        "dùng <script>, <canvas>, thư viện biểu đồ (Chart.js...) hay onclick: bảng khoá script, có "
+        "là bị từ chối. Biểu đồ vẽ bằng SVG tĩnh, tự tính toạ độ. Không ảnh ngoài. Gọi lại là thay "
+        "nội dung bảng. Vẫn tóm tắt kết luận bằng chữ trong câu trả lời."
     ),
     "inputSchema": {
         "type": "object",
