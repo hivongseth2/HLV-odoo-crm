@@ -11,9 +11,9 @@
   --pa-yellow: #f8c20a;
   --pa-yellow-soft: #fff6d6;
   --pa-bg: #ffffff;
-  --pa-surface: #faf9f5;
-  --pa-user-bubble: #efece4;
-  --pa-border: #e3e0d8;
+  --pa-surface: #f3f7fc;
+  --pa-user-bubble: #e1ecf8;
+  --pa-border: #dbe4ef;
   --pa-text: #2b2a27;
   --pa-muted: #8a877f;
   --pa-warn-bg: #fff4d6;
@@ -23,7 +23,7 @@
 
   height: 72vh;
   margin-top: 16px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--pa-text);
 }
 
@@ -549,7 +549,7 @@ body.hlv-pa-resizing {
 }
 
 .hlv-pa-input:focus-within {
-  border-color: #cfcabe;
+  border-color: #b9cde4;
   box-shadow: 0 2px 14px rgba(43, 42, 39, 0.1);
 }
 
@@ -560,12 +560,11 @@ body.hlv-pa-resizing {
   border: 0;
   padding: 0 0 6px;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   max-height: 160px;
 }
 
-.hlv-pa-new,
 .hlv-pa-attach,
 .hlv-pa-send {
   border: 0;
@@ -583,7 +582,6 @@ body.hlv-pa-resizing {
   cursor: pointer;
 }
 
-.hlv-pa-new:hover,
 .hlv-pa-attach:hover {
   background: var(--pa-user-bubble);
   color: var(--pa-text);

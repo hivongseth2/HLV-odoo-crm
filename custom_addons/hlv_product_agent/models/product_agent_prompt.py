@@ -27,6 +27,7 @@ OLD_DEFAULT_VERSIONS = {
         'e35043ee76354515',  # 18.0.1.6.0: chưa có định dạng chữ / ảnh, chưa dặn chủ động tìm web
         '35043f5c0fb79a58',  # 18.0.1.7.0: trả lời dài, chưa có nút lựa chọn [[...]]
         '79f0f9e068dff22a',  # 18.0.1.8.0: bộ lựa chọn mẫu cố định, Claude chép y nguyên
+        '225ec1aa51313458',  # 18.0.1.9.0: chưa hỏi bằng ảnh khi tạo mã mà chưa rõ hàng
     },
 }
 DEFAULT_FILES = {

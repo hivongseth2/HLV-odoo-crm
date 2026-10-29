@@ -1,6 +1,6 @@
 /* Khung chat trợ lý — thanh tab (Trò chuyện / Lịch sử / Hàng đã tạo) và nội dung hai tab phụ.
    Tách khỏi product_chat.css cho file dưới giới hạn độ dài; biến màu --pa-* khai ở .hlv-pa-chat. */
-/* Thanh tab trên đầu cột chat, kiểu Claude desktop: chữ, tab đang mở có gạch dưới. */
+/* Thanh trên đầu cột chat: nút "Cuộc mới", các tab (đang tạm ẩn), tên người đang chat. */
 .hlv-pa-tabs {
   display: flex;
   align-items: center;
@@ -9,7 +9,10 @@
   border-bottom: 1px solid var(--pa-border);
 }
 
+/* Tạm ẩn các tab (Trò chuyện / Lịch sử / Hàng đã tạo) theo yêu cầu 10/2026: khung chat chỉ còn
+   cuộc đang chat. Code hai tab phụ vẫn giữ, bỏ "display: none" dưới đây là hiện lại. */
 .hlv-pa-tab {
+  display: none;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -147,4 +150,24 @@
 .hlv-pa-created-detail {
   font-size: 13px;
   margin: 2px 0;
+}
+
+/* Nút "Cuộc mới" ở đầu thanh trên, như nút New chat của Claude desktop. */
+.hlv-pa-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pa-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  margin: 0 0 8px -6px;
+  cursor: pointer;
+}
+
+.hlv-pa-new:hover {
+  background: var(--pa-accent-soft);
 }
