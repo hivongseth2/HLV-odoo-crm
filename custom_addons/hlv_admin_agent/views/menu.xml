@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- App riêng, chỉ người có quyền Trợ lý quản trị thấy. -->
+    <menuitem id="menu_hlv_admin_agent_root"
+              name="Trợ lý quản trị"
+              groups="group_admin_agent_user"
+              web_icon="hlv_admin_agent,static/description/icon.png"
+              sequence="95"/>
+
+    <menuitem id="menu_hlv_admin_agent_chat"
+              name="Mở trang chat"
+              parent="menu_hlv_admin_agent_root"
+              action="action_hlv_admin_chat_page"
+              groups="group_admin_agent_user"
+              sequence="10"/>
+
+    <menuitem id="menu_hlv_admin_agent_sessions"
+              name="Cuộc chat"
+              parent="menu_hlv_admin_agent_root"
+              action="action_hlv_admin_chat_session"
+              groups="base.group_system"
+              sequence="20"/>
+
+    <menuitem id="menu_hlv_admin_agent_config"
+              name="Cấu hình"
+              parent="menu_hlv_admin_agent_root"
+              action="action_hlv_admin_agent_config"
+              groups="base.group_system"
+              sequence="30"/>
+</odoo>

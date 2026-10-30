@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_admin_agent_config_form" model="ir.ui.view">
+        <field name="name">hlv.admin.agent.config.form</field>
+        <field name="model">hlv.admin.agent.config</field>
+        <field name="arch" type="xml">
+            <form string="Cấu hình trợ lý quản trị" create="false" delete="false">
+                <header>
+                    <button name="action_reset_prompt" type="object" string="Về prompt mặc định"
+                            confirm="Ghi đè prompt lõi bằng bản mặc định đi kèm module?"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="model"/>
+                            <field name="effort"/>
+                        </group>
+                        <group>
+                            <div class="text-muted" colspan="2">
+                                API key, model phụ tra cứu: dùng chung với Trợ lý tạo mã hàng
+                                (Cài đặt &gt; Tồn kho &gt; Trợ lý tạo mã hàng). Đổi prompt / model là các
+                                cuộc chat mở lại lịch sử ở lượt kế tiếp.
+                            </div>
+                        </group>
+                    </group>
+                    <field name="prompt_core" widget="text" nolabel="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_admin_agent_config" model="ir.actions.server">
+        <field name="name">Cấu hình trợ lý quản trị</field>
+        <field name="model_id" ref="model_hlv_admin_agent_config"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_current()</field>
+    </record>
+</odoo>

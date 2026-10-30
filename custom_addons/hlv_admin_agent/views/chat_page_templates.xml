@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang toàn màn kiểu Claude desktop: cột trái các cuộc chat, giữa là cuộc đang mở. Dựng trên
+         web.frontend_layout (không phải layout website) và tắt header / footer: trang chỉ có chat. -->
+    <template id="chat_page" name="Trợ lý quản trị">
+        <t t-call="web.frontend_layout">
+            <t t-set="title">Trợ lý quản trị</t>
+            <t t-set="no_header" t-value="True"/>
+            <t t-set="no_footer" t-value="True"/>
+            <div class="hlv-aa-app" data-sidebar="1">
+                <aside class="hlv-aa-sidebar">
+                    <div class="hlv-aa-brand">Trợ lý quản trị</div>
+                    <button type="button" class="hlv-aa-new">
+                        <i class="fa fa-plus"/> Cuộc chat mới
+                    </button>
+                    <div class="hlv-aa-sessions"/>
+                    <div class="hlv-aa-account">
+                        <a href="/odoo" title="Về Odoo"><i class="fa fa-arrow-left"/></a>
+                        <span t-esc="user_name"/>
+                    </div>
+                </aside>
+                <main class="hlv-aa-main">
+                    <div class="hlv-aa-top">
+                        <button type="button" class="hlv-aa-toggle" title="Ẩn / hiện danh sách cuộc chat">
+                            <i class="fa fa-bars"/>
+                        </button>
+                        <span class="hlv-aa-title"/>
+                    </div>
+                    <div class="hlv-aa-scroll">
+                        <div class="hlv-aa-messages"/>
+                    </div>
+                    <div class="hlv-aa-composer">
+                        <div class="hlv-aa-status"/>
+                        <div class="hlv-aa-previews"/>
+                        <div class="hlv-aa-input">
+                            <label class="hlv-aa-attach" title="Đính kèm ảnh (hoặc dán ảnh vào ô chat)">
+                                <i class="fa fa-paperclip"/>
+                                <input type="file" accept="image/*" multiple="multiple" class="d-none"/>
+                            </label>
+                            <textarea rows="1" maxlength="4000"
+                                      placeholder="Tạo báo giá, cơ hội, tra tồn, tạo mã hàng..."/>
+                            <button type="button" class="hlv-aa-send" title="Gửi (Enter)">
+                                <i class="fa fa-arrow-up"/>
+                            </button>
+                        </div>
+                        <div class="hlv-aa-hint">Enter để gửi · Shift+Enter xuống dòng · dán ảnh thẳng vào ô chat</div>
+                    </div>
+                </main>
+                <!-- Bảng trợ lý dựng (so sánh thông số): HTML trong iframe sandbox, không chạy script. -->
+                <div class="hlv-aa-board" data-open="0">
+                    <div class="hlv-aa-board-box">
+                        <div class="hlv-aa-board-head">
+                            <span class="hlv-aa-board-title"/>
+                            <button type="button" class="hlv-aa-board-close" title="Đóng (Esc)">
+                                <i class="fa fa-times"/>
+                            </button>
+                        </div>
+                        <iframe class="hlv-aa-board-frame" sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                title="Bảng của trợ lý"/>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

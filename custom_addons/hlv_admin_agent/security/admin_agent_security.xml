@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_admin_agent" model="ir.module.category">
+        <field name="name">Trợ lý quản trị</field>
+        <field name="sequence">61</field>
+    </record>
+
+    <!-- Quyền riêng, không suy ra từ quyền nào khác: trợ lý tạo được báo giá, cơ hội, mã hàng trên
+         MISA nên phải được cấp có chủ đích. Gán sẵn cho admin. -->
+    <record id="group_admin_agent_user" model="res.groups">
+        <field name="name">Trợ lý quản trị: Được dùng</field>
+        <field name="category_id" ref="module_category_admin_agent"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+        <field name="comment">Vào trang /tro-ly-quan-tri: chat với Claude để tạo báo giá, cơ hội trên MISA CRM, tra cứu kho, tạo mã hàng, tìm web.</field>
+    </record>
+
+    <record id="rule_admin_chat_session_own" model="ir.rule">
+        <field name="name">Trợ lý quản trị: chỉ cuộc chat của mình</field>
+        <field name="model_id" ref="model_hlv_admin_chat_session"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_admin_agent_user'))]"/>
+    </record>
+
+    <record id="rule_admin_chat_session_system" model="ir.rule">
+        <field name="name">Trợ lý quản trị: admin hệ thống xem tất cả</field>
+        <field name="model_id" ref="model_hlv_admin_chat_session"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('base.group_system'))]"/>
+    </record>
+
+    <record id="rule_admin_chat_message_own" model="ir.rule">
+        <field name="name">Tin trợ lý quản trị: theo cuộc chat của mình</field>
+        <field name="model_id" ref="model_hlv_admin_chat_message"/>
+        <field name="domain_force">[('session_id.user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_admin_agent_user'))]"/>
+    </record>
+
+    <record id="rule_admin_chat_message_system" model="ir.rule">
+        <field name="name">Tin trợ lý quản trị: admin hệ thống xem tất cả</field>
+        <field name="model_id" ref="model_hlv_admin_chat_message"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('base.group_system'))]"/>
+    </record>
+</odoo>
