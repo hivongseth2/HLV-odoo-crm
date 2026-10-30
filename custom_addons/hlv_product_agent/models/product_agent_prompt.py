@@ -36,6 +36,7 @@ OLD_DEFAULT_VERSIONS = {
         '4d327e8098f509ef',  # 18.0.1.15.0: hết lượt tìm web thì tưởng bị chặn luôn ở các lượt sau
         '5533442db2fe2ad4',  # 18.0.1.16.1: hãng hết hàng chưa đưa hãng khác, mời tạo mã chưa tra MISA
         '352e8f35ecb3123c',  # 18.0.1.16.2: hỏi lại thông tin sale đã ghi, hỏi hãng vật tư chung, chưa hỏi bằng nút
+        '339b1144b28f5e4d',  # 18.0.1.17.0: hãng hết hàng vẫn đẩy thành nút thay vì liệt kê hãng khác
     },
 }
 DEFAULT_FILES = {

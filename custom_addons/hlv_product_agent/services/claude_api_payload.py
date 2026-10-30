@@ -175,6 +175,31 @@ def reply_text(content):
     )
 
 
+# Tool chỉ hiện thứ lên màn hình, không đem về dữ liệu mới: Claude hay viết xong câu trả lời rồi
+# gọi chúng cùng bước, bước sau chỉ còn "Trang đã mở...". Chữ của bước đó là câu trả lời thật.
+DISPLAY_TOOLS = frozenset({'show_in_search_page', 'so_sanh_thong_so'})
+
+
+def turn_reply(step_contents):
+    """Chữ trả lời cho sale của cả lượt.
+
+    Nhận: list content của từng bước Claude trong lượt, theo thứ tự (bước cuối là lúc dừng).
+    Trả: chữ bước cuối, đứng sau chữ của các bước trước mà chỉ gọi tool hiển thị
+        (DISPLAY_TOOLS). Chữ viết trước tool tra cứu là câu dạo đầu khi chưa có kết quả nên
+        bỏ. Đoạn lặp y nguyên chỉ giữ một lần. Biên: list rỗng -> ''.
+    """
+    parts = []
+    for index, content in enumerate(step_contents):
+        calls = tool_uses(content)
+        is_last = index == len(step_contents) - 1
+        if not is_last and not (calls and all(call.get('name') in DISPLAY_TOOLS for call in calls)):
+            continue
+        text = reply_text(content)
+        if text and text not in parts:
+            parts.append(text)
+    return "\n\n".join(parts)
+
+
 def tool_uses(content):
     """Các lệnh gọi tool MISA (client tool) trong một phản hồi, theo thứ tự."""
     return [block for block in content or [] if block.get('type') == 'tool_use']

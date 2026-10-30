@@ -26,7 +26,7 @@ from odoo.modules.registry import Registry
 from ..services.claude_api_payload import (
     DEFAULT_EFFORT, DEFAULT_MODEL, DEFAULT_WORKER_MODEL, EFFORT_CHOICES, MAX_TOKENS, MODEL_CHOICES,
     build_system, build_tools, context_key, history_content, history_too_long,
-    load_history, reply_text, request_extras, tool_result, tool_uses, user_content,
+    load_history, request_extras, tool_result, tool_uses, turn_reply, user_content,
 )
 from ..services.claude_client import api_error_message, connection_cause, load_anthropic, make_client
 
@@ -314,6 +314,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
             **request_extras(model),
         )
         started = time.monotonic()
+        step_contents = []
         for step in range(MAX_STEPS):
             if time.monotonic() - started > TURN_DEADLINE_SECONDS:
                 raise TurnFailed("Claude chạy quá %s giây" % TURN_DEADLINE_SECONDS)
@@ -323,6 +324,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
                 raise TurnFailed("Claude từ chối xử lý yêu cầu này")
             content = history_content(response.to_dict(mode='json').get('content'))
             messages.append({'role': 'assistant', 'content': content})
+            step_contents.append(content)
             if response.stop_reason == 'pause_turn':
                 # Tool web chạy dài, máy chủ tạm dừng: gửi lại nguyên văn là chạy tiếp.
                 continue
@@ -335,7 +337,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
                 continue
             if response.stop_reason == 'max_tokens':
                 raise TurnFailed("câu trả lời quá dài, bị cắt")
-            return reply_text(content), messages
+            return turn_reply(step_contents), messages
         raise TurnFailed("Claude gọi tool quá %s lần trong một lượt" % MAX_STEPS)
 
     @staticmethod
