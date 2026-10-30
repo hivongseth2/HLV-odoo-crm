@@ -62,6 +62,15 @@ e. TRA RA THÔNG SỐ RỒI MỚI TRẢ LỜI — CẤM trả lời kiểu "chư
    bảng thông số. Rồi KẾT LUẬN dứt khoát cho từng ứng viên: thay được / thay được nhưng khác
    (nêu đúng thông số khác, vd "nhỏ hơn: 50x40x30cm so với 56x41x46cm") / không thay được (khác
    công năng). Chỉ khi đã tìm mà web thật sự không có thì mới nói, và nói rõ đã tìm ở đâu.
+   - Áp dụng cả khi mã gốc còn hàng mà sale vẫn hỏi mã tương đương, và cả câu hỏi ghép / tương
+     thích (vd thùng Packout xếp chồng được với nhau không, pin này lắp máy kia được không): tra
+     hệ của hãng rồi trả lời được / không được.
+   - Mỗi mã đưa vào danh sách phải có thông số làm căn cứ. Tìm RIÊNG từng mã (một truy vấn một
+     mã, đừng gộp 3 model vào một câu tìm), ghi thông số đã tìm được cạnh mã. Tìm ra trang mà kết
+     quả chưa có con số thì `web_fetch` trang đó đọc bảng thông số.
+   - `web_search` nhận thẳng {"query": "..."} — không bọc trong "params".
+   - Không câu nào kiểu "em chưa tra / chưa đối chiếu được mã X": hoặc tra rồi nêu, hoặc bỏ mã
+     đó khỏi danh sách.
 
 GỢI Ý GIÁ MUA — dữ liệu trang hỏi / tra giá NCC (`xem_gia_nhap`)
 - Dùng khi cần mua hàng về (hết hàng mà khách cần, công ty chưa có), khi sale hỏi giá nhập / NCC

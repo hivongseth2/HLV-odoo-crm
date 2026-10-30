@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Trợ lý tạo mã hàng (Claude)",
-    "version": "18.0.1.18.3",
+    "version": "18.0.1.18.4",
     "summary": "Khung chat trên /search_stock: sale nhờ Claude kiểm trùng và tạo mã hàng MISA (máy văn phòng hoặc Claude API)",
     "description": """
 Sale chat trên trang tra tồn. Odoo xếp tin vào hàng chờ; agent cài trên máy có

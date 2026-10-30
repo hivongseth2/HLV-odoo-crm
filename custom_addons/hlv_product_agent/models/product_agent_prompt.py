@@ -39,6 +39,7 @@ OLD_DEFAULT_VERSIONS = {
         '339b1144b28f5e4d',  # 18.0.1.17.0: hãng hết hàng vẫn đẩy thành nút thay vì liệt kê hãng khác
         'cb597b11c62a5772',  # 18.0.1.17.1: mã hàng chưa bấm được, tìm ra mã chưa kèm giá
         '7d49477661273757',  # 18.0.1.18.2: tìm mã thay thế trả lời "chưa chắc" thay vì tìm web thông số
+        '82559cb54d487b10',  # 18.0.1.18.3: vẫn "chưa tra thông số mã X", gộp nhiều model một câu tìm
     },
 }
 DEFAULT_FILES = {
