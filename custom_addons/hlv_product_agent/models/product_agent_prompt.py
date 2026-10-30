@@ -41,6 +41,7 @@ OLD_DEFAULT_VERSIONS = {
         '7d49477661273757',  # 18.0.1.18.2: tìm mã thay thế trả lời "chưa chắc" thay vì tìm web thông số
         '82559cb54d487b10',  # 18.0.1.18.3: vẫn "chưa tra thông số mã X", gộp nhiều model một câu tìm
         '839af6e80c195eeb',  # 18.0.1.18.4: ghép Packout chưa quét hết hệ, lắp lẫn pin không tìm web, còn "chưa kiểm chứng"
+        '8f562ddea6c79e0b',  # 18.0.1.18.5: còn câu rào cuối bài "em chưa đối chiếu được..."
     },
 }
 DEFAULT_FILES = {
