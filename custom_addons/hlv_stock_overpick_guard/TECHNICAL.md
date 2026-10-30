@@ -20,6 +20,7 @@ Only the picking's own lines are counted. Reservations held by other pickings ar
 ## When the check runs
 | Entry point | Behaviour |
 |---|---|
+| `stock.move._hlv_onchange_cap_overpick` (onchange `move_line_ids`, "Điều chuyển tồn kho" dialog) | **auto-reduces** before save: when a key's total exceeds on-hand, lines are reduced starting with those whose qty went up vs `_origin` (newest first), then a warning is shown. It only sees this move's lines; the save check below covers the rest |
 | `stock.picking.write` (move/move-line/location vals) | runs super with context `hlv_overpick_defer`, then checks the whole picking once |
 | `stock.move.write` (`move_line_ids`/`quantity`/`location_id`) | same as above, for the move's picking (this is where the "Điều chuyển tồn kho" dialog saves) |
 | `stock.move.line.create/write` called directly (barcode, scripts) | checks only the keys of the changed lines; a write that only changes quantity checks only lines whose quantity went up |
