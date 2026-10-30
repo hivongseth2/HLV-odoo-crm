@@ -135,7 +135,7 @@ description | string | | Mô tả.</field>
         <field name="notes">Cần bật "Cho phép tạo dữ liệu trên MISA" ở Cấu hình, không thì 403 write_disabled.
 KHÔNG chống trùng: gọi lại sau khi đã tạo xong là thêm một cơ hội nữa. Có id trả về là ĐÃ tạo, kể cả khi kèm "warning" (bước phụ sau khi tạo bị lỗi).
 Người phụ trách = tài khoản MISA mà Odoo đăng nhập.
-Combo chưa hỗ trợ → 400 combo_not_supported. Mã không có → 404 product_not_found.
+Mã là combo: gửi một dòng (code = mã combo, giá = giá cả bộ); Odoo tự thêm các dòng con như form MISA (tiền 0, SL = SL trong bộ × SL combo). Combo chưa có hàng con → 400 combo_empty. Mã không có → 404 product_not_found.
 code (số CH…) = null nếu MISA tạo xong nhưng chưa đọc lại được số.</field>
     </record>
 
@@ -227,7 +227,7 @@ description | string | | Mô tả.</field>
         <field name="payload_example">{"account_id": 1039, "opportunity_id": 51565, "quote_date": "2026-10-15", "expired_date": "2026-10-25", "shipping_cost": 50000, "commission_percent": 3, "prepaid": 0, "validity_days": 10, "delivery_days": 3, "payment_terms": "Thanh toán 100% khi nhận hàng", "description": "Báo giá theo yêu cầu", "lines": [{"code": "48-22-4530", "qty": 2, "price_after_tax": 380000, "customer_item": "Kéo cắt tôn"}]}</field>
         <field name="response_example">{"id": 46123, "code": "BG3603960629", "total": 760000.0, "ok": true}</field>
         <field name="notes">KHÔNG chống trùng: gọi lại sau khi đã tạo xong là thêm một báo giá nữa. Có id trả về là ĐÃ tạo.
-Thuế suất, đơn vị tính lấy theo hàng trên MISA. Combo chưa hỗ trợ (400 combo_not_supported).
+Thuế suất, đơn vị tính lấy theo hàng trên MISA. Combo: gửi một dòng mã combo, Odoo tự thêm dòng con như ở opportunity/create (dựng theo mẫu form Cơ hội).
 Công thức "Chi phí hoa hồng" của MISA nhân thẳng với số % (không chia 100) — Odoo giữ nguyên để số khớp với form MISA.
 code (số BG…) = null nếu MISA tạo xong nhưng chưa đọc lại được số.</field>
     </record>
@@ -253,7 +253,7 @@ description | string | | Mô tả.</field>
         <field name="payload_example">{"opportunity_id": 51565, "shipping_cost": 50000, "commission_percent": 4, "validity_days": 10}</field>
         <field name="response_example">{"id": 46121, "code": "BG3603960627", "total": 410400.0, "ok": true}</field>
         <field name="notes">Giá lấy đúng như trên cơ hội — dòng cơ hội giá 0 thì báo giá cũng 0. Muốn giá khác: sửa cơ hội trước, hoặc dùng quote/create với opportunity_id và lines tự gửi, hoặc sửa sau bằng quote/update.
-Cơ hội chưa có hàng: 400 no_lines. Cơ hội có combo: 400 combo_not_supported.
+Cơ hội chưa có hàng: 400 no_lines. Combo chép cả dòng cha lẫn dòng con.
 KHÔNG chống trùng: gọi lại là thêm một báo giá nữa.</field>
     </record>
 

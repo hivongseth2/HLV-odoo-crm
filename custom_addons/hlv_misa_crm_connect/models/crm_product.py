@@ -6,7 +6,10 @@ from odoo.addons.misa_fetch_po_button.utils.crm_product import exact_code_match
 from ..services.crm_payloads import (
     MAX_PAGE_SIZE, product_row, product_search_payload, product_stock_search_payload, stock_row,
 )
-from ..services.misa_form import line_amounts
+from ..services.misa_form import (
+    combo_child_fields, combo_child_product, combo_child_qty, combo_parent_fields, line_amounts,
+    new_set_master_id,
+)
 from .misa_crm_client import CrmInputError
 
 MAX_CODE_PAGES = 10
@@ -68,19 +71,39 @@ class MisaCrmProduct(models.AbstractModel):
     def _new_lines(self, lines, make_row):
         """Dòng hàng mới từ ``lines`` của bên gọi ({"code", "qty", "price_after_tax" | "price", …}).
 
-        Tra từng mã trên MISA (sai mã -> 404, combo -> 400) và tính tiền theo thuế của hàng; dòng
-        dựng bằng ``make_row(thứ_tự, hàng, sl, tiền, line)``. Tra hết TRƯỚC khi ghi gì lên MISA.
+        Tra từng mã trên MISA (sai mã -> 404) và tính tiền theo thuế của hàng; dòng dựng bằng
+        ``make_row(thứ_tự, hàng, sl, tiền, line)``. Mã là combo: dòng cha mang giá bên gọi đưa, kèm các
+        dòng con ngay sau như form MISA. Tra hết TRƯỚC khi ghi gì lên MISA.
         """
         rows = []
-        for index, line in enumerate(lines, start=1):
+        for line in lines:
             product = self._product_by_code(line["code"])
-            if product["is_combo"]:
-                # Dòng combo trên form kéo theo các dòng con — chưa có request mẫu, không tự đoán.
-                raise CrmInputError(400, "combo_not_supported",
-                                    "Mã %s là combo — API chưa hỗ trợ thêm combo." % line["code"])
             amounts = line_amounts(line["qty"], product["tax_percent"],
                                    price=line.get("price"), price_after_tax=line.get("price_after_tax"))
-            rows.append(make_row(index, product, line["qty"], amounts, line))
+            parent = make_row(len(rows) + 1, product, line["qty"], amounts, line)
+            rows.append(parent)
+            if product["is_combo"]:
+                rows += self._combo_child_rows(product, line["qty"], parent, make_row, len(rows))
+        return rows
+
+    def _combo_child_rows(self, product, combo_qty, parent, make_row, rows_before):
+        """Biến ``parent`` thành dòng cha combo và trả các dòng con (tiền 0) theo thành phần trên MISA.
+
+        Thành phần lấy bằng đúng lệnh form gọi khi chọn combo (Product/GetProductInProductSet).
+        Combo chưa có hàng con -> CrmInputError 400 (form MISA cũng không cho lưu combo rỗng).
+        """
+        children = self._crm_data("POST", "Product/GetProductInProductSet",
+                                  payload={"IDs": [str(product["id"])], "Columns": []}) or []
+        if not children:
+            raise CrmInputError(400, "combo_empty", "Combo %s chưa có hàng con trên MISA." % product["code"])
+        master_id = new_set_master_id()
+        parent.update(combo_parent_fields(master_id))
+        rows = []
+        for sort_order, child in enumerate(children, start=rows_before + 1):
+            qty = combo_child_qty(child.get("Amount"), combo_qty)
+            row = make_row(sort_order, combo_child_product(child), qty, line_amounts(qty, 0, price=0), {})
+            row.update(combo_child_fields(child, master_id))
+            rows.append(row)
         return rows
 
     def _product_by_code(self, code):

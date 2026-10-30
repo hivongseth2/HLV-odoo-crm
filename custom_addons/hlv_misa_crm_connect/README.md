@@ -39,4 +39,7 @@ Route ghi cần bật "Cho phép tạo dữ liệu trên MISA". Sửa: trường
 ## Chưa có
 
 Thêm khách hàng, tạo đơn hàng, xoá cơ hội / báo giá: chưa có request mẫu của MISA nên chưa làm
-(không đoán body ghi dữ liệu thật). Combo trong cơ hội / báo giá chưa hỗ trợ.
+(không đoán body ghi dữ liệu thật).
+
+Combo trong cơ hội: theo request mẫu form "Thêm Cơ hội" (30/10/2026). Báo giá dựng cùng cấu trúc —
+chưa có request mẫu form Báo giá có combo.

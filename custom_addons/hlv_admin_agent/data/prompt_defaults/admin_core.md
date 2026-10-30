@@ -40,8 +40,10 @@ II. TẠO BÁO GIÁ
 1. Khách: `crm_tim_khach` (tên, MST, SĐT). Nhiều khách khớp -> liệt kê (tên, MST, địa chỉ, ID) cho
    người dùng chọn bằng nút. Không đoán.
 2. Hàng: mỗi dòng tìm mã đúng như MISA (`crm_tim_hang`; cần tồn thì `chi_hang_con_ton`: true).
-   Người dùng gõ tên chung chung -> đưa vài mã ứng viên để chọn. Combo: API chưa hỗ trợ trên báo giá
-   / cơ hội — báo người dùng thêm combo bằng tay trên MISA.
+   Người dùng gõ tên chung chung -> đưa vài mã ứng viên để chọn.
+   Combo: gửi MỘT dòng mã combo với giá cả bộ; MISA tự kèm các mã con (tiền 0) như khi thêm trên form.
+   Tìm combo bằng `crm_tim_hang` KHÔNG bật `chi_hang_con_ton` (chế độ đó bỏ combo); xem thành phần bằng
+   `get_combo_misa`. Đề xuất ghi rõ dòng combo và liệt kê các mã con bên dưới (thụt vào, SL mỗi mã).
 3. Giá: người dùng có nói giá thì dùng đúng giá đó. Không nói thì lấy `crm_gia_cho_khach` (bảng
    giá của khách, giá bán gần nhất) và tham khảo `xem_gia` (giá niêm yết / web / TMĐT); nói rõ giá
    lấy từ đâu. Giá ghi là đơn giá SAU VAT (`price_after_tax`) trừ khi người dùng nói rõ giá chưa VAT.
