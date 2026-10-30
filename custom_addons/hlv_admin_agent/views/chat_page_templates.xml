@@ -17,6 +17,9 @@
                     <div class="hlv-aa-account">
                         <a href="/odoo" title="Về Odoo"><i class="fa fa-arrow-left"/></a>
                         <span t-esc="user_name"/>
+                        <button type="button" class="hlv-aa-open-personal" title="Cá nhân hoá: hướng dẫn riêng, ghi nhớ">
+                            <i class="fa fa-sliders"/>
+                        </button>
                     </div>
                     <div class="hlv-aa-resize" title="Kéo để đổi độ rộng"/>
                 </aside>
@@ -46,13 +49,40 @@
                                             t-esc="option[1]"/>
                                 </t>
                             </select>
-                            <button type="button" class="hlv-aa-send" title="Gửi (Enter)">
-                                <i class="fa fa-arrow-up"/>
+                            <button type="button" class="hlv-aa-send" data-mode="send" title="Gửi (Enter)">
+                                <i class="fa fa-arrow-up hlv-aa-send-icon"/>
+                                <i class="fa fa-stop hlv-aa-stop-icon"/>
                             </button>
                         </div>
                         <div class="hlv-aa-hint">Enter để gửi · Shift+Enter xuống dòng · dán ảnh thẳng vào ô chat</div>
                     </div>
                 </main>
+                <!-- Cá nhân hoá (admin_personal.js): hướng dẫn riêng + ghi nhớ của chính người đang đăng nhập. -->
+                <div class="hlv-aa-personal" data-open="0">
+                    <div class="hlv-aa-personal-box">
+                        <div class="hlv-aa-board-head">
+                            <span class="hlv-aa-board-title">Cá nhân hoá</span>
+                            <button type="button" class="hlv-aa-personal-close" title="Đóng"><i class="fa fa-times"/></button>
+                        </div>
+                        <div class="hlv-aa-personal-body">
+                            <h3>Hướng dẫn riêng</h3>
+                            <p class="hlv-aa-muted">Trợ lý theo ở mọi cuộc chat của anh/chị. Vd: "Trả lời ngắn; báo giá luôn kèm giá chưa VAT; khách quen phí ship 0".</p>
+                            <textarea class="hlv-aa-instructions" rows="5" maxlength="4000"/>
+                            <div class="hlv-aa-row-end">
+                                <span class="hlv-aa-personal-msg"/>
+                                <button type="button" class="hlv-aa-save-instructions">Lưu hướng dẫn</button>
+                            </div>
+                            <h3>Ghi nhớ</h3>
+                            <p class="hlv-aa-muted">Trợ lý tự ghi khi anh/chị bảo "nhớ là...", hoặc thêm tay ở đây. Mọi cuộc chat sau đều dùng.</p>
+                            <div class="hlv-aa-memory-add">
+                                <select class="hlv-aa-memory-kind"/>
+                                <input type="text" class="hlv-aa-memory-text" maxlength="500" placeholder="Điều trợ lý cần nhớ..."/>
+                                <button type="button" class="hlv-aa-memory-add-btn">Thêm</button>
+                            </div>
+                            <div class="hlv-aa-memories"/>
+                        </div>
+                    </div>
+                </div>
                 <!-- Bảng trợ lý dựng (so sánh thông số): HTML trong iframe sandbox, không chạy script. -->
                 <div class="hlv-aa-board" data-open="0">
                     <div class="hlv-aa-board-box">

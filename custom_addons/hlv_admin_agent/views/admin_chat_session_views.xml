@@ -36,6 +36,7 @@
                             <field name="api_output_tokens"/>
                         </group>
                     </group>
+                    <field name="summary" readonly="1" invisible="not summary"/>
                     <field name="message_ids" readonly="1">
                         <list>
                             <field name="create_date" string="Lúc"/>

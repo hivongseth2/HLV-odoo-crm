@@ -11,6 +11,8 @@ from odoo.http import request
 
 from odoo.addons.hlv_product_agent.services.claude_api_payload import MODEL_CHOICES
 
+from ..services.personal import MEMORY_KINDS
+
 GROUP = 'hlv_admin_agent.group_admin_agent_user'
 PAGE_URL = '/tro-ly-quan-tri'
 MAX_NAME_CHARS = 80
@@ -24,6 +26,15 @@ def _check_access():
 def _ready():
     """Đã khai API key chưa — chưa thì trang báo ngay thay vì để tin chờ mãi."""
     return bool(request.env['hlv.admin.agent.config'].current().run_config()['api_key'])
+
+
+def _personal_call(work):
+    """Chạy một thao tác cá nhân hoá; lỗi nhập (UserError) trả về cho trang đọc thay vì văng lỗi."""
+    try:
+        work()
+    except UserError as error:
+        return {'ok': False, 'error': str(error)}
+    return {'ok': True}
 
 
 def _model_options():
@@ -113,3 +124,49 @@ class AdminAgentChat(http.Controller):
             return {'ok': False}
         session.sudo().unlink()
         return {'ok': True}
+
+    @http.route('/admin_agent/chat/stop', type='json', auth='user', methods=['POST'])
+    def stop(self, session_id=0, **kw):
+        """Nút dừng: trợ lý dừng ở bước kế (lệnh ghi đang chạy dở vẫn chạy xong)."""
+        _check_access()
+        session = request.env['hlv.admin.chat.session'].owned(session_id)
+        return {'ok': bool(session) and session.request_stop()}
+
+    # ── Cá nhân hoá: chỉ của chính người đang đăng nhập ──────────────────
+    @http.route('/admin_agent/personal/get', type='json', auth='user', methods=['POST'])
+    def personal_get(self, **kw):
+        _check_access()
+        user = request.env.user
+        return {
+            'instructions': request.env['hlv.admin.agent.profile'].instructions_for(user),
+            'memories': request.env['hlv.admin.agent.memory'].for_user(user),
+            'kinds': MEMORY_KINDS,
+        }
+
+    @http.route('/admin_agent/personal/instructions', type='json', auth='user', methods=['POST'])
+    def personal_instructions(self, instructions='', **kw):
+        _check_access()
+        return _personal_call(lambda: request.env['hlv.admin.agent.profile'].save_for(
+            request.env.user, instructions))
+
+    @http.route('/admin_agent/personal/memory/add', type='json', auth='user', methods=['POST'])
+    def memory_add(self, content='', kind='other', **kw):
+        _check_access()
+        return _personal_call(lambda: request.env['hlv.admin.agent.memory'].add_for_user(
+            request.env.user, content, kind))
+
+    @http.route('/admin_agent/personal/memory/update', type='json', auth='user', methods=['POST'])
+    def memory_update(self, memory_id=0, content='', **kw):
+        _check_access()
+        memory = request.env['hlv.admin.agent.memory'].owned_by(request.env.user, memory_id)
+        if not memory:
+            return {'ok': False, 'error': "Không có ghi nhớ này."}
+        return _personal_call(lambda: memory.set_content(content))
+
+    @http.route('/admin_agent/personal/memory/delete', type='json', auth='user', methods=['POST'])
+    def memory_delete(self, memory_id=0, **kw):
+        _check_access()
+        memory = request.env['hlv.admin.agent.memory'].owned_by(request.env.user, memory_id)
+        if memory:
+            memory.unlink()
+        return {'ok': bool(memory)}

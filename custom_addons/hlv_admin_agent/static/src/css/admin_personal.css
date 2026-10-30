@@ -1,0 +1,148 @@
+/* Màn "Cá nhân hoá" của trang trợ lý quản trị (admin_personal.js). Biến màu khai ở admin_chat.css. */
+
+/* ---------- Cá nhân hoá ---------- */
+.hlv-aa-account .hlv-aa-open-personal {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+
+.hlv-aa-account .hlv-aa-open-personal:hover {
+  color: var(--pa-accent);
+}
+
+.hlv-aa-personal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.hlv-aa-personal[data-open="1"] {
+  display: flex;
+}
+
+.hlv-aa-personal-box {
+  width: min(720px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--pa-bg);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.hlv-aa-personal-body {
+  padding: 4px 18px 18px;
+  overflow-y: auto;
+}
+
+.hlv-aa-personal-body h3 {
+  margin: 16px 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hlv-aa-muted {
+  color: var(--pa-muted);
+  font-size: 12.5px;
+  margin: 0 0 8px;
+}
+
+.hlv-aa-instructions,
+.hlv-aa-memory-text,
+.hlv-aa-memory-kind {
+  border: 1px solid var(--pa-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--pa-bg);
+  color: var(--pa-text);
+  font: inherit;
+  outline: 0;
+}
+
+.hlv-aa-instructions {
+  width: 100%;
+  resize: vertical;
+}
+
+.hlv-aa-instructions:focus,
+.hlv-aa-memory-text:focus {
+  border-color: var(--pa-accent);
+  box-shadow: 0 0 0 1px var(--pa-accent);
+}
+
+.hlv-aa-row-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.hlv-aa-personal-msg {
+  font-size: 12.5px;
+  color: var(--pa-accent);
+}
+
+.hlv-aa-personal-msg[data-level="error"] {
+  color: #9b1c1c;
+}
+
+.hlv-aa-save-instructions,
+.hlv-aa-memory-add-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: var(--pa-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.hlv-aa-memory-add {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hlv-aa-memory-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hlv-aa-memory {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 4px;
+  border-top: 1px solid var(--pa-border);
+}
+
+.hlv-aa-memory-kind-badge {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-dark);
+  font-size: 11.5px;
+}
+
+.hlv-aa-memory-content {
+  flex: 1 1 auto;
+}
+
+.hlv-aa-memory button {
+  border: 0;
+  background: transparent;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+
+.hlv-aa-memory button:hover {
+  color: var(--pa-text);
+}

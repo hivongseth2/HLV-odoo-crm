@@ -57,7 +57,7 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
         "click .hlv-aa-board-close": "_closeBoard",
         "click .hlv-aa-preview-remove": "_onRemovePreview",
         "keydown textarea": "_onKeydown",
-        "input textarea": "_autosize",
+        "input textarea": "_onInput",
         "change input[type=file]": "_onPickFiles",
         "change .hlv-aa-model": "_onPickModel",
         "pointerdown .hlv-aa-resize": "_onResizeStart",
@@ -197,6 +197,7 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
             this.busySince = Date.now();
         }
         this.busy = Boolean(state.busy);
+        this._renderSendButton();
         this._renderWelcome();
         this._renderTyping(state);
         if (state.error) {
@@ -244,7 +245,13 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
             typing = document.createElement("div");
             typing.className = "hlv-aa-typing";
         }
-        typing.textContent = state.processing ? "Trợ lý đang làm..." : "Đang chờ trợ lý nhận tin...";
+        if (state.stopping) {
+            typing.textContent = "Đang dừng (đợi bước đang chạy xong)...";
+        } else if (state.processing) {
+            typing.textContent = state.progress || "Trợ lý đang làm...";
+        } else {
+            typing.textContent = "Đang chờ trợ lý nhận tin...";
+        }
         // Luôn nằm dưới cùng, sau tin vừa tới.
         this.messagesEl.appendChild(typing);
         this.scrollEl.scrollTop = this.scrollEl.scrollHeight;
@@ -363,6 +370,10 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
 
     async _onSend() {
         const text = this.textarea.value.trim();
+        if (this.busy && !text && !this.pendingImages.length) {
+            // Đang chạy mà ô nhập trống: nút đang là ■ — bấm là dừng. Có chữ thì vẫn gửi (xếp lượt sau).
+            return this._onStop();
+        }
         if (this.sending || (!text && !this.pendingImages.length)) {
             return;
         }
@@ -391,6 +402,30 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
             this.sendBtn.disabled = false;
             this._schedulePoll();
         }
+    },
+
+    async _onStop() {
+        if (!this.sessionId) {
+            return;
+        }
+        try {
+            await rpc("/admin_agent/chat/stop", { session_id: this.sessionId });
+        } catch {
+            this._renderStatus("Chưa gửi được lệnh dừng, thử lại.", "error");
+        }
+        this._refresh();
+    },
+
+    _onInput() {
+        this._autosize();
+        this._renderSendButton();
+    },
+
+    /** Nút gửi thành ■ khi trợ lý đang chạy và ô nhập trống (như Claude desktop). */
+    _renderSendButton() {
+        const stop = this.busy && !this.textarea.value.trim() && !this.pendingImages.length;
+        this.sendBtn.dataset.mode = stop ? "stop" : "send";
+        this.sendBtn.title = stop ? "Dừng trợ lý" : "Gửi (Enter)";
     },
 
     _onKeydown(ev) {
@@ -483,6 +518,7 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
             });
         }
         this._renderPreviews();
+        this._renderSendButton();
     },
 
     _onRemovePreview(ev) {

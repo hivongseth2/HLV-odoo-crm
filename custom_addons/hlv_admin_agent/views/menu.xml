@@ -18,8 +18,22 @@
               name="Cuộc chat"
               parent="menu_hlv_admin_agent_root"
               action="action_hlv_admin_chat_session"
-              groups="base.group_system"
+              groups="group_admin_agent_manager"
               sequence="20"/>
+
+    <menuitem id="menu_hlv_admin_agent_memory"
+              name="Ghi nhớ"
+              parent="menu_hlv_admin_agent_root"
+              action="action_hlv_admin_agent_memory"
+              groups="group_admin_agent_manager"
+              sequence="22"/>
+
+    <menuitem id="menu_hlv_admin_agent_profile"
+              name="Hướng dẫn riêng"
+              parent="menu_hlv_admin_agent_root"
+              action="action_hlv_admin_agent_profile"
+              groups="group_admin_agent_manager"
+              sequence="24"/>
 
     <menuitem id="menu_hlv_admin_agent_config"
               name="Cấu hình"

@@ -477,7 +477,8 @@
   flex: 1 1 auto;
 }
 
-.hlv-aa-board-close {
+.hlv-aa-board-close,
+.hlv-aa-personal-close {
   border: 0;
   background: transparent;
   color: var(--pa-muted);
@@ -503,4 +504,35 @@
   .hlv-aa-composer {
     padding: 0 12px;
   }
+}
+
+/* ---------- Các bước trợ lý đã làm (thu gọn dưới câu trả lời) ---------- */
+.hlv-aa-steps {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--pa-muted);
+}
+
+.hlv-aa-steps summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.hlv-aa-steps ol {
+  margin: 4px 0 0;
+  padding-left: 22px;
+}
+
+/* ---------- Nút gửi / dừng ---------- */
+.hlv-aa-send .hlv-aa-stop-icon,
+.hlv-aa-send[data-mode="stop"] .hlv-aa-send-icon {
+  display: none;
+}
+
+.hlv-aa-send[data-mode="stop"] .hlv-aa-stop-icon {
+  display: inline;
+}
+
+.hlv-aa-send[data-mode="stop"] {
+  background: var(--pa-text);
 }
