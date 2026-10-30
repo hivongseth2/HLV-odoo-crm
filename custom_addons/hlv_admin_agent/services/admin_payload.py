@@ -9,6 +9,7 @@ import json
 from odoo.addons.hlv_product_agent.services.claude_api_payload import client_tools, server_tools
 
 from .crm_tools import CRM_TOOLS
+from .personal import PERSONAL_TOOLS
 
 # Tool của trợ lý tạo mã chỉ có nghĩa trên trang tra tồn (mở trang đúng mã) — trang này không có.
 EXCLUDED_PRODUCT_TOOLS = frozenset({"show_in_search_page"})
@@ -25,13 +26,14 @@ HISTORY_IDLE_MINUTES = 60
 
 
 def admin_tools(model):
-    """Toàn bộ tool cho một request: tool trợ lý tạo mã (kể cả giao việc tra cứu) + MISA CRM + web.
+    """Toàn bộ tool cho một request: tool trợ lý tạo mã (kể cả giao việc tra cứu) + MISA CRM + ghi nhớ /
+    cuộc chat cũ + web.
 
     Nhận: tên model Claude (bản web tool tuỳ model). Trả: list tool theo định dạng Messages API.
     Thứ tự cố định: đổi thứ tự là mất cache prompt.
     """
     product = [tool for tool in client_tools() if tool["name"] not in EXCLUDED_PRODUCT_TOOLS]
-    return product + CRM_TOOLS + server_tools(model)
+    return product + CRM_TOOLS + PERSONAL_TOOLS + server_tools(model)
 
 
 def admin_system_text(core, product_prompt):

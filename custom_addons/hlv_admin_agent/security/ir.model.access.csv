@@ -1,6 +1,10 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_hlv_admin_chat_session_user,hlv.admin.chat.session user,model_hlv_admin_chat_session,group_admin_agent_user,1,0,1,0
-access_hlv_admin_chat_session_system,hlv.admin.chat.session system,model_hlv_admin_chat_session,base.group_system,1,1,1,1
+access_hlv_admin_chat_session_manager,hlv.admin.chat.session manager,model_hlv_admin_chat_session,group_admin_agent_manager,1,1,1,1
 access_hlv_admin_chat_message_user,hlv.admin.chat.message user,model_hlv_admin_chat_message,group_admin_agent_user,1,0,0,0
-access_hlv_admin_chat_message_system,hlv.admin.chat.message system,model_hlv_admin_chat_message,base.group_system,1,1,1,1
+access_hlv_admin_chat_message_manager,hlv.admin.chat.message manager,model_hlv_admin_chat_message,group_admin_agent_manager,1,1,1,1
+access_hlv_admin_agent_memory_user,hlv.admin.agent.memory user,model_hlv_admin_agent_memory,group_admin_agent_user,1,0,0,0
+access_hlv_admin_agent_memory_manager,hlv.admin.agent.memory manager,model_hlv_admin_agent_memory,group_admin_agent_manager,1,1,1,1
+access_hlv_admin_agent_profile_user,hlv.admin.agent.profile user,model_hlv_admin_agent_profile,group_admin_agent_user,1,0,0,0
+access_hlv_admin_agent_profile_manager,hlv.admin.agent.profile manager,model_hlv_admin_agent_profile,group_admin_agent_manager,1,1,1,1
 access_hlv_admin_agent_config_system,hlv.admin.agent.config system,model_hlv_admin_agent_config,base.group_system,1,1,1,0

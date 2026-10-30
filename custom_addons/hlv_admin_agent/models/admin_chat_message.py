@@ -37,6 +37,8 @@ class HlvAdminChatMessage(models.Model):
     )
     # Lệnh cho trang (vd bảng so sánh thông số), JSON — trang chỉ vẽ, không chạy gì.
     client_action = fields.Char(copy=False)
+    # Câu trả lời: các bước trợ lý đã làm trong lượt (JSON list chữ), trang hiện thu gọn "Đã làm N bước".
+    steps = fields.Text(copy=False)
 
     def to_client_dict(self):
         """Dữ liệu một tin cho trang chat."""
@@ -48,6 +50,7 @@ class HlvAdminChatMessage(models.Model):
             'image_ids': self.attachment_ids.ids,
             'date': fields.Datetime.to_string(self.create_date),
             'action': json.loads(self.client_action) if self.client_action else None,
+            'steps': json.loads(self.steps) if self.steps else [],
         }
 
     def to_prompt_dict(self):

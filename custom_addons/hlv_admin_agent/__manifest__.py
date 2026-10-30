@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Trợ lý quản trị (Claude)",
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "summary": "Trang chat toàn màn cho quản trị: tạo báo giá, cơ hội trên MISA CRM, tra cứu Odoo, tạo mã hàng, tìm web",
     "description": """
 Trang /tro-ly-quan-tri: chỉ khung chat (danh sách cuộc chat bên trái, cuộc đang mở ở giữa), chỉ
@@ -29,14 +29,17 @@ lời trước.
         "data/admin_agent_cron.xml",
         "views/admin_agent_config_views.xml",
         "views/admin_chat_session_views.xml",
+        "views/admin_agent_memory_views.xml",
         "views/menu.xml",
         "views/chat_page_templates.xml",
     ],
     "assets": {
         "web.assets_frontend": [
             "hlv_admin_agent/static/src/css/admin_chat.css",
+            "hlv_admin_agent/static/src/css/admin_personal.css",
             "hlv_admin_agent/static/src/js/admin_chat_render.js",
             "hlv_admin_agent/static/src/js/admin_chat.js",
+            "hlv_admin_agent/static/src/js/admin_personal.js",
         ],
     },
     "installable": True,

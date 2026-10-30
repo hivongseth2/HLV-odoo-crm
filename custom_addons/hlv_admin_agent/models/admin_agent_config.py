@@ -7,11 +7,17 @@ key, một chỗ thanh toán.
 from odoo import api, fields, models
 from odoo.tools import file_open
 
+from odoo.addons.hlv_product_agent.services import prompt_version
 from odoo.addons.hlv_product_agent.services.claude_api_payload import EFFORT_CHOICES, MODEL_CHOICES
 
 from ..services.admin_payload import admin_system_text
 
 DEFAULT_PROMPT_FILE = 'hlv_admin_agent/data/prompt_defaults/admin_core.md'
+# Vân tay (prompt_version) các bản prompt lõi mặc định đã phát hành. Prompt trong DB còn đúng một bản
+# này = chưa ai sửa, nâng cấp module thì thay bằng bản mặc định hiện tại; đã sửa tay thì giữ nguyên.
+OLD_DEFAULT_VERSIONS = {
+    '4f5c506fe741c064',  # 18.0.1.0.0 - 18.0.1.1.0: chưa có ghi nhớ, cuộc chat cũ, nút dừng
+}
 # Quản trị hỏi ít nhưng việc khó hơn sale (ghép báo giá nhiều dòng, đối chiếu giá khách): mặc định
 # model kỹ hơn trợ lý tạo mã.
 DEFAULT_MODEL = 'claude-sonnet-5-5'
@@ -37,6 +43,14 @@ class HlvAdminAgentConfig(models.Model):
         """Bản ghi cấu hình (tạo từ mặc định nếu chưa có)."""
         config = self.sudo().search([], limit=1)
         return config or self.sudo().create({'prompt_core': self._default_prompt()})
+
+    @api.model
+    def _ensure_default(self):
+        """Gọi từ data XML mỗi lần cài / nâng cấp: tạo bản cấu hình nếu chưa có; prompt lõi còn nguyên bản
+        mặc định cũ thì lên bản mới."""
+        config = self.current()
+        if prompt_version((config.prompt_core or '').strip() + "\n") in OLD_DEFAULT_VERSIONS:
+            config.prompt_core = self._default_prompt()
 
     @api.model
     def action_open_current(self):

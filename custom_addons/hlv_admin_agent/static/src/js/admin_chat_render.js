@@ -40,6 +40,9 @@ function pointCodeLinksToSearchPage(root) {
 export function buildMessage(message, { withOptions = false } = {}) {
     const item = document.createElement("div");
     item.className = `hlv-aa-msg hlv-aa-msg-${message.role}`;
+    if (message.steps && message.steps.length) {
+        item.appendChild(buildSteps(message.steps));
+    }
     if (message.content) {
         const text = document.createElement("div");
         text.className = "hlv-pa-text";
@@ -82,6 +85,24 @@ export function buildMessage(message, { withOptions = false } = {}) {
     time.textContent = formatTime(message.date);
     item.appendChild(time);
     return item;
+}
+
+/**
+ * Các bước trợ lý đã làm trong lượt, thu gọn: "Đã làm N bước ▸" — bấm mới mở danh sách.
+ */
+function buildSteps(steps) {
+    const box = document.createElement("details");
+    box.className = "hlv-aa-steps";
+    const summary = document.createElement("summary");
+    summary.textContent = `Đã làm ${steps.length} bước`;
+    const list = document.createElement("ol");
+    for (const step of steps) {
+        const li = document.createElement("li");
+        li.textContent = step;
+        list.appendChild(li);
+    }
+    box.append(summary, list);
+    return box;
 }
 
 /**

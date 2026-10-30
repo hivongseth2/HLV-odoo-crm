@@ -15,6 +15,16 @@
         <field name="comment">Vào trang /tro-ly-quan-tri: chat với Claude để tạo báo giá, cơ hội trên MISA CRM, tra cứu kho, tạo mã hàng, tìm web.</field>
     </record>
 
+    <!-- Quản lý: xem cuộc chat, ghi nhớ, hướng dẫn riêng của MỌI người ở backend. Trên trang chat ai
+         cũng chỉ thấy của mình. -->
+    <record id="group_admin_agent_manager" model="res.groups">
+        <field name="name">Trợ lý quản trị: Quản lý</field>
+        <field name="category_id" ref="module_category_admin_agent"/>
+        <field name="implied_ids" eval="[(4, ref('group_admin_agent_user'))]"/>
+        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+        <field name="comment">Xem mọi cuộc chat, ghi nhớ, hướng dẫn riêng của người dùng trợ lý quản trị.</field>
+    </record>
+
     <record id="rule_admin_chat_session_own" model="ir.rule">
         <field name="name">Trợ lý quản trị: chỉ cuộc chat của mình</field>
         <field name="model_id" ref="model_hlv_admin_chat_session"/>
@@ -22,11 +32,11 @@
         <field name="groups" eval="[(4, ref('group_admin_agent_user'))]"/>
     </record>
 
-    <record id="rule_admin_chat_session_system" model="ir.rule">
-        <field name="name">Trợ lý quản trị: admin hệ thống xem tất cả</field>
+    <record id="rule_admin_chat_session_manager" model="ir.rule">
+        <field name="name">Trợ lý quản trị: quản lý xem tất cả cuộc chat</field>
         <field name="model_id" ref="model_hlv_admin_chat_session"/>
         <field name="domain_force">[(1, '=', 1)]</field>
-        <field name="groups" eval="[(4, ref('base.group_system'))]"/>
+        <field name="groups" eval="[(4, ref('group_admin_agent_manager'))]"/>
     </record>
 
     <record id="rule_admin_chat_message_own" model="ir.rule">
@@ -36,10 +46,38 @@
         <field name="groups" eval="[(4, ref('group_admin_agent_user'))]"/>
     </record>
 
-    <record id="rule_admin_chat_message_system" model="ir.rule">
-        <field name="name">Tin trợ lý quản trị: admin hệ thống xem tất cả</field>
+    <record id="rule_admin_chat_message_manager" model="ir.rule">
+        <field name="name">Tin trợ lý quản trị: quản lý xem tất cả</field>
         <field name="model_id" ref="model_hlv_admin_chat_message"/>
         <field name="domain_force">[(1, '=', 1)]</field>
-        <field name="groups" eval="[(4, ref('base.group_system'))]"/>
+        <field name="groups" eval="[(4, ref('group_admin_agent_manager'))]"/>
+    </record>
+
+    <record id="rule_admin_agent_memory_own" model="ir.rule">
+        <field name="name">Ghi nhớ trợ lý quản trị: của mình</field>
+        <field name="model_id" ref="model_hlv_admin_agent_memory"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_admin_agent_user'))]"/>
+    </record>
+
+    <record id="rule_admin_agent_memory_manager" model="ir.rule">
+        <field name="name">Ghi nhớ trợ lý quản trị: quản lý xem tất cả</field>
+        <field name="model_id" ref="model_hlv_admin_agent_memory"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_admin_agent_manager'))]"/>
+    </record>
+
+    <record id="rule_admin_agent_profile_own" model="ir.rule">
+        <field name="name">Hướng dẫn riêng trợ lý quản trị: của mình</field>
+        <field name="model_id" ref="model_hlv_admin_agent_profile"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_admin_agent_user'))]"/>
+    </record>
+
+    <record id="rule_admin_agent_profile_manager" model="ir.rule">
+        <field name="name">Hướng dẫn riêng trợ lý quản trị: quản lý xem tất cả</field>
+        <field name="model_id" ref="model_hlv_admin_agent_profile"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_admin_agent_manager'))]"/>
     </record>
 </odoo>

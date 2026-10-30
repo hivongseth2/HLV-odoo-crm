@@ -22,6 +22,8 @@ from odoo.addons.hlv_product_agent.models.product_chat_session import (
 from odoo.addons.hlv_product_agent.services import build_turn_prompt
 from odoo.addons.hlv_product_agent.services.claude_api_payload import INLINE_IMAGE_NOTE, MODEL_CHOICES
 
+from ..services.personal import with_summary
+
 _logger = logging.getLogger(__name__)
 
 NEW_SESSION_NAME = "Cuộc chat mới"
@@ -58,6 +60,13 @@ class HlvAdminChatSession(models.Model):
     api_cache_read_tokens = fields.Integer("Token đọc cache", readonly=True, copy=False)
     api_output_tokens = fields.Integer("Token ra", readonly=True, copy=False)
     api_last_prompt_tokens = fields.Integer("Độ dài prompt gần nhất", readonly=True, copy=False)
+    # Bước trợ lý đang làm ("Tìm khách “Việt Hưng”") — runner ghi + commit trước mỗi bước, trang đọc khi hỏi.
+    progress = fields.Char(readonly=True, copy=False)
+    # Người dùng bấm dừng: runner kiểm giữa các bước, không cắt ngang một lệnh ghi đang chạy.
+    cancel_requested = fields.Boolean(readonly=True, copy=False)
+    # Phần đầu cuộc đã rơi khỏi ngữ cảnh, được model phụ tóm tắt (hlv.admin.agent.compact).
+    summary = fields.Text("Tóm tắt phần đầu", readonly=True, copy=False)
+    summary_upto_id = fields.Integer(readonly=True, copy=False, help="Tin cuối đã gộp vào bản tóm tắt.")
 
     # =========================================================================
     # PHÍA TRANG CHAT (đã kiểm quyền ở controller; chỉ đụng cuộc của chính mình)
@@ -132,8 +141,26 @@ class HlvAdminChatSession(models.Model):
             'model': self.model or False,
             'busy': self.state == 'processing' or any(self.message_ids.mapped('to_send')),
             'processing': self.state == 'processing',
+            'progress': self.progress or '' if self.state == 'processing' else '',
+            'stopping': self.cancel_requested,
             'messages': [msg.to_client_dict() for msg in self.message_ids if msg.id > (after_id or 0)],
         }
+
+    def request_stop(self):
+        """Người dùng bấm dừng. Đang chạy: đặt cờ cho runner dừng ở bước kế. Tin chưa ai cầm: huỷ luôn.
+
+        Trả True nếu có gì để dừng.
+        """
+        self.ensure_one()
+        if self.state == 'processing':
+            self.sudo().cancel_requested = True
+            return True
+        pending = self.message_ids.filtered('to_send')
+        if not pending:
+            return False
+        pending.sudo().write({'to_send': False})
+        self._post('event', _("Đã huỷ tin chưa gửi cho trợ lý."))
+        return True
 
     # =========================================================================
     # PHÍA RUNNER
@@ -155,7 +182,8 @@ class HlvAdminChatSession(models.Model):
             return ''
         token = uuid.uuid4().hex
         self.message_ids.filtered(lambda m: m.to_send and m.role == 'user').write({'claim_token': token})
-        self.write({'state': 'processing', 'claim_token': token, 'claim_date': fields.Datetime.now()})
+        self.write({'state': 'processing', 'claim_token': token, 'claim_date': fields.Datetime.now(),
+                    'progress': False, 'cancel_requested': False})
         return token
 
     @api.model
@@ -175,28 +203,36 @@ class HlvAdminChatSession(models.Model):
         claimed = self.message_ids.filtered(
             lambda m: self.claim_token and m.claim_token == self.claim_token and m.role == 'user')
         items = [msg.to_prompt_dict() for msg in claimed]
+        # Tin đã nằm trong bản tóm tắt thì không gửi lại nguyên văn.
         history = self.message_ids.filtered(
-            lambda m: m.id < claimed[:1].id and m.role in ('user', 'assistant'))[-COLD_START_HISTORY_LIMIT:]
+            lambda m: (self.summary_upto_id or 0) < m.id < claimed[:1].id and m.role in ('user', 'assistant')
+        )[-COLD_START_HISTORY_LIMIT:]
         prompt = build_turn_prompt(items, True, image_note=INLINE_IMAGE_NOTE)
         prompt_cold = build_turn_prompt(
             items, True, [msg.to_prompt_dict() for msg in history], image_note=INLINE_IMAGE_NOTE,
         ) if history else prompt
+        prompt_cold = with_summary(prompt_cold, self.summary)
         images = [image for msg in claimed for image in msg.api_image_payloads()]
         return {'prompt': prompt, 'prompt_cold': prompt_cold, 'images': images}
 
-    def deliver_reply(self, reply, error=None):
-        """Chốt một lượt: lưu câu trả lời (hoặc lỗi) và thả cuộc về 'Chờ tin'."""
+    def deliver_reply(self, reply, error=None, steps=None):
+        """Chốt một lượt: lưu câu trả lời (hoặc lỗi) và thả cuộc về 'Chờ tin'.
+
+        steps: list chữ các bước trợ lý đã làm trong lượt (hiện thu gọn dưới câu trả lời).
+        """
         self.ensure_one()
         self.message_ids.filtered(lambda m: m.claim_token == self.claim_token).write({'to_send': False})
         reply = (reply or '').strip()
         if reply:
-            self._post('assistant', reply)
+            message = self._post('assistant', reply)
+            if steps:
+                message.steps = json.dumps(steps, ensure_ascii=False)
         if error or not reply:
             _logger.warning("ADMIN_AGENT cuộc %s lỗi: %s", self.id, error)
             self._post('event', _("Trợ lý gặp lỗi nên chưa trả lời được (%s). Gửi lại tin giúp em.")
                        % (error or _("không có câu trả lời"))[:300])
-        self.write({'state': 'idle', 'claim_token': False, 'claim_date': False,
-                    'last_activity': fields.Datetime.now()})
+        self.write({'state': 'idle', 'claim_token': False, 'claim_date': False, 'progress': False,
+                    'cancel_requested': False, 'last_activity': fields.Datetime.now()})
 
     @api.model
     def release_stale(self):

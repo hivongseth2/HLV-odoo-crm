@@ -3,4 +3,7 @@ from . import admin_agent_config
 from . import admin_chat_session
 from . import admin_chat_message
 from . import admin_crm_tools
+from . import admin_agent_memory
+from . import admin_personal_tools
+from . import admin_agent_compact
 from . import admin_agent_runner
