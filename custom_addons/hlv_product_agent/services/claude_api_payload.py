@@ -175,12 +175,34 @@ def history_content(content):
     return [block for block in content or [] if block.get('type') != 'fallback']
 
 
+def _is_server_tool_block(block):
+    kind = block.get('type') or ''
+    return kind == 'server_tool_use' or (kind.endswith('_tool_result') and kind != 'tool_result')
+
+
 def reply_text(content):
-    """Chữ trả lời cho sale: nối các khối text. Biên: không có khối text -> ''."""
-    return "\n\n".join(
-        block['text'].strip() for block in content or []
-        if block.get('type') == 'text' and (block.get('text') or '').strip()
-    )
+    """Chữ trả lời cho sale trong một content của Claude.
+
+    Nhận: list khối content. Trả: các khối text đứng sau khối tool server (tìm web, chạy code)
+        cuối cùng, nối liền nhau. Chữ đứng trước là lời dạo khi Claude chưa có kết quả ("em
+        parse lại...") nên bỏ. Nối không chèn dòng trống vì trích nguồn cắt một câu thành nhiều
+        khối text liền nhau; hai đoạn cách nhau bởi khối khác thì cách một dòng trống.
+        Biên: không có khối text -> ''.
+    """
+    blocks = content or []
+    start = 0
+    for index, block in enumerate(blocks):
+        if _is_server_tool_block(block):
+            start = index + 1
+    paragraphs, current = [], ''
+    for block in blocks[start:]:
+        if block.get('type') == 'text':
+            current += block.get('text') or ''
+            continue
+        paragraphs.append(current.strip())
+        current = ''
+    paragraphs.append(current.strip())
+    return "\n\n".join(p for p in paragraphs if p)
 
 
 # Tool chỉ hiện thứ lên màn hình, không đem về dữ liệu mới: Claude hay viết xong câu trả lời rồi
