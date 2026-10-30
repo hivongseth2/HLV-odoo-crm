@@ -9,6 +9,8 @@ from odoo import http
 from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 
+from odoo.addons.hlv_product_agent.services.claude_api_payload import MODEL_CHOICES
+
 GROUP = 'hlv_admin_agent.group_admin_agent_user'
 PAGE_URL = '/tro-ly-quan-tri'
 MAX_NAME_CHARS = 80
@@ -22,6 +24,11 @@ def _check_access():
 def _ready():
     """Đã khai API key chưa — chưa thì trang báo ngay thay vì để tin chờ mãi."""
     return bool(request.env['hlv.admin.agent.config'].current().run_config()['api_key'])
+
+
+def _model_options():
+    """Model cho ô chọn trên trang: ``[(mã, tên ngắn)]`` — bỏ phần giá trong ngoặc của nhãn Cấu hình."""
+    return [(code, label.split(' (')[0]) for code, label in MODEL_CHOICES]
 
 
 def _state(session, after_id=0):
@@ -38,7 +45,11 @@ class AdminAgentChat(http.Controller):
     def page(self, **kw):
         if not request.env.user.has_group(GROUP):
             return request.not_found()
-        return request.render('hlv_admin_agent.chat_page', {'user_name': request.env.user.name})
+        return request.render('hlv_admin_agent.chat_page', {
+            'user_name': request.env.user.name,
+            'models': _model_options(),
+            'default_model': request.env['hlv.admin.agent.config'].current().model,
+        })
 
     @http.route('/admin_agent/chat/sessions', type='json', auth='user', methods=['POST'])
     def sessions(self, **kw):
@@ -56,7 +67,7 @@ class AdminAgentChat(http.Controller):
         return _state(Session.owned(session_id), after_id)
 
     @http.route('/admin_agent/chat/send', type='json', auth='user', methods=['POST'])
-    def send(self, session_id=0, text='', images=None, after_id=0, **kw):
+    def send(self, session_id=0, text='', images=None, after_id=0, model=None, **kw):
         """Gửi một tin; chưa có cuộc (session_id rỗng) thì mở cuộc mới. Lỗi nhập trả trong 'error'."""
         _check_access()
         Session = request.env['hlv.admin.chat.session']
@@ -65,6 +76,8 @@ class AdminAgentChat(http.Controller):
         if not session:
             return dict(_state(Session), error="Cuộc chat không còn.")
         try:
+            # Model trước tin: post_user_message đánh thức runner, lượt này phải chạy model vừa chọn.
+            session.set_model(model)
             session.post_user_message(text, images or [])
         except UserError as error:
             # Tin hỏng ở cuộc vừa mở: bỏ luôn cuộc rỗng, khỏi để rác ở cột trái. Kiểm tin chạy trước
@@ -74,6 +87,13 @@ class AdminAgentChat(http.Controller):
                 session = Session
             return dict(_state(session, after_id), error=str(error))
         return _state(session, after_id)
+
+    @http.route('/admin_agent/chat/model', type='json', auth='user', methods=['POST'])
+    def model(self, session_id=0, model=None, **kw):
+        """Đổi model của một cuộc (ô chọn model); lượt kế tiếp chạy model mới."""
+        _check_access()
+        session = request.env['hlv.admin.chat.session'].owned(session_id)
+        return {'ok': bool(session) and session.set_model(model)}
 
     @http.route('/admin_agent/chat/rename', type='json', auth='user', methods=['POST'])
     def rename(self, session_id=0, name='', **kw):
