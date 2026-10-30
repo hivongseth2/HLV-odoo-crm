@@ -40,6 +40,7 @@ OLD_DEFAULT_VERSIONS = {
         'cb597b11c62a5772',  # 18.0.1.17.1: mã hàng chưa bấm được, tìm ra mã chưa kèm giá
         '7d49477661273757',  # 18.0.1.18.2: tìm mã thay thế trả lời "chưa chắc" thay vì tìm web thông số
         '82559cb54d487b10',  # 18.0.1.18.3: vẫn "chưa tra thông số mã X", gộp nhiều model một câu tìm
+        '839af6e80c195eeb',  # 18.0.1.18.4: ghép Packout chưa quét hết hệ, lắp lẫn pin không tìm web, còn "chưa kiểm chứng"
     },
 }
 DEFAULT_FILES = {
