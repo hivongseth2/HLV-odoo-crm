@@ -83,7 +83,7 @@ const MAX_OPTIONS = 6;
 /**
  * Tách các lựa chọn khỏi câu trả lời.
  * Nhận: chuỗi. Trả: {body: chuỗi còn lại, options: [chữ lựa chọn]} — lựa chọn lấy từ các dòng chỉ
- * gồm [[...]], bỏ trùng, tối đa MAX_OPTIONS. [[...]] nằm giữa câu thì để nguyên trong body.
+ * gồm [[...]], bỏ dấu `, bỏ trùng, tối đa MAX_OPTIONS. [[...]] nằm giữa câu thì để nguyên trong body.
  * Biên: chuỗi rỗng -> {body: "", options: []}.
  */
 export function splitOptions(text) {
@@ -95,7 +95,9 @@ export function splitOptions(text) {
             continue;
         }
         for (const match of line.matchAll(OPTION)) {
-            const option = match[1].trim();
+            // Claude quen bọc mã trong `...` (để bấm mở trang tra tồn) cả trong nút; nút hiện chữ
+            // thô và bấm là gửi nguyên chữ, nên bỏ dấu ` đi.
+            const option = match[1].replace(/`/g, "").trim();
             if (option && !options.includes(option) && options.length < MAX_OPTIONS) {
                 options.push(option);
             }
