@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Phiên đăng nhập là res.device của core; dùng view mặc định của core (có nút Thu hồi) thay vì
+         trỏ xmlid action/menu kỹ thuật của base, menu đó chỉ hiện khi bật chế độ nhà phát triển. -->
+    <record id="action_hlv_login_sessions" model="ir.actions.act_window">
+        <field name="name">Phiên đăng nhập</field>
+        <field name="res_model">res.device</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'group_by': 'user_id'}</field>
+    </record>
+
+    <record id="view_hlv_login_device_list" model="ir.ui.view">
+        <field name="name">hlv.login.device.list</field>
+        <field name="model">hlv.login.device</field>
+        <field name="arch" type="xml">
+            <list create="0" decoration-warning="state == 'pending'" decoration-muted="state in ('rejected', 'expired')">
+                <header>
+                    <button name="%(action_hlv_login_sessions)d" type="action" string="Phiên đăng nhập / Thu hồi"
+                            icon="fa-sign-out" display="always"/>
+                </header>
+                <field name="request_date"/>
+                <field name="request_until" optional="show"/>
+                <field name="user_id"/>
+                <field name="ip_address"/>
+                <field name="platform" optional="show"/>
+                <field name="browser" optional="show"/>
+                <field name="country" optional="hide"/>
+                <field name="state" widget="badge"
+                       decoration-warning="state == 'pending'"
+                       decoration-success="state == 'approved'"
+                       decoration-danger="state == 'rejected'"
+                       decoration-muted="state == 'expired'"/>
+                <field name="approved_by_id" optional="show"/>
+                <field name="approved_until"/>
+                <field name="last_login_date" optional="show"/>
+                <button name="action_approve" type="object" string="Duyệt" icon="fa-check"
+                        groups="hlv_login_approval.group_login_approver"
+                        invisible="state in ('approved', 'expired') or user_id == uid"/>
+                <button name="action_reject" type="object" string="Từ chối" icon="fa-ban"
+                        groups="hlv_login_approval.group_login_approver"
+                        invisible="state in ('rejected', 'expired')"/>
+                <button name="action_open_user_sessions" type="object" string="Phiên" icon="fa-desktop"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_login_device_form" model="ir.ui.view">
+        <field name="name">hlv.login.device.form</field>
+        <field name="model">hlv.login.device</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <header>
+                    <button name="action_approve" type="object" string="Duyệt" class="btn-primary"
+                            groups="hlv_login_approval.group_login_approver"
+                            invisible="state in ('approved', 'expired') or user_id == uid"/>
+                    <button name="action_reject" type="object" string="Từ chối"
+                            groups="hlv_login_approval.group_login_approver"
+                            invisible="state in ('rejected', 'expired')"
+                            confirm="Từ chối thiết bị này? User sẽ không đăng nhập được từ thiết bị này cho tới khi được duyệt lại."/>
+                    <button name="action_revoke_user_sessions" type="object" string="Đăng xuất mọi phiên"
+                            groups="hlv_login_approval.group_login_approver"
+                            confirm="Đăng xuất user này khỏi mọi trình duyệt đang mở? Thiết bị đã duyệt chỉ cần nhập lại mật khẩu."/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Yêu cầu">
+                            <field name="user_id"/>
+                            <field name="request_date"/>
+                            <field name="request_until"/>
+                            <field name="ip_address"/>
+                            <field name="platform"/>
+                            <field name="browser"/>
+                            <field name="country"/>
+                            <field name="city"/>
+                        </group>
+                        <group string="Duyệt">
+                            <field name="approved_by_id"/>
+                            <field name="approved_date"/>
+                            <field name="approved_until"/>
+                            <field name="last_login_date"/>
+                        </group>
+                    </group>
+                    <!-- Phiên đăng nhập của user lấy từ res.device có sẵn; nút Thu hồi là của core. -->
+                    <separator string="Phiên đang mở của user"/>
+                    <field name="session_ids" readonly="1">
+                        <list create="0" delete="0">
+                            <field name="display_name" string="Thiết bị"/>
+                            <field name="ip_address"/>
+                            <field name="city" optional="hide"/>
+                            <field name="country" optional="hide"/>
+                            <field name="first_activity"/>
+                            <field name="last_activity"/>
+                            <button name="revoke" type="object" string="Thu hồi" icon="fa-sign-out"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_hlv_login_device_search" model="ir.ui.view">
+        <field name="name">hlv.login.device.search</field>
+        <field name="model">hlv.login.device</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="user_id"/>
+                <field name="ip_address"/>
+                <filter name="pending" string="Chờ duyệt" domain="[('state', '=', 'pending')]"/>
+                <filter name="approved" string="Đã duyệt" domain="[('state', '=', 'approved')]"/>
+                <filter name="rejected" string="Từ chối" domain="[('state', '=', 'rejected')]"/>
+                <filter name="expired" string="Hết hạn" domain="[('state', '=', 'expired')]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_user" string="Người dùng" context="{'group_by': 'user_id'}"/>
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_hlv_login_device" model="ir.actions.act_window">
+        <field name="name">Duyệt thiết bị đăng nhập</field>
+        <field name="res_model">hlv.login.device</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Không có thiết bị nào chờ duyệt</p>
+            <p>User nội bộ đăng nhập từ trình duyệt mới sẽ xuất hiện ở đây.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_hlv_login_device"
+              name="Duyệt thiết bị đăng nhập"
+              parent="base.menu_users"
+              action="action_hlv_login_device"
+              groups="base.group_system,hlv_login_approval.group_login_approver"
+              sequence="30"/>
+</odoo>

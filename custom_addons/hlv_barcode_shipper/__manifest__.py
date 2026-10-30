@@ -4,7 +4,7 @@
 {
     "name": "HLV Barcode Shipper",
     "summary": "Mobile barcode screen for shipper to scan PICK -> OUT",
-    "version": "18.0.3.12.0",
+    "version": "18.0.3.13.0",
     "author": "Hoang Long Vu",
     "website": "https://hoanglongvu.com",
     "category": "Inventory/Barcode",
@@ -21,12 +21,9 @@
         "views/shipper_management_views.xml",
         "views/res_users_views.xml",
     ],
-    "assets": {
-        "web.assets_frontend": [
-            "hlv_barcode_shipper/static/src/css/barcode_shipper.css",
-            "hlv_barcode_shipper/static/src/js/barcode_scanner.js",
-        ],
-    },
+    # Không khai CSS/JS vào web.assets_frontend: trang shipper tự nạp bằng <link>/<script>,
+    # còn khai vào bundle thì `.alert { display: none }` lan ra mọi trang frontend và ẩn
+    # luôn thông báo lỗi của trang đăng nhập.
     "installable": True,
     "application": True,
 }

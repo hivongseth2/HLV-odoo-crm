@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang chờ và nút Duyệt tự tính hạn, không cần cron. Cron để danh sách "Chờ duyệt" không đọng
+         yêu cầu cũ, và trang chờ còn mở được báo hết hạn qua bus. -->
+    <record id="ir_cron_expire_login_requests" model="ir.cron">
+        <field name="name">Duyệt đăng nhập: đóng yêu cầu quá hạn</field>
+        <field name="model_id" ref="model_hlv_login_device"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_expire_requests()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

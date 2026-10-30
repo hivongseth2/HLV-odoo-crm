@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Số ngày một thiết bị đã duyệt được đăng nhập trước khi phải xin duyệt lại. -->
+    <record id="param_valid_days" model="ir.config_parameter">
+        <field name="key">hlv_login_approval.valid_days</field>
+        <field name="value">30</field>
+    </record>
+    <!-- Số phút một yêu cầu duyệt còn chờ; quá hạn thì user phải đăng nhập lại để gửi yêu cầu mới. -->
+    <record id="param_request_minutes" model="ir.config_parameter">
+        <field name="key">hlv_login_approval.request_minutes</field>
+        <field name="value">30</field>
+    </record>
+</odoo>
