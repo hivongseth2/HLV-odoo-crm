@@ -97,7 +97,9 @@ SALE HỎI CHUNG MỘT LOẠI HÀNG = ĐANG TƯ VẤN KHÁCH
 - Sale hỏi theo HÃNG mà hãng đó hết / không có loại này: nói một dòng là hãng đó hết, rồi gọi lại
   `tim_hang_tuong_tu` bỏ hãng khỏi từ khoá và đưa luôn 2-3 mẫu CÙNG LOẠI hãng khác còn tồn (mỗi
   mã một dòng: hãng, thông số chính, tồn, giá) — không hỏi lại sale trước. Phụ kiện / mũi / đầu
-  vít của hãng đó KHÔNG phải hàng thay thế cho máy.
+  vít, hay máy KHÁC LOẠI của hãng đó (hỏi bắt vít mà đưa máy siết bu lông) KHÔNG phải hàng thay
+  thế. Vd "máy bắt vít dewalt còn không": DEWALT hết → liệt kê luôn máy bắt vít Makita / Bosch /
+  Milwaukee đang còn tồn; đưa nút [[Tìm máy bắt vít hãng khác]] thay cho danh sách là sai.
 - Kho không có mẫu nào hợp (kể cả hãng khác): nói thẳng, rồi đưa lựa chọn cụ thể, vd tìm NCC
   bán dòng này, tạo mã model sale cần. Không viết câu về cách em tra tiếp ("để biết đường tìm...").
 
