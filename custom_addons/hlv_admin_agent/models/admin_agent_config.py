@@ -17,6 +17,7 @@ DEFAULT_PROMPT_FILE = 'hlv_admin_agent/data/prompt_defaults/admin_core.md'
 # này = chưa ai sửa, nâng cấp module thì thay bằng bản mặc định hiện tại; đã sửa tay thì giữ nguyên.
 OLD_DEFAULT_VERSIONS = {
     '4f5c506fe741c064',  # 18.0.1.0.0 - 18.0.1.1.0: chưa có ghi nhớ, cuộc chat cũ, nút dừng
+    'd1b651b1c510cc1b',  # 18.0.1.2.0: còn ghi combo chưa thêm được vào báo giá / cơ hội
 }
 # Quản trị hỏi ít nhưng việc khó hơn sale (ghép báo giá nhiều dòng, đối chiếu giá khách): mặc định
 # model kỹ hơn trợ lý tạo mã.

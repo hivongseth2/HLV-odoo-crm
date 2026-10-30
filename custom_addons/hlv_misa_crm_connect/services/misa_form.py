@@ -110,6 +110,71 @@ def product_line(table, sort_order, product, qty, amounts, description=None):
     }
 
 
+# ── Combo trên bảng hàng (request "Thêm Cơ hội" có combo, DevTools 30/10/2026) ──────────────────
+# Chọn một combo, form gửi MỘT dòng cha (giá, thuế của chính combo) rồi các dòng con ngay sau, nối với
+# nhau bằng một mã nhóm form tự sinh: dòng cha mang nó ở ProductSetMasterID, dòng con ở
+# ProductInSetMasterID. Dòng con có tiền = 0 và KHÔNG được cộng vào dòng tổng.
+
+def new_set_master_id():
+    """Mã nhóm mới cho một combo trên bảng hàng (chuỗi GUID như form sinh)."""
+    return str(uuid.uuid4())
+
+
+def combo_parent_fields(master_id):
+    """Trường đánh dấu dòng cha của combo, ghi đè lên dòng ``product_line`` của mã combo."""
+    return {"ProductSetMasterID": master_id, "IsSetProduct": True}
+
+
+def combo_child_product(child):
+    """Hàng con (một phần tử ``Product/GetProductInProductSet``) -> dạng hàng ``product_line`` nhận.
+
+    Biên: thiếu UnitID thì lấy UsageUnitID; thiếu mô tả bán thì lấy tên hàng.
+    """
+    return {
+        "id": child.get("ID"),
+        "code": (child.get("ProductCode") or "").strip(),
+        "name": child.get("ProductName"),
+        "description": child.get("SaleDescription") or child.get("ProductName"),
+        "unit_id": child.get("UnitID") or child.get("UsageUnitID"),
+        "unit": child.get("UnitIDText") or child.get("UsageUnitIDText"),
+        "tax_id": child.get("TaxID"),
+        "tax": child.get("TaxIDText"),
+        # Form gửi OwnerID rỗng ở dòng con (dòng cha mới mang người phụ trách).
+        "owner_id": "",
+    }
+
+
+def combo_child_qty(per_set, combo_qty):
+    """SL dòng con = SL trong một bộ × SL combo. Biên: SL trong bộ trống -> coi là 1.
+
+    Mẫu bắt được chỉ có combo SL 1; nhân theo SL combo là cách form giữ tỉ lệ khi đổi SL dòng cha.
+    """
+    return float(Decimal(str(per_set or 1)) * Decimal(str(combo_qty)))
+
+
+def combo_child_fields(child, master_id):
+    """Trường nối dòng con với dòng cha, ghi đè lên dòng ``product_line`` của hàng con."""
+    return {
+        "ProductSetID": child.get("ProductSetID"), "ProductInSetMasterID": master_id,
+        "IsChildProduct": True, "ProductIDInSet": child.get("ProductIDInSet"), "OwnerID": "",
+    }
+
+
+def renew_set_master_ids(rows):
+    """Cấp mã nhóm combo MỚI cho các dòng chép từ chứng từ khác (vd tạo báo giá từ cơ hội).
+
+    Nhận: list dòng (dict, sửa tại chỗ). Dòng cha và dòng con cùng combo vẫn chung một mã mới.
+    Biên: dòng không thuộc combo giữ nguyên.
+    """
+    renamed = {}
+    for row in rows:
+        for key in ("ProductSetMasterID", "ProductInSetMasterID"):
+            old = row.get(key)
+            if old:
+                row[key] = renamed.setdefault(old, new_set_master_id())
+    return rows
+
+
 def serial_type_cell():
     """Ô ẩn "serial_type" mà bảng hàng Báo giá gửi kèm mỗi dòng (chuỗi JSON, DataIndex ngẫu nhiên)."""
     return json.dumps({
@@ -155,12 +220,15 @@ def _sum(rows, key):
 
 
 def summary(rows, extra_zero=()):
-    """Dòng tổng của bảng hàng, chỉ tính dòng không bị xoá.
+    """Dòng tổng của bảng hàng, chỉ tính dòng không bị xoá và không phải dòng con combo.
 
     Nhận: dòng gửi đi (``Data``), các trường tổng riêng của form luôn 0 (vd Báo giá:
     CustomField3Summary). Trả: dict tổng như form gửi.
+    Dòng con combo: form không cộng (mẫu combo 1 bộ 2 món gửi AmountSummary = 1) — tiền đã nằm ở
+    dòng cha, cộng SL dòng con là tổng SL sai.
     """
-    rows = [row for row in rows if row.get("MISAEntityState") != STATE_DELETE]
+    rows = [row for row in rows
+            if row.get("MISAEntityState") != STATE_DELETE and not row.get("IsChildProduct")]
     to_currency, after_discount = _sum(rows, "ToCurrency"), _sum(rows, "ToCurrencyAfterDiscount")
     discount, tax, total = _sum(rows, "Discount"), _sum(rows, "Tax"), _sum(rows, "Total")
     result = {

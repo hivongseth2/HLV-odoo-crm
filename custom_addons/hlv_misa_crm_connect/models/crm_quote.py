@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from odoo import models
 
 from ..services import opportunity_payload as opportunity_form
-from ..services.misa_form import VN_UTC_OFFSET, edit_rows, payload_total, subform_request
+from ..services.misa_form import VN_UTC_OFFSET, edit_rows, payload_total, renew_set_master_ids, subform_request
 from ..services.quote_payload import (
     DEFAULT_STAGE, FORM_LAYOUT_ID, SUBFORM_AGGREGATES, SUBFORM_COLUMNS, TABLE, quote_line,
     quote_line_from_opportunity, quote_payload, saved_quote_row,
@@ -60,19 +60,20 @@ class MisaCrmQuote(models.AbstractModel):
 
     def api_quote_create_from_opportunity(self, opportunity_id, header, stage_id=None):
         """Tạo báo giá từ cơ hội: khách và hàng (SL, giá, thuế, chiết khấu) chép từ cơ hội, báo giá
-        gắn vào cơ hội đó. Bỏ dòng ghi chú; cơ hội có combo -> 400. Trả {"id", "code", "total"}."""
+        gắn vào cơ hội đó. Bỏ dòng ghi chú; combo chép cả dòng cha lẫn dòng con. Trả {"id", "code", "total"}."""
         current = self._current_record("Opportunity", opportunity_form.FORM_LAYOUT_ID, opportunity_id, "cơ hội")
         saved = self._saved_lines("Opportunity", opportunity_id, subform_request(
             opportunity_form.TABLE, opportunity_form.SUBFORM_COLUMNS, opportunity_form.SUBFORM_AGGREGATES))
         products = [row for row in sorted(saved, key=lambda r: r.get("SortOrder") or 0) if not row.get("IsNoteRow")]
-        if any(row.get("IsSetProduct") or row.get("IsChildProduct") for row in products):
-            raise CrmInputError(400, "combo_not_supported", "Cơ hội có combo — API chưa hỗ trợ chép combo.")
         if not products:
             raise CrmInputError(400, "no_lines", "Cơ hội chưa có hàng — báo giá phải có ít nhất một dòng hàng.")
         account = self._quote_account(current["AccountID"])
         opportunity = {"id": current["ID"], "name": current.get("OpportunityName")}
         stage = self._pick_quote_stage(stage_id)
-        rows = [quote_line_from_opportunity(index, row) for index, row in enumerate(products, start=1)]
+        # Combo chép nguyên dòng cha + dòng con, nhưng mã nhóm combo phải mới: mã cũ đang nối các dòng
+        # của cơ hội, dùng lại là hai chứng từ chung một nhóm.
+        rows = renew_set_master_ids(
+            [quote_line_from_opportunity(index, row) for index, row in enumerate(products, start=1)])
         return self._create_quote(account, opportunity, stage, header, rows)
 
     def api_quote_update(self, quote_id, header, lines=None, stage_id=None):

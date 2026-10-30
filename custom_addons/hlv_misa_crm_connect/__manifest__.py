@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV kết nối MISA CRM (API cho bên ngoài)",
-    "version": "18.0.1.2.0",
+    "version": "18.0.1.3.0",
     "summary": "API riêng của Odoo để hệ thống bên ngoài tra khách, tìm hàng, xem/tạo cơ hội, xem báo giá, đơn hàng trên MISA CRM",
     "description": """
 Odoo giữ tài khoản MISA CRM (đăng nhập + token dùng chung của misa_fetch_po_button); bên ngoài

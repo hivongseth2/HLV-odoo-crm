@@ -14,7 +14,8 @@ _LINES = {
     "type": "array",
     "description": (
         "Dòng hàng. Mỗi dòng: mã ĐÚNG như MISA, SL > 0, và đúng MỘT trong price_after_tax (đơn giá "
-        "SAU VAT — ưu tiên) hoặc price (đơn giá chưa VAT). Không nhận combo."
+        "SAU VAT — ưu tiên) hoặc price (đơn giá chưa VAT). Combo: một dòng mã combo, giá cả bộ — Odoo "
+        "tự thêm các dòng mã con (tiền 0) như form MISA."
     ),
     "items": {
         "type": "object",
