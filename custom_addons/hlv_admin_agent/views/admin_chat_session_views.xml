@@ -8,6 +8,7 @@
                 <field name="last_activity"/>
                 <field name="user_id"/>
                 <field name="name"/>
+                <field name="model" optional="show"/>
                 <field name="state" widget="badge" decoration-warning="state == 'processing'"/>
                 <field name="api_input_tokens" optional="show" sum="Tổng"/>
                 <field name="api_cache_read_tokens" optional="hide" sum="Tổng"/>

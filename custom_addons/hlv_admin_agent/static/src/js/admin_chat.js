@@ -22,6 +22,26 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NOT_READY_TEXT = "Chưa khai Anthropic API key (Cài đặt > Tồn kho > Trợ lý tạo mã hàng): trợ lý chưa trả lời được.";
 const MOBILE_QUERY = "(max-width: 767px)";
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 520;
+const SIDEBAR_WIDTH_KEY = "hlv_admin_agent.sidebar_width";
+
+// localStorage có thể bị chặn (chế độ riêng tư, chính sách trình duyệt): không nhớ được thì thôi.
+function loadSidebarWidth() {
+    try {
+        return Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY)) || null;
+    } catch {
+        return null;
+    }
+}
+
+function saveSidebarWidth(width) {
+    try {
+        window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(width)));
+    } catch {
+        // Không nhớ được: lần sau về độ rộng mặc định.
+    }
+}
 
 publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
     selector: ".hlv-aa-app",
@@ -38,8 +58,9 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
         "click .hlv-aa-preview-remove": "_onRemovePreview",
         "keydown textarea": "_onKeydown",
         "input textarea": "_autosize",
-        "paste textarea": "_onPaste",
         "change input[type=file]": "_onPickFiles",
+        "change .hlv-aa-model": "_onPickModel",
+        "pointerdown .hlv-aa-resize": "_onResizeStart",
     },
 
     start() {
@@ -59,13 +80,21 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
         this.textarea = this.el.querySelector("textarea");
         this.sendBtn = this.el.querySelector(".hlv-aa-send");
         this.boardEl = this.el.querySelector(".hlv-aa-board");
+        this.modelEl = this.el.querySelector(".hlv-aa-model");
+        this.defaultModel = this.modelEl.value;
         if (window.matchMedia(MOBILE_QUERY).matches) {
             this.el.dataset.sidebar = "0";
         }
+        this._applySidebarWidth(loadSidebarWidth());
         this._onEscape = (ev) => ev.key === "Escape" && this._closeBoard();
         document.addEventListener("keydown", this._onEscape);
+        // Listener gốc trên cả trang, không qua events của widget: publicWidget bọc sự kiện bằng jQuery,
+        // ev.clipboardData ở đó là undefined nên dán ảnh không bao giờ ăn. Dán ở đâu trên trang cũng nhận.
+        this._onDocPaste = (ev) => this._onPaste(ev);
+        document.addEventListener("paste", this._onDocPaste);
         this._loadSessions();
         this._openSession(this.sessionId);
+        this._autosize();
         this.textarea.focus();
         return this._super(...arguments);
     },
@@ -73,6 +102,7 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
     destroy() {
         clearTimeout(this.pollTimer);
         document.removeEventListener("keydown", this._onEscape);
+        document.removeEventListener("paste", this._onDocPaste);
         this._super(...arguments);
     },
 
@@ -102,6 +132,8 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
         this._setUrl();
         this._markActive();
         this._renderStatus("", "");
+        // Cuộc chưa chọn model chạy model mặc định; cuộc đã chọn thì state ghi đè ngay sau.
+        this.modelEl.value = this.defaultModel;
         if (sessionId) {
             this._refresh();
         } else {
@@ -141,6 +173,9 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
             this._setUrl();
         }
         this.titleEl.textContent = state.name || "";
+        if (state.model && !this.sending) {
+            this.modelEl.value = state.model;
+        }
         let gotReply = false;
         for (const message of state.messages) {
             if (message.id <= this.lastId) {
@@ -339,6 +374,7 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
                 text,
                 images: this.pendingImages.map(({ name, mimetype, data }) => ({ name, mimetype, data })),
                 after_id: this.lastId,
+                model: this.modelEl.value,
             });
             if (!state.error) {
                 // Chỉ xoá ô nhập khi server đã nhận: gửi hỏng thì không mất chữ.
@@ -370,11 +406,54 @@ publicWidget.registry.HlvAdminChat = publicWidget.Widget.extend({
     },
 
     _onPaste(ev) {
-        const files = [...(ev.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+        // items thay vì files: ảnh chụp màn hình (Win+Shift+S, Snipping Tool) có trình duyệt chỉ đưa qua items.
+        const files = [...(ev.clipboardData?.items || [])]
+            .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+            .map((item) => item.getAsFile())
+            .filter(Boolean);
         if (files.length) {
             ev.preventDefault();
             this._addFiles(files);
+            this.textarea.focus();
         }
+    },
+
+    async _onPickModel() {
+        // Cuộc đã có thì lưu ngay để lượt sau dùng model mới; cuộc mới thì gửi kèm tin đầu tiên.
+        if (this.sessionId) {
+            await rpc("/admin_agent/chat/model", { session_id: this.sessionId, model: this.modelEl.value });
+        }
+    },
+
+    _applySidebarWidth(width) {
+        if (width) {
+            this.el.style.setProperty("--aa-sidebar-width", `${width}px`);
+        }
+    },
+
+    /** Kéo mép phải cột trái để đổi độ rộng; nhớ trên máy này. */
+    _onResizeStart(ev) {
+        ev.preventDefault();
+        const handle = ev.currentTarget;
+        handle.setPointerCapture(ev.pointerId);
+        this.el.classList.add("hlv-aa-resizing");
+        let width = null;
+        const onMove = (moveEv) => {
+            width = Math.min(Math.max(moveEv.clientX, SIDEBAR_MIN), SIDEBAR_MAX);
+            this._applySidebarWidth(width);
+        };
+        const onUp = () => {
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+            handle.removeEventListener("pointercancel", onUp);
+            this.el.classList.remove("hlv-aa-resizing");
+            if (width) {
+                saveSidebarWidth(width);
+            }
+        };
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
     },
 
     _onPickFiles(ev) {

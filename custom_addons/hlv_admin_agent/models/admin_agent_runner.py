@@ -181,6 +181,8 @@ class HlvAdminAgentRunner(models.AbstractModel):
         """Trả ``(reply, history, context_key)``. Raise TurnFailed khi không xong."""
         config_record = self.env['hlv.admin.agent.config'].current()
         config = config_record.run_config()
+        if session.model:
+            config['model'] = session.model
         if not config['api_key']:
             raise TurnFailed("chưa khai Anthropic API key (Cài đặt > Tồn kho > Trợ lý tạo mã hàng)")
         system_text = config_record.system_text()

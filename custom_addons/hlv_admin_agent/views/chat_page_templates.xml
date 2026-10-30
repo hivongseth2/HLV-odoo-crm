@@ -18,6 +18,7 @@
                         <a href="/odoo" title="Về Odoo"><i class="fa fa-arrow-left"/></a>
                         <span t-esc="user_name"/>
                     </div>
+                    <div class="hlv-aa-resize" title="Kéo để đổi độ rộng"/>
                 </aside>
                 <main class="hlv-aa-main">
                     <div class="hlv-aa-top">
@@ -39,6 +40,12 @@
                             </label>
                             <textarea rows="1" maxlength="4000"
                                       placeholder="Tạo báo giá, cơ hội, tra tồn, tạo mã hàng..."/>
+                            <select class="hlv-aa-model" title="Model trả lời cuộc chat này">
+                                <t t-foreach="models" t-as="option">
+                                    <option t-att-value="option[0]" t-att-selected="option[0] == default_model"
+                                            t-esc="option[1]"/>
+                                </t>
+                            </select>
                             <button type="button" class="hlv-aa-send" title="Gửi (Enter)">
                                 <i class="fa fa-arrow-up"/>
                             </button>

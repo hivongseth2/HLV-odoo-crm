@@ -26,6 +26,7 @@
 
 /* ---------- Cột trái ---------- */
 .hlv-aa-sidebar {
+  position: relative;
   width: var(--aa-sidebar-width);
   flex: 0 0 auto;
   display: flex;
@@ -36,6 +37,28 @@
 
 .hlv-aa-app[data-sidebar="0"] .hlv-aa-sidebar {
   display: none;
+}
+
+/* Mép phải cột trái: kéo để đổi độ rộng. */
+.hlv-aa-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.hlv-aa-resize:hover,
+.hlv-aa-resizing .hlv-aa-resize {
+  background: var(--pa-accent);
+  opacity: 0.35;
+}
+
+.hlv-aa-resizing {
+  user-select: none;
+  cursor: col-resize;
 }
 
 .hlv-aa-brand {
@@ -324,29 +347,59 @@
 
 .hlv-aa-input {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 6px;
-  padding: 10px 10px 10px 14px;
+  padding: 8px 8px 8px 14px;
   border: 1px solid var(--pa-border);
   border-radius: 18px;
   background: var(--pa-bg);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Đang gõ: viền xanh mảnh + quầng nhạt, như ô nhập Claude desktop (bản màu xanh HLV). */
 .hlv-aa-input:focus-within {
-  border-color: #c9c6be;
+  border-color: var(--pa-accent);
+  box-shadow: 0 0 0 1px var(--pa-accent), 0 2px 14px rgba(21, 101, 179, 0.18);
 }
 
+/* Bỏ margin / padding mặc định của trình duyệt và theme: còn là chữ bị thụt xuống dưới tâm khung. */
 .hlv-aa-input textarea {
   flex: 1 1 auto;
+  display: block;
+  margin: 0;
+  padding: 6px 0;
   border: 0;
   outline: 0;
+  box-shadow: none;
   resize: none;
+  min-height: 0;
   max-height: 240px;
+  overflow-y: auto;
   background: transparent;
   color: var(--pa-text);
+  font: inherit;
   line-height: 1.5;
+}
+
+.hlv-aa-model {
+  flex: 0 0 auto;
+  max-width: 150px;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: transparent;
+  color: var(--pa-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.hlv-aa-model:hover,
+.hlv-aa-model:focus {
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  outline: 0;
 }
 
 .hlv-aa-attach {
@@ -397,11 +450,19 @@
 .hlv-aa-board-box {
   width: min(1100px, 94vw);
   height: 86vh;
+  min-width: 360px;
+  min-height: 240px;
+  max-width: 98vw;
+  max-height: 96vh;
   display: flex;
   flex-direction: column;
   background: var(--pa-bg);
   border-radius: 12px;
   overflow: hidden;
+  /* Kéo góc dưới phải để đổi kích thước bảng. Dải trống dưới đáy: iframe phủ tới góc thì nuốt mất
+     thao tác kéo, góc kéo không bấm được. */
+  resize: both;
+  padding-bottom: 14px;
 }
 
 .hlv-aa-board-head {

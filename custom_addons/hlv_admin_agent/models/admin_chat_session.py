@@ -20,7 +20,7 @@ from odoo.addons.hlv_product_agent.models.product_chat_session import (
     COLD_START_HISTORY_LIMIT, MAX_IMAGES_PER_MESSAGE, MAX_TEXT_CHARS,
 )
 from odoo.addons.hlv_product_agent.services import build_turn_prompt
-from odoo.addons.hlv_product_agent.services.claude_api_payload import INLINE_IMAGE_NOTE
+from odoo.addons.hlv_product_agent.services.claude_api_payload import INLINE_IMAGE_NOTE, MODEL_CHOICES
 
 _logger = logging.getLogger(__name__)
 
@@ -39,6 +39,9 @@ class HlvAdminChatSession(models.Model):
     name = fields.Char("Chủ đề", default=NEW_SESSION_NAME, required=True)
     user_id = fields.Many2one('res.users', string="Tài khoản", required=True, index=True,
                               default=lambda self: self.env.user)
+    # Người dùng chọn trên trang chat; trống = model trong Cấu hình. Đổi giữa cuộc là lượt sau mở lại
+    # lịch sử từ tin chữ (khối thinking gắn với model cũ, API không nhận).
+    model = fields.Selection(MODEL_CHOICES, string="Model")
     last_activity = fields.Datetime("Hoạt động cuối", default=fields.Datetime.now)
     state = fields.Selection([('idle', "Chờ tin"), ('processing', "Claude đang xử lý")],
                              default='idle', required=True, readonly=True)
@@ -79,6 +82,14 @@ class HlvAdminChatSession(models.Model):
             return self.browse()
         return self.search([('id', '=', session_id), ('user_id', '=', self.env.uid)], limit=1)
 
+    def set_model(self, model):
+        """Đổi model của cuộc. Model không có trong danh sách thì bỏ qua (giữ model cũ). Trả True nếu đổi."""
+        self.ensure_one()
+        if model not in dict(MODEL_CHOICES) or model == self.model:
+            return False
+        self.sudo().model = model
+        return True
+
     def post_user_message(self, text, images=None):
         """Ghi tin người dùng vào hàng chờ và đánh thức runner.
 
@@ -118,6 +129,7 @@ class HlvAdminChatSession(models.Model):
         return {
             'session_id': self.id,
             'name': self.name,
+            'model': self.model or False,
             'busy': self.state == 'processing' or any(self.message_ids.mapped('to_send')),
             'processing': self.state == 'processing',
             'messages': [msg.to_client_dict() for msg in self.message_ids if msg.id > (after_id or 0)],
