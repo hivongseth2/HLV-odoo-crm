@@ -65,10 +65,33 @@ function renderPart(part) {
         link.textContent = part.text;
         return link;
     }
-    const tag = { bold: "strong", mark: "mark", code: "code" }[part.type];
+    if (part.type === "code") {
+        return codeLink(part.text);
+    }
+    const tag = { bold: "strong", mark: "mark" }[part.type];
     const node = document.createElement(tag);
     node.textContent = part.text;
     return node;
+}
+
+/**
+ * Mã hàng trong `...` thành link mở trang tra tồn đúng mã đó, cùng tab như lệnh mở trang của
+ * trợ lý: sale bấm là thấy tồn, giá, ảnh của mã ngay, khỏi gõ lại. Khung chat nạp lại lịch sử
+ * từ server nên tải lại trang không mất cuộc chat.
+ */
+function codeLink(code) {
+    const node = document.createElement("code");
+    node.textContent = code;
+    const url = searchUrl({ type: "search", q: code.trim() });
+    if (!url) {
+        return node;
+    }
+    const link = document.createElement("a");
+    link.className = "hlv-pa-code-link";
+    link.href = url;
+    link.title = "Mở mã này trên trang tra tồn";
+    link.appendChild(node);
+    return link;
 }
 
 /**
