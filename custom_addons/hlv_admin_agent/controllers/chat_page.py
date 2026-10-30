@@ -32,7 +32,9 @@ def _state(session, after_id=0):
 
 class AdminAgentChat(http.Controller):
 
-    @http.route(PAGE_URL, type='http', auth='user', methods=['GET'])
+    # website=True: module website sửa web.frontend_layout và cần biến 'website' / 'main_object' trong
+    # context — thiếu là trang lỗi KeyError 'website'. sitemap=False: trang nội bộ, không đưa lên sitemap.
+    @http.route(PAGE_URL, type='http', auth='user', methods=['GET'], website=True, sitemap=False)
     def page(self, **kw):
         if not request.env.user.has_group(GROUP):
             return request.not_found()
