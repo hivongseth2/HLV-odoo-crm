@@ -38,6 +38,7 @@ OLD_DEFAULT_VERSIONS = {
         '352e8f35ecb3123c',  # 18.0.1.16.2: hỏi lại thông tin sale đã ghi, hỏi hãng vật tư chung, chưa hỏi bằng nút
         '339b1144b28f5e4d',  # 18.0.1.17.0: hãng hết hàng vẫn đẩy thành nút thay vì liệt kê hãng khác
         'cb597b11c62a5772',  # 18.0.1.17.1: mã hàng chưa bấm được, tìm ra mã chưa kèm giá
+        '7d49477661273757',  # 18.0.1.18.2: tìm mã thay thế trả lời "chưa chắc" thay vì tìm web thông số
     },
 }
 DEFAULT_FILES = {

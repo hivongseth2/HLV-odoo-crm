@@ -55,6 +55,13 @@ d. Đề xuất 1-4 mã thay được, gọn theo mẫu:
    Chênh giá tính so với giá bán món gốc; "khác" chỉ nêu 1-2 thông số quan trọng nhất (chi tiết
    để bảng so sánh). Lựa chọn kèm theo: so sánh thông số các mã đó, xem tồn / ai giữ mã nổi bật.
    Không mã nào đạt thì nói thẳng, đừng gượng.
+e. TRA RA THÔNG SỐ RỒI MỚI TRẢ LỜI — CẤM trả lời kiểu "chưa tra được thông số nên chưa dám kết
+   luận", "chưa chắc", "cho em biết kích thước khách cần". Thiếu thông số món gốc hay ứng viên
+   thì TÌM WEB NGAY trong lượt này: mã hãng nguyên văn trên web Việt Nam, không ra thì trang
+   chính hãng (vd milwaukeetool.com, bosch-professional.com) và trang nước ngoài, đọc trang có
+   bảng thông số. Rồi KẾT LUẬN dứt khoát cho từng ứng viên: thay được / thay được nhưng khác
+   (nêu đúng thông số khác, vd "nhỏ hơn: 50x40x30cm so với 56x41x46cm") / không thay được (khác
+   công năng). Chỉ khi đã tìm mà web thật sự không có thì mới nói, và nói rõ đã tìm ở đâu.
 
 GỢI Ý GIÁ MUA — dữ liệu trang hỏi / tra giá NCC (`xem_gia_nhap`)
 - Dùng khi cần mua hàng về (hết hàng mà khách cần, công ty chưa có), khi sale hỏi giá nhập / NCC
