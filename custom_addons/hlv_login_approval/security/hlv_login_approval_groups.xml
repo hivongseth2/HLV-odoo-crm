@@ -6,4 +6,8 @@
         <field name="name">Người duyệt thiết bị đăng nhập</field>
         <field name="users" eval="[(4, ref('base.user_admin'))]"/>
     </record>
+    <!-- Chỉ gán cho tài khoản dịch vụ đăng nhập bằng script; user có quyền Settings thì không được miễn. -->
+    <record id="group_login_approval_exempt" model="res.groups">
+        <field name="name">Miễn duyệt thiết bị đăng nhập (tài khoản dịch vụ)</field>
+    </record>
 </odoo>

@@ -1,6 +1,6 @@
 {
     'name': 'HLV - Duyệt đăng nhập theo thiết bị',
-    'version': '18.0.3.2.0',
+    'version': '18.0.3.3.0',
     'summary': 'User nội bộ đăng nhập từ thiết bị mới phải chờ admin duyệt',
     'description': """
         - Mỗi trình duyệt được gắn một cookie thiết bị. Lần đầu user nội bộ đăng nhập
@@ -15,6 +15,8 @@
         - Yêu cầu chờ duyệt có hạn (mặc định 30 phút, tham số hlv_login_approval.request_minutes);
           quá hạn thì đăng nhập lại để gửi yêu cầu mới.
         - Không áp dụng cho user portal và XML-RPC / API key.
+        - Tài khoản dịch vụ đăng nhập bằng script (worker AI...) gán vào nhóm "Miễn duyệt thiết bị
+          đăng nhập"; nhóm này không có tác dụng với user có quyền Settings.
     """,
     'category': 'Administration',
     'author': 'HLV',

@@ -59,7 +59,20 @@ class ResUsers(models.Model):
         # Đã đăng nhập sẵn trên trình duyệt này: đây là đổi mật khẩu / xác minh danh tính.
         if request.session.uid == user.id:
             return False
-        return user._is_internal()
+        if not user._is_internal():
+            return False
+        if user._is_login_approval_exempt():
+            _logger.info("hlv_login_approval: %s miễn duyệt thiết bị (tài khoản dịch vụ)", user.login)
+            return False
+        return True
+
+    def _is_login_approval_exempt(self):
+        # Tài khoản dịch vụ (worker AI...) đăng nhập bằng mật khẩu qua /web/session/authenticate,
+        # không giữ cookie thiết bị nên lần nào cũng thành máy mới. Không miễn cho admin Settings:
+        # nhóm này không được thành lối tắt để tài khoản quyền cao bỏ qua duyệt.
+        self.ensure_one()
+        return (self.has_group('hlv_login_approval.group_login_approval_exempt')
+                and not self.has_group('base.group_system'))
 
     def _is_login_rescue_account(self):
         # Chỉ miễn khi đã bật 2FA: miễn duyệt cho tài khoản chỉ có mật khẩu là để ngỏ cửa hậu.
