@@ -24,6 +24,18 @@ def _line_key(ml):
     return ml.product_id, ml.location_id, ml.lot_id, ml.package_id, ml.owner_id
 
 
+def _on_hand(env, key):
+    """On-hand qty of the exact quant _action_done will decrement (product UoM)."""
+    product, location, lot, package, owner = key
+    return sum(env['stock.quant']._gather(
+        product, location, lot_id=lot, package_id=package, owner_id=owner, strict=True,
+    ).mapped('quantity'))
+
+
+def _counts_for_overpick(ml):
+    return ml.quantity > 0 and ml.location_id.usage == 'internal' and ml.product_id.is_storable
+
+
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
@@ -36,14 +48,10 @@ class StockPicking(models.Model):
         """
         if self.env.context.get(SKIP_CTX):
             return
-        Quant = self.env['stock.quant']
         errors = []
         for picking in self.filtered(lambda p: p.state not in ('done', 'cancel')):
             lines = picking.move_line_ids.filtered(
-                lambda ml: ml.state not in ('done', 'cancel')
-                and ml.quantity > 0
-                and ml.location_id.usage == 'internal'
-                and ml.product_id.is_storable
+                lambda ml: ml.state not in ('done', 'cancel') and _counts_for_overpick(ml)
             )
             if validating and any(picking.move_ids.mapped('picked')):
                 # Core: if any move is picked, only picked lines of picked moves are processed.
@@ -55,9 +63,7 @@ class StockPicking(models.Model):
                 if keys is not None and key not in keys:
                     continue
                 product, location, lot, package, owner = key
-                on_hand = sum(Quant._gather(
-                    product, location, lot_id=lot, package_id=package, owner_id=owner, strict=True,
-                ).mapped('quantity'))
+                on_hand = _on_hand(self.env, key)
                 if float_compare(qty, on_hand, precision_rounding=product.uom_id.rounding) > 0:
                     errors.append(_(
                         '• %(picking)s | %(product)s%(lot)s tại %(location)s: lấy %(qty)s nhưng tồn chỉ có %(on_hand)s %(uom)s',
@@ -91,6 +97,40 @@ class StockPicking(models.Model):
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
+
+    @api.onchange('move_line_ids')
+    def _hlv_onchange_cap_overpick(self):
+        """Detailed-operations dialog: when the lines on one quant add up to more than its on-hand qty,
+        reduce them right away. Lines whose qty went up are reduced first (newest first), then the rest."""
+        if self.state in ('done', 'cancel') or self.env.context.get(SKIP_CTX):
+            return
+        groups = defaultdict(list)
+        for ml in self.move_line_ids.filtered(_counts_for_overpick):
+            groups[_line_key(ml)].append(ml)
+        messages = []
+        for key, lines in groups.items():
+            product, location = key[0], key[1]
+            uom = product.uom_id
+            on_hand = _on_hand(self.env, key)
+            excess = sum(ml.product_uom_id._compute_quantity(ml.quantity, uom) for ml in lines) - on_hand
+            if float_compare(excess, 0, precision_rounding=uom.rounding) <= 0:
+                continue
+            ordered = sorted(reversed(lines), key=lambda ml: ml.quantity <= (ml._origin.quantity or 0.0))
+            for ml in ordered:
+                if float_compare(excess, 0, precision_rounding=uom.rounding) <= 0:
+                    break
+                new_qty = max(0.0, ml.quantity - uom._compute_quantity(excess, ml.product_uom_id))
+                excess -= ml.product_uom_id._compute_quantity(ml.quantity - new_qty, uom)
+                ml.quantity = new_qty
+            messages.append(_(
+                '• %(location)s: chỉ còn %(on_hand)s %(uom)s, đã tự giảm số lượng các dòng cho khớp tồn.',
+                location=location.complete_name, on_hand=on_hand, uom=uom.name,
+            ))
+        if messages:
+            return {'warning': {
+                'title': _('Vượt quá tồn kho tại vị trí!'),
+                'message': '\n'.join(messages),
+            }}
 
     def write(self, vals):
         if self.env.context.get(DEFER_CTX) or not MOVE_TRIGGER_FIELDS & set(vals):
