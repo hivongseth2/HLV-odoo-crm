@@ -354,6 +354,16 @@ body.hlv-pa-resizing {
   color: var(--pa-accent);
 }
 
+.hlv-pa-text .hlv-pa-code-link {
+  text-decoration: none;
+}
+
+.hlv-pa-text .hlv-pa-code-link code {
+  color: var(--pa-accent);
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+}
+
 .hlv-pa-msg .hlv-pa-rich-img {
   display: block;
   max-width: 100%;
