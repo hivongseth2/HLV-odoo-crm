@@ -1,0 +1,445 @@
+/* Trang trợ lý quản trị: toàn màn, cột trái các cuộc chat, giữa là cuộc đang mở (kiểu Claude desktop).
+   Chữ có định dạng (.hlv-pa-text, .hlv-pa-line, nút .hlv-pa-option) dùng lại style của trợ lý tạo mã
+   (hlv_product_agent/static/src/css/product_chat.css) — ở đây chỉ khai biến màu nó cần. */
+
+.hlv-aa-app {
+  --pa-accent: #1565b3;
+  --pa-accent-dark: #0d4c8c;
+  --pa-accent-soft: #e8f1fb;
+  --pa-bg: #ffffff;
+  --pa-surface: #f7f7f5;
+  --pa-user-bubble: #ecebe7;
+  --pa-border: #e2e0da;
+  --pa-text: #2b2a27;
+  --pa-muted: #8a877f;
+  --aa-sidebar-bg: #f2f1ed;
+  --aa-sidebar-width: 272px;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  background: var(--pa-bg);
+  color: var(--pa-text);
+  font-size: 14.5px;
+  z-index: 10;
+}
+
+/* ---------- Cột trái ---------- */
+.hlv-aa-sidebar {
+  width: var(--aa-sidebar-width);
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--aa-sidebar-bg);
+  border-right: 1px solid var(--pa-border);
+}
+
+.hlv-aa-app[data-sidebar="0"] .hlv-aa-sidebar {
+  display: none;
+}
+
+.hlv-aa-brand {
+  padding: 16px 16px 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.hlv-aa-new {
+  margin: 4px 12px 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--pa-border);
+  border-radius: 10px;
+  background: var(--pa-bg);
+  color: var(--pa-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hlv-aa-new:hover {
+  border-color: var(--pa-accent);
+}
+
+.hlv-aa-sessions {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.hlv-aa-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hlv-aa-session:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.hlv-aa-session.active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.hlv-aa-session-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlv-aa-session-busy {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pa-accent);
+  flex: 0 0 auto;
+}
+
+.hlv-aa-session-tools {
+  display: none;
+  gap: 2px;
+}
+
+.hlv-aa-session:hover .hlv-aa-session-tools {
+  display: flex;
+}
+
+.hlv-aa-session-tools button {
+  border: 0;
+  background: transparent;
+  color: var(--pa-muted);
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.hlv-aa-session-tools button:hover {
+  color: var(--pa-text);
+}
+
+.hlv-aa-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--pa-border);
+  color: var(--pa-muted);
+  font-size: 13px;
+}
+
+.hlv-aa-account a {
+  color: var(--pa-muted);
+}
+
+/* ---------- Khung giữa ---------- */
+.hlv-aa-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hlv-aa-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  min-height: 48px;
+}
+
+.hlv-aa-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--pa-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.hlv-aa-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlv-aa-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+/* Cột chữ hẹp ở giữa như Claude desktop: dòng dài quá khó đọc. */
+.hlv-aa-messages,
+.hlv-aa-composer {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.hlv-aa-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 8px;
+  padding-bottom: 24px;
+}
+
+.hlv-aa-msg {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.6;
+}
+
+.hlv-aa-msg-user {
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+.hlv-aa-msg-user .hlv-pa-text {
+  padding: 9px 14px;
+  border-radius: 16px;
+  background: var(--pa-user-bubble);
+  white-space: pre-wrap;
+}
+
+.hlv-aa-msg-event {
+  align-self: stretch;
+  padding: 6px 12px;
+  border-left: 3px solid var(--pa-accent);
+  background: var(--pa-accent-soft);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.hlv-aa-msg img.hlv-aa-attachment,
+.hlv-aa-msg .hlv-pa-rich-img {
+  max-width: 240px;
+  max-height: 240px;
+  margin-top: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--pa-border);
+  object-fit: contain;
+}
+
+.hlv-aa-msg-action {
+  align-self: flex-start;
+  margin-top: 4px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--pa-accent);
+  cursor: pointer;
+}
+
+.hlv-aa-time {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--pa-muted);
+}
+
+.hlv-aa-msg-user .hlv-aa-time {
+  align-self: flex-end;
+}
+
+.hlv-aa-typing {
+  color: var(--pa-muted);
+  font-style: italic;
+}
+
+.hlv-aa-welcome {
+  margin-top: 18vh;
+  text-align: center;
+  color: var(--pa-muted);
+}
+
+.hlv-aa-welcome h2 {
+  color: var(--pa-text);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.hlv-aa-welcome .hlv-pa-options {
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* ---------- Ô nhập ---------- */
+.hlv-aa-composer {
+  padding-bottom: 14px;
+}
+
+.hlv-aa-status:empty {
+  display: none;
+}
+
+.hlv-aa-status {
+  margin-bottom: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff4d6;
+  color: #7a5a00;
+}
+
+.hlv-aa-status[data-level="error"] {
+  background: #fde8e8;
+  color: #9b1c1c;
+}
+
+.hlv-aa-previews {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hlv-aa-preview {
+  position: relative;
+}
+
+.hlv-aa-preview img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--pa-border);
+}
+
+.hlv-aa-preview button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pa-text);
+  color: #fff;
+  font-size: 11px;
+  line-height: 20px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hlv-aa-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--pa-border);
+  border-radius: 18px;
+  background: var(--pa-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.hlv-aa-input:focus-within {
+  border-color: #c9c6be;
+}
+
+.hlv-aa-input textarea {
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  resize: none;
+  max-height: 240px;
+  background: transparent;
+  color: var(--pa-text);
+  line-height: 1.5;
+}
+
+.hlv-aa-attach {
+  margin: 0;
+  padding: 4px;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+
+.hlv-aa-send {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 10px;
+  background: var(--pa-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.hlv-aa-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hlv-aa-hint {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--pa-muted);
+}
+
+/* ---------- Bảng trợ lý dựng ---------- */
+.hlv-aa-board {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.hlv-aa-board[data-open="1"] {
+  display: flex;
+}
+
+.hlv-aa-board-box {
+  width: min(1100px, 94vw);
+  height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--pa-bg);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.hlv-aa-board-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--pa-border);
+  font-weight: 600;
+}
+
+.hlv-aa-board-title {
+  flex: 1 1 auto;
+}
+
+.hlv-aa-board-close {
+  border: 0;
+  background: transparent;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+
+.hlv-aa-board-frame {
+  flex: 1 1 auto;
+  border: 0;
+  width: 100%;
+}
+
+/* Điện thoại: cột trái thành ngăn đè lên khung chat. */
+@media (max-width: 767px) {
+  .hlv-aa-sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .hlv-aa-messages,
+  .hlv-aa-composer {
+    padding: 0 12px;
+  }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tạo bản cấu hình (prompt lõi từ data/prompt_defaults/admin_core.md) nếu chưa có; đã có thì
+         giữ nguyên — prompt có thể đã được sửa trên Odoo. Chạy lại mỗi lần nâng cấp là an toàn. -->
+    <function model="hlv.admin.agent.config" name="current"/>
+</odoo>
