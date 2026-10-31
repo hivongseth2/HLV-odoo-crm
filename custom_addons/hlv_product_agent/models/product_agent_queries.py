@@ -16,7 +16,9 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
 )
 
 from ..services.price_summary import compact_prices
-from ..services.query_format import clamp_int, fit_result, has_all_words, name_tokens
+from ..services.query_format import (
+    clamp_int, fit_result, has_all_words, keyword_tier, name_tokens, usable_keywords,
+)
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
 _logger = logging.getLogger(__name__)
@@ -331,31 +333,38 @@ class HlvProductAgentQueries(models.AbstractModel):
         # Một loại máy nhiều cách gọi ("khoan bê tông" / "khoan búa"): khớp MỘT cách gọi là lấy.
         variants = [args.get('tu_khoa') or ''] + [text for text in (args.get('tu_khoa_khac') or [])
                                                   if isinstance(text, str)][:MAX_KEYWORD_VARIANTS]
-        word_sets = [words for words in map(name_tokens, variants) if words]
-        if not category and not word_sets:
+        keywords = usable_keywords(variants)
+        if not category and not keywords:
             return {'status': 'error', 'message': "Cần code của món gốc (để lấy nhóm hàng), nhom, hoặc tu_khoa "
                                                   "loại hàng để khoanh vùng ứng viên."}
         stock = self._stock_by_product(category)
         products = self.env['product.product'].sudo().browse(list(stock)).filtered(
             lambda product: product.sale_ok and product != base)
-        if word_sets:
-            products = products.filtered(lambda product: any(has_all_words(
-                words, '%s %s %s' % (product.name, product.default_code or '', product.description_sale or ''))
-                for words in word_sets))
+        # Xếp theo độ khớp TÊN trước, bán chạy sau: xếp theo bán chạy thì "keo trắng đục" bán 280 cái
+        # đứng đầu danh sách "máy đục", máy đục thật chưa bán cái nào bị cắt khỏi danh sách.
+        tiers = {product.id: keyword_tier(keywords, product.name, '%s %s' % (
+            product.default_code or '', product.description_sale or '')) for product in products}
+        products = products.filtered(lambda product: tiers[product.id] is not None)
         sold = self._sold_qty(products)
-        products = products.sorted(lambda product: (-sold.get(product.id, 0.0), -stock[product.id][0]))
+        products = products.sorted(lambda product: (
+            tiers[product.id], -sold.get(product.id, 0.0), -stock[product.id][0]))
         shown = products[:SUBSTITUTE_CANDIDATES]
         specs = self.env['hlv.product.spec'].fresh_by_product(shown | base if base else shown)
         result = {
             'mon_goc': self._with_saved_specs(self._product_brief(base), specs) if base else None,
             'tieu_chi': {'nhom_hang': category.complete_name if category else None,
-                         'tu_khoa': [text for text in variants if text] or None},
+                         'tu_khoa': keywords or None},
             'tong_ung_vien': len(products),
             'ung_vien': [self._with_saved_specs(dict(
                 self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
                 gia_ban=product.list_price, da_ban_180_ngay=sold.get(product.id, 0.0)), specs)
                 for product in shown],
         }
+        if len(products) > len(shown):
+            result['ghi_chu_danh_sach'] = (
+                "Danh sách đã cắt: còn %s mã không hiện (xếp theo độ khớp tên, rồi bán chạy). Sale hỏi "
+                "'tất cả' thì đừng kết luận chỉ từ danh sách này — thu hẹp tu_khoa (thêm hãng / dòng) và "
+                "gọi lại." % (len(products) - len(shown)))
         if specs:
             result['ghi_chu_thong_so'] = ("Mã có thong_so_da_luu: dùng luôn, KHÔNG tìm web lại; chỉ tìm web "
                                           "cho mã chưa có.")

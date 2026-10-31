@@ -99,3 +99,59 @@ def name_tokens(text):
     """
     words = re.findall(r"[a-z0-9]+(?:[-.][a-z0-9]+)*", _plain(text))
     return frozenset(word for word in words if len(word) >= 2 and word not in _GENERIC_WORDS)
+
+
+# Cụm từ khoá ngắn hơn ngần này ký tự ("HD", "HM") khớp gần như mọi tên hàng.
+MIN_KEYWORD_CHARS = 3
+# Bậc khớp, nhỏ là sát: tên bắt đầu bằng cụm / tên chứa cụm / tên có đủ từ / chỉ khớp mã hoặc mô tả.
+TIER_NAME_STARTS, TIER_NAME_PHRASE, TIER_NAME_WORDS, TIER_OTHER = 0, 1, 2, 3
+
+
+def _squash(text):
+    return re.sub(r"[^a-z0-9]", "", _plain(text))
+
+
+def usable_keywords(variants):
+    """Các cụm từ khoá đủ dài để lọc, giữ thứ tự, bỏ trùng.
+
+    Nhận: list chuỗi (tu_khoa + tu_khoa_khac). Trả: list chuỗi.
+    Biên: phần tử không phải chuỗi / rỗng / ngắn hơn MIN_KEYWORD_CHARS (sau khi bỏ dấu, khoảng
+    trắng) -> bỏ.
+    """
+    seen, result = set(), []
+    for text in variants or []:
+        key = _squash(text) if isinstance(text, str) else ""
+        if len(key) >= MIN_KEYWORD_CHARS and key not in seen:
+            seen.add(key)
+            result.append(text)
+    return result
+
+
+def keyword_tier(keywords, name, other_text=""):
+    """Một món hàng khớp từ khoá tới đâu.
+
+    So NGUYÊN CỤM với tên (giữ cả chữ "máy": "máy đục" khác "đục" trong "keo trắng đục"), rồi mới
+    tới từng từ, rồi mã / mô tả. Dùng để xếp loại hàng đúng lên trước hàng chỉ dính chữ.
+    Nhận: keywords (list cụm, đã qua usable_keywords), name (tên hàng), other_text (mã + mô tả).
+    Trả: TIER_* nhỏ nhất trong các cụm khớp; None nếu không cụm nào khớp.
+    Biên: keywords rỗng -> TIER_OTHER (không lọc theo chữ).
+    """
+    if not keywords:
+        return TIER_OTHER
+    name_key = _squash(name)
+    best = None
+    for text in keywords:
+        phrase = _squash(text)
+        words = name_tokens(text)
+        if name_key.startswith(phrase):
+            tier = TIER_NAME_STARTS
+        elif phrase in name_key:
+            tier = TIER_NAME_PHRASE
+        elif words and has_all_words(words, name):
+            tier = TIER_NAME_WORDS
+        elif has_all_words(words, "%s %s" % (name, other_text)):
+            tier = TIER_OTHER
+        else:
+            continue
+        best = tier if best is None else min(best, tier)
+    return best
