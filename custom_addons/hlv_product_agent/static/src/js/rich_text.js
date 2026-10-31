@@ -24,6 +24,20 @@ export function safeUrl(url) {
     return LOCAL_PATHS.some((path) => value.startsWith(path)) ? value : null;
 }
 
+// Số phiếu kho (KBC/CKN/00004, TSN/INT/02156), đơn bán DH..., đơn mua DMH..., đơn S0....
+// Mã hàng có dấu "/" như (3/4"x20Y) NANO không khớp vì phải đủ 3 khúc chữ in / chữ in / số.
+const DOCUMENT_NUMBER = /^(?:[A-Z]{2,6}\/[A-Z]{2,6}\/\d{3,}|DH\d{8,}|DMH\d{4,}|S\d{5})$/;
+
+/**
+ * Chữ có phải số phiếu / số đơn chứ không phải mã hàng không.
+ * Nhận: chuỗi trong `...`. Trả: true nếu khớp dạng số phiếu / số đơn của Odoo HLV.
+ * Biên: chuỗi rỗng / có khoảng trắng hai đầu -> xét sau khi trim; rỗng -> false.
+ * Claude vẫn hay bọc số phiếu trong `...` dù prompt dặn không: link tra tồn của nó là trang trống.
+ */
+export function isDocumentNumber(text) {
+    return DOCUMENT_NUMBER.test((text || "").trim());
+}
+
 /**
  * Các đoạn của một dòng.
  * Trả: mảng {type: 'text'|'bold'|'mark'|'code'|'image'|'link', text, url?}.

@@ -5,7 +5,7 @@
  * Tách khỏi product_chat.js (widget: đồng bộ với Odoo + sự kiện) cho file dưới giới hạn độ dài.
  * Chữ Claude viết chỉ đi qua createElement / textContent, không bao giờ innerHTML.
  */
-import { parseRich } from "@hlv_product_agent/js/rich_text";
+import { isDocumentNumber, parseRich } from "@hlv_product_agent/js/rich_text";
 
 // Khung HTML cho bảng trợ lý: style nền tảng để bảng Claude dựng nhìn gọn dù nó quên style.
 const BOARD_BASE_CSS =
@@ -82,7 +82,7 @@ function renderPart(part) {
 function codeLink(code) {
     const node = document.createElement("code");
     node.textContent = code;
-    const url = searchUrl({ type: "search", q: code.trim() });
+    const url = isDocumentNumber(code) ? null : searchUrl({ type: "search", q: code.trim() });
     if (!url) {
         return node;
     }
