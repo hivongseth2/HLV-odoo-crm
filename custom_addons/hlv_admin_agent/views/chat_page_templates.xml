@@ -20,6 +20,11 @@
                         <button type="button" class="hlv-aa-open-personal" title="Cá nhân hoá: hướng dẫn riêng, ghi nhớ">
                             <i class="fa fa-sliders"/>
                         </button>
+                        <!-- Quản lý xem cuộc chat / ghi nhớ / hướng dẫn riêng của MỌI người ở backend. -->
+                        <a t-if="is_manager" href="/odoo/action-hlv_admin_agent.action_hlv_admin_chat_session"
+                           title="Quản lý: cuộc chat, ghi nhớ, hướng dẫn riêng của mọi người">
+                            <i class="fa fa-users"/>
+                        </a>
                     </div>
                     <div class="hlv-aa-resize" title="Kéo để đổi độ rộng"/>
                 </aside>

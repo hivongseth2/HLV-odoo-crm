@@ -7,12 +7,15 @@
               web_icon="hlv_admin_agent,static/description/icon.png"
               sequence="95"/>
 
+    <!-- Bấm app = mở menu con ĐẦU TIÊN người đó thấy. "Mở trang chat" đứng sau các menu quản lý: quản
+         lý bấm app vào màn backend (có thanh menu tới Cuộc chat / Ghi nhớ...); người dùng thường không
+         thấy menu quản lý nên vẫn vào thẳng trang chat. Đặt lên đầu là trang chat che mất backend. -->
     <menuitem id="menu_hlv_admin_agent_chat"
               name="Mở trang chat"
               parent="menu_hlv_admin_agent_root"
               action="action_hlv_admin_chat_page"
               groups="group_admin_agent_user"
-              sequence="10"/>
+              sequence="40"/>
 
     <menuitem id="menu_hlv_admin_agent_sessions"
               name="Cuộc chat"
