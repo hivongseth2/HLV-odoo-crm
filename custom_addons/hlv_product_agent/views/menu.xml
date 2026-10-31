@@ -32,14 +32,14 @@
               name="Thông số đã tra"
               parent="menu_hlv_product_agent_root"
               action="action_hlv_product_spec"
-              groups="group_product_agent_manager"
+              groups="group_product_agent_manager,base.group_system"
               sequence="16"/>
 
     <menuitem id="menu_hlv_product_name_alias"
               name="Tên gọi khác"
               parent="menu_hlv_product_agent_root"
               action="action_hlv_product_name_alias"
-              groups="group_product_agent_manager"
+              groups="group_product_agent_manager,base.group_system"
               sequence="17"/>
 
     <menuitem id="menu_hlv_product_agent_prompt"
