@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <list string="HĐĐT đơn POS" create="false" edit="false" delete="false"
                   decoration-danger="meinvoice_review_needed"
-                  decoration-warning="meinvoice_status == 'error'">
+                  decoration-warning="meinvoice_status == 'invalid'">
                 <field name="name"/>
                 <field name="date_order"/>
                 <field name="partner_id"/>
@@ -17,7 +17,7 @@
                 <field name="meinvoice_status" widget="badge"
                        decoration-success="meinvoice_status == 'published'"
                        decoration-info="meinvoice_status == 'draft'"
-                       decoration-danger="meinvoice_status == 'error'"/>
+                       decoration-danger="meinvoice_status == 'invalid'"/>
                 <field name="meinvoice_review_needed" string="Cần xem" widget="boolean"/>
                 <field name="meinvoice_review_note"/>
                 <button name="action_view_meinvoice_invoices" type="object" string="Hóa đơn"
@@ -46,8 +46,10 @@
                         domain="[('meinvoice_review_needed', '=', True)]"/>
                 <filter name="filter_no_invoice" string="Chưa có HĐĐT"
                         domain="[('state', 'in', ('paid', 'done', 'invoiced')), ('meinvoice_invoice_ids', '=', False)]"/>
-                <filter name="filter_publish_error" string="Chưa tự phát hành được"
-                        domain="[('meinvoice_invoice_ids', 'any', [('state', '=', 'draft'), ('pos_publish_error', '!=', False)])]"/>
+                <filter name="filter_to_approve" string="HĐĐT chờ duyệt"
+                        domain="[('meinvoice_invoice_ids', 'any', [('state', '=', 'draft')])]"/>
+                <filter name="filter_invalid" string="HĐĐT không hợp lệ"
+                        domain="[('meinvoice_invoice_ids', 'any', [('state', '=', 'invalid')])]"/>
                 <separator/>
                 <filter name="filter_date_order" string="Ngày đơn" date="date_order"/>
             </search>

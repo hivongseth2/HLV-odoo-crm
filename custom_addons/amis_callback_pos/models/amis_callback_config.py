@@ -6,30 +6,21 @@ class AmisCallbackConfigPos(models.Model):
     _inherit = 'amis.callback.config'
 
     meinvoice_pos_enabled = fields.Boolean(
-        string='Tạo HĐĐT cho đơn POS',
+        string='Tạo HĐĐT nháp cho đơn POS',
         default=False,
         help='Bật: mỗi đơn POS thanh toán xong được tạo một hóa đơn điện tử nháp. '
-             'Dùng chung ký hiệu hóa đơn (máy tính tiền) của cấu hình meInvoice.',
+             'Không tự gửi CQT — kế toán duyệt rồi bấm "Gửi lên Cơ quan Thuế".',
     )
-    meinvoice_pos_auto_publish = fields.Boolean(
-        string='Phát hành ngay lên CQT (POS)',
-        default=True,
-        help='Bật: hóa đơn nháp của đơn POS được gửi CQT ngay sau khi lưu đơn '
-             '(qua cron, không bắt thu ngân chờ). Tắt: chỉ tạo nháp để kế toán '
-             'xem trước rồi tự gửi — nên tắt trong những ngày chạy thử đầu.',
-    )
-    meinvoice_pos_buyer_mode = fields.Selection(
-        [
-            ('consumer', 'Luôn bán cho người tiêu dùng'),
-            ('partner_vat', 'Lấy thông tin khách nếu khách có MST'),
-        ],
-        string='Người mua trên HĐĐT POS',
-        default='consumer',
-        required=True,
+    meinvoice_pos_inv_series = fields.Char(
+        string='Ký hiệu HĐ cho đơn POS',
+        default='1C26MLV',
+        help='Ký hiệu hóa đơn dùng cho đơn POS, tách khỏi ký hiệu của đơn Shopee. '
+             'Để trống thì dùng ký hiệu chung của cấu hình meInvoice.',
     )
     meinvoice_pos_consumer_name = fields.Char(
         string='Tên người mua khi bán cho người tiêu dùng',
         default='Bán cho người tiêu dùng',
+        help='Ghi khi khách của đơn POS không có MST.',
     )
     meinvoice_pos_consumer_partner_ids = fields.Many2many(
         'res.partner',

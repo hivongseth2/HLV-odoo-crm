@@ -32,11 +32,12 @@ class MeinvoiceInvoice(models.Model):
     @api.depends('sale_order_id', 'inv_no', 'inv_series', 'state')
     def _compute_name(self):
         for rec in self:
+            source = rec._source_document_name()
             if rec.inv_no:
                 rec.name = '%s %s' % (rec.inv_series or '', rec.inv_no)
-            elif rec.sale_order_id:
+            elif source:
                 prefix = 'Không hợp lệ' if rec.state == 'invalid' else 'Nháp'
-                rec.name = '%s — %s' % (prefix, rec.sale_order_id.name)
+                rec.name = '%s — %s' % (prefix, source)
             else:
                 rec.name = 'Nháp #%d' % (rec.id or 0)
 
@@ -671,12 +672,23 @@ class MeinvoiceInvoice(models.Model):
         Trả True nếu đã chuyển sang không hợp lệ.
         """
         self.ensure_one()
-        reason = self.sale_order_id._meinvoice_vat_error()
+        reason = self._source_vat_error()
         if not reason:
             return False
         self.write({'state': 'invalid', 'invalid_reason': reason})
         _logger.warning('meInvoice id=%d chuyển Dữ liệu không hợp lệ: %s', self.id, reason)
         return True
+
+    def _source_document_name(self):
+        """Số chứng từ nguồn (đơn bán, đơn POS...) để đặt tên hóa đơn chưa có số; '' nếu không có."""
+        self.ensure_one()
+        return self.sale_order_id.name or ''
+
+    def _source_vat_error(self):
+        """Lý do thiếu VAT của chứng từ nguồn; chuỗi rỗng nếu đủ. Module cầu nối kênh khác
+        (amis_callback_pos) ghi đè cho chứng từ của mình."""
+        self.ensure_one()
+        return self.sale_order_id._meinvoice_vat_error() if self.sale_order_id else ''
 
     def unlink(self):
         # Hóa đơn không hợp lệ chưa từng gửi CQT nên xóa được như nháp.

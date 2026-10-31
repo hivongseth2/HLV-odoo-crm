@@ -29,7 +29,7 @@ class PosOrderMeinvoice(models.Model):
         [
             ('none', 'Chưa có'),
             ('draft', 'Nháp'),
-            ('error', 'Lỗi phát hành'),
+            ('invalid', 'Dữ liệu không hợp lệ'),
             ('published', 'Đã gửi CQT'),
         ],
         string='HĐĐT', compute='_compute_meinvoice_status',
@@ -41,18 +41,18 @@ class PosOrderMeinvoice(models.Model):
     )
     meinvoice_review_note = fields.Char(string='Lý do cần xem (HĐĐT)', copy=False)
 
-    @api.depends('meinvoice_invoice_ids.state', 'meinvoice_invoice_ids.pos_publish_error')
+    @api.depends('meinvoice_invoice_ids.state')
     def _compute_meinvoice_status(self):
         for order in self:
             invoices = order.meinvoice_invoice_ids.filtered(lambda i: i.state != 'cancelled')
             if not invoices:
                 order.meinvoice_status = 'none'
-            elif invoices.filtered(lambda i: i.state != 'draft'):
+            elif invoices.filtered(lambda i: i.state not in ('draft', 'invalid')):
                 order.meinvoice_status = 'published'
-            elif invoices.filtered('pos_publish_error'):
-                order.meinvoice_status = 'error'
-            else:
+            elif invoices.filtered(lambda i: i.state == 'draft'):
                 order.meinvoice_status = 'draft'
+            else:
+                order.meinvoice_status = 'invalid'
 
     # ── Kích hoạt khi POS lưu đơn đã thanh toán ─────────────────────────────
 
@@ -63,15 +63,13 @@ class PosOrderMeinvoice(models.Model):
         return order_id
 
     def _meinvoice_after_payment(self):
-        """Tạo nháp HĐĐT và đánh thức cron phát hành. Không bao giờ chặn lưu đơn POS."""
+        """Tạo nháp HĐĐT chờ kế toán duyệt. Không bao giờ chặn lưu đơn POS."""
         config = self.env['amis.callback.config'].sudo().search([], limit=1)
         if not config or not config.meinvoice_enabled or not config.meinvoice_pos_enabled:
             return
         try:
             with self.env.cr.savepoint():
-                invoice = self.sudo()._meinvoice_create_draft(config)
-            if invoice and invoice.pos_auto_publish:
-                self.env.ref('amis_callback_pos.ir_cron_meinvoice_pos_publish').sudo()._trigger()
+                self.sudo()._meinvoice_create_draft(config)
         except Exception:
             _logger.exception('meInvoice POS: tạo HĐĐT nháp cho %s thất bại (bỏ qua).', self.name)
 
@@ -80,9 +78,10 @@ class PosOrderMeinvoice(models.Model):
     def _meinvoice_create_draft(self, config):
         """Tạo meinvoice.invoice nháp cho đơn POS đã thanh toán.
 
-        Trả hóa đơn vừa tạo, hoặc hóa đơn rỗng khi không tạo: đơn chưa thanh toán,
-        đã có hóa đơn còn hiệu lực, hoặc đơn phải để kế toán xử lý tay (khi đó đơn
-        được đánh dấu meinvoice_review_needed kèm lý do).
+        Trả hóa đơn vừa tạo — nháp, hoặc 'Dữ liệu không hợp lệ' khi có dòng thiếu VAT —
+        hay hóa đơn rỗng khi không tạo: đơn chưa thanh toán, đã có hóa đơn còn hiệu lực,
+        hoặc đơn phải để kế toán xử lý tay (khi đó đơn được đánh dấu meinvoice_review_needed
+        kèm lý do).
         """
         self.ensure_one()
         Invoice = self.env['meinvoice.invoice']
@@ -97,6 +96,31 @@ class PosOrderMeinvoice(models.Model):
         if float_is_zero(self.amount_total, precision_rounding=currency.rounding):
             return self._meinvoice_flag_review('Đơn 0 đồng — không tự xuất hóa đơn.')
 
+        inv_series = (config.meinvoice_pos_inv_series or config.meinvoice_inv_series or '').strip()
+        if not inv_series:
+            return self._meinvoice_flag_review('Thiếu ký hiệu hóa đơn POS trong cấu hình meInvoice.')
+        inv_date = datetime.now(pytz.timezone(Invoice._pos_timezone())).date()
+        vals = {
+            'pos_order_id': self.id,
+            'inv_series': inv_series,
+            'inv_date': inv_date,
+            'payment_method': 'TM/CK',
+            **self._meinvoice_buyer_vals(config),
+            'invoice_data_json': json.dumps(
+                self._meinvoice_header_data(inv_series, inv_date), ensure_ascii=False,
+            ),
+        }
+        # Không gửi khách mail bản nháp: kế toán còn duyệt / sửa người mua trước khi gửi CQT.
+        Invoice = Invoice.with_context(meinvoice_skip_draft_mail=True)
+
+        vat_error = self._meinvoice_vat_error()
+        if vat_error:
+            # Không dựng dòng: thuế sai thì tiền trước/sau thuế cũng không tin được. Bản ghi chỉ
+            # để kế toán thấy lý do; đơn POS đã thanh toán không sửa được dòng nên xử lý tay.
+            invoice = Invoice.create(dict(vals, state='invalid', invalid_reason=vat_error))
+            _logger.info('meInvoice POS: %s dữ liệu không hợp lệ (id=%d)', self.name, invoice.id)
+            return invoice
+
         try:
             line_vals = build_invoice_lines(self._meinvoice_line_inputs())
         except ValueError as exc:
@@ -104,41 +128,15 @@ class PosOrderMeinvoice(models.Model):
         if not line_vals:
             return self._meinvoice_flag_review('Đơn không có dòng hàng để xuất hóa đơn.')
 
+        invoice = Invoice.create(dict(vals, line_ids=[(0, 0, line) for line in line_vals]))
         # Làm tròn tiền mặt / làm tròn thuế toàn đơn có thể khiến tổng dòng khác
-        # số khách thực trả. Khi đó vẫn tạo nháp nhưng giữ lại cho kế toán.
+        # số khách thực trả — vẫn tạo nháp nhưng báo kế toán đối chiếu trước khi gửi.
         invoice_total = sum(v['amount_without_vat_oc'] + v['vat_amount_oc'] for v in line_vals)
-        mismatch = not float_is_zero(
-            invoice_total - self.amount_total, precision_rounding=currency.rounding,
-        )
-        hold_reason = (
-            'Tổng hóa đơn {:,.0f} khác tổng đơn POS {:,.0f} — kế toán kiểm tra rồi tự gửi CQT.'
-            .format(invoice_total, self.amount_total)
-        ) if mismatch else False
-        auto_publish = (
-            config.meinvoice_pos_enabled and config.meinvoice_pos_auto_publish and not mismatch
-        )
-
-        inv_series = (config.meinvoice_inv_series or '').strip()
-        if not inv_series:
-            return self._meinvoice_flag_review('Thiếu ký hiệu hóa đơn trong cấu hình meInvoice.')
-        inv_date = datetime.now(pytz.timezone(Invoice._pos_timezone())).date()
-        buyer = self._meinvoice_buyer_vals(config)
-        # Không gửi mail "bản xem trước": hóa đơn POS lên CQT ngay sau đó.
-        invoice = Invoice.with_context(meinvoice_skip_draft_mail=True).create({
-            'pos_order_id': self.id,
-            'inv_series': inv_series,
-            'inv_date': inv_date,
-            'payment_method': 'TM/CK',
-            **buyer,
-            'invoice_data_json': json.dumps(
-                self._meinvoice_header_data(inv_series, inv_date), ensure_ascii=False,
-            ),
-            'line_ids': [(0, 0, vals) for vals in line_vals],
-            'pos_auto_publish': bool(auto_publish),
-            'pos_publish_error': hold_reason,
-        })
-        if mismatch:
-            self._meinvoice_flag_review(hold_reason)
+        if not float_is_zero(invoice_total - self.amount_total, precision_rounding=currency.rounding):
+            self._meinvoice_flag_review(
+                'Tổng hóa đơn {:,.0f} khác tổng đơn POS {:,.0f} — kiểm tra trước khi gửi CQT.'
+                .format(invoice_total, self.amount_total)
+            )
         _logger.info('meInvoice POS: tạo nháp id=%d cho %s', invoice.id, self.name)
         return invoice
 
@@ -148,39 +146,58 @@ class PosOrderMeinvoice(models.Model):
         _logger.info('meInvoice POS: %s cần kế toán xem: %s', self.name, reason)
         return self.env['meinvoice.invoice']
 
+    def _meinvoice_pos_lines(self):
+        """Dòng POS lên hóa đơn: bỏ dòng số lượng 0 và dòng cha combo (giá 0, tiền nằm ở dòng con)."""
+        self.ensure_one()
+        rounding = self.currency_id.rounding
+        return self.lines.filtered(lambda line: not float_is_zero(line.qty, precision_digits=6) and not (
+            line.combo_line_ids and float_is_zero(line.price_subtotal_incl, precision_rounding=rounding)
+        ))
+
+    def _meinvoice_vat_error(self):
+        """Lý do đơn không lập được HĐĐT vì thuế; chuỗi rỗng nếu mọi dòng có đúng một thuế %.
+
+        Dòng không thuế sẽ lên hóa đơn thành VAT 0% sai thuế suất (cùng quy tắc với đơn bán,
+        sale.order._meinvoice_vat_error). Nhiều thuế / thuế không phải % thì meInvoice không
+        biểu diễn được trên một dòng.
+        """
+        self.ensure_one()
+        missing, unsupported = [], []
+        for line in self._meinvoice_pos_lines():
+            taxes = line.tax_ids_after_fiscal_position
+            label = '• %s' % (line.full_product_name or line.product_id.display_name)
+            if not taxes:
+                missing.append(label)
+            elif len(taxes) > 1 or taxes.filtered(lambda t: t.amount_type != 'percent'):
+                unsupported.append('%s (%s)' % (label, ', '.join(taxes.mapped('name'))))
+        parts = []
+        if missing:
+            parts.append('%d dòng không có thuế VAT:\n%s' % (len(missing), '\n'.join(missing)))
+        if unsupported:
+            parts.append('%d dòng có thuế không hỗ trợ — chỉ nhận một thuế phần trăm:\n%s'
+                         % (len(unsupported), '\n'.join(unsupported)))
+        if not parts:
+            return ''
+        return 'Đơn POS %s có %s' % (self.name, '\n'.join(parts))
+
     def _meinvoice_line_inputs(self):
-        """Quy dòng POS về dict số cho build_invoice_lines. ValueError nếu thuế không hỗ trợ."""
+        """Quy dòng POS về dict số cho build_invoice_lines. Gọi sau _meinvoice_vat_error rỗng:
+        mỗi dòng có đúng một thuế %."""
         currency = self.currency_id
         inputs = []
-        for line in self.lines:
-            # Dòng cha combo mang giá 0, tiền nằm ở các dòng con.
-            if line.combo_line_ids and float_is_zero(
-                line.price_subtotal_incl, precision_rounding=currency.rounding,
-            ):
-                continue
-            if float_is_zero(line.qty, precision_digits=6):
-                continue
+        for line in self._meinvoice_pos_lines():
             taxes = line.tax_ids_after_fiscal_position
-            if len(taxes) > 1 or taxes.filtered(lambda t: t.amount_type != 'percent'):
-                raise ValueError(
-                    'Dòng "%s" có thuế không hỗ trợ (%s) — chỉ hỗ trợ một thuế phần trăm.'
-                    % (line.full_product_name or line.product_id.display_name,
-                       ', '.join(taxes.mapped('name')))
-                )
-            if taxes:
-                gross_excl = taxes.compute_all(
-                    line.price_unit, currency, line.qty,
-                    product=line.product_id, partner=self.partner_id,
-                )['total_excluded']
-            else:
-                gross_excl = currency.round(line.price_unit * line.qty)
+            gross_excl = taxes.compute_all(
+                line.price_unit, currency, line.qty,
+                product=line.product_id, partner=self.partner_id,
+            )['total_excluded']
             name = line.full_product_name or line.product_id.display_name or ''
             inputs.append({
                 'name': re.sub(r'^\[.*?\]\s*', '', name),
                 'code': line.product_id.default_code or '',
                 'unit': line.product_uom_id.name or '',
                 'qty': line.qty,
-                'vat_rate': taxes.amount if taxes else 0.0,
+                'vat_rate': taxes.amount,
                 'gross_excl': gross_excl,
                 'net_excl': line.price_subtotal,
                 'vat': line.price_subtotal_incl - line.price_subtotal,
@@ -188,13 +205,16 @@ class PosOrderMeinvoice(models.Model):
         return inputs
 
     def _meinvoice_buyer_vals(self, config):
-        """Thông tin người mua theo cấu hình: người tiêu dùng, hoặc khách có MST."""
+        """Người mua: công ty khi khách sale chọn ở quầy có MST, không thì người tiêu dùng.
+
+        Khách muốn hóa đơn tên công ty thì sale chọn / tạo đúng khách có MST trên POS; kế toán
+        còn sửa được người mua trên nháp trước khi gửi CQT.
+        """
         partner = self.partner_id
         company = partner.commercial_partner_id
         consumer_partners = config.meinvoice_pos_consumer_partner_ids
         use_partner = (
-            config.meinvoice_pos_buyer_mode == 'partner_vat'
-            and (company.vat or '').strip()
+            (company.vat or '').strip()
             and not (partner & consumer_partners or company & consumer_partners)
         )
         if not use_partner:
@@ -242,8 +262,6 @@ class PosOrderMeinvoice(models.Model):
         created = self.env['meinvoice.invoice']
         for order in self:
             created |= order.sudo()._meinvoice_create_draft(config)
-        if created.filtered('pos_auto_publish'):
-            self.env.ref('amis_callback_pos.ir_cron_meinvoice_pos_publish').sudo()._trigger()
         if not created:
             # Không raise: raise sẽ rollback luôn đánh dấu "cần xem" vừa ghi.
             return {
