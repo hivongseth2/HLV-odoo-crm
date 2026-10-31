@@ -26,7 +26,8 @@ deltatech_picking_transit/
 ├── data/transfer_location_data.xml   ← <function> tạo CHUYENKHO cho mọi kho mỗi lần nâng cấp
 ├── models/
 │   ├── stock_location.py             ← field hlv_is_transfer_location; stock.warehouse._hlv_get_transfer_location()
-│   ├── stock_move_line.py            ← chặn sửa tay Transit / đích sai CHUYENKHO trên từng dòng
+│   ├── stock_move.py                 ← giữ nguồn move/move line phiếu bước 2 = CHUYENKHO (helper dùng chung)
+│   ├── stock_move_line.py            ← chặn sửa tay Transit / đích sai CHUYENKHO trên từng dòng; giữ nguồn bước 2
 │   ├── stock_picking.py              ← tạo bước 2, nhận diện transit/CHUYENKHO, ràng buộc, domain chọn vị trí
 │   └── stock_picking_type.py         ← two_step_transfer_use, auto_second_transfer
 ├── views/                            ← nút "Tạo phiếu bước 2", "Phân bổ lại vị trí"
@@ -46,6 +47,7 @@ deltatech_picking_transit/
 | Sinh phiếu bước 2 | `stock.picking.button_validate` → `create_second_transfer_wizard` |
 | Phần còn lại (backorder) của phiếu bước 2 giữ `source_transfer_id` khi tách trên web | `stock.picking._create_backorder_picking` (override) |
 | Tự chọn đích CHUYENKHO khi Liên hệ là kho khác; nguồn bước 2 = đích bước 1 | `stock.picking._compute_location_id` (override) |
+| Nguồn move/move line phiếu bước 2 luôn = đích bước 1: create/write đổi `location_id` khác thì ép về (onchange đổi nguồn phiếu của Odoo kéo theo move → move line, `stock.picking.write` chỉ chặn được cấp phiếu) | `stock_move.py` `_hlv_pin_step2_source*` + `stock.picking._hlv_step2_source()`, gọi từ `stock.move`/`stock.move.line` create/write |
 | Chặn xác nhận khi nguồn/đích không khớp kho của loại phiếu | `stock.picking._hlv_check_transfer_route` (gọi đầu `button_validate`) |
 
 Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_transfer_location_for`, `_transfer_picking_type` → `_hlv_transfer_out_type`), `hlv_sale_delivery_planning` (phiếu luân chuyển → `_hlv_transfer_out_type` + loại khỏi tồn khả dụng), `misa_fetch_po_button` (`_get_transit_location(from_loc)`, loại phiếu → `_hlv_transfer_out_type`), `hlv_stock_origin_audit` (cảnh báo tồn đọng), `hlv_inventory_group_report` (cột sắp giao/chuyển kho).
@@ -57,7 +59,7 @@ Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_t
 4. Kiểm tra trước khi xác nhận (`_hlv_check_transfer_route`, bỏ qua phiếu trả hàng và PICK/PACK):
    - Bước 1: nguồn (header + move line) thuộc kho của loại phiếu; đích thuộc kho đó (CHUYENKHO). Đi thẳng vào vị trí tồn kho khác bị chặn; ra vị trí ảo ngoài kho (SUDUNG-*) cho qua. Transit cũ vẫn cho qua.
    - Bước 2: nguồn đúng bằng đích của bước 1; đích thuộc kho của loại phiếu (kho nhận).
-5. `write`/`read`/`_onchange_picking_type` giữ nguyên `location_id` của phiếu bước 2 = vị trí trung chuyển.
+5. `write`/`read`/`_onchange_picking_type` giữ nguyên `location_id` của phiếu bước 2 = vị trí trung chuyển; `stock.move`/`stock.move.line` create/write giữ nguồn từng dòng (người dùng đổi nguồn trên form → lưu → cả phiếu, move, move line đều về CHUYENKHO).
 
 ## 5. Mở rộng
 - Thêm kho mới: chạy nâng cấp module hoặc gọi `_hlv_get_transfer_location()` (tự tạo khi thiếu).
