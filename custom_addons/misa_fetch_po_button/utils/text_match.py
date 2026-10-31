@@ -32,6 +32,16 @@ def normalize_vn(text):
     return _NON_ALNUM_RE.sub("", without_marks.lower())
 
 
+def tax_code_key(tax_code):
+    """MST để so trùng: " 0312 345 678 " và "0312345678" là một MST.
+
+    Nhận: chuỗi hoặc None. Trả: chuỗi chữ hoa, bỏ khoảng trắng và dấu chấm; GIỮ dấu gạch vì
+    "0312345678-001" (chi nhánh) là MST khác với công ty mẹ.
+    Biên: None / chuỗi trắng -> "".
+    """
+    return re.sub(r"[\s.]+", "", str(tax_code or "")).upper()
+
+
 def uom_key(name):
     """Tên đơn vị tính để so khớp: "cái", "Cái", " CÁI " là một ĐVT.
 

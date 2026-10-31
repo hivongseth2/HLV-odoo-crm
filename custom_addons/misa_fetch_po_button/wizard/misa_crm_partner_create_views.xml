@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_crm_partner_create_form" model="ir.ui.view">
+        <field name="name">misa.crm.partner.create.form</field>
+        <field name="model">misa.crm.partner.create</field>
+        <field name="arch" type="xml">
+            <form string="Tạo khách từ MISA CRM">
+                <field name="searched" invisible="1"/>
+                <div class="d-flex gap-2 align-items-center mb-3">
+                    <field name="keyword" nolabel="1" class="flex-grow-1"
+                           placeholder="Gõ MST hoặc tên khách như trên MISA CRM"/>
+                    <button name="action_search" type="object" string="Tìm trên CRM" class="btn-primary"/>
+                </div>
+                <div class="text-muted mb-2" invisible="not searched">
+                    Trùng mã khách CRM hoặc MST với khách đã có trong Odoo thì không tạo được, chỉ mở khách đó.
+                    Chỉ trùng tên thì vẫn tạo được, nhưng nên mở xem khách cùng tên trước.
+                </div>
+                <div class="alert alert-warning" role="alert" invisible="not searched or line_ids">
+                    Không thấy khách nào trên MISA CRM.
+                </div>
+                <field name="line_ids" nolabel="1" invisible="not line_ids">
+                    <list create="0" delete="0" edit="0"
+                          decoration-muted="state == 'exists'" decoration-warning="state == 'same_name'">
+                        <field name="account_number"/>
+                        <field name="account_name"/>
+                        <field name="tax_code"/>
+                        <field name="phone" optional="show"/>
+                        <field name="address" optional="hide"/>
+                        <field name="owner" optional="show"/>
+                        <field name="crm_inactive" optional="hide"/>
+                        <field name="state" widget="badge"
+                               decoration-success="state == 'new'" decoration-warning="state == 'same_name'"
+                               decoration-info="state == 'exists'"/>
+                        <field name="existing_partner_id" invisible="state != 'exists'"/>
+                        <field name="match_reason" invisible="state != 'exists'"/>
+                        <field name="same_name_partner_ids" widget="many2many_tags"
+                               invisible="state != 'same_name'"/>
+                        <button name="action_create_partner" type="object" string="Tạo" icon="fa-plus"
+                                class="btn-primary" invisible="state != 'new'"/>
+                        <button name="action_create_partner" type="object" string="Vẫn tạo" icon="fa-plus"
+                                invisible="state != 'same_name'"
+                                confirm="Odoo đã có khách cùng tên. Chắc chắn đây là khách khác (khác mã, khác MST)?"/>
+                        <button name="action_open_existing" type="object" string="Mở" icon="fa-external-link"
+                                invisible="state != 'exists'"/>
+                    </list>
+                </field>
+                <footer>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_misa_crm_partner_create" model="ir.actions.act_window">
+        <field name="name">Tạo khách từ MISA CRM</field>
+        <field name="res_model">misa.crm.partner.create</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_misa_crm_partner_create"
+              name="Tạo khách từ MISA CRM"
+              parent="contacts.menu_contacts"
+              action="action_misa_crm_partner_create"
+              groups="base.group_partner_manager"
+              sequence="5"/>
+</odoo>
