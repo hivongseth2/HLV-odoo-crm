@@ -26,7 +26,8 @@ from odoo.modules.registry import Registry
 from ..services.claude_api_payload import (
     DEFAULT_EFFORT, DEFAULT_MODEL, DEFAULT_WORKER_MODEL, EFFORT_CHOICES, MAX_TOKENS, MODEL_CHOICES,
     CACHE_CONTROL, build_system, build_tools, context_key, history_content, history_too_long,
-    load_history, request_extras, tool_result, tool_uses, turn_reply, user_content,
+    FULL_ANSWER_NUDGE, load_history, needs_full_answer, request_extras, tool_result, tool_uses, turn_reply,
+    user_content,
 )
 from ..services.claude_client import api_error_message, connection_cause, load_anthropic, make_client
 from ..services.turn_prompt import with_today
@@ -328,6 +329,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
         )
         started = time.monotonic()
         step_contents = []
+        nudged = False
         for step in range(MAX_STEPS):
             if time.monotonic() - started > TURN_DEADLINE_SECONDS:
                 raise TurnFailed("Claude chạy quá %s giây" % TURN_DEADLINE_SECONDS)
@@ -350,6 +352,11 @@ class HlvProductAgentApiRunner(models.AbstractModel):
                 continue
             if response.stop_reason == 'max_tokens':
                 raise TurnFailed("câu trả lời quá dài, bị cắt")
+            if not nudged and needs_full_answer(step_contents):
+                # Nhắc một lần; câu cụt bị bỏ vì turn_reply chỉ lấy chữ bước cuối.
+                nudged = True
+                messages.append({'role': 'user', 'content': [{'type': 'text', 'text': FULL_ANSWER_NUDGE}]})
+                continue
             return turn_reply(step_contents), messages
         raise TurnFailed("Claude gọi tool quá %s lần trong một lượt" % MAX_STEPS)
 
