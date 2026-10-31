@@ -213,21 +213,26 @@ DISPLAY_TOOLS = frozenset({'show_in_search_page', 'so_sanh_thong_so'})
 # Câu trả lời ngắn hơn ngần này sau bước chỉ gọi tool hiển thị là câu cụt "Trang tra tồn đã mở...".
 THIN_REPLY_CHARS = 160
 FULL_ANSWER_NUDGE = (
-    "(Hệ thống) Câu vừa rồi chỉ báo đã mở trang / bảng, sale chưa có câu trả lời. Viết câu trả lời "
+    "(Hệ thống) Sale chưa có câu trả lời (câu vừa rồi trống hoặc chỉ báo đã mở trang). Viết câu trả lời "
     "đầy đủ từ kết quả tool ở trên (mã, tồn, giá... theo luật trình bày, đủ mọi mã nếu sale hỏi "
     "\"tất cả\"). Không gọi lại tool hiển thị."
 )
 
 
 def needs_full_answer(step_contents):
-    """Lượt có kết thúc bằng câu cụt ngay sau bước chỉ gọi tool hiển thị không.
+    """Lượt có kết thúc mà sale chưa có câu trả lời không.
 
-    Haiku hay gọi show_in_search_page rồi dừng ở "Trang tra tồn đã mở ...", coi trang là câu trả
-    lời; sale hỏi "tất cả mã" mà chỉ nhận một câu.
+    Hai kiểu Haiku hay bỏ dở: gọi show_in_search_page rồi dừng ở "Trang tra tồn đã mở ...", coi
+    trang là câu trả lời; hoặc đọc xong kết quả tool chỉ "nghĩ" rồi dừng, không viết chữ nào.
     Nhận: list content từng bước (bước cuối không gọi tool). Trả: bool.
-    Biên: ít hơn 2 bước, bước trước gọi tool tra cứu, hoặc câu cuối đủ dài -> False.
+    Biên: bước cuối còn gọi tool -> False; không có chữ nào sau ít nhất một bước tool -> True;
+    câu ngắn mà bước trước không phải chỉ gọi tool hiển thị, hoặc câu đủ dài -> False.
     """
-    if len(step_contents) < 2 or tool_uses(step_contents[-1]):
+    if not step_contents or tool_uses(step_contents[-1]):
+        return False
+    if len(step_contents) >= 2 and not turn_reply(step_contents):
+        return True
+    if len(step_contents) < 2:
         return False
     calls = tool_uses(step_contents[-2])
     if not calls or not all(call.get('name') in DISPLAY_TOOLS for call in calls):

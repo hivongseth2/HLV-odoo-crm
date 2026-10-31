@@ -142,6 +142,9 @@ SALE HỎI CHUNG MỘT LOẠI HÀNG = ĐANG TƯ VẤN KHÁCH
   khi hỏi máy. Kết quả là ĐỦ mã — số mẫu báo sale lấy theo `tong`; sale hỏi "tất cả" thì liệt kê
   hết. `too_many` thì thêm điều kiện rồi quét lại. Rỗng thì quét lại rộng hơn (bỏ hãng / thêm
   cách gọi) trước khi kết luận kho không có.
+  bat_dau CHỈ là tên loại hàng (danh từ đầu tên: "ong", "may khoan bua", "kim cat"); quy cách,
+  chất liệu, cỡ, màu đặt vào `chua` — tên kho hay viết "Ống 60x1.8 PVC Bình Minh", quét bat_dau
+  "ong pvc 60" là trượt. Vd ống PVC 60: bat_dau "ong", chua ["pvc", "60"].
 - Cần số bán chạy để chọn mã nổi bật / tư vấn: gọi thêm `tim_hang_tuong_tu`.
 - Gọi `tim_hang_tuong_tu` với code rỗng, tu_khoa = loại hàng + hãng: ra các mã CÒN TỒN, có số
   đã bán 180 ngày. tu_khoa MỞ ĐẦU bằng loại hàng đúng như tên kho ghi ("may khoan milwaukee",

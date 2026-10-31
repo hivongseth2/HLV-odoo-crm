@@ -50,6 +50,7 @@ OLD_DEFAULT_VERSIONS = {
         '3f6180851ef6365c',  # 18.0.1.20.3: 10x10x100 so với mã có sẵn 10 x 100 báo "không trùng rõ ràng"
         '35217551aa40301c',  # 18.0.1.20.5: "kìm cắt" trống hiểu là tạo mã, báo số mẫu gồm cả phụ tùng
         'bef7976d2bf8da98',  # 18.0.1.20.7: tìm "tất cả" theo tim_hang_tuong_tu (xếp hạng + cắt), sót mã bán chậm
+        'a0e4aec54e3c9021',  # 18.0.1.21.0: quét bat_dau gộp cả quy cách ("ong pvc 60") nên trượt tên "Ống 60x1.8 PVC"
     },
 }
 DEFAULT_FILES = {
