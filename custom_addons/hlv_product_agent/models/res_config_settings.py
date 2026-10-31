@@ -8,6 +8,7 @@ from .product_agent_api_runner import (
     CRON_XMLID, DEFAULT_PARALLEL, MAX_PARALLEL, MODE_API, MODE_LOCAL, PARAM_API_KEY,
     PARAM_EFFORT, PARAM_MODE, PARAM_MODEL, PARAM_PARALLEL, PARAM_WORKER_MODEL, TurnFailed,
 )
+from .product_name_alias import DEFAULT_ALIAS_MODEL, PARAM_ALIAS_MODEL, STUDY_BATCH
 
 
 class ResConfigSettings(models.TransientModel):
@@ -45,12 +46,32 @@ class ResConfigSettings(models.TransientModel):
         help="Số sale được Claude trả lời cùng lúc (1 tới %d). Ai tới sau thì xếp hàng." % MAX_PARALLEL,
     )
 
+    hlv_product_agent_alias_model = fields.Selection(
+        MODEL_CHOICES, string="Model đọc danh mục", default=DEFAULT_ALIAS_MODEL,
+        config_parameter=PARAM_ALIAS_MODEL,
+        help="Mỗi giờ Claude đọc các tên loại hàng mới trong kho, liệt kê cách sale hay gọi (\"tê\" cho "
+             "\"Chữ T PVC\", \"băng tan\" cho \"Cao su non\") để trợ lý tìm không sót. Chỉ tốn token với loại "
+             "mới. Opus biết nhiều cách gọi hơn nhưng đắt gấp đôi Sonnet.",
+    )
+
     def set_values(self):
         super().set_values()
         # Chế độ máy văn phòng thì tắt cron: khỏi chạy không mỗi phút, khỏi rác log.
         cron = self.env.ref(CRON_XMLID, raise_if_not_found=False)
         if cron:
             cron.sudo().active = self.hlv_product_agent_mode == MODE_API
+
+    def action_hlv_product_agent_study_catalog(self):
+        """Cho Claude đọc ngay một đợt tên loại chưa đọc (không chờ cron)."""
+        self.ensure_one()
+        # Một lô (~1 phút) cho kịp trả lời trình duyệt; phần còn lại cron đọc mỗi giờ.
+        added = self.env['hlv.product.name.type']._cron_study_catalog(limit=STUDY_BATCH)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {'type': 'info', 'title': _("Tên gọi khác"),
+                       'message': _("Đã thêm %s cách gọi khác. Các loại còn lại cron đọc tiếp mỗi giờ.") % added},
+        }
 
     def action_hlv_product_agent_check_api(self):
         """Thử API key + model đang nhập. Không tốn token."""

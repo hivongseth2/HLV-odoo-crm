@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Trợ lý tạo mã hàng (Claude)",
-    "version": "18.0.1.21.3",
+    "version": "18.0.1.22.0",
     "summary": "Khung chat trên /search_stock: sale nhờ Claude kiểm trùng và tạo mã hàng MISA (máy văn phòng hoặc Claude API)",
     "description": """
 Sale chat trên trang tra tồn. Odoo xếp tin vào hàng chờ; agent cài trên máy có
@@ -34,6 +34,8 @@ Thay cho luồng tạo mã bằng ChatGPT của hlv_chatgpt.
         "views/product_chat_views.xml",
         "views/product_agent_log_views.xml",
         "views/product_spec_views.xml",
+        "views/product_name_alias_views.xml",
+        "data/product_name_alias_data.xml",
         "views/product_agent_prompt_views.xml",
         "views/res_config_settings_views.xml",
         "views/menu.xml",

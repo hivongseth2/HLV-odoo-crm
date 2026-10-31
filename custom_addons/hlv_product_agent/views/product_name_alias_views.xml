@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_product_name_alias_list" model="ir.ui.view">
+        <field name="name">hlv.product.name.alias.list</field>
+        <field name="model">hlv.product.name.alias</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="alias"/>
+                <field name="type_name"/>
+                <field name="source" widget="badge"/>
+                <field name="create_date" string="Lúc" readonly="1" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_product_name_alias_search" model="ir.ui.view">
+        <field name="name">hlv.product.name.alias.search</field>
+        <field name="model">hlv.product.name.alias</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="alias"/>
+                <field name="type_name"/>
+                <filter name="learned" string="Tự học khi tìm" domain="[('source', '=', 'learned')]"/>
+                <filter name="catalog" string="Claude đọc danh mục" domain="[('source', '=', 'catalog')]"/>
+                <group>
+                    <filter name="by_source" string="Nguồn" context="{'group_by': 'source'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_hlv_product_name_alias" model="ir.actions.act_window">
+        <field name="name">Tên gọi khác của loại hàng</field>
+        <field name="res_model">hlv.product.name.alias</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p>Cách sale gọi một loại hàng khác tên kho ghi (sale hỏi "tê", kho ghi "Chữ T PVC"). Trợ lý tự
+               học: mỗi giờ Claude đọc các tên loại hàng mới trong kho, và mỗi lần tìm theo một cách gọi ra
+               rỗng rồi tìm cách khác ra hàng thì ghi lại. Sửa / xoá ở đây khi thấy cặp sai.</p>
+        </field>
+    </record>
+</odoo>

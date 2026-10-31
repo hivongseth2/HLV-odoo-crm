@@ -35,6 +35,13 @@
               groups="group_product_agent_manager"
               sequence="16"/>
 
+    <menuitem id="menu_hlv_product_name_alias"
+              name="Tên gọi khác"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_name_alias"
+              groups="group_product_agent_manager"
+              sequence="17"/>
+
     <menuitem id="menu_hlv_product_agent_prompt"
               name="Prompt trợ lý"
               parent="menu_hlv_product_agent_root"

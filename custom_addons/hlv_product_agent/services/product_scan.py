@@ -33,14 +33,31 @@ def scan_terms(values):
     return result[:MAX_SCAN_TERMS]
 
 
-def scan_criteria(args):
+def with_aliases(terms, aliases):
+    """Thêm tên loại kho ứng với các cách gọi sale dùng vào danh sách cụm bat_dau.
+
+    Nhận: list cụm đã chuẩn hoá, aliases = {cách gọi đã chuẩn hoá: [tên loại kho đã chuẩn hoá]}
+    (bảng hlv.product.name.alias). Trả: list mới, tên loại kho đứng ngay sau cụm gốc, bỏ trùng.
+    Biên: aliases rỗng / không có cụm nào trong bảng -> giữ nguyên.
+    """
+    result = []
+    for term in terms:
+        result.append(term)
+        result += aliases.get(term, [])
+    return list(dict.fromkeys(result))
+
+
+def scan_criteria(args, aliases=None):
     """Điều kiện quét từ tham số tool.
 
-    Nhận: dict tham số (bat_dau, chua, khong_chua, hang, ma_chua). Trả: dict cùng khoá, mỗi khoá
-    là list cụm đã chuẩn hoá. Biên: thiếu khoá / sai kiểu -> list rỗng.
+    Nhận: dict tham số (bat_dau, chua, khong_chua, hang, ma_chua), aliases như with_aliases. Trả: dict
+    cùng khoá, mỗi khoá là list cụm đã chuẩn hoá; bat_dau đã thêm tên loại kho. Biên: thiếu khoá /
+    sai kiểu -> list rỗng.
     """
     args = args if isinstance(args, dict) else {}
-    return {key: scan_terms(args.get(key)) for key in ('bat_dau', 'chua', 'khong_chua', 'hang', 'ma_chua')}
+    criteria = {key: scan_terms(args.get(key)) for key in ('bat_dau', 'chua', 'khong_chua', 'hang', 'ma_chua')}
+    criteria['bat_dau'] = with_aliases(criteria['bat_dau'], aliases or {})
+    return criteria
 
 
 def has_scan_filter(criteria):

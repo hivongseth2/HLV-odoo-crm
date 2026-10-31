@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Các cặp đã gặp khi test (31/10/2026) — chỗ bắt đầu; phần lớn bảng do Claude đọc danh mục
+         và tự học khi tìm. noupdate: quản lý sửa / xoá thì nâng cấp module không ghi đè. -->
+    <record id="alias_te_chu_t" model="hlv.product.name.alias">
+        <field name="alias">tê</field>
+        <field name="type_name">Chữ T</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_dai_oc_tan" model="hlv.product.name.alias">
+        <field name="alias">đai ốc</field>
+        <field name="type_name">Tán</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_e_cu_tan" model="hlv.product.name.alias">
+        <field name="alias">ê cu</field>
+        <field name="type_name">Tán</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_vong_dem" model="hlv.product.name.alias">
+        <field name="alias">vòng đệm</field>
+        <field name="type_name">Lông đền</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_bang_tan" model="hlv.product.name.alias">
+        <field name="alias">băng tan</field>
+        <field name="type_name">Cao su non</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_cut_co" model="hlv.product.name.alias">
+        <field name="alias">cút</field>
+        <field name="type_name">Co</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_mang_song" model="hlv.product.name.alias">
+        <field name="alias">măng sông</field>
+        <field name="type_name">Nối</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_dau_vit" model="hlv.product.name.alias">
+        <field name="alias">đầu vít</field>
+        <field name="type_name">Mũi vít</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_bac_dan" model="hlv.product.name.alias">
+        <field name="alias">bạc đạn</field>
+        <field name="type_name">Vòng bi</field>
+        <field name="source">seed</field>
+    </record>
+    <record id="alias_tuoc_no_vit" model="hlv.product.name.alias">
+        <field name="alias">tuốc nơ vít</field>
+        <field name="type_name">Tua vít</field>
+        <field name="source">seed</field>
+    </record>
+</odoo>
