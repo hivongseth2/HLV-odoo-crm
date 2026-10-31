@@ -76,23 +76,15 @@ class StockPicking(models.Model):
         Override write để ngăn việc ghi đè location_id khi phiếu là bước 2 của transit transfer.
         Nếu location_id bị thay đổi từ transit sang non-transit, sẽ restore lại.
         """
-        for picking in self:
-            # Chỉ bảo vệ phiếu có source_transfer_id (phiếu bước 2)
-            if picking.source_transfer_id and 'location_id' in vals:
-                current_location = picking.location_id
-                new_location_id = vals.get('location_id')
-                
-                # Nếu location hiện tại là transit/CHUYENKHO và đang bị thay đổi
-                if current_location and self._is_inter_warehouse_transit(current_location):
-                    new_location = self.env['stock.location'].browse(new_location_id) if new_location_id else False
-
-                    # Nếu location mới KHÔNG phải transit/CHUYENKHO, ngăn việc thay đổi
-                    if new_location and not self._is_inter_warehouse_transit(new_location):
-                        _logger.warning(f"WRITE PROTECTION: Ngăn thay đổi location_id từ Transit ({current_location.id}) sang {new_location.id}")
-                        # Xóa location_id khỏi vals để không ghi đè
-                        vals = dict(vals)  # Copy để không ảnh hưởng original
-                        del vals['location_id']
-        
+        # Phiếu bước 2: nguồn chỉ được là đích của phiếu bước 1 — kể cả CHUYENKHO của kho khác cũng bỏ
+        # (move/move line đã được giữ ở stock_move.py, để phiếu đổi thì phiếu lệch với dòng)
+        if 'location_id' in vals:
+            pinned = self.filtered(lambda p: (hub := p._hlv_step2_source()) and hub.id != vals['location_id'])
+            if pinned:
+                rest_vals = {k: v for k, v in vals.items() if k != 'location_id'}
+                res = super(StockPicking, pinned).write(rest_vals) if rest_vals else True
+                others = self - pinned
+                return (super(StockPicking, others).write(vals) if others else True) and res
         return super().write(vals)
 
     @api.model_create_multi
