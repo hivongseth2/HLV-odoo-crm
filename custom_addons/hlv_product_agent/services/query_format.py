@@ -103,12 +103,23 @@ def name_tokens(text):
 
 # Cụm từ khoá ngắn hơn ngần này ký tự ("HD", "HM") khớp gần như mọi tên hàng.
 MIN_KEYWORD_CHARS = 3
-# Bậc khớp, nhỏ là sát: tên bắt đầu bằng cụm / tên chứa cụm / tên có đủ từ / chỉ khớp mã hoặc mô tả.
-TIER_NAME_STARTS, TIER_NAME_PHRASE, TIER_NAME_WORDS, TIER_OTHER = 0, 1, 2, 3
+# Bậc khớp, nhỏ là sát: tên bắt đầu bằng cả cụm / tên bắt đầu bằng đúng loại hàng và có đủ từ /
+# tên chứa cụm / tên có đủ từ / chỉ khớp mã hoặc mô tả.
+TIER_NAME_STARTS, TIER_NAME_TYPE, TIER_NAME_PHRASE, TIER_NAME_WORDS, TIER_OTHER = 0, 1, 2, 3, 4
 
 
 def _squash(text):
     return re.sub(r"[^a-z0-9]", "", _plain(text))
+
+
+def _leading_type(text):
+    """Phần đầu cụm từ khoá tới hết từ đặc trưng đầu tiên: "may khoan milwaukee" -> "maykhoan",
+    "pin milwaukee 18v" -> "pin". Tên hàng trong kho mở đầu bằng loại hàng ("Máy khoan ...", "Pin ...")."""
+    words = re.findall(r"[a-z0-9]+", _plain(text))
+    for index, word in enumerate(words):
+        if word not in _GENERIC_WORDS:
+            return "".join(words[:index + 1])
+    return ""
 
 
 def usable_keywords(variants):
@@ -130,8 +141,9 @@ def usable_keywords(variants):
 def keyword_tier(keywords, name, other_text=""):
     """Một món hàng khớp từ khoá tới đâu.
 
-    So NGUYÊN CỤM với tên (giữ cả chữ "máy": "máy đục" khác "đục" trong "keo trắng đục"), rồi mới
-    tới từng từ, rồi mã / mô tả. Dùng để xếp loại hàng đúng lên trước hàng chỉ dính chữ.
+    So NGUYÊN CỤM với tên (giữ cả chữ "máy": "máy đục" khác "đục" trong "keo trắng đục"), rồi tên mở
+    đầu bằng đúng loại hàng ("Máy khoan ... MILWAUKEE" trước "Mũi khoan ... MILWAUKEE" và trước phụ
+    tùng "... dùng pin M18 MILWAUKEE"), rồi từng từ, rồi mã / mô tả.
     Nhận: keywords (list cụm, đã qua usable_keywords), name (tên hàng), other_text (mã + mô tả).
     Trả: TIER_* nhỏ nhất trong các cụm khớp; None nếu không cụm nào khớp.
     Biên: keywords rỗng -> TIER_OTHER (không lọc theo chữ).
@@ -143,8 +155,11 @@ def keyword_tier(keywords, name, other_text=""):
     for text in keywords:
         phrase = _squash(text)
         words = name_tokens(text)
+        leading = _leading_type(text)
         if name_key.startswith(phrase):
             tier = TIER_NAME_STARTS
+        elif leading and name_key.startswith(leading) and has_all_words(words, name):
+            tier = TIER_NAME_TYPE
         elif phrase in name_key:
             tier = TIER_NAME_PHRASE
         elif words and has_all_words(words, name):

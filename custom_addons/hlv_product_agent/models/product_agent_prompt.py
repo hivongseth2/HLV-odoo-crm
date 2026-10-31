@@ -48,6 +48,7 @@ OLD_DEFAULT_VERSIONS = {
         '518d0d48337dc3c3',  # 18.0.1.19.0: chưa dùng thông số đã lưu, lần nào cũng tìm web
         '108612360652972f',  # 18.0.1.20.0: tìm web xong không gọi luu_thong_so
         '3f6180851ef6365c',  # 18.0.1.20.3: 10x10x100 so với mã có sẵn 10 x 100 báo "không trùng rõ ràng"
+        '35217551aa40301c',  # 18.0.1.20.5: "kìm cắt" trống hiểu là tạo mã, báo số mẫu gồm cả phụ tùng
     },
 }
 DEFAULT_FILES = {

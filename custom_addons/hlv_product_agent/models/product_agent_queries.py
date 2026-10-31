@@ -17,7 +17,7 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
 
 from ..services.price_summary import compact_prices
 from ..services.query_format import (
-    clamp_int, fit_result, has_all_words, keyword_tier, name_tokens, usable_keywords,
+    TIER_NAME_TYPE, clamp_int, fit_result, has_all_words, keyword_tier, name_tokens, usable_keywords,
 )
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
@@ -355,6 +355,10 @@ class HlvProductAgentQueries(models.AbstractModel):
             'tieu_chi': {'nhom_hang': category.complete_name if category else None,
                          'tu_khoa': keywords or None},
             'tong_ung_vien': len(products),
+            # Số mã tên mở đầu đúng loại hàng sale hỏi: báo "kho còn N mẫu" theo số này, không theo
+            # tong_ung_vien (gồm cả phụ tùng / mũi / hàng chỉ dính chữ).
+            'so_ma_dung_loai': (sum(1 for product in products if tiers[product.id] <= TIER_NAME_TYPE)
+                                if keywords else len(products)),
             'ung_vien': [self._with_saved_specs(dict(
                 self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
                 gia_ban=product.list_price, da_ban_180_ngay=sold.get(product.id, 0.0)), specs)
