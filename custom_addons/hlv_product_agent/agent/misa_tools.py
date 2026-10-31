@@ -436,11 +436,41 @@ QUERY_TOOLS += [
         },
     },
 ]
+_SCAN_TERMS = {"type": "array", "items": {"type": "string"}, "maxItems": 8}
+QUERY_TOOLS += [
+    {
+        "name": "quet_san_pham",
+        "description": (
+            "Quét TÊN mọi sản phẩm đang bán, trả ĐỦ mọi mã khớp (mã, tên, tồn, khả dụng, giá bán) — không "
+            "xếp hạng, không cắt. Dùng khi sale hỏi kho CÓ GÌ / TẤT CẢ / CÒN MẤY LOẠI của một loại hàng "
+            "(vd 'tồn kho tất cả máy đục', 'máy khoan bê tông makita', 'kìm cắt'). So không dấu, bỏ "
+            "khoảng trắng. Đặt điều kiện CHẶT như người lọc tay: bat_dau = các cách tên kho mở đầu cho "
+            "loại đó ('may duc', 'may pha be tong'; 'may khoan bua', 'may khoan be tong'), hang = hãng, "
+            "khong_chua = chữ của phụ tùng ('dung cho', 'mui', 'phu tung'). Quá 100 mã thì báo "
+            "too_many — thêm điều kiện rồi quét lại. Mã thay thế cho một món cụ thể thì dùng "
+            "tim_hang_tuong_tu."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bat_dau": dict(_SCAN_TERMS, description="Tên BẮT ĐẦU bằng MỘT trong các cụm (các cách gọi của cùng loại hàng)"),
+                "chua": dict(_SCAN_TERMS, description="Tên hoặc mã chứa MỌI cụm (vd quy cách '17mm', '1/2')"),
+                "khong_chua": dict(_SCAN_TERMS, description="Bỏ tên chứa MỘT trong các cụm (phụ tùng, mũi...)"),
+                "hang": dict(_SCAN_TERMS, description="Tên hoặc mã chứa MỘT trong các hãng; rỗng = mọi hãng"),
+                "ma_chua": dict(_SCAN_TERMS, description="Mã chứa MỘT trong các cụm (vd 'M18', 'GBH')"),
+                "con_ton": {"type": "boolean", "description": "Chỉ hàng còn tồn (mặc định true); false = cả mã đã hết"},
+            },
+            "required": ["bat_dau"],
+            "additionalProperties": False,
+        },
+    },
+]
 QUERY_TOOL_NAMES = frozenset(tool["name"] for tool in QUERY_TOOLS)
 # Kết quả ngắn: gọi thẳng rẻ hơn giao người khác đọc. Còn lại kết quả dài — ở chế độ Claude
 # API giao model rẻ (giao_viec_tra_cuu) đọc rồi tóm tắt, model chính chỉ đọc bản tóm tắt.
 LIGHT_QUERY_TOOLS = frozenset({
     "xem_ton_kho", "xem_gia", "xem_thanh_phan_combo", "tim_hang_tuong_tu", "tim_ncc_dong_hang",
+    "quet_san_pham",
 })
 HEAVY_QUERY_TOOLS = QUERY_TOOL_NAMES - LIGHT_QUERY_TOOLS
 READ_ONLY_TOOLS = READ_ONLY_TOOLS | QUERY_TOOL_NAMES

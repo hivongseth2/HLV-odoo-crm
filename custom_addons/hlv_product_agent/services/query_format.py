@@ -108,7 +108,8 @@ MIN_KEYWORD_CHARS = 3
 TIER_NAME_STARTS, TIER_NAME_TYPE, TIER_NAME_PHRASE, TIER_NAME_WORDS, TIER_OTHER = 0, 1, 2, 3, 4
 
 
-def _squash(text):
+def squash_text(text):
+    """Chữ để so: thường, bỏ dấu (đ -> d), bỏ mọi ký tự không phải chữ / số. Biên: None -> ''."""
     return re.sub(r"[^a-z0-9]", "", _plain(text))
 
 
@@ -131,42 +132,49 @@ def usable_keywords(variants):
     """
     seen, result = set(), []
     for text in variants or []:
-        key = _squash(text) if isinstance(text, str) else ""
+        key = squash_text(text) if isinstance(text, str) else ""
         if len(key) >= MIN_KEYWORD_CHARS and key not in seen:
             seen.add(key)
             result.append(text)
     return result
 
 
-def keyword_tier(keywords, name, other_text=""):
-    """Một món hàng khớp từ khoá tới đâu.
+def keyword_rank(keywords, name, other_text=""):
+    """Một món hàng khớp từ khoá tới đâu, để xếp hạng.
 
+    Trả ``(bậc, -số từ của cụm khớp)``: cùng bậc thì món khớp cụm cụ thể hơn ("máy khoan búa
+    makita") đứng trước món chỉ khớp cụm chung ("máy khoan makita") — không thì máy khoan búa chưa
+    bán cái nào bị máy vặn vít bán chạy đẩy khỏi danh sách. None nếu không khớp cụm nào.
     So NGUYÊN CỤM với tên (giữ cả chữ "máy": "máy đục" khác "đục" trong "keo trắng đục"), rồi tên mở
-    đầu bằng đúng loại hàng ("Máy khoan ... MILWAUKEE" trước "Mũi khoan ... MILWAUKEE" và trước phụ
-    tùng "... dùng pin M18 MILWAUKEE"), rồi từng từ, rồi mã / mô tả.
+    đầu bằng đúng loại hàng, rồi từng từ, rồi mã / mô tả (xem TIER_*).
     Nhận: keywords (list cụm, đã qua usable_keywords), name (tên hàng), other_text (mã + mô tả).
-    Trả: TIER_* nhỏ nhất trong các cụm khớp; None nếu không cụm nào khớp.
-    Biên: keywords rỗng -> TIER_OTHER (không lọc theo chữ).
+    Biên: keywords rỗng -> (TIER_OTHER, 0).
     """
     if not keywords:
-        return TIER_OTHER
-    name_key = _squash(name)
+        return (TIER_OTHER, 0)
     best = None
     for text in keywords:
-        phrase = _squash(text)
-        words = name_tokens(text)
-        leading = _leading_type(text)
-        if name_key.startswith(phrase):
-            tier = TIER_NAME_STARTS
-        elif leading and name_key.startswith(leading) and has_all_words(words, name):
-            tier = TIER_NAME_TYPE
-        elif phrase in name_key:
-            tier = TIER_NAME_PHRASE
-        elif words and has_all_words(words, name):
-            tier = TIER_NAME_WORDS
-        elif has_all_words(words, "%s %s" % (name, other_text)):
-            tier = TIER_OTHER
-        else:
-            continue
-        best = tier if best is None else min(best, tier)
+        tier = _phrase_tier(text, name, other_text)
+        if tier is not None:
+            rank = (tier, -len(name_tokens(text)))
+            best = rank if best is None else min(best, rank)
     return best
+
+
+def _phrase_tier(text, name, other_text):
+    """Bậc khớp của MỘT cụm từ khoá với một món; None nếu không khớp."""
+    name_key = squash_text(name)
+    phrase = squash_text(text)
+    words = name_tokens(text)
+    leading = _leading_type(text)
+    if name_key.startswith(phrase):
+        return TIER_NAME_STARTS
+    if leading and name_key.startswith(leading) and has_all_words(words, name):
+        return TIER_NAME_TYPE
+    if phrase in name_key:
+        return TIER_NAME_PHRASE
+    if words and has_all_words(words, name):
+        return TIER_NAME_WORDS
+    if has_all_words(words, "%s %s" % (name, other_text)):
+        return TIER_OTHER
+    return None

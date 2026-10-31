@@ -16,8 +16,9 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
 )
 
 from ..services.price_summary import compact_prices
+from ..services.product_scan import MAX_SCAN_RESULTS, has_scan_filter, scan_criteria, scan_match
 from ..services.query_format import (
-    TIER_NAME_TYPE, clamp_int, fit_result, has_all_words, keyword_tier, name_tokens, usable_keywords,
+    TIER_NAME_TYPE, clamp_int, fit_result, has_all_words, keyword_rank, name_tokens, usable_keywords,
 )
 from ..services.search_ranking import normalize_code, rank_products, single_non_combo
 
@@ -42,7 +43,7 @@ PRICE_PAGE_LINK = '/hoi-gia-ncc/tra-gia?p=%s'
 # Dòng giữ chỗ của phiếu không phải đơn bán: đủ cho một mã, chặn trường hợp lỗi dữ liệu dồn hàng nghìn dòng.
 OTHER_RESERVATION_LIMIT = 200
 # Tool tra theo mô tả tự do, không cần (và có thể không có) đúng một mã trong Odoo.
-FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang'})
+FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang', 'quet_san_pham'})
 # Hàng thay thế: số ứng viên còn tồn đưa Claude xét (nhiều hơn thì Claude lọc thêm từ khoá).
 SUBSTITUTE_CANDIDATES = 40
 SUBSTITUTE_DESCRIPTION_CHARS = 300
@@ -342,12 +343,13 @@ class HlvProductAgentQueries(models.AbstractModel):
             lambda product: product.sale_ok and product != base)
         # Xếp theo độ khớp TÊN trước, bán chạy sau: xếp theo bán chạy thì "keo trắng đục" bán 280 cái
         # đứng đầu danh sách "máy đục", máy đục thật chưa bán cái nào bị cắt khỏi danh sách.
-        tiers = {product.id: keyword_tier(keywords, product.name, '%s %s' % (
+        ranks = {product.id: keyword_rank(keywords, product.name, '%s %s' % (
             product.default_code or '', product.description_sale or '')) for product in products}
-        products = products.filtered(lambda product: tiers[product.id] is not None)
+        products = products.filtered(lambda product: ranks[product.id] is not None)
+        tiers = {product_id: rank[0] for product_id, rank in ranks.items() if rank}
         sold = self._sold_qty(products)
         products = products.sorted(lambda product: (
-            tiers[product.id], -sold.get(product.id, 0.0), -stock[product.id][0]))
+            ranks[product.id], -sold.get(product.id, 0.0), -stock[product.id][0]))
         shown = products[:SUBSTITUTE_CANDIDATES]
         specs = self.env['hlv.product.spec'].fresh_by_product(shown | base if base else shown)
         result = {
@@ -379,6 +381,38 @@ class HlvProductAgentQueries(models.AbstractModel):
         if brief['product_id'] in specs:
             brief['thong_so_da_luu'] = specs[brief['product_id']]
         return brief
+
+    def _q_quet_san_pham(self, args):
+        """ĐỦ mọi sản phẩm đang bán có tên khớp điều kiện Claude đặt — không xếp hạng, không cắt.
+
+        Đọc mã + tên mọi sản phẩm một lần bằng SQL (vài chục nghìn dòng, nhẹ) rồi lọc ở Python: so
+        không dấu / bỏ khoảng trắng mà ilike của Odoo không làm được ("bu lông" = "bulong").
+        """
+        criteria = scan_criteria(args)
+        if not has_scan_filter(criteria):
+            return {'status': 'error', 'message': "Cần ít nhất một trong bat_dau / chua / ma_chua (cụm >= 3 ký tự)."}
+        self.env.cr.execute("""
+            SELECT pp.id, pp.default_code, COALESCE(pt.name->>'vi_VN', pt.name->>'en_US')
+              FROM product_product pp JOIN product_template pt ON pt.id = pp.product_tmpl_id
+             WHERE pp.active AND pt.active AND pt.sale_ok
+        """)
+        matched = [(pid, code or '', name or '') for pid, code, name in self.env.cr.fetchall()
+                   if scan_match(criteria, name, code)]
+        stock = self._stock_by_product()
+        in_stock_only = args.get('con_ton', True) is not False
+        if in_stock_only:
+            matched = [row for row in matched if row[0] in stock]
+        if len(matched) > MAX_SCAN_RESULTS:
+            return {'status': 'too_many', 'tong': len(matched),
+                    'message': "Khớp %s mã, quá %s: thêm điều kiện (bat_dau cụ thể hơn, hang, khong_chua) rồi "
+                               "quét lại." % (len(matched), MAX_SCAN_RESULTS),
+                    'vi_du': [name for _pid, _code, name in matched[:15]]}
+        prices = {p.id: p.list_price for p in self.env['product.product'].sudo().browse([row[0] for row in matched])}
+        rows = sorted(({
+            'code': code, 'name': name, 'ton': stock.get(pid, (0.0, 0.0))[0],
+            'kha_dung': stock.get(pid, (0.0, 0.0))[1], 'gia_ban': prices.get(pid, 0.0),
+        } for pid, code, name in matched), key=lambda row: (-row['ton'], row['name']))
+        return {'status': 'found', 'tong': len(rows), 'chi_hang_con_ton': in_stock_only, 'ma': rows}
 
     def _sold_qty(self, products):
         """{product_id: số lượng đã bán (đơn đã xác nhận) trong SOLD_WINDOW_DAYS ngày}; mã chưa bán thì không có."""

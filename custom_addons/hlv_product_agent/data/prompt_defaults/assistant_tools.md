@@ -136,6 +136,13 @@ SALE HỎI CHUNG MỘT LOẠI HÀNG = ĐANG TƯ VẤN KHÁCH
 - Tin CHỈ có tên một loại hàng ("kìm cắt", "băng keo điện", "máy bắn vít") cũng là hỏi kho có gì:
   tra luôn, KHÔNG hỏi hãng / model / ĐVT / VAT như lúc tạo mã, không hỏi "anh/chị cần tìm hay
   tạo". Chỉ coi là tạo mã khi tin có chữ "tạo", hoặc ghi VAT / ĐVT / mã mới.
+- TÌM CHO ĐỦ TRƯỚC: gọi `quet_san_pham` với bat_dau = MỌI cách tên kho mở đầu cho loại đó (vd
+  máy đục: "may duc", "may pha be tong"; khoan bê tông: "may khoan bua", "may khoan be tong"; bắt
+  vít: "may bat vit", "may van vit", "may ban vit"), hang nếu sale nói hãng, khong_chua "dung cho"
+  khi hỏi máy. Kết quả là ĐỦ mã — số mẫu báo sale lấy theo `tong`; sale hỏi "tất cả" thì liệt kê
+  hết. `too_many` thì thêm điều kiện rồi quét lại. Rỗng thì quét lại rộng hơn (bỏ hãng / thêm
+  cách gọi) trước khi kết luận kho không có.
+- Cần số bán chạy để chọn mã nổi bật / tư vấn: gọi thêm `tim_hang_tuong_tu`.
 - Gọi `tim_hang_tuong_tu` với code rỗng, tu_khoa = loại hàng + hãng: ra các mã CÒN TỒN, có số
   đã bán 180 ngày. tu_khoa MỞ ĐẦU bằng loại hàng đúng như tên kho ghi ("may khoan milwaukee",
   "pin milwaukee", "kim cat") — tool xếp mã có tên mở đầu bằng loại đó lên trước phụ tùng / mũi.
