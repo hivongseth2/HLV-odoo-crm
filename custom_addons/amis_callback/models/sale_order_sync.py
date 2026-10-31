@@ -140,11 +140,27 @@ class SaleOrderAmisSync(models.Model):
     amis_draft_invoice_count = fields.Integer(
         compute='_compute_amis_draft_invoice_count', string='Số HĐĐT',
     )
+    meinvoice_is_shopee = fields.Boolean(
+        compute='_compute_meinvoice_is_shopee', string='Đơn Shopee (HĐĐT)',
+        help='HĐĐT meInvoice chỉ lập cho đơn Shopee — dùng để ẩn nút Tạo HĐĐT trên đơn khác.',
+    )
 
     @api.depends('amis_draft_invoice_ids')
     def _compute_amis_draft_invoice_count(self):
         for order in self:
             order.amis_draft_invoice_count = len(order.amis_draft_invoice_ids)
+
+    # Không khai @api.depends('shopee_order_ref'): field đó thuộc module sale_shopee mà module này
+    # không phụ thuộc — khai vào là lỗi lúc nạp registry nếu thiếu module. Field không lưu nên mỗi
+    # lần mở đơn vẫn tính lại.
+    def _compute_meinvoice_is_shopee(self):
+        for order in self:
+            order.meinvoice_is_shopee = order._is_meinvoice_shopee_order()
+
+    def _is_meinvoice_shopee_order(self):
+        """Đơn có mã Shopee — chỉ những đơn này được lập HĐĐT meInvoice."""
+        self.ensure_one()
+        return bool(getattr(self, 'shopee_order_ref', None))
 
     @staticmethod
     def _normalize_tag_name(name):
@@ -172,8 +188,7 @@ class SaleOrderAmisSync(models.Model):
         """Tự động tạo hóa đơn điện tử nháp nếu đây là đơn Shopee và config cho phép."""
         self.ensure_one()
 
-        # Chỉ xử lý khi có shopee_order_ref
-        if not (getattr(self, 'shopee_order_ref', None) or ''):
+        if not self._is_meinvoice_shopee_order():
             return
 
         if self._has_invoice_info_change_tag():
@@ -189,14 +204,16 @@ class SaleOrderAmisSync(models.Model):
         if not config.meinvoice_auto_draft_on_confirm:
             return
 
-        # Không tạo nếu đã có nháp
+        # Không tạo nếu đã có nháp — hoặc đã có bản không hợp lệ, để trigger lặp lại (nhiều phiếu
+        # xuất) không đẻ thêm bản không hợp lệ; sửa VAT xong thì tạo lại bằng nút trên đơn.
         existing = self.env['meinvoice.invoice'].sudo().search([
             ('sale_order_id', '=', self.id),
-            ('state', '=', 'draft'),
+            ('state', 'in', ('draft', 'invalid')),
         ], limit=1)
         if existing:
             _logger.info(
-                'Skip auto-draft meInvoice for SO %s: đã có nháp id=%d', self.name, existing.id
+                'Skip auto-draft meInvoice for SO %s: đã có HĐĐT %s id=%d',
+                self.name, existing.state, existing.id,
             )
             return
 
@@ -241,8 +258,11 @@ class SaleOrderAmisSync(models.Model):
                     'vat_amount_oc': item.get('VATAmountOC', 0),
                 }))
 
+            vat_error = self._meinvoice_vat_error()
             draft = self.env['meinvoice.invoice'].sudo().create({
                 'sale_order_id': self.id,
+                'state': 'invalid' if vat_error else 'draft',
+                'invalid_reason': vat_error or False,
                 'inv_series': inv_series,
                 'inv_date': inv_date,
                 'payment_method': payment_method,
@@ -262,7 +282,7 @@ class SaleOrderAmisSync(models.Model):
                 'invoice_data_json': _json.dumps(invoice_data, ensure_ascii=False, default=str),
             })
             _logger.info(
-                'Auto-created meInvoice draft id=%d for Shopee SO %s', draft.id, self.name
+                'Auto-created meInvoice id=%d state=%s for Shopee SO %s', draft.id, draft.state, self.name
             )
         except Exception:
             _logger.exception(
@@ -543,6 +563,10 @@ class SaleOrderAmisSync(models.Model):
         self.ensure_one()
         if self.state not in ('sale', 'done'):
             raise UserError('Đơn hàng phải ở trạng thái Đã xác nhận hoặc Hoàn thành.')
+        if not self._is_meinvoice_shopee_order():
+            raise UserError(
+                'Hóa đơn điện tử meInvoice chỉ lập cho đơn Shopee. Đơn %s không có mã Shopee.' % self.name
+            )
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         if not config.meinvoice_enabled:
@@ -655,8 +679,11 @@ class SaleOrderAmisSync(models.Model):
             inv_date = _date.today()
 
         import json as _json
+        vat_error = self._meinvoice_vat_error()
         draft = self.env['meinvoice.invoice'].create({
             'sale_order_id': self.id,
+            'state': 'invalid' if vat_error else 'draft',
+            'invalid_reason': vat_error or False,
             'inv_series': inv_series,
             'inv_date': inv_date,
             'payment_method': payment_method,
@@ -675,7 +702,9 @@ class SaleOrderAmisSync(models.Model):
             'line_ids': line_vals,
             'invoice_data_json': _json.dumps(invoice_data, ensure_ascii=False, default=str),
         })
-        _logger.info('meInvoice draft created for SO %s → meinvoice.invoice id=%d', self.name, draft.id)
+        _logger.info(
+            'meInvoice created for SO %s → meinvoice.invoice id=%d state=%s', self.name, draft.id, draft.state,
+        )
 
         return {
             'type': 'ir.actions.act_window',
@@ -810,6 +839,29 @@ class SaleOrderAmisSync(models.Model):
             self.name, transaction_id, inv_no,
         )
 
+    def _meinvoice_lines(self):
+        """Các dòng đơn hàng lên hóa đơn điện tử."""
+        self.ensure_one()
+        return self.order_line.filtered(lambda l: not l.display_type and l.product_uom_qty > 0)
+
+    def _meinvoice_vat_error(self):
+        """Lý do đơn không được lập HĐĐT vì thiếu VAT; chuỗi rỗng nếu mọi dòng đều có VAT.
+
+        Dòng không có thuế % bị _build_meinvoice_invoice_data ghi lặng lẽ thành '0%' — hóa đơn
+        sai thuế suất mà vẫn gửi CQT được, nên chặn cả đơn dù chỉ một dòng thiếu. Thuế 0% khai
+        rõ trên dòng vẫn hợp lệ.
+        """
+        self.ensure_one()
+        missing = self._meinvoice_lines().filtered(
+            lambda l: not l.tax_id.filtered(lambda t: t.amount_type == 'percent')
+        )
+        if not missing:
+            return ''
+        return 'Đơn %s có %d dòng không có thuế VAT:\n%s\nThêm thuế cho các dòng này trên đơn rồi tạo lại HĐĐT.' % (
+            self.name, len(missing),
+            '\n'.join('• %s' % (l.product_id.display_name or l.name) for l in missing),
+        )
+
     def _build_meinvoice_invoice_data(self, config):
         """Xây dựng đối tượng InvoiceData theo spec MISA meInvoice Đầu ra."""
         self.ensure_one()
@@ -835,7 +887,7 @@ class SaleOrderAmisSync(models.Model):
         # Tên người mua: dùng tên mặc định theo kênh Shopee nếu có config
         buyer_name = config.get_meinvoice_buyer_name(self)
 
-        lines = self.order_line.filtered(lambda l: not l.display_type and l.product_uom_qty > 0)
+        lines = self._meinvoice_lines()
         if not lines:
             raise UserError('Đơn hàng "%s" không có dòng sản phẩm hợp lệ để phát hành hóa đơn.' % self.name)
 

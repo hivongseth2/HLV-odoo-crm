@@ -8,7 +8,7 @@
             <list string="Hàng đợi Webhook → meInvoice"
                   default_order="create_date desc"
                   decoration-success="state == 'done'"
-                  decoration-danger="state in ('error', 'duplicate')"
+                  decoration-danger="state in ('error', 'duplicate', 'invalid')"
                   decoration-warning="state == 'processing'"
                   decoration-info="state == 'deferred'"
                   decoration-muted="state in ('skipped',)">
@@ -18,7 +18,7 @@
                 <field name="trigger_status" string="Trạng thái kích hoạt"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'done'"
-                       decoration-danger="state in ('error', 'duplicate')"
+                       decoration-danger="state in ('error', 'duplicate', 'invalid')"
                        decoration-warning="state in ('pending', 'processing')"
                        decoration-info="state == 'deferred'"
                        decoration-muted="state == 'skipped'"/>
@@ -30,7 +30,7 @@
                 <field name="error_msg" optional="hide"/>
                 <button name="action_retry" string="Thử lại" type="object"
                         icon="fa-refresh"
-                        invisible="state not in ('error', 'skipped', 'deferred')"/>
+                        invisible="state not in ('error', 'skipped', 'deferred', 'invalid')"/>
                 <button name="action_skip" string="Bỏ qua" type="object"
                         icon="fa-ban"
                         invisible="state not in ('pending', 'error')"/>
@@ -46,10 +46,10 @@
             <form string="Chi tiết Webhook Queue">
                 <header>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="pending,deferred,processing,done,duplicate,error,skipped"/>
+                           statusbar_visible="pending,deferred,processing,done,duplicate,invalid,error,skipped"/>
                     <button name="action_retry" string="Thử lại" type="object"
                             class="btn-primary"
-                            invisible="state not in ('error', 'skipped', 'deferred')"/>
+                            invisible="state not in ('error', 'skipped', 'deferred', 'invalid')"/>
                     <button name="action_skip" string="Bỏ qua" type="object"
                             invisible="state not in ('pending', 'error')"/>
                 </header>
@@ -99,6 +99,7 @@
                 <filter string="Lỗi" name="error" domain="[('state','=','error')]"/>
                 <filter string="Nghi trùng HĐ" name="duplicate"
                         domain="[('state','=','duplicate')]"/>
+                <filter string="Dữ liệu không hợp lệ" name="invalid" domain="[('state','=','invalid')]"/>
                 <filter string="Hoàn thành" name="done" domain="[('state','=','done')]"/>
                 <filter string="Bỏ qua" name="skipped" domain="[('state','=','skipped')]"/>
                 <separator/>

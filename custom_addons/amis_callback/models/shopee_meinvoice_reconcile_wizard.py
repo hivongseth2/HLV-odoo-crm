@@ -98,9 +98,11 @@ class ShopeeMeinvoiceReconcileWizard(models.TransientModel):
         }
 
         for order in orders:
+            # Bản 'invalid' chưa từng gửi CQT, thường có thêm bản nháp tạo lại sau khi sửa VAT —
+            # đếm vào thì đơn bị báo nhiều hóa đơn oan.
             invoices = Invoice.search([
                 ('sale_order_id', '=', order.id),
-                ('state', '!=', 'cancelled'),
+                ('state', 'not in', ('cancelled', 'invalid')),
             ], order='create_date asc, id asc')
 
             invoice_count = len(invoices)

@@ -33,6 +33,7 @@ const PICKING_STATE_FILTER_OPTIONS = [
 const SHOPEE_STATE_FILTER_OPTIONS = [
     { value: "missing", label: "Chưa có HĐĐT" },
     { value: "draft", label: "Nháp, chưa phát hành" },
+    { value: "invalid", label: "Dữ liệu không hợp lệ" },
     { value: "submitted", label: "Đã gửi, chờ CQT duyệt" },
     { value: "rejected", label: "Bị từ chối" },
     { value: "accepted", label: "Đã phát hành" },

@@ -762,7 +762,7 @@
         // đỏ ở trên, còn lại là các bước riêng của luồng phát hành.
         &.miv-badge-state-draft { background: rgba(137, 135, 129, 0.14); color: var(--miv-ink-muted); }
         &.miv-badge-state-submitted { background: rgba(250, 178, 25, 0.18); color: var(--miv-warning-text); }
-        &.miv-badge-state-rejected { background: rgba(208, 59, 59, 0.12); color: var(--miv-critical-text); }
+        &.miv-badge-state-rejected, &.miv-badge-state-invalid { background: rgba(208, 59, 59, 0.12); color: var(--miv-critical-text); }
         &.miv-badge-state-accepted { background: rgba(12, 163, 12, 0.12); color: var(--miv-good-text); }
         &.miv-badge-shopee { background: rgba(201, 36, 122, 0.12); color: #c9247a; }
     }

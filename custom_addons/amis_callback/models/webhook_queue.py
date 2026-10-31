@@ -51,6 +51,7 @@ class AmisWebhookQueue(models.Model):
             ('deferred', 'Ngoài khung giờ'),
             ('done', 'Hoàn thành'),
             ('duplicate', 'Nghi trùng HĐ - cần đối soát'),
+            ('invalid', 'Dữ liệu không hợp lệ'),
             ('error', 'Lỗi'),
             ('skipped', 'Bỏ qua'),
         ],
@@ -238,7 +239,7 @@ class AmisWebhookQueue(models.Model):
             # Kiểm tra đã có hóa đơn chưa phải nháp rồi → skip
             published = self.env['meinvoice.invoice'].sudo().search([
                 ('sale_order_id', '=', so.id),
-                ('state', 'not in', ('draft', 'cancelled')),
+                ('state', 'not in', ('draft', 'invalid', 'cancelled')),
             ], limit=1)
             if published:
                 self._append_attempt_history(
@@ -259,6 +260,13 @@ class AmisWebhookQueue(models.Model):
             ], order='id desc')
 
             if not drafts:
+                invalid = self.env['meinvoice.invoice'].sudo().search([
+                    ('sale_order_id', '=', so.id),
+                    ('state', '=', 'invalid'),
+                ], order='id desc', limit=1)
+                if invalid:
+                    self._mark_invalid(invalid)
+                    return
                 self._append_attempt_history('SKIPPED', 'Không có HĐĐT nháp để phát hành')
                 self.sudo().write({
                     'state': 'skipped',
@@ -280,6 +288,9 @@ class AmisWebhookQueue(models.Model):
                 return
 
             draft = drafts[0]
+            if draft._mark_invalid_if_missing_vat():
+                self._mark_invalid(draft)
+                return
 
             # Cập nhật inv_date về ngày hôm nay (giờ địa phương) trước khi gửi CQT.
             # CQT yêu cầu InvDate = ngày gửi thực tế; nếu dùng ngày tạo nháp cũ
@@ -335,6 +346,18 @@ class AmisWebhookQueue(models.Model):
                 'error_msg': err,
                 'processed_at': fields.Datetime.now(),
             })
+
+    def _mark_invalid(self, invoice):
+        """Dừng bản ghi queue vì HĐĐT không hợp lệ — cron không tự thử lại (state ngoài pending/error).
+        Sửa đơn, tạo lại HĐĐT rồi bấm Thử lại."""
+        self.ensure_one()
+        self._append_attempt_history('INVALID', invoice.invalid_reason)
+        self.sudo().write({
+            'state': 'invalid',
+            'error_msg': invoice.invalid_reason,
+            'meinvoice_invoice_id': invoice.id,
+            'processed_at': fields.Datetime.now(),
+        })
 
     # ── Manual actions ────────────────────────────────────────────────────────
 

@@ -28,13 +28,14 @@ class MeinvoiceInvoice(models.Model):
         store=True,
     )
 
-    @api.depends('sale_order_id', 'inv_no', 'inv_series')
+    @api.depends('sale_order_id', 'inv_no', 'inv_series', 'state')
     def _compute_name(self):
         for rec in self:
             if rec.inv_no:
                 rec.name = '%s %s' % (rec.inv_series or '', rec.inv_no)
             elif rec.sale_order_id:
-                rec.name = 'Nháp — %s' % rec.sale_order_id.name
+                prefix = 'Không hợp lệ' if rec.state == 'invalid' else 'Nháp'
+                rec.name = '%s — %s' % (prefix, rec.sale_order_id.name)
             else:
                 rec.name = 'Nháp #%d' % (rec.id or 0)
 
@@ -47,12 +48,17 @@ class MeinvoiceInvoice(models.Model):
     state = fields.Selection(
         [
             ('draft', 'Nháp'),
+            ('invalid', 'Dữ liệu không hợp lệ'),
             ('submitted', 'Đã gửi CQT'),
             ('accepted', 'CQT chấp nhận'),
             ('rejected', 'CQT từ chối'),
             ('cancelled', 'Đã hủy'),
         ],
         string='Trạng thái', default='draft', required=True, tracking=True,
+    )
+    invalid_reason = fields.Text(
+        string='Lý do không hợp lệ', readonly=True, copy=False,
+        help='Vì sao hóa đơn không được gửi CQT. Sửa đơn hàng rồi bấm "Tạo HĐĐT" lại trên đơn.',
     )
 
     # ── Thông tin hóa đơn (chỉnh sửa được khi nháp) ─────────────────────────
@@ -236,8 +242,26 @@ class MeinvoiceInvoice(models.Model):
     def action_publish(self):
         """Gửi hóa đơn lên Cơ quan Thuế qua meInvoice API."""
         self.ensure_one()
+        if self.state == 'invalid':
+            raise UserError(
+                'Hóa đơn %s ở trạng thái Dữ liệu không hợp lệ, không được gửi CQT.\n%s'
+                % (self.name, self.invalid_reason or '')
+            )
         if self.state != 'draft':
             raise UserError('Chỉ hóa đơn ở trạng thái Nháp mới có thể phát hành.')
+        if self._mark_invalid_if_missing_vat():
+            # Không raise: raise sẽ rollback luôn việc chuyển trạng thái vừa ghi.
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Không gửi CQT — Dữ liệu không hợp lệ',
+                    'message': self.invalid_reason,
+                    'type': 'danger',
+                    'sticky': True,
+                    'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
+                },
+            }
 
         self._sync_invoice_data_from_lines()
 
@@ -632,8 +656,23 @@ class MeinvoiceInvoice(models.Model):
             )
         return True
 
+    def _mark_invalid_if_missing_vat(self):
+        """Chuyển nháp sang 'Dữ liệu không hợp lệ' nếu đơn hàng có dòng không có VAT.
+
+        Kiểm lại lúc gửi (không chỉ lúc tạo) để chặn cả nháp tạo trước khi có quy tắc này.
+        Trả True nếu đã chuyển sang không hợp lệ.
+        """
+        self.ensure_one()
+        reason = self.sale_order_id._meinvoice_vat_error()
+        if not reason:
+            return False
+        self.write({'state': 'invalid', 'invalid_reason': reason})
+        _logger.warning('meInvoice id=%d chuyển Dữ liệu không hợp lệ: %s', self.id, reason)
+        return True
+
     def unlink(self):
-        protected = self.filtered(lambda rec: rec.state != 'draft')
+        # Hóa đơn không hợp lệ chưa từng gửi CQT nên xóa được như nháp.
+        protected = self.filtered(lambda rec: rec.state not in ('draft', 'invalid'))
         if protected:
             raise UserError(
                 'Không thể xóa hóa đơn không còn ở trạng thái Nháp: %s. '
@@ -1034,6 +1073,11 @@ class MeinvoiceInvoice(models.Model):
     def action_send_mail_draft(self):
         """Nút bấm: gửi email bản nháp (thông báo lập hóa đơn, chưa cấp mã)."""
         self._check_mail_enabled()
+        invalid = self.filtered(lambda r: r.state == 'invalid')
+        if invalid:
+            raise UserError(
+                'Không gửi email cho hóa đơn Dữ liệu không hợp lệ: %s' % ', '.join(invalid.mapped('name'))
+            )
         result = self._send_meinvoice_mail(mode='draft', raise_on_error=False)
         sent = len(result['sent'])
         skipped = len(result['skipped'])

@@ -35,7 +35,7 @@
                     <button name="action_send_mail_draft" type="object"
                             string="Email bản nháp"
                             class="btn-secondary"
-                            invisible="state == 'cancelled'"
+                            invisible="state in ('cancelled', 'invalid')"
                             confirm="Gửi email thông báo lập hóa đơn (bản nháp) cho khách hàng?"/>
                     <button name="action_send_mail_published" type="object"
                             string="Email bản chính"
@@ -44,7 +44,7 @@
                             confirm="Gửi email hóa đơn đã cấp mã (bản chính thức) cho khách hàng?"/>
                     <button name="action_open_send_mail_wizard" type="object"
                             string="Soạn email…"
-                            invisible="state == 'cancelled'"/>
+                            invisible="state in ('cancelled', 'invalid')"/>
                     <button name="action_cancel" type="object"
                             string="Hủy"
                             invisible="state != 'draft'"
@@ -54,6 +54,10 @@
                            statusbar_visible="draft,submitted,accepted,cancelled"/>
                 </header>
                 <sheet>
+                    <div class="alert alert-danger" role="alert" invisible="state != 'invalid'">
+                        <strong>Dữ liệu không hợp lệ — không được gửi Cơ quan Thuế.</strong>
+                        <field name="invalid_reason" nolabel="1" class="d-block mt-1"/>
+                    </div>
                     <group>
                         <group>
                             <field name="sale_order_id" readonly="1"/>
@@ -163,7 +167,7 @@
                   decoration-info="state == 'draft'"
                   decoration-warning="state == 'submitted'"
                   decoration-success="state == 'accepted'"
-                  decoration-danger="state == 'rejected'"
+                  decoration-danger="state in ('rejected', 'invalid')"
                   decoration-muted="state == 'cancelled'">
                 <field name="create_date" string="Ngày tạo" optional="show"/>
                 <field name="sale_order_id" string="Đơn hàng"/>
@@ -172,7 +176,8 @@
                        decoration-info="state == 'draft'"
                        decoration-warning="state == 'submitted'"
                        decoration-success="state == 'accepted'"
-                       decoration-danger="state in ('rejected','cancelled')"/>
+                       decoration-danger="state in ('rejected','cancelled','invalid')"/>
+                <field name="invalid_reason" optional="hide"/>
                 <field name="inv_series" string="Ký hiệu"/>
                 <field name="inv_date" string="Ngày HĐ"/>
                 <field name="buyer_legal_name" string="Tên người mua"/>
@@ -206,7 +211,7 @@
                         invisible="state not in ('submitted','accepted','rejected')"/>
                 <button name="action_send_mail_draft" type="object" string="Mail nháp"
                         icon="fa-envelope-o"
-                        invisible="state == 'cancelled'"
+                        invisible="state in ('cancelled', 'invalid')"
                         confirm="Gửi email bản nháp?"/>
                 <button name="action_send_mail_published" type="object" string="Mail chính"
                         icon="fa-envelope"
@@ -232,6 +237,7 @@
                 <field name="transaction_id" string="Transaction ID"/>
                 <separator/>
                 <filter name="filter_draft" string="Nháp" domain="[('state','=','draft')]"/>
+                <filter name="filter_invalid" string="Dữ liệu không hợp lệ" domain="[('state','=','invalid')]"/>
                 <filter name="filter_submitted" string="Đã gửi CQT" domain="[('state','=','submitted')]"/>
                 <filter name="filter_accepted" string="CQT chấp nhận" domain="[('state','=','accepted')]"/>
                 <filter name="filter_rejected" string="CQT từ chối" domain="[('state','=','rejected')]"/>

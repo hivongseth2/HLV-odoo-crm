@@ -66,11 +66,12 @@ MISA_ORDER_STATE_LABELS = {
 
 # Đơn Shopee dùng luồng hóa đơn điện tử "meInvoice" riêng của amis_callback (model
 # meinvoice.invoice), không đi qua sa_invoice_request như MISA — trạng thái lấy thẳng từ
-# field `state` của meinvoice.invoice (draft/submitted/rejected/accepted), + 'missing' tự
+# field `state` của meinvoice.invoice (draft/invalid/submitted/rejected/accepted), + 'missing' tự
 # thêm khi đơn Shopee chưa có bản ghi hóa đơn nào (hoặc tất cả đã bị hủy).
 MISA_SHOPEE_INVOICE_STATE_LABELS = {
     'missing': 'Chưa có HĐĐT',
     'draft': 'Nháp, chưa phát hành',
+    'invalid': 'Dữ liệu không hợp lệ',
     'submitted': 'Đã gửi, chờ CQT duyệt',
     'rejected': 'Bị từ chối',
     'accepted': 'Đã phát hành',

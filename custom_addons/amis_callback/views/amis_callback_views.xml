@@ -408,10 +408,11 @@
         <field name="arch" type="xml">
             <data>
                 <xpath expr="//div[@name='button_box']" position="inside">
-                    <!-- Tạo hóa đơn điện tử nháp từ đơn hàng -->
+                    <!-- Tạo hóa đơn điện tử nháp từ đơn hàng — chỉ đơn Shopee -->
+                    <field name="meinvoice_is_shopee" invisible="1"/>
                     <button name="action_publish_meinvoice_invoice" type="object"
                             class="oe_stat_button" icon="fa-plus"
-                            invisible="state not in ('sale','done')">
+                            invisible="state not in ('sale','done') or not meinvoice_is_shopee">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Tạo</span>
                             <span class="o_stat_text">HĐĐT</span>
@@ -474,14 +475,14 @@
                                   decoration-info="state == 'draft'"
                                   decoration-warning="state == 'submitted'"
                                   decoration-success="state == 'accepted'"
-                                  decoration-danger="state == 'rejected'"
+                                  decoration-danger="state in ('rejected', 'invalid')"
                                   decoration-muted="state == 'cancelled'">
                                 <field name="create_date" string="Ngày tạo"/>
                                 <field name="state" widget="badge"
                                        decoration-info="state == 'draft'"
                                        decoration-warning="state == 'submitted'"
                                        decoration-success="state == 'accepted'"
-                                       decoration-danger="state in ('rejected','cancelled')"/>
+                                       decoration-danger="state in ('rejected','cancelled','invalid')"/>
                                 <field name="inv_series" string="Ký hiệu"/>
                                 <field name="inv_date" string="Ngày HĐ"/>
                                 <field name="buyer_legal_name" string="Tên người mua"/>

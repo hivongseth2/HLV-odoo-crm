@@ -111,7 +111,7 @@
                 .msu-tab-active{color:#2a78d6;border-bottom-color:#2a78d6}
                 .msu-badge-state-draft{background:#f1f0eb;color:#52514e}
                 .msu-badge-state-submitted{background:#fef8e9;color:#92600a}
-                .msu-badge-state-rejected{background:#fdf1f1;color:#d03b3b}
+                .msu-badge-state-rejected,.msu-badge-state-invalid{background:#fdf1f1;color:#d03b3b}
                 .msu-badge-state-accepted{background:#eaf8ea;color:#0ca30c}
 
                 /* ---- Stat tiles ---- */
@@ -576,6 +576,7 @@
                                     <option value="">Tất cả trạng thái</option>
                                     <option value="missing">Chưa có HĐĐT</option>
                                     <option value="draft">Nháp, chưa phát hành</option>
+                                    <option value="invalid">Dữ liệu không hợp lệ</option>
                                     <option value="submitted">Đã gửi, chờ CQT duyệt</option>
                                     <option value="rejected">Bị từ chối</option>
                                     <option value="accepted">Đã phát hành</option>
