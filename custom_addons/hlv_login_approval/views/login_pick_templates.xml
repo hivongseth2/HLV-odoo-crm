@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Trang xác nhận khi người duyệt bấm số trong email; xem controllers/pick.py. -->
+    <template id="login_pick" name="Xác nhận chọn số duyệt đăng nhập">
+        <t t-call="web.login_layout">
+            <t t-set="disable_footer">1</t>
+            <div class="oe_login_form">
+                <t t-if="error">
+                    <h5 class="card-title text-warning">Không duyệt được</h5>
+                    <p class="text-muted" t-out="error"/>
+                </t>
+                <t t-elif="result == 'approved'">
+                    <h5 class="card-title text-success">Đã duyệt</h5>
+                    <p class="text-muted">
+                        <t t-out="device.user_id.name"/> sẽ tự vào hệ thống trên thiết bị vừa duyệt.
+                    </p>
+                </t>
+                <t t-elif="result == 'cancelled'">
+                    <h5 class="card-title text-danger">Sai số, đã huỷ yêu cầu</h5>
+                    <p class="text-muted">
+                        <t t-out="device.user_id.name"/> phải đăng nhập lại để lấy số mới. Nếu người đó không
+                        nhắn số cho bạn, có thể ai khác đang dùng mật khẩu của họ.
+                    </p>
+                </t>
+                <t t-else="">
+                    <h5 class="card-title">Duyệt đăng nhập</h5>
+                    <p class="text-muted mb-1">
+                        <strong t-out="device.user_id.name"/> —
+                        <t t-out="' / '.join(filter(None, [device.platform, device.browser])) or 'Không rõ'"/>,
+                        IP <t t-out="device.ip_address or 'Không rõ'"/>
+                    </p>
+                    <p class="text-muted">Bạn chọn số:</p>
+                    <div class="text-center my-3">
+                        <span class="display-3 fw-bold text-primary" t-out="choice"/>
+                    </div>
+                    <p class="small text-muted">
+                        Chỉ xác nhận khi đây đúng là số người dùng vừa đọc cho bạn. Chọn sai là huỷ yêu cầu.
+                    </p>
+                    <form t-att-action="pick_url" method="post">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <input type="hidden" name="choice" t-att-value="choice"/>
+                        <button type="submit" class="btn btn-primary w-100">Xác nhận duyệt</button>
+                    </form>
+                </t>
+                <div class="text-center small mt-4 pt-3 border-top">
+                    <a t-att-href="device_url">Mở yêu cầu trong Odoo</a>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>
