@@ -44,17 +44,27 @@ class HlvProductSpec(models.Model):
         for record in self:
             record.product_id = queries._products_with_code(record.code)[:1] if record.code_key else False
 
+    def _canonical_code(self, code):
+        """Mã dùng làm khoá: mã Odoo của đúng một hàng lẻ khớp `code`, không thì chính `code`.
+
+        Claude lúc lưu theo tên model ("GWS 900-100 S"), lúc tra theo mã Odoo ("06013961K0"):
+        không quy về một mã thì một máy thành hai dòng và lần hỏi sau vẫn đi tìm web.
+        """
+        product, _problem, _note = self.env['hlv.product.agent.queries']._resolve_product(code)
+        return (product.default_code or code) if product else code
+
     def lookup(self, codes):
         """Thông số đã lưu của các mã. Trả dict cho tool ``xem_thong_so_da_luu``."""
         wanted = lookup_codes(codes)
         if not wanted:
             return {'status': 'error', 'message': "Thiếu codes (danh sách mã cần xem)."}
+        keys = {code: normalize_code(self._canonical_code(code)) for code in wanted}
         stored = {rec.code_key: rec for rec in self.sudo().search(
-            [('code_key', 'in', [normalize_code(code) for code in wanted])])}
+            [('code_key', 'in', list(set(keys.values()) | {normalize_code(code) for code in wanted}))])}
         now = fields.Datetime.now()
         rows = []
         for code in wanted:
-            rec = stored.get(normalize_code(code))
+            rec = stored.get(keys[code]) or stored.get(normalize_code(code))
             if not rec:
                 rows.append({'code': code, 'co_luu': False})
                 continue
@@ -80,6 +90,7 @@ class HlvProductSpec(models.Model):
             'specs': specs, 'sources': clean_text(sources, MAX_SOURCE_CHARS),
             'checked_at': fields.Datetime.now(), 'sale_name': sale_name or False,
         }
+        code = self._canonical_code(code)
         Spec = self.sudo()
         existing = Spec.search([('code_key', '=', normalize_code(code))], limit=1)
         if existing:
