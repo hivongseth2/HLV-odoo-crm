@@ -1,6 +1,6 @@
 {
     'name': 'HLV - Duyệt đăng nhập theo thiết bị',
-    'version': '18.0.3.4.0',
+    'version': '18.0.3.5.0',
     'summary': 'User nội bộ đăng nhập từ thiết bị mới phải chờ admin duyệt',
     'description': """
         - Mỗi trình duyệt được gắn một cookie thiết bị. Lần đầu user nội bộ đăng nhập
@@ -9,7 +9,7 @@
           đúng số trong 3 số mới duyệt được (chọn sai là huỷ yêu cầu), như xác minh khớp số của Google.
         - Duyệt xong, trang chờ nhận tín hiệu qua bus (websocket) và tự vào hệ thống.
         - Nhóm "Người duyệt thiết bị đăng nhập" nhận email và Duyệt / Từ chối tại
-          Thiết lập > Người dùng & Công ty > Duyệt thiết bị đăng nhập. Không ai tự duyệt
+          Nhân viên > Duyệt đăng nhập. Không ai tự duyệt
           thiết bị của chính mình.
         - Áp dụng cho mọi user nội bộ, kể cả admin. Ngoại lệ duy nhất là tài khoản cứu hộ
           (base.user_admin) khi đã bật 2FA: không chờ duyệt nhưng máy mới vẫn báo người duyệt.
@@ -23,7 +23,7 @@
     'category': 'Administration',
     'author': 'HLV',
     'website': 'https://www.hoanglongvu.com',
-    'depends': ['mail', 'auth_totp'],
+    'depends': ['mail', 'auth_totp', 'hr'],
     'data': [
         'security/hlv_login_approval_groups.xml',
         'security/ir.model.access.csv',

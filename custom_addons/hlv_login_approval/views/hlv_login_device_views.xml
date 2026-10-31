@@ -33,7 +33,7 @@
                 <field name="approved_by_id" optional="show"/>
                 <field name="approved_until"/>
                 <field name="last_login_date" optional="show"/>
-                <button name="action_approve" type="object" string="Duyệt" icon="fa-check"
+                <button name="action_approve" type="object" string="Duyệt (chọn số)" icon="fa-check"
                         groups="hlv_login_approval.group_login_approver"
                         invisible="state != 'pending' or user_id == uid"/>
                 <button name="action_reject" type="object" string="Từ chối" icon="fa-ban"
@@ -50,7 +50,7 @@
         <field name="arch" type="xml">
             <form create="0">
                 <header>
-                    <button name="action_approve" type="object" string="Duyệt" class="btn-primary"
+                    <button name="action_approve" type="object" string="Duyệt (chọn số)" class="btn-primary"
                             groups="hlv_login_approval.group_login_approver"
                             invisible="state != 'pending' or user_id == uid"/>
                     <button name="action_unblock" type="object" string="Bỏ chặn"
@@ -134,10 +134,11 @@
         </field>
     </record>
 
+    <!-- Đặt trong app Nhân viên cho người duyệt (quản lý) dễ tìm, không phải vào Cài đặt. -->
     <menuitem id="menu_hlv_login_device"
-              name="Duyệt thiết bị đăng nhập"
-              parent="base.menu_users"
+              name="Duyệt đăng nhập"
+              parent="hr.menu_hr_root"
               action="action_hlv_login_device"
               groups="base.group_system,hlv_login_approval.group_login_approver"
-              sequence="30"/>
+              sequence="90"/>
 </odoo>
