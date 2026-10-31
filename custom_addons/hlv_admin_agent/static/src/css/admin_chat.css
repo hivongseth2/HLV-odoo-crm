@@ -21,7 +21,15 @@
   background: var(--pa-bg);
   color: var(--pa-text);
   font-size: 14.5px;
-  z-index: 10;
+  /* Trang chạy trong layout website (route website=True): phủ lên mọi nút nổi website chèn vào trang
+     (nút gọi điện, chat...), nhưng dưới thông báo / hộp thoại của Odoo ($zindex-modal 1055). */
+  z-index: 1050;
+}
+
+/* Thanh "Editor / ứng dụng" website gắn cho người dùng nội bộ ($zindex-modal) đè lên góc trái trang
+   chat; trang đã có nút ← về Odoo nên ẩn hẳn — chỉ trên trang này (:has), các trang web khác giữ nguyên. */
+body:has(.hlv-aa-app) .o_frontend_to_backend_nav {
+  display: none !important;
 }
 
 /* ---------- Cột trái ---------- */

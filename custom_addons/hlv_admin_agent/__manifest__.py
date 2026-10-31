@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Trợ lý quản trị (Claude)",
-    "version": "18.0.1.2.2",
+    "version": "18.0.1.2.3",
     "summary": "Trang chat toàn màn cho quản trị: tạo báo giá, cơ hội trên MISA CRM, tra cứu Odoo, tạo mã hàng, tìm web",
     "description": """
 Trang /tro-ly-quan-tri: chỉ khung chat (danh sách cuộc chat bên trái, cuộc đang mở ở giữa), chỉ
