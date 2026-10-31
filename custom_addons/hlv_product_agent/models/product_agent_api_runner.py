@@ -29,8 +29,11 @@ from ..services.claude_api_payload import (
     load_history, request_extras, tool_result, tool_uses, turn_reply, user_content,
 )
 from ..services.claude_client import api_error_message, connection_cause, load_anthropic, make_client
+from ..services.turn_prompt import with_today
 
 _logger = logging.getLogger(__name__)
+
+VN_TZ = 'Asia/Ho_Chi_Minh'
 
 PARAM_MODE = 'hlv_product_agent.mode'
 PARAM_API_KEY = 'hlv_product_agent.anthropic_api_key'
@@ -66,6 +69,12 @@ REQUEST_TIMEOUT_SECONDS = 180
 
 # Thông điệp lỗi viết thẳng tiếng Việt, không qua _(): phần lớn được dựng trong luồng
 # riêng / hàm không có self.env, nơi _() không tìm ra ngôn ngữ và ghi cảnh báo kèm stack.
+def _today_vn(session):
+    """Ngày hôm nay theo giờ của người chat (mặc định giờ VN) — lượt API chạy trong luồng nền, không có tz."""
+    record = session.with_context(tz=session.user_id.tz or VN_TZ)
+    return fields.Datetime.context_timestamp(record, fields.Datetime.now()).date()
+
+
 class TurnFailed(Exception):
     """Lượt không xong được; thông điệp hiện cho sale đọc."""
 
@@ -307,6 +316,7 @@ class HlvProductAgentApiRunner(models.AbstractModel):
         client = make_client(anthropic, config['api_key'], timeout=REQUEST_TIMEOUT_SECONDS)
         model = config['model']
         text = turn['prompt'] if history else turn['prompt_cold']
+        text = with_today(text, _today_vn(session))
         messages = history + [{'role': 'user', 'content': user_content(text, turn['images'])}]
         params = dict(
             model=model, max_tokens=MAX_TOKENS,

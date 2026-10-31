@@ -70,3 +70,17 @@ def build_turn_prompt(new_messages, is_admin, history=None, image_note=READ_IMAG
             + body
         )
     return apply_permission_marker(body, is_admin)
+
+
+def with_today(prompt, today):
+    """Chèn ngày hôm nay ngay sau marker quyền ở đầu lượt.
+
+    Claude không tự biết hôm nay là ngày nào, nên không nhận ra phiếu / PO đã quá ngày dự kiến.
+    Nhận: prompt dạng ``"<marker> <nội dung>"`` (kết quả build_turn_prompt), today: ``date``.
+    Trả: ``"<marker> (Hôm nay: dd/mm/yyyy) <nội dung>"`` — marker vẫn đứng đầu.
+    Biên: prompt chỉ có marker -> ``"<marker> (Hôm nay: ...)"``; không có marker -> chèn ở đầu.
+    """
+    note = "(Hôm nay: %s)" % today.strftime("%d/%m/%Y")
+    end = prompt.find("]") + 1 if prompt.startswith("[") else 0
+    head, rest = prompt[:end], prompt[end:].strip()
+    return " ".join(part for part in (head, note, rest) if part)
