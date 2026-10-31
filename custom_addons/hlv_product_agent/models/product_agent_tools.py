@@ -58,6 +58,8 @@ class HlvProductAgentTools(models.AbstractModel):
             'show_in_search_page': self._show_in_search_page,
             'show_panel': self._show_panel,
             'so_sanh_thong_so': self._compare_specs,
+            'xem_thong_so_da_luu': self._saved_specs,
+            'luu_thong_so': self._remember_specs,
         }.get(name)
         if not handler and name in QUERY_TOOL_NAMES:
             return self.env['hlv.product.agent.queries'].with_context(chat_user_id=session.user_id.id).run(name, args)
@@ -66,6 +68,13 @@ class HlvProductAgentTools(models.AbstractModel):
         if not isinstance(args, dict):
             return {'status': 'error', 'message': "Tham số phải là object JSON."}
         return handler(session, args)
+
+    def _saved_specs(self, session, args):
+        return self.env['hlv.product.spec'].lookup(args.get('codes'))
+
+    def _remember_specs(self, session, args):
+        return self.env['hlv.product.spec'].remember(
+            args.get('code'), args.get('thong_so'), args.get('nguon'), session.sale_name)
 
     def _misa_utils(self):
         return self.env['misa.api.utils'].sudo()
