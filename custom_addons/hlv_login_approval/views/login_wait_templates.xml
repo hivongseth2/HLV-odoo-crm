@@ -22,16 +22,28 @@
                     </p>
                     <a class="btn btn-primary w-100" href="/web/session/logout?redirect=/web/login">Đăng nhập lại</a>
                 </t>
+                <t t-elif="waiting_state == 'cancelled'">
+                    <h5 class="card-title text-warning">Yêu cầu duyệt đã bị huỷ</h5>
+                    <p class="text-muted">
+                        Người duyệt chọn không đúng số. Đăng nhập lại để lấy số mới, rồi đọc đúng số đó
+                        cho người duyệt.
+                    </p>
+                    <a class="btn btn-primary w-100" href="/web/session/logout?redirect=/web/login">Đăng nhập lại</a>
+                </t>
                 <t t-else="">
                     <h5 class="card-title">Đang chờ duyệt thiết bị</h5>
-                    <div class="text-center my-4">
-                        <span class="spinner-border text-primary" role="status"/>
+                    <p class="text-muted mb-1">Nhắn số này cho người duyệt (quản lý):</p>
+                    <div class="text-center my-3">
+                        <span class="display-3 fw-bold text-primary" t-out="match_code"/>
                     </div>
                     <p class="text-muted">
-                        Đây là lần đầu bạn đăng nhập từ thiết bị này. Yêu cầu đã gửi tới người duyệt;
-                        khi được duyệt trang sẽ tự vào hệ thống, không cần nhập lại mật khẩu.
-                        Yêu cầu chờ tối đa <t t-out="request_minutes"/> phút.
+                        Người duyệt phải chọn đúng số này thì bạn mới vào được. Khi được duyệt trang sẽ tự vào
+                        hệ thống, không cần nhập lại mật khẩu. Yêu cầu chờ tối đa
+                        <t t-out="request_minutes"/> phút.
                     </p>
+                    <div class="text-center mb-3">
+                        <span class="spinner-border spinner-border-sm text-primary" role="status"/>
+                    </div>
                     <p class="small text-muted mb-0">
                         Thiết bị: <t t-out="' / '.join(filter(None, [device.platform, device.browser])) or 'Không rõ'"/><br/>
                         IP: <t t-out="device.ip_address or 'Không rõ'"/>

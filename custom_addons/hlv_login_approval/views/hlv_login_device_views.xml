@@ -13,7 +13,7 @@
         <field name="name">hlv.login.device.list</field>
         <field name="model">hlv.login.device</field>
         <field name="arch" type="xml">
-            <list create="0" decoration-warning="state == 'pending'" decoration-muted="state in ('rejected', 'expired')">
+            <list create="0" decoration-warning="state == 'pending'" decoration-muted="state in ('rejected', 'expired', 'cancelled')">
                 <header>
                     <button name="%(action_hlv_login_sessions)d" type="action" string="Phiên đăng nhập / Thu hồi"
                             icon="fa-sign-out" display="always"/>
@@ -29,16 +29,16 @@
                        decoration-warning="state == 'pending'"
                        decoration-success="state == 'approved'"
                        decoration-danger="state == 'rejected'"
-                       decoration-muted="state == 'expired'"/>
+                       decoration-muted="state in ('expired', 'cancelled')"/>
                 <field name="approved_by_id" optional="show"/>
                 <field name="approved_until"/>
                 <field name="last_login_date" optional="show"/>
                 <button name="action_approve" type="object" string="Duyệt" icon="fa-check"
                         groups="hlv_login_approval.group_login_approver"
-                        invisible="state in ('approved', 'expired') or user_id == uid"/>
+                        invisible="state != 'pending' or user_id == uid"/>
                 <button name="action_reject" type="object" string="Từ chối" icon="fa-ban"
                         groups="hlv_login_approval.group_login_approver"
-                        invisible="state in ('rejected', 'expired')"/>
+                        invisible="state not in ('pending', 'approved')"/>
                 <button name="action_open_user_sessions" type="object" string="Phiên" icon="fa-desktop"/>
             </list>
         </field>
@@ -52,15 +52,19 @@
                 <header>
                     <button name="action_approve" type="object" string="Duyệt" class="btn-primary"
                             groups="hlv_login_approval.group_login_approver"
-                            invisible="state in ('approved', 'expired') or user_id == uid"/>
+                            invisible="state != 'pending' or user_id == uid"/>
+                    <button name="action_unblock" type="object" string="Bỏ chặn"
+                            groups="hlv_login_approval.group_login_approver"
+                            invisible="state != 'rejected'"
+                            confirm="Bỏ chặn thiết bị này? User đăng nhập lại sẽ tạo yêu cầu mới và vẫn phải được duyệt bằng số."/>
                     <button name="action_reject" type="object" string="Từ chối"
                             groups="hlv_login_approval.group_login_approver"
-                            invisible="state in ('rejected', 'expired')"
+                            invisible="state not in ('pending', 'approved')"
                             confirm="Từ chối thiết bị này? User sẽ không đăng nhập được từ thiết bị này cho tới khi được duyệt lại."/>
                     <button name="action_revoke_user_sessions" type="object" string="Đăng xuất mọi phiên"
                             groups="hlv_login_approval.group_login_approver"
                             confirm="Đăng xuất user này khỏi mọi trình duyệt đang mở? Thiết bị đã duyệt chỉ cần nhập lại mật khẩu."/>
-                    <field name="state" widget="statusbar"/>
+                    <field name="state" widget="statusbar" statusbar_visible="pending,approved"/>
                 </header>
                 <sheet>
                     <group>
@@ -109,7 +113,7 @@
                 <filter name="pending" string="Chờ duyệt" domain="[('state', '=', 'pending')]"/>
                 <filter name="approved" string="Đã duyệt" domain="[('state', '=', 'approved')]"/>
                 <filter name="rejected" string="Từ chối" domain="[('state', '=', 'rejected')]"/>
-                <filter name="expired" string="Hết hạn" domain="[('state', '=', 'expired')]"/>
+                <filter name="expired" string="Hết hạn / Đã huỷ" domain="[('state', 'in', ('expired', 'cancelled'))]"/>
                 <separator/>
                 <group expand="0" string="Nhóm theo">
                     <filter name="group_user" string="Người dùng" context="{'group_by': 'user_id'}"/>

@@ -47,7 +47,7 @@ publicWidget.registry.HlvLoginApprovalWait = publicWidget.Widget.extend({
     _applyState(state) {
         if (state === "approved") {
             window.location.assign(this.continueUrl);
-        } else if (state === "rejected" || state === "expired" || state === "none") {
+        } else if (["rejected", "expired", "cancelled", "none"].includes(state)) {
             // Tải lại để server hiện trang bị từ chối / hết hạn / đưa về trang đăng nhập.
             clearInterval(this.pollTimer);
             window.location.reload();

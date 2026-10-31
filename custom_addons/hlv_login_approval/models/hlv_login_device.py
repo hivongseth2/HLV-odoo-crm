@@ -7,12 +7,16 @@ from odoo.http import GeoIP
 from odoo.addons.base.models.res_users import check_identity
 
 from .login_approval_utils import (
-    approval_expiry, is_approval_valid, is_request_open, parse_positive_int, request_expiry)
+    approval_expiry, is_approval_valid, is_request_open, join_match_choices, parse_positive_int,
+    request_expiry, split_match_choices)
 
 _logger = logging.getLogger(__name__)
 
 DEFAULT_VALID_DAYS = 30
 DEFAULT_REQUEST_MINUTES = 30
+# Số khớp 2 chữ số như Google; người duyệt chọn 1 trong MATCH_CHOICES số.
+MATCH_CODE_MIN, MATCH_CODE_MAX = 10, 99
+MATCH_CHOICES = 3
 BUS_NOTIFICATION = 'hlv_login_approval/update'
 
 
@@ -30,6 +34,7 @@ class HlvLoginDevice(models.Model):
         ('approved', 'Đã duyệt'),
         ('rejected', 'Từ chối'),
         ('expired', 'Hết hạn'),
+        ('cancelled', 'Đã huỷ'),
     ], string='Trạng thái', default='pending', required=True, readonly=True)
     # Cùng tên và cách lấy với res.device.log để admin so được với danh sách phiên của user.
     ip_address = fields.Char(string='IP', readonly=True)
@@ -45,6 +50,12 @@ class HlvLoginDevice(models.Model):
     approved_date = fields.Datetime(string='Duyệt lúc', readonly=True)
     approved_until = fields.Datetime(string='Hiệu lực đến', readonly=True)
     last_login_date = fields.Datetime(string='Đăng nhập gần nhất', readonly=True)
+    # Số hiện trên trang chờ; người duyệt phải hỏi người đang ngồi trước máy mới biết để chọn.
+    # Không đưa vào view hay email, và chỉ admin đọc được qua ORM (xuất dữ liệu...).
+    match_code = fields.Char(readonly=True, copy=False, groups='base.group_system')
+    # Bộ số cho người duyệt chọn, chốt một lần cùng match_code. Nếu mỗi lần mở hộp chọn lại
+    # sinh số mồi mới thì mở vài lần là thấy số nào lặp lại, tức là số đúng.
+    match_choices = fields.Char(readonly=True, copy=False, groups='base.group_system')
     session_ids = fields.One2many(related='user_id.device_ids', string='Phiên đang mở của user')
     # Trang chờ (chưa đăng nhập) nghe kênh bus dạng chuỗi; bus cho khách subscribe kênh
     # chuỗi bất kỳ nên tên kênh phải ngẫu nhiên, không đoán được từ id.
@@ -61,14 +72,55 @@ class HlvLoginDevice(models.Model):
             device.display_name = f"{device.user_id.name} – {device.ip_address or '?'}"
 
     def action_approve(self):
-        if self.filtered(lambda d: d.user_id == self.env.user):
+        """Mở hộp chọn số khớp; duyệt thật nằm ở _approve_with_code."""
+        self.ensure_one()
+        self._check_can_approve()
+        wizard = self.env['hlv.login.device.approve'].create({
+            'device_id': self.id,
+            **{f'choice_{i}': code
+               for i, code in enumerate(split_match_choices(self.sudo().match_choices), start=1)},
+        })
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._("Chọn số trên màn hình của %s", self.user_id.name),
+            'res_model': wizard._name,
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def _approve_with_code(self, code):
+        """Duyệt nếu chọn đúng số; chọn sai thì huỷ yêu cầu. Trả True khi đã duyệt.
+
+        Huỷ chứ không cho chọn lại: chọn lại được thì bấm lần lượt 3 số kiểu gì cũng trúng.
+        """
+        self.ensure_one()
+        self._check_can_approve()
+        if code and code == self.sudo().match_code:
+            self.write(self._approval_vals(self.env.user))
+            approved = True
+        else:
+            _logger.warning("hlv_login_approval: %s chọn sai số khi duyệt thiết bị %s, huỷ yêu cầu",
+                            self.env.user.login, self.id)
+            self.write({'state': 'cancelled'})
+            approved = False
+        self._notify_waiting_browser()
+        return approved
+
+    def _check_can_approve(self):
+        self.ensure_one()
+        if self.user_id == self.env.user:
             raise UserError(self.env._(
                 "Không được tự duyệt thiết bị của chính mình, nhờ người duyệt khác."))
-        if self.filtered(lambda d: d.state in ('pending', 'expired') and not d._is_request_open()):
+        if not self._is_request_open():
             raise UserError(self.env._(
-                "Yêu cầu đã hết hạn. Người dùng đăng nhập lại sẽ tạo yêu cầu mới để duyệt."))
-        self.write(self._approval_vals(self.env.user))
-        self._notify_waiting_browser()
+                "Yêu cầu không còn chờ duyệt (đã hết hạn hoặc đã xử lý). "
+                "Người dùng đăng nhập lại sẽ tạo yêu cầu mới với số mới."))
+
+    def action_unblock(self):
+        # Thiết bị bị từ chối không vào được trang chờ nên không có số để khớp; bỏ chặn chỉ cho
+        # phép xin lại, lần đăng nhập sau tạo yêu cầu mới có số và vẫn phải duyệt.
+        self.filtered(lambda d: d.state == 'rejected').write({'state': 'cancelled'})
 
     def action_reject(self):
         # Cookie thiết bị không gắn với phiên cụ thể nào trong res.device (sid đổi mỗi lần
@@ -127,7 +179,10 @@ class HlvLoginDevice(models.Model):
 
     def _is_request_open(self):
         self.ensure_one()
-        return is_request_open(self.state, self.request_until, fields.Datetime.now())
+        # Yêu cầu tạo trước khi có số khớp thì không duyệt được nữa: coi như hết hạn để
+        # lần đăng nhập sau tạo yêu cầu mới có số.
+        return bool(self.sudo().match_code) and is_request_open(
+            self.state, self.request_until, fields.Datetime.now())
 
     def _waiting_state(self):
         """Trạng thái hiển thị cho trang chờ: tính hạn ngay, không đợi cron đổi state."""
@@ -137,6 +192,15 @@ class HlvLoginDevice(models.Model):
         if self.state in ('pending', 'expired') and not self._is_request_open():
             return 'expired'
         return self.state
+
+    @api.model
+    def _new_match_vals(self):
+        """Số khớp mới cùng bộ số cho người duyệt chọn (gồm số đúng và số mồi)."""
+        numbers = secrets.SystemRandom().sample(range(MATCH_CODE_MIN, MATCH_CODE_MAX + 1), MATCH_CHOICES)
+        return {
+            'match_code': str(numbers[0]),
+            'match_choices': join_match_choices(numbers),
+        }
 
     @api.model
     def _register_attempt(self, user_id, token_hash, ip_address, platform, browser, auto_approve=False):
@@ -162,6 +226,7 @@ class HlvLoginDevice(models.Model):
             'request_until': request_expiry(now, self._request_minutes()),
             'approved_until': False,
             'bus_channel': f"hlv_login_approval_{secrets.token_urlsafe(24)}",
+            **({'match_code': False, 'match_choices': False} if auto_approve else self._new_match_vals()),
         }
         if auto_approve:
             vals.update(self._approval_vals(self.env['res.users'].browse(user_id)))

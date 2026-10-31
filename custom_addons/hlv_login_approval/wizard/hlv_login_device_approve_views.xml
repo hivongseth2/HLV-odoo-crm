@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_login_device_approve_form" model="ir.ui.view">
+        <field name="name">hlv.login.device.approve.form</field>
+        <field name="model">hlv.login.device.approve</field>
+        <field name="arch" type="xml">
+            <form>
+                <p>
+                    Hỏi <strong><field name="user_id" readonly="1" class="d-inline"/></strong> số đang hiện
+                    trên màn hình đăng nhập của họ, rồi bấm đúng số đó. <strong>Chọn sai là huỷ yêu cầu</strong>,
+                    người dùng phải đăng nhập lại để lấy số mới.
+                </p>
+                <p class="text-muted small">
+                    Không ai nhắn số cho bạn mà vẫn có yêu cầu? Đừng đoán, bấm Đóng rồi Từ chối.
+                </p>
+                <div class="d-flex justify-content-center gap-3 my-4">
+                    <button name="action_pick" type="object" class="btn btn-outline-primary btn-lg px-5 fs-2"
+                            context="{'hlv_pick': choice_1}"><field name="choice_1"/></button>
+                    <button name="action_pick" type="object" class="btn btn-outline-primary btn-lg px-5 fs-2"
+                            context="{'hlv_pick': choice_2}"><field name="choice_2"/></button>
+                    <button name="action_pick" type="object" class="btn btn-outline-primary btn-lg px-5 fs-2"
+                            context="{'hlv_pick': choice_3}"><field name="choice_3"/></button>
+                </div>
+                <group>
+                    <group>
+                        <field name="platform"/>
+                        <field name="browser"/>
+                    </group>
+                    <group>
+                        <field name="ip_address"/>
+                        <field name="request_date"/>
+                    </group>
+                </group>
+                <field name="device_id" invisible="1"/>
+                <footer>
+                    <button string="Đóng" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
