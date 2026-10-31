@@ -46,6 +46,7 @@ OLD_DEFAULT_VERSIONS = {
         '1ed90ae549168f34',  # 18.0.1.18.7: chưa báo trễ hạn, gọi hàng đang chuyển là khách giữ
         '22839bd0d3fc775a',  # 18.0.1.18.9: mã tương đương chưa có nút hỏi nhu cầu khách
         '518d0d48337dc3c3',  # 18.0.1.19.0: chưa dùng thông số đã lưu, lần nào cũng tìm web
+        '108612360652972f',  # 18.0.1.20.0: tìm web xong không gọi luu_thong_so
     },
 }
 DEFAULT_FILES = {
