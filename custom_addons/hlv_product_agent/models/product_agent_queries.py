@@ -390,7 +390,7 @@ class HlvProductAgentQueries(models.AbstractModel):
         """
         criteria = scan_criteria(args)
         if not has_scan_filter(criteria):
-            return {'status': 'error', 'message': "Cần ít nhất một trong bat_dau / chua / ma_chua (cụm >= 3 ký tự)."}
+            return {'status': 'error', 'message': "Cần ít nhất một trong bat_dau / chua / ma_chua (cụm >= 2 ký tự)."}
         self.env.cr.execute("""
             SELECT pp.id, pp.default_code, COALESCE(pt.name->>'vi_VN', pt.name->>'en_US')
               FROM product_product pp JOIN product_template pt ON pt.id = pp.product_tmpl_id
