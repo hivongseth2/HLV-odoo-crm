@@ -181,6 +181,13 @@ class StockPicking(models.Model):
         
         return name_ok or (location.usage == "transit" and ("inter-warehouse transit" in complete_name or "trung chuyển liên kho" in complete_name or "kho trung gian" in complete_name))
 
+    def _hlv_step2_source(self):
+        """Nguồn cố định của phiếu bước 2 đang mở (= đích phiếu bước 1); rỗng nếu không phải phiếu bước 2."""
+        self.ensure_one()
+        if self.source_transfer_id and self.state not in ("done", "cancel") and not self.return_id:
+            return self.source_transfer_id.location_dest_id
+        return self.env["stock.location"]
+
     @api.depends("picking_type_id")
     def _compute_hlv_allow_transfer_location(self):
         for picking in self:
