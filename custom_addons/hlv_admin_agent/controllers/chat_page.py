@@ -14,6 +14,7 @@ from odoo.addons.hlv_product_agent.services.claude_api_payload import MODEL_CHOI
 from ..services.personal import MEMORY_KINDS
 
 GROUP = 'hlv_admin_agent.group_admin_agent_user'
+MANAGER_GROUP = 'hlv_admin_agent.group_admin_agent_manager'
 PAGE_URL = '/tro-ly-quan-tri'
 MAX_NAME_CHARS = 80
 
@@ -58,6 +59,7 @@ class AdminAgentChat(http.Controller):
             return request.not_found()
         return request.render('hlv_admin_agent.chat_page', {
             'user_name': request.env.user.name,
+            'is_manager': request.env.user.has_group(MANAGER_GROUP),
             'models': _model_options(),
             'default_model': request.env['hlv.admin.agent.config'].current().model,
         })
