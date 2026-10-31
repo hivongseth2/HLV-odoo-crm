@@ -16,7 +16,8 @@ from odoo.addons.website_public_inventory_18.controllers.main import (
 )
 
 from ..services.price_summary import compact_prices
-from ..services.product_scan import MAX_SCAN_RESULTS, has_scan_filter, scan_criteria, scan_match
+from ..services.name_alias import leading_type
+from ..services.product_scan import MAX_SCAN_RESULTS, has_scan_filter, scan_criteria, scan_match, scan_terms
 from ..services.query_format import (
     TIER_NAME_TYPE, clamp_int, fit_result, has_all_words, keyword_rank, name_tokens, usable_keywords,
 )
@@ -44,6 +45,8 @@ PRICE_PAGE_LINK = '/hoi-gia-ncc/tra-gia?p=%s'
 OTHER_RESERVATION_LIMIT = 200
 # Tool tra theo mô tả tự do, không cần (và có thể không có) đúng một mã trong Odoo.
 FREE_TEXT_QUERIES = frozenset({'tim_hang_tuong_tu', 'tim_ncc_dong_hang', 'quet_san_pham'})
+# Số tên loại gợi ý khi quét ra rỗng.
+SCAN_TYPE_HINTS = 12
 # Hàng thay thế: số ứng viên còn tồn đưa Claude xét (nhiều hơn thì Claude lọc thêm từ khoá).
 SUBSTITUTE_CANDIDATES = 40
 SUBSTITUTE_DESCRIPTION_CHARS = 300
@@ -388,7 +391,8 @@ class HlvProductAgentQueries(models.AbstractModel):
         Đọc mã + tên mọi sản phẩm một lần bằng SQL (vài chục nghìn dòng, nhẹ) rồi lọc ở Python: so
         không dấu / bỏ khoảng trắng mà ilike của Odoo không làm được ("bu lông" = "bulong").
         """
-        criteria = scan_criteria(args)
+        aliases = self.env['hlv.product.name.alias'].expansions(scan_terms(args.get('bat_dau')))
+        criteria = scan_criteria(args, aliases)
         if not has_scan_filter(criteria):
             return {'status': 'error', 'message': "Cần ít nhất một trong bat_dau / chua / ma_chua (cụm >= 2 ký tự)."}
         self.env.cr.execute("""
@@ -396,8 +400,8 @@ class HlvProductAgentQueries(models.AbstractModel):
               FROM product_product pp JOIN product_template pt ON pt.id = pp.product_tmpl_id
              WHERE pp.active AND pt.active AND pt.sale_ok
         """)
-        matched = [(pid, code or '', name or '') for pid, code, name in self.env.cr.fetchall()
-                   if scan_match(criteria, name, code)]
+        catalog = self.env.cr.fetchall()
+        matched = [(pid, code or '', name or '') for pid, code, name in catalog if scan_match(criteria, name, code)]
         stock = self._stock_by_product()
         in_stock_only = args.get('con_ton', True) is not False
         if in_stock_only:
@@ -412,7 +416,26 @@ class HlvProductAgentQueries(models.AbstractModel):
             'code': code, 'name': name, 'ton': stock.get(pid, (0.0, 0.0))[0],
             'kha_dung': stock.get(pid, (0.0, 0.0))[1], 'gia_ban': prices.get(pid, 0.0),
         } for pid, code, name in matched), key=lambda row: (-row['ton'], row['name']))
-        return {'status': 'found', 'tong': len(rows), 'chi_hang_con_ton': in_stock_only, 'ma': rows}
+        result = {'status': 'found', 'tong': len(rows), 'chi_hang_con_ton': in_stock_only, 'ma': rows}
+        if not rows and (criteria['chua'] or criteria['hang']):
+            result['goi_y_loai'] = self._scan_type_hints(catalog, criteria)
+        return result
+
+    @staticmethod
+    def _scan_type_hints(catalog, criteria):
+        """Tên loại kho đang dùng cho hàng có đúng quy cách / hãng sale nói, khi quét theo tên loại ra rỗng.
+
+        Sale gọi "tê", kho ghi "Chữ T PVC": bỏ bat_dau, giữ chua / hang, đếm phần đầu tên các mã khớp —
+        trợ lý thấy "Chữ T PVC" là quét lại được, và lượt đó dạy luôn bảng tên gọi khác.
+        """
+        loose = dict(criteria, bat_dau=[])
+        counts = {}
+        for _pid, code, name in catalog:
+            if scan_match(loose, name, code):
+                kind = leading_type(name)
+                if kind:
+                    counts[kind] = counts.get(kind, 0) + 1
+        return sorted(counts, key=lambda kind: -counts[kind])[:SCAN_TYPE_HINTS]
 
     def _sold_qty(self, products):
         """{product_id: số lượng đã bán (đơn đã xác nhận) trong SOLD_WINDOW_DAYS ngày}; mã chưa bán thì không có."""

@@ -210,6 +210,42 @@ def reply_text(content):
 DISPLAY_TOOLS = frozenset({'show_in_search_page', 'so_sanh_thong_so'})
 
 
+def scan_calls(messages):
+    """Các lần quet_san_pham trong một lượt, theo thứ tự, để tự học tên gọi khác.
+
+    Nhận: list tin Messages API của lượt (assistant có tool_use, user có tool_result).
+    Trả: list ``{'bat_dau': [str], 'chua': [str], 'names': [tên các mã ra]}``.
+    Biên: kết quả không đọc được JSON / không phải 'found' -> names rỗng; không quét lần nào -> [].
+    """
+    calls, results = [], {}
+    for message in messages or []:
+        content = message.get('content')
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if block.get('type') == 'tool_use' and block.get('name') == 'quet_san_pham':
+                calls.append(block)
+            elif block.get('type') == 'tool_result':
+                results[block.get('tool_use_id')] = block.get('content')
+    scans = []
+    for call in calls:
+        raw = results.get(call.get('id'))
+        if isinstance(raw, list):
+            raw = "".join(part.get('text', '') for part in raw if isinstance(part, dict))
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else {}
+        except ValueError:
+            data = {}
+        args = call.get('input') or {}
+        listed = data.get('ma') if data.get('status') == 'found' else None
+        scans.append({
+            'bat_dau': [term for term in args.get('bat_dau') or [] if isinstance(term, str)],
+            'chua': [term for term in args.get('chua') or [] if isinstance(term, str)],
+            'names': [row.get('name', '') for row in listed or [] if isinstance(row, dict)],
+        })
+    return scans
+
+
 # Câu trả lời ngắn hơn ngần này sau bước chỉ gọi tool hiển thị là câu cụt "Trang tra tồn đã mở...".
 THIN_REPLY_CHARS = 160
 FULL_ANSWER_NUDGE = (

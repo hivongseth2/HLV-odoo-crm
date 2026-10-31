@@ -26,8 +26,8 @@ from odoo.modules.registry import Registry
 from ..services.claude_api_payload import (
     DEFAULT_EFFORT, DEFAULT_MODEL, DEFAULT_WORKER_MODEL, EFFORT_CHOICES, MAX_TOKENS, MODEL_CHOICES,
     CACHE_CONTROL, build_system, build_tools, context_key, history_content, history_too_long,
-    FULL_ANSWER_NUDGE, load_history, needs_full_answer, request_extras, tool_result, tool_uses, turn_reply,
-    user_content,
+    FULL_ANSWER_NUDGE, load_history, needs_full_answer, request_extras, scan_calls, tool_result, tool_uses,
+    turn_reply, user_content,
 )
 from ..services.claude_client import api_error_message, connection_cause, load_anthropic, make_client
 from ..services.turn_prompt import with_today
@@ -357,8 +357,18 @@ class HlvProductAgentApiRunner(models.AbstractModel):
                 nudged = True
                 messages.append({'role': 'user', 'content': [{'type': 'text', 'text': FULL_ANSWER_NUDGE}]})
                 continue
+            self._learn_names(messages[len(history):])
             return turn_reply(step_contents), messages
         raise TurnFailed("Claude gọi tool quá %s lần trong một lượt" % MAX_STEPS)
+
+    def _learn_names(self, turn_messages):
+        """Tự học tên gọi khác từ các lần quét của lượt. Lỗi ở đây không được làm hỏng câu trả lời."""
+        try:
+            # Savepoint: lỗi ghi (vd hai lượt cùng học một cặp) không được làm hỏng transaction của lượt.
+            with self.env.cr.savepoint():
+                self.env['hlv.product.name.alias'].learn_from_scans(scan_calls(turn_messages))
+        except Exception:  # noqa: BLE001 — học hụt một lượt thì thôi, sale vẫn phải nhận câu trả lời
+            _logger.exception("PRODUCT_AGENT tự học tên gọi khác lỗi")
 
     @staticmethod
     def _request(anthropic, client, params, messages, stale_ok):

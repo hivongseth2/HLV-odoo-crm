@@ -38,8 +38,14 @@
                                 <label for="hlv_product_agent_api_parallel" class="col-lg-4 o_light_label"/>
                                 <field name="hlv_product_agent_api_parallel"/>
                             </div>
+                            <div class="row">
+                                <label for="hlv_product_agent_alias_model" class="col-lg-4 o_light_label"/>
+                                <field name="hlv_product_agent_alias_model"/>
+                            </div>
                             <button name="action_hlv_product_agent_check_api" type="object"
                                     string="Kiểm tra kết nối" class="btn-link" icon="oi-arrow-right"/>
+                            <button name="action_hlv_product_agent_study_catalog" type="object"
+                                    string="Đọc danh mục ngay" class="btn-link" icon="oi-arrow-right"/>
                         </div>
                     </setting>
                 </block>

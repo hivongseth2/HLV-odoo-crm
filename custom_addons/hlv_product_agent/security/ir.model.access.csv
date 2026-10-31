@@ -13,3 +13,7 @@ access_hlv_product_agent_prompt_revision_system,hlv.product.agent.prompt.revisio
 access_hlv_product_naming_rule_manager,hlv.product.naming.rule manager,model_hlv_product_naming_rule,group_product_agent_manager,1,1,1,1
 access_hlv_product_spec_manager,hlv.product.spec manager,model_hlv_product_spec,group_product_agent_manager,1,1,1,1
 access_hlv_product_spec_system,hlv.product.spec system,model_hlv_product_spec,base.group_system,1,1,1,1
+access_hlv_product_name_alias_manager,hlv.product.name.alias manager,model_hlv_product_name_alias,group_product_agent_manager,1,1,1,1
+access_hlv_product_name_alias_system,hlv.product.name.alias system,model_hlv_product_name_alias,base.group_system,1,1,1,1
+access_hlv_product_name_type_manager,hlv.product.name.type manager,model_hlv_product_name_type,group_product_agent_manager,1,0,0,0
+access_hlv_product_name_type_system,hlv.product.name.type system,model_hlv_product_name_type,base.group_system,1,1,1,1

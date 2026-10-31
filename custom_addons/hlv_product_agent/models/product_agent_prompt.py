@@ -53,6 +53,7 @@ OLD_DEFAULT_VERSIONS = {
         'a0e4aec54e3c9021',  # 18.0.1.21.0: quét bat_dau gộp cả quy cách ("ong pvc 60") nên trượt tên "Ống 60x1.8 PVC"
         '0c63ff61a945beae',  # 18.0.1.21.1: "co PVC 60" bị quét thành ống (bắt chước ví dụ)
         '512c39b9d183f75b',  # 18.0.1.21.2: đai ốc không quét "tán" (tên kho), quét rỗng là kết luận không có
+        'e40a988795709e82',  # 18.0.1.21.3: chưa biết goi_y_loai / bảng tên gọi khác tự học
     },
 }
 DEFAULT_FILES = {

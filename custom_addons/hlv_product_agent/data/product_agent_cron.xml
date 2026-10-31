@@ -13,4 +13,16 @@
         <!-- Tắt sẵn: mặc định chạy bằng máy văn phòng. Chọn Claude API trong Cài đặt là bật. -->
         <field name="active" eval="False"/>
     </record>
+
+    <!-- Mỗi giờ Claude đọc các tên loại hàng MỚI trong kho, ghi cách sale hay gọi vào bảng tên gọi
+         khác (quet_san_pham dùng để tìm không sót). Hết loại mới thì chạy không, không tốn token. -->
+    <record id="ir_cron_product_agent_study_catalog" model="ir.cron">
+        <field name="name">Trợ lý tạo mã hàng: học tên gọi khác của loại hàng</field>
+        <field name="model_id" ref="model_hlv_product_name_type"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_study_catalog()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">hours</field>
+        <field name="active" eval="True"/>
+    </record>
 </odoo>
