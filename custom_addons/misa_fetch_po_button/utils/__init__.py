@@ -8,4 +8,5 @@ from . import text_match
 from . import crm_product
 from . import misa_product_import
 from . import misa_opportunity
+from . import misa_crm_account
 from . import misa_quote
