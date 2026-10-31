@@ -13,6 +13,10 @@ from ..services.spec_memory import (
 )
 
 
+# Khoá tên model ngắn hơn ngần này (vd 'GSB') dễ nằm trong tên hàng khác.
+MIN_MODEL_KEY = 5
+
+
 class HlvProductSpec(models.Model):
     _name = 'hlv.product.spec'
     _description = "Thông số đã tra trên web"
@@ -53,6 +57,36 @@ class HlvProductSpec(models.Model):
         product, _problem, _note = self.env['hlv.product.agent.queries']._resolve_product(code)
         return (product.default_code or code) if product else code
 
+    def fresh_by_product(self, products):
+        """{product_id: thông số} của các sản phẩm có thông số lưu còn hạn.
+
+        Kèm vào danh sách ứng viên mã thay thế: trợ lý chỉ gọi xem_thong_so_da_luu cho mã gốc rồi
+        đi tìm web lại cả những ứng viên đã lưu.
+        """
+        if not products:
+            return {}
+        now = fields.Datetime.now()
+        return {rec.product_id.id: rec.specs for rec in self.sudo().search([('product_id', 'in', products.ids)])
+                if is_fresh(rec.checked_at, now)}
+
+    def _by_model_name(self, code):
+        """Dòng lưu theo tên model nằm trong tên sản phẩm Odoo của `code` (vd 'GHG 20-63' cho 06012A62K0).
+
+        Tên model khớp nhiều hàng (máy + bo mạch cùng tên) thì lúc lưu không quy được về mã Odoo.
+        Chỉ dòng chưa nối sản phẩm (dòng đã nối là của đúng hàng khác, vd máy chứ không phải bo mạch);
+        lấy khoá dài nhất cho chắc; khoá ngắn hơn MIN_MODEL_KEY dễ khớp nhầm.
+        """
+        product = self.env['hlv.product.agent.queries']._products_with_code(code)[:1]
+        if not product:
+            return self.browse()
+        self.env.cr.execute("""
+            SELECT id FROM hlv_product_spec
+             WHERE product_id IS NULL AND length(code_key) >= %s AND position(code_key IN %s) > 0
+             ORDER BY length(code_key) DESC LIMIT 1
+        """, [MIN_MODEL_KEY, normalize_code(product.name)])
+        row = self.env.cr.fetchone()
+        return self.sudo().browse(row[0]) if row else self.browse()
+
     def lookup(self, codes):
         """Thông số đã lưu của các mã. Trả dict cho tool ``xem_thong_so_da_luu``."""
         wanted = lookup_codes(codes)
@@ -65,6 +99,7 @@ class HlvProductSpec(models.Model):
         rows = []
         for code in wanted:
             rec = stored.get(keys[code]) or stored.get(normalize_code(code))
+            rec = rec or self._by_model_name(code)
             if not rec:
                 rows.append({'code': code, 'co_luu': False})
                 continue
