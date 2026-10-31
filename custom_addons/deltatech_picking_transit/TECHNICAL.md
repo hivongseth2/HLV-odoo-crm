@@ -59,7 +59,7 @@ Module dùng CHUYENKHO (đều `depends` module này): `hlv_mobile_barcode` (`_t
 4. Kiểm tra trước khi xác nhận (`_hlv_check_transfer_route`, bỏ qua phiếu trả hàng và PICK/PACK):
    - Bước 1: nguồn (header + move line) thuộc kho của loại phiếu; đích thuộc kho đó (CHUYENKHO). Đi thẳng vào vị trí tồn kho khác bị chặn; ra vị trí ảo ngoài kho (SUDUNG-*) cho qua. Transit cũ vẫn cho qua.
    - Bước 2: nguồn đúng bằng đích của bước 1; đích thuộc kho của loại phiếu (kho nhận).
-5. `write`/`read`/`_onchange_picking_type` giữ nguyên `location_id` của phiếu bước 2 = vị trí trung chuyển; `stock.move`/`stock.move.line` create/write giữ nguồn từng dòng (người dùng đổi nguồn trên form → lưu → cả phiếu, move, move line đều về CHUYENKHO).
+5. `write`/`read`/`_onchange_picking_type` giữ nguyên `location_id` của phiếu bước 2 = đích phiếu bước 1 (đổi sang vị trí khác, kể cả CHUYENKHO kho khác, đều bị bỏ qua); `stock.move`/`stock.move.line` create/write giữ nguồn từng dòng (người dùng đổi nguồn trên form → lưu → cả phiếu, move, move line đều về CHUYENKHO).
 
 ## 5. Mở rộng
 - Thêm kho mới: chạy nâng cấp module hoặc gọi `_hlv_get_transfer_location()` (tự tạo khi thiếu).
