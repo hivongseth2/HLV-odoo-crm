@@ -194,8 +194,17 @@ class HlvProductAgentQueries(models.AbstractModel):
     # Truy vấn nhẹ
     # =========================================================================
     def _q_xem_ton_kho(self, product, args):
-        return self._inventory()._product_breakdown_data(
+        data = self._inventory()._product_breakdown_data(
             self.env, product.id, self._warehouse_id(args.get('warehouse')))
+        # Cột 'Giữ' gồm cả phiếu chuyển kho: chỉ có tổng là trợ lý gọi hết thành "giữ cho đơn" và
+        # coi hàng đang trên đường là hết. Kèm luôn ở đây vì khả dụng không ít thì nó không gọi
+        # xem_dang_giu.
+        others = self._other_reservations(product) if data.get('ok') else []
+        if others:
+            data = dict(data, phieu_khac_dang_giu=others, ghi_chu_giu=(
+                "Một phần cột Giữ là các phiếu này, KHÔNG phải đơn bán / khách giữ. Phiếu chuyển kho: "
+                "hàng đang chuyển tới kho 'chuyen_den', cộng vào kho đó. So ngay_du_kien với hôm nay."))
+        return data
 
     def _q_xem_gia(self, product, args):
         template = product.product_tmpl_id
@@ -269,6 +278,7 @@ class HlvProductAgentQueries(models.AbstractModel):
                 'kho': line.location_id.warehouse_id.name or line.location_id.display_name,
                 'phieu': picking.name or move.reference or '',
                 'loai': (picking.picking_type_id or move.picking_type_id).name or '',
+                'chuyen_den': (picking.location_dest_id or move.location_dest_id).warehouse_id.name or '',
                 'doi_tac': picking.partner_id.display_name or '',
                 'nguon': picking.origin or move.origin or '',
                 'ngay_du_kien': fields.Datetime.to_string(picking.scheduled_date or move.date),
