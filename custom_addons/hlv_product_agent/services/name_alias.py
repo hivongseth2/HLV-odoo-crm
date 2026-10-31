@@ -58,33 +58,37 @@ def alias_prompt(type_names):
     return "Các tên loại hàng trong kho:\n" + "\n".join("- %s" % name for name in type_names)
 
 
-def parse_alias_reply(text, type_names):
-    """Cặp (tên loại, cách gọi khác) từ câu trả lời JSON của Claude.
+# Một mục "tên loại": [cách gọi, ...] đã viết trọn. Đọc từng mục chứ không đọc cả object: câu trả lời
+# chạm max_tokens bị cắt giữa chừng thì JSON cả khối hỏng, các mục viết xong vẫn dùng được.
+_ENTRY = re.compile(r'"((?:[^"\\]|\\.)*)"\s*:\s*(\[[^\[\]]*\])')
 
-    Nhận: chữ Claude trả, list tên loại đã gửi. Trả: list (tên loại, cách gọi), chỉ cho các loại có
-    trong lô; bỏ cách gọi trùng tên loại sau khi bỏ dấu / khoảng trắng, quá ngắn, hoặc không phải chuỗi.
-    Biên: không đọc được JSON -> [].
+
+def parse_alias_reply(text, type_names):
+    """Cặp (tên loại, cách gọi khác) và các loại Claude đã trả lời, từ câu trả lời JSON.
+
+    Nhận: chữ Claude trả, list tên loại đã gửi. Trả: ``(pairs, answered)`` — pairs là list (tên loại,
+    cách gọi), answered là set tên loại có mục viết trọn (kể cả mục rỗng []) — chỉ loại có trong lô.
+    Bỏ cách gọi trùng tên loại sau khi bỏ dấu / khoảng trắng, quá ngắn, hoặc không phải chuỗi.
+    Biên: câu trả lời bị cắt -> các mục viết xong vẫn lấy; không có mục nào -> ([], set()).
     """
-    match = re.search(r"\{.*\}", text or "", re.S)
-    try:
-        data = json.loads(match.group(0)) if match else {}
-    except ValueError:
-        return []
-    if not isinstance(data, dict):
-        return []
     sent = {squash_text(name): name for name in type_names}
-    pairs = []
-    for raw_type, aliases in data.items():
+    pairs, answered = [], set()
+    for raw_type, raw_list in _ENTRY.findall(text or ""):
         type_name = sent.get(squash_text(raw_type))
+        try:
+            aliases = json.loads(raw_list)
+        except ValueError:
+            continue
         if not type_name or not isinstance(aliases, list):
             continue
+        answered.add(type_name)
         seen = {squash_text(type_name)}
         for alias in aliases[:MAX_ALIASES_PER_TYPE]:
             key = squash_text(alias) if isinstance(alias, str) else ""
             if len(key) >= MIN_ALIAS_CHARS and key not in seen:
                 seen.add(key)
                 pairs.append((type_name, alias.strip()))
-    return pairs
+    return pairs, answered
 
 
 def learned_pairs(scans):

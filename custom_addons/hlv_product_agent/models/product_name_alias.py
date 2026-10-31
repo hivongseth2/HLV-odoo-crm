@@ -22,9 +22,10 @@ PARAM_ALIAS_MODEL = 'hlv_product_agent.alias_model'
 DEFAULT_ALIAS_MODEL = 'claude-sonnet-5-5'
 # Một lô tên loại mỗi lần gọi; mỗi lần chạy cron xử lý tối đa STUDY_LIMIT loại chưa đọc (lần đầu vài
 # nghìn loại thì trải ra nhiều giờ, không chiếm worker lâu).
-STUDY_BATCH = 120
+# Lô 120 loại chạm max_tokens 8000 (Sonnet viết dài) -> JSON cụt, cả lô mất: lô nhỏ, trần cao hơn.
+STUDY_BATCH = 40
 STUDY_LIMIT = 600
-STUDY_MAX_TOKENS = 8000
+STUDY_MAX_TOKENS = 16000
 SOURCES = [('catalog', "Claude đọc danh mục"), ('learned', "Tự học khi tìm"), ('seed', "Khởi đầu"),
            ('manual', "Quản lý thêm")]
 
@@ -111,12 +112,12 @@ class HlvProductNameType(models.Model):
                 names.setdefault(key, kind)
         Type = self.sudo()
         existing = {record.type_key: record for record in Type.search([])}
-        for key, count in counts.items():
-            if key in existing:
-                if existing[key].product_count != count:
-                    existing[key].product_count = count
-            else:
-                Type.create({'type_name': names[key], 'type_key': key, 'product_count': count})
+        for key, record in existing.items():
+            if key in counts and record.product_count != counts[key]:
+                record.product_count = counts[key]
+        # Tạo một lần cả lô: lần đầu vài nghìn loại, tạo từng dòng làm nút "Đọc danh mục ngay" treo lâu.
+        Type.create([{'type_name': names[key], 'type_key': key, 'product_count': count}
+                     for key, count in counts.items() if key not in existing])
 
     @api.model
     def _cron_study_catalog(self, limit=STUDY_LIMIT):
@@ -146,10 +147,13 @@ class HlvProductNameType(models.Model):
                 _logger.warning("PRODUCT_AGENT đọc danh mục lỗi: %s", api_error_message(anthropic, error))
                 break
             text = "".join(block.text for block in response.content if block.type == 'text')
-            added += Alias.remember([(alias, kind) for kind, alias in parse_alias_reply(text, names)], 'catalog')
-            batch.write({'studied_at': fields.Datetime.now()})
+            pairs, answered = parse_alias_reply(text, names)
+            added += Alias.remember([(alias, kind) for kind, alias in pairs], 'catalog')
+            # Chỉ đánh dấu loại Claude đã trả lời trọn: bị cắt giữa chừng thì loại còn lại đọc lại lần sau.
+            batch.filtered(lambda record: record.type_name in answered).write({'studied_at': fields.Datetime.now()})
             # Lô đã đọc phải lưu ngay: lô sau lỗi thì lần chạy tới không gửi lại lô này.
             self.env.cr.commit()
-            _logger.info("PRODUCT_AGENT đọc danh mục %s: %s loại, in=%s out=%s", model, len(names),
-                         response.usage.input_tokens, response.usage.output_tokens)
+            _logger.info("PRODUCT_AGENT đọc danh mục %s: %s/%s loại, %s cách gọi, in=%s out=%s stop=%s", model,
+                         len(answered), len(names), len(pairs), response.usage.input_tokens,
+                         response.usage.output_tokens, response.stop_reason)
         return added

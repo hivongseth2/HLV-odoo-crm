@@ -46,6 +46,8 @@
                                     string="Kiểm tra kết nối" class="btn-link" icon="oi-arrow-right"/>
                             <button name="action_hlv_product_agent_study_catalog" type="object"
                                     string="Đọc danh mục ngay" class="btn-link" icon="oi-arrow-right"/>
+                            <button name="%(hlv_product_agent.action_hlv_product_name_alias)d" type="action"
+                                    string="Xem tên gọi khác" class="btn-link" icon="oi-arrow-right"/>
                         </div>
                     </setting>
                 </block>
