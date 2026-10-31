@@ -44,6 +44,7 @@ OLD_DEFAULT_VERSIONS = {
         '8f562ddea6c79e0b',  # 18.0.1.18.5: còn câu rào cuối bài "em chưa đối chiếu được..."
         '82ce4c87ee7c55f5',  # 18.0.1.18.6: hàng trên phiếu chuyển nội bộ coi là hết, chào mã thay thế
         '1ed90ae549168f34',  # 18.0.1.18.7: chưa báo trễ hạn, gọi hàng đang chuyển là khách giữ
+        '22839bd0d3fc775a',  # 18.0.1.18.9: mã tương đương chưa có nút hỏi nhu cầu khách
     },
 }
 DEFAULT_FILES = {
