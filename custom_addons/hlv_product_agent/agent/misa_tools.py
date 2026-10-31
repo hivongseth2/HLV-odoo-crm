@@ -15,6 +15,7 @@ READ_ONLY_TOOLS = frozenset({
     # Không ghi gì vào MISA; gọi lại cùng từ khoá trong một lượt thì khỏi mở trang lần nữa.
     "show_in_search_page",
     "so_sanh_thong_so",
+    "xem_thong_so_da_luu",
 })
 
 TOOLS = [
@@ -468,7 +469,45 @@ PANEL_TOOL = {
 # Tạm tắt vẽ bảng (10/2026): trợ lý chỉ trả lời bằng chữ. Bật lại: đổi True — handler, khung
 # hiện bảng trên trang và kiểm HTML (panel_html) vẫn giữ nguyên.
 PANEL_ENABLED = False
-TOOLS = TOOLS + ([PANEL_TOOL] if PANEL_ENABLED else []) + QUERY_TOOLS
+# Thông số đã tra web, lưu theo mã: nhiều sale hỏi cùng một món thì chỉ tìm web một lần.
+SPEC_TOOLS = [
+    {
+        "name": "xem_thong_so_da_luu",
+        "description": (
+            "Thông số kỹ thuật em đã tra trên web và lưu lại cho các mã (kể cả mã chưa có trong "
+            "Odoo). GỌI TRƯỚC khi tìm web thông số. con_dung=true: dùng luôn, khỏi tìm web. Quá hạn "
+            "hoặc chưa lưu: tìm web rồi gọi luu_thong_so."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "codes": {"type": "array", "items": {"type": "string"}, "maxItems": 10,
+                          "description": "Các mã cần xem (mã gốc + các mã ứng viên)"},
+            },
+            "required": ["codes"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "luu_thong_so",
+        "description": (
+            "Lưu (hoặc ghi đè) thông số kỹ thuật của MỘT mã vừa tra được trên web, để lần sau khỏi "
+            "tìm lại. Gọi ngay sau khi tra ra, mỗi mã một lần; cũng gọi khi sale báo / web cho thấy "
+            "hàng đã đổi thông số. CHỈ thông số kỹ thuật — KHÔNG ghi giá. Không cần sale xác nhận."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Mã hàng / model đúng như trong Odoo / MISA hoặc mã hãng"},
+                "thong_so": {"type": "string", "description": "Các thông số chính, mỗi dòng 'tên: giá trị đơn vị' (vd 'Lực siết tối đa: 745 Nm')"},
+                "nguon": {"type": "string", "description": "Link nguồn đã đọc, mỗi dòng một link; ghi (nước ngoài) nếu không phải web VN"},
+            },
+            "required": ["code", "thong_so", "nguon"],
+            "additionalProperties": False,
+        },
+    },
+]
+TOOLS = TOOLS + ([PANEL_TOOL] if PANEL_ENABLED else []) + QUERY_TOOLS + SPEC_TOOLS
 
 # Chỉ có ở chế độ Claude API (Odoo tự chạy vòng model phụ); máy agent không thấy tool này.
 DELEGATE_TOOL = {

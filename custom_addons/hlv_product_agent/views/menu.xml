@@ -28,6 +28,13 @@
               groups="group_product_agent_manager"
               sequence="17"/>
 
+    <menuitem id="menu_hlv_product_spec"
+              name="Thông số đã tra"
+              parent="menu_hlv_product_agent_root"
+              action="action_hlv_product_spec"
+              groups="group_product_agent_manager"
+              sequence="16"/>
+
     <menuitem id="menu_hlv_product_agent_prompt"
               name="Prompt trợ lý"
               parent="menu_hlv_product_agent_root"

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_product_spec_list" model="ir.ui.view">
+        <field name="name">hlv.product.spec.list</field>
+        <field name="model">hlv.product.spec</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="code"/>
+                <field name="product_id" optional="show"/>
+                <field name="specs" string="Thông số (đầu)" optional="show"/>
+                <field name="checked_at"/>
+                <field name="sale_name" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_product_spec_form" model="ir.ui.view">
+        <field name="name">hlv.product.spec.form</field>
+        <field name="model">hlv.product.spec</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="product_id"/>
+                        </group>
+                        <group>
+                            <field name="checked_at"/>
+                            <field name="sale_name"/>
+                        </group>
+                    </group>
+                    <group string="Thông số">
+                        <field name="specs" nolabel="1" colspan="2"/>
+                    </group>
+                    <group string="Nguồn">
+                        <field name="sources" nolabel="1" colspan="2"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_hlv_product_spec_search" model="ir.ui.view">
+        <field name="name">hlv.product.spec.search</field>
+        <field name="model">hlv.product.spec</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="code"/>
+                <field name="specs"/>
+                <field name="product_id"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_hlv_product_spec" model="ir.actions.act_window">
+        <field name="name">Thông số đã tra</field>
+        <field name="res_model">hlv.product.spec</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p>Trợ lý tự lưu thông số mỗi lần tra trên web, quá 20 ngày thì tra lại. Sửa ở đây khi
+               trợ lý lưu sai; ngày tra không đổi khi sửa tay.</p>
+        </field>
+    </record>
+</odoo>
