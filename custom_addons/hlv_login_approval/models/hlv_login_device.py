@@ -251,5 +251,6 @@ class HlvLoginDevice(models.Model):
         if not approvers:
             _logger.warning("hlv_login_approval: không có người duyệt nào có email để báo thiết bị %s", self.id)
             return
-        template = self.env.ref('hlv_login_approval.mail_template_device_request')
+        template = self.env.ref('hlv_login_approval.mail_template_login_request').with_context(
+            hlv_match_choices=split_match_choices(self.sudo().match_choices))
         template.send_mail(self.id, email_values={'email_to': ','.join(approvers.mapped('email_formatted'))})

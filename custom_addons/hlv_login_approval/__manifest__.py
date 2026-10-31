@@ -1,12 +1,14 @@
 {
     'name': 'HLV - Duyệt đăng nhập theo thiết bị',
-    'version': '18.0.3.5.0',
+    'version': '18.0.3.6.0',
     'summary': 'User nội bộ đăng nhập từ thiết bị mới phải chờ admin duyệt',
     'description': """
         - Mỗi trình duyệt được gắn một cookie thiết bị. Lần đầu user nội bộ đăng nhập
           (đúng mật khẩu) từ thiết bị đó sẽ vào trang chờ và tạo yêu cầu duyệt.
         - Trang chờ hiện một số 2 chữ số; người dùng nhắn số đó cho người duyệt, người duyệt chọn
           đúng số trong 3 số mới duyệt được (chọn sai là huỷ yêu cầu), như xác minh khớp số của Google.
+        - Email báo người duyệt có 3 nút số; bấm số mở trang Odoo để xác nhận (phải đăng nhập
+          bằng tài khoản người duyệt).
         - Duyệt xong, trang chờ nhận tín hiệu qua bus (websocket) và tự vào hệ thống.
         - Nhóm "Người duyệt thiết bị đăng nhập" nhận email và Duyệt / Từ chối tại
           Nhân viên > Duyệt đăng nhập. Không ai tự duyệt
@@ -33,6 +35,7 @@
         'data/mail_template_data.xml',
         'views/hlv_login_device_views.xml',
         'views/login_wait_templates.xml',
+        'views/login_pick_templates.xml',
         'wizard/hlv_login_device_approve_views.xml',
     ],
     'assets': {
