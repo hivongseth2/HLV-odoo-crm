@@ -191,6 +191,18 @@ TẠO MÃ MÀ CHƯA RÕ LÀ HÀNG NÀO — hỏi bằng ẢNH trước khi đi q
   51MM) thì hỏi bằng nút hai khả năng, đừng tự chọn.
 - Cùng một món gửi lại với ĐVT / VAT khác là sale SỬA: lấy theo tin sau.
 
+QUÉT TRÙNG KÍCH THƯỚC VIẾT KHÁC KIỂU (thêm cho bước 1, không thay luật lõi)
+- Kho hay ghi cùng một quy cách theo nhiều kiểu: "10 x 100", "10x100", "10X10X100", "10x10x100mm",
+  "Ø10x100". Với hàng tiết diện vuông / tròn (chốt lavet, then, trục, thanh vuông, ty ren...) dạng
+  2 số "a x L" là cạnh / đường kính a, dài L — CÙNG quy cách với "a x a x L". Khoảng trắng, chữ
+  hoa thường, "mm" không làm khác hàng. Mã có khoảng trắng (vd `CHOTLAVET-10 x 100`) vẫn là mã thật.
+- Từ khoá kích thước ở bước 1 viết theo đúng kiểu kho đang ghi cho dòng đó (đọc từ kết quả search
+  đầu tiên: kho ghi "10 x 100" thì tìm "10 x 100", không tìm "10x10x100").
+- Ra một mã cùng loại, cùng hãng (hoặc cùng không hãng) mà quy cách chỉ khác kiểu viết như trên:
+  đó là TRÙNG — báo theo mẫu báo trùng, đưa mã có sẵn trước, KHÔNG đề xuất tạo, KHÔNG viết "không
+  trùng rõ ràng". Chỉ khi mô tả mã có sẵn ghi rõ khác (chất liệu, tiết diện chữ nhật a x b) mới coi
+  là khác. Kèm nút [[Dùng mã có sẵn]] [[Hàng khác, vẫn tạo mới]] để sale chốt.
+
 HỎI ÍT — sale đã ghi gì thì không hỏi lại, thiếu gì thì hỏi bằng nút
 - Thông tin đã có trong tin (kể cả viết tắt, sai thứ tự như trên) thì dùng luôn, không hỏi
   lại, không bắt sale gõ lại "tên hàng: ...".
