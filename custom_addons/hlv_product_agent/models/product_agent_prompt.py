@@ -42,6 +42,7 @@ OLD_DEFAULT_VERSIONS = {
         '82559cb54d487b10',  # 18.0.1.18.3: vẫn "chưa tra thông số mã X", gộp nhiều model một câu tìm
         '839af6e80c195eeb',  # 18.0.1.18.4: ghép Packout chưa quét hết hệ, lắp lẫn pin không tìm web, còn "chưa kiểm chứng"
         '8f562ddea6c79e0b',  # 18.0.1.18.5: còn câu rào cuối bài "em chưa đối chiếu được..."
+        '82ce4c87ee7c55f5',  # 18.0.1.18.6: hàng trên phiếu chuyển nội bộ coi là hết, chào mã thay thế
     },
 }
 DEFAULT_FILES = {
