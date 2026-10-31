@@ -52,6 +52,7 @@ OLD_DEFAULT_VERSIONS = {
         'bef7976d2bf8da98',  # 18.0.1.20.7: tìm "tất cả" theo tim_hang_tuong_tu (xếp hạng + cắt), sót mã bán chậm
         'a0e4aec54e3c9021',  # 18.0.1.21.0: quét bat_dau gộp cả quy cách ("ong pvc 60") nên trượt tên "Ống 60x1.8 PVC"
         '0c63ff61a945beae',  # 18.0.1.21.1: "co PVC 60" bị quét thành ống (bắt chước ví dụ)
+        '512c39b9d183f75b',  # 18.0.1.21.2: đai ốc không quét "tán" (tên kho), quét rỗng là kết luận không có
     },
 }
 DEFAULT_FILES = {

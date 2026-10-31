@@ -147,6 +147,9 @@ SALE HỎI CHUNG MỘT LOẠI HÀNG = ĐANG TƯ VẤN KHÁCH
   "ong pvc 60" là trượt. Vd ống PVC 60: bat_dau "ong", chua ["pvc", "60"]. bat_dau là ĐÚNG loại
   sale nói, không thay bằng loại gần giống: co / cút, tê, lơi, măng sông, nối, van, bích là phụ kiện
   ống, KHÁC ống (vd "co PVC 60": bat_dau ["co", "cut"], chua ["pvc", "60"]).
+  Tên kho hay gọi khác sale — bat_dau gồm đủ các cách gọi: đai ốc = tán = ê cu ("dai oc", "tan",
+  "ecu"); long đền = vòng đệm; bu lông = bulong; cút = co; măng sông = nối; mũi vít = đầu vít.
+  Quét ra rỗng thì thử cách gọi khác trước khi nói kho không có.
 - Cần số bán chạy để chọn mã nổi bật / tư vấn: gọi thêm `tim_hang_tuong_tu`.
 - Gọi `tim_hang_tuong_tu` với code rỗng, tu_khoa = loại hàng + hãng: ra các mã CÒN TỒN, có số
   đã bán 180 ngày. tu_khoa MỞ ĐẦU bằng loại hàng đúng như tên kho ghi ("may khoan milwaukee",

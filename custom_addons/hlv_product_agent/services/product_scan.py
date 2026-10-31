@@ -7,25 +7,28 @@ hãng, không chứa "dùng cho"...) như người lọc tay.
 
 Util thuần: vào chuỗi / list, ra bool / dict. Không đụng ``self.env``.
 """
-from .query_format import MIN_KEYWORD_CHARS, squash_text
+from .query_format import squash_text
 
 # Quá ngần này mã thì bắt thêm điều kiện thay vì trả cả đống (tốn token, sale cũng không đọc hết).
 MAX_SCAN_RESULTS = 100
 MAX_SCAN_TERMS = 8
+# Cụm 2 ký tự là chuyện thường ở đây: "co", "tê", "ốc", quy cách "60", "m8". Không như từ khoá của
+# tim_hang_tuong_tu (chặn "HD" khớp mọi thứ): bat_dau đã khoanh theo đầu tên nên không nhiễu.
+MIN_SCAN_CHARS = 2
 
 
 def scan_terms(values):
     """Các cụm điều kiện đã chuẩn hoá để so, bỏ cụm quá ngắn.
 
     Nhận: chuỗi hoặc list chuỗi. Trả: list chuỗi đã squash_text, giữ thứ tự, bỏ trùng, tối đa
-    MAX_SCAN_TERMS. Biên: None / phần tử không phải chuỗi / ngắn hơn MIN_KEYWORD_CHARS -> bỏ.
+    MAX_SCAN_TERMS. Biên: None / phần tử không phải chuỗi / ngắn hơn MIN_SCAN_CHARS -> bỏ.
     """
     if isinstance(values, str):
         values = [values]
     result = []
     for value in values or []:
         key = squash_text(value) if isinstance(value, str) else ""
-        if len(key) >= MIN_KEYWORD_CHARS and key not in result:
+        if len(key) >= MIN_SCAN_CHARS and key not in result:
             result.append(key)
     return result[:MAX_SCAN_TERMS]
 
