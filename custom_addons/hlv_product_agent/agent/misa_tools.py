@@ -499,7 +499,7 @@ SPEC_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "code": {"type": "string", "description": "Mã hàng / model đúng như trong Odoo / MISA hoặc mã hãng"},
+                "code": {"type": "string", "description": "Mã Odoo nếu hàng đã có (vd '06012A62K0', KHÔNG phải tên model 'GHG 20-63'); chưa có trong Odoo thì mã hãng / model"},
                 "thong_so": {"type": "string", "description": "Các thông số chính, mỗi dòng 'tên: giá trị đơn vị' (vd 'Lực siết tối đa: 745 Nm')"},
                 "nguon": {"type": "string", "description": "Link nguồn đã đọc, mỗi dòng một link; ghi (nước ngoài) nếu không phải web VN"},
             },

@@ -344,15 +344,28 @@ class HlvProductAgentQueries(models.AbstractModel):
                 for words in word_sets))
         sold = self._sold_qty(products)
         products = products.sorted(lambda product: (-sold.get(product.id, 0.0), -stock[product.id][0]))
-        return {
-            'mon_goc': self._product_brief(base) if base else None,
+        shown = products[:SUBSTITUTE_CANDIDATES]
+        specs = self.env['hlv.product.spec'].fresh_by_product(shown | base if base else shown)
+        result = {
+            'mon_goc': self._with_saved_specs(self._product_brief(base), specs) if base else None,
             'tieu_chi': {'nhom_hang': category.complete_name if category else None,
                          'tu_khoa': [text for text in variants if text] or None},
             'tong_ung_vien': len(products),
-            'ung_vien': [dict(self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
-                              gia_ban=product.list_price, da_ban_180_ngay=sold.get(product.id, 0.0))
-                         for product in products[:SUBSTITUTE_CANDIDATES]],
+            'ung_vien': [self._with_saved_specs(dict(
+                self._product_brief(product), ton=stock[product.id][0], kha_dung=stock[product.id][1],
+                gia_ban=product.list_price, da_ban_180_ngay=sold.get(product.id, 0.0)), specs)
+                for product in shown],
         }
+        if specs:
+            result['ghi_chu_thong_so'] = ("Mã có thong_so_da_luu: dùng luôn, KHÔNG tìm web lại; chỉ tìm web "
+                                          "cho mã chưa có.")
+        return result
+
+    @staticmethod
+    def _with_saved_specs(brief, specs):
+        if brief['product_id'] in specs:
+            brief['thong_so_da_luu'] = specs[brief['product_id']]
+        return brief
 
     def _sold_qty(self, products):
         """{product_id: số lượng đã bán (đơn đã xác nhận) trong SOLD_WINDOW_DAYS ngày}; mã chưa bán thì không có."""
