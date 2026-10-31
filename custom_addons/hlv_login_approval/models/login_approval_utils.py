@@ -68,3 +68,22 @@ def is_request_open(state, request_until, now):
         Thiếu request_until (yêu cầu tạo trước khi có hạn) thì coi như đã hết hạn.
     """
     return state == 'pending' and bool(request_until) and now < request_until
+
+
+def join_match_choices(numbers):
+    """Ghép bộ số cho người duyệt chọn thành chuỗi để lưu.
+
+    :param numbers: các số nguyên (số đúng lẫn số mồi), thứ tự bất kỳ.
+    :return: chuỗi các số xếp tăng dần, ngăn cách bằng dấu phẩy, ví dụ "12,47,83".
+        Xếp tăng dần để vị trí nút không lộ số nào là số đúng. Rỗng thì trả "".
+    """
+    return ','.join(str(n) for n in sorted(numbers))
+
+
+def split_match_choices(value):
+    """Tách chuỗi bộ số đã lưu thành danh sách để hiện lên nút.
+
+    :param value: chuỗi dạng "12,47,83", hoặc False/None.
+    :return: list chuỗi số theo thứ tự đã lưu; value rỗng thì trả [].
+    """
+    return [part for part in (value or '').split(',') if part]

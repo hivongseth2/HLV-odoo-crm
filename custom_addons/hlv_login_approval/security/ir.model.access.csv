@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_hlv_login_device_approver,hlv.login.device.approver,model_hlv_login_device,group_login_approver,1,1,0,1
+access_hlv_login_device_approve_approver,hlv.login.device.approve.approver,model_hlv_login_device_approve,group_login_approver,1,1,1,1
 access_hlv_login_device_system,hlv.login.device.system,model_hlv_login_device,base.group_system,1,0,0,0

@@ -1,11 +1,13 @@
 {
     'name': 'HLV - Duyệt đăng nhập theo thiết bị',
-    'version': '18.0.3.3.0',
+    'version': '18.0.3.4.0',
     'summary': 'User nội bộ đăng nhập từ thiết bị mới phải chờ admin duyệt',
     'description': """
         - Mỗi trình duyệt được gắn một cookie thiết bị. Lần đầu user nội bộ đăng nhập
           (đúng mật khẩu) từ thiết bị đó sẽ vào trang chờ và tạo yêu cầu duyệt.
-        - Admin duyệt xong, trang chờ nhận tín hiệu qua bus (websocket) và tự vào hệ thống.
+        - Trang chờ hiện một số 2 chữ số; người dùng nhắn số đó cho người duyệt, người duyệt chọn
+          đúng số trong 3 số mới duyệt được (chọn sai là huỷ yêu cầu), như xác minh khớp số của Google.
+        - Duyệt xong, trang chờ nhận tín hiệu qua bus (websocket) và tự vào hệ thống.
         - Nhóm "Người duyệt thiết bị đăng nhập" nhận email và Duyệt / Từ chối tại
           Thiết lập > Người dùng & Công ty > Duyệt thiết bị đăng nhập. Không ai tự duyệt
           thiết bị của chính mình.
@@ -31,6 +33,7 @@
         'data/mail_template_data.xml',
         'views/hlv_login_device_views.xml',
         'views/login_wait_templates.xml',
+        'wizard/hlv_login_device_approve_views.xml',
     ],
     'assets': {
         'web.assets_frontend': [

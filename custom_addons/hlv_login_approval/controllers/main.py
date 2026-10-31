@@ -22,6 +22,7 @@ class LoginApprovalHome(Home):
         return request.render('hlv_login_approval.login_wait', {
             'device': device,
             'waiting_state': device._waiting_state(),
+            'match_code': device.sudo().match_code,
             'request_minutes': device._request_minutes(),
             'continue_url': self._hlv_continue_url(redirect),
         })
