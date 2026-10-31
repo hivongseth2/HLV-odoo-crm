@@ -491,7 +491,8 @@ SPEC_TOOLS = [
     {
         "name": "luu_thong_so",
         "description": (
-            "Lưu (hoặc ghi đè) thông số kỹ thuật của MỘT mã vừa tra được trên web, để lần sau khỏi "
+            "BẮT BUỘC sau mỗi lần tìm web ra thông số, TRƯỚC khi viết câu trả lời. Lưu (hoặc ghi đè) thông số "
+            "kỹ thuật của MỘT mã vừa tra được trên web, để lần sau khỏi "
             "tìm lại. Gọi ngay sau khi tra ra, mỗi mã một lần; cũng gọi khi sale báo / web cho thấy "
             "hàng đã đổi thông số. CHỈ thông số kỹ thuật — KHÔNG ghi giá. Không cần sale xác nhận."
         ),
