@@ -490,9 +490,19 @@ class BarcodeShipperController(http.Controller):
                             errors.append(f"{picking.name}: Trạng thái không hợp lệ ({picking.state})")
                             continue
 
-                    picking.button_validate()
+                    # Savepoint: lỗi giữa chừng của 1 phiếu không làm hỏng transaction, nên các
+                    # phiếu khác và log lỗi bên dưới vẫn được lưu.
+                    with request.env.cr.savepoint():
+                        picking.button_validate()
+                    # button_validate có thể trả về wizard (VD hỏi tạo backorder) hoặc bị override
+                    # chặn im lặng mà không raise → phải kiểm state, không coi "không lỗi" là xong.
+                    if picking.state != "done":
+                        raise UserError(
+                            f"Phiếu chưa hoàn tất (trạng thái {picking.state}) — "
+                            "cần kho xác nhận trên Odoo"
+                        )
                     success_names.append(picking.name)
-                    
+
                     self._log_scan(
                         barcode=picking.name,
                         scan_type="complete",
@@ -502,7 +512,16 @@ class BarcodeShipperController(http.Controller):
                     )
                 except Exception as e:
                     _logger.exception(f"Error validating picking {picking.name}")
-                    errors.append(f"{picking.name}: Lỗi hệ thống ({str(e)})")
+                    errors.append(f"{picking.name}: {e}")
+                    # Trước đây lỗi chỉ hiện trên điện thoại → không tra lại được vì sao phiếu có
+                    # ảnh mà chưa hoàn tất.
+                    self._log_scan(
+                        barcode=picking.name,
+                        scan_type="complete",
+                        picking_id=picking.id,
+                        status="error",
+                        message=f"Hoàn tất {picking.name} lỗi: {e}",
+                    )
 
             if errors:
                 return {
