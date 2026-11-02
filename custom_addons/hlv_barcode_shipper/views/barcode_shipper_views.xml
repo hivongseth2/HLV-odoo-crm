@@ -69,7 +69,7 @@
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
                     <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js"></script>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
-                    <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
+                    <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css?v=18.0.3.14.0"/>
                 </t>
 
                 <div class="hlv-barcode-shipper">
@@ -606,7 +606,7 @@
                     </div>
                 </div>
 
-                <script src="/hlv_barcode_shipper/static/src/js/barcode_scanner.js"></script>
+                <script src="/hlv_barcode_shipper/static/src/js/barcode_scanner.js?v=18.0.3.14.0"></script>
             </t>
         </template>
 

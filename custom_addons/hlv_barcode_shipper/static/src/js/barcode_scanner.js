@@ -1294,6 +1294,7 @@ class BarcodeShipper {
     _startPhotoCaptureFor(pickingIds) {
         if (!pickingIds || pickingIds.length === 0) return;
         this._photoPickingIds = pickingIds;
+        this._photosUploaded = false;
         this._capturedPhotos = [];
         this._photoBlob = null;
         this._photoDetectedPickingId = null;
@@ -1700,7 +1701,27 @@ class BarcodeShipper {
         }
         if (photosToUpload.length === 0 || !this._photoPickingIds || this._photoPickingIds.length === 0) return;
 
+        // Hỏi TRƯỚC khi gửi ảnh. Trước đây gửi ảnh rồi mới hỏi: bấm Hủy (hoặc hộp hỏi tự đóng) là
+        // phiếu đã có ảnh trong chatter mà vẫn "Sẵn sàng" (KBC/OUT/14830 ngày 02/11/2026).
+        const pickingIds = this._photoPickingIds;
         const sendBtn = document.getElementById('photo-send-btn');
+        if (!(await this._askConfirm(`Xác nhận hoàn tất ${pickingIds.length} đơn hàng?`, 'Hoàn tất'))) {
+            // Giữ ảnh đã chụp, để nút gửi hiện sẵn cho lần bấm sau
+            if (sendBtn) {
+                sendBtn.style.display = 'flex';
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh &amp; Hoàn tất';
+            }
+            this.showMessage('photo-result', 'Chưa hoàn tất — ảnh chưa gửi. Bấm "Gửi ảnh & Hoàn tất" khi sẵn sàng.', 'warning');
+            return;
+        }
+
+        // Ảnh đã gửi đủ mà bước hoàn tất lỗi → bấm gửi lại chỉ hoàn tất, không đăng ảnh trùng.
+        if (this._photosUploaded) {
+            await this._doCompleteOut(pickingIds);
+            return;
+        }
+
         if (sendBtn) {
             sendBtn.style.display = 'flex';
             sendBtn.disabled = true;
@@ -1713,7 +1734,7 @@ class BarcodeShipper {
             for (let i = 0; i < photosToUpload.length; i++) {
                 const photo = photosToUpload[i];
                 // Nếu biết picking cụ thể thì upload riêng, không biết thì gắn tất cả
-                const ids = photo.pickingId ? [photo.pickingId] : this._photoPickingIds;
+                const ids = photo.pickingId ? [photo.pickingId] : pickingIds;
                 const formData = new FormData();
                 formData.append('picking_ids', JSON.stringify(ids));
                 formData.append('photo', photo.blob, `delivery_photo_${i + 1}.jpg`);
@@ -1738,18 +1759,26 @@ class BarcodeShipper {
 
         if (!uploadOk) {
             // Upload thất bại nhưng vẫn cho hoàn tất (có hỏi xác nhận)
-            if (!confirm('Một số ảnh không gửi được. Vẫn hoàn tất đơn hàng?')) return;
+            const proceed = await this._askConfirm('Một số ảnh không gửi được. Vẫn hoàn tất đơn hàng?', 'Vẫn hoàn tất');
+            if (!proceed) {
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh &amp; Hoàn tất'; }
+                return;
+            }
+        } else {
+            this._photosUploaded = true;
         }
 
         this.showMessage('photo-result', 'Ảnh đã gửi! Đang hoàn tất đơn hàng...', 'success');
-        await this._doCompleteOut(this._photoPickingIds);
+        await this._doCompleteOut(pickingIds);
     }
 
     async skipPhotoAndComplete() {
         if (!this._photoPickingIds || this._photoPickingIds.length === 0) return;
         this._stopPhotoCamera();
+        const pickingIds = this._photoPickingIds;
+        if (!(await this._askConfirm(`Hoàn tất ${pickingIds.length} đơn hàng mà không chụp ảnh?`, 'Hoàn tất'))) return;
         this.showMessage('photo-result', 'Đang hoàn tất đơn hàng...', 'warning');
-        await this._doCompleteOut(this._photoPickingIds);
+        await this._doCompleteOut(pickingIds);
     }
 
     // === Hiển thị đúng button sau khi chụp (single vs multi picking) ===
@@ -1778,6 +1807,7 @@ class BarcodeShipper {
 
     // === Lưu ảnh hiện tại vào danh sách, cập nhật tiến độ ===
     _confirmCapturedPhoto() {
+        this._photosUploaded = false;  // ảnh mới chụp lại → phải gửi lại
         const isSingle = !this._photoPickingIds || this._photoPickingIds.length <= 1;
         if (isSingle) {
             // Single picking: đóng overlay và gửi luôn
@@ -1941,8 +1971,8 @@ class BarcodeShipper {
         this._photoQrLoopTimer = setTimeout(loop, 600);
     }
 
+    // Người gọi phải hỏi xác nhận trước (sendPhotoAndComplete / skipPhotoAndComplete).
     async _doCompleteOut(pickingIds) {
-        if (!confirm(`Xác nhận hoàn tất ${pickingIds.length} đơn hàng?`)) return;
         try {
             const res = await this.apiCall('/api/barcode/complete_out', { picking_ids: pickingIds });
             if (res.success) {
@@ -1972,8 +2002,14 @@ class BarcodeShipper {
             }
         } catch (e) {
             console.error(e);
-            this.showMessage('photo-result', 'Lỗi kết nối', 'danger');
+            this.showMessage('photo-result', 'Lỗi kết nối — phiếu CHƯA hoàn tất, bấm gửi lại.', 'danger');
             this.playSound('error');
+            const sendBtn = document.getElementById('photo-send-btn');
+            if (sendBtn) {
+                sendBtn.style.display = 'flex';
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh & Hoàn tất';
+            }
         }
     }
 
@@ -2067,6 +2103,40 @@ class BarcodeShipper {
         document.body.style.overflow = '';
         // Refocus input sau khi đóng modal
         this.focusCurrentInput();
+    }
+
+    // Hộp xác nhận trong trang, thay cho window.confirm(): Chrome Android tự đóng confirm() và
+    // trả về "Hủy" khi shipper rời màn hình (tắt màn hình, nghe máy, mở Zalo). Hộp này vẫn chờ.
+    // Trả Promise<boolean>; chỉ đóng bằng 2 nút (không có nút X, không đóng khi bấm nền).
+    _askConfirm(message, okLabel) {
+        let modal = document.getElementById('ask-confirm-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ask-confirm-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title"><i class="fa fa-question-circle"></i> Xác nhận</h3>
+                    </div>
+                    <div id="ask-confirm-body" class="modal-body" style="font-size:15px;"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; display:flex; gap:10px; background:#fff;">
+                        <button id="ask-confirm-cancel-btn" class="btn btn-secondary btn-lg" style="flex:1;">Hủy</button>
+                        <button id="ask-confirm-ok-btn" class="btn btn-success btn-lg" style="flex:2;"></button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        modal.querySelector('#ask-confirm-body').textContent = message;
+        const okBtn = modal.querySelector('#ask-confirm-ok-btn');
+        okBtn.textContent = okLabel;
+        return new Promise(resolve => {
+            const finish = (ok) => { this.closeModal(modal); resolve(ok); };
+            okBtn.onclick = () => finish(true);
+            modal.querySelector('#ask-confirm-cancel-btn').onclick = () => finish(false);
+            this.showModal(modal);
+        });
     }
 
     async apiCall(endpoint, data) {
