@@ -65,7 +65,7 @@
                                 title="Link riêng của mã sale này — gửi cho đúng sale đó">Copy link mã này</button>
                         <label class="hq-sr-only" for="hq-search">Tìm phiếu hỏi giá</label>
                         <input type="search" id="hq-search" class="hq-input hq-input-wide"
-                               placeholder="Tìm số phiếu, số cơ hội, sản phẩm, NCC, đơn bán, YCMH…"/>
+                               placeholder="Tìm số phiếu, số cơ hội, sản phẩm, NCC, đơn bán, YCMH, đơn mua…"/>
                         <button type="button" class="hq-btn hq-btn-primary hq-push" id="hq-new">Hỏi giá NCC</button>
                     </div>
 
