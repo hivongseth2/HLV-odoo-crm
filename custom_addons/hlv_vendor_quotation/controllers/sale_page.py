@@ -36,9 +36,9 @@ from .sale_page_common import API, SalePageMixin, to_int
 
 PER_PAGE = 30
 STATUS_TABS = [("all", "Tất cả")] + SALE_STATUS
-# Trông như số đơn mua: DMH… / PO… theo sau là số, hoặc P0… (số mặc định của Odoo). Bắt buộc có số để
-# "POLY…", "PO" (tên hàng) đi thẳng đường tìm thường.
-PURCHASE_ORDER_NUMBER = re.compile(r"^(?:(?:DMH|PO)[\s/._-]*\d|P0)", re.IGNORECASE)
+# Trông như số đơn mua: DMH… (gõ mỗi "DMH" cũng tính — sale hay gõ đầu mã rồi mới gõ số), PO… theo sau
+# là số, hoặc P0… (số mặc định của Odoo). "PO" bắt buộc có số để "POLY…" (tên hàng) đi thẳng đường tìm thường.
+PURCHASE_ORDER_NUMBER = re.compile(r"^(?:DMH|PO[\s/._-]*\d|P0)", re.IGNORECASE)
 
 
 class VendorQuoteSalePage(SalePageMixin, http.Controller):
@@ -111,9 +111,10 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     def api_inquiries(self, code="", vendor_id=None, status="all", search="", page=1, **kw):
         scope = self._check(code)
         Inquiry = request.env["hlv.vendor.inquiry"]
-        base = sale_scope.scope_domain(scope) + self._search_domain(search)
+        base = sale_scope.scope_domain(scope)
         if to_int(vendor_id):
             base.append(("quote_ids.access_id.partner_id", "=", to_int(vendor_id)))
+        base += self._search_domain(search, base)
         counts = {key: Inquiry.search_count(base + self._status_domain(key, search)) for key, _label in STATUS_TABS}
         status = status if status in counts else "all"
         pager = paginate(counts[status], page, PER_PAGE)
@@ -443,17 +444,21 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
                 return order
         raise UserError("Không tìm thấy cuộc trao đổi.")
 
-    def _search_domain(self, search):
+    def _search_domain(self, search, base):
+        """`base`: phạm vi đang xem (mã sale, NCC) — số đơn mua phải dò trong phạm vi này, xem dưới."""
         search = (search or "").strip()
         if not search:
             return []
         if PURCHASE_ORDER_NUMBER.match(search):
             # Trông như số đơn mua thì dò đơn mua trước — khỏi quét sản phẩm / NCC / đơn bán. Không ra phiếu
             # nào mới quét hết: đầu mã chỉ là đoán, "P0…" / "PO1…" vẫn có thể là mã hàng.
-            # sudo: sale không có quyền đơn mua. Chỉ lấy id phiếu, phạm vi mã sale vẫn lọc ở domain gốc.
-            orders = request.env["purchase.order"].sudo().search([("name", "ilike", search)], limit=50)
-            if orders.hlv_inquiry_ids:
-                return [("id", "in", orders.hlv_inquiry_ids.ids)]
+            # Dò ngay trong phạm vi, không lấy N đơn mua khớp rồi mới lọc: gõ "DMH0" thì N đơn mới nhất
+            # thường là của sale / NCC khác → ra rỗng mà cũng không quét hết.
+            # sudo: đường dò đi qua dòng đơn mua, sale không có quyền. Chỉ lấy id, search sau vẫn theo quyền sale.
+            inquiry_ids = request.env["hlv.vendor.inquiry"].sudo().search(
+                base + [("line_ids.request_line_ids.purchase_lines.order_id.name", "ilike", search)]).ids
+            if inquiry_ids:
+                return [("id", "in", inquiry_ids)]
         return expression.OR([
             [("name", "ilike", search)],
             [("opportunity_ref", "ilike", search)],
