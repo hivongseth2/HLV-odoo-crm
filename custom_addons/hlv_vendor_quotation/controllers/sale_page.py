@@ -11,6 +11,7 @@ tìm (sản phẩm, NCC, đơn bán) ở sale_page_create.py.
 
 import base64
 import binascii
+import re
 from collections import defaultdict
 from urllib.parse import urlencode
 
@@ -35,6 +36,9 @@ from .sale_page_common import API, SalePageMixin, to_int
 
 PER_PAGE = 30
 STATUS_TABS = [("all", "Tất cả")] + SALE_STATUS
+# Trông như số đơn mua: DMH… / PO… theo sau là số, hoặc P0… (số mặc định của Odoo). Bắt buộc có số để
+# "POLY…", "PO" (tên hàng) đi thẳng đường tìm thường.
+PURCHASE_ORDER_NUMBER = re.compile(r"^(?:(?:DMH|PO)[\s/._-]*\d|P0)", re.IGNORECASE)
 
 
 class VendorQuoteSalePage(SalePageMixin, http.Controller):
@@ -443,6 +447,13 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         search = (search or "").strip()
         if not search:
             return []
+        if PURCHASE_ORDER_NUMBER.match(search):
+            # Trông như số đơn mua thì dò đơn mua trước — khỏi quét sản phẩm / NCC / đơn bán. Không ra phiếu
+            # nào mới quét hết: đầu mã chỉ là đoán, "P0…" / "PO1…" vẫn có thể là mã hàng.
+            # sudo: sale không có quyền đơn mua. Chỉ lấy id phiếu, phạm vi mã sale vẫn lọc ở domain gốc.
+            orders = request.env["purchase.order"].sudo().search([("name", "ilike", search)], limit=50)
+            if orders.hlv_inquiry_ids:
+                return [("id", "in", orders.hlv_inquiry_ids.ids)]
         return expression.OR([
             [("name", "ilike", search)],
             [("opportunity_ref", "ilike", search)],
