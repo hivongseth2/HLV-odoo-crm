@@ -16,7 +16,8 @@ thêm ``error`` (mã máy đọc) và ``message`` (người đọc):
     POST /api/misa/combo/update     sửa thành phần / tên / giá của combo đã có
 
 Mã HTTP: 200 xong · 400 thiếu/sai dữ liệu · 401 thiếu key · 403 sai key · 404 không thấy
-hàng cần sửa · 409 trùng (mã đã có) · 502 MISA từ chối/lỗi · 503 Odoo chưa cấu hình key.
+hàng cần sửa · 409 trùng (mã đã có) · 422 MISA từ chối dữ liệu (sửa body, đừng gửi lại y
+nguyên) · 502 MISA / mạng lỗi (có thể thử lại) · 503 Odoo chưa cấu hình key.
 """
 import logging
 
@@ -24,12 +25,17 @@ from odoo import http
 from odoo.http import request
 
 from ..utils.api_key import api_key_matches
+from ..utils.misa_api_utils import MisaRefused
 from ..utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
 _logger = logging.getLogger(__name__)
 
 KEY_PARAM = 'misa.product_api.key'
 UPDATABLE_FIELDS = {'name': 'name', 'code': 'code', 'description': 'Description'}
+# Tạo hàng thường ghi description vào ô "Mô tả SP" (CustomField17) của CRM, ô này chỉ nhận
+# 255 ký tự. Chặn trước để báo rõ trường nào sai (03/11/2026 cả lô hàng DACS bị MISA từ chối
+# vì lỗi này mà bên gọi chỉ thấy 502).
+PRODUCT_DESCRIPTION_MAX = 255
 
 
 class ApiError(Exception):
@@ -101,6 +107,9 @@ def _handle(action, work):
     except ApiError as error:
         return _reply(dict(error.extra, ok=False, error=error.error, message=error.message),
                       status=error.status)
+    except MisaRefused as error:
+        _logger.warning("MISA_PRODUCT_API %s bị MISA từ chối dữ liệu: %s", action, error)
+        return _reply({'ok': False, 'error': 'misa_rejected', 'message': str(error)}, status=422)
     except Exception as error:
         _logger.exception("MISA_PRODUCT_API %s lỗi", action)
         return _reply({'ok': False, 'error': 'misa_error', 'message': str(error)}, status=502)
@@ -168,6 +177,10 @@ def _create_product(data, misa):
     code = _text(data, 'code')
     name = _text(data, 'name')
     tax = _number(data, 'tax')
+    description = _text(data, 'description', required=False)
+    if len(description) > PRODUCT_DESCRIPTION_MAX:
+        raise ApiError(400, 'invalid_field', "'description' tối đa %s ký tự (đang %s) — giới hạn ô Mô tả SP của MISA."
+                       % (PRODUCT_DESCRIPTION_MAX, len(description)))
     category_id = data.get('category_id')
     category_name = _text(data, 'category', required=False)
     if not category_id and not category_name:
@@ -183,7 +196,7 @@ def _create_product(data, misa):
         price=_number(data, 'price', 0), price_pu=_number(data, 'price_pu', 0),
         tax_percent=tax, unit_name=_text(data, 'unit', required=False) or 'Cái',
         category_name=category_name or 'Hàng hóa', cat_id=category_id,
-        description=_text(data, 'description', required=False),
+        description=description,
     )
     _logger.info("MISA_PRODUCT_API tạo %s - %s (MISA ID %s) từ %s",
                  code, name, misa_id, request.httprequest.remote_addr)
