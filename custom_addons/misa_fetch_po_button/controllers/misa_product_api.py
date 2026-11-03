@@ -25,6 +25,7 @@ from odoo import http
 from odoo.http import request
 
 from ..utils.api_key import api_key_matches
+from ..utils.crm_product import description_length_error
 from ..utils.misa_api_utils import MisaRefused
 from ..utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
@@ -32,10 +33,6 @@ _logger = logging.getLogger(__name__)
 
 KEY_PARAM = 'misa.product_api.key'
 UPDATABLE_FIELDS = {'name': 'name', 'code': 'code', 'description': 'Description'}
-# Tạo hàng thường ghi description vào ô "Mô tả SP" (CustomField17) của CRM, ô này chỉ nhận
-# 255 ký tự. Chặn trước để báo rõ trường nào sai (03/11/2026 cả lô hàng DACS bị MISA từ chối
-# vì lỗi này mà bên gọi chỉ thấy 502).
-PRODUCT_DESCRIPTION_MAX = 255
 
 
 class ApiError(Exception):
@@ -178,9 +175,11 @@ def _create_product(data, misa):
     name = _text(data, 'name')
     tax = _number(data, 'tax')
     description = _text(data, 'description', required=False)
-    if len(description) > PRODUCT_DESCRIPTION_MAX:
-        raise ApiError(400, 'invalid_field', "'description' tối đa %s ký tự (đang %s) — giới hạn ô Mô tả SP của MISA."
-                       % (PRODUCT_DESCRIPTION_MAX, len(description)))
+    # Chặn trước để báo rõ trường nào sai: 03/11/2026 cả lô hàng DACS bị MISA từ chối vì mô tả
+    # dài mà bên gọi chỉ thấy 502.
+    too_long = description_length_error(description)
+    if too_long:
+        raise ApiError(400, 'invalid_field', "'description': %s" % too_long)
     category_id = data.get('category_id')
     category_name = _text(data, 'category', required=False)
     if not category_id and not category_name:

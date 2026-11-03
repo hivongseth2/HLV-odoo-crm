@@ -8,6 +8,24 @@ import re
 _TAX_RATE_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
 _NON_ALNUM_RE = re.compile(r"[\W_]+")
 
+# Tạo hàng thường ghi mô tả vào ô "Mô tả SP" (CustomField17) của CRM, ô này chỉ nhận 255 ký
+# tự — quá là CRM từ chối. Schema tool trong hlv_product_agent/agent/misa_tools.py ghi cứng
+# cùng con số (file đó chạy ngoài Odoo, không import được): đổi ở đây thì đổi cả ở đó.
+PRODUCT_DESCRIPTION_MAX = 255
+
+
+def description_length_error(description):
+    """Câu báo lỗi khi mô tả hàng thường dài quá ô "Mô tả SP" của CRM.
+
+    Nhận: chuỗi hoặc None. Trả: chuỗi lỗi (kèm độ dài hiện tại) nếu quá
+    PRODUCT_DESCRIPTION_MAX ký tự, None nếu vừa. None / "" -> None.
+    """
+    length = len(description or "")
+    if length <= PRODUCT_DESCRIPTION_MAX:
+        return None
+    return ("Mô tả tối đa %s ký tự (đang %s) — giới hạn ô Mô tả SP của MISA. Chỉ giữ các thông "
+            "số chính rồi gửi lại." % (PRODUCT_DESCRIPTION_MAX, length))
+
 
 def parse_tax_rate(tax_text):
     """% VAT trong chữ thuế của CRM.
