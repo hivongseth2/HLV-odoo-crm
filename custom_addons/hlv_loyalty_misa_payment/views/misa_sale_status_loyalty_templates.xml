@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa trang của misa_invoice_status_report (xmlid do repo này tự đặt, không phải core).
+         Panel đặt id msu-tab-loyalty để cơ chế chuyển tab của trang gốc tự ẩn/hiện. -->
+    <template id="misa_sale_status_page_loyalty" inherit_id="misa_invoice_status_report.misa_sale_status_page"
+              name="MISA Sale Status - Điểm đổi thưởng">
+        <xpath expr="//button[@id='msu-tab-btn-customs']" position="after">
+            <button class="msu-tab" id="msu-tab-btn-loyalty" data-tab="loyalty">Điểm đổi thưởng</button>
+        </xpath>
+
+        <xpath expr="//div[@id='msu-tab-customs']" position="after">
+            <div id="msu-tab-loyalty" style="display:none">
+                <div class="msu-filters">
+                    <input type="text" id="msl-search" class="msu-input msu-search-input"
+                           placeholder="Tìm theo khách, tài khoản loyalty, mã đơn, mã phiếu hoặc số hóa đơn..."/>
+                    <button id="msl-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                    <button id="msl-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
+                    <button id="msl-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                    <span class="msl-bulk">
+                        <span id="msl-selected-info" class="msu-muted"/>
+                        <button id="msl-cancel-btn" class="msu-btn msu-btn-outline-danger msu-btn-sm" style="display:none" disabled="disabled">
+                            <i class="fa fa-times"/> Hủy
+                        </button>
+                        <button id="msl-confirm-btn" class="msu-btn msu-btn-primary msu-btn-sm" disabled="disabled"
+                                data-loading-text="Đang tra MISA..."
+                                title="Tra lại MISA cho từng phiếu, chỉ xác nhận phiếu đã thu đủ tiền">
+                            <i class="fa fa-check"/> Xác nhận
+                        </button>
+                    </span>
+                </div>
+
+                <p class="msl-hint msu-muted">
+                    Điểm đổi thưởng đang chờ xác nhận của các phiếu xuất kho thuộc mã sale này. Bấm
+                    Xác nhận sẽ tra lại MISA ngay lúc đó — chỉ phiếu có hóa đơn đã thu đủ tiền mới được
+                    xác nhận. Cột "Thu tiền" là kết quả lần tra trước, chỉ để tham khảo.
+                </p>
+                <div class="msl-summary" id="msl-summary"/>
+
+                <div class="msu-table-card">
+                    <div class="msu-table-scroll">
+                        <table class="msu-table msl-table">
+                            <thead>
+                                <tr>
+                                    <th class="msl-col-check"><input type="checkbox" id="msl-check-all" title="Chọn cả trang"/></th>
+                                    <th>Ngày</th>
+                                    <th>Khách / Tài khoản</th>
+                                    <th>Đơn / Phiếu</th>
+                                    <th class="msu-col-num">Điểm</th>
+                                    <th>Hóa đơn / Thu tiền</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="msl-tbody"/>
+                        </table>
+                    </div>
+                    <div id="msl-empty" class="msu-empty" style="display:none">Không có điểm nào đang chờ xác nhận.</div>
+                    <div class="msu-pagination" id="msl-pagination" style="display:none">
+                        <button id="msl-prev" class="msu-btn msu-btn-outline-muted msu-btn-sm">&#8249; Trước</button>
+                        <span id="msl-page-label"/>
+                        <button id="msl-next" class="msu-btn msu-btn-outline-muted msu-btn-sm">Sau &#8250;</button>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+
+        <xpath expr="//div[@id='msu-toast-stack']" position="before">
+            <!-- Dùng chung cho Hủy (ẩn ô số điểm) và Sửa: cả 2 đều bắt ghi lý do. -->
+            <div class="msu-modal-overlay" id="msl-action-modal" style="display:none">
+                <div class="msu-modal">
+                    <h5 id="msl-action-title"/>
+                    <p class="msu-card-subtitle" id="msl-action-target"/>
+                    <label class="msl-field" id="msl-action-points-wrap">Số điểm mới
+                        <input type="number" id="msl-action-points" class="msu-input" min="1" step="1"/>
+                    </label>
+                    <label class="msl-field">Lý do
+                        <textarea id="msl-action-reason" class="msu-input" rows="2" placeholder="Bắt buộc — được ghi vào mô tả điểm để đối soát"/>
+                    </label>
+                    <div id="msl-action-error" class="msu-modal-error"/>
+                    <div class="msu-modal-actions">
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msl-action-close">Đóng</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msl-action-save" data-loading-text="Đang lưu...">Lưu</button>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+
+        <!-- Nạp SAU script chính của trang để window.MsuSaleStatus đã có sẵn. -->
+        <xpath expr="//t[@t-call='misa_invoice_status_report.misa_sale_status_layout']" position="inside">
+            <link rel="stylesheet" href="/hlv_loyalty_misa_payment/static/src/public/loyalty_sale_confirm.css"/>
+            <script type="text/javascript" src="/hlv_loyalty_misa_payment/static/src/public/loyalty_sale_confirm.js"></script>
+        </xpath>
+    </template>
+</odoo>

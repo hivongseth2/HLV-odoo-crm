@@ -57,6 +57,11 @@ class HlvLoyaltyHistory(models.Model):
         help='Phân biệt bản ghi bị hủy do hoàn hàng (điểm không được tích lại, '
              'vì hàng đã trả) với bản ghi bị người dùng chủ động hủy/thu hồi '
              '(được phép tích lại qua nút "Tạo bù điểm Loyalty").')
+    # Model không kế thừa mail.thread (tracking trên state không ghi được gì) — mà việc xác
+    # nhận điểm giờ do cả bộ phận loyalty lẫn chính sale làm (trang /misa_sale_status), nên
+    # phải lưu riêng ai bấm để còn đối soát.
+    confirmed_by_id = fields.Many2one('res.users', string='Người xác nhận', readonly=True, copy=False)
+    confirmed_at = fields.Datetime(string='Lúc xác nhận', readonly=True, copy=False)
 
     description = fields.Char(string='Mô tả')
     point_formula = fields.Text(
@@ -185,9 +190,12 @@ class HlvLoyaltyHistory(models.Model):
 
     def action_confirm(self):
         """Nhân viên xác nhận điểm đổi thưởng đang chờ."""
-        for rec in self:
-            if rec.state == 'pending':
-                rec.state = 'confirmed'
+        pending = self.filtered(lambda rec: rec.state == 'pending')
+        pending.write({
+            'state': 'confirmed',
+            'confirmed_by_id': self.env.user.id,
+            'confirmed_at': fields.Datetime.now(),
+        })
 
     def action_cancel(self):
         """Hủy bản ghi điểm đang chờ."""

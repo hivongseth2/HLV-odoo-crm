@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Thêm vào trang Cài đặt Loyalty của hlv_loyalty (xmlid do repo này tự đặt). -->
+    <record id="res_config_settings_view_form_loyalty_sale_confirm" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.loyalty.sale.confirm</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="hlv_loyalty.res_config_settings_view_form_loyalty"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='loyalty_setting_container']" position="after">
+                <block title="Sale xác nhận điểm trên trang /misa_sale_status" name="loyalty_sale_confirm_container">
+                    <setting id="loyalty_sale_allow_cancel_setting"
+                             string="Sale được hủy điểm chờ xác nhận"
+                             help="Bật thì tab Điểm đổi thưởng có nút Hủy (bắt ghi lý do). Xác nhận điểm luôn có, chỉ khi MISA báo đã thu đủ tiền.">
+                        <field name="loyalty_sale_allow_cancel"/>
+                    </setting>
+                    <setting id="loyalty_sale_allow_edit_setting"
+                             string="Sale được sửa / tính lại điểm chờ xác nhận"
+                             help="Bật thì có nút Sửa số điểm (bắt ghi lý do) và Tính lại theo đơn bán. Chỉ áp dụng cho điểm đang chờ.">
+                        <field name="loyalty_sale_allow_edit"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -89,6 +89,8 @@
                                    decoration-muted="transaction_type == 'manual'"/>
                             <field name="description"/>
                             <field name="cancel_reason" invisible="state != 'cancelled'"/>
+                            <field name="confirmed_by_id" invisible="not confirmed_by_id"/>
+                            <field name="confirmed_at" invisible="not confirmed_at"/>
                         </group>
                         <group string="Tham chiếu">
                             <field name="picking_id"/>
@@ -145,6 +147,8 @@
                        decoration-muted="transaction_type == 'manual'"/>
                 <field name="point_amount" sum="Tổng điểm"/>
                 <field name="description"/>
+                <field name="confirmed_by_id" optional="hide"/>
+                <field name="confirmed_at" optional="hide"/>
                 <field name="point_formula" optional="hide"/>
                 <field name="picking_id" optional="show"/>
                 <field name="sale_order_id" optional="show"/>

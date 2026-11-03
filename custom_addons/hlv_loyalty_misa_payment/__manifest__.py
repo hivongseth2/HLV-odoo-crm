@@ -1,6 +1,6 @@
 {
     'name': 'HLV Loyalty - Kiểm tra thu tiền hóa đơn MISA',
-    'version': '18.0.1.1.0',
+    'version': '18.0.1.2.0',
     'category': 'Sales',
     'summary': 'Xem hóa đơn MISA của giao dịch điểm đã thu tiền chưa, ngay trên form Lịch sử điểm',
     'description': """
@@ -9,6 +9,10 @@
         tới TỪNG dòng hàng đã tích điểm (mã hàng + đơn hàng trên chi tiết chứng từ).
         Số hóa đơn + tình trạng thu tiền được lưu lại và hiện ngay trên list Lịch sử điểm;
         cron chạy 20h hằng đêm tra tiếp các bản ghi chưa có hóa đơn hoặc chưa thu tiền.
+
+        Trang /misa_sale_status có thêm tab "Điểm đổi thưởng": sale xác nhận điểm đang chờ của
+        phiếu thuộc mã sale mình — tra lại MISA lúc bấm, chỉ phiếu đã thu đủ tiền mới được xác
+        nhận. Hủy / sửa / tính lại điểm bật tắt trong Cài đặt Loyalty.
     """,
     'author': 'HLV',
     # Module cầu nối: form điểm nằm ở hlv_loyalty, còn toàn bộ lớp gọi API MISA
@@ -18,6 +22,8 @@
     'data': [
         'views/loyalty_history_misa_payment_views.xml',
         'data/misa_payment_cron.xml',
+        'views/res_config_settings_views.xml',
+        'views/misa_sale_status_loyalty_templates.xml',
     ],
     'assets': {
         'web.assets_backend': [

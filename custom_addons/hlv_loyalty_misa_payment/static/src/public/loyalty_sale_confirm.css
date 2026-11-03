@@ -1,0 +1,18 @@
+/* Tab "Điểm đổi thưởng" — chỉ phần riêng của tab; nút, bảng, modal dùng class msu-* của trang gốc. */
+.msl-bulk{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-size:.78rem}
+.msl-hint{font-size:.78rem;margin:0 0 8px}
+.msl-summary{font-size:.84rem;color:#3f3e3a;margin-bottom:10px}
+
+.msl-table .msl-col-check{width:1%;text-align:center}
+.msl-table .msl-sub{font-size:.74rem;margin-top:2px}
+.msl-nowrap{white-space:nowrap}
+.msl-actions{white-space:nowrap;text-align:right}
+.msl-actions .msu-btn + .msu-btn{margin-left:4px}
+
+.msl-badge{display:inline-block;margin-top:3px;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800;white-space:nowrap}
+.msl-badge-ok{background:#eaf8ea;color:#0ca30c}
+.msl-badge-warn{background:#fdf1f1;color:#d03b3b}
+.msl-badge-muted{background:#f1f0eb;color:#52514e}
+
+.msl-field{display:flex;flex-direction:column;gap:4px;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:10px}
+.msl-field .msu-input{width:100%}
