@@ -71,7 +71,14 @@ TOOLS = [
                 },
                 "description": {
                     "type": "string",
-                    "description": 'Mô tả/thông số trên MISA, có thể là chuỗi JSON, VD: {"Vật liệu": "Thép"}',
+                    # 255 = PRODUCT_DESCRIPTION_MAX của misa_fetch_po_button (file này chạy ngoài
+                    # Odoo nên không import được); Odoo vẫn kiểm lại trước khi gọi MISA.
+                    "maxLength": 255,
+                    "description": (
+                        'Mô tả/thông số trên MISA, có thể là chuỗi JSON, VD: {"Vật liệu": "Thép"}. '
+                        "TỐI ĐA 255 KÝ TỰ (ô Mô tả SP của MISA, dài hơn là MISA từ chối): chỉ "
+                        "giữ vài thông số chính, không dán nguyên bảng thông số."
+                    ),
                 },
             },
             "required": [

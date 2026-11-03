@@ -8,6 +8,7 @@ error — coi lỗi là "không tìm thấy" là đường tạo trùng.
 import logging
 
 from odoo import fields, models
+from odoo.addons.misa_fetch_po_button.utils.crm_product import description_length_error
 from odoo.addons.misa_fetch_po_button.utils.misa_product_code import ProductCodeNotFound, ProductCodeTaken
 
 from ..services import combo_change_summary, missing_from_proposal, odoo_combo_text
@@ -239,6 +240,10 @@ class HlvProductAgentTools(models.AbstractModel):
         name = (args.get('name') or '').strip()
         if not code or not name:
             return {'status': 'error', 'message': "Thiếu mã hoặc tên hàng."}
+        # Kiểm trước khoá + quét trùng: mô tả dài là MISA từ chối chắc, khỏi tốn lượt gọi MISA.
+        too_long = description_length_error(args.get('description'))
+        if too_long:
+            return {'status': 'error', 'message': too_long}
         unconfirmed = self._require_proposed(session, [code, name])
         if unconfirmed:
             return unconfirmed
