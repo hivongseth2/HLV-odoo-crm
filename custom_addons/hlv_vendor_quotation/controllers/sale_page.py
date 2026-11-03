@@ -39,6 +39,9 @@ STATUS_TABS = [("all", "Tất cả")] + SALE_STATUS
 # Trông như số đơn mua: DMH… (gõ mỗi "DMH" cũng tính — sale hay gõ đầu mã rồi mới gõ số), PO… theo sau
 # là số, hoặc P0… (số mặc định của Odoo). "PO" bắt buộc có số để "POLY…" (tên hàng) đi thẳng đường tìm thường.
 PURCHASE_ORDER_NUMBER = re.compile(r"^(?:DMH|PO[\s/._-]*\d|P0)", re.IGNORECASE)
+# Gõ phần số của đơn mua ("24615" của DMH24615) — cũng có thể là số cơ hội / phiếu / đơn bán nên dò cộng thêm.
+# Từ 3 chữ số: 1–2 số khớp gần như mọi đơn mua, chỉ tốn công dò.
+NUMBER_ONLY = re.compile(r"^\d{3,}$")
 
 
 class VendorQuoteSalePage(SalePageMixin, http.Controller):
@@ -452,14 +455,10 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
         if PURCHASE_ORDER_NUMBER.match(search):
             # Trông như số đơn mua thì dò đơn mua trước — khỏi quét sản phẩm / NCC / đơn bán. Không ra phiếu
             # nào mới quét hết: đầu mã chỉ là đoán, "P0…" / "PO1…" vẫn có thể là mã hàng.
-            # Dò ngay trong phạm vi, không lấy N đơn mua khớp rồi mới lọc: gõ "DMH0" thì N đơn mới nhất
-            # thường là của sale / NCC khác → ra rỗng mà cũng không quét hết.
-            # sudo: đường dò đi qua dòng đơn mua, sale không có quyền. Chỉ lấy id, search sau vẫn theo quyền sale.
-            inquiry_ids = request.env["hlv.vendor.inquiry"].sudo().search(
-                base + [("line_ids.request_line_ids.purchase_lines.order_id.name", "ilike", search)]).ids
+            inquiry_ids = self._purchase_order_inquiry_ids(search, base)
             if inquiry_ids:
                 return [("id", "in", inquiry_ids)]
-        return expression.OR([
+        domains = [
             [("name", "ilike", search)],
             [("opportunity_ref", "ilike", search)],
             [("sale_code", "ilike", search)],
@@ -467,7 +466,19 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             [("request_id.name", "ilike", search)],
             [("line_ids.product_id", "ilike", search)],
             [("quote_ids.partner_id", "ilike", search)],
-        ])
+        ]
+        if NUMBER_ONLY.match(search):
+            domains.append([("id", "in", self._purchase_order_inquiry_ids(search, base))])
+        return expression.OR(domains)
+
+    def _purchase_order_inquiry_ids(self, search, base):
+        """Id phiếu trong phạm vi `base` có đơn mua mà số chứa `search`.
+
+        Dò ngay trong phạm vi, không lấy N đơn mua khớp rồi mới lọc: gõ "DMH0" thì N đơn mới nhất
+        thường là của sale / NCC khác → ra rỗng. sudo: đường dò đi qua dòng đơn mua, sale không có
+        quyền; chỉ trả id, search sau vẫn theo quyền sale."""
+        return request.env["hlv.vendor.inquiry"].sudo().search(
+            base + [("line_ids.request_line_ids.purchase_lines.order_id.name", "ilike", search)]).ids
 
     def _status_domain(self, status, search=""):
         if status == "all":
