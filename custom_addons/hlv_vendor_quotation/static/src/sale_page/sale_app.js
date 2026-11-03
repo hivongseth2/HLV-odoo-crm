@@ -1,7 +1,7 @@
 /* Khởi động trang /hoi-gia-ncc. Phải nạp SAU các file feature vì gọi HQ.loadVendors,
    HQ.loadInquiries, HQ.openInquiry, HQ.openCreate, HQ.bindCreateEvents, HQ.bindCompareEvents,
    HQ.bindChatEvents, HQ.bindOrderViewEvents, HQ.bindRequestViewEvents, HQ.bindOriginEvents, HQ.bindVendorInfoEvents,
-   HQ.bindCloseEvents, HQ.bindBellEvents, HQ.loadBell, HQ.bindAddVendorEvents, HQ.bindPriceHistoryEvents, HQ.bindPasteEvents, HQ.bindCrmEvents,
+   HQ.bindCloseEvents, HQ.bindBellEvents, HQ.loadBell, HQ.bindAddVendorEvents, HQ.bindPriceProposalEvents, HQ.bindPriceHistoryEvents, HQ.bindPasteEvents, HQ.bindCrmEvents,
    HQ.listenBus.
 
    Mã sale lấy từ link riêng ?t=<token> như /misa_sale_status: mỗi sale chỉ có mã của mình
@@ -192,6 +192,7 @@ window.HlvQuote = window.HlvQuote || {};
     HQ.bindCloseEvents();
     HQ.bindBellEvents();
     HQ.bindAddVendorEvents();
+    HQ.bindPriceProposalEvents();
     HQ.bindPriceHistoryEvents();
     HQ.bindPasteEvents();
     HQ.bindCrmEvents();

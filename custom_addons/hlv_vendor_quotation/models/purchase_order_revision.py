@@ -15,6 +15,7 @@ from ..services.chat_bus import notify_order_status
 from ..services.vendor_chat import post_chat
 from .delivery_utils import due_datetime, local_day
 from .purchase_order import CONFIRMED_STATES, VENDOR_ORDER_STATES
+from .purchase_order_line_price import PRICE_WRITE_CTX
 from .revision_utils import change_text, is_dates_only, line_change_error, line_changes, needs_approval
 from .vendor_quote_utils import DATE_FMT, local_date_text, parse_states, price_incl_vat, split_unit_price
 
@@ -32,6 +33,12 @@ DEFAULT_REVISION_STATES = tuple(state for state, _label in VENDOR_ORDER_STATES)
 NO_REVISION_STATES = "none"
 # Yêu cầu đã áp vào đơn — mỗi cái tạo một phiên bản mới của đơn.
 APPLIED_STATES = ("approved", "applied")
+# Ai khởi xướng phiên bản: NCC sửa trên trang NCC, hay thu mua đề xuất giá → sale hỏi lại NCC → thu mua duyệt
+# (po_price_proposal.py). Cả hai cùng là một phiên bản của đơn, cùng bản chụp trước / sau.
+REVISION_ORIGINS = [
+    ("vendor", "NCC yêu cầu"),
+    ("proposal", "Thu mua đề xuất — NCC báo lại"),
+]
 
 
 def tax_rate_of(order_line):
@@ -55,6 +62,8 @@ class PurchaseOrderRevision(models.Model):
     decided_date = fields.Datetime(string="Duyệt lúc", readonly=True)
     activity_id = fields.Many2one("mail.activity", string="Hoạt động", readonly=True, ondelete="set null")
     line_ids = fields.One2many("hlv.po.revision.line", "revision_id", string="Thay đổi")
+    origin = fields.Selection(REVISION_ORIGINS, string="Nguồn", default="vendor", required=True, readonly=True)
+    proposal_id = fields.Many2one("hlv.po.price.proposal", string="Đề xuất giá", readonly=True, ondelete="set null")
     summary = fields.Text(string="Tóm tắt", compute="_compute_summary")
     # Bản chụp mọi dòng của đơn ngay trước / sau khi áp (PurchaseOrderRevisionMixin._hlv_snapshot) — NCC xem lại
     # từng phiên bản cũ. Không dựng ngược từ đơn hiện tại được: thu mua còn sửa tay đơn ngoài các yêu cầu.
@@ -133,26 +142,16 @@ class PurchaseOrderRevision(models.Model):
 
     def _tell_sale(self, event, source):
         """Báo trang sale (chuông / popup / Zalo). source: "vendor" (NCC gửi / áp ngay) hoặc "buyer" (thu mua quyết)."""
-        order = self.purchase_order_id.sudo()
-        order.write({"hlv_vendor_event": event, "hlv_vendor_status_date": fields.Datetime.now(),
-                     "hlv_vendor_event_source": source})
-        notify_order_status(order)
+        self.purchase_order_id._hlv_tell_sale(event, source)
 
     def _notify_buyer(self):
-        """Hoạt động "cần duyệt" cho người mua của đơn (không có thì người tạo đơn). mail_activity_quick_update: không
-        gửi email báo giao việc — thu mua thấy ở biểu tượng hoạt động trong Odoo."""
-        order = self.purchase_order_id.sudo()
-        buyer = order.user_id or order.create_uid
-        if not buyer:
-            return
-        self.activity_id = order.with_context(mail_activity_quick_update=True).activity_schedule(
-            "mail.mail_activity_data_todo",
-            summary=_("NCC yêu cầu thay đổi đơn — cần duyệt"),
-            note=Markup("<p>%s</p><ul>%s</ul>") % (
+        """Hoạt động "cần duyệt" cho thu mua (purchase.order._hlv_schedule_buyer_activity)."""
+        self.activity_id = self.purchase_order_id._hlv_schedule_buyer_activity(
+            _("NCC yêu cầu thay đổi đơn — cần duyệt"),
+            Markup("<p>%s</p><ul>%s</ul>") % (
                 _("Yêu cầu số %s của NCC (bấm nút \"Yêu cầu NCC chờ duyệt\" trên đơn để duyệt):", self.number),
                 Markup("").join(Markup("<li>%s</li>") % text for text in self._change_texts()),
             ),
-            user_id=buyer.id,
         )
 
     def _close_activity(self, feedback):
@@ -175,6 +174,25 @@ class PurchaseOrderRevisionLine(models.Model):
     new_price_unit = fields.Float(string="Đơn giá mới (chưa VAT)", digits="Product Price", readonly=True)
     old_date = fields.Date(string="Ngày giao cũ", readonly=True)
     new_date = fields.Date(string="Ngày giao mới", readonly=True)
+    # Cột của danh sách "Lịch sử" từng dòng đơn mua (purchase_order_line_price.action_hlv_view_changes).
+    old_price_incl = fields.Float(string="Giá cũ (sau VAT)", digits="Product Price", compute="_compute_price_incl")
+    new_price_incl = fields.Float(string="Giá mới (sau VAT)", digits="Product Price", compute="_compute_price_incl")
+    revision_number = fields.Integer(related="revision_id.number", string="Phiên bản số")
+    revision_state = fields.Selection(related="revision_id.state", string="Trạng thái")
+    revision_origin = fields.Selection(related="revision_id.origin", string="Nguồn")
+    purchase_order_id = fields.Many2one(related="revision_id.purchase_order_id", string="Đơn mua")
+    decided_user_id = fields.Many2one(related="revision_id.decided_user_id", string="Người duyệt")
+    decided_date = fields.Datetime(related="revision_id.decided_date", string="Duyệt lúc")
+
+    @api.depends("old_price_unit", "new_price_unit", "tax_rate")
+    def _compute_price_incl(self):
+        for line in self:
+            line.old_price_incl = price_incl_vat(line.old_price_unit, line.tax_rate)
+            line.new_price_incl = price_incl_vat(line.new_price_unit, line.tax_rate)
+
+    def _hlv_applied(self):
+        """Các thay đổi đã áp vào đơn (bỏ yêu cầu chờ duyệt / không duyệt / NCC rút)."""
+        return self.filtered(lambda l: l.revision_id.state in APPLIED_STATES)
 
     def _changes(self):
         """Thay đổi của dòng (revision_utils.line_changes) — giá so theo SAU VAT như NCC gõ."""
@@ -198,9 +216,11 @@ class PurchaseOrderRevisionLine(models.Model):
         if "price" in changes:
             vals["price_unit"] = self.new_price_unit
         if vals:
-            po_line.write(vals)
-        if "price" in changes:
-            # Báo giá NCC đổi theo — sale tra / hỏi lại giá thấy giá mới nhất NCC đã sửa.
+            # Dòng lên từ hỏi giá bị khoá giá (purchase_order_line_price) — phiên bản đã duyệt là đường được phép.
+            po_line.with_context(**{PRICE_WRITE_CTX: True}).write(vals)
+        if "price" in changes and self.revision_id.origin == "vendor":
+            # Báo giá NCC đổi theo — sale tra / hỏi lại giá thấy giá mới nhất NCC đã sửa. Phiên bản từ đề xuất giá thì
+            # giá đã nằm sẵn trên báo giá (NCC vừa báo lại) — ghi ngược theo VAT của đơn sẽ lệch VAT NCC báo.
             self.env["hlv.vendor.quote.line"]._hlv_follow_order_price(
                 po_line, self.new_price_unit, self.revision_id.purchase_order_id.name)
         if "day" in changes:
@@ -279,6 +299,49 @@ class PurchaseOrderRevisionMixin(models.Model):
     def _hlv_revision_pending(self):
         self.ensure_one()
         return self.sudo().hlv_revision_ids.filtered(lambda r: r.state == "pending")[:1]
+
+    def _hlv_tell_sale(self, event, source):
+        """Báo trang sale (chuông / popup / Zalo) một tin trên đơn. source: EVENT_SOURCES — "vendor" / "buyer"."""
+        order = self.sudo()
+        order.write({"hlv_vendor_event": event, "hlv_vendor_status_date": fields.Datetime.now(),
+                     "hlv_vendor_event_source": source})
+        notify_order_status(order)
+
+    def _hlv_schedule_buyer_activity(self, summary, note, user=None):
+        """Hoạt động "cần làm" trên đơn cho thu mua: user, không có thì người mua của đơn, không nữa thì người tạo đơn.
+        mail_activity_quick_update: không gửi email báo giao việc — thu mua thấy ở biểu tượng hoạt động trong Odoo.
+        Trả hoạt động (rỗng khi không có ai để giao)."""
+        self.ensure_one()
+        order = self.sudo()
+        buyer = user or order.user_id or order.create_uid
+        if not buyer:
+            return self.env["mail.activity"]
+        return order.with_context(mail_activity_quick_update=True).activity_schedule(
+            "mail.mail_activity_data_todo", summary=summary, note=note, user_id=buyer.id)
+
+    def _hlv_apply_proposal_price(self, proposal):
+        """Thu mua duyệt giá NCC báo lại (po_price_proposal): ghi thành một phiên bản đã duyệt của đơn — cùng bản chụp
+        trước / sau, dòng cũ → mới như yêu cầu của NCC, NCC xem lại trên trang NCC. Giữ VAT của dòng, đơn giá chưa VAT
+        tính lại để giá sau VAT bằng giá NCC báo. Trả phiên bản vừa tạo; giá không đổi → recordset rỗng."""
+        self.ensure_one()
+        order = self.sudo()
+        pending = order._hlv_revision_pending()
+        if pending:
+            raise UserError(_("Đơn %(order)s đang có yêu cầu NCC số %(n)s chờ duyệt — xử lý yêu cầu đó trước.",
+                              order=order.name, n=pending.number))
+        line = proposal.order_line_id.sudo()
+        tax = tax_rate_of(line)
+        changes = line_changes(line.product_qty, None, price_incl_vat(line.price_unit, tax), proposal.new_price_incl,
+                               None, None)
+        if not changes:
+            return self.env["hlv.po.revision"]
+        revision = order._hlv_create_revision([(line, tax, changes)], "", order.partner_id.commercial_partner_id)
+        revision.write({"origin": "proposal", "proposal_id": proposal.id})
+        revision._apply()
+        revision.write({"state": "approved", "decided_user_id": self.env.uid, "decided_date": fields.Datetime.now()})
+        revision._log(_("Bên mua cập nhật đơn theo giá quý công ty báo lại (phiên bản mới):\n%s", revision._bullet_text()),
+                      order.company_id.partner_id, from_vendor=False)
+        return revision
 
     def _vendor_propose_changes(self, edits, note, vendor_partner):
         """NCC đổi SL / đơn giá (sau VAT) / ngày giao của các dòng. edits: {id dòng: {"qty", "price", "day"}} — giá trị

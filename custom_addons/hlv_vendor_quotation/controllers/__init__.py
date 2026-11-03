@@ -7,5 +7,6 @@ from . import vendor_portal_history
 from . import sale_page
 from . import sale_page_create
 from . import sale_page_crm
+from . import sale_price_proposal
 from . import sale_plan_nav
 from . import sale_price_lookup

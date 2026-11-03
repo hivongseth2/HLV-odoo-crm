@@ -14,6 +14,7 @@ from ..models.vendor_quote_utils import (
 )
 from .sale_code import sale_code
 from .chat_read import chat_stats, seen_markers
+from .price_proposal_payload import inquiry_price_proposals
 from .price_reuse import recent_vendor_price, reference_prices
 
 QUOTE_STATE_LABELS = {
@@ -223,6 +224,8 @@ def inquiry_detail(inquiry):
         "can_close": inquiry.state == "open",
         "vendors": [_vendor_column(q) for q in quotes],
         "lines": [_compare_row(line, quotes) for line in inquiry.line_ids],
+        # Thu mua đề xuất giá món đã lên đơn mua — sale hỏi lại NCC rồi gửi thu mua duyệt.
+        "price_proposals": inquiry_price_proposals(inquiry),
         # Tổng tiền theo SL mua của từng NCC đã chọn.
         "chosen_total": sum(line.price_unit * line.chosen_qty for line in chosen),
         "chosen_total_incl": sum(_price_incl(line) * line.chosen_qty for line in chosen),

@@ -108,6 +108,10 @@ class VendorQuoteLine(models.Model):
     # lại (ai thu hồi, lúc nào: chatter của báo giá). NCC không thấy dòng nữa (vendor_quote._vendor_lines),
     # không so giá, không chọn được. "Hỏi lại" bật lại đúng dòng này (vendor_quote.action_add_inquiry_lines).
     withdrawn = fields.Boolean(string="Bên mua đã thu hồi", readonly=True, copy=False)
+    # Thu mua đề xuất giá món đã lên đơn mua, sale "Hỏi lại NCC" (po_price_proposal.py): dòng mở lại cho NCC báo
+    # lại giá dù đã đặt — tới khi NCC gửi lại báo giá hoặc đề xuất đóng (vendor_quote_requote.py).
+    hlv_requote_proposal_id = fields.Many2one(
+        "hlv.po.price.proposal", string="Đang hỏi lại giá", readonly=True, copy=False, index=True, ondelete="set null")
     vendor_locked = fields.Boolean(
         string="Đã lên đơn mua", compute="_compute_vendor_locked",
         help="Mặt hàng đã lên đơn mua: NCC không sửa giá dòng này nữa (cả NCC không được chọn — "
@@ -202,13 +206,19 @@ class VendorQuoteLine(models.Model):
     @api.depends("inquiry_line_id.locked", "selected", "withdrawn", "request_line_id.purchased_qty",
                  "request_line_id.product_qty",
                  "request_line_id.purchase_lines.state", "backorder_request_line_id.purchased_qty",
-                 "backorder_request_line_id.purchase_lines.state")
+                 "backorder_request_line_id.purchase_lines.state", "hlv_requote_proposal_id.state",
+                 "quote_id.hlv_requote_prev_state")
     def _compute_vendor_locked(self):
         """NCC không sửa giá dòng này nữa: sản phẩm đã lên đơn mua đủ SL cần mua, hoặc phần của chính
-        NCC này (đang được chọn) đã lên đơn mua đủ. Luồng hỏi giá từ YCMH: dòng YCMH đã lên đơn đủ."""
+        NCC này (đang được chọn) đã lên đơn mua đủ. Luồng hỏi giá từ YCMH: dòng YCMH đã lên đơn đủ.
+        Món đang được hỏi lại giá thì mở; báo giá đã đóng mà mở lại để hỏi lại thì chỉ mở đúng món đó."""
         for line in self:
             if line.withdrawn:
                 line.vendor_locked = True  # đường nào sót lọc _vendor_lines thì NCC cũng không sửa được
+            elif line._hlv_requote_open():
+                line.vendor_locked = False
+            elif line.quote_id.hlv_requote_prev_state == "done":
+                line.vendor_locked = True
             elif line.inquiry_line_id:
                 own = line._hlv_live_request_lines()
                 line.vendor_locked = line.inquiry_line_id.locked or (

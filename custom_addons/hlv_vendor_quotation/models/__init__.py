@@ -3,12 +3,15 @@ from . import vendor_quote_access
 from . import vendor_quote
 from . import vendor_quote_line
 from . import vendor_quote_line_choice
+from . import vendor_quote_requote
 from . import vendor_inquiry
 from . import vendor_inquiry_crm_order
 from . import purchase_request
 from . import purchase_order
 from . import purchase_order_delivery
+from . import purchase_order_line_price
 from . import purchase_order_revision
+from . import po_price_proposal
 from . import stock_picking
 from . import vendor_suggestion
 from . import vendor_chat_read

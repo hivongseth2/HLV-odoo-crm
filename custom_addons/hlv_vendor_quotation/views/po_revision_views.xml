@@ -11,6 +11,7 @@
                 <field name="purchase_order_id"/>
                 <field name="partner_id"/>
                 <field name="number"/>
+                <field name="origin" optional="show"/>
                 <field name="create_date" string="Gửi lúc"/>
                 <field name="summary"/>
                 <field name="state" widget="badge" decoration-warning="state == 'pending'"
@@ -38,6 +39,8 @@
                         <group>
                             <field name="purchase_order_id"/>
                             <field name="partner_id"/>
+                            <field name="origin"/>
+                            <field name="proposal_id" invisible="not proposal_id"/>
                             <field name="author_partner_id"/>
                             <field name="create_date" string="Gửi lúc"/>
                         </group>

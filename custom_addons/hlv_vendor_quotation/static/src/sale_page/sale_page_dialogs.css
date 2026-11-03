@@ -534,3 +534,8 @@
 .hq-date-btn { position: absolute; top: 50%; right: .35rem; transform: translateY(-50%); display: inline-flex; padding: .25rem;
     border: 0; border-radius: 3px; background: none; color: var(--hq-muted); cursor: pointer; }
 .hq-date-btn:hover { color: inherit; background: rgba(0, 0, 0, .05); }
+/* Thu mua đề xuất giá (sale_price_proposal.js): mỗi món một khối, xong rồi thì mờ đi. */
+.hq-proposal { padding: .5rem 0; border-top: 1px solid var(--hq-line-soft); }
+.hq-proposals > .hq-share-head + .hq-proposal { border-top: 0; }
+.hq-proposal.is-done { opacity: .65; }
+.hq-proposal textarea { flex: 1 1 20rem; min-width: 0; }

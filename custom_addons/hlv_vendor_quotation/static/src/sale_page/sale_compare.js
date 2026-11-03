@@ -260,6 +260,7 @@ window.HlvQuote = window.HlvQuote || {};
       '<button type="button" class="btn-close" data-close="drawer" aria-label="Đóng"></button></div>' +
       renderFacts(d) +
       renderRejected(d) +
+      HQ.priceProposalBox(d) +
       HQ.closedBanner(d) +
       renderCompare(d) +
       HQ.addVendorBox(d) +

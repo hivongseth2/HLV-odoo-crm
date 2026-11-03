@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Thu mua đề xuất giá dòng đơn mua lên từ hỏi giá (models/po_price_proposal.py): thu mua không sửa đơn giá
+         trực tiếp — đề xuất → sale hỏi lại NCC trên trang NCC → sale gửi giá → thu mua duyệt ở đây. -->
+    <record id="view_po_price_proposal_list" model="ir.ui.view">
+        <field name="name">hlv.po.price.proposal.list</field>
+        <field name="model">hlv.po.price.proposal</field>
+        <field name="arch" type="xml">
+            <list string="Đề xuất giá" create="0"
+                  decoration-warning="state == 'to_approve'" decoration-muted="state in ('kept', 'cancel')"
+                  decoration-success="state == 'approved'">
+                <field name="purchase_order_id"/>
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="old_price_incl"/>
+                <field name="suggested_price_incl"/>
+                <field name="new_price_incl"/>
+                <field name="buyer_id" optional="show"/>
+                <field name="create_date" string="Đề xuất lúc" optional="show"/>
+                <field name="state" widget="badge" decoration-warning="state == 'to_approve'"
+                       decoration-info="state in ('sale', 'vendor', 'quoted')"
+                       decoration-success="state == 'approved'" decoration-danger="state == 'rejected'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_po_price_proposal_form" model="ir.ui.view">
+        <field name="name">hlv.po.price.proposal.form</field>
+        <field name="model">hlv.po.price.proposal</field>
+        <field name="arch" type="xml">
+            <form string="Đề xuất giá" create="0">
+                <header>
+                    <button name="action_approve" type="object" string="Duyệt — đổi giá trên đơn" class="btn-primary"
+                            invisible="state != 'to_approve'" groups="purchase.group_purchase_user"
+                            confirm="Đổi đơn giá dòng đơn mua theo giá NCC báo lại? Đơn có thêm một phiên bản, NCC được báo."/>
+                    <button name="action_reject" type="object" string="Không duyệt"
+                            invisible="state != 'to_approve'" groups="purchase.group_purchase_user"/>
+                    <button name="action_cancel" type="object" string="Huỷ đề xuất"
+                            invisible="state not in ('sale', 'vendor', 'quoted', 'to_approve', 'rejected')"
+                            groups="purchase.group_purchase_user"
+                            confirm="Huỷ đề xuất giá này? Món đang mở trên trang NCC sẽ khoá lại."/>
+                    <field name="state" widget="statusbar" statusbar_visible="sale,vendor,quoted,to_approve,approved"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <div class="alert alert-warning" role="alert" invisible="not vat_warning">
+                        <field name="vat_warning" nolabel="1"/>
+                    </div>
+                    <group>
+                        <group string="Đơn mua">
+                            <field name="purchase_order_id"/>
+                            <field name="order_line_id" invisible="1"/>
+                            <field name="product_id"/>
+                            <field name="partner_id"/>
+                            <field name="inquiry_id"/>
+                            <field name="quote_line_id" invisible="1"/>
+                            <field name="revision_id" invisible="not revision_id"/>
+                        </group>
+                        <group string="Giá (sau VAT)">
+                            <field name="old_price_incl"/>
+                            <field name="suggested_price_incl"/>
+                            <field name="vendor_price_incl" invisible="not vendor_date"/>
+                            <field name="new_price_incl" invisible="not submit_date"/>
+                            <field name="tax_rate"/>
+                            <field name="vendor_tax_rate" invisible="not vendor_date"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Thu mua">
+                            <field name="buyer_id"/>
+                            <field name="create_date" string="Đề xuất lúc"/>
+                            <field name="buyer_note"/>
+                            <field name="decided_user_id" invisible="not decided_user_id"/>
+                            <field name="decided_date" invisible="not decided_date"/>
+                            <field name="reject_reason" readonly="state != 'to_approve'"
+                                   invisible="state not in ('to_approve', 'rejected')"
+                                   placeholder="Bắt buộc khi không duyệt — sale sẽ thấy lý do"/>
+                        </group>
+                        <group string="Sale / NCC">
+                            <field name="sale_user_id"/>
+                            <field name="requote_date" invisible="not requote_date"/>
+                            <field name="vendor_message" invisible="not vendor_message"/>
+                            <field name="vendor_date" invisible="not vendor_date"/>
+                            <field name="sale_note" invisible="not sale_note"/>
+                            <field name="submit_date" invisible="not submit_date"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_po_price_proposal_search" model="ir.ui.view">
+        <field name="name">hlv.po.price.proposal.search</field>
+        <field name="model">hlv.po.price.proposal</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="purchase_order_id"/>
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <filter name="filter_to_approve" string="Chờ thu mua duyệt" domain="[('state', '=', 'to_approve')]"/>
+                <filter name="filter_open" string="Đang mở"
+                        domain="[('state', 'in', ('sale', 'vendor', 'quoted', 'to_approve', 'rejected'))]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_po_price_proposal" model="ir.actions.act_window">
+        <field name="name">Đề xuất giá đơn mua</field>
+        <field name="res_model">hlv.po.price.proposal</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{"search_default_filter_open": 1}</field>
+    </record>
+
+    <menuitem id="menu_po_price_proposal"
+              name="Đề xuất giá đơn mua"
+              parent="menu_vendor_quote_root"
+              action="action_po_price_proposal"
+              sequence="45"
+              groups="purchase.group_purchase_user"/>
+
+    <!-- Hộp thu mua ghi giá gợi ý (wizard/po_price_proposal_wizard.py). -->
+    <record id="view_po_price_proposal_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.po.price.proposal.wizard.form</field>
+        <field name="model">hlv.po.price.proposal.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Đề xuất giá">
+                <p class="text-muted">
+                    Dòng này lên từ trang hỏi giá nên không sửa giá trực tiếp. Ghi giá gợi ý + lý do: sale hỏi lại
+                    NCC trên trang NCC, NCC báo lại giá thì sale gửi về đây để thu mua duyệt.
+                </p>
+                <group>
+                    <field name="order_line_id" invisible="1"/>
+                    <field name="product_id"/>
+                    <field name="vendor_id"/>
+                    <field name="current_price_incl"/>
+                    <field name="suggested_price_incl"/>
+                    <field name="note" placeholder="VD: NCC khác báo 1.200.000, giá thị trường đã giảm…"/>
+                </group>
+                <footer>
+                    <button name="action_submit" type="object" string="Gửi sale hỏi lại NCC" class="btn-primary"/>
+                    <button string="Thôi" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Lịch sử thay đổi từng dòng đơn mua (cột "Lịch sử" trên dòng — như "LS MISA" trên dòng đơn bán): mọi phiên
+         bản đã áp vào đơn, cả NCC yêu cầu lẫn thu mua duyệt giá NCC báo lại. -->
+    <record id="view_po_line_change_list" model="ir.ui.view">
+        <field name="name">hlv.po.revision.line.history.list</field>
+        <field name="model">hlv.po.revision.line</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <list string="Lịch sử thay đổi dòng đơn mua" create="0" edit="0" delete="0" default_order="id desc">
+                <field name="decided_date"/>
+                <field name="revision_number"/>
+                <field name="revision_origin" widget="badge"/>
+                <field name="name"/>
+                <field name="old_qty"/>
+                <field name="new_qty" decoration-bf="new_qty != old_qty"/>
+                <field name="uom_name"/>
+                <field name="old_price_incl"/>
+                <field name="new_price_incl" decoration-bf="new_price_incl != old_price_incl"/>
+                <field name="old_price_unit" optional="hide"/>
+                <field name="new_price_unit" optional="hide"/>
+                <field name="old_date" optional="show"/>
+                <field name="new_date" optional="show" decoration-bf="new_date != old_date"/>
+                <field name="decided_user_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_po_line_changes" model="ir.actions.act_window">
+        <field name="name">Lịch sử thay đổi dòng đơn mua</field>
+        <field name="res_model">hlv.po.revision.line</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_po_line_change_list"/>
+        <field name="target">new</field>
+        <field name="context">{"create": False}</field>
+    </record>
+
+    <!-- Đơn mua: khoá ô giá dòng lên từ hỏi giá, nút "Đề xuất giá" + "Lịch sử" trên từng dòng, nút đề xuất giá
+         trên đầu đơn. Xpath theo purchase.purchase_order_form — cùng view po_revision_views.xml đang kế thừa. -->
+    <record id="view_purchase_order_form_price_proposal" model="ir.ui.view">
+        <field name="name">purchase.order.form.price.proposal</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_hlv_price_proposals" type="object" class="oe_stat_button" icon="fa-tag"
+                        invisible="not hlv_price_proposal_ids" groups="purchase.group_purchase_user">
+                    <field name="hlv_price_proposal_open_count" widget="statinfo" string="Đề xuất giá đang mở"/>
+                </button>
+                <field name="hlv_price_proposal_ids" invisible="1" groups="purchase.group_purchase_user"/>
+            </xpath>
+            <xpath expr="//sheet" position="before">
+                <field name="hlv_price_proposal_approve_count" invisible="1" groups="purchase.group_purchase_user"/>
+                <div class="alert alert-info mb-0" role="alert" invisible="not hlv_price_proposal_approve_count"
+                     groups="purchase.group_purchase_user">
+                    Sale đã gửi giá NCC báo lại — bấm "Đề xuất giá đang mở" để duyệt.
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_unit']" position="attributes">
+                <attribute name="readonly">qty_invoiced != 0 or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='discount']" position="attributes">
+                <attribute name="readonly">qty_invoiced != 0 or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='taxes_id']" position="attributes">
+                <attribute name="readonly">is_downpayment or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_unit']" position="after">
+                <field name="hlv_price_locked" column_invisible="1"/>
+                <button name="action_hlv_propose_price" type="object" icon="fa-tag"
+                        title="Đề xuất giá — giá theo hỏi giá, sale hỏi lại NCC rồi thu mua duyệt"
+                        invisible="not hlv_price_locked or not id or parent.state == 'cancel'"
+                        groups="purchase.group_purchase_user"/>
+                <field name="hlv_change_count" string="LS đổi" optional="show" readonly="1"
+                       groups="purchase.group_purchase_user"/>
+                <button name="action_hlv_view_changes" type="object" icon="fa-history" title="Lịch sử thay đổi dòng"
+                        invisible="not hlv_change_count" groups="purchase.group_purchase_user"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

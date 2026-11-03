@@ -166,6 +166,9 @@
                     <!-- Trạng thái dòng: chip nhỏ cùng dòng (rê chuột xem chi tiết) — dòng không cao thêm. -->
                     <span t-if="line.vendor_locked" class="vq-chip vq-chip-locked"
                           title="Đã lên đơn mua — không sửa được nữa">đã đặt</span>
+                    <!-- Món đã đặt mà bên mua hỏi lại giá (đề xuất giá của thu mua — vendor_quote_requote.py). -->
+                    <span t-if="line_editable and line.hlv_requote_proposal_id" class="vq-chip vq-chip-ref"
+                          title="Đã đặt hàng — bên mua nhờ báo lại giá món này (xem lời nhắn trong khung trao đổi). Sửa đơn giá rồi gửi báo giá.">báo lại giá</span>
                     <span t-if="ref and line_editable" class="vq-chip vq-chip-ref"
                           t-att-title="'Giá lần trước: %s sau VAT cho %s %s (%s) — đã điền sẵn, kiểm tra rồi gửi' % (fmt(ref.price_unit * (1 + ref.tax_rate / 100.0)), fmt(ref.product_qty), ref.product_uom_id.name, fdate(ref.quote_id.submit_date))">giá cũ</span>
                 </div>
