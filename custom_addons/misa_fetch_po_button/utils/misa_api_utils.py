@@ -19,6 +19,14 @@ class MisaAuthExpired(Exception):
     """CRM trả 401/403: token đã lưu hết hiệu lực, cần đăng nhập lại."""
 
 
+class MisaRefused(Exception):
+    """CRM từ chối DỮ LIỆU gửi lên (có ValidateInfo, VD "Mô tả SP tối đa 255 ký tự").
+
+    Tách khỏi lỗi máy chủ / mạng: gửi lại nguyên như cũ vô ích, phải sửa dữ liệu. Vẫn là
+    Exception nên mọi chỗ đang ``except Exception`` không đổi hành vi.
+    """
+
+
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
@@ -1957,7 +1965,8 @@ class MisaApiUtils(models.AbstractModel):
                 if item.get("ErrorMessage")
             ]
             error_message = "; ".join(validation_messages) or response_data.get("UserMessage") or response.text[:500]
-            raise Exception(f"MISA CRM từ chối {code}: {error_message}")
+            error_cls = MisaRefused if validation_messages else Exception
+            raise error_cls(f"MISA CRM từ chối {code}: {error_message}")
 
         misa_id = self._parse_misa_id(response_data, code, headers)
         if not misa_id:
@@ -2202,10 +2211,11 @@ class MisaApiUtils(models.AbstractModel):
             val_info = res_json.get("ValidateInfo") or []
             # CRM có lúc từ chối mà không ghi UserMessage / ValidateInfo: khi đó lý do chỉ
             # nằm trong body (SystemMessage, Code...), báo "None" là không ai sửa được.
-            err_msg = (", ".join(v.get("ErrorMessage") or "" for v in val_info if isinstance(v, dict)).strip(", ")
-                       or res_json.get("UserMessage") or res_json.get("SystemMessage")
+            validation = ", ".join(v.get("ErrorMessage") or "" for v in val_info if isinstance(v, dict)).strip(", ")
+            err_msg = (validation or res_json.get("UserMessage") or res_json.get("SystemMessage")
                        or res.text[:300])
-            raise Exception(f"MISA Refused: {err_msg}")
+            error_cls = MisaRefused if validation else Exception
+            raise error_cls(f"MISA Refused: {err_msg}")
 
         misa_id = self._parse_misa_id(res_json, code, headers)
         
