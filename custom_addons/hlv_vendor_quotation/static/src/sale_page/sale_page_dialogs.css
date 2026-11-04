@@ -548,3 +548,12 @@
 .hq-offer-price.is-proposed { color: var(--hq-warn-ink); }
 .hq-offer.has-proposal .hq-tag { justify-self: start; }
 .hq-pp-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+/* Dải "việc cần làm" đầu ngăn: một câu + một nút dẫn tới ô tô cam — thay cho khối chữ dài lặp lại ô. */
+.hq-todo { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0 0 .75rem;
+    padding: .6rem .8rem; background: var(--hq-warn-soft); border-left: 4px solid var(--hq-warn);
+    border-radius: var(--hq-radius); }
+.hq-todo b { display: block; color: var(--hq-warn-ink); }
+.hq-todo span { font-size: .8125rem; color: var(--hq-muted); }
+.hq-offer.is-flash { animation: hq-flash 1.2s ease-out 2; }
+@keyframes hq-flash { 50% { box-shadow: inset 3px 0 0 var(--hq-warn), 0 0 0 3px var(--hq-warn); } }
+@media (prefers-reduced-motion: reduce) { .hq-offer.is-flash { animation: none; outline: 3px solid var(--hq-warn); } }

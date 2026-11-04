@@ -1,7 +1,8 @@
 /* Thu mua đề xuất giá (models/po_price_proposal.py): thu mua không sửa giá đơn mua ở backend nữa mà đề xuất giá gợi ý.
    Việc của sale nằm ngay trên ô giá của bảng so giá (ô + dòng tô màu, giá trên đơn gạch đi): "Hỏi lại NCC" — món mở
-   lại trên báo giá của NCC, kèm lời nhắn — NCC báo lại thì "Gửi thu mua duyệt"; hoặc "NCC giữ giá". Khối "Thu mua đề
-   xuất giá" phía trên chỉ để đọc lý do / giá NCC khác / kết quả. Giá sau VAT là số chính. */
+   lại trên báo giá của NCC, kèm lời nhắn — NCC báo lại thì "Gửi thu mua duyệt"; hoặc "NCC giữ giá". Đầu ngăn chỉ còn
+   một dải "việc cần làm" dẫn tới ô, cộng một dòng ngắn cho mỗi đề xuất đã xong — mỗi thông tin chỉ hiện một chỗ.
+   Giá sau VAT là số chính. */
 window.HlvQuote = window.HlvQuote || {};
 
 (function (HQ) {
@@ -22,7 +23,12 @@ window.HlvQuote = window.HlvQuote || {};
     }) || null;
   };
 
-  /** Món của đề xuất có ô trên bảng so giá không — có thì nút thao tác nằm ở ô, khối phía trên không vẽ trùng. */
+  /** Đơn mua có đề xuất còn mở — tin "thu mua đề xuất giá" của đơn đã nằm trên ô so giá, phần Đơn mua khỏi nhắc lại. */
+  HQ.orderHasOpenProposal = function (d, orderId) {
+    return (d.price_proposals || []).some(function (p) { return p.order_id === orderId && !DONE[p.state]; });
+  };
+
+  /** Món của đề xuất có ô trên bảng so giá không — có thì mọi thứ của đề xuất nằm ở ô. */
   function shownInCompare(d, p) {
     return (d.lines || []).some(function (line) {
       return Object.keys(line.offers).some(function (key) {
@@ -32,17 +38,36 @@ window.HlvQuote = window.HlvQuote || {};
     });
   }
 
+  /** Đầu ngăn: dải việc cần làm (đề xuất chờ sale, có ô trên bảng) + đề xuất không có ô (vẽ đủ, kèm nút) + một dòng
+   cho mỗi đề xuất đã xong. Đề xuất đang chờ NCC / thu mua chỉ hiện ở ô — sale không có gì để làm. */
   HQ.priceProposalBox = function (d) {
     var list = d.price_proposals || [];
-    if (!list.length) {
+    var inCell = list.filter(function (p) { return !DONE[p.state] && shownInCompare(d, p); });
+    var todo = inCell.filter(function (p) { return p.can_requote || p.can_submit || p.can_keep; });
+    var orphan = list.filter(function (p) { return !DONE[p.state] && inCell.indexOf(p) < 0; });
+    var done = list.filter(function (p) { return DONE[p.state]; });
+    return todoBanner(todo) + (orphan.length || done.length
+      ? '<div class="hq-share hq-proposals"><div class="hq-share-head"><b>Thu mua đề xuất giá</b></div>' +
+        orphan.map(item).join("") + done.map(doneLine).join("") + "</div>" : "");
+  };
+
+  function todoBanner(todo) {
+    if (!todo.length) {
       return "";
     }
-    var waiting = list.filter(function (p) { return p.can_requote || p.can_submit; }).length;
-    return '<div class="hq-share hq-proposals"><div class="hq-share-head"><b>Thu mua đề xuất giá</b>' +
-      (waiting ? '<span class="hq-tag hq-tag-warn">' + waiting + " việc cần sale làm</span>" +
-        '<span class="hq-muted">— bấm nút trên ô tô màu ở bảng So giá</span>' : "") + "</div>" +
-      list.map(function (p) { return item(p, !DONE[p.state] && shownInCompare(d, p)); }).join("") + "</div>";
-  };
+    var submit = todo.some(function (p) { return p.can_submit; });
+    return '<div class="hq-todo" role="status"><div><b>Thu mua trả về giá ' + todo.length + " món</b>" +
+      "<span>" + (submit ? "NCC đã báo lại — gửi thu mua duyệt" : "Hỏi lại NCC") +
+      " ngay trên ô tô cam ở bảng So giá</span></div>" +
+      '<button type="button" class="hq-btn hq-btn-primary" data-pp-jump="1">Đến ô cần làm</button></div>';
+  }
+
+  /** Đề xuất đã xong: một dòng kết quả. */
+  function doneLine(p) {
+    return '<div class="hq-proposal is-done">' + esc(p.product) + " " + HQ.docChip(p.order) + " " +
+      (p.state === "approved" ? "đơn đã đổi sang " + price(p.new_price) + " sau VAT"
+        : "NCC giữ giá " + HQ.money(p.old_price)) + "</div>";
+  }
 
   function price(value) {
     return "<b>" + HQ.money(value) + "</b>";
@@ -53,19 +78,24 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   /** Giá trong ô so giá có đề xuất còn mở: giá trên đơn gạch đi, số chính là giá NCC báo lại (hoặc giá thu mua gợi ý
-   khi NCC chưa báo). NCC giữ nguyên giá thì không gạch — giá trên đơn vẫn là giá đang dùng. */
+   khi NCC chưa báo), dưới là lý do của thu mua và việc đang chờ ai. NCC giữ nguyên giá thì không gạch — giá trên đơn
+   vẫn là giá đang dùng. Giá NCC khác không nhắc: đã nằm ở các cột bên cạnh. */
   HQ.proposalPrice = function (offer, p) {
-    if (p.vendor_kept_price) {
-      return '<span class="hq-offer-price">' + HQ.money(offer.price_incl) + ' <span class="hq-offer-unit">sau VAT</span></span>' +
-        '<span class="hq-offer-meta">NCC giữ nguyên giá · thu mua gợi ý ' + HQ.money(p.suggested_price) + "</span>" +
-        stateTag(p);
-    }
-    var main = p.vendor_price
-      ? '<span class="hq-offer-price">' + HQ.money(p.vendor_price) + ' <span class="hq-offer-unit">NCC báo lại</span></span>'
-      : '<span class="hq-offer-price is-proposed">' + HQ.money(p.suggested_price) +
-        ' <span class="hq-offer-unit">thu mua gợi ý</span></span>';
-    return '<span class="hq-offer-old" title="Giá sau VAT đang trên đơn mua ' + esc(p.order) + '"><s>' +
-      HQ.money(p.old_price) + "</s> giá trên đơn</span>" + main + stateTag(p);
+    var head = p.vendor_kept_price
+      ? '<span class="hq-offer-price">' + HQ.money(p.old_price) + ' <span class="hq-offer-unit">NCC giữ nguyên giá</span></span>' +
+        '<span class="hq-offer-meta">thu mua gợi ý ' + HQ.money(p.suggested_price) + "</span>"
+      : '<span class="hq-offer-old" title="Giá sau VAT đang trên đơn mua ' + esc(p.order) + '"><s>' +
+        HQ.money(p.old_price) + "</s> giá trên đơn</span>" + (p.vendor_price
+        ? '<span class="hq-offer-price">' + HQ.money(p.vendor_price) + ' <span class="hq-offer-unit">NCC báo lại</span></span>'
+        : '<span class="hq-offer-price is-proposed">' + HQ.money(p.suggested_price) +
+          ' <span class="hq-offer-unit">thu mua gợi ý</span></span>');
+    var notes = [p.buyer_note ? "Lý do: " + esc(p.buyer_note) : "",
+      // Không có nút nào cho sale = đang chờ người khác: nói rõ chờ ai.
+      p.can_requote || p.can_submit || p.can_keep ? "" : esc(p.state_label)].filter(Boolean);
+    return head + notes.map(function (n) { return '<span class="hq-offer-meta">' + n + "</span>"; }).join("") +
+      (p.reject_reason && p.state === "rejected" ? '<span class="hq-offer-short">Thu mua không duyệt: ' +
+        esc(p.reject_reason) + "</span>" : "") +
+      (p.vat_warning ? '<span class="hq-offer-short">' + esc(p.vat_warning) + "</span>" : "");
   };
 
   /** Nút việc của sale cho một đề xuất — trên ô so giá (hoặc ở khối phía trên khi món không có ô). */
@@ -87,8 +117,8 @@ window.HlvQuote = window.HlvQuote || {};
     return html ? '<div class="hq-pp-actions">' + html + "</div>" : "";
   };
 
-  /** inCompare: món có ô trên bảng so giá — nút thao tác nằm ở ô, ở đây chỉ còn thông tin. */
-  function item(p, inCompare) {
+  /** Đề xuất còn mở mà món không có ô trên bảng so giá (VD đã thu hồi NCC): vẽ đủ ở đây, kèm nút. */
+  function item(p) {
     var lines = ['<div class="hq-muted">Giá trên đơn ' + HQ.money(p.old_price) + (p.suggested_price
       ? " → thu mua gợi ý " + price(p.suggested_price) : "") + " (sau VAT)" +
       (p.buyer ? " · " + esc(p.buyer) : "") + (p.date ? " · " + esc(p.date) : "") + "</div>"];
@@ -110,11 +140,8 @@ window.HlvQuote = window.HlvQuote || {};
     if (p.vat_warning) {
       lines.push('<div class="hq-partial">' + esc(p.vat_warning) + "</div>");
     }
-    if (p.new_price && !DONE[p.state]) {
+    if (p.new_price) {
       lines.push("<div>Đã gửi duyệt: " + price(p.new_price) + " sau VAT</div>");
-    }
-    if (p.state === "approved") {
-      lines.push('<div class="hq-alloc-ok">Đơn mua đã đổi sang ' + HQ.money(p.new_price) + " sau VAT</div>");
     }
     if (p.reject_reason && p.state === "rejected") {
       lines.push('<div class="hq-expired">Thu mua không duyệt: ' + esc(p.reject_reason) + "</div>");
@@ -122,10 +149,10 @@ window.HlvQuote = window.HlvQuote || {};
     if (p.sale_note) {
       lines.push('<div class="hq-muted">Sale ghi: ' + esc(p.sale_note) + "</div>");
     }
-    return '<div class="hq-proposal' + (DONE[p.state] ? " is-done" : "") + '">' +
+    return '<div class="hq-proposal">' +
       '<div class="hq-share-head"><span>' + esc(p.product) + "</span>" + HQ.docChip(p.order) +
       '<span class="hq-muted">' + esc(p.vendor) + "</span>" + stateTag(p) + "</div>" +
-      lines.join("") + (inCompare ? "" : HQ.proposalActions(p)) + "</div>";
+      lines.join("") + HQ.proposalActions(p) + "</div>";
   }
 
   function proposalById(id) {
@@ -151,6 +178,15 @@ window.HlvQuote = window.HlvQuote || {};
 
   HQ.bindPriceProposalEvents = function () {
     var panel = HQ.$("hq-drawer-panel");
+    HQ.on(panel, "click", "[data-pp-jump]", function () {
+      var cell = panel.querySelector(".hq-offer.has-proposal");
+      if (cell) {
+        cell.scrollIntoView({ behavior: "smooth", block: "center" });
+        cell.classList.remove("is-flash");
+        void cell.offsetWidth;  // vẽ lại để bấm lần nữa vẫn nháy
+        cell.classList.add("is-flash");
+      }
+    });
     HQ.on(panel, "click", "[data-pp-requote]", function (el) {
       var p = proposalById(+el.dataset.ppRequote);
       var message = ask("Lời nhắn gửi " + (p.vendor || "NCC") + " — NCC thấy trên trang báo giá (sửa được):",

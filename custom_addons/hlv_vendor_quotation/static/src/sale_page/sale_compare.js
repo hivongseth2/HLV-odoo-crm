@@ -641,7 +641,7 @@ window.HlvQuote = window.HlvQuote || {};
             : '<div class="hq-muted">Chưa có mã đơn hàng</div>') +
           (o.warehouse_note ? '<div class="hq-po-note" title="Ghi chú odoo (kho)">Kho ghi: ' + esc(o.warehouse_note) + "</div>" : "") +
           "</td><td>" + esc(o.vendor) + "</td>" +
-          "<td>" + (o.vendor_event ? '<div class="hq-partial">' + (o.vendor_event_actor && o.vendor_event_actor !== o.vendor
+          "<td>" + (o.vendor_event && !HQ.orderHasOpenProposal(d, o.id) ? '<div class="hq-partial">' + (o.vendor_event_actor && o.vendor_event_actor !== o.vendor
             ? "<b>" + esc(o.vendor_event_actor) + ":</b> " : "") + esc(o.vendor_event) + "</div>" : "") +
           (o.vendor_ship ? '<div class="hq-muted hq-small" title="NCC đã gửi">' + esc(o.vendor_ship) + "</div>" : "") +
           (o.vendor_status ? '<span class="hq-tag hq-tag-ok">' + esc(o.vendor_status) + "</span>"
