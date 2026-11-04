@@ -38,6 +38,18 @@ class SalePageMixin:
     def _get_inquiry(self, inquiry_id, code):
         """Phiếu thuộc phạm vi mã sale đã kiểm — không cho mở phiếu của sale khác bằng id."""
         inquiry = request.env["hlv.vendor.inquiry"].browse(to_int(inquiry_id)).exists()
-        if not inquiry or (code and (inquiry.sale_code or "").upper() != code.upper()):
+        if not inquiry or (code and not self._inquiry_in_scope(inquiry, code)):
             raise UserError("Không tìm thấy phiếu hỏi giá.")
         return inquiry
+
+    @staticmethod
+    def _inquiry_in_scope(inquiry, code):
+        """Phiếu là của mã sale code: mã sale của phiếu, hoặc phiếu có YCMH mà "Người yêu cầu" là sale này — đơn mua
+        thuộc sale theo người yêu cầu của YCMH (cùng luật ô tìm số đơn mua, sale_page._purchase_order_inquiry_ids).
+        sudo: sale chỉ đọc hạn chế YCMH."""
+        if (inquiry.sale_code or "").upper() == code.upper():
+            return True
+        request_lines = inquiry.sudo().line_ids.request_line_ids
+        return bool(request_lines) and bool(request_lines.search_count(
+            [("id", "in", request_lines.ids)] + sale_scope.requester_scope_domain(code, "request_id.x_misa_requested_by"),
+            limit=1))

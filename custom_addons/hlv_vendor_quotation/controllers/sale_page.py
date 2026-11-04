@@ -116,10 +116,9 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
     def api_inquiries(self, code="", vendor_id=None, status="all", search="", page=1, **kw):
         scope = self._check(code)
         Inquiry = request.env["hlv.vendor.inquiry"]
-        base = sale_scope.scope_domain(scope)
+        base = self._scoped_search_domain(search, scope)
         if to_int(vendor_id):
-            base.append(("quote_ids.access_id.partner_id", "=", to_int(vendor_id)))
-        base += self._search_domain(search, base)
+            base = base + [("quote_ids.access_id.partner_id", "=", to_int(vendor_id))]
         counts = {key: Inquiry.search_count(base + self._status_domain(key, search)) for key, _label in STATUS_TABS}
         status = status if status in counts else "all"
         pager = paginate(counts[status], page, PER_PAGE)
@@ -449,15 +448,20 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
                 return order
         raise UserError("Không tìm thấy cuộc trao đổi.")
 
-    def _search_domain(self, search, base):
-        """`base`: phạm vi đang xem (mã sale, NCC) — số đơn mua phải dò trong phạm vi này, xem dưới."""
+    def _scoped_search_domain(self, search, scope):
+        """Phạm vi mã sale đang xem (scope: mã đã kiểm, False = mọi mã) + ô tìm.
+
+        Phiếu thuộc sale theo mã sale của phiếu. Riêng tìm theo số đơn mua: đơn mua thuộc sale theo "Người yêu cầu"
+        của YCMH sinh ra đơn đó (_purchase_order_inquiry_ids) — thu mua sửa người yêu cầu trên YCMH, hoặc hàng gộp vào
+        YCMH của sale khác, thì đơn đi theo người yêu cầu chứ không theo người lập phiếu."""
+        scope_dom = sale_scope.scope_domain(scope)
         search = (search or "").strip()
         if not search:
-            return []
+            return scope_dom
         if PURCHASE_ORDER_NUMBER.match(search):
             # Trông như số đơn mua thì dò đơn mua trước — khỏi quét sản phẩm / NCC / đơn bán. Không ra phiếu
             # nào mới quét hết: đầu mã chỉ là đoán, "P0…" / "PO1…" vẫn có thể là mã hàng.
-            inquiry_ids = self._purchase_order_inquiry_ids(search, base)
+            inquiry_ids = self._purchase_order_inquiry_ids(search, scope)
             if inquiry_ids:
                 return [("id", "in", inquiry_ids)]
         domains = [
@@ -469,18 +473,23 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             [("line_ids.product_id", "ilike", search)],
             [("quote_ids.partner_id", "ilike", search)],
         ]
+        domain = expression.AND([scope_dom, expression.OR(domains)])
         if NUMBER_ONLY.match(search):
-            domains.append([("id", "in", self._purchase_order_inquiry_ids(search, base))])
-        return expression.OR(domains)
+            domain = expression.OR([domain, [("id", "in", self._purchase_order_inquiry_ids(search, scope))]])
+        return domain
 
-    def _purchase_order_inquiry_ids(self, search, base):
-        """Id phiếu trong phạm vi `base` có đơn mua mà số chứa `search`.
+    def _purchase_order_inquiry_ids(self, search, scope):
+        """Id phiếu có đơn mua mà số chứa `search`, đơn lên từ dòng YCMH có "Người yêu cầu" là mã sale scope (False =
+        mọi mã). Điều kiện số đơn và người yêu cầu đặt trên CÙNG một dòng YCMH ("any") — không để dòng này khớp số đơn,
+        dòng YCMH khác khớp người yêu cầu.
 
         Dò ngay trong phạm vi, không lấy N đơn mua khớp rồi mới lọc: gõ "DMH0" thì N đơn mới nhất
-        thường là của sale / NCC khác → ra rỗng. sudo: đường dò đi qua dòng đơn mua, sale không có
+        thường là của sale / NCC khác → ra rỗng. sudo: đường dò đi qua YCMH / dòng đơn mua, sale không có
         quyền; chỉ trả id, search sau vẫn theo quyền sale."""
+        request_line_domain = [("purchase_lines.order_id.name", "ilike", search)] + sale_scope.requester_scope_domain(
+            scope, "request_id.x_misa_requested_by")
         return request.env["hlv.vendor.inquiry"].sudo().search(
-            base + [("line_ids.request_line_ids.purchase_lines.order_id.name", "ilike", search)]).ids
+            [("line_ids.request_line_ids", "any", request_line_domain)]).ids
 
     def _status_domain(self, status, search=""):
         if status == PRICE_TODO_TAB:

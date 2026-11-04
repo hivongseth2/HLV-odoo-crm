@@ -57,3 +57,18 @@ def can_handle_sale_code(env, code):
 def scope_domain(code, field="sale_code"):
     """Domain lọc theo mã đã kiểm (False = mọi mã). So không phân biệt hoa thường như MISA."""
     return [(field, "=ilike", code)] if code else []
+
+
+def _like_escape(text):
+    """Thoát ký tự đại diện của LIKE (gạch chéo ngược, %, _) để mã sale được so nguyên văn."""
+    return text.replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
+
+
+def requester_scope_domain(code, field="x_misa_requested_by"):
+    """Domain "Người yêu cầu" của YCMH là mã sale code — ô này ghi "TÊN (MÃ)" (requester_label, cùng dạng OwnerIDText
+    của MISA) hoặc chỉ "MÃ". Không phân biệt hoa thường. code False / rỗng (mọi mã) → [] = không lọc."""
+    code = (code or "").strip()
+    if not code:
+        return []
+    escaped = _like_escape(code)
+    return ["|", (field, "=ilike", escaped), (field, "=ilike", f"%({escaped})")]
