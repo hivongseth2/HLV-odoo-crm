@@ -120,6 +120,7 @@ window.HlvQuote = window.HlvQuote || {};
     ["quoted", "phiếu NCC đã báo giá — chờ bạn chọn"],
     ["requested", "phiếu đã lên YCMH"],
     ["partial", "phiếu còn thiếu hàng — hỏi thêm NCC"],
+    ["price", "phiếu thu mua trả về giá — hỏi lại NCC"],
   ];
 
   /* Icon tin nhắn (đen, vẽ bằng nét) cho badge số tin trao đổi. */

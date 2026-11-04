@@ -35,7 +35,9 @@ from ..services.vendor_mail import mail_defaults, send_vendor_mail
 from .sale_page_common import API, SalePageMixin, to_int
 
 PER_PAGE = 30
-STATUS_TABS = [("all", "Tất cả")] + SALE_STATUS
+# "price": phiếu thu mua trả về giá (đề xuất giá đang chờ sale) — không phải một tình trạng phiếu, lọc riêng.
+PRICE_TODO_TAB = "price"
+STATUS_TABS = [("all", "Tất cả"), (PRICE_TODO_TAB, "Thu mua trả về giá")] + SALE_STATUS
 # Trông như số đơn mua: DMH… (gõ mỗi "DMH" cũng tính — sale hay gõ đầu mã rồi mới gõ số), PO… theo sau
 # là số, hoặc P0… (số mặc định của Odoo). "PO" bắt buộc có số để "POLY…" (tên hàng) đi thẳng đường tìm thường.
 PURCHASE_ORDER_NUMBER = re.compile(r"^(?:DMH|PO[\s/._-]*\d|P0)", re.IGNORECASE)
@@ -481,6 +483,8 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             base + [("line_ids.request_line_ids.purchase_lines.order_id.name", "ilike", search)]).ids
 
     def _status_domain(self, status, search=""):
+        if status == PRICE_TODO_TAB:
+            return [("id", "in", request.env["hlv.po.price.proposal"]._sale_todo_inquiry_ids())]
         if status == "all":
             # "Tất cả" = phiếu còn theo dõi; phiếu đã đóng / huỷ xem ở tab riêng. Đang tìm thì gồm cả
             # phiếu đã đóng / huỷ: tìm lại số cơ hội sau một thời gian, phiếu thường đã tự đóng.

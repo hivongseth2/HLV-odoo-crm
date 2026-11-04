@@ -31,6 +31,8 @@ PROPOSAL_STATES = [
 # Đề xuất chưa xong: mỗi dòng đơn mua chỉ một cái. "rejected" vẫn mở — sale hỏi lại NCC lần nữa hoặc báo giữ giá.
 OPEN_STATES = ("sale", "vendor", "quoted", "to_approve", "rejected")
 REQUOTE_FROM = ("sale", "quoted", "rejected")
+# Đề xuất đang chờ SALE làm (hỏi lại NCC / gửi thu mua duyệt) — bộ lọc "Thu mua trả về giá" trên trang hỏi giá.
+SALE_TODO_STATES = ("sale", "quoted", "rejected")
 KEEP_FROM = ("sale", "vendor", "quoted", "rejected")
 
 
@@ -83,6 +85,13 @@ class PurchaseOrderPriceProposal(models.Model):
     def _compute_vat_warning(self):
         for proposal in self:
             proposal.vat_warning = vat_note(proposal.tax_rate, proposal.vendor_tax_rate) if proposal.vendor_date else ""
+
+    @api.model
+    def _sale_todo_inquiry_ids(self):
+        """Id các phiếu hỏi giá có đề xuất giá đang chờ sale làm (SALE_TODO_STATES). Đọc bằng sudo — sale không có quyền
+        model này; nơi gọi tự lọc phiếu theo phạm vi mã sale."""
+        groups = self.sudo()._read_group([("state", "in", SALE_TODO_STATES), ("inquiry_id", "!=", False)], ["inquiry_id"])
+        return [inquiry.id for (inquiry,) in groups]
 
     # ------------------------------------------------------------------ thu mua đề xuất
     @api.model

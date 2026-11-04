@@ -14,7 +14,7 @@ from ..models.vendor_quote_utils import (
 )
 from .sale_code import sale_code
 from .chat_read import chat_stats, seen_markers
-from .price_proposal_payload import inquiry_price_proposals
+from .price_proposal_payload import inquiry_price_proposals, sale_todo_count
 from .price_reuse import recent_vendor_price, reference_prices
 
 QUOTE_STATE_LABELS = {
@@ -165,6 +165,8 @@ def inquiry_summary(inquiry):
     return {
         "id": inquiry.id,
         "name": inquiry.name,
+        # Thu mua trả về giá (đề xuất giá đang chờ sale hỏi lại NCC / gửi duyệt) — dòng phiếu tô nổi + nhãn.
+        "price_todo": sale_todo_count(inquiry),
         "sale_code": inquiry.sale_code or "",
         "opportunity_ref": inquiry.opportunity_ref or "",
         "products": ", ".join(names) + (f" và {more} sản phẩm khác" if more > 0 else ""),

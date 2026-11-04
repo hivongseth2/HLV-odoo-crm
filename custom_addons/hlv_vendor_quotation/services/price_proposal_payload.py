@@ -4,7 +4,7 @@
 Đọc bằng sudo: sale không có quyền đơn mua / đề xuất giá — nơi gọi đã kiểm phiếu thuộc phạm vi mã sale.
 """
 
-from ..models.po_price_proposal import KEEP_FROM, PROPOSAL_STATES, REQUOTE_FROM
+from ..models.po_price_proposal import KEEP_FROM, PROPOSAL_STATES, REQUOTE_FROM, SALE_TODO_STATES
 from ..models.price_proposal_utils import requote_message
 from ..models.vendor_quote_utils import DATETIME_FMT, local_date_text
 
@@ -18,6 +18,24 @@ def inquiry_price_proposals(inquiry):
     proposals = inquiry.env["hlv.po.price.proposal"].sudo().search(
         [("inquiry_id", "=", inquiry.id), ("state", "!=", "cancel")], order="id desc", limit=PROPOSAL_LIMIT)
     return [_proposal(p) for p in proposals]
+
+
+def sale_todo_count(inquiry):
+    """Số đề xuất giá của phiếu đang chờ sale làm (hỏi lại NCC / gửi thu mua duyệt)."""
+    return inquiry.env["hlv.po.price.proposal"].sudo().search_count(
+        [("inquiry_id", "=", inquiry.id), ("state", "in", SALE_TODO_STATES)])
+
+
+def _other_offers(proposal):
+    """Giá các NCC KHÁC đã báo cho cùng món trên phiếu (rẻ trước) — phiếu hỏi nhiều NCC thì sale thấy ngay khi hỏi lại
+    NCC của đơn. Chỉ để tham khảo: đề xuất đổi giá trên đơn mua của NCC của đơn, không đổi NCC."""
+    own = proposal.quote_line_id
+    lines = own.inquiry_line_id.quote_line_ids.filtered(
+        lambda l: l.quote_id != own.quote_id and l.quote_state in ("quoted", "done") and l.price_unit
+        and not l.unavailable and not l.withdrawn)
+    offers = [{"vendor": l.partner_id.commercial_partner_id.display_name, "price": l.price_unit * (1 + l.tax_rate / 100.0),
+               "supply": l._availability_text()} for l in lines]
+    return sorted(offers, key=lambda o: o["price"])
 
 
 def _proposal(proposal):
@@ -46,4 +64,5 @@ def _proposal(proposal):
         "can_requote": proposal.state in REQUOTE_FROM and bool(proposal.quote_line_id),
         "can_submit": proposal.state == "quoted",
         "can_keep": proposal.state in KEEP_FROM,
+        "other_offers": _other_offers(proposal),
     }

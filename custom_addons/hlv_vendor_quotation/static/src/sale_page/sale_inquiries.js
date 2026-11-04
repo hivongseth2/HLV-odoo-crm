@@ -105,9 +105,13 @@ window.HlvQuote = window.HlvQuote || {};
   }
 
   function renderKpis() {
-    HQ.$("hq-kpis").innerHTML = HQ.KPIS.map(function (kpi) {
+    HQ.$("hq-kpis").innerHTML = HQ.KPIS.filter(function (kpi) {
+      // "Thu mua trả về giá" chỉ hiện khi có phiếu (hoặc đang lọc) — thường là 0, khỏi chiếm chỗ.
+      return kpi[0] !== "price" || S.counts.price || S.status === "price";
+    }).map(function (kpi) {
+      var warn = (kpi[0] === "quoted" || kpi[0] === "price") && S.counts[kpi[0]];
       return '<button type="button" class="hq-kpi' + (S.status === kpi[0] ? " is-active" : "") +
-        (kpi[0] === "quoted" && S.counts.quoted ? " is-warn" : "") + '" data-status="' + kpi[0] + '">' +
+        (warn ? " is-warn" : "") + '" data-status="' + kpi[0] + '">' +
         '<span class="hq-kpi-num">' + (S.counts[kpi[0]] || 0) + "</span>" +
         '<span class="hq-kpi-label">' + esc(kpi[1]) + "</span></button>";
     }).join("");
@@ -131,7 +135,8 @@ window.HlvQuote = window.HlvQuote || {};
       var none = '<span class="hq-muted">—</span>';
       // Có tin NCC chưa xem: tô cả dòng + icon tin nhắn nền cam có số — nhìn bảng là biết phiếu nào cần vào xem.
       var chat = HQ.chatIcon(q.chat_count, q.chat_unread);
-      return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") + (q.request_rejected ? " hq-row-alert" : "") +
+      return '<tr class="hq-row' + (q.chat_unread ? " hq-row-new" : "") +
+        (q.request_rejected || q.price_todo ? " hq-row-alert" : "") +
         '" data-inquiry="' + q.id + '">' +
         '<td class="hq-nowrap"><span class="hq-ref">' + esc(q.name) + "</span>" + (chat ? " " + chat : "") +
         (q.opportunity_ref ? '<div class="hq-muted" title="Số cơ hội">' + esc(q.opportunity_ref) + "</div>" : "") +
@@ -146,6 +151,8 @@ window.HlvQuote = window.HlvQuote || {};
         '<td class="hq-nowrap hq-num">' + esc(q.deadline || "—") + "</td>" +
         '<td><span class="hq-tag ' + (HQ.SALE_STATUS_CLASS[q.sale_status] || "") + '">' +
         esc(q.sale_status_label) + "</span>" +
+        (q.price_todo ? '<div><span class="hq-tag hq-tag-danger" title="Thu mua đề xuất giá — vào phiếu hỏi lại NCC">' +
+          "Thu mua trả về giá" + (q.price_todo > 1 ? " (" + q.price_todo + ")" : "") + "</span></div>" : "") +
         (q.close_reason ? '<div class="hq-muted hq-small">' + esc(q.close_reason) + "</div>" : "") + "</td></tr>";
     }).join("");
   }

@@ -36,6 +36,12 @@ window.HlvQuote = window.HlvQuote || {};
     if (p.buyer_note) {
       lines.push("<div>Lý do: " + esc(p.buyer_note) + "</div>");
     }
+    if ((p.other_offers || []).length) {
+      // Phiếu hỏi nhiều NCC: giá NCC khác đã báo cho cùng món — để sale có số mà thương lượng với NCC của đơn.
+      lines.push('<div class="hq-muted">NCC khác đã báo: ' + p.other_offers.map(function (o) {
+        return esc(o.vendor) + " " + price(o.price) + (o.supply ? " (" + esc(o.supply) + ")" : "");
+      }).join(" · ") + "</div>");
+    }
     if (p.vendor_price) {
       lines.push("<div>NCC báo lại: " + price(p.vendor_price) + " sau VAT</div>");
     }
@@ -74,7 +80,7 @@ window.HlvQuote = window.HlvQuote || {};
       html += (hidden ? '<button type="button" class="hq-link-btn" data-pp-reask="' + p.id + '">Hỏi lại NCC lần nữa</button>' : "") +
         '<div class="hq-close-row' + (hidden ? " hq-hidden" : "") + '" data-pp-box="' + p.id + '">' +
         '<label class="hq-sr-only" for="hq-pp-msg-' + p.id + '">Lời nhắn gửi NCC</label>' +
-        '<textarea class="hq-input" rows="3" id="hq-pp-msg-' + p.id + '" data-pp-msg="' + p.id + '">' +
+        '<textarea class="hq-input hq-textarea" rows="3" id="hq-pp-msg-' + p.id + '" data-pp-msg="' + p.id + '">' +
         esc(p.vendor_message || p.default_message) + "</textarea>" +
         '<button type="button" class="hq-btn' + (hidden ? "" : " hq-btn-primary") + '" data-pp-requote="' + p.id +
         '" title="Mở lại món này trên báo giá của NCC và gửi lời nhắn — NCC báo lại giá trên trang NCC">Hỏi lại NCC</button></div>';
