@@ -253,8 +253,7 @@ window.HlvQuote = window.HlvQuote || {};
     D.detail = d;
     HQ.addVendorDetail = d;
     HQ.$("hq-drawer-panel").innerHTML =
-      '<div class="hq-drawer-head"><div><div class="hq-muted">Phiếu hỏi giá' +
-      (d.sale_code ? " · " + esc(HQ.saleName(d.sale_code)) : "") + "</div>" +
+      '<div class="hq-drawer-head"><div><div class="hq-muted">Phiếu hỏi giá</div>' +
       '<h2 class="hq-h2">' + esc(d.name) + ' <span class="hq-tag ' + (HQ.SALE_STATUS_CLASS[d.sale_status] || "") +
       '">' + esc(d.sale_status_label) + "</span></h2></div>" +
       '<button type="button" class="btn-close" data-close="drawer" aria-label="Đóng"></button></div>' +
@@ -355,8 +354,8 @@ window.HlvQuote = window.HlvQuote || {};
         return offer && HQ.openProposal(d, offer.line_id);
       });
       return "<tr" + (proposed ? ' class="hq-row-proposal"' : "") + "><td>" + esc(line.name) +
-        (proposed ? '<div><span class="hq-tag hq-tag-warn">Thu mua trả về giá</span></div>' : "") +
-        (tag ? "<div>" + tag + "</div>" : "") +
+        (proposed ? '<div><span class="hq-tag hq-tag-warn" title="Món đã lên đơn mua — thu mua muốn đổi giá, sale hỏi ' +
+          'lại NCC">Thu mua trả về giá</span></div>' : tag ? "<div>" + tag + "</div>" : "") +
         '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
         (Math.abs(line.need_qty - line.qty) > EPS ? '<div class="hq-muted hq-small">cần ' + HQ.qty(line.need_qty) + "</div>" : "") +
         "</td>" + d.vendors.map(function (v) {
@@ -448,9 +447,12 @@ window.HlvQuote = window.HlvQuote || {};
     var qty = canChoose
       ? '<label class="hq-buy-label">SL mua <input type="number" class="hq-input hq-buy-input" min="0" step="any" ' +
         'inputmode="decimal" data-buy-qty="' + offer.line_id + '" value="' + offer.chosen_qty + '"/></label> ' + esc(uom)
-      : "SL mua " + HQ.qty(offer.chosen_qty) + " " + esc(uom);
+      : offer.ordered_qty > EPS
+        ? '<span title="Đã đặt / SL mua">Đã đặt ' + HQ.qty(offer.ordered_qty) + "/" + HQ.qty(offer.chosen_qty) + " " +
+          esc(uom) + "</span>"
+        : "SL mua " + HQ.qty(offer.chosen_qty) + " " + esc(uom);
     return '<div class="hq-buy">' + qty +
-      (offer.ordered_qty > EPS ? '<span class="hq-muted">đã đặt ' + HQ.qty(offer.ordered_qty) + "</span>" : "") +
+      (canChoose && offer.ordered_qty > EPS ? '<span class="hq-muted">đã đặt ' + HQ.qty(offer.ordered_qty) + "</span>" : "") +
       ((offer.request_names || []).length ? docChips(offer.request_names)
         : offer.to_request ? '<span class="hq-partial">chưa lên YCMH</span>' : "") + "</div>";
   }
@@ -490,9 +492,9 @@ window.HlvQuote = window.HlvQuote || {};
         HQ.money(offer.price_incl) +
         ' <span class="hq-offer-unit">sau VAT</span></span>' +
         '<span class="hq-offer-incl">' + HQ.money(offer.price_unit) + " chưa VAT</span>") +
-      (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
+      (meta && !proposal ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
       (offer.supply ? '<span class="hq-offer-short" title="NCC không đủ số lượng hỏi">' + esc(offer.supply) + "</span>" : "") +
-      (offer.list_price ? '<span class="hq-offer-meta">Trước CK ' + HQ.money(offer.list_price_incl) + " · CK " +
+      (offer.list_price && !proposal ? '<span class="hq-offer-meta">Trước CK ' + HQ.money(offer.list_price_incl) + " · CK " +
         HQ.qty(offer.discount) + "%</span>" : "") +
       (offer.invoice_name ? '<span class="hq-offer-meta" title="Tên xuất hóa đơn: ' + esc(offer.invoice_name) + '">HĐ: ' +
         esc(offer.invoice_name) + "</span>" : "") +

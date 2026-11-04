@@ -543,9 +543,14 @@
 .hq-compare tr.hq-row-proposal > td { background: var(--hq-warn-soft); }
 .hq-offer.has-proposal, .hq-offer.is-selected.has-proposal { background: var(--hq-warn-soft);
     box-shadow: inset 3px 0 0 var(--hq-warn); }
-.hq-offer-old { display: block; font-size: .75rem; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
-.hq-offer-old s { color: var(--hq-danger); }
-.hq-offer-price.is-proposed { color: var(--hq-warn-ink); }
+/* Một hàng: giá trên đơn gạch (nhỏ, đỏ) → giá mới. */
+.hq-offer-old { font-size: .75rem; font-weight: 400; color: var(--hq-danger); }
+.hq-offer-price .is-proposed { color: var(--hq-warn-ink); }
+.hq-pp-detail-btn { justify-self: start; font-size: .75rem; }
+.hq-pp-steps { font-size: .75rem; padding: .35rem .5rem; background: #fff; border: 1px solid var(--hq-line);
+    border-radius: var(--hq-radius); }
+.hq-pp-steps ol { margin: 0; padding-left: 1.1rem; }
+.hq-pp-steps li + li { margin-top: .2rem; }
 .hq-offer.has-proposal .hq-tag { justify-self: start; }
 .hq-pp-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
 /* Dải "việc cần làm" đầu ngăn: một câu + một nút dẫn tới ô tô cam — thay cho khối chữ dài lặp lại ô. */

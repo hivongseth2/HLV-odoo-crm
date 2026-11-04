@@ -15,7 +15,7 @@ window.HlvQuote = window.HlvQuote || {};
   var SEARCH_DELAY = 3000;
 
   // Một ô cho cả "đơn bán" và "mã đơn hàng": trùng số đơn bán thì server gắn luôn đơn bán (action_set_order_ref_crm).
-  HQ.ORIGIN_LABEL = "Mã đơn hàng của khách (Tài liệu gốc đơn mua) — số đơn DH… / S…, gõ xong bấm Enter để tìm";
+  HQ.ORIGIN_LABEL = "Mã đơn hàng của khách (Tài liệu gốc đơn mua)";
   var ORIGIN_LABEL = HQ.ORIGIN_LABEL;
 
   function inputId(key) {

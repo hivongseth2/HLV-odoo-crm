@@ -58,6 +58,9 @@ def _proposal(proposal):
         "old_price": proposal.old_price_incl,
         "suggested_price": proposal.suggested_price_incl,
         "vendor_price": proposal.vendor_price_incl,
+        "vendor_date": local_date_text(proposal.vendor_date, DATETIME_FMT),
+        "tax_rate": proposal.tax_rate,
+        "vendor_tax_rate": proposal.vendor_tax_rate,
         "new_price": proposal.new_price_incl,
         "vat_warning": proposal.vat_warning or "",
         "vendor_message": proposal.vendor_message or "",
@@ -68,6 +71,7 @@ def _proposal(proposal):
         "vendor_kept_price": proposal.vendor_kept_price,
         # NCC giữ nguyên giá thì không có gì để thu mua duyệt (_sale_submit cũng chặn).
         "can_submit": proposal.state == "quoted" and not proposal.vendor_kept_price,
-        "can_keep": proposal.state in KEEP_FROM,
+        # NCC đã báo giá mới thì việc là gửi duyệt hoặc hỏi lại — "NCC giữ giá" chỉ còn khi NCC chưa báo / giữ nguyên.
+        "can_keep": proposal.state in KEEP_FROM and not (proposal.vendor_date and not proposal.vendor_kept_price),
         "other_offers": _other_offers(proposal),
     }
