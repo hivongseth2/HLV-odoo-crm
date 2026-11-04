@@ -5,7 +5,6 @@
 """
 
 from ..models.po_price_proposal import KEEP_FROM, PROPOSAL_STATES, REQUOTE_FROM, SALE_TODO_STATES
-from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import DATETIME_FMT, local_date_text
 
 STATE_LABELS = dict(PROPOSAL_STATES)
@@ -36,6 +35,12 @@ def _other_offers(proposal):
     offers = [{"vendor": l.partner_id.commercial_partner_id.display_name, "price": l.price_unit * (1 + l.tax_rate / 100.0),
                "supply": l._availability_text()} for l in lines]
     return sorted(offers, key=lambda o: o["price"])
+
+
+def vat_options(company):
+    """[{code, label}] mức VAT chọn được trong popup / kiểm ở API — chỉ mức company đã khai thuế mua."""
+    options = company.env["hlv.vendor.quote.line"]._hlv_vat_options(company)
+    return [{"code": code, "label": label} for code, label in options]
 
 
 def _product(product):
@@ -87,7 +92,7 @@ def _proposal(proposal):
         # VAT: mã thu mua đề xuất / sale chốt (rỗng = giữ VAT trên đơn); form điền sẵn cái sale chốt, chưa có thì của thu mua.
         "suggested_vat": proposal.suggested_vat or "",
         "form_vat": proposal.new_vat or proposal.suggested_vat or "",
-        "vat_options": [{"code": code, "label": label} for code, label in VAT_SELECTION],
+        "vat_options": vat_options(proposal.purchase_order_id.company_id),
         "qty_received": proposal.order_line_id.sudo().qty_received,
         "can_requote": proposal.state in REQUOTE_FROM and bool(proposal.quote_line_id),
         "vendor_kept_price": proposal.vendor_kept_price,

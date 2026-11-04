@@ -383,6 +383,15 @@ class VendorQuoteLine(models.Model):
         return self._hlv_purchase_tax(self.vat, self.quote_id.company_id or self.env.company)
 
     @api.model
+    def _hlv_vat_options(self, company):
+        """Mã VAT (VAT_SELECTION) chọn được: "kct" luôn có (không thuế); mức % chỉ khi company đã khai thuế mua % đó — chọn
+        mức chưa khai thì không ghi được thuế lên đơn mua. Trả [(mã, nhãn)] theo thứ tự VAT_SELECTION."""
+        amounts = set(self.env["account.tax"].sudo().with_company(company).search([
+            ("type_tax_use", "=", "purchase"), ("amount_type", "=", "percent"), ("company_id", "=", company.id),
+        ]).mapped("amount"))
+        return [(code, label) for code, label in VAT_SELECTION if code == "kct" or float(code) in amounts]
+
+    @api.model
     def _hlv_purchase_tax(self, vat, company):
         """Thuế mua (loại %) của company cho mã VAT (VAT_SELECTION). Trống / "kct" → không thuế; công ty chưa khai thuế %
         đó → recordset rỗng (nơi gọi tự báo lỗi nếu cần)."""

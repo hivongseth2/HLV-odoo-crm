@@ -22,7 +22,6 @@ from odoo.http import request
 
 from ..models.vendor_inquiry import CLOSE_REASONS, SALE_STATUS
 from ..models.vendor_quote_access import SALE_PAGE_ROUTE
-from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import local_date_text, paginate
 from ..services import sale_page_payload as payload
 from ..services import sale_scope
@@ -65,7 +64,6 @@ class VendorQuoteSalePage(SalePageMixin, http.Controller):
             "codes": codes,
             "can_see_all": sale_scope.can_see_all(env),
             "all_code": sale_scope.ALL_SALES,
-            "vat_options": VAT_SELECTION,
             "status_tabs": STATUS_TABS,
             # Danh bạ sale: JS hiện tên thay cho mã sale (mã chưa khai vẫn hiện mã).
             "sale_names": env["hlv.vendor.sale.contact"]._name_map(),

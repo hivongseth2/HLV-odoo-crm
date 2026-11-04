@@ -6,7 +6,6 @@
 from odoo import api, fields, models
 
 from ..models.purchase_order_revision import tax_rate_of
-from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import price_incl_vat
 
 
@@ -32,12 +31,17 @@ class PurchaseOrderPriceProposalWizard(models.TransientModel):
                                            domain=[("purchase_ok", "=", True)],
                                            help="Để trống nếu giữ mã. Duyệt xong: dòng mã cũ về SL 0, mã mới thành "
                                                 "dòng mới.")
-    suggested_vat = fields.Selection(VAT_SELECTION, string="Đổi VAT",
+    suggested_vat = fields.Selection(selection="_selection_vat", string="Đổi VAT",
                                      help="Để trống nếu giữ VAT. Hỏi NCC thì NCC xác nhận VAT trên trang NCC; không hỏi NCC "
                                           "thì giữ giá chưa VAT, chỉ đổi thuế.")
     note = fields.Text(string="Lý do", required=True,
                        help="VD: NCC khác báo rẻ hơn, khách mua thêm, mã cũ ngừng sản xuất… — sale đọc trên trang Hỏi "
                             "giá NCC.")
+
+    @api.model
+    def _selection_vat(self):
+        """Chỉ các mức VAT công ty đã khai thuế mua (vendor_quote_line._hlv_vat_options)."""
+        return self.env["hlv.vendor.quote.line"]._hlv_vat_options(self.env.company)
 
     @api.depends("order_line_id.price_unit", "order_line_id.taxes_id")
     def _compute_current_price_incl(self):

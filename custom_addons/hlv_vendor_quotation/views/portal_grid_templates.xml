@@ -182,8 +182,11 @@
                     <option value="">—</option>
                     <option t-foreach="vat_options" t-as="opt" t-att-value="opt[0]"
                             t-att-selected="opt[0] == vat_value" t-esc="opt[1]"/>
+                    <!-- Dòng đã lưu mức mà công ty không còn khai: giữ trong ô để không mất giá trị cũ. -->
+                    <option t-if="line.vat and line.vat == vat_value and vat_value not in dict(vat_options)" t-att-value="vat_value"
+                            selected="selected" t-esc="vat_labels.get(vat_value, vat_value)"/>
                 </select>
-                <span t-else="" class="vq-cell-text" t-esc="dict(vat_options).get(line.vat, '—')"/>
+                <span t-else="" class="vq-cell-text" t-esc="vat_labels.get(line.vat, '—')"/>
             </td>
             <!-- Giá đã gồm VAT. Bật chiết khấu: ô là giá trước CK, dòng nhỏ dưới là giá sau CK.
                  Rê chuột xem giá chưa VAT + tiền VAT (sau CK). -->

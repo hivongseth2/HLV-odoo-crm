@@ -467,7 +467,8 @@ class VendorQuotePortal(http.Controller):
             "parse_num": parse_vn_number,
             # Ngày giờ theo giờ VN — Datetime Odoo lưu UTC, strftime thẳng sẽ lệch ngày.
             "fdate": local_date_text,
-            "vat_options": VAT_SELECTION,
+            "vat_options": request.env["hlv.vendor.quote.line"]._hlv_vat_options(request.env.company.sudo()),
+            "vat_labels": dict(VAT_SELECTION),
             "default_vat": DEFAULT_VENDOR_VAT,
             "post": {},
             "errors": [],

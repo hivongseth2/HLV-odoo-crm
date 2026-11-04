@@ -6,8 +6,8 @@ from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import request
 
-from ..models.vendor_quote_line import VAT_SELECTION
 from ..services import sale_page_payload as payload
+from ..services.price_proposal_payload import vat_options
 from .sale_page_common import API, SalePageMixin, to_int
 
 
@@ -32,8 +32,9 @@ class VendorQuotePriceProposal(SalePageMixin, http.Controller):
         except (TypeError, ValueError):
             raise UserError("Số lượng / giá không hợp lệ.") from None
         vat = str(vat or "")
-        if vat and vat not in dict(VAT_SELECTION):
-            raise UserError("VAT không hợp lệ.")
+        company = proposal.purchase_order_id.company_id
+        if vat and vat not in {o["code"] for o in vat_options(company)}:
+            raise UserError("Công ty chưa khai thuế mua mức VAT này — chọn mức khác.")
         proposal._sale_send(qty, product, bool(needs_vendor), max(price, 0.0), str(note or "")[:1000], vat)
         return payload.inquiry_detail(inquiry)
 
