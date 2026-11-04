@@ -380,12 +380,17 @@ class VendorQuoteLine(models.Model):
         }
 
     def _purchase_tax(self):
-        if not self.vat or self.vat == "kct":
+        return self._hlv_purchase_tax(self.vat, self.quote_id.company_id or self.env.company)
+
+    @api.model
+    def _hlv_purchase_tax(self, vat, company):
+        """Thuế mua (loại %) của company cho mã VAT (VAT_SELECTION). Trống / "kct" → không thuế; công ty chưa khai thuế %
+        đó → recordset rỗng (nơi gọi tự báo lỗi nếu cần)."""
+        if not vat or vat == "kct":
             return self.env["account.tax"]
-        company = self.quote_id.company_id or self.env.company
         return self.env["account.tax"].with_company(company).search([
             ("type_tax_use", "=", "purchase"),
             ("amount_type", "=", "percent"),
-            ("amount", "=", self.tax_rate),
+            ("amount", "=", float(vat)),
             ("company_id", "=", company.id),
         ], limit=1)

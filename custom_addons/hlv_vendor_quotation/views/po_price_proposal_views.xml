@@ -75,6 +75,9 @@
                             <field name="suggested_product_id" invisible="not suggested_product_id"/>
                             <field name="new_qty" invisible="not new_qty"/>
                             <field name="new_product_id" invisible="not new_product_id"/>
+                            <field name="suggested_vat" invisible="not suggested_vat"/>
+                            <field name="new_vat" invisible="not new_vat"/>
+                            <field name="apply_vat" invisible="not apply_vat"/>
                             <field name="needs_vendor" invisible="state == 'sale'"/>
                         </group>
                     </group>
@@ -139,8 +142,8 @@
         <field name="arch" type="xml">
             <form string="Đề xuất">
                 <p class="text-muted">
-                    Dòng này lên từ trang hỏi giá nên không sửa trực tiếp. Ghi điều muốn đổi (giá / SL / mã — đều tuỳ
-                    chọn) + lý do: sale sửa lại nếu cần rồi hỏi NCC, xong gửi về đây để thu mua duyệt. Duyệt xong: tăng
+                    Dòng này lên từ trang hỏi giá nên không sửa trực tiếp. Ghi điều muốn đổi (giá / SL / mã / VAT — đều
+                    tuỳ chọn) + lý do: sale sửa lại nếu cần rồi hỏi NCC, xong gửi về đây để thu mua duyệt. Duyệt xong: tăng
                     SL thì phần thêm thành dòng mới, đổi mã thì dòng cũ về SL 0 và mã mới thành dòng mới.
                 </p>
                 <group>
@@ -149,6 +152,7 @@
                         <field name="product_id"/>
                         <field name="vendor_id"/>
                         <field name="current_price_incl"/>
+                        <field name="current_tax_rate"/>
                         <field name="current_qty"/>
                         <field name="uom_id"/>
                     </group>
@@ -156,6 +160,7 @@
                         <field name="suggested_price_incl"/>
                         <field name="suggested_qty"/>
                         <field name="suggested_product_id" options="{'no_create': True}"/>
+                        <field name="suggested_vat" placeholder="Giữ VAT trên đơn"/>
                     </group>
                 </group>
                 <group>

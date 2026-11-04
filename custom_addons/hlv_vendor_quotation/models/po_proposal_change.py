@@ -10,14 +10,17 @@ thành MỘT phiên bản (hlv.po.revision, có bản chụp trước / sau; NCC
 - đổi mã: dòng mã cũ về SL 0 (giữ dòng để còn lịch sử — Odoo không cho xoá dòng đơn đã xác nhận), mã mới là dòng mới +
   dòng YCMH mới trên cùng YCMH.
 Phiếu hỏi giá đổi theo (SL mua của NCC, SL cần mua) để bảng so giá khớp với đơn mua.
+VAT: đổi được như SL / mã. Hỏi NCC thì dòng đơn lấy đúng VAT + giá chưa VAT NCC báo (khớp hoá đơn NCC sẽ xuất); không
+hỏi NCC thì giữ giá chưa VAT, chỉ đổi thuế (giá sau VAT đổi theo).
 """
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
-from .price_proposal_utils import same_money
+from .price_proposal_utils import same_money, vat_label, vat_rate
 from .purchase_order_line_price import PRICE_WRITE_CTX
 from .purchase_order_revision import tax_rate_of
+from .vendor_quote_line import VAT_SELECTION
 from .vendor_quote_utils import format_vn_number, split_unit_price
 
 QTY_EPS = 1e-6
@@ -34,6 +37,10 @@ class PriceProposalLineChange(models.Model):
     # Cái sale chốt gửi đi (sửa lại từ đề xuất của thu mua): 0 / trống = giữ như trên đơn.
     new_qty = fields.Float(string="SL mới", digits="Product Unit of Measure", readonly=True)
     new_product_id = fields.Many2one("product.product", string="Mã mới", readonly=True)
+    suggested_vat = fields.Selection(VAT_SELECTION, string="VAT thu mua đề xuất", readonly=True)
+    new_vat = fields.Selection(VAT_SELECTION, string="VAT mới", readonly=True)
+    # VAT sẽ ghi lên đơn khi duyệt — chốt lúc gửi thu mua: VAT NCC báo (hỏi NCC) hoặc VAT sale chọn (gửi thẳng).
+    apply_vat = fields.Selection(VAT_SELECTION, string="VAT áp khi duyệt", readonly=True)
     needs_vendor = fields.Boolean(string="Cần NCC báo giá lại", default=True, readonly=True)
     new_quote_line_id = fields.Many2one("hlv.vendor.quote.line", string="Dòng báo giá mã mới", readonly=True,
                                         ondelete="set null")
@@ -53,27 +60,33 @@ class PriceProposalLineChange(models.Model):
     def _qty_changed(self):
         return bool(self.new_qty) and abs(self.new_qty - self.old_qty) > QTY_EPS
 
+    def _vat_changed(self):
+        return bool(self.new_vat) and abs(vat_rate(self.new_vat) - self.tax_rate) > QTY_EPS
+
     def _has_line_change(self):
-        """Có đổi SL / mã (không chỉ giá)."""
-        return self._product_changed() or self._qty_changed()
+        """Có đổi SL / mã / VAT (không chỉ giá)."""
+        return self._product_changed() or self._qty_changed() or self._vat_changed()
 
     def _target_quote_line(self):
         """Dòng báo giá NCC báo giá cho cái sẽ mua: dòng mã mới khi đổi mã, không thì dòng cũ."""
         return self.new_quote_line_id if self._product_changed() else self.quote_line_id
 
     def _change_text(self):
-        """"SL 1 → 2 Cái", "mã A → B" — "" khi chỉ đổi giá. Dùng trong tin gửi NCC / thu mua / sale."""
+        """"SL 1 → 2 Cái", "mã A → B", "VAT 8% → 10%" — "" khi chỉ đổi giá. Dùng trong tin gửi NCC / thu mua / sale."""
         parts = []
         if self._product_changed():
             parts.append(_("mã %(old)s → %(new)s", old=self.product_id.display_name, new=self.new_product_id.display_name))
         if self._qty_changed():
             parts.append(_("SL %(old)s → %(new)s %(uom)s", old=format_vn_number(self.old_qty),
                            new=format_vn_number(self.new_qty), uom=self.uom_id.name or ""))
+        if self._vat_changed():
+            parts.append(_("VAT %(old)s%% → %(new)s", old=format_vn_number(self.tax_rate), new=vat_label(self.new_vat)))
         return "; ".join(parts)
 
     # ------------------------------------------------------------------ sale chốt SL / mã
-    def _set_line_target(self, qty, product):
-        """Sale chốt SL / mã sẽ hỏi NCC hoặc gửi duyệt (sửa lại đề xuất của thu mua nếu cần). product rỗng = giữ mã.
+    def _set_line_target(self, qty, product, vat=""):
+        """Sale chốt SL / mã / VAT sẽ hỏi NCC hoặc gửi duyệt (sửa lại đề xuất của thu mua nếu cần). product rỗng = giữ mã,
+        vat rỗng = giữ VAT trên đơn.
         Lỗi: SL ≤ 0; giảm dưới SL kho đã nhận; đổi mã khi kho đã nhận mã cũ."""
         self.ensure_one()
         po_line = self.order_line_id.sudo()
@@ -89,6 +102,7 @@ class PriceProposalLineChange(models.Model):
         self.sudo().write({
             "new_qty": qty if abs(qty - self.old_qty) > QTY_EPS else 0.0,
             "new_product_id": product.id if changed else False,
+            "new_vat": vat if vat and abs(vat_rate(vat) - self.tax_rate) > QTY_EPS else False,
         })
 
     def _prepare_target_quote_line(self):
@@ -140,29 +154,42 @@ class PriceProposalLineChange(models.Model):
                               order=order.name, n=pending.number))
         line = self.order_line_id.sudo()
         tax = tax_rate_of(line)
+        new_tax = vat_rate(self.apply_vat) if self.apply_vat else tax
+        taxes = None
+        if abs(new_tax - tax) > QTY_EPS:
+            taxes = self.env["hlv.vendor.quote.line"]._hlv_purchase_tax(self.apply_vat, order.company_id)
+            if self.apply_vat != "kct" and not taxes:
+                raise UserError(_("Công ty chưa khai thuế mua %s — không đổi VAT dòng đơn được.", vat_label(self.apply_vat)))
         new_unit = line.price_unit
-        if not same_money(self.new_price_incl, self.old_price_incl):
-            new_unit = split_unit_price(self.new_price_incl, tax)[0] or line.price_unit
+        # Không hỏi NCC: giữ giá chưa VAT (đổi VAT thì giá sau VAT đổi theo). Hỏi NCC: giá chưa VAT tính từ giá sau VAT
+        # NCC báo theo VAT sẽ áp — đúng số NCC xuất hoá đơn.
+        if self.needs_vendor and (taxes is not None or not same_money(self.new_price_incl, self.old_price_incl)):
+            new_unit = split_unit_price(self.new_price_incl, new_tax)[0] or line.price_unit
         locked = order.state == "done"
         if locked:
             order.button_unlock()
         before = order._hlv_snapshot()
-        changes = self._apply_to_order(line, new_unit)
+        changes = self._apply_to_order(line, new_unit, taxes)
         after = order._hlv_snapshot()
         if locked:
             order.button_done()
         return order._hlv_record_proposal_revision(changes, before, after, self)
 
-    def _apply_to_order(self, line, new_unit):
-        """Ghi lên đơn + YCMH + phiếu. Trả [(dòng đơn, SL cũ, SL mới, đơn giá cũ, đơn giá mới)] (chưa VAT)."""
+    def _apply_to_order(self, line, new_unit, taxes=None):
+        """Ghi lên đơn + YCMH + phiếu. taxes: thuế mới của dòng (None = giữ). Trả [(dòng đơn, SL cũ, SL mới, đơn giá cũ,
+        đơn giá mới — chưa VAT, % VAT cũ, % VAT mới)]."""
         old_qty, old_unit = line.product_qty, line.price_unit
+        old_tax = tax_rate_of(line)
+        new_tax = sum(taxes.filtered(lambda t: t.amount_type == "percent").mapped("amount")) if taxes is not None \
+            else old_tax
         # Đổi SL làm Odoo tính lại giá + ngày giao theo bảng giá NCC — ghi kèm giá / ngày đang có trong cùng write.
         write = line.with_context(**{PRICE_WRITE_CTX: True}).write
         if self._product_changed():
-            new_line = self._add_order_line(self.new_quote_line_id, self._target_qty(), new_unit, new_request=True)
+            new_line = self._add_order_line(self.new_quote_line_id, self._target_qty(), new_unit, True, taxes)
             write({"product_qty": 0.0, "price_unit": old_unit, "date_planned": line.date_planned})
             self._shift_choice(self.quote_line_id, -old_qty)
-            return [(line, old_qty, 0.0, old_unit, old_unit), (new_line, 0.0, new_line.product_qty, new_unit, new_unit)]
+            return [(line, old_qty, 0.0, old_unit, old_unit, old_tax, old_tax),
+                    (new_line, 0.0, new_line.product_qty, new_unit, new_unit, new_tax, new_tax)]
         target = self._target_qty()
         delta = target - old_qty
         # Tăng mà kho chưa nhận gì: cộng thẳng vào dòng cũ. Đã nhận một phần thì tách dòng mới — gộp sẽ đổi giá cả phần
@@ -173,17 +200,19 @@ class PriceProposalLineChange(models.Model):
         request_line = self._open_request_line(self.quote_line_id) if merge else None
         new_qty = target if merge or delta < -QTY_EPS else old_qty
         vals = {"price_unit": new_unit}
+        if taxes is not None:
+            vals["taxes_id"] = [(6, 0, taxes.ids)]
         if abs(new_qty - old_qty) > QTY_EPS:
             vals.update(product_qty=new_qty, date_planned=line.date_planned)
         write(vals)
         if delta < -QTY_EPS:
             self._shift_choice(self.quote_line_id, delta)  # sau khi giảm đơn: YCMH không giảm dưới phần đã lên đơn
-        result = [(line, old_qty, new_qty, old_unit, new_unit)]
+        result = [(line, old_qty, new_qty, old_unit, new_unit, old_tax, new_tax)]
         if merge:
             self._allocate(line, request_line, delta)
         elif delta > QTY_EPS:
-            new_line = self._add_order_line(self.quote_line_id, delta, new_unit, new_request=False)
-            result.append((new_line, 0.0, delta, new_unit, new_unit))
+            new_line = self._add_order_line(self.quote_line_id, delta, new_unit, False, taxes)
+            result.append((new_line, 0.0, delta, new_unit, new_unit, new_tax, new_tax))
         return result
 
     def _shift_choice(self, quote_line, delta):
@@ -206,8 +235,9 @@ class PriceProposalLineChange(models.Model):
             vals["product_qty"] = need
         inquiry_line.write(vals)
 
-    def _add_order_line(self, quote_line, qty, unit, new_request):
-        """Thêm dòng mới vào đơn cho quote_line (SL qty, đơn giá chưa VAT unit, cùng thuế / ngày giao với dòng cũ), nối
+    def _add_order_line(self, quote_line, qty, unit, new_request, taxes=None):
+        """Thêm dòng mới vào đơn cho quote_line (SL qty, đơn giá chưa VAT unit, thuế taxes — None = như dòng cũ, cùng ngày
+        giao với dòng cũ), nối
         dòng YCMH như wizard Tạo RFQ (purchase_request_lines + allocation). new_request: tạo dòng YCMH mới trên cùng YCMH
         (đổi mã); không thì nối dòng YCMH của NCC (đã cộng SL ở _shift_choice)."""
         quote_line = quote_line.sudo()
@@ -227,7 +257,8 @@ class PriceProposalLineChange(models.Model):
         uom = request_line.product_uom_id or product.uom_po_id or product.uom_id
         po_line = self.env["purchase.order.line"].sudo().with_context(**{PRICE_WRITE_CTX: True}).create({
             "order_id": old.order_id.id, "product_id": product.id, "name": quote_line._hlv_product_label(),
-            "product_qty": qty, "product_uom": uom.id, "price_unit": unit, "taxes_id": [(6, 0, old.taxes_id.ids)],
+            "product_qty": qty, "product_uom": uom.id, "price_unit": unit,
+            "taxes_id": [(6, 0, (taxes if taxes is not None else old.taxes_id).ids)],
             "date_planned": old.date_planned, "analytic_distribution": old.analytic_distribution,
         })
         self._allocate(po_line, request_line, qty)

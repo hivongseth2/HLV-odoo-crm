@@ -12,17 +12,32 @@ def money_text(value):
     return format_vn_number(round(value or 0.0))
 
 
-def requote_message(product_name, suggested_incl, new_qty_text="", replaces_name=""):
+def vat_rate(vat):
+    """% VAT của mã VAT (VAT_SELECTION của báo giá NCC): "10" → 10.0, "kct" → 0.0, trống / None → None (không đổi)."""
+    if not vat:
+        return None
+    return 0.0 if vat == "kct" else float(vat)
+
+
+def vat_label(vat):
+    """Chữ hiện cho mã VAT: "10" → "10%", "kct" → "không chịu thuế", trống → ""."""
+    if not vat:
+        return ""
+    return "không chịu thuế" if vat == "kct" else f"{format_vn_number(float(vat))}%"
+
+
+def requote_message(product_name, suggested_incl, new_qty_text="", replaces_name="", vat=""):
     """Tin gửi NCC xin báo lại giá một mặt hàng (soạn sẵn theo cái sale chốt; sale ghi thêm được).
 
     suggested_incl: giá mong muốn, sau VAT (0 / None = không ghi giá). new_qty_text: SL sẽ mua kèm ĐVT khi đổi SL / mã
-    (VD "2 Cái"), "" = không nhắc SL. replaces_name: mã cũ khi đổi mã ("" = không đổi). Lý do thu mua ghi là lời nội bộ,
-    không đưa vào tin. Trả chuỗi một đoạn.
+    (VD "2 Cái"), "" = không nhắc SL. replaces_name: mã cũ khi đổi mã ("" = không đổi). vat: mã VAT bên mình muốn NCC
+    xuất ("" = không nhắc). Lý do thu mua ghi là lời nội bộ, không đưa vào tin. Trả chuỗi một đoạn.
     """
     qty = f" cho số lượng {new_qty_text}" if new_qty_text else ""
     swap = f" (thay cho {replaces_name})" if replaces_name else ""
     target = f" Bên mình mong giá khoảng {money_text(suggested_incl)} (sau VAT)." if suggested_incl else ""
-    return (f"Nhờ quý công ty báo lại giá {product_name}{swap}{qty} trên báo giá này.{target} "
+    tax = f" Hoá đơn VAT {vat_label(vat)}." if vat else ""
+    return (f"Nhờ quý công ty báo lại giá {product_name}{swap}{qty} trên báo giá này.{target}{tax} "
             "Quý công ty sửa đơn giá rồi bấm gửi báo giá giúp bên mình.")
 
 

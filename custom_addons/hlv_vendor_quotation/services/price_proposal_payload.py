@@ -5,6 +5,7 @@
 """
 
 from ..models.po_price_proposal import KEEP_FROM, PROPOSAL_STATES, REQUOTE_FROM, SALE_TODO_STATES
+from ..models.vendor_quote_line import VAT_SELECTION
 from ..models.vendor_quote_utils import DATETIME_FMT, local_date_text
 
 STATE_LABELS = dict(PROPOSAL_STATES)
@@ -83,6 +84,10 @@ def _proposal(proposal):
         "form_product": _product(proposal.new_product_id or proposal.suggested_product_id or proposal.product_id),
         "change_text": proposal._change_text() if proposal._has_line_change() else "",
         "needs_vendor": proposal.needs_vendor,
+        # VAT: mã thu mua đề xuất / sale chốt (rỗng = giữ VAT trên đơn); form điền sẵn cái sale chốt, chưa có thì của thu mua.
+        "suggested_vat": proposal.suggested_vat or "",
+        "form_vat": proposal.new_vat or proposal.suggested_vat or "",
+        "vat_options": [{"code": code, "label": label} for code, label in VAT_SELECTION],
         "qty_received": proposal.order_line_id.sudo().qty_received,
         "can_requote": proposal.state in REQUOTE_FROM and bool(proposal.quote_line_id),
         "vendor_kept_price": proposal.vendor_kept_price,

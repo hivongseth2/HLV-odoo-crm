@@ -558,7 +558,8 @@
 .hq-pp-modal { z-index: 1060; }  /* nổi trên ngăn phiếu, như khung trao đổi */
 .hq-pp-modal .hq-modal-box { width: min(760px, 100%); }
 .hq-pp-modal .hq-dropdown { position: static; margin-top: .2rem; }
-.hq-pp-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
+.hq-pp-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
+.hq-pp-field-wide { grid-column: 1 / -1; }
 .hq-pp-field { display: grid; gap: .2rem; min-width: 0; }
 .hq-pp-check { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .hq-pp-outcome { font-size: .8125rem; color: var(--hq-warn-ink); }

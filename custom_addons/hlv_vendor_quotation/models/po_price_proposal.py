@@ -15,7 +15,7 @@ from odoo.exceptions import UserError
 
 from ..services.notify import post_internal
 from ..services.vendor_chat import post_chat
-from .price_proposal_utils import money_text, requote_message, same_money, vat_note
+from .price_proposal_utils import money_text, requote_message, same_money, vat_label, vat_note, vat_rate
 from .purchase_order_revision import tax_rate_of
 from .vendor_quote_utils import format_vn_number, price_incl_vat
 
@@ -81,7 +81,7 @@ class PurchaseOrderPriceProposal(models.Model):
         help="NCC đã gửi lại báo giá nhưng giá sau VAT không đổi so với giá trên đơn — không có gì để thu mua duyệt.",
     )
 
-    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl", "new_qty", "new_product_id")
+    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl", "new_qty", "new_product_id", "new_vat")
     def _compute_vendor_kept_price(self):
         # Đổi SL / mã thì giá bằng giá cũ vẫn là thay đổi cần duyệt — không phải "giữ giá".
         for proposal in self:
@@ -144,9 +144,9 @@ class PurchaseOrderPriceProposal(models.Model):
         return quote_line
 
     @api.model
-    def _buyer_propose(self, po_line, suggested_incl, note, qty=0.0, product=None):
-        """Thu mua gửi đề xuất: giá gợi ý (sau VAT, 0 = không gợi ý), SL mới (0 = giữ), mã thay thế (rỗng = giữ) + lý do
-        (bắt buộc — có thể chỉ có lý do). Trả đề xuất vừa tạo; báo sale trên trang hỏi giá."""
+    def _buyer_propose(self, po_line, suggested_incl, note, qty=0.0, product=None, vat=""):
+        """Thu mua gửi đề xuất: giá gợi ý (sau VAT, 0 = không gợi ý), SL mới (0 = giữ), mã thay thế (rỗng = giữ), mã VAT
+        (rỗng = giữ) + lý do (bắt buộc — có thể chỉ có lý do). Trả đề xuất vừa tạo; báo sale trên trang hỏi giá."""
         quote_line = self._check_can_propose(po_line)
         if suggested_incl < 0 or qty < 0:
             raise UserError(_("Giá gợi ý / số lượng không được âm."))
@@ -163,6 +163,7 @@ class PurchaseOrderPriceProposal(models.Model):
             "buyer_note": note, "buyer_id": self.env.uid, "old_qty": po_line.product_qty,
             "suggested_qty": qty if abs(qty - po_line.product_qty) > 1e-6 else 0.0,
             "suggested_product_id": product.id if product else False,
+            "suggested_vat": vat if vat and abs(vat_rate(vat) - tax) > 1e-6 else False,
         })
         texts = dict(proposal._texts(), wish=proposal._buyer_wish_text())
         proposal._post_order(Markup(_("Thu mua <b>trả về</b> %(product)s (%(wish)s). Lý do: %(note)s. Chờ sale xử lý."))
@@ -173,22 +174,27 @@ class PurchaseOrderPriceProposal(models.Model):
         return proposal
 
     # ------------------------------------------------------------------ sale (trang /hoi-gia-ncc)
-    def _sale_send(self, qty, product, needs_vendor, price_incl, note):
+    def _sale_send(self, qty, product, needs_vendor, price_incl, note, vat=""):
         """Sale chốt SL / mã (sửa lại đề xuất của thu mua nếu cần) rồi gửi:
         - needs_vendor: mở món (hoặc mã mới) trên báo giá của NCC của đơn cho SL mới + nhắn NCC (lời nhắn soạn sẵn theo
           mã / SL / giá mong muốn price_incl, cộng note của sale);
-        - không: gửi thẳng thu mua duyệt, giữ giá trên đơn (note là ghi chú cho thu mua). Đổi mã luôn phải hỏi NCC (mã
-          mới chưa có giá); không đổi SL / mã thì cũng phải hỏi NCC (không có gì để duyệt)."""
+        - không: gửi thẳng thu mua duyệt, giữ giá chưa VAT trên đơn (đổi VAT thì giá sau VAT đổi theo; note là ghi chú
+          cho thu mua). Đổi mã luôn phải hỏi NCC (mã mới chưa có giá); không đổi SL / mã / VAT thì cũng phải hỏi NCC
+          (không có gì để duyệt). vat: mã VAT muốn đổi (rỗng = giữ)."""
         self.ensure_one()
         self._check_state(REQUOTE_FROM, _("gửi"))
-        self._set_line_target(qty, product)
+        self._set_line_target(qty, product, vat)
         note = (note or "").strip()
         if not needs_vendor and not self._product_changed():
             if not self._has_line_change():
-                raise UserError(_("Không đổi số lượng / mã thì phải hỏi NCC giá mới (hoặc bấm \"NCC giữ giá\")."))
+                raise UserError(_("Không đổi số lượng / mã / VAT thì phải hỏi NCC giá mới (hoặc bấm \"NCC giữ giá\")."))
             self._close_requote()
             self.sudo().write({"needs_vendor": False, "vendor_price_incl": 0.0, "vendor_date": False})
-            self._submit(self.old_price_incl, note)
+            new_incl = self.old_price_incl
+            if self._vat_changed():
+                unit = self.order_line_id.sudo().price_unit
+                new_incl = price_incl_vat(unit, vat_rate(self.new_vat))
+            self._submit(new_incl, note, self.new_vat)
             return
         quote_line = self._prepare_target_quote_line()
         if not quote_line:
@@ -197,7 +203,7 @@ class PurchaseOrderPriceProposal(models.Model):
         self.sudo().write({"state": "vendor", "needs_vendor": True, "vendor_message": message,
                            "sale_user_id": self.env.uid, "requote_date": fields.Datetime.now(),
                            "vendor_price_incl": 0.0, "vendor_tax_rate": 0.0, "vendor_date": False})
-        quote_line.quote_id._hlv_open_requote(quote_line, self, self._target_qty())
+        quote_line.quote_id._hlv_open_requote(quote_line, self, self._target_qty(), self.new_vat)
         post_chat(quote_line.quote_id, message, self.env.user.partner_id, from_vendor=False,
                   sale_code=self.inquiry_id.sale_code or "")
         self._post_order(Markup(_("Sale (%(user)s) đã hỏi lại NCC %(product)s%(change)s.")) % dict(
@@ -210,7 +216,7 @@ class PurchaseOrderPriceProposal(models.Model):
         if self._has_line_change():
             qty_text = f"{format_vn_number(self._target_qty())} {self.uom_id.name or ''}".rstrip()
         replaces = self.product_id.display_name if self._product_changed() else ""
-        text = requote_message(product.display_name, price_incl, qty_text, replaces)
+        text = requote_message(product.display_name, price_incl, qty_text, replaces, self.new_vat or "")
         return f"{text} {note}" if note else text
 
     def _vendor_answered(self, quote_line):
@@ -253,11 +259,14 @@ class PurchaseOrderPriceProposal(models.Model):
         if not self._has_line_change() and same_money(new_incl, self.old_price_incl):
             raise UserError(_("NCC vẫn báo %s sau VAT — bằng giá trên đơn, không có gì để thu mua duyệt. Hỏi lại NCC lần "
                               "nữa hoặc bấm \"NCC giữ giá\".", money_text(new_incl)))
-        self._submit(new_incl, note)
+        # Dòng đơn sẽ lấy đúng VAT NCC báo — hoá đơn NCC xuất theo VAT đó. NCC để trống VAT = giữ VAT trên đơn.
+        self._submit(new_incl, note, quote_line.vat or "")
 
-    def _submit(self, new_incl, note):
-        """Chuyển thu mua duyệt: giá sau VAT sẽ áp new_incl (+ SL / mã sale đã chốt); việc cho thu mua trên đơn."""
-        self.sudo().write({"state": "to_approve", "new_price_incl": new_incl, "sale_note": (note or "").strip()[:255],
+    def _submit(self, new_incl, note, vat=""):
+        """Chuyển thu mua duyệt: giá sau VAT sẽ áp new_incl, VAT vat (rỗng = giữ) + SL / mã sale đã chốt; việc cho thu
+        mua trên đơn."""
+        self.sudo().write({"state": "to_approve", "new_price_incl": new_incl, "apply_vat": vat or False,
+                           "sale_note": (note or "").strip()[:255],
                            "submit_date": fields.Datetime.now(), "sale_user_id": self.env.uid})
         texts = self._texts()
         self.sudo().activity_id = self.purchase_order_id._hlv_schedule_buyer_activity(
@@ -353,6 +362,9 @@ class PurchaseOrderPriceProposal(models.Model):
                            new=format_vn_number(self.suggested_qty)))
         if self.suggested_product_id:
             parts.append(_("đổi sang mã %s", self.suggested_product_id.display_name))
+        if self.suggested_vat:
+            parts.append(_("VAT %(old)s%% → %(new)s", old=format_vn_number(self.tax_rate),
+                           new=vat_label(self.suggested_vat)))
         return "; ".join(parts) or _("chỉ ghi lý do")
 
     def _post_order(self, body):

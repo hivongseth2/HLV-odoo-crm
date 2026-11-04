@@ -87,6 +87,22 @@ window.HlvQuote = window.HlvQuote || {};
     return '<span class="hq-tag ' + (STATE_CLASS[p.state] || "") + '">' + esc(p.state_label) + "</span>";
   }
 
+  /** Nhãn đầu ô so giá: đề xuất đang ở bước nào, ai phải làm — nhìn là biết NCC đã báo lại chưa. [chữ, lớp màu] */
+  function cellTag(p) {
+    if (p.state === "quoted") {
+      if (p.vendor_kept_price) {
+        return ["NCC giữ nguyên giá", "hq-tag-warn"];
+      }
+      return p.vendor_price ? ["NCC đã báo mới", "hq-tag-ok"] : ["NCC không có hàng", "hq-tag-danger"];
+    }
+    return {
+      sale: ["Thu mua trả về — sale xử lý", "hq-tag-warn"],
+      vendor: ["Chờ NCC báo", "hq-tag-mine"],
+      to_approve: ["Chờ thu mua duyệt", "hq-tag-mine"],
+      rejected: ["Thu mua không duyệt", "hq-tag-danger"],
+    }[p.state] || [p.state_label, ""];
+  }
+
   function pct(rate) {
     return HQ.qty(rate || 0) + "%";
   }
@@ -117,12 +133,13 @@ window.HlvQuote = window.HlvQuote || {};
       p.vat_warning ? '<span class="hq-offer-short" title="' + esc(p.vat_warning) + '">VAT ' + pct(p.tax_rate) + " → " +
         pct(p.vendor_tax_rate) + "</span>" : "",
       p.buyer_note && !p.vendor_price ? '<span class="hq-offer-meta">Lý do: ' + esc(p.buyer_note) + "</span>" : "",
-      // Không có nút nào cho sale = đang chờ người khác: nói rõ chờ ai.
-      p.can_requote || p.can_submit || p.can_keep ? "" : '<span class="hq-offer-meta">' + esc(p.state_label) + "</span>",
       p.reject_reason && p.state === "rejected"
         ? '<span class="hq-offer-short">Thu mua không duyệt: ' + esc(p.reject_reason) + "</span>" : "",
     ];
-    return '<span class="hq-offer-price">' + head + "</span>" + notes.join("") +
+    var tag = cellTag(p);
+    var when = p.state === "quoted" && p.vendor_date ? ' title="NCC báo lúc ' + esc(p.vendor_date) + '"' : "";
+    return '<span class="hq-tag ' + tag[1] + '"' + when + ">" + esc(tag[0]) + "</span>" +
+      '<span class="hq-offer-price">' + head + "</span>" + notes.join("") +
       '<button type="button" class="hq-link-btn hq-pp-detail-btn" data-pp-detail="' + p.id + '">Chi tiết</button>' +
       '<div class="hq-pp-steps hq-hidden" data-pp-steps="' + p.id + '">' + steps(p) + "</div>";
   };
@@ -130,7 +147,9 @@ window.HlvQuote = window.HlvQuote || {};
   /** SL / mã thu mua đề xuất (sale chưa chốt) — "SL 1 → 2 Cái · mã X"; "" khi thu mua chỉ ghi giá / lý do. */
   function buyerWish(p) {
     return [p.suggested_qty ? "SL " + HQ.qty(p.old_qty) + " → " + HQ.qty(p.suggested_qty) + " " + esc(p.uom) : "",
-      p.suggested_product ? "mã " + esc(p.suggested_product.name) : ""].filter(Boolean).join(" · ");
+      p.suggested_product ? "mã " + esc(p.suggested_product.name) : "",
+      p.suggested_vat ? "VAT " + pct(p.tax_rate) + " → " + (p.suggested_vat === "kct" ? "KCT" : p.suggested_vat + "%") : ""]
+      .filter(Boolean).join(" · ");
   }
 
   /** Các bước của đề xuất: báo giá cũ → thu mua đề xuất → NCC báo lại (→ đã gửi duyệt). */

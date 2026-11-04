@@ -354,8 +354,8 @@ window.HlvQuote = window.HlvQuote || {};
         return offer && HQ.openProposal(d, offer.line_id);
       });
       return "<tr" + (proposed ? ' class="hq-row-proposal"' : "") + "><td>" + esc(line.name) +
-        (proposed ? '<div><span class="hq-tag hq-tag-warn" title="Món đã lên đơn mua — thu mua muốn đổi giá, sale hỏi ' +
-          'lại NCC">Thu mua trả về giá</span></div>' : tag ? "<div>" + tag + "</div>" : "") +
+        (proposed ? '<div><span class="hq-tag hq-tag-warn" title="Món đã lên đơn mua — thu mua muốn đổi giá / SL / ' +
+          'mã, sale hỏi lại NCC">Thu mua trả về</span></div>' : tag ? "<div>" + tag + "</div>" : "") +
         '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
         (Math.abs(line.need_qty - line.qty) > EPS ? '<div class="hq-muted hq-small">cần ' + HQ.qty(line.need_qty) + "</div>" : "") +
         "</td>" + d.vendors.map(function (v) {

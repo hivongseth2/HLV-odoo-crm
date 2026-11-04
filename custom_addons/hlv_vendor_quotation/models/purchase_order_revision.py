@@ -17,7 +17,9 @@ from .delivery_utils import due_datetime, local_day
 from .purchase_order import CONFIRMED_STATES, VENDOR_ORDER_STATES
 from .purchase_order_line_price import PRICE_WRITE_CTX
 from .revision_utils import change_text, is_dates_only, line_change_error, line_changes, needs_approval
-from .vendor_quote_utils import DATE_FMT, local_date_text, parse_states, price_incl_vat, split_unit_price
+from .vendor_quote_utils import (
+    DATE_FMT, format_vn_number, local_date_text, parse_states, price_incl_vat, split_unit_price,
+)
 
 REVISION_STATES = [
     ("pending", "Chờ thu mua duyệt"),
@@ -169,6 +171,8 @@ class PurchaseOrderRevisionLine(models.Model):
     name = fields.Char(string="Hàng hóa", readonly=True)
     uom_name = fields.Char(string="ĐVT", readonly=True)
     tax_rate = fields.Float(string="% thuế", readonly=True)
+    # Đổi VAT (bên mua đổi — po_proposal_change): tax_rate là VAT mới, đây là VAT cũ. Không đổi thì bằng tax_rate.
+    old_tax_rate = fields.Float(string="% thuế cũ", readonly=True)
     old_qty = fields.Float(string="SL cũ", digits="Product Unit of Measure", readonly=True)
     new_qty = fields.Float(string="SL mới", digits="Product Unit of Measure", readonly=True)
     old_price_unit = fields.Float(string="Đơn giá cũ (chưa VAT)", digits="Product Price", readonly=True)
@@ -185,10 +189,10 @@ class PurchaseOrderRevisionLine(models.Model):
     decided_user_id = fields.Many2one(related="revision_id.decided_user_id", string="Người duyệt")
     decided_date = fields.Datetime(related="revision_id.decided_date", string="Duyệt lúc")
 
-    @api.depends("old_price_unit", "new_price_unit", "tax_rate")
+    @api.depends("old_price_unit", "new_price_unit", "tax_rate", "old_tax_rate")
     def _compute_price_incl(self):
         for line in self:
-            line.old_price_incl = price_incl_vat(line.old_price_unit, line.tax_rate)
+            line.old_price_incl = price_incl_vat(line.old_price_unit, line.old_tax_rate)
             line.new_price_incl = price_incl_vat(line.new_price_unit, line.tax_rate)
 
     def _hlv_applied(self):
@@ -199,12 +203,15 @@ class PurchaseOrderRevisionLine(models.Model):
         """Thay đổi của dòng (revision_utils.line_changes) — giá so theo SAU VAT như NCC gõ."""
         self.ensure_one()
         return line_changes(
-            self.old_qty, self.new_qty, price_incl_vat(self.old_price_unit, self.tax_rate),
+            self.old_qty, self.new_qty, price_incl_vat(self.old_price_unit, self.old_tax_rate),
             price_incl_vat(self.new_price_unit, self.tax_rate), self.old_date, self.new_date,
         )
 
     def _change_text(self):
-        return change_text(self.name, self._changes(), self.uom_name or "")
+        text = change_text(self.name, self._changes(), self.uom_name or "")
+        if abs(self.old_tax_rate - self.tax_rate) > 1e-6:
+            text += f"; VAT {format_vn_number(self.old_tax_rate)}% → {format_vn_number(self.tax_rate)}%"
+        return text
 
     def _apply(self):
         changes = self._changes()
@@ -324,20 +331,19 @@ class PurchaseOrderRevisionMixin(models.Model):
     def _hlv_record_proposal_revision(self, changes, before, after, proposal):
         """Ghi phiên bản đã duyệt cho đề xuất của thu mua — po_proposal_change._apply_line_change đã ghi lên đơn (thêm
         dòng mới thì không đi được đường _apply của phiên bản, nên ghi trước rồi lưu lại ở đây). changes: [(dòng đơn,
-        SL cũ, SL mới, đơn giá cũ, đơn giá mới — chưa VAT)]; before / after: _hlv_snapshot. Dòng mới ghi SL cũ 0. Báo
+        SL cũ, SL mới, đơn giá cũ, đơn giá mới — chưa VAT, % VAT cũ, % VAT mới)]; before / after: _hlv_snapshot. Dòng mới ghi SL cũ 0. Báo
         NCC trong khung trao đổi đơn (NCC biết đơn bị giảm SL / đổi mã). Không dòng nào đổi → recordset rỗng."""
         self.ensure_one()
         order = self.sudo()
         line_vals = []
-        for line, old_qty, new_qty, old_unit, new_unit in changes:
-            tax = tax_rate_of(line)
-            if not line_changes(old_qty, new_qty, price_incl_vat(old_unit, tax), price_incl_vat(new_unit, tax),
-                                None, None):
+        for line, old_qty, new_qty, old_unit, new_unit, old_tax, tax in changes:
+            if not line_changes(old_qty, new_qty, price_incl_vat(old_unit, old_tax), price_incl_vat(new_unit, tax),
+                                None, None) and abs(old_tax - tax) <= 1e-6:
                 continue
             day = local_day(line.date_planned)
             line_vals.append((0, 0, {
                 "order_line_id": line.id, "name": line.product_id.display_name, "uom_name": line.product_uom.name,
-                "tax_rate": tax, "old_qty": old_qty, "new_qty": new_qty, "old_price_unit": old_unit,
+                "tax_rate": tax, "old_tax_rate": old_tax, "old_qty": old_qty, "new_qty": new_qty, "old_price_unit": old_unit,
                 "new_price_unit": new_unit, "old_date": day, "new_date": day,
             }))
         if not line_vals:
@@ -418,7 +424,8 @@ class PurchaseOrderRevisionMixin(models.Model):
                 new_price = split_unit_price(changes["price"][1], tax)[0]
             line_vals.append((0, 0, {
                 "order_line_id": line.id, "name": line.product_id.display_name, "uom_name": line.product_uom.name,
-                "tax_rate": tax, "old_qty": line.product_qty, "new_qty": changes.get("qty", (0, line.product_qty))[1],
+                "tax_rate": tax, "old_tax_rate": tax, "old_qty": line.product_qty,
+                "new_qty": changes.get("qty", (0, line.product_qty))[1],
                 "old_price_unit": line.price_unit, "new_price_unit": new_price,
                 "old_date": local_day(line.date_planned), "new_date": changes.get("day", (0, local_day(line.date_planned)))[1],
             }))

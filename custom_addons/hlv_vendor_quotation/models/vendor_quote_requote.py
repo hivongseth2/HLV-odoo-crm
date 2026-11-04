@@ -36,11 +36,14 @@ class VendorQuoteRequote(models.Model):
             vals["date_deadline"] = today + timedelta(days=REQUOTE_DAYS)
         quote.write(vals)
 
-    def _hlv_open_requote(self, quote_line, proposal, qty):
+    def _hlv_open_requote(self, quote_line, proposal, qty, vat=""):
         """Mở quote_line (thuộc báo giá này) cho NCC báo lại giá theo proposal, cho SL qty (SL sẽ mua của NCC này — sale
-        có thể đã đổi; dòng đã lên đơn bị khoá nên SL trên báo giá không tự đổi theo phiếu)."""
+        có thể đã đổi; dòng đã lên đơn bị khoá nên SL trên báo giá không tự đổi theo phiếu). vat: điền sẵn VAT bên mua
+        muốn (NCC vẫn sửa được), rỗng = giữ."""
         self._hlv_open_quote()
         vals = {"hlv_requote_proposal_id": proposal.id}
+        if vat:
+            vals["vat"] = vat
         if abs(quote_line.product_qty - qty) > 1e-6:
             vals["product_qty"] = qty
         quote_line.sudo().write(vals)
