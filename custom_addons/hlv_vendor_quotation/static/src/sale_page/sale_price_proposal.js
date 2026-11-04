@@ -42,7 +42,10 @@ window.HlvQuote = window.HlvQuote || {};
         return esc(o.vendor) + " " + price(o.price) + (o.supply ? " (" + esc(o.supply) + ")" : "");
       }).join(" · ") + "</div>");
     }
-    if (p.vendor_price) {
+    if (p.vendor_kept_price) {
+      lines.push('<div class="hq-partial">NCC gửi lại nhưng <b>giữ nguyên giá</b> ' + HQ.money(p.vendor_price) +
+        " sau VAT — thương lượng thêm (hỏi lại NCC) hoặc bấm \"NCC giữ giá\"</div>");
+    } else if (p.vendor_price) {
       lines.push("<div>NCC báo lại: " + price(p.vendor_price) + " sau VAT</div>");
     }
     if (p.vat_warning) {
@@ -76,6 +79,7 @@ window.HlvQuote = window.HlvQuote || {};
         '<button type="button" class="hq-btn hq-btn-primary" data-pp-submit="' + p.id + '">Gửi thu mua duyệt</button></div>';
     }
     if (p.can_requote) {
+      // NCC đã báo lại giá mới: ô hỏi lại thu gọn sau nút (việc chính là gửi duyệt).
       var hidden = p.can_submit;
       html += (hidden ? '<button type="button" class="hq-link-btn" data-pp-reask="' + p.id + '">Hỏi lại NCC lần nữa</button>' : "") +
         '<div class="hq-close-row' + (hidden ? " hq-hidden" : "") + '" data-pp-box="' + p.id + '">' +
@@ -86,7 +90,9 @@ window.HlvQuote = window.HlvQuote || {};
         '" title="Mở lại món này trên báo giá của NCC và gửi lời nhắn — NCC báo lại giá trên trang NCC">Hỏi lại NCC</button></div>';
     }
     if (p.can_keep) {
-      html += '<div class="hq-close-row"><button type="button" class="hq-btn hq-btn-mini" data-pp-keep="' + p.id +
+      // NCC giữ nguyên giá: "NCC giữ giá" là việc chính.
+      html += '<div class="hq-close-row"><button type="button" class="hq-btn ' +
+        (p.vendor_kept_price ? "hq-btn-primary" : "hq-btn-mini") + '" data-pp-keep="' + p.id +
         '" title="NCC không giảm — đơn giữ giá cũ, đóng đề xuất">NCC giữ giá</button></div>';
     }
     return html;

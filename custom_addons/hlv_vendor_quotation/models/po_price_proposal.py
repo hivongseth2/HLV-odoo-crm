@@ -14,7 +14,7 @@ from odoo.exceptions import UserError
 
 from ..services.notify import post_internal
 from ..services.vendor_chat import post_chat
-from .price_proposal_utils import money_text, vat_note
+from .price_proposal_utils import money_text, same_money, vat_note
 from .purchase_order_revision import tax_rate_of
 from .vendor_quote_utils import price_incl_vat
 
@@ -75,6 +75,16 @@ class PurchaseOrderPriceProposal(models.Model):
     revision_id = fields.Many2one("hlv.po.revision", string="Phiên bản đơn đã áp", readonly=True, ondelete="set null")
     activity_id = fields.Many2one("mail.activity", string="Hoạt động", readonly=True, ondelete="set null")
     vat_warning = fields.Char(string="Lưu ý VAT", compute="_compute_vat_warning")
+    vendor_kept_price = fields.Boolean(
+        string="NCC giữ nguyên giá", compute="_compute_vendor_kept_price",
+        help="NCC đã gửi lại báo giá nhưng giá sau VAT không đổi so với giá trên đơn — không có gì để thu mua duyệt.",
+    )
+
+    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl")
+    def _compute_vendor_kept_price(self):
+        for proposal in self:
+            proposal.vendor_kept_price = bool(proposal.vendor_date) and same_money(
+                proposal.vendor_price_incl, proposal.old_price_incl)
 
     @api.depends("purchase_order_id.name", "product_id")
     def _compute_name(self):
@@ -182,6 +192,15 @@ class PurchaseOrderPriceProposal(models.Model):
                 "state": "quoted", "vendor_price_incl": price_incl_vat(quote_line.price_unit, quote_line.tax_rate),
                 "vendor_tax_rate": quote_line.tax_rate, "vendor_date": fields.Datetime.now(),
             })
+            if proposal.vendor_kept_price:
+                # NCC bấm gửi lại mà không đổi giá — nói rõ, đừng để sale tưởng có giá mới mà gửi thu mua duyệt.
+                proposal._post_inquiry(Markup(_("NCC gửi lại báo giá <i>%(product)s</i> (đơn %(order)s) nhưng <b>giữ nguyên "
+                                                "giá</b> %(vendor)s sau VAT — sale thương lượng thêm (hỏi lại NCC) hoặc "
+                                                "bấm \"NCC giữ giá\".")) % proposal._texts(),
+                                       quote_line.quote_id.partner_id)
+                proposal._tell_sale(_("NCC giữ nguyên giá %(product)s (%(vendor)s) — hỏi lại NCC hoặc báo NCC giữ giá",
+                                      **proposal._texts()), source="vendor")
+                continue
             proposal._post_inquiry(Markup(_("NCC báo lại giá <i>%(product)s</i> (đơn %(order)s): %(vendor)s sau VAT — "
                                             "sale bấm \"Gửi thu mua duyệt\".")) % proposal._texts(),
                                    quote_line.quote_id.partner_id)
@@ -196,6 +215,9 @@ class PurchaseOrderPriceProposal(models.Model):
         new_incl = price_incl_vat(quote_line.price_unit, quote_line.tax_rate) if quote_line else self.vendor_price_incl
         if not new_incl:
             raise UserError(_("NCC chưa có giá cho món này — hỏi lại NCC."))
+        if same_money(new_incl, self.old_price_incl):
+            raise UserError(_("NCC vẫn báo %s sau VAT — bằng giá trên đơn, không có gì để thu mua duyệt. Hỏi lại NCC lần "
+                              "nữa hoặc bấm \"NCC giữ giá\".", money_text(new_incl)))
         self.sudo().write({"state": "to_approve", "new_price_incl": new_incl, "sale_note": (note or "").strip()[:255],
                            "submit_date": fields.Datetime.now(), "sale_user_id": self.env.uid})
         texts = self._texts()

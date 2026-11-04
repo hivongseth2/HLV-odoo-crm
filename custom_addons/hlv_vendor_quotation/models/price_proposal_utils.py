@@ -48,6 +48,11 @@ def same_price_incl(price, tax_rate, discount, other_price, other_tax_rate, othe
     return incl(price, tax_rate, discount) == incl(other_price, other_tax_rate, other_discount)
 
 
+def same_money(value, other):
+    """Hai số tiền bằng nhau khi làm tròn tới đồng (giá sau VAT tính lại từ giá chưa VAT lệch phần lẻ). None = 0."""
+    return round(value or 0.0) == round(other or 0.0)
+
+
 def vat_note(order_tax_rate, vendor_tax_rate):
     """Câu ghi chú khi NCC báo lại với % VAT khác VAT trên dòng đơn mua ("" khi bằng nhau).
 

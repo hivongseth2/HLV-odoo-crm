@@ -47,7 +47,8 @@ def _proposal(proposal):
         "order_id": proposal.purchase_order_id.id,
         "vendor": proposal.partner_id.commercial_partner_id.display_name,
         "state": proposal.state,
-        "state_label": STATE_LABELS.get(proposal.state, ""),
+        "state_label": "NCC gửi lại — giữ nguyên giá" if proposal.state == "quoted" and proposal.vendor_kept_price
+        else STATE_LABELS.get(proposal.state, ""),
         "buyer": proposal.buyer_id.name or "",
         "buyer_note": proposal.buyer_note or "",
         "date": local_date_text(proposal.create_date, DATETIME_FMT),
@@ -62,7 +63,9 @@ def _proposal(proposal):
         "sale_note": proposal.sale_note or "",
         "default_message": requote_message(product, proposal.suggested_price_incl),
         "can_requote": proposal.state in REQUOTE_FROM and bool(proposal.quote_line_id),
-        "can_submit": proposal.state == "quoted",
+        "vendor_kept_price": proposal.vendor_kept_price,
+        # NCC giữ nguyên giá thì không có gì để thu mua duyệt (_sale_submit cũng chặn).
+        "can_submit": proposal.state == "quoted" and not proposal.vendor_kept_price,
         "can_keep": proposal.state in KEEP_FROM,
         "other_offers": _other_offers(proposal),
     }
