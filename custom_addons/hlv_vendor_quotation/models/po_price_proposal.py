@@ -106,7 +106,7 @@ class PurchaseOrderPriceProposal(models.Model):
     def _check_can_propose(self, po_line):
         """Lỗi (UserError) khi dòng không đề xuất giá được; trả dòng báo giá NCC sẽ hỏi lại."""
         if not po_line.hlv_price_locked:
-            raise UserError(_("Dòng này không lên từ trang hỏi giá — giá sửa trực tiếp trên đơn như bình thường."))
+            raise UserError(_("Dòng này không gắn với phiếu hỏi giá — giá sửa trực tiếp trên đơn như bình thường."))
         if po_line.order_id.state == "cancel":
             raise UserError(_("Đơn %s đã huỷ.", po_line.order_id.name))
         if po_line.qty_invoiced:

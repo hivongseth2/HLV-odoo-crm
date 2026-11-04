@@ -5,8 +5,8 @@ Giá trên dòng là giá NCC báo trên trang hỏi giá, sale chọn, thu mua 
 xuất giá" (po_price_proposal.py) → sale hỏi lại NCC trên trang NCC → sale gửi thu mua duyệt → duyệt mới đổi giá, ghi
 thành một phiên bản của đơn (hlv.po.revision) — cột "Lịch sử" trên từng dòng xem lại cũ → mới.
 
-Chỉ dòng có YCMH lập từ trang hỏi giá (hlv_from_quote_page): đơn mua tạo tay / lên từ MISA không có phiếu để sale hỏi
-lại, thu mua vẫn nhập giá như cũ.
+Chỉ dòng có YCMH gắn với phiếu hỏi giá (purchase_request_line_price — nơi định nghĩa "gắn với hỏi giá"): đơn mua không
+gắn với hỏi giá (tạo tay, lên từ MISA) không có phiếu để sale hỏi lại, thu mua vẫn nhập giá như cũ.
 """
 
 from odoo import _, api, fields, models
@@ -27,16 +27,16 @@ class PurchaseOrderLinePriceLock(models.Model):
 
     hlv_price_locked = fields.Boolean(
         string="Giá theo hỏi giá", compute="_compute_hlv_price_locked",
-        help="Dòng lên từ YCMH của trang Hỏi giá NCC: đơn giá không sửa tay được — bấm \"Đề xuất giá\" để sale hỏi "
+        help="Dòng lên từ YCMH gắn với phiếu hỏi giá: đơn giá không sửa tay được — bấm \"Đề xuất giá\" để sale hỏi "
              "lại NCC, giá mới về thì thu mua duyệt.",
     )
     hlv_revision_line_ids = fields.One2many("hlv.po.revision.line", "order_line_id", string="Thay đổi của dòng")
     hlv_change_count = fields.Integer(string="Số lần đổi", compute="_compute_hlv_change_count")
 
-    @api.depends("purchase_request_lines.request_id.hlv_from_quote_page")
+    @api.depends("purchase_request_lines.hlv_price_locked")
     def _compute_hlv_price_locked(self):
         for line in self:
-            line.hlv_price_locked = any(line.sudo().purchase_request_lines.request_id.mapped("hlv_from_quote_page"))
+            line.hlv_price_locked = any(line.sudo().purchase_request_lines.mapped("hlv_price_locked"))
 
     @api.depends("hlv_revision_line_ids.revision_id.state")
     def _compute_hlv_change_count(self):

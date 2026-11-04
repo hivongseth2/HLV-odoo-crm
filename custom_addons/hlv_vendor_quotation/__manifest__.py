@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Báo giá NCC qua link",
-    "version": "18.0.3.108.0",
+    "version": "18.0.3.108.1",
     "summary": "Sale gửi link báo giá có mật khẩu cho nhà cung cấp, thu mua so sánh và chọn",
     "description": """
 - Sale làm việc ở trang riêng /hoi-gia-ncc (cùng kiểu /sale_plan, có link trên navbar /sale_plan):
@@ -20,7 +20,8 @@
 - NCC nhập đơn giá chưa VAT, VAT, thời gian giao, ghi chú hoặc báo "không có hàng".
 - Thu mua (nhóm Mua hàng) so sánh theo từng mặt hàng (giá rẻ nhất tô xanh), bấm "Chọn" để ghi NCC + giá
   vào dòng YCMH; nút "Tạo RFQ" có sẵn sẽ dùng luôn NCC và giá đó.
-- Dòng đơn mua lên từ hỏi giá bị khoá đơn giá / chiết khấu / thuế ở backend: thu mua bấm "Đề xuất giá" (giá gợi ý +
+- Đơn gắn với phiếu hỏi giá (cả YCMH lẫn đơn mua) bị khoá đơn giá / chiết khấu / thuế ở backend; đơn không gắn với
+  hỏi giá xử lý như cũ. Thu mua bấm "Đề xuất giá" trên dòng đơn mua (giá gợi ý +
   lý do) → sale "Hỏi lại NCC" trên /hoi-gia-ncc (món mở lại trên báo giá NCC) → NCC báo lại → sale gửi thu mua
   duyệt → duyệt mới đổi giá, ghi thành một phiên bản của đơn; cột "Lịch sử" trên từng dòng đơn mua xem cũ → mới.
 """,

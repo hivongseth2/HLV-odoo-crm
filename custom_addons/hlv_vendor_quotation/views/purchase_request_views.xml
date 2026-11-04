@@ -94,4 +94,100 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Dòng YCMH gắn với phiếu hỏi giá (models/purchase_request_line_price.py): thu mua không sửa đơn giá / thuế / chiết
+         khấu — giá là giá sale chọn trên trang hỏi giá; muốn giá khác thì "Đề xuất giá" trên dòng đơn mua. YCMH không
+         gắn với hỏi giá giữ nguyên như cũ. Kế thừa view của misa_purchase_request_sync (module trong repo, xmlid ổn định). -->
+    <record id="view_purchase_request_form_price_lock" model="ir.ui.view">
+        <field name="name">purchase.request.form.hlv.price.lock</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_form_inherit_misa_sync"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="after">
+                <field name="hlv_price_locked" column_invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_price_before_tax']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_discount_rate']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_discount_amount']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_tax_rate']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='misa_tax_amount']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_request_line_details_price_lock" model="ir.ui.view">
+        <field name="name">purchase.request.line.details.hlv.price.lock</field>
+        <field name="model">purchase.request.line</field>
+        <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_line_details_inherit_misa"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='is_editable']" position="after">
+                <field name="hlv_price_locked" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='estimated_cost']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='history_po_line_id']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_price_before_tax']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_price_before_tax_total']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_discount_rate']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_discount_amount']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_tax_rate']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_tax_amount_total']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_tax_amount']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_price_after_tax_total']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_price_after_tax']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='misa_amount']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_request_line_form_price_lock" model="ir.ui.view">
+        <field name="name">purchase.request.line.form.hlv.price.lock</field>
+        <field name="model">purchase.request.line</field>
+        <field name="inherit_id" ref="misa_purchase_request_sync.view_purchase_request_line_form_inherit_misa"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='is_editable']" position="after">
+                <field name="hlv_price_locked" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='estimated_cost']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='history_po_line_id']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+        </field>
+    </record>
 </odoo>

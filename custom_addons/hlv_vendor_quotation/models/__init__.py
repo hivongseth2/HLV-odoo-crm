@@ -10,6 +10,7 @@ from . import purchase_request
 from . import purchase_order
 from . import purchase_order_delivery
 from . import purchase_order_line_price
+from . import purchase_request_line_price
 from . import purchase_order_revision
 from . import po_price_proposal
 from . import stock_picking

@@ -60,7 +60,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         return self.with_context(**{PRICE_WRITE_CTX: True})._hlv_make_purchase_order()
 
     def _hlv_check_locked_prices(self):
-        """Dòng YCMH lập từ trang hỏi giá: giá trong wizard phải là giá sale chọn trên trang hỏi giá (cột "sale đề xuất"
+        """Dòng YCMH gắn với phiếu hỏi giá: giá trong wizard phải là giá sale chọn trên trang hỏi giá (cột "sale đề xuất"
         của dòng YCMH — vendor_quote_line._request_line_proposal_vals), so theo giá sau VAT. Thu mua muốn giá khác thì
         tạo RFQ rồi "Đề xuất giá" trên dòng đơn mua."""
         # Giá / thuế wizard thật sự dùng (misa_purchase_request_sync): đơn giá trống thì lấy giá sale đề xuất, thuế
@@ -72,7 +72,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         ))
         if changed:
             raise UserError(_(
-                "%s lên từ trang hỏi giá — giữ đúng giá sale đã chọn. Muốn giá khác: tạo RFQ rồi bấm \"Đề xuất giá\" "
+                "%s gắn với phiếu hỏi giá — giữ đúng giá sale đã chọn. Muốn giá khác: tạo RFQ rồi bấm \"Đề xuất giá\" "
                 "trên dòng đơn mua để sale hỏi lại NCC.",
                 ", ".join(changed.mapped(lambda item: item.product_id.display_name)),
             ))
@@ -110,6 +110,6 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order.item"
 
-    # Dòng YCMH lập từ trang hỏi giá: ô giá / thuế / chiết khấu trong wizard chỉ xem (kiểm lại ở
+    # Dòng YCMH gắn với phiếu hỏi giá: ô giá / thuế / chiết khấu trong wizard chỉ xem (kiểm lại ở
     # PurchaseRequestLineMakePurchaseOrder._hlv_check_locked_prices).
-    hlv_price_locked = fields.Boolean(related="line_id.request_id.hlv_from_quote_page", string="Giá theo hỏi giá")
+    hlv_price_locked = fields.Boolean(related="line_id.hlv_price_locked", string="Giá theo hỏi giá")
