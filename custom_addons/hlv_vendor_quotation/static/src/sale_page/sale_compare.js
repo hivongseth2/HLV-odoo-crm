@@ -349,7 +349,14 @@ window.HlvQuote = window.HlvQuote || {};
     }).join("") + "</tr>";
     var rows = d.lines.map(function (line) {
       var tag = allocationTag(line);
-      return "<tr><td>" + esc(line.name) + (tag ? "<div>" + tag + "</div>" : "") +
+      // Món thu mua trả về giá: cả dòng tô màu để sale thấy ngay giữa bảng.
+      var proposed = d.vendors.some(function (v) {
+        var offer = line.offers[v.quote_id];
+        return offer && HQ.openProposal(d, offer.line_id);
+      });
+      return "<tr" + (proposed ? ' class="hq-row-proposal"' : "") + "><td>" + esc(line.name) +
+        (proposed ? '<div><span class="hq-tag hq-tag-warn">Thu mua trả về giá</span></div>' : "") +
+        (tag ? "<div>" + tag + "</div>" : "") +
         '</td><td class="hq-num hq-nowrap">' + HQ.qty(line.qty) + " " + esc(line.uom) +
         (Math.abs(line.need_qty - line.qty) > EPS ? '<div class="hq-muted hq-small">cần ' + HQ.qty(line.need_qty) + "</div>" : "") +
         "</td>" + d.vendors.map(function (v) {
@@ -357,7 +364,8 @@ window.HlvQuote = window.HlvQuote || {};
           if (!offer || offer.withdrawn) {
             return HQ.notAskedCell(line, v, d, offer);
           }
-          return HQ.appendToCell(offerCell(offer, v, d.can_choose && !line.locked, line.uom, pricedCount(line) > 1),
+          return HQ.appendToCell(offerCell(offer, v, d.can_choose && !line.locked, line.uom, pricedCount(line) > 1,
+            HQ.openProposal(d, offer.line_id)),
             HQ.withdrawLink(line, v, d, offer));
         }).join("") + "</tr>";
     }).join("");
@@ -455,8 +463,10 @@ window.HlvQuote = window.HlvQuote || {};
     }).length;
   }
 
-  /** compared: từ hai NCC có giá trở lên — giá thấp nhất mới gắn sao (một giá thì không có gì để so). */
-  function offerCell(offer, vendor, canChoose, uom, compared) {
+  /** compared: từ hai NCC có giá trở lên — giá thấp nhất mới gắn sao (một giá thì không có gì để so).
+   proposal: đề xuất giá còn mở của ô (sale_price_proposal.js) — ô tô màu, giá trên đơn gạch đi, nút việc của sale
+   thay cho bấm chọn (món đã lên đơn mua). */
+  function offerCell(offer, vendor, canChoose, uom, compared, proposal) {
     if (!offer || (!offer.price_unit && !offer.unavailable)) {
       if (offer && offer.reference_price) {
         return '<td class="hq-offer hq-muted">Chờ NCC xác nhận<span class="hq-offer-meta">lần trước ' +
@@ -474,11 +484,12 @@ window.HlvQuote = window.HlvQuote || {};
     var meta = [offer.vat ? "VAT " + offer.vat : "", offer.delivery_days ? offer.delivery_days + " ngày" : ""]
       .filter(Boolean).join(" · ");
     // Giá sau VAT là số chính (bên mình đọc và so theo giá sau VAT); giá chưa VAT ghi phụ.
-    var body = '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' +
-      (offer.is_best && compared ? '<span class="hq-best-star" title="Giá sau VAT thấp nhất">★</span> ' : "") +
-      HQ.money(offer.price_incl) +
-      ' <span class="hq-offer-unit">sau VAT</span></span>' +
-      '<span class="hq-offer-incl">' + HQ.money(offer.price_unit) + " chưa VAT</span>" +
+    var body = (proposal ? HQ.proposalPrice(offer, proposal)
+      : '<span class="hq-offer-price' + (offer.is_best ? " is-best" : "") + '">' +
+        (offer.is_best && compared ? '<span class="hq-best-star" title="Giá sau VAT thấp nhất">★</span> ' : "") +
+        HQ.money(offer.price_incl) +
+        ' <span class="hq-offer-unit">sau VAT</span></span>' +
+        '<span class="hq-offer-incl">' + HQ.money(offer.price_unit) + " chưa VAT</span>") +
       (meta ? '<span class="hq-offer-meta">' + esc(meta) + "</span>" : "") +
       (offer.supply ? '<span class="hq-offer-short" title="NCC không đủ số lượng hỏi">' + esc(offer.supply) + "</span>" : "") +
       (offer.list_price ? '<span class="hq-offer-meta">Trước CK ' + HQ.money(offer.list_price_incl) + " · CK " +
@@ -489,8 +500,12 @@ window.HlvQuote = window.HlvQuote || {};
         esc(offer.vendor_note) + "</span>" : "") +
       (offer.inherited_from ? '<span class="hq-offer-reuse" title="Giá còn hiệu lực lấy lại từ ' +
         esc(offer.inherited_from) + ' — không hỏi lại NCC">giá cũ · ' + esc(offer.inherited_from) + "</span>" : "");
-    var cls = "hq-offer" + (offer.selected ? " is-selected" : "");
+    var cls = "hq-offer" + (offer.selected ? " is-selected" : "") + (proposal ? " has-proposal" : "");
     var buy = offer.selected ? buyBox(offer, canChoose, uom) : "";
+    if (proposal) {
+      return '<td class="' + cls + '"><div class="hq-offer-static">' + body + HQ.proposalActions(proposal) + "</div>" +
+        buy + "</td>";
+    }
     if (!canChoose) {
       return '<td class="' + cls + '"><div class="hq-offer-static">' + body + "</div>" + buy + "</td>";
     }

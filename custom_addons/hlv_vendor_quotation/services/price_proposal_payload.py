@@ -45,6 +45,8 @@ def _proposal(proposal):
         "product": product,
         "order": proposal.purchase_order_id.name,
         "order_id": proposal.purchase_order_id.id,
+        # Ô giá trên bảng so giá (offer.line_id) — tô màu + nút thao tác ngay trên ô.
+        "quote_line_id": proposal.quote_line_id.id,
         "vendor": proposal.partner_id.commercial_partner_id.display_name,
         "state": proposal.state,
         "state_label": "NCC gửi lại — giữ nguyên giá" if proposal.state == "quoted" and proposal.vendor_kept_price

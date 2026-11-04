@@ -538,4 +538,13 @@
 .hq-proposal { padding: .5rem 0; border-top: 1px solid var(--hq-line-soft); }
 .hq-proposals > .hq-share-head + .hq-proposal { border-top: 0; }
 .hq-proposal.is-done { opacity: .65; }
-.hq-proposal textarea { flex: 1 1 20rem; min-width: 0; }
+/* Ô / dòng so giá thu mua trả về giá: màu cảnh báo đè màu "đã chọn" để không lẫn với ô bình thường; giá trên đơn
+   gạch đi, nút việc của sale ngay trong ô. */
+.hq-compare tr.hq-row-proposal > td { background: var(--hq-warn-soft); }
+.hq-offer.has-proposal, .hq-offer.is-selected.has-proposal { background: var(--hq-warn-soft);
+    box-shadow: inset 3px 0 0 var(--hq-warn); }
+.hq-offer-old { display: block; font-size: .75rem; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
+.hq-offer-old s { color: var(--hq-danger); }
+.hq-offer-price.is-proposed { color: var(--hq-warn-ink); }
+.hq-offer.has-proposal .hq-tag { justify-self: start; }
+.hq-pp-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
