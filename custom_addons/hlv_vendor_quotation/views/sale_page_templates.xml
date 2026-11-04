@@ -217,6 +217,22 @@
                         </div>
                     </div>
 
+                    <!-- Hỏi lại NCC cho món thu mua trả về (sale_price_proposal_form.js — nội dung vẽ khi mở). -->
+                    <div id="hq-pp-modal" class="hq-modal hq-pp-modal hq-hidden" role="dialog" aria-modal="true"
+                         aria-labelledby="hq-pp-title">
+                        <div class="hq-modal-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-pp-title">Hỏi lại NCC</h2>
+                                <button type="button" class="btn-close" data-pp-close="1" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body" id="hq-pp-body"></div>
+                            <div class="hq-modal-foot">
+                                <button type="button" class="hq-btn hq-push" data-pp-close="1">Thôi</button>
+                                <button type="button" class="hq-btn hq-btn-primary" id="hq-pp-send">Gửi</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Trao đổi với NCC trên một báo giá / đơn mua (nổi trên ngăn chi tiết). -->
                     <div id="hq-chat" class="hq-modal hq-chat-modal hq-hidden">
                         <div class="hq-modal-box hq-chat-box">

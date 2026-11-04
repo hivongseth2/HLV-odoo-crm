@@ -1,6 +1,6 @@
 /* Thu mua trả về một dòng đơn mua (models/po_price_proposal.py + po_proposal_change.py): giá gợi ý, SL, mã thay thế —
    đều tuỳ chọn — kèm lý do. Việc của sale nằm ngay trên ô giá của bảng so giá (ô + dòng tô màu, giá trên đơn gạch đi):
-   "Hỏi lại NCC" mở form ngay dưới dòng (sale_price_proposal_form.js) — sale chốt mã / SL rồi hỏi NCC hoặc gửi thẳng
+   "Hỏi lại NCC" mở popup (sale_price_proposal_form.js) — sale chốt mã / SL rồi hỏi NCC hoặc gửi thẳng
    thu mua; NCC báo lại thì "Gửi thu mua duyệt"; hoặc "NCC giữ giá". Đầu ngăn chỉ còn một dải "việc cần làm" dẫn tới
    ô, cộng một dòng ngắn cho mỗi đề xuất đã xong — mỗi thông tin chỉ hiện một chỗ. Giá sau VAT là số chính. */
 window.HlvQuote = window.HlvQuote || {};
@@ -42,7 +42,7 @@ window.HlvQuote = window.HlvQuote || {};
     return (d.lines || []).some(function (line) {
       return Object.keys(line.offers).some(function (key) {
         var offer = line.offers[key];
-        return offer && !offer.withdrawn && offer.line_id === p.quote_line_id;  // form gửi nằm dưới dòng món trên đơn
+        return offer && !offer.withdrawn && offer.line_id === p.quote_line_id;
       });
     });
   }
@@ -161,7 +161,7 @@ window.HlvQuote = window.HlvQuote || {};
     }
     if (p.can_requote) {
       html += '<button type="button" class="hq-btn hq-btn-mini' + (p.can_submit ? "" : " hq-btn-primary") +
-        '" data-pp-form="' + p.id + '" title="Mở form ngay dưới dòng: chốt mã / SL, hỏi NCC hoặc gửi thẳng thu mua">' +
+        '" data-pp-form="' + p.id + '" title="Chốt mã / SL rồi hỏi NCC hoặc gửi thẳng thu mua">' +
         (p.can_submit ? "Hỏi lại lần nữa" : "Hỏi lại NCC") + "</button>";
     }
     if (p.can_keep) {
@@ -211,15 +211,18 @@ window.HlvQuote = window.HlvQuote || {};
 
   HQ.proposalSend = send;
 
+  /** Gọi API của đề xuất rồi vẽ lại phiếu. Trả promise → true khi xong, false khi lỗi (đã báo lỗi). */
   function send(name, params, button, message) {
     button.disabled = true;
-    HQ.api(name, params).then(function (detail) {
+    return HQ.api(name, params).then(function (detail) {
       HQ.renderInquiry(detail);
       HQ.toast(message);
       HQ.reloadAll();
+      return true;
     }).catch(function (err) {
       button.disabled = false;
       HQ.toast(err.message);
+      return false;
     });
   }
 

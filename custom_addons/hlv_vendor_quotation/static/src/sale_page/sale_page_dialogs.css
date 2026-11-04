@@ -553,13 +553,13 @@
 .hq-pp-steps li + li { margin-top: .2rem; }
 .hq-offer.has-proposal .hq-tag { justify-self: start; }
 .hq-pp-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
-/* Form "Hỏi lại NCC" mở ngay dưới dòng sản phẩm (sale_price_proposal_form.js). Danh sách mã nằm trong luồng (static):
-   bảng so giá cuộn ngang nên danh sách nổi bị cắt. */
-.hq-compare tr.hq-pp-form-row > td { background: #fff; border-left: 3px solid var(--hq-warn); }
-.hq-pp-form { display: grid; gap: .5rem; max-width: 56rem; }
+/* Popup "Hỏi lại NCC" (sale_price_proposal_form.js). Danh sách mã nằm trong luồng (static): thân popup cuộn dọc nên
+   danh sách nổi bị cắt. */
+.hq-pp-modal { z-index: 1060; }  /* nổi trên ngăn phiếu, như khung trao đổi */
+.hq-pp-modal .hq-modal-box { width: min(760px, 100%); }
+.hq-pp-modal .hq-dropdown { position: static; margin-top: .2rem; }
 .hq-pp-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
 .hq-pp-field { display: grid; gap: .2rem; min-width: 0; }
-.hq-pp-form .hq-dropdown { position: static; margin-top: .2rem; }
 .hq-pp-check { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .hq-pp-outcome { font-size: .8125rem; color: var(--hq-warn-ink); }
 @media (max-width: 640px) { .hq-pp-fields { grid-template-columns: minmax(0, 1fr); } }

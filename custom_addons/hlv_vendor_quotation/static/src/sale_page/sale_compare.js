@@ -366,7 +366,7 @@ window.HlvQuote = window.HlvQuote || {};
           return HQ.appendToCell(offerCell(offer, v, d.can_choose && !line.locked, line.uom, pricedCount(line) > 1,
             HQ.openProposal(d, offer.line_id)),
             HQ.withdrawLink(line, v, d, offer));
-        }).join("") + "</tr>" + (proposed ? HQ.proposalFormRows(d, line, 2 + d.vendors.length) : "");
+        }).join("") + "</tr>";
     }).join("");
     return '<div class="hq-compare-head"><h3 class="hq-h3 hq-section-title">So giá</h3>' +
       (d.can_add_vendor ? '<button type="button" class="hq-btn hq-btn-mini" data-add-toggle="1" title="NCC báo hết hàng / ' +

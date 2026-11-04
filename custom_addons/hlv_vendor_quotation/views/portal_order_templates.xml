@@ -125,7 +125,8 @@
                 v<t t-esc="info['revision']['version']"/></span></h2>
             <div t-foreach="info['revision']['history']" t-as="rev" class="vq-revision-item">
                 <div class="vq-revision-head">
-                    <b>Yêu cầu số <t t-esc="rev['number']"/></b>
+                    <b t-if="rev['origin'] == 'proposal'">Bên mua cập nhật đơn</b>
+                    <b t-else="">Yêu cầu số <t t-esc="rev['number']"/></b>
                     <span class="vq-muted vq-small" t-esc="fdate(rev['at'], '%H:%M %d/%m/%Y')"/>
                     <span t-attf-class="vq-outcome vq-revision-#{rev['state']}" t-esc="rev['state_label']"/>
                     <span t-if="rev['version']" class="vq-version-chip">→ bản v<t t-esc="rev['version']"/></span>

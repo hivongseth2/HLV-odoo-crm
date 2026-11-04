@@ -4,14 +4,15 @@
 Thu mua ghi SL / mã muốn đổi (tuỳ chọn) kèm lý do → sale sửa lại nếu cần rồi gửi: hỏi lại NCC (NCC báo giá cho SL / mã
 mới trên trang NCC) hoặc — khi không cần NCC báo giá (VD chỉ giảm SL) — gửi thẳng thu mua duyệt. Duyệt thì áp vào đơn
 thành MỘT phiên bản (hlv.po.revision, có bản chụp trước / sau; NCC đọc trong khung trao đổi đơn — biết đơn bị giảm SL):
-- tăng SL: dòng cũ giữ SL (đổi giá nếu có); phần thêm là DÒNG MỚI cùng đơn, nối vào dòng YCMH cũ;
+- tăng SL: kho chưa nhận gì thì cộng thẳng vào dòng cũ (một dòng, giá mới cho cả dòng); đã nhận một phần thì dòng cũ
+  giữ SL (đổi giá nếu có) và phần thêm là DÒNG MỚI cùng đơn — đều nối vào dòng YCMH cũ;
 - giảm SL: giảm SL dòng cũ (Odoo trừ vào phiếu nhập đang mở — hlv_purchase_qty_decrease), YCMH giảm theo;
 - đổi mã: dòng mã cũ về SL 0 (giữ dòng để còn lịch sử — Odoo không cho xoá dòng đơn đã xác nhận), mã mới là dòng mới +
   dòng YCMH mới trên cùng YCMH.
 Phiếu hỏi giá đổi theo (SL mua của NCC, SL cần mua) để bảng so giá khớp với đơn mua.
 """
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from .price_proposal_utils import same_money
@@ -163,16 +164,24 @@ class PriceProposalLineChange(models.Model):
             self._shift_choice(self.quote_line_id, -old_qty)
             return [(line, old_qty, 0.0, old_unit, old_unit), (new_line, 0.0, new_line.product_qty, new_unit, new_unit)]
         target = self._target_qty()
-        kept = min(old_qty, target)
-        vals = {"price_unit": new_unit}
-        if kept < old_qty - QTY_EPS:
-            vals.update(product_qty=kept, date_planned=line.date_planned)
-        write(vals)
-        result = [(line, old_qty, kept, old_unit, new_unit)]
         delta = target - old_qty
-        if abs(delta) > QTY_EPS:
-            self._shift_choice(self.quote_line_id, delta)
+        # Tăng mà kho chưa nhận gì: cộng thẳng vào dòng cũ. Đã nhận một phần thì tách dòng mới — gộp sẽ đổi giá cả phần
+        # đã nhập kho theo giá cũ, hoá đơn NCC lệch với giá trị nhập kho.
+        merge = delta > QTY_EPS and line.qty_received <= QTY_EPS
         if delta > QTY_EPS:
+            self._shift_choice(self.quote_line_id, delta)  # YCMH cộng trước để có phần chưa lên đơn mà nối
+        request_line = self._open_request_line(self.quote_line_id) if merge else None
+        new_qty = target if merge or delta < -QTY_EPS else old_qty
+        vals = {"price_unit": new_unit}
+        if abs(new_qty - old_qty) > QTY_EPS:
+            vals.update(product_qty=new_qty, date_planned=line.date_planned)
+        write(vals)
+        if delta < -QTY_EPS:
+            self._shift_choice(self.quote_line_id, delta)  # sau khi giảm đơn: YCMH không giảm dưới phần đã lên đơn
+        result = [(line, old_qty, new_qty, old_unit, new_unit)]
+        if merge:
+            self._allocate(line, request_line, delta)
+        elif delta > QTY_EPS:
             new_line = self._add_order_line(self.quote_line_id, delta, new_unit, new_request=False)
             result.append((new_line, 0.0, delta, new_unit, new_unit))
         return result
@@ -213,23 +222,42 @@ class PriceProposalLineChange(models.Model):
             inquiry_line = quote_line.inquiry_line_id.sudo()
             inquiry_line.need_qty = max(inquiry_line.need_qty, inquiry_line._hlv_chosen_total())
         else:
-            live = quote_line._hlv_live_request_lines()
-            # Dòng còn phần chưa lên đơn = dòng vừa được cộng SL ở _shift_choice (phần giao ngay hoặc phần hẹn).
-            open_part = live.filtered(lambda l: l.product_qty - l.purchased_qty > QTY_EPS)
-            request_line = open_part[:1] or (live & quote_line.request_line_id.sudo()) or live[:1]
+            request_line = self._open_request_line(quote_line)
         product = quote_line.product_id
         uom = request_line.product_uom_id or product.uom_po_id or product.uom_id
         po_line = self.env["purchase.order.line"].sudo().with_context(**{PRICE_WRITE_CTX: True}).create({
             "order_id": old.order_id.id, "product_id": product.id, "name": quote_line._hlv_product_label(),
             "product_qty": qty, "product_uom": uom.id, "price_unit": unit, "taxes_id": [(6, 0, old.taxes_id.ids)],
             "date_planned": old.date_planned, "analytic_distribution": old.analytic_distribution,
-            "purchase_request_lines": [(4, request_line.id)] if request_line else [],
         })
-        if request_line:
-            self.env["purchase.request.allocation"].sudo().create({
+        self._allocate(po_line, request_line, qty)
+        self.sudo().added_order_line_id = po_line.id
+        return po_line
+
+    @api.model
+    def _open_request_line(self, quote_line):
+        """Dòng YCMH của NCC còn phần chưa lên đơn — dòng vừa được cộng SL ở _shift_choice (apply_qty_delta cộng vào phần
+        hẹn nếu có, không thì phần giao ngay). Gọi TRƯỚC khi ghi SL lên đơn. Không có → dòng giao ngay."""
+        live = quote_line.sudo()._hlv_live_request_lines()
+        open_part = live.filtered(lambda l: l.product_qty - l.purchased_qty > QTY_EPS)
+        return open_part[:1] or (live & quote_line.sudo().request_line_id) or live[:1]
+
+    @api.model
+    def _allocate(self, po_line, request_line, qty):
+        """Nối dòng đơn với dòng YCMH cho thêm qty như wizard Tạo RFQ: purchase_request_lines + allocation (đã nối thì cộng
+        vào allocation có sẵn); actual_qty = phần còn phải mua. request_line rỗng → không làm gì."""
+        if not request_line:
+            return
+        if request_line not in po_line.purchase_request_lines:
+            po_line.purchase_request_lines = [(4, request_line.id)]
+        Allocation = self.env["purchase.request.allocation"].sudo()
+        allocation = Allocation.search([("purchase_request_line_id", "=", request_line.id),
+                                        ("purchase_line_id", "=", po_line.id)], limit=1)
+        if allocation:
+            allocation.requested_product_uom_qty += qty
+        else:
+            Allocation.create({
                 "requested_product_uom_qty": qty, "product_uom_id": request_line.product_uom_id.id,
                 "purchase_request_line_id": request_line.id, "purchase_line_id": po_line.id,
             })
-            request_line.write({"actual_qty": max(0.0, request_line.product_qty - request_line.purchased_qty)})
-        self.sudo().added_order_line_id = po_line.id
-        return po_line
+        request_line.write({"actual_qty": max(0.0, request_line.product_qty - request_line.purchased_qty)})

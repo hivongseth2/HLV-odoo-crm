@@ -33,11 +33,12 @@ DEFAULT_REVISION_STATES = tuple(state for state, _label in VENDOR_ORDER_STATES)
 NO_REVISION_STATES = "none"
 # Yêu cầu đã áp vào đơn — mỗi cái tạo một phiên bản mới của đơn.
 APPLIED_STATES = ("approved", "applied")
-# Ai khởi xướng phiên bản: NCC sửa trên trang NCC, hay thu mua đề xuất giá → sale hỏi lại NCC → thu mua duyệt
-# (po_price_proposal.py). Cả hai cùng là một phiên bản của đơn, cùng bản chụp trước / sau.
+# Ai khởi xướng phiên bản: NCC sửa trên trang NCC, hay BÊN MUA đổi (thu mua trả về → sale hỏi lại NCC / gửi thẳng →
+# thu mua duyệt — po_price_proposal.py). Cả hai cùng là một phiên bản của đơn, cùng bản chụp trước / sau; chữ hiện ra
+# phải phân biệt — bên mua đổi mà ghi "yêu cầu của NCC" là sai người.
 REVISION_ORIGINS = [
     ("vendor", "NCC yêu cầu"),
-    ("proposal", "Thu mua đề xuất — NCC báo lại"),
+    ("proposal", "Bên mua đổi"),
 ]
 
 
@@ -48,7 +49,7 @@ def tax_rate_of(order_line):
 
 class PurchaseOrderRevision(models.Model):
     _name = "hlv.po.revision"
-    _description = "Yêu cầu thay đổi đơn mua của NCC"
+    _description = "Thay đổi đơn mua (NCC yêu cầu / bên mua đổi)"
     _order = "purchase_order_id, number desc"
 
     purchase_order_id = fields.Many2one("purchase.order", string="Đơn mua", required=True, ondelete="cascade", index=True)
@@ -149,7 +150,7 @@ class PurchaseOrderRevision(models.Model):
         self.activity_id = self.purchase_order_id._hlv_schedule_buyer_activity(
             _("NCC yêu cầu thay đổi đơn — cần duyệt"),
             Markup("<p>%s</p><ul>%s</ul>") % (
-                _("Yêu cầu số %s của NCC (bấm nút \"Yêu cầu NCC chờ duyệt\" trên đơn để duyệt):", self.number),
+                _("Yêu cầu số %s của NCC (bấm nút \"Thay đổi đơn\" trên đơn để duyệt):", self.number),
                 Markup("").join(Markup("<li>%s</li>") % text for text in self._change_texts()),
             ),
         )
@@ -271,7 +272,8 @@ class PurchaseOrderRevisionMixin(models.Model):
                         "note": pending.vendor_note or ""} if pending else None,
             "pending_lines": {l.order_line_id.id: l._change_text() for l in pending.line_ids},
             "history": [{
-                "number": r.number, "state": r.state, "state_label": labels[r.state], "at": r.create_date,
+                "number": r.number, "origin": r.origin, "state": r.state, "state_label": labels[r.state],
+                "at": r.create_date,
                 "texts": r._change_texts(), "note": r.vendor_note or "", "reason": r.reject_reason or "",
                 "version": version_of.get(r.id), "snapshot": r.snapshot_after or None,
             } for r in order.hlv_revision_ids.sorted("number", reverse=True)],
@@ -342,7 +344,7 @@ class PurchaseOrderRevisionMixin(models.Model):
             return self.env["hlv.po.revision"]
         revision = self.env["hlv.po.revision"].sudo().create({
             "purchase_order_id": order.id, "number": len(order.hlv_revision_ids) + 1,
-            "author_partner_id": order.partner_id.commercial_partner_id.id, "line_ids": line_vals,
+            "line_ids": line_vals,  # không có "NCC yêu cầu" — bên mua đổi
         })
         revision.write({
             "origin": "proposal", "proposal_id": proposal.id, "state": "approved", "snapshot_before": before,
