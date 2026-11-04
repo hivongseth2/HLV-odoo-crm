@@ -15,6 +15,9 @@
                 <field name="old_price_incl"/>
                 <field name="suggested_price_incl"/>
                 <field name="new_price_incl"/>
+                <field name="old_qty" optional="hide"/>
+                <field name="new_qty" optional="show"/>
+                <field name="new_product_id" optional="show"/>
                 <field name="buyer_id" optional="show"/>
                 <field name="create_date" string="Đề xuất lúc" optional="show"/>
                 <field name="state" widget="badge" decoration-warning="state == 'to_approve'"
@@ -55,6 +58,7 @@
                             <field name="inquiry_id"/>
                             <field name="quote_line_id" invisible="1"/>
                             <field name="revision_id" invisible="not revision_id"/>
+                            <field name="added_order_line_id" invisible="not added_order_line_id"/>
                         </group>
                         <group string="Giá (sau VAT)">
                             <field name="old_price_incl"/>
@@ -63,6 +67,15 @@
                             <field name="new_price_incl" invisible="not submit_date"/>
                             <field name="tax_rate"/>
                             <field name="vendor_tax_rate" invisible="not vendor_date"/>
+                        </group>
+                        <group string="Số lượng / mã">
+                            <field name="uom_id" invisible="1"/>
+                            <field name="old_qty"/>
+                            <field name="suggested_qty" invisible="not suggested_qty"/>
+                            <field name="suggested_product_id" invisible="not suggested_product_id"/>
+                            <field name="new_qty" invisible="not new_qty"/>
+                            <field name="new_product_id" invisible="not new_product_id"/>
+                            <field name="needs_vendor" invisible="state == 'sale'"/>
                         </group>
                     </group>
                     <group>
@@ -124,21 +137,32 @@
         <field name="name">hlv.po.price.proposal.wizard.form</field>
         <field name="model">hlv.po.price.proposal.wizard</field>
         <field name="arch" type="xml">
-            <form string="Đề xuất giá">
+            <form string="Đề xuất">
                 <p class="text-muted">
-                    Dòng này lên từ trang hỏi giá nên không sửa giá trực tiếp. Ghi giá gợi ý + lý do: sale hỏi lại
-                    NCC trên trang NCC, NCC báo lại giá thì sale gửi về đây để thu mua duyệt.
+                    Dòng này lên từ trang hỏi giá nên không sửa trực tiếp. Ghi điều muốn đổi (giá / SL / mã — đều tuỳ
+                    chọn) + lý do: sale sửa lại nếu cần rồi hỏi NCC, xong gửi về đây để thu mua duyệt. Duyệt xong: tăng
+                    SL thì phần thêm thành dòng mới, đổi mã thì dòng cũ về SL 0 và mã mới thành dòng mới.
                 </p>
                 <group>
-                    <field name="order_line_id" invisible="1"/>
-                    <field name="product_id"/>
-                    <field name="vendor_id"/>
-                    <field name="current_price_incl"/>
-                    <field name="suggested_price_incl"/>
-                    <field name="note" placeholder="VD: NCC khác báo 1.200.000, giá thị trường đã giảm…"/>
+                    <group>
+                        <field name="order_line_id" invisible="1"/>
+                        <field name="product_id"/>
+                        <field name="vendor_id"/>
+                        <field name="current_price_incl"/>
+                        <field name="current_qty"/>
+                        <field name="uom_id"/>
+                    </group>
+                    <group>
+                        <field name="suggested_price_incl"/>
+                        <field name="suggested_qty"/>
+                        <field name="suggested_product_id" options="{'no_create': True}"/>
+                    </group>
+                </group>
+                <group>
+                    <field name="note" placeholder="VD: NCC khác báo 1.200.000, khách mua thêm, mã cũ ngừng sản xuất…"/>
                 </group>
                 <footer>
-                    <button name="action_submit" type="object" string="Gửi sale hỏi lại NCC" class="btn-primary"/>
+                    <button name="action_submit" type="object" string="Gửi sale" class="btn-primary"/>
                     <button string="Thôi" special="cancel"/>
                 </footer>
             </form>
@@ -222,7 +246,7 @@
             <xpath expr="//field[@name='order_line']/list/field[@name='price_unit']" position="after">
                 <field name="hlv_price_locked" column_invisible="1"/>
                 <button name="action_hlv_propose_price" type="object" icon="fa-tag"
-                        title="Đề xuất giá — giá theo hỏi giá, sale hỏi lại NCC rồi thu mua duyệt"
+                        title="Đề xuất đổi giá / số lượng / mã — dòng theo hỏi giá: sale hỏi lại NCC rồi thu mua duyệt"
                         invisible="not hlv_price_locked or not id or parent.state == 'cancel'"
                         groups="purchase.group_purchase_user"/>
                 <field name="hlv_change_count" string="LS đổi" optional="show" readonly="1"

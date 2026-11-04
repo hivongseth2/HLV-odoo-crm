@@ -13,6 +13,7 @@ from . import purchase_order_line_price
 from . import purchase_request_line_price
 from . import purchase_order_revision
 from . import po_price_proposal
+from . import po_proposal_change
 from . import stock_picking
 from . import vendor_suggestion
 from . import vendor_chat_read

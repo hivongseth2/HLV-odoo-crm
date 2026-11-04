@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Hộp "Đề xuất giá" trên dòng đơn mua: thu mua ghi giá gợi ý (sau VAT) + lý do — không sửa thẳng đơn giá
-(dòng lên từ hỏi giá bị khoá, xem models/purchase_order_line_price.py)."""
+"""Hộp "Đề xuất" trên dòng đơn mua: thu mua ghi giá gợi ý (sau VAT), SL mới, mã thay thế — đều tuỳ chọn — kèm lý do
+(bắt buộc), không sửa thẳng đơn (dòng lên từ hỏi giá bị khoá, xem models/purchase_order_line_price.py). Sale sửa lại
+được trước khi hỏi NCC (models/po_proposal_change.py)."""
 
 from odoo import api, fields, models
 
@@ -10,18 +11,28 @@ from ..models.vendor_quote_utils import price_incl_vat
 
 class PurchaseOrderPriceProposalWizard(models.TransientModel):
     _name = "hlv.po.price.proposal.wizard"
-    _description = "Thu mua đề xuất giá dòng đơn mua"
+    _description = "Thu mua đề xuất đổi dòng đơn mua"
 
     order_line_id = fields.Many2one("purchase.order.line", string="Dòng đơn mua", required=True, readonly=True)
     product_id = fields.Many2one(related="order_line_id.product_id", string="Sản phẩm")
     vendor_id = fields.Many2one(related="order_line_id.partner_id", string="Nhà cung cấp")
+    uom_id = fields.Many2one(related="order_line_id.product_uom", string="ĐVT")
+    current_qty = fields.Float(related="order_line_id.product_qty", string="SL trên đơn")
     current_price_incl = fields.Float(string="Giá trên đơn (sau VAT)", digits="Product Price",
                                       compute="_compute_current_price_incl")
     suggested_price_incl = fields.Float(string="Giá gợi ý (sau VAT)", digits="Product Price",
                                         help="Giá thu mua mong muốn — sale dùng để thương lượng khi hỏi lại NCC. "
-                                             "Để 0 nếu chỉ cần NCC báo lại giá.")
+                                             "Để 0 nếu không gợi ý giá.")
+    suggested_qty = fields.Float(string="SL đề xuất", digits="Product Unit of Measure",
+                                 help="Để 0 hoặc bằng SL trên đơn nếu không đổi. Duyệt xong: tăng thì phần thêm thành "
+                                      "dòng mới trên đơn, giảm thì dòng cũ giảm SL.")
+    suggested_product_id = fields.Many2one("product.product", string="Đổi sang mã",
+                                           domain=[("purchase_ok", "=", True)],
+                                           help="Để trống nếu giữ mã. Duyệt xong: dòng mã cũ về SL 0, mã mới thành "
+                                                "dòng mới.")
     note = fields.Text(string="Lý do", required=True,
-                       help="VD: NCC khác báo rẻ hơn, giá thị trường đã giảm… — sale đọc trên trang Hỏi giá NCC.")
+                       help="VD: NCC khác báo rẻ hơn, khách mua thêm, mã cũ ngừng sản xuất… — sale đọc trên trang Hỏi "
+                            "giá NCC.")
 
     @api.depends("order_line_id.price_unit", "order_line_id.taxes_id")
     def _compute_current_price_incl(self):
@@ -31,5 +42,6 @@ class PurchaseOrderPriceProposalWizard(models.TransientModel):
 
     def action_submit(self):
         self.ensure_one()
-        self.env["hlv.po.price.proposal"]._buyer_propose(self.order_line_id, self.suggested_price_incl, self.note)
+        self.env["hlv.po.price.proposal"]._buyer_propose(
+            self.order_line_id, self.suggested_price_incl, self.note, self.suggested_qty, self.suggested_product_id)
         return {"type": "ir.actions.act_window_close"}

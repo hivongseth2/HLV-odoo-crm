@@ -5,7 +5,6 @@
 """
 
 from ..models.po_price_proposal import KEEP_FROM, PROPOSAL_STATES, REQUOTE_FROM, SALE_TODO_STATES
-from ..models.price_proposal_utils import requote_message
 from ..models.vendor_quote_utils import DATETIME_FMT, local_date_text
 
 STATE_LABELS = dict(PROPOSAL_STATES)
@@ -38,15 +37,22 @@ def _other_offers(proposal):
     return sorted(offers, key=lambda o: o["price"])
 
 
+def _product(product):
+    """{id, name} của sản phẩm cho form trên trang; không có → None."""
+    return {"id": product.id, "name": product.display_name} if product else None
+
+
 def _proposal(proposal):
     product = proposal.product_id.display_name or ""
     return {
         "id": proposal.id,
         "product": product,
+        "product_id": proposal.product_id.id,
         "order": proposal.purchase_order_id.name,
         "order_id": proposal.purchase_order_id.id,
-        # Ô giá trên bảng so giá (offer.line_id) — tô màu + nút thao tác ngay trên ô.
+        # Ô giá trên bảng so giá (offer.line_id) — tô màu + nút thao tác ngay trên ô; đổi mã thì cả ô của mã mới.
         "quote_line_id": proposal.quote_line_id.id,
+        "new_quote_line_id": proposal.new_quote_line_id.id,
         "vendor": proposal.partner_id.commercial_partner_id.display_name,
         "state": proposal.state,
         "state_label": "NCC gửi lại — giữ nguyên giá" if proposal.state == "quoted" and proposal.vendor_kept_price
@@ -66,12 +72,23 @@ def _proposal(proposal):
         "vendor_message": proposal.vendor_message or "",
         "reject_reason": proposal.reject_reason or "",
         "sale_note": proposal.sale_note or "",
-        "default_message": requote_message(product, proposal.suggested_price_incl),
+        # SL / mã: trên đơn → thu mua đề xuất → sale chốt (form gửi điền sẵn cái sale chốt, chưa có thì của thu mua).
+        "uom": proposal.uom_id.name or "",
+        "old_qty": proposal.old_qty,
+        "suggested_qty": proposal.suggested_qty,
+        "suggested_product": _product(proposal.suggested_product_id),
+        "new_qty": proposal.new_qty,
+        "new_product": _product(proposal.new_product_id),
+        "form_qty": proposal.new_qty or proposal.suggested_qty or proposal.old_qty,
+        "form_product": _product(proposal.new_product_id or proposal.suggested_product_id or proposal.product_id),
+        "change_text": proposal._change_text() if proposal._has_line_change() else "",
+        "needs_vendor": proposal.needs_vendor,
+        "qty_received": proposal.order_line_id.sudo().qty_received,
         "can_requote": proposal.state in REQUOTE_FROM and bool(proposal.quote_line_id),
         "vendor_kept_price": proposal.vendor_kept_price,
         # NCC giữ nguyên giá thì không có gì để thu mua duyệt (_sale_submit cũng chặn).
-        "can_submit": proposal.state == "quoted" and not proposal.vendor_kept_price,
+        "can_submit": proposal.state == "quoted" and bool(proposal.vendor_price_incl) and not proposal.vendor_kept_price,
         # NCC đã báo giá mới thì việc là gửi duyệt hoặc hỏi lại — "NCC giữ giá" chỉ còn khi NCC chưa báo / giữ nguyên.
-        "can_keep": proposal.state in KEEP_FROM and not (proposal.vendor_date and not proposal.vendor_kept_price),
+        "can_keep": proposal.state in KEEP_FROM and not (proposal.vendor_price_incl and not proposal.vendor_kept_price),
         "other_offers": _other_offers(proposal),
     }

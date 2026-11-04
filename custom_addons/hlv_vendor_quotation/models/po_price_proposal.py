@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Thu mua đề xuất giá cho một dòng đơn mua lên từ hỏi giá — thay cho việc sửa tay đơn giá ở backend.
+"""Thu mua đề xuất đổi một dòng đơn mua lên từ hỏi giá (giá, và tuỳ chọn SL / mã — po_proposal_change.py) — thay cho
+việc sửa tay ở backend.
 
-Luồng: thu mua ghi giá gợi ý (sau VAT) + lý do → trang /hoi-gia-ncc của sale hiện việc cần làm → sale "Hỏi lại NCC":
-món đó mở lại trên báo giá của chính NCC của đơn (vendor_quote_requote.py), NCC báo giá mới trên trang NCC → sale
-"Gửi thu mua duyệt" → thu mua duyệt thì giá dòng đơn mua đổi, ghi thành một phiên bản của đơn (hlv.po.revision, có
-bản chụp trước / sau như yêu cầu của NCC) — lịch sử từng dòng xem ở cột "Lịch sử" trên đơn mua.
-Sale cũng báo được "NCC giữ giá" để đóng đề xuất.
+Luồng: thu mua ghi giá gợi ý / SL / mã (đều tuỳ chọn) + lý do → trang /hoi-gia-ncc của sale hiện việc cần làm → sale sửa
+lại nếu cần rồi gửi: hỏi lại NCC (món mở lại trên báo giá của chính NCC của đơn — vendor_quote_requote.py, NCC báo trên
+trang NCC → sale "Gửi thu mua duyệt"), hoặc không cần NCC báo giá (VD chỉ giảm SL) thì gửi thẳng thu mua duyệt. Thu mua
+duyệt thì đơn đổi, ghi thành một phiên bản của đơn (hlv.po.revision, có bản chụp trước / sau như yêu cầu của NCC) —
+lịch sử từng dòng xem ở cột "Lịch sử" trên đơn mua. Sale cũng báo được "NCC giữ giá" để đóng đề xuất.
 """
 
 from markupsafe import Markup
@@ -14,9 +15,9 @@ from odoo.exceptions import UserError
 
 from ..services.notify import post_internal
 from ..services.vendor_chat import post_chat
-from .price_proposal_utils import money_text, same_money, vat_note
+from .price_proposal_utils import money_text, requote_message, same_money, vat_note
 from .purchase_order_revision import tax_rate_of
-from .vendor_quote_utils import price_incl_vat
+from .vendor_quote_utils import format_vn_number, price_incl_vat
 
 PROPOSAL_STATES = [
     ("sale", "Chờ sale hỏi lại NCC"),
@@ -24,7 +25,7 @@ PROPOSAL_STATES = [
     ("quoted", "NCC đã báo lại — chờ sale gửi duyệt"),
     ("to_approve", "Chờ thu mua duyệt"),
     ("rejected", "Thu mua không duyệt — sale hỏi lại"),
-    ("approved", "Đã duyệt — đã đổi giá"),
+    ("approved", "Đã duyệt — đã đổi đơn"),
     ("kept", "NCC giữ giá cũ"),
     ("cancel", "Thu mua đã huỷ"),
 ]
@@ -80,10 +81,11 @@ class PurchaseOrderPriceProposal(models.Model):
         help="NCC đã gửi lại báo giá nhưng giá sau VAT không đổi so với giá trên đơn — không có gì để thu mua duyệt.",
     )
 
-    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl")
+    @api.depends("vendor_date", "vendor_price_incl", "old_price_incl", "new_qty", "new_product_id")
     def _compute_vendor_kept_price(self):
+        # Đổi SL / mã thì giá bằng giá cũ vẫn là thay đổi cần duyệt — không phải "giữ giá".
         for proposal in self:
-            proposal.vendor_kept_price = bool(proposal.vendor_date) and same_money(
+            proposal.vendor_kept_price = bool(proposal.vendor_date) and not proposal._has_line_change() and same_money(
                 proposal.vendor_price_incl, proposal.old_price_incl)
 
     @api.depends("purchase_order_id.name", "product_id")
@@ -142,52 +144,85 @@ class PurchaseOrderPriceProposal(models.Model):
         return quote_line
 
     @api.model
-    def _buyer_propose(self, po_line, suggested_incl, note):
-        """Thu mua gửi đề xuất giá (sau VAT) + lý do. Trả đề xuất vừa tạo; báo sale trên trang hỏi giá."""
+    def _buyer_propose(self, po_line, suggested_incl, note, qty=0.0, product=None):
+        """Thu mua gửi đề xuất: giá gợi ý (sau VAT, 0 = không gợi ý), SL mới (0 = giữ), mã thay thế (rỗng = giữ) + lý do
+        (bắt buộc — có thể chỉ có lý do). Trả đề xuất vừa tạo; báo sale trên trang hỏi giá."""
         quote_line = self._check_can_propose(po_line)
-        if suggested_incl < 0:
-            raise UserError(_("Giá gợi ý không được âm."))
+        if suggested_incl < 0 or qty < 0:
+            raise UserError(_("Giá gợi ý / số lượng không được âm."))
         note = (note or "").strip()
         if not note:
-            raise UserError(_("Ghi lý do để sale biết cần hỏi lại NCC điều gì (VD giá thị trường, NCC khác rẻ hơn)."))
+            raise UserError(_("Ghi lý do để sale biết cần hỏi lại NCC điều gì (VD giá thị trường, mua thêm, đổi mã)."))
+        if product == po_line.product_id:
+            product = None
         tax = tax_rate_of(po_line)
         proposal = self.sudo().create({
             "purchase_order_id": po_line.order_id.id, "order_line_id": po_line.id, "quote_line_id": quote_line.id,
             "inquiry_id": quote_line.inquiry_line_id.inquiry_id.id, "tax_rate": tax,
             "old_price_incl": price_incl_vat(po_line.price_unit, tax), "suggested_price_incl": suggested_incl,
-            "buyer_note": note, "buyer_id": self.env.uid,
+            "buyer_note": note, "buyer_id": self.env.uid, "old_qty": po_line.product_qty,
+            "suggested_qty": qty if abs(qty - po_line.product_qty) > 1e-6 else 0.0,
+            "suggested_product_id": product.id if product else False,
         })
-        proposal._post_order(Markup(_("Thu mua <b>đề xuất giá</b> %(product)s: %(old)s → gợi ý %(new)s (sau VAT). "
-                                      "Lý do: %(note)s. Chờ sale hỏi lại NCC.")) % proposal._texts())
-        proposal._post_inquiry(Markup(_("Thu mua đề xuất giá <i>%(product)s</i> trên đơn %(order)s: gợi ý %(new)s "
-                                        "(sau VAT, đang %(old)s). Lý do: %(note)s — vào trang Hỏi giá NCC hỏi lại "
-                                        "NCC.")) % proposal._texts())
-        proposal._tell_sale(_("Thu mua đề xuất giá %(product)s: gợi ý %(new)s (đang %(old)s) — sale hỏi lại NCC",
-                              **proposal._texts()))
+        texts = dict(proposal._texts(), wish=proposal._buyer_wish_text())
+        proposal._post_order(Markup(_("Thu mua <b>trả về</b> %(product)s (%(wish)s). Lý do: %(note)s. Chờ sale xử lý."))
+                             % texts)
+        proposal._post_inquiry(Markup(_("Thu mua trả về <i>%(product)s</i> trên đơn %(order)s (%(wish)s). Lý do: "
+                                        "%(note)s — vào trang Hỏi giá NCC xử lý.")) % texts)
+        proposal._tell_sale(_("Thu mua trả về %(product)s (%(wish)s) — sale xử lý", **texts))
         return proposal
 
     # ------------------------------------------------------------------ sale (trang /hoi-gia-ncc)
-    def _sale_requote(self, message):
-        """Sale hỏi lại NCC: mở món trên báo giá của NCC cho NCC sửa giá + nhắn NCC trên khung trao đổi báo giá."""
+    def _sale_send(self, qty, product, needs_vendor, price_incl, note):
+        """Sale chốt SL / mã (sửa lại đề xuất của thu mua nếu cần) rồi gửi:
+        - needs_vendor: mở món (hoặc mã mới) trên báo giá của NCC của đơn cho SL mới + nhắn NCC (lời nhắn soạn sẵn theo
+          mã / SL / giá mong muốn price_incl, cộng note của sale);
+        - không: gửi thẳng thu mua duyệt, giữ giá trên đơn (note là ghi chú cho thu mua). Đổi mã luôn phải hỏi NCC (mã
+          mới chưa có giá); không đổi SL / mã thì cũng phải hỏi NCC (không có gì để duyệt)."""
         self.ensure_one()
-        self._check_state(REQUOTE_FROM, _("hỏi lại NCC"))
-        message = (message or "").strip()
-        if not message:
-            raise UserError(_("Nhập lời nhắn gửi NCC."))
-        quote_line = self.quote_line_id.sudo()
+        self._check_state(REQUOTE_FROM, _("gửi"))
+        self._set_line_target(qty, product)
+        note = (note or "").strip()
+        if not needs_vendor and not self._product_changed():
+            if not self._has_line_change():
+                raise UserError(_("Không đổi số lượng / mã thì phải hỏi NCC giá mới (hoặc bấm \"NCC giữ giá\")."))
+            self._close_requote()
+            self.sudo().write({"needs_vendor": False, "vendor_price_incl": 0.0, "vendor_date": False})
+            self._submit(self.old_price_incl, note)
+            return
+        quote_line = self._prepare_target_quote_line()
         if not quote_line:
             raise UserError(_("Không còn dòng báo giá của NCC cho món này."))
-        self.sudo().write({"state": "vendor", "vendor_message": message, "sale_user_id": self.env.uid,
-                           "requote_date": fields.Datetime.now()})
-        quote_line.quote_id._hlv_open_requote(quote_line, self)
+        message = self._vendor_request_text(price_incl, note)
+        self.sudo().write({"state": "vendor", "needs_vendor": True, "vendor_message": message,
+                           "sale_user_id": self.env.uid, "requote_date": fields.Datetime.now(),
+                           "vendor_price_incl": 0.0, "vendor_tax_rate": 0.0, "vendor_date": False})
+        quote_line.quote_id._hlv_open_requote(quote_line, self, self._target_qty())
         post_chat(quote_line.quote_id, message, self.env.user.partner_id, from_vendor=False,
                   sale_code=self.inquiry_id.sale_code or "")
-        self._post_order(Markup(_("Sale (%(user)s) đã hỏi lại NCC giá %(product)s.")) % dict(
+        self._post_order(Markup(_("Sale (%(user)s) đã hỏi lại NCC %(product)s%(change)s.")) % dict(
             self._texts(), user=self.env.user.name))
+
+    def _vendor_request_text(self, price_incl, note):
+        """Tin gửi NCC: soạn sẵn theo mã / SL sẽ mua / giá mong muốn, cộng lời của sale."""
+        product = self._target_product()
+        qty_text = ""
+        if self._has_line_change():
+            qty_text = f"{format_vn_number(self._target_qty())} {self.uom_id.name or ''}".rstrip()
+        replaces = self.product_id.display_name if self._product_changed() else ""
+        text = requote_message(product.display_name, price_incl, qty_text, replaces)
+        return f"{text} {note}" if note else text
 
     def _vendor_answered(self, quote_line):
         """NCC vừa gửi lại báo giá có món đang hỏi lại: ghi giá NCC báo, báo sale gửi thu mua duyệt."""
         for proposal in self.sudo().filtered(lambda p: p.state == "vendor"):
+            if quote_line.unavailable:
+                proposal.write({"state": "quoted", "vendor_price_incl": 0.0, "vendor_date": fields.Datetime.now()})
+                proposal._post_inquiry(Markup(_("NCC báo <b>không có hàng</b> <i>%s</i> — đổi mã khác, hỏi lại NCC hoặc "
+                                                "bấm \"NCC giữ giá\".")) % quote_line.product_id.display_name,
+                                       quote_line.quote_id.partner_id)
+                proposal._tell_sale(_("NCC không có hàng %s", quote_line.product_id.display_name), source="vendor")
+                continue
             proposal.write({
                 "state": "quoted", "vendor_price_incl": price_incl_vat(quote_line.price_unit, quote_line.tax_rate),
                 "vendor_tax_rate": quote_line.tax_rate, "vendor_date": fields.Datetime.now(),
@@ -211,23 +246,27 @@ class PurchaseOrderPriceProposal(models.Model):
         """Sale gửi giá NCC vừa báo lại cho thu mua duyệt (giá lấy lại từ báo giá lúc gửi)."""
         self.ensure_one()
         self._check_state(("quoted",), _("gửi thu mua duyệt"))
-        quote_line = self.quote_line_id.sudo()
+        quote_line = self._target_quote_line().sudo()
         new_incl = price_incl_vat(quote_line.price_unit, quote_line.tax_rate) if quote_line else self.vendor_price_incl
-        if not new_incl:
+        if not new_incl or quote_line.unavailable:
             raise UserError(_("NCC chưa có giá cho món này — hỏi lại NCC."))
-        if same_money(new_incl, self.old_price_incl):
+        if not self._has_line_change() and same_money(new_incl, self.old_price_incl):
             raise UserError(_("NCC vẫn báo %s sau VAT — bằng giá trên đơn, không có gì để thu mua duyệt. Hỏi lại NCC lần "
                               "nữa hoặc bấm \"NCC giữ giá\".", money_text(new_incl)))
+        self._submit(new_incl, note)
+
+    def _submit(self, new_incl, note):
+        """Chuyển thu mua duyệt: giá sau VAT sẽ áp new_incl (+ SL / mã sale đã chốt); việc cho thu mua trên đơn."""
         self.sudo().write({"state": "to_approve", "new_price_incl": new_incl, "sale_note": (note or "").strip()[:255],
                            "submit_date": fields.Datetime.now(), "sale_user_id": self.env.uid})
         texts = self._texts()
         self.sudo().activity_id = self.purchase_order_id._hlv_schedule_buyer_activity(
-            _("Sale gửi giá NCC báo lại — cần duyệt"),
-            Markup("<p>%s</p>") % _("%(product)s: %(old)s → %(price)s (sau VAT). Bấm \"Đề xuất giá\" trên đơn để duyệt.",
-                                    **texts),
+            _("Sale gửi thay đổi dòng đơn — cần duyệt"),
+            Markup("<p>%s</p>") % _("%(product)s: %(old)s → %(price)s (sau VAT)%(change)s. Bấm \"Đề xuất giá\" trên "
+                                    "đơn để duyệt.", **texts),
             self.buyer_id,
         )
-        self._post_order(Markup(_("Sale gửi duyệt giá %(product)s: %(old)s → <b>%(price)s</b> (sau VAT).")) % texts)
+        self._post_order(Markup(_("Sale gửi duyệt %(product)s: %(old)s → <b>%(price)s</b> (sau VAT)%(change)s.")) % texts)
 
     def _sale_keep(self, note):
         """Sale báo NCC giữ giá cũ: đóng đề xuất, đơn giữ nguyên."""
@@ -235,23 +274,25 @@ class PurchaseOrderPriceProposal(models.Model):
         self._check_state(KEEP_FROM, _("báo NCC giữ giá"))
         note = (note or "").strip()[:255]
         self._close_requote()
+        self._drop_new_quote_line()
         self.sudo().write({"state": "kept", "sale_note": note or False, "sale_user_id": self.env.uid})
         self._post_order(Markup(_("Sale báo NCC <b>giữ giá</b> %(product)s (%(old)s sau VAT)%(note)s — đơn giữ nguyên.")) % dict(
             self._texts(), note=(": " + note) if note else ""))
 
     # ------------------------------------------------------------------ thu mua duyệt
     def action_approve(self):
-        """Thu mua duyệt: đổi giá dòng đơn mua (một phiên bản mới của đơn), báo NCC + sale."""
+        """Thu mua duyệt: đổi giá / SL / mã trên đơn mua (một phiên bản mới của đơn — po_proposal_change), báo NCC +
+        sale."""
         for proposal in self:
             proposal._check_state(("to_approve",), _("duyệt"))
             line = proposal.order_line_id
             if line.qty_invoiced:
                 raise UserError(_("%s đã có hoá đơn NCC — không đổi giá trên đơn được nữa.", line.product_id.display_name))
-            revision = proposal.purchase_order_id._hlv_apply_proposal_price(proposal)
+            revision = proposal._apply_line_change()
             proposal.sudo().write({"state": "approved", "revision_id": revision.id, "decided_user_id": self.env.uid,
                                    "decided_date": fields.Datetime.now()})
             proposal._close_activity(_("Đã duyệt"))
-            proposal._tell_sale(_("Thu mua duyệt giá mới %(product)s: %(price)s (sau VAT)", **proposal._texts()))
+            proposal._tell_sale(_("Thu mua duyệt %(product)s: %(price)s (sau VAT)%(change)s", **proposal._texts()))
         return True
 
     def action_reject(self):
@@ -272,6 +313,7 @@ class PurchaseOrderPriceProposal(models.Model):
         for proposal in self:
             proposal._check_state(OPEN_STATES, _("huỷ"))
             proposal._close_requote()
+            proposal._drop_new_quote_line()
             proposal.sudo().write({"state": "cancel", "decided_user_id": self.env.uid,
                                    "decided_date": fields.Datetime.now()})
             proposal._close_activity(_("Thu mua huỷ đề xuất"))
@@ -286,7 +328,8 @@ class PurchaseOrderPriceProposal(models.Model):
 
     def _close_requote(self):
         """NCC không còn phải báo lại món này (đề xuất xong / huỷ) — khoá lại dòng báo giá."""
-        lines = self.sudo().quote_line_id.filtered(lambda l: l.hlv_requote_proposal_id in self)
+        lines = (self.sudo().quote_line_id | self.sudo().new_quote_line_id).filtered(
+            lambda l: l.hlv_requote_proposal_id in self)
         lines._hlv_close_requote()
 
     def _texts(self):
@@ -297,7 +340,20 @@ class PurchaseOrderPriceProposal(models.Model):
             "old": money_text(self.old_price_incl), "new": money_text(self.suggested_price_incl),
             "vendor": money_text(self.vendor_price_incl), "price": money_text(self.new_price_incl),
             "note": self.buyer_note or "",
+            "change": (" — " + self._change_text()) if self._has_line_change() else "",
         }
+
+    def _buyer_wish_text(self):
+        """Thu mua muốn gì: "gợi ý giá 300.000; SL 2; mã X" — "chỉ ghi lý do" khi không điền gì."""
+        parts = []
+        if self.suggested_price_incl:
+            parts.append(_("gợi ý giá %s", money_text(self.suggested_price_incl)))
+        if self.suggested_qty:
+            parts.append(_("SL %(old)s → %(new)s", old=format_vn_number(self.old_qty),
+                           new=format_vn_number(self.suggested_qty)))
+        if self.suggested_product_id:
+            parts.append(_("đổi sang mã %s", self.suggested_product_id.display_name))
+        return "; ".join(parts) or _("chỉ ghi lý do")
 
     def _post_order(self, body):
         post_internal(self.purchase_order_id.sudo(), body, self.env.user.partner_id)

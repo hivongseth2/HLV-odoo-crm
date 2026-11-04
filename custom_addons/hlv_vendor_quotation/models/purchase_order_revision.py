@@ -319,27 +319,36 @@ class PurchaseOrderRevisionMixin(models.Model):
         return order.with_context(mail_activity_quick_update=True).activity_schedule(
             "mail.mail_activity_data_todo", summary=summary, note=note, user_id=buyer.id)
 
-    def _hlv_apply_proposal_price(self, proposal):
-        """Thu mua duyệt giá NCC báo lại (po_price_proposal): ghi thành một phiên bản đã duyệt của đơn — cùng bản chụp
-        trước / sau, dòng cũ → mới như yêu cầu của NCC, NCC xem lại trên trang NCC. Giữ VAT của dòng, đơn giá chưa VAT
-        tính lại để giá sau VAT bằng giá NCC báo. Trả phiên bản vừa tạo; giá không đổi → recordset rỗng."""
+    def _hlv_record_proposal_revision(self, changes, before, after, proposal):
+        """Ghi phiên bản đã duyệt cho đề xuất của thu mua — po_proposal_change._apply_line_change đã ghi lên đơn (thêm
+        dòng mới thì không đi được đường _apply của phiên bản, nên ghi trước rồi lưu lại ở đây). changes: [(dòng đơn,
+        SL cũ, SL mới, đơn giá cũ, đơn giá mới — chưa VAT)]; before / after: _hlv_snapshot. Dòng mới ghi SL cũ 0. Báo
+        NCC trong khung trao đổi đơn (NCC biết đơn bị giảm SL / đổi mã). Không dòng nào đổi → recordset rỗng."""
         self.ensure_one()
         order = self.sudo()
-        pending = order._hlv_revision_pending()
-        if pending:
-            raise UserError(_("Đơn %(order)s đang có yêu cầu NCC số %(n)s chờ duyệt — xử lý yêu cầu đó trước.",
-                              order=order.name, n=pending.number))
-        line = proposal.order_line_id.sudo()
-        tax = tax_rate_of(line)
-        changes = line_changes(line.product_qty, None, price_incl_vat(line.price_unit, tax), proposal.new_price_incl,
-                               None, None)
-        if not changes:
+        line_vals = []
+        for line, old_qty, new_qty, old_unit, new_unit in changes:
+            tax = tax_rate_of(line)
+            if not line_changes(old_qty, new_qty, price_incl_vat(old_unit, tax), price_incl_vat(new_unit, tax),
+                                None, None):
+                continue
+            day = local_day(line.date_planned)
+            line_vals.append((0, 0, {
+                "order_line_id": line.id, "name": line.product_id.display_name, "uom_name": line.product_uom.name,
+                "tax_rate": tax, "old_qty": old_qty, "new_qty": new_qty, "old_price_unit": old_unit,
+                "new_price_unit": new_unit, "old_date": day, "new_date": day,
+            }))
+        if not line_vals:
             return self.env["hlv.po.revision"]
-        revision = order._hlv_create_revision([(line, tax, changes)], "", order.partner_id.commercial_partner_id)
-        revision.write({"origin": "proposal", "proposal_id": proposal.id})
-        revision._apply()
-        revision.write({"state": "approved", "decided_user_id": self.env.uid, "decided_date": fields.Datetime.now()})
-        revision._log(_("Bên mua cập nhật đơn theo giá quý công ty báo lại (phiên bản mới):\n%s", revision._bullet_text()),
+        revision = self.env["hlv.po.revision"].sudo().create({
+            "purchase_order_id": order.id, "number": len(order.hlv_revision_ids) + 1,
+            "author_partner_id": order.partner_id.commercial_partner_id.id, "line_ids": line_vals,
+        })
+        revision.write({
+            "origin": "proposal", "proposal_id": proposal.id, "state": "approved", "snapshot_before": before,
+            "snapshot_after": after, "decided_user_id": self.env.uid, "decided_date": fields.Datetime.now(),
+        })
+        revision._log(_("Bên mua cập nhật đơn (phiên bản mới):\n%s", revision._bullet_text()),
                       order.company_id.partner_id, from_vendor=False)
         return revision
 

@@ -12,14 +12,17 @@ def money_text(value):
     return format_vn_number(round(value or 0.0))
 
 
-def requote_message(product_name, suggested_incl):
-    """Tin sale gửi NCC (điền sẵn, sale sửa được trước khi gửi) xin báo lại giá một mặt hàng.
+def requote_message(product_name, suggested_incl, new_qty_text="", replaces_name=""):
+    """Tin gửi NCC xin báo lại giá một mặt hàng (soạn sẵn theo cái sale chốt; sale ghi thêm được).
 
-    suggested_incl: giá thu mua gợi ý, sau VAT (0 / None = không ghi giá). Lý do thu mua ghi là lời nội bộ cho sale,
+    suggested_incl: giá mong muốn, sau VAT (0 / None = không ghi giá). new_qty_text: SL sẽ mua kèm ĐVT khi đổi SL / mã
+    (VD "2 Cái"), "" = không nhắc SL. replaces_name: mã cũ khi đổi mã ("" = không đổi). Lý do thu mua ghi là lời nội bộ,
     không đưa vào tin. Trả chuỗi một đoạn.
     """
+    qty = f" cho số lượng {new_qty_text}" if new_qty_text else ""
+    swap = f" (thay cho {replaces_name})" if replaces_name else ""
     target = f" Bên mình mong giá khoảng {money_text(suggested_incl)} (sau VAT)." if suggested_incl else ""
-    return (f"Nhờ quý công ty báo lại giá {product_name} trên báo giá này.{target} "
+    return (f"Nhờ quý công ty báo lại giá {product_name}{swap}{qty} trên báo giá này.{target} "
             "Quý công ty sửa đơn giá rồi bấm gửi báo giá giúp bên mình.")
 
 

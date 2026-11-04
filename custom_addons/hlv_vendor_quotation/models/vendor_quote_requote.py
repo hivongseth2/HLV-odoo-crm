@@ -21,9 +21,9 @@ class VendorQuoteRequote(models.Model):
              "\"done\" = báo giá đã đóng, chỉ mở món đang hỏi lại.",
     )
 
-    def _hlv_open_requote(self, quote_line, proposal):
-        """Mở quote_line (thuộc báo giá này) cho NCC báo lại giá theo proposal: báo giá về "Chờ NCC báo giá" để NCC
-        thấy việc cần làm; hạn đã qua thì gia hạn REQUOTE_DAYS ngày. Báo giá đã huỷ → UserError."""
+    def _hlv_open_quote(self):
+        """Báo giá về "Chờ NCC báo giá" để NCC thấy việc cần làm (nhớ trạng thái cũ để trả lại khi xong); hạn đã qua
+        thì gia hạn REQUOTE_DAYS ngày. Báo giá đã huỷ → UserError. Gọi nhiều lần không sao."""
         self.ensure_one()
         quote = self.sudo()
         if quote.state in ("draft", "cancel"):
@@ -34,14 +34,24 @@ class VendorQuoteRequote(models.Model):
         today = quote._vendor_today()
         if quote.date_deadline and quote.date_deadline < today:
             vals["date_deadline"] = today + timedelta(days=REQUOTE_DAYS)
-        quote_line.sudo().hlv_requote_proposal_id = proposal.id
         quote.write(vals)
+
+    def _hlv_open_requote(self, quote_line, proposal, qty):
+        """Mở quote_line (thuộc báo giá này) cho NCC báo lại giá theo proposal, cho SL qty (SL sẽ mua của NCC này — sale
+        có thể đã đổi; dòng đã lên đơn bị khoá nên SL trên báo giá không tự đổi theo phiếu)."""
+        self._hlv_open_quote()
+        vals = {"hlv_requote_proposal_id": proposal.id}
+        if abs(quote_line.product_qty - qty) > 1e-6:
+            vals["product_qty"] = qty
+        quote_line.sudo().write(vals)
 
     def _vendor_submit(self, line_values, vendor_note, price_valid_until=False):
         """Món đang hỏi lại đã lên đơn mua: NCC phải báo giá, không báo "không có hàng" được (hết hàng là việc đổi SL
         đơn mua — nhắn bên mua). Gửi xong thì ghi giá NCC báo lại vào đề xuất."""
         requoted = self._vendor_lines().filtered(lambda l: l._hlv_requote_open())
-        refused = requoted.filtered(lambda l: (line_values.get(l.id) or {}).get("unavailable"))
+        # Chỉ món ĐÃ đặt bắt buộc có giá; mã thay thế thu mua đề xuất thì NCC báo "không có hàng" được.
+        refused = requoted.filtered(lambda l: (line_values.get(l.id) or {}).get("unavailable")
+                                    and l.sudo().hlv_requote_proposal_id.quote_line_id == l)
         if refused:
             raise UserError(_(
                 "%s đã đặt hàng, bên mua chỉ hỏi lại giá — nhập đơn giá (hết hàng thì nhắn bên mua trong khung trao đổi).",

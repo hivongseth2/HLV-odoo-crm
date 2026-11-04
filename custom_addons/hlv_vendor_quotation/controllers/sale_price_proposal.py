@@ -21,10 +21,16 @@ class VendorQuotePriceProposal(SalePageMixin, http.Controller):
         return proposal, self._get_inquiry(proposal.inquiry_id.id, scope)
 
     @http.route(f"{API}/price_requote", type="json", auth="user", methods=["POST"])
-    def api_price_requote(self, code="", proposal_id=None, message="", **kw):
-        """Sale hỏi lại NCC giá món thu mua đề xuất: mở món trên báo giá NCC + nhắn NCC."""
+    def api_price_requote(self, code="", proposal_id=None, qty=0, product_id=None, needs_vendor=True, price=0,
+                          note="", **kw):
+        """Sale chốt SL / mã rồi gửi: hỏi lại NCC (mở món trên báo giá NCC + nhắn NCC) hoặc gửi thẳng thu mua duyệt."""
         proposal, inquiry = self._proposal(code, proposal_id)
-        proposal._sale_requote(str(message or "")[:1000])
+        product = request.env["product.product"].sudo().browse(to_int(product_id)).exists()
+        try:
+            qty, price = float(qty or 0), float(price or 0)
+        except (TypeError, ValueError):
+            raise UserError("Số lượng / giá không hợp lệ.") from None
+        proposal._sale_send(qty, product, bool(needs_vendor), max(price, 0.0), str(note or "")[:1000])
         return payload.inquiry_detail(inquiry)
 
     @http.route(f"{API}/price_submit", type="json", auth="user", methods=["POST"])

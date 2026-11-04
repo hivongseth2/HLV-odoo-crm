@@ -98,8 +98,9 @@ class PurchaseOrderLinePriceLock(models.Model):
             changed = locked.filtered(lambda l: l._hlv_qty_key() != qty_before[l.id])
             if changed:
                 raise UserError(_(
-                    "%s lên từ trang hỏi giá — không sửa số lượng / ĐVT / sản phẩm trực tiếp. Mua thêm: sale bổ sung từ "
-                    "phiếu hỏi giá rồi lên YCMH. NCC giao thiếu: NCC báo đổi số lượng trên trang NCC để thu mua duyệt.",
+                    "%s lên từ trang hỏi giá — không sửa số lượng / ĐVT / sản phẩm trực tiếp. Muốn tăng / giảm SL hay đổi "
+                    "mã: bấm nút đề xuất (biểu tượng nhãn) trên dòng — sale hỏi lại NCC rồi gửi về để duyệt. NCC giao "
+                    "thiếu: NCC báo đổi số lượng trên trang NCC để thu mua duyệt.",
                     ", ".join(changed.mapped(lambda l: l.product_id.display_name or l.name)),
                 ))
         return result
@@ -121,7 +122,7 @@ class PurchaseOrderLinePriceLock(models.Model):
         self.env["hlv.po.price.proposal"]._check_can_propose(self)
         return {
             "type": "ir.actions.act_window",
-            "name": _("Đề xuất giá — %s", self.product_id.display_name),
+            "name": _("Đề xuất đổi dòng — %s", self.product_id.display_name),
             "res_model": "hlv.po.price.proposal.wizard",
             "view_mode": "form",
             "target": "new",
