@@ -16,7 +16,7 @@
         </field>
     </record>
 
-    <!-- Dòng YCMH gắn với phiếu hỏi giá: không sửa giá / thuế / chiết khấu trong wizard — giá là giá sale đã chọn, muốn
+    <!-- Dòng YCMH gắn với phiếu hỏi giá: không sửa giá / thuế / chiết khấu / số lượng / sản phẩm trong wizard — giá là giá sale đã chọn, muốn
          đổi thì "Đề xuất giá" trên dòng đơn mua (wizard/request_rfq_wizard.py kiểm lại phía server). -->
     <record id="view_request_rfq_wizard_price_lock" model="ir.ui.view">
         <field name="name">purchase.request.line.make.purchase.order.hlv.price.lock</field>
@@ -36,6 +36,18 @@
                 <attribute name="readonly">hlv_price_locked</attribute>
             </xpath>
             <xpath expr="//field[@name='actual_discount_amount']" position="attributes">
+                <attribute name="readonly">hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='actual_qty']" position="attributes">
+                <attribute name="readonly">hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="attributes">
+                <attribute name="readonly">hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_uom_id'][@groups='uom.group_uom']" position="attributes">
+                <attribute name="readonly">hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_uom_id'][@groups='!uom.group_uom']" position="attributes">
                 <attribute name="readonly">hlv_price_locked</attribute>
             </xpath>
         </field>

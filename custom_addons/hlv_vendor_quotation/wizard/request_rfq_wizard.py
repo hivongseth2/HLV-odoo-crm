@@ -5,10 +5,14 @@
   bị gộp thành MỘT dòng đơn mua, mất ngày hẹn;
 - "Tách đơn mua riêng cho phần NCC hẹn giao": mặc định theo lựa chọn của sale lúc lên YCMH
   (purchase.request.line.hlv_separate_po), thu mua đổi được. Bật thì phần hẹn ra đơn mua riêng.
+
+Dòng YCMH gắn với phiếu hỏi giá: giá và số lượng trong wizard là của phiếu hỏi giá, thu mua không sửa được
+(_hlv_check_locked_items).
 """
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.float_utils import float_compare
 
 from ..models.price_proposal_utils import same_price_incl
 from ..models.purchase_order_line_price import PRICE_WRITE_CTX
@@ -53,16 +57,26 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             res["hlv_split_backorder"] = any(backorder.mapped("hlv_separate_po"))
         return res
 
+    @api.model
+    def _prepare_item(self, line):
+        """Dòng gắn với phiếu hỏi giá: SL lên đơn = đúng phần còn phải mua của dòng YCMH (sale chốt trên phiếu). actual_qty
+        cũ trên dòng có thể là số của lần Tạo RFQ trước (misa_purchase_request_sync ghi lại) — không dùng."""
+        res = super()._prepare_item(line)
+        if line.hlv_price_locked:
+            res["actual_qty"] = line._hlv_remaining_qty()
+        return res
+
     def make_purchase_order(self):
-        # Dòng đơn mua lên từ hỏi giá bị khoá giá (purchase_order_line_price): wizard ghi giá đã chọn trên YCMH
-        # (đặt SL, gộp vào dòng có sẵn) là đường được phép — nên giá trong wizard phải đúng giá đã chọn.
-        self._hlv_check_locked_prices()
+        # Dòng đơn mua lên từ hỏi giá bị khoá (purchase_order_line_price): wizard ghi giá / SL đã chốt trên YCMH (đặt SL,
+        # gộp vào dòng có sẵn) là đường được phép — nên giá / SL trong wizard phải đúng của phiếu hỏi giá.
+        self._hlv_check_locked_items()
         return self.with_context(**{PRICE_WRITE_CTX: True})._hlv_make_purchase_order()
 
-    def _hlv_check_locked_prices(self):
+    def _hlv_check_locked_items(self):
         """Dòng YCMH gắn với phiếu hỏi giá: giá trong wizard phải là giá sale chọn trên trang hỏi giá (cột "sale đề xuất"
-        của dòng YCMH — vendor_quote_line._request_line_proposal_vals), so theo giá sau VAT. Thu mua muốn giá khác thì
-        tạo RFQ rồi "Đề xuất giá" trên dòng đơn mua."""
+        của dòng YCMH — vendor_quote_line._request_line_proposal_vals), so theo giá sau VAT; số lượng phải là phần còn
+        phải mua của dòng YCMH. Thu mua muốn giá khác thì tạo RFQ rồi "Đề xuất giá" trên dòng đơn mua; muốn SL khác thì
+        sale bổ sung / giảm trên phiếu hỏi giá."""
         # Giá / thuế wizard thật sự dùng (misa_purchase_request_sync): đơn giá trống thì lấy giá sale đề xuất, thuế
         # chọn từ danh sách ưu tiên hơn % gõ tay.
         changed = self.item_ids.filtered(lambda item: item.hlv_price_locked and not same_price_incl(
@@ -74,6 +88,13 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             raise UserError(_(
                 "%s gắn với phiếu hỏi giá — giữ đúng giá sale đã chọn. Muốn giá khác: tạo RFQ rồi bấm \"Đề xuất giá\" "
                 "trên dòng đơn mua để sale hỏi lại NCC.",
+                ", ".join(changed.mapped(lambda item: item.product_id.display_name)),
+            ))
+        changed = self.item_ids.filtered(lambda item: item.hlv_price_locked and not item._hlv_qty_as_requested())
+        if changed:
+            raise UserError(_(
+                "%s gắn với phiếu hỏi giá — số lượng phải đúng phần còn phải mua trên YCMH. Muốn mua khác số đó: sale "
+                "đổi SL mua / bổ sung trên phiếu hỏi giá.",
                 ", ".join(changed.mapped(lambda item: item.product_id.display_name)),
             ))
 
@@ -110,6 +131,19 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order.item"
 
-    # Dòng YCMH gắn với phiếu hỏi giá: ô giá / thuế / chiết khấu trong wizard chỉ xem (kiểm lại ở
-    # PurchaseRequestLineMakePurchaseOrder._hlv_check_locked_prices).
+    # Dòng YCMH gắn với phiếu hỏi giá: ô giá / thuế / chiết khấu / số lượng / sản phẩm trong wizard chỉ xem (kiểm lại ở
+    # PurchaseRequestLineMakePurchaseOrder._hlv_check_locked_items).
     hlv_price_locked = fields.Boolean(related="line_id.hlv_price_locked", string="Giá theo hỏi giá")
+
+    def _hlv_qty_as_requested(self):
+        """Đúng sản phẩm và SL wizard sẽ lên đơn (actual_qty, trống thì product_qty — như misa_purchase_request_sync) bằng
+        phần còn phải mua của dòng YCMH, quy về ĐVT của dòng YCMH."""
+        self.ensure_one()
+        line = self.line_id
+        if self.product_id != line.product_id:
+            return False
+        qty = self.actual_qty or self.product_qty or 0.0
+        if self.product_uom_id and self.product_uom_id != line.product_uom_id:
+            qty = self.product_uom_id._compute_quantity(qty, line.product_uom_id)
+        rounding = line.product_uom_id.rounding or 0.001
+        return float_compare(qty, line._hlv_remaining_qty(), precision_rounding=rounding) == 0

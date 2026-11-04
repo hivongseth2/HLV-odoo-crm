@@ -104,7 +104,7 @@ class VendorQuoteLineChoice(models.Model):
         if inquiry_line.locked:
             raise UserError(_(
                 "%s đã lên đơn mua đủ số lượng cần mua. NCC giao thiếu: giảm SL mua của NCC đó xuống đúng số "
-                "giao được (thu mua sửa dòng đơn mua trước), phần còn thiếu sẽ mở ra để chọn NCC khác.",
+                "giao được (NCC báo đổi số lượng đơn mua trên trang NCC, thu mua duyệt trước), phần còn thiếu sẽ mở ra để chọn NCC khác.",
                 self._hlv_product_label(),
             ))
         if qty is None:

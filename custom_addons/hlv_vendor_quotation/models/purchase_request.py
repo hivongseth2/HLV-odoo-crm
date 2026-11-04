@@ -270,8 +270,9 @@ class PurchaseRequestLine(models.Model):
     def _hlv_fully_ordered(self):
         """Đã lên đơn mua ĐỦ số lượng — mặt hàng khoá, không đổi NCC được nữa.
 
-        Còn thiếu thì mở: NCC báo hết hàng / chỉ giao được một phần sau khi đã đặt, thu mua sửa
-        số lượng dòng đơn mua xuống đúng số NCC giao được (về 0 nếu hết hẳn — đơn mua đã xác
+        Còn thiếu thì mở: NCC báo hết hàng / chỉ giao được một phần sau khi đã đặt, số lượng dòng đơn mua
+        giảm xuống đúng số NCC giao được — dòng gắn với hỏi giá thì NCC báo đổi trên trang NCC, thu mua
+        duyệt (purchase_order_line_price khoá sửa tay) — (về 0 nếu hết hẳn — đơn mua đã xác
         nhận không xoá được dòng, mà huỷ cả đơn thì hỏng mặt hàng khác), rồi sale chọn NCC
         cho phần còn lại. Chưa có dòng đơn mua nào → chưa khoá.
         """

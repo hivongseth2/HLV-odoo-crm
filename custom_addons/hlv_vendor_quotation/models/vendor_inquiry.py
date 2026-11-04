@@ -545,8 +545,8 @@ class VendorInquiryLine(models.Model):
     )
     locked = fields.Boolean(
         string="Đã lên đơn mua", compute="_compute_locked",
-        help="Đã lên RFQ/đơn mua đủ SL cần mua: không chọn thêm NCC. NCC giao thiếu: thu mua sửa số lượng "
-             "dòng đơn mua xuống, sale giảm SL mua của NCC đó — phần còn thiếu mở ra để chọn NCC khác.",
+        help="Đã lên RFQ/đơn mua đủ SL cần mua: không chọn thêm NCC. NCC giao thiếu: NCC báo đổi số lượng "
+             "trên trang NCC (thu mua duyệt), sale giảm SL mua của NCC đó — phần còn thiếu mở ra để chọn NCC khác.",
     )
 
     @api.model_create_multi

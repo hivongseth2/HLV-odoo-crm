@@ -96,7 +96,8 @@
     </record>
 
     <!-- Dòng YCMH gắn với phiếu hỏi giá (models/purchase_request_line_price.py): thu mua không sửa đơn giá / thuế / chiết
-         khấu — giá là giá sale chọn trên trang hỏi giá; muốn giá khác thì "Đề xuất giá" trên dòng đơn mua. YCMH không
+         khấu / số lượng / sản phẩm — của phiếu hỏi giá; muốn giá khác thì "Đề xuất giá" trên dòng đơn mua, muốn mua thêm
+         thì sale bổ sung từ phiếu hỏi giá. YCMH không
          gắn với hỏi giá giữ nguyên như cũ. Kế thừa view của misa_purchase_request_sync (module trong repo, xmlid ổn định). -->
     <record id="view_purchase_request_form_price_lock" model="ir.ui.view">
         <field name="name">purchase.request.form.hlv.price.lock</field>
@@ -105,6 +106,18 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="after">
                 <field name="hlv_price_locked" column_invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_uom_id'][1]" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_uom_id'][2]" position="attributes">
+                <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="attributes">
                 <attribute name="readonly">parent.state != 'draft' or hlv_price_locked</attribute>
@@ -171,6 +184,15 @@
             <xpath expr="//field[@name='misa_amount']" position="attributes">
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
+            <xpath expr="//field[@name='product_id']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_qty']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_uom_id']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
         </field>
     </record>
 
@@ -186,6 +208,15 @@
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
             <xpath expr="//field[@name='history_po_line_id']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_qty']" position="attributes">
+                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_uom_id']" position="attributes">
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
         </field>

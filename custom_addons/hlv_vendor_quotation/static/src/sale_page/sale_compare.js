@@ -406,7 +406,7 @@ window.HlvQuote = window.HlvQuote || {};
   /** Dòng tình trạng dưới tên sản phẩm: đã chia bao nhiêu / thiếu / đã đặt / YCMH / từ chối / khoá. */
   function allocationTag(line) {
     if (line.locked) {
-      return '<span class="hq-muted" title="NCC giao thiếu: thu mua sửa số lượng dòng đơn mua xuống, rồi giảm SL mua ' +
+      return '<span class="hq-muted" title="NCC giao thiếu: NCC báo đổi số lượng đơn mua trên trang NCC (thu mua duyệt), rồi giảm SL mua ' +
         'của NCC đó — phần còn thiếu mở ra để chọn NCC khác">đã lên đơn mua đủ — khoá</span>';
     }
     var parts = [];
