@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api, _
+from odoo import models
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -41,7 +41,10 @@ class StockPicking(models.Model):
 
     def _open_smart_print_wizard(self, rule=False):
         """Open the wizard with pre-filled rule if found."""
-        action = self.env.ref('hlv_smart_report_config.action_hlv_smart_print_wizard').read()[0]
+        # _for_xml_id thay vì env.ref().read(): Odoo 18 chỉ cho group_system đọc
+        # ir.actions.act_window, read() làm thủ kho dính "Lỗi truy cập".
+        action = self.env['ir.actions.act_window']._for_xml_id(
+            'hlv_smart_report_config.action_hlv_smart_print_wizard')
         context = dict(self.env.context)
         context.update({
             'default_picking_id': self.id,
