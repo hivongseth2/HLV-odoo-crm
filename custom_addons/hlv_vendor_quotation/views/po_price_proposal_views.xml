@@ -15,8 +15,9 @@
                             groups="purchase.group_purchase_user"
                             confirm="Đổi đơn mua theo các đề xuất đã chọn? Mỗi đơn có thêm một phiên bản, NCC được báo."/>
                 </header>
-                <field name="purchase_order_id"/>
-                <field name="partner_id"/>
+                <!-- Mở từ nút trên đơn mua (hlv_from_order): đơn / NCC / thu mua đề xuất giống nhau mọi dòng — ẩn. -->
+                <field name="purchase_order_id" column_invisible="context.get('hlv_from_order')"/>
+                <field name="partner_id" column_invisible="context.get('hlv_from_order')"/>
                 <field name="product_id"/>
                 <field name="old_price_incl"/>
                 <field name="suggested_price_incl"/>
@@ -25,7 +26,7 @@
                 <field name="new_qty" optional="show" invisible="not new_qty"/>
                 <field name="new_drop" optional="show" invisible="not new_drop"/>
                 <field name="new_product_id" optional="show"/>
-                <field name="buyer_id" optional="show"/>
+                <field name="buyer_id" optional="show" column_invisible="context.get('hlv_from_order')"/>
                 <field name="create_date" string="Đề xuất lúc" optional="show"/>
                 <field name="state" widget="badge" decoration-warning="state == 'to_approve'"
                        decoration-info="state in ('sale', 'vendor', 'quoted')"

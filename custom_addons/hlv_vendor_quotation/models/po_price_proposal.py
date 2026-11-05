@@ -422,5 +422,6 @@ class PurchaseOrderPriceProposalMixin(models.Model):
         self.ensure_one()
         action = self.env["ir.actions.act_window"]._for_xml_id("hlv_vendor_quotation.action_po_price_proposal")
         action["domain"] = [("purchase_order_id", "=", self.id)]
-        action["context"] = {}
+        # Mở từ một đơn: cột đơn mua / NCC / thu mua đề xuất giống nhau mọi dòng — danh sách ẩn đi (po_price_proposal_views.xml).
+        action["context"] = {"hlv_from_order": True}
         return action
