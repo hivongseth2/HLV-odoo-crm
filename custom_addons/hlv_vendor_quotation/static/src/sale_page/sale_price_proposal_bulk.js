@@ -65,16 +65,20 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-pp-outcome hq-ppb-wide" data-ppb-outcome></div></div>';
   }
 
-  function row(p) {
+  /** Một món = một thẻ: số thứ tự + ảnh + tên đậm ở đầu để nhìn là biết thẻ nào của món nào. */
+  function row(p, index) {
     var wish = [p.buyer_note ? "Lý do: " + esc(p.buyer_note) : "",
-      p.vendor_price && !p.vendor_kept_price ? "NCC báo lại " + HQ.money(p.vendor_price) : "",
+      p.vendor_price && !p.vendor_kept_price ? "NCC báo lại <b>" + HQ.money(p.vendor_price) + "</b>" : "",
       p.vendor_kept_price ? "NCC giữ nguyên giá" : ""].filter(Boolean).join(" · ");
     return '<div class="hq-ppb-row" data-ppb-id="' + p.id + '">' +
-      '<div class="hq-ppb-head"><b>' + esc(p.product) + "</b> " + HQ.docChip(p.order) +
-      '<span class="hq-muted">trên đơn ' + HQ.money(p.old_price) + " · " + HQ.qty(p.old_qty) + " " + esc(p.uom) +
-      "</span></div>" + (wish ? '<div class="hq-muted">' + wish + "</div>" : "") +
+      '<img class="hq-ppb-img" src="' + esc(p.image) + '" alt="" loading="lazy"/>' +
+      '<div class="hq-ppb-main"><div class="hq-ppb-head"><span class="hq-ppb-no">' + (index + 1) + "</span><b>" +
+      esc(p.product) + "</b>" + HQ.docChip(p.order) + "</div>" +
+      '<div class="hq-muted">Trên đơn ' + HQ.money(p.old_price) + " sau VAT · " + HQ.qty(p.old_qty) + " " + esc(p.uom) +
+      (wish ? " · " + wish : "") + "</div>" +
       actionSelect(p) + (p.can_requote ? requoteFields(p) : "") +
-      '<input type="text" class="hq-input" data-ppb-note maxlength="1000" placeholder="Ghi chú (không bắt buộc)"/></div>';
+      '<input type="text" class="hq-input" data-ppb-note maxlength="1000" placeholder="Ghi chú (không bắt buộc)"/>' +
+      "</div></div>";
   }
 
   /** {qty, rate, price, swapped} đang nhập ở phần hỏi lại của một hàng. */

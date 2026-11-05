@@ -169,6 +169,10 @@
                     <!-- Món đã đặt mà bên mua hỏi lại giá (đề xuất giá của thu mua — vendor_quote_requote.py). -->
                     <span t-if="line_editable and line.hlv_requote_proposal_id" class="vq-chip vq-chip-ref"
                           title="Đã đặt hàng — bên mua nhờ báo lại giá món này (xem lời nhắn trong khung trao đổi). Sửa đơn giá rồi gửi báo giá.">báo lại giá</span>
+                    <t t-set="target_price" t-value="line_editable and line.hlv_requote_proposal_id and line._hlv_requote_target_price()"/>
+                    <span t-if="target_price" class="vq-chip vq-chip-ref"
+                          t-att-title="'Bên mua mong giá khoảng %s một %s (sau VAT)' % (fmt(target_price), line.product_uom_id.name)"
+                          t-esc="'mong %s' % fmt(target_price)"/>
                     <span t-if="ref and line_editable" class="vq-chip vq-chip-ref"
                           t-att-title="'Giá lần trước: %s sau VAT cho %s %s (%s) — đã điền sẵn, kiểm tra rồi gửi' % (fmt(ref.price_unit * (1 + ref.tax_rate / 100.0)), fmt(ref.product_qty), ref.product_uom_id.name, fdate(ref.quote_id.submit_date))">giá cũ</span>
                 </div>

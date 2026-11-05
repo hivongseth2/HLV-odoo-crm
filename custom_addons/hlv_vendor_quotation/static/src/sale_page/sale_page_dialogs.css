@@ -564,10 +564,17 @@
 .hq-pp-check { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .hq-pp-outcome { font-size: .8125rem; color: var(--hq-warn-ink); }
 /* Popup "Xử lý tất cả" (sale_price_proposal_bulk.js): mỗi món một khối, phần hỏi lại NCC chia 3 cột. */
-.hq-ppb-row { display: grid; gap: .35rem; padding: .6rem 0; border-bottom: 1px solid var(--hq-line); }
-.hq-ppb-row:last-child { border-bottom: 0; }
-.hq-ppb-row.is-skip { opacity: .55; }
-.hq-ppb-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.hq-ppb-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: .75rem; padding: .75rem;
+  border: 1px solid var(--hq-line); border-left: 4px solid var(--hq-warn-ink); border-radius: 8px; background: #fff; }
+.hq-ppb-row + .hq-ppb-row { margin-top: .75rem; }
+.hq-ppb-row.is-skip { opacity: .55; border-left-color: var(--hq-line); }
+.hq-ppb-img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--hq-line); border-radius: 6px;
+  background: #fff; }
+.hq-ppb-main { display: grid; gap: .4rem; min-width: 0; }
+.hq-ppb-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .9375rem; }
+.hq-ppb-no { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; border-radius: 50%;
+  background: var(--hq-warn-ink); color: #fff; font-size: .75rem; font-weight: 600; }
+#hq-ppb-body { background: var(--hq-bg); }
 .hq-ppb-requote { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
 .hq-ppb-wide { grid-column: 1 / -1; }
 @media (max-width: 640px) { .hq-pp-fields, .hq-ppb-requote { grid-template-columns: minmax(0, 1fr); } }

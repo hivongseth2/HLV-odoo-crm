@@ -68,6 +68,13 @@ class VendorQuoteRequote(models.Model):
 class VendorQuoteLineRequote(models.Model):
     _inherit = "hlv.vendor.quote.line"
 
+    def _hlv_requote_target_price(self):
+        """Giá sau VAT bên mua mong khi nhờ NCC báo lại dòng này (0 = không ghi / không đang hỏi lại). sudo: NCC không
+        đọc được đề xuất giá."""
+        self.ensure_one()
+        proposal = self.sudo().hlv_requote_proposal_id
+        return proposal.target_price_incl if proposal.state == "vendor" else 0.0
+
     def _hlv_requote_open(self):
         """Dòng đang chờ NCC báo lại giá (đề xuất giá ở bước "Chờ NCC báo lại"). sudo: tính vendor_locked cả khi sale
         (không có quyền đọc đề xuất giá) mở bảng so giá."""

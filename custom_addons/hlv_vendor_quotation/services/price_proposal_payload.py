@@ -64,6 +64,7 @@ def _proposal(proposal):
         "id": proposal.id,
         "product": product,
         "product_id": proposal.product_id.id,
+        "image": f"/web/image/product.product/{proposal.product_id.id}/image_128",
         "order": proposal.purchase_order_id.name,
         "order_id": proposal.purchase_order_id.id,
         # Ô giá trên bảng so giá (offer.line_id) — tô màu + nút thao tác ngay trên ô; đổi mã thì cả ô của mã mới.

@@ -64,6 +64,9 @@ class PurchaseOrderPriceProposal(models.Model):
     vendor_message = fields.Text(string="Tin sale gửi NCC", readonly=True)
     sale_user_id = fields.Many2one("res.users", string="Sale hỏi lại", readonly=True)
     requote_date = fields.Datetime(string="Hỏi lại NCC lúc", readonly=True)
+    # Giá sale ghi "mong muốn" khi hỏi lại NCC — NCC thấy ngay trên dòng báo giá (portal_grid_templates.xml), không chỉ
+    # trong tin nhắn. 0 = sale không ghi giá.
+    target_price_incl = fields.Float(string="Giá mong NCC (sau VAT)", digits="Product Price", readonly=True)
     vendor_price_incl = fields.Float(string="NCC báo lại (sau VAT)", digits="Product Price", readonly=True)
     vendor_tax_rate = fields.Float(string="% VAT NCC báo", readonly=True)
     vendor_date = fields.Datetime(string="NCC báo lại lúc", readonly=True)
@@ -211,6 +214,7 @@ class PurchaseOrderPriceProposal(models.Model):
             raise UserError(_("Không còn dòng báo giá của NCC cho món này."))
         message = self._vendor_request_text(price_incl, note)
         self.sudo().write({"state": "vendor", "needs_vendor": True, "vendor_message": message,
+                           "target_price_incl": price_incl,
                            "sale_user_id": self.env.uid, "requote_date": fields.Datetime.now(),
                            "vendor_price_incl": 0.0, "vendor_tax_rate": 0.0, "vendor_date": False})
         quote_line.quote_id._hlv_open_requote(quote_line, self, self._target_qty(), self.new_vat)
