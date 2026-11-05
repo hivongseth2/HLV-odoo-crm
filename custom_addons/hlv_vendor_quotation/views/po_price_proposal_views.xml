@@ -9,6 +9,12 @@
             <list string="Đề xuất giá" create="0"
                   decoration-warning="state == 'to_approve'" decoration-muted="state in ('kept', 'cancel')"
                   decoration-success="state == 'approved'">
+                <!-- Chọn nhiều dòng "Chờ thu mua duyệt" rồi duyệt một lần — cùng đơn thì thành một phiên bản. -->
+                <header>
+                    <button name="action_approve" type="object" string="Duyệt các dòng đã chọn" class="btn-primary"
+                            groups="purchase.group_purchase_user"
+                            confirm="Đổi đơn mua theo các đề xuất đã chọn? Mỗi đơn có thêm một phiên bản, NCC được báo."/>
+                </header>
                 <field name="purchase_order_id"/>
                 <field name="partner_id"/>
                 <field name="product_id"/>

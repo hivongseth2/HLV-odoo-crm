@@ -332,7 +332,8 @@ class PurchaseOrderRevisionMixin(models.Model):
         """Ghi phiên bản đã duyệt cho đề xuất của thu mua — po_proposal_change._apply_line_change đã ghi lên đơn (thêm
         dòng mới thì không đi được đường _apply của phiên bản, nên ghi trước rồi lưu lại ở đây). changes: [(dòng đơn,
         SL cũ, SL mới, đơn giá cũ, đơn giá mới — chưa VAT, % VAT cũ, % VAT mới)]; before / after: _hlv_snapshot. Dòng mới ghi SL cũ 0. Báo
-        NCC trong khung trao đổi đơn (NCC biết đơn bị giảm SL / đổi mã). Không dòng nào đổi → recordset rỗng."""
+        NCC trong khung trao đổi đơn (NCC biết đơn bị giảm SL / đổi mã). proposal: đề xuất đầu tiên khi duyệt nhiều dòng
+        một lần (các đề xuất đều trỏ revision_id về phiên bản này). Không dòng nào đổi → recordset rỗng."""
         self.ensure_one()
         order = self.sudo()
         line_vals = []

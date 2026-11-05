@@ -233,6 +233,22 @@
                         </div>
                     </div>
 
+                    <!-- Xử lý tất cả món thu mua trả về một lần (sale_price_proposal_bulk.js — nội dung vẽ khi mở). -->
+                    <div id="hq-ppb-modal" class="hq-modal hq-pp-modal hq-hidden" role="dialog" aria-modal="true"
+                         aria-labelledby="hq-ppb-title">
+                        <div class="hq-modal-box">
+                            <div class="hq-modal-head">
+                                <h2 class="hq-h2" id="hq-ppb-title">Thu mua trả về</h2>
+                                <button type="button" class="btn-close" data-ppb-close="1" aria-label="Đóng"></button>
+                            </div>
+                            <div class="hq-modal-body" id="hq-ppb-body"></div>
+                            <div class="hq-modal-foot">
+                                <button type="button" class="hq-btn hq-push" data-ppb-close="1">Thôi</button>
+                                <button type="button" class="hq-btn hq-btn-primary" id="hq-ppb-send">Gửi</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Trao đổi với NCC trên một báo giá / đơn mua (nổi trên ngăn chi tiết). -->
                     <div id="hq-chat" class="hq-modal hq-chat-modal hq-hidden">
                         <div class="hq-modal-box hq-chat-box">
@@ -306,6 +322,7 @@
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_add_vendor.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_proposal.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_proposal_form.js?v=#{asset_version}"></script>
+                <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_price_proposal_bulk.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_inquiry_refs.js?v=#{asset_version}"></script>
                 <script t-attf-src="/hlv_vendor_quotation/static/src/sale_page/sale_compare_ask.js?v=#{asset_version}"></script>

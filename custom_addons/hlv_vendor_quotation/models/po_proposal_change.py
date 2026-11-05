@@ -161,13 +161,32 @@ class PriceProposalLineChange(models.Model):
 
     # ------------------------------------------------------------------ thu mua duyệt
     def _apply_line_change(self):
-        """Áp giá / SL / mã vào đơn mua thành một phiên bản đã duyệt. Trả phiên bản (rỗng nếu không đổi gì)."""
-        self.ensure_one()
+        """Áp giá / SL / mã của các đề xuất (cùng MỘT đơn mua — thu mua duyệt nhiều dòng một lần) vào đơn thành MỘT phiên
+        bản đã duyệt: NCC nhận một tin cho cả lần duyệt. Trả phiên bản (rỗng nếu không đổi gì)."""
         order = self.purchase_order_id.sudo()
+        order.ensure_one()
         pending = order._hlv_revision_pending()
         if pending:
             raise UserError(_("Đơn %(order)s đang có yêu cầu NCC số %(n)s chờ duyệt — xử lý yêu cầu đó trước.",
                               order=order.name, n=pending.number))
+        # Tính giá / thuế từng dòng trước khi ghi gì lên đơn.
+        plans = [(proposal, proposal._approved_price()) for proposal in self]
+        locked = order.state == "done"
+        if locked:
+            order.button_unlock()
+        before = order._hlv_snapshot()
+        changes = []
+        for proposal, (new_unit, taxes) in plans:
+            changes += proposal._apply_to_order(proposal.order_line_id.sudo(), new_unit, taxes)
+        after = order._hlv_snapshot()
+        if locked:
+            order.button_done()
+        return order._hlv_record_proposal_revision(changes, before, after, self[:1])
+
+    def _approved_price(self):
+        """(đơn giá chưa VAT, thuế mới — None = giữ) sẽ ghi lên dòng đơn khi duyệt đề xuất này."""
+        self.ensure_one()
+        order = self.purchase_order_id.sudo()
         line = self.order_line_id.sudo()
         tax = tax_rate_of(line)
         new_tax = vat_rate(self.apply_vat) if self.apply_vat else tax
@@ -181,15 +200,7 @@ class PriceProposalLineChange(models.Model):
         # NCC báo theo VAT sẽ áp — đúng số NCC xuất hoá đơn.
         if self.needs_vendor and (taxes is not None or not same_money(self.new_price_incl, self.old_price_incl)):
             new_unit = split_unit_price(self.new_price_incl, new_tax)[0] or line.price_unit
-        locked = order.state == "done"
-        if locked:
-            order.button_unlock()
-        before = order._hlv_snapshot()
-        changes = self._apply_to_order(line, new_unit, taxes)
-        after = order._hlv_snapshot()
-        if locked:
-            order.button_done()
-        return order._hlv_record_proposal_revision(changes, before, after, self)
+        return new_unit, taxes
 
     def _apply_to_order(self, line, new_unit, taxes=None):
         """Ghi lên đơn + YCMH + phiếu. taxes: thuế mới của dòng (None = giữ). Trả [(dòng đơn, SL cũ, SL mới, đơn giá cũ,

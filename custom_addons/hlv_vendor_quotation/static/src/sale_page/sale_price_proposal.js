@@ -49,6 +49,13 @@ window.HlvQuote = window.HlvQuote || {};
 
   /** Đầu ngăn: dải việc cần làm (đề xuất chờ sale, có ô trên bảng) + đề xuất không có ô (vẽ đủ, kèm nút) + một dòng
    cho mỗi đề xuất đã xong. Đề xuất đang chờ NCC / thu mua chỉ hiện ở ô — sale không có gì để làm. */
+  /** Đề xuất còn việc của sale (hỏi lại NCC / gửi duyệt / giữ giá) — popup "Xử lý tất cả" (sale_price_proposal_bulk.js). */
+  HQ.proposalTodo = function (d) {
+    return (d.price_proposals || []).filter(function (p) {
+      return !DONE[p.state] && (p.can_requote || p.can_submit || p.can_keep);
+    });
+  };
+
   HQ.priceProposalBox = function (d) {
     var list = d.price_proposals || [];
     var inCell = list.filter(function (p) { return !DONE[p.state] && shownInCompare(d, p); });
@@ -67,8 +74,9 @@ window.HlvQuote = window.HlvQuote || {};
     var submit = todo.some(function (p) { return p.can_submit; });
     return '<div class="hq-todo" role="status"><div><b>Thu mua trả về ' + todo.length + " món</b>" +
       "<span>" + (submit ? "NCC đã báo lại — gửi thu mua duyệt" : "Hỏi lại NCC / gửi thu mua") +
-      " ngay trên ô tô cam ở bảng So giá</span></div>" +
-      '<button type="button" class="hq-btn hq-btn-primary" data-pp-jump="1">Đến ô cần làm</button></div>';
+      " ngay trên ô tô cam ở bảng So giá, hoặc xử lý tất cả một lần</span></div>" +
+      '<div class="hq-pp-actions"><button type="button" class="hq-btn" data-pp-jump="1">Đến ô cần làm</button>' +
+      '<button type="button" class="hq-btn hq-btn-primary" data-ppb-open="1">Xử lý tất cả</button></div></div>';
   }
 
   /** Đề xuất đã xong: một dòng kết quả. */
@@ -254,6 +262,7 @@ window.HlvQuote = window.HlvQuote || {};
   HQ.bindPriceProposalEvents = function () {
     var panel = HQ.$("hq-drawer-panel");
     HQ.bindProposalFormEvents(panel);
+    HQ.bindProposalBulkEvents(panel);
     HQ.on(panel, "click", "[data-pp-detail]", function (el) {
       panel.querySelector('[data-pp-steps="' + el.dataset.ppDetail + '"]').classList.toggle("hq-hidden");
     });

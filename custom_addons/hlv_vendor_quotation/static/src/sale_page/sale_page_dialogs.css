@@ -563,7 +563,14 @@
 .hq-pp-field { display: grid; gap: .2rem; min-width: 0; }
 .hq-pp-check { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .hq-pp-outcome { font-size: .8125rem; color: var(--hq-warn-ink); }
-@media (max-width: 640px) { .hq-pp-fields { grid-template-columns: minmax(0, 1fr); } }
+/* Popup "Xử lý tất cả" (sale_price_proposal_bulk.js): mỗi món một khối, phần hỏi lại NCC chia 3 cột. */
+.hq-ppb-row { display: grid; gap: .35rem; padding: .6rem 0; border-bottom: 1px solid var(--hq-line); }
+.hq-ppb-row:last-child { border-bottom: 0; }
+.hq-ppb-row.is-skip { opacity: .55; }
+.hq-ppb-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.hq-ppb-requote { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.hq-ppb-wide { grid-column: 1 / -1; }
+@media (max-width: 640px) { .hq-pp-fields, .hq-ppb-requote { grid-template-columns: minmax(0, 1fr); } }
 /* Dải "việc cần làm" đầu ngăn: một câu + một nút dẫn tới ô tô cam — thay cho khối chữ dài lặp lại ô. */
 .hq-todo { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0 0 .75rem;
     padding: .6rem .8rem; background: var(--hq-warn-soft); border-left: 4px solid var(--hq-warn);

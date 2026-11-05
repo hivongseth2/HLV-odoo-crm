@@ -26,6 +26,40 @@ class VendorQuotePriceProposal(SalePageMixin, http.Controller):
                           note="", vat="", **kw):
         """Sale chốt SL / mã rồi gửi: hỏi lại NCC (mở món trên báo giá NCC + nhắn NCC) hoặc gửi thẳng thu mua duyệt."""
         proposal, inquiry = self._proposal(code, proposal_id)
+        self._requote(proposal, qty, product_id, needs_vendor, price, note, vat)
+        return payload.inquiry_detail(inquiry)
+
+    @http.route(f"{API}/price_bulk", type="json", auth="user", methods=["POST"])
+    def api_price_bulk(self, code="", items=None, **kw):
+        """Sale xử lý nhiều món thu mua trả về một lần (popup "Xử lý tất cả"). items: [{proposal_id, action: "requote"
+        (kèm qty, product_id, needs_vendor, price, vat, note như price_requote) / "submit" / "keep", note}]. Một món lỗi
+        → cả lần gửi không ghi gì (lỗi ghi rõ món nào), sale sửa rồi gửi lại."""
+        inquiry = None
+        for item in items or []:
+            proposal, item_inquiry = self._proposal(code, item.get("proposal_id"))
+            if inquiry and item_inquiry != inquiry:
+                raise UserError("Các món phải cùng một phiếu hỏi giá.")
+            inquiry = item_inquiry
+            note = str(item.get("note") or "")
+            try:
+                action = item.get("action")
+                if action == "requote":
+                    self._requote(proposal, item.get("qty"), item.get("product_id"), item.get("needs_vendor", True),
+                                  item.get("price"), note, item.get("vat"))
+                elif action == "submit":
+                    proposal._sale_submit(note)
+                elif action == "keep":
+                    proposal._sale_keep(note)
+                else:
+                    raise UserError("Thao tác không hợp lệ.")
+            except UserError as err:
+                raise UserError(f"{proposal.product_id.display_name}: {err.args[0]}") from None
+        if not inquiry:
+            raise UserError("Chưa chọn món nào.")
+        return payload.inquiry_detail(inquiry)
+
+    def _requote(self, proposal, qty, product_id, needs_vendor, price, note, vat):
+        """Kiểm dữ liệu sale gửi rồi proposal._sale_send — dùng chung cho gửi một món và gửi nhiều món."""
         product = request.env["product.product"].sudo().browse(to_int(product_id)).exists()
         try:
             qty, price = float(qty or 0), float(price or 0)
@@ -36,7 +70,6 @@ class VendorQuotePriceProposal(SalePageMixin, http.Controller):
         if vat and vat not in {o["code"] for o in vat_options(company)}:
             raise UserError("Công ty chưa khai thuế mua mức VAT này — chọn mức khác.")
         proposal._sale_send(qty, product, bool(needs_vendor), max(price, 0.0), str(note or "")[:1000], vat)
-        return payload.inquiry_detail(inquiry)
 
     @http.route(f"{API}/price_submit", type="json", auth="user", methods=["POST"])
     def api_price_submit(self, code="", proposal_id=None, note="", **kw):

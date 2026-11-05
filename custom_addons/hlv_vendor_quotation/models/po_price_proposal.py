@@ -300,18 +300,20 @@ class PurchaseOrderPriceProposal(models.Model):
 
     # ------------------------------------------------------------------ thu mua duyệt
     def action_approve(self):
-        """Thu mua duyệt: đổi giá / SL / mã trên đơn mua (một phiên bản mới của đơn — po_proposal_change), báo NCC +
-        sale."""
+        """Thu mua duyệt (một hoặc nhiều đề xuất — chọn trên danh sách): đổi giá / SL / mã trên đơn mua; các đề xuất
+        cùng đơn thành MỘT phiên bản mới của đơn (po_proposal_change), báo NCC + sale."""
         for proposal in self:
             proposal._check_state(("to_approve",), _("duyệt"))
             line = proposal.order_line_id
             if line.qty_invoiced:
                 raise UserError(_("%s đã có hoá đơn NCC — không đổi giá trên đơn được nữa.", line.product_id.display_name))
-            revision = proposal._apply_line_change()
-            proposal.sudo().write({"state": "approved", "revision_id": revision.id, "decided_user_id": self.env.uid,
-                                   "decided_date": fields.Datetime.now()})
-            proposal._close_activity(_("Đã duyệt"))
-            proposal._tell_sale(_("Thu mua duyệt %(product)s: %(price)s (sau VAT)%(change)s", **proposal._texts()))
+        for proposals in self.grouped("purchase_order_id").values():
+            revision = proposals._apply_line_change()
+            proposals.sudo().write({"state": "approved", "revision_id": revision.id, "decided_user_id": self.env.uid,
+                                    "decided_date": fields.Datetime.now()})
+            for proposal in proposals:
+                proposal._close_activity(_("Đã duyệt"))
+                proposal._tell_sale(_("Thu mua duyệt %(product)s: %(price)s (sau VAT)%(change)s", **proposal._texts()))
         return True
 
     def action_reject(self):
