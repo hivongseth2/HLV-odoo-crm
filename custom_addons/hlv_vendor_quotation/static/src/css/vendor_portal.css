@@ -325,6 +325,9 @@ select.vq-cell-input { padding: 0 4px; cursor: pointer; }
 .vq-short-label { color: #92400e; }
 .vq-short-opt { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
 .vq-short-date { height: 30px; padding: 0 6px; font-size: .82rem; }
+/* Giá bên mua đề nghị khi nhờ báo lại giá: cùng khuôn dòng thiếu hàng, màu nhấn của trang thay vì vàng cảnh báo. */
+.vq-grid tbody tr.vq-request-row td { background: #f1f5fb; }
+.vq-request-label { color: var(--vq-accent); }
 .vq-grid .vq-col-text { width: 150px; }
 /* Tên dài: cắt bằng "…", rê chuột xem đủ (title ở ô). Chip trạng thái nằm cùng hàng. */
 .vq-name-cell { display: flex; align-items: center; gap: 6px; max-width: 380px; }
@@ -414,6 +417,11 @@ a.vq-name-text:hover { color: var(--vq-accent); text-decoration: underline; }
     .vq-grid tr.vq-line:not(.vq-more-open) .vq-more-only, .vq-grid td.vq-empty { display: none; }
     .vq-line-na td.vq-col-price, .vq-line-na td.vq-col-net, .vq-line-na td.vq-col-vat, .vq-line-na td.vq-col-disc { opacity: .5; }
     .vq-submit-row { gap: 12px; }
+    /* Giá bên mua đề nghị: dải đáy của khung mặt hàng ngay trên (không thành khung riêng, nửa bề ngang). */
+    .vq-grid tbody tr:has(+ tr.vq-request-row) { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .vq-grid tbody tr.vq-request-row { grid-template-columns: minmax(0, 1fr); padding: 0; border-top: 0;
+        border-top-left-radius: 0; border-top-right-radius: 0; overflow: hidden; }
+    .vq-grid tbody tr.vq-request-row td { padding: 10px 14px; }
 }
 
 /* --- Hiệu lực giá (cột trái chân form, trên ghi chú chung) --- */

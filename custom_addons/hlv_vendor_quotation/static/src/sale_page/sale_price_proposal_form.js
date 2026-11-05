@@ -44,9 +44,9 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-picker"><input type="text" class="hq-input" id="hq-pp-prod" autocomplete="off" value="' +
       esc(product.name || "") + '" placeholder="Gõ mã / tên để đổi sang mã khác"/>' +
       '<div class="hq-dropdown hq-hidden" id="hq-pp-prod-list"></div></div></div>' +
-      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-qty">SL (' + esc(p.uom) + ", 0 = không mua) · trên đơn " +
-      HQ.qty(p.old_qty) + '</label><input type="number" class="hq-input" id="hq-pp-qty" min="0" step="any" ' +
-      'inputmode="decimal" value="' + p.form_qty + '"/></div>' +
+      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-qty" id="hq-pp-qty-label">' + qtyLabel(p, p.form_qty) +
+      '</label><input type="number" class="hq-input" id="hq-pp-qty" min="0" step="any" inputmode="decimal" ' +
+      'title="0 = không mua nữa" value="' + p.form_qty + '"/></div>' +
       '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-price">Giá mong muốn (sau VAT)</label>' +
       '<input type="number" class="hq-input" id="hq-pp-price" min="0" step="any" inputmode="decimal" value="' +
       (p.suggested_price || "") + '" placeholder="Không bắt buộc"/></div>' +
@@ -56,6 +56,12 @@ window.HlvQuote = window.HlvQuote || {};
       '<div class="hq-pp-outcome" id="hq-pp-outcome"></div>' +
       '<label class="hq-sr-only" for="hq-pp-note">Ghi thêm</label>' +
       '<textarea class="hq-input hq-textarea" rows="3" maxlength="1000" id="hq-pp-note"></textarea>';
+  }
+
+  /** Nhãn ô SL: "SL (Cái)"; đổi SL thì "SL (Cái) · 1 → 2". */
+  function qtyLabel(p, qty) {
+    var text = "SL (" + esc(p.uom) + ")";
+    return qty >= 0 && Math.abs(qty - p.old_qty) > EPS ? text + " · " + HQ.qty(p.old_qty) + " → " + HQ.qty(qty) : text;
   }
 
   /** VAT đổi thế nào khi duyệt: hỏi NCC thì theo VAT NCC báo; không hỏi thì giữ giá chưa VAT, giá sau VAT đổi theo. */
@@ -122,6 +128,7 @@ window.HlvQuote = window.HlvQuote || {};
   // Popup xử lý nhiều món (sale_price_proposal_bulk.js) dùng đúng các quy tắc này.
   HQ.ppRules = {
     vatRate: vatRate, vatSelect: vatSelect, outcome: outcome, vatOutcome: vatOutcome, vendorDefault: vendorDefault,
+    qtyLabel: qtyLabel,
   };
 
   function refresh() {
@@ -137,6 +144,7 @@ window.HlvQuote = window.HlvQuote || {};
     if (def.disabled || !F.touched) {
       vendor.checked = def.checked;
     }
+    el("qty-label").innerHTML = qtyLabel(p, qty);
     el("outcome").textContent = outcome(p, product, qty, swapped) + vatOutcome(p, rate, vendor.checked);
     el("send").textContent = vendor.checked ? "Gửi NCC báo giá" : "Gửi thu mua duyệt";
     el("send").disabled = !(qty >= 0) || (qty < EPS && swapped);

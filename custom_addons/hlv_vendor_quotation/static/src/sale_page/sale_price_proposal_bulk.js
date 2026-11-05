@@ -53,9 +53,9 @@ window.HlvQuote = window.HlvQuote || {};
     var swapped = !!product.id && product.id !== p.product_id;
     return '<div class="hq-ppb-requote" data-ppb-requote>' +
       (swapped ? '<div class="hq-muted">Đổi sang mã ' + esc(product.name) + "</div>" : "") +
-      '<label class="hq-pp-field"><span class="hq-label">SL (' + esc(p.uom) + ", 0 = không mua) · trên đơn " +
-      HQ.qty(p.old_qty) + '</span><input type="number" class="hq-input" data-ppb-qty min="0" step="any" ' +
-      'inputmode="decimal" value="' + p.form_qty + '"/></label>' +
+      '<label class="hq-pp-field"><span class="hq-label" data-ppb-qty-label>' + HQ.ppRules.qtyLabel(p, p.form_qty) +
+      '</span><input type="number" class="hq-input" data-ppb-qty min="0" step="any" inputmode="decimal" ' +
+      'title="0 = không mua nữa" value="' + p.form_qty + '"/></label>' +
       '<label class="hq-pp-field"><span class="hq-label">Giá mong muốn (sau VAT)</span><input type="number" ' +
       'class="hq-input" data-ppb-price min="0" step="any" inputmode="decimal" value="' + (p.suggested_price || "") +
       '" placeholder="Không bắt buộc"/></label>' +
@@ -108,6 +108,7 @@ window.HlvQuote = window.HlvQuote || {};
       return true;
     }
     var v = readRequote(box, p);
+    box.querySelector("[data-ppb-qty-label]").innerHTML = HQ.ppRules.qtyLabel(p, v.qty);
     var vendor = box.querySelector("[data-ppb-vendor]");
     var def = HQ.ppRules.vendorDefault(p, v.qty, v.rate, v.price, v.swapped);
     vendor.disabled = def.disabled;
