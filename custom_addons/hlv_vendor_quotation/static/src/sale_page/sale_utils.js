@@ -193,6 +193,16 @@ window.HlvQuote = window.HlvQuote || {};
     return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(value || 0);
   };
 
+  /** Số gõ kiểu VN -> số: "1.250.000" -> 1250000, "272.727,27" -> 272727.27, "1250000" -> 1250000. Rỗng / không
+      phải số -> null. Dấu chấm luôn là ngăn cách nghìn, dấu phẩy là phần lẻ. */
+  HQ.parseVnNumber = function (text) {
+    var clean = String(text == null ? "" : text).trim().replace(/\./g, "").replace(",", ".");
+    if (!clean || isNaN(Number(clean))) {
+      return null;
+    }
+    return Number(clean);
+  };
+
   /** "YYYY-MM-DD" + n ngày -> "YYYY-MM-DD". Chuỗi rỗng/sai -> "". */
   HQ.addDays = function (dateStr, days) {
     var parts = String(dateStr || "").split("-");

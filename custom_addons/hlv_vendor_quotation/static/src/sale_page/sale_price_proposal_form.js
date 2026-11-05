@@ -54,12 +54,14 @@ window.HlvQuote = window.HlvQuote || {};
   function lineFields(p) {
     var rate = vatRate(p.form_vat);
     var gross = p.suggested_price || "";
-    var net = gross ? netOf(gross, rate === null ? p.tax_rate : rate) : "";
+    var net = gross ? HQ.qty(netOf(gross, rate === null ? p.tax_rate : rate)) : "";
+    gross = gross ? HQ.qty(gross) : "";
     function field(name, input) {
       return '<label class="hq-pp-field"><span class="hq-label" data-pp-label="' + name + '"></span>' + input + "</label>";
     }
+    // Ô tiền là ô chữ (không phải type=number) để hiện dấu chấm ngăn cách nghìn: "1.250.000".
     function money(attr, value) {
-      return '<input type="number" class="hq-input" ' + attr + ' min="0" step="any" inputmode="decimal" value="' + value +
+      return '<input type="text" class="hq-input" ' + attr + ' inputmode="decimal" value="' + value +
         '" placeholder="Không bắt buộc"/>';
     }
     return '<div class="hq-pp-line" data-pp-line data-basis="gross" data-tax="' + p.tax_rate + '">' +
@@ -75,7 +77,7 @@ window.HlvQuote = window.HlvQuote || {};
     var raw = box.querySelector("[data-pp-qty]").value.trim();
     var code = box.querySelector("[data-pp-vat]").value;
     return { qty: raw === "" ? NaN : Number(raw), vat: code, rate: vatRate(code),
-             price: Number(box.querySelector("[data-pp-gross]").value) || 0 };
+             price: HQ.parseVnNumber(box.querySelector("[data-pp-gross]").value) || 0 };
   }
 
   /** Gõ giá một ô (source) hoặc đổi VAT (source null): tính lại ô giá còn lại theo ô sale gõ sau cùng. */
@@ -88,9 +90,11 @@ window.HlvQuote = window.HlvQuote || {};
     var net = box.querySelector("[data-pp-net]");
     var gross = box.querySelector("[data-pp-gross]");
     if (box.dataset.basis === "net") {
-      gross.value = net.value === "" ? "" : grossOf(Number(net.value), rate);
+      var netValue = HQ.parseVnNumber(net.value);
+      gross.value = netValue === null ? "" : HQ.qty(grossOf(netValue, rate));
     } else {
-      net.value = gross.value === "" ? "" : netOf(Number(gross.value), rate);
+      var grossValue = HQ.parseVnNumber(gross.value);
+      net.value = grossValue === null ? "" : HQ.qty(netOf(grossValue, rate));
     }
   }
 
@@ -128,6 +132,13 @@ window.HlvQuote = window.HlvQuote || {};
       onChange();
     });
     HQ.on(root, "input", "[data-pp-qty]", onChange);
+    // Rời ô tiền: viết lại cho có dấu chấm ngăn cách (không làm khi đang gõ — con trỏ sẽ nhảy).
+    HQ.on(root, "change", "[data-pp-net], [data-pp-gross]", function (input) {
+      var value = HQ.parseVnNumber(input.value);
+      if (value !== null) {
+        input.value = HQ.qty(value);
+      }
+    });
   }
 
   /** VAT đổi thế nào khi duyệt: hỏi NCC thì theo VAT NCC báo; không hỏi thì giữ giá chưa VAT, giá sau VAT đổi theo. */

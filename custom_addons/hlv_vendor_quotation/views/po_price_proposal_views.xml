@@ -22,7 +22,8 @@
                 <field name="suggested_price_incl"/>
                 <field name="new_price_incl"/>
                 <field name="old_qty" optional="hide"/>
-                <field name="new_qty" optional="show"/>
+                <field name="new_qty" optional="show" invisible="not new_qty"/>
+                <field name="new_drop" optional="show" invisible="not new_drop"/>
                 <field name="new_product_id" optional="show"/>
                 <field name="buyer_id" optional="show"/>
                 <field name="create_date" string="Đề xuất lúc" optional="show"/>

@@ -138,8 +138,9 @@ window.HlvQuote = window.HlvQuote || {};
       swapCell ? '<span class="hq-offer-short">Mã thay cho ' + esc(p.product) + "</span>" : "",
       p.change_text ? '<span class="hq-offer-short">' + esc(p.change_text) + "</span>"
         : buyerWish(p) ? '<span class="hq-offer-short">Thu mua muốn: ' + buyerWish(p) + "</span>" : "",
-      p.vat_warning ? '<span class="hq-offer-short" title="' + esc(p.vat_warning) + '">VAT ' + pct(p.tax_rate) + " → " +
-        pct(p.vendor_tax_rate) + "</span>" : "",
+      p.vat_warning && !/VAT /.test(p.change_text || "")
+        ? '<span class="hq-offer-short" title="' + esc(p.vat_warning) + '">VAT ' + pct(p.tax_rate) + " → " +
+          pct(p.vendor_tax_rate) + "</span>" : "",
       p.buyer_note && !p.vendor_price ? '<span class="hq-offer-meta">Lý do: ' + esc(p.buyer_note) + "</span>" : "",
       p.reject_reason && p.state === "rejected"
         ? '<span class="hq-offer-short">Thu mua không duyệt: ' + esc(p.reject_reason) + "</span>" : "",
