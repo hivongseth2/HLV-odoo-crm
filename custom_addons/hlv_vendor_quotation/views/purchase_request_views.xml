@@ -157,9 +157,6 @@
             <xpath expr="//field[@name='misa_price_before_tax']" position="attributes">
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
-            <xpath expr="//field[@name='misa_price_before_tax_total']" position="attributes">
-                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
-            </xpath>
             <xpath expr="//field[@name='misa_discount_rate']" position="attributes">
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
@@ -173,9 +170,6 @@
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
             <xpath expr="//field[@name='misa_tax_amount']" position="attributes">
-                <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
-            </xpath>
-            <xpath expr="//field[@name='misa_price_after_tax_total']" position="attributes">
                 <attribute name="readonly">is_editable == False or hlv_price_locked</attribute>
             </xpath>
             <xpath expr="//field[@name='misa_price_after_tax']" position="attributes">

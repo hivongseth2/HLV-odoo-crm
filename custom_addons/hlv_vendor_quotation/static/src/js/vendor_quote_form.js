@@ -39,7 +39,26 @@
         return value == null ? 0 : value;
     }
 
-    /** Giá của một dòng: {unavailable, vat, qty, prices: {after, net} hoặc null}. */
+    /** SL tính tiền của dòng: SL hỏi; NCC sẵn ít hơn mà chưa hẹn ngày giao phần còn lại (tick "không có thêm" hoặc
+        chưa chọn gì) → chỉ phần sẵn — như server (allocation_utils.quoted_qty). */
+    function billableQty(line, asked) {
+        const input = line.querySelector("[data-vq-have]");
+        if (!input) {
+            // Dòng khoá: không còn ô "Sẵn hàng" — server ghi sẵn SL tính tiền.
+            return parseFloat(line.dataset.billQty) || asked;
+        }
+        const have = parseVnNumber(input.value);
+        if (have == null || have >= asked || have <= 0) {
+            return asked;
+        }
+        const shortRow = form.querySelector(`[data-vq-short-for="${line.dataset.vqLid}"]`);
+        const noMore = shortRow && shortRow.querySelector("[data-vq-nomore]");
+        const date = shortRow && shortRow.querySelector('input[type="date"]');
+        const promised = date && date.value && !(noMore && noMore.checked);
+        return promised ? asked : have;
+    }
+
+    /** Giá của một dòng: {unavailable, vat, qty (SL tính tiền), prices: {after, net} hoặc null}. */
     function readLine(line) {
         const unitInput = line.querySelector("[data-vq-unit]");
         const vatSelect = line.querySelector("[data-vq-vat]");
@@ -57,7 +76,7 @@
             // Dòng sửa được có nút "×" (checkbox); dòng chỉ đọc ghi sẵn data-na.
             unavailable: naInput ? naInput.checked : line.dataset.na === "1",
             vat: vat,
-            qty: parseFloat(line.dataset.qty) || 0,
+            qty: billableQty(line, parseFloat(line.dataset.qty) || 0),
             prices: prices,
         };
     }

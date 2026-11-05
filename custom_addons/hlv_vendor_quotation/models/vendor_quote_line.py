@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError, UserError
 from odoo.tools.float_utils import float_compare
 
 from ..services.notify import post_internal
+from .allocation_utils import quoted_qty
 from .vendor_quote_utils import availability_text, best_price_ids, format_vn_number, price_incl_vat
 
 VAT_SELECTION = [
@@ -133,10 +134,17 @@ class VendorQuoteLine(models.Model):
         for line in self:
             line.tax_rate = float(line.vat) if line.vat and line.vat != "kct" else 0.0
 
-    @api.depends("price_unit", "product_qty", "tax_rate", "unavailable")
+    def _hlv_quoted_qty(self):
+        """SL tính tiền: NCC "có X · không có thêm" thì X, không thì SL hỏi (allocation_utils.quoted_qty)."""
+        self.ensure_one()
+        return quoted_qty(self.product_qty, self.available_qty, self.no_more)
+
+    @api.depends("price_unit", "product_qty", "tax_rate", "unavailable", "available_qty", "no_more")
     def _compute_price(self):
+        # NCC "có X · không có thêm": tiền tính theo X — tổng báo giá là số NCC thật sự bán, không phải SL hỏi.
         for line in self:
-            subtotal = 0.0 if line.unavailable else line.price_unit * line.product_qty
+            qty = line._hlv_quoted_qty()
+            subtotal = 0.0 if line.unavailable else line.price_unit * qty
             line.price_subtotal = subtotal
             line.price_total = subtotal * (1 + line.tax_rate / 100.0)
 

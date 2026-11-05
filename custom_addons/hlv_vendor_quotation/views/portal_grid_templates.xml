@@ -130,7 +130,7 @@
         <t t-set="more_open" t-value="line_editable and (days_raw or inv_raw or note_raw)"/>
         <tr data-vq-line="1" data-vq-pair="1" t-att-data-vq-lid="lid"
             t-attf-class="vq-line #{choice_class} #{'vq-line-na' if na_checked else ''} #{'vq-line-locked' if line.vendor_locked else ''} #{'vq-line-error' if error_line_ids and lid in error_line_ids else ''} #{'vq-more-open' if more_open else ''}"
-            t-att-data-qty="line.product_qty" t-att-data-price="line.price_unit"
+            t-att-data-qty="line.product_qty" t-att-data-bill-qty="line._hlv_quoted_qty()" t-att-data-price="line.price_unit"
             t-att-data-vat="line.vat or ''" t-att-data-na="'1' if na_checked else None">
             <td class="vq-col-no" t-esc="line_index + 1"/>
             <t t-if="show_quote">

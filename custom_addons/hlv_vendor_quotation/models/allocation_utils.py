@@ -18,6 +18,13 @@ def supply_cap(available_qty, no_more):
     return available_qty if available_qty and no_more else None
 
 
+def quoted_qty(asked_qty, available_qty, no_more):
+    """SL tính tiền của một dòng báo giá NCC: SL hỏi, trừ khi NCC báo "có X · không có thêm" thì chỉ X (supply_cap).
+    Thiếu nhưng hẹn giao phần còn lại → vẫn SL hỏi (NCC giao đủ, chỉ chia hai đợt). asked_qty None coi như 0."""
+    cap = supply_cap(available_qty, no_more)
+    return min(asked_qty or 0.0, cap) if cap is not None else (asked_qty or 0.0)
+
+
 def default_buy_qty(need_qty, others_qty, available_qty, no_more):
     """SL mua điền sẵn khi sale bấm chọn thêm một NCC.
 
