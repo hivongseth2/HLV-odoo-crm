@@ -42,7 +42,6 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
         "click .hlv-pa-new": "_onNew",
         "click .hlv-pa-preview-remove": "_onRemovePreview",
         "keydown textarea": "_onKeydown",
-        "paste textarea": "_onPaste",
         "change input[type=file]": "_onPickFiles",
         "click .hlv-pa-switch": "_onSwitchPerson",
         "click .hlv-pa-pick": "_onPickPerson",
@@ -91,6 +90,9 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
             }
         };
         document.addEventListener("keydown", this._onEscape);
+        // Ctrl+V ở bất kỳ đâu trên trang (kể cả khi con trỏ chưa nằm trong ô chat) đều dán ảnh vào chat.
+        this._onDocPaste = (ev) => this._onPaste(ev);
+        document.addEventListener("paste", this._onDocPaste);
         this._refresh();
         return this._super(...arguments);
     },
@@ -103,6 +105,7 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
             this.table.removeEventListener("click", this._onRowAsk);
         }
         document.removeEventListener("keydown", this._onEscape);
+        document.removeEventListener("paste", this._onDocPaste);
         this._super(...arguments);
     },
 
@@ -668,7 +671,25 @@ publicWidget.registry.HlvProductChat = publicWidget.Widget.extend({
     },
 
     _onPaste(ev) {
-        const files = [...(ev.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+        // Ô nhập khác trên trang (không phải ô chat) giữ nguyên hành vi dán của nó.
+        const target = ev.target;
+        const inOtherField =
+            target instanceof Element &&
+            target.closest("input, textarea, [contenteditable]") &&
+            !this.el.contains(target);
+        if (inOtherField) {
+            return;
+        }
+        // Ảnh chụp màn hình có khi chỉ nằm ở items, không nằm ở files (tuỳ trình duyệt).
+        const data = ev.clipboardData;
+        let files = [...(data?.files || [])];
+        if (!files.length) {
+            files = [...(data?.items || [])]
+                .filter((item) => item.kind === "file")
+                .map((item) => item.getAsFile())
+                .filter(Boolean);
+        }
+        files = files.filter((f) => f.type.startsWith("image/"));
         if (files.length) {
             ev.preventDefault();
             this._addFiles(files);
