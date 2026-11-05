@@ -558,26 +558,27 @@
 .hq-pp-modal { z-index: 1060; }  /* nổi trên ngăn phiếu, như khung trao đổi */
 .hq-pp-modal .hq-modal-box { width: min(760px, 100%); }
 .hq-pp-modal .hq-dropdown { position: static; margin-top: .2rem; }
-.hq-pp-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
-.hq-pp-field-wide { grid-column: 1 / -1; }
+/* Bộ ô SL · giá trước VAT · VAT · giá sau VAT (lineFields — sale_price_proposal_form.js): ô khác với đơn tô màu. */
+.hq-pp-line { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+.hq-pp-line .hq-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.hq-pp-field.is-changed .hq-input { border-color: var(--hq-warn-ink); background: #fff7ed; font-weight: 700; }
+.hq-pp-diff { color: var(--hq-warn-ink); font-weight: 700; }
 .hq-pp-field { display: grid; gap: .2rem; min-width: 0; }
 .hq-pp-check { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .hq-pp-outcome { font-size: .8125rem; color: var(--hq-warn-ink); }
 /* Popup "Xử lý tất cả" (sale_price_proposal_bulk.js): mỗi món một khối, phần hỏi lại NCC chia 3 cột. */
 .hq-ppb-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: .75rem; padding: .75rem;
-  border: 1px solid var(--hq-line); border-left: 4px solid var(--hq-warn-ink); border-radius: 8px; background: #fff; }
+  border: 1px solid var(--hq-line); border-left: 4px solid var(--hq-warn-ink); background: #fff; }
 .hq-ppb-row + .hq-ppb-row { margin-top: .75rem; }
 .hq-ppb-row.is-skip { opacity: .55; border-left-color: var(--hq-line); }
-.hq-ppb-img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--hq-line); border-radius: 6px;
-  background: #fff; }
+.hq-ppb-img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--hq-line); background: #fff; }
 .hq-ppb-main { display: grid; gap: .4rem; min-width: 0; }
 .hq-ppb-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .9375rem; }
 .hq-ppb-no { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; border-radius: 50%;
   background: var(--hq-warn-ink); color: #fff; font-size: .75rem; font-weight: 600; }
 #hq-ppb-body { background: var(--hq-bg); }
-.hq-ppb-requote { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
-.hq-ppb-wide { grid-column: 1 / -1; }
-@media (max-width: 640px) { .hq-pp-fields, .hq-ppb-requote { grid-template-columns: minmax(0, 1fr); } }
+.hq-ppb-requote { display: grid; gap: .5rem; }
+@media (max-width: 640px) { .hq-pp-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 /* Dải "việc cần làm" đầu ngăn: một câu + một nút dẫn tới ô tô cam — thay cho khối chữ dài lặp lại ô. */
 .hq-todo { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0 0 .75rem;
     padding: .6rem .8rem; background: var(--hq-warn-soft); border-left: 4px solid var(--hq-warn);

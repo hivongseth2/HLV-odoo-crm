@@ -1,7 +1,10 @@
 /* Popup "Hỏi lại NCC" của đề xuất thu mua trả về (sale_price_proposal.js): sale chốt mã / SL / giá mong muốn (điền
    sẵn theo đề xuất của thu mua), VAT, chọn có cần NCC báo giá lại không rồi gửi (models/po_proposal_change.py). Đổi mã
    luôn phải hỏi NCC (mã mới chưa có giá); chỉ giảm SL / đổi VAT thì mặc định gửi thẳng thu mua (giữ giá chưa VAT) —
-   sale bật lại được; SL 0 = không mua nữa, luôn gửi thẳng thu mua. Dòng "Duyệt xong: …" nói trước đơn mua sẽ đổi thế nào. Khung popup nằm sẵn trong trang (#hq-pp-modal, sale_page_templates.xml). */
+   sale bật lại được; SL 0 = không mua nữa, luôn gửi thẳng thu mua. Dòng "Duyệt xong: …" nói trước đơn mua sẽ đổi thế
+   nào. Khung popup nằm sẵn trong trang (#hq-pp-modal, sale_page_templates.xml).
+   Bộ ô SL / giá trước VAT / VAT / giá sau VAT (lineFields) dùng chung với popup "Xử lý tất cả" (sale_price_proposal_bulk.js):
+   gõ giá ô nào thì ô kia tự tính theo VAT; ô khác với đơn thì tô màu + nhãn "cũ → mới". */
 window.HlvQuote = window.HlvQuote || {};
 
 (function (HQ) {
@@ -25,11 +28,20 @@ window.HlvQuote = window.HlvQuote || {};
     return code ? (code === "kct" ? 0 : Number(code)) : null;
   }
 
+  /** Giá chưa VAT (2 số lẻ) từ giá sau VAT, và giá sau VAT (tới đồng) từ giá chưa VAT. */
+  function netOf(gross, rate) {
+    return Math.round(gross / (1 + rate / 100) * 100) / 100;
+  }
+
+  function grossOf(net, rate) {
+    return Math.round(net * (1 + rate / 100));
+  }
+
   /** Ô VAT điền sẵn mức đang chốt / trên đơn (form_vat). Chỉ khi mức trên đơn không có trong danh sách (công ty không
       còn khai) mới có dòng "Giữ VAT trên đơn". */
-  function vatSelect(p, id) {
+  function vatSelect(p) {
     var known = (p.vat_options || []).some(function (o) { return o.code === p.form_vat; });
-    return '<select class="hq-input" id="' + (id || "hq-pp-vat") + '">' +
+    return '<select class="hq-input" data-pp-vat>' +
       (known ? "" : '<option value="">Giữ VAT trên đơn (' + pct(p.tax_rate) + ")</option>") +
       (p.vat_options || []).map(function (o) {
         return '<option value="' + esc(o.code) + '"' + (o.code === p.form_vat ? " selected" : "") + ">" + esc(o.label) +
@@ -37,31 +49,87 @@ window.HlvQuote = window.HlvQuote || {};
       }).join("") + "</select>";
   }
 
-  function body(p) {
-    var product = p.form_product || {};
-    return '<div class="hq-pp-fields">' +
-      '<div class="hq-pp-field hq-pp-field-wide"><label class="hq-label" for="hq-pp-prod">Mã hàng</label>' +
-      '<div class="hq-picker"><input type="text" class="hq-input" id="hq-pp-prod" autocomplete="off" value="' +
-      esc(product.name || "") + '" placeholder="Gõ mã / tên để đổi sang mã khác"/>' +
-      '<div class="hq-dropdown hq-hidden" id="hq-pp-prod-list"></div></div></div>' +
-      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-qty" id="hq-pp-qty-label">' + qtyLabel(p, p.form_qty) +
-      '</label><input type="number" class="hq-input" id="hq-pp-qty" min="0" step="any" inputmode="decimal" ' +
-      'title="0 = không mua nữa" value="' + p.form_qty + '"/></div>' +
-      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-price">Giá mong muốn (sau VAT)</label>' +
-      '<input type="number" class="hq-input" id="hq-pp-price" min="0" step="any" inputmode="decimal" value="' +
-      (p.suggested_price || "") + '" placeholder="Không bắt buộc"/></div>' +
-      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-vat">VAT</label>' + vatSelect(p) + "</div></div>" +
-      (p.buyer_note ? '<div class="hq-muted">Thu mua: ' + esc(p.buyer_note) + "</div>" : "") +
-      '<label class="hq-pp-check"><input type="checkbox" id="hq-pp-vendor"/> Cần NCC báo giá lại</label>' +
-      '<div class="hq-pp-outcome" id="hq-pp-outcome"></div>' +
-      '<label class="hq-sr-only" for="hq-pp-note">Ghi thêm</label>' +
-      '<textarea class="hq-input hq-textarea" rows="3" maxlength="1000" id="hq-pp-note"></textarea>';
+  /** Bộ ô SL · giá trước VAT · VAT · giá sau VAT của một đề xuất (giá mong muốn điền sẵn theo gợi ý của thu mua).
+      Nhãn vẽ ở refreshLine. data-tax: % VAT trên đơn — dùng khi ô VAT là "giữ VAT trên đơn". */
+  function lineFields(p) {
+    var rate = vatRate(p.form_vat);
+    var gross = p.suggested_price || "";
+    var net = gross ? netOf(gross, rate === null ? p.tax_rate : rate) : "";
+    function field(name, input) {
+      return '<label class="hq-pp-field"><span class="hq-label" data-pp-label="' + name + '"></span>' + input + "</label>";
+    }
+    function money(attr, value) {
+      return '<input type="number" class="hq-input" ' + attr + ' min="0" step="any" inputmode="decimal" value="' + value +
+        '" placeholder="Không bắt buộc"/>';
+    }
+    return '<div class="hq-pp-line" data-pp-line data-basis="gross" data-tax="' + p.tax_rate + '">' +
+      field("qty", '<input type="number" class="hq-input" data-pp-qty min="0" step="any" inputmode="decimal" ' +
+        'title="0 = không mua nữa" value="' + p.form_qty + '"/>') +
+      field("net", money("data-pp-net", net)) + field("vat", vatSelect(p)) + field("gross", money("data-pp-gross", gross)) +
+      "</div>";
   }
 
-  /** Nhãn ô SL: "SL (Cái)"; đổi SL thì "SL (Cái) · 1 → 2". */
-  function qtyLabel(p, qty) {
-    var text = "SL (" + esc(p.uom) + ")";
-    return qty >= 0 && Math.abs(qty - p.old_qty) > EPS ? text + " · " + HQ.qty(p.old_qty) + " → " + HQ.qty(qty) : text;
+  /** {qty (NaN khi trống — ô trống không phải "0 = không mua"), vat (mã), rate (null = giữ), price (sau VAT, 0 = không
+      ghi)} đang nhập trong bộ ô. */
+  function readLine(box) {
+    var raw = box.querySelector("[data-pp-qty]").value.trim();
+    var code = box.querySelector("[data-pp-vat]").value;
+    return { qty: raw === "" ? NaN : Number(raw), vat: code, rate: vatRate(code),
+             price: Number(box.querySelector("[data-pp-gross]").value) || 0 };
+  }
+
+  /** Gõ giá một ô (source) hoặc đổi VAT (source null): tính lại ô giá còn lại theo ô sale gõ sau cùng. */
+  function syncPrice(box, source) {
+    if (source) {
+      box.dataset.basis = source.hasAttribute("data-pp-net") ? "net" : "gross";
+    }
+    var rate = vatRate(box.querySelector("[data-pp-vat]").value);
+    rate = rate === null ? Number(box.dataset.tax) : rate;
+    var net = box.querySelector("[data-pp-net]");
+    var gross = box.querySelector("[data-pp-gross]");
+    if (box.dataset.basis === "net") {
+      gross.value = net.value === "" ? "" : grossOf(Number(net.value), rate);
+    } else {
+      net.value = gross.value === "" ? "" : netOf(Number(gross.value), rate);
+    }
+  }
+
+  function setField(box, name, changed, labelHtml) {
+    var label = box.querySelector('[data-pp-label="' + name + '"]');
+    label.innerHTML = labelHtml;
+    label.parentNode.classList.toggle("is-changed", changed);
+  }
+
+  /** Nhãn + màu của bộ ô theo cái đang nhập: ô khác với đơn thì tô màu, nhãn "cũ → mới". Trả readLine. */
+  function refreshLine(box, p) {
+    var v = readLine(box);
+    var rate = v.rate === null ? p.tax_rate : v.rate;
+    var qtyChanged = v.qty >= 0 && Math.abs(v.qty - p.old_qty) > EPS;
+    var vatChanged = Math.abs(rate - p.tax_rate) > EPS;
+    var priceChanged = v.price > 0 && Math.abs(v.price - p.old_price) >= 1;
+    var diff = function (label, from, to) {
+      return label + ' <b class="hq-pp-diff">' + from + " → " + to + "</b>";
+    };
+    var uom = "SL (" + esc(p.uom) + ")";
+    setField(box, "qty", qtyChanged, qtyChanged ? diff(uom, HQ.qty(p.old_qty), HQ.qty(v.qty)) : uom);
+    setField(box, "vat", vatChanged, vatChanged ? diff("VAT", pct(p.tax_rate), pct(rate)) : "VAT");
+    setField(box, "net", priceChanged, "Giá trước VAT");
+    setField(box, "gross", priceChanged, priceChanged
+      ? 'Giá sau VAT <b class="hq-pp-diff">cũ ' + HQ.money(p.old_price) + "</b>" : "Giá sau VAT");
+    return v;
+  }
+
+  /** Gắn sự kiện cho mọi bộ ô trong root; onChange chạy sau mỗi lần sửa (sau khi đã tính lại ô giá kia). */
+  function bindLine(root, onChange) {
+    HQ.on(root, "input", "[data-pp-net], [data-pp-gross]", function (input) {
+      syncPrice(input.closest("[data-pp-line]"), input);
+      onChange();
+    });
+    HQ.on(root, "change", "[data-pp-vat]", function (select) {
+      syncPrice(select.closest("[data-pp-line]"), null);
+      onChange();
+    });
+    HQ.on(root, "input", "[data-pp-qty]", onChange);
   }
 
   /** VAT đổi thế nào khi duyệt: hỏi NCC thì theo VAT NCC báo; không hỏi thì giữ giá chưa VAT, giá sau VAT đổi theo. */
@@ -125,29 +193,50 @@ window.HlvQuote = window.HlvQuote || {};
     return { checked: !(directOnly && !price), disabled: false };
   }
 
+  /** Dòng đầu: giá cũ (sau VAT) · VAT · SL trên đơn. */
+  function oldText(p) {
+    return "Giá cũ <b>" + HQ.money(p.old_price) + "</b> sau VAT · VAT " + pct(p.tax_rate) + " · SL " + HQ.qty(p.old_qty) +
+      " " + esc(p.uom);
+  }
+
   // Popup xử lý nhiều món (sale_price_proposal_bulk.js) dùng đúng các quy tắc này.
   HQ.ppRules = {
-    vatRate: vatRate, vatSelect: vatSelect, outcome: outcome, vatOutcome: vatOutcome, vendorDefault: vendorDefault,
-    qtyLabel: qtyLabel,
+    outcome: outcome, vatOutcome: vatOutcome, vendorDefault: vendorDefault, lineFields: lineFields,
+    refreshLine: refreshLine, bindLine: bindLine, oldText: oldText,
   };
+
+  function body(p) {
+    var product = p.form_product || {};
+    return '<div class="hq-muted">' + oldText(p) + "</div>" +
+      '<div class="hq-pp-field"><label class="hq-label" for="hq-pp-prod">Mã hàng</label>' +
+      '<div class="hq-picker"><input type="text" class="hq-input" id="hq-pp-prod" autocomplete="off" value="' +
+      esc(product.name || "") + '" placeholder="Gõ mã / tên để đổi sang mã khác"/>' +
+      '<div class="hq-dropdown hq-hidden" id="hq-pp-prod-list"></div></div></div>' + lineFields(p) +
+      (p.buyer_note ? '<div class="hq-muted">Thu mua: ' + esc(p.buyer_note) + "</div>" : "") +
+      '<label class="hq-pp-check"><input type="checkbox" id="hq-pp-vendor"/> Cần NCC báo giá lại</label>' +
+      '<div class="hq-pp-outcome" id="hq-pp-outcome"></div>' +
+      '<label class="hq-sr-only" for="hq-pp-note">Ghi thêm</label>' +
+      '<textarea class="hq-input hq-textarea" rows="3" maxlength="1000" id="hq-pp-note"></textarea>';
+  }
+
+  function line() {
+    return el("body").querySelector("[data-pp-line]");
+  }
 
   function refresh() {
     var p = F.p;
     var product = F.product || {};
-    var raw = el("qty").value.trim();
-    var qty = raw === "" ? NaN : Number(raw);  // ô trống không phải "0 = không mua"
+    var v = refreshLine(line(), p);
     var swapped = !!product.id && product.id !== p.product_id;
-    var rate = vatRate(el("vat").value);
     var vendor = el("vendor");
-    var def = vendorDefault(p, qty, rate, Number(el("price").value) || 0, swapped);
+    var def = vendorDefault(p, v.qty, v.rate, v.price, swapped);
     vendor.disabled = def.disabled;
     if (def.disabled || !F.touched) {
       vendor.checked = def.checked;
     }
-    el("qty-label").innerHTML = qtyLabel(p, qty);
-    el("outcome").textContent = outcome(p, product, qty, swapped) + vatOutcome(p, rate, vendor.checked);
+    el("outcome").textContent = outcome(p, product, v.qty, swapped) + vatOutcome(p, v.rate, vendor.checked);
     el("send").textContent = vendor.checked ? "Gửi NCC báo giá" : "Gửi thu mua duyệt";
-    el("send").disabled = !(qty >= 0) || (qty < EPS && swapped);
+    el("send").disabled = !(v.qty >= 0) || (v.qty < EPS && swapped);
     el("note").placeholder = vendor.checked
       ? "Ghi thêm cho NCC (không bắt buộc) — lời nhắn đã soạn sẵn theo mã / SL / giá"
       : "Ghi chú cho thu mua (không bắt buộc)";
@@ -173,7 +262,7 @@ window.HlvQuote = window.HlvQuote || {};
     });
     refresh();  // cũng mở khoá nút gửi — nút có sẵn trong trang, lần gửi trước đã khoá nó
     HQ.show("hq-pp-modal", true);
-    el("qty").focus();
+    line().querySelector("[data-pp-qty]").focus();
   }
 
   function close() {
@@ -185,17 +274,17 @@ window.HlvQuote = window.HlvQuote || {};
     var modal = HQ.$("hq-pp-modal");
     HQ.on(panel, "click", "[data-pp-form]", function (button) { open(+button.dataset.ppForm); });
     HQ.on(modal, "click", "[data-pp-close]", close);
-    HQ.on(modal, "input", "#hq-pp-qty, #hq-pp-price", refresh);
-    HQ.on(modal, "change", "#hq-pp-vat", refresh);
+    bindLine(modal, refresh);
     HQ.on(modal, "change", "#hq-pp-vendor", function () {
       F.touched = true;
       refresh();
     });
     HQ.on(modal, "click", "#hq-pp-send", function (button) {
       var vendor = el("vendor").checked;
+      var v = readLine(line());
       HQ.proposalSend("price_requote", {
-        proposal_id: F.p.id, product_id: (F.product || {}).id || null, qty: Number(el("qty").value) || 0,
-        price: Number(el("price").value) || 0, needs_vendor: vendor, note: el("note").value, vat: el("vat").value,
+        proposal_id: F.p.id, product_id: (F.product || {}).id || null, qty: v.qty || 0, price: v.price,
+        needs_vendor: vendor, note: el("note").value, vat: v.vat,
       }, button, vendor ? "Đã gửi NCC — chờ NCC báo giá" : "Đã gửi thu mua duyệt").then(function (ok) {
         if (ok) {
           close();
